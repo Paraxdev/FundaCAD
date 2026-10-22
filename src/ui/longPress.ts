@@ -47,8 +47,14 @@ function fire() {
   if (!p || !p.target.isConnected) return;
   firedFor = p.id;
   const ev = new MouseEvent("contextmenu", {
-    bubbles: true, cancelable: true, composed: true,
-    clientX: p.x, clientY: p.y, button: 2, buttons: 0, view: window,
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    clientX: p.x,
+    clientY: p.y,
+    button: 2,
+    buttons: 0,
+    view: window,
   });
   ours.add(ev);
   p.target.dispatchEvent(ev);
@@ -64,7 +70,8 @@ function onDown(e: PointerEvent) {
 }
 
 function onMove(e: PointerEvent) {
-  if (press && e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TOUCH_SLOP_PX) cancel();
+  if (press && e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TOUCH_SLOP_PX)
+    cancel();
 }
 
 function onEnd(e: PointerEvent) {

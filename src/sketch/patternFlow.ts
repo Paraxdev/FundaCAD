@@ -120,7 +120,8 @@ export class PatternFlow {
    *  keep the fresh placement at its current values (new). */
   cancelPending() {
     if (!this.pendingPattern) return;
-    if (this.editOriginal) this.host.patterns().push(this.editOriginal); // restore the pre-edit pattern
+    if (this.editOriginal)
+      this.host.patterns().push(this.editOriginal); // restore the pre-edit pattern
     else this.host.patterns().push(this.pendingPattern); // a fresh placement: keep it at its current values
     this.pendingPattern = null;
     this.editOriginal = null;
@@ -223,19 +224,41 @@ export class PatternFlow {
     const id = newPatternId();
     const sources = [...this.host.selected()];
     if (tool === "boltCircle") return { id, type: "boltCircle", cx: c.x, cy: c.y, bcd: 40, count: 6, diameter: 6 };
-    if (tool === "gridHoles") return { id, type: "gridHoles", cx: c.x, cy: c.y, diameter: 6, countX: 3, countY: 3, spacingX: 12, spacingY: 12 };
+    if (tool === "gridHoles")
+      return { id, type: "gridHoles", cx: c.x, cy: c.y, diameter: 6, countX: 3, countY: 3, spacingX: 12, spacingY: 12 };
     if (tool === "hexHoles") return { id, type: "hexHoles", cx: c.x, cy: c.y, diameter: 6, spacing: 12, rings: 2 };
     if (tool === "honeycomb") return { id, type: "honeycomb", cx: c.x, cy: c.y, diameter: 12, spacing: 13, rings: 2 };
-    if (tool === "patternCircular") return { id, type: "patternCircular", sources, cx: c.x, cy: c.y, count: 6, angle: 360 };
+    if (tool === "patternCircular")
+      return { id, type: "patternCircular", sources, cx: c.x, cy: c.y, count: 6, angle: 360 };
     return { id, type: "patternRect", sources, countX: 3, countY: 1, spacingX: 15, spacingY: 15 }; // patternRect
   }
 
   private patternDimDefs(type: SketchPattern["type"]) {
-    if (type === "boltCircle") return [{ name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 }, { name: "diameter", label: "Diameter", icon: "diameter", positive: true }];
-    if (type === "gridHoles") return [{ name: "countX", label: "Nx", kind: "count" as const, integer: true, atLeast: 1 }, { name: "countY", label: "Ny", kind: "count" as const, integer: true, atLeast: 1 }, { name: "diameter", label: "Diameter", icon: "diameter", positive: true }];
-    if (type === "hexHoles" || type === "honeycomb") return [{ name: "rings", label: "Rings", kind: "count" as const, integer: true, atLeast: 0 }, { name: "diameter", label: "Diameter", icon: "diameter", positive: true }];
-    if (type === "patternCircular") return [{ name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 }, { name: "angle", label: "Angle", icon: "angle", kind: "angle" as const }];
-    return [{ name: "countX", label: "Nx", kind: "count" as const, integer: true, atLeast: 1 }, { name: "countY", label: "Ny", kind: "count" as const, integer: true, atLeast: 1 }]; // patternRect
+    if (type === "boltCircle")
+      return [
+        { name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 },
+        { name: "diameter", label: "Diameter", icon: "diameter", positive: true },
+      ];
+    if (type === "gridHoles")
+      return [
+        { name: "countX", label: "Nx", kind: "count" as const, integer: true, atLeast: 1 },
+        { name: "countY", label: "Ny", kind: "count" as const, integer: true, atLeast: 1 },
+        { name: "diameter", label: "Diameter", icon: "diameter", positive: true },
+      ];
+    if (type === "hexHoles" || type === "honeycomb")
+      return [
+        { name: "rings", label: "Rings", kind: "count" as const, integer: true, atLeast: 0 },
+        { name: "diameter", label: "Diameter", icon: "diameter", positive: true },
+      ];
+    if (type === "patternCircular")
+      return [
+        { name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 },
+        { name: "angle", label: "Angle", icon: "angle", kind: "angle" as const },
+      ];
+    return [
+      { name: "countX", label: "Nx", kind: "count" as const, integer: true, atLeast: 1 },
+      { name: "countY", label: "Ny", kind: "count" as const, integer: true, atLeast: 1 },
+    ]; // patternRect
   }
 
   /** Live sizing: cursor offset/distance from the start point drives the spatial
@@ -255,7 +278,8 @@ export class PatternFlow {
       this.host.refreshActive();
       return;
     }
-    const dx = p.x - this.patternCenter.x, dy = p.y - this.patternCenter.y;
+    const dx = p.x - this.patternCenter.x,
+      dy = p.y - this.patternCenter.y;
     const r = Math.hypot(dx, dy);
     const dimN = (name: string, fallback: number) => Math.round(dim.getValue(name) ?? fallback);
     if (pat.type === "boltCircle") {
@@ -293,9 +317,14 @@ export class PatternFlow {
       const src = dim.isUserDriven("angle") ? null : this.firstSourcePoint(pat.sources);
       const swept = src
         ? patternSweepDeg({
-            cx: this.patternCenter.x, cy: this.patternCenter.y,
-            sx: src.x, sy: src.y, px: p.x, py: p.y,
-            prev: this.sweep, free: e.altKey,
+            cx: this.patternCenter.x,
+            cy: this.patternCenter.y,
+            sx: src.x,
+            sy: src.y,
+            px: p.x,
+            py: p.y,
+            prev: this.sweep,
+            free: e.altKey,
           })
         : null;
       if (swept != null) {
@@ -350,10 +379,7 @@ export class PatternFlow {
     this.editOriginal = { ...pat };
     this.pendingPattern = pat;
     this.sweep = null; // the first drag sample re-seeds the accumulator from the cursor
-    this.patternCenter = new THREE.Vector2(
-      "cx" in pat ? (pat.cx as number) : 0,
-      "cy" in pat ? (pat.cy as number) : 0,
-    );
+    this.patternCenter = new THREE.Vector2("cx" in pat ? (pat.cx as number) : 0, "cy" in pat ? (pat.cy as number) : 0);
     this.centreDrag = false;
     this.host.setActiveTool(pat.type);
     this.showHud(pat);

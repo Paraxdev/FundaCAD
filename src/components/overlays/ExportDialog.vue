@@ -7,9 +7,20 @@ import { useModalGate } from "../../composables/useModalGate";
 import { escapeClaimed } from "../../ui/escapeClaim";
 import { useExportDialogStore } from "../../stores/exportDialog";
 import {
-  clampFaceting, clampTolerance, DEFAULT_SETTINGS, FORMATS, isFlatFormat, isMeshFormat, loadExportSettings, REFINEMENTS,
-  refinementOf, takesUnit, UNITS,
-  type BodyScope, type Faceting, type Refinement,
+  clampFaceting,
+  clampTolerance,
+  DEFAULT_SETTINGS,
+  FORMATS,
+  isFlatFormat,
+  isMeshFormat,
+  loadExportSettings,
+  REFINEMENTS,
+  refinementOf,
+  takesUnit,
+  UNITS,
+  type BodyScope,
+  type Faceting,
+  type Refinement,
 } from "../../io/exportSettings";
 import ModalFrame from "./ModalFrame.vue";
 import NumberBox from "../shell/NumberBox.vue";
@@ -83,7 +94,11 @@ function onKey(e: KeyboardEvent) {
     e.preventDefault();
     e.stopImmediatePropagation();
     cancel();
-  } else if (e.key === "Enter" && !(e.target instanceof HTMLSelectElement) && !(e.target as HTMLElement)?.closest(".select-trigger, .select-pop")) {
+  } else if (
+    e.key === "Enter" &&
+    !(e.target instanceof HTMLSelectElement) &&
+    !(e.target as HTMLElement)?.closest(".select-trigger, .select-pop")
+  ) {
     e.preventDefault();
     confirm();
   }
@@ -113,12 +128,19 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
               class="sm-input"
               data-testid="export-tolerance"
               :model-value="settings.tolerance"
-              @update:model-value="(v: number | null) => { if (v != null && Number.isFinite(v)) settings.tolerance = v; }"
+              @update:model-value="
+                (v: number | null) => {
+                  if (v != null && Number.isFinite(v)) settings.tolerance = v;
+                }
+              "
             />
             <span class="export-unit">mm</span>
           </span>
         </label>
-        <div class="sm-hint">Drawn at true size in millimetres. Lines, arcs and circles stay exact, other curves become polylines this close to the curve.</div>
+        <div class="sm-hint"
+          >Drawn at true size in millimetres. Lines, arcs and circles stay exact, other curves become polylines this
+          close to the curve.</div
+        >
       </template>
       <label v-if="bodies.length > 1 && !flatShown" class="prefs-row">
         <span class="prefs-label">Bodies</span>
@@ -142,7 +164,12 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
         </label>
         <label class="prefs-row">
           <span class="prefs-label">Refinement</span>
-          <Select :model-value="settings.refinement" :options="REFINEMENT_OPTIONS" testid="export-refinement" @update:model-value="onRefinement" />
+          <Select
+            :model-value="settings.refinement"
+            :options="REFINEMENT_OPTIONS"
+            testid="export-refinement"
+            @update:model-value="onRefinement"
+          />
         </label>
         <label class="prefs-row">
           <span class="prefs-label">Advanced</span>

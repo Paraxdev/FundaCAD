@@ -5,8 +5,11 @@ import { bandIndex, expandToBand } from "../../src/viewport/faceBands";
  *  them back into the global numbering the picker works in. Everything here is
  *  about that translation and about refusing to guess when a run is nonsense. */
 
-const body = (faceStart: number, faceCount: number, faceBands?: number[][]) =>
-  ({ faceStart, faceCount, ...(faceBands ? { faceBands } : {}) });
+const body = (faceStart: number, faceCount: number, faceBands?: number[][]) => ({
+  faceStart,
+  faceCount,
+  ...(faceBands ? { faceBands } : {}),
+});
 
 describe("face band lookup", () => {
   it("gives every member of a run the whole run", () => {
@@ -66,7 +69,12 @@ describe("face band lookup", () => {
   });
 
   it("keeps several runs on one body apart", () => {
-    const idx = bandIndex([body(0, 10, [[0, 1], [4, 5, 6]])]);
+    const idx = bandIndex([
+      body(0, 10, [
+        [0, 1],
+        [4, 5, 6],
+      ]),
+    ]);
     expect([...expandToBand(1, idx)]).toEqual([0, 1]);
     expect([...expandToBand(5, idx)]).toEqual([4, 5, 6]);
     expect([...expandToBand(3, idx)]).toEqual([3]);

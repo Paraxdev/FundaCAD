@@ -15,8 +15,7 @@ describe("sketchEscapeAction", () => {
     // The bug this whole module exists for: one Escape that both cancels the
     // half-drawn rectangle and leaves the sketch throws away the geometry AND
     // the session, and the user pressed one key expecting to lose the rectangle.
-    expect(sketchEscapeAction({ ...idle, tool: "rectangle", pendingGeometry: true }))
-      .toBe("cancel-geometry");
+    expect(sketchEscapeAction({ ...idle, tool: "rectangle", pendingGeometry: true })).toBe("cancel-geometry");
     expect(sketchEscapeAction({ ...idle, tool: "offset", offsetPick: true })).toBe("cancel-offset");
     expect(sketchEscapeAction({ ...idle, dragging: true })).toBe("cancel-drag");
   });
@@ -57,9 +56,7 @@ describe("sketchEscapeAction", () => {
         overlay: false,
       }),
     ).toBe("cancel-offset");
-    expect(
-      sketchEscapeAction({ ...idle, dragging: true, pendingGeometry: true, selection: true }),
-    ).toBe("cancel-drag");
+    expect(sketchEscapeAction({ ...idle, dragging: true, pendingGeometry: true, selection: true })).toBe("cancel-drag");
   });
 
   it("walks out one rung per press, and always reaches the exit", () => {

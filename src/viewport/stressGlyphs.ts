@@ -22,16 +22,38 @@ import type { Vec3 } from "../types";
 import type { Viewport } from "./viewport";
 import { escapeClaimed } from "../ui/escapeClaim";
 import {
-  AXES, forceDragLabel, forceDragPatch, forceDragStart, forceToArrowPx, GRAVITY_MARK_COLOR, LOAD_MARK_COLOR,
-  PINNED_MARK_COLOR, roundSig, sameTarget, snapDrag, type ForceDirection, type ForceDragStart, type SnapCandidate,
+  AXES,
+  forceDragLabel,
+  forceDragPatch,
+  forceDragStart,
+  forceToArrowPx,
+  GRAVITY_MARK_COLOR,
+  LOAD_MARK_COLOR,
+  PINNED_MARK_COLOR,
+  roundSig,
+  sameTarget,
+  snapDrag,
+  type ForceDirection,
+  type ForceDragStart,
+  type SnapCandidate,
   type StressTarget,
 } from "../ui/stress";
 
 export type StressGlyphHost = Pick<
   Viewport,
-  | "addToScene" | "removeFromScene" | "rayFrom" | "pixelWorldSize" | "projectToScreen"
-  | "camera" | "domElement" | "requestRender" | "pickStressOverlay" | "stressOverlayPoint"
-  | "pickFaceForPressPull" | "overlayDrawn" | "watchOverlays"
+  | "addToScene"
+  | "removeFromScene"
+  | "rayFrom"
+  | "pixelWorldSize"
+  | "projectToScreen"
+  | "camera"
+  | "domElement"
+  | "requestRender"
+  | "pickStressOverlay"
+  | "stressOverlayPoint"
+  | "pickFaceForPressPull"
+  | "overlayDrawn"
+  | "watchOverlays"
 >;
 
 /** A spot of a support or a load: the body's surface inside the orb. */
@@ -169,9 +191,16 @@ export class StressGlyphs {
   private preview: Orb | null = null;
   private placing: { color: number; radius: number } | null = null;
   private shared: {
-    shaft: THREE.CylinderGeometry; head: THREE.ConeGeometry; shaftEdge: THREE.CylinderGeometry; headEdge: THREE.ConeGeometry;
-    grab: THREE.SphereGeometry; ball: THREE.SphereGeometry; hidden: THREE.Material;
-    orb: THREE.SphereGeometry; ring: THREE.BufferGeometry; rim: THREE.SphereGeometry;
+    shaft: THREE.CylinderGeometry;
+    head: THREE.ConeGeometry;
+    shaftEdge: THREE.CylinderGeometry;
+    headEdge: THREE.ConeGeometry;
+    grab: THREE.SphereGeometry;
+    ball: THREE.SphereGeometry;
+    hidden: THREE.Material;
+    orb: THREE.SphereGeometry;
+    ring: THREE.BufferGeometry;
+    rim: THREE.SphereGeometry;
   } | null = null;
   private materials = new Map<number, THREE.Material>();
   private orbMaterials = new Map<string, THREE.Material>();
@@ -181,8 +210,12 @@ export class StressGlyphs {
   private raf = 0;
   private probe = false;
   private drag: {
-    loadId: number; glyph: ForceGlyph; candidates: SnapCandidate[]; start: ForceDragStart;
-    from: { x: number; y: number }; moved: boolean;
+    loadId: number;
+    glyph: ForceGlyph;
+    candidates: SnapCandidate[];
+    start: ForceDragStart;
+    from: { x: number; y: number };
+    moved: boolean;
   } | null = null;
   private hoverTip: number | null = null;
   private press: { x: number; y: number } | null = null;
@@ -299,13 +332,19 @@ export class StressGlyphs {
       const headEdge = new THREE.ConeGeometry(HEAD_R + EDGE_PX, HEAD_LEN + 3 * EDGE_PX, 16);
       headEdge.translate(0, (HEAD_LEN + 3 * EDGE_PX) / 2 - EDGE_PX, 0);
       this.shared = {
-        shaft, head, shaftEdge, headEdge,
+        shaft,
+        head,
+        shaftEdge,
+        headEdge,
         grab: new THREE.SphereGeometry(GRAB_R, 10, 8),
         ball: new THREE.SphereGeometry(PROBE_R, 12, 8),
         hidden: new THREE.MeshBasicMaterial({ visible: false, depthTest: false }),
         orb: new THREE.SphereGeometry(1, 40, 20),
         ring: new THREE.BufferGeometry().setFromPoints(
-          Array.from({ length: 64 }, (_, i) => new THREE.Vector3(Math.cos((i / 64) * 2 * Math.PI), Math.sin((i / 64) * 2 * Math.PI), 0)),
+          Array.from(
+            { length: 64 },
+            (_, i) => new THREE.Vector3(Math.cos((i / 64) * 2 * Math.PI), Math.sin((i / 64) * 2 * Math.PI), 0),
+          ),
         ),
         rim: new THREE.SphereGeometry(RIM_R, 12, 8),
       };
@@ -328,11 +367,16 @@ export class StressGlyphs {
     const key = `${kind}${color}`;
     let m = this.orbMaterials.get(key);
     if (!m) {
-      m = kind === "ring"
-        ? new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 })
-        : new THREE.MeshBasicMaterial({
-            color, transparent: true, depthWrite: false, depthTest: kind === "dome", opacity: kind === "dome" ? 0.38 : 0.1,
-          });
+      m =
+        kind === "ring"
+          ? new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 })
+          : new THREE.MeshBasicMaterial({
+              color,
+              transparent: true,
+              depthWrite: false,
+              depthTest: kind === "dome",
+              opacity: kind === "dome" ? 0.38 : 0.1,
+            });
       this.orbMaterials.set(key, m);
     }
     return m;
@@ -384,8 +428,11 @@ export class StressGlyphs {
     const cam = this.host.camera;
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion);
     const rim = o.at.clone().addScaledVector(right, o.radius);
-    const moved = !o.dome.position.equals(o.at) || Math.abs(o.dome.scale.x - o.radius) > 1e-9 ||
-      !o.ring.quaternion.equals(cam.quaternion) || (!!o.handle && !o.handle.position.equals(rim));
+    const moved =
+      !o.dome.position.equals(o.at) ||
+      Math.abs(o.dome.scale.x - o.radius) > 1e-9 ||
+      !o.ring.quaternion.equals(cam.quaternion) ||
+      (!!o.handle && !o.handle.position.equals(rim));
     for (const part of [o.dome, o.ghost, o.ring]) {
       part.position.copy(o.at);
       part.scale.setScalar(o.radius);
@@ -420,7 +467,18 @@ export class StressGlyphs {
       grab = new THREE.Mesh(g.grab, g.hidden);
       group.add(grab);
     }
-    const a: Arrow = { group, shaft, head, shaftEdge, headEdge, grab, at: new THREE.Vector3(...at), dir: new THREE.Vector3(...dir).normalize(), px, tipAtRoot };
+    const a: Arrow = {
+      group,
+      shaft,
+      head,
+      shaftEdge,
+      headEdge,
+      grab,
+      at: new THREE.Vector3(...at),
+      dir: new THREE.Vector3(...dir).normalize(),
+      px,
+      tipAtRoot,
+    };
     this.shape(a);
     this.host.addToScene(group, "stress");
     this.arrows.push(a);
@@ -485,7 +543,10 @@ export class StressGlyphs {
     }
     for (const p of m.pins) {
       const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...p.from), new THREE.Vector3(...p.to)]);
-      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: PINNED_MARK_COLOR, depthTest: false, transparent: true, opacity: 0.95 }));
+      const line = new THREE.Line(
+        geo,
+        new THREE.LineBasicMaterial({ color: PINNED_MARK_COLOR, depthTest: false, transparent: true, opacity: 0.95 }),
+      );
       line.renderOrder = 998;
       line.raycast = () => {};
       this.host.addToScene(line, "stress");
@@ -507,7 +568,13 @@ export class StressGlyphs {
   /** Keep the frame loop running while the pointer is ours and something is
    *  drawn. Idempotent, so every change can ask for it. */
   private loop() {
-    if (this.raf || !this.attached || !this.host.overlayDrawn("stress") || !(this.arrows.length || this.probes.length || this.orbs.length || this.preview)) return;
+    if (
+      this.raf ||
+      !this.attached ||
+      !this.host.overlayDrawn("stress") ||
+      !(this.arrows.length || this.probes.length || this.orbs.length || this.preview)
+    )
+      return;
     if (typeof requestAnimationFrame === "function") this.raf = requestAnimationFrame(this.tick);
   }
 
@@ -550,7 +617,8 @@ export class StressGlyphs {
   // --- the pointer ---------------------------------------------------------------
 
   private syncAttach() {
-    const want = this.arrows.length > 0 || this.probe || this.probes.length > 0 || this.orbs.length > 0 || !!this.placing;
+    const want =
+      this.arrows.length > 0 || this.probe || this.probes.length > 0 || this.orbs.length > 0 || !!this.placing;
     if (want) this.attach();
     else this.detach();
   }
@@ -586,8 +654,11 @@ export class StressGlyphs {
   private rimAt(x: number, y: number): Orb | null {
     const grabs = this.orbs.filter((o) => o.grab);
     if (!grabs.length) return null;
-    const hit = this.host.rayFrom(x, y).intersectObjects(grabs.map((o) => o.grab!), false)[0];
-    return hit ? grabs.find((o) => o.grab === hit.object) ?? null : null;
+    const hit = this.host.rayFrom(x, y).intersectObjects(
+      grabs.map((o) => o.grab!),
+      false,
+    )[0];
+    return hit ? (grabs.find((o) => o.grab === hit.object) ?? null) : null;
   }
 
   /** Where a click at (x, y) would put a spot. */
@@ -614,7 +685,10 @@ export class StressGlyphs {
   private tipAt(x: number, y: number): number | null {
     const grabs = [...this.forceArrows.entries()].filter(([, a]) => a.grab);
     if (!grabs.length) return null;
-    const hit = this.host.rayFrom(x, y).intersectObjects(grabs.map(([, a]) => a.grab!), false)[0];
+    const hit = this.host.rayFrom(x, y).intersectObjects(
+      grabs.map(([, a]) => a.grab!),
+      false,
+    )[0];
     if (!hit) return null;
     return grabs.find(([, a]) => a.grab === hit.object)?.[0] ?? null;
   }
@@ -635,7 +709,11 @@ export class StressGlyphs {
       e.stopImmediatePropagation();
       // Keep the drag when the pointer leaves the canvas. A browser that has
       // lost track of the pointer refuses, and the drag then ends at the edge.
-      try { this.host.domElement.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+      try {
+        this.host.domElement.setPointerCapture(e.pointerId);
+      } catch {
+        /* not capturable */
+      }
       // The direction the arrow already has first, then "into the face" when
       // the faces have one, then the axes. A snap keeps the first of a tie, and
       // on a face square to an axis "into" is that axis exactly, so a drag
@@ -647,7 +725,10 @@ export class StressGlyphs {
       }
       // Measured from where the press landed on the tip, not from the tip.
       const press = this.dragAt(e.clientX, e.clientY, glyph, candidates);
-      const start = forceDragStart(glyph.force, press ? press.length / this.host.pixelWorldSize(new THREE.Vector3(...glyph.anchor)) : null);
+      const start = forceDragStart(
+        glyph.force,
+        press ? press.length / this.host.pixelWorldSize(new THREE.Vector3(...glyph.anchor)) : null,
+      );
       this.drag = { loadId, glyph, candidates, start, from: { x: e.clientX, y: e.clientY }, moved: false };
       this.setCursor("grabbing");
       return;
@@ -656,7 +737,11 @@ export class StressGlyphs {
     if (rim?.spot) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      try { this.host.domElement.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+      try {
+        this.host.domElement.setPointerCapture(e.pointerId);
+      } catch {
+        /* not capturable */
+      }
       this.spotDrag = { orb: rim, spot: rim.spot, from: { x: e.clientX, y: e.clientY }, moved: false };
       return;
     }
@@ -749,7 +834,11 @@ export class StressGlyphs {
     if (this.drag) {
       const id = this.drag.loadId;
       this.drag = null;
-      try { this.host.domElement.releasePointerCapture(e.pointerId); } catch { /* never captured */ }
+      try {
+        this.host.domElement.releasePointerCapture(e.pointerId);
+      } catch {
+        /* never captured */
+      }
       this.setCursor(this.tipAt(e.clientX, e.clientY) !== null ? "grab" : null);
       this.showLabel(null);
       this.handlers.forceDragEnd(id, false);
@@ -758,7 +847,11 @@ export class StressGlyphs {
     if (this.spotDrag) {
       const d = this.spotDrag;
       this.spotDrag = null;
-      try { this.host.domElement.releasePointerCapture(e.pointerId); } catch { /* never captured */ }
+      try {
+        this.host.domElement.releasePointerCapture(e.pointerId);
+      } catch {
+        /* never captured */
+      }
       this.showLabel(null);
       this.handlers.spotRadiusEnd?.(d.spot.target, d.spot.index, false);
       return;

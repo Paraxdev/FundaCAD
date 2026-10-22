@@ -30,10 +30,20 @@ vi.mock("../../src/io/files", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../src/io/files")>();
   return {
     ...real,
-    openDocumentAtPath: vi.fn(async (_s: unknown, path: string) => { opened.push(`path ${path}`); return "ok"; }),
-    openDocumentBytes: vi.fn(async (_s: unknown, file: File) => { opened.push(`bytes ${file.name}`); return "ok"; }),
-    importPath: vi.fn(async (_s: unknown, _g: unknown, path: string) => { opened.push(`import ${path}`); }),
-    importFileBytes: vi.fn(async (_s: unknown, _g: unknown, file: File) => { opened.push(`import bytes ${file.name}`); }),
+    openDocumentAtPath: vi.fn(async (_s: unknown, path: string) => {
+      opened.push(`path ${path}`);
+      return "ok";
+    }),
+    openDocumentBytes: vi.fn(async (_s: unknown, file: File) => {
+      opened.push(`bytes ${file.name}`);
+      return "ok";
+    }),
+    importPath: vi.fn(async (_s: unknown, _g: unknown, path: string) => {
+      opened.push(`import ${path}`);
+    }),
+    importFileBytes: vi.fn(async (_s: unknown, _g: unknown, file: File) => {
+      opened.push(`import bytes ${file.name}`);
+    }),
     reportError: vi.fn(async () => {}),
   };
 });

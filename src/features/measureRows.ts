@@ -37,7 +37,8 @@ export function measureRows(
   const f = toDisplay(1); // display units per mm (area uses f²)
   const L = (mm: number) => `${displayRound(toDisplay(mm))} ${unit}`;
   const A = (mm2: number) => `${displayRound(mm2 * f * f)} ${unit}²`;
-  const xyz = (v: THREE.Vector3) => `${displayRound(toDisplay(v.x))}, ${displayRound(toDisplay(v.y))}, ${displayRound(toDisplay(v.z))}`;
+  const xyz = (v: THREE.Vector3) =>
+    `${displayRound(toDisplay(v.x))}, ${displayRound(toDisplay(v.y))}, ${displayRound(toDisplay(v.z))}`;
 
   const rows: MeasureRow[] = [];
   const push = (k: string, v: string) => rows.push({ k, v });

@@ -9,34 +9,39 @@ import type { Feature } from "../../src/types";
 const A = { kind: "edge", by: "nearest", point: [0, -46, 20.3], body: "body1" };
 const B = { kind: "edge", by: "nearest", point: [0, 46, 20.3], body: "body1" };
 
-const saved = (): Feature => ({
-  id: "wall_blend",
-  type: "fillet",
-  name: "Bowl to wall blend",
-  radius: 4,
-  edges: [A, B],
-  sizeType: "radius",
-  tangentEdges: true,
-  activeWhen: "detail > 1",
-} as unknown as Feature);
+const saved = (): Feature =>
+  ({
+    id: "wall_blend",
+    type: "fillet",
+    name: "Bowl to wall blend",
+    radius: 4,
+    edges: [A, B],
+    sizeType: "radius",
+    tangentEdges: true,
+    activeWhen: "detail > 1",
+  }) as unknown as Feature;
 
 // What EdgeFeatureTool.buildFeature() makes of it: no name, no activeWhen, the
 // selectors in its own order.
-const toolView = (radius: number, over: Record<string, unknown> = {}): Feature => ({
-  id: "wall_blend",
-  type: "fillet",
-  edges: [B, A],
-  radius,
-  sizeType: "radius",
-  tangentEdges: true,
-  ...over,
-} as unknown as Feature);
+const toolView = (radius: number, over: Record<string, unknown> = {}): Feature =>
+  ({
+    id: "wall_blend",
+    type: "fillet",
+    edges: [B, A],
+    radius,
+    sizeType: "radius",
+    tangentEdges: true,
+    ...over,
+  }) as unknown as Feature;
 
 describe("blendEditCommit, a plain radius", () => {
   it("round-trips the feature except the edited radius", () => {
     const original = saved();
     const { feature, param } = blendEditCommit({
-      original, opened: toolView(4), built: toolView(6), paramRef: null,
+      original,
+      opened: toolView(4),
+      built: toolView(6),
+      paramRef: null,
     });
     expect(param).toBeNull();
     expect(feature).toEqual({ ...original, radius: 6 });
@@ -45,8 +50,10 @@ describe("blendEditCommit, a plain radius", () => {
   });
 
   it("writes nothing when nothing changed", () => {
-    expect(blendEditCommit({ original: saved(), opened: toolView(4), built: toolView(4), paramRef: null }))
-      .toEqual({ feature: null, param: null });
+    expect(blendEditCommit({ original: saved(), opened: toolView(4), built: toolView(4), paramRef: null })).toEqual({
+      feature: null,
+      param: null,
+    });
   });
 
   it("keeps the saved edges, in their saved form, while the members are the same", () => {
@@ -67,7 +74,11 @@ describe("blendEditCommit, a plain radius", () => {
     const built = { id: "wall_blend", type: "chamfer", edges: [B, A], distance: 2 } as unknown as Feature;
     const out = editedBlend(saved(), opened, built) as unknown as Record<string, unknown>;
     expect(out).toEqual({
-      id: "wall_blend", type: "chamfer", name: "Bowl to wall blend", edges: [A, B], distance: 2,
+      id: "wall_blend",
+      type: "chamfer",
+      name: "Bowl to wall blend",
+      edges: [A, B],
+      distance: 2,
       activeWhen: "detail > 1",
     });
   });
@@ -106,7 +117,10 @@ describe("blendEditCommit, a fillet flipped to a chamfer and back", () => {
 describe("blendEditCommit, a radius bound to a bare parameter", () => {
   it("sets the parameter and leaves the feature alone", () => {
     const { feature, param } = blendEditCommit({
-      original: saved(), opened: toolView(4), built: toolView(12), paramRef: "wall_blend_r",
+      original: saved(),
+      opened: toolView(4),
+      built: toolView(12),
+      paramRef: "wall_blend_r",
     });
     expect(feature).toBeNull();
     expect(param).toEqual({ name: "wall_blend_r", value: 12 });
@@ -114,7 +128,10 @@ describe("blendEditCommit, a radius bound to a bare parameter", () => {
 
   it("with another change too, patches that change and keeps the bound radius", () => {
     const { feature, param } = blendEditCommit({
-      original: saved(), opened: toolView(4), built: toolView(5, { continuity: "G2" }), paramRef: "wall_blend_r",
+      original: saved(),
+      opened: toolView(4),
+      built: toolView(5, { continuity: "G2" }),
+      paramRef: "wall_blend_r",
     });
     expect(feature).toEqual({ ...saved(), continuity: "G2" });
     expect(param).toEqual({ name: "wall_blend_r", value: 5 });
@@ -122,7 +139,10 @@ describe("blendEditCommit, a radius bound to a bare parameter", () => {
 
   it("does not touch the parameter when only something else moved", () => {
     const { param } = blendEditCommit({
-      original: saved(), opened: toolView(4), built: toolView(4, { profile: 0.3 }), paramRef: "wall_blend_r",
+      original: saved(),
+      opened: toolView(4),
+      built: toolView(4, { profile: 0.3 }),
+      paramRef: "wall_blend_r",
     });
     expect(param).toBeNull();
   });

@@ -5,7 +5,9 @@ import { isCoreFeatureType, type Feature } from "../types";
  *  reads_visibility). A plugin picks its own targets, so its features always do. */
 export function readsBodyVisibility(f: Feature): boolean {
   const { targets, hiddenBodies, operation } = f as {
-    targets?: unknown; hiddenBodies?: unknown; operation?: unknown;
+    targets?: unknown;
+    hiddenBodies?: unknown;
+    operation?: unknown;
   };
   if (!isCoreFeatureType(f.type)) return true;
   if (Array.isArray(targets) && targets.length) return false;

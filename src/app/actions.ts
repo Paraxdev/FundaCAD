@@ -19,10 +19,28 @@ import type { FaceOffsetMode } from "../features/faceOffsetTool";
 /** View and display actions: they change how the model is looked at, not the
  *  model, so a pick still waiting survives them. */
 const KEEPS_PICK = new Set([
-  "fit", "reset-camera", "iso", "top", "front", "right", "persp",
-  "selmode", "selmode-auto", "selmode-faces", "selmode-bodies",
-  "toggle-xray", "toggle-wireframe", "zebra", "curvature", "draft-analysis", "shortcut-help",
-  "viewmode-matcap", "viewmode-realtime", "viewmode-pathtraced", "viewmode-cycle", "viewmode-cycle-back",
+  "fit",
+  "reset-camera",
+  "iso",
+  "top",
+  "front",
+  "right",
+  "persp",
+  "selmode",
+  "selmode-auto",
+  "selmode-faces",
+  "selmode-bodies",
+  "toggle-xray",
+  "toggle-wireframe",
+  "zebra",
+  "curvature",
+  "draft-analysis",
+  "shortcut-help",
+  "viewmode-matcap",
+  "viewmode-realtime",
+  "viewmode-pathtraced",
+  "viewmode-cycle",
+  "viewmode-cycle-back",
   "clean-view",
 ]);
 
@@ -50,7 +68,9 @@ export function createActions(e: Engine): (action: string) => void {
       e.setStatus("Create or import a body first", "");
       return;
     }
-    e.tools.faceOffset.start(mode, (id) => { if (id) e.selectFeature(id, false); });
+    e.tools.faceOffset.start(mode, (id) => {
+      if (id) e.selectFeature(id, false);
+    });
   }
 
   // Draft (swing a face over to a taper) and Thread (a climbing revolve cut into
@@ -63,7 +83,9 @@ export function createActions(e: Engine): (action: string) => void {
       e.setStatus("Create or import a body first", "");
       return;
     }
-    e.tools[which].start((id) => { if (id) e.selectFeature(id, false); });
+    e.tools[which].start((id) => {
+      if (id) e.selectFeature(id, false);
+    });
   }
 
   return function handleAction(action: string) {
@@ -86,8 +108,7 @@ export function createActions(e: Engine): (action: string) => void {
       const tool = SKETCH_MODIFY[action];
       if (e.sketch.active) {
         if (tool && !e.sketch.applySelectedConstraint(tool)) e.sketch.setTool(tool);
-      }
-      else e.setStatus("Enter a sketch to use modify tools", "");
+      } else e.setStatus("Enter a sketch to use modify tools", "");
       return;
     }
     if (action === "finish") return void e.sketch.finish(true);
@@ -441,9 +462,7 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       }
       case "show-all-bodies":
-        e.store.setBodiesVisibility(
-          new Map((e.store.buildState.result?.bodies ?? []).map((b) => [b.id, true])),
-        );
+        e.store.setBodiesVisibility(new Map((e.store.buildState.result?.bodies ?? []).map((b) => [b.id, true])));
         break;
       case "shortcut-help":
         toggleShortcutHUD();

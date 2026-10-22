@@ -81,11 +81,7 @@ export function edgeChoiceLabel(
  *  place in the browser, so "Box 2" in the menu is the second Box in the tree
  *  rather than the second row of this particular menu.
  */
-export function bodyRowLabel(
-  name: string | null,
-  index: number,
-  sharedByOthers: boolean,
-): string | null {
+export function bodyRowLabel(name: string | null, index: number, sharedByOthers: boolean): string | null {
   if (!name) return null;
   return sharedByOthers && index >= 0 ? `${name} ${index + 1}` : name;
 }

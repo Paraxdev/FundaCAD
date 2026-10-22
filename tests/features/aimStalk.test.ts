@@ -35,7 +35,12 @@ describe("aimFollow", () => {
   it("a press that has not moved leaves the direction as it was", () => {
     const from = new THREE.Vector3(0.6, 0, 0.8);
     const d = aimFollow(new THREE.Vector3(0.3, -0.4, 0.866).normalize(), from, from.clone());
-    expect(d.toArray().map((x) => +x.toFixed(9))).toEqual(new THREE.Vector3(0.3, -0.4, 0.866).normalize().toArray().map((x) => +x.toFixed(9)));
+    expect(d.toArray().map((x) => +x.toFixed(9))).toEqual(
+      new THREE.Vector3(0.3, -0.4, 0.866)
+        .normalize()
+        .toArray()
+        .map((x) => +x.toFixed(9)),
+    );
   });
 });
 

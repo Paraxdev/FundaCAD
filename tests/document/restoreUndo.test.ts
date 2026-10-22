@@ -29,15 +29,31 @@ describe("undo after a restore", () => {
     const { s, v1 } = workedOn();
     const before = s.workingSnapshot();
     expect(Object.keys(before).sort()).toEqual([
-      "bodyColors", "bodyNames", "elements", "environment", "features", "futureKey", "palette",
-      "paramDefs", "parameters", "referenceImages", "rollback", "stress", "suppressed", "version",
+      "bodyColors",
+      "bodyNames",
+      "elements",
+      "environment",
+      "features",
+      "futureKey",
+      "palette",
+      "paramDefs",
+      "parameters",
+      "referenceImages",
+      "rollback",
+      "stress",
+      "suppressed",
+      "version",
     ]);
     s.restoreVersion(v1.id);
     const restored = s.workingSnapshot();
     expect(restored.features).toEqual([box("f1", 10.5)]);
     s.undo();
     expect(s.workingSnapshot()).toEqual(before);
-    expect([s.isSuppressed("f2"), s.stressStudy, s.documentEnvironment]).toEqual([true, study, { settings: { exposure: 2.25 } }]);
+    expect([s.isSuppressed("f2"), s.stressStudy, s.documentEnvironment]).toEqual([
+      true,
+      study,
+      { settings: { exposure: 2.25 } },
+    ]);
     s.redo();
     expect(s.workingSnapshot()).toEqual(restored);
     s.undo();
@@ -82,7 +98,10 @@ describe("undo after a restore", () => {
     s.switchVersionBranch("main");
     expect([s.versionRepo!.current, s.workingSnapshot().features]).toEqual(["main", [box("f1", 10.5)]]);
     s.undo();
-    expect([s.versionRepo!.current, s.workingSnapshot().features]).toEqual(["lean", [box("f1", 10.5), box("f5", 6.75, 1.25)]]);
+    expect([s.versionRepo!.current, s.workingSnapshot().features]).toEqual([
+      "lean",
+      [box("f1", 10.5), box("f5", 6.75, 1.25)],
+    ]);
     expect(s.versionRepo!.branches).toEqual({ main: v1.id, lean: lean.id });
   });
 
@@ -109,7 +128,8 @@ describe("undo after a restore", () => {
       s.undo();
       return s;
     };
-    const noMain = (d: CadDocument) => void delete (d.versions as { branches: Record<string, string> }).branches["main"];
+    const noMain = (d: CadDocument) =>
+      void delete (d.versions as { branches: Record<string, string> }).branches["main"];
     for (const drop of [() => {}, noMain, (d: CadDocument) => void delete d.versions]) {
       const { versionRepo } = carried(drop);
       expect([versionRepo!.current, Object.keys(versionRepo!.branches)]).toEqual(["main", ["main", "lean"]]);
@@ -127,22 +147,37 @@ describe("undo after a restore", () => {
   });
 
   it.each([
-    ["stress", { stress: study }, { stress: { future: true, nodes: [1.5, 2] } }, (s: DocumentStore) => s.setStressStudy(null)],
-    ["environment", { environment: env(1.75) }, { environment: { name: "future", sky: 3 } }, (s: DocumentStore) => s.setDocumentEnvironment(null)],
-  ])("drops the unreadable %s section a replacing load brought once undo brings the readable one back, and redo keeps a clear made since", (key, own, unreadable, clear) => {
-    const s = opened({ features: [box("f1", 10.5)], ...own });
-    s.loadDocument({ parameters: {}, features: [box("f1", 10.5)], ...unreadable } as unknown as CadDocument, { replace: true });
-    expect(saved(s)[key]).toEqual(Object.values(unreadable)[0]);
-    s.undo();
-    expect(saved(s)[key]).toEqual(Object.values(own)[0]);
-    s.redo();
-    expect(saved(s)[key]).toEqual(Object.values(unreadable)[0]);
-    s.undo();
-    clear(s);
-    expect(key in saved(s)).toBe(false);
-    s.redo();
-    expect(key in saved(s)).toBe(false);
-  });
+    [
+      "stress",
+      { stress: study },
+      { stress: { future: true, nodes: [1.5, 2] } },
+      (s: DocumentStore) => s.setStressStudy(null),
+    ],
+    [
+      "environment",
+      { environment: env(1.75) },
+      { environment: { name: "future", sky: 3 } },
+      (s: DocumentStore) => s.setDocumentEnvironment(null),
+    ],
+  ])(
+    "drops the unreadable %s section a replacing load brought once undo brings the readable one back, and redo keeps a clear made since",
+    (key, own, unreadable, clear) => {
+      const s = opened({ features: [box("f1", 10.5)], ...own });
+      s.loadDocument({ parameters: {}, features: [box("f1", 10.5)], ...unreadable } as unknown as CadDocument, {
+        replace: true,
+      });
+      expect(saved(s)[key]).toEqual(Object.values(unreadable)[0]);
+      s.undo();
+      expect(saved(s)[key]).toEqual(Object.values(own)[0]);
+      s.redo();
+      expect(saved(s)[key]).toEqual(Object.values(unreadable)[0]);
+      s.undo();
+      clear(s);
+      expect(key in saved(s)).toBe(false);
+      s.redo();
+      expect(key in saved(s)).toBe(false);
+    },
+  );
 
   it.each([
     ["an isolate", true],

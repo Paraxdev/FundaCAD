@@ -43,7 +43,8 @@ const BUILD_DIR_FIELD: ChoiceField = {
   label: "Build direction",
   options: BUILD_DIRS,
   fallback: "+Z",
-  title: "The direction the printer stacks layers, so the roof points up. Taken from Overhang when the feature is made.",
+  title:
+    "The direction the printer stacks layers, so the roof points up. Taken from Overhang when the feature is made.",
 };
 
 export const FACES_TARGET: readonly TargetField[] = [
@@ -135,7 +136,8 @@ export const SACRIFICIAL_LAYER: PrintTool = {
         { value: "top", label: "Top" },
       ],
       fallback: "bottom",
-      title: "Which opening is closed when a hole's inside face was picked, lowest or highest along the build direction.",
+      title:
+        "Which opening is closed when a hole's inside face was picked, lowest or highest along the build direction.",
     },
   ],
   pick: "faces",
@@ -177,9 +179,13 @@ export const ZIP_TIE_CHANNEL: PrintTool = {
     ["angle", "Angle", "angle"],
   ],
   choiceFields: [],
-  toggleFields: [{
-    field: "allowBreakthrough", label: "Allow breakthrough", fallback: false,
-  }],
+  toggleFields: [
+    {
+      field: "allowBreakthrough",
+      label: "Allow breakthrough",
+      fallback: false,
+    },
+  ],
   pick: "faces",
   targets: FACES_TARGET,
 };
@@ -219,8 +225,14 @@ export const VERTICAL_FILLET: PrintTool = {
 };
 
 export const PRINT_TOOLS: readonly PrintTool[] = [
-  TEARDROP, ROOF_BRIDGE, COUNTERBORE_BRIDGE, SACRIFICIAL_LAYER,
-  THREAD_RIBS, ZIP_TIE_CHANNEL, ELEPHANT_FOOT_CHAMFER, VERTICAL_FILLET,
+  TEARDROP,
+  ROOF_BRIDGE,
+  COUNTERBORE_BRIDGE,
+  SACRIFICIAL_LAYER,
+  THREAD_RIBS,
+  ZIP_TIE_CHANNEL,
+  ELEPHANT_FOOT_CHAMFER,
+  VERTICAL_FILLET,
 ];
 
 export interface FacePick {
@@ -229,12 +241,15 @@ export interface FacePick {
 }
 
 export function faceSelectors(picks: readonly FacePick[]): Selector[] {
-  return picks.map((p) => ({
-    kind: "face",
-    by: "nearest",
-    point: p.point,
-    ...(p.body ? { body: p.body } : {}),
-  }) as Selector);
+  return picks.map(
+    (p) =>
+      ({
+        kind: "face",
+        by: "nearest",
+        point: p.point,
+        ...(p.body ? { body: p.body } : {}),
+      }) as Selector,
+  );
 }
 
 /** The feature a pick makes, or null when nothing was picked. */
@@ -258,12 +273,7 @@ export function featureFor(
 /** The feature a body-target tool makes: `bodies` when any are selected, left
  *  off entirely so the builder's own "active body" fallback applies (the same
  *  `whenEmpty` contract BODIES_TARGET declares). */
-export function bodyFeatureFor(
-  tool: PrintTool,
-  id: string,
-  bodyIds: readonly string[],
-  buildDir: BuildDir,
-): Feature {
+export function bodyFeatureFor(tool: PrintTool, id: string, bodyIds: readonly string[], buildDir: BuildDir): Feature {
   return {
     id,
     type: tool.type,

@@ -11,17 +11,30 @@ vi.mock("@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url", () => ({
 import { compileAndSolve } from "../../src/sketch/sketchSolve";
 import { rectCorners, rectFromThreePoints } from "../../src/sketch/region";
 
-const line = (id: string, x1: number, y1: number, x2: number, y2: number) => ({ type: "line", id, x1, y1, x2, y2 }) as ResolvedEntity;
-const circle = (id: string, x: number, y: number, radius: number) => ({ type: "circle", id, x, y, radius }) as ResolvedEntity;
-const fixLine = (e: string): SketchConstraint[] => [{ type: "fix", e, p: 0 }, { type: "fix", e, p: 1 }];
+const line = (id: string, x1: number, y1: number, x2: number, y2: number) =>
+  ({ type: "line", id, x1, y1, x2, y2 }) as ResolvedEntity;
+const circle = (id: string, x: number, y: number, radius: number) =>
+  ({ type: "circle", id, x, y, radius }) as ResolvedEntity;
+const fixLine = (e: string): SketchConstraint[] => [
+  { type: "fix", e, p: 0 },
+  { type: "fix", e, p: 1 },
+];
 
 describe("a circle centred on a line may leave it for either side", () => {
   // l runs (2,1) to (12,6); n is its unit normal, the centre (7,3.5) is l's midpoint
   const l = line("l", 2, 1, 12, 6);
   const n = { x: -5 / Math.hypot(5, 10), y: 10 / Math.hypot(5, 10) };
-  const cons: SketchConstraint[] = [...fixLine("l"), { type: "radius", e: "c", value: 2 }, { type: "c2lDistance", circle: "c", line: "l", value: -1 }];
+  const cons: SketchConstraint[] = [
+    ...fixLine("l"),
+    { type: "radius", e: "c", value: 2 },
+    { type: "c2lDistance", circle: "c", line: "l", value: -1 },
+  ];
 
-  for (const [label, t] of [["exactly on it", 0], ["within 1e-9 of it", 4e-10], ["clearly on one side", -0.25]] as const) {
+  for (const [label, t] of [
+    ["exactly on it", 0],
+    ["within 1e-9 of it", 4e-10],
+    ["clearly on one side", -0.25],
+  ] as const) {
     it(`accepts a c2lDistance solve with the centre ${label}`, async () => {
       const c = circle("c", 7 + t * n.x, 3.5 + t * n.y, 2);
       const r = await compileAndSolve([l, c], cons);
@@ -30,7 +43,10 @@ describe("a circle centred on a line may leave it for either side", () => {
       if (t < 0) expect(dist).toBeLessThan(0);
       expect({ ...r, entities: [r.entities[0], { dist: Math.abs(dist), radius: s.radius }] }).toEqual({
         entities: [l, { dist: expect.closeTo(1, 9), radius: expect.closeTo(2, 9) }],
-        dof: 1, ok: true, conflicts: [], overDefined: [],
+        dof: 1,
+        ok: true,
+        conflicts: [],
+        overDefined: [],
       });
     });
   }
@@ -39,10 +55,18 @@ describe("a circle centred on a line may leave it for either side", () => {
     const q = { type: "point", id: "q", x: 7 - 0.5 * n.x, y: 3.5 - 0.5 * n.y } as ResolvedEntity;
     const c = circle("c", 7 + 0.5 * n.x, 3.5 + 0.5 * n.y, 2);
     const hop: SketchConstraint[] = [
-      ...fixLine("l"), { type: "c2lDistance", circle: "c", line: "l", value: -1 },
-      { type: "fix", e: "q", p: 0 }, { type: "coincident", e1: "c", p1: 0, e2: "q", p2: 0 },
+      ...fixLine("l"),
+      { type: "c2lDistance", circle: "c", line: "l", value: -1 },
+      { type: "fix", e: "q", p: 0 },
+      { type: "coincident", e1: "c", p1: 0, e2: "q", p2: 0 },
     ];
-    expect(await compileAndSolve([l, q, c], hop)).toEqual({ entities: [l, q, c], dof: 0, ok: false, conflicts: ["k2"], overDefined: [] });
+    expect(await compileAndSolve([l, q, c], hop)).toEqual({
+      entities: [l, q, c],
+      dof: 0,
+      ok: false,
+      conflicts: ["k2"],
+      overDefined: [],
+    });
   });
 });
 
@@ -81,9 +105,16 @@ describe("collinear on lines that share a point adds one equation", () => {
       const first = await compileAndSolve([a, b], col);
       const again = await compileAndSolve(first.entities, col);
       for (const r of [first, again]) {
-        expect({ dof: r.dof, ok: r.ok, conflicts: r.conflicts, overDefined: r.overDefined }).toEqual({ dof, ok: true, conflicts: [], overDefined: [] });
+        expect({ dof: r.dof, ok: r.ok, conflicts: r.conflicts, overDefined: r.overDefined }).toEqual({
+          dof,
+          ok: true,
+          conflicts: [],
+          overDefined: [],
+        });
         const [sa, sb] = r.entities as { x1: number; y1: number; x2: number; y2: number }[];
-        const off = (x: number, y: number) => ((x - sa!.x1) * (sa!.y2 - sa!.y1) - (y - sa!.y1) * (sa!.x2 - sa!.x1)) / Math.hypot(sa!.x2 - sa!.x1, sa!.y2 - sa!.y1);
+        const off = (x: number, y: number) =>
+          ((x - sa!.x1) * (sa!.y2 - sa!.y1) - (y - sa!.y1) * (sa!.x2 - sa!.x1)) /
+          Math.hypot(sa!.x2 - sa!.x1, sa!.y2 - sa!.y1);
         expect([off(sb!.x1, sb!.y1), off(sb!.x2, sb!.y2)].map((v) => +v.toFixed(9) + 0)).toEqual([0, 0]);
       }
     });
@@ -91,14 +122,35 @@ describe("collinear on lines that share a point adds one equation", () => {
 });
 
 describe("a radial gap that leaves the inner circle no radius is refused", () => {
-  for (const [ro, ri, gap, ok] of [[0.7, 0.3, 0.7, false], [12.345, 6, 12.345, false], [5, 3, 5, false], [0.7, 0.3, 0.7 - 1e-6, true]] as const) {
+  for (const [ro, ri, gap, ok] of [
+    [0.7, 0.3, 0.7, false],
+    [12.345, 6, 12.345, false],
+    [5, 3, 5, false],
+    [0.7, 0.3, 0.7 - 1e-6, true],
+  ] as const) {
     it(`outer ${ro}, gap ${gap}: ${ok ? "solves" : "refused"}`, async () => {
-      const o = circle("o", 3.1, -1.7, ro), i = circle("i", 3.1, -1.7, ri);
-      const cons: SketchConstraint[] = [{ type: "concentric", c1: "o", c2: "i" }, { type: "radius", e: "o", value: ro }, { type: "radialGap", inner: "i", outer: "o", value: gap }];
+      const o = circle("o", 3.1, -1.7, ro),
+        i = circle("i", 3.1, -1.7, ri);
+      const cons: SketchConstraint[] = [
+        { type: "concentric", c1: "o", c2: "i" },
+        { type: "radius", e: "o", value: ro },
+        { type: "radialGap", inner: "i", outer: "o", value: gap },
+      ];
       const r = await compileAndSolve([o, i], cons);
-      expect(r).toEqual(ok
-        ? { entities: [o, { ...i, x: expect.closeTo(3.1, 9), y: expect.closeTo(-1.7, 9), radius: expect.closeTo(1e-6, 12) }], dof: 2, ok: true, conflicts: [], overDefined: [] }
-        : { entities: [o, i], dof: 2, ok: false, conflicts: ["k2"], overDefined: [] });
+      expect(r).toEqual(
+        ok
+          ? {
+              entities: [
+                o,
+                { ...i, x: expect.closeTo(3.1, 9), y: expect.closeTo(-1.7, 9), radius: expect.closeTo(1e-6, 12) },
+              ],
+              dof: 2,
+              ok: true,
+              conflicts: [],
+              overDefined: [],
+            }
+          : { entities: [o, i], dof: 2, ok: false, conflicts: ["k2"], overDefined: [] },
+      );
     });
   }
 });

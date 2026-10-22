@@ -57,8 +57,19 @@ describe("selection paint stays out of a picture", () => {
     const faceTriangles = new Map<number, number[]>();
     for (let f = 0; f < 6; f++) faceTriangles.set(f, [f * 2, f * 2 + 1]);
     const faceIds = Array.from({ length: 12 }, (_, t) => Math.floor(t / 2));
-    const body = { id: "b1", mesh: new THREE.Mesh(geometry), faceStart: 0, faceCount: 6, faceTriangles, faceIds, baseColors: base };
-    return { v: { bodies: [body] } as unknown as ModelView, color: geometry.getAttribute("color") as THREE.BufferAttribute };
+    const body = {
+      id: "b1",
+      mesh: new THREE.Mesh(geometry),
+      faceStart: 0,
+      faceCount: 6,
+      faceTriangles,
+      faceIds,
+      baseColors: base,
+    };
+    return {
+      v: { bodies: [body] } as unknown as ModelView,
+      color: geometry.getAttribute("color") as THREE.BufferAttribute,
+    };
   }
   function edge() {
     const colours: number[] = [];
@@ -68,8 +79,11 @@ describe("selection paint stays out of a picture", () => {
     };
     return { e: { draw, slot: 0 } as unknown as EdgeRef, last: () => colours.at(-1) };
   }
-  const faceColour = (attr: THREE.BufferAttribute, f: number, index: THREE.BufferAttribute) =>
-    [attr.getX(index.getX(f * 6)), attr.getY(index.getX(f * 6)), attr.getZ(index.getX(f * 6))];
+  const faceColour = (attr: THREE.BufferAttribute, f: number, index: THREE.BufferAttribute) => [
+    attr.getX(index.getX(f * 6)),
+    attr.getY(index.getX(f * 6)),
+    attr.getZ(index.getX(f * 6)),
+  ];
 
   it("draws selected and hovered faces and edges plain during the picture and tinted after", () => {
     const { v, color } = view();
@@ -93,7 +107,10 @@ describe("selection paint stays out of a picture", () => {
       during = [faceColour(color, 1, index), faceColour(color, 2, index)];
       edgesDuring = [sel.last(), hov.last()];
     });
-    expect(during).toEqual([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5]]);
+    expect(during).toEqual([
+      [0.5, 0.5, 0.5],
+      [0.5, 0.5, 0.5],
+    ]);
     expect(edgesDuring).not.toContain(selEdge);
     expect(edgesDuring).not.toContain(hovEdge);
 

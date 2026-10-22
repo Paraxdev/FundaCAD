@@ -109,8 +109,12 @@ export function auditIsClean(a: SceneAuditResult): boolean {
 export function auditLine(a: SceneAuditResult): string {
   if (auditIsClean(a)) return `scene clean: ${a.bodies} bodies, ${a.children} objects`;
   const parts: string[] = [];
-  if (a.extra.length) parts.push(`${a.extra.length} EXTRA [${a.extra.slice(0, 4).join("; ")}${a.extra.length > 4 ? "; ..." : ""}]`);
-  if (a.missing.length) parts.push(`${a.missing.length} MISSING [${a.missing.slice(0, 4).join("; ")}${a.missing.length > 4 ? "; ..." : ""}]`);
+  if (a.extra.length)
+    parts.push(`${a.extra.length} EXTRA [${a.extra.slice(0, 4).join("; ")}${a.extra.length > 4 ? "; ..." : ""}]`);
+  if (a.missing.length)
+    parts.push(
+      `${a.missing.length} MISSING [${a.missing.slice(0, 4).join("; ")}${a.missing.length > 4 ? "; ..." : ""}]`,
+    );
   if (a.duplicateIds.length) parts.push(`duplicate body ids [${a.duplicateIds.slice(0, 4).join("; ")}]`);
   return `scene MISMATCH: ${a.bodies} bodies, ${a.children} objects, ${parts.join(", ")}`;
 }

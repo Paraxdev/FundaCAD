@@ -39,8 +39,8 @@ describe("feature ids follow the app, not the agent", () => {
     // exactly the sort of thing a plugin author would otherwise discover by
     // having predicted an id.
     const b = testBroker();
-    await b.call("feature_add", { feature: { type: "box" } });   // f1
-    await b.call("feature_add", { feature: { type: "box" } });   // f2
+    await b.call("feature_add", { feature: { type: "box" } }); // f1
+    await b.call("feature_add", { feature: { type: "box" } }); // f2
     await b.call("feature_remove", { id: "f1" });
     const r = await b.call("feature_add", { feature: { type: "box" } });
     expect(value<{ id: string }>(r).id).toBe("f3");

@@ -40,18 +40,17 @@ export function rotationFrame(axis: THREE.Vector3): RotationFrame {
   // rotation axis is LEAST aligned with keeps the cross product well
   // conditioned, which matters because this runs on the world axes themselves.
   const ref = Math.abs(n.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
-  const u = ref.clone().sub(n.clone().multiplyScalar(ref.dot(n))).normalize();
+  const u = ref
+    .clone()
+    .sub(n.clone().multiplyScalar(ref.dot(n)))
+    .normalize();
   const v = n.clone().cross(u); // unit: n ⟂ u, both unit
   return { u, v };
 }
 
 /** Where a world point sits, as an angle about the pivot, in that frame.
  *  Radians, right-handed about the frame's axis. */
-export function angleInFrame(
-  point: THREE.Vector3,
-  pivot: THREE.Vector3,
-  frame: RotationFrame,
-): number {
+export function angleInFrame(point: THREE.Vector3, pivot: THREE.Vector3, frame: RotationFrame): number {
   const rel = point.clone().sub(pivot);
   return Math.atan2(rel.dot(frame.v), rel.dot(frame.u));
 }
@@ -89,11 +88,7 @@ export interface MoveValues {
  *  Angles come out in degrees in the kernel's own order (see the header). The
  *  translation carries the pivot correction, which is the whole reason this
  *  exists. */
-export function composeMove(
-  pivot: THREE.Vector3,
-  rot: THREE.Quaternion,
-  translate: THREE.Vector3,
-): MoveValues {
+export function composeMove(pivot: THREE.Vector3, rot: THREE.Quaternion, translate: THREE.Vector3): MoveValues {
   const e = new THREE.Euler().setFromQuaternion(rot, "XYZ");
   const spun = pivot.clone().applyQuaternion(rot);
   // The `+ 0` is not decoration: a zero rotation comes back out of the Euler
@@ -119,9 +114,7 @@ export function composeMove(
  *  preview that looks right and a rebuild that jumps. */
 export function moveMatrix(v: MoveValues): THREE.Matrix4 {
   const rad = (d: number) => (d * Math.PI) / 180;
-  const m = new THREE.Matrix4().makeRotationFromEuler(
-    new THREE.Euler(rad(v.rx), rad(v.ry), rad(v.rz), "XYZ"),
-  );
+  const m = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rad(v.rx), rad(v.ry), rad(v.rz), "XYZ"));
   m.premultiply(new THREE.Matrix4().makeTranslation(v.dx, v.dy, v.dz));
   return m;
 }

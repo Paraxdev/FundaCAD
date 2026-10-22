@@ -11,7 +11,19 @@ import { sketchRail } from "../ui/railDefs";
 export interface ReadHost {
   store: Pick<
     DocumentStore,
-    "document" | "buildState" | "rollbackIndex" | "isSuppressed" | "isBodyVisible" | "bodyMaterialOf" | "bodyColorSlot" | "busyState" | "previewError" | "canUndo" | "canRedo" | "dirty" | "fileName"
+    | "document"
+    | "buildState"
+    | "rollbackIndex"
+    | "isSuppressed"
+    | "isBodyVisible"
+    | "bodyMaterialOf"
+    | "bodyColorSlot"
+    | "busyState"
+    | "previewError"
+    | "canUndo"
+    | "canRedo"
+    | "dirty"
+    | "fileName"
   >;
   viewport: Pick<Viewport, "getSelectedBodies" | "getSelectedFaceIds" | "selectedEdgeLines" | "faceIdToBodyId">;
 }
@@ -90,7 +102,11 @@ export function selection(h: ReadHost, doc: Document = document): Selection {
 
 /** The element's own text, without its children's or a dev build's comments. */
 function ownText(el: Element): string {
-  return [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim();
+  return [...el.childNodes]
+    .filter((n) => n.nodeType === 3)
+    .map((n) => n.textContent)
+    .join("")
+    .trim();
 }
 
 function text(doc: Document, sel: string): string {
@@ -106,7 +122,9 @@ export interface Message {
 
 export function messages(since = 0): { seq: number; rows: Message[] } {
   const all = logEntries();
-  const rows = all.filter((e) => e.id > since).slice(-100)
+  const rows = all
+    .filter((e) => e.id > since)
+    .slice(-100)
     .map((e) => ({ seq: e.id, level: e.level, text: e.message, at: e.at }));
   return { seq: all.length ? all[all.length - 1]!.id : since, rows };
 }
@@ -185,7 +203,9 @@ export function status(h: ReadHost, doc: Document = document, since = 0): Status
     selection: text(doc, "[data-testid=selection-readout]"),
     recent: last ? { seq: last.id, level: last.level, text: last.message, at: last.at } : null,
     error: lastError(h, since),
-    warnings: [...doc.querySelectorAll("#viewcontrols .perf-warn")].map((b) => b.getAttribute("title") ?? "").filter(Boolean),
+    warnings: [...doc.querySelectorAll("#viewcontrols .perf-warn")]
+      .map((b) => b.getAttribute("title") ?? "")
+      .filter(Boolean),
     busy: busyText(h),
   };
 }
@@ -221,7 +241,8 @@ export function guide(doc: Document = document): GuideReadout | null {
     if (!b) continue;
     if (!outline) outline = b;
     else {
-      const right = Math.max(outline.left + outline.width, b.left + b.width), bottom = Math.max(outline.top + outline.height, b.top + b.height);
+      const right = Math.max(outline.left + outline.width, b.left + b.width),
+        bottom = Math.max(outline.top + outline.height, b.top + b.height);
       outline = { left: Math.min(outline.left, b.left), top: Math.min(outline.top, b.top), width: 0, height: 0 };
       outline.width = right - outline.left;
       outline.height = bottom - outline.top;

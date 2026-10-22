@@ -14,7 +14,10 @@ const TOKEN = process.env.SC_TOKEN || "";
 const APP = process.env.SC_URL || "http://localhost:5173/";
 const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = process.env.SC_OUT || path.join(os.tmpdir(), "matcap_swatches_e2e");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 fs.mkdirSync(OUT, { recursive: true });
 
 let failures = 0;
@@ -35,7 +38,9 @@ function check(ok, what, detail) {
     await page.addInitScript((ws) => {
       const W = window.WebSocket;
       window.WebSocket = class extends W {
-        constructor(u, p) { super(String(u).replace(":8765", `:${ws}`), p); }
+        constructor(u, p) {
+          super(String(u).replace(":8765", `:${ws}`), p);
+        }
       };
     }, ENGINE_PORT);
     await page.goto(`${APP}?token=${TOKEN}`);
@@ -49,12 +54,18 @@ function check(ok, what, detail) {
       setRenderPref("viewModeModel", "matcap");
       setRenderPref("matcapStyle", "studio");
       setRenderPref("matcapTint", true);
-      const s = window.store, v = window.viewport;
-      s.load(JSON.stringify({ parameters: {}, features: [
-        { id: "a", type: "sphere", radius: 12 },
-        { id: "b", type: "cylinder", radius: 7, height: 26 },
-        { id: "m", type: "move", bodies: ["body2"], dx: 30, dy: 0, dz: 0, rx: 0, ry: 0, rz: 0 },
-      ] }));
+      const s = window.store,
+        v = window.viewport;
+      s.load(
+        JSON.stringify({
+          parameters: {},
+          features: [
+            { id: "a", type: "sphere", radius: 12 },
+            { id: "b", type: "cylinder", radius: 7, height: 26 },
+            { id: "m", type: "move", bodies: ["body2"], dx: 30, dy: 0, dz: 0, rx: 0, ry: 0, rz: 0 },
+          ],
+        }),
+      );
       while (s.buildState.building || v.bodyMeshes.length < 2) await new Promise((r) => setTimeout(r, 200));
       s.setBodiesMaterial(["body1"], s.addMaterial({ name: "red", color: "#d83a3a" }));
       s.setBodiesMaterial(["body2"], s.addMaterial({ name: "blue", color: "#2f6bff" }));
@@ -67,10 +78,11 @@ function check(ok, what, detail) {
     await page.waitForSelector(".matcap-swatch");
     const names = await page.$$eval(".matcap-swatch", (b) => b.map((x) => x.dataset.matcap));
     check(names.join() === "studio,clay,metal,wax", "four swatches", names);
-    const mat = () => page.evaluate(() => {
-      const t = window.viewport.scene.post.matcap?.mats;
-      return t ? [...t.values()].map((x) => x.flat.vertexColors) : null;
-    });
+    const mat = () =>
+      page.evaluate(() => {
+        const t = window.viewport.scene.post.matcap?.mats;
+        return t ? [...t.values()].map((x) => x.flat.vertexColors) : null;
+      });
     const shot = async (name) => {
       await page.waitForTimeout(500);
       await page.screenshot({ path: path.join(OUT, name) });
@@ -80,7 +92,10 @@ function check(ok, what, detail) {
     await page.click('.matcap-swatch[data-matcap="metal"]');
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("fundacad.render")).matcapStyle);
     check(saved === "metal", "the choice is saved", saved);
-    check(await page.getAttribute('.matcap-swatch[data-matcap="metal"]', "aria-pressed") === "true", "the swatch shows active");
+    check(
+      (await page.getAttribute('.matcap-swatch[data-matcap="metal"]', "aria-pressed")) === "true",
+      "the swatch shows active",
+    );
     await shot("metal.png");
 
     await page.click('.matcap-swatch[data-matcap="wax"]');
@@ -92,7 +107,11 @@ function check(ok, what, detail) {
     await shot("plain.png");
     const after = await mat();
     check(tint === false, "tint turned off", tint);
-    check(before && after && before.every((v) => v === true) && after.every((v) => v === false), "plain drops the body colours", { before, after });
+    check(
+      before && after && before.every((v) => v === true) && after.every((v) => v === false),
+      "plain drops the body colours",
+      { before, after },
+    );
 
     await page.reload();
     await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });

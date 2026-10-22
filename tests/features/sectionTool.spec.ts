@@ -430,7 +430,10 @@ describe("section phases", () => {
   it("a slanted plane drags along its own normal, and F flips the kept side and the handle about it", () => {
     const def: PlaneDef = { origin: [52, -7, 31], normal: [0, -0.6, 0.8], xdir: [1, 0, 0] };
     const anchor = sectionAnchor(def.origin, def.normal, CENTRE);
-    const at = (offset: number, side: 1 | -1): Sent => ({ ...clipPlaneAt(anchor, def.normal, offset, side), ghost: 0.14 });
+    const at = (offset: number, side: 1 | -1): Sent => ({
+      ...clipPlaneAt(anchor, def.normal, offset, side),
+      ghost: 0.14,
+    });
     const { tool, canvas, state, sent, scene } = setup();
     tool.start({ kind: "plane", def });
     flushFrames();
@@ -446,7 +449,9 @@ describe("section phases", () => {
     expect(sent.at(-1)).toEqual(at(10, -1));
     const handle = handles(scene)[0]!;
     const round = (v: THREE.Vector3) => v.toArray().map((x) => Math.round(x * 1e6) / 1e6 + 0);
-    expect(round(handle.position)).toEqual(round(new THREE.Vector3(...anchor).addScaledVector(new THREE.Vector3(...def.normal), 10)));
+    expect(round(handle.position)).toEqual(
+      round(new THREE.Vector3(...anchor).addScaledVector(new THREE.Vector3(...def.normal), 10)),
+    );
     expect(round(HANDLE_UP.clone().applyQuaternion(handle.quaternion))).toEqual([0, 0.6, -0.8]);
   });
 
@@ -471,7 +476,9 @@ function fakeSaved(initial: SectionView | null = null) {
   let cut = initial && readSectionView(initial);
   const writes: (SectionView | null)[] = [];
   const listeners = new Set<(v: SectionView | null) => void>();
-  const tell = () => { for (const fn of [...listeners]) fn(cut); };
+  const tell = () => {
+    for (const fn of [...listeners]) fn(cut);
+  };
   return {
     writes,
     saved: {
@@ -484,7 +491,9 @@ function fakeSaved(initial: SectionView | null = null) {
       onChange: (fn: (v: SectionView | null) => void) => {
         listeners.add(fn);
         fn(cut);
-        return () => { listeners.delete(fn); };
+        return () => {
+          listeners.delete(fn);
+        };
       },
     },
     outside: (v: SectionView | null) => {
@@ -511,9 +520,21 @@ describe("the section and its saved cut", () => {
     document.body.innerHTML = "";
   });
 
-  const cut = (offset: number, extra: Partial<SectionView> = {}): SectionView =>
-    ({ origin: CENTRE, normal: [0, 0, 1], offset, side: 1, ghost: "soft", ...extra });
-  const OTHER: SectionView = { origin: [-14, 33, 7.5], normal: [0, -0.8, 0.6], offset: 4.75, side: -1, ghost: "strong" };
+  const cut = (offset: number, extra: Partial<SectionView> = {}): SectionView => ({
+    origin: CENTRE,
+    normal: [0, 0, 1],
+    offset,
+    side: 1,
+    ghost: "soft",
+    ...extra,
+  });
+  const OTHER: SectionView = {
+    origin: [-14, 33, 7.5],
+    normal: [0, -0.8, 0.6],
+    offset: 4.75,
+    side: -1,
+    ghost: "strong",
+  };
 
   it("writes the cut when it starts, on each drag step and on Enter, and null on Off", () => {
     const store = fakeSaved();
@@ -554,7 +575,10 @@ describe("the section and its saved cut", () => {
     ]);
     expect(store.saved.get()).toEqual(cut(0, { origin: [37.5, -12, 2], ghost: "strong" }));
     const at = clipPlaneAt([37.5, -12, 2], [0, 0, 1], 0, 1);
-    expect(sent).toEqual([{ ...at, ghost: 0.14 }, { ...at, ghost: 0.3 }]);
+    expect(sent).toEqual([
+      { ...at, ghost: 0.14 },
+      { ...at, ghost: 0.3 },
+    ]);
   });
 
   it("takes on a cut changed under it: an edit ends, an aim ends once, and null turns it off", () => {

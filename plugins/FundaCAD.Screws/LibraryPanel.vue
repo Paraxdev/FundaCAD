@@ -9,14 +9,40 @@ import { openTextFile, saveTextFile, toast, useEngine } from "fundacad";
 import FastenerPreview from "./FastenerPreview.vue";
 import CustomForm from "./CustomForm.vue";
 import {
-  DRIVE_PREFIX, catalogueSize, drivesOf, expand, familyById, formatLength, lengthsFor, pitchesFor,
-  specRows, threadSize, type ItemChoice,
+  DRIVE_PREFIX,
+  catalogueSize,
+  drivesOf,
+  expand,
+  familyById,
+  formatLength,
+  lengthsFor,
+  pitchesFor,
+  specRows,
+  threadSize,
+  type ItemChoice,
 } from "./catalogue";
-import { NO_FILTERS, facets, filterEntries, groupEntries, listEntries, parseQuery, type Filters, type ListEntry } from "./search";
+import {
+  NO_FILTERS,
+  facets,
+  filterEntries,
+  groupEntries,
+  listEntries,
+  parseQuery,
+  type Filters,
+  type ListEntry,
+} from "./search";
 import { exportLibrary, parseLibraryFile } from "./library";
 import { PARTS, type FastenerSpec } from "./spec";
 import {
-  DRAG_MIME, addUserFastener, dragging, open, removeUserFastener, selection, tab, updateUserFastener, userLibrary,
+  DRAG_MIME,
+  addUserFastener,
+  dragging,
+  open,
+  removeUserFastener,
+  selection,
+  tab,
+  updateUserFastener,
+  userLibrary,
 } from "./state";
 import { insertFastener, placementFromSelection } from "./insert";
 
@@ -26,10 +52,12 @@ const TOTAL = catalogueSize();
 const filters = ref<Filters>({ ...NO_FILTERS });
 const entries = computed(() => listEntries(userLibrary.value));
 const shown = computed(() => filterEntries(entries.value, filters.value));
-const groups = computed(() => groupEntries(shown.value).map((g) => ({
-  ...g,
-  families: g.families.map((f) => ({ ...f, entries: f.entries.slice(0, 60) })),
-})));
+const groups = computed(() =>
+  groupEntries(shown.value).map((g) => ({
+    ...g,
+    families: g.families.map((f) => ({ ...f, entries: f.entries.slice(0, 60) })),
+  })),
+);
 const options = computed(() => facets(entries.value));
 
 function driveLabel(d: string): string {
@@ -56,7 +84,8 @@ function defaultChoice(e: ListEntry): ItemChoice {
 function specOfEntry(e: ListEntry): FastenerSpec | null {
   if (e.source === "custom") return userLibrary.value.find((it) => it.id === e.customId)?.spec ?? null;
   const sel = selection.value;
-  if (sel?.source === "catalogue" && sel.choice.familyId === e.familyId && sel.choice.size === e.size) return expand(sel.choice);
+  if (sel?.source === "catalogue" && sel.choice.familyId === e.familyId && sel.choice.size === e.size)
+    return expand(sel.choice);
   return expand(defaultChoice(e));
 }
 
@@ -102,11 +131,18 @@ const spec = computed<FastenerSpec | null>(() => {
 });
 
 const volume = ref<number | null>(null);
-watch(spec, () => { volume.value = null; });
+watch(spec, () => {
+  volume.value = null;
+});
 const sizeKey = computed(() => (selection.value?.source === "catalogue" ? selection.value.choice.size : undefined));
-const rows = computed(() => (spec.value
-  ? specRows(spec.value, { ...(sizeKey.value ? { size: sizeKey.value } : {}), ...(volume.value !== null ? { volume: volume.value } : {}) })
-  : []));
+const rows = computed(() =>
+  spec.value
+    ? specRows(spec.value, {
+        ...(sizeKey.value ? { size: sizeKey.value } : {}),
+        ...(volume.value !== null ? { volume: volume.value } : {}),
+      })
+    : [],
+);
 
 const busy = ref(false);
 const hasFace = ref(false);
@@ -174,7 +210,10 @@ function remove(id: string) {
 
 async function exportMine() {
   if (!userLibrary.value.length) return;
-  await saveTextFile("fasteners.json", exportLibrary(userLibrary.value), { name: "Fastener library", extensions: ["json"] });
+  await saveTextFile("fasteners.json", exportLibrary(userLibrary.value), {
+    name: "Fastener library",
+    extensions: ["json"],
+  });
 }
 
 async function importMine() {
@@ -182,17 +221,28 @@ async function importMine() {
   if (text === null) return;
   const { specs, problems } = parseLibraryFile(text);
   for (const s of specs) addUserFastener(s);
-  if (problems.length) toast(`Imported ${specs.length}, skipped ${problems.length}: ${problems.join(" | ")}`, { kind: "error" });
+  if (problems.length)
+    toast(`Imported ${specs.length}, skipped ${problems.length}: ${problems.join(" | ")}`, { kind: "error" });
   else toast(`Imported ${specs.length} fastener${specs.length === 1 ? "" : "s"}`, { kind: "info" });
 }
 
 const selectStyle = { flex: "1 1 0", minWidth: "0" };
 const rowStyle = (active: boolean) => ({
-  display: "flex", alignItems: "center", gap: "8px", padding: "3px 6px", cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  padding: "3px 6px",
+  cursor: "pointer",
   borderRadius: "var(--r-sm, 3px)",
   background: active ? "var(--accent-tint-2, rgba(75,249,188,0.24))" : "transparent",
 });
-const badge = { fontSize: "9px", padding: "0 5px", borderRadius: "var(--r-pill, 999px)", border: "1px solid var(--accent, #4bf9bc)", color: "var(--accent, #4bf9bc)" };
+const badge = {
+  fontSize: "9px",
+  padding: "0 5px",
+  borderRadius: "var(--r-pill, 999px)",
+  border: "1px solid var(--accent, #4bf9bc)",
+  color: "var(--accent, #4bf9bc)",
+};
 const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1 : 0.65 });
 </script>
 
@@ -201,8 +251,16 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
     <div class="scr-library" :style="{ width: '860px', maxWidth: '82vw' }" @pointerenter="refreshFace">
       <div :style="{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }">
         <div class="measure-title" :style="{ margin: 0 }">Fasteners</div>
-        <button type="button" class="btn scr-tab-catalogue" :style="tabStyle(tab === 'catalogue')" @click="tab = 'catalogue'">Catalogue</button>
-        <button type="button" class="btn scr-tab-custom" :style="tabStyle(tab === 'custom')" @click="tab = 'custom'">My fasteners ({{ userLibrary.length }})</button>
+        <button
+          type="button"
+          class="btn scr-tab-catalogue"
+          :style="tabStyle(tab === 'catalogue')"
+          @click="tab = 'catalogue'"
+          >Catalogue</button
+        >
+        <button type="button" class="btn scr-tab-custom" :style="tabStyle(tab === 'custom')" @click="tab = 'custom'"
+          >My fasteners ({{ userLibrary.length }})</button
+        >
         <span class="measure-hint" :style="{ margin: '0 0 0 auto' }">{{ TOTAL.toLocaleString() }} standard items</span>
         <button type="button" class="btn scr-close" title="Close" @click="open = false">Close</button>
       </div>
@@ -241,12 +299,26 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
             </select>
           </div>
           <div class="scr-list" :style="{ maxHeight: '56vh', overflow: 'auto', paddingRight: '4px' }">
-            <div v-if="!shown.length" class="measure-hint">Nothing matches. Clear a filter, or add your own under My fasteners.</div>
+            <div v-if="!shown.length" class="measure-hint"
+              >Nothing matches. Clear a filter, or add your own under My fasteners.</div
+            >
             <template v-for="g in groups" :key="g.category">
-              <div :style="{ margin: '8px 0 2px', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-mute, #7d7590)' }">{{ g.category }}</div>
+              <div
+                :style="{
+                  margin: '8px 0 2px',
+                  fontSize: '10px',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: 'var(--text-mute, #7d7590)',
+                }"
+                >{{ g.category }}</div
+              >
               <div v-for="fam in g.families" :key="fam.title + fam.standard" :style="{ marginBottom: '4px' }">
                 <div :style="{ fontWeight: 600, padding: '2px 6px' }">
-                  {{ fam.title }} <span v-if="fam.standard" :style="{ color: 'var(--text-dim, #aaa1b5)', fontWeight: 400 }">{{ fam.standard }}</span>
+                  {{ fam.title }}
+                  <span v-if="fam.standard" :style="{ color: 'var(--text-dim, #aaa1b5)', fontWeight: 400 }">{{
+                    fam.standard
+                  }}</span>
                 </div>
                 <div
                   v-for="e in fam.entries"
@@ -256,17 +328,25 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
                   :style="rowStyle(isSelected(e))"
                   draggable="true"
                   @click="select(e)"
-                  @dblclick="select(e); insert()"
+                  @dblclick="
+                    select(e);
+                    insert();
+                  "
                   @dragstart="onDragStart($event, e)"
                   @dragend="onDragEnd"
                 >
                   <span :style="{ minWidth: '92px' }">{{ e.source === "custom" ? e.familyName : e.sizeLabel }}</span>
                   <span v-if="e.source === 'custom'" class="scr-badge" :style="badge">Custom</span>
                   <span :style="{ color: 'var(--text-dim, #aaa1b5)', fontSize: '11px' }">
-                    <template v-if="e.lengths.length > 1">L {{ formatLength(e.lengths[0]!, e.system === 'inch' ? 'in' : 'mm') }} to {{ formatLength(e.lengths[e.lengths.length - 1]!, e.system === 'inch' ? 'in' : 'mm') }}</template>
+                    <template v-if="e.lengths.length > 1"
+                      >L {{ formatLength(e.lengths[0]!, e.system === "inch" ? "in" : "mm") }} to
+                      {{ formatLength(e.lengths[e.lengths.length - 1]!, e.system === "inch" ? "in" : "mm") }}</template
+                    >
                     <template v-else-if="e.source === 'custom'">{{ e.size }}</template>
                   </span>
-                  <span :style="{ marginLeft: 'auto', color: 'var(--text-mute, #7d7590)', fontSize: '11px' }">{{ e.drives.map(driveLabel).join(", ") }}</span>
+                  <span :style="{ marginLeft: 'auto', color: 'var(--text-mute, #7d7590)', fontSize: '11px' }">{{
+                    e.drives.map(driveLabel).join(", ")
+                  }}</span>
                 </div>
               </div>
             </template>
@@ -275,44 +355,90 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
         </div>
 
         <div v-if="spec" class="scr-detail">
-          <div :style="{ fontWeight: 600, fontSize: '13px', marginBottom: '6px' }" class="scr-name">{{ spec.name }}</div>
+          <div :style="{ fontWeight: 600, fontSize: '13px', marginBottom: '6px' }" class="scr-name">{{
+            spec.name
+          }}</div>
           <div :style="{ display: 'flex', gap: '12px' }">
             <FastenerPreview :spec="spec" :width="250" :height="200" @measured="volume = $event" />
             <div :style="{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }">
               <template v-if="choice">
-                <label v-if="lengths.length > 1">Length
-                  <select class="measure-select scr-length" :value="choice.length" :style="{ width: '100%' }" @change="setChoice({ length: Number(($event.target as HTMLSelectElement).value) })">
+                <label v-if="lengths.length > 1"
+                  >Length
+                  <select
+                    class="measure-select scr-length"
+                    :value="choice.length"
+                    :style="{ width: '100%' }"
+                    @change="setChoice({ length: Number(($event.target as HTMLSelectElement).value) })"
+                  >
                     <option v-for="l in lengths" :key="l" :value="l">{{ formatLength(l, spec.units) }}</option>
                   </select>
                 </label>
-                <label v-if="drives.length > 1">Drive
-                  <select class="measure-select scr-drive" :value="choice.drive" :style="{ width: '100%' }" @change="setChoice({ drive: ($event.target as HTMLSelectElement).value })">
-                    <option v-for="d in drives" :key="d" :value="d">{{ driveLabel(d) }} ({{ DRIVE_PREFIX[d] ?? d }})</option>
+                <label v-if="drives.length > 1"
+                  >Drive
+                  <select
+                    class="measure-select scr-drive"
+                    :value="choice.drive"
+                    :style="{ width: '100%' }"
+                    @change="setChoice({ drive: ($event.target as HTMLSelectElement).value })"
+                  >
+                    <option v-for="d in drives" :key="d" :value="d"
+                      >{{ driveLabel(d) }} ({{ DRIVE_PREFIX[d] ?? d }})</option
+                    >
                   </select>
                 </label>
-                <label v-if="pitches.length > 1">Pitch
-                  <select class="measure-select scr-pitch" :value="choice.pitch ?? pitches[0]!.pitch" :style="{ width: '100%' }" @change="setChoice({ pitch: Number(($event.target as HTMLSelectElement).value) })">
+                <label v-if="pitches.length > 1"
+                  >Pitch
+                  <select
+                    class="measure-select scr-pitch"
+                    :value="choice.pitch ?? pitches[0]!.pitch"
+                    :style="{ width: '100%' }"
+                    @change="setChoice({ pitch: Number(($event.target as HTMLSelectElement).value) })"
+                  >
                     <option v-for="p in pitches" :key="p.label" :value="p.pitch">{{ p.label }}</option>
                   </select>
                 </label>
-                <label>Thread
-                  <select class="measure-select scr-modelled" :value="choice.modelled ? 'modelled' : 'simple'" :style="{ width: '100%' }" @change="setChoice({ modelled: ($event.target as HTMLSelectElement).value === 'modelled' })">
+                <label
+                  >Thread
+                  <select
+                    class="measure-select scr-modelled"
+                    :value="choice.modelled ? 'modelled' : 'simple'"
+                    :style="{ width: '100%' }"
+                    @change="setChoice({ modelled: ($event.target as HTMLSelectElement).value === 'modelled' })"
+                  >
                     <option value="simple">Simplified</option>
                     <option value="modelled">Modelled helix</option>
                   </select>
                 </label>
-                <label>Hand
-                  <select class="measure-select" :value="choice.hand ?? 'right'" :style="{ width: '100%' }" @change="setChoice({ hand: ($event.target as HTMLSelectElement).value as 'right' | 'left' })">
+                <label
+                  >Hand
+                  <select
+                    class="measure-select"
+                    :value="choice.hand ?? 'right'"
+                    :style="{ width: '100%' }"
+                    @change="setChoice({ hand: ($event.target as HTMLSelectElement).value as 'right' | 'left' })"
+                  >
                     <option value="right">Right</option>
                     <option value="left">Left</option>
                   </select>
                 </label>
               </template>
-              <button type="button" class="btn btn-primary scr-insert" :disabled="busy" :style="{ marginTop: '6px' }" @click="insert">
+              <button
+                type="button"
+                class="btn btn-primary scr-insert"
+                :disabled="busy"
+                :style="{ marginTop: '6px' }"
+                @click="insert"
+              >
                 {{ busy ? "Inserting..." : hasFace ? "Insert on selected face" : "Insert at origin" }}
               </button>
               <div class="measure-hint" :style="{ margin: 0 }">Or drag a row onto a face.</div>
-              <button v-if="selection?.source !== 'custom'" type="button" class="btn scr-make-custom" @click="startNew(spec)">Make a custom one from this</button>
+              <button
+                v-if="selection?.source !== 'custom'"
+                type="button"
+                class="btn scr-make-custom"
+                @click="startNew(spec)"
+                >Make a custom one from this</button
+              >
               <template v-else>
                 <button type="button" class="btn" @click="startEdit(selection.id)">Edit</button>
                 <button type="button" class="btn" @click="remove(selection.id)">Delete</button>
@@ -342,17 +468,38 @@ const tabStyle = (on: boolean) => ({ fontWeight: on ? 600 : 400, opacity: on ? 1
           <div :style="{ display: 'flex', gap: '8px', marginBottom: '8px' }">
             <button type="button" class="btn btn-primary scr-new" @click="startNew(null)">New fastener</button>
             <button type="button" class="btn scr-import" @click="importMine">Import JSON</button>
-            <button type="button" class="btn scr-export" :disabled="!userLibrary.length" @click="exportMine">Export JSON</button>
+            <button type="button" class="btn scr-export" :disabled="!userLibrary.length" @click="exportMine"
+              >Export JSON</button
+            >
           </div>
           <div v-if="!userLibrary.length" class="measure-hint">
             Nothing here yet. Make a new one, or pick a catalogue item and choose Make a custom one from this.
           </div>
-          <div v-for="it in userLibrary" :key="it.id" class="scr-custom-row" :style="{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0', borderBottom: '1px solid var(--line, #322c42)' }">
+          <div
+            v-for="it in userLibrary"
+            :key="it.id"
+            class="scr-custom-row"
+            :style="{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '4px 0',
+              borderBottom: '1px solid var(--line, #322c42)',
+            }"
+          >
             <span class="scr-badge" :style="badge">Custom</span>
             <span :style="{ fontWeight: 600 }">{{ it.spec.name }}</span>
             <span class="measure-hint" :style="{ margin: 0 }">{{ it.spec.notes }}</span>
             <span :style="{ marginLeft: 'auto', display: 'flex', gap: '6px' }">
-              <button type="button" class="btn" @click="selection = { source: 'custom', id: it.id }; tab = 'catalogue'">Show</button>
+              <button
+                type="button"
+                class="btn"
+                @click="
+                  selection = { source: 'custom', id: it.id };
+                  tab = 'catalogue';
+                "
+                >Show</button
+              >
               <button type="button" class="btn" @click="startEdit(it.id)">Edit</button>
               <button type="button" class="btn" @click="remove(it.id)">Delete</button>
             </span>

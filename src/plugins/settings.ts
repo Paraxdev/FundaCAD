@@ -86,14 +86,7 @@ export interface DataSetting extends SettingBase {
 }
 
 export type SettingProp =
-  | BooleanSetting
-  | NumberSetting
-  | EnumSetting
-  | StringSetting
-  | ColourSetting
-  | KeySetting
-  | FileSetting
-  | DataSetting;
+  BooleanSetting | NumberSetting | EnumSetting | StringSetting | ColourSetting | KeySetting | FileSetting | DataSetting;
 
 export type SettingType = SettingProp["type"];
 
@@ -110,9 +103,7 @@ export interface SettingsSchema {
   legacy?: () => SettingValues | null;
 }
 
-const TYPES: ReadonlySet<string> = new Set([
-  "boolean", "number", "enum", "string", "colour", "key", "file", "data",
-]);
+const TYPES: ReadonlySet<string> = new Set(["boolean", "number", "enum", "string", "colour", "key", "file", "data"]);
 const KEY_RE = /^[A-Za-z][\w.-]*$/;
 const COLOUR_RE = /^#[0-9a-fA-F]{6}$/;
 

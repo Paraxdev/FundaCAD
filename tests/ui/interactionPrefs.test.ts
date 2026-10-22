@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-  asDwellMs, DEFAULT_DWELL_MS, getHoverDwellMs, MAX_DWELL_MS, MIN_DWELL_MS, onHoverDwellChange, setHoverDwellMs,
+  asDwellMs,
+  DEFAULT_DWELL_MS,
+  getHoverDwellMs,
+  MAX_DWELL_MS,
+  MIN_DWELL_MS,
+  onHoverDwellChange,
+  setHoverDwellMs,
 } from "../../src/ui/interactionPrefs";
 
 describe("hover delay preference", () => {

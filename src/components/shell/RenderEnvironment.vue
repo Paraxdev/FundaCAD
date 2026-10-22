@@ -15,14 +15,37 @@ import DenoiserRow from "./DenoiserRow.vue";
 
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import {
-  ENVIRONMENTS_LIST, REALTIME_QUALITY_PREFS, MAX_BRIGHTNESS, MAX_EXPOSURE, MIN_BRIGHTNESS, MIN_EXPOSURE, hdrHashOf,
-  groundKey, onRenderPrefsChange, performanceModeOn, renderPrefs, setRenderPref,
-  type Background, type Denoise, type Environment, type Ground, type RealtimeQualityPref, type TracerPref,
+  ENVIRONMENTS_LIST,
+  REALTIME_QUALITY_PREFS,
+  MAX_BRIGHTNESS,
+  MAX_EXPOSURE,
+  MIN_BRIGHTNESS,
+  MIN_EXPOSURE,
+  hdrHashOf,
+  groundKey,
+  onRenderPrefsChange,
+  performanceModeOn,
+  renderPrefs,
+  setRenderPref,
+  type Background,
+  type Denoise,
+  type Environment,
+  type Ground,
+  type RealtimeQualityPref,
+  type TracerPref,
 } from "../../ui/renderPrefs";
 import { onWorkspaceChange, workspace } from "../../ui/workspace";
 import {
-  activeSavedId, applySavedEnvironment, chooseBuiltInEnvironment, deleteSavedEnvironment, envLibrary, hdrName,
-  importEnvironmentFile, onEnvLibraryChange, renameSavedEnvironment, saveEnvironmentAs,
+  activeSavedId,
+  applySavedEnvironment,
+  chooseBuiltInEnvironment,
+  deleteSavedEnvironment,
+  envLibrary,
+  hdrName,
+  importEnvironmentFile,
+  onEnvLibraryChange,
+  renameSavedEnvironment,
+  saveEnvironmentAs,
 } from "../../ui/environmentImport";
 import type { EnvEntry } from "../../ui/environmentLibrary";
 import { onHdrRegistered } from "../../viewport/hdrRegistry";
@@ -55,25 +78,48 @@ const hdrHash = computed(() => hdrHashOf(prefs.value.environment));
 const offs: (() => void)[] = [];
 const loadSaved = () => {
   activeSaved.value = activeSavedId();
-  void envLibrary().list().then((l) => { saved.value = l; }).catch(() => { saved.value = []; });
+  void envLibrary()
+    .list()
+    .then((l) => {
+      saved.value = l;
+    })
+    .catch(() => {
+      saved.value = [];
+    });
 };
-const syncLabel = () => { hdrLabel.value = hdrHash.value ? hdrName(hdrHash.value) : null; };
+const syncLabel = () => {
+  hdrLabel.value = hdrHash.value ? hdrName(hdrHash.value) : null;
+};
 onMounted(() => {
-  offs.push(onRenderPrefsChange(() => {
-    prefs.value = { ...renderPrefs() };
-    highReason.value = highRefusal(engine.viewport.qualityTier());
-    syncLabel();
-  }));
-  offs.push(engine.viewport.onRenderTierChange(() => { highReason.value = highRefusal(engine.viewport.qualityTier()); }));
-  offs.push(onWorkspaceChange((w) => { ws.value = w; }));
+  offs.push(
+    onRenderPrefsChange(() => {
+      prefs.value = { ...renderPrefs() };
+      highReason.value = highRefusal(engine.viewport.qualityTier());
+      syncLabel();
+    }),
+  );
+  offs.push(
+    engine.viewport.onRenderTierChange(() => {
+      highReason.value = highRefusal(engine.viewport.qualityTier());
+    }),
+  );
+  offs.push(
+    onWorkspaceChange((w) => {
+      ws.value = w;
+    }),
+  );
   offs.push(onEnvLibraryChange(loadSaved));
   offs.push(onHdrRegistered(syncLabel));
   loadSaved();
   syncLabel();
 });
-onUnmounted(() => { for (const off of offs) off(); });
+onUnmounted(() => {
+  for (const off of offs) off();
+});
 
-const fail = (err: unknown) => { notice.value = err instanceof Error ? err.message : String(err); };
+const fail = (err: unknown) => {
+  notice.value = err instanceof Error ? err.message : String(err);
+};
 
 const importFile = async (file: File) => {
   notice.value = `Reading ${file.name}...`;
@@ -92,7 +138,10 @@ const pickSaved = (entry: EnvEntry) => {
 };
 const startNaming = (id: string | null, text: string) => {
   naming.value = { id, text };
-  void nextTick(() => { nameInput.value?.focus(); nameInput.value?.select(); });
+  void nextTick(() => {
+    nameInput.value?.focus();
+    nameInput.value?.select();
+  });
 };
 const finishNaming = async () => {
   const n = naming.value;
@@ -149,16 +198,16 @@ const aimKey = () => {
     return;
   }
   aiming.value = true;
-  tool.start(() => { aiming.value = false; });
+  tool.start(() => {
+    aiming.value = false;
+  });
 };
 const resetKey = () => {
   setRenderPref("keyAzimuth", DEFAULT_KEY.azimuth);
   setRenderPref("keyElevation", DEFAULT_KEY.elevation);
 };
-const onBrightness = (e: Event) =>
-  setRenderPref("brightness", Number.parseFloat((e.target as HTMLInputElement).value));
-const onBloom = (e: Event) =>
-  setRenderPref("bloom", Number.parseFloat((e.target as HTMLInputElement).value));
+const onBrightness = (e: Event) => setRenderPref("brightness", Number.parseFloat((e.target as HTMLInputElement).value));
+const onBloom = (e: Event) => setRenderPref("bloom", Number.parseFloat((e.target as HTMLInputElement).value));
 </script>
 
 <template>
@@ -183,9 +232,8 @@ const onBloom = (e: Event) =>
         </button>
       </div>
       <p class="sm-hint">
-        Every one of these is built in the renderer out of a few lit panels, so
-        none of them is a file to download. A metal is almost entirely
-        reflection, which is why the choice changes so much.
+        Every one of these is built in the renderer out of a few lit panels, so none of them is a file to download. A
+        metal is almost entirely reflection, which is why the choice changes so much.
       </p>
     </section>
 
@@ -259,7 +307,9 @@ const onBloom = (e: Event) =>
             id="rd-env-rotation"
             class="sm-slider"
             type="range"
-            min="-180" max="180" step="5"
+            min="-180"
+            max="180"
+            step="5"
             :value="prefs.envRotation"
             @change="onRotation"
           />
@@ -270,7 +320,9 @@ const onBloom = (e: Event) =>
             id="rd-env-exposure"
             class="sm-slider"
             type="range"
-            :min="MIN_EXPOSURE" :max="MAX_EXPOSURE" step="0.25"
+            :min="MIN_EXPOSURE"
+            :max="MAX_EXPOSURE"
+            step="0.25"
             :value="prefs.envExposure"
             @change="onExposure"
           />
@@ -282,13 +334,13 @@ const onBloom = (e: Event) =>
             data-env-behind
             :aria-pressed="prefs.envBackground"
             @click="toggleBehind"
-          >{{ prefs.envBackground ? "Shown behind the model" : "Ground colour behind" }}</button>
+            >{{ prefs.envBackground ? "Shown behind the model" : "Ground colour behind" }}</button
+          >
         </div>
       </template>
       <p class="sm-hint">
-        Import an .hdr or .exr panorama, or drop one on the window. Save as keeps
-        the whole look under a name. A document lit by one of these carries it,
-        so it opens with the same light elsewhere.
+        Import an .hdr or .exr panorama, or drop one on the window. Save as keeps the whole look under a name. A
+        document lit by one of these carries it, so it opens with the same light elsewhere.
       </p>
     </section>
 
@@ -302,7 +354,8 @@ const onBloom = (e: Event) =>
           :class="{ active: prefs.background === b.id }"
           :data-background="b.id"
           @click="setRenderPref('background', b.id)"
-        >{{ b.label }}</button>
+          >{{ b.label }}</button
+        >
       </div>
       <div class="rd-chips" role="group" aria-label="Ground shadow">
         <button
@@ -313,7 +366,8 @@ const onBloom = (e: Event) =>
           :data-ground="g.id"
           :aria-pressed="ground === g.id"
           @click="setRenderPref(groundKey(ws), g.id)"
-        >{{ g.label }}</button>
+          >{{ g.label }}</button
+        >
       </div>
       <div class="sm-hint">A soft shadow under the model. Off on the lightweight render.</div>
       <label class="prefs-row">
@@ -322,7 +376,9 @@ const onBloom = (e: Event) =>
           id="rd-brightness"
           class="sm-slider"
           type="range"
-          :min="MIN_BRIGHTNESS" :max="MAX_BRIGHTNESS" step="0.05"
+          :min="MIN_BRIGHTNESS"
+          :max="MAX_BRIGHTNESS"
+          step="0.05"
           :value="prefs.brightness"
           @input="onBrightness"
         />
@@ -343,25 +399,22 @@ const onBloom = (e: Event) =>
           :disabled="q === 'high' && highReason !== null"
           :title="q === 'high' && highReason !== null ? highReason : undefined"
           @click="setRenderPref('realtimeQuality', q)"
-        >{{ QUALITY_LABELS[q] }}</button>
+          >{{ QUALITY_LABELS[q] }}</button
+        >
       </div>
     </section>
 
     <section class="rd-section">
       <h3 class="rd-head">Key light</h3>
       <div class="rd-chips" role="group" aria-label="Key light">
-        <button
-          class="rd-chip"
-          :class="{ active: aiming }"
-          data-key-light="aim"
-          :aria-pressed="aiming"
-          @click="aimKey"
-        >Aim</button>
+        <button class="rd-chip" :class="{ active: aiming }" data-key-light="aim" :aria-pressed="aiming" @click="aimKey"
+          >Aim</button
+        >
         <button class="rd-chip" data-key-light="reset" @click="resetKey">Reset</button>
       </div>
       <div class="sm-hint" data-key-light="angles">
-        From {{ formatTurn(prefs.keyAzimuth) }} round, {{ formatTurn(prefs.keyElevation) }} up.
-        Aim drags a sun on the model to swing the light that casts the shadows.
+        From {{ formatTurn(prefs.keyAzimuth) }} round, {{ formatTurn(prefs.keyElevation) }} up. Aim drags a sun on the
+        model to swing the light that casts the shadows.
       </div>
     </section>
 
@@ -373,15 +426,16 @@ const onBloom = (e: Event) =>
           id="rd-bloom"
           class="sm-slider"
           type="range"
-          min="0" max="1" step="0.05"
+          min="0"
+          max="1"
+          step="0.05"
           :value="prefs.bloom"
           :data-bloom="prefs.bloom"
           @input="onBloom"
         />
       </label>
       <div class="sm-hint">
-        Light spilling off faces with Emission turned up. In the path traced view
-        bright highlights spill too.
+        Light spilling off faces with Emission turned up. In the path traced view bright highlights spill too.
       </div>
     </section>
 
@@ -394,11 +448,12 @@ const onBloom = (e: Event) =>
           data-shadows="mode"
           :aria-pressed="prefs.shadows"
           @click="setRenderPref('shadows', !prefs.shadows)"
-        >{{ prefs.shadows ? "On" : "Off" }}</button>
+          >{{ prefs.shadows ? "On" : "Off" }}</button
+        >
       </div>
       <div class="sm-hint">
-        Ground every part with a real cast shadow from the key light, not just the
-        soft light an emissive part throws. Off on the lightweight render.
+        Ground every part with a real cast shadow from the key light, not just the soft light an emissive part throws.
+        Off on the lightweight render.
       </div>
     </section>
 
@@ -412,11 +467,11 @@ const onBloom = (e: Event) =>
           :class="{ active: prefs.denoise === d.id }"
           :data-denoise="d.id"
           @click="setRenderPref('denoise', d.id)"
-        >{{ d.label }}</button>
+          >{{ d.label }}</button
+        >
       </div>
       <div class="sm-hint">
-        Path traced cleans the grain out of the finished picture. High quality
-        takes a few seconds longer.
+        Path traced cleans the grain out of the finished picture. High quality takes a few seconds longer.
       </div>
       <DenoiserRow hint-class="sm-hint" button-class="rd-chip" />
     </section>
@@ -431,11 +486,11 @@ const onBloom = (e: Event) =>
           :class="{ active: prefs.tracer === t.id }"
           :data-tracer="t.id"
           @click="setRenderPref('tracer', t.id)"
-        >{{ t.label }}</button>
+          >{{ t.label }}</button
+        >
       </div>
       <div class="sm-hint">
-        Where Path traced runs: in the app itself or in the web view. Auto picks
-        the faster one this computer has.
+        Where Path traced runs: in the app itself or in the web view. Auto picks the faster one this computer has.
       </div>
     </section>
 
@@ -450,12 +505,12 @@ const onBloom = (e: Event) =>
           :disabled="prefs.potatoMode"
           :title="prefs.potatoMode ? 'Potato mode includes performance mode' : undefined"
           @click="setRenderPref('performanceMode', !prefs.performanceMode)"
-        >{{ performanceModeOn(prefs) ? "On" : "Off" }}</button>
+          >{{ performanceModeOn(prefs) ? "On" : "Off" }}</button
+        >
       </div>
       <div class="sm-hint">
-        Drop the heavy effects, glass refraction, a high pixel ratio and the
-        extra emitter lights, for a lighter render. On automatically on a weak
-        GPU; turn it on by hand if the viewport stutters or a laptop runs hot.
+        Drop the heavy effects, glass refraction, a high pixel ratio and the extra emitter lights, for a lighter render.
+        On automatically on a weak GPU; turn it on by hand if the viewport stutters or a laptop runs hot.
       </div>
     </section>
 
@@ -468,12 +523,12 @@ const onBloom = (e: Event) =>
           data-potato="mode"
           :aria-pressed="prefs.potatoMode"
           @click="setRenderPref('potatoMode', !prefs.potatoMode)"
-        >{{ prefs.potatoMode ? "On" : "Off" }}</button>
+          >{{ prefs.potatoMode ? "On" : "Off" }}</button
+        >
       </div>
       <div class="sm-hint">
-        Lowest quality, for slow or virtual machines. Flat shading, thin edges,
-        half resolution, no glass blur and no effects or camera animations.
-        Includes performance mode.
+        Lowest quality, for slow or virtual machines. Flat shading, thin edges, half resolution, no glass blur and no
+        effects or camera animations. Includes performance mode.
       </div>
     </section>
     <RenderSections tab="environment" />

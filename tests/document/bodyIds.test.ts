@@ -30,14 +30,24 @@ function backend(bodyIds: () => Record<string, string> | undefined) {
   const be = {
     async rebuild(doc: CadDocument) {
       sent.push(doc);
-      const result: RebuildResult = { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: { min: [0, 0, 0], max: [0, 0, 0] } };
+      const result: RebuildResult = {
+        mesh: { positions: [], indices: [], faceIds: [] },
+        edges: [],
+        bbox: { min: [0, 0, 0], max: [0, 0, 0] },
+      };
       const ids = bodyIds();
       return { ok: true as const, result: ids ? { ...result, bodyIds: ids } : result };
     },
     async init() {},
-    onStatus() { return () => {}; },
-    onProgress() { return () => {}; },
-    async cancel() { return true; },
+    onStatus() {
+      return () => {};
+    },
+    onProgress() {
+      return () => {};
+    },
+    async cancel() {
+      return true;
+    },
   } as unknown as GeometryBackend;
   return { be, sent };
 }
@@ -68,17 +78,33 @@ describe("the body id map", () => {
 
   it("is not written onto a different document than the one that was built", async () => {
     let release!: () => void;
-    const gate = new Promise<void>((r) => { release = r; });
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
     const be = {
       async rebuild(doc: CadDocument) {
         await gate;
         const bodyIds = { ...doc.bodyIds, [`${doc.features[0]!.id}:0`]: "body1" };
-        return { ok: true as const, result: { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: { min: [0, 0, 0], max: [0, 0, 0] }, bodyIds } };
+        return {
+          ok: true as const,
+          result: {
+            mesh: { positions: [], indices: [], faceIds: [] },
+            edges: [],
+            bbox: { min: [0, 0, 0], max: [0, 0, 0] },
+            bodyIds,
+          },
+        };
       },
       async init() {},
-      onStatus() { return () => {}; },
-      onProgress() { return () => {}; },
-      async cancel() { return true; },
+      onStatus() {
+        return () => {};
+      },
+      onProgress() {
+        return () => {};
+      },
+      async cancel() {
+        return true;
+      },
     } as unknown as GeometryBackend;
     const store = new DocumentStore(be, { parameters: {}, features: [box("a")], bodyIds: {} });
     const building = store.rebuildNow();
@@ -106,8 +132,19 @@ describe("a feature that becomes a join (vectors shared with fundacad-core)", ()
 
   it("loses the id it had as a new body when an edit turns it into a join", async () => {
     const h = backend(() => undefined);
-    const rv = { id: "rv", type: "revolve", sketch: "s", axis: "Z", angle: 360, operation: "new" } as unknown as Feature;
-    const store = new DocumentStore(h.be, { parameters: {}, features: [box("a"), rv], bodyIds: { "a:0": "body1", "rv:0": "body3" } });
+    const rv = {
+      id: "rv",
+      type: "revolve",
+      sketch: "s",
+      axis: "Z",
+      angle: 360,
+      operation: "new",
+    } as unknown as Feature;
+    const store = new DocumentStore(h.be, {
+      parameters: {},
+      features: [box("a"), rv],
+      bodyIds: { "a:0": "body1", "rv:0": "body3" },
+    });
     store.updateFeature("rv", { operation: "join", targets: ["body1"] } as Partial<Feature>);
     expect(store.document.bodyIds).toEqual({ "a:0": "body1" });
     store.updateFeature("rv", { angle: 180 } as Partial<Feature>);

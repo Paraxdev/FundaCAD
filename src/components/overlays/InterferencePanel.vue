@@ -53,7 +53,9 @@ function close() {
       </div>
       <div v-if="!panels.interference.clashes.length" class="measure-row">
         <span class="measure-v">{{
-          panels.interference.unchecked.length ? "No overlap among the pairs that were checked" : "No overlapping bodies"
+          panels.interference.unchecked.length
+            ? "No overlap among the pairs that were checked"
+            : "No overlapping bodies"
         }}</span>
       </div>
       <div
@@ -73,9 +75,15 @@ function close() {
         </label>
         <span class="measure-v" v-if="clearanceOn">
           <input
-            class="measure-number" type="number" min="0.01" max="50" step="0.01"
-            v-model.number="threshold" @change="recheck"
-          /> mm
+            class="measure-number"
+            type="number"
+            min="0.01"
+            max="50"
+            step="0.01"
+            v-model.number="threshold"
+            @change="recheck"
+          />
+          mm
         </span>
       </div>
 

@@ -14,7 +14,10 @@ const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const OUT = path.resolve(process.argv[2] || "edge_handle_at_click_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -26,11 +29,17 @@ const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   await page.evaluate(async () => {
@@ -41,14 +50,18 @@ const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
   await page.evaluate(() => window.__fundacad.handleAction("iso"));
   await page.waitForTimeout(1200);
 
-  const anchor = () => page.evaluate(() => {
-    const w = window.__fundacad.nudge.want;
-    return w ? [w.anchor.x, w.anchor.y, w.anchor.z] : null;
-  });
+  const anchor = () =>
+    page.evaluate(() => {
+      const w = window.__fundacad.nudge.want;
+      return w ? [w.anchor.x, w.anchor.y, w.anchor.z] : null;
+    });
 
   // The top front edge runs along X at y = -20, z = 10. Aim three quarters along it.
   const target = [18, -20, 10];
-  const scr = await page.evaluate((t) => window.viewport.projectToScreen(new window.viewport.camera.position.constructor(...t)), target);
+  const scr = await page.evaluate(
+    (t) => window.viewport.projectToScreen(new window.viewport.camera.position.constructor(...t)),
+    target,
+  );
   await page.mouse.move(scr.x, scr.y);
   await page.waitForTimeout(200);
   await page.mouse.click(scr.x, scr.y);
@@ -88,7 +101,11 @@ const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
   });
   await page.waitForTimeout(400);
   const mid = await anchor();
-  check("CONTROL: an edge selected without a click gets the midpoint", !!mid && dist(mid, [0, 20, 10]) < 0.5, JSON.stringify(mid));
+  check(
+    "CONTROL: an edge selected without a click gets the midpoint",
+    !!mid && dist(mid, [0, 20, 10]) < 0.5,
+    JSON.stringify(mid),
+  );
 
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall checks passed");

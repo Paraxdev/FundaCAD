@@ -98,9 +98,7 @@ export function faceMaterialPaint(resolved: Map<number, MaterialDef>): Record<nu
  *  mesh. Sparse against the app's DEFAULT finish rather than against the body's:
  *  a face whose material only says "this colour" needs no material of its own,
  *  and the colour has already travelled through the paint map above. */
-export function faceMaterialFinishes(
-  resolved: Map<number, MaterialDef>,
-): Record<number, BodyFinish> {
+export function faceMaterialFinishes(resolved: Map<number, MaterialDef>): Record<number, BodyFinish> {
   const out: Record<number, BodyFinish> = {};
   for (const [fid, m] of resolved) out[fid] = finishOf(m);
   return out;

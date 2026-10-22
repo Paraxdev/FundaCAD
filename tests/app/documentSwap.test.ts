@@ -15,7 +15,10 @@ const RESULT: RebuildResult = {
   bbox: { min: [0, 0, 0], max: [1, 1, 1] },
   bodies: [{ id: "b1", name: "Body1", faceStart: 0, faceCount: 1 }],
 };
-const DOC = { parameters: {}, features: [{ id: "f1", type: "sketch", plane: "XY", entities: [] }] } as unknown as CadDocument;
+const DOC = {
+  parameters: {},
+  features: [{ id: "f1", type: "sketch", plane: "XY", entities: [] }],
+} as unknown as CadDocument;
 
 /** Lands RESULT once, then never answers again, like an engine still busy freeing the old build. */
 function slowEngine() {
@@ -25,9 +28,15 @@ function slowEngine() {
       return ++calls === 1 ? { ok: true as const, result: RESULT } : new Promise<never>(() => {});
     },
     async init() {},
-    onStatus() { return () => {}; },
-    onProgress() { return () => {}; },
-    async cancel() { return true; },
+    onStatus() {
+      return () => {};
+    },
+    onProgress() {
+      return () => {};
+    },
+    async cancel() {
+      return true;
+    },
   } as unknown as GeometryBackend;
 }
 
@@ -47,7 +56,9 @@ function harness() {
       clearModel: () => calls.push("clearModel"),
     },
   });
-  store.onBuild((s) => { if (!s.building) calls.push(`build:${s.result ? "old" : "none"}`); });
+  store.onBuild((s) => {
+    if (!s.building) calls.push(`build:${s.result ? "old" : "none"}`);
+  });
   return { store, calls };
 }
 
@@ -60,8 +71,14 @@ describe("New and Open clear the view at once", () => {
       if (how === "New") store.newDocument();
       else store.load(JSON.stringify({ parameters: {}, features: [] }));
       expect(calls.slice(0, 8)).toEqual([
-        "cancelTools", "sketch.cancel", "dropBodyGizmo", "clearSelection", "setSelectedBodies",
-        "clearRegionSelection", "forgetLastCommit", "clearModel",
+        "cancelTools",
+        "sketch.cancel",
+        "dropBodyGizmo",
+        "clearSelection",
+        "setSelectedBodies",
+        "clearRegionSelection",
+        "forgetLastCommit",
+        "clearModel",
       ]);
       expect(calls).not.toContain("build:old");
     });
@@ -83,9 +100,25 @@ describe("New and Open stand every tool down", () => {
     const tool = (name: string, active: boolean) => ({ active, cancel: () => calls.push(`${name}.cancel`) });
     const t: Record<string, unknown> = {};
     for (const n of [
-      "extrude", "edgeFeature", "targetEdit", "pressPull", "faceOffset", "draft", "thread", "textOnFace", "hole", "loft",
-      "pattern", "planeOffset", "datumPose", "lightAim", "revolvePitch", "joint", "mechanism",
-    ]) t[n] = tool(n, n === "extrude" || n === "pressPull");
+      "extrude",
+      "edgeFeature",
+      "targetEdit",
+      "pressPull",
+      "faceOffset",
+      "draft",
+      "thread",
+      "textOnFace",
+      "hole",
+      "loft",
+      "pattern",
+      "planeOffset",
+      "datumPose",
+      "lightAim",
+      "revolvePitch",
+      "joint",
+      "mechanism",
+    ])
+      t[n] = tool(n, n === "extrude" || n === "pressPull");
     t.move = tool("move", false);
     t.measure = { active: true, stop: () => calls.push("measure.stop") };
     t.section = { picking: false, editing: false, endEdit: () => calls.push("section.endEdit") };
@@ -100,7 +133,11 @@ describe("New and Open stand every tool down", () => {
 
   // A cut that is on, or none, is the store's to replace with the next document's own.
   it("ends a section aiming or editing and leaves one that is on or off alone", () => {
-    for (const [picking, editing, ends] of [[true, false, true], [false, true, true], [false, false, false]] as const) {
+    for (const [picking, editing, ends] of [
+      [true, false, true],
+      [false, true, true],
+      [false, false, false],
+    ] as const) {
       const calls: string[] = [];
       const t = tools(calls);
       Object.assign(t.section, { picking, editing });
@@ -118,9 +155,15 @@ describe("New and Open stand every tool down", () => {
           return { ok: true as const, result: RESULT };
         },
         async init() {},
-        onStatus() { return () => {}; },
-        onProgress() { return () => {}; },
-        async cancel() { return true; },
+        onStatus() {
+          return () => {};
+        },
+        onProgress() {
+          return () => {};
+        },
+        async cancel() {
+          return true;
+        },
       } as unknown as GeometryBackend;
       const store = new DocumentStore(engine, DOC);
       await store.rebuildNow();
@@ -138,11 +181,19 @@ describe("New and Open stand every tool down", () => {
 
   it("keeps a tool's live preview through a replace load, where the tool stays armed", async () => {
     const engine = {
-      async rebuild() { return { ok: true as const, result: RESULT }; },
+      async rebuild() {
+        return { ok: true as const, result: RESULT };
+      },
       async init() {},
-      onStatus() { return () => {}; },
-      onProgress() { return () => {}; },
-      async cancel() { return true; },
+      onStatus() {
+        return () => {};
+      },
+      onProgress() {
+        return () => {};
+      },
+      async cancel() {
+        return true;
+      },
     } as unknown as GeometryBackend;
     const store = new DocumentStore(engine, DOC);
     await store.rebuildNow();
@@ -156,7 +207,9 @@ describe("New and Open stand every tool down", () => {
   it("still clears the document when one tool's cancel throws", () => {
     const calls: string[] = [];
     const t = tools(calls);
-    t.extrude.cancel = () => { throw new Error("boom"); };
+    t.extrude.cancel = () => {
+      throw new Error("boom");
+    };
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => cancelActiveTools(t)).not.toThrow();
     expect(calls).toContain("pressPull.cancel");

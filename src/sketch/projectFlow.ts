@@ -82,7 +82,10 @@ export class ProjectFlow {
 
   /** the committed sketch feature `id`, when it is a sketch */
   private sourceSketch(id: string): Extract<Feature, { type: "sketch" }> | null {
-    return asFeature(this.host.store()?.document.features.find((x) => x.id === id), "sketch");
+    return asFeature(
+      this.host.store()?.document.features.find((x) => x.id === id),
+      "sketch",
+    );
   }
 
   /** a committed sketch's REAL entity by id, with its owning sketch feature,
@@ -111,11 +114,15 @@ export class ProjectFlow {
       return;
     }
     this.host.viewport().hoverEntity(null);
-    const hit = this.host.overlay().committedCurveAt(e.clientX, e.clientY, (w) => this.host.viewport().projectToScreen(w));
+    const hit = this.host
+      .overlay()
+      .committedCurveAt(e.clientX, e.clientY, (w) => this.host.viewport().projectToScreen(w));
     const src = hit ? this.committedSource(hit.sketchId, hit.entityId) : null;
-    this.host.overlay().setPreview(
-      src ? curveObjects([src.entity], this.host.overlay().planeFor(src.sketch.plane), 0x33aaff, true) : [],
-    );
+    this.host
+      .overlay()
+      .setPreview(
+        src ? curveObjects([src.entity], this.host.overlay().planeFor(src.sketch.plane), 0x33aaff, true) : [],
+      );
     this.host.viewport().requestRender();
   }
 
@@ -178,7 +185,10 @@ export class ProjectFlow {
       const own: string[] = [];
       for (const { fp, curve } of results[i]!.curves) {
         const existing = fp ? this.projectedWithFp(fp) : undefined;
-        if (existing) { own.push(existing.id); continue; }
+        if (existing) {
+          own.push(existing.id);
+          continue;
+        }
         const id = newEntityId();
         const sel: Selector = fp ? { kind: "edge", by: "match", fp } : source.sel;
         this.host.entities().push({ type: "projected", id, source: { kind: "edge", body: source.body, sel }, curve });
@@ -198,26 +208,31 @@ export class ProjectFlow {
     if (this.projectBusy || !store) return;
     let source: ProjectedSource | null = null;
     if (this.host.projectPanel().filter === "sketchCurves") {
-      const hit = this.host.overlay().committedCurveAt(e.clientX, e.clientY, (w) => this.host.viewport().projectToScreen(w));
+      const hit = this.host
+        .overlay()
+        .committedCurveAt(e.clientX, e.clientY, (w) => this.host.viewport().projectToScreen(w));
       if (!hit) {
         // nothing committed under the cursor, the ACTIVE sketch's own entities
         // are never valid sources (checked second: a projection usually lies
         // screen-coincident with its source, and the source must stay pickable)
         const p = this.host.planePoint(e);
-        if (p && pickEntity(this.host.entities(), p, this.host.pickTol()) >= 0) toast("Can't project the active sketch's own curves");
+        if (p && pickEntity(this.host.entities(), p, this.host.pickTol()) >= 0)
+          toast("Can't project the active sketch's own curves");
         return;
       }
       if (!this.committedSource(hit.sketchId, hit.entityId)) {
         toast("Pattern copies can't be projected, pick the pattern's source curve");
         return;
       }
-      const dup = this.host.entities().some(
-        (x) =>
-          x.type === "projected" &&
-          x.source.kind === "sketchCurve" &&
-          x.source.sketch === hit.sketchId &&
-          x.source.entity === hit.entityId,
-      );
+      const dup = this.host
+        .entities()
+        .some(
+          (x) =>
+            x.type === "projected" &&
+            x.source.kind === "sketchCurve" &&
+            x.source.sketch === hit.sketchId &&
+            x.source.entity === hit.entityId,
+        );
       if (dup) {
         toast("That curve is already projected into this sketch");
         return;
@@ -226,16 +241,13 @@ export class ProjectFlow {
     } else {
       const hit = this.host.viewport().pickEntity(e.clientX, e.clientY);
       if (!hit) return;
-      const body =
-        hit.kind === "edge"
-          ? hit.edge.body
-          : this.host.viewport().faceIdToBodyId(hit.faceId);
+      const body = hit.kind === "edge" ? hit.edge.body : this.host.viewport().faceIdToBodyId(hit.faceId);
       if (!body) return;
       if (this.host.projectPanel().filter === "silhouette") {
         // any face/edge hit resolves to its whole BODY, the HLR outline source
-        const dup = this.host.entities().some(
-          (x) => x.type === "projected" && x.source.kind === "silhouette" && x.source.body === body,
-        );
+        const dup = this.host
+          .entities()
+          .some((x) => x.type === "projected" && x.source.kind === "silhouette" && x.source.body === body);
         if (dup) {
           toast("That body's silhouette is already projected into this sketch");
           return;
@@ -285,7 +297,12 @@ export class ProjectFlow {
     // sketch-curve case was pre-checked above, its ids are stable)
     const fresh = r.curves.filter(({ fp }) => !(fp && this.hasProjectedFp(fp)));
     const skipped = r.curves.length - fresh.length;
-    if (skipped) toast(skipped === r.curves.length ? "That edge is already projected into this sketch" : `${skipped} already-projected edge${skipped > 1 ? "s" : ""} skipped`);
+    if (skipped)
+      toast(
+        skipped === r.curves.length
+          ? "That edge is already projected into this sketch"
+          : `${skipped} already-projected edge${skipped > 1 ? "s" : ""} skipped`,
+      );
     if (!fresh.length) return;
     // multi-curve picks (a face boundary, a projected rectangle) emit sibling
     // entities sharing source.group = the FIRST sibling's entity id (stable:
@@ -302,12 +319,23 @@ export class ProjectFlow {
             // the dedup filter above never drops any, i IS the edge index in
             // the engine's deterministic _entity_edges order (the refresh
             // handler's authoritative sibling correspondence).
-            { kind: "sketchCurve", sketch: source.sketch, entity: source.entity, ...group, ...(fresh.length > 1 ? { index: i } : {}) }
+            {
+              kind: "sketchCurve",
+              sketch: source.sketch,
+              entity: source.entity,
+              ...group,
+              ...(fresh.length > 1 ? { index: i } : {}),
+            }
           : source.kind === "silhouette"
             ? // whole-body source: no selector; the refresh re-runs HLR and
               // re-matches the sibling curves (see _recompute_projections)
               { kind: "silhouette", body: source.body, ...group }
-            : { kind: source.kind, body: source.body, sel: fp ? { kind: "edge", by: "match", fp } : source.sel, ...group };
+            : {
+                kind: source.kind,
+                body: source.body,
+                sel: fp ? { kind: "edge", by: "match", fp } : source.sel,
+                ...group,
+              };
       this.host.entities().push({ type: "projected", id: ids[i]!, source: src, curve });
     });
     this.host.refreshActive();

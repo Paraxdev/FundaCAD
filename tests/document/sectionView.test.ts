@@ -4,7 +4,13 @@ import { describe, expect, it } from "vitest";
 import { SECTION_GHOSTS, readSectionView, sameSectionView, sectionViewExtras } from "../../src/document/sectionView";
 import type { SectionView } from "../../src/types";
 
-const SLANTED: SectionView = { origin: [62.5, 18.25, 20], normal: [0.6, 0, 0.8], offset: -9.5, side: -1, ghost: "faint" };
+const SLANTED: SectionView = {
+  origin: [62.5, 18.25, 20],
+  normal: [0.6, 0, 0.8],
+  offset: -9.5,
+  side: -1,
+  ghost: "faint",
+};
 
 describe("readSectionView", () => {
   it("reads a slanted cut off the origin back whole", () => {
@@ -12,7 +18,10 @@ describe("readSectionView", () => {
   });
 
   it("makes the normal unit length", () => {
-    expect(readSectionView({ ...SLANTED, normal: [3, -4, 12] })).toEqual({ ...SLANTED, normal: [3 / 13, -4 / 13, 12 / 13] });
+    expect(readSectionView({ ...SLANTED, normal: [3, -4, 12] })).toEqual({
+      ...SLANTED,
+      normal: [3 / 13, -4 / 13, 12 / 13],
+    });
   });
 
   it("refuses a bad origin", () => {
@@ -36,8 +45,9 @@ describe("readSectionView", () => {
 
   it("falls back for a loose offset, side or ghost", () => {
     const read = (patch: Record<string, unknown>) => readSectionView({ ...SLANTED, ...patch });
-    expect([read({ offset: "x" }), read({ offset: Infinity }), read({ offset: undefined })].map((v) => v?.offset))
-      .toEqual([0, 0, 0]);
+    expect(
+      [read({ offset: "x" }), read({ offset: Infinity }), read({ offset: undefined })].map((v) => v?.offset),
+    ).toEqual([0, 0, 0]);
     expect([0, 2, "-1", -1, 1].map((side) => read({ side })?.side)).toEqual([1, 1, 1, -1, 1]);
     expect(read({ ghost: "fog" })).toEqual({ ...SLANTED, ghost: "soft" });
     expect(SECTION_GHOSTS.map((ghost) => read({ ghost })?.ghost)).toEqual(["hidden", "faint", "soft", "strong"]);

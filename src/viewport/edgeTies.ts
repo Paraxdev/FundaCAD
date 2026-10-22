@@ -46,14 +46,9 @@ export interface Candidate {
  *  Callers must treat it that way rather than as an error: a menu is a cost, and
  *  it is only worth paying when the alternative is guessing.
  */
-export function ambiguousCandidates<T extends Candidate>(
-  cands: readonly T[],
-  band: number = TIE_BAND_PX,
-): T[] {
+export function ambiguousCandidates<T extends Candidate>(cands: readonly T[], band: number = TIE_BAND_PX): T[] {
   if (cands.length < 2) return [];
-  const sorted = [...cands]
-    .filter((c) => Number.isFinite(c.screenDist))
-    .sort((a, b) => a.screenDist - b.screenDist);
+  const sorted = [...cands].filter((c) => Number.isFinite(c.screenDist)).sort((a, b) => a.screenDist - b.screenDist);
   const best = sorted[0];
   if (!best) return [];
 

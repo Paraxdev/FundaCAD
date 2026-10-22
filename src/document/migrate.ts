@@ -188,7 +188,10 @@ export function migrateDocument(parsed: CadDocument): string[] {
     }
   };
   for (const f of features) {
-    const rows = [...(FEATURE_NUM_FIELDS[f.type] ?? []), ...presentCommonFields(f as unknown as Record<string, unknown>)];
+    const rows = [
+      ...(FEATURE_NUM_FIELDS[f.type] ?? []),
+      ...presentCommonFields(f as unknown as Record<string, unknown>),
+    ];
     for (const [field, , kind] of rows) {
       bind(f, field, kindUnit(kind), { kind: "feature", feature: f.id, field });
     }

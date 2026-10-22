@@ -86,7 +86,9 @@ const readState = () => {
   on.value = next;
 };
 let offPlugins: (() => void) | null = null;
-onMounted(() => { offPlugins = onPluginChange(readState); });
+onMounted(() => {
+  offPlugins = onPluginChange(readState);
+});
 onUnmounted(() => offPlugins?.());
 
 function toggle(id: string, ev: Event) {
@@ -100,7 +102,11 @@ const record = (id: string) => installed.value.find((r) => r.id === id);
 
 const sections = shallowRef(contributedSettings());
 let offContrib: (() => void) | null = null;
-onMounted(() => { offContrib = onContribChange(() => { sections.value = contributedSettings(); }); });
+onMounted(() => {
+  offContrib = onContribChange(() => {
+    sections.value = contributedSettings();
+  });
+});
 onUnmounted(() => offContrib?.());
 
 const sectionsOf = (id: string) => sections.value.filter((x) => x.plugin === id).map((x) => x.section);
@@ -279,10 +285,7 @@ async function drop(id: string, name: string) {
 
 <template>
   <div class="sm-section">Installed plugins</div>
-  <div class="sm-hint">
-    Each gets what it asked for and nothing else. Off stops one without removing
-    it.
-  </div>
+  <div class="sm-hint"> Each gets what it asked for and nothing else. Off stops one without removing it. </div>
 
   <input
     v-if="sections.length"
@@ -329,10 +332,7 @@ async function drop(id: string, name: string) {
     <div class="plug-state">
       Version {{ rec.version }}.
       <span v-if="whereFrom(rec)"> {{ whereFrom(rec) }}</span>
-      <button
-        class="plug-link"
-        @click="showing = showing === rec.id ? '' : rec.id"
-      >
+      <button class="plug-link" @click="showing = showing === rec.id ? '' : rec.id">
         {{ showing === rec.id ? "Hide what it uses" : "What it uses" }}
       </button>
       <template v-if="sectionsOf(rec.id).length">
@@ -399,8 +399,7 @@ async function drop(id: string, name: string) {
     </div>
 
     <div v-if="!manifest" class="sm-hint">
-      This app cannot read what this plugin agreed to. Remove it and install it
-      again.
+      This app cannot read what this plugin agreed to. Remove it and install it again.
     </div>
 
     <div v-if="showing === rec.id && manifest" class="plug-consent">
@@ -420,12 +419,7 @@ async function drop(id: string, name: string) {
     </div>
   </div>
 
-  <div
-    v-for="{ id, manifest } in fromSource"
-    :key="id"
-    class="plug-row"
-    :data-plugin-row="id"
-  >
+  <div v-for="{ id, manifest } in fromSource" :key="id" class="plug-row" :data-plugin-row="id">
     <div class="plug-head">
       <div>
         <div class="plug-name">{{ manifest ? manifest.name : id }}</div>
@@ -491,9 +485,7 @@ async function drop(id: string, name: string) {
         <template v-if="candidate.official">
           Version {{ candidate.manifest.version }}, published by FundaCAD.
         </template>
-        <template v-else>
-          Version {{ candidate.manifest.version }}, from {{ candidate.origin }}, unchecked.
-        </template>
+        <template v-else> Version {{ candidate.manifest.version }}, from {{ candidate.origin }}, unchecked. </template>
       </div>
       <div class="plug-can">
         <div class="plug-listhead">{{ candidate.manifest.name }} will be able to</div>
@@ -509,18 +501,8 @@ async function drop(id: string, name: string) {
       </div>
       <div class="sm-hint">{{ sandboxNote(candidate.manifest.kind) }}</div>
       <div class="plug-actions">
-        <button
-          class="btn"
-          :disabled="busy === candidate.manifest.id"
-          @click="candidate = null"
-        >
-          Cancel
-        </button>
-        <button
-          class="btn btn-primary"
-          :disabled="busy === candidate.manifest.id"
-          @click="acceptCandidate(candidate)"
-        >
+        <button class="btn" :disabled="busy === candidate.manifest.id" @click="candidate = null"> Cancel </button>
+        <button class="btn btn-primary" :disabled="busy === candidate.manifest.id" @click="acceptCandidate(candidate)">
           {{ busy === candidate.manifest.id ? "Installing…" : "Install" }}
         </button>
       </div>
@@ -535,11 +517,7 @@ async function drop(id: string, name: string) {
         <div class="plug-name">{{ p.manifest.name }}</div>
         <div class="plug-summary">{{ p.manifest.summary }}</div>
       </div>
-      <button
-        v-if="showing !== p.manifest.id"
-        class="btn btn-primary"
-        @click="showing = p.manifest.id"
-      >
+      <button v-if="showing !== p.manifest.id" class="btn btn-primary" @click="showing = p.manifest.id">
         Install
       </button>
     </div>
@@ -559,14 +537,8 @@ async function drop(id: string, name: string) {
       </div>
       <div class="sm-hint">{{ sandboxNote(p.manifest.kind) }}</div>
       <div class="plug-actions">
-        <button class="btn" :disabled="busy === p.manifest.id" @click="showing = ''">
-          Cancel
-        </button>
-        <button
-          class="btn btn-primary"
-          :disabled="busy === p.manifest.id"
-          @click="accept(p)"
-        >
+        <button class="btn" :disabled="busy === p.manifest.id" @click="showing = ''"> Cancel </button>
+        <button class="btn btn-primary" :disabled="busy === p.manifest.id" @click="accept(p)">
           {{ busy === p.manifest.id ? "Installing…" : "Install" }}
         </button>
       </div>

@@ -1,8 +1,23 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import {
-  CORNER_SEGMENTS, GHOST_SHARE, LABEL_BOX_PX, MIN_TILE_SCALE, OriginTiles, RIM_INK_MIX, RIM_PX, TILE_LOOK, TILE_ORDER, TILE_SHAPE,
-  labelInk, mixHex, nameFade, tilePose, tileStates, type TilePose, type TileState,
+  CORNER_SEGMENTS,
+  GHOST_SHARE,
+  LABEL_BOX_PX,
+  MIN_TILE_SCALE,
+  OriginTiles,
+  RIM_INK_MIX,
+  RIM_PX,
+  TILE_LOOK,
+  TILE_ORDER,
+  TILE_SHAPE,
+  labelInk,
+  mixHex,
+  nameFade,
+  tilePose,
+  tileStates,
+  type TilePose,
+  type TileState,
 } from "../../src/viewport/originTiles";
 import { AXIS_COLOR } from "../../src/viewport/originTriad";
 import { roundedSquare } from "../../src/viewport/cornerProfile";
@@ -50,8 +65,8 @@ const look = (s: TileState) => ({ ...TILE_LOOK[s], ghost: TILE_LOOK[s].fill * GH
 
 /** The axis aligned box a placed tile fills, in the group's pixel frame. */
 function tileBox(p: TilePose, size: number) {
-  const lo = [0, 1, 2].map((i) => p.centre[i]! - (Math.abs(p.u[i]!) + Math.abs(p.v[i]!)) * size / 2);
-  const hi = [0, 1, 2].map((i) => p.centre[i]! + (Math.abs(p.u[i]!) + Math.abs(p.v[i]!)) * size / 2);
+  const lo = [0, 1, 2].map((i) => p.centre[i]! - ((Math.abs(p.u[i]!) + Math.abs(p.v[i]!)) * size) / 2);
+  const hi = [0, 1, 2].map((i) => p.centre[i]! + ((Math.abs(p.u[i]!) + Math.abs(p.v[i]!)) * size) / 2);
   return { lo, hi };
 }
 
@@ -84,10 +99,18 @@ describe("tilePose", () => {
   });
 
   it("keeps the tiles apart by the gap, and touching at gap 0", () => {
-    for (const [gap, want] of [[5, 5 * Math.SQRT2], [6, 6 * Math.SQRT2], [0, 0]] as const) {
+    for (const [gap, want] of [
+      [5, 5 * Math.SQRT2],
+      [6, 6 * Math.SQRT2],
+      [0, 0],
+    ] as const) {
       const shape = { ...TILE_SHAPE, sizePx: 37, gapPx: gap };
       const boxes = PLANES.map((k) => tileBox(tilePose(k, shape), 37));
-      const d = [boxDistance(boxes[0]!, boxes[1]!), boxDistance(boxes[0]!, boxes[2]!), boxDistance(boxes[1]!, boxes[2]!)];
+      const d = [
+        boxDistance(boxes[0]!, boxes[1]!),
+        boxDistance(boxes[0]!, boxes[2]!),
+        boxDistance(boxes[1]!, boxes[2]!),
+      ];
       for (const x of d) expect(x).toBeCloseTo(want, 12);
     }
   });
@@ -135,13 +158,15 @@ describe("OriginTiles", () => {
     const t = new OriginTiles(scene);
     markOverlay(t.group, "origin");
     expect(t.group.parent).toBe(scene);
-    expect(PLANES.map((k) => ({
-      plane: t.planes[k].userData.plane,
-      color: (t.planes[k].material as THREE.MeshBasicMaterial).color.getHex(),
-      visible: t.planes[k].visible,
-      parent: t.planes[k].parent === t.group,
-      roles: t.planes[k].children.map((c) => c.userData.role),
-    }))).toEqual([
+    expect(
+      PLANES.map((k) => ({
+        plane: t.planes[k].userData.plane,
+        color: (t.planes[k].material as THREE.MeshBasicMaterial).color.getHex(),
+        visible: t.planes[k].visible,
+        parent: t.planes[k].parent === t.group,
+        roles: t.planes[k].children.map((c) => c.userData.role),
+      })),
+    ).toEqual([
       { plane: "XY", color: AXIS_COLOR.z, visible: false, parent: true, roles: ["ghost", "rim", "label"] },
       { plane: "XZ", color: AXIS_COLOR.y, visible: false, parent: true, roles: ["ghost", "rim", "label"] },
       { plane: "YZ", color: AXIS_COLOR.x, visible: false, parent: true, roles: ["ghost", "rim", "label"] },
@@ -163,7 +188,10 @@ describe("OriginTiles", () => {
     const flags = (o: THREE.Object3D) => {
       const m = matOf(o);
       return {
-        order: o.renderOrder, depthTest: m.depthTest, depthWrite: m.depthWrite, transparent: m.transparent,
+        order: o.renderOrder,
+        depthTest: m.depthTest,
+        depthWrite: m.depthWrite,
+        transparent: m.transparent,
         offset: m.polygonOffset ? [m.polygonOffsetFactor, m.polygonOffsetUnits] : null,
       };
     };
@@ -250,7 +278,7 @@ describe("OriginTiles", () => {
     expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.idle.label, XZ: 0, YZ: 0 });
     // At scale 2 the XZ centre is (52, 0, 52) and the YZ centre (0, -52, 52): the eye is 67 and 63 away.
     t.update(2, null, eyeAt(10, -15, 102, [30, -20, 15]));
-    const ramp = (facing: number) => TILE_LOOK.idle.label * (facing - 0.15) / 0.2;
+    const ramp = (facing: number) => (TILE_LOOK.idle.label * (facing - 0.15)) / 0.2;
     expect(labelOpacity(t)).toEqual({
       XY: TILE_LOOK.idle.label,
       XZ: expect.closeTo(ramp(15 / 67), 12),
@@ -261,10 +289,11 @@ describe("OriginTiles", () => {
 
   it("rims each tile in its axis colour pulled towards the ink, and inks the names", () => {
     const t = new OriginTiles(new THREE.Scene());
-    const colours = () => PLANES.map((k) => [
-      matOf(child(t.planes[k], "rim")).color.getHex(),
-      matOf(child(t.planes[k], "label")).color.getHex(),
-    ]);
+    const colours = () =>
+      PLANES.map((k) => [
+        matOf(child(t.planes[k], "rim")).color.getHex(),
+        matOf(child(t.planes[k], "label")).color.getHex(),
+      ]);
     const noirText = 0xf6f0e4;
     const noirGround = 0x0b0912;
     t.applyTheme(noirGround);
@@ -285,8 +314,12 @@ describe("OriginTiles", () => {
   it("paints the names on the first show, and again only until the font has loaded", () => {
     const drawn: string[] = [];
     const ctx = {
-      clearRect: () => {}, fillText: (s: string) => drawn.push(s),
-      fillStyle: "", font: "", textAlign: "", textBaseline: "",
+      clearRect: () => {},
+      fillText: (s: string) => drawn.push(s),
+      fillStyle: "",
+      font: "",
+      textAlign: "",
+      textBaseline: "",
     };
     let fontReady = false;
     vi.stubGlobal("document", {
@@ -299,15 +332,18 @@ describe("OriginTiles", () => {
     expect(drawn).toEqual([]);
     t.setShown(true);
     expect(drawn).toEqual(["XY", "XZ", "YZ"]);
-    expect({ fill: ctx.fillStyle, font: ctx.font.includes("Space Grotesk"), size: ctx.font.includes("44px") })
-      .toEqual({ fill: "#ffffff", font: true, size: true });
+    expect({ fill: ctx.fillStyle, font: ctx.font.includes("Space Grotesk"), size: ctx.font.includes("44px") }).toEqual({
+      fill: "#ffffff",
+      font: true,
+      size: true,
+    });
     fontReady = true;
     t.setShown(true);
     expect(drawn).toEqual(["XY", "XZ", "YZ", "XY", "XZ", "YZ"]);
     t.setShown(true);
     expect(drawn.length).toBe(6);
     const map = (child(t.planes.YZ, "label") as THREE.Sprite).material.map!;
-    expect((map.image as { width: number; height: number })).toMatchObject({ width: 112, height: 64 });
+    expect(map.image as { width: number; height: number }).toMatchObject({ width: 112, height: 64 });
     t.dispose();
   });
 
@@ -329,24 +365,34 @@ describe("OriginTiles", () => {
     expect(PLANES.map((k) => t.planes[k])).toEqual(meshes);
     PLANES.forEach((k, i) => expect(t.planes[k]).toBe(meshes[i]));
     expect(spies.map((s) => s.mock.calls.length)).toEqual([1, 1, 1, 1, 1, 1]);
-    expect(PLANES.map((k) => (child(t.planes[k], "ghost") as THREE.Mesh).geometry === t.planes[k].geometry)).toEqual([true, true, true]);
+    expect(PLANES.map((k) => (child(t.planes[k], "ghost") as THREE.Mesh).geometry === t.planes[k].geometry)).toEqual([
+      true,
+      true,
+      true,
+    ]);
     const box = (m: THREE.Mesh) => {
       m.geometry.computeBoundingBox();
       const b = m.geometry.boundingBox!;
       return [b.min.x, b.min.y, b.max.x, b.max.y];
     };
     expect(PLANES.map((k) => box(t.planes[k]))).toEqual([
-      [-18.5, -18.5, 18.5, 18.5], [-18.5, -18.5, 18.5, 18.5], [-18.5, -18.5, 18.5, 18.5],
+      [-18.5, -18.5, 18.5, 18.5],
+      [-18.5, -18.5, 18.5, 18.5],
+      [-18.5, -18.5, 18.5, 18.5],
     ]);
     expect(PLANES.map((k) => t.planes[k].position.toArray())).toEqual([
-      [-23.5, 23.5, 0], [-23.5, 0, -23.5], [0, 23.5, -23.5],
+      [-23.5, 23.5, 0],
+      [-23.5, 0, -23.5],
+      [0, 23.5, -23.5],
     ]);
     const second = [...meshes, ...rims].map((m) => m.geometry);
     const again = second.map((g) => vi.spyOn(g, "dispose"));
     t.reshape({ radiusPx: 4, rho: 0.6 });
     expect(again.map((s) => s.mock.calls.length)).toEqual([1, 1, 1, 1, 1, 1]);
     expect(PLANES.map((k) => t.planes[k].position.toArray())).toEqual([
-      [-23.5, 23.5, 0], [-23.5, 0, -23.5], [0, 23.5, -23.5],
+      [-23.5, 23.5, 0],
+      [-23.5, 0, -23.5],
+      [0, 23.5, -23.5],
     ]);
     t.dispose();
   });
@@ -386,7 +432,11 @@ describe("OriginTiles", () => {
     const t = new OriginTiles(new THREE.Scene());
     t.group.scale.setScalar(0.37);
     t.group.updateMatrixWorld(true);
-    const corner = (k: Plane3) => new THREE.Vector3(20, 20, 0).applyMatrix4(t.planes[k].matrixWorld).toArray().map((n) => Math.round(n * 1e9) / 1e9 + 0);
+    const corner = (k: Plane3) =>
+      new THREE.Vector3(20, 20, 0)
+        .applyMatrix4(t.planes[k].matrixWorld)
+        .toArray()
+        .map((n) => Math.round(n * 1e9) / 1e9 + 0);
     expect(PLANES.map(corner)).toEqual([
       [46 * 0.37, -6 * 0.37, 0].map((n) => Math.round(n * 1e9) / 1e9),
       [46 * 0.37, 0, 46 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),

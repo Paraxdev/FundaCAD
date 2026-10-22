@@ -42,8 +42,14 @@ import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } f
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
 import { motionOn, onMotionChange, setMotion } from "../../ui/motion";
 import {
-  getHomeBackground, HOME_BACKGROUNDS, HOME_IMAGE_TYPES, loadHomeImage, onHomeBackgroundChange, setHomeBackground,
-  storeHomeImage, type HomeBackground,
+  getHomeBackground,
+  HOME_BACKGROUNDS,
+  HOME_IMAGE_TYPES,
+  loadHomeImage,
+  onHomeBackgroundChange,
+  setHomeBackground,
+  storeHomeImage,
+  type HomeBackground,
 } from "../../ui/homeBackground";
 import {
   asOrbitPivot,
@@ -78,7 +84,9 @@ import {
 } from "../../ui/renderPrefs";
 
 const dialogs = useDialogStore();
-const close = () => { dialogs.preferences = false; };
+const close = () => {
+  dialogs.preferences = false;
+};
 
 // Unlike the 3D-mouse dialog, this one DOES gate global shortcuts: it is full of
 // text-sized targets and single-letter tool keys would fire underneath it.
@@ -122,15 +130,34 @@ onMounted(() => {
   ownDepth = modals.depth;
   window.addEventListener("keydown", onKey, true);
   stops.push(
-    onThemeChange(() => { theme.value = getTheme(); themeList.value = themes(); }),
-    onIconPackChange(() => { pack.value = getIconPack(); }),
-    onUnitChange(() => { unit.value = getUnit(); }),
-    onRenderPrefsChange(() => { render.value = renderPrefs(); }),
-    onHoverDwellChange(() => { dwell.value = getHoverDwellMs(); }),
-    onMotionChange(() => { motion.value = motionOn(); }),
-    onNavPrefsChange(() => { nav.value = getNavPrefs(); }),
-    onDetectedWheelChange(() => { detectedWheel.value = getDetectedWheel(); }),
-    onHomeBackgroundChange(() => { homeBg.value = getHomeBackground(); }),
+    onThemeChange(() => {
+      theme.value = getTheme();
+      themeList.value = themes();
+    }),
+    onIconPackChange(() => {
+      pack.value = getIconPack();
+    }),
+    onUnitChange(() => {
+      unit.value = getUnit();
+    }),
+    onRenderPrefsChange(() => {
+      render.value = renderPrefs();
+    }),
+    onHoverDwellChange(() => {
+      dwell.value = getHoverDwellMs();
+    }),
+    onMotionChange(() => {
+      motion.value = motionOn();
+    }),
+    onNavPrefsChange(() => {
+      nav.value = getNavPrefs();
+    }),
+    onDetectedWheelChange(() => {
+      detectedWheel.value = getDetectedWheel();
+    }),
+    onHomeBackgroundChange(() => {
+      homeBg.value = getHomeBackground();
+    }),
   );
 });
 onUnmounted(() => {
@@ -148,7 +175,9 @@ const categories = computed(() => [
   { id: "plugins", label: "Plugins" },
 ]);
 const category = ref(pluginFocus.value ? "plugins" : "appearance");
-watch(pluginFocus, (id) => { if (id) category.value = "plugins"; });
+watch(pluginFocus, (id) => {
+  if (id) category.value = "plugins";
+});
 
 const UNITS = [
   { id: "mm", label: "mm" },
@@ -196,12 +225,18 @@ const environmentOptions = ENVIRONMENTS_LIST.map((e) => ({ value: e.id, label: e
 
 // Every write goes through the module's own gate, so a choice that no longer
 // matches anything is refused at the same place a corrupt stored value is.
-function onTheme(id: string) { const v = asThemeId(id); if (v) setTheme(v); }
+function onTheme(id: string) {
+  const v = asThemeId(id);
+  if (v) setTheme(v);
+}
 
 // Opening the native file picker from a real button, the <input> itself is
 // hidden: a bare file input reads as a mystery control on a settings screen,
 // and "Upload theme…" says what it is for.
-function pickThemeFile() { themeError.value = ""; fileInput.value?.click(); }
+function pickThemeFile() {
+  themeError.value = "";
+  fileInput.value?.click();
+}
 
 async function onUpload(ev: Event) {
   const input = ev.target as HTMLInputElement;
@@ -237,8 +272,14 @@ function onRemoveTheme() {
   // and refreshes both refs.
   if (activeIsCustom.value) removeCustomTheme(theme.value);
 }
-function onPack(id: string) { const v = asIconPackId(id); if (v) setIconPack(v); }
-function pickUnit(id: string) { const v = asUnit(id); if (v) setUnit(v); }
+function onPack(id: string) {
+  const v = asIconPackId(id);
+  if (v) setIconPack(v);
+}
+function pickUnit(id: string) {
+  const v = asUnit(id);
+  if (v) setUnit(v);
+}
 
 async function pickHomeBackground(id: HomeBackground) {
   homeImageError.value = "";
@@ -262,22 +303,60 @@ async function onHomeImage(ev: Event) {
   homeImageError.value = "";
   setHomeBackground("image");
 }
-function onEnvironment(id: string) { const v = asEnvironment(id); if (v) setRenderPref("environment", v); }
-function pickBackground(id: string) { const v = asBackground(id); if (v) setRenderPref("background", v); }
-function onBrightness(ev: Event) { setRenderPref("brightness", Number.parseFloat(value(ev))); }
-function onDwell(ev: Event) { setHoverDwellMs(Number.parseFloat(value(ev))); }
-function onBloom(ev: Event) { const v = asBloom(Number.parseFloat(value(ev))); if (v !== null) setRenderPref("bloom", v); }
-function pickTracer(id: string) { const v = asTracerPref(id); if (v) setRenderPref("tracer", v); }
-function pickTangent(id: string) { const v = asTangentEdges(id); if (v) setRenderPref("tangentEdges", v); }
-function onPerformanceMode(ev: Event) { setRenderPref("performanceMode", (ev.target as HTMLInputElement).checked); }
-function onPotatoMode(ev: Event) { setRenderPref("potatoMode", (ev.target as HTMLInputElement).checked); }
-function onMotion(ev: Event) { setMotion((ev.target as HTMLInputElement).checked); }
+function onEnvironment(id: string) {
+  const v = asEnvironment(id);
+  if (v) setRenderPref("environment", v);
+}
+function pickBackground(id: string) {
+  const v = asBackground(id);
+  if (v) setRenderPref("background", v);
+}
+function onBrightness(ev: Event) {
+  setRenderPref("brightness", Number.parseFloat(value(ev)));
+}
+function onDwell(ev: Event) {
+  setHoverDwellMs(Number.parseFloat(value(ev)));
+}
+function onBloom(ev: Event) {
+  const v = asBloom(Number.parseFloat(value(ev)));
+  if (v !== null) setRenderPref("bloom", v);
+}
+function pickTracer(id: string) {
+  const v = asTracerPref(id);
+  if (v) setRenderPref("tracer", v);
+}
+function pickTangent(id: string) {
+  const v = asTangentEdges(id);
+  if (v) setRenderPref("tangentEdges", v);
+}
+function onPerformanceMode(ev: Event) {
+  setRenderPref("performanceMode", (ev.target as HTMLInputElement).checked);
+}
+function onPotatoMode(ev: Event) {
+  setRenderPref("potatoMode", (ev.target as HTMLInputElement).checked);
+}
+function onMotion(ev: Event) {
+  setMotion((ev.target as HTMLInputElement).checked);
+}
 const checked = (ev: Event) => (ev.target as HTMLInputElement).checked;
-function onInertia(ev: Event) { setNavPrefs({ inertia: checked(ev) }); }
-function pickWheelDevice(id: string) { const v = asWheelDevice(id); if (v) setNavPrefs({ wheelDevice: v }); }
-function pickOrbitPivot(id: string) { const v = asOrbitPivot(id); if (v) setNavPrefs({ orbitPivot: v }); }
-function pickTouchpadScroll(id: string) { const v = asTouchpadScroll(id); if (v) setNavPrefs({ touchpadScroll: v }); }
-function onSmoothing(ev: Event) { setNavPrefs({ smoothTime: Number.parseFloat(value(ev)) }); }
+function onInertia(ev: Event) {
+  setNavPrefs({ inertia: checked(ev) });
+}
+function pickWheelDevice(id: string) {
+  const v = asWheelDevice(id);
+  if (v) setNavPrefs({ wheelDevice: v });
+}
+function pickOrbitPivot(id: string) {
+  const v = asOrbitPivot(id);
+  if (v) setNavPrefs({ orbitPivot: v });
+}
+function pickTouchpadScroll(id: string) {
+  const v = asTouchpadScroll(id);
+  if (v) setNavPrefs({ touchpadScroll: v });
+}
+function onSmoothing(ev: Event) {
+  setNavPrefs({ smoothTime: Number.parseFloat(value(ev)) });
+}
 function onClassicCamera(ev: Event) {
   classicCamera.value = checked(ev);
   setNavigatorChoice(classicCamera.value ? "legacy" : "v2");
@@ -299,7 +378,8 @@ function onClassicCamera(ev: Event) {
           :aria-current="category === c.id ? 'page' : undefined"
           :data-category="c.id"
           @click="category = c.id"
-        >{{ c.label }}</button>
+          >{{ c.label }}</button
+        >
       </nav>
 
       <div class="prefs-panes">
@@ -312,10 +392,9 @@ function onClassicCamera(ev: Event) {
                 <Select id="prefs-theme" :model-value="theme" :options="themeOptions" @update:model-value="onTheme" />
               </div>
               <p class="pref-hint">
-                FundaCAD Noir, Dracula, Solarized Light and the Noir Blue/Red/Orange tints ship
-                with FundaCAD. Upload a JSON palette to add your own, it is stored in this
-                browser's preferences. Keys are colour tokens like <code>--bg</code> and
-                <code>--accent</code>, values are hex or rgb().
+                FundaCAD Noir, Dracula, Solarized Light and the Noir Blue/Red/Orange tints ship with FundaCAD. Upload a
+                JSON palette to add your own, it is stored in this browser's preferences. Keys are colour tokens like
+                <code>--bg</code> and <code>--accent</code>, values are hex or rgb().
               </p>
               <div class="prefs-actions">
                 <input
@@ -349,7 +428,8 @@ function onClassicCamera(ev: Event) {
                     :aria-checked="unit === u.id"
                     :class="{ on: unit === u.id }"
                     @click="pickUnit(u.id)"
-                  >{{ u.label }}</button>
+                    >{{ u.label }}</button
+                  >
                 </div>
               </div>
               <p class="pref-hint">Geometry is always stored in millimetres, this is display only.</p>
@@ -366,7 +446,8 @@ function onClassicCamera(ev: Event) {
                     :aria-checked="homeBg === b.id"
                     :class="{ on: homeBg === b.id }"
                     @click="pickHomeBackground(b.id)"
-                  >{{ b.label }}</button>
+                    >{{ b.label }}</button
+                  >
                 </div>
               </div>
               <p class="pref-hint">What Home sits on. Workspace shows your model dimmed behind it.</p>
@@ -400,8 +481,8 @@ function onClassicCamera(ev: Event) {
                 />
               </div>
               <p class="pref-hint">
-                A metal is almost entirely reflection, so with none it renders nearly
-                black. Flat is the clearer way to read shape.
+                A metal is almost entirely reflection, so with none it renders nearly black. Flat is the clearer way to
+                read shape.
               </p>
             </div>
             <div class="pref-card">
@@ -416,7 +497,8 @@ function onClassicCamera(ev: Event) {
                     :aria-checked="render.background === b.id"
                     :class="{ on: render.background === b.id }"
                     @click="pickBackground(b.id)"
-                  >{{ b.label }}</button>
+                    >{{ b.label }}</button
+                  >
                 </div>
               </div>
             </div>
@@ -448,23 +530,31 @@ function onClassicCamera(ev: Event) {
                     :aria-checked="render.tangentEdges === t.id"
                     :class="{ on: render.tangentEdges === t.id }"
                     @click="pickTangent(t.id)"
-                  >{{ t.label }}</button>
+                    >{{ t.label }}</button
+                  >
                 </div>
               </div>
               <p class="pref-hint">
-                Where two faces meet smoothly, like the borders of a fillet, there is no
-                corner to see, only a line across one continuous surface.
+                Where two faces meet smoothly, like the borders of a fillet, there is no corner to see, only a line
+                across one continuous surface.
               </p>
             </div>
             <div class="pref-card">
               <div class="pref-head">
                 <label class="pref-title" for="prefs-bloom">Bloom</label>
               </div>
-              <input id="prefs-bloom" class="sm-slider pref-slider" type="range" min="0" max="1" step="0.05"
-                :value="render.bloom" @input="onBloom" />
+              <input
+                id="prefs-bloom"
+                class="sm-slider pref-slider"
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                :value="render.bloom"
+                @input="onBloom"
+              />
               <p class="pref-hint">
-                Light spilling off faces with Emission turned up. In the path traced view
-                bright highlights spill too.
+                Light spilling off faces with Emission turned up. In the path traced view bright highlights spill too.
               </p>
             </div>
             <div class="pref-card">
@@ -479,13 +569,13 @@ function onClassicCamera(ev: Event) {
                     :aria-checked="render.tracer === t.id"
                     :class="{ on: render.tracer === t.id }"
                     @click="pickTracer(t.id)"
-                  >{{ t.label }}</button>
+                    >{{ t.label }}</button
+                  >
                 </div>
               </div>
               <p class="pref-hint">
-                Where Path traced runs. Native traces in the app itself, WebGPU in the
-                viewport's web view; Auto picks the faster one this computer has. If the
-                one picked is missing, the other is used.
+                Where Path traced runs. Native traces in the app itself, WebGPU in the viewport's web view; Auto picks
+                the faster one this computer has. If the one picked is missing, the other is used.
               </p>
               <DenoiserRow hint-class="pref-hint" button-class="btn" />
             </div>
@@ -504,26 +594,19 @@ function onClassicCamera(ev: Event) {
                 </span>
               </label>
               <p class="pref-hint">
-                Drops glass refraction, the high pixel ratio and the emitter shadows for a
-                lighter render. Weak GPUs get it automatically; turn it on if the viewport
-                stutters or a laptop runs hot.
+                Drops glass refraction, the high pixel ratio and the emitter shadows for a lighter render. Weak GPUs get
+                it automatically; turn it on if the viewport stutters or a laptop runs hot.
               </p>
               <label class="pref-head pref-sub" title="Lowest quality, for slow or virtual machines">
                 <span class="pref-title">Potato mode</span>
                 <span class="param-switch">
-                  <input
-                    id="prefs-potato-mode"
-                    type="checkbox"
-                    :checked="render.potatoMode"
-                    @change="onPotatoMode"
-                  />
+                  <input id="prefs-potato-mode" type="checkbox" :checked="render.potatoMode" @change="onPotatoMode" />
                   <span class="track"><span class="knob"></span></span>
                 </span>
               </label>
               <p class="pref-hint">
-                Lowest quality, for slow or virtual machines. Flat shading, thin edges, half
-                resolution, no glass blur and no effects or camera animations. Includes
-                performance mode.
+                Lowest quality, for slow or virtual machines. Flat shading, thin edges, half resolution, no glass blur
+                and no effects or camera animations. Includes performance mode.
               </p>
             </div>
           </div>
@@ -537,12 +620,19 @@ function onClassicCamera(ev: Event) {
                 <label class="pref-title" for="prefs-smoothing">Smoothing</label>
                 <span class="prefs-readout">{{ nav.smoothTime.toFixed(3) }} s</span>
               </div>
-              <input id="prefs-smoothing" class="sm-slider pref-slider" type="range" min="0"
-                max="0.3" step="0.005" :value="nav.smoothTime" @input="onSmoothing" />
+              <input
+                id="prefs-smoothing"
+                class="sm-slider pref-slider"
+                type="range"
+                min="0"
+                max="0.3"
+                step="0.005"
+                :value="nav.smoothTime"
+                @input="onSmoothing"
+              />
               <p class="pref-hint">
-                How long a zoom or a drag takes to catch up with the hand. 0 follows the
-                mouse exactly; whatever it is set to, the point under the cursor stays
-                under it on every frame.
+                How long a zoom or a drag takes to catch up with the hand. 0 follows the mouse exactly; whatever it is
+                set to, the point under the cursor stays under it on every frame.
               </p>
             </div>
             <div class="pref-card">
@@ -557,14 +647,14 @@ function onClassicCamera(ev: Event) {
                     :aria-checked="nav.orbitPivot === p.id"
                     :class="{ on: nav.orbitPivot === p.id }"
                     @click="pickOrbitPivot(p.id)"
-                  >{{ p.label }}</button>
+                    >{{ p.label }}</button
+                  >
                 </div>
               </div>
               <p class="pref-hint">
-                What a drag turns the view about. Under cursor takes the model point you
-                press on, Origin always turns about the world origin, and Selection about
-                the centre of what is selected (under the cursor while nothing is). The
-                arrow keys turn about the same point, 15° a press, 5° with Shift.
+                What a drag turns the view about. Under cursor takes the model point you press on, Origin always turns
+                about the world origin, and Selection about the centre of what is selected (under the cursor while
+                nothing is). The arrow keys turn about the same point, 15° a press, 5° with Shift.
               </p>
             </div>
             <div class="pref-card">
@@ -576,8 +666,7 @@ function onClassicCamera(ev: Event) {
                 </span>
               </label>
               <p class="pref-hint">
-                A flicked orbit keeps turning for a moment after the button comes up,
-                about the same point.
+                A flicked orbit keeps turning for a moment after the button comes up, about the same point.
               </p>
             </div>
             <div class="pref-card">
@@ -592,15 +681,15 @@ function onClassicCamera(ev: Event) {
                     :aria-checked="nav.wheelDevice === d.id"
                     :class="{ on: nav.wheelDevice === d.id }"
                     @click="pickWheelDevice(d.id)"
-                  >{{ d.label }}</button>
+                    >{{ d.label }}</button
+                  >
                 </div>
               </div>
               <p class="pref-hint">
-                A mouse wheel zooms; a touchpad's two fingers turn or move the view and a
-                pinch zooms. Automatic tells them apart each time you scroll<template
-                  v-if="nav.wheelDevice === 'auto' && detectedWheel"
-                >, and took the last one for a {{ detectedWheel }}</template>. Pick one
-                if it guesses wrong.
+                A mouse wheel zooms; a touchpad's two fingers turn or move the view and a pinch zooms. Automatic tells
+                them apart each time you scroll<template v-if="nav.wheelDevice === 'auto' && detectedWheel"
+                  >, and took the last one for a {{ detectedWheel }}</template
+                >. Pick one if it guesses wrong.
               </p>
             </div>
             <div class="pref-card">
@@ -615,12 +704,13 @@ function onClassicCamera(ev: Event) {
                     :aria-checked="nav.touchpadScroll === t.id"
                     :class="{ on: nav.touchpadScroll === t.id }"
                     @click="pickTouchpadScroll(t.id)"
-                  >{{ t.label }}</button>
+                    >{{ t.label }}</button
+                  >
                 </div>
               </div>
               <p class="pref-hint">
-                On a touchpad, what two fingers scrolling do to the view. Shift with the
-                scroll does the other, and a pinch zooms toward the pointer.
+                On a touchpad, what two fingers scrolling do to the view. Shift with the scroll does the other, and a
+                pinch zooms toward the pointer.
               </p>
             </div>
             <div class="pref-card">
@@ -632,8 +722,8 @@ function onClassicCamera(ev: Event) {
                 </span>
               </label>
               <p class="pref-hint">
-                The camera from before this release, kept for one release in case the new
-                one gets in your way. Takes effect after a restart.
+                The camera from before this release, kept for one release in case the new one gets in your way. Takes
+                effect after a restart.
               </p>
             </div>
           </div>
@@ -651,9 +741,8 @@ function onClassicCamera(ev: Event) {
                 </span>
               </label>
               <p class="pref-hint">
-                Off makes every transition instant: menus, panels, the error notice
-                and camera moves all jump straight to where they end. Follows the
-                system's reduce motion setting until changed here.
+                Off makes every transition instant: menus, panels, the error notice and camera moves all jump straight
+                to where they end. Follows the system's reduce motion setting until changed here.
               </p>
             </div>
             <div class="pref-card">
@@ -661,12 +750,19 @@ function onClassicCamera(ev: Event) {
                 <label class="pref-title" for="prefs-hover-dwell">Hover delay</label>
                 <span class="prefs-readout">{{ (dwell / 1000).toFixed(2) }} s</span>
               </div>
-              <input id="prefs-hover-dwell" class="sm-slider pref-slider" type="range" :min="MIN_DWELL_MS"
-                :max="MAX_DWELL_MS" step="50" :value="dwell" @input="onDwell" />
+              <input
+                id="prefs-hover-dwell"
+                class="sm-slider pref-slider"
+                type="range"
+                :min="MIN_DWELL_MS"
+                :max="MAX_DWELL_MS"
+                step="50"
+                :value="dwell"
+                @input="onDwell"
+              />
               <p class="pref-hint">
-                How long the pointer rests on a part before its face is highlighted
-                instead of the whole part. A click selects whatever is highlighted, so a
-                longer delay makes it easier to select whole parts.
+                How long the pointer rests on a part before its face is highlighted instead of the whole part. A click
+                selects whatever is highlighted, so a longer delay makes it easier to select whole parts.
               </p>
             </div>
           </div>

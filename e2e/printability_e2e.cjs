@@ -16,19 +16,27 @@ const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const APP_PORT = process.env.SC_APP_PORT || "5173";
 const WS_PORT = process.env.SC_ENGINE_PORT || "8765";
 const SHOTS = process.argv[2] || "";
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 
 // A T on the bed, whose cap overhangs, and beside it a 0.6 mm fin, one
 // perimeter for a 0.4 mm nozzle.
-const DOC = JSON.stringify({ version: 9, parameters: {}, paramDefs: {}, features: [
-  { id: "s", type: "box", length: 4, width: 4, height: 10 },
-  { id: "m", type: "move", dz: 5, bodies: ["body1"] },
-  { id: "c", type: "box", length: 20, width: 4, height: 4 },
-  { id: "n", type: "move", dz: 12, bodies: ["body2"] },
-  { id: "j", type: "boolean", operation: "union", target: "body1", tools: ["body2"] },
-  { id: "f", type: "box", length: 0.6, width: 20, height: 10 },
-  { id: "k", type: "move", dx: 20, dz: 5, bodies: ["body3"] },
-] });
+const DOC = JSON.stringify({
+  version: 9,
+  parameters: {},
+  paramDefs: {},
+  features: [
+    { id: "s", type: "box", length: 4, width: 4, height: 10 },
+    { id: "m", type: "move", dz: 5, bodies: ["body1"] },
+    { id: "c", type: "box", length: 20, width: 4, height: 4 },
+    { id: "n", type: "move", dz: 12, bodies: ["body2"] },
+    { id: "j", type: "boolean", operation: "union", target: "body1", tools: ["body2"] },
+    { id: "f", type: "box", length: 0.6, width: 20, height: 10 },
+    { id: "k", type: "move", dx: 20, dz: 5, bodies: ["body3"] },
+  ],
+});
 
 let failures = 0;
 const check = (name, ok, detail) => {
@@ -39,26 +47,39 @@ const check = (name, ok, detail) => {
 (async () => {
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-  await page.addInitScript(({ t, ws }) => {
-    const N = window.WebSocket;
-    class P extends N {
-      constructor(u, p) {
-        const s = String(u).replace(":8765", `:${ws}`).replace(/([?&])token=[^&]*/, `$1token=${t}`);
-        super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
+  await page.addInitScript(
+    ({ t, ws }) => {
+      const N = window.WebSocket;
+      class P extends N {
+        constructor(u, p) {
+          const s = String(u)
+            .replace(":8765", `:${ws}`)
+            .replace(/([?&])token=[^&]*/, `$1token=${t}`);
+          super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+        }
       }
-    }
-    window.WebSocket = P;
-  }, { t: TOKEN, ws: WS_PORT });
+      window.WebSocket = P;
+    },
+    { t: TOKEN, ws: WS_PORT },
+  );
 
   await page.goto(`http://localhost:${APP_PORT}/`);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store, null, { timeout: 60000 });
   await page.evaluate((text) => window.store.load(text), DOC);
   await page.waitForTimeout(4000);
-  const shot = async (name) => { if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` }); };
+  const shot = async (name) => {
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` });
+  };
 
   // Through the tool rail, as a person would get there: the PRINT group's
   // tile opens its flyout, and Printability is in it.
@@ -76,8 +97,14 @@ const check = (name, ok, detail) => {
   const rows = await page.$$eval(".printability-finding", (els) => els.map((e) => e.textContent.trim()));
   console.log("  rows:", JSON.stringify(rows));
   check("the error line stays empty", !(await page.$(".printability-error")));
-  check("the cap's underside is an overhang", rows.some((r) => /^Overhang/.test(r)));
-  check("the fin is a thin wall of 0.6 mm", rows.some((r) => /Thin wall 0\.6 mm/.test(r)));
+  check(
+    "the cap's underside is an overhang",
+    rows.some((r) => /^Overhang/.test(r)),
+  );
+  check(
+    "the fin is a thin wall of 0.6 mm",
+    rows.some((r) => /Thin wall 0\.6 mm/.test(r)),
+  );
   const header = await page.textContent(".printability-header");
   check("the header says how the parts sit", /\+Z up as modelled/.test(header || ""), header);
   await shot("printability-results");

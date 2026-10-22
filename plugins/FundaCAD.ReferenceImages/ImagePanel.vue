@@ -47,34 +47,74 @@ function onAngle(ev: Event) {
 }
 
 function onDistance(ev: KeyboardEvent) {
-  if (ev.key === "Escape") { tool.value?.cancel(); return; }
+  if (ev.key === "Escape") {
+    tool.value?.cancel();
+    return;
+  }
   if (ev.key !== "Enter") return;
   error.value = tool.value?.finishCalibrate((ev.target as HTMLInputElement).value) ?? null;
 }
 
 const prompt = computed(() =>
-  step.value === "first" ? "Click the first point on the image."
-    : step.value === "second" ? "Click the second point."
-      : step.value === "distance" ? "The real distance between them:" : null,
+  step.value === "first"
+    ? "Click the first point on the image."
+    : step.value === "second"
+      ? "Click the second point."
+      : step.value === "distance"
+        ? "The real distance between them:"
+        : null,
 );
 
 const root: CSSProperties = {
-  position: "fixed", bottom: "60px", right: "16px", zIndex: "50", padding: "8px",
-  background: "var(--panel, #20242c)", border: "1px solid var(--line-strong, #3a4150)",
-  borderRadius: "var(--r-md, 6px)", boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,0.4))",
-  font: "12px system-ui, sans-serif", color: "var(--text, #dce3ee)",
-  width: "260px", maxWidth: "calc(100vw - 24px)", boxSizing: "border-box",
+  position: "fixed",
+  bottom: "60px",
+  right: "16px",
+  zIndex: "50",
+  padding: "8px",
+  background: "var(--panel, #20242c)",
+  border: "1px solid var(--line-strong, #3a4150)",
+  borderRadius: "var(--r-md, 6px)",
+  boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,0.4))",
+  font: "12px system-ui, sans-serif",
+  color: "var(--text, #dce3ee)",
+  width: "260px",
+  maxWidth: "calc(100vw - 24px)",
+  boxSizing: "border-box",
 };
-const title: CSSProperties = { fontWeight: "600", marginBottom: "6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
-const row: CSSProperties = { display: "grid", gridTemplateColumns: "72px 1fr", gap: "6px", alignItems: "center", marginBottom: "4px" };
+const title: CSSProperties = {
+  fontWeight: "600",
+  marginBottom: "6px",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+const row: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "72px 1fr",
+  gap: "6px",
+  alignItems: "center",
+  marginBottom: "4px",
+};
 const muted: CSSProperties = { color: "var(--text-mute, #8b93a3)", marginBottom: "6px" };
 const errorStyle: CSSProperties = { color: "var(--error, #ff5c5c)", marginTop: "4px" };
 const field: CSSProperties = {
-  background: "var(--panel-2, #161a20)", color: "var(--text, #dce3ee)",
-  border: "1px solid var(--line-strong, #3a4150)", borderRadius: "var(--r-sm, 3px)",
-  padding: "3px 4px", font: "inherit", width: "100%", boxSizing: "border-box", minWidth: "0",
+  background: "var(--panel-2, #161a20)",
+  color: "var(--text, #dce3ee)",
+  border: "1px solid var(--line-strong, #3a4150)",
+  borderRadius: "var(--r-sm, 3px)",
+  padding: "3px 4px",
+  font: "inherit",
+  width: "100%",
+  boxSizing: "border-box",
+  minWidth: "0",
 };
-const btn: CSSProperties = { border: "none", borderRadius: "var(--r-sm, 4px)", padding: "4px 10px", cursor: "pointer", font: "inherit" };
+const btn: CSSProperties = {
+  border: "none",
+  borderRadius: "var(--r-sm, 4px)",
+  padding: "4px 10px",
+  cursor: "pointer",
+  font: "inherit",
+};
 const okBtn: CSSProperties = { ...btn, background: "var(--accent, #2b6)", color: "var(--on-accent, #fff)" };
 const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color: "var(--text, #fff)" };
 const actions: CSSProperties = { display: "flex", gap: "6px", justifyContent: "flex-end", marginTop: "8px" };
@@ -102,7 +142,13 @@ const actions: CSSProperties = { display: "flex", gap: "6px", justifyContent: "f
       <template v-else>
         <label :style="row">
           <span>Width</span>
-          <input data-field="width" :style="field" :value="displayRound(r.width)" :disabled="r.locked" @change="onWidth" />
+          <input
+            data-field="width"
+            :style="field"
+            :value="displayRound(r.width)"
+            :disabled="r.locked"
+            @change="onWidth"
+          />
         </label>
         <div :style="row">
           <span>Height</span>
@@ -127,8 +173,26 @@ const actions: CSSProperties = { display: "flex", gap: "6px", justifyContent: "f
         <div :style="row">
           <span>Flip</span>
           <span>
-            <label><input data-field="flipX" type="checkbox" :checked="r.flipX" :disabled="r.locked" @change="set({ flipX: !r.flipX })" /> X</label>
-            <label style="margin-left: 10px"><input data-field="flipY" type="checkbox" :checked="r.flipY" :disabled="r.locked" @change="set({ flipY: !r.flipY })" /> Y</label>
+            <label
+              ><input
+                data-field="flipX"
+                type="checkbox"
+                :checked="r.flipX"
+                :disabled="r.locked"
+                @change="set({ flipX: !r.flipX })"
+              />
+              X</label
+            >
+            <label style="margin-left: 10px"
+              ><input
+                data-field="flipY"
+                type="checkbox"
+                :checked="r.flipY"
+                :disabled="r.locked"
+                @change="set({ flipY: !r.flipY })"
+              />
+              Y</label
+            >
           </span>
         </div>
         <label :style="row">
@@ -138,7 +202,9 @@ const actions: CSSProperties = { display: "flex", gap: "6px", justifyContent: "f
         <div v-if="!r.locked" :style="muted">Shift drag the image to move it.</div>
         <div :style="actions">
           <button :style="noBtn" data-action="close" @click="selected = null">Close</button>
-          <button :style="okBtn" data-action="calibrate" :disabled="r.locked" @click="tool?.startCalibrate(r.id)">Calibrate</button>
+          <button :style="okBtn" data-action="calibrate" :disabled="r.locked" @click="tool?.startCalibrate(r.id)"
+            >Calibrate</button
+          >
         </div>
       </template>
     </div>

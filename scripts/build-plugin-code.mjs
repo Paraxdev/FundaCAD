@@ -43,17 +43,9 @@ const repoOf = (dir) => path.resolve(dir, "..", "..");
  *  `__fundacadHost` is the one argument the built module takes. Bracket
  *  notation throughout, because two of these have a slash in them and because a
  *  uniform shape is one less thing to get wrong when adding one. */
-const SHARED = [
-  "fundacad",
-  "fundacad/ui",
-  "vue",
-  "pinia",
-  "three",
-];
+const SHARED = ["fundacad", "fundacad/ui", "vue", "pinia", "three"];
 
-const globals = Object.fromEntries(
-  SHARED.map((id) => [id, `__fundacadHost[${JSON.stringify(id)}]`]),
-);
+const globals = Object.fromEntries(SHARED.map((id) => [id, `__fundacadHost[${JSON.stringify(id)}]`]));
 
 /** The name the IIFE assigns its exports to, and what the loader reads back. */
 const EXPORT_NAME = "__fundacadPlugin";
@@ -103,14 +95,14 @@ export async function buildPlugin(dir, outFile) {
   if (js.length !== 1) {
     throw new Error(
       `${dir}: expected one chunk, got ${js.length} (${js.map((f) => f.fileName).join(", ")}). ` +
-      "A dynamic import() of a plugin's own module splits the build; import it directly.",
+        "A dynamic import() of a plugin's own module splits the build; import it directly.",
     );
   }
   if (css.length) {
     throw new Error(
       `${dir}: a <style> block produced ${css.map((f) => f.fileName).join(", ")}. ` +
-      "A plugin styles itself with the app's own classes or with inline styles; " +
-      "there is nowhere to put a stylesheet a downloaded plugin brought with it.",
+        "A plugin styles itself with the app's own classes or with inline styles; " +
+        "there is nowhere to put a stylesheet a downloaded plugin brought with it.",
     );
   }
 

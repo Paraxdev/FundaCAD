@@ -2,15 +2,41 @@
 // detectRegions, pointInLoop/pointInRegion.
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { detectRegions, entityPolyline, evenOddFilled, glyphRegion, pointInRegion, rectCorners, rectFromThreePoints, regionArea } from "../../src/sketch/region";
+import {
+  detectRegions,
+  entityPolyline,
+  evenOddFilled,
+  glyphRegion,
+  pointInRegion,
+  rectCorners,
+  rectFromThreePoints,
+  regionArea,
+} from "../../src/sketch/region";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 
-const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity =>
-  ({ type: "line", id, x1, y1, x2, y2 });
-const rect = (id: string, x: number, y: number, width: number, height: number): ResolvedEntity =>
-  ({ type: "rectangle", id, x, y, width, height });
-const circle = (id: string, x: number, y: number, radius: number): ResolvedEntity =>
-  ({ type: "circle", id, x, y, radius });
+const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({
+  type: "line",
+  id,
+  x1,
+  y1,
+  x2,
+  y2,
+});
+const rect = (id: string, x: number, y: number, width: number, height: number): ResolvedEntity => ({
+  type: "rectangle",
+  id,
+  x,
+  y,
+  width,
+  height,
+});
+const circle = (id: string, x: number, y: number, radius: number): ResolvedEntity => ({
+  type: "circle",
+  id,
+  x,
+  y,
+  radius,
+});
 
 describe("entityPolyline", () => {
   it("a line is its two endpoints, open (no closing vertex)", () => {
@@ -34,8 +60,20 @@ describe("entityPolyline", () => {
 describe("glyphRegion, a tessellated glyph face becomes an extrudable profile", () => {
   it("a square outer with a square hole yields a ring whose interior avoids the hole", () => {
     // 10×10 outer, 4×4 centered hole (like the counter of an 'O')
-    const outer: [number, number][] = [[-5, -5], [5, -5], [5, 5], [-5, 5]];
-    const holes: [number, number][][] = [[[-2, -2], [2, -2], [2, 2], [-2, 2]]];
+    const outer: [number, number][] = [
+      [-5, -5],
+      [5, -5],
+      [5, 5],
+      [-5, 5],
+    ];
+    const holes: [number, number][][] = [
+      [
+        [-2, -2],
+        [2, -2],
+        [2, 2],
+        [-2, 2],
+      ],
+    ];
     const region = glyphRegion("s1", outer, holes);
 
     expect(region.sketchId).toBe("s1");
@@ -48,7 +86,12 @@ describe("glyphRegion, a tessellated glyph face becomes an extrudable profile", 
   });
 
   it("a solid glyph face (no holes) keeps its whole area", () => {
-    const outer: [number, number][] = [[0, 0], [6, 0], [6, 4], [0, 4]];
+    const outer: [number, number][] = [
+      [0, 0],
+      [6, 0],
+      [6, 4],
+      [0, 4],
+    ];
     const region = glyphRegion("s1", outer, []);
     expect(region.holes).toHaveLength(0);
     expect(pointInRegion(new THREE.Vector2(3, 2), region)).toBe(true);
@@ -145,7 +188,8 @@ describe("detectRegions, thin-ring interior anchor (field bug: outer ring select
 
 describe("detectRegions, projected reference geometry forms profiles", () => {
   const pline = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({
-    type: "projected", id,
+    type: "projected",
+    id,
     source: { kind: "edge", body: "body1", sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } } },
     curve: { kind: "line", x1, y1, x2, y2 },
   });
@@ -164,7 +208,8 @@ describe("detectRegions, projected reference geometry forms profiles", () => {
 
   it("a projected circle is its own closed loop (fast path, like a native circle)", () => {
     const pc: ResolvedEntity = {
-      type: "projected", id: "pc",
+      type: "projected",
+      id: "pc",
       source: { kind: "silhouette", body: "body1" },
       curve: { kind: "circle", x: 0, y: 0, r: 5 },
     };
@@ -176,7 +221,8 @@ describe("detectRegions, projected reference geometry forms profiles", () => {
 
   it("a construction projected entity never forms a profile", () => {
     const pc: ResolvedEntity = {
-      type: "projected", id: "pc",
+      type: "projected",
+      id: "pc",
       source: { kind: "silhouette", body: "body1" },
       curve: { kind: "circle", x: 0, y: 0, r: 5 },
       construction: true,
@@ -190,12 +236,7 @@ describe("detectRegions, splitting a profile at the edge of the face it sits on"
   // bounded by that face as much as by its own curves, and until this existed
   // the whole profile was one region that extruded off the side of the part.
   const face: THREE.Vector2[][] = [
-    [
-      new THREE.Vector2(-10, -10),
-      new THREE.Vector2(10, -10),
-      new THREE.Vector2(10, 10),
-      new THREE.Vector2(-10, 10),
-    ],
+    [new THREE.Vector2(-10, -10), new THREE.Vector2(10, -10), new THREE.Vector2(10, 10), new THREE.Vector2(-10, 10)],
   ];
 
   /** Shoelace area of a loop, for checking that a split conserves material. */
@@ -305,7 +346,12 @@ describe("rectCorners rotation", () => {
     // file anyone opens and re-saves.
     for (const a of [0, undefined]) {
       const c = rectCorners(3, 5, 10, 4, a);
-      expect(c.map((p) => [p.x, p.y])).toEqual([[-2, 3], [8, 3], [8, 7], [-2, 7]]);
+      expect(c.map((p) => [p.x, p.y])).toEqual([
+        [-2, 3],
+        [8, 3],
+        [8, 7],
+        [-2, 7],
+      ]);
     }
   });
 
@@ -344,7 +390,10 @@ describe("rectCorners rotation", () => {
 
   it("stays a rectangle: opposite sides equal, corners square", () => {
     const c = rectCorners(-7, 2, 10, 4, 37.5);
-    const side = (i: number) => at(c, (i + 1) % 4).clone().sub(at(c, i));
+    const side = (i: number) =>
+      at(c, (i + 1) % 4)
+        .clone()
+        .sub(at(c, i));
     expect(side(0).length()).toBeCloseTo(10, 9);
     expect(side(1).length()).toBeCloseTo(4, 9);
     expect(side(2).length()).toBeCloseTo(10, 9);
@@ -418,10 +467,24 @@ describe("detectRegions, every closed primitive is a profile, not just the two",
   // are closed curves with no free endpoints, so the chain tracer has nothing to
   // join them to; only the entities the fast path names as loops of their own
   // ever became regions, and that list was rectangle + circle.
-  const slot = (id: string, x1: number, y1: number, x2: number, y2: number, width: number): ResolvedEntity =>
-    ({ type: "slot", id, x1, y1, x2, y2, width });
-  const poly = (id: string, x: number, y: number, radius: number, sides: number): ResolvedEntity =>
-    ({ type: "polygon", id, x, y, radius, sides, angle: 0 });
+  const slot = (id: string, x1: number, y1: number, x2: number, y2: number, width: number): ResolvedEntity => ({
+    type: "slot",
+    id,
+    x1,
+    y1,
+    x2,
+    y2,
+    width,
+  });
+  const poly = (id: string, x: number, y: number, radius: number, sides: number): ResolvedEntity => ({
+    type: "polygon",
+    id,
+    x,
+    y,
+    radius,
+    sides,
+    angle: 0,
+  });
 
   it("a slot is one region, and the point between its arc centres is in it", () => {
     const regions = detectRegions("s1", [slot("s", -10, 0, 10, 0, 8)]);
@@ -466,9 +529,15 @@ function lines(loops: THREE.Vector2[][]): THREE.Vector2[][] {
 }
 
 describe("detectRegions, the areas are the engine's cells whatever the cut lines' layout", () => {
-  const seg = (x1: number, y1: number, x2: number, y2: number) => [new THREE.Vector2(x1, y1), new THREE.Vector2(x2, y2)];
+  const seg = (x1: number, y1: number, x2: number, y2: number) => [
+    new THREE.Vector2(x1, y1),
+    new THREE.Vector2(x2, y2),
+  ];
   const boxLines = (x0: number, y0: number, x1: number, y1: number) => [
-    seg(x0, y0, x1, y0), seg(x1, y0, x1, y1), seg(x1, y1, x0, y1), seg(x0, y1, x0, y0),
+    seg(x0, y0, x1, y0),
+    seg(x1, y0, x1, y1),
+    seg(x1, y1, x0, y1),
+    seg(x0, y1, x0, y0),
   ];
   const areas = (rs: ReturnType<typeof detectRegions>) => rs.map(regionArea).sort((a, b) => a - b);
 
@@ -504,7 +573,9 @@ describe("evenOddFilled", () => {
   it("leaves the counter of an O empty and fills the island inside it", () => {
     const regions = detectRegions("s", [circle("a", 0, 0, 10), circle("b", 0, 0, 5), circle("c", 0, 0, 2)]);
     const filled = evenOddFilled(regions);
-    const byArea = regions.map((r, i) => [Math.round(regionArea(r)), filled[i]]).sort((x, y) => Number(y[0]) - Number(x[0]));
+    const byArea = regions
+      .map((r, i) => [Math.round(regionArea(r)), filled[i]])
+      .sort((x, y) => Number(y[0]) - Number(x[0]));
     expect(byArea.map((x) => x[1])).toEqual([true, false, true]);
   });
 });

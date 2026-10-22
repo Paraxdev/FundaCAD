@@ -59,6 +59,10 @@ export function hdrRoom(h: HeldHdr, rotationDeg: number, exposure: number): { sc
   scene.add(turn);
   return {
     scene,
-    dispose: () => { geo.dispose(); mat.dispose(); tex.dispose(); },
+    dispose: () => {
+      geo.dispose();
+      mat.dispose();
+      tex.dispose();
+    },
   };
 }

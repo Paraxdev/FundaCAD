@@ -5,7 +5,9 @@ import { SHORTCUTS, formatShortcut, resolveShortcut, shortcutHudGroups } from ".
 import { CONSTRAINT_TOOLS } from "../../src/sketch/constraintTools";
 import { SKETCH_MODIFY } from "../../src/app/actionTables";
 
-const constraintActions = Object.entries(SKETCH_MODIFY).filter(([, tool]) => CONSTRAINT_TOOLS.has(tool)).map(([a]) => a);
+const constraintActions = Object.entries(SKETCH_MODIFY)
+  .filter(([, tool]) => CONSTRAINT_TOOLS.has(tool))
+  .map(([a]) => a);
 
 describe("constraint shortcuts", () => {
   it("covers every constraint tool", () => {

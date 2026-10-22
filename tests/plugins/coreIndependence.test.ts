@@ -116,7 +116,10 @@ function staticImports(src: string): string[] {
     if (named && !clause.trim().startsWith("{")) {
       // a default plus a brace list: the default is a value
     } else if (named) {
-      const parts = named[1]!.split(",").map((s) => s.trim()).filter(Boolean);
+      const parts = named[1]!
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (parts.length > 0 && parts.every((s) => s.startsWith("type "))) continue;
     }
     out.push(spec);
@@ -187,7 +190,10 @@ describe("the core does not depend on the capabilities it can turn off", () => {
       const mine = Object.keys(sources).filter(owns);
       expect(mine.length, name).toBeGreaterThan(1);
       // and each one really is a plugin directory, not a chance substring
-      expect(mine.every((p) => p.includes("/plugins/")), name).toBe(true);
+      expect(
+        mine.every((p) => p.includes("/plugins/")),
+        name,
+      ).toBe(true);
     }
   });
 
@@ -269,11 +275,19 @@ describe("the core does not depend on the capabilities it can turn off", () => {
         import: "default",
         eager: true,
       }) as Record<string, string>),
-      ...(import.meta.glob(["../../src-tauri/src/**/*.rs", "../../src-tauri/Cargo.toml", "../../src-tauri/*.json", "../../src-tauri/capabilities/*.json"], {
-        query: "?raw",
-        import: "default",
-        eager: true,
-      }) as Record<string, string>),
+      ...(import.meta.glob(
+        [
+          "../../src-tauri/src/**/*.rs",
+          "../../src-tauri/Cargo.toml",
+          "../../src-tauri/*.json",
+          "../../src-tauri/capabilities/*.json",
+        ],
+        {
+          query: "?raw",
+          import: "default",
+          eager: true,
+        },
+      ) as Record<string, string>),
       ...(import.meta.glob(["../../crates/*/src/**/*.rs", "../../crates/*/Cargo.toml"], {
         query: "?raw",
         import: "default",
@@ -285,13 +299,26 @@ describe("the core does not depend on the capabilities it can turn off", () => {
         eager: true,
       }) as Record<string, string>),
     };
-    const WORDS = /printer|slicer|\borca|bambu|moonraker|octoprint|prusa|klipper|snapmaker|\bqidi\b|toolhead|\bb?g-?code\b/i;
+    const WORDS =
+      /printer|slicer|\borca|bambu|moonraker|octoprint|prusa|klipper|snapmaker|\bqidi\b|toolhead|\bb?g-?code\b/i;
 
     const files = Object.keys(core);
-    expect(files.some((f) => f.endsWith(".rs")), "no Rust source found").toBe(true);
-    expect(files.some((f) => f.includes("/crates/fundacad-geom/src/")), "no engine source found").toBe(true);
-    expect(files.some((f) => f.includes("/src/") && f.endsWith(".ts")), "no window source found").toBe(true);
-    expect(files.some((f) => f.includes("/src-tauri/tracer/") && f.endsWith(".wgsl")), "no tracer source found").toBe(true);
+    expect(
+      files.some((f) => f.endsWith(".rs")),
+      "no Rust source found",
+    ).toBe(true);
+    expect(
+      files.some((f) => f.includes("/crates/fundacad-geom/src/")),
+      "no engine source found",
+    ).toBe(true);
+    expect(
+      files.some((f) => f.includes("/src/") && f.endsWith(".ts")),
+      "no window source found",
+    ).toBe(true);
+    expect(
+      files.some((f) => f.includes("/src-tauri/tracer/") && f.endsWith(".wgsl")),
+      "no tracer source found",
+    ).toBe(true);
 
     const offenders: string[] = [];
     for (const [file, src] of Object.entries(core)) {

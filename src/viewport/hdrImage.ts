@@ -43,7 +43,9 @@ export function exrSize(bytes: Uint8Array): { width: number; height: number } | 
   const cstr = (at: number) => {
     let end = at;
     while (end < bytes.length && bytes[end] !== 0) end++;
-    return end < bytes.length ? { text: new TextDecoder("latin1").decode(bytes.subarray(at, end)), next: end + 1 } : null;
+    return end < bytes.length
+      ? { text: new TextDecoder("latin1").decode(bytes.subarray(at, end)), next: end + 1 }
+      : null;
   };
   let p = 8;
   while (p < bytes.length && bytes[p] !== 0) {
@@ -54,7 +56,12 @@ export function exrSize(bytes: Uint8Array): { width: number; height: number } | 
     const body = type.next + 4;
     if (size < 0 || body + size > bytes.length) return null;
     if (name.text === "dataWindow" && type.text === "box2i" && size === 16) {
-      const [x0, y0, x1, y1] = [0, 4, 8, 12].map((o) => view.getInt32(body + o, true)) as [number, number, number, number];
+      const [x0, y0, x1, y1] = [0, 4, 8, 12].map((o) => view.getInt32(body + o, true)) as [
+        number,
+        number,
+        number,
+        number,
+      ];
       return { width: x1 - x0 + 1, height: y1 - y0 + 1 };
     }
     p = body + size;
@@ -75,7 +82,9 @@ function flipRows(data: Float32Array, width: number, height: number) {
 
 function refuseSize(name: string, width: number, height: number) {
   if (width > MAX_HDR_WIDTH || height > MAX_HDR_WIDTH) {
-    throw new HdrRefusal(`${name} is ${width} x ${height}, an environment can be ${MAX_HDR_WIDTH} pixels wide at most.`);
+    throw new HdrRefusal(
+      `${name} is ${width} x ${height}, an environment can be ${MAX_HDR_WIDTH} pixels wide at most.`,
+    );
   }
   if (width < 2 || height < 1) throw new HdrRefusal(`${name} has no pixels.`);
 }
@@ -84,7 +93,9 @@ function refuseSize(name: string, width: number, height: number) {
  *  its pixels are allocated. */
 export async function decodeHdr(bytes: Uint8Array, name: string): Promise<HdrImage> {
   if (bytes.length > MAX_HDR_FILE_BYTES) {
-    throw new HdrRefusal(`${name} is ${mb(bytes.length)}, an environment file can be ${mb(MAX_HDR_FILE_BYTES)} at most.`);
+    throw new HdrRefusal(
+      `${name} is ${mb(bytes.length)}, an environment file can be ${mb(MAX_HDR_FILE_BYTES)} at most.`,
+    );
   }
   const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   type Parsed = { width: number; height: number; data: ArrayLike<number> };
@@ -106,7 +117,9 @@ export async function decodeHdr(bytes: Uint8Array, name: string): Promise<HdrIma
     }
   } catch (err) {
     if (err instanceof HdrRefusal) throw err;
-    throw new HdrRefusal(`${name} could not be read as an HDR image: ${err instanceof Error ? err.message : String(err)}`);
+    throw new HdrRefusal(
+      `${name} could not be read as an HDR image: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   if (!parsed?.data || parsed.width * parsed.height * 4 > parsed.data.length) {
     throw new HdrRefusal(`${name} could not be read as an HDR image.`);
@@ -124,12 +137,19 @@ export function downscaleEquirect(img: HdrImage, maxWidth: number): HdrImage {
     const w = Math.max(1, cur.width >> 1);
     const h = Math.max(1, cur.height >> 1);
     const out = new Float32Array(w * h * 4);
-    const sw = cur.width, sh = cur.height, s = cur.data;
+    const sw = cur.width,
+      sh = cur.height,
+      s = cur.data;
     for (let y = 0; y < h; y++) {
-      const y0 = Math.min(sh - 1, y * 2), y1 = Math.min(sh - 1, y * 2 + 1);
+      const y0 = Math.min(sh - 1, y * 2),
+        y1 = Math.min(sh - 1, y * 2 + 1);
       for (let x = 0; x < w; x++) {
-        const x0 = Math.min(sw - 1, x * 2), x1 = Math.min(sw - 1, x * 2 + 1);
-        const a = (y0 * sw + x0) * 4, b = (y0 * sw + x1) * 4, c = (y1 * sw + x0) * 4, d = (y1 * sw + x1) * 4;
+        const x0 = Math.min(sw - 1, x * 2),
+          x1 = Math.min(sw - 1, x * 2 + 1);
+        const a = (y0 * sw + x0) * 4,
+          b = (y0 * sw + x1) * 4,
+          c = (y1 * sw + x0) * 4,
+          d = (y1 * sw + x1) * 4;
         const o = (y * w + x) * 4;
         for (let k = 0; k < 4; k++) out[o + k] = (s[a + k]! + s[b + k]! + s[c + k]! + s[d + k]!) * 0.25;
       }
@@ -147,9 +167,14 @@ export function encodeRgbe(img: HdrImage): Uint8Array {
   out.set(head);
   let o = head.length;
   for (let i = 0; i < n; i++) {
-    const r = Math.max(0, img.data[i * 4]!), g = Math.max(0, img.data[i * 4 + 1]!), b = Math.max(0, img.data[i * 4 + 2]!);
+    const r = Math.max(0, img.data[i * 4]!),
+      g = Math.max(0, img.data[i * 4 + 1]!),
+      b = Math.max(0, img.data[i * 4 + 2]!);
     const m = Math.max(r, g, b);
-    if (!(m > 1e-32) || !Number.isFinite(m)) { o += 4; continue; }
+    if (!(m > 1e-32) || !Number.isFinite(m)) {
+      o += 4;
+      continue;
+    }
     const e = Math.floor(Math.log2(m)) + 1;
     const s = 256 / 2 ** e;
     out[o++] = Math.min(255, Math.floor(r * s));
@@ -197,7 +222,8 @@ export function thumbnailPixels(img: HdrImage, w: number, h: number): Uint8Clamp
     const sy = Math.min(img.height - 1, Math.floor(((y + 0.5) / h) * img.height));
     for (let x = 0; x < w; x++) {
       const sx = Math.min(img.width - 1, Math.floor(((x + 0.5) / w) * img.width));
-      const i = (sy * img.width + sx) * 4, o = (y * w + x) * 4;
+      const i = (sy * img.width + sx) * 4,
+        o = (y * w + x) * 4;
       for (let k = 0; k < 3; k++) {
         const v = img.data[i + k]!;
         out[o + k] = 255 * Math.pow(v / (1 + v), 1 / 2.2);

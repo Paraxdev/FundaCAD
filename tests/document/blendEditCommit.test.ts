@@ -17,7 +17,9 @@ function stubBackend(rebuilds: CadDocument[]): GeometryBackend {
       return { ok: false, error: { message: "stub" } };
     },
     async init() {},
-    onStatus() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
     connected: true,
   } as unknown as GeometryBackend;
 }
@@ -32,7 +34,9 @@ const doc = (bound: boolean): CadDocument => ({
         paramDefs: {
           wall_blend_r: { expr: "4", value: 4, unit: "mm" as const, comment: "bowl to inner wall blend" },
           d22: {
-            expr: "wall_blend_r", value: 4, unit: "mm" as const,
+            expr: "wall_blend_r",
+            value: 4,
+            unit: "mm" as const,
             target: { kind: "feature" as const, feature: "wall_blend", field: "radius" },
           },
         },

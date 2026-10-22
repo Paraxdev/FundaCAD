@@ -31,7 +31,10 @@ const URL = process.env.SC_URL || "http://localhost:5173/";
 const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = path.resolve(process.argv[2] || "press_pull_resize_shots");
 const C1 = path.join(__dirname, "../crates/fundacad-geom/tests/press_pull/c1_slot_end.json");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail !== undefined ? `, ${JSON.stringify(detail)}` : ""}`);
@@ -50,19 +53,29 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
 
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((port) => {
     const N = window.WebSocket;
     class P extends N {
-      constructor(u, p) { super(String(u).replace(":8765", `:${port}`), p); }
+      constructor(u, p) {
+        super(String(u).replace(":8765", `:${port}`), p);
+      }
     }
     window.WebSocket = P;
   }, ENGINE_PORT);
   await page.goto(`${URL}?token=${TOKEN}`);
-  await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, {
+    timeout: 60000,
+  });
   await page.waitForTimeout(1500);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(300); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(300);
+  }
   const shot = (name) => page.screenshot({ path: path.join(OUT, `${name}.png`) });
   const settle = async () => {
     await page.waitForTimeout(500);
@@ -77,57 +90,74 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
     await settle();
   };
   const volume = () => page.evaluate(() => window.viewport.bodyProperties(null)?.volume ?? null);
-  const look = () => page.evaluate(() => {
-    const v = window.viewport; const V = v.camera.position.constructor;
-    v.rig.setLookAt(new V(60, -40, 40), new V(0, 6, 20));
-    v.requestRender();
-  });
-  const lookAtEnd = () => page.evaluate(() => {
-    const v = window.viewport; const V = v.camera.position.constructor;
-    // Into the slot's mouth on the +X face, where its outline shows the end.
-    v.rig.setLookAt(new V(43, 1, 25), new V(25, 6, 20));
-    v.requestRender();
-  });
+  const look = () =>
+    page.evaluate(() => {
+      const v = window.viewport;
+      const V = v.camera.position.constructor;
+      v.rig.setLookAt(new V(60, -40, 40), new V(0, 6, 20));
+      v.requestRender();
+    });
+  const lookAtEnd = () =>
+    page.evaluate(() => {
+      const v = window.viewport;
+      const V = v.camera.position.constructor;
+      // Into the slot's mouth on the +X face, where its outline shows the end.
+      v.rig.setLookAt(new V(43, 1, 25), new V(25, 6, 20));
+      v.requestRender();
+    });
   // Faces of plane y = 7.125 inside the slot's height: the radial step a resize
   // used to leave where the end met its walls.
-  const radialWalls = () => page.evaluate(() => {
-    const v = window.viewport; const V = v.camera.position.constructor;
-    let n = 0;
-    for (const b of v.model.bodies) {
-      const pos = b.mesh.geometry.getAttribute("position");
-      const idx = b.mesh.geometry.getIndex();
-      const mw = b.mesh.matrixWorld;
-      const a = new V(), p = new V(), q = new V();
-      for (let t = 0; t < idx.count / 3; t++) {
-        a.fromBufferAttribute(pos, idx.getX(3 * t)).applyMatrix4(mw);
-        p.fromBufferAttribute(pos, idx.getX(3 * t + 1)).applyMatrix4(mw);
-        q.fromBufferAttribute(pos, idx.getX(3 * t + 2)).applyMatrix4(mw);
-        const c = a.clone().add(p).add(q).multiplyScalar(1 / 3);
-        const nrm = p.clone().sub(a).cross(q.clone().sub(a)).normalize();
-        if (Math.abs(nrm.y) > 0.99 && Math.abs(c.y - 7.125) < 0.05 && c.z > 17 && c.z < 23) n++;
+  const radialWalls = () =>
+    page.evaluate(() => {
+      const v = window.viewport;
+      const V = v.camera.position.constructor;
+      let n = 0;
+      for (const b of v.model.bodies) {
+        const pos = b.mesh.geometry.getAttribute("position");
+        const idx = b.mesh.geometry.getIndex();
+        const mw = b.mesh.matrixWorld;
+        const a = new V(),
+          p = new V(),
+          q = new V();
+        for (let t = 0; t < idx.count / 3; t++) {
+          a.fromBufferAttribute(pos, idx.getX(3 * t)).applyMatrix4(mw);
+          p.fromBufferAttribute(pos, idx.getX(3 * t + 1)).applyMatrix4(mw);
+          q.fromBufferAttribute(pos, idx.getX(3 * t + 2)).applyMatrix4(mw);
+          const c = a
+            .clone()
+            .add(p)
+            .add(q)
+            .multiplyScalar(1 / 3);
+          const nrm = p.clone().sub(a).cross(q.clone().sub(a)).normalize();
+          if (Math.abs(nrm.y) > 0.99 && Math.abs(c.y - 7.125) < 0.05 && c.z > 17 && c.z < 23) n++;
+        }
       }
-    }
-    return n;
-  });
-  const tool = () => page.evaluate(() => {
-    const t = window.pressPull;
-    const box = [...document.querySelectorAll(".dim-input")].find((b) => b.style.display !== "none");
-    const name = box?.querySelector(".dim-name");
-    const toggle = box?.querySelector(".dim-toggle");
-    return {
-      active: t.active,
-      value: t.value,
-      label: name ? (name.title || name.textContent) : null,
-      field: box?.querySelector("input")?.value ?? null,
-      toggle: toggle ? { text: toggle.textContent, on: toggle.classList.contains("on"), shown: toggle.style.display !== "none" } : null,
-      problem: box?.querySelector(".dim-problem")?.textContent ?? null,
-      refused: t.outcomes.refusal,
-      shown: t.outcomes.shownFeature ? { distance: t.outcomes.shownFeature.distance, followTangent: t.outcomes.shownFeature.followTangent } : null,
-      previewError: window.store.previewError,
-      held: window.store.buildState.heldRefusal?.code ?? null,
-      prompt: document.querySelector("#prompt")?.textContent ?? "",
-    };
-  });
+      return n;
+    });
+  const tool = () =>
+    page.evaluate(() => {
+      const t = window.pressPull;
+      const box = [...document.querySelectorAll(".dim-input")].find((b) => b.style.display !== "none");
+      const name = box?.querySelector(".dim-name");
+      const toggle = box?.querySelector(".dim-toggle");
+      return {
+        active: t.active,
+        value: t.value,
+        label: name ? name.title || name.textContent : null,
+        field: box?.querySelector("input")?.value ?? null,
+        toggle: toggle
+          ? { text: toggle.textContent, on: toggle.classList.contains("on"), shown: toggle.style.display !== "none" }
+          : null,
+        problem: box?.querySelector(".dim-problem")?.textContent ?? null,
+        refused: t.outcomes.refusal,
+        shown: t.outcomes.shownFeature
+          ? { distance: t.outcomes.shownFeature.distance, followTangent: t.outcomes.shownFeature.followTangent }
+          : null,
+        previewError: window.store.previewError,
+        held: window.store.buildState.heldRefusal?.code ?? null,
+        prompt: document.querySelector("#prompt")?.textContent ?? "",
+      };
+    });
   const select = async (point) => {
     await page.evaluate((p) => {
       const v = window.viewport;
@@ -141,7 +171,8 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   // Grab the arrow and pull it along itself until the value passes `until`.
   const drag = async (until, { release = true } = {}) => {
     const grip = await page.evaluate(() => {
-      const t = window.pressPull; const v = window.viewport;
+      const t = window.pressPull;
+      const v = window.viewport;
       const at = t.anchor.clone().addScaledVector(t.axis, t.value);
       const k = v.pixelWorldSize(at);
       const s = v.projectToScreen(at.clone().addScaledVector(t.axis, k * 25 * (t.value < 0 ? -1 : 1)));
@@ -154,9 +185,11 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
     const sign = until > (await tool()).value ? 1 : -1;
     await page.mouse.move(grip.x, grip.y);
     await page.mouse.down();
-    let x = grip.x, y = grip.y;
+    let x = grip.x,
+      y = grip.y;
     for (let i = 0; i < 200; i++) {
-      x += ux * 2 * sign; y += uy * 2 * sign;
+      x += ux * 2 * sign;
+      y += uy * 2 * sign;
       await page.mouse.move(x, y);
       const v = (await tool()).value;
       if (sign > 0 ? v >= until : v <= until) break;
@@ -166,7 +199,9 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   };
   const typeValue = async (text) => {
     await page.evaluate(() => {
-      const i = [...document.querySelectorAll(".dim-input")].find((b) => b.style.display !== "none").querySelector("input");
+      const i = [...document.querySelectorAll(".dim-input")]
+        .find((b) => b.style.display !== "none")
+        .querySelector("input");
       i.focus();
       i.select();
     });
@@ -190,7 +225,11 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   let t = await tool();
   check("the tool opens on the slot end", t.active, t);
   check("its field reads R 2.00", t.label === "R" && Math.abs(Number(t.field) - 2) < 0.005, t);
-  check("Tangent faces follow is offered and on", !!t.toggle && t.toggle.shown && t.toggle.on && t.toggle.text === "Tangent faces follow", t.toggle);
+  check(
+    "Tangent faces follow is offered and on",
+    !!t.toggle && t.toggle.shown && t.toggle.on && t.toggle.text === "Tangent faces follow",
+    t.toggle,
+  );
   await shot("01_picked");
 
   // --- 2. dragging out previews through the engine -----------------------------
@@ -199,7 +238,11 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   await settle();
   t = await tool();
   check("the drag grew the end", t.value >= 0.6 && t.value < 1.2, t.value);
-  check("an engine preview is on screen, with no refusal", t.shown !== null && t.previewError === null && t.held === null && t.refused === null, t);
+  check(
+    "an engine preview is on screen, with no refusal",
+    t.shown !== null && t.previewError === null && t.held === null && t.refused === null,
+    t,
+  );
   check("which grows the bore, a negative push", t.shown && t.shown.distance < 0, t.shown);
   const vGrown = await volume();
   check("the preview took material away", vGrown < v0 - 1, { v0, vGrown });
@@ -213,25 +256,45 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   await typeValue("1.5");
   await page.waitForTimeout(300);
   await settle();
-  await page.waitForFunction(() => window.pressPull.outcomes.shownFeature?.distance === 0.5, null, { timeout: 120000 }).catch(() => {});
+  await page
+    .waitForFunction(() => window.pressPull.outcomes.shownFeature?.distance === 0.5, null, { timeout: 120000 })
+    .catch(() => {});
   await settle();
   t = await tool();
-  check("typing 1.5 previews a shrink of 0.5 with the run following", t.shown && t.shown.distance === 0.5 && t.shown.followTangent === true && t.previewError === null, t);
+  check(
+    "typing 1.5 previews a shrink of 0.5 with the run following",
+    t.shown && t.shown.distance === 0.5 && t.shown.followTangent === true && t.previewError === null,
+    t,
+  );
   const vNarrowed = await volume();
   check("the whole slot narrows to 3 wide", Math.abs(vNarrowed - vNarrow) < 0.002 * vNarrow, { vNarrowed, vNarrow });
-  check("the prompt says the run moves with it", /Moves the \d+ faces that run smoothly into it/.test(t.prompt), t.prompt);
+  check(
+    "the prompt says the run moves with it",
+    /Moves the \d+ faces that run smoothly into it/.test(t.prompt),
+    t.prompt,
+  );
   check("and no radial wall", (await radialWalls()) === 0);
   await shot("03_narrowed");
 
   // --- 4. follow off refuses, and the narrowed slot is held --------------------
-  await page.evaluate(() => [...document.querySelectorAll(".dim-input")].find((b) => b.style.display !== "none")
-    .querySelector(".dim-toggle").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 })));
+  await page.evaluate(() =>
+    [...document.querySelectorAll(".dim-input")]
+      .find((b) => b.style.display !== "none")
+      .querySelector(".dim-toggle")
+      .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 })),
+  );
   await page.waitForTimeout(300);
   await settle();
-  await page.waitForFunction(() => window.pressPull.outcomes.refusal !== null, null, { timeout: 120000 }).catch(() => {});
+  await page
+    .waitForFunction(() => window.pressPull.outcomes.refusal !== null, null, { timeout: 120000 })
+    .catch(() => {});
   t = await tool();
   check("the switch reads off", t.toggle && !t.toggle.on, t.toggle);
-  check("the refusal is in the box", !!t.problem && /Tangent faces follow/.test(t.problem) && /2 flat faces/.test(t.problem), t.problem);
+  check(
+    "the refusal is in the box",
+    !!t.problem && /Tangent faces follow/.test(t.problem) && /2 flat faces/.test(t.problem),
+    t.problem,
+  );
   check("and painted on the handle", t.refused !== null && t.held === "tangentLost", t);
   const vHeld = await volume();
   check("the narrowed slot stays on screen", Math.abs(vHeld - vNarrowed) < 1e-6 * vNarrowed, { vHeld, vNarrowed });
@@ -239,33 +302,58 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   await page.keyboard.press("Enter");
   await page.waitForTimeout(400);
   t = await tool();
-  const committedEarly = await page.evaluate(() => window.store.document.features.filter((f) => f.type === "press-pull").length);
-  check("Enter on the refused typed value keeps the tool open", t.active && committedEarly === 3, { active: t.active, committedEarly });
+  const committedEarly = await page.evaluate(
+    () => window.store.document.features.filter((f) => f.type === "press-pull").length,
+  );
+  check("Enter on the refused typed value keeps the tool open", t.active && committedEarly === 3, {
+    active: t.active,
+    committedEarly,
+  });
 
   // --- 5. a refused drag commits the size held on screen -----------------------
   await drag(0.3, { release: false });
   await page.waitForTimeout(300);
   await settle();
-  await page.waitForFunction(() => window.pressPull.outcomes.shownFeature?.followTangent === false, null, { timeout: 120000 }).catch(() => {});
+  await page
+    .waitForFunction(() => window.pressPull.outcomes.shownFeature?.followTangent === false, null, { timeout: 120000 })
+    .catch(() => {});
   t = await tool();
   const grownTo = t.shown;
-  check("dragged out, the end grows with follow off", grownTo && grownTo.followTangent === false && grownTo.distance < 0 && t.refused === null, t);
+  check(
+    "dragged out, the end grows with follow off",
+    grownTo && grownTo.followTangent === false && grownTo.distance < 0 && t.refused === null,
+    t,
+  );
   await page.mouse.up();
   await drag(-0.2);
   await settle();
-  await page.waitForFunction(() => window.pressPull.outcomes.refusal !== null, null, { timeout: 120000 }).catch(() => {});
+  await page
+    .waitForFunction(() => window.pressPull.outcomes.refusal !== null, null, { timeout: 120000 })
+    .catch(() => {});
   t = await tool();
   check("dragged in past R 2 it is refused", t.value <= -0.2 && t.refused !== null && t.held === "tangentLost", t);
   check("the prompt says which size is kept", /keeping R/.test(t.prompt), t.prompt);
-  check("the grown end is still on screen", t.shown && t.shown.distance === grownTo.distance, { shown: t.shown, grownTo });
+  check("the grown end is still on screen", t.shown && t.shown.distance === grownTo.distance, {
+    shown: t.shown,
+    grownTo,
+  });
   await shot("05_held");
   await page.keyboard.press("Enter");
   await settle();
   await page.waitForTimeout(800);
   await settle();
-  const pp = await page.evaluate(() => window.store.document.features.filter((f) => f.type === "press-pull" && !["f6", "f7", "f8"].includes(f.id)));
-  check("one press/pull is committed, at the held size", pp.length === 1 && pp[0].distance === grownTo.distance && pp[0].followTangent === false, pp);
-  const state = await page.evaluate(() => ({ active: window.pressPull.active, err: window.store.buildState.errorFeatureId ?? null }));
+  const pp = await page.evaluate(() =>
+    window.store.document.features.filter((f) => f.type === "press-pull" && !["f6", "f7", "f8"].includes(f.id)),
+  );
+  check(
+    "one press/pull is committed, at the held size",
+    pp.length === 1 && pp[0].distance === grownTo.distance && pp[0].followTangent === false,
+    pp,
+  );
+  const state = await page.evaluate(() => ({
+    active: window.pressPull.active,
+    err: window.store.buildState.errorFeatureId ?? null,
+  }));
   check("the tool closed and the model builds", !state.active && state.err === null, state);
   check("with no radial wall", (await radialWalls()) === 0);
   await shot("06_committed");
@@ -275,7 +363,11 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   await page.waitForFunction(() => window.pressPull.round?.tangent != null, null, { timeout: 60000 }).catch(() => {});
   await page.waitForTimeout(300);
   t = await tool();
-  check("a round hole reads as a diameter", t.active && t.label === "Diameter" && Math.abs(Number(t.field) - 6.738) < 0.01, t);
+  check(
+    "a round hole reads as a diameter",
+    t.active && t.label === "Diameter" && Math.abs(Number(t.field) - 6.738) < 0.01,
+    t,
+  );
   check("with no follow switch", !t.toggle || !t.toggle.shown, t.toggle);
   await shot("07_hole");
   await page.keyboard.press("Escape");

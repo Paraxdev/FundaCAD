@@ -19,7 +19,10 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "area_select_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -33,7 +36,10 @@ const check = (name, ok, detail) => {
     args: ["--use-angle=swiftshader", "--no-sandbox"],
   });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -48,7 +54,10 @@ const check = (name, ok, detail) => {
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   // Three boxes in a row, so a box drawn across them has something to include
@@ -58,8 +67,12 @@ const check = (name, ok, detail) => {
       const id = window.store.nextId();
       window.store.addFeature({ id, type: "box", length: 20, width: 20, height: 20 });
       window.store.addFeature({
-        id: window.store.nextId(), type: "move", body: `body${i + 1}`,
-        dx: (i - 1) * 40, dy: 0, dz: 0,
+        id: window.store.nextId(),
+        type: "move",
+        body: `body${i + 1}`,
+        dx: (i - 1) * 40,
+        dy: 0,
+        dz: 0,
       });
     }
     await window.store.rebuildNow();
@@ -90,17 +103,18 @@ const check = (name, ok, detail) => {
     return { x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), y0: Math.min(a.y, b.y), y1: Math.max(a.y, b.y) };
   });
 
-  const state = () => page.evaluate(() => ({
-    chip: document.querySelector(".areachip")?.dataset.filter ?? null,
-    chipText: document.querySelector(".areachip")?.textContent?.trim() ?? null,
-    band: !!document.querySelector(".areabox"),
-    faces: window.viewport.getSelectedFaceIds().length,
-    edges: window.viewport.selectedEdgeLines().length,
-    bodies: window.viewport.getSelectedBodies().length,
-    mode: window.viewport.selecting,
-    takes: window.viewport.areaTakes,
-    gizmo: window.__fundacad.move.active,
-  }));
+  const state = () =>
+    page.evaluate(() => ({
+      chip: document.querySelector(".areachip")?.dataset.filter ?? null,
+      chipText: document.querySelector(".areachip")?.textContent?.trim() ?? null,
+      band: !!document.querySelector(".areabox"),
+      faces: window.viewport.getSelectedFaceIds().length,
+      edges: window.viewport.selectedEdgeLines().length,
+      bodies: window.viewport.getSelectedBodies().length,
+      mode: window.viewport.selecting,
+      takes: window.viewport.areaTakes,
+      gizmo: window.__fundacad.move.active,
+    }));
 
   // ---- 1. the box shows what it will take, mid-drag -------------------------
   console.log("\n1. what the box takes, while it is being dragged");
@@ -111,10 +125,12 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(120);
   const mid = await state();
   check("the band is drawn", mid.band);
-  check("something is already selected before the release",
-    mid.faces > 0, `${mid.faces} faces, ${mid.edges} edges`);
-  check("and nothing has been announced yet: no gizmo, no mode change",
-    mid.gizmo === false && mid.mode === "faces", JSON.stringify({ gizmo: mid.gizmo, mode: mid.mode }));
+  check("something is already selected before the release", mid.faces > 0, `${mid.faces} faces, ${mid.edges} edges`);
+  check(
+    "and nothing has been announced yet: no gizmo, no mode change",
+    mid.gizmo === false && mid.mode === "faces",
+    JSON.stringify({ gizmo: mid.gizmo, mode: mid.mode }),
+  );
   await page.screenshot({ path: path.join(OUT, "1-preview.png") });
 
   // ---- 2. the chip says which filter, and Tab changes it --------------------
@@ -126,24 +142,33 @@ const check = (name, ok, detail) => {
     await page.waitForTimeout(300);
     cycled.push(await state());
   }
-  check("Tab walks every filter and comes back",
+  check(
+    "Tab walks every filter and comes back",
     JSON.stringify(cycled.map((s) => s.chip)) === JSON.stringify(["faces", "edges", "bodies", "all"]),
-    cycled.map((s) => s.chip).join(" -> "));
-  check("the chip says what the filter takes",
-    cycled[1].chipText.includes("Edges"), cycled[1].chipText);
+    cycled.map((s) => s.chip).join(" -> "),
+  );
+  check("the chip says what the filter takes", cycled[1].chipText.includes("Edges"), cycled[1].chipText);
 
   // ---- 3. the preview follows the filter ------------------------------------
   console.log("\n3. the preview follows the filter");
   const onEdges = cycled[1];
-  check("edges only takes edges", onEdges.edges > 0 && onEdges.faces === 0,
-    `${onEdges.faces} faces, ${onEdges.edges} edges`);
+  check(
+    "edges only takes edges",
+    onEdges.edges > 0 && onEdges.faces === 0,
+    `${onEdges.faces} faces, ${onEdges.edges} edges`,
+  );
   const onFaces = cycled[0];
-  check("faces only takes faces", onFaces.faces > 0 && onFaces.edges === 0,
-    `${onFaces.faces} faces, ${onFaces.edges} edges`);
+  check(
+    "faces only takes faces",
+    onFaces.faces > 0 && onFaces.edges === 0,
+    `${onFaces.faces} faces, ${onFaces.edges} edges`,
+  );
   const onBodies = cycled[2];
-  check("bodies takes bodies, from a viewport that is picking FACES",
+  check(
+    "bodies takes bodies, from a viewport that is picking FACES",
     onBodies.bodies === 3 && onBodies.mode === "faces",
-    `${onBodies.bodies} bodies while picking ${onBodies.mode}`);
+    `${onBodies.bodies} bodies while picking ${onBodies.mode}`,
+  );
 
   // ---- 4. and the release is what announces ---------------------------------
   console.log("\n4. the release");
@@ -166,8 +191,11 @@ const check = (name, ok, detail) => {
   // That is on purpose: it is the state the app is in after ANY box over
   // bodies, and until canAreaSelect stopped asking toolBusy it was a state in
   // which no second box could be drawn at all.
-  check("a second box can be drawn with the gizmo still up",
-    (await state()).gizmo === true, "gizmo up before the sweep");
+  check(
+    "a second box can be drawn with the gizmo still up",
+    (await state()).gizmo === true,
+    "gizmo up before the sweep",
+  );
   // The bodies are 20mm cubes at x = -40, 0, +40. PROJECTED rather than guessed
   // in pixels: what "fit" chose is not known here, and a box sized by guesswork
   // would pass or fail on the zoom.
@@ -180,8 +208,10 @@ const check = (name, ok, detail) => {
     const a = at(-35, -30);
     const b = at(35, 30);
     return {
-      x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x),
-      y0: Math.min(a.y, b.y), y1: Math.max(a.y, b.y),
+      x0: Math.min(a.x, b.x),
+      x1: Math.max(a.x, b.x),
+      y0: Math.min(a.y, b.y),
+      y1: Math.max(a.y, b.y),
     };
   });
   // Drag RIGHTWARD across only the middle body: a window takes it and leaves the
@@ -200,14 +230,16 @@ const check = (name, ok, detail) => {
     return s;
   };
   const window0 = await sweep(false);
-  check("a window takes only the body wholly inside it",
-    window0.bodies === 1, `${window0.bodies} bodies`);
+  check("a window takes only the body wholly inside it", window0.bodies === 1, `${window0.bodies} bodies`);
   const crossing0 = await sweep(true);
   // CONTROL on the line above: the same rectangle, drawn the other way, must
   // take MORE. If both took one, the window test above would be passing because
   // the box only ever reached one body, not because a window is stricter.
-  check("a crossing over the same ground takes more (control)",
-    crossing0.bodies > window0.bodies, `${crossing0.bodies} against ${window0.bodies}`);
+  check(
+    "a crossing over the same ground takes more (control)",
+    crossing0.bodies > window0.bodies,
+    `${crossing0.bodies} against ${window0.bodies}`,
+  );
 
   // ---- 6. the projection is taken once per drag ----------------------------
   //
@@ -221,7 +253,10 @@ const check = (name, ok, detail) => {
     const vp = window.viewport;
     const orig = vp.projectForArea.bind(vp);
     window.__projections = 0;
-    vp.projectForArea = () => { window.__projections++; return orig(); };
+    vp.projectForArea = () => {
+      window.__projections++;
+      return orig();
+    };
   });
   await page.mouse.move(span.x0, span.y0);
   await page.mouse.down();
@@ -233,8 +268,11 @@ const check = (name, ok, detail) => {
   const projections = await page.evaluate(() => window.__projections);
   await page.mouse.up();
   await page.waitForTimeout(200);
-  check("the model is projected once for the whole drag, not once a frame",
-    projections === 1, `${projections} projections over 14 frames`);
+  check(
+    "the model is projected once for the whole drag, not once a frame",
+    projections === 1,
+    `${projections} projections over 14 frames`,
+  );
 
   console.log(`\nshots in ${OUT}`);
   await browser.close();

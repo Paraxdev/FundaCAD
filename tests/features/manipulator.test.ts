@@ -59,10 +59,8 @@ function orbit(az: number, el: number): THREE.PerspectiveCamera {
   return cam;
 }
 const forwardOf = (cam: THREE.Camera) => cam.getWorldDirection(new THREE.Vector3());
-const rightOf = (cam: THREE.Camera) =>
-  new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0).normalize();
-const upOf = (cam: THREE.Camera) =>
-  new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1).normalize();
+const rightOf = (cam: THREE.Camera) => new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0).normalize();
+const upOf = (cam: THREE.Camera) => new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1).normalize();
 
 /** Every orbit position and axis the sweeps below cover. */
 function* orbits() {
@@ -149,8 +147,7 @@ describe("screenPlaneOrientation", () => {
 });
 
 describe("leanOutOfView", () => {
-  const screenShare = (v: THREE.Vector3, fwd: THREE.Vector3) =>
-    v.clone().projectOnPlane(fwd).length();
+  const screenShare = (v: THREE.Vector3, fwd: THREE.Vector3) => v.clone().projectOnPlane(fwd).length();
 
   it("leaves an axis with screen length of its own untouched", () => {
     // The common case by far, and the handle must not wobble in it: an edge
@@ -195,9 +192,7 @@ describe("leanOutOfView", () => {
     const flat = upOf(cam).clone().multiplyScalar(0.08);
     const axis = fwd.clone().add(flat).normalize();
     const leaned = leanOutOfView(axis, fwd, rightOf(cam));
-    expect(
-      leaned.clone().projectOnPlane(fwd).normalize().dot(flat.clone().normalize()),
-    ).toBeCloseTo(1, 6);
+    expect(leaned.clone().projectOnPlane(fwd).normalize().dot(flat.clone().normalize())).toBeCloseTo(1, 6);
   });
 
   it("guarantees the floor from every direction", () => {
@@ -257,9 +252,7 @@ describe("arrow handle grab volume", () => {
 
 describe("arrow handle paint", () => {
   const bodyOf = (g: THREE.Group) =>
-    g.children.find(
-      (c) => (c as THREE.Mesh).material instanceof THREE.MeshLambertMaterial,
-    ) as THREE.Mesh;
+    g.children.find((c) => (c as THREE.Mesh).material instanceof THREE.MeshLambertMaterial) as THREE.Mesh;
 
   it("brightens on hover and returns to its tone", () => {
     const h = createDragHandle();
@@ -391,7 +384,14 @@ describe("handleScale", () => {
     // scale.setScalar(0) collapses the glyph AND its invisible grab volumes, so
     // the handle would be invisible and unclickable at once, indistinguishable
     // from the tool being broken.
-    for (const [d, p] of [[0, 1], [-5, 1], [10, 0], [10, -1], [NaN, 1], [10, NaN]] as const) {
+    for (const [d, p] of [
+      [0, 1],
+      [-5, 1],
+      [10, 0],
+      [10, -1],
+      [NaN, 1],
+      [10, NaN],
+    ] as const) {
       const s = handleScale(d, p);
       expect(Number.isFinite(s)).toBe(true);
       expect(s).toBeGreaterThan(0);
@@ -441,7 +441,13 @@ describe("handleReachPx", () => {
     // A zero would put the bar on top of a handle that is still drawn: the
     // shrink is floored (MIN_HANDLE_SCALE) precisely so the thing stays a
     // target, and the clearance has to respect the same floor.
-    for (const [diag, k] of [[0, 0.1], [-1, 0.1], [400, 0], [NaN, 0.1], [400, NaN]] as const) {
+    for (const [diag, k] of [
+      [0, 0.1],
+      [-1, 0.1],
+      [400, 0],
+      [NaN, 0.1],
+      [400, NaN],
+    ] as const) {
       expect(handleReachPx(diag, k), `${diag}/${k}`).toBeGreaterThan(0);
     }
     expect(handleReachPx(1e-6, 1)).toBeGreaterThanOrEqual(HANDLE_LENGTH * MIN_HANDLE_SCALE);

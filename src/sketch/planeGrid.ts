@@ -149,10 +149,16 @@ export class SketchPlaneGrid {
   // painted lines would sit over the dimmed geometry as darker ghosts. Adding to
   // what is already on screen cannot darken anything.
   private minorMat = new THREE.LineBasicMaterial({
-    color: MINOR, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    color: MINOR,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
   });
   private majorMat = new THREE.LineBasicMaterial({
-    color: MAJOR, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    color: MAJOR,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
   });
   private key = "";
   private lift = new THREE.Vector3();
@@ -165,14 +171,7 @@ export class SketchPlaneGrid {
    *  sketch coordinates, the camera target dropped onto the plane, so the grid
    *  goes where you are looking. `reach` is how far it must run from there; see
    *  gridReach. Returns true when geometry was rebuilt, i.e. a repaint is owed. */
-  update(
-    plane: SketchPlane,
-    cx: number,
-    cy: number,
-    worldPerPixel: number,
-    reach: number,
-    minStep: number,
-  ): boolean {
+  update(plane: SketchPlane, cx: number, cy: number, worldPerPixel: number, reach: number, minStep: number): boolean {
     const step = gridStep(worldPerPixel, minStep);
     // Quantise both the centre and the extent onto the lattice. `reach` is a
     // continuous function of the zoom and `cx`/`cy` of the pan, so leaving

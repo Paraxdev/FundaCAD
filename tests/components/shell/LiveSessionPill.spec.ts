@@ -42,8 +42,7 @@ function makeEngine(initial: LiveState) {
   return { live } as unknown as Engine & { live: typeof live };
 }
 
-const mountPill = (engine: Engine) =>
-  mount(LiveSessionPill, { global: { provide: { [ENGINE as symbol]: engine } } });
+const mountPill = (engine: Engine) => mount(LiveSessionPill, { global: { provide: { [ENGINE as symbol]: engine } } });
 
 describe("the assistant badge", () => {
   beforeEach(() => {

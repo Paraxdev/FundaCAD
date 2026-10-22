@@ -38,24 +38,40 @@ const focus = computed(() => d.value?.hovered ?? d.value?.picked ?? null);
 
 function swatch(k: PrintabilityKind): CSSProperties {
   return {
-    display: "inline-block", width: "8px", height: "8px", marginRight: "6px", borderRadius: "2px",
-    verticalAlign: "middle", background: cssHex(KIND_COLORS[k] ?? 0x888888),
+    display: "inline-block",
+    width: "8px",
+    height: "8px",
+    marginRight: "6px",
+    borderRadius: "2px",
+    verticalAlign: "middle",
+    background: cssHex(KIND_COLORS[k] ?? 0x888888),
   };
 }
 
 // A long check lists a row per finding; it scrolls rather than running off
 // the bottom of the window, as the app's Stress panel does.
-const BODY: CSSProperties = { minWidth: "300px", maxWidth: "380px", maxHeight: "calc(100vh - 180px)", overflowY: "auto" };
+const BODY: CSSProperties = {
+  minWidth: "300px",
+  maxWidth: "380px",
+  maxHeight: "calc(100vh - 180px)",
+  overflowY: "auto",
+};
 const TOGGLE: CSSProperties = { display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" };
 const CHECK_ROW: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "var(--s-1) var(--s-4)" };
 const ACTIONS: CSSProperties = { justifyContent: "flex-start", gap: "var(--s-2)", marginTop: "var(--s-2)" };
 const BODY_NAME: CSSProperties = { marginTop: "var(--s-2)", fontWeight: 600 };
-const LEGEND: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "var(--s-1) var(--s-3)", marginTop: "var(--s-2)" };
+const LEGEND: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "var(--s-1) var(--s-3)",
+  marginTop: "var(--s-2)",
+};
 const WARN: CSSProperties = { color: "var(--accent-hot, #ff9a5c)" };
 
 function findingStyle(index: number): CSSProperties {
   return {
-    cursor: "pointer", borderRadius: "2px",
+    cursor: "pointer",
+    borderRadius: "2px",
     ...(focus.value === index ? { background: "var(--accent-tint, rgba(255, 122, 60, 0.14))" } : {}),
   };
 }
@@ -74,23 +90,69 @@ function findingStyle(index: number): CSSProperties {
       <div class="measure-divider" />
       <div class="measure-row">
         <span class="measure-k">Nozzle</span>
-        <span class="measure-v"><input v-model.number="setup.nozzle" class="measure-number printability-nozzle" type="number" min="0" step="0.05" /> mm</span>
+        <span class="measure-v"
+          ><input
+            v-model.number="setup.nozzle"
+            class="measure-number printability-nozzle"
+            type="number"
+            min="0"
+            step="0.05"
+          />
+          mm</span
+        >
       </div>
       <div class="measure-row">
         <span class="measure-k">Layer</span>
-        <span class="measure-v"><input v-model.number="setup.layer" class="measure-number printability-layer" type="number" min="0" step="0.05" /> mm</span>
+        <span class="measure-v"
+          ><input
+            v-model.number="setup.layer"
+            class="measure-number printability-layer"
+            type="number"
+            min="0"
+            step="0.05"
+          />
+          mm</span
+        >
       </div>
       <div class="measure-row">
         <span class="measure-k">Overhang angle</span>
-        <span class="measure-v"><input v-model.number="setup.overhang" class="measure-number printability-overhang" type="number" min="1" max="89" step="1" /> °</span>
+        <span class="measure-v"
+          ><input
+            v-model.number="setup.overhang"
+            class="measure-number printability-overhang"
+            type="number"
+            min="1"
+            max="89"
+            step="1"
+          />
+          °</span
+        >
       </div>
       <div class="measure-row">
         <span class="measure-k">Smallest gap</span>
-        <span class="measure-v"><input v-model.number="setup.minGap" class="measure-number printability-gap" type="number" min="0" step="0.05" /> mm</span>
+        <span class="measure-v"
+          ><input
+            v-model.number="setup.minGap"
+            class="measure-number printability-gap"
+            type="number"
+            min="0"
+            step="0.05"
+          />
+          mm</span
+        >
       </div>
       <div class="measure-row">
         <span class="measure-k">Longest bridge</span>
-        <span class="measure-v"><input v-model.number="setup.maxBridge" class="measure-number printability-bridge" type="number" min="0" step="1" /> mm</span>
+        <span class="measure-v"
+          ><input
+            v-model.number="setup.maxBridge"
+            class="measure-number printability-bridge"
+            type="number"
+            min="0"
+            step="1"
+          />
+          mm</span
+        >
       </div>
       <div class="measure-row">
         <span class="measure-k">Up</span>
@@ -114,14 +176,12 @@ function findingStyle(index: number): CSSProperties {
       </div>
 
       <div class="measure-row" :style="ACTIONS">
-        <button
-          type="button" class="btn btn-primary printability-run" :disabled="d.running"
-          @click="ctl.run()"
-        >{{ d.running ? "Checking…" : "Check" }}</button>
-        <button
-          type="button" class="btn printability-cancel" :disabled="!d.running"
-          @click="ctl.cancel()"
-        >Cancel</button>
+        <button type="button" class="btn btn-primary printability-run" :disabled="d.running" @click="ctl.run()">{{
+          d.running ? "Checking…" : "Check"
+        }}</button>
+        <button type="button" class="btn printability-cancel" :disabled="!d.running" @click="ctl.cancel()"
+          >Cancel</button
+        >
         <button type="button" class="btn printability-close" @click="ctl.close()">Close</button>
       </div>
       <div v-if="d.error" class="measure-hint printability-error" :style="WARN">{{ d.error }}</div>
@@ -130,13 +190,17 @@ function findingStyle(index: number): CSSProperties {
         <div class="measure-divider" />
         <div v-if="d.result.header" class="measure-hint printability-header">{{ d.result.header }}</div>
         <div v-for="g in d.result.groups" :key="g.body" class="printability-group">
-          <div class="measure-row printability-body" :style="BODY_NAME"><span class="measure-v">{{ g.name }}</span></div>
+          <div class="measure-row printability-body" :style="BODY_NAME"
+            ><span class="measure-v">{{ g.name }}</span></div
+          >
           <div v-for="(n, i) in g.notes" :key="'n' + i" class="measure-row printability-note" :style="WARN">
             <span class="measure-v">{{ n }}</span>
           </div>
           <div
-            v-for="r in g.rows" :key="r.index"
-            class="measure-row printability-finding" :class="{ 'is-focus': focus === r.index }"
+            v-for="r in g.rows"
+            :key="r.index"
+            class="measure-row printability-finding"
+            :class="{ 'is-focus': focus === r.index }"
             :style="findingStyle(r.index)"
             @mouseenter="ctl.hover(r.index)"
             @mouseleave="ctl.hover(null)"
@@ -156,12 +220,17 @@ function findingStyle(index: number): CSSProperties {
             <span :style="swatch(k)" />{{ KIND_LABELS[k] }}
           </span>
         </div>
-        <div v-for="(w, i) in d.result.errors" :key="'e' + i" class="measure-hint printability-warning" :style="WARN">{{ w }}</div>
-        <div v-if="d.stale" class="measure-hint printability-stale">The model changed since this check, check again to see the faces</div>
+        <div v-for="(w, i) in d.result.errors" :key="'e' + i" class="measure-hint printability-warning" :style="WARN">{{
+          w
+        }}</div>
+        <div v-if="d.stale" class="measure-hint printability-stale"
+          >The model changed since this check, check again to see the faces</div
+        >
       </template>
 
       <div class="measure-hint">
-        Checks the selected bodies, or every body when none is selected · hover a finding to pick out its face, click to look at it
+        Checks the selected bodies, or every body when none is selected · hover a finding to pick out its face, click to
+        look at it
       </div>
     </div>
   </FloatingPanel>

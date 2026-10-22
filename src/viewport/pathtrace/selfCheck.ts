@@ -21,7 +21,13 @@ let once: Promise<SelfCheckAnswer | null> | null = null;
 
 function isAnswer(a: unknown): a is SelfCheckAnswer {
   const o = a as Partial<SelfCheckAnswer> | null;
-  return !!o && typeof o.diff === "number" && typeof o.threshold === "number" && typeof o.ms === "number" && typeof o.passed === "boolean";
+  return (
+    !!o &&
+    typeof o.diff === "number" &&
+    typeof o.threshold === "number" &&
+    typeof o.ms === "number" &&
+    typeof o.passed === "boolean"
+  );
 }
 
 let failed: SelfCheckAnswer | null = null;

@@ -77,10 +77,17 @@ export function createAimStalk(opts: { rays?: boolean; color?: number } = {}): A
     const pts: THREE.Vector3[] = [];
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;
-      const c = Math.cos(a), s = Math.sin(a);
-      pts.push(new THREE.Vector3(c * (BALL_R + 4), s * (BALL_R + 4), 0), new THREE.Vector3(c * (BALL_R + 9), s * (BALL_R + 9), 0));
+      const c = Math.cos(a),
+        s = Math.sin(a);
+      pts.push(
+        new THREE.Vector3(c * (BALL_R + 4), s * (BALL_R + 4), 0),
+        new THREE.Vector3(c * (BALL_R + 9), s * (BALL_R + 9), 0),
+      );
     }
-    const spokes = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: idle(), ...overlay }));
+    const spokes = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({ color: idle(), ...overlay }),
+    );
     spokes.renderOrder = 1001;
     lines.push(spokes);
     face.add(spokes);

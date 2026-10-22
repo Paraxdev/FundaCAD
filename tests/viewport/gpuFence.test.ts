@@ -9,11 +9,23 @@ function fakeGl() {
     SYNC_STATUS: 2,
     SIGNALED: 3,
     UNSIGNALED: 4,
-    fenceSync: () => { const s = {}; live.add(s); return s; },
-    deleteSync: (s: object) => { live.delete(s); },
+    fenceSync: () => {
+      const s = {};
+      live.add(s);
+      return s;
+    },
+    deleteSync: (s: object) => {
+      live.delete(s);
+    },
     getSyncParameter: () => (signaled ? 3 : 4),
   };
-  return { gl: gl as unknown as WebGL2RenderingContext, live, signal: (v: boolean) => { signaled = v; } };
+  return {
+    gl: gl as unknown as WebGL2RenderingContext,
+    live,
+    signal: (v: boolean) => {
+      signaled = v;
+    },
+  };
 }
 
 describe("GpuFence", () => {

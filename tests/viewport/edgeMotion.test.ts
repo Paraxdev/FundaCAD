@@ -3,7 +3,14 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import {
-  BLEND_DELAY_MS, BLEND_MS, EdgeBlend, EdgeMotionRule, MERGE_OFF_DRAWS, MERGE_ON_DRAWS, ease, type EdgeLoad,
+  BLEND_DELAY_MS,
+  BLEND_MS,
+  EdgeBlend,
+  EdgeMotionRule,
+  MERGE_OFF_DRAWS,
+  MERGE_ON_DRAWS,
+  ease,
+  type EdgeLoad,
 } from "../../src/viewport/edgeMotion";
 import { EdgeBatches, type EdgeFrame } from "../../src/viewport/edgeBatches";
 import { BodyEdges } from "../../src/viewport/edgeLines";
@@ -63,8 +70,10 @@ describe("the edge level rule", () => {
     expect(modes.slice(8)).toEqual([...Array(7).fill("thin"), "full"]);
     expect(gesture(r, PLATES, Array(16).fill(470), 9000).includes("thin")).toBe(false);
     // A new model judges its own short ticks, not against the old model's fat frame.
-    expect(gesture(r, { ...PLATES, segments: 10_000 }, [10, 10, 10, 10, ...Array(8).fill(470)], 18_000))
-      .toEqual([...Array(12).fill("full"), "thin"]);
+    expect(gesture(r, { ...PLATES, segments: 10_000 }, [10, 10, 10, 10, ...Array(8).fill(470)], 18_000)).toEqual([
+      ...Array(12).fill("full"),
+      "thin",
+    ]);
   });
 
   it("goes back to full when the model's segments change by more than half", () => {
@@ -137,7 +146,9 @@ describe("the edge level rule", () => {
 
   it("leaves a model whose edges are a small share of the frame full however slow", () => {
     const r = new EdgeMotionRule();
-    expect(gesture(r, { draws: 30, segments: 5000, triangles: 2_000_000 }, Array(8).fill(200), 0).includes("thin")).toBe(false);
+    expect(
+      gesture(r, { draws: 30, segments: 5000, triangles: 2_000_000 }, Array(8).fill(200), 0).includes("thin"),
+    ).toBe(false);
   });
 
   it("does not judge the frame that built the batches", () => {
@@ -180,7 +191,10 @@ describe("the edge level rule under a GPU queue a few frames deep", () => {
   });
 
   it("draws the second gesture thin after one window of fat frames, however many free slots came first", () => {
-    for (const start of [[5, 2, 3, 985, 4], [7, 2150, 5, 1020, 6]]) {
+    for (const start of [
+      [5, 2, 3, 985, 4],
+      [7, 2150, 5, 1020, 6],
+    ]) {
       expect(lagged(learnThin(), start, 36, 60_000), String(start)).toBe("f".repeat(8) + "t".repeat(29));
     }
   });
@@ -193,8 +207,10 @@ describe("the edge level rule under a GPU queue a few frames deep", () => {
 
   it("counts a tick of an eighth of the fat frame, and leaves out a shorter one", () => {
     expect(gesture(learnThin(), PLATES, [FAT / 8, FAT, FAT, FAT], 60_000)).toEqual([...Array(4).fill("full"), "thin"]);
-    expect(gesture(learnThin(), PLATES, [FAT / 8 - 0.5, FAT, FAT, FAT, FAT], 60_000))
-      .toEqual([...Array(5).fill("full"), "thin"]);
+    expect(gesture(learnThin(), PLATES, [FAT / 8 - 0.5, FAT, FAT, FAT, FAT], 60_000)).toEqual([
+      ...Array(5).fill("full"),
+      "thin",
+    ]);
   });
 
   it("leaves out three short ticks in a row at most, so a renderer that got fast ends the probe", () => {
@@ -204,14 +220,18 @@ describe("the edge level rule under a GPU queue a few frames deep", () => {
     const done = learnThin();
     gesture(done, PLATES, Array(7).fill(12), 60_000);
     // Found fast, so its short ticks count again and two slow windows turn thin on.
-    expect(gesture(done, PLATES, [12, 12, 12, 12, ...Array(8).fill(FAT)], 70_000))
-      .toEqual([...Array(12).fill("full"), "thin"]);
+    expect(gesture(done, PLATES, [12, 12, 12, 12, ...Array(8).fill(FAT)], 70_000)).toEqual([
+      ...Array(12).fill("full"),
+      "thin",
+    ]);
   });
 
   it("forgets the fat frame with the model", () => {
     const r = learnThin();
-    expect(gesture(r, { ...PLATES, segments: 20_000 }, [12, 12, 12, 12, ...Array(8).fill(FAT)], 60_000))
-      .toEqual([...Array(12).fill("full"), "thin"]);
+    expect(gesture(r, { ...PLATES, segments: 20_000 }, [12, 12, 12, 12, ...Array(8).fill(FAT)], 60_000)).toEqual([
+      ...Array(12).fill("full"),
+      "thin",
+    ]);
   });
 });
 
@@ -296,7 +316,13 @@ describe("the edge blend", () => {
 
 function body(id: string, x: number, n: number): BodyEdges {
   const edges = Array.from({ length: n }, (_, i) => ({
-    id: `${id}e${i}`, body: id, points: [[x, i, 0], [x + 1, i, 0], [x + 2, i, 1]] as [number, number, number][],
+    id: `${id}e${i}`,
+    body: id,
+    points: [
+      [x, i, 0],
+      [x + 1, i, 0],
+      [x + 2, i, 1],
+    ] as [number, number, number][],
   }));
   return new BodyEdges(edges, new THREE.Vector2(800, 600));
 }
@@ -385,7 +411,11 @@ describe("the merged edge batches", () => {
     frame.weight = 0;
     batches.end();
     batches.begin(frame);
-    expect(drawn(scene).map((o) => o.name).includes("edge-batch")).toBe(false);
+    expect(
+      drawn(scene)
+        .map((o) => o.name)
+        .includes("edge-batch"),
+    ).toBe(false);
     batches.end();
   });
 });

@@ -6,9 +6,7 @@
 // body drawing wrong and a person deciding to report it is however long they
 // spend trying to work around it first.
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  hasFaults, pipe, pipeFault, pipelineLog, resetPipelineLog,
-} from "../../src/diagnostics/pipelineLog";
+import { hasFaults, pipe, pipeFault, pipelineLog, resetPipelineLog } from "../../src/diagnostics/pipelineLog";
 
 beforeEach(() => resetPipelineLog());
 

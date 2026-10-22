@@ -54,9 +54,7 @@ describe("the op table", () => {
     expect(tools.length).toBeGreaterThan(10);
     // Every MCP tool is an op. Not the reverse: see the next test.
     for (const tool of tools) {
-      expect(OPS, `the MCP server registers ${tool} and the op table has no such op`).toContain(
-        tool,
-      );
+      expect(OPS, `the MCP server registers ${tool} and the op table has no such op`).toContain(tool);
     }
   });
 
@@ -218,7 +216,18 @@ describe("the grant check", () => {
   it("can() agrees with call() on every op", async () => {
     const b = broker(["document.read", "geometry.build"]);
     for (const op of OPS) {
-      const allowed = (await b.call(op, { path: "x", name: "n", id: "i", to: 0, feature: { type: "box" }, patch: {}, expr: 1, document: {} })).ok;
+      const allowed = (
+        await b.call(op, {
+          path: "x",
+          name: "n",
+          id: "i",
+          to: 0,
+          feature: { type: "box" },
+          patch: {},
+          expr: 1,
+          document: {},
+        })
+      ).ok;
       expect(b.can(op), op).toBe(allowed);
     }
     expect(b.can("doc_close")).toBe(false);

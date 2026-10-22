@@ -7,8 +7,16 @@ import { shallowRef } from "vue";
 import { setPrompt, toast } from "fundacad";
 import type { Engine, Feature, Selector } from "fundacad";
 import {
-  PRINT_CLEARANCE, formatOffBy, nearestThread, threadChoices, threadFeature,
-  type FaceIs, type Hand, type NearestThread, type ThreadChoice, type ThreadSystem,
+  PRINT_CLEARANCE,
+  formatOffBy,
+  nearestThread,
+  threadChoices,
+  threadFeature,
+  type FaceIs,
+  type Hand,
+  type NearestThread,
+  type ThreadChoice,
+  type ThreadSystem,
 } from "./threadSpec";
 
 export interface ThreadDraft {
@@ -60,21 +68,42 @@ export function featureOf(d: ThreadDraft, id: string): Feature | null {
   const choice = choiceOf(d);
   if (!choice) return null;
   return threadFeature({
-    id, face: d.face as unknown as Record<string, unknown>, axis: d.axis, choice,
-    faceIs: d.external ? "nominal" : d.faceIs, external: d.external,
-    starts: d.starts, hand: d.hand, clearance: d.printFit ? d.clearance : 0,
-    length: d.length, offset: d.offset,
+    id,
+    face: d.face as unknown as Record<string, unknown>,
+    axis: d.axis,
+    choice,
+    faceIs: d.external ? "nominal" : d.faceIs,
+    external: d.external,
+    starts: d.starts,
+    hand: d.hand,
+    clearance: d.printFit ? d.clearance : 0,
+    length: d.length,
+    offset: d.offset,
   }) as unknown as Feature;
 }
 
 /** A draft for a freshly picked face, on the size it is nearest to. */
-export function draftForFace(face: Selector, diameter: number, external: boolean, axis?: [number, number, number]): ThreadDraft | null {
+export function draftForFace(
+  face: Selector,
+  diameter: number,
+  external: boolean,
+  axis?: [number, number, number],
+): ThreadDraft | null {
   const n = nearestThread(diameter, external, SYSTEMS_NEAREST);
   if (!n) return null;
   return {
-    editing: null, face, axis, faceDiameter: diameter, external,
-    system: n.choice.system, designation: n.choice.designation, faceIs: n.faceIs,
-    hand: "right", starts: 1, printFit: false, clearance: PRINT_CLEARANCE,
+    editing: null,
+    face,
+    axis,
+    faceDiameter: diameter,
+    external,
+    system: n.choice.system,
+    designation: n.choice.designation,
+    faceIs: n.faceIs,
+    hand: "right",
+    starts: 1,
+    printFit: false,
+    clearance: PRINT_CLEARANCE,
   };
 }
 
@@ -85,13 +114,20 @@ export function draftForFeature(f: Record<string, unknown>, faceDiameter: number
   const num = (v: unknown) => (typeof v === "number" ? v : undefined);
   const clearance = num(f.clearance) ?? 0;
   return {
-    editing: String(f.id), face: f.face as Selector,
-    axis: f.axis as [number, number, number] | undefined, faceDiameter,
-    external: spec.external !== false, system: spec.system as ThreadSystem, designation: spec.designation,
+    editing: String(f.id),
+    face: f.face as Selector,
+    axis: f.axis as [number, number, number] | undefined,
+    faceDiameter,
+    external: spec.external !== false,
+    system: spec.system as ThreadSystem,
+    designation: spec.designation,
     faceIs: spec.faceIs === "nominal" ? "nominal" : "tap",
-    hand: f.hand === "left" ? "left" : "right", starts: num(f.starts) ?? 1,
-    printFit: clearance > 0, clearance: clearance > 0 ? clearance : PRINT_CLEARANCE,
-    length: num(f.length), offset: num(f.offset),
+    hand: f.hand === "left" ? "left" : "right",
+    starts: num(f.starts) ?? 1,
+    printFit: clearance > 0,
+    clearance: clearance > 0 ? clearance : PRINT_CLEARANCE,
+    length: num(f.length),
+    offset: num(f.offset),
   };
 }
 

@@ -19,11 +19,14 @@ function setup() {
     bodyElementOf: () => undefined,
   };
   const deps = {
-    store, viewport,
+    store,
+    viewport,
     toolBusy: () => false,
     dropBodyGizmo: () => {},
     setStatus: () => {},
-    handleAction: (a: string) => { actions.push(a); },
+    handleAction: (a: string) => {
+      actions.push(a);
+    },
     getLastAction: () => null,
   } as unknown as ContextMenusDeps;
   return { menus: createContextMenus(deps), actions };
@@ -40,7 +43,9 @@ describe("Separate", () => {
   });
 
   it("is in the ribbon right after Split Body", () => {
-    const actions = MODEL.flatMap((g) => g.items).flatMap(leavesOf).map((t) => t.action);
+    const actions = MODEL.flatMap((g) => g.items)
+      .flatMap(leavesOf)
+      .map((t) => t.action);
     expect(actions[actions.indexOf("split") + 1]).toBe("separate");
   });
 });

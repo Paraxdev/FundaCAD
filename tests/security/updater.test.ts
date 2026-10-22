@@ -69,8 +69,7 @@ describe("updater", () => {
       ...dev.plugins.updater.endpoints,
     ]) {
       expect(new URL(url).origin, `updater endpoint ${url}`).toBe("https://github.com");
-      expect(new URL(url).pathname.startsWith("/Paraxdev/fundacad/"), `updater endpoint ${url}`)
-        .toBe(true);
+      expect(new URL(url).pathname.startsWith("/Paraxdev/fundacad/"), `updater endpoint ${url}`).toBe(true);
     }
   });
 
@@ -81,10 +80,7 @@ describe("updater", () => {
     expect(key.length).toBeGreaterThan(40);
     // atob rather than Buffer: this project's tsconfig has no node types, and a
     // test that does not typecheck is one vue-tsc reports instead of the code.
-    expect(
-      atob(key),
-      "the updater pubkey is not a minisign public key",
-    ).toMatch(/minisign public key/);
+    expect(atob(key), "the updater pubkey is not a minisign public key").toMatch(/minisign public key/);
   });
 
   // The endpoint is baked into the binary at build time, so which feed a copy
@@ -99,9 +95,7 @@ describe("updater", () => {
   // re-downloads.
   it("reads the beta feed and never the retired alpha one", () => {
     const path = (urls: string[]) => urls.map((u) => new URL(u).pathname);
-    expect(path(conf.plugins.updater.endpoints)).toEqual([
-      "/Paraxdev/fundacad/releases/download/beta/latest.json",
-    ]);
+    expect(path(conf.plugins.updater.endpoints)).toEqual(["/Paraxdev/fundacad/releases/download/beta/latest.json"]);
     expect(confRaw + releaseRaw + stableRaw + devRaw).not.toContain("/alpha/latest.json");
   });
 
@@ -109,9 +103,7 @@ describe("updater", () => {
   // never be what a stable install finds there.
   it("a stable build reads the latest stable release's feed", () => {
     const path = (urls: string[]) => urls.map((u) => new URL(u).pathname);
-    expect(path(stable.plugins.updater.endpoints)).toEqual([
-      "/Paraxdev/fundacad/releases/latest/download/latest.json",
-    ]);
+    expect(path(stable.plugins.updater.endpoints)).toEqual(["/Paraxdev/fundacad/releases/latest/download/latest.json"]);
   });
 
   // Its own feed, so a development install never updates to a beta and the

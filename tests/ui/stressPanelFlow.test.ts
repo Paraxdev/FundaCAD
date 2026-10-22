@@ -23,8 +23,13 @@ const FIRST: FaceMap = {
 };
 
 function quad(z: number, n: number): THREE.Triangle[] {
-  const a = new THREE.Vector3(0, 0, z), b = new THREE.Vector3(10, 0, z), c = new THREE.Vector3(10, 10, z), d = new THREE.Vector3(0, 10, z);
-  return n > 0 ? [new THREE.Triangle(a, b, c), new THREE.Triangle(a, c, d)] : [new THREE.Triangle(a, c, b), new THREE.Triangle(a, d, c)];
+  const a = new THREE.Vector3(0, 0, z),
+    b = new THREE.Vector3(10, 0, z),
+    c = new THREE.Vector3(10, 10, z),
+    d = new THREE.Vector3(0, 10, z);
+  return n > 0
+    ? [new THREE.Triangle(a, b, c), new THREE.Triangle(a, c, d)]
+    : [new THREE.Triangle(a, c, b), new THREE.Triangle(a, d, c)];
 }
 
 const reply: StressReply = {
@@ -67,7 +72,10 @@ function rig() {
     faceIdToBodyId: (f: number) => FACES[f]?.body ?? null,
     selectedFacesForPressPull: () =>
       selected.length
-        ? { selectors: selected.map((f) => ({ kind: "face", by: "nearest", point: [5, 5, FACES[f]!.z] })), faceIds: selected }
+        ? {
+            selectors: selected.map((f) => ({ kind: "face", by: "nearest", point: [5, 5, FACES[f]!.z] })),
+            faceIds: selected,
+          }
         : null,
     faceTriangles: (f: number) => FACES[f]?.tris ?? (FACES[f] ? quad(FACES[f]!.z, FACES[f]!.n) : []),
     bodyProperties: () => ({ com: new THREE.Vector3(5, 5, 5) }),
@@ -78,9 +86,14 @@ function rig() {
       const hit = Object.entries(FACES).find(([, f]) => f.z === p[2]);
       return hit ? Number(hit[0]) : null;
     },
-    clearSelection: () => { selected = []; },
+    clearSelection: () => {
+      selected = [];
+    },
     setFaceMarks: (m: unknown) => marks.push(m),
-    setStressOverlay: (o: unknown) => { overlays.push(o); shown = o !== null; },
+    setStressOverlay: (o: unknown) => {
+      overlays.push(o);
+      shown = o !== null;
+    },
     hasStressOverlay: () => shown,
   };
   const built = { features: [{ id: "on-screen" }] } as unknown as CadDocument;
@@ -88,24 +101,50 @@ function rig() {
     document: { features: [] } as unknown as CadDocument,
     // What the model on screen was built from: rolled back, suppressions out.
     builtDocument: () => built,
-    buildState: { result: { bodies: [{ id: "b1", name: "Block", faceStart: 0, faceCount: 9 }, { id: "b2", name: "Lid", faceStart: 9, faceCount: 1 }] } },
-    onDocChange: (fn: () => void) => { docListeners.push(fn); fn(); return () => {}; },
-    onOpen: (fn: () => void) => { openListeners.push(fn); return () => {}; },
+    buildState: {
+      result: {
+        bodies: [
+          { id: "b1", name: "Block", faceStart: 0, faceCount: 9 },
+          { id: "b2", name: "Lid", faceStart: 9, faceCount: 1 },
+        ],
+      },
+    },
+    onDocChange: (fn: () => void) => {
+      docListeners.push(fn);
+      fn();
+      return () => {};
+    },
+    onOpen: (fn: () => void) => {
+      openListeners.push(fn);
+      return () => {};
+    },
     isBodyVisible: () => true,
-    get stressStudy() { return study; },
-    setStressStudy: (s: StressStudy | null) => { study = s ? structuredClone(s) : null; saved.push(study); },
+    get stressStudy() {
+      return study;
+    },
+    setStressStudy: (s: StressStudy | null) => {
+      study = s ? structuredClone(s) : null;
+      saved.push(study);
+    },
   };
   const geometry = {
     stress: (_doc: CadDocument, body: string, opts: StressOptions, onStarted?: (id: string) => void) => {
       calls.push({ body, opts, doc: _doc });
       onStarted?.(`req-${calls.length}`);
-      return new Promise<StressResult>((res) => { settle = res; });
+      return new Promise<StressResult>((res) => {
+        settle = res;
+      });
     },
-    cancel: async (id?: string) => { cancels.push(id); return true; },
+    cancel: async (id?: string) => {
+      cancels.push(id);
+      return true;
+    },
     // One overhang on b1's face 3, for the panels' tints to share the body.
   };
   const deps = {
-    store, viewport, geometry,
+    store,
+    viewport,
+    geometry,
     hasBody: () => true,
     setStatus: (t: string) => statuses.push(t),
     stressGlyphs: (h: StressGlyphHandlers) => {
@@ -120,14 +159,31 @@ function rig() {
   } as unknown as PanelsDeps;
   const ui = createPanels(deps);
   return {
-    ui, built, marks, overlays, statuses, calls, cancels, saved, deformations, glyphModels, glyphCalls,
+    ui,
+    built,
+    marks,
+    overlays,
+    statuses,
+    calls,
+    cancels,
+    saved,
+    deformations,
+    glyphModels,
+    glyphCalls,
     handlers: () => handlers!,
-    pickAt: (p: typeof pick) => { pick = p; },
+    pickAt: (p: typeof pick) => {
+      pick = p;
+    },
     study: () => study,
     /** Another state of the same document put in place (a version, an
      *  assistant's edit), with its own study. */
-    replaceStudy: (s: StressStudy | null) => { study = s; docListeners.forEach((f) => f()); },
-    select: (ids: number[]) => { selected = ids; },
+    replaceStudy: (s: StressStudy | null) => {
+      study = s;
+      docListeners.forEach((f) => f());
+    },
+    select: (ids: number[]) => {
+      selected = ids;
+    },
     settle: (r: StressResult) => settle(r),
     editDoc: () => docListeners.forEach((f) => f()),
     /** A new build drawn with these faces: the viewport drops its overlays and
@@ -135,7 +191,14 @@ function rig() {
     rebuild: (faces: FaceMap) => {
       FACES = faces;
       store.buildState = {
-        result: { bodies: [...new Set(Object.values(faces).map((f) => f.body))].map((id, i) => ({ id, name: id, faceStart: 9 * i, faceCount: 9 })) },
+        result: {
+          bodies: [...new Set(Object.values(faces).map((f) => f.body))].map((id, i) => ({
+            id,
+            name: id,
+            faceStart: 9 * i,
+            faceCount: 9,
+          })),
+        },
       };
       shown = false;
       overlays.push(null);
@@ -238,7 +301,11 @@ describe("stress panel flow", () => {
     expect(usePanelsStore().stress!.running).toBe(false);
     expect(usePanelsStore().stress!.result?.rows.find((x) => x.k === "Safety factor")?.v).toBe("12.5");
     expect(r.overlays.at(-1)).toEqual({
-      bodyId: "b1", positions: reply.surface!.positions, indices: [0, 1, 2], values: [1, 4, 2], range: { min: 1, max: 4 },
+      bodyId: "b1",
+      positions: reply.surface!.positions,
+      indices: [0, 1, 2],
+      values: [1, 4, 2],
+      range: { min: 1, max: 4 },
     });
   });
 
@@ -314,7 +381,10 @@ describe("stress panel across changes", () => {
     r.ui.setStressColours(false);
     expect(r.overlays.at(-1)).toBeNull();
     expect(p.stress!.colours).toBe("hidden");
-    expect(r.marks.at(-1)).toEqual([{ faceIds: [1], color: 0x4ac6ff }, { faceIds: [2], color: 0xff9a2e }]);
+    expect(r.marks.at(-1)).toEqual([
+      { faceIds: [1], color: 0x4ac6ff },
+      { faceIds: [2], color: 0xff9a2e },
+    ]);
     r.select([2]);
     r.ui.setStressFacesFromSelection({ support: 1 });
     expect(p.stress!.setup.supports[0]!.faces.faceIds).toEqual([2]);
@@ -331,7 +401,10 @@ describe("stress panel across changes", () => {
     const s = usePanelsStore().stress!.setup;
     expect(s.supports[0]!.faces.faceIds).toEqual([4]);
     expect(s.loads[0]!.faces.faceIds).toEqual([7]);
-    expect(r.marks.at(-1)).toEqual([{ faceIds: [4], color: 0x4ac6ff }, { faceIds: [7], color: 0xff9a2e }]);
+    expect(r.marks.at(-1)).toEqual([
+      { faceIds: [4], color: 0x4ac6ff },
+      { faceIds: [7], color: 0xff9a2e },
+    ]);
   });
 
   it("keeps a face the edit removed, says so, and will not run until it is back", async () => {
@@ -347,7 +420,9 @@ describe("stress panel across changes", () => {
     expect(r.statuses.at(-1)).toBe("Stress: 1 face is not found on the current model, set the faces again");
     await r.ui.runStress();
     expect(r.calls).toEqual([]);
-    expect(usePanelsStore().stress!.error).toBe("a face of the load is not found on the current model, set the faces again");
+    expect(usePanelsStore().stress!.error).toBe(
+      "a face of the load is not found on the current model, set the faces again",
+    );
     // The saved study never lost it: the next build that has the face finds it.
     expect(r.study()).toEqual(saved);
     r.editDoc();
@@ -437,7 +512,9 @@ describe("the study saved with the document", () => {
     expect(r.saved).toEqual([]);
     setUp(r);
     const s = r.study()!;
-    expect(s.supports).toEqual([{ id: 1, type: "fixed", faces: [{ kind: "face", by: "nearest", point: [5, 5, 0], body: "b1" }] }]);
+    expect(s.supports).toEqual([
+      { id: 1, type: "fixed", faces: [{ kind: "face", by: "nearest", point: [5, 5, 0], body: "b1" }] },
+    ]);
     expect(s.loads[0]!.faces).toEqual([{ kind: "face", by: "nearest", point: [5, 5, 10], body: "b1" }]);
     const n = r.saved.length;
     usePanelsStore().stress!.setup.gravity.on = true;
@@ -461,7 +538,10 @@ describe("the study saved with the document", () => {
     expect(s.loads[0]!.faces.faceIds).toEqual([2]);
     expect(s.loads[0]!.faces.area).toBeCloseTo(100, 9);
     expect(r.saved).toHaveLength(before);
-    expect(r.marks.at(-1)).toEqual([{ faceIds: [1], color: 0x4ac6ff }, { faceIds: [2], color: 0xff9a2e }]);
+    expect(r.marks.at(-1)).toEqual([
+      { faceIds: [1], color: 0x4ac6ff },
+      { faceIds: [2], color: 0xff9a2e },
+    ]);
   });
 
   it("says which saved faces are not on the body when it opens", () => {
@@ -541,7 +621,16 @@ describe("supports, gravity and the view's glyphs", () => {
     const r = rig();
     setUp(r);
     let m = r.glyphModels.at(-1)!;
-    expect(m.forces).toEqual([{ loadId: 1, anchor: [expect.closeTo(5, 9), expect.closeTo(5, 9), 10], dir: [0, 0, -1], force: 100, direction: "into", into: [0, 0, -1] }]);
+    expect(m.forces).toEqual([
+      {
+        loadId: 1,
+        anchor: [expect.closeTo(5, 9), expect.closeTo(5, 9), 10],
+        dir: [0, 0, -1],
+        force: 100,
+        direction: "into",
+        into: [0, 0, -1],
+      },
+    ]);
     expect(m.gravity).toBeNull();
     usePanelsStore().stress!.setup.gravity = { on: true, direction: "-X" };
     r.ui.refreshStressMarks();
@@ -549,7 +638,9 @@ describe("supports, gravity and the view's glyphs", () => {
     expect(m.gravity).toEqual({ at: [5, 5, 5], dir: [-1, 0, 0] });
     void r.ui.runStress();
     expect(r.calls.at(-1)!.opts.gravity).toEqual([-9.81, 0, 0]);
-    expect(r.calls.at(-1)!.opts.supports).toEqual([{ type: "fixed", faces: [{ kind: "face", by: "nearest", point: [5, 5, 0], body: "b1" }] }]);
+    expect(r.calls.at(-1)!.opts.supports).toEqual([
+      { type: "fixed", faces: [{ kind: "face", by: "nearest", point: [5, 5, 0], body: "b1" }] },
+    ]);
   });
 
   it("draws a pressure as small arrows into its faces", () => {
@@ -587,7 +678,17 @@ describe("supports, gravity and the view's glyphs", () => {
     r.select([5]);
     r.ui.setStressFacesFromSelection({ support: 2 });
     const run = r.ui.runStress();
-    r.settle({ ok: true, result: { ...reply, reactions: [[0, 0, 70], [0, 0, 30]], weight: [0, 0, -0.2] } });
+    r.settle({
+      ok: true,
+      result: {
+        ...reply,
+        reactions: [
+          [0, 0, 70],
+          [0, 0, 30],
+        ],
+        weight: [0, 0, -0.2],
+      },
+    });
     await run;
     const rows = usePanelsStore().stress!.result!.rows;
     expect(rows.find((x) => x.k === "Support 2, pinned")?.v).toBe("0, 0, 30 N");
@@ -598,7 +699,11 @@ describe("supports, gravity and the view's glyphs", () => {
 describe("the deformed shape and the probe", () => {
   const moving: StressReply = {
     ...reply,
-    surface: { ...reply.surface!, positions: [0, 0, 0, 100, 0, 0, 0, 10, 0], displacement: [0, 0, 0, 0, 0, -2, 0, 0, -1] },
+    surface: {
+      ...reply.surface!,
+      positions: [0, 0, 0, 100, 0, 0, 0, 10, 0],
+      displacement: [0, 0, 0, 0, 0, -2, 0, 0, -1],
+    },
   };
 
   afterEach(() => vi.unstubAllGlobals());
@@ -707,7 +812,10 @@ describe("what the review of the stress tools found", () => {
     setUp(r);
     const s = structuredClone(r.study()!) as unknown as { supports: { faces: unknown[] }[] };
     // Past the document's own check, as a study put straight in the store.
-    s.supports[0]!.faces = [{ kind: "face", by: "nearest", point: null }, { kind: "face", by: "match" }];
+    s.supports[0]!.faces = [
+      { kind: "face", by: "nearest", point: null },
+      { kind: "face", by: "match" },
+    ];
     r.ui.closeStress();
     r.replaceStudy(s as unknown as StressStudy);
     expect(() => r.ui.showStress()).not.toThrow();
@@ -772,12 +880,19 @@ describe("what the review of the stress tools found", () => {
     expect(r.statuses.at(-1)).toMatch(/run the analysis again to probe it/);
   });
 
-  it("counts a face the view cannot place, sends it, and says so plainly for \"into the face\"", () => {
+  it('counts a face the view cannot place, sends it, and says so plainly for "into the face"', () => {
     const r = rig();
     setUp(r);
     const s = structuredClone(r.study()!);
     // A fingerprint of a cylinder: the engine finds it, the view cannot.
-    s.loads[0]!.faces = [{ kind: "face", by: "match", fp: { centroid: [5, 5, 5], normal: [1, 0, 0], surface: "cylinder", radius: 3 }, body: "b1" }];
+    s.loads[0]!.faces = [
+      {
+        kind: "face",
+        by: "match",
+        fp: { centroid: [5, 5, 5], normal: [1, 0, 0], surface: "cylinder", radius: 3 },
+        body: "b1",
+      },
+    ];
     r.replaceStudy(s);
     r.ui.refreshStressMarks();
     const l = usePanelsStore().stress!.setup.loads[0]!;
@@ -785,7 +900,9 @@ describe("what the review of the stress tools found", () => {
     expect(l.faces.missing).toBe(0);
     void r.ui.runStress();
     expect(r.calls).toEqual([]);
-    expect(usePanelsStore().stress!.error).toMatch(/one of its faces is not shown in the view, so "into the face" cannot be worked out; set the faces again/);
+    expect(usePanelsStore().stress!.error).toMatch(
+      /one of its faces is not shown in the view, so "into the face" cannot be worked out; set the faces again/,
+    );
     l.direction = "-Z";
     void r.ui.runStress();
     expect(r.calls).toHaveLength(1);

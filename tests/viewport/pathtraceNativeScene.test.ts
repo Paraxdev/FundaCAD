@@ -2,18 +2,46 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { BlasCache, mainThreadBuilder } from "../../src/viewport/pathtrace/blasCache";
 import ENV_DIRECTIONS from "../fixtures/env_directions.json";
-import { envFrame, meshFrame, NativeScene, nativeCamera, nativeLook, pageMaterial } from "../../src/viewport/pathtrace/nativeScene";
-import { equirectDirection, halfEquirect, hdrEnvironment, hemiAt, type EnvLayout } from "../../src/viewport/pathtrace/environment";
+import {
+  envFrame,
+  meshFrame,
+  NativeScene,
+  nativeCamera,
+  nativeLook,
+  pageMaterial,
+} from "../../src/viewport/pathtrace/nativeScene";
+import {
+  equirectDirection,
+  halfEquirect,
+  hdrEnvironment,
+  hemiAt,
+  type EnvLayout,
+} from "../../src/viewport/pathtrace/environment";
 import { registerHdr } from "../../src/viewport/hdrRegistry";
 import { DEFAULT_RENDER, type Ground } from "../../src/ui/renderPrefs";
-import { buildLightRig, FILL_INTENSITY, GROUND_ALBEDO, KEY_INTENSITY, SUN_ANGULAR_RADIUS, type GroundFloor, type RigLight } from "../../src/viewport/lightRig";
+import {
+  buildLightRig,
+  FILL_INTENSITY,
+  GROUND_ALBEDO,
+  KEY_INTENSITY,
+  SUN_ANGULAR_RADIUS,
+  type GroundFloor,
+  type RigLight,
+} from "../../src/viewport/lightRig";
 import { lookSignature } from "../../src/viewport/pathtrace/host";
 import type { TraceLook } from "../../src/viewport/pathtrace/backend";
 
 function body(id: string, etag: string, color?: boolean) {
   const g = new THREE.BoxGeometry(1, 1, 1);
-  if (color) g.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(g.getAttribute("position").count * 3).fill(0.5), 3));
-  const mats = [new THREE.MeshPhysicalMaterial({ color: 0xff0000 }), new THREE.MeshPhysicalMaterial({ transmission: 1, ior: 1.4 })];
+  if (color)
+    g.setAttribute(
+      "color",
+      new THREE.Float32BufferAttribute(new Float32Array(g.getAttribute("position").count * 3).fill(0.5), 3),
+    );
+  const mats = [
+    new THREE.MeshPhysicalMaterial({ color: 0xff0000 }),
+    new THREE.MeshPhysicalMaterial({ transmission: 1, ior: 1.4 }),
+  ];
   const m = new THREE.Mesh(g, mats);
   m.userData.owner = { id, etag };
   return m;
@@ -111,7 +139,9 @@ describe("native tracer scene feed", () => {
   });
 
   it("materials keep the P3 fields and an endless attenuation goes as 0", () => {
-    const glass = pageMaterial(new THREE.MeshPhysicalMaterial({ transmission: 1, ior: 1.4, attenuationDistance: Infinity, dispersion: 2 }));
+    const glass = pageMaterial(
+      new THREE.MeshPhysicalMaterial({ transmission: 1, ior: 1.4, attenuationDistance: Infinity, dispersion: 2 }),
+    );
     expect(glass).toMatchObject({ transmission: 1, ior: 1.4, attenuationDistance: 0, dispersion: 2 });
     const lamp = pageMaterial(new THREE.MeshPhysicalMaterial({ emissive: 0xffffff, emissiveIntensity: 3 }));
     expect(lamp.emissive).toEqual([1, 1, 1]);
@@ -203,7 +233,9 @@ describe("native look", () => {
   });
 
   it("takes an sRGB colour to linear and skips a Realtime only light", () => {
-    const l = nativeLook(look(1, [extra({ colour: 0x808080, realtimeOnly: true }), extra({ colour: 0x808080, angularRadius: 3 })]));
+    const l = nativeLook(
+      look(1, [extra({ colour: 0x808080, realtimeOnly: true }), extra({ colour: 0x808080, angularRadius: 3 })]),
+    );
     expect(l.lights).toHaveLength(3);
     const grey = l.lights![2]!;
     expect(grey.color[0]).toBeCloseTo(0.2159, 4);
@@ -224,17 +256,29 @@ describe("native look", () => {
   it("sends the catcher Realtime draws as the ground, none by default", () => {
     const floor = { workspace: "model" as const, z: 0.5, centre: [1, 2] as [number, number], extent: 3.2 };
     const shadow = { ...look(1), rig: buildLightRig({ ...DEFAULT_RENDER, groundModel: "shadow" }, () => false, floor) };
-    expect(nativeLook(shadow).ground).toEqual({ mode: "shadow", z: 0.5, centre: [1, 2], extent: 3.2, albedo: GROUND_ALBEDO });
+    expect(nativeLook(shadow).ground).toEqual({
+      mode: "shadow",
+      z: 0.5,
+      centre: [1, 2],
+      extent: 3.2,
+      albedo: GROUND_ALBEDO,
+    });
     expect(nativeLook(look(1)).ground!.mode).toBe("none");
   });
 
   it("a new ground mode, height, centre or size sends the look again", () => {
     const same = look(1);
-    const at = (groundModel: Ground, floor: GroundFloor) => lookSignature({ ...same, rig: buildLightRig({ ...DEFAULT_RENDER, groundModel }, () => false, floor) });
+    const at = (groundModel: Ground, floor: GroundFloor) =>
+      lookSignature({ ...same, rig: buildLightRig({ ...DEFAULT_RENDER, groundModel }, () => false, floor) });
     const floor: GroundFloor = { workspace: "model", z: 0, centre: [0, 0], extent: 2 };
     const base = at("shadow", floor);
     expect(at("shadow", { ...floor })).toBe(base);
-    for (const other of [at("none", floor), at("shadow", { ...floor, z: 1 }), at("shadow", { ...floor, centre: [0, 1] }), at("shadow", { ...floor, extent: 3 })]) {
+    for (const other of [
+      at("none", floor),
+      at("shadow", { ...floor, z: 1 }),
+      at("shadow", { ...floor, centre: [0, 1] }),
+      at("shadow", { ...floor, extent: 3 }),
+    ]) {
       expect(other).not.toBe(base);
     }
   });
@@ -248,7 +292,14 @@ describe("native environment", () => {
   const roomLook = (key: string): TraceLook => {
     const tex = halfEquirect(new Uint16Array(4 * 2 * 4), 4, 2);
     tex.userData.envKey = key;
-    return { lights: [], background: new THREE.Color(), environment: tex, brightness: 1, toneMapping: THREE.NeutralToneMapping, exposure: 1 };
+    return {
+      lights: [],
+      background: new THREE.Color(),
+      environment: tex,
+      brightness: 1,
+      toneMapping: THREE.NeutralToneMapping,
+      exposure: 1,
+    };
   };
   const native = () => {
     let held: string | null = null;
@@ -261,7 +312,15 @@ describe("native environment", () => {
       }
       return null;
     };
-    return { scene: new NativeScene(call, (e) => { throw e; }), sent, lose: () => { held = null; } };
+    return {
+      scene: new NativeScene(call, (e) => {
+        throw e;
+      }),
+      sent,
+      lose: () => {
+        held = null;
+      },
+    };
   };
 
   it("sends a room once per key and again to a tracer that lost it", async () => {
@@ -293,10 +352,16 @@ describe("native environment", () => {
   });
 
   it("an HDR goes as its pixels, turned by columns, with the exposure and the hemisphere", () => {
-    const w = 4, h = 2;
+    const w = 4,
+      h = 2;
     const data = new Float32Array(w * h * 4);
     for (let i = 0; i < w * h; i++) data.set([i, 0, 0, 1], i * 4);
-    const hemi = { sky: new THREE.Color(1, 1, 1), ground: new THREE.Color(0, 0, 0), intensity: Math.PI, up: new THREE.Vector3(0, 0, 1) };
+    const hemi = {
+      sky: new THREE.Color(1, 1, 1),
+      ground: new THREE.Color(0, 0, 0),
+      intensity: Math.PI,
+      up: new THREE.Vector3(0, 0, 1),
+    };
     const out = hdrEnvironment({ width: w, height: h, data }, 90, 1, hemi);
     const at = (c: number, r: number, k: number) => THREE.DataUtils.fromHalfFloat(out[(r * w + c) * 4 + k]!);
     for (let r = 0; r < h; r++) {
@@ -313,10 +378,15 @@ describe("native environment", () => {
   });
 
   it("the hemisphere term is FRAGMENT's: sky above, ground below, the horizon halfway", () => {
-    const hemi = { sky: new THREE.Color(0.654, 0.654, 0.654), ground: new THREE.Color(0.0172, 0.0172, 0.0172), intensity: 0.6, up: new THREE.Vector3(0, 0, 2) };
+    const hemi = {
+      sky: new THREE.Color(0.654, 0.654, 0.654),
+      ground: new THREE.Color(0.0172, 0.0172, 0.0172),
+      intensity: 0.6,
+      up: new THREE.Vector3(0, 0, 2),
+    };
     expect(hemiAt([0, 0, 1], hemi)[0]).toBeCloseTo((0.654 * 0.6) / Math.PI, 6);
     expect(hemiAt([0, 0, -1], hemi)[0]).toBeCloseTo((0.0172 * 0.6) / Math.PI, 6);
-    expect(hemiAt([1, 0, 0], hemi)[0]).toBeCloseTo(((0.654 + 0.0172) / 2) * 0.6 / Math.PI, 6);
+    expect(hemiAt([1, 0, 0], hemi)[0]).toBeCloseTo((((0.654 + 0.0172) / 2) * 0.6) / Math.PI, 6);
   });
 
   it("looks queued behind a slow pt_env collapse into the newest one", async () => {
@@ -324,20 +394,32 @@ describe("native environment", () => {
     const sent: string[] = [];
     let looks = 0;
     let release!: () => void;
-    const gate = new Promise<void>((r) => { release = r; });
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
     let entered!: () => void;
-    const first = new Promise<void>((r) => { entered = r; });
+    const first = new Promise<void>((r) => {
+      entered = r;
+    });
     const call = async (cmd: string, args?: unknown) => {
-      if (cmd === "pt_look") { looks++; return held; }
+      if (cmd === "pt_look") {
+        looks++;
+        return held;
+      }
       if (cmd === "pt_env") {
         const key = header(args as Uint8Array).head.key;
         sent.push(key);
-        if (sent.length === 1) { entered(); await gate; }
+        if (sent.length === 1) {
+          entered();
+          await gate;
+        }
         held = key;
       }
       return null;
     };
-    const scene = new NativeScene(call, (e) => { throw e; });
+    const scene = new NativeScene(call, (e) => {
+      throw e;
+    });
     const done = [scene.look(roomLook("r1"))];
     await first;
     done.push(scene.look(roomLook("r2")), scene.look(roomLook("r3")));
@@ -351,11 +433,19 @@ describe("native environment", () => {
   it("cameras queued behind a slow call collapse into the newest, and each caller gets the reply of the call that carried it", async () => {
     const sent: number[][] = [];
     let release!: () => void;
-    const gate = new Promise<void>((r) => { release = r; });
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
     let entered!: () => void;
-    const first = new Promise<void>((r) => { entered = r; });
+    const first = new Promise<void>((r) => {
+      entered = r;
+    });
     const call = async (cmd: string, args?: unknown) => {
-      if (cmd === "pt_scene") { entered(); await gate; return []; }
+      if (cmd === "pt_scene") {
+        entered();
+        await gate;
+        return [];
+      }
       if (cmd !== "pt_camera") return null;
       sent.push((args as { camera: { eye: number[] } }).camera.eye);
       return 40 + sent.length;
@@ -366,7 +456,9 @@ describe("native environment", () => {
       c.lookAt(1.5, 2, -0.5);
       return c;
     };
-    const scene = new NativeScene(call, (e) => { throw e; });
+    const scene = new NativeScene(call, (e) => {
+      throw e;
+    });
     const alone = scene.camera(at(-4), null);
     expect(await alone).toBe(41);
     void scene.setMeshes([]);
@@ -382,7 +474,10 @@ describe("native environment", () => {
 
   it("an HDR look sends the panorama's key with its pixels", async () => {
     registerHdr("abc", "sky.hdr", { width: 8, height: 4, data: new Float32Array(8 * 4 * 4).fill(1) });
-    const look = { ...roomLook("room"), hdr: { hash: "abc", rotation: 0, exposure: 0, hemi: null, key: "hdr:abc|0.0|0.00|" } };
+    const look = {
+      ...roomLook("room"),
+      hdr: { hash: "abc", rotation: 0, exposure: 0, hemi: null, key: "hdr:abc|0.0|0.00|" },
+    };
     const { head } = header(envFrame(look)!.bytes());
     expect(head.up).toBe("z");
     expect(head.key).toBe("hdr:abc|0.0|0.00|");

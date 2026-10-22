@@ -92,10 +92,7 @@ function refusalReason(f: Feature): string {
  *  or a timeline selection) into what a features-mode pattern can repeat and
  *  what it can't. A candidate id absent from `features` (stale) is dropped
  *  silently, there is nothing left to say about a feature that is gone. */
-export function patternSources(
-  features: readonly Feature[],
-  candidateIds: readonly string[],
-): PatternSources {
+export function patternSources(features: readonly Feature[], candidateIds: readonly string[]): PatternSources {
   const byId = new Map(features.map((f) => [f.id, f] as const));
   const order = new Map(features.map((f, i) => [f.id, i] as const));
   const ids: string[] = [];
@@ -206,9 +203,7 @@ function madeABody(f: Feature): boolean {
 }
 
 export type PatternStart =
-  | { mode: "features"; ids: string[] }
-  | { mode: "body"; body: string | null }
-  | { mode: "refuse"; reason: string };
+  { mode: "features"; ids: string[] } | { mode: "body"; body: string | null } | { mode: "refuse"; reason: string };
 
 export interface PatternCandidates {
   ids: readonly string[];

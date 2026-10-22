@@ -28,7 +28,10 @@ function setup(reply: (point: Vec3) => FaceAnchorReply) {
     hoverFaceAt: () => 3,
     pickFaceForPressPull: () => ({
       selector: { kind: "face", by: "nearest", point: [hitAt.x, hitAt.y, hitAt.z] } as Selector,
-      faceId: 3, normal: new THREE.Vector3(0, 1, 0), anchor: hitAt.clone(), bodyId: "body1",
+      faceId: 3,
+      normal: new THREE.Vector3(0, 1, 0),
+      anchor: hitAt.clone(),
+      bodyId: "body1",
     }),
   } as unknown as Viewport;
   const asked: Vec3[] = [];
@@ -37,12 +40,27 @@ function setup(reply: (point: Vec3) => FaceAnchorReply) {
   const store = {
     nextId: () => `f${++n}`,
     setPreview: () => {},
-    addFeatures: (f: Feature[]) => { committed.push(f); },
-    faceAnchor: async (_s: Selector, _b: string | null, p: Vec3) => { asked.push(p); return reply(p); },
+    addFeatures: (f: Feature[]) => {
+      committed.push(f);
+    },
+    faceAnchor: async (_s: Selector, _b: string | null, p: Vec3) => {
+      asked.push(p);
+      return reply(p);
+    },
   } as unknown as DocumentStore;
   const pointer = (type: string) =>
     canvas.dispatchEvent(new PointerEvent(type, { clientX: 5, clientY: 5, button: 0, bubbles: true }));
-  return { canvas, store, vp, asked, committed, pointer, moveHit: (p: THREE.Vector3) => { hitAt = p; } };
+  return {
+    canvas,
+    store,
+    vp,
+    asked,
+    committed,
+    pointer,
+    moveHit: (p: THREE.Vector3) => {
+      hitAt = p;
+    },
+  };
 }
 
 const flush = () => new Promise((r) => queueMicrotask(() => r(undefined)));
@@ -62,7 +80,9 @@ describe("TextOnFaceTool", () => {
     const s = setup(() => ({ body: "body1", surface: "cylinder", at: [0.25, 0.5], normal: [0, 1, 0], fp: FP }));
     const t = new TextOnFaceTool(s.vp, s.store);
     let done: string | null = null;
-    t.start((id) => { done = id; });
+    t.start((id) => {
+      done = id;
+    });
     s.pointer("pointerdown");
     await flush();
     const panel = useToolPanelStore();
@@ -71,8 +91,15 @@ describe("TextOnFaceTool", () => {
     expect(s.committed).toHaveLength(1);
     const f = s.committed[0]![0] as Record<string, unknown>;
     expect(f).toMatchObject({
-      type: "textOnFace", text: "FUNDA", height: 8, depth: 1, operation: "join", body: "body1",
-      face: { kind: "face", by: "match", fp: FP, body: "body1" }, at: [0.25, 0.5], point: [0, 20, 0],
+      type: "textOnFace",
+      text: "FUNDA",
+      height: 8,
+      depth: 1,
+      operation: "join",
+      body: "body1",
+      face: { kind: "face", by: "match", fp: FP, body: "body1" },
+      at: [0.25, 0.5],
+      point: [0, 20, 0],
     });
     expect(done).toBe(f.id);
     expect(t.active).toBe(false);
@@ -92,7 +119,10 @@ describe("TextOnFaceTool", () => {
     s.pointer("pointermove");
     s.pointer("pointerup");
     await flush();
-    expect(s.asked).toEqual([[1, 2, 10], [6, -5, 10]]);
+    expect(s.asked).toEqual([
+      [1, 2, 10],
+      [6, -5, 10],
+    ]);
     useToolPanelStore().commitText({ text: "A", height: 5, style: "bold", align: "left", angle: 0 });
     const f = s.committed[0]![0] as Record<string, unknown>;
     expect(f.face).toEqual({ kind: "face", by: "nearest", point: [6, -5, 10], body: "body1" });

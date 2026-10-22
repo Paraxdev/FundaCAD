@@ -19,10 +19,14 @@ const APP = process.env.SC_URL || "http://localhost:5173/";
 const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = process.env.SC_OUT || path.join(os.tmpdir(), "viewmodes_e2e");
 const N = +(process.argv[2] || 64);
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 fs.mkdirSync(OUT, { recursive: true });
 
-const PERF_TIP = "To avoid crashes or unintentional freezes path tracing has been turned off. To re-enable, turn off performance mode.";
+const PERF_TIP =
+  "To avoid crashes or unintentional freezes path tracing has been turned off. To re-enable, turn off performance mode.";
 
 let failures = 0;
 function check(ok, what, detail) {
@@ -42,7 +46,9 @@ function check(ok, what, detail) {
     await page.addInitScript((ws) => {
       const W = window.WebSocket;
       window.WebSocket = class extends W {
-        constructor(u, p) { super(String(u).replace(":8765", `:${ws}`), p); }
+        constructor(u, p) {
+          super(String(u).replace(":8765", `:${ws}`), p);
+        }
       };
     }, ENGINE_PORT);
     await page.addInitScript(() => {
@@ -51,10 +57,17 @@ function check(ok, what, detail) {
       const q = globalThis.GPUQueue?.prototype;
       if (q) {
         const submit = q.submit;
-        q.submit = function (...a) { window.__gpuSubmits++; return submit.apply(this, a); };
+        q.submit = function (...a) {
+          window.__gpuSubmits++;
+          return submit.apply(this, a);
+        };
       }
       const raf = window.requestAnimationFrame.bind(window);
-      window.requestAnimationFrame = (cb) => raf((t) => { window.__rafs++; cb(t); });
+      window.requestAnimationFrame = (cb) =>
+        raf((t) => {
+          window.__rafs++;
+          cb(t);
+        });
       const click = HTMLAnchorElement.prototype.click;
       HTMLAnchorElement.prototype.click = function () {
         if (this.download) window.__saved = { name: this.download, href: this.href };
@@ -77,13 +90,24 @@ function check(ok, what, detail) {
     });
 
     await page.evaluate(async (N) => {
-      const s = window.store, v = window.viewport;
+      const s = window.store,
+        v = window.viewport;
       const side = Math.ceil(Math.sqrt(N));
       const features = [];
       for (let i = 0; i < N; i++) {
         if (i % 2) features.push({ id: `c${i}`, type: "cylinder", radius: 8, height: 20 });
         else features.push({ id: `c${i}`, type: "sphere", radius: 9 });
-        features.push({ id: `m${i}`, type: "move", bodies: [`body${i + 1}`], dx: (i % side) * 25, dy: Math.floor(i / side) * 25, dz: 0, rx: 0, ry: 0, rz: 0 });
+        features.push({
+          id: `m${i}`,
+          type: "move",
+          bodies: [`body${i + 1}`],
+          dx: (i % side) * 25,
+          dy: Math.floor(i / side) * 25,
+          dz: 0,
+          rx: 0,
+          ry: 0,
+          rz: 0,
+        });
       }
       s.load(JSON.stringify({ parameters: {}, features }));
       const t0 = performance.now();
@@ -91,36 +115,51 @@ function check(ok, what, detail) {
         if (performance.now() - t0 > 60000) throw new Error("build timed out");
         await new Promise((r) => setTimeout(r, 300));
       }
-      const ids = (off) => Array.from({ length: N }, (_, i) => i).filter((i) => i % 8 === off).map((i) => `body${i + 1}`);
+      const ids = (off) =>
+        Array.from({ length: N }, (_, i) => i)
+          .filter((i) => i % 8 === off)
+          .map((i) => `body${i + 1}`);
       s.setBodiesMaterial(ids(0), s.addMaterial({ name: "glass", color: "#9fd8ff", opacity: 0.3, roughness: 0.05 }));
       s.setBodiesMaterial(ids(3), s.addMaterial({ name: "emit", color: "#ff7a2a", emissive: 0.8 }));
-      s.setBodiesMaterial(ids(5), s.addMaterial({ name: "coat", color: "#c03040", clearcoat: 1, metalness: 0.2, roughness: 0.3 }));
-      s.setFacesMaterial([0, 1].map((face) => ({ body: "body2", face })), s.addMaterial({ name: "paint", color: "#2f6bff" }));
+      s.setBodiesMaterial(
+        ids(5),
+        s.addMaterial({ name: "coat", color: "#c03040", clearcoat: 1, metalness: 0.2, roughness: 0.3 }),
+      );
+      s.setFacesMaterial(
+        [0, 1].map((face) => ({ body: "body2", face })),
+        s.addMaterial({ name: "paint", color: "#2f6bff" }),
+      );
       await new Promise((r) => setTimeout(r, 3000));
       window.__fundacad.handleAction("fit");
       await new Promise((r) => setTimeout(r, 1500));
     }, N);
     await page.mouse.move(5, 5);
 
-    const state = () => page.evaluate(() => {
-      const v = window.viewport;
-      const pressed = [...document.querySelectorAll("[data-view-mode]")]
-        .filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.dataset.viewMode);
-      const pt = document.querySelector('[data-view-mode="pathtraced"]');
-      return {
-        mode: v.viewMode, post: v.scene.post.viewMode, pressed,
-        ptTitle: pt?.getAttribute("title"), ptDisabled: pt?.getAttribute("aria-disabled"),
-      };
-    });
-    const materialIds = () => page.evaluate(() => {
-      window.__vmMats ??= new WeakMap();
-      let n = 0;
-      return window.viewport.bodyMeshes.map((b) => {
-        const m = b.mesh.material;
-        if (!window.__vmMats.has(m)) window.__vmMats.set(m, ++n + 1000 * Math.random());
-        return [b.id, window.__vmMats.get(m), Array.isArray(m) ? m.map((x) => x.type).join("+") : m.type];
+    const state = () =>
+      page.evaluate(() => {
+        const v = window.viewport;
+        const pressed = [...document.querySelectorAll("[data-view-mode]")]
+          .filter((b) => b.getAttribute("aria-pressed") === "true")
+          .map((b) => b.dataset.viewMode);
+        const pt = document.querySelector('[data-view-mode="pathtraced"]');
+        return {
+          mode: v.viewMode,
+          post: v.scene.post.viewMode,
+          pressed,
+          ptTitle: pt?.getAttribute("title"),
+          ptDisabled: pt?.getAttribute("aria-disabled"),
+        };
       });
-    });
+    const materialIds = () =>
+      page.evaluate(() => {
+        window.__vmMats ??= new WeakMap();
+        let n = 0;
+        return window.viewport.bodyMeshes.map((b) => {
+          const m = b.mesh.material;
+          if (!window.__vmMats.has(m)) window.__vmMats.set(m, ++n + 1000 * Math.random());
+          return [b.id, window.__vmMats.get(m), Array.isArray(m) ? m.map((x) => x.type).join("+") : m.type];
+        });
+      });
     const snap = () => page.evaluate(() => window.viewport.screenshotPNG());
     const shotBar = (name) => page.locator(".view-modes").screenshot({ path: path.join(OUT, name) });
     const shotView = async (name) => {
@@ -132,7 +171,11 @@ function check(ok, what, detail) {
     check(s.mode === "realtime" && s.pressed.join() === "realtime", "opens on Realtime", s);
     await page.waitForFunction(() => window.viewport.renderTier.webgpu !== undefined, null, { timeout: 10000 });
     s = await state();
-    check(s.ptDisabled !== "true" && s.ptTitle === "Path traced (Z)", "Path traced is offered on a WebGPU Chrome", s.ptTitle);
+    check(
+      s.ptDisabled !== "true" && s.ptTitle === "Path traced (Z)",
+      "Path traced is offered on a WebGPU Chrome",
+      s.ptTitle,
+    );
     const titles = await page.$$eval("[data-view-mode]", (bs) => bs.map((b) => b.getAttribute("title")));
     check(titles[0] === "Matcap (Z)" && titles[1] === "Realtime (Z)", "button titles", titles);
     await shotBar("buttons-realtime.png");
@@ -144,22 +187,48 @@ function check(ok, what, detail) {
     await page.click('[data-view-mode="pathtraced"]');
     s = await state();
     check(s.mode === "pathtraced" && s.post === "pathtraced", "Path traced button", s);
-    const traced = await page.waitForFunction(() => {
-      const t = window.viewport.traceStatus;
-      return t.samples >= 64 && t.shown ? t : null;
-    }, null, { timeout: 90000, polling: 100 }).then((h) => h.jsonValue(), (e) => ({ error: String(e) }));
+    const traced = await page
+      .waitForFunction(
+        () => {
+          const t = window.viewport.traceStatus;
+          return t.samples >= 64 && t.shown ? t : null;
+        },
+        null,
+        { timeout: 90000, polling: 100 },
+      )
+      .then(
+        (h) => h.jsonValue(),
+        (e) => ({ error: String(e) }),
+      );
     check(traced.samples >= 64 && traced.shown, "Path traced reaches 64 samples and shows them", traced);
     await shotView("pathtraced-64.png");
-    const capped = await page.waitForFunction(() => (window.viewport.traceStatus.state === "done" ? window.viewport.traceStatus : null), null, { timeout: 120000, polling: 200 })
-      .then((h) => h.jsonValue(), (e) => ({ error: String(e) }));
+    const capped = await page
+      .waitForFunction(
+        () => (window.viewport.traceStatus.state === "done" ? window.viewport.traceStatus : null),
+        null,
+        { timeout: 120000, polling: 200 },
+      )
+      .then(
+        (h) => h.jsonValue(),
+        (e) => ({ error: String(e) }),
+      );
     check(capped.state === "done" && capped.samples >= 256, "the tracer stops at the sample cap", capped);
     const status = () => page.evaluate(() => window.viewport.traceStatus);
-    const setDenoise = (v) => page.evaluate(async (d) => (await import("/src/ui/renderPrefs.ts")).setRenderPref("denoise", d), v);
-    const waitDenoised = () => page.waitForFunction(() => window.viewport.traceStatus.denoised, null, { timeout: 60000, polling: 100 })
-      .then(() => status(), (e) => ({ error: String(e) }));
+    const setDenoise = (v) =>
+      page.evaluate(async (d) => (await import("/src/ui/renderPrefs.ts")).setRenderPref("denoise", d), v);
+    const waitDenoised = () =>
+      page
+        .waitForFunction(() => window.viewport.traceStatus.denoised, null, { timeout: 60000, polling: 100 })
+        .then(
+          () => status(),
+          (e) => ({ error: String(e) }),
+        );
     const t0 = Date.now();
     const den = await waitDenoised();
-    check(den.denoised === true && den.state === "done", "the final denoise lands at the cap", { ...den, ms: Date.now() - t0 });
+    check(den.denoised === true && den.state === "done", "the final denoise lands at the cap", {
+      ...den,
+      ms: Date.now() - t0,
+    });
     await shotView("pathtraced-256-denoised.png");
     await setDenoise("off");
     await page.waitForTimeout(300);
@@ -169,7 +238,11 @@ function check(ok, what, detail) {
     // The tracer restarts on any camera or scene change; restart() is the same reset without moving the view.
     const at16 = async (name) => {
       await page.evaluate(() => window.viewport.trace.restart());
-      const h = await page.waitForFunction(() => (window.viewport.traceStatus.samples >= 16 ? window.viewport.traceStatus : null), null, { timeout: 60000, polling: 16 });
+      const h = await page.waitForFunction(
+        () => (window.viewport.traceStatus.samples >= 16 ? window.viewport.traceStatus : null),
+        null,
+        { timeout: 60000, polling: 16 },
+      );
       const st = await h.jsonValue();
       await page.screenshot({ path: path.join(OUT, name), clip: { x: 0, y: 40, width: 1400, height: 860 } });
       return st;
@@ -179,7 +252,10 @@ function check(ok, what, detail) {
     console.log("filtered at", (await at16("pathtraced-16-filtered.png")).samples, "samples");
     const again = await waitDenoised();
     check(again.denoised === true, "the denoise runs again after a restart", again);
-    check(JSON.stringify(await materialIds()) === JSON.stringify(before), "body materials are the same objects in Path traced");
+    check(
+      JSON.stringify(await materialIds()) === JSON.stringify(before),
+      "body materials are the same objects in Path traced",
+    );
 
     const counters = () => page.evaluate(() => ({ submits: window.__gpuSubmits, rafs: window.__rafs }));
     await page.waitForTimeout(500);
@@ -187,12 +263,19 @@ function check(ok, what, detail) {
     await page.waitForTimeout(2000);
     const c1 = await counters();
     // The viewport's own loop keeps its rAF, drawing only on demand; the tracer must add no GPU work.
-    check(c1.submits - c0.submits === 0, "no GPU work at the cap", { submits: c1.submits - c0.submits, rafs: c1.rafs - c0.rafs });
+    check(c1.submits - c0.submits === 0, "no GPU work at the cap", {
+      submits: c1.submits - c0.submits,
+      rafs: c1.rafs - c0.rafs,
+    });
     const cost = await page.evaluate(() => {
       const t = window.viewport.trace.backend?.tracer;
       return { budget: t?.frameBudget, renderScale: t?.renderScale, cap: t?.maxSamples };
     });
-    check(cost.renderScale === 0.75 && cost.cap === 256, "traces at three quarters of the canvas up to 256 samples", cost);
+    check(
+      cost.renderScale === 0.75 && cost.cap === 256,
+      "traces at three quarters of the canvas up to 256 samples",
+      cost,
+    );
 
     await page.evaluate(async () => (await import("/src/ui/workspace.ts")).setWorkspace("render"));
     await page.click('[data-view-mode="pathtraced"]');
@@ -200,53 +283,98 @@ function check(ok, what, detail) {
     await page.click('.rd-tab[data-tab="camera"]');
     await page.click('.rd-chip[data-scale="1"]');
     await page.click('.rd-chip[data-samples="64"]');
-    const offer = await page.evaluate(() => ({ traced: document.querySelector("#rd-traced")?.checked, size: window.viewport.tracedPictureSize(1) }));
+    const offer = await page.evaluate(() => ({
+      traced: document.querySelector("#rd-traced")?.checked,
+      size: window.viewport.tracedPictureSize(1),
+    }));
     check(offer.traced === true, "the Camera tab offers a traced picture in Path traced", offer);
     const p0 = Date.now();
     await page.click("#rd-take-picture");
     await page.waitForFunction(() => window.viewport.traceStatus.picturing, null, { timeout: 10000, polling: 16 });
-    const during = await page.evaluate(() => ({ shown: window.viewport.traceStatus.shown, button: document.querySelector("#rd-take-picture")?.textContent }));
+    const during = await page.evaluate(() => ({
+      shown: window.viewport.traceStatus.shown,
+      button: document.querySelector("#rd-take-picture")?.textContent,
+    }));
     await page.waitForFunction(() => !!window.__saved, null, { timeout: 120000, polling: 100 });
     const pictureMs = Date.now() - p0;
     const pic = await page.evaluate(async () => {
-      const load = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+      const load = (src) =>
+        new Promise((res, rej) => {
+          const i = new Image();
+          i.onload = () => res(i);
+          i.onerror = rej;
+          i.src = src;
+        });
       const pixels = (img) => {
         const c = document.createElement("canvas");
-        c.width = img.width; c.height = img.height;
+        c.width = img.width;
+        c.height = img.height;
         const g = c.getContext("2d");
         g.drawImage(img, 0, 0);
         return g.getImageData(0, 0, c.width, c.height).data;
       };
       const traced = await load(window.__saved.href);
       const raster = await load(window.viewport.renderStill(1, { realtime: true }));
-      const a = pixels(traced), b = pixels(raster);
-      let sum = 0, sq = 0, diff = 0;
+      const a = pixels(traced),
+        b = pixels(raster);
+      let sum = 0,
+        sq = 0,
+        diff = 0;
       const n = a.length / 4;
       for (let i = 0; i < a.length; i += 4) {
         const l = (a[i] + a[i + 1] + a[i + 2]) / 3;
-        sum += l; sq += l * l;
+        sum += l;
+        sq += l * l;
         if (a.length === b.length) diff += Math.abs(l - (b[i] + b[i + 1] + b[i + 2]) / 3);
       }
       const mean = sum / n;
       return {
-        name: window.__saved.name, w: traced.width, h: traced.height, rw: raster.width, rh: raster.height,
-        mean: +mean.toFixed(1), sd: +Math.sqrt(sq / n - mean * mean).toFixed(1), diffFromRaster: +(diff / n).toFixed(2),
+        name: window.__saved.name,
+        w: traced.width,
+        h: traced.height,
+        rw: raster.width,
+        rh: raster.height,
+        mean: +mean.toFixed(1),
+        sd: +Math.sqrt(sq / n - mean * mean).toFixed(1),
+        diffFromRaster: +(diff / n).toFixed(2),
       };
     });
     const base64 = await page.evaluate(() => window.__saved.href.slice(window.__saved.href.indexOf(",") + 1));
     fs.writeFileSync(path.join(OUT, "picture-traced.png"), Buffer.from(base64, "base64"));
-    const after = await page.waitForFunction(() => (window.viewport.traceStatus.samples > 0 && !window.viewport.traceStatus.picturing ? window.viewport.traceStatus : null), null, { timeout: 30000, polling: 100 })
-      .then((h) => h.jsonValue(), (e) => ({ error: String(e) }));
-    check(during.shown === false && /Cancel/.test(during.button || ""), "the viewport shows Realtime while the picture traces", during);
-    check(pic.w === offer.size.width && pic.h === offer.size.height && pic.sd > 5 && pic.diffFromRaster > 1,
-      "a traced picture is saved at the view's size and is not the raster still", { ...pic, ms: pictureMs });
+    const after = await page
+      .waitForFunction(
+        () =>
+          window.viewport.traceStatus.samples > 0 && !window.viewport.traceStatus.picturing
+            ? window.viewport.traceStatus
+            : null,
+        null,
+        { timeout: 30000, polling: 100 },
+      )
+      .then(
+        (h) => h.jsonValue(),
+        (e) => ({ error: String(e) }),
+      );
+    check(
+      during.shown === false && /Cancel/.test(during.button || ""),
+      "the viewport shows Realtime while the picture traces",
+      during,
+    );
+    check(
+      pic.w === offer.size.width && pic.h === offer.size.height && pic.sd > 5 && pic.diffFromRaster > 1,
+      "a traced picture is saved at the view's size and is not the raster still",
+      { ...pic, ms: pictureMs },
+    );
     check(after.samples > 0 && after.shown, "the viewport traces again after the picture", after);
     await page.click('[data-view-mode="realtime"]');
     await page.evaluate(async () => (await import("/src/ui/workspace.ts")).setWorkspace("model"));
     await page.evaluate(async () => (await import("/src/ui/renderPrefs.ts")).setRenderPref("performanceMode", true));
     await page.waitForTimeout(300);
     s = await state();
-    check(s.mode === "realtime" && s.ptDisabled === "true" && s.ptTitle?.startsWith(PERF_TIP), "performance mode drops Path traced to Realtime", s);
+    check(
+      s.mode === "realtime" && s.ptDisabled === "true" && s.ptTitle?.startsWith(PERF_TIP),
+      "performance mode drops Path traced to Realtime",
+      s,
+    );
     await page.click('[data-view-mode="pathtraced"]');
     await page.waitForTimeout(300);
     s = await state();
@@ -269,15 +397,27 @@ function check(ok, what, detail) {
     check(s.mode === "matcap" && s.post === "matcap" && s.pressed.join() === "matcap", "Matcap button", s);
     await shotBar("buttons-matcap.png");
     await shotView("matcap.png");
-    check(JSON.stringify(await materialIds()) === JSON.stringify(before), "body materials are the same objects in Matcap");
+    check(
+      JSON.stringify(await materialIds()) === JSON.stringify(before),
+      "body materials are the same objects in Matcap",
+    );
 
     const timing = await page.evaluate(() => {
-      const v = window.viewport, r = v.scene.renderer, gl = r.getContext(), px = new Uint8Array(4);
+      const v = window.viewport,
+        r = v.scene.renderer,
+        gl = r.getContext(),
+        px = new Uint8Array(4);
       const sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
       const time = (fn, n = 60) => {
-        fn(); sync();
+        fn();
+        sync();
         const a = [];
-        for (let i = 0; i < n; i++) { const t = performance.now(); fn(); sync(); a.push(performance.now() - t); }
+        for (let i = 0; i < n; i++) {
+          const t = performance.now();
+          fn();
+          sync();
+          a.push(performance.now() - t);
+        }
         a.sort((x, y) => x - y);
         return { median: +a[a.length >> 1].toFixed(2), max: +a[a.length - 1].toFixed(2) };
       };
@@ -309,11 +449,17 @@ function check(ok, what, detail) {
     await page.keyboard.press("Shift+Z");
     s = await state();
     check(s.mode === "realtime", "Shift+Z goes back", s.mode);
-    check(JSON.stringify(await materialIds()) === JSON.stringify(before), "body materials are the same objects back in Realtime");
+    check(
+      JSON.stringify(await materialIds()) === JSON.stringify(before),
+      "body materials are the same objects back in Realtime",
+    );
     const rt2 = await snap();
     check(rt1 === rt2, "Realtime is byte identical after a trip through Matcap", { a: rt1.length, b: rt2.length });
     const programsAfter = await page.evaluate(() => window.viewport.scene.renderer.info.programs.length);
-    check(programsAfter - programsBefore <= 1, "one matcap program, nothing recompiled", { programsBefore, programsAfter });
+    check(programsAfter - programsBefore <= 1, "one matcap program, nothing recompiled", {
+      programsBefore,
+      programsAfter,
+    });
 
     await page.click('[data-view-mode="matcap"]');
     await page.evaluate(() => window.__fundacad.handleAction("toggle-xray"));
@@ -344,7 +490,9 @@ function check(ok, what, detail) {
     await open();
     s = await state();
     check(s.mode === "matcap", "Matcap is kept across a reload", s.mode);
-    await page.evaluate(async () => (await import("/src/ui/renderPrefs.ts")).setRenderPref("viewModeModel", "realtime"));
+    await page.evaluate(async () =>
+      (await import("/src/ui/renderPrefs.ts")).setRenderPref("viewModeModel", "realtime"),
+    );
     console.log(`screenshots in ${OUT}`);
   } finally {
     await browser.close();

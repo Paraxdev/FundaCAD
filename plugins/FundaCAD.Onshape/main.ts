@@ -12,7 +12,15 @@ import { PLUGIN_ID } from "./native";
 export async function activate(e: Engine): Promise<() => void> {
   const run = () => void import("./flow").then((m) => m.importFromOnshape(e.store, e.geometry));
   return contribute(PLUGIN_ID, {
-    menus: [{ menu: "File", items: [{ separator: true, label: "" }, { label: "Import from Onshape link\u2026", onClick: run }] }],
+    menus: [
+      {
+        menu: "File",
+        items: [
+          { separator: true, label: "" },
+          { label: "Import from Onshape link\u2026", onClick: run },
+        ],
+      },
+    ],
     overlays: [LinkHost],
     settings: [{ key: "onshape", component: KeysSection }],
   });

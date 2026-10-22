@@ -23,7 +23,10 @@ const VITE = (process.env.SC_VITE || "http://localhost:5173").replace(/\/$/, "")
 const OUT = path.resolve(process.argv[2] || "browser_save_geometry_shots");
 const FIXTURE = path.resolve(__dirname, "../tests/fixtures/asm_colors.step");
 const TOKEN = "savegeom";
-if (!ENGINE) { console.error("set SC_ENGINE to a fundacad-engine binary"); process.exit(1); }
+if (!ENGINE) {
+  console.error("set SC_ENGINE to a fundacad-engine binary");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -31,11 +34,15 @@ const check = (name, ok, detail) => {
 };
 
 // The engine prints the port it was given, so an ephemeral one is picked here.
-const freePort = () => new Promise((resolve, reject) => {
-  const srv = net.createServer();
-  srv.once("error", reject);
-  srv.listen(0, "127.0.0.1", () => { const { port } = srv.address(); srv.close(() => resolve(port)); });
-});
+const freePort = () =>
+  new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.once("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
 
 async function startEngine(tag) {
   const listen = await freePort();
@@ -56,11 +63,17 @@ async function startEngine(tag) {
     const read = (d) => {
       buf += d;
       const m = /LISTENING (\d+)/.exec(buf);
-      if (m) { clearTimeout(timer); resolve(Number(m[1])); }
+      if (m) {
+        clearTimeout(timer);
+        resolve(Number(m[1]));
+      }
     };
     proc.stdout.on("data", read);
     proc.stderr.on("data", read);
-    proc.on("exit", (c) => { clearTimeout(timer); reject(new Error(`engine ${tag} exited ${c}: ${buf}`)); });
+    proc.on("exit", (c) => {
+      clearTimeout(timer);
+      reject(new Error(`engine ${tag} exited ${c}: ${buf}`));
+    });
   });
   return { proc, root, port };
 }
@@ -76,19 +89,30 @@ function stopEngine(e) {
 
 async function openApp(page, port) {
   await page.goto(`${VITE}/?engine=${port}&token=${TOKEN}`);
-  await page.waitForFunction(() => !!window.store && !!window.geometry && window.geometry.connected, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.store && !!window.geometry && window.geometry.connected, null, {
+    timeout: 60000,
+  });
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(300); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(300);
+  }
 }
 
-const idle = (page) => page.waitForFunction(
-  () => !window.store.buildState.building && !window.store.busy?.active, null, { timeout: 120000 },
-);
+const idle = (page) =>
+  page.waitForFunction(() => !window.store.buildState.building && !window.store.busy?.active, null, {
+    timeout: 120000,
+  });
 
-const bodies = (page) => page.evaluate(() => (window.store.buildState.result?.bodies ?? []).map((b) => ({
-  name: window.store.bodyName(b.id) ?? b.name,
-  color: window.store.bodyMaterialOf(b.id)?.color ?? null,
-})).sort((a, b) => a.name.localeCompare(b.name)));
+const bodies = (page) =>
+  page.evaluate(() =>
+    (window.store.buildState.result?.bodies ?? [])
+      .map((b) => ({
+        name: window.store.bodyName(b.id) ?? b.name,
+        color: window.store.bodyMaterialOf(b.id)?.color ?? null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  );
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
@@ -101,9 +125,14 @@ const bodies = (page) => page.evaluate(() => (window.store.buildState.result?.bo
     browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
     const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, acceptDownloads: true });
     const page = await context.newPage();
-    page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+    page.on("pageerror", (e) => {
+      console.error("PAGE ERROR:", e.message);
+      failures++;
+    });
     const errors = [];
-    page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
 
     await openApp(page, portA);
     const imported = await page.evaluate(async (file) => {
@@ -115,8 +144,11 @@ const bodies = (page) => page.evaluate(() => (window.store.buildState.result?.bo
     await idle(page);
     const before = await bodies(page);
     console.log("  imported bodies:", JSON.stringify(before));
-    check("the import landed and its parts wear colours",
-      !!imported && before.length >= 3 && before.filter((b) => b.color).length >= 3, `geom ${imported}`);
+    check(
+      "the import landed and its parts wear colours",
+      !!imported && before.length >= 3 && before.filter((b) => b.color).length >= 3,
+      `geom ${imported}`,
+    );
 
     const [download] = await Promise.all([
       page.waitForEvent("download", { timeout: 60000 }),
@@ -126,16 +158,20 @@ const bodies = (page) => page.evaluate(() => (window.store.buildState.result?.bo
     await download.saveAs(saved);
     const file = JSON.parse(fs.readFileSync(saved, "utf8"));
     const keys = Object.keys(file);
-    check("the download carries the import's geometry, as the last key",
+    check(
+      "the download carries the import's geometry, as the last key",
       keys.at(-1) === "geometry" && typeof file.geometry?.[imported] === "string",
-      `${fs.statSync(saved).size} bytes, keys ${keys.join(",")}`);
+      `${fs.statSync(saved).size} bytes, keys ${keys.join(",")}`,
+    );
 
     await page.goto("about:blank");
     await stopEngine(first);
     second = await startEngine("b");
     const portB = await second.port;
-    check("the second engine starts with no blobs",
-      !fs.existsSync(path.join(second.root, "blobs")) || fs.readdirSync(path.join(second.root, "blobs")).length === 0);
+    check(
+      "the second engine starts with no blobs",
+      !fs.existsSync(path.join(second.root, "blobs")) || fs.readdirSync(path.join(second.root, "blobs")).length === 0,
+    );
 
     await openApp(page, portB);
     errors.length = 0;
@@ -144,16 +180,23 @@ const bodies = (page) => page.evaluate(() => (window.store.buildState.result?.bo
       page.evaluate(() => window.__fundacad.handleAction("open")),
     ]);
     await chooser.setFiles(saved);
-    await page.waitForFunction(() => window.store.document.features.some((f) => f.type === "import"), null, { timeout: 60000 });
+    await page.waitForFunction(() => window.store.document.features.some((f) => f.type === "import"), null, {
+      timeout: 60000,
+    });
     await page.evaluate(() => window.store.rebuildNow());
     await idle(page);
     const after = await bodies(page);
     console.log("  reopened bodies:", JSON.stringify(after));
-    check("the reopened file builds the same bodies in the same colours",
-      JSON.stringify(after) === JSON.stringify(before));
+    check(
+      "the reopened file builds the same bodies in the same colours",
+      JSON.stringify(after) === JSON.stringify(before),
+    );
     const blobs = fs.readdirSync(path.join(second.root, "blobs"));
-    check("the second engine got the import's bytes from the file",
-      blobs.some((n) => n.startsWith(imported)), JSON.stringify(blobs));
+    check(
+      "the second engine got the import's bytes from the file",
+      blobs.some((n) => n.startsWith(imported)),
+      JSON.stringify(blobs),
+    );
     const buildError = await page.evaluate(() => window.store.buildState.error?.message ?? null);
     check("nothing failed to build", !buildError, String(buildError));
     check("no error was shown", errors.length === 0, JSON.stringify(errors));

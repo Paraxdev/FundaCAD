@@ -6,13 +6,7 @@ import type { DocumentStore } from "../document/store";
 import type { GeometryBackend } from "../geometry/client";
 import { asFeature, type Feature } from "../types";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS } from "./documentExt";
-import {
-  baseName,
-  insertFundaDocument,
-  staleLinks,
-  updateFundaLink,
-  type FundaInsertMode,
-} from "./fundaInsert";
+import { baseName, insertFundaDocument, staleLinks, updateFundaLink, type FundaInsertMode } from "./fundaInsert";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
@@ -75,7 +69,10 @@ export async function insertDocumentFromDialog(store: DocumentStore, geometry: G
 
 /** Re-read one linked step from its file. */
 export async function refreshLink(store: DocumentStore, geometry: GeometryBackend, featureId: string) {
-  const f = asFeature(store.document.features.find((x) => x.id === featureId), "import");
+  const f = asFeature(
+    store.document.features.find((x) => x.id === featureId),
+    "import",
+  );
   if (!f?.link) return;
   const text = await readDocumentText(f.link.path);
   if (text === null) {
@@ -99,7 +96,10 @@ export async function checkLinks(store: DocumentStore, geometry: GeometryBackend
     const names = changed.map((id) => nameOf(store, id)).join(", ");
     await say(`${names} changed since ${changed.length === 1 ? "it was" : "they were"} linked`, "info", {
       label: "Update",
-      onClick: () => void (async () => { for (const id of changed) await refreshLink(store, geometry, id); })(),
+      onClick: () =>
+        void (async () => {
+          for (const id of changed) await refreshLink(store, geometry, id);
+        })(),
     });
   }
   if (missing.length) {
@@ -108,7 +108,10 @@ export async function checkLinks(store: DocumentStore, geometry: GeometryBackend
 }
 
 function nameOf(store: DocumentStore, id: string): string {
-  const f = asFeature(store.document.features.find((x) => x.id === id), "import");
+  const f = asFeature(
+    store.document.features.find((x) => x.id === id),
+    "import",
+  );
   return f?.name || (f?.link ? baseName(f.link.path) : id);
 }
 

@@ -2,8 +2,15 @@ import { describe, expect, it } from "vitest";
 import { STILL_MS, TraceGeneration, traceState, type TraceInputs } from "../../src/viewport/pathtrace/state";
 
 const base: TraceInputs = {
-  mode: "pathtraced", visible: true, stillMs: 1000, sectioned: false, xray: false,
-  wireframe: false, sketchOpen: false, samples: 3, cap: 256,
+  mode: "pathtraced",
+  visible: true,
+  stillMs: 1000,
+  sectioned: false,
+  xray: false,
+  wireframe: false,
+  sketchOpen: false,
+  samples: 3,
+  cap: 256,
 };
 
 describe("when the tracer runs", () => {

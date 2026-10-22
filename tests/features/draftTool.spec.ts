@@ -56,9 +56,15 @@ function fakeStore() {
     },
     addFeature: (f: Feature) => added.push(f),
     verifyCommit: (id: string) => verified.push(id),
-    get hasPreview() { return state.hasPreview; },
-    get previewError() { return state.building ? null : state.previewError; },
-    get buildState() { return { building: state.building, result: null }; },
+    get hasPreview() {
+      return state.hasPreview;
+    },
+    get previewError() {
+      return state.building ? null : state.previewError;
+    },
+    get buildState() {
+      return { building: state.building, result: null };
+    },
   };
   return { store: store as unknown as DocumentStore, state, added, verified };
 }
@@ -74,7 +80,10 @@ describe("DraftTool Enter", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     frames = [];
-    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => { frames.push(fn); return frames.length; });
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+      frames.push(fn);
+      return frames.length;
+    });
     vi.stubGlobal("cancelAnimationFrame", () => {});
   });
   afterEach(() => {
@@ -86,7 +95,9 @@ describe("DraftTool Enter", () => {
     const s = fakeStore();
     const t = new DraftTool(fakeViewport(), s.store);
     let done: string | null | undefined;
-    t.start((id) => { done = id; });
+    t.start((id) => {
+      done = id;
+    });
     typeAngle("5")();
     expect(s.added).toHaveLength(0);
     expect(done).toBeUndefined();
@@ -129,7 +140,9 @@ describe("DraftTool Enter", () => {
       const s = fakeStore();
       const t = new DraftTool(fakeViewport(), s.store);
       let done: string | null | undefined;
-      t.start((id) => { done = id; });
+      t.start((id) => {
+        done = id;
+      });
       refuse45(s);
       const enter = typeAngle("10");
       if (!enterBeforeFrame) flushFrame();

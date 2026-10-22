@@ -8,7 +8,15 @@
 // the change somebody wants to undo under the positions they dragged through.
 
 import { computed, ref } from "vue";
-import { checkResults, clampToControl, configurationDrift, toast, useBrowserStore, useDocValue, useEngine } from "fundacad";
+import {
+  checkResults,
+  clampToControl,
+  configurationDrift,
+  toast,
+  useBrowserStore,
+  useDocValue,
+  useEngine,
+} from "fundacad";
 import { Icon } from "fundacad/ui";
 import { setupOpen } from "./state";
 import { tuneGroups, type TuneRow } from "./view";
@@ -68,7 +76,8 @@ const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit"
         title="Parameter setup: controls, groups, configurations and checks"
         style="background: none; border: none; color: inherit; cursor: pointer; padding: 0 4px; margin-right: 6px"
         @click.stop="setupOpen = true"
-      ><Icon name="properties" :size="14" /></button>
+        ><Icon name="properties" :size="14"
+      /></button>
       <span class="tree-count">{{ count }}</span>
     </div>
 
@@ -88,7 +97,8 @@ const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit"
           v-if="activeId && drift.length"
           style="opacity: 0.6; font-size: 11px"
           :title="`Changed since it was applied: ${drift.join(', ')}`"
-        >modified</span>
+          >modified</span
+        >
       </div>
 
       <div
@@ -121,7 +131,7 @@ const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit"
             class="feature-row tree-child xp-row"
             :data-param="row.name"
             :style="{ ...rowStyle, paddingLeft: g.id === null ? undefined : '34px' }"
-            :title="row.problem ? `${row.name}: ${row.problem}` : row.def.comment ?? row.name"
+            :title="row.problem ? `${row.name}: ${row.problem}` : (row.def.comment ?? row.name)"
           >
             <span :style="{ ...nameStyle, color: row.problem ? '#e24a3b' : undefined }">{{ row.name }}</span>
 
@@ -147,7 +157,8 @@ const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit"
                 v-if="!row.control.choices.some((c) => c.value === row.def.value)"
                 :value="String(row.def.value)"
                 disabled
-              >{{ row.def.value }} (not listed)</option>
+                >{{ row.def.value }} (not listed)</option
+              >
             </select>
 
             <template v-else-if="row.control.kind === 'slider'">

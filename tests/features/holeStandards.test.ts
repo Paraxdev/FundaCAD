@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
-  CLEARANCE, COUNTERBORE, COUNTERSINK, HOLE_SIZES, INSERT, TAP_DRILL,
-  badHoleSizeText, holeChoicePatch, holeFieldApplies, newHoleFields, parseHoleSize, standardDims,
+  CLEARANCE,
+  COUNTERBORE,
+  COUNTERSINK,
+  HOLE_SIZES,
+  INSERT,
+  TAP_DRILL,
+  badHoleSizeText,
+  holeChoicePatch,
+  holeFieldApplies,
+  newHoleFields,
+  parseHoleSize,
+  standardDims,
 } from "../../src/features/holeStandards";
 import type { Feature } from "../../src/types";
 import vectors from "../vectors/hole_standards.json";
@@ -9,7 +19,9 @@ import vectors from "../vectors/hole_standards.json";
 type Hole = Extract<Feature, { type: "hole" }>;
 
 const hole = (over: Partial<Hole> = {}): Hole => ({
-  id: "h", type: "hole", points: [[0, 0, 10]],
+  id: "h",
+  type: "hole",
+  points: [[0, 0, 10]],
   face: { kind: "face", by: "nearest", point: [0, 0, 10] },
   ...newHoleFields("simple", "M3", "through"),
   ...over,
@@ -56,8 +68,16 @@ describe("hole standard tables", () => {
 describe("standardDims", () => {
   it("gives a clearance diameter by fit, and head dimensions by type", () => {
     expect(standardDims("simple", "clearance", "M4", "close")).toEqual({ diameter: 4.3 });
-    expect(standardDims("counterbore", undefined, "M5", "loose")).toEqual({ diameter: 5.8, cbDiameter: 10, cbDepth: 5.4 });
-    expect(standardDims("countersink", "tap", "M3", undefined)).toEqual({ diameter: 2.5, csDiameter: 6.9, csAngle: 90 });
+    expect(standardDims("counterbore", undefined, "M5", "loose")).toEqual({
+      diameter: 5.8,
+      cbDiameter: 10,
+      cbDepth: 5.4,
+    });
+    expect(standardDims("countersink", "tap", "M3", undefined)).toEqual({
+      diameter: 2.5,
+      csDiameter: 6.9,
+      csAngle: 90,
+    });
     expect(standardDims("simple", "custom", "M3", "normal")).toEqual({});
   });
 
@@ -70,8 +90,15 @@ describe("standardDims", () => {
 describe("newHoleFields", () => {
   it("writes every dimension out", () => {
     expect(newHoleFields("counterbore", "M3", "through")).toEqual({
-      holeType: "counterbore", standard: "clearance", size: "M3", fit: "normal", extent: "through",
-      diameter: 3.4, depth: 6.8, cbDiameter: 6.5, cbDepth: 3.4,
+      holeType: "counterbore",
+      standard: "clearance",
+      size: "M3",
+      fit: "normal",
+      extent: "through",
+      diameter: 3.4,
+      depth: 6.8,
+      cbDiameter: 6.5,
+      cbDepth: 3.4,
     });
   });
 
@@ -101,14 +128,20 @@ describe("holeChoicePatch", () => {
   it("fills a custom hole's new counterbore from its diameter", () => {
     const h = hole({ standard: "custom", diameter: 4 });
     expect(holeChoicePatch(h, "holeType", "counterbore")).toEqual({
-      holeType: "counterbore", cbDiameter: 7.6, cbDepth: 4,
+      holeType: "counterbore",
+      cbDiameter: 7.6,
+      cbDepth: 4,
     });
   });
 
   it("turns an insert blind and sizes it", () => {
     const h = hole({ extent: "through" });
     expect(holeChoicePatch(h, "holeType", "insert")).toMatchObject({
-      holeType: "insert", extent: "blind", diameter: 4, depth: 6, leadIn: 0.5,
+      holeType: "insert",
+      extent: "blind",
+      diameter: 4,
+      depth: 6,
+      leadIn: 0.5,
     });
   });
 

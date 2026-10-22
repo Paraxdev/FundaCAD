@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { activate } from "../../plugins/FundaCAD.PrintLook/main";
 import { settings } from "../../plugins/FundaCAD.PrintLook/settings";
-import { contributedMaterialPresets, contributedRelief, contributedRenderSections, onContribChange, resetContributions } from "../../src/plugins/contrib";
+import {
+  contributedMaterialPresets,
+  contributedRelief,
+  contributedRenderSections,
+  onContribChange,
+  resetContributions,
+} from "../../src/plugins/contrib";
 import type { Engine } from "../../src/app/engine";
 
 describe("the Printed look plugin", () => {

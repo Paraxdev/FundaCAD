@@ -69,7 +69,13 @@ export class DatumRings {
     }
     this.rim = new THREE.Line(
       new THREE.BufferGeometry().setFromPoints(pts),
-      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, depthTest: false, depthWrite: false }),
+      new THREE.LineBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.16,
+        depthTest: false,
+        depthWrite: false,
+      }),
     );
     this.rim.renderOrder = 997;
     this.group.add(this.rim);
@@ -132,16 +138,20 @@ export class DatumRings {
   probe(g: Grab, s: RingScene): { grabAt: THREE.Vector3; drawn: THREE.Object3D[] } | null {
     this.group.updateMatrixWorld(true);
     if (g === "offset") {
-      return this.arrow ? { grabAt: this.arrow.group.localToWorld(new THREE.Vector3(0, 30, 0)), drawn: [this.arrow.group] } : null;
+      return this.arrow
+        ? { grabAt: this.arrow.group.localToWorld(new THREE.Vector3(0, 30, 0)), drawn: [this.arrow.group] }
+        : null;
     }
     const r = this.rings.get(g);
     if (!r) return null;
-    const circle = (n: number) => Array.from({ length: n }, (_, i) => {
-      const a = (i / n) * Math.PI * 2;
-      return new THREE.Vector3(Math.cos(a) * RING_PX, Math.sin(a) * RING_PX, 0);
-    });
-    const others = [...this.rings.entries()].filter(([t]) => t !== g).flatMap(([, o]) =>
-      circle(48).map((p) => s.viewport.projectToScreen(o.group.localToWorld(p))));
+    const circle = (n: number) =>
+      Array.from({ length: n }, (_, i) => {
+        const a = (i / n) * Math.PI * 2;
+        return new THREE.Vector3(Math.cos(a) * RING_PX, Math.sin(a) * RING_PX, 0);
+      });
+    const others = [...this.rings.entries()]
+      .filter(([t]) => t !== g)
+      .flatMap(([, o]) => circle(48).map((p) => s.viewport.projectToScreen(o.group.localToWorld(p))));
     // Only the near half: seen edge-on a ring is a line, and a press on it takes
     // the side facing the viewer.
     const view = s.viewport.camera.getWorldDirection(new THREE.Vector3());

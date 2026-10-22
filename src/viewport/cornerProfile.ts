@@ -34,13 +34,18 @@ export function conicCorner(p0: Vec2, vertex: Vec2, p2: Vec2, rho: number, segme
 export function roundedSquare(size: number, leg: number, rho: number, segments: number): Vec2[] {
   const h = size / 2;
   const l = Math.min(h, Math.max(0, leg));
-  const corners: Vec2[] = [[h, -h], [h, h], [-h, h], [-h, -h]];
+  const corners: Vec2[] = [
+    [h, -h],
+    [h, h],
+    [-h, h],
+    [-h, -h],
+  ];
   if (l === 0) return corners.map(([x, y]) => [x, y]);
   const out: Vec2[] = [];
   corners.forEach((v, i) => {
     const prev = corners[(i + 3) % 4]!;
     const next = corners[(i + 1) % 4]!;
-    const toward = (to: Vec2): Vec2 => [v[0] + (Math.sign(to[0] - v[0]) * l), v[1] + (Math.sign(to[1] - v[1]) * l)];
+    const toward = (to: Vec2): Vec2 => [v[0] + Math.sign(to[0] - v[0]) * l, v[1] + Math.sign(to[1] - v[1]) * l];
     const arc = conicCorner(toward(prev), v, toward(next), rho, segments);
     // At a half size leg two neighbouring corners share their tangent point.
     out.push(...(l === h ? arc.slice(1) : arc));

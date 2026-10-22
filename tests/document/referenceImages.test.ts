@@ -24,8 +24,17 @@ function stub() {
 }
 
 const image = (id: string, extra: Record<string, unknown> = {}) => ({
-  id, name: `${id}.png`, image: HASH, mime: "image/png", px: [400, 200],
-  plane: "XY", at: [0, 0], width: 100, angle: 0, opacity: 0.5, ...extra,
+  id,
+  name: `${id}.png`,
+  image: HASH,
+  mime: "image/png",
+  px: [400, 200],
+  plane: "XY",
+  at: [0, 0],
+  width: 100,
+  angle: 0,
+  opacity: 0.5,
+  ...extra,
 });
 
 function fresh(): DocumentStore {
@@ -66,7 +75,8 @@ describe("reference images in the document", () => {
   it("undoes and redoes, and a coalesced drag is one step", () => {
     const store = fresh();
     store.setReferenceImages([image("ri1")]);
-    for (let i = 1; i <= 10; i++) store.setReferenceImages([image("ri1", { opacity: i / 10 })], { coalesce: "opacity:ri1" });
+    for (let i = 1; i <= 10; i++)
+      store.setReferenceImages([image("ri1", { opacity: i / 10 })], { coalesce: "opacity:ri1" });
     expect(store.referenceImages()[0]!.opacity).toBe(1);
     store.undo();
     expect(store.referenceImages()[0]!.opacity).toBe(0.5);
@@ -92,7 +102,9 @@ describe("reference images in the document", () => {
 
   it("drops entries with no id and repeated ids", () => {
     const store = fresh();
-    store.load(JSON.stringify({ parameters: {}, features: [], referenceImages: [image("a"), { name: "x" }, image("a"), 5] }));
+    store.load(
+      JSON.stringify({ parameters: {}, features: [], referenceImages: [image("a"), { name: "x" }, image("a"), 5] }),
+    );
     expect(store.referenceImages().map((e) => e.id)).toEqual(["a"]);
   });
 

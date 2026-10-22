@@ -7,17 +7,32 @@ const calls: string[] = [];
 let discard = true;
 let openOutcome = "ok";
 vi.mock("../../src/app/documentActions", () => ({
-  mayDiscard: vi.fn(async () => { calls.push("ask"); return discard; }),
+  mayDiscard: vi.fn(async () => {
+    calls.push("ask");
+    return discard;
+  }),
 }));
 vi.mock("../../src/io/files", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../src/io/files")>();
   return {
     ...real,
-    openDocumentAtPath: vi.fn(async (_s: unknown, path: string) => { calls.push(`open ${path}`); return openOutcome; }),
-    openDocumentBytes: vi.fn(async (_s: unknown, file: File) => { calls.push(`open bytes ${file.name}`); return openOutcome; }),
-    importPath: vi.fn(async (_s: unknown, _g: unknown, path: string) => { calls.push(`import ${path}`); }),
-    importFileBytes: vi.fn(async (_s: unknown, _g: unknown, file: File) => { calls.push(`import bytes ${file.name}`); }),
-    reportError: vi.fn(async (msg: string) => { calls.push(`error ${msg}`); }),
+    openDocumentAtPath: vi.fn(async (_s: unknown, path: string) => {
+      calls.push(`open ${path}`);
+      return openOutcome;
+    }),
+    openDocumentBytes: vi.fn(async (_s: unknown, file: File) => {
+      calls.push(`open bytes ${file.name}`);
+      return openOutcome;
+    }),
+    importPath: vi.fn(async (_s: unknown, _g: unknown, path: string) => {
+      calls.push(`import ${path}`);
+    }),
+    importFileBytes: vi.fn(async (_s: unknown, _g: unknown, file: File) => {
+      calls.push(`import bytes ${file.name}`);
+    }),
+    reportError: vi.fn(async (msg: string) => {
+      calls.push(`error ${msg}`);
+    }),
   };
 });
 
@@ -33,13 +48,21 @@ import { DOC_EXTS } from "../../src/io/documentExt";
 import { planDrop, routeDroppedName } from "../../src/io/dropRouting";
 import { takeDroppedFiles, type DroppedFile } from "../../src/io/desktopDrop";
 
-const confText = Object.values(import.meta.glob("../../src-tauri/tauri.conf.json", {
-  query: "?raw", import: "default", eager: true,
-}))[0] as string;
+const confText = Object.values(
+  import.meta.glob("../../src-tauri/tauri.conf.json", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }),
+)[0] as string;
 
 const engine = { store: {}, sketch: { hasUncommittedEdits: false }, geometry: {} } as never;
 
-beforeEach(() => { calls.length = 0; discard = true; openOutcome = "ok"; });
+beforeEach(() => {
+  calls.length = 0;
+  discard = true;
+  openOutcome = "ok";
+});
 
 describe("routeDroppedName", () => {
   it("imports a DXF drawing in any case", () => {
@@ -77,7 +100,13 @@ describe("routeDroppedName", () => {
 describe("planDrop", () => {
   it("opens the first document, skips the others, imports in drop order", () => {
     const plan = planDrop(["b.stl", "a.funda", "c.step", "d.fundab", "e.txt", "f.3mf"], (n) => n);
-    expect(plan).toEqual({ open: "a.funda", imports: ["b.stl", "c.step", "f.3mf"], environments: [], skipped: ["d.fundab"], rejected: ["e.txt"] });
+    expect(plan).toEqual({
+      open: "a.funda",
+      imports: ["b.stl", "c.step", "f.3mf"],
+      environments: [],
+      skipped: ["d.fundab"],
+      rejected: ["e.txt"],
+    });
   });
 
   it("sends a panorama to the environment instead of refusing it", () => {
@@ -103,7 +132,10 @@ describe("takeDroppedFiles", () => {
   it("reads File objects when there is no path", async () => {
     const file = new File(['{"features":[]}'], "a.funda");
     const stl = new File(["solid x\nendsolid x\n"], "b.stl");
-    await takeDroppedFiles(engine, [{ name: "a.funda", file }, { name: "b.stl", path: null, file: stl }]);
+    await takeDroppedFiles(engine, [
+      { name: "a.funda", file },
+      { name: "b.stl", path: null, file: stl },
+    ]);
     expect(calls).toEqual(["ask", "open bytes a.funda", "import bytes b.stl"]);
   });
 

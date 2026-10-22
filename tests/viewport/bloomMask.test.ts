@@ -6,12 +6,35 @@ import * as THREE from "three";
 import { GlowMask, glows, maskHighPass } from "../../src/viewport/realtimePipeline";
 import { PostChain } from "../../src/viewport/scene";
 
-interface Seen { color: string; colorWrite: boolean; depthWrite: boolean; transparent: boolean; blending: number; side: number }
-interface Draw { target: unknown; mask: number; background: unknown; autoClear: boolean; autoUpdate: boolean; clear: string; alpha: number; meshes: Record<string, Seen[]> }
+interface Seen {
+  color: string;
+  colorWrite: boolean;
+  depthWrite: boolean;
+  transparent: boolean;
+  blending: number;
+  side: number;
+}
+interface Draw {
+  target: unknown;
+  mask: number;
+  background: unknown;
+  autoClear: boolean;
+  autoUpdate: boolean;
+  clear: string;
+  alpha: number;
+  meshes: Record<string, Seen[]>;
+}
 
 function seen(m: THREE.Material): Seen {
   const b = m as THREE.MeshBasicMaterial;
-  return { color: b.color?.getHexString() ?? "-", colorWrite: m.colorWrite, depthWrite: m.depthWrite, transparent: m.transparent, blending: m.blending, side: m.side };
+  return {
+    color: b.color?.getHexString() ?? "-",
+    colorWrite: m.colorWrite,
+    depthWrite: m.depthWrite,
+    transparent: m.transparent,
+    blending: m.blending,
+    side: m.side,
+  };
 }
 
 function body(name: string, material: THREE.Material | THREE.Material[], at: [number, number, number]): THREE.Mesh {
@@ -22,7 +45,8 @@ function body(name: string, material: THREE.Material | THREE.Material[], at: [nu
   return mesh;
 }
 
-const glowing = (hex: number, intensity: number) => new THREE.MeshStandardMaterial({ color: hex, emissive: hex, emissiveIntensity: intensity, roughness: 0.6 });
+const glowing = (hex: number, intensity: number) =>
+  new THREE.MeshStandardMaterial({ color: hex, emissive: hex, emissiveIntensity: intensity, roughness: 0.6 });
 
 function fakeRenderer() {
   let target: unknown = "composer-read";
@@ -34,21 +58,44 @@ function fakeRenderer() {
     autoClear: false,
     shadowMap: { autoUpdate: true, render: () => {} },
     getRenderTarget: () => target,
-    setRenderTarget: (t: unknown) => { target = t; },
+    setRenderTarget: (t: unknown) => {
+      target = t;
+    },
     getClearColor: (c: THREE.Color) => c.copy(clear),
     getClearAlpha: () => alpha,
-    setClearColor: (c: THREE.Color | number, a = 1) => { clear.set(c); alpha = a; },
+    setClearColor: (c: THREE.Color | number, a = 1) => {
+      clear.set(c);
+      alpha = a;
+    },
     render: (s: THREE.Scene, c: THREE.Camera) => {
       const meshes: Record<string, Seen[]> = {};
       s.traverseVisible((o) => {
         const m = o as THREE.Mesh;
-        if ((m.isMesh || (o as THREE.Line).isLine) && o.layers.test(c.layers)) meshes[o.name] = (Array.isArray(m.material) ? m.material : [m.material]).map(seen);
+        if ((m.isMesh || (o as THREE.Line).isLine) && o.layers.test(c.layers))
+          meshes[o.name] = (Array.isArray(m.material) ? m.material : [m.material]).map(seen);
       });
-      draws.push({ target, mask: c.layers.mask, background: s.background, autoClear: renderer.autoClear, autoUpdate: renderer.shadowMap.autoUpdate, clear: clear.getHexString(), alpha, meshes });
+      draws.push({
+        target,
+        mask: c.layers.mask,
+        background: s.background,
+        autoClear: renderer.autoClear,
+        autoUpdate: renderer.shadowMap.autoUpdate,
+        clear: clear.getHexString(),
+        alpha,
+        meshes,
+      });
       if (throwOn === draws.length) throw new Error("lost context");
     },
   };
-  return { renderer, draws, clear, target: () => target, throwAt: (n: number) => { throwOn = n; } };
+  return {
+    renderer,
+    draws,
+    clear,
+    target: () => target,
+    throwAt: (n: number) => {
+      throwOn = n;
+    },
+  };
 }
 
 function scene() {
@@ -58,7 +105,11 @@ function scene() {
   const glow = body("glow", glowing(0xd9f2b4, 0.7), [37.5, -12, 8.25]);
   (glow.material as THREE.Material).side = THREE.DoubleSide;
   const glass = body("glass", new THREE.MeshPhysicalMaterial({ transmission: 1 }), [8, 30, 11]);
-  const faced = body("faced", [new THREE.MeshStandardMaterial({ color: 0xc0c0c0 }), glowing(0x40ff20, 1.4)], [-44, -27, 6.5]);
+  const faced = body(
+    "faced",
+    [new THREE.MeshStandardMaterial({ color: 0xc0c0c0 }), glowing(0x40ff20, 1.4)],
+    [-44, -27, 6.5],
+  );
   const off = body("off", glowing(0xff2010, 1.4), [60, 60, 9]);
   off.visible = false;
   const edges = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial());
@@ -74,7 +125,13 @@ function scene() {
   return { s, camera, white, glow, glass, faced, off, edges, ground, handle };
 }
 
-const BLACK: Omit<Seen, "side"> = { color: "000000", colorWrite: true, depthWrite: true, transparent: false, blending: THREE.NoBlending };
+const BLACK: Omit<Seen, "side"> = {
+  color: "000000",
+  colorWrite: true,
+  depthWrite: true,
+  transparent: false,
+  blending: THREE.NoBlending,
+};
 const WHITE: Omit<Seen, "side"> = { ...BLACK, color: "ffffff" };
 
 describe("glows", () => {
@@ -99,24 +156,47 @@ describe("GlowMask", () => {
     const f = fakeRenderer();
     const mask = new GlowMask();
     const full = c.camera.layers.mask;
-    const own = () => [c.white.material, c.glow.material, c.glass.material, c.faced.material, ...(c.faced.material as THREE.Material[]), c.ground.material];
+    const own = () => [
+      c.white.material,
+      c.glow.material,
+      c.glass.material,
+      c.faced.material,
+      ...(c.faced.material as THREE.Material[]),
+      c.ground.material,
+    ];
     const before = own();
     expect(mask.render(f.renderer as unknown as THREE.WebGLRenderer, c.s, c.camera, 350, 206)).toBe(true);
     expect([mask.target.width, mask.target.height]).toEqual([350, 206]);
-    expect(f.draws).toEqual([{
-      target: mask.target, mask: 1, background: null, autoClear: true, autoUpdate: false, clear: "000000", alpha: 1,
-      meshes: {
-        white: [{ ...BLACK, side: THREE.FrontSide }],
-        glow: [{ ...WHITE, side: THREE.DoubleSide }],
-        glass: [{ ...BLACK, colorWrite: false, depthWrite: false, side: THREE.FrontSide }],
-        faced: [{ ...BLACK, side: THREE.FrontSide }, { ...WHITE, side: THREE.FrontSide }],
+    expect(f.draws).toEqual([
+      {
+        target: mask.target,
+        mask: 1,
+        background: null,
+        autoClear: true,
+        autoUpdate: false,
+        clear: "000000",
+        alpha: 1,
+        meshes: {
+          white: [{ ...BLACK, side: THREE.FrontSide }],
+          glow: [{ ...WHITE, side: THREE.DoubleSide }],
+          glass: [{ ...BLACK, colorWrite: false, depthWrite: false, side: THREE.FrontSide }],
+          faced: [
+            { ...BLACK, side: THREE.FrontSide },
+            { ...WHITE, side: THREE.FrontSide },
+          ],
+        },
       },
-    }]);
+    ]);
     expect(own().map((m, i) => m === before[i])).toEqual(before.map(() => true));
     expect([c.edges.visible, c.ground.visible, c.handle.visible, c.off.visible]).toEqual([true, true, true, false]);
     expect(c.camera.layers.mask).toBe(full);
     expect(c.s.background).toEqual(new THREE.Color(0x203040));
-    expect([f.target(), f.clear.getHexString(), f.renderer.autoClear, f.renderer.shadowMap.autoUpdate]).toEqual(["composer-read", "0b0912", false, true]);
+    expect([f.target(), f.clear.getHexString(), f.renderer.autoClear, f.renderer.shadowMap.autoUpdate]).toEqual([
+      "composer-read",
+      "0b0912",
+      false,
+      true,
+    ]);
   });
 
   it("follows the bloom's size from one frame to the next", () => {
@@ -135,13 +215,20 @@ describe("GlowMask", () => {
       const c = scene();
       for (const o of [c.glow, c.faced, c.white, c.glass]) c.s.remove(o);
       const plain = [
-        body("p0", new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x000000, emissiveIntensity: 1.4 }), [12, -7, 9]),
+        body(
+          "p0",
+          new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x000000, emissiveIntensity: 1.4 }),
+          [12, -7, 9],
+        ),
         body("p1", glowing(0xd9f2b4, 0), [-31, 18, 9]),
         body("p2", new THREE.MeshPhysicalMaterial({ transmission: 1, roughness: 0.1 }), [52, 23, 9]),
       ].slice(0, n);
       c.s.add(...plain);
       const f = fakeRenderer();
-      expect(new GlowMask().render(f.renderer as unknown as THREE.WebGLRenderer, c.s, c.camera, 350, 206), `${n} bodies`).toBe(false);
+      expect(
+        new GlowMask().render(f.renderer as unknown as THREE.WebGLRenderer, c.s, c.camera, 350, 206),
+        `${n} bodies`,
+      ).toBe(false);
       expect(f.draws).toEqual([]);
     }
   });
@@ -151,14 +238,27 @@ describe("GlowMask", () => {
     const f = fakeRenderer();
     f.throwAt(1);
     const full = c.camera.layers.mask;
-    const own = () => [c.white.material, c.glow.material, c.glass.material, c.faced.material, ...(c.faced.material as THREE.Material[])];
+    const own = () => [
+      c.white.material,
+      c.glow.material,
+      c.glass.material,
+      c.faced.material,
+      ...(c.faced.material as THREE.Material[]),
+    ];
     const before = own();
-    expect(() => new GlowMask().render(f.renderer as unknown as THREE.WebGLRenderer, c.s, c.camera, 350, 206)).toThrow("lost context");
+    expect(() => new GlowMask().render(f.renderer as unknown as THREE.WebGLRenderer, c.s, c.camera, 350, 206)).toThrow(
+      "lost context",
+    );
     expect(own().map((m, i) => m === before[i])).toEqual(before.map(() => true));
     expect([c.edges.visible, c.ground.visible]).toEqual([true, true]);
     expect(c.camera.layers.mask).toBe(full);
     expect(c.s.background).toEqual(new THREE.Color(0x203040));
-    expect([f.target(), f.clear.getHexString(), f.renderer.autoClear, f.renderer.shadowMap.autoUpdate]).toEqual(["composer-read", "0b0912", false, true]);
+    expect([f.target(), f.clear.getHexString(), f.renderer.autoClear, f.renderer.shadowMap.autoUpdate]).toEqual([
+      "composer-read",
+      "0b0912",
+      false,
+      true,
+    ]);
   });
 });
 
@@ -193,7 +293,8 @@ describe("maskHighPass", () => {
   });
 
   it("changes nothing on a shader without the line it rewrites", () => {
-    const fragmentShader = "uniform sampler2D tDiffuse; varying vec2 vUv; void main() { gl_FragColor = texture2D( tDiffuse, vUv ); }";
+    const fragmentShader =
+      "uniform sampler2D tDiffuse; varying vec2 vUv; void main() { gl_FragColor = texture2D( tDiffuse, vUv ); }";
     const m = new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: null } }, fragmentShader });
     expect(maskHighPass(m, new THREE.Texture())).toBe(false);
     expect(m.fragmentShader).toBe(fragmentShader);
@@ -220,10 +321,18 @@ describe("PostChain bloom", () => {
         spilled.push(read);
       }
     }
-    const post = new PostChain(f.renderer as unknown as THREE.WebGLRenderer, c.s, () => false, () => false);
+    const post = new PostChain(
+      f.renderer as unknown as THREE.WebGLRenderer,
+      c.s,
+      () => false,
+      () => false,
+    );
     const p = post as unknown as {
-      passes: unknown; camera: THREE.Camera; build(): void;
-      bloom: InstanceType<typeof passes.UnrealBloomPass>; glowMask: GlowMask;
+      passes: unknown;
+      camera: THREE.Camera;
+      build(): void;
+      bloom: InstanceType<typeof passes.UnrealBloomPass>;
+      glowMask: GlowMask;
     };
     p.passes = { ...passes, UnrealBloomPass: SpyBloom };
     post.setSize(700, 412);
@@ -236,8 +345,13 @@ describe("PostChain bloom", () => {
     const b = await built();
     const read = new THREE.WebGLRenderTarget(1400, 824);
     b.p.bloom.render(b.f.renderer as unknown as THREE.WebGLRenderer, read, read, 0, false);
-    expect(b.f.draws.map((d) => [d.target, Object.keys(d.meshes)])).toEqual([[b.p.glowMask.target, ["white", "glow", "glass", "faced"]]]);
-    expect([b.p.glowMask.target.width, b.p.glowMask.target.height]).toEqual([b.p.bloom.renderTargetBright.width, b.p.bloom.renderTargetBright.height]);
+    expect(b.f.draws.map((d) => [d.target, Object.keys(d.meshes)])).toEqual([
+      [b.p.glowMask.target, ["white", "glow", "glass", "faced"]],
+    ]);
+    expect([b.p.glowMask.target.width, b.p.glowMask.target.height]).toEqual([
+      b.p.bloom.renderTargetBright.width,
+      b.p.bloom.renderTargetBright.height,
+    ]);
     expect(b.spilled).toEqual([read]);
     expect(b.p.bloom.materialHighPassFilter.uniforms["tMask"]!.value).toBe(b.p.glowMask.target.texture);
   });
@@ -250,5 +364,4 @@ describe("PostChain bloom", () => {
     expect(b.f.draws).toEqual([]);
     expect(b.spilled).toEqual([]);
   });
-
 });

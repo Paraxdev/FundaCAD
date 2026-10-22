@@ -32,14 +32,7 @@ import type { DocumentStore } from "../document/store";
 import type { Selector } from "../types";
 import { setPrompt } from "../ui/prompt";
 import { trackedFace } from "./holeFace";
-import {
-  pointOf,
-  readTarget,
-  sameEntry,
-  writeTarget,
-  type TargetEntry,
-  type TargetField,
-} from "./selectionTargets";
+import { pointOf, readTarget, sameEntry, writeTarget, type TargetEntry, type TargetField } from "./selectionTargets";
 
 /** One row of the list. `resolved` is false for an entry this tool could not put
  *  on screen, kept, carried through, and drawn greyed rather than hidden, so a
@@ -314,9 +307,7 @@ export class TargetEditTool {
     this.viewport.clearSelection();
     if (t.kind === "body") {
       this.viewport.setSelectionMode("bodies");
-      this.viewport.setSelectedBodies(
-        this.entries.filter((e): e is string => typeof e === "string"),
-      );
+      this.viewport.setSelectedBodies(this.entries.filter((e): e is string => typeof e === "string"));
       return;
     }
     this.viewport.setSelectionMode("faces");
@@ -335,11 +326,9 @@ export class TargetEditTool {
   /** Where an entry is on the CURRENT model, or null when it names nothing this
    *  build renders. Null is a display fact, never a reason to drop it, see the
    *  header. */
-  private locate(entry: TargetEntry):
-    | { kind: "edge"; edge: EdgeRef }
-    | { kind: "face"; faceId: number }
-    | { kind: "body"; id: string }
-    | null {
+  private locate(
+    entry: TargetEntry,
+  ): { kind: "edge"; edge: EdgeRef } | { kind: "face"; faceId: number } | { kind: "body"; id: string } | null {
     const t = this.target;
     if (!t) return null;
     if (t.kind === "body") {
@@ -378,9 +367,7 @@ export class TargetEditTool {
     if (!t) return;
     const n = this.entries.length;
     const noun = n === 1 ? t.kind : `${t.kind}s`;
-    setPrompt(
-      `${n} ${noun} · click one to add or remove · later features are hidden while editing · Enter · Esc`,
-    );
+    setPrompt(`${n} ${noun} · click one to add or remove · later features are hidden while editing · Enter · Esc`);
   }
 
   private onKey(e: KeyboardEvent) {

@@ -99,7 +99,10 @@ describe("the native tracer backend", () => {
       await vi.advanceTimersByTimeAsync(200);
       await t.renderSample(0);
       expect(uploads).toEqual([]);
-      link.queue = [{ generation: 5, width: 2, height: 2 }, { generation: 5, width: 2, height: 2 }];
+      link.queue = [
+        { generation: 5, width: 2, height: 2 },
+        { generation: 5, width: 2, height: 2 },
+      ];
       await t.renderSample(0);
       await t.renderSample(0);
       expect(uploads.length).toBe(1);
@@ -121,7 +124,10 @@ describe("the native tracer backend", () => {
       expect(await t.samples()).toBe(0);
       await vi.advanceTimersByTimeAsync(200);
       expect(await t.samples()).toBe(0);
-      link.queue = [{ generation: 5, width: 2, height: 2 }, { generation: 5, width: 2, height: 2 }];
+      link.queue = [
+        { generation: 5, width: 2, height: 2 },
+        { generation: 5, width: 2, height: 2 },
+      ];
       // The prefetch was asked for before the resize.
       await t.renderSample(0);
       expect(await t.samples()).toBe(0);
@@ -149,7 +155,14 @@ describe("the native tracer backend", () => {
     const roomLook = (key: string): TraceLook => {
       const tex = halfEquirect(new Uint16Array(4 * 2 * 4), 4, 2);
       tex.userData.envKey = key;
-      return { lights: [], background: new THREE.Color(), environment: tex, brightness: 1, toneMapping: THREE.NeutralToneMapping, exposure: 1 };
+      return {
+        lights: [],
+        background: new THREE.Color(),
+        environment: tex,
+        brightness: 1,
+        toneMapping: THREE.NeutralToneMapping,
+        exposure: 1,
+      };
     };
     const slowEnv = () => {
       const order: string[] = [];
@@ -170,7 +183,10 @@ describe("the native tracer backend", () => {
       t.updateLook(roomLook("studio|h1"));
       const s = t.samples();
       await new Promise((r) => setTimeout(r, 10));
-      expect(order.filter((c) => c.startsWith("pt_look") || c === "pt_env" || c === "pt_status")).toEqual(["pt_look", "pt_env"]);
+      expect(order.filter((c) => c.startsWith("pt_look") || c === "pt_env" || c === "pt_status")).toEqual([
+        "pt_look",
+        "pt_env",
+      ]);
       release();
       expect(await s).toBe(256);
       expect(order.slice(-3)).toEqual(["pt_look", "pt_env", "pt_status"]);
@@ -192,7 +208,14 @@ describe("the native tracer backend", () => {
     const statuses = (list: object[], calls: string[]) => async (cmd: string, args?: unknown) => {
       calls.push(args ? `${cmd} ${JSON.stringify(args)}` : cmd);
       if (cmd !== "pt_status") return undefined;
-      return { samples: 64, fault: null, denoised: false, denoising: false, denoiseError: null, ...((list.length > 1 ? list.shift() : list[0]) ?? {}) };
+      return {
+        samples: 64,
+        fault: null,
+        denoised: false,
+        denoising: false,
+        denoiseError: null,
+        ...((list.length > 1 ? list.shift() : list[0]) ?? {}),
+      };
     };
     async function settle(t: NativeTracer) {
       let rounds = 0;
@@ -203,7 +226,11 @@ describe("the native tracer backend", () => {
     it("waits for the native denoise, then pulls its frame past the raw prefetch", async () => {
       const link = new FakeLink();
       const calls: string[] = [];
-      const { t, uploads } = setup(link, 1, statuses([{ denoising: true }, { denoising: true }, { denoised: true }], calls));
+      const { t, uploads } = setup(
+        link,
+        1,
+        statuses([{ denoising: true }, { denoising: true }, { denoised: true }], calls),
+      );
       await t.init();
       await t.renderSample(0);
       expect(t.denoised).toBe(false);
@@ -242,11 +269,13 @@ describe("the native tracer backend", () => {
   describe("bloom", () => {
     const flush = () => new Promise((r) => setTimeout(r, 0));
     const glow = { strength: 0.252, radius: 0.48, threshold: 1.28 };
-    const logged = (link: FakeLink, status: object = {}) => async (cmd: string, args?: unknown) => {
-      link.log.push(args ? `${cmd} ${JSON.stringify(args)}` : cmd);
-      if (cmd !== "pt_status") return undefined;
-      return { samples: 64, fault: null, denoised: false, denoising: false, denoiseError: null, ...status };
-    };
+    const logged =
+      (link: FakeLink, status: object = {}) =>
+      async (cmd: string, args?: unknown) => {
+        link.log.push(args ? `${cmd} ${JSON.stringify(args)}` : cmd);
+        if (cmd !== "pt_status") return undefined;
+        return { samples: 64, fault: null, denoised: false, denoising: false, denoiseError: null, ...status };
+      };
     const blooms = (link: FakeLink) => link.log.filter((l) => l.startsWith("pt_bloom"));
 
     it("is a whole TracerBackend", () => {
@@ -297,7 +326,7 @@ describe("the native tracer backend", () => {
       t.setBloom(glow);
       for (let i = 0; i < 5; i++) await flush();
       expect(uploads.length).toBe(before + 2);
-      const sent = link.log.findIndex((l) => l.startsWith("pt_bloom {\"bloom\":{"));
+      const sent = link.log.findIndex((l) => l.startsWith('pt_bloom {"bloom":{'));
       expect(link.log.indexOf(`upload ${uploads[before + 1]}`)).toBeGreaterThan(sent);
       expect(t.denoised).toBe(true);
       expect(t.present()).toBe(false);
@@ -450,7 +479,12 @@ function slowNative(frameMs: number, cameraWaits = true) {
   const shown: number[] = [];
   const blit: Blit = { maxTextureSize: 4096, upload: (f) => shown.push(f.seq), dispose() {} };
   const canvas = { style: {} as Record<string, string>, remove() {} } as unknown as HTMLCanvasElement;
-  const t = new NativeTracer({ canvas, blit: () => blit, connect: async () => ({ link, generation: 1, source: "slow" }), call });
+  const t = new NativeTracer({
+    canvas,
+    blit: () => blit,
+    connect: async () => ({ link, generation: 1, source: "slow" }),
+    call,
+  });
   return { t, shown, cameraOf, cameraCalls: () => cameraCalls };
 }
 
@@ -493,7 +527,11 @@ async function orbit(frameMs: number, hz: number, cameraWaits = true) {
     now += tickMs;
     const seq = n.shown.at(-1);
     const v = n.t.shownView();
-    ticks.push({ now, traced: seq === undefined ? null : n.cameraOf.get(seq)!, overlay: v ? orbitIndex(v.matrices[12]!) : null });
+    ticks.push({
+      now,
+      traced: seq === undefined ? null : n.cameraOf.get(seq)!,
+      overlay: v ? orbitIndex(v.matrices[12]!) : null,
+    });
   }
   vi.useRealTimers();
   const drawing = ticks.filter((r) => r.traced !== null && r.traced > 0);

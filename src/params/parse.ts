@@ -63,9 +63,7 @@ export const FUNCTIONS: Record<string, { arity: [number, number]; apply: (args: 
 
 /** Reserved-but-unimplemented function names (future grammar additions must not
  *  be shadowed by user parameters). */
-export const RESERVED_FUNCTIONS = new Set([
-  "pow", "ln", "log", "exp", "sign", "random", "sinh", "cosh", "tanh",
-]);
+export const RESERVED_FUNCTIONS = new Set(["pow", "ln", "log", "exp", "sign", "random", "sinh", "cosh", "tanh"]);
 
 export const CONSTANTS: Record<string, number> = { PI: Math.PI };
 
@@ -94,7 +92,7 @@ export function tokenize(src: string): Token[] {
       i++;
       continue;
     }
-    if (ch >= "0" && ch <= "9" || (ch === "." && src[i + 1]! >= "0" && src[i + 1]! <= "9")) {
+    if ((ch >= "0" && ch <= "9") || (ch === "." && src[i + 1]! >= "0" && src[i + 1]! <= "9")) {
       const start = i;
       while (i < src.length && ((src[i]! >= "0" && src[i]! <= "9") || src[i] === ".")) i++;
       if (src[i] === "e" || src[i] === "E") {
@@ -168,7 +166,11 @@ class Parser {
     if (this.toks.length === 0) throw new ExprError("empty expression");
     const node = this.expr();
     const left = this.peek();
-    if (left) throw new ExprError(`unexpected "${left.kind === "op" ? left.op : left.kind === "ident" ? left.name : left.value}"`, left.start);
+    if (left)
+      throw new ExprError(
+        `unexpected "${left.kind === "op" ? left.op : left.kind === "ident" ? left.name : left.value}"`,
+        left.start,
+      );
     return node;
   }
 

@@ -70,7 +70,6 @@ export const BASE_COLOR = new THREE.Color(0x9aa7b4);
 export const SCAN_COLOR = new THREE.Color(0xc9b48f);
 export const SCAN_MATTE = { metalness: 0, roughness: 1 } as const;
 
-
 /** Split a RebuildResult's flat edge list by owning body id (see `orphans` above
  *  for the no-match fallback). `bodyIds` is the set of body ids present in this
  *  reply, so a stale `body` reference (a body that's gone) also falls to orphans. */
@@ -153,8 +152,7 @@ export function partitionMesh(
     if (!wanted.has(m.id)) continue;
     const slot = slotBodies.length;
     slotBodies.push(m.id);
-    slotOfFace.fill(slot, m.faceStart - faceBase,
-      Math.min(m.faceStart + m.faceCount, faceLimit) - faceBase);
+    slotOfFace.fill(slot, m.faceStart - faceBase, Math.min(m.faceStart + m.faceCount, faceLimit) - faceBase);
   }
 
   const tFrom = opts?.range ? Math.max(0, opts.range.triStart) : 0;
@@ -240,7 +238,9 @@ export function buildBodyMesh(
     const t = owned[k]!;
     const fid = faceIds[t];
     if (fid === undefined) continue;
-    const i0 = indices[t * 3], i1 = indices[t * 3 + 1], i2 = indices[t * 3 + 2];
+    const i0 = indices[t * 3],
+      i1 = indices[t * 3 + 1],
+      i2 = indices[t * 3 + 2];
     if (i0 === undefined || i1 === undefined || i2 === undefined) continue;
     const at = nTri * 3;
     for (let c = 0; c < 3; c++) {
@@ -267,7 +267,9 @@ export function buildBodyMesh(
     localPositions[li * 3 + 1] = positions[base + 1] ?? 0;
     localPositions[li * 3 + 2] = positions[base + 2] ?? 0;
     if (meshNormals) {
-      const nx = meshNormals[base] ?? 0, ny = meshNormals[base + 1] ?? 0, nz = meshNormals[base + 2] ?? 0;
+      const nx = meshNormals[base] ?? 0,
+        ny = meshNormals[base + 1] ?? 0,
+        nz = meshNormals[base + 2] ?? 0;
       localNormals[li * 3] = nx;
       localNormals[li * 3 + 1] = ny;
       localNormals[li * 3 + 2] = nz;
@@ -281,7 +283,9 @@ export function buildBodyMesh(
   if (shared) {
     for (let k = 0; k < owned.length; k++) {
       const t = owned[k]!;
-      const i0 = indices[t * 3], i1 = indices[t * 3 + 1], i2 = indices[t * 3 + 2];
+      const i0 = indices[t * 3],
+        i1 = indices[t * 3 + 1],
+        i2 = indices[t * 3 + 2];
       if (i0 !== undefined) remap[i0] = -1;
       if (i1 !== undefined) remap[i1] = -1;
       if (i2 !== undefined) remap[i2] = -1;
@@ -314,9 +318,7 @@ export function buildBodyMesh(
   // The same index width three picks for a plain array: 16 bits while every
   // vertex number fits.
   const vertsOut = posOut.length / 3;
-  geo.setIndex(new THREE.BufferAttribute(
-    vertsOut > 65535 ? localIndices : Uint16Array.from(localIndices), 1,
-  ));
+  geo.setIndex(new THREE.BufferAttribute(vertsOut > 65535 ? localIndices : Uint16Array.from(localIndices), 1));
   // The engine ships true surface normals at shipping quality (a displaced face
   // its plugin's), so shading does not depend on how fine the mesh is. A body
   // without them, a large document's coarsened tier, keeps the client-side
@@ -340,31 +342,33 @@ export function buildBodyMesh(
   // weak one, where glass is alpha anyway, so it never pays for the physical
   // BRDF it cannot use. The finish code only ever asks for transmission through
   // applyGlassLook, which no-ops on a non-physical material, so both are safe.
-  const mat = (renderLowPower ? new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    vertexColors: true,
-    metalness: FINISH.metalness,
-    roughness: FINISH.roughness,
-    flatShading: false,
-    polygonOffset: true,
-    polygonOffsetFactor: 1,
-    polygonOffsetUnits: 1,
-    side: THREE.DoubleSide,
-  }) : new THREE.MeshPhysicalMaterial({
-    color: 0xffffff,
-    vertexColors: true,
-    // The one definition of the app's default finish, shared with materials so
-    // that "no material" and "a material that says nothing about its finish"
-    // are the same picture rather than two nearly identical ones.
-    metalness: FINISH.metalness,
-    roughness: FINISH.roughness,
-    flatShading: false,
-    // push faces back so edge lines stay crisp on top (no z-fighting)
-    polygonOffset: true,
-    polygonOffsetFactor: 1,
-    polygonOffsetUnits: 1,
-    side: THREE.DoubleSide,
-  }));
+  const mat = renderLowPower
+    ? new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        vertexColors: true,
+        metalness: FINISH.metalness,
+        roughness: FINISH.roughness,
+        flatShading: false,
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1,
+        side: THREE.DoubleSide,
+      })
+    : new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        vertexColors: true,
+        // The one definition of the app's default finish, shared with materials so
+        // that "no material" and "a material that says nothing about its finish"
+        // are the same picture rather than two nearly identical ones.
+        metalness: FINISH.metalness,
+        roughness: FINISH.roughness,
+        flatShading: false,
+        // push faces back so edge lines stay crisp on top (no z-fighting)
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1,
+        side: THREE.DoubleSide,
+      });
 
   if (meta.scan) Object.assign(mat, SCAN_MATTE);
   const mesh = new THREE.Mesh(geo, mat);
@@ -493,10 +497,15 @@ function faceIndexOf(view: ModelView) {
 export function bodyOfFace(view: ModelView, faceId: number): BodyMesh | undefined {
   const { starts, bodies } = faceIndexOf(view);
   // rightmost body whose faceStart <= faceId
-  let lo = 0, hi = starts.length - 1, found = -1;
+  let lo = 0,
+    hi = starts.length - 1,
+    found = -1;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    if (starts[mid]! <= faceId) { found = mid; lo = mid + 1; } else hi = mid - 1;
+    if (starts[mid]! <= faceId) {
+      found = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
   }
   if (found < 0) return undefined;
   const b = bodies[found]!;
@@ -588,7 +597,7 @@ export function applyClearcoat(mat: THREE.MeshStandardMaterial, amount: number):
   const was = phys.clearcoat > 0;
   phys.clearcoat = amount;
   phys.clearcoatRoughness = CLEARCOAT_ROUGHNESS;
-  if (was !== (amount > 0)) phys.needsUpdate = true;
+  if (was !== amount > 0) phys.needsUpdate = true;
 }
 
 // A weak machine (software rasteriser, tiny RAM) cannot afford transmission: it
@@ -622,7 +631,10 @@ export function isRenderLowPower(): boolean {
  *  Auto thickness needs the mesh: its mean thickness is the uniform, and the
  *  per pixel pass in glassThickness measures the rest. */
 export function applyGlassLook(
-  mat: THREE.MeshStandardMaterial, f: BodyFinish, ghost: boolean, mesh?: THREE.Mesh,
+  mat: THREE.MeshStandardMaterial,
+  f: BodyFinish,
+  ghost: boolean,
+  mesh?: THREE.Mesh,
 ): boolean {
   const phys = mat as THREE.MeshPhysicalMaterial;
   if (!(phys as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial) return false;
@@ -677,7 +689,7 @@ const ANISOTROPY: Omit<ShaderPatch, "uniforms"> = {
   key: "aniso1",
   after: {
     common: "uniform vec3 uAnisoAxis;",
-    normal_fragment_begin: /* glsl */`
+    normal_fragment_begin: /* glsl */ `
 #ifdef USE_ANISOTROPY
 vec3 aAxis = normalize((viewMatrix * vec4(uAnisoAxis, 0.0)).xyz);
 vec3 aT = aAxis - dot(aAxis, normal) * normal;
@@ -687,7 +699,7 @@ aT = aLen > 1e-4 ? aT / aLen
   : normalize(cross(normal, abs(normal.x) < 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
 tbn = mat3(aT, cross(normal, aT), normal);
 #endif`,
-    lights_physical_fragment: /* glsl */`
+    lights_physical_fragment: /* glsl */ `
 #ifdef USE_ANISOTROPY
 material.anisotropy *= aFade;
 material.alphaT = mix(pow2(material.roughness), 1.0, pow2(material.anisotropy));
@@ -703,12 +715,12 @@ const SCATTER: Omit<ShaderPatch, "uniforms"> = {
   key: "scatter1",
   after: {
     common: "uniform float uScatter;",
-    aomap_fragment: /* glsl */`
+    aomap_fragment: /* glsl */ `
 #ifdef USE_TRANSMISSION
 float scKeep = material.roughness;
 material.roughness = max(material.roughness, 1.0 - exp(-thickness / max(uScatter, 1e-3)));
 #endif`,
-    transmission_fragment: /* glsl */`
+    transmission_fragment: /* glsl */ `
 #ifdef USE_TRANSMISSION
 material.roughness = scKeep;
 #endif`,
@@ -723,7 +735,11 @@ const WHITE = new THREE.Color(1, 1, 1);
  *  scatter only takes on a finish that turned out see-through. Flakes are drawn
  *  by their own patch. */
 export function applyFinishFields(
-  mat: THREE.MeshStandardMaterial, f: BodyFinish, ghost: boolean, tint: THREE.ColorRepresentation, axis: THREE.Vector3,
+  mat: THREE.MeshStandardMaterial,
+  f: BodyFinish,
+  ghost: boolean,
+  tint: THREE.ColorRepresentation,
+  axis: THREE.Vector3,
 ): void {
   const phys = mat as THREE.MeshPhysicalMaterial;
   if (!(phys as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial) return;

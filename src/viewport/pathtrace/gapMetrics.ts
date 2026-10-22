@@ -98,7 +98,8 @@ function windowSum(sat: Float64Array, w: number, x0: number, y0: number, x1: num
 export function gapMetrics(a: GapImage, b: GapImage, mask?: ArrayLike<number>): GapMetrics {
   const { width: w, height: h } = a;
   if (b.width !== w || b.height !== h) throw new Error("the two images differ in size");
-  if (a.data.length !== w * h * 4 || b.data.length !== w * h * 4) throw new Error("the buffer is not width x height RGBA");
+  if (a.data.length !== w * h * 4 || b.data.length !== w * h * 4)
+    throw new Error("the buffer is not width x height RGBA");
   if (mask && mask.length !== w * h) throw new Error("the mask is not width x height");
   const n = w * h;
 

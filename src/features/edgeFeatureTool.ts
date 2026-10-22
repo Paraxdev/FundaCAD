@@ -46,11 +46,7 @@ import { swipeOffsetPx } from "./edgeSwipe";
 import { clearanceLimit, localClearance } from "./blendClearance";
 import { fmtLength } from "../ui/units";
 import { ProfileChip } from "./profileChip";
-import {
-  clampProfile,
-  formatProfile,
-  isPlainProfile,
-} from "./profileArcMath";
+import { clampProfile, formatProfile, isPlainProfile } from "./profileArcMath";
 import {
   blendRefusalReason,
   blendVerdict,
@@ -245,9 +241,7 @@ export class EdgeFeatureTool {
     // with, and localClearance already discards everything inside the touch
     // tolerance as attached rather than nearby.
     const selected = this.ghosts.map((g, i) => ({ id: `pick:${i}`, points: g.points }));
-    this.clearanceLimitMm = clearanceLimit(
-      localClearance({ selected, all, modelScale: this.modelDiagonal() ?? 0 }),
-    );
+    this.clearanceLimitMm = clearanceLimit(localClearance({ selected, all, modelScale: this.modelDiagonal() ?? 0 }));
   }
 
   /** How far the cursor is from the picked edge, in mm, signed by which side of
@@ -323,17 +317,14 @@ export class EdgeFeatureTool {
   }
 
   private get refusedNow(): boolean {
-    return !this.neutral
-      && this.currentSelectors().length > 0
-      && blendVerdict(this.range, this.size()) === "refused";
+    return !this.neutral && this.currentSelectors().length > 0 && blendVerdict(this.range, this.size()) === "refused";
   }
 
   /** Paint the refusal, or take it down, on the handle, the value box and the
    *  prompt. Cheap enough to run on every change of value. */
   private refreshRefusal() {
-    const reason = this.refusedNow && this.refusal
-      ? blendRefusalReason(this.kind, this.memberCount(), this.refusal)
-      : null;
+    const reason =
+      this.refusedNow && this.refusal ? blendRefusalReason(this.kind, this.memberCount(), this.refusal) : null;
     if (reason === this.refusalShown) return;
     this.refusalShown = reason;
     if (reason === null) this.recolorGhostsFromDiagnostics(undefined);
@@ -370,11 +361,7 @@ export class EdgeFeatureTool {
     // so the table and the behaviour cannot drift apart, and asking here rather
     // than in each caller means the face route exists from the key, the ribbon,
     // the palette and the context menus at once.
-    const seed = pre.length
-      ? pre
-      : canConsume(kind, "face")
-        ? this.faceEdgeSelectors()
-        : [];
+    const seed = pre.length ? pre : canConsume(kind, "face") ? this.faceEdgeSelectors() : [];
     this.active = true;
     this.kind = kind;
     this.phase = "pick";
@@ -470,12 +457,12 @@ export class EdgeFeatureTool {
     this.positiveKind = f.type; // the saved treatment keeps the arrow's own side
     this.value = value;
     this.signed = value;
-    this.profile =
-      f.type === "fillet" && typeof f.profile === "number" ? clampProfile(f.profile) : 0;
+    this.profile = f.type === "fillet" && typeof f.profile === "number" ? clampProfile(f.profile) : 0;
     this.continuity = f.type === "fillet" && f.continuity === "G2" ? "G2" : "G1";
-    this.options = f.type === "fillet"
-      ? { sizeType: f.sizeType, tangentEdges: f.tangentEdges }
-      : { chamferType: f.chamferType, distance2: f.distance2, tangentEdges: f.tangentEdges };
+    this.options =
+      f.type === "fillet"
+        ? { sizeType: f.sizeType, tangentEdges: f.tangentEdges }
+        : { chamferType: f.chamferType, distance2: f.distance2, tangentEdges: f.tangentEdges };
     this.optionsKind = f.type;
     this.unmatchedSels = [];
     this.awaitingRollback = true;
@@ -582,7 +569,15 @@ export class EdgeFeatureTool {
     const line = new Line2(geo, mat);
     line.renderOrder = 998;
     this.viewport.addToScene(line);
-    this.ghosts.push({ id: ++this.memberSeq, sels: [sel], mid, points, line, chain: chain ?? ++this.chainCounter, color: GHOST_SELECT });
+    this.ghosts.push({
+      id: ++this.memberSeq,
+      sels: [sel],
+      mid,
+      points,
+      line,
+      chain: chain ?? ++this.chainCounter,
+      color: GHOST_SELECT,
+    });
   }
 
   // --- member panel (ui/FilletMembers.vue) ----------------------------------
@@ -675,10 +670,10 @@ export class EdgeFeatureTool {
 
   /** What the pointer is on in the drag phase: a member to drop, an edge to
    *  add, or nothing. */
-  private clickTarget(clientX: number, clientY: number):
-    | { kind: "member"; g: GhostEdge }
-    | { kind: "edge"; hit: NonNullable<ReturnType<Viewport["pickEdgeAt"]>> }
-    | null {
+  private clickTarget(
+    clientX: number,
+    clientY: number,
+  ): { kind: "member"; g: GhostEdge } | { kind: "edge"; hit: NonNullable<ReturnType<Viewport["pickEdgeAt"]>> } | null {
     const ghost = this.ghostAt(clientX, clientY);
     const hit = this.viewport.pickEdgeAt(clientX, clientY);
     const t = blendClickTarget(ghost?.dist ?? null, hit?.rankPx ?? null, hitPx(EDGE_GRAB_PX));
@@ -719,9 +714,7 @@ export class EdgeFeatureTool {
   private tangentChain(start: EdgeRef): EdgeRef[] {
     const all = this.viewport.visibleEdgeLines();
     const bb = this.store.buildState.result?.bbox;
-    const diag = bb
-      ? Math.hypot(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2])
-      : 100;
+    const diag = bb ? Math.hypot(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]) : 100;
     const joinTol = Math.max(1e-4, 1e-5 * diag); // endpoint coincidence
     const G1_COS = Math.cos((10 * Math.PI) / 180); // tangents within 10°
 
@@ -733,11 +726,12 @@ export class EdgeFeatureTool {
       const last = pts[pts.length - 1];
       const prev = pts[pts.length - 2];
       if (!first || !second || !last || !prev) return [];
-      const tHead = new THREE.Vector3(
-        second[0] - first[0], second[1] - first[1], second[2] - first[2]).normalize();
-      const tTail = new THREE.Vector3(
-        last[0] - prev[0], last[1] - prev[1], last[2] - prev[2]).normalize();
-      return [{ p: first, t: tHead }, { p: last, t: tTail }];
+      const tHead = new THREE.Vector3(second[0] - first[0], second[1] - first[1], second[2] - first[2]).normalize();
+      const tTail = new THREE.Vector3(last[0] - prev[0], last[1] - prev[1], last[2] - prev[2]).normalize();
+      return [
+        { p: first, t: tHead },
+        { p: last, t: tTail },
+      ];
     };
 
     const chain = new Set<EdgeRef>([start]);
@@ -832,11 +826,15 @@ export class EdgeFeatureTool {
     // The label names the bound parameter, not just the field, so dragging
     // doesn't look like an ordinary literal edit it silently isn't.
     const field = this.paramRef ? { ...this.field, label: `${this.field.label}·${this.paramRef}` } : this.field;
-    this.dim.show([{ ...field, kind: "length", ...featureValueRule(this.kind, this.field.name) }], () => this.commit(), () => this.cancel(),
+    this.dim.show(
+      [{ ...field, kind: "length", ...featureValueRule(this.kind, this.field.name) }],
+      () => this.commit(),
+      () => this.cancel(),
       this.kind === "fillet"
         ? {
             label: this.continuity,
-            title: "Continuity: G1 is a circular round, G2 eases into the faces with no jump in curvature. Click to switch",
+            title:
+              "Continuity: G1 is a circular round, G2 eases into the faces with no jump in curvature. Click to switch",
             initial: this.continuity === "G2",
             onChange: (on) => {
               this.continuity = on ? "G2" : "G1";
@@ -846,7 +844,8 @@ export class EdgeFeatureTool {
             },
           }
         : undefined,
-      this.chip?.el);
+      this.chip?.el,
+    );
     this.dim.showOwnProblem(this.refusalShown);
     if (keepTyped) this.dim.seed(this.field.name, this.value);
     else this.dim.updateFromCursor({ [this.field.name]: this.value });
@@ -946,7 +945,9 @@ export class EdgeFeatureTool {
       return;
     }
     if (this.neutral) {
-      setPrompt(`Drag out for a ${this.positiveKind}, back for a ${otherTreatment(this.positiveKind)} · release to cancel`);
+      setPrompt(
+        `Drag out for a ${this.positiveKind}, back for a ${otherTreatment(this.positiveKind)} · release to cancel`,
+      );
       return;
     }
     if (this.refusalShown) {
@@ -962,9 +963,7 @@ export class EdgeFeatureTool {
     // once it is off the circular default, otherwise it is noise on the one
     // line the user reads mid-drag.
     const prof =
-      this.kind === "fillet" && !isPlainProfile(this.profile)
-        ? ` · profile ${formatProfile(this.profile)}`
-        : "";
+      this.kind === "fillet" && !isPlainProfile(this.profile) ? ` · profile ${formatProfile(this.profile)}` : "";
     const param = this.paramRef ? ` · sets parameter "${this.paramRef}"` : "";
     setPrompt(
       `${treatmentLabel(this.kind)}, ${n} edge${n === 1 ? "" : "s"} · drag or type a ${this.field.name}${prof}${param} · Tab · Enter · Esc`,
@@ -1057,13 +1056,9 @@ export class EdgeFeatureTool {
   /** Paint ghosts red when the engine's failure probe names their edge (the
    *  edgeOpFailed diagnostic carries the failed edges' midpoints). */
   private recolorGhostsFromDiagnostics(diags: import("../types").ResolveDiag[] | undefined) {
-    const entry = diags?.find(
-      (d) => d.kind === "edgeOpFailed" && d.feature_id === this.previewId && d.failed?.length,
-    );
+    const entry = diags?.find((d) => d.kind === "edgeOpFailed" && d.feature_id === this.previewId && d.failed?.length);
     const bb = this.store.buildState.result?.bbox;
-    const diag = bb
-      ? Math.hypot(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2])
-      : 100;
+    const diag = bb ? Math.hypot(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]) : 100;
     const tol = midMatchTol(diag);
     for (const g of this.ghosts) {
       const failed = !!entry?.failed?.some(
@@ -1181,8 +1176,7 @@ export class EdgeFeatureTool {
   private onUp(e: PointerEvent) {
     if (e.button !== 0 || this.phase !== "drag") return;
     if (this.grabbing) {
-      const moved =
-        Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+      const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
       this.grabbing = false;
       // The release is one of the moments the real preview isn't allowed to
       // wait out the debounce (see schedulePreviewDuringDrag): commit and
@@ -1220,8 +1214,7 @@ export class EdgeFeatureTool {
     }
     // A clean click that found no edge keeps the tool and its members. Only
     // Enter or the check button apply it.
-    const moved =
-      Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.downOnGizmo || moved) return;
     if (this.memberCount()) setPrompt(missPrompt(this.kind, this.memberCount()));
     else this.promptForPhase();
@@ -1314,9 +1307,7 @@ export class EdgeFeatureTool {
    *  actually applying. Reconciled per frame rather than at the six places those
    *  can each change. */
   private syncChip() {
-    this.chip?.setVisible(
-      this.phase === "drag" && !this.neutral && this.currentSelectors().length > 0,
-    );
+    this.chip?.setVisible(this.phase === "drag" && !this.neutral && this.currentSelectors().length > 0);
   }
 
   /** Keep the handle standing across an orbit.
@@ -1378,11 +1369,7 @@ export class EdgeFeatureTool {
   private modelCentre(): THREE.Vector3 | null {
     const bb = this.store.buildState.result?.bbox;
     if (!bb) return null;
-    return new THREE.Vector3(
-      (bb.min[0] + bb.max[0]) / 2,
-      (bb.min[1] + bb.max[1]) / 2,
-      (bb.min[2] + bb.max[2]) / 2,
-    );
+    return new THREE.Vector3((bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2);
   }
 
   private buildGizmo() {
@@ -1421,9 +1408,10 @@ export class EdgeFeatureTool {
     const v = this.size();
     const sels = this.currentSelectors();
     const edges = sels.length === 1 && sels[0] ? sels[0] : sels;
-    const kept = this.optionsKind === this.kind
-      ? Object.fromEntries(Object.entries(this.options).filter(([, x]) => x !== undefined))
-      : {};
+    const kept =
+      this.optionsKind === this.kind
+        ? Object.fromEntries(Object.entries(this.options).filter(([, x]) => x !== undefined))
+        : {};
     if (this.kind !== "fillet") return { id: this.previewId, type: "chamfer", edges, distance: v, ...kept };
     const g2 = this.continuity === "G2" ? { continuity: "G2" as const } : {};
     // Omit the field entirely at 0 rather than storing it: a plain fillet must
@@ -1476,8 +1464,9 @@ export class EdgeFeatureTool {
         built: feature,
         paramRef: this.paramRef,
       });
-      const refused = edit.refused
-        ?? (edit.feature || edit.param ? this.store.commitFeatureEdit(this.editId, edit.feature, edit.param) : null);
+      const refused =
+        edit.refused ??
+        (edit.feature || edit.param ? this.store.commitFeatureEdit(this.editId, edit.feature, edit.param) : null);
       // A commit ends the preview itself; anything else puts the committed model back.
       this.store.endEditPreview();
       if (refused) toast(refused, { kind: "warning" });
@@ -1581,11 +1570,7 @@ export class EdgeFeatureTool {
     if (n > 0) return acc.multiplyScalar(1 / n);
     const bb = this.store.buildState.result?.bbox;
     if (bb) {
-      return new THREE.Vector3(
-        (bb.min[0] + bb.max[0]) / 2,
-        (bb.min[1] + bb.max[1]) / 2,
-        (bb.min[2] + bb.max[2]) / 2,
-      );
+      return new THREE.Vector3((bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2);
     }
     return acc;
   }

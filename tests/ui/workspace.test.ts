@@ -1,8 +1,6 @@
 // Which arrangement of the window is up.
 import { describe, it, expect, beforeEach } from "vitest";
-import {
-  canEditMaterials, onWorkspaceChange, setWorkspace, workspace, WORKSPACES,
-} from "../../src/ui/workspace";
+import { canEditMaterials, onWorkspaceChange, setWorkspace, workspace, WORKSPACES } from "../../src/ui/workspace";
 
 describe("workspace", () => {
   beforeEach(() => setWorkspace("model"));

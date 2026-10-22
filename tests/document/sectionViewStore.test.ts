@@ -24,8 +24,9 @@ function stub() {
 
 const CUT: SectionView = { origin: [62.5, 18.25, 20], normal: [0.6, 0, 0.8], offset: -9.5, side: -1, ghost: "faint" };
 const CUT_C: SectionView = { origin: [-14, 33, 7.5], normal: [0, -0.8, 0.6], offset: 4.75, side: 1, ghost: "strong" };
-const box = (id: string, x: number): Feature => ({ id, type: "box", length: 20 + x, width: 12, height: 7 } as Feature);
-const doc = (features: Feature[], extra: Partial<CadDocument> = {}) => JSON.stringify({ parameters: {}, features, ...extra });
+const box = (id: string, x: number): Feature => ({ id, type: "box", length: 20 + x, width: 12, height: 7 }) as Feature;
+const doc = (features: Feature[], extra: Partial<CadDocument> = {}) =>
+  JSON.stringify({ parameters: {}, features, ...extra });
 
 const fresh = () => new DocumentStore(stub().backend, { parameters: {}, features: [box("a1", 3)] });
 const saved = (store: DocumentStore) => JSON.parse(store.toJSON()) as Record<string, unknown>;
@@ -183,7 +184,12 @@ describe("the section cut in the document", () => {
     const carried = [{ kind: 7, name: "thumb", hash: "c0ffee" }] as never;
     store.carriedSections = carried;
     store.setSectionView(structuredClone(CUT));
-    const state = () => [store.document.features.map((f) => f.id), store.sectionView, saved(store).sectionView, store.carriedSections];
+    const state = () => [
+      store.document.features.map((f) => f.id),
+      store.sectionView,
+      saved(store).sectionView,
+      store.carriedSections,
+    ];
     store.restoreVersion(empty.id);
     expect(state()).toEqual([[], CUT, CUT, carried]);
     store.undo();
@@ -209,7 +215,11 @@ describe("the section cut in the document", () => {
     store.load(old.toJSON());
     store.setSectionView(structuredClone(CUT));
     store.restoreVersion(store.versionRepo!.versions[0]!.id);
-    expect([store.document.features.map((f) => f.id), store.sectionView, saved(store).sectionView]).toEqual([["a1"], CUT, CUT]);
+    expect([store.document.features.map((f) => f.id), store.sectionView, saved(store).sectionView]).toEqual([
+      ["a1"],
+      CUT,
+      CUT,
+    ]);
     expect(store.changesSinceVersion()).toEqual({ added: [], removed: [], changed: [], settings: false });
     store.load(doc([box("b1", 1)]));
     expect([store.sectionView, store.versionRepo]).toEqual([null, null]);
@@ -220,7 +230,10 @@ describe("the section cut in the document", () => {
     old.saveVersion("old");
     const repo = old.versionRepo as VersionRepo;
     const v = repo.versions[0]!;
-    repo.objects["old-rest"] = JSON.stringify({ ...(JSON.parse(repo.objects[v.tree.rest]!) as object), sectionView: CUT_C });
+    repo.objects["old-rest"] = JSON.stringify({
+      ...(JSON.parse(repo.objects[v.tree.rest]!) as object),
+      sectionView: CUT_C,
+    });
     v.tree.rest = "old-rest";
     const store = fresh();
     store.load(old.toJSON());
@@ -248,7 +261,11 @@ describe("the section cut in the document", () => {
     store.load(doc([box("a1", 3)], { sectionView: newer as unknown as SectionView }));
     store.saveVersion("one");
     store.load(doc([box("z9", 2)], { sectionView: CUT_C }), { replace: true });
-    expect([store.sectionView, "sectionView" in saved(store), store.versionRepo!.versions.map((v) => v.message)]).toEqual([null, false, ["one"]]);
+    expect([
+      store.sectionView,
+      "sectionView" in saved(store),
+      store.versionRepo!.versions.map((v) => v.message),
+    ]).toEqual([null, false, ["one"]]);
   });
 
   it("keeps fields a newer version wrote through save, reopen and a move, and drops them with Off", () => {

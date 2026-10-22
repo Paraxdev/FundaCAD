@@ -11,11 +11,15 @@ function bare() {
   Object.assign(vp, {
     highlighter: {
       clearSelection: () => selected.clear(),
-      toggleSelectFace: (f: number) => { if (!selected.delete(f)) selected.add(f); },
+      toggleSelectFace: (f: number) => {
+        if (!selected.delete(f)) selected.add(f);
+      },
     },
     requestRender: () => {},
   });
-  vp.onSelectionChange = () => { announced++; };
+  vp.onSelectionChange = () => {
+    announced++;
+  };
   return { vp, selected, announced: () => announced };
 }
 

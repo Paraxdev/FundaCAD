@@ -19,7 +19,15 @@ export function installKeyboard(e: Engine): void {
       if (e.sketch.active && SKETCH_TOOLS.has(a)) return;
       if (a === "escape") {
         const t = e.tools;
-        if (!e.sketch.active && !t.extrude.active && !t.edgeFeature.active && !t.pressPull.active && !t.loft.active && !t.planeOffset.active && !t.datumPose.active) {
+        if (
+          !e.sketch.active &&
+          !t.extrude.active &&
+          !t.edgeFeature.active &&
+          !t.pressPull.active &&
+          !t.loft.active &&
+          !t.planeOffset.active &&
+          !t.datumPose.active
+        ) {
           e.viewport.clearSelection();
           e.selectFeature(null);
         }
@@ -101,20 +109,41 @@ export function installKeyboard(e: Engine): void {
       // AltGr reports Ctrl+Alt on Windows and types a letter of its own.
       const mac = isMac();
       const is = (letter: string) => k === letter || (mac && ev.code === `Key${letter.toUpperCase()}`);
-      if (is("s")) { ev.preventDefault(); useShellStore().toggleItems(); }
-      else if (is("h")) { ev.preventDefault(); useShellStore().toggleHistory(); }
+      if (is("s")) {
+        ev.preventDefault();
+        useShellStore().toggleItems();
+      } else if (is("h")) {
+        ev.preventDefault();
+        useShellStore().toggleHistory();
+      }
       return;
     }
-    if (k === "f" && !ev.shiftKey) { ev.preventDefault(); useCommandPaletteStore().toggle(e.sketch.active ? "sketch" : "model"); }
-    else if (k === "n") { ev.preventDefault(); void e.newDocument(); }
-    else if (k === "o") { ev.preventDefault(); void e.openDoc(); }
-    else if (k === "s" && ev.shiftKey) { ev.preventDefault(); void saveDocumentAs(e.store); }
-    else if (k === "s") { ev.preventDefault(); void saveDocument(e.store); }
-    else if (k === "e") { ev.preventDefault(); void exportSelection(e.store, e.geometry, e.viewport); }
+    if (k === "f" && !ev.shiftKey) {
+      ev.preventDefault();
+      useCommandPaletteStore().toggle(e.sketch.active ? "sketch" : "model");
+    } else if (k === "n") {
+      ev.preventDefault();
+      void e.newDocument();
+    } else if (k === "o") {
+      ev.preventDefault();
+      void e.openDoc();
+    } else if (k === "s" && ev.shiftKey) {
+      ev.preventDefault();
+      void saveDocumentAs(e.store);
+    } else if (k === "s") {
+      ev.preventDefault();
+      void saveDocument(e.store);
+    } else if (k === "e") {
+      ev.preventDefault();
+      void exportSelection(e.store, e.geometry, e.viewport);
+    }
     // Ctrl+, is the conventional Preferences key and belongs with the file
     // shortcuts rather than the keymap: like them it has to work mid-sketch,
     // and unlike them it is punctuation, which the keymap's tool bindings are
     // not.
-    else if (ev.key === ",") { ev.preventDefault(); useDialogStore().preferences = true; }
+    else if (ev.key === ",") {
+      ev.preventDefault();
+      useDialogStore().preferences = true;
+    }
   });
 }

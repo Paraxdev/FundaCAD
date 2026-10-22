@@ -5,7 +5,12 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
-import { StressGlyphs, type StressGlyphHandlers, type StressGlyphHost, type StressGlyphModel } from "../../src/viewport/stressGlyphs";
+import {
+  StressGlyphs,
+  type StressGlyphHandlers,
+  type StressGlyphHost,
+  type StressGlyphModel,
+} from "../../src/viewport/stressGlyphs";
 import { dragForce, forceDragStart, forceToArrowPx } from "../../src/ui/stress";
 
 // A 100 x 100 px canvas showing world x and y from -50 to 50, looking down -Z:
@@ -90,7 +95,11 @@ describe("StressGlyphs", () => {
     expect(document.body.querySelector(".stress-cursor-label")?.textContent).toBe(`${out} N, +x`);
     // Swung round to straight down the screen: -Y.
     pointer(canvas, "pointermove", 50, 100);
-    expect(handlers.forceDrag).toHaveBeenLastCalledWith(1, { direction: "-Y", custom: null, force: dragForce(start, 50 + start.offsetPx) });
+    expect(handlers.forceDrag).toHaveBeenLastCalledWith(1, {
+      direction: "-Y",
+      custom: null,
+      force: dragForce(start, 50 + start.offsetPx),
+    });
     pointer(canvas, "pointerup", 50, 100);
     expect(handlers.forceDragEnd).toHaveBeenCalledWith(1, false);
     glyphs.dispose();
@@ -108,13 +117,17 @@ describe("StressGlyphs", () => {
     // length the press point stands for (about 22 N).
     pointer(canvas, "pointermove", x + 4, 50);
     const start = forceDragStart(30, x - 50);
-    expect(handlers.forceDrag).toHaveBeenLastCalledWith(1, { direction: "+X", custom: null, force: dragForce(start, x + 4 - 50 + start.offsetPx) });
+    expect(handlers.forceDrag).toHaveBeenLastCalledWith(1, {
+      direction: "+X",
+      custom: null,
+      force: dragForce(start, x + 4 - 50 + start.offsetPx),
+    });
     expect(handlers.forceDrag.mock.calls.at(-1)![1].force).toBe(36);
     pointer(canvas, "pointerup", x + 4, 50);
     glyphs.dispose();
   });
 
-  it("keeps \"into the face\" on a drag along an arrow that is also an axis", () => {
+  it('keeps "into the face" on a drag along an arrow that is also an axis', () => {
     const { glyphs, handlers, canvas } = rig();
     glyphs.setModel(model(1, [1, 0, 0]));
     pointer(canvas, "pointerdown", 50 + forceToArrowPx(1) - 6, 50);
@@ -145,7 +158,11 @@ describe("StressGlyphs", () => {
 
   it("reads the body under the cursor in probe mode, pins a click, and not an orbit", () => {
     const { glyphs, handlers, canvas, pick } = rig();
-    const hit = { tri: 4, weights: [0.2, 0.3, 0.5] as [number, number, number], point: [0, 0, 0] as [number, number, number] };
+    const hit = {
+      tri: 4,
+      weights: [0.2, 0.3, 0.5] as [number, number, number],
+      point: [0, 0, 0] as [number, number, number],
+    };
     pick.mockReturnValue(hit);
     glyphs.setProbe(true);
     pointer(canvas, "pointermove", 30, 30);
@@ -174,7 +191,12 @@ describe("StressGlyphs", () => {
 
   it("draws pinned probes with their readouts, and takes everything away on dispose", () => {
     const { glyphs, scene } = rig();
-    glyphs.setModel({ ...model(10), pressures: [{ at: [0, 0, 0], dir: [0, 0, -1] }], gravity: { at: [0, 0, 0], dir: [0, 0, -1] }, pins: [{ from: [0, 0, 0], to: [0, 0, 10] }] });
+    glyphs.setModel({
+      ...model(10),
+      pressures: [{ at: [0, 0, 0], dir: [0, 0, -1] }],
+      gravity: { at: [0, 0, 0], dir: [0, 0, -1] },
+      pins: [{ from: [0, 0, 0], to: [0, 0, 10] }],
+    });
     glyphs.setProbePins([{ tri: 0, weights: [1, 0, 0], label: "3 MPa" }]);
     // Three arrows, one axis line, one probe ball.
     expect(scene.children).toHaveLength(5);

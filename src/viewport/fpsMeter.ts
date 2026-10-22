@@ -61,7 +61,11 @@ export class FpsMeter {
     const last = this.stamps[this.stamps.length - 1];
     if (last === undefined || now - last > IDLE_AFTER_MS) {
       // Not "idle" alone: beside the history's build state that read as the engine's.
-      this.show("render idle", "The viewport only draws when something changes, nothing to render right now. This says nothing about the geometry engine." + gpuLine);
+      this.show(
+        "render idle",
+        "The viewport only draws when something changes, nothing to render right now. This says nothing about the geometry engine." +
+          gpuLine,
+      );
       return;
     }
     // Rate over the window, and the mean interval between the frames in it.
@@ -74,9 +78,9 @@ export class FpsMeter {
     const ms = span / (n - 1);
     this.show(
       `${Math.round(fps)} fps · ${ms.toFixed(1)} ms`,
-      `${n} frames drawn in the last ${Math.round(span)}ms. `
-        + "The viewport renders on demand, so this only counts frames that were actually drawn."
-        + gpuLine,
+      `${n} frames drawn in the last ${Math.round(span)}ms. ` +
+        "The viewport renders on demand, so this only counts frames that were actually drawn." +
+        gpuLine,
     );
   }
 

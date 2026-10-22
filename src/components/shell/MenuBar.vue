@@ -68,7 +68,10 @@ function onKey(e: KeyboardEvent) {
 let releaseEscape: (() => void) | null = null;
 watch(openIndex, (i) => {
   if (i !== null) releaseEscape ??= claimEscape();
-  else { releaseEscape?.(); releaseEscape = null; }
+  else {
+    releaseEscape?.();
+    releaseEscape = null;
+  }
 });
 onMounted(() => {
   document.addEventListener("pointerdown", onDown);

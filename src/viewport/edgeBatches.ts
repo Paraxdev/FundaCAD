@@ -60,26 +60,48 @@ function liveSegments(e: BodyEdges): number {
 }
 
 function untransformed(o: THREE.Object3D): boolean {
-  const p = o.position, q = o.quaternion, s = o.scale;
-  return p.x === 0 && p.y === 0 && p.z === 0 && q.x === 0 && q.y === 0 && q.z === 0 && q.w === 1
-    && s.x === 1 && s.y === 1 && s.z === 1;
+  const p = o.position,
+    q = o.quaternion,
+    s = o.scale;
+  return (
+    p.x === 0 &&
+    p.y === 0 &&
+    p.z === 0 &&
+    q.x === 0 &&
+    q.y === 0 &&
+    q.z === 0 &&
+    q.w === 1 &&
+    s.x === 1 &&
+    s.y === 1 &&
+    s.z === 1
+  );
 }
 
 function samePlanes(a: THREE.Plane[] | null, b: THREE.Plane[] | null): boolean {
   if (a === b) return true;
-  const la = a?.length ?? 0, lb = b?.length ?? 0;
+  const la = a?.length ?? 0,
+    lb = b?.length ?? 0;
   if (la !== lb) return false;
   for (let i = 0; i < la; i++) if (a![i] !== b![i] && !a![i]!.equals(b![i]!)) return false;
   return true;
 }
 
 function sameLook(a: BodyEdges, b: BodyEdges): boolean {
-  const m = a.material, n = b.material;
-  return m.linewidth === n.linewidth && m.opacity === n.opacity && m.transparent === n.transparent
-    && m.depthTest === n.depthTest && m.depthWrite === n.depthWrite && m.visible === n.visible
-    && m.color.equals(n.color) && samePlanes(m.clippingPlanes, n.clippingPlanes)
-    && a.object.layers.mask === b.object.layers.mask && a.object.renderOrder === b.object.renderOrder
-    && a.object.parent === b.object.parent;
+  const m = a.material,
+    n = b.material;
+  return (
+    m.linewidth === n.linewidth &&
+    m.opacity === n.opacity &&
+    m.transparent === n.transparent &&
+    m.depthTest === n.depthTest &&
+    m.depthWrite === n.depthWrite &&
+    m.visible === n.visible &&
+    m.color.equals(n.color) &&
+    samePlanes(m.clippingPlanes, n.clippingPlanes) &&
+    a.object.layers.mask === b.object.layers.mask &&
+    a.object.renderOrder === b.object.renderOrder &&
+    a.object.parent === b.object.parent
+  );
 }
 
 /** A 3 x 10 bit Morton code of a point in the unit cube. */
@@ -197,11 +219,13 @@ export class EdgeBatches {
       return c;
     });
     const size = box.getSize(new THREE.Vector3());
-    const key = centres.map((c) => morton(
-      size.x > 0 ? (c.x - box.min.x) / size.x : 0,
-      size.y > 0 ? (c.y - box.min.y) / size.y : 0,
-      size.z > 0 ? (c.z - box.min.z) / size.z : 0,
-    ));
+    const key = centres.map((c) =>
+      morton(
+        size.x > 0 ? (c.x - box.min.x) / size.x : 0,
+        size.y > 0 ? (c.y - box.min.y) / size.y : 0,
+        size.z > 0 ? (c.z - box.min.z) / size.z : 0,
+      ),
+    );
     const order = members.map((_, i) => i).sort((a, b) => key[a]! - key[b]!);
     const total = members.reduce((n, e) => n + liveSegments(e), 0);
     const per = Math.max(MIN_BATCH_SEGMENTS, Math.ceil(total / TARGET_BATCHES));

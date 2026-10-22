@@ -114,7 +114,10 @@ export interface MatcapLook {
   tint: boolean;
 }
 
-interface Twin { flat: THREE.MeshMatcapMaterial; seen: number }
+interface Twin {
+  flat: THREE.MeshMatcapMaterial;
+  seen: number;
+}
 
 function isBodyMesh(o: THREE.Object3D): o is THREE.Mesh {
   return (o as THREE.Mesh).isMesh === true && !!o.userData.owner;

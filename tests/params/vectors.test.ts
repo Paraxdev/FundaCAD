@@ -20,8 +20,16 @@ interface Vectors {
   numericLiteral: { expr: string; expect: boolean }[];
   reserved: { yes: string[]; no: string[] };
   identNames: { yes: string[]; no: string[] };
-  recompute: { name: string; defs: Record<string, ParamDef>; values: Record<string, number>; issues: Record<string, string> }[];
-  validate: { defs: Record<string, ParamDef>; cases: { name: string | null; expr: string; kind?: "count"; ok?: number; error?: string }[] }[];
+  recompute: {
+    name: string;
+    defs: Record<string, ParamDef>;
+    values: Record<string, number>;
+    issues: Record<string, string>;
+  }[];
+  validate: {
+    defs: Record<string, ParamDef>;
+    cases: { name: string | null; expr: string; kind?: "count"; ok?: number; error?: string }[];
+  }[];
   checks: { defs: Record<string, ParamDef>; checks: ParamCheck[]; results: { ok: boolean; error?: string }[] }[];
   targets: { name: string; defs: Record<string, ParamDef>; features: unknown[]; expect: unknown[] }[];
   featureNumFields: Record<string, [string, string][]>;
@@ -88,9 +96,13 @@ describe("parameter vectors shared with fundacad-core", () => {
 
   it("keeps the field tables fundacad-core copies", () => {
     const rows = (r: readonly (readonly [string, string, string])[]) => r.map(([field, , kind]) => [field, kind]);
-    expect(Object.fromEntries(Object.entries(FEATURE_NUM_FIELDS).map(([type, r]) => [type, rows(r!)]))).toEqual(V.featureNumFields);
+    expect(Object.fromEntries(Object.entries(FEATURE_NUM_FIELDS).map(([type, r]) => [type, rows(r!)]))).toEqual(
+      V.featureNumFields,
+    );
     expect(rows(COMMON_NUM_FIELDS)).toEqual(V.commonNumFields);
-    expect(Object.fromEntries(Object.entries(INT_FIELDS).map(([f, min]) => [f, Number.isFinite(min) ? min : String(min)]))).toEqual(V.intFields);
+    expect(
+      Object.fromEntries(Object.entries(INT_FIELDS).map(([f, min]) => [f, Number.isFinite(min) ? min : String(min)])),
+    ).toEqual(V.intFields);
   });
 
   it("validates expressions and runs checks", () => {

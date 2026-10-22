@@ -69,10 +69,13 @@ async function surfaces(page) {
 
 /** Flip a capability through the real registry and let its activate() settle. */
 async function setEnabled(page, id, on) {
-  await page.evaluate(async ([pid, value]) => {
-    const m = await import("/src/plugins/registry.ts");
-    m.setPluginEnabled(pid, value);
-  }, [id, on]);
+  await page.evaluate(
+    async ([pid, value]) => {
+      const m = await import("/src/plugins/registry.ts");
+      m.setPluginEnabled(pid, value);
+    },
+    [id, on],
+  );
   await page.waitForTimeout(600);
 }
 

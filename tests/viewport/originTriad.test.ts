@@ -4,9 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import {
-  AXIS_COLOR, OriginTriad, TRIAD_OPACITY, mutedAxisColor,
-} from "../../src/viewport/originTriad";
+import { AXIS_COLOR, OriginTriad, TRIAD_OPACITY, mutedAxisColor } from "../../src/viewport/originTriad";
 import { EDGE_HOVER_COLOR } from "../../src/viewport/highlight";
 
 /** Every material the arm paints with, drawn and occluded pass alike. */
@@ -42,7 +40,11 @@ describe("OriginTriad", () => {
 
   it("mutes the axis colours but keeps each one's hue", () => {
     const channels = (h: number) => [(h >> 16) & 0xff, (h >> 8) & 0xff, h & 0xff];
-    for (const [c, top] of [[AXIS_COLOR.x, 0], [AXIS_COLOR.y, 1], [AXIS_COLOR.z, 2]] as const) {
+    for (const [c, top] of [
+      [AXIS_COLOR.x, 0],
+      [AXIS_COLOR.y, 1],
+      [AXIS_COLOR.z, 2],
+    ] as const) {
       const before = channels(c);
       const after = channels(mutedAxisColor(c));
       const spread = (v: number[]) => Math.max(...v) - Math.min(...v);
@@ -77,7 +79,10 @@ describe("OriginTriad", () => {
     expect(hit).toBeTruthy();
     let axis: unknown = null;
     for (let o: THREE.Object3D | null = hit!.object; o; o = o.parent) {
-      if (o.userData?.axis) { axis = o.userData.axis; break; }
+      if (o.userData?.axis) {
+        axis = o.userData.axis;
+        break;
+      }
     }
     expect(axis).toBe("X");
     triad.dispose();
@@ -86,9 +91,7 @@ describe("OriginTriad", () => {
   it("must fail without the sleeve: the drawn line alone is not that wide", () => {
     const triad = new OriginTriad(new THREE.Scene());
     triad.group.updateMatrixWorld(true);
-    const drawn = triad.arms[0]!.children.filter(
-      (o) => ((o as THREE.Mesh).material as THREE.Material).visible,
-    );
+    const drawn = triad.arms[0]!.children.filter((o) => ((o as THREE.Mesh).material as THREE.Material).visible);
     const ray = new THREE.Raycaster(new THREE.Vector3(32, 3, 40), new THREE.Vector3(0, 0, -1));
     expect(ray.intersectObjects(drawn, false)).toHaveLength(0);
     triad.dispose();

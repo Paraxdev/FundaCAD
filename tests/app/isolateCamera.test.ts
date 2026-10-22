@@ -4,7 +4,11 @@ import { installIsolateCamera, sameCameraState } from "../../src/app/isolateCame
 import type { CameraState } from "../../src/viewport/cameras";
 
 const pose = (x: number, scale: number): CameraState => ({
-  target: [x, 0, 0], quaternion: [0, 0, 0, 1], scale, fov: 45, mode: "auto",
+  target: [x, 0, 0],
+  quaternion: [0, 0, 0, 1],
+  scale,
+  fov: 45,
+  mode: "auto",
 });
 
 function rig() {
@@ -31,7 +35,11 @@ function harness() {
     isolateActive: false,
     buildState: { result: { bodies: [{ id: "big" }, { id: "small" }] } },
     isBodyVisible: (id: string) => vis.get(id) ?? true,
-    onBuild: (fn: () => void) => { listeners.add(fn); fn(); return () => listeners.delete(fn); },
+    onBuild: (fn: () => void) => {
+      listeners.add(fn);
+      fn();
+      return () => listeners.delete(fn);
+    },
   };
   const r = rig();
   const boxes: Record<string, THREE.Box3> = {
@@ -49,8 +57,12 @@ function harness() {
   };
   const queue: (() => void)[] = [];
   installIsolateCamera(store, view, (fn) => queue.push(fn));
-  const emit = () => { for (const fn of listeners) fn(); };
-  const settle = () => { while (queue.length) queue.shift()!(); };
+  const emit = () => {
+    for (const fn of listeners) fn();
+  };
+  const settle = () => {
+    while (queue.length) queue.shift()!();
+  };
   const isolate = (keep: string[]) => {
     for (const id of ["big", "small"]) vis.set(id, keep.includes(id));
     store.isolateActive = false;

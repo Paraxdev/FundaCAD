@@ -73,17 +73,33 @@ describe("noteBlendOutcome", () => {
     steps.reduce((r, [v, ok]) => noteBlendOutcome(r, v, ok), EMPTY_BLEND_RANGE);
 
   it("records the largest size that built and the smallest that did not", () => {
-    expect(fold([[1, true], [2, true], [4, false], [5, false]])).toEqual({ built: 2, refused: 4 });
+    expect(
+      fold([
+        [1, true],
+        [2, true],
+        [4, false],
+        [5, false],
+      ]),
+    ).toEqual({ built: 2, refused: 4 });
   });
 
   it("lets a refusal drop a success recorded at the same size", () => {
-    const r = fold([[2.2, true], [2.2, false]]);
+    const r = fold([
+      [2.2, true],
+      [2.2, false],
+    ]);
     expect(r.refused).toBe(2.2);
     expect(r.built).toBeNull();
   });
 
   it("does not let a late success climb back over a refusal", () => {
-    expect(fold([[1, true], [3, false], [4, true]]).built).toBe(1);
+    expect(
+      fold([
+        [1, true],
+        [3, false],
+        [4, true],
+      ]).built,
+    ).toBe(1);
   });
 
   it("ignores a value that is not a size", () => {
@@ -138,19 +154,26 @@ describe("commitDecision", () => {
   });
 
   it("commits a value whose own preview built", () => {
-    expect(commitDecision({ ...base, value: 30, verdict: "builds", settled: true, shown: 30 }))
-      .toEqual({ action: "commit", value: 30 });
+    expect(commitDecision({ ...base, value: 30, verdict: "builds", settled: true, shown: 30 })).toEqual({
+      action: "commit",
+      value: 30,
+    });
   });
 
   it("commits a value the kernel has not answered for yet, for the store to verify", () => {
     // Released mid round-trip: the tool closes now, the rebuild decides later.
-    expect(commitDecision({ ...base, verdict: "unknown", shown: 30 }))
-      .toEqual({ action: "commit", value: 41, unverified: true });
+    expect(commitDecision({ ...base, verdict: "unknown", shown: 30 })).toEqual({
+      action: "commit",
+      value: 41,
+      unverified: true,
+    });
   });
 
   it("commits a size below one that built without asking again", () => {
-    expect(commitDecision({ ...base, value: 20, verdict: "builds", shown: 30 }))
-      .toEqual({ action: "commit", value: 20 });
+    expect(commitDecision({ ...base, value: 20, verdict: "builds", shown: 30 })).toEqual({
+      action: "commit",
+      value: 20,
+    });
   });
 
   describe("with a signed value, as press/pull reads one", () => {
@@ -171,7 +194,10 @@ describe("commitDecision", () => {
 });
 
 describe("blendRefusalReason", () => {
-  const tooBig = { code: "blendTooLarge", message: "Fillet failed on Body1: Failed creating a fillet with radius of 40.0, try a smaller value" };
+  const tooBig = {
+    code: "blendTooLarge",
+    message: "Fillet failed on Body1: Failed creating a fillet with radius of 40.0, try a smaller value",
+  };
 
   it("says what a too-large blend means, per treatment and edge count", () => {
     expect(blendRefusalReason("fillet", 1, tooBig)).toBe("Radius too large for the faces around this edge");
@@ -190,8 +216,9 @@ describe("blendRefusalReason", () => {
   });
 
   it("passes an unrecognised refusal through without the body prefix", () => {
-    expect(blendRefusalReason("fillet", 1, { code: null, message: "Fillet failed on Body1: something odd" }))
-      .toBe("something odd");
+    expect(blendRefusalReason("fillet", 1, { code: null, message: "Fillet failed on Body1: something odd" })).toBe(
+      "something odd",
+    );
   });
 });
 

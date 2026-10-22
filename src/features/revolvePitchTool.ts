@@ -50,13 +50,7 @@ import { resolveEntities } from "../sketch/resolve";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
-import {
-  axisDragDistance,
-  createDragHandle,
-  nameHandle,
-  leanOutOfView,
-  type DragHandle,
-} from "./manipulator";
+import { axisDragDistance, createDragHandle, nameHandle, leanOutOfView, type DragHandle } from "./manipulator";
 import {
   arcSpanDeg,
   clampDragAngle,
@@ -68,13 +62,7 @@ import {
   sweepArc,
   unwrapTurn,
 } from "./screwMath";
-import {
-  ROTATE_SNAP_DEG,
-  angleInFrame,
-  ringDragDegenerate,
-  rotationFrame,
-  snapDegrees,
-} from "./transformGizmo";
+import { ROTATE_SNAP_DEG, angleInFrame, ringDragDegenerate, rotationFrame, snapDegrees } from "./transformGizmo";
 import { themeColor } from "../viewport/themeColors";
 import { CanvasGesture } from "./canvasGesture";
 import { hitPx, hitScale } from "../input/pointerKind";
@@ -194,8 +182,7 @@ export class RevolvePitchTool {
     const f = this.store.document.features.find((x) => x.id === featureId);
     if (!f || f.type !== "revolve") return false;
     const rev = f as Revolve;
-    const bound = (field: string) =>
-      this.store.isParamBound({ kind: "feature", feature: rev.id, field });
+    const bound = (field: string) => this.store.isParamBound({ kind: "feature", feature: rev.id, field });
     if (bound("pitch") || bound("angle")) return false;
     if (typeof rev.angle !== "number" || rev.angle === 0) return false;
     const savedPitch = rev.pitch;
@@ -348,11 +335,7 @@ export class RevolvePitchTool {
       // Shift lifts the step, the way it does on the move gizmo's rings and on
       // the pitch arrow. The default step is the app's one rotation step rather
       // than a second convention invented here.
-      const stepped = clampDragAngle(
-        snapDegrees(raw, e.shiftKey ? 0 : ROTATE_SNAP_DEG),
-        this.pitch,
-        this.minPitch,
-      );
+      const stepped = clampDragAngle(snapDegrees(raw, e.shiftKey ? 0 : ROTATE_SNAP_DEG), this.pitch, this.minPitch);
       if (stepped === this.angle) return;
       this.angle = stepped;
       this.dim.updateFromCursor({ angle: this.angle });
@@ -401,8 +384,7 @@ export class RevolvePitchTool {
     if (this.grabbing || this.grabbingAngle) {
       this.grabbing = false;
       this.grabbingAngle = false;
-      this.viewport.domElement.style.cursor =
-        this.hovering || this.hoveringArc ? "grab" : "default";
+      this.viewport.domElement.style.cursor = this.hovering || this.hoveringArc ? "grab" : "default";
       // Letting go of a handle is NOT the end of the gesture. A revolve has two
       // numbers and a handle each, so committing here shut the tool the moment
       // the first one was set and the second could not be reached without
@@ -417,8 +399,7 @@ export class RevolvePitchTool {
       this.pushPreview();
       return;
     }
-    const moved =
-      Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (!this.downOnGizmo && !moved) this.commit();
   }
 
@@ -438,13 +419,8 @@ export class RevolvePitchTool {
     // angle. leanOutOfView is for DRAWING only: the drag still measures along
     // the true axis, where axisDragDistance already handles the steep case.
     const fwd = this.viewport.camera.getWorldDirection(new THREE.Vector3());
-    const right = new THREE.Vector3()
-      .setFromMatrixColumn(this.viewport.camera.matrixWorld, 0)
-      .normalize();
-    this.quat.setFromUnitVectors(
-      Y_AXIS,
-      leanOutOfView(this.dir.clone().multiplyScalar(sign), fwd, right),
-    );
+    const right = new THREE.Vector3().setFromMatrixColumn(this.viewport.camera.matrixWorld, 0).normalize();
+    this.quat.setFromUnitVectors(Y_AXIS, leanOutOfView(this.dir.clone().multiplyScalar(sign), fwd, right));
     this.gizmo.position.copy(this.anchor);
     this.gizmo.quaternion.copy(this.quat);
     this.gizmo.scale.setScalar(this.viewport.pixelWorldSize(this.anchor));
@@ -569,8 +545,7 @@ export class RevolvePitchTool {
   private drawArc() {
     if (!this.arc || !this.arcTube || !this.arcGrab || !this.arcHead || !this.arcMat) return;
     const mmPerPx = this.viewport.pixelWorldSize(this.anchor);
-    const span =
-      arcSpanDeg(this.radius, mmPerPx, ARC_PX) * (this.angle < 0 ? -1 : 1);
+    const span = arcSpanDeg(this.radius, mmPerPx, ARC_PX) * (this.angle < 0 ? -1 : 1);
     // Quantised so an orbit, which changes mmPerPx every frame under a
     // perspective camera, does not rebuild a tube sixty times a second for a
     // shape that has not visibly moved.
@@ -586,21 +561,9 @@ export class RevolvePitchTool {
       this.arc.visible = true;
       const curve = new THREE.CatmullRomCurve3(pts.map(v3));
       this.arcTube.geometry.dispose();
-      this.arcTube.geometry = new THREE.TubeGeometry(
-        curve,
-        ARC_SEGMENTS,
-        ARC_TUBE_PX * mmPerPx,
-        8,
-        false,
-      );
+      this.arcTube.geometry = new THREE.TubeGeometry(curve, ARC_SEGMENTS, ARC_TUBE_PX * mmPerPx, 8, false);
       this.arcGrab.geometry.dispose();
-      this.arcGrab.geometry = new THREE.TubeGeometry(
-        curve,
-        ARC_SEGMENTS,
-        hitPx(ARC_GRAB_PX) * mmPerPx,
-        6,
-        false,
-      );
+      this.arcGrab.geometry = new THREE.TubeGeometry(curve, ARC_SEGMENTS, hitPx(ARC_GRAB_PX) * mmPerPx, 6, false);
       const last = pts[pts.length - 1]!;
       const prev = pts[pts.length - 2]!;
       this.arcEnd.set(last[0], last[1], last[2]);
@@ -615,9 +578,7 @@ export class RevolvePitchTool {
     // about its own centre, so placing it on the end of the tube would bury half
     // the head in the line it is meant to cap; this puts its base there and its
     // point out past the end, which is where an arrow's point belongs.
-    this.arcHead.position
-      .copy(this.arcEnd)
-      .addScaledVector(this.arcTangent, (HEAD_LEN_PX * mmPerPx) / 2);
+    this.arcHead.position.copy(this.arcEnd).addScaledVector(this.arcTangent, (HEAD_LEN_PX * mmPerPx) / 2);
     const hot = this.hoveringArc || this.grabbingAngle;
     const c = themeColor(hot ? "--accent-hot" : "--accent", hot ? 0xff9a5c : 0xff7a3c);
     this.arcMat.color.set(c);
@@ -640,9 +601,7 @@ export class RevolvePitchTool {
     if (!at) return null;
     // The pivot is where that plane crosses the axis, which is the axis point
     // level with the arrow rather than the one level with the profile.
-    const pivot = this.base
-      .clone()
-      .addScaledVector(this.dir, this.anchor.clone().sub(this.base).dot(this.dir));
+    const pivot = this.base.clone().addScaledVector(this.dir, this.anchor.clone().sub(this.base).dot(this.dir));
     return (angleInFrame(at, pivot, rotationFrame(this.dir)) * 180) / Math.PI;
   }
 
@@ -660,9 +619,7 @@ export class RevolvePitchTool {
     // head begins, so without it the point of the arrow, which is the part of an
     // arrow a hand goes for, was the one place on the control that took no
     // press: measured along the curve, the last tenth answered nothing at all.
-    const parts = this.arc?.visible
-      ? [this.arcGrab, this.arcHead].filter((o): o is THREE.Mesh => !!o)
-      : [];
+    const parts = this.arc?.visible ? [this.arcGrab, this.arcHead].filter((o): o is THREE.Mesh => !!o) : [];
     const gizmo = this.gizmo;
     return this.viewport.probe(x, y, (rc): "pitch" | "angle" | null => {
       const arrow = gizmo ? rc.intersectObjects(gizmo.children, false)[0] : undefined;

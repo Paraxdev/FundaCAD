@@ -3,7 +3,14 @@
 // the overlays are drawn after it on the canvas, with everything given back.
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { HIGH_NEEDS_FULL, HIGH_NEEDS_GPU, HIGH_NEEDS_POWER, resolveRealtimeQuality, stagesFor, type FrameState } from "../../src/viewport/realtimePipeline";
+import {
+  HIGH_NEEDS_FULL,
+  HIGH_NEEDS_GPU,
+  HIGH_NEEDS_POWER,
+  resolveRealtimeQuality,
+  stagesFor,
+  type FrameState,
+} from "../../src/viewport/realtimePipeline";
 import { PostChain } from "../../src/viewport/scene";
 import { DEFAULT_RENDER, setRenderPref } from "../../src/ui/renderPrefs";
 
@@ -41,11 +48,26 @@ describe("stagesFor", () => {
   });
 
   it("lists the High stages, bokeh only through a lens and the prepass only while still", () => {
-    expect(stagesFor(state())).toEqual({ path: "high", stages: ["prepass", "model", "bokeh", "bloom", "output", "compose"] });
-    expect(stagesFor(state({ perspective: false }))).toEqual({ path: "high", stages: ["prepass", "model", "bloom", "output", "compose"] });
-    expect(stagesFor(state({ bloom: false }))).toEqual({ path: "high", stages: ["prepass", "model", "bokeh", "output", "compose"] });
-    expect(stagesFor(state({ facts: { moving: true, ghosted: false } }))).toEqual({ path: "high", stages: ["model", "bokeh", "bloom", "output", "compose"] });
-    expect(stagesFor(state({ bloom: false, blur: false }))).toEqual({ path: "high", stages: ["prepass", "model", "output", "compose"] });
+    expect(stagesFor(state())).toEqual({
+      path: "high",
+      stages: ["prepass", "model", "bokeh", "bloom", "output", "compose"],
+    });
+    expect(stagesFor(state({ perspective: false }))).toEqual({
+      path: "high",
+      stages: ["prepass", "model", "bloom", "output", "compose"],
+    });
+    expect(stagesFor(state({ bloom: false }))).toEqual({
+      path: "high",
+      stages: ["prepass", "model", "bokeh", "output", "compose"],
+    });
+    expect(stagesFor(state({ facts: { moving: true, ghosted: false } }))).toEqual({
+      path: "high",
+      stages: ["model", "bokeh", "bloom", "output", "compose"],
+    });
+    expect(stagesFor(state({ bloom: false, blur: false }))).toEqual({
+      path: "high",
+      stages: ["prepass", "model", "output", "compose"],
+    });
   });
 
   it("is not High before the passes have loaded", () => {
@@ -74,10 +96,22 @@ describe("resolveRealtimeQuality", () => {
   });
 
   it("gives Standard with a reason on Light, Potato, a weak machine and a software renderer", () => {
-    expect(resolveRealtimeQuality("high", { ...full, lowPower: true })).toEqual({ quality: "standard", reason: HIGH_NEEDS_FULL });
-    expect(resolveRealtimeQuality("high", { lowPower: true, auto: true, software: false })).toEqual({ quality: "standard", reason: HIGH_NEEDS_POWER });
-    expect(resolveRealtimeQuality("high", { lowPower: true, auto: true, software: true })).toEqual({ quality: "standard", reason: HIGH_NEEDS_GPU });
-    expect(resolveRealtimeQuality("high", { ...full, software: true })).toEqual({ quality: "standard", reason: HIGH_NEEDS_GPU });
+    expect(resolveRealtimeQuality("high", { ...full, lowPower: true })).toEqual({
+      quality: "standard",
+      reason: HIGH_NEEDS_FULL,
+    });
+    expect(resolveRealtimeQuality("high", { lowPower: true, auto: true, software: false })).toEqual({
+      quality: "standard",
+      reason: HIGH_NEEDS_POWER,
+    });
+    expect(resolveRealtimeQuality("high", { lowPower: true, auto: true, software: true })).toEqual({
+      quality: "standard",
+      reason: HIGH_NEEDS_GPU,
+    });
+    expect(resolveRealtimeQuality("high", { ...full, software: true })).toEqual({
+      quality: "standard",
+      reason: HIGH_NEEDS_GPU,
+    });
   });
 
   it("still names the refusal when High was not chosen, for the row's tooltip", () => {
@@ -85,7 +119,14 @@ describe("resolveRealtimeQuality", () => {
   });
 });
 
-interface Draw { target: unknown; mask: number; background: unknown; autoClear: boolean; autoUpdate: boolean; materials: unknown[] }
+interface Draw {
+  target: unknown;
+  mask: number;
+  background: unknown;
+  autoClear: boolean;
+  autoUpdate: boolean;
+  materials: unknown[];
+}
 
 function highChain() {
   const scene = new THREE.Scene();
@@ -97,8 +138,13 @@ function highChain() {
   const handle = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshLambertMaterial());
   handle.layers.set(7);
   // Like a section cap: a hook that writes its own material's uniforms before each draw.
-  const cap = new THREE.Mesh(new THREE.PlaneGeometry(), new THREE.ShaderMaterial({ uniforms: { pitch: { value: 0 } }, colorWrite: false }));
-  cap.onBeforeRender = () => { (cap.material as THREE.ShaderMaterial).uniforms["pitch"]!.value = 9; };
+  const cap = new THREE.Mesh(
+    new THREE.PlaneGeometry(),
+    new THREE.ShaderMaterial({ uniforms: { pitch: { value: 0 } }, colorWrite: false }),
+  );
+  cap.onBeforeRender = () => {
+    (cap.material as THREE.ShaderMaterial).uniforms["pitch"]!.value = 9;
+  };
   scene.add(body, glass, handle, cap);
   let target: unknown = null;
   const clear = new THREE.Color(0x0b0912);
@@ -111,9 +157,17 @@ function highChain() {
   const renderer = {
     compileAsync: (sc: THREE.Scene) => {
       const materials: unknown[] = [];
-      sc.traverseVisible((o) => { if ((o as THREE.Mesh).isMesh && o.layers.test(camera.layers)) materials.push((o as THREE.Mesh).material); });
+      sc.traverseVisible((o) => {
+        if ((o as THREE.Mesh).isMesh && o.layers.test(camera.layers)) materials.push((o as THREE.Mesh).material);
+      });
       compiles.push({ target, materials });
-      return new Promise<void>((resolve) => { const was = release; release = () => { was(); resolve(); }; });
+      return new Promise<void>((resolve) => {
+        const was = release;
+        release = () => {
+          was();
+          resolve();
+        };
+      });
     },
     toneMapping: THREE.NeutralToneMapping,
     toneMappingExposure: 1,
@@ -122,27 +176,48 @@ function highChain() {
     getPixelRatio: () => 1,
     getDrawingBufferSize: (v: THREE.Vector2) => v.set(64, 32),
     getRenderTarget: () => target,
-    setRenderTarget: (t: unknown) => { target = t; },
+    setRenderTarget: (t: unknown) => {
+      target = t;
+    },
     getClearColor: (c: THREE.Color) => c.copy(clear),
     getClearAlpha: () => 1,
-    setClearColor: (c: THREE.Color | number) => { clear.set(c); },
+    setClearColor: (c: THREE.Color | number) => {
+      clear.set(c);
+    },
     clear: () => {},
     clearDepth: () => {},
     clearStencil: () => {},
     render: (s: THREE.Scene, c: THREE.Camera) => {
       s.traverseVisible((o) => {
         const m = o as THREE.Mesh;
-        if (m.isMesh && o.layers.test(c.layers)) o.onBeforeRender(renderer as unknown as THREE.WebGLRenderer, s, c, m.geometry, m.material as THREE.Material, new THREE.Group());
+        if (m.isMesh && o.layers.test(c.layers))
+          o.onBeforeRender(
+            renderer as unknown as THREE.WebGLRenderer,
+            s,
+            c,
+            m.geometry,
+            m.material as THREE.Material,
+            new THREE.Group(),
+          );
       });
       draws.push({
-        target, mask: c.layers.mask, background: s.background, autoClear: renderer.autoClear,
-        autoUpdate: renderer.shadowMap.autoUpdate, materials: [body.material, glass.material, handle.material],
+        target,
+        mask: c.layers.mask,
+        background: s.background,
+        autoClear: renderer.autoClear,
+        autoUpdate: renderer.shadowMap.autoUpdate,
+        materials: [body.material, glass.material, handle.material],
       });
       if (throwOn === draws.length) throw new Error("lost context");
     },
   };
   let throwOn = 0;
-  const post = new PostChain(renderer as unknown as THREE.WebGLRenderer, scene, () => false, () => false);
+  const post = new PostChain(
+    renderer as unknown as THREE.WebGLRenderer,
+    scene,
+    () => false,
+    () => false,
+  );
   const composed: number[] = [];
   const composer = {
     passes: [] as unknown[],
@@ -158,7 +233,25 @@ function highChain() {
   setRenderPref("bloom", 0);
   setRenderPref("focusBlur", 0);
   const originals = [body.material, glass.material, handle.material];
-  return { post, scene, camera, full, draws, composed, compiles, release: () => release(), renderer, originals, body, glass, handle, cap, throwAt: (n: number) => { throwOn = n; } };
+  return {
+    post,
+    scene,
+    camera,
+    full,
+    draws,
+    composed,
+    compiles,
+    release: () => release(),
+    renderer,
+    originals,
+    body,
+    glass,
+    handle,
+    cap,
+    throwAt: (n: number) => {
+      throwOn = n;
+    },
+  };
 }
 
 describe("PostChain quality switch", () => {
@@ -196,7 +289,9 @@ describe("PostChain quality switch", () => {
     expect(prepass.materials).toHaveLength(1);
     expect(prepass.materials[0]).toBeInstanceOf(THREE.MeshNormalMaterial);
     expect(overlay.target).toBeNull();
-    expect(overlay.materials.filter((m) => (m as THREE.Material).colorWrite === false)).toHaveLength(overlay.materials.length - 1);
+    expect(overlay.materials.filter((m) => (m as THREE.Material).colorWrite === false)).toHaveLength(
+      overlay.materials.length - 1,
+    );
     expect([c.body.material, c.glass.material, c.handle.material]).toEqual(c.originals);
     c.release();
     await swapped;

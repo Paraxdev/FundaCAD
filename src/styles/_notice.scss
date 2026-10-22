@@ -39,7 +39,8 @@
   transition-property: width, opacity, transform, border-color, background;
   transition-duration: 720ms, 240ms, 240ms, var(--t-fast), var(--t-fast);
   transition-timing-function: cubic-bezier(0.3, 0.95, 0.35, 1), var(--ease), var(--ease), var(--ease), var(--ease);
-  transition-timing-function: linear(0, 0.174 10%, 0.348 20%, 0.521 30%, 0.695 40%, 0.828 48%, 0.924 56%, 0.971 64%, 0.983 72%, 0.991 86%, 1),
+  transition-timing-function:
+    linear(0, 0.174 10%, 0.348 20%, 0.521 30%, 0.695 40%, 0.828 48%, 0.924 56%, 0.971 64%, 0.983 72%, 0.991 86%, 1),
     var(--ease), var(--ease), var(--ease), var(--ease);
 }
 .err-notice:hover {
@@ -57,7 +58,9 @@
   width: 17px;
   height: 17px;
   margin-top: -8.5px;
-  transition: opacity 180ms var(--ease), transform 220ms var(--ease);
+  transition:
+    opacity 180ms var(--ease),
+    transform 220ms var(--ease);
 }
 .err-tri path:first-child {
   fill: var(--err-soft);
@@ -114,8 +117,14 @@
   transform: scale(0.96);
 }
 @keyframes err-pop {
-  from { opacity: 0; transform: scale(0.3); }
-  to   { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* The resting width, never seen. */
@@ -155,6 +164,11 @@
   animation: logcon-flash 1.6s var(--ease);
 }
 @keyframes logcon-flash {
-  0%, 30% { background: var(--error-tint); }
-  100% { background: transparent; }
+  0%,
+  30% {
+    background: var(--error-tint);
+  }
+  100% {
+    background: transparent;
+  }
 }

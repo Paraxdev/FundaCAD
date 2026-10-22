@@ -30,7 +30,10 @@ const CHROME = process.env.SC_CHROME || "/usr/bin/chromium";
 const CHROME_MATCH = process.env.SC_CHROME_MATCH || "chromium";
 
 const TOKEN = process.env.SC_TOKEN || "";
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 const SIZES = (process.env.SC_RSS_SIZES || "100,1000,3000").split(",").map(Number);
 const DOCS = process.env.SC_PERF_DIR || "/tmp";
 
@@ -42,7 +45,9 @@ function pidsMatching(needle) {
     try {
       const cmd = fs.readFileSync(`/proc/${e}/cmdline`, "utf8");
       if (cmd.includes(needle)) out.add(Number(e));
-    } catch { /* vanished */ }
+    } catch {
+      /* vanished */
+    }
   }
   return out;
 }
@@ -51,12 +56,18 @@ function pidsMatching(needle) {
  *  a WebGL scene's cost is spread across all three, and the renderer's JS heap
  *  alone under-reports it badly. */
 function rssMiB(pids) {
-  let total = 0, n = 0;
+  let total = 0,
+    n = 0;
   for (const pid of pids) {
     try {
       const m = /VmRSS:\s+(\d+) kB/.exec(fs.readFileSync(`/proc/${pid}/status`, "utf8"));
-      if (m) { total += Number(m[1]); n += 1; }
-    } catch { /* gone */ }
+      if (m) {
+        total += Number(m[1]);
+        n += 1;
+      }
+    } catch {
+      /* gone */
+    }
   }
   return { mib: total / 1024, procs: n };
 }
@@ -87,7 +98,10 @@ function rssMiB(pids) {
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3500);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store, null, { timeout: 60000 });
   await page.waitForTimeout(1500);
 
@@ -98,7 +112,10 @@ function rssMiB(pids) {
   const rows = [];
   for (const n of SIZES) {
     const file = `${DOCS}/perf_tree_${n}.funda`;
-    if (!fs.existsSync(file)) { console.log(`${n}: no ${file}, run gen_perf_docs.py`); continue; }
+    if (!fs.existsSync(file)) {
+      console.log(`${n}: no ${file}, run gen_perf_docs.py`);
+      continue;
+    }
     const doc = JSON.parse(fs.readFileSync(file, "utf8"));
     await page.evaluate(async (d) => {
       window.store.loadDocument(d);
@@ -121,8 +138,12 @@ function rssMiB(pids) {
       return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
     });
     await page.evaluate(() => {
-      window.__frames = 0; window.__t0 = performance.now();
-      const tick = () => { window.__frames += 1; window.__raf = requestAnimationFrame(tick); };
+      window.__frames = 0;
+      window.__t0 = performance.now();
+      const tick = () => {
+        window.__frames += 1;
+        window.__raf = requestAnimationFrame(tick);
+      };
       window.__raf = requestAnimationFrame(tick);
     });
     const camBefore = await page.evaluate(() => {
@@ -130,7 +151,7 @@ function rssMiB(pids) {
       return c ? [c.position.x, c.position.y, c.position.z] : [0, 0, 0];
     });
     await page.mouse.move(box.x, box.y);
-    await page.mouse.down({ button: "middle" });  // middle = orbit (Fusion convention)
+    await page.mouse.down({ button: "middle" }); // middle = orbit (Fusion convention)
     for (let i = 0; i < 40; i++) {
       await page.mouse.move(box.x + Math.round(80 * Math.sin(i / 4)), box.y + (i % 7) * 3);
       await page.waitForTimeout(50);
@@ -157,7 +178,7 @@ function rssMiB(pids) {
     rows.push({ n, mib: r.mib, over, fps });
     console.log(
       `${String(n).padEnd(9)} ${r.mib.toFixed(0).padStart(7)} ${over.toFixed(0).padStart(13)} ` +
-      `${(over / n).toFixed(3).padStart(10)} ${fps.toFixed(1).padStart(6)}`
+        `${(over / n).toFixed(3).padStart(10)} ${fps.toFixed(1).padStart(6)}`,
     );
   }
 
@@ -168,9 +189,11 @@ function rssMiB(pids) {
     console.log(`The pre-Phase-A figure the plan was built on was 12,492 MiB (12.2 GiB).`);
     const ratio = 12492 / big.mib;
     console.log(`Post-Phase-A is ${ratio.toFixed(1)}x smaller on this measurement.`);
-    console.log(big.mib > 4096
-      ? "STILL heavy: a 16 GB machine is at risk."
-      : "Comfortable on a 16 GB machine; the OOM framing no longer applies.");
+    console.log(
+      big.mib > 4096
+        ? "STILL heavy: a 16 GB machine is at risk."
+        : "Comfortable on a 16 GB machine; the OOM framing no longer applies.",
+    );
   }
   await browser.close();
 })();

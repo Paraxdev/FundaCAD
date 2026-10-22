@@ -31,14 +31,23 @@ function rig() {
     regions: [],
     update: vi.fn(),
     regionPointsForSketch: () => [[1, 1, 0]],
-    selectRegionsByPoints: () => { selected = [wr]; },
+    selectRegionsByPoints: () => {
+      selected = [wr];
+    },
     selectedRegions: () => selected,
     setHoverRegion: vi.fn(),
-    clearRegionSelection: () => { selected = []; },
+    clearRegionSelection: () => {
+      selected = [];
+    },
   };
   const addFeature = vi.fn();
   const store = {
-    document: { features: [{ id: "f1", type: "sketch" }, { id: "f2", type: "extrude", sketch: "f1", distance: 20 }] },
+    document: {
+      features: [
+        { id: "f1", type: "sketch" },
+        { id: "f2", type: "extrude", sketch: "f1", distance: 20 },
+      ],
+    },
     buildState: { result: { mesh: { positions: [0, 0, 0] } } },
     nextId: () => "f9",
     hiddenBodyIds: () => undefined,
@@ -68,7 +77,9 @@ function rig() {
 beforeEach(() => {
   setActivePinia(createPinia());
   const proto = ExtrudeTool.prototype as unknown as { updatePreview(): void; positionDim(): void };
-  vi.spyOn(proto, "updatePreview").mockImplementation(function (this: Internals) { this.refreshPrompt(); });
+  vi.spyOn(proto, "updatePreview").mockImplementation(function (this: Internals) {
+    this.refreshPrompt();
+  });
   vi.spyOn(proto, "positionDim").mockImplementation(() => {});
 });
 afterEach(() => {
@@ -123,7 +134,12 @@ describe("extruding a consumed sketch chosen in the tree", () => {
     r.dragTo(7);
     (r.tool as unknown as { commit(): void }).commit();
     expect(r.addFeature).toHaveBeenCalledTimes(1);
-    expect(r.addFeature.mock.calls[0]![0]).toMatchObject({ type: "extrude", sketch: "f1", operation: "join", distance: 7 });
+    expect(r.addFeature.mock.calls[0]![0]).toMatchObject({
+      type: "extrude",
+      sketch: "f1",
+      operation: "join",
+      distance: 7,
+    });
   });
 
   it("an ordinary extrude still guesses from the direction, and ignores Alt+O", () => {

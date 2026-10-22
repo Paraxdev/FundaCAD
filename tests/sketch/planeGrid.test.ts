@@ -54,8 +54,8 @@ describe("snapLatticeStep", () => {
 
   it("would have disagreed with the old fixed lattice", () => {
     // Both directions of the defect, so this cannot pass by accident.
-    expect(snapLatticeStep(1)).toBeGreaterThan(5);      // zoomed out: 50mm cells
-    expect(snapLatticeStep(0.002)).toBeLessThan(5);     // zoomed in: sub-mm cells
+    expect(snapLatticeStep(1)).toBeGreaterThan(5); // zoomed out: 50mm cells
+    expect(snapLatticeStep(0.002)).toBeLessThan(5); // zoomed in: sub-mm cells
   });
 
   it("never offers a lattice finer than a cursor can aim at", () => {
@@ -117,7 +117,10 @@ describe("gridLines", () => {
   const all = (g: ReturnType<typeof gridLines>) => [...g.minor, ...g.major];
   const lineCount = (g: ReturnType<typeof gridLines>) => all(g).length / 4;
   const line = (xy: number[], i: number) => ({
-    x1: xy[i * 4]!, y1: xy[i * 4 + 1]!, x2: xy[i * 4 + 2]!, y2: xy[i * 4 + 3]!,
+    x1: xy[i * 4]!,
+    y1: xy[i * 4 + 1]!,
+    x2: xy[i * 4 + 2]!,
+    y2: xy[i * 4 + 3]!,
   });
 
   it("emits four numbers per line and nothing else", () => {
@@ -153,7 +156,10 @@ describe("gridLines", () => {
 
   it("marks every Nth line major, counted from the origin", () => {
     const g = gridLines(0, 0, 5, 100);
-    for (const [xy, wantMajor] of [[g.major, true], [g.minor, false]] as const) {
+    for (const [xy, wantMajor] of [
+      [g.major, true],
+      [g.minor, false],
+    ] as const) {
       for (let i = 0; i < xy.length / 4; i++) {
         const l = line(xy, i);
         const idx = (l.x1 === l.x2 ? l.x1 : l.y1) / 5;
@@ -175,7 +181,11 @@ describe("gridLines", () => {
     // The control on "infinite": the reach is the viewport, so a line that
     // stopped inside it would be a line whose end you can see. There is no
     // interior edge to find, in either axis, from any centre.
-    for (const [cx, cy] of [[0, 0], [123, -77], [-4.2, 9.9]] as const) {
+    for (const [cx, cy] of [
+      [0, 0],
+      [123, -77],
+      [-4.2, 9.9],
+    ] as const) {
       const g = gridLines(cx, cy, 5, 100);
       expect(lineCount(g)).toBeGreaterThan(0);
       for (let i = 0; i < lineCount(g); i++) {

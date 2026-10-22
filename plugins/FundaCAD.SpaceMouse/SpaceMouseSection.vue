@@ -43,7 +43,9 @@ const ACTIONS = Object.keys(ACTION_LABELS) as ActionName[];
 // A deep ref would put reactive proxies in there.
 const binds = shallowRef<Record<ActionName, AxisBinding>>(structuredClone(getSpaceMouseConfig().bind));
 
-const offSettings = settings.onChange(() => { binds.value = structuredClone(getSpaceMouseConfig().bind); });
+const offSettings = settings.onChange(() => {
+  binds.value = structuredClone(getSpaceMouseConfig().bind);
+});
 
 function applyBind(action: ActionName, patch: Partial<AxisBinding>) {
   const next: AxisBinding = { ...binds.value[action], ...patch };

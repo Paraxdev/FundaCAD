@@ -69,7 +69,13 @@ import { ThreadTool } from "../features/threadTool";
 import { TextOnFaceTool } from "../features/textOnFaceTool";
 import { HoleTool } from "../features/holeTool";
 import { cancelActiveTools, createToolBusy } from "./toolBusy";
-import { createDocumentActions, newFromTemplate, openAtVersion, openOnBranch, openPathGuarded } from "./documentActions";
+import {
+  createDocumentActions,
+  newFromTemplate,
+  openAtVersion,
+  openOnBranch,
+  openPathGuarded,
+} from "./documentActions";
 import { endPickSession } from "../ui/treePick";
 import { createDatumPlanes } from "./datumPlanes";
 import { createSketchVisibility } from "./sketchVisibility";
@@ -271,22 +277,35 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.viewport = new Viewport(canvas);
   // The grid spacing follows the zoom, so what one square is worth is a fact
   // about the view that only the view knows and only the chrome can show.
-  e.viewport.onGridStep = (mm) => { useUiStore().gridStepMm = mm; };
+  e.viewport.onGridStep = (mm) => {
+    useUiStore().gridStepMm = mm;
+  };
   // See-through has no other tell once the model happens to be see-through for
   // another reason (a sketch dims it too), so the view bar's button is what
   // says which mode you are in.
-  e.viewport.onXrayChange = (on) => { useUiStore().xray = on; };
-  e.viewport.onWireframeChange = (on) => { useUiStore().wireframe = on; };
-  e.viewport.onViewModeChange = (m) => { useUiStore().viewMode = m; };
+  e.viewport.onXrayChange = (on) => {
+    useUiStore().xray = on;
+  };
+  e.viewport.onWireframeChange = (on) => {
+    useUiStore().wireframe = on;
+  };
+  e.viewport.onViewModeChange = (m) => {
+    useUiStore().viewMode = m;
+  };
   useUiStore().viewMode = e.viewport.viewMode;
-  e.viewport.onTraceStateChange = (st) => { useUiStore().traceState = st; };
+  e.viewport.onTraceStateChange = (st) => {
+    useUiStore().traceState = st;
+  };
   e.viewport.onTraceFault = (why, off) => {
     toast(off ? `${why}. Path tracing is off until FundaCAD restarts.` : `${why}. The view is back on Realtime.`, {
-      kind: "error", source: "pathtrace",
+      kind: "error",
+      source: "pathtrace",
     });
   };
   e.viewport.onTraceNotice = (message) => toast(message, { kind: "warning", source: "pathtrace" });
-  e.viewport.onStutterChange = (on) => { useUiStore().lowPerformance = on; };
+  e.viewport.onStutterChange = (on) => {
+    useUiStore().lowPerformance = on;
+  };
 
   e.geometry = new Geometry();
   void e.geometry.init(); // picks the engine transport and opens it
@@ -319,7 +338,10 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // the store, so leaving it running in "off" would keep counting revisions for
   // a session nobody is in.
   e.live = new LiveSessionHost(e.store, e.geometry, liveEditsAllowed);
-  e.guide = new GuideSession((t) => resolveTarget(e, t), () => takeSnapshot(e));
+  e.guide = new GuideSession(
+    (t) => resolveTarget(e, t),
+    () => takeSnapshot(e),
+  );
   e.live.attachGuide(e.guide);
   const syncLive = () => {
     if (liveSharingEnabled()) e.live.start();
@@ -342,14 +364,22 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     else if (e.overlay.regions.length) e.overlay.update(e.store.document);
   };
   const cuts = profileCutCache({
-    cuts: (plane, r) => e.store.profileCuts(
-      [plane.origin.x, plane.origin.y, plane.origin.z],
-      [plane.n.x, plane.n.y, plane.n.z],
-      ([[r.minx, r.miny], [r.maxx, r.miny], [r.maxx, r.maxy], [r.minx, r.maxy]] as const).map(([x, y]) => {
-        const p = plane.to3D(x, y);
-        return [p.x, p.y, p.z] as Vec3;
-      }),
-    ),
+    cuts: (plane, r) =>
+      e.store.profileCuts(
+        [plane.origin.x, plane.origin.y, plane.origin.z],
+        [plane.n.x, plane.n.y, plane.n.z],
+        (
+          [
+            [r.minx, r.miny],
+            [r.maxx, r.miny],
+            [r.maxx, r.maxy],
+            [r.minx, r.maxy],
+          ] as const
+        ).map(([x, y]) => {
+          const p = plane.to3D(x, y);
+          return [p.x, p.y, p.z] as Vec3;
+        }),
+      ),
     epoch: () => e.store.buildState.result,
     document: () => opened,
     landed: splitAgain,
@@ -366,8 +396,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // projection refresh entries for the OPEN sketch bypass the doc (the session
   // owns it) and patch the live entities instead
   e.store.onProjectionsApplied = (updates) => e.sketch.syncProjectedCurves(updates);
-  e.store.onParamSolveIssue = (id) =>
-    toast(`Sketch ${id}: dimensions can't be satisfied, geometry left unchanged`);
+  e.store.onParamSolveIssue = (id) => toast(`Sketch ${id}: dimensions can't be satisfied, geometry left unchanged`);
   // Engine owns fonts: glyph outlines arrive async via tessellateText; repaint the
   // right surface (active sketch or committed overlay) when they land.
   setTextBackend(e.geometry, () => {
@@ -400,7 +429,10 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
         onChange: (fn) => e.store.onSectionViewChange(fn),
       },
       datumDef: (id) => {
-        const f = asFeature(e.store.document.features.find((x) => x.id === id), "datumPlane");
+        const f = asFeature(
+          e.store.document.features.find((x) => x.id === id),
+          "datumPlane",
+        );
         return f ? e.datumPlaneDef(f) : null;
       },
     }),
@@ -416,12 +448,14 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.sketch.gizmo = {
     start: (target, done) => move.startTarget(target, () => done()),
     cancel: () => move.cancel(),
-    get active() { return move.active; },
+    get active() {
+      return move.active;
+    },
   };
 
   // Reads e.toolBusy, assigned below, hence the thunk, the same late binding
   // every other block in this file uses.
-  e.nudge =new SelectionNudge(e.viewport, { toolBusy: () => e.toolBusy() });
+  e.nudge = new SelectionNudge(e.viewport, { toolBusy: () => e.toolBusy() });
 
   // Warm up the constraint solver WASM. Deliberately ignores failure: initSolver
   // resolves false rather than rejecting, so a runtime that cannot compile the
@@ -469,7 +503,9 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     sketch: e.sketch,
     dropBodyGizmo: () => e.dropBodyGizmo(),
     overlay: e.overlay,
-    forgetLastCommit: () => { e.tools.extrude.lastCommit = null; },
+    forgetLastCommit: () => {
+      e.tools.extrude.lastCommit = null;
+    },
     viewport: e.viewport,
   });
   installEnvironmentSync(e.store);
@@ -530,11 +566,15 @@ export function mountUi(e: Engine): void {
     patternTool: e.tools.pattern,
     planeOffset: e.tools.planeOffset,
     datumPose: e.tools.datumPose,
-    datumMoveTarget: (id) => datumMoveTarget({
-      store: e.store,
-      sourceOf: (f) => e.datumSourceOf(f),
-      previewPose: (pid, p) => e.previewDatumPose(pid, p),
-    }, id),
+    datumMoveTarget: (id) =>
+      datumMoveTarget(
+        {
+          store: e.store,
+          sourceOf: (f) => e.datumSourceOf(f),
+          previewPose: (pid, p) => e.previewDatumPose(pid, p),
+        },
+        id,
+      ),
     canvas: e.canvas,
     toolBusy: () => e.toolBusy(),
     hasBody: () => e.hasBody(),
@@ -544,7 +584,9 @@ export function mountUi(e: Engine): void {
     isSketchConsumed: (id) => e.isSketchConsumed(id),
     getSelectedFeature: () => e.selectedFeature,
     getSelectedFeatureExplicit: () => e.selectedFeatureExplicit,
-    setPlanePick: (v) => { e.planePick = v; },
+    setPlanePick: (v) => {
+      e.planePick = v;
+    },
   });
 
   e.menus = createContextMenus({
@@ -564,11 +606,14 @@ export function mountUi(e: Engine): void {
     datumPlaneDef: (f) => e.datumPlaneDef(f),
     handleAction: (a) => e.handleAction(a),
     getLastAction: () => e.lastAction,
-    setLastAction: (a) => { e.lastAction = a; },
+    setLastAction: (a) => {
+      e.lastAction = a;
+    },
     startCutByPlane: (id) => e.starters.startCutByPlane(id),
     offsetPlaneFromFace: (...args) => e.starters.offsetPlaneFromFace(...args),
     axisFromRoundFace: (...args) => e.starters.axisFromRoundFace(...args),
-    exportFlat: (source, format) => void import("../io/files").then((m) => m.exportModel(e.store, e.geometry, [], source, format)),
+    exportFlat: (source, format) =>
+      void import("../io/files").then((m) => m.exportModel(e.store, e.geometry, [], source, format)),
   });
 
   e.ui.panels = createPanels({
@@ -617,5 +662,4 @@ export function mountUi(e: Engine): void {
     if (!connected) e.setStatus("connecting to the geometry engine…", "error");
     else void e.store.rebuildNow();
   });
-
 }

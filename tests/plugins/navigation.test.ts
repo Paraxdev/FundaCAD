@@ -4,8 +4,17 @@ import { validateBindings } from "../../src/viewport/navigator/bindings";
 import { checkShortcut } from "../../src/input/shortcuts";
 import { shippedPlugins } from "../../src/plugins/shipped";
 import {
-  DEFAULT_CONFIG, PRESETS, RADIAL_ACTION, RADIAL_KEY, RING_SLOTS, contextOf, keymapFor, parseConfig, radialItems,
-  tableFor, type NavConfig,
+  DEFAULT_CONFIG,
+  PRESETS,
+  RADIAL_ACTION,
+  RADIAL_KEY,
+  RING_SLOTS,
+  contextOf,
+  keymapFor,
+  parseConfig,
+  radialItems,
+  tableFor,
+  type NavConfig,
 } from "../../plugins/FundaCAD.Navigation/navigation";
 
 const cfg = (patch: Partial<NavConfig> = {}): NavConfig => ({ ...structuredClone(DEFAULT_CONFIG), ...patch });
@@ -25,9 +34,13 @@ describe("the Navigation plugin", () => {
       "Alt+left orbits",
     ]);
     for (const p of PRESETS) expect(validateBindings(p.table), p.label).toEqual([]);
-    for (const p of PRESETS) for (const d of ["alt-right", "right", "middle"] as const) {
-      expect(validateBindings(tableFor(cfg({ preset: p.id, radial: true, radialDrag: d })).table), `${p.label} ${d}`).toEqual([]);
-    }
+    for (const p of PRESETS)
+      for (const d of ["alt-right", "right", "middle"] as const) {
+        expect(
+          validateBindings(tableFor(cfg({ preset: p.id, radial: true, radialDrag: d })).table),
+          `${p.label} ${d}`,
+        ).toEqual([]);
+      }
   });
 
   it("keeps the left button alone for selection in every preset", () => {
@@ -46,13 +59,22 @@ describe("the Navigation plugin", () => {
   it("adds the radial trigger when on, and says why a drag the preset uses cannot be one", () => {
     const on = tableFor(cfg({ radial: true }));
     expect(on.table[0]).toEqual({ button: "right", alt: true, drag: "gesture", click: "menu" });
-    expect(keymapFor(cfg({ radial: true }))).toContainEqual({ action: RADIAL_ACTION, key: RADIAL_KEY, context: "global", label: "Radial menu" });
+    expect(keymapFor(cfg({ radial: true }))).toContainEqual({
+      action: RADIAL_ACTION,
+      key: RADIAL_KEY,
+      context: "global",
+      label: "Radial menu",
+    });
     expect(checkShortcut({ action: RADIAL_ACTION, key: RADIAL_KEY, context: "global" })).toBe(null);
     const taken = tableFor(cfg({ radial: true, radialDrag: "right" }));
     expect(taken.problem).toContain("Right drag already does orbit");
     const free = tableFor(cfg({ preset: "middle-shift", radial: true, radialDrag: "right" }));
     expect(free.problem).toBe(null);
-    expect(free.table.find((b) => b.button === "right" && !b.shift)).toEqual({ button: "right", drag: "gesture", click: "menu" });
+    expect(free.table.find((b) => b.button === "right" && !b.shift)).toEqual({
+      button: "right",
+      drag: "gesture",
+      click: "menu",
+    });
   });
 
   it("round-trips its config through storage and survives junk", () => {
@@ -60,7 +82,9 @@ describe("the Navigation plugin", () => {
     c.items.sketch = ["line", "circle"];
     expect(parseConfig(JSON.stringify(c))).toEqual(c);
     expect(parseConfig("{nope")).toEqual(DEFAULT_CONFIG);
-    expect(parseConfig(JSON.stringify({ preset: "warp", items: { model: [3] }, keys: [{ key: 1 }] }))).toEqual(DEFAULT_CONFIG);
+    expect(parseConfig(JSON.stringify({ preset: "warp", items: { model: [3] }, keys: [{ key: 1 }] }))).toEqual(
+      DEFAULT_CONFIG,
+    );
   });
 
   it("offers sketch tools in a sketch and modelling tools on a selection", () => {
@@ -74,7 +98,12 @@ describe("the Navigation plugin", () => {
   it("builds a ring with icons and puts the overflow under More", () => {
     const run = vi.fn();
     const ids = Array.from({ length: 10 }, (_, i) => (i === 0 ? "fillet" : `cmd${i}`));
-    const items = radialItems(ids, run, (id) => id.toUpperCase(), () => undefined);
+    const items = radialItems(
+      ids,
+      run,
+      (id) => id.toUpperCase(),
+      () => undefined,
+    );
     expect(items.length).toBe(RING_SLOTS);
     expect(items[0]!.icon).toBe("fillet");
     expect(items.at(-1)!.label).toBe("More");
@@ -98,7 +127,10 @@ describe("its settings", () => {
 
   it("adopts the old key once, then keeps them in the app's store", async () => {
     const store = new MemoryStorage();
-    store.setItem("fundacad.navigation.plugin", JSON.stringify({ preset: "alt-left", radial: true, radialDrag: "middle", keys: [{ action: "fit", key: "q" }] }));
+    store.setItem(
+      "fundacad.navigation.plugin",
+      JSON.stringify({ preset: "alt-left", radial: true, radialDrag: "middle", keys: [{ action: "fit", key: "q" }] }),
+    );
     const first = await start(store);
     expect(first.navState.cfg).toMatchObject({ preset: "alt-left", radial: true, radialDrag: "middle" });
     expect(first.navState.cfg.keys).toEqual([{ action: "fit", key: "q" }]);

@@ -9,7 +9,13 @@ import { toast } from "../../src/ui/toast";
 
 vi.mock("../../src/ui/toast", () => ({ toast: vi.fn(() => 1), dismissToast: vi.fn() }));
 
-function rig(opts: { selected?: string | null; explicit?: boolean; regions?: { sketchId: string }[]; startOk?: boolean; f1?: Record<string, unknown> }) {
+function rig(opts: {
+  selected?: string | null;
+  explicit?: boolean;
+  regions?: { sketchId: string }[];
+  startOk?: boolean;
+  f1?: Record<string, unknown>;
+}) {
   const start = vi.fn((_done: unknown, _opts?: unknown) => opts.startOk ?? true);
   const setStatus = vi.fn();
   const addFeature = vi.fn();
@@ -71,7 +77,12 @@ describe("Create > Extrude with a consumed sketch chosen in the tree", () => {
 
   it("offers Tie Loose Ends for a square with a gap instead of making a thin wall of it", () => {
     const line = (id: string, x1: number, y1: number, x2: number, y2: number) => ({ type: "line", id, x1, y1, x2, y2 });
-    const square = [line("a", 0, 0, 20, 0), line("b", 20, 0, 20, 20), line("c", 20, 20, 0, 20), line("d", 0, 20, 0, 0.05)];
+    const square = [
+      line("a", 0, 0, 20, 0),
+      line("b", 20, 0, 20, 20),
+      line("c", 20, 20, 0, 20),
+      line("d", 0, 20, 0, 0.05),
+    ];
     const r = rig({ selected: "f1", startOk: false, f1: { entities: square, constraints: [], plane: "XY" } });
     r.starters.startExtrude();
     expect(r.setStatus.mock.calls[0]![0]).toMatch(/^That sketch has no closed profile to extrude/);
@@ -102,7 +113,11 @@ describe("Create > Extrude on a sketch with a gap", () => {
   const co = (e1: string, p1: number, e2: string, p2: number) => ({ type: "coincident", e1, p1, e2, p2 });
   const square = [line("a", 0, 0, 50, 0), line("b", 50, 0, 50, 50), line("c", 50, 50, 0, 50), line("d", 0, 50, 0, 3)];
   const corners = [co("a", 1, "b", 0), co("b", 1, "c", 0), co("c", 1, "d", 0)];
-  const ell = { entities: [line("a", 0, 0, 50, 0), line("b", 50, 0, 50, 50)], constraints: [co("a", 1, "b", 0)], plane: "XY" };
+  const ell = {
+    entities: [line("a", 0, 0, 50, 0), line("b", 50, 0, 50, 50)],
+    constraints: [co("a", 1, "b", 0)],
+    plane: "XY",
+  };
   const gapped = { entities: square, constraints: corners, plane: "XY" };
 
   it("a 3 mm gap on a 50 mm square is named and offered a fix, not walled", () => {

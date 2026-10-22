@@ -16,38 +16,57 @@ import type { OffsetPair, ProjectedCurve, SketchConstraint } from "../../src/typ
 
 type P = [number, number];
 type Xf = (x: number, y: number) => P;
-const frame = (ox: number, oy: number, a: number): Xf => (x, y) =>
-  [ox + x * Math.cos(a) - y * Math.sin(a), oy + x * Math.sin(a) + y * Math.cos(a)];
+const frame =
+  (ox: number, oy: number, a: number): Xf =>
+  (x, y) => [ox + x * Math.cos(a) - y * Math.sin(a), oy + x * Math.sin(a) + y * Math.cos(a)];
 const ident: Xf = (x, y) => [x, y];
 const turned = frame(137.5, -42.25, 0.6);
 
 const SRC = { kind: "sketchCurve", sketch: "s0", entity: "e0" } as const;
-const projected = (id: string, curve: ProjectedCurve): ResolvedEntity => ({ type: "projected", id, source: SRC, curve });
-const unlinked = (ents: ResolvedEntity[]) => breakLink(ents, new Set(ents.filter((e) => e.type === "projected").map((e) => e.id)));
+const projected = (id: string, curve: ProjectedCurve): ResolvedEntity => ({
+  type: "projected",
+  id,
+  source: SRC,
+  curve,
+});
+const unlinked = (ents: ResolvedEntity[]) =>
+  breakLink(ents, new Set(ents.filter((e) => e.type === "projected").map((e) => e.id)));
 const line = (xf: Xf, id: string, a: P, b: P) => {
-  const [x1, y1] = xf(...a), [x2, y2] = xf(...b);
+  const [x1, y1] = xf(...a),
+    [x2, y2] = xf(...b);
   return projected(id, { kind: "line", x1, y1, x2, y2 });
 };
 /** a CCW arc from angle t0 to t1 */
 const arc = (xf: Xf, id: string, c: P, r: number, t0: number, t1: number) => {
   const on = (t: number) => xf(c[0] + r * Math.cos(t), c[1] + r * Math.sin(t));
-  const [x1, y1] = on(t0), [x2, y2] = on(t1), [mx, my] = on((t0 + t1) / 2);
+  const [x1, y1] = on(t0),
+    [x2, y2] = on(t1),
+    [mx, my] = on((t0 + t1) / 2);
   return projected(id, { kind: "arc", x1, y1, x2, y2, mx, my });
 };
 
 // The report's top face: an 85.97 x 76.03 block, its (+x,-y) vertical edge
 // filleted Rv, then the arc, the right and the front top edges R17. `mixed`
 // stores two lines against the loop, as OCCT's edge parameter may run.
-const W = 85.96578286299416, H = 76.03237166824204;
-const xL = -W / 2, xR = W / 2 - 17, yB = -H / 2 + 17, yT = H / 2;
+const W = 85.96578286299416,
+  H = 76.03237166824204;
+const xL = -W / 2,
+  xR = W / 2 - 17,
+  yB = -H / 2 + 17,
+  yT = H / 2;
 const centre = (Rv: number): P => [W / 2 - Rv, -H / 2 + Rv];
 function faceOutline(xf: Xf, opts: { mixed?: boolean; poly?: boolean; Rv?: number } = {}): ResolvedEntity[] {
-  const Rv = opts.Rv ?? 64.92, C = centre(Rv), R = Rv - 17;
+  const Rv = opts.Rv ?? 64.92,
+    C = centre(Rv),
+    R = Rv - 17;
   const f = opts.poly
-    ? projected("f", { kind: "poly", pts: Array.from({ length: 17 }, (_, k) => {
-      const t = -Math.PI / 2 + (k / 16) * (Math.PI / 2);
-      return xf(C[0] + R * Math.cos(t), C[1] + R * Math.sin(t));
-    }) })
+    ? projected("f", {
+        kind: "poly",
+        pts: Array.from({ length: 17 }, (_, k) => {
+          const t = -Math.PI / 2 + (k / 16) * (Math.PI / 2);
+          return xf(C[0] + R * Math.cos(t), C[1] + R * Math.sin(t));
+        }),
+      })
     : arc(xf, "f", C, R, -Math.PI / 2, 0);
   const e = opts.mixed ? line(xf, "e", [C[0], yB], [xL, yB]) : line(xf, "e", [xL, yB], [C[0], yB]);
   const b = opts.mixed ? line(xf, "b", [xL, yT], [xR, yT]) : line(xf, "b", [xR, yT], [xL, yT]);
@@ -80,11 +99,19 @@ const round = (e: ResolvedEntity | undefined) => {
   return g && { x: +g.x.toFixed(6), y: +g.y.toFixed(6), r: +g.r.toFixed(6) };
 };
 const byId = (ents: ResolvedEntity[], id: string | undefined) => ents.find((e) => e.id === id);
-const copyOf = (ents: ResolvedEntity[], pairs: OffsetPair[], src: string) => round(byId(ents, pairs.find((p) => p.src === src)?.cpy));
+const copyOf = (ents: ResolvedEntity[], pairs: OffsetPair[], src: string) =>
+  round(byId(ents, pairs.find((p) => p.src === src)?.cpy));
 
 describe("offset of a projected filleted face outline commits its preview", () => {
-  const picks = [[0, "the short line"], [1, "the arc"], [3, "the long line"]] as const;
-  for (const [name, xf] of [["axis aligned at the origin", ident], ["turned 0.6 rad off the origin", turned]] as const) {
+  const picks = [
+    [0, "the short line"],
+    [1, "the arc"],
+    [3, "the long line"],
+  ] as const;
+  for (const [name, xf] of [
+    ["axis aligned at the origin", ident],
+    ["turned 0.6 rad off the origin", turned],
+  ] as const) {
     for (const mixed of [false, true]) {
       for (const [pick, what] of picks) {
         it(`${name}, lines ${mixed ? "mixed" : "with the loop"}, picking ${what}`, async () => {
@@ -92,11 +119,18 @@ describe("offset of a projected filleted face outline commits its preview", () =
           expect(r.solved.conflicts).toEqual([]);
           expect(maxDev(r.preview, r.committed)).toBeLessThan(1e-6);
           const [cx, cy] = xf(...centre(64.92));
-          expect(copyOf(r.committed, r.pairs, "f")).toEqual({ x: +cx.toFixed(6), y: +cy.toFixed(6), r: +(64.92 - 17 - 6.04).toFixed(6) });
+          expect(copyOf(r.committed, r.pairs, "f")).toEqual({
+            x: +cx.toFixed(6),
+            y: +cy.toFixed(6),
+            r: +(64.92 - 17 - 6.04).toFixed(6),
+          });
           // the arc shrinks, so it flips exactly when the pick's sign says grow
           expect(flips(r.pairs)).toEqual([
-            { src: "a", cpy: "string" }, { src: "b", cpy: "string" }, { src: "c", cpy: "string" },
-            { src: "e", cpy: "string" }, { src: "f", cpy: "string", ...(r.c.value > 0 ? { flip: true } : {}) },
+            { src: "a", cpy: "string" },
+            { src: "b", cpy: "string" },
+            { src: "c", cpy: "string" },
+            { src: "e", cpy: "string" },
+            { src: "f", cpy: "string", ...(r.c.value > 0 ? { flip: true } : {}) },
           ]);
         });
       }
@@ -125,12 +159,19 @@ describe("offset of a projected filleted face outline commits its preview", () =
   });
 
   it("flips every corner of a rounded rectangle offset inward from a line", async () => {
-    const xf = frame(-23.4, 71.9, -1.1), w = 50, h = 30, k = 5;
+    const xf = frame(-23.4, 71.9, -1.1),
+      w = 50,
+      h = 30,
+      k = 5;
     const ents = [
-      line(xf, "l0", [k, 0], [w - k, 0]), arc(xf, "a0", [w - k, k], k, -Math.PI / 2, 0),
-      line(xf, "l1", [w, k], [w, h - k]), arc(xf, "a1", [w - k, h - k], k, 0, Math.PI / 2),
-      line(xf, "l2", [w - k, h], [k, h]), arc(xf, "a2", [k, h - k], k, Math.PI / 2, Math.PI),
-      line(xf, "l3", [0, h - k], [0, k]), arc(xf, "a3", [k, k], k, Math.PI, 1.5 * Math.PI),
+      line(xf, "l0", [k, 0], [w - k, 0]),
+      arc(xf, "a0", [w - k, k], k, -Math.PI / 2, 0),
+      line(xf, "l1", [w, k], [w, h - k]),
+      arc(xf, "a1", [w - k, h - k], k, 0, Math.PI / 2),
+      line(xf, "l2", [w - k, h], [k, h]),
+      arc(xf, "a2", [k, h - k], k, Math.PI / 2, Math.PI),
+      line(xf, "l3", [0, h - k], [0, k]),
+      arc(xf, "a3", [k, k], k, Math.PI, 1.5 * Math.PI),
     ];
     const r = await previewAndCommit(ents, 2, xf(w / 2, h / 2), 1.5);
     expect(r.solved.conflicts).toEqual([]);
@@ -147,12 +188,20 @@ describe("offset of a projected filleted face outline commits its preview", () =
     // the loop runs f1 against its stored CCW sweep
     const xf = frame(-61.3, 18.7, -0.35);
     const ents = [
-      line(xf, "l0", [0, 0], [32, 0]), arc(xf, "f0", [32, 8], 8, -Math.PI / 2, 0),
-      line(xf, "l1", [40, 8], [40, 20]), line(xf, "l2", [40, 20], [26, 20]),
+      line(xf, "l0", [0, 0], [32, 0]),
+      arc(xf, "f0", [32, 8], 8, -Math.PI / 2, 0),
+      line(xf, "l1", [40, 8], [40, 20]),
+      line(xf, "l2", [40, 20], [26, 20]),
       arc(xf, "f1", [26, 26], 6, Math.PI, 1.5 * Math.PI),
-      line(xf, "l3", [20, 26], [20, 40]), line(xf, "l4", [20, 40], [0, 40]), line(xf, "l5", [0, 40], [0, 0]),
+      line(xf, "l3", [20, 26], [20, 40]),
+      line(xf, "l4", [20, 40], [0, 40]),
+      line(xf, "l5", [0, 40], [0, 0]),
     ];
-    const cases = [[0, [5, 5], ["f0"]], [1, [33, 7], ["f1"]], [4, [18, 18], ["f0"]]] as const;
+    const cases = [
+      [0, [5, 5], ["f0"]],
+      [1, [33, 7], ["f1"]],
+      [4, [18, 18], ["f0"]],
+    ] as const;
     for (const [pick, inside, flipped] of cases) {
       const r = await previewAndCommit(ents, pick, xf(inside[0], inside[1]), 2);
       expect(r.solved.conflicts).toEqual([]);

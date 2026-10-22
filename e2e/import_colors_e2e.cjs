@@ -18,7 +18,10 @@ const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "import_color_shots");
 const FIXTURE = path.resolve(__dirname, "../tests/fixtures/asm_colors.step");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -32,7 +35,10 @@ const check = (name, ok, detail) => {
     args: ["--use-angle=swiftshader", "--no-sandbox"],
   });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -47,7 +53,10 @@ const check = (name, ok, detail) => {
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.geometry, null, { timeout: 60000 });
 
   const before = await page.evaluate(() => window.store.materialLibrary.length);
@@ -59,8 +68,13 @@ const check = (name, ok, detail) => {
     if (!res.ok) return { error: res.message };
     const id = window.store.nextId();
     window.store.addFeature({
-      id, type: "import", format: "step", name: res.name, geom: res.geom,
-      source: file, solid: res.solid,
+      id,
+      type: "import",
+      format: "step",
+      name: res.name,
+      geom: res.geom,
+      source: file,
+      solid: res.solid,
       ...(res.color !== undefined ? { color: res.color } : {}),
       ...(res.nodes !== undefined ? { nodes: res.nodes } : {}),
       ...(res.parts !== undefined ? { parts: res.parts } : {}),
@@ -100,26 +114,32 @@ const check = (name, ok, detail) => {
     };
   }, FIXTURE);
 
-  if (out.error) { console.error("import failed:", out.error); process.exit(1); }
+  if (out.error) {
+    console.error("import failed:", out.error);
+    process.exit(1);
+  }
   console.log("\n  the file said:", JSON.stringify(out.perNode));
   console.log("  materials made:", JSON.stringify(out.added));
   console.log("  bodies now wear:", JSON.stringify(out.worn, null, 2), "\n");
 
   const after = await page.evaluate(() => window.store.materialLibrary.length);
-  check("three materials were made, one per colour in the file",
-    after - before === 3, `library ${before} -> ${after}`);
-  check("each of them is named for its colour",
+  check("three materials were made, one per colour in the file", after - before === 3, `library ${before} -> ${after}`);
+  check(
+    "each of them is named for its colour",
     out.added.length === 3 && out.added.every((n) => /^Imported (red|green|yellow) #/.test(n)),
-    JSON.stringify(out.added));
+    JSON.stringify(out.added),
+  );
 
   const worn = Object.fromEntries(out.worn.map((b) => [b.name, b.color]));
   check("the red part wears the red material", worn["Red Part"] === "#e51919", JSON.stringify(worn));
   check("the green part wears the green material", worn["Green Part"] === "#19e519");
   check("the yellow part wears the yellow material", worn["Yellow Part"] === "#e5e519");
-  check("the part the file left uncoloured is left alone",
-    worn["Uncoloured Part"] === null, String(worn["Uncoloured Part"]));
-  check("and those colours actually reach the renderer",
-    out.painted.length === 3, JSON.stringify(out.painted));
+  check(
+    "the part the file left uncoloured is left alone",
+    worn["Uncoloured Part"] === null,
+    String(worn["Uncoloured Part"]),
+  );
+  check("and those colours actually reach the renderer", out.painted.length === 3, JSON.stringify(out.painted));
 
   await page.evaluate(() => window.__fundacad.handleAction("fit"));
   await page.waitForTimeout(900);

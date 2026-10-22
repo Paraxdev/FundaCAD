@@ -25,12 +25,9 @@ function boxEdges(sx: number, sy: number, sz: number): ClearanceEdge[] {
   const zs = [0, sz];
   const out: ClearanceEdge[] = [];
   let n = 0;
-  for (const y of ys)
-    for (const z of zs) out.push({ id: `x${n++}`, points: [p(0, y, z), p(sx, y, z)] });
-  for (const x of xs)
-    for (const z of zs) out.push({ id: `y${n++}`, points: [p(x, 0, z), p(x, sy, z)] });
-  for (const x of xs)
-    for (const y of ys) out.push({ id: `z${n++}`, points: [p(x, y, 0), p(x, y, sz)] });
+  for (const y of ys) for (const z of zs) out.push({ id: `x${n++}`, points: [p(0, y, z), p(sx, y, z)] });
+  for (const x of xs) for (const z of zs) out.push({ id: `y${n++}`, points: [p(x, 0, z), p(x, sy, z)] });
+  for (const x of xs) for (const y of ys) out.push({ id: `z${n++}`, points: [p(x, y, 0), p(x, y, sz)] });
   return out;
 }
 

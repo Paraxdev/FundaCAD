@@ -28,8 +28,7 @@ export function promptInsets(
   gap: number,
   minWidth: number,
 ): Insets {
-  const inRow = (o: Box) =>
-    o.right > o.left && o.bottom > o.top && o.bottom > band.top && o.top < band.bottom;
+  const inRow = (o: Box) => o.right > o.left && o.bottom > o.top && o.bottom > band.top && o.top < band.bottom;
   let left = gap;
   let right = gap;
   for (const o of cards.left) if (inRow(o)) left = Math.max(left, o.right - area.left + gap);
@@ -69,13 +68,20 @@ export function clearRow(
 
 // The rail's buttons rather than the rail: its box runs the full height at the
 // width of its widest label, which sits at the top.
-export const LEFT_CARDS = "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group";
+export const LEFT_CARDS =
+  "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group";
 export const RIGHT_CARDS = "#float-layer .float-right > *";
 
 const rects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
 
 /** The part of `area` a row spanning `band` can use without sliding under a card. */
 export function clearOfCards(area: Box, band: { top: number; bottom: number }, gap: number, minWidth: number): Box {
-  const { left, right } = promptInsets(area, band, { left: rects(LEFT_CARDS), right: rects(RIGHT_CARDS) }, gap, minWidth);
+  const { left, right } = promptInsets(
+    area,
+    band,
+    { left: rects(LEFT_CARDS), right: rects(RIGHT_CARDS) },
+    gap,
+    minWidth,
+  );
   return { left: area.left + left, right: area.right - right, top: area.top, bottom: area.bottom };
 }

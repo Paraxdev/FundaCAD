@@ -106,10 +106,18 @@ export function setTurntable(p: Pose, yaw: number, elev: number) {
 }
 
 export function poseFinite(p: Pose): boolean {
-  return finiteVec(p.target) && finiteQuat(p.q) && Number.isFinite(p.scale) && p.scale > 0
-    && Number.isFinite(p.fov) && p.fov > 0 && p.fov < 180
-    && Number.isFinite(p.yaw) && Number.isFinite(p.elev)
-    && Math.abs(p.q.lengthSq() - 1) < 1e-6;
+  return (
+    finiteVec(p.target) &&
+    finiteQuat(p.q) &&
+    Number.isFinite(p.scale) &&
+    p.scale > 0 &&
+    Number.isFinite(p.fov) &&
+    p.fov > 0 &&
+    p.fov < 180 &&
+    Number.isFinite(p.yaw) &&
+    Number.isFinite(p.elev) &&
+    Math.abs(p.q.lengthSq() - 1) < 1e-6
+  );
 }
 
 // --- screen <-> world ---------------------------------------------------------
@@ -150,7 +158,11 @@ export function boxOffScreen(p: Pose, v: Frame, box: THREE.Box3): boolean {
   const a = aspectOf(v);
   const h = halfTan(p.fov);
   const c = new THREE.Vector3();
-  let left = 0, rightOut = 0, below = 0, above = 0, behind = 0;
+  let left = 0,
+    rightOut = 0,
+    below = 0,
+    above = 0,
+    behind = 0;
   for (let i = 0; i < 8; i++) {
     c.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).sub(e);
     const z = c.dot(fwd);
@@ -187,7 +199,8 @@ export function rayAt(p: Pose, v: Frame, x: number, y: number, back = 0, out?: R
   const up = upOf(p, f2);
   const e = eyeOf(p, f3);
   if (p.ortho) {
-    r.origin.copy(e)
+    r.origin
+      .copy(e)
       .addScaledVector(right, nx * p.scale * a)
       .addScaledVector(up, ny * p.scale)
       .addScaledVector(fwd, -back);
@@ -196,7 +209,11 @@ export function rayAt(p: Pose, v: Frame, x: number, y: number, back = 0, out?: R
   } else {
     const h = halfTan(p.fov);
     r.origin.copy(e);
-    r.dir.copy(fwd).addScaledVector(right, nx * h * a).addScaledVector(up, ny * h).normalize();
+    r.dir
+      .copy(fwd)
+      .addScaledVector(right, nx * h * a)
+      .addScaledVector(up, ny * h)
+      .normalize();
     r.originDepth = 0;
   }
   return r;

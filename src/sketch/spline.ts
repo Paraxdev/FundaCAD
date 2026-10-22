@@ -32,7 +32,8 @@ export function splinePolyline(pts: P[], segsPerSpan = 16): THREE.Vector2[] {
 }
 
 function catmull(p0: P, p1: P, p2: P, p3: P, t: number): THREE.Vector2 {
-  const t2 = t * t, t3 = t2 * t;
+  const t2 = t * t,
+    t3 = t2 * t;
   const c = (a: number, b: number, c: number, d: number) =>
     0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
   return new THREE.Vector2(c(p0.x, p1.x, p2.x, p3.x), c(p0.y, p1.y, p2.y, p3.y));

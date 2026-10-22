@@ -52,8 +52,10 @@ export function snapAngleDeg(deg: number, free?: boolean): number {
  *  (source or cursor sitting on the centre), which leaves the caller on its
  *  current value rather than jumping it somewhere arbitrary. */
 export function patternSweepDeg(i: PatternSweepInput): number | null {
-  const sdx = i.sx - i.cx, sdy = i.sy - i.cy;
-  const pdx = i.px - i.cx, pdy = i.py - i.cy;
+  const sdx = i.sx - i.cx,
+    sdy = i.sy - i.cy;
+  const pdx = i.px - i.cx,
+    pdy = i.py - i.cy;
   if (!(Math.hypot(sdx, sdy) > MIN_RADIUS) || !(Math.hypot(pdx, pdy) > MIN_RADIUS)) return null;
   let raw = ((Math.atan2(pdy, pdx) - Math.atan2(sdy, sdx)) * 180) / Math.PI;
   while (raw > 180) raw -= FULL;
@@ -84,10 +86,10 @@ export function nearCentreDot(
 /** Where a circular pattern starts centred: the mean of the selected sources'
  *  representative points. Sources that no longer resolve are skipped, and with
  *  none left there is no centre to offer. */
-export function selectionCentre(
-  points: readonly ({ x: number; y: number } | null)[],
-): { x: number; y: number } | null {
-  let sx = 0, sy = 0, n = 0;
+export function selectionCentre(points: readonly ({ x: number; y: number } | null)[]): { x: number; y: number } | null {
+  let sx = 0,
+    sy = 0,
+    n = 0;
   for (const p of points) {
     if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
     sx += p.x;

@@ -66,12 +66,14 @@ function lineMat(color: number): THREE.LineBasicMaterial {
   return m;
 }
 // construction geometry: dashed orange (referenceable, not a profile)
-const CONSTRUCTION_MAT = overlayMaterial(new THREE.LineDashedMaterial({
-  color: 0xffa64d,
-  dashSize: 1.6,
-  gapSize: 1.0,
-  depthTest: true,
-}));
+const CONSTRUCTION_MAT = overlayMaterial(
+  new THREE.LineDashedMaterial({
+    color: 0xffa64d,
+    dashSize: 1.6,
+    gapSize: 1.0,
+    depthTest: true,
+  }),
+);
 // alignment guides: the snap marker's amber, dashed and dimmed. The dash is
 // short and the gap long so a guide reads as an aid rather than as a drawn line
 // even when it runs the width of the screen.
@@ -269,11 +271,7 @@ export class SketchOverlay {
   /** Selectable regions for each non-construction text entity's glyph faces,
    *  sourced from the client-side tessellation cache (empty until glyphs warm,
    *  the async cache fill triggers a repaint, so they appear a frame later). */
-  private glyphWorldRegions(
-    ents: ResolvedEntity[],
-    plane: SketchPlane,
-    sketchId: string,
-  ): WorldRegion[] {
+  private glyphWorldRegions(ents: ResolvedEntity[], plane: SketchPlane, sketchId: string): WorldRegion[] {
     const out: WorldRegion[] = [];
     for (const e of ents) {
       if (e.type !== "text" || e.construction) continue;
@@ -365,11 +363,8 @@ export class SketchOverlay {
    *  text's glyphs) toggles as one unit, all its glyph anchors move together. */
   toggleRegionSelection(wr: WorldRegion, additive: boolean) {
     const group = this.regionGroup(wr);
-    const pts = group.map(
-      (r) => [r.interior3D.x, r.interior3D.y, r.interior3D.z] as [number, number, number],
-    );
-    const inGroup = (p: [number, number, number]) =>
-      group.some((r) => this.pointHitsRegion(p, r));
+    const pts = group.map((r) => [r.interior3D.x, r.interior3D.y, r.interior3D.z] as [number, number, number]);
+    const inGroup = (p: [number, number, number]) => group.some((r) => this.pointHitsRegion(p, r));
     const sel = this.isRegionSelected(wr);
     if (!additive) {
       // plain click: this group becomes the whole selection, unless it already WAS
@@ -440,10 +435,15 @@ export class SketchOverlay {
     for (const wr of this.activeRegions) {
       if (!wr.groupId || wr.entityId === undefined) continue; // only glyph regions
       let b = bounds.get(wr.groupId);
-      if (!b) { b = { id: wr.entityId, minx: Infinity, miny: Infinity, maxx: -Infinity, maxy: -Infinity }; bounds.set(wr.groupId, b); }
+      if (!b) {
+        b = { id: wr.entityId, minx: Infinity, miny: Infinity, maxx: -Infinity, maxy: -Infinity };
+        bounds.set(wr.groupId, b);
+      }
       for (const pt of wr.region.loop) {
-        b.minx = Math.min(b.minx, pt.x); b.miny = Math.min(b.miny, pt.y);
-        b.maxx = Math.max(b.maxx, pt.x); b.maxy = Math.max(b.maxy, pt.y);
+        b.minx = Math.min(b.minx, pt.x);
+        b.miny = Math.min(b.miny, pt.y);
+        b.maxx = Math.max(b.maxx, pt.x);
+        b.maxy = Math.max(b.maxy, pt.y);
       }
     }
     let best: string | null = null;
@@ -451,7 +451,10 @@ export class SketchOverlay {
     for (const b of bounds.values()) {
       if (p.x < b.minx || p.x > b.maxx || p.y < b.miny || p.y > b.maxy) continue;
       const area = (b.maxx - b.minx) * (b.maxy - b.miny);
-      if (area < bestArea) { bestArea = area; best = b.id; }
+      if (area < bestArea) {
+        bestArea = area;
+        best = b.id;
+      }
     }
     return best;
   }
@@ -556,11 +559,7 @@ export class SketchOverlay {
    *  Drawn dashed and in the snap marker's own amber, because that is what it
    *  is: the guide and the marker are one answer, and a solid line in a curve
    *  colour would read as geometry that had been drawn. */
-  setGuides(
-    segments: readonly (readonly [THREE.Vector2, THREE.Vector2])[],
-    plane: SketchPlane,
-    pixelWorldSize = 0,
-  ) {
+  setGuides(segments: readonly (readonly [THREE.Vector2, THREE.Vector2])[], plane: SketchPlane, pixelWorldSize = 0) {
     this.clearGroup(this.guideGroup);
     // Dash length in PIXELS, not millimetres. A guide runs from an anchor to the
     // cursor, so its length is whatever the user's hand made it, and a dash
@@ -573,10 +572,7 @@ export class SketchOverlay {
     }
     for (const [a, b] of segments) {
       const line = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([
-          plane.to3D(a.x, a.y),
-          plane.to3D(b.x, b.y),
-        ]),
+        new THREE.BufferGeometry().setFromPoints([plane.to3D(a.x, a.y), plane.to3D(b.x, b.y)]),
         GUIDE_MAT,
       );
       line.computeLineDistances(); // required for dashing
@@ -606,8 +602,13 @@ export class SketchOverlay {
       const dot = new THREE.Points(
         new THREE.BufferGeometry().setFromPoints([new THREE.Vector3()]),
         new THREE.PointsMaterial({
-          color: 0xffffff, size: HANDLE_DOT_PX, sizeAttenuation: false, map: pointDotTexture(),
-          transparent: true, depthTest: false, depthWrite: false,
+          color: 0xffffff,
+          size: HANDLE_DOT_PX,
+          sizeAttenuation: false,
+          map: pointDotTexture(),
+          transparent: true,
+          depthTest: false,
+          depthWrite: false,
         }),
       );
       dot.frustumCulled = false;
@@ -684,11 +685,8 @@ export function curveObjects(
     // Delete works on projected entities, so selection must be visible.
     const projected = e.type === "projected" ? e : null;
     const drawColor =
-      projected && !highlight
-        ? projected.stale === true ? PROJECTED_STALE_COLOR : PROJECTED_COLOR
-        : color;
-    const curve =
-      !projected && e.construction ? constructionLine(pts) : polyline(pts, drawColor);
+      projected && !highlight ? (projected.stale === true ? PROJECTED_STALE_COLOR : PROJECTED_COLOR) : color;
+    const curve = !projected && e.construction ? constructionLine(pts) : polyline(pts, drawColor);
     // Circles/arcs (native or projected) get a visible center "+": the center is
     // a snap target and the dimension tool's position handle, invisible, nobody
     // finds it. Grouped so the one-object-per-entity contract holds. asRound is
@@ -721,14 +719,26 @@ export function controlPolygonObjects(
   POLYGON_MAT.dashSize = px * POLYGON_DASH_PX;
   POLYGON_MAT.gapSize = px * POLYGON_GAP_PX;
   const ring = e.closed ? [...e.poles, e.poles[0]!] : e.poles;
-  const poly = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ring.map((q) => plane.to3D(q.x, q.y))), POLYGON_MAT);
+  const poly = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(ring.map((q) => plane.to3D(q.x, q.y))),
+    POLYGON_MAT,
+  );
   poly.computeLineDistances();
   poly.renderOrder = 12;
   g.add(poly);
-  g.add(poleSquares(e.poles.filter((_, k) => k !== active), plane, px));
+  g.add(
+    poleSquares(
+      e.poles.filter((_, k) => k !== active),
+      plane,
+      px,
+    ),
+  );
   const a = e.poles[active];
   if (a) {
-    const dot = new THREE.Points(new THREE.BufferGeometry().setFromPoints([plane.to3D(a.x, a.y)]), dotMat(SELECT_COLOR));
+    const dot = new THREE.Points(
+      new THREE.BufferGeometry().setFromPoints([plane.to3D(a.x, a.y)]),
+      dotMat(SELECT_COLOR),
+    );
     dot.renderOrder = 14;
     g.add(dot);
   }
@@ -754,7 +764,12 @@ function poleSquares(poles: { x: number; y: number }[], plane: SketchPlane, px: 
   const s = px * POLE_HALF_PX;
   const sq: THREE.Vector3[] = [];
   for (const q of poles) {
-    const c = [plane.to3D(q.x - s, q.y - s), plane.to3D(q.x + s, q.y - s), plane.to3D(q.x + s, q.y + s), plane.to3D(q.x - s, q.y + s)];
+    const c = [
+      plane.to3D(q.x - s, q.y - s),
+      plane.to3D(q.x + s, q.y - s),
+      plane.to3D(q.x + s, q.y + s),
+      plane.to3D(q.x - s, q.y + s),
+    ];
     for (let i = 0; i < 4; i++) sq.push(c[i]!, c[(i + 1) % 4]!);
   }
   const squares = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sq), lineMat(POLE_COLOR));
@@ -765,12 +780,7 @@ function poleSquares(poles: { x: number; y: number }[], plane: SketchPlane, px: 
 /** One THREE.Group for a text entity: an outline THREE.Line per glyph contour plus a
  *  filled glyph mesh (skipped for construction text). Kept to ONE object per entity so
  *  curveObjects' one-object-per-entity contract (see sketchMode preview) holds. */
-function textObjects(
-  faces: TextFace[],
-  plane: SketchPlane,
-  color: number,
-  construction: boolean,
-): THREE.Group {
+function textObjects(faces: TextFace[], plane: SketchPlane, color: number, construction: boolean): THREE.Group {
   const g = new THREE.Group();
   for (const f of faces) {
     for (const loop of [f.outer, ...f.holes]) {
@@ -815,8 +825,13 @@ function dotMat(color: number): THREE.PointsMaterial {
   let m = dotMats.get(color);
   if (!m) {
     m = new THREE.PointsMaterial({
-      color, size: POINT_DOT_PX, sizeAttenuation: false, map: pointDotTexture(),
-      transparent: true, depthTest: true, depthWrite: false,
+      color,
+      size: POINT_DOT_PX,
+      sizeAttenuation: false,
+      map: pointDotTexture(),
+      transparent: true,
+      depthTest: true,
+      depthWrite: false,
     });
     dotMats.set(color, m);
   }
@@ -831,8 +846,13 @@ function looseEndMat(color: number): THREE.PointsMaterial {
   let m = looseMats.get(color);
   if (!m) {
     m = new THREE.PointsMaterial({
-      color, size: POINT_DOT_PX + 2, sizeAttenuation: false, map: pointDotTexture(),
-      transparent: true, depthTest: false, depthWrite: false,
+      color,
+      size: POINT_DOT_PX + 2,
+      sizeAttenuation: false,
+      map: pointDotTexture(),
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
     });
     looseMats.set(color, m);
   }
@@ -844,10 +864,7 @@ function looseEndMat(color: number): THREE.PointsMaterial {
  *  the plane on XZ/YZ sketches (edge-on, half the cross vanished). */
 function pointMarker(plane: SketchPlane, x: number, y: number, color: number): THREE.Object3D {
   const s = 0.9;
-  const pts = [
-    plane.to3D(x - s, y), plane.to3D(x + s, y),
-    plane.to3D(x, y - s), plane.to3D(x, y + s),
-  ];
+  const pts = [plane.to3D(x - s, y), plane.to3D(x + s, y), plane.to3D(x, y - s), plane.to3D(x, y + s)];
   const g = new THREE.BufferGeometry().setFromPoints(pts);
   const seg = new THREE.LineSegments(g, lineMat(color));
   seg.renderOrder = 13;

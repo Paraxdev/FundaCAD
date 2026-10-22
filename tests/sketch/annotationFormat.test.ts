@@ -7,7 +7,13 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  dimClass, dimTitle, fmtDim, glyphClass, glyphTitle, isFormula, screenTransform,
+  dimClass,
+  dimTitle,
+  fmtDim,
+  glyphClass,
+  glyphTitle,
+  isFormula,
+  screenTransform,
 } from "../../src/sketch/annotationFormat";
 
 describe("fmtDim", () => {

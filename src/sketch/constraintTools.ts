@@ -33,11 +33,18 @@ export const CONSTRAINT_TOOLS = new Set<SketchTool>([
  *  index already resolved from a click position (dimRefPoints/resolvePoint)
  *  when the caller knows exactly which point was meant. Omitted when only the
  *  whole entity is known, e.g. a plain rail-selection with no click position. */
-export interface ConstraintPick { id: string; p?: number }
+export interface ConstraintPick {
+  id: string;
+  p?: number;
+}
 
 /** `tool` names the constraint tool the option stands for, so a shortcut can
  *  apply it to the selection instead of arming the tool. */
-export interface ConstraintOption { label: string; tool?: SketchTool; apply: () => void }
+export interface ConstraintOption {
+  label: string;
+  tool?: SketchTool;
+  apply: () => void;
+}
 
 /** The slice of SketchMode these click flows read/write, live accessors, not copies. */
 export interface ConstraintHost {
@@ -161,8 +168,13 @@ export class ConstraintTools {
     let bestD = tol * tol;
     for (const e of this.host.entities()) {
       for (const r of dimRefPoints(e)) {
-        const dx = r.pos.x - p.x, dy = r.pos.y - p.y, d = dx * dx + dy * dy;
-        if (d <= bestD) { bestD = d; best = { id: e.id, idx: r.p }; }
+        const dx = r.pos.x - p.x,
+          dy = r.pos.y - p.y,
+          d = dx * dx + dy * dy;
+        if (d <= bestD) {
+          bestD = d;
+          best = { id: e.id, idx: r.p };
+        }
       }
     }
     return best;
@@ -180,13 +192,17 @@ export class ConstraintTools {
       const op = this.operandAt(p);
       const ep = this.pendingEndpoint;
       this.pendingEndpoint = null;
-      if (op?.kind === "line" && baseId(op.id) !== ep.id) this.addConstraint({ type: "midpoint", e: ep.id, p: ep.idx, line: op.id });
+      if (op?.kind === "line" && baseId(op.id) !== ep.id)
+        this.addConstraint({ type: "midpoint", e: ep.id, p: ep.idx, line: op.id });
       return;
     }
     if (t === "coincident") {
       // a point, then a point (coincident) or a curve body (point on curve)
       const ep = this.resolvePoint(p);
-      if (!this.pendingEndpoint) { if (ep) this.pendingEndpoint = ep; return; }
+      if (!this.pendingEndpoint) {
+        if (ep) this.pendingEndpoint = ep;
+        return;
+      }
       const a = this.pendingEndpoint;
       this.pendingEndpoint = null;
       if (ep && ep.id !== a.id) {
@@ -209,10 +225,12 @@ export class ConstraintTools {
       return;
     }
     const op = this.operandAt(p);
-    const a = this.pendingEndpoint, b = this.pendingEndpoint2;
+    const a = this.pendingEndpoint,
+      b = this.pendingEndpoint2;
     this.pendingEndpoint = null;
     this.pendingEndpoint2 = null;
-    if (op?.kind === "line") this.addConstraint({ type: "symmetric", e1: a.id, p1: a.idx, e2: b.id, p2: b.idx, line: op.id });
+    if (op?.kind === "line")
+      this.addConstraint({ type: "symmetric", e1: a.id, p1: a.idx, e2: b.id, p2: b.idx, line: op.id });
   }
 
   /** tangent between two curves: line/circle/arc, in any mix except line+line.
@@ -258,8 +276,13 @@ export class ConstraintTools {
     for (const e of this.host.entities()) {
       if (e.type === "projected") continue; // already fixed, fixing it is meaningless
       for (const r of dimRefPoints(e)) {
-        const dx = r.pos.x - p.x, dy = r.pos.y - p.y, d = dx * dx + dy * dy;
-        if (d <= bestD) { bestD = d; best = { id: e.id, p: r.p }; }
+        const dx = r.pos.x - p.x,
+          dy = r.pos.y - p.y,
+          d = dx * dx + dy * dy;
+        if (d <= bestD) {
+          bestD = d;
+          best = { id: e.id, p: r.p };
+        }
       }
     }
     if (best) return this.addConstraint({ type: "fix", e: best.id, p: best.p });
@@ -307,21 +330,63 @@ export class ConstraintTools {
     const hasPt = (o: PickOp) => o.point !== null;
 
     if (all((o) => o.ent?.type === "line")) {
-      add("Horizontal", "horizontal", ops.map((o) => ({ type: "horizontal", line: o.id })));
-      add("Vertical", "vertical", ops.map((o) => ({ type: "vertical", line: o.id })));
+      add(
+        "Horizontal",
+        "horizontal",
+        ops.map((o) => ({ type: "horizontal", line: o.id })),
+      );
+      add(
+        "Vertical",
+        "vertical",
+        ops.map((o) => ({ type: "vertical", line: o.id })),
+      );
     }
     if (all(isLine)) {
-      add("Parallel", "parallel", chain((a, b) => ({ type: "parallel", l1: a.id, l2: b.id })));
-      if (ops.length === 2) add("Perpendicular", "perpendicular", chain((a, b) => ({ type: "perpendicular", l1: a.id, l2: b.id })));
-      add("Equal", "equal", chain((a, b) => ({ type: "equal", l1: a.id, l2: b.id })));
-      add("Collinear", "collinear", chain((a, b) => ({ type: "collinear", l1: a.id, l2: b.id })));
+      add(
+        "Parallel",
+        "parallel",
+        chain((a, b) => ({ type: "parallel", l1: a.id, l2: b.id })),
+      );
+      if (ops.length === 2)
+        add(
+          "Perpendicular",
+          "perpendicular",
+          chain((a, b) => ({ type: "perpendicular", l1: a.id, l2: b.id })),
+        );
+      add(
+        "Equal",
+        "equal",
+        chain((a, b) => ({ type: "equal", l1: a.id, l2: b.id })),
+      );
+      add(
+        "Collinear",
+        "collinear",
+        chain((a, b) => ({ type: "collinear", l1: a.id, l2: b.id })),
+      );
     } else if (all(isRnd)) {
-      add("Concentric", "concentric", chain((a, b) => ({ type: "concentric", c1: a.id, c2: b.id })));
-      add("Equal", "equal", chain((a, b) => ({ type: "equalRadius", a: a.id, b: b.id })));
-      if (ops.length === 2) add("Tangent", "tangent", chain((a, b) => ({ type: "tangent2", a: a.id, b: b.id })));
+      add(
+        "Concentric",
+        "concentric",
+        chain((a, b) => ({ type: "concentric", c1: a.id, c2: b.id })),
+      );
+      add(
+        "Equal",
+        "equal",
+        chain((a, b) => ({ type: "equalRadius", a: a.id, b: b.id })),
+      );
+      if (ops.length === 2)
+        add(
+          "Tangent",
+          "tangent",
+          chain((a, b) => ({ type: "tangent2", a: a.id, b: b.id })),
+        );
     } else if (ops.length === 2 && all((o) => o.kind !== undefined)) {
       // line and round: tangentClick refuses only line+line, routed above
-      add("Tangent", "tangent", chain((a, b) => ({ type: "tangent2", a: a.id, b: b.id })));
+      add(
+        "Tangent",
+        "tangent",
+        chain((a, b) => ({ type: "tangent2", a: a.id, b: b.id })),
+      );
     }
 
     // a point with a curve, either way round. A curve picked whole is preferred
@@ -330,7 +395,10 @@ export class ConstraintTools {
     // Coincident comes first for it
     const curveOptions = (clicked: boolean) => {
       if (ops.length !== 2) return;
-      for (const [pt, cv] of [[first, rest[0]!], [rest[0]!, first]] as const) {
+      for (const [pt, cv] of [
+        [first, rest[0]!],
+        [rest[0]!, first],
+      ] as const) {
         if (cv.explicit !== clicked) continue;
         if (pt.point === null || !cv.kind || baseId(cv.id) === pt.id) continue;
         const p = pt.point;
@@ -338,8 +406,11 @@ export class ConstraintTools {
         // two rounds picked whole read as curves, a centre on the other's rim
         // needs the centre itself clicked
         if (centre && !pt.explicit && cv.kind !== "line") continue;
-        add(centre ? (cv.kind === "line" ? "Centre on line" : "Centre on curve") : "On curve", "coincident", [{ type: "pointOnCurve", e: pt.id, p, curve: cv.id }]);
-        if (cv.kind === "line") add(centre ? "Centre at midpoint" : "Midpoint", "midpoint", [{ type: "midpoint", e: pt.id, p, line: cv.id }]);
+        add(centre ? (cv.kind === "line" ? "Centre on line" : "Centre on curve") : "On curve", "coincident", [
+          { type: "pointOnCurve", e: pt.id, p, curve: cv.id },
+        ]);
+        if (cv.kind === "line")
+          add(centre ? "Centre at midpoint" : "Midpoint", "midpoint", [{ type: "midpoint", e: pt.id, p, line: cv.id }]);
       }
     };
     curveOptions(false);
@@ -348,11 +419,23 @@ export class ConstraintTools {
       // concentric already says "same centre"; a redundant Coincident on round
       // centres would just confuse the relations list
       if (!all(isRnd)) {
-        add("Coincident", "coincident", chain((a, b) => ({ type: "coincident", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })));
+        add(
+          "Coincident",
+          "coincident",
+          chain((a, b) => ({ type: "coincident", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })),
+        );
       }
       curveOptions(true);
-      add("Align horizontally", "horizontal", chain((a, b) => ({ type: "horizontalPoints", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })));
-      add("Align vertically", "vertical", chain((a, b) => ({ type: "verticalPoints", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })));
+      add(
+        "Align horizontally",
+        "horizontal",
+        chain((a, b) => ({ type: "horizontalPoints", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })),
+      );
+      add(
+        "Align vertically",
+        "vertical",
+        chain((a, b) => ({ type: "verticalPoints", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })),
+      );
     }
 
     if (ops.length === 3) {
@@ -361,13 +444,18 @@ export class ConstraintTools {
       const pts = ops.filter(hasPt);
       const [pa, pb] = pts;
       if (axis.length === 1 && pa && pb && pa.point !== null && pb.point !== null) {
-        add("Symmetric", "symmetric", [{ type: "symmetric", e1: pa.id, p1: pa.point, e2: pb.id, p2: pb.point, line: axis[0]!.id }]);
+        add("Symmetric", "symmetric", [
+          { type: "symmetric", e1: pa.id, p1: pa.point, e2: pb.id, p2: pb.point, line: axis[0]!.id },
+        ]);
       }
     }
     return out;
   }
 
-  private singleOptions(op: PickOp, add: (label: string, tool: SketchTool | undefined, cs: SketchConstraint[]) => void) {
+  private singleOptions(
+    op: PickOp,
+    add: (label: string, tool: SketchTool | undefined, cs: SketchConstraint[]) => void,
+  ) {
     const e = op.ent;
     if (!e) return; // a lone rectangle side, its direction is already held
     if (e.type === "line") {
@@ -383,8 +471,11 @@ export class ConstraintTools {
         add("Fix end", undefined, [{ type: "fix", e: e.id, p: 1 }]);
       }
       const r = asRound(e)?.r;
-      const sized = this.host.constraints().some((c) => (c.type === "radius" && c.e === e.id) || (c.type === "diameter" && c.circle === e.id));
-      if (r !== undefined && !sized) add("Radius", undefined, [{ type: "radius", e: e.id, value: Math.round(r * 1e6) / 1e6 }]);
+      const sized = this.host
+        .constraints()
+        .some((c) => (c.type === "radius" && c.e === e.id) || (c.type === "diameter" && c.circle === e.id));
+      if (r !== undefined && !sized)
+        add("Radius", undefined, [{ type: "radius", e: e.id, value: Math.round(r * 1e6) / 1e6 }]);
       return;
     }
     if (op.point !== null) add("Fix", "fix", [{ type: "fix", e: e.id, p: op.point }]);
@@ -402,14 +493,26 @@ export class ConstraintTools {
 
 export const LINE_TANGENT_MSG = "Two lines cannot be tangent, use Collinear or Parallel instead";
 
-interface Operand { idx: number; id: string; kind: "line" | "circle" | "arc"; ent?: ResolvedEntity }
+interface Operand {
+  idx: number;
+  id: string;
+  kind: "line" | "circle" | "arc";
+  ent?: ResolvedEntity;
+}
 
 /** One pick of `applicable`, decoded: `id` may be a rectangle side, `point` is
  *  the point index it stands for when that is unambiguous. */
-interface PickOp { id: string; kind: "line" | "circle" | "arc" | undefined; ent?: ResolvedEntity; point: number | null; explicit: boolean }
+interface PickOp {
+  id: string;
+  kind: "line" | "circle" | "arc" | undefined;
+  ent?: ResolvedEntity;
+  point: number | null;
+  explicit: boolean;
+}
 
 function pickOp(byId: Map<string, ResolvedEntity>, pk: ConstraintPick): PickOp | null {
-  if (pk.id.includes("~")) return lineOperand(byId, pk.id) ? { id: pk.id, kind: "line", point: null, explicit: false } : null;
+  if (pk.id.includes("~"))
+    return lineOperand(byId, pk.id) ? { id: pk.id, kind: "line", point: null, explicit: false } : null;
   const e = byId.get(pk.id);
   if (!e) return null;
   const pts = dimRefPoints(e);
@@ -423,14 +526,19 @@ const centreIndex = (e: ResolvedEntity | undefined) => (e?.type === "arc" ? 2 : 
 
 export function nearestRectSide(e: Extract<ResolvedEntity, { type: "rectangle" }>, p: THREE.Vector2): number {
   const c = rectCorners(e.x, e.y, e.width, e.height, e.angle);
-  let best = 0, bestD = Infinity;
+  let best = 0,
+    bestD = Infinity;
   for (let k = 0; k < 4; k++) {
-    const a = c[k]!, b = c[(k + 1) % 4]!;
+    const a = c[k]!,
+      b = c[(k + 1) % 4]!;
     const ab = b.clone().sub(a);
     const l2 = ab.lengthSq();
     const t = l2 > 0 ? Math.min(1, Math.max(0, p.clone().sub(a).dot(ab) / l2)) : 0;
     const d = p.distanceTo(a.clone().addScaledVector(ab, t));
-    if (d < bestD) { bestD = d; best = k; }
+    if (d < bestD) {
+      bestD = d;
+      best = k;
+    }
   }
   return best;
 }

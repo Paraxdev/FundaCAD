@@ -32,7 +32,12 @@ function makeEngine() {
     setStressProbe: vi.fn(),
     removeStressProbe: vi.fn(),
   };
-  const store = { onBuild: (fn: () => void) => { fn(); return () => {}; } };
+  const store = {
+    onBuild: (fn: () => void) => {
+      fn();
+      return () => {};
+    },
+  };
   return { engine: { store, ui: { panels } } as unknown as Engine, panels };
 }
 
@@ -218,7 +223,9 @@ describe("StressPanel", () => {
     p.stress!.setup.gravity.on = true;
     await flushPromises();
     expect(q(".stress-set-support")).not.toBeNull();
-    p.stressFinished({ result: { rows: [{ k: "Peak von Mises", v: "4 MPa" }], warnings: [], legend: { min: 0, max: 4 }, yields: false } });
+    p.stressFinished({
+      result: { rows: [{ k: "Peak von Mises", v: "4 MPa" }], warnings: [], legend: { min: 0, max: 4 }, yields: false },
+    });
     p.setStressColours("shown");
     p.setStressDeform({ scale: 10, auto: 10, max: 40, animate: false });
     await flushPromises();
@@ -226,7 +233,9 @@ describe("StressPanel", () => {
     expect(q(".stress-setup-folded")?.textContent).toContain("1 support, 1 load, gravity -Z, PLA");
     // The result's controls come before its rows.
     const panel = q(".stress-panel")!;
-    const order = [".stress-deform", ".stress-probe", ".stress-legend"].map((c) => [...panel.querySelectorAll("*")].indexOf(q(c)!));
+    const order = [".stress-deform", ".stress-probe", ".stress-legend"].map((c) =>
+      [...panel.querySelectorAll("*")].indexOf(q(c)!),
+    );
     expect(order).toEqual([...order].sort((a, b) => a - b));
     q(".stress-setup-toggle")!.click();
     await flushPromises();
@@ -259,7 +268,14 @@ describe("StressPanel", () => {
     p.showStress("b1");
     const sel: Selector = { kind: "face", by: "match", fp: { centroid: [0, 0, 0], normal: [1, 0, 0] }, body: "b1" };
     p.setStressLoadFaces(1, { selectors: [sel], faceIds: [], normalSum: [0, 0, 0], area: 0, unshown: 1, missing: 0 });
-    p.setStressSupportFaces(1, { selectors: [sel], faceIds: [], normalSum: [0, 0, 0], area: 0, unshown: 0, missing: 1 });
+    p.setStressSupportFaces(1, {
+      selectors: [sel],
+      faceIds: [],
+      normalSum: [0, 0, 0],
+      area: 0,
+      unshown: 0,
+      missing: 1,
+    });
     await flushPromises();
     const counts = [...document.body.querySelectorAll(".stress-count")].map((e) => e.textContent);
     expect(counts).toEqual(["1 face, not found on the current model", "1 face (not shown in the view)"]);

@@ -1,8 +1,15 @@
 import { defineStore } from "pinia";
 import { markRaw, ref } from "vue";
 import {
-  emptyFaceSet, newLoad, newSetup, newSupport, nextId,
-  type StressFaceSet, type StressResultView, type StressSetup, type StressTarget,
+  emptyFaceSet,
+  newLoad,
+  newSetup,
+  newSupport,
+  nextId,
+  type StressFaceSet,
+  type StressResultView,
+  type StressSetup,
+  type StressTarget,
 } from "../ui/stress";
 import type { StressSpot, StressSupportType, Vec3 } from "../types";
 
@@ -122,8 +129,16 @@ export const usePanelsStore = defineStore("panels", () => {
 
   function fresh(setup: StressSetup): StressData {
     return {
-      setup, running: false, requestId: null, result: null, error: null, colours: "none",
-      deform: null, probe: false, pins: [], placing: null,
+      setup,
+      running: false,
+      requestId: null,
+      result: null,
+      error: null,
+      colours: "none",
+      deform: null,
+      probe: false,
+      pins: [],
+      placing: null,
     };
   }
 
@@ -153,7 +168,9 @@ export const usePanelsStore = defineStore("panels", () => {
   function stressRow(target: StressTarget) {
     const s = stress.value?.setup;
     if (!s) return undefined;
-    return "support" in target ? s.supports.find((x) => x.id === target.support) : s.loads.find((l) => l.id === target.load);
+    return "support" in target
+      ? s.supports.find((x) => x.id === target.support)
+      : s.loads.find((l) => l.id === target.load);
   }
 
   function addStressSpot(target: StressTarget, spot: StressSpot) {
@@ -258,11 +275,34 @@ export const usePanelsStore = defineStore("panels", () => {
   }
 
   return {
-    properties, interference, overhang, params, stress,
-    showProperties, showInterference,
-    showStress, replaceStressSetup, setStressBody, setStressSupportFaces, addStressSupport, removeStressSupport,
-    setStressLoadFaces, addStressLoad, removeStressLoad, stressRow, addStressSpot, removeStressSpot, setStressPlacing,
-    stressStarted, stressSent, stressFinished, clearStressResult, setStressColours,
-    setStressDeform, setStressProbe, addStressPin, removeStressPin,
+    properties,
+    interference,
+    overhang,
+    params,
+    stress,
+    showProperties,
+    showInterference,
+    showStress,
+    replaceStressSetup,
+    setStressBody,
+    setStressSupportFaces,
+    addStressSupport,
+    removeStressSupport,
+    setStressLoadFaces,
+    addStressLoad,
+    removeStressLoad,
+    stressRow,
+    addStressSpot,
+    removeStressSpot,
+    setStressPlacing,
+    stressStarted,
+    stressSent,
+    stressFinished,
+    clearStressResult,
+    setStressColours,
+    setStressDeform,
+    setStressProbe,
+    addStressPin,
+    removeStressPin,
   };
 });

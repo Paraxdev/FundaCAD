@@ -127,9 +127,7 @@ describe("composeMove", () => {
     expect(byMatrix.distanceTo(byQuat)).toBeLessThan(1e-9);
 
     const rad = (d: number) => (d * Math.PI) / 180;
-    const wrongOrder = p.clone().applyEuler(
-      new THREE.Euler(rad(mv.rx), rad(mv.ry), rad(mv.rz), "ZYX"),
-    );
+    const wrongOrder = p.clone().applyEuler(new THREE.Euler(rad(mv.rx), rad(mv.ry), rad(mv.rz), "ZYX"));
     expect(wrongOrder.distanceTo(byQuat)).toBeGreaterThan(0.1);
   });
 

@@ -61,8 +61,7 @@ export const START = "__fundacadStartPlugin";
  *  cheapest denial of service in this design. */
 export const MAX_LOG = 2000;
 
-const isObj = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /** Parse a message from the guest, or null if it is not one.
  *

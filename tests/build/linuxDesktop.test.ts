@@ -43,7 +43,9 @@ describe("the Linux desktop entries", () => {
     expect(mimeXml).toMatch(/<mime-type type="application\/x-fundacad">[\s\S]*?<glob pattern="\*\.funda"\/>/);
     expect(mimeXml).toMatch(/<mime-type type="application\/x-fundacad-bundle">[\s\S]*?<glob pattern="\*\.fundab"\/>/);
     for (const pkg of ["deb", "rpm"]) {
-      expect(conf.bundle.linux[pkg].files["/usr/share/mime/packages/dev.fundacad.app.xml"], pkg).toBe("../packaging/dev.fundacad.app.mime.xml");
+      expect(conf.bundle.linux[pkg].files["/usr/share/mime/packages/dev.fundacad.app.xml"], pkg).toBe(
+        "../packaging/dev.fundacad.app.mime.xml",
+      );
     }
     expect(flatpakManifest).toMatch(/install -Dm644 \S+ \/app\/share\/mime\/packages\/dev\.fundacad\.app\.xml/);
   });
@@ -51,7 +53,13 @@ describe("the Linux desktop entries", () => {
   // The bundler files each PNG under hicolor by its pixel size, so a size
   // missing here is one the desktop scales up from a smaller icon.
   it("ship the app icon at every size a menu, dock or launcher asks for", () => {
-    for (const icon of ["icons/32x32.png", "icons/64x64.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.png"]) {
+    for (const icon of [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+    ]) {
       expect(conf.bundle.icon, icon).toContain(icon);
     }
     expect(conf.bundle.icon[0], "the window icon is the first PNG").toBe("icons/32x32.png");

@@ -39,9 +39,7 @@ const KEY = "fundacad.liveEditing";
 /** Narrow an untrusted stored value. Anything unrecognised is the default, the
  *  same way every other setting module treats a corrupt value. */
 export function asLiveEditingMode(v: unknown): LiveEditingMode | null {
-  return typeof v === "string" && (LIVE_MODES as readonly string[]).includes(v)
-    ? (v as LiveEditingMode)
-    : null;
+  return typeof v === "string" && (LIVE_MODES as readonly string[]).includes(v) ? (v as LiveEditingMode) : null;
 }
 
 let current: LiveEditingMode = asLiveEditingMode(readSetting(KEY)) ?? DEFAULT_LIVE_MODE;

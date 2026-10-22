@@ -42,7 +42,13 @@ export function parseSizeText(raw: string): SizeText | null {
 }
 
 /** What the field shows for a radial drag of `delta` from `radius`. */
-export function sizeReadout(quantity: SizeQuantity, radius: number, delta: number, solidInside: boolean, full: boolean): number {
+export function sizeReadout(
+  quantity: SizeQuantity,
+  radius: number,
+  delta: number,
+  solidInside: boolean,
+  full: boolean,
+): number {
   if (quantity === "offset") return delta;
   const d = radialDrag(radius, delta, solidInside, full);
   return quantity === "diameter" ? d.diameter : d.radius;

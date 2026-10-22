@@ -27,8 +27,18 @@ export class Disposer {
     return once;
   }
 
-  listen<K extends keyof WindowEventMap>(target: Window, type: K, fn: (e: WindowEventMap[K]) => void, opts?: boolean | AddEventListenerOptions): Cleanup;
-  listen<K extends keyof HTMLElementEventMap>(target: HTMLElement, type: K, fn: (e: HTMLElementEventMap[K]) => void, opts?: boolean | AddEventListenerOptions): Cleanup;
+  listen<K extends keyof WindowEventMap>(
+    target: Window,
+    type: K,
+    fn: (e: WindowEventMap[K]) => void,
+    opts?: boolean | AddEventListenerOptions,
+  ): Cleanup;
+  listen<K extends keyof HTMLElementEventMap>(
+    target: HTMLElement,
+    type: K,
+    fn: (e: HTMLElementEventMap[K]) => void,
+    opts?: boolean | AddEventListenerOptions,
+  ): Cleanup;
   listen(target: EventTarget, type: string, fn: (e: Event) => void, opts?: boolean | AddEventListenerOptions): Cleanup;
   listen(target: EventTarget, type: string, fn: (e: never) => void, opts?: boolean | AddEventListenerOptions): Cleanup {
     const handler = fn as unknown as EventListener;

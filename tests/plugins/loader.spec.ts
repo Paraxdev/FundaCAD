@@ -12,12 +12,7 @@
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import {
-  EXPORT_NAME,
-  evaluatePlugin,
-  hostModules,
-  type HostModules,
-} from "../../src/plugins/loader";
+import { EXPORT_NAME, evaluatePlugin, hostModules, type HostModules } from "../../src/plugins/loader";
 import { contributors, resetContributions } from "../../src/plugins/contrib";
 
 // The build script is ESM and imports vite; loaded through the same graph so
@@ -110,20 +105,23 @@ describe("a plugin built for a release", () => {
 
 describe("what the loader refuses", () => {
   it("says which plugin when the code will not compile", () => {
-    expect(() => evaluatePlugin("A.One", "this is not javascript {", modules))
-      .toThrow(/A\.One: its code would not compile/);
+    expect(() => evaluatePlugin("A.One", "this is not javascript {", modules)).toThrow(
+      /A\.One: its code would not compile/,
+    );
   });
 
   it("says which plugin when the code throws on load", () => {
-    expect(() => evaluatePlugin("A.One", `throw new Error("boom");`, modules))
-      .toThrow(/A\.One: its code threw while loading: boom/);
+    expect(() => evaluatePlugin("A.One", `throw new Error("boom");`, modules)).toThrow(
+      /A\.One: its code threw while loading: boom/,
+    );
   });
 
   it("refuses code that was not built by the packager", () => {
     // Valid JavaScript that simply is not a plugin. Without this the app would
     // get `undefined` and fail later, somewhere with no plugin id in it.
-    expect(() => evaluatePlugin("A.One", "var x = 1;", modules))
-      .toThrow(/A\.One: its code defined no __fundacadPlugin/);
+    expect(() => evaluatePlugin("A.One", "var x = 1;", modules)).toThrow(
+      /A\.One: its code defined no __fundacadPlugin/,
+    );
   });
 
   it("hands the plugin nothing but the host argument", () => {

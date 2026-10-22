@@ -13,7 +13,10 @@ const SEGMENTS_PER_TURN = 120;
 
 /** Where the angle `a` (radians, right-handed in `frame`) lands at `radius`. */
 export function dialPoint(frame: RotationFrame, a: number, radius: number): THREE.Vector3 {
-  return frame.u.clone().multiplyScalar(Math.cos(a) * radius).addScaledVector(frame.v, Math.sin(a) * radius);
+  return frame.u
+    .clone()
+    .multiplyScalar(Math.cos(a) * radius)
+    .addScaledVector(frame.v, Math.sin(a) * radius);
 }
 
 /** "345°", "-30°", "7.5°": whole degrees without a fraction, one decimal otherwise. */
@@ -75,7 +78,12 @@ export class RotateDial {
     const from = dialPoint(this.frame, start, DIAL_RADIUS);
     this.tip = dialPoint(this.frame, start + sweep, DIAL_RADIUS);
     this.arms.geometry.dispose();
-    this.arms.geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), from, new THREE.Vector3(), this.tip]);
+    this.arms.geometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(),
+      from,
+      new THREE.Vector3(),
+      this.tip,
+    ]);
     this.label.textContent = formatTurn(turnedDeg);
   }
 

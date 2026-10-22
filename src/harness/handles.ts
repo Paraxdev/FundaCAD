@@ -75,7 +75,8 @@ function axis(h: HandleHost, obj: THREE.Object3D): { dir: [number, number]; pxPe
   const mm = (h.viewport.pixelWorldSize(at) || 1) * 50;
   const a = h.viewport.projectToScreen(at);
   const b = h.viewport.projectToScreen(at.clone().addScaledVector(up, mm));
-  const dx = b.x - a.x, dy = b.y - a.y;
+  const dx = b.x - a.x,
+    dy = b.y - a.y;
   const len = Math.hypot(dx, dy);
   if (len < 1e-6) return { dir: [0, 0], pxPerMm: 0 };
   return { dir: [dx / len, dy / len], pxPerMm: len / mm };
@@ -100,23 +101,38 @@ export function handleList(h: HandleHost, onCanvas: CanvasTest = canvasTest(h.vi
   });
 }
 
-export function handlePoint(h: HandleHost, name: string, onCanvas: CanvasTest = canvasTest(h.viewport.domElement)): HandleInfo {
+export function handlePoint(
+  h: HandleHost,
+  name: string,
+  onCanvas: CanvasTest = canvasTest(h.viewport.domElement),
+): HandleInfo {
   const { base, nth } = splitIndex(name);
   const all = namedHandles(h.viewport.scene.scene);
   const named = all.filter((o) => (o.userData.handle as string).toLowerCase() === base.toLowerCase());
   if (!named.length) {
     const names = [...new Set(all.map((o) => o.userData.handle as string))];
     throw new HarnessError(
-      names.length ? `no handle "${base}" on screen, there are: ${names.join(", ")}` : `no handle "${base}" on screen, no tool has a handle up`,
+      names.length
+        ? `no handle "${base}" on screen, there are: ${names.join(", ")}`
+        : `no handle "${base}" on screen, no tool has a handle up`,
       "NotFound",
       names,
     );
   }
   if (named.length > 1 && nth == null) {
-    throw new HarnessError(`${named.length} handles are named "${base}", add #1 to #${named.length}`, "Ambiguous", named.map((_, i) => `${base}#${i + 1}`));
+    throw new HarnessError(
+      `${named.length} handles are named "${base}", add #1 to #${named.length}`,
+      "Ambiguous",
+      named.map((_, i) => `${base}#${i + 1}`),
+    );
   }
   const obj = named[(nth ?? 1) - 1];
-  if (!obj) throw new HarnessError(`there are ${named.length} handles named "${base}", not ${nth}`, "NotFound", named.map((_, i) => `${base}#${i + 1}`));
+  if (!obj)
+    throw new HarnessError(
+      `there are ${named.length} handles named "${base}", not ${nth}`,
+      "NotFound",
+      named.map((_, i) => `${base}#${i + 1}`),
+    );
   obj.updateWorldMatrix(true, true);
   const hit = aim(h, obj, onCanvas);
   if (!hit) throw new HarnessError(`handle "${name}" is off screen or covered, try another view`, "Occluded");
@@ -128,7 +144,13 @@ export function handlePoint(h: HandleHost, name: string, onCanvas: CanvasTest = 
 export function overHandle(h: HandleHost, x: number, y: number, pad = 8): boolean {
   const all = namedHandles(h.viewport.scene.scene);
   if (!all.length) return false;
-  for (const [dx, dy] of [[0, 0], [pad, 0], [-pad, 0], [0, pad], [0, -pad]] as const) {
+  for (const [dx, dy] of [
+    [0, 0],
+    [pad, 0],
+    [-pad, 0],
+    [0, pad],
+    [0, -pad],
+  ] as const) {
     const rc = h.viewport.rayFrom(x + dx, y + dy);
     if (all.some((o) => rc.intersectObject(o, true).length)) return true;
   }

@@ -17,19 +17,47 @@ const DEFAULT_PALETTE = [
 type Store = ReturnType<typeof opened>;
 const lists: [string, unknown, (s: Store) => unknown, unknown][] = [
   ["referenceImages", [], (s) => s.referenceImages(), []],
-  ["referenceImages", [{ id: "r1", src: "a.png", x: 2.5 }], (s) => s.referenceImages(), [{ id: "r1", src: "a.png", x: 2.5 }]],
   [
     "referenceImages",
-    [null, { id: "r1", src: "a.png" }, 7, "s", true, [], [{ id: "q" }], { id: "" }, { id: 3 }, { id: "r1", dup: 1 }, { id: "r2" }],
+    [{ id: "r1", src: "a.png", x: 2.5 }],
+    (s) => s.referenceImages(),
+    [{ id: "r1", src: "a.png", x: 2.5 }],
+  ],
+  [
+    "referenceImages",
+    [
+      null,
+      { id: "r1", src: "a.png" },
+      7,
+      "s",
+      true,
+      [],
+      [{ id: "q" }],
+      { id: "" },
+      { id: 3 },
+      { id: "r1", dup: 1 },
+      { id: "r2" },
+    ],
     (s) => s.referenceImages(),
     [{ id: "r1", src: "a.png" }, { id: "r2" }],
   ],
   ["elements", [], (s) => s.bodyElements, []],
   [
     "elements",
-    [{ id: 5, name: "n" }, null, { id: "" }, { id: "e1", name: " " }, { id: "e2", name: "Lid", parent: "" }, { id: "e3", parent: "e2", x: 1 }],
+    [
+      { id: 5, name: "n" },
+      null,
+      { id: "" },
+      { id: "e1", name: " " },
+      { id: "e2", name: "Lid", parent: "" },
+      { id: "e3", parent: "e2", x: 1 },
+    ],
     (s) => s.bodyElements,
-    [{ id: "e1", name: "e1" }, { id: "e2", name: "Lid" }, { x: 1, id: "e3", name: "e3", parent: "e2" }],
+    [
+      { id: "e1", name: "e1" },
+      { id: "e2", name: "Lid" },
+      { x: 1, id: "e3", name: "e3", parent: "e2" },
+    ],
   ],
   [
     "materials",
@@ -37,15 +65,17 @@ const lists: [string, unknown, (s: Store) => unknown, unknown][] = [
     (s) => s.materialLibrary,
     [{ id: "m-red", name: "Red", color: "#c03020" }],
   ],
-  [
-    "materials",
-    [{ id: "x" }, null],
-    (s) => s.materialLibrary,
-    STARTER_LIBRARY,
-  ],
+  ["materials", [{ id: "x" }, null], (s) => s.materialLibrary, STARTER_LIBRARY],
   [
     "palette",
-    [null, { name: "Teal", color: "#10a0b0" }, 7, { name: "", color: "nope", material: 5 }, { name: "Mint", color: "#0FA", material: "PLA", extra: 2 }, []],
+    [
+      null,
+      { name: "Teal", color: "#10a0b0" },
+      7,
+      { name: "", color: "nope", material: 5 },
+      { name: "Mint", color: "#0FA", material: "PLA", extra: 2 },
+      [],
+    ],
     (s) => s.colorPalette,
     [
       { name: "White", color: "#e8e8e8" },
@@ -72,7 +102,12 @@ const lists: [string, unknown, (s: Store) => unknown, unknown][] = [
     (s) => s.bodyColorsMap(),
     { b1: 2, b6: 0, b7: Number.MAX_SAFE_INTEGER },
   ],
-  ["bodyVisibility", { b1: false, b2: "no", b3: null, b4: 0, b5: true }, (s) => saved(s).bodyVisibility, { b1: false, b5: true }],
+  [
+    "bodyVisibility",
+    { b1: false, b2: "no", b3: null, b4: 0, b5: true },
+    (s) => saved(s).bodyVisibility,
+    { b1: false, b5: true },
+  ],
   ["suppressed", ["f2", 3, null, "f1"], (s) => saved(s).suppressed, ["f2", "f1"]],
   ["suppressed", "f1", (s) => saved(s).suppressed, undefined],
   ["rollback", "x", (s) => s.rollbackIndex, 2],
@@ -99,7 +134,12 @@ const lists: [string, unknown, (s: Store) => unknown, unknown][] = [
   ["viewOverrides", [{ normal: [0, 1, 0], up: [0, 0, 1] }], (s) => s.document.viewOverrides, undefined],
   ["bodyIds", { "sk1:0": 5 }, (s) => s.document.bodyIds, undefined],
   ["bodyIds", ["body1"], (s) => s.document.bodyIds, undefined],
-  ["bodyIds", { "sk1:0": "body1", "sk1:1": "body4" }, (s) => s.document.bodyIds, { "sk1:0": "body1", "sk1:1": "body4" }],
+  [
+    "bodyIds",
+    { "sk1:0": "body1", "sk1:1": "body4" },
+    (s) => s.document.bodyIds,
+    { "sk1:0": "body1", "sk1:1": "body4" },
+  ],
 ];
 
 describe("junk entries in a file's lists", () => {
@@ -133,7 +173,16 @@ describe("junk entries in a file's lists", () => {
       viewOverrides: { front: { normal: [0, 1, 0], up: [0, 0, 1] } },
     });
     expect(s.colorPalette[1]).toEqual({ name: "Teal", color: "#10a0b0" });
-    s.load(JSON.stringify({ parameters: {}, features: [box("g1", 2.5)], palette: [{ name: "Ink", color: "#102030" }], bodyNames: { c1: "Rim" }, rollback: "x", viewOverrides: [] }));
+    s.load(
+      JSON.stringify({
+        parameters: {},
+        features: [box("g1", 2.5)],
+        palette: [{ name: "Ink", color: "#102030" }],
+        bodyNames: { c1: "Rim" },
+        rollback: "x",
+        viewOverrides: [],
+      }),
+    );
     expect(s.colorPalette).toEqual([{ name: "Ink", color: "#102030" }]);
     expect(s.bodyNamesMap()).toEqual({ c1: "Rim" });
     expect(s.bodyColorsMap()).toEqual({});
@@ -146,10 +195,18 @@ describe("junk entries in a file's lists", () => {
   });
 
   it("a damaged modelling step makes the file unreadable and names the step", () => {
-    for (const [features, at] of [[[box("f1", 1), null], "features[1]"], [[5], "features[0]"], [[box("f1", 1), { id: "x" }], "features[1]"]] as const) {
+    for (const [features, at] of [
+      [[box("f1", 1), null], "features[1]"],
+      [[5], "features[0]"],
+      [[box("f1", 1), { id: "x" }], "features[1]"],
+    ] as const) {
       const s = freshStore();
       let err: unknown = null;
-      try { s.load(JSON.stringify({ parameters: {}, features })); } catch (e) { err = e; }
+      try {
+        s.load(JSON.stringify({ parameters: {}, features }));
+      } catch (e) {
+        err = e;
+      }
       expect(err, JSON.stringify(features)).toBeInstanceOf(UnreadableDocumentError);
       expect((err as Error).message).toContain(at);
     }

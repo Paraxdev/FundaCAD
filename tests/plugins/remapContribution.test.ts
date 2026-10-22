@@ -3,8 +3,15 @@ import { contribute, setGrantLookup } from "../../src/plugins/contrib";
 import { DEFAULT_BINDINGS, pointerBindings, type PointerBinding } from "../../src/viewport/navigator/bindings";
 import { resolveShortcut } from "../../src/input/shortcuts";
 
-const MIDDLE: PointerBinding[] = [{ button: "middle", drag: "orbit" }, { button: "right", click: "menu" }];
-const grants: Record<string, string[]> = { "Test.Remap": ["input.remap"], "Test.Other": ["input.remap"], "Test.Plain": ["ui.panel"] };
+const MIDDLE: PointerBinding[] = [
+  { button: "middle", drag: "orbit" },
+  { button: "right", click: "menu" },
+];
+const grants: Record<string, string[]> = {
+  "Test.Remap": ["input.remap"],
+  "Test.Other": ["input.remap"],
+  "Test.Plain": ["ui.panel"],
+};
 setGrantLookup((id) => grants[id]);
 
 const off: (() => void)[] = [];

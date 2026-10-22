@@ -17,14 +17,18 @@ function streaming(sel: { faces?: number[]; edges?: unknown[]; bodies?: string[]
       getSelectedFaces: () => sel.faces ?? [],
       getSelectedEdges: () => sel.edges ?? [],
       getSelectedBodies: () => sel.bodies ?? [],
-      dispose: () => { disposed++; },
+      dispose: () => {
+        disposed++;
+      },
     },
     requestRender: () => {},
   });
   vp.onSelectionChange = () => {
     heard.push(`pick:${vp.getSelectedFaceIds().length + vp.selectedEdgeLines().length}`);
   };
-  vp.onBodySelectionChange = (cause) => { heard.push(`bodies:${vp.getSelectedBodies().length}:${cause}`); };
+  vp.onBodySelectionChange = (cause) => {
+    heard.push(`bodies:${vp.getSelectedBodies().length}:${cause}`);
+  };
   return { vp, heard, disposed: () => disposed };
 }
 

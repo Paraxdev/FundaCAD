@@ -166,10 +166,10 @@ function filamentSource() {
       const proposed = filaments.map((f) =>
         f.present
           ? {
-            name: `${f.vendor} ${f.material}`.trim() || `Toolhead ${f.index + 1}`,
-            color: f.color,
-            material: f.material,
-          }
+              name: `${f.vendor} ${f.material}`.trim() || `Toolhead ${f.index + 1}`,
+              color: f.color,
+              material: f.material,
+            }
           : undefined,
       );
       if (!proposed.some(Boolean)) {

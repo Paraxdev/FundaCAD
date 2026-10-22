@@ -14,13 +14,7 @@ import { entityPolyline } from "../sketch/region";
 import { resolveEntities } from "../sketch/resolve";
 import { rotated, scaled, translated } from "../sketch/pattern";
 import { toast } from "../ui/toast";
-import {
-  ALL_HANDLES,
-  IN_PLANE_HANDLES,
-  WORLD_FRAME,
-  bodyMoveFeatures,
-  type MoveTarget,
-} from "./moveTarget";
+import { ALL_HANDLES, IN_PLANE_HANDLES, WORLD_FRAME, bodyMoveFeatures, type MoveTarget } from "./moveTarget";
 
 /** A transform that keeps a plane in itself, read in that plane's 2D coordinates:
  *  p' = f · R(angle) · p + (tx, ty). */
@@ -35,7 +29,8 @@ export function similarityIn(plane: SketchPlane, m: THREE.Matrix4): Similarity2D
   const o = plane.origin.clone().applyMatrix4(m);
   const ux = plane.origin.clone().add(plane.u).applyMatrix4(m).sub(o);
   const t = plane.to2D(o);
-  const c = ux.dot(plane.u), s = ux.dot(plane.v);
+  const c = ux.dot(plane.u),
+    s = ux.dot(plane.v);
   return { f: Math.hypot(c, s), angle: Math.atan2(s, c), tx: t.x, ty: t.y };
 }
 
@@ -91,7 +86,10 @@ export function applySketchMove(
       profiles?: { sketch: string; region: Vec3 }[];
     };
     if (f.profiles?.some((p) => ids.has(p.sketch))) {
-      return { ...f, profiles: f.profiles.map((p) => (ids.has(p.sketch) ? { ...p, region: movePoint(p.region, m) } : p)) } as Feature;
+      return {
+        ...f,
+        profiles: f.profiles.map((p) => (ids.has(p.sketch) ? { ...p, region: movePoint(p.region, m) } : p)),
+      } as Feature;
     }
     if (f.sketch && ids.has(f.sketch) && (f.regions || f.region)) {
       return {
@@ -177,7 +175,12 @@ export function sketchFeatureTarget(
 ): MoveTarget | null {
   const sketches = () =>
     sketchIds
-      .map((id) => asFeature(store.document.features.find((f) => f.id === id), "sketch"))
+      .map((id) =>
+        asFeature(
+          store.document.features.find((f) => f.id === id),
+          "sketch",
+        ),
+      )
       .filter((f): f is NonNullable<typeof f> => !!f);
   if (!sketches().length) return null;
   const points = () => {

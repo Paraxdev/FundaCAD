@@ -9,7 +9,10 @@ describe("diffSnapshot", () => {
     const before = snap({ features: [{ id: "f1", type: "box" }] });
     const after = snap({
       tool: "Fillet / Chamfer",
-      features: [{ id: "f1", type: "box" }, { id: "fillet1", type: "fillet" }],
+      features: [
+        { id: "f1", type: "box" },
+        { id: "fillet1", type: "fillet" },
+      ],
       selection: { faces: 0, edges: 1, bodies: 0 },
       value: { field: "radius", text: "3", typed: true },
     });
@@ -32,7 +35,9 @@ describe("matchWait", () => {
     expect(matchWait({ until: ["tool"], tool: "extrude" }, tool)).toBe(false);
     expect(matchWait({ until: ["feature"] }, tool)).toBe(false);
     expect(matchWait({ until: ["feature", "tool"] }, tool)).toBe(true);
-    expect(matchWait({ until: ["value"], field: "radius" }, { kind: "value", field: "distance", text: "2" })).toBe(false);
+    expect(matchWait({ until: ["value"], field: "radius" }, { kind: "value", field: "distance", text: "2" })).toBe(
+      false,
+    );
   });
 });
 
@@ -41,7 +46,13 @@ describe("GuideSession waits", () => {
   const rig = () => {
     let now = snap();
     const g = new GuideSession(found, () => now);
-    return { g, set: (p: Partial<Snapshot>) => { now = snap(p); g.observe(); } };
+    return {
+      g,
+      set: (p: Partial<Snapshot>) => {
+        now = snap(p);
+        g.observe();
+      },
+    };
   };
 
   it("counts only what happens after the wait is armed", () => {
@@ -66,11 +77,17 @@ describe("GuideSession waits", () => {
 
   it("Stop resolves any wait, clears the step and counts the stop", () => {
     const { g } = rig();
-    g.apply([{ kind: "highlight", seq: 1, target: { ui: "x" }, step: 2, of: 3 }, { kind: "wait", seq: 2, until: ["tool"] }]);
+    g.apply([
+      { kind: "highlight", seq: 1, target: { ui: "x" }, step: 2, of: 3 },
+      { kind: "wait", seq: 2, until: ["tool"] },
+    ]);
     expect(g.active).toBe(true);
     g.stop();
     expect(g.state.step).toBeNull();
-    expect(g.state.wait).toMatchObject({ done: "stopped", what: "the user stopped the guide at step 2 of 3, everything is cleared" });
+    expect(g.state.wait).toMatchObject({
+      done: "stopped",
+      what: "the user stopped the guide at step 2 of 3, everything is cleared",
+    });
     expect(g.state.stopped).toEqual({ n: 1, step: 2, of: 3 });
     expect(g.active).toBe(false);
   });

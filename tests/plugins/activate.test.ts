@@ -78,9 +78,7 @@ describe("which plugins are active", () => {
     // The order plugins start in decides the order their menu rows and ribbon
     // groups appear. Leaving it to Set insertion order would make that depend
     // on which of the two happened to name one first.
-    expect(activeIds(["C.Three", "A.One"], ["B.Two"], allOn))
-      .toEqual(["A.One", "B.Two", "C.Three"]);
-    expect(activeIds(["B.Two"], ["A.One", "C.Three"], allOn))
-      .toEqual(["A.One", "B.Two", "C.Three"]);
+    expect(activeIds(["C.Three", "A.One"], ["B.Two"], allOn)).toEqual(["A.One", "B.Two", "C.Three"]);
+    expect(activeIds(["B.Two"], ["A.One", "C.Three"], allOn)).toEqual(["A.One", "B.Two", "C.Three"]);
   });
 });

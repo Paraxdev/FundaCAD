@@ -32,10 +32,7 @@ export type { FaceColorRuns, ImportColorSource };
  *  answer to a run that overruns is "those faces have no colour of their own",
  *  never a throw in the middle of assembling a rebuild. A run naming a palette
  *  slot that is not there reads the same way. */
-export function decodeFaceColors(
-  enc: FaceColorRuns | undefined,
-  count: number,
-): (string | null)[] {
+export function decodeFaceColors(enc: FaceColorRuns | undefined, count: number): (string | null)[] {
   const n = Math.max(0, Math.floor(count));
   const out: (string | null)[] = new Array(n).fill(null);
   if (!enc || !Array.isArray(enc.runs)) return out;
@@ -100,12 +97,14 @@ export function dominantFaceColor(colors: readonly (string | null)[]): string | 
  *  leaving its dominant faces to that would throw the file's colour away. Such
  *  a body names every coloured face it has. */
 export function importedFacePaint(
-  bodies: readonly {
-    id: string;
-    faceStart: number;
-    faceCount: number;
-    faceColors?: FaceColorRuns;
-  }[] | undefined,
+  bodies:
+    | readonly {
+        id: string;
+        faceStart: number;
+        faceCount: number;
+        faceColors?: FaceColorRuns;
+      }[]
+    | undefined,
   bodyPaint: Readonly<Record<string, string>>,
   picks?: ReadonlyMap<string, BodyColorPick>,
 ): Record<number, string> {
@@ -180,13 +179,15 @@ export function pickBodyColor(
 /** `pickBodyColor` for every body of a build that came from an imported
  *  assembly, keyed by body id. Bodies from anything else are absent. */
 export function importedBodyColors(
-  bodies: readonly {
-    id: string;
-    faceCount: number;
-    nodeRef?: string | undefined;
-    faceColors?: FaceColorRuns | undefined;
-    partColor?: string | undefined;
-  }[] | undefined,
+  bodies:
+    | readonly {
+        id: string;
+        faceCount: number;
+        nodeRef?: string | undefined;
+        faceColors?: FaceColorRuns | undefined;
+        partColor?: string | undefined;
+      }[]
+    | undefined,
   features: readonly {
     id: string;
     type: string;
@@ -195,7 +196,14 @@ export function importedBodyColors(
   sourceOf: (featureId: string) => ImportColorSource,
 ): Map<string, BodyColorPick> {
   const out = new Map<string, BodyColorPick>();
-  const trees = new Map<string, { source: ImportColorSource; nodes: NonNullable<(typeof features)[number]["nodes"]>; inherited: (string | undefined)[] }>();
+  const trees = new Map<
+    string,
+    {
+      source: ImportColorSource;
+      nodes: NonNullable<(typeof features)[number]["nodes"]>;
+      inherited: (string | undefined)[];
+    }
+  >();
   for (const f of features) {
     if (f.type !== "import" || !f.nodes) continue;
     trees.set(f.id, { source: sourceOf(f.id), nodes: f.nodes, inherited: nodeColors(f.nodes) });
@@ -207,12 +215,18 @@ export function importedBodyColors(
     const tree = trees.get(b.nodeRef!.slice(0, slash));
     if (!tree) continue;
     const index = Number(b.nodeRef!.slice(slash + 1));
-    out.set(b.id, pickBodyColor({
-      partColor: b.partColor,
-      ownColor: tree.nodes[index]?.color,
-      inheritedColor: tree.inherited[index],
-      faceColors: b.faceColors ? decodeFaceColors(b.faceColors, b.faceCount) : undefined,
-    }, tree.source));
+    out.set(
+      b.id,
+      pickBodyColor(
+        {
+          partColor: b.partColor,
+          ownColor: tree.nodes[index]?.color,
+          inheritedColor: tree.inherited[index],
+          faceColors: b.faceColors ? decodeFaceColors(b.faceColors, b.faceCount) : undefined,
+        },
+        tree.source,
+      ),
+    );
   }
   return out;
 }

@@ -22,56 +22,139 @@ export type FieldKind = "length" | "angle" | "count";
  *  `texture` used to be the last row of this table. */
 export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string, FieldKind][]>> = {
   extrude: [
-    ["distance", "Distance", "length"], ["taper", "Taper", "angle"], ["startOffset", "Start offset", "length"],
-    ["endOffset", "End offset", "length"], ["distance2", "Distance 2", "length"], ["taper2", "Taper 2", "angle"],
-    ["endOffset2", "End offset 2", "length"], ["thickness", "Thickness", "length"], ["thickness2", "Thickness 2", "length"],
+    ["distance", "Distance", "length"],
+    ["taper", "Taper", "angle"],
+    ["startOffset", "Start offset", "length"],
+    ["endOffset", "End offset", "length"],
+    ["distance2", "Distance 2", "length"],
+    ["taper2", "Taper 2", "angle"],
+    ["endOffset2", "End offset 2", "length"],
+    ["thickness", "Thickness", "length"],
+    ["thickness2", "Thickness 2", "length"],
   ],
   // profile is a dimensionless ratio in (-1, 1), "count" is this file's kind for
   // real-valued unitless fields (see scale.factor, texture.sharpness), not an
   // integer claim; INTEGER_FIELDS below is what marks those.
-  fillet: [["radius", "Radius", "length"], ["profile", "Profile", "count"]],
-  chamfer: [["distance", "Distance", "length"], ["distance2", "Distance 2", "length"]],
-  "press-pull": [["distance", "Distance", "length"], ["taper", "Taper", "angle"], ["upToOffset", "Up to offset", "length"]],
+  fillet: [
+    ["radius", "Radius", "length"],
+    ["profile", "Profile", "count"],
+  ],
+  chamfer: [
+    ["distance", "Distance", "length"],
+    ["distance2", "Distance 2", "length"],
+  ],
+  "press-pull": [
+    ["distance", "Distance", "length"],
+    ["taper", "Taper", "angle"],
+    ["upToOffset", "Up to offset", "length"],
+  ],
   // Pitch is how far one full turn climbs, not how far the whole revolve does,
   // so a thread's pitch is typed straight off its spec and stays right however
   // many turns are wound on. Empty means no climb: the flat revolve.
-  revolve: [["angle", "Angle", "angle"], ["pitch", "Pitch", "length"]],
-  datumPlane: [
-    ["offset", "Offset", "length"], ["tiltX", "Tilt X", "angle"], ["tiltY", "Tilt Y", "angle"],
-    ["spin", "Spin", "angle"], ["shiftX", "Shift X", "length"], ["shiftY", "Shift Y", "length"],
+  revolve: [
+    ["angle", "Angle", "angle"],
+    ["pitch", "Pitch", "length"],
   ],
-  box: [["length", "Length", "length"], ["width", "Width", "length"], ["height", "Height", "length"]],
-  cylinder: [["radius", "Radius", "length"], ["height", "Height", "length"]],
-  cone: [["bottomRadius", "Bottom radius", "length"], ["topRadius", "Top radius", "length"], ["height", "Height", "length"]],
+  datumPlane: [
+    ["offset", "Offset", "length"],
+    ["tiltX", "Tilt X", "angle"],
+    ["tiltY", "Tilt Y", "angle"],
+    ["spin", "Spin", "angle"],
+    ["shiftX", "Shift X", "length"],
+    ["shiftY", "Shift Y", "length"],
+  ],
+  box: [
+    ["length", "Length", "length"],
+    ["width", "Width", "length"],
+    ["height", "Height", "length"],
+  ],
+  cylinder: [
+    ["radius", "Radius", "length"],
+    ["height", "Height", "length"],
+  ],
+  cone: [
+    ["bottomRadius", "Bottom radius", "length"],
+    ["topRadius", "Top radius", "length"],
+    ["height", "Height", "length"],
+  ],
   sphere: [["radius", "Radius", "length"]],
-  torus: [["majorRadius", "Ring radius", "length"], ["minorRadius", "Tube radius", "length"]],
+  torus: [
+    ["majorRadius", "Ring radius", "length"],
+    ["minorRadius", "Tube radius", "length"],
+  ],
   shell: [["thickness", "Thickness", "length"]],
   offsetFace: [["distance", "Distance", "length"]],
   thicken: [["thickness", "Thickness", "length"]],
   draft: [["angle", "Angle", "angle"]],
   thread: [
-    ["pitch", "Pitch", "length"], ["starts", "Starts", "count"], ["offset", "Offset", "length"],
-    ["length", "Length", "length"], ["clearance", "Print clearance", "length"],
+    ["pitch", "Pitch", "length"],
+    ["starts", "Starts", "count"],
+    ["offset", "Offset", "length"],
+    ["length", "Length", "length"],
+    ["clearance", "Print clearance", "length"],
   ],
-  textOnFace: [["height", "Height", "length"], ["depth", "Depth", "length"], ["angle", "Angle", "angle"]],
+  textOnFace: [
+    ["height", "Height", "length"],
+    ["depth", "Depth", "length"],
+    ["angle", "Angle", "angle"],
+  ],
   hole: [
-    ["diameter", "Diameter", "length"], ["depth", "Depth", "length"],
-    ["cbDiameter", "Counterbore diameter", "length"], ["cbDepth", "Counterbore depth", "length"],
-    ["csDiameter", "Countersink diameter", "length"], ["csAngle", "Countersink angle", "angle"],
+    ["diameter", "Diameter", "length"],
+    ["depth", "Depth", "length"],
+    ["cbDiameter", "Counterbore diameter", "length"],
+    ["cbDepth", "Counterbore depth", "length"],
+    ["csDiameter", "Countersink diameter", "length"],
+    ["csAngle", "Countersink angle", "angle"],
     ["leadIn", "Lead-in", "length"],
   ],
-  patternRect: [["countX", "Count X", "count"], ["countY", "Count Y", "count"], ["spacingX", "Spacing X", "length"], ["spacingY", "Spacing Y", "length"]],
-  patternLinear: [["count", "Count", "count"], ["spacing", "Spacing", "length"]],
-  patternCircular: [["count", "Count", "count"], ["angle", "Angle", "angle"]],
+  patternRect: [
+    ["countX", "Count X", "count"],
+    ["countY", "Count Y", "count"],
+    ["spacingX", "Spacing X", "length"],
+    ["spacingY", "Spacing Y", "length"],
+  ],
+  patternLinear: [
+    ["count", "Count", "count"],
+    ["spacing", "Spacing", "length"],
+  ],
+  patternCircular: [
+    ["count", "Count", "count"],
+    ["angle", "Angle", "angle"],
+  ],
   simplifyMesh: [["tolerance", "Angle tol", "angle"]],
   cleanUp: [["tolerance", "Tolerance", "length"]],
-  scale: [["factor", "Factor", "count"], ["sx", "X factor", "count"], ["sy", "Y factor", "count"], ["sz", "Z factor", "count"]],
-  move: [["dx", "Move X", "length"], ["dy", "Move Y", "length"], ["dz", "Move Z", "length"], ["rx", "Rotate X", "angle"], ["ry", "Rotate Y", "angle"], ["rz", "Rotate Z", "angle"]],
-  joint: [["offset", "Offset", "length"], ["angle", "Angle", "angle"]],
+  scale: [
+    ["factor", "Factor", "count"],
+    ["sx", "X factor", "count"],
+    ["sy", "Y factor", "count"],
+    ["sz", "Z factor", "count"],
+  ],
+  move: [
+    ["dx", "Move X", "length"],
+    ["dy", "Move Y", "length"],
+    ["dz", "Move Z", "length"],
+    ["rx", "Rotate X", "angle"],
+    ["ry", "Rotate Y", "angle"],
+    ["rz", "Rotate Z", "angle"],
+  ],
+  joint: [
+    ["offset", "Offset", "length"],
+    ["angle", "Angle", "angle"],
+  ],
   // The drive value: a slider drive reads the offset, a revolute one the angle, and
   // fieldApplies shows only that one (document/mechanism.ts).
-  mechanism: [["offset", "Drive offset", "length"], ["angle", "Drive angle", "angle"]],
-  duplicate: [["dx", "Move X", "length"], ["dy", "Move Y", "length"], ["dz", "Move Z", "length"], ["rx", "Rotate X", "angle"], ["ry", "Rotate Y", "angle"], ["rz", "Rotate Z", "angle"]],
+  mechanism: [
+    ["offset", "Drive offset", "length"],
+    ["angle", "Drive angle", "angle"],
+  ],
+  duplicate: [
+    ["dx", "Move X", "length"],
+    ["dy", "Move Y", "length"],
+    ["dz", "Move Z", "length"],
+    ["rx", "Rotate X", "angle"],
+    ["ry", "Rotate Y", "angle"],
+    ["rz", "Rotate Z", "angle"],
+  ],
 };
 
 /** Whether selecting this feature type actually opens an editor (numeric fields
@@ -110,7 +193,10 @@ export function featureNumFields(
 
 // Only on the datum plane forms that read them: `t` a fraction 0..1 along the
 // edge (dimensionless, so "count"), `angle` the turn about the edge.
-const DATUM_REF_FIELDS: [string, string, FieldKind][] = [["t", "Position", "count"], ["angle", "Angle", "angle"]];
+const DATUM_REF_FIELDS: [string, string, FieldKind][] = [
+  ["t", "Position", "count"],
+  ["angle", "Angle", "angle"],
+];
 
 function typeNumFields(type: string, values?: Record<string, unknown>): readonly [string, string, FieldKind][] {
   const own = FEATURE_NUM_FIELDS[type as Feature["type"]];
@@ -177,9 +263,7 @@ export function presentCommonFields(values: Record<string, unknown>): [string, s
 /** Every numeric-looking field on a feature nobody describes, in key order,
  *  labelled by its own name. Ids, type and geometry selections are skipped:
  *  they are not numbers and a spin box over one would corrupt the feature. */
-export function rawNumFields(
-  values: Record<string, unknown>,
-): [string, string, FieldKind][] {
+export function rawNumFields(values: Record<string, unknown>): [string, string, FieldKind][] {
   const out: [string, string, FieldKind][] = [];
   for (const [k, v] of Object.entries(values)) {
     if (k === "id" || k === "type" || COMMON_NUM_FIELDS.some(([field]) => field === k)) continue;
@@ -189,7 +273,8 @@ export function rawNumFields(
     if (Array.isArray(v) && v.length && v.every((e) => isRecord(e) && typeof e["id"] === "string")) {
       for (const e of v as Record<string, unknown>[]) {
         for (const [ek, ev] of Object.entries(e)) {
-          if (ek !== "id" && typeof ev === "number") out.push([`${k}.${e["id"]}.${ek}`, `${k} ${e["id"]} ${ek}`, "count"]);
+          if (ek !== "id" && typeof ev === "number")
+            out.push([`${k}.${e["id"]}.${ek}`, `${k} ${e["id"]} ${ek}`, "count"]);
         }
       }
     }
@@ -202,9 +287,28 @@ export function rawNumFields(
  *  rectangles…) is parameter-driven through a dimension constraint instead, the
  *  solver overwrites raw coordinates every pump. */
 export const RIGID_ENTITY_NUM_FIELDS: Partial<Record<SketchEntity["type"], [string, FieldKind][]>> = {
-  polygon: [["x", "length"], ["y", "length"], ["radius", "length"], ["sides", "count"], ["angle", "angle"]],
-  slot: [["x1", "length"], ["y1", "length"], ["x2", "length"], ["y2", "length"], ["width", "length"]],
-  text: [["x", "length"], ["y", "length"], ["height", "length"], ["angle", "angle"], ["positionOnPath", "count"], ["boxWidth", "length"]],
+  polygon: [
+    ["x", "length"],
+    ["y", "length"],
+    ["radius", "length"],
+    ["sides", "count"],
+    ["angle", "angle"],
+  ],
+  slot: [
+    ["x1", "length"],
+    ["y1", "length"],
+    ["x2", "length"],
+    ["y2", "length"],
+    ["width", "length"],
+  ],
+  text: [
+    ["x", "length"],
+    ["y", "length"],
+    ["height", "length"],
+    ["angle", "angle"],
+    ["positionOnPath", "count"],
+    ["boxWidth", "length"],
+  ],
 };
 
 /** Canonical unit of a field kind (lengths mm, angles degrees, counts raw). */
@@ -214,12 +318,49 @@ export function kindUnit(kind: FieldKind): ParamUnit {
 
 /** Numeric fields on sketch patterns. */
 export const PATTERN_NUM_FIELDS: Record<SketchPattern["type"], [string, FieldKind][]> = {
-  patternRect: [["countX", "count"], ["countY", "count"], ["spacingX", "length"], ["spacingY", "length"], ["angle", "angle"]],
-  patternCircular: [["cx", "length"], ["cy", "length"], ["count", "count"], ["angle", "angle"]],
-  hexHoles: [["cx", "length"], ["cy", "length"], ["diameter", "length"], ["spacing", "length"], ["rings", "count"]],
-  honeycomb: [["cx", "length"], ["cy", "length"], ["diameter", "length"], ["spacing", "length"], ["rings", "count"]],
-  boltCircle: [["cx", "length"], ["cy", "length"], ["bcd", "length"], ["count", "count"], ["diameter", "length"]],
-  gridHoles: [["cx", "length"], ["cy", "length"], ["diameter", "length"], ["countX", "count"], ["countY", "count"], ["spacingX", "length"], ["spacingY", "length"]],
+  patternRect: [
+    ["countX", "count"],
+    ["countY", "count"],
+    ["spacingX", "length"],
+    ["spacingY", "length"],
+    ["angle", "angle"],
+  ],
+  patternCircular: [
+    ["cx", "length"],
+    ["cy", "length"],
+    ["count", "count"],
+    ["angle", "angle"],
+  ],
+  hexHoles: [
+    ["cx", "length"],
+    ["cy", "length"],
+    ["diameter", "length"],
+    ["spacing", "length"],
+    ["rings", "count"],
+  ],
+  honeycomb: [
+    ["cx", "length"],
+    ["cy", "length"],
+    ["diameter", "length"],
+    ["spacing", "length"],
+    ["rings", "count"],
+  ],
+  boltCircle: [
+    ["cx", "length"],
+    ["cy", "length"],
+    ["bcd", "length"],
+    ["count", "count"],
+    ["diameter", "length"],
+  ],
+  gridHoles: [
+    ["cx", "length"],
+    ["cy", "length"],
+    ["diameter", "length"],
+    ["countX", "count"],
+    ["countY", "count"],
+    ["spacingX", "length"],
+    ["spacingY", "length"],
+  ],
 };
 
 /** Integer-only fields (a subset of the "count" kind, which also holds real-
@@ -274,9 +415,27 @@ export function valueProblem(label: string, rule: ValueRule, v: number): string 
  *  parameter name, the skip-set for the legacy bare-name scans in the params
  *  engine. Keep in sync when a new string field lands on either union. */
 export const NON_NUM_STRING_FIELDS = new Set([
-  "id", "type", "name", "operation", "font", "style", "align", "text", "pathRef",
-  "plane", "sketch", "axis", "profile", "path", "direction", "body", "imagePath", "solid",
-  "ground", "drive", "mode",
+  "id",
+  "type",
+  "name",
+  "operation",
+  "font",
+  "style",
+  "align",
+  "text",
+  "pathRef",
+  "plane",
+  "sketch",
+  "axis",
+  "profile",
+  "path",
+  "direction",
+  "body",
+  "imagePath",
+  "solid",
+  "ground",
+  "drive",
+  "mode",
 ]);
 
 /** A parameter target resolved to the live object holding the number. */
@@ -294,7 +453,10 @@ export interface ResolvedTarget {
  *  dangling binding means). */
 export function resolveTarget(doc: CadDocument, target: ParamTarget): ResolvedTarget | null {
   const sketchOf = (id: string) =>
-    asFeature(doc.features.find((x) => x.id === id), "sketch");
+    asFeature(
+      doc.features.find((x) => x.id === id),
+      "sketch",
+    );
   switch (target.kind) {
     case "feature": {
       const f = doc.features.find((x) => x.id === target.feature);
@@ -302,9 +464,7 @@ export function resolveTarget(doc: CadDocument, target: ParamTarget): ResolvedTa
       // a field of a PLUGIN's feature, and it has to keep resolving whether or
       // not that plugin is loaded. The raw fallback is what makes the binding
       // survive the plugin being uninstalled instead of quietly going dead.
-      const row = f
-        && featureNumFields(f.type, f as Record<string, unknown>)
-          .find(([field]) => field === target.field);
+      const row = f && featureNumFields(f.type, f as Record<string, unknown>).find(([field]) => field === target.field);
       const at = f && row && fieldHolder(f as unknown as Record<string, unknown>, target.field);
       if (!at) return null;
       return { holder: at.holder, field: at.key, kind: row![2] };
@@ -325,14 +485,24 @@ export function resolveTarget(doc: CadDocument, target: ParamTarget): ResolvedTa
       const e = f?.entities.find((x) => x.id === target.entity);
       const row = e && RIGID_ENTITY_NUM_FIELDS[e.type]?.find(([field]) => field === target.field);
       if (!e || !row) return null;
-      return { holder: e as unknown as Record<string, unknown>, field: target.field, kind: row[1], sketch: target.sketch };
+      return {
+        holder: e as unknown as Record<string, unknown>,
+        field: target.field,
+        kind: row[1],
+        sketch: target.sketch,
+      };
     }
     case "pattern": {
       const f = sketchOf(target.sketch);
       const p = f?.patterns?.find((x) => x.id === target.pattern);
       const row = p && PATTERN_NUM_FIELDS[p.type]?.find(([field]) => field === target.field);
       if (!p || !row) return null;
-      return { holder: p as unknown as Record<string, unknown>, field: target.field, kind: row[1], sketch: target.sketch };
+      return {
+        holder: p as unknown as Record<string, unknown>,
+        field: target.field,
+        kind: row[1],
+        sketch: target.sketch,
+      };
     }
   }
 }
@@ -370,11 +540,7 @@ export function targetFeatureId(target: ParamTarget): string {
  *  it would change nothing, all three of which a caller reads the same way, as
  *  "there is nothing here worth building".
  */
-export function featureWithTarget(
-  doc: CadDocument,
-  target: ParamTarget,
-  value: number,
-): Feature | null {
+export function featureWithTarget(doc: CadDocument, target: ParamTarget, value: number): Feature | null {
   const id = targetFeatureId(target);
   if (!doc.features.some((f) => f.id === id)) return null;
   const view: CadDocument = { ...doc, features: doc.features.slice() };

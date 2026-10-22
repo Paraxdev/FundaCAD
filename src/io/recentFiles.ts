@@ -17,9 +17,7 @@ export function getRecentFiles(): RecentFile[] {
   try {
     const list = JSON.parse(readSetting(KEY, ...LEGACY_KEYS) ?? "[]");
     if (!Array.isArray(list)) return [];
-    return list.filter(
-      (r): r is RecentFile => !!r && typeof r.path === "string" && typeof r.openedAt === "number",
-    );
+    return list.filter((r): r is RecentFile => !!r && typeof r.path === "string" && typeof r.openedAt === "number");
   } catch {
     return [];
   }
@@ -38,5 +36,7 @@ export function forgetRecent(path: string): void {
 function write(list: RecentFile[]): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
-  } catch { /* blocked storage keeps the old list */ }
+  } catch {
+    /* blocked storage keeps the old list */
+  }
 }

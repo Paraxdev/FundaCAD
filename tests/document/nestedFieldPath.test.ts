@@ -68,18 +68,24 @@ describe("nested field paths", () => {
 
   it("asks a plugin that lists its rows from the feature's values", () => {
     off = contribute("Test.Nodes", {
-      features: [{
-        type: "someNodes",
-        numFields: (values) => [
-          ["blend", "Blend", "length"],
-          ...((values["nodes"] as { id: string }[] | undefined) ?? []).map(
-            (n) => [`nodes.${n.id}.sx`, `${n.id} size`, "length"] as [string, string, "length"],
-          ),
-        ],
-      }],
+      features: [
+        {
+          type: "someNodes",
+          numFields: (values) => [
+            ["blend", "Blend", "length"],
+            ...((values["nodes"] as { id: string }[] | undefined) ?? []).map(
+              (n) => [`nodes.${n.id}.sx`, `${n.id} size`, "length"] as [string, string, "length"],
+            ),
+          ],
+        },
+      ],
     });
     const rows = featureNumFields("someNodes", doc().features[0] as unknown as Record<string, unknown>);
-    expect(rows).toEqual([["blend", "Blend", "length"], ["nodes.n1.sx", "n1 size", "length"], ["nodes.n2.sx", "n2 size", "length"]]);
+    expect(rows).toEqual([
+      ["blend", "Blend", "length"],
+      ["nodes.n1.sx", "n1 size", "length"],
+      ["nodes.n2.sx", "n2 size", "length"],
+    ]);
     expect(resolveTarget(doc(), target)?.kind).toBe("length");
     expect(resolveTarget(doc(), { ...target, field: "nodes.n2.x" })).toBeNull();
   });

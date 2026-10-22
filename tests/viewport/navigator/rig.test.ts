@@ -14,15 +14,35 @@ function stubCanvas() {
   const captured = new Set<number>();
   const el = {
     style: {} as Record<string, string>,
-    addEventListener: (t: string, f: Listener) => { (listeners[t] ??= []).push(f); },
-    removeEventListener: (t: string, f: Listener) => { listeners[t] = (listeners[t] ?? []).filter((g) => g !== f); },
+    addEventListener: (t: string, f: Listener) => {
+      (listeners[t] ??= []).push(f);
+    },
+    removeEventListener: (t: string, f: Listener) => {
+      listeners[t] = (listeners[t] ?? []).filter((g) => g !== f);
+    },
     getBoundingClientRect: () => ({ left: 0, top: 0, right: W, bottom: H, width: W, height: H, x: 0, y: 0 }),
-    setPointerCapture: (id: number) => { captured.add(id); },
-    releasePointerCapture: (id: number) => { captured.delete(id); },
+    setPointerCapture: (id: number) => {
+      captured.add(id);
+    },
+    releasePointerCapture: (id: number) => {
+      captured.delete(id);
+    },
     hasPointerCapture: (id: number) => captured.has(id),
   };
   const fire = (type: string, init: Record<string, unknown>) => {
-    const e = { pointerId: 1, pointerType: "mouse", button: -1, buttons: 0, clientX: 0, clientY: 0, shiftKey: false, ctrlKey: false, preventDefault() {}, ...init, type };
+    const e = {
+      pointerId: 1,
+      pointerType: "mouse",
+      button: -1,
+      buttons: 0,
+      clientX: 0,
+      clientY: 0,
+      shiftKey: false,
+      ctrlKey: false,
+      preventDefault() {},
+      ...init,
+      type,
+    };
     for (const f of listeners[type] ?? []) f(e);
   };
   return { el, fire, captured };
@@ -99,7 +119,15 @@ describe("navigator rig input", () => {
   it("the wheel zooms toward what is under the cursor", () => {
     const { rig } = rigWithBox();
     const s0 = rig.viewScale();
-    const e = { clientX: 400, clientY: 300, deltaY: -300, deltaX: 0, deltaMode: 0, ctrlKey: false, preventDefault() {} };
+    const e = {
+      clientX: 400,
+      clientY: 300,
+      deltaY: -300,
+      deltaX: 0,
+      deltaMode: 0,
+      ctrlKey: false,
+      preventDefault() {},
+    };
     rig.wheel(e as unknown as WheelEvent);
     steady(rig);
     expect(rig.viewScale()).toBeLessThan(s0);

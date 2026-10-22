@@ -44,7 +44,9 @@ describe("turning one off and on", () => {
   it("persists the change and tells whoever is listening", async () => {
     const m = await load();
     let heard = 0;
-    const off = m.onPluginChange(() => { heard++; });
+    const off = m.onPluginChange(() => {
+      heard++;
+    });
 
     m.setPluginEnabled(ID, false);
     expect(m.pluginEnabled(ID)).toBe(false);
@@ -67,7 +69,9 @@ describe("turning one off and on", () => {
     // would restart everything on every no-op.
     const m = await load();
     let heard = 0;
-    m.onPluginChange(() => { heard++; });
+    m.onPluginChange(() => {
+      heard++;
+    });
     m.setPluginEnabled(ID, true); // already on
     m.setPluginEnabled(ID, true);
     expect(heard).toBe(0);

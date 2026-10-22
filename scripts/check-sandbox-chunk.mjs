@@ -50,8 +50,10 @@ if (chunks.length !== 1) {
   const src = readFileSync(join(ASSETS, chunks[0]), "utf8");
 
   if (!src.includes(START)) {
-    fail(`the built sandbox chunk (${chunks[0]}) does not register ${START}. ` +
-      "The generated worker script calls it and would fail on its first line.");
+    fail(
+      `the built sandbox chunk (${chunks[0]}) does not register ${START}. ` +
+        "The generated worker script calls it and would fail on its first line.",
+    );
   }
 
   // The chunk has to be a real module with the guest in it, not the husk

@@ -13,7 +13,15 @@ describe("printability panel state", () => {
     const p = createPrintabilityState();
     expect(p.data.value).toBeNull();
     p.show();
-    expect(p.data.value?.setup).toMatchObject({ nozzle: 0.4, layer: 0.2, overhang: 45, minGap: 0.2, maxBridge: 10, up: "+Z", layFlat: false });
+    expect(p.data.value?.setup).toMatchObject({
+      nozzle: 0.4,
+      layer: 0.2,
+      overhang: 45,
+      minGap: 0.2,
+      maxBridge: 10,
+      up: "+Z",
+      layFlat: false,
+    });
     expect(Object.values(p.data.value!.setup.checks).every(Boolean)).toBe(true);
     expect(p.data.value?.running).toBe(false);
   });

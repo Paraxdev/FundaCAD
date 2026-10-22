@@ -43,11 +43,21 @@ export function createDocBridge(store: DocumentStore): DocBridge {
   // PREVIOUS document for the whole stream, a partial model must never become
   // visible to a panel.
   const offs = [
-    store.onDocChange(() => { docVersion.value++; }),
-    store.onBuild(() => { buildVersion.value++; }),
-    store.onEditPreview(() => { editPreviewVersion.value++; }),
-    store.onBusy((b) => { busy.value = b; }),
-    store.onMeta(() => { metaVersion.value++; }),
+    store.onDocChange(() => {
+      docVersion.value++;
+    }),
+    store.onBuild(() => {
+      buildVersion.value++;
+    }),
+    store.onEditPreview(() => {
+      editPreviewVersion.value++;
+    }),
+    store.onBusy((b) => {
+      busy.value = b;
+    }),
+    store.onMeta(() => {
+      metaVersion.value++;
+    }),
   ];
 
   if (import.meta.env.DEV) {

@@ -5,16 +5,41 @@
 
 import * as THREE from "three";
 import { isGlassAuto, registerGlass } from "./glassThickness";
-import { applyClearcoat, applyFinishFields, applyGlassLook, applyThinFilm, isRenderLowPower, SCAN_MATTE, type BodyMesh, type ModelView } from "./render";
+import {
+  applyClearcoat,
+  applyFinishFields,
+  applyGlassLook,
+  applyThinFilm,
+  isRenderLowPower,
+  SCAN_MATTE,
+  type BodyMesh,
+  type ModelView,
+} from "./render";
 import type { SceneBundle } from "./scene";
 import { type BodyFinish, FINISH, isShiny } from "../document/materials";
 import { applySurface, applySurfaceGraph, cloneWithoutSurface, graphKey, surfaceKey } from "./proceduralSurface";
 import { MAX_EMISSIVE_INTENSITY } from "../ui/renderPrefs";
-import { type AreaEmitter, areaEmitters, emitterLuminance, emitterPower, emitterPowerBound, emitterShadowNear, emitterStandoff } from "./emitters";
+import {
+  type AreaEmitter,
+  areaEmitters,
+  emitterLuminance,
+  emitterPower,
+  emitterPowerBound,
+  emitterShadowNear,
+  emitterStandoff,
+} from "./emitters";
 import { installAreaLights } from "./areaLightShadows";
 import { markInPicture } from "./pictureScene";
 import { copyPatches, getPatch, removePatch, setPatch } from "./shaderPatches";
-import { RELIEF_PATCH, reliefAxis, reliefOrigin, reliefPatch, reliefUniforms, writeRelief, type ReliefUniforms } from "./relief";
+import {
+  RELIEF_PATCH,
+  reliefAxis,
+  reliefOrigin,
+  reliefPatch,
+  reliefUniforms,
+  writeRelief,
+  type ReliefUniforms,
+} from "./relief";
 import type { ReliefMap } from "../plugins/contrib";
 
 /** Every rectangle light is evaluated for every lit pixel, so this is the budget. */
@@ -35,13 +60,27 @@ const PEEK_OPACITY = 0.4;
 const DEFAULT_FINISH: BodyFinish = { ...FINISH };
 const WORLD_UP = new THREE.Vector3(0, 0, 1);
 
-interface EmitterPatch { e: AreaEmitter; glow: number; color: THREE.Color; power: number }
+interface EmitterPatch {
+  e: AreaEmitter;
+  glow: number;
+  color: THREE.Color;
+  power: number;
+}
 
-interface GlowingBody { b: BodyMesh; glow: number; fids: number[] | undefined; bound: number }
+interface GlowingBody {
+  b: BodyMesh;
+  glow: number;
+  fids: number[] | undefined;
+  bound: number;
+}
 
 /** A fixed set of lights in the scene: real emitters first in rank order, the
  *  rest at intensity zero, so a glow change only ever touches uniforms. */
-interface EmitterRig { group: THREE.Group; area: THREE.RectAreaLight[]; shadow: THREE.PointLight[] }
+interface EmitterRig {
+  group: THREE.Group;
+  area: THREE.RectAreaLight[];
+  shadow: THREE.PointLight[];
+}
 
 /** Read by the tracer, which leaves such a surface out of its light sampling. */
 function markNoLight(m: THREE.Material, on: boolean): void {
@@ -66,10 +105,26 @@ export function sameStringMap(
  *  key on it, so a new field added here reaches all three at once. */
 export function finishKey(f: BodyFinish): string {
   return [
-    f.metalness, f.roughness, f.opacity, f.emissive, f.clearcoat,
-    f.ior, f.thickness, f.attenuationColor ?? "", f.attenuationDistance, f.dispersion,
-    f.iridescence, f.specularColor ?? "", f.sheen, f.anisotropy, f.flakes, f.flakeSize, f.scatterDistance,
-    f.castsLight, surfaceKey(f.surface), graphKey(f.surfaceGraph),
+    f.metalness,
+    f.roughness,
+    f.opacity,
+    f.emissive,
+    f.clearcoat,
+    f.ior,
+    f.thickness,
+    f.attenuationColor ?? "",
+    f.attenuationDistance,
+    f.dispersion,
+    f.iridescence,
+    f.specularColor ?? "",
+    f.sheen,
+    f.anisotropy,
+    f.flakes,
+    f.flakeSize,
+    f.scatterDistance,
+    f.castsLight,
+    surfaceKey(f.surface),
+    graphKey(f.surfaceGraph),
   ].join("|");
 }
 
@@ -145,12 +200,15 @@ export class BodyFinishLayer {
 
   /** `sig` covers the base material's identity, because a rebuild hands back a
    *  fresh one and clones of the old one would keep its settings. */
-  private faceMatState = new Map<string, {
-    sig: string;
-    mats: THREE.MeshStandardMaterial[];
-    finishes: BodyFinish[];
-    colors: (string | undefined)[];
-  }>();
+  private faceMatState = new Map<
+    string,
+    {
+      sig: string;
+      mats: THREE.MeshStandardMaterial[];
+      finishes: BodyFinish[];
+      colors: (string | undefined)[];
+    }
+  >();
   /** Fitted patches per geometry, keyed by which faces glow (never how much),
    *  so a slider step re-weights them instead of fitting every body again. */
   private fitted = new WeakMap<THREE.BufferGeometry, { key: string; emitters: AreaEmitter[] }>();
@@ -199,7 +257,7 @@ export class BodyFinishLayer {
     let glows = false;
     for (const b of model.bodies) {
       const own = this.host.savedMats().get(b.id) ?? b.mesh.material;
-      const mat = (Array.isArray(own) ? own[0] : own);
+      const mat = Array.isArray(own) ? own[0] : own;
       if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
       this.syncFaceMaterials(b, mat, byBody.get(b.id));
       const peeked = o.peek?.has(b.id) === true;
@@ -318,8 +376,8 @@ export class BodyFinishLayer {
 
   /** False when the materials' relief programs still have to be linked. */
   private putRelief(mats: THREE.Material[], rb: ReliefBody): boolean {
-    const warm = !this.host.prepareMaterials || rb.shown
-      || mats.every((m) => getPatch(m, RELIEF_PATCH) || this.reliefWarm.has(m));
+    const warm =
+      !this.host.prepareMaterials || rb.shown || mats.every((m) => getPatch(m, RELIEF_PATCH) || this.reliefWarm.has(m));
     if (!warm) return false;
     for (const m of mats) {
       setPatch(m, reliefPatch(rb.u));
@@ -499,9 +557,10 @@ export class BodyFinishLayer {
   private fitEmitters(g: GlowingBody, key: string): AreaEmitter[] {
     const geo = g.b.mesh.geometry;
     const pos = geo.getAttribute("position") as THREE.BufferAttribute | undefined;
-    const found = pos && g.b.faceIds
-      ? areaEmitters(pos.array, geo.getIndex()?.array ?? null, g.b.faceIds, (fid) => this.glowOf(g, fid) > 0)
-      : [];
+    const found =
+      pos && g.b.faceIds
+        ? areaEmitters(pos.array, geo.getIndex()?.array ?? null, g.b.faceIds, (fid) => this.glowOf(g, fid) > 0)
+        : [];
     this.fitted.set(geo, { key, emitters: found });
     return found;
   }
@@ -554,7 +613,8 @@ export class BodyFinishLayer {
     }
     const shadowCap = isRenderLowPower() || !this.host.scene().renderer.shadowMap.enabled ? 0 : MAX_SHADOW_EMITTERS;
     const area = this.ranked.length <= SMALL_AREA_BUCKET ? Math.min(SMALL_AREA_BUCKET, cap) : cap;
-    const fits = (r: EmitterRig | null): r is EmitterRig => !!r && r.area.length === area && r.shadow.length === shadowCap;
+    const fits = (r: EmitterRig | null): r is EmitterRig =>
+      !!r && r.area.length === area && r.shadow.length === shadowCap;
     if (!this.ranked.length) {
       this.dropStaged();
       if (this.rig) this.disposeRig(this.rig);
@@ -584,7 +644,9 @@ export class BodyFinishLayer {
       return;
     }
     // A failed link still swaps: the render then compiles in line, as it always did.
-    const done = () => { if (gen === this.stagedGen && this.staged === rig) this.swapIn(rig); };
+    const done = () => {
+      if (gen === this.stagedGen && this.staged === rig) this.swapIn(rig);
+    };
     ready.then(done, done);
   }
 
@@ -740,7 +802,10 @@ function buildRig(area: number, shadow: number): EmitterRig {
   const group = new THREE.Group();
   group.name = "emitters";
   markInPicture(group);
-  const areas = Array.from({ length: area }, () => group.add(new THREE.RectAreaLight(0xffffff, 0, 1e-3, 1e-3)).children.at(-1) as THREE.RectAreaLight);
+  const areas = Array.from(
+    { length: area },
+    () => group.add(new THREE.RectAreaLight(0xffffff, 0, 1e-3, 1e-3)).children.at(-1) as THREE.RectAreaLight,
+  );
   // Shadowed area light i and shadow i are one emitter, so these come after.
   const shadows = Array.from({ length: shadow }, () => {
     const l = new THREE.PointLight(0xffffff, 0);

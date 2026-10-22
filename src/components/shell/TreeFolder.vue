@@ -66,9 +66,7 @@ const labelEl = useTemplateRef<InstanceType<typeof InlineLabel>>("labelEl");
 
 // Only nested heads carry an inline padding, so a top-level folder keeps
 // whatever the stylesheet gives it.
-const style = computed(() =>
-  props.depth > 0 ? { paddingLeft: `${folderIndent(props.depth)}px` } : undefined,
-);
+const style = computed(() => (props.depth > 0 ? { paddingLeft: `${folderIndent(props.depth)}px` } : undefined));
 
 function onClick(e: MouseEvent) {
   if (props.activate && !(e.target as HTMLElement | null)?.closest?.(".tree-caret")) props.activate(e);

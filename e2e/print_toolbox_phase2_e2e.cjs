@@ -18,7 +18,10 @@ const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5195/";
 const WS_PORT = process.env.SC_ENGINE_PORT || "8795";
 const OUT = path.resolve(process.argv[2] || "print_toolbox_phase2_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -29,31 +32,43 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-  await page.addInitScript(({ t, ws }) => {
-    const N = window.WebSocket;
-    class P extends N {
-      constructor(u, p) {
-        const s = String(u).replace(":8765", `:${ws}`).replace(/([?&])token=[^&]*/, `$1token=${t}`);
-        super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
+  await page.addInitScript(
+    ({ t, ws }) => {
+      const N = window.WebSocket;
+      class P extends N {
+        constructor(u, p) {
+          const s = String(u)
+            .replace(":8765", `:${ws}`)
+            .replace(/([?&])token=[^&]*/, `$1token=${t}`);
+          super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+        }
       }
-    }
-    window.WebSocket = P;
-  }, { t: TOKEN, ws: WS_PORT });
+      window.WebSocket = P;
+    },
+    { t: TOKEN, ws: WS_PORT },
+  );
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   const settled = () => page.waitForFunction(() => !window.store.buildState.building, null, { timeout: 60000 });
   const errorMessage = () => page.evaluate(() => window.store.buildState.errorMessage);
   const volumeOf = (bodyId) => page.evaluate((id) => window.viewport.bodyProperties([id])?.volume ?? null, bodyId);
   const bodyIds = () => page.evaluate(() => (window.store.buildState.result?.bodies ?? []).map((b) => b.id));
-  const lastFeature = (type) => page.evaluate((t) => {
-    const fs = window.store.document.features.filter((f) => f.type === t);
-    return fs[fs.length - 1] ?? null;
-  }, type);
+  const lastFeature = (type) =>
+    page.evaluate((t) => {
+      const fs = window.store.document.features.filter((f) => f.type === t);
+      return fs[fs.length - 1] ?? null;
+    }, type);
   const selectFaceNear = async (point) => {
     const id = await page.evaluate((p) => window.viewport.faceIdNear(p), point);
     if (id == null) return false;
@@ -64,10 +79,27 @@ const check = (name, ok, detail) => {
   // A block with a sideways through hole, for the ribs and (on its top face)
   // the zip-tie channel. This is body1.
   await page.evaluate(async () => {
-    window.store.addFeature({ id: "s1", type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 40 }] });
+    window.store.addFeature({
+      id: "s1",
+      type: "sketch",
+      plane: "XY",
+      entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 40 }],
+    });
     window.store.addFeature({ id: "e1", type: "extrude", sketch: "s1", distance: 20, operation: "new" });
-    window.store.addFeature({ id: "s2", type: "sketch", plane: "XZ", entities: [{ type: "circle", id: "c1", x: 0, y: 10, radius: 3 }] });
-    window.store.addFeature({ id: "e2", type: "extrude", sketch: "s2", distance: 100, symmetric: true, operation: "cut" });
+    window.store.addFeature({
+      id: "s2",
+      type: "sketch",
+      plane: "XZ",
+      entities: [{ type: "circle", id: "c1", x: 0, y: 10, radius: 3 }],
+    });
+    window.store.addFeature({
+      id: "e2",
+      type: "extrude",
+      sketch: "s2",
+      distance: 100,
+      symmetric: true,
+      operation: "cut",
+    });
     await window.store.rebuildNow();
   });
   await page.waitForFunction(() => (window.store.buildState.result?.bodies ?? []).length > 0, null, { timeout: 60000 });
@@ -88,8 +120,11 @@ const check = (name, ok, detail) => {
   let v1 = await volumeOf(body1);
   let f = await lastFeature("threadRibs");
   check("no build error after ribs", (await errorMessage()) === null);
-  check("thread-forming ribs added a feature and material", !!f && v1 != null && v0 != null && v1 > v0,
-    `${v0} -> ${v1}`);
+  check(
+    "thread-forming ribs added a feature and material",
+    !!f && v1 != null && v0 != null && v1 > v0,
+    `${v0} -> ${v1}`,
+  );
   await page.screenshot({ path: path.join(OUT, "01_ribs.png") });
 
   // 2. Zip-tie channel, on the top face.
@@ -104,14 +139,22 @@ const check = (name, ok, detail) => {
   v1 = await volumeOf(body1);
   f = await lastFeature("zipTieChannel");
   check("no build error after the channel", (await errorMessage()) === null);
-  check("a zip-tie channel added a feature and removed material", !!f && v1 != null && v0 != null && v1 < v0,
-    `${v0} -> ${v1}`);
+  check(
+    "a zip-tie channel added a feature and removed material",
+    !!f && v1 != null && v0 != null && v1 < v0,
+    `${v0} -> ${v1}`,
+  );
   await page.screenshot({ path: path.join(OUT, "02_zip_tie.png") });
 
   // 3. Elephant-foot chamfer, on its own body: no pick, acts at once on the
   // body selected here.
   await page.evaluate(async () => {
-    window.store.addFeature({ id: "s3", type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r3", x: 60, y: 0, width: 30, height: 30 }] });
+    window.store.addFeature({
+      id: "s3",
+      type: "sketch",
+      plane: "XY",
+      entities: [{ type: "rectangle", id: "r3", x: 60, y: 0, width: 30, height: 30 }],
+    });
     window.store.addFeature({ id: "e3", type: "extrude", sketch: "s3", distance: 15, operation: "new" });
     await window.store.rebuildNow();
   });
@@ -128,15 +171,23 @@ const check = (name, ok, detail) => {
   v1 = await volumeOf(body2);
   f = await lastFeature("elephantFootChamfer");
   check("no build error after the chamfer", (await errorMessage()) === null);
-  check("the elephant-foot chamfer added a feature and removed material",
-    !!f && v1 != null && v0 != null && v1 < v0, `${v0} -> ${v1}`);
+  check(
+    "the elephant-foot chamfer added a feature and removed material",
+    !!f && v1 != null && v0 != null && v1 < v0,
+    `${v0} -> ${v1}`,
+  );
   await page.evaluate(() => window.__fundacad.handleAction("iso"));
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(OUT, "03_elephant_foot.png") });
 
   // 4. Vertical edge fillet, on a third body: same no-pick pattern.
   await page.evaluate(async () => {
-    window.store.addFeature({ id: "s4", type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r4", x: -60, y: 0, width: 25, height: 25 }] });
+    window.store.addFeature({
+      id: "s4",
+      type: "sketch",
+      plane: "XY",
+      entities: [{ type: "rectangle", id: "r4", x: -60, y: 0, width: 25, height: 25 }],
+    });
     window.store.addFeature({ id: "e4", type: "extrude", sketch: "s4", distance: 12, operation: "new" });
     await window.store.rebuildNow();
   });
@@ -150,8 +201,11 @@ const check = (name, ok, detail) => {
   v1 = await volumeOf(body3);
   f = await lastFeature("verticalFillet");
   check("no build error after the fillet", (await errorMessage()) === null);
-  check("the vertical fillet added a feature and removed material",
-    !!f && v1 != null && v0 != null && v1 < v0, `${v0} -> ${v1}`);
+  check(
+    "the vertical fillet added a feature and removed material",
+    !!f && v1 != null && v0 != null && v1 < v0,
+    `${v0} -> ${v1}`,
+  );
   await page.evaluate(() => window.__fundacad.handleAction("iso"));
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(OUT, "04_vertical_fillet.png") });
@@ -165,8 +219,11 @@ const check = (name, ok, detail) => {
   if (option) await option.click();
   await page.waitForTimeout(600);
   const toastText = await page.evaluate(() => document.body.innerText);
-  check("bed fit check shows a toast mentioning the bed", toastText.includes("mm bed"),
-    JSON.stringify(toastText.slice(0, 300)));
+  check(
+    "bed fit check shows a toast mentioning the bed",
+    toastText.includes("mm bed"),
+    JSON.stringify(toastText.slice(0, 300)),
+  );
   const featuresAfter = await page.evaluate(() => window.store.document.features.length);
   check("bed fit check is not a feature", featuresAfter === featuresBefore, `${featuresBefore} -> ${featuresAfter}`);
   await page.screenshot({ path: path.join(OUT, "05_bed_fit_toast.png") });

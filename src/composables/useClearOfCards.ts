@@ -1,7 +1,8 @@
 import { onMounted, onUnmounted, type Ref } from "vue";
 import { LEFT_CARDS, RIGHT_CARDS, clearRow, promptInsets, type Box } from "../ui/promptPlacement";
 
-const COLUMNS = "#float-layer .float-left, #float-layer .float-left-stack, #float-layer .tool-rail, #float-layer .float-right";
+const COLUMNS =
+  "#float-layer .float-left, #float-layer .float-left-stack, #float-layer .tool-rail, #float-layer .float-right";
 
 const rects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
 
@@ -58,7 +59,11 @@ export function useClearOfCards(el: Readonly<Ref<HTMLElement | null>>, minWidth 
   };
 
   const schedule = () => {
-    if (!frame) frame = requestAnimationFrame(() => { frame = 0; place(); });
+    if (!frame)
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        place();
+      });
   };
 
   onMounted(() => {

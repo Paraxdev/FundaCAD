@@ -16,7 +16,14 @@ import { fmtLength, getUnit, onUnitChange, setUnit, asUnit, type Unit } from "..
 import { saveRenderedImage } from "../../io/files";
 import { MATCAP_STYLES, onRenderPrefsChange, renderPrefs, setRenderPref, type MatcapStyle } from "../../ui/renderPrefs";
 import { matcapSwatchUrl } from "../../ui/matcapSwatch";
-import { VIEW_MODES, pathTracedBlock, savedOverlays, setOverlay, setOverlaysOn, type ViewMode } from "../../ui/viewMode";
+import {
+  VIEW_MODES,
+  pathTracedBlock,
+  savedOverlays,
+  setOverlay,
+  setOverlaysOn,
+  type ViewMode,
+} from "../../ui/viewMode";
 import { onWorkspaceChange } from "../../ui/workspace";
 import { keyHint } from "../../input/shortcuts";
 import { OVERLAY_KINDS, OVERLAY_LABELS } from "../../viewport/overlayKinds";
@@ -78,7 +85,9 @@ onMounted(() => window.addEventListener("pointerup", bump));
 onUnmounted(() => window.removeEventListener("pointerup", bump));
 
 const unit = ref<Unit>(getUnit());
-const offUnit = onUnitChange(() => { unit.value = getUnit(); });
+const offUnit = onUnitChange(() => {
+  unit.value = getUnit();
+});
 onUnmounted(offUnit);
 
 const UNITS = [
@@ -103,7 +112,10 @@ const VIEWS = [
 ] as const;
 const viewTab = ref<"views" | "appearance">("views");
 
-const projection = computed<ProjectionMode>(() => { pulse.value; return engine.viewport.projection; });
+const projection = computed<ProjectionMode>(() => {
+  pulse.value;
+  return engine.viewport.projection;
+});
 const PROJECTIONS = [
   { value: "persp" as ProjectionMode, label: "Perspective" },
   { value: "ortho" as ProjectionMode, label: "Orthographic" },
@@ -116,7 +128,11 @@ function pickProjection(m: ProjectionMode) {
 }
 
 const SELECT_MODES = [
-  { value: "auto" as const, label: "Body, then face", hint: "click a body to take it, click it again for a face or edge" },
+  {
+    value: "auto" as const,
+    label: "Body, then face",
+    hint: "click a body to take it, click it again for a face or edge",
+  },
   { value: "faces" as const, label: "Faces" },
   { value: "bodies" as const, label: "Bodies" },
 ];
@@ -127,7 +143,12 @@ function pickSelectMode(m: SelectPolicy) {
 const analysis = computed(() => {
   pulse.value;
   const vp = engine.viewport;
-  return { zebra: vp.zebraOn, curvature: vp.combsOn, overhang: vp.analysis === "draft", colors: vp.analysis === "component" };
+  return {
+    zebra: vp.zebraOn,
+    curvature: vp.combsOn,
+    overhang: vp.analysis === "draft",
+    colors: vp.analysis === "component",
+  };
 });
 function runAndRefresh(action: string) {
   engine.handleAction(action);
@@ -146,9 +167,15 @@ const offTier = onRenderPrefsChange(() => {
   overlays.value = savedOverlays();
 });
 onUnmounted(offTier);
-onUnmounted(onWorkspaceChange(() => { overlays.value = savedOverlays(); }));
+onUnmounted(
+  onWorkspaceChange(() => {
+    overlays.value = savedOverlays();
+  }),
+);
 const cleanKey = keyHint("clean-view");
-const offTierChange = engine.viewport.onRenderTierChange(() => { tier.value = engine.viewport.renderTier; });
+const offTierChange = engine.viewport.onRenderTierChange(() => {
+  tier.value = engine.viewport.renderTier;
+});
 onUnmounted(offTierChange);
 const PAUSED_HINT: Record<string, string> = {
   "paused:section": "paused: section view",
@@ -156,15 +183,23 @@ const PAUSED_HINT: Record<string, string> = {
   "paused:wireframe": "paused: wireframe",
   "paused:sketch": "paused: sketch open",
 };
-const viewModes = computed(() => VIEW_MODES.map((v) => {
-  const block = v.id === "pathtraced" ? pathTracedBlock(tier.value) : null;
-  const hint = v.id === "pathtraced" ? PAUSED_HINT[ui.traceState] : undefined;
-  const title = block ? block.tooltip : hint ? `${v.label} (Z), ${hint}` : `${v.label} (Z)`;
-  return { ...v, disabled: block !== null, softBlock: block?.reason === "perf", title };
-}));
-const viewModeChoices = computed(() => viewModes.value.map((v) => ({
-  value: v.id, label: v.label, disabled: v.disabled, clickable: v.softBlock, title: v.disabled ? v.title : undefined,
-})));
+const viewModes = computed(() =>
+  VIEW_MODES.map((v) => {
+    const block = v.id === "pathtraced" ? pathTracedBlock(tier.value) : null;
+    const hint = v.id === "pathtraced" ? PAUSED_HINT[ui.traceState] : undefined;
+    const title = block ? block.tooltip : hint ? `${v.label} (Z), ${hint}` : `${v.label} (Z)`;
+    return { ...v, disabled: block !== null, softBlock: block?.reason === "perf", title };
+  }),
+);
+const viewModeChoices = computed(() =>
+  viewModes.value.map((v) => ({
+    value: v.id,
+    label: v.label,
+    disabled: v.disabled,
+    clickable: v.softBlock,
+    title: v.disabled ? v.title : undefined,
+  })),
+);
 function pickViewMode(m: ViewMode) {
   const mode = viewModes.value.find((v) => v.id === m);
   if (mode?.disabled && !mode.softBlock) return;
@@ -218,7 +253,12 @@ async function screenshot() {
     <!-- On a narrow stage Items and History are drawers, and their switches
          go first, where a short column cannot scroll them out of sight. -->
     <div v-if="shell.narrow" class="float-group">
-      <IconButton icon="items" :title="fmtKeys('Items (Ctrl+Alt+S)')" :active="shell.itemsShown" @click="shell.toggleItems()" />
+      <IconButton
+        icon="items"
+        :title="fmtKeys('Items (Ctrl+Alt+S)')"
+        :active="shell.itemsShown"
+        @click="shell.toggleItems()"
+      />
       <IconButton
         icon="history"
         :title="fmtKeys(ui.sketchActive ? 'Sketch options (Ctrl+Alt+H)' : 'History (Ctrl+Alt+H)')"
@@ -235,7 +275,8 @@ async function screenshot() {
         :class="{ active: isOpen('grid') }"
         title="Grid and units"
         @click="open('grid', $event)"
-      >{{ gridLabel }}</button>
+        >{{ gridLabel }}</button
+      >
       <IconButton icon="views" title="Views" :active="isOpen('views')" @click="open('views', $event)" />
       <IconButton icon="view-reset" title="Reset camera (Shift+Home)" @click="engine.handleAction('reset-camera')" />
     </div>
@@ -252,7 +293,12 @@ async function screenshot() {
       />
     </div>
     <div class="float-group">
-      <IconButton icon="shaded" title="Display" :active="isOpen('display') || ui.xray || ui.wireframe" @click="open('display', $event)" />
+      <IconButton
+        icon="shaded"
+        title="Display"
+        :active="isOpen('display') || ui.xray || ui.wireframe"
+        @click="open('display', $event)"
+      />
       <IconButton icon="camera" title="Screenshot" :active="saving" @click="screenshot()" />
       <IconButton icon="versions" title="Versions" :active="isOpen('versions')" @click="open('versions', $event)" />
       <IconButton
@@ -268,7 +314,13 @@ async function screenshot() {
       <IconButton icon="bug" title="Report a bug" @click="dialogs.bugReport = true" />
     </div>
 
-    <Popover v-if="isOpen('perf')" :anchor="anchorOf('perf')" side="left" kind="vc-pop perf-pop" @close="shell.closePopover()">
+    <Popover
+      v-if="isOpen('perf')"
+      :anchor="anchorOf('perf')"
+      side="left"
+      kind="vc-pop perf-pop"
+      @close="shell.closePopover()"
+    >
       <div class="perf-pop-title">Low performance</div>
       <p class="perf-pop-text">Detected stutters, your machine may have problems with displaying the models.</p>
       <p v-if="!isRenderLowPower()" class="perf-pop-text">
@@ -282,7 +334,13 @@ async function screenshot() {
       <button type="button" class="pop-wide ghost" @click="dismissPerformanceWarning()">Dismiss</button>
     </Popover>
 
-    <Popover v-if="isOpen('versions')" :anchor="anchorOf('versions')" side="left" kind="vc-pop versions-pop" @close="shell.closePopover()">
+    <Popover
+      v-if="isOpen('versions')"
+      :anchor="anchorOf('versions')"
+      side="left"
+      kind="vc-pop versions-pop"
+      @close="shell.closePopover()"
+    >
       <VersionsPanel />
     </Popover>
 
@@ -317,17 +375,27 @@ async function screenshot() {
       <ChoiceList :options="UNITS" :model-value="unit" @update:model-value="pickUnit" />
       <div class="pop-rule"></div>
       <div class="pop-section">Grid</div>
-      <p class="pop-note">One square is {{ gridLabel }} at this zoom. Zoom in for a finer grid, and the move gizmo steps by a tenth of a square.</p>
+      <p class="pop-note"
+        >One square is {{ gridLabel }} at this zoom. Zoom in for a finer grid, and the move gizmo steps by a tenth of a
+        square.</p
+      >
     </Popover>
 
     <Popover v-if="isOpen('views')" :anchor="anchorOf('views')" side="left" kind="vc-pop" @close="shell.closePopover()">
       <Tabs
         v-model="viewTab"
-        :tabs="[{ value: 'views', label: 'Views' }, { value: 'appearance', label: 'Appearance' }]"
+        :tabs="[
+          { value: 'views', label: 'Views' },
+          { value: 'appearance', label: 'Appearance' },
+        ]"
       />
       <template v-if="viewTab === 'views'">
-        <button type="button" class="pop-wide" @click="engine.handleAction('iso')"><Icon name="view-iso" :size="16" />Default View</button>
-        <button type="button" class="pop-wide ghost" @click="engine.handleAction('fit')"><Icon name="view-fit" :size="16" />Fit to Model</button>
+        <button type="button" class="pop-wide" @click="engine.handleAction('iso')"
+          ><Icon name="view-iso" :size="16" />Default View</button
+        >
+        <button type="button" class="pop-wide ghost" @click="engine.handleAction('fit')"
+          ><Icon name="view-fit" :size="16" />Fit to Model</button
+        >
         <div class="pop-rule"></div>
         <button
           v-for="v in VIEWS"
@@ -335,7 +403,8 @@ async function screenshot() {
           type="button"
           class="opt-row opt-row-icon"
           @click="engine.viewport.setStandardView(v.view)"
-        ><Icon :name="`view-${v.view}`" :size="18" /><span class="opt-label">{{ v.label }}</span></button>
+          ><Icon :name="`view-${v.view}`" :size="18" /><span class="opt-label">{{ v.label }}</span></button
+        >
       </template>
       <template v-else>
         <div class="pop-section">Projection</div>
@@ -346,7 +415,13 @@ async function screenshot() {
       </template>
     </Popover>
 
-    <Popover v-if="isOpen('display')" :anchor="anchorOf('display')" side="left" kind="vc-pop" @close="shell.closePopover()">
+    <Popover
+      v-if="isOpen('display')"
+      :anchor="anchorOf('display')"
+      side="left"
+      kind="vc-pop"
+      @close="shell.closePopover()"
+    >
       <div class="pop-section">Shading</div>
       <ChoiceList :options="viewModeChoices" :model-value="ui.viewMode" @update:model-value="pickViewMode" />
       <template v-if="ui.viewMode === 'matcap'">
@@ -365,7 +440,11 @@ async function screenshot() {
             @click="setRenderPref('matcapStyle', m as MatcapStyle)"
           ></button>
         </div>
-        <Toggle :model-value="matcap.tint" label="Tint with body colors" @update:model-value="setRenderPref('matcapTint', $event)" />
+        <Toggle
+          :model-value="matcap.tint"
+          label="Tint with body colors"
+          @update:model-value="setRenderPref('matcapTint', $event)"
+        />
       </template>
       <Toggle
         v-if="ui.viewMode === 'pathtraced'"
@@ -377,7 +456,12 @@ async function screenshot() {
       />
       <div class="pop-rule"></div>
       <div class="pop-section">Overlays</div>
-      <Toggle :model-value="overlays.on" label="Show overlays" data-overlay="all" @update:model-value="setOverlaysOn($event)" />
+      <Toggle
+        :model-value="overlays.on"
+        label="Show overlays"
+        data-overlay="all"
+        @update:model-value="setOverlaysOn($event)"
+      />
       <Toggle
         v-for="k in OVERLAY_KINDS"
         :key="k"
@@ -389,17 +473,30 @@ async function screenshot() {
       />
       <p class="pop-note">A running tool still shows its gizmo, and a hidden outline still selects its edge.</p>
       <button type="button" class="pop-wide ghost" data-action="clean-view" @click="engine.handleAction('clean-view')">
-        {{ overlays.on ? "Clean view" : "Bring overlays back" }}<span v-if="cleanKey" class="pop-key">{{ cleanKey }}</span>
+        {{ overlays.on ? "Clean view" : "Bring overlays back"
+        }}<span v-if="cleanKey" class="pop-key">{{ cleanKey }}</span>
       </button>
       <div class="pop-rule"></div>
       <Toggle :model-value="ui.xray" label="X-Ray" @update:model-value="engine.handleAction('toggle-xray')" />
-      <Toggle :model-value="ui.wireframe" label="Wireframe" @update:model-value="engine.handleAction('toggle-wireframe')" />
+      <Toggle
+        :model-value="ui.wireframe"
+        label="Wireframe"
+        @update:model-value="engine.handleAction('toggle-wireframe')"
+      />
       <div class="pop-rule"></div>
       <div class="pop-section">Surface analysis</div>
       <Toggle :model-value="analysis.zebra" label="Zebra" @update:model-value="runAndRefresh('zebra')" />
-      <Toggle :model-value="analysis.curvature" label="Curvature combs" @update:model-value="runAndRefresh('curvature')" />
+      <Toggle
+        :model-value="analysis.curvature"
+        label="Curvature combs"
+        @update:model-value="runAndRefresh('curvature')"
+      />
       <Toggle :model-value="analysis.overhang" label="Overhang" @update:model-value="runAndRefresh('draft-analysis')" />
-      <Toggle :model-value="analysis.colors" label="Body colors" @update:model-value="runAndRefresh('component-colors')" />
+      <Toggle
+        :model-value="analysis.colors"
+        label="Body colors"
+        @update:model-value="runAndRefresh('component-colors')"
+      />
     </Popover>
   </div>
 </template>

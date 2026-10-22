@@ -172,10 +172,7 @@ export class ExtrudeTool {
    *  an earlier extrude consumed it. It is shown for the length of the gesture
    *  and every area of it is pre-selected, so a second extrude of the same
    *  profile is a new feature. Returns false when that sketch has no closed area. */
-  start(
-    onDone: (id: string | null) => void,
-    opts?: { grabAt?: { x: number; y: number }; sketch?: string },
-  ): boolean {
+  start(onDone: (id: string | null) => void, opts?: { grabAt?: { x: number; y: number }; sketch?: string }): boolean {
     if (this.active) return false;
     if (opts?.sketch) {
       this.forcedSketchId = opts.sketch;
@@ -225,13 +222,7 @@ export class ExtrudeTool {
     if (this.phase !== "drag" || !first) return;
     this.fluentGrab = true;
     this.downPos = { x: clientX, y: clientY };
-    this.grabProj = axisDragDistance(
-      this.viewport,
-      clientX,
-      clientY,
-      this.anchor(),
-      first.plane.n,
-    );
+    this.grabProj = axisDragDistance(this.viewport, clientX, clientY, this.anchor(), first.plane.n);
     // Start at nothing rather than at beginDrag's default 10 mm: the depth is
     // about to follow the hand that is already on the arrow, and a solid that
     // sprang to 10 mm before the first movement would read as the grab itself
@@ -253,9 +244,15 @@ export class ExtrudeTool {
     opts?: { grabAt?: { x: number; y: number } },
   ): boolean {
     if (this.active) return false;
-    const f = asFeature(this.store.document.features.find((x) => x.id === featureId), "extrude");
+    const f = asFeature(
+      this.store.document.features.find((x) => x.id === featureId),
+      "extrude",
+    );
     if (!f) return false;
-    if (typeof f.distance !== "number" || this.store.isParamBound({ kind: "feature", feature: f.id, field: "distance" }))
+    if (
+      typeof f.distance !== "number" ||
+      this.store.isParamBound({ kind: "feature", feature: f.id, field: "distance" })
+    )
       return false; // parameter-driven distance, the value rows' job
 
     this.active = true;
@@ -284,9 +281,7 @@ export class ExtrudeTool {
     // the now-forced-visible sketch contributes regions to select from.
     this.store.beginEditPreview(featureId);
     this.overlay.update(this.store.document);
-    const saved: [number, number, number][] = (
-      f.regions ?? (f.region ? [f.region] : [])
-    ) as [number, number, number][];
+    const saved: [number, number, number][] = (f.regions ?? (f.region ? [f.region] : [])) as [number, number, number][];
     this.overlay.selectRegionsByPoints(saved);
     this.selected = this.overlay.selectedRegions();
     // A whole-sketch extrude saved no region anchors, so there was nothing to
@@ -405,7 +400,9 @@ export class ExtrudeTool {
   private positionDim(anchor: THREE.Vector3 = this.anchor()) {
     const s = this.viewport.projectToScreen(anchor);
     const rect = this.viewport.domElement.getBoundingClientRect();
-    const boxW = 160, boxH = 46, m = 12;
+    const boxW = 160,
+      boxH = 46,
+      m = 12;
     const fx = Math.max(rect.left + m, Math.min(s.x + 28, rect.right - boxW - m));
     const fy = Math.max(rect.top + m, Math.min(s.y + 28, rect.bottom - boxH - m));
     this.dim.position(fx - 16, fy - 16); // dim.position adds a +16 cursor offset
@@ -448,15 +445,12 @@ export class ExtrudeTool {
     // below: a press on the handle is the start of a drag and never a commit,
     // and a tool whose handle committed on contact could not be used at all.
     const grabFirst = this.selected[0];
-    if (!e.ctrlKey && !e.metaKey && !e.shiftKey && grabFirst
-        && this.hitGizmo(e.clientX, e.clientY)) {
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey && grabFirst && this.hitGizmo(e.clientX, e.clientY)) {
       e.stopImmediatePropagation(); // don't orbit while dragging the handle
       this.grabbing = true;
       this.grabValue = this.distance;
       this.downPos = { x: e.clientX, y: e.clientY };
-      this.grabProj = axisDragDistance(
-        this.viewport, e.clientX, e.clientY, this.anchor(), grabFirst.plane.n,
-      );
+      this.grabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor(), grabFirst.plane.n);
       this.viewport.domElement.style.cursor = "grabbing";
       return;
     }
@@ -499,8 +493,7 @@ export class ExtrudeTool {
    *  click that onDown already handled. */
   private onUp(e: PointerEvent) {
     if (e.button !== 0 || this.phase !== "drag") return;
-    const moved = Math.abs(e.clientX - this.downPos.x) > 3
-      || Math.abs(e.clientY - this.downPos.y) > 3;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.taperGrabbing) {
       // Let go of the taper arc and the extrude is done: a grab-drag-release is
       // one whole gesture, so the release finishes it rather than leaving it open
@@ -596,7 +589,10 @@ export class ExtrudeTool {
       // The ∠ field rides beside the depth: the depth free-tracks the cursor,
       // the taper is set by its own handle or typed here, and the two never
       // clobber each other because updateFromCursor only ever pushes `distance`.
-      [{ name: "distance", label: "D" }, { name: "taper", label: "Angle", icon: "angle", kind: "angle" }],
+      [
+        { name: "distance", label: "D" },
+        { name: "taper", label: "Angle", icon: "angle", kind: "angle" },
+      ],
       () => this.commit(),
       () => this.cancel(),
       {
@@ -847,9 +843,7 @@ export class ExtrudeTool {
     // in-plane drag axis and the normal: local X -> taperAxis, local Y (the arc's
     // centre) -> the normal so it arches upward, local Z the plane's own normal.
     const z = new THREE.Vector3().crossVectors(this.taperAxis, dir).normalize();
-    g.quaternion.setFromRotationMatrix(
-      new THREE.Matrix4().makeBasis(this.taperAxis, dir, z),
-    );
+    g.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(this.taperAxis, dir, z));
     g.scale.setScalar(px);
     // Red once the walls undercut (a negative taper, which no mould can draw),
     // amber otherwise.
@@ -878,15 +872,19 @@ export class ExtrudeTool {
     const base = centre.addScaledVector(this.taperAxis, reach);
     const rad = (this.taper * Math.PI) / 180;
     // Positive leans the far face in, toward the centre, so the wall tips away from taperAxis.
-    const lean = (a: number) =>
-      dir.clone().applyAxisAngle(swingNormal, a).multiplyScalar(r).add(base);
+    const lean = (a: number) => dir.clone().applyAxisAngle(swingNormal, a).multiplyScalar(r).add(base);
     const steps = 24;
     const arc: THREE.Vector3[] = [];
     for (let i = 0; i <= steps; i++) arc.push(lean((rad * i) / steps));
     const pts = [base.clone(), lean(0), ...arc, lean(rad), base.clone()];
     if (!this.taperGuide) {
       const mat = new THREE.LineDashedMaterial({
-        color: 0xffffff, dashSize: 1, gapSize: 1, transparent: true, opacity: 0.8, depthTest: false,
+        color: 0xffffff,
+        dashSize: 1,
+        gapSize: 1,
+        transparent: true,
+        opacity: 0.8,
+        depthTest: false,
       });
       this.taperGuide = new THREE.Line(new THREE.BufferGeometry(), mat);
       this.taperGuide.renderOrder = 999;
@@ -920,8 +918,12 @@ export class ExtrudeTool {
   }
 
   private placeHandle(
-    handle: DragHandle, at: THREE.Vector3, axis: THREE.Vector3, px: number,
-    hot: boolean, cut: boolean,
+    handle: DragHandle,
+    at: THREE.Vector3,
+    axis: THREE.Vector3,
+    px: number,
+    hot: boolean,
+    cut: boolean,
   ) {
     const g = handle.group;
     g.position.copy(at);
@@ -966,8 +968,12 @@ export class ExtrudeTool {
     const depth = this.depthHandle;
     if (!taper && !depth) return null;
     return this.viewport.probe(x, y, (rc) =>
-      taper && rc.intersectObjects(taper.group.children, false).length > 0 ? "taper"
-        : depth && rc.intersectObjects(depth.group.children, false).length > 0 ? "depth" : null);
+      taper && rc.intersectObjects(taper.group.children, false).length > 0
+        ? "taper"
+        : depth && rc.intersectObjects(depth.group.children, false).length > 0
+          ? "depth"
+          : null,
+    );
   }
 
   /** The feature this gesture would commit (also what the engine previews while

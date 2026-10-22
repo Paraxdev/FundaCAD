@@ -13,6 +13,7 @@ const emit = defineEmits<{ (e: "update", id: string): void }>();
       :class="{ active: value === o.id }"
       :aria-pressed="value === o.id"
       @click="emit('update', o.id)"
-    >{{ o.label }}</button>
+      >{{ o.label }}</button
+    >
   </div>
 </template>

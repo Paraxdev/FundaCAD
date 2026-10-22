@@ -28,12 +28,7 @@
 // own manifest is ignored, because a bundle claiming to be ours is precisely
 // the one that must not be believed for saying so.
 
-import {
-  parseManifest,
-  promiseOf,
-  sameId,
-  type PluginManifest,
-} from "./manifest";
+import { parseManifest, promiseOf, sameId, type PluginManifest } from "./manifest";
 import { bundleAsset, shippedPlugins } from "./shipped";
 import type { DocumentStore } from "../document/store";
 import { toast } from "../ui/toast";
@@ -48,8 +43,7 @@ const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
  *  the rolling beta, the rolling development build, or a stable release's own
  *  tag, which the release build passes in VITE_FUNDACAD_RELEASE. Its bundles carry the geometry components
  *  the engine's plugin host runs, built from the same commit as the host. */
-export const RELEASE_TAG: string =
-  (import.meta.env.VITE_FUNDACAD_RELEASE as string | undefined) || "beta";
+export const RELEASE_TAG: string = (import.meta.env.VITE_FUNDACAD_RELEASE as string | undefined) || "beta";
 
 export interface OfficialPlugin {
   manifest: PluginManifest;

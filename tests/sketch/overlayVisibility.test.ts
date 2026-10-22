@@ -22,8 +22,7 @@ const doc = (): CadDocument =>
     ],
   }) as unknown as CadDocument;
 
-const square = (id: string, x: number) =>
-  ({ type: "rectangle", id, x, y: 0, width: 10, height: 10 });
+const square = (id: string, x: number) => ({ type: "rectangle", id, x, y: 0, width: 10, height: 10 });
 
 const ids = (o: SketchOverlay) => o.regions.map((r) => r.sketchId).sort();
 

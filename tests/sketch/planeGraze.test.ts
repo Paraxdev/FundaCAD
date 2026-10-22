@@ -58,7 +58,7 @@ describe("when a click is declined", () => {
   });
 
   it("turns over within a degree of the stated threshold", () => {
-    const edge = (90 - (Math.acos(MIN_PLANE_FACING) * 180) / Math.PI);
+    const edge = 90 - (Math.acos(MIN_PLANE_FACING) * 180) / Math.PI;
     expect(edge).toBeCloseTo(5.74, 2);
     expect(tooEdgeOn(off(90 - edge - 0.01), Z)).toBe(false);
     expect(tooEdgeOn(off(90 - edge + 0.01), Z)).toBe(true);

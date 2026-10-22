@@ -22,10 +22,15 @@ const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const APP = process.env.SC_APP || "http://localhost:5173/";
 const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = path.resolve(process.argv[2] || "fillet_refusal_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
-  console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail !== undefined ? `, ${typeof detail === "string" ? detail : JSON.stringify(detail)}` : ""}`);
+  console.log(
+    `  ${ok ? "PASS" : "FAIL"}  ${name}${detail !== undefined ? `, ${typeof detail === "string" ? detail : JSON.stringify(detail)}` : ""}`,
+  );
   if (!ok) failures++;
 };
 
@@ -33,29 +38,45 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-  await page.addInitScript(([t, port]) => {
-    const N = window.WebSocket;
-    class P extends N {
-      constructor(u, p) {
-        const s = String(u).replace("127.0.0.1:8765", `127.0.0.1:${port}`).replace(/([?&])token=[^&]*/, `$1token=${t}`);
-        super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
+  await page.addInitScript(
+    ([t, port]) => {
+      const N = window.WebSocket;
+      class P extends N {
+        constructor(u, p) {
+          const s = String(u)
+            .replace("127.0.0.1:8765", `127.0.0.1:${port}`)
+            .replace(/([?&])token=[^&]*/, `$1token=${t}`);
+          super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+        }
       }
-    }
-    window.WebSocket = P;
-  }, [TOKEN, ENGINE_PORT]);
+      window.WebSocket = P;
+    },
+    [TOKEN, ENGINE_PORT],
+  );
 
   await page.goto(APP);
   await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.geometry, null, { timeout: 60000 });
   await page.waitForTimeout(1500);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(300); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(300);
+  }
 
   await page.evaluate(async () => {
     const s = window.store;
     s.addFeature({ id: "s1", type: "sketch", plane: "XY", entities: [{ type: "circle", radius: 240, x: 0, y: 0 }] });
     s.addFeature({ id: "e1", type: "extrude", sketch: "s1", distance: 80, operation: "new" });
-    s.addFeature({ id: "s2", type: "sketch", plane: { origin: [0, 0, 80], normal: [0, 0, 1], xdir: [1, 0, 0] }, entities: [{ type: "circle", radius: 80, x: 0, y: 0 }] });
+    s.addFeature({
+      id: "s2",
+      type: "sketch",
+      plane: { origin: [0, 0, 80], normal: [0, 0, 1], xdir: [1, 0, 0] },
+      entities: [{ type: "circle", radius: 80, x: 0, y: 0 }],
+    });
     s.addFeature({ id: "e2", type: "extrude", sketch: "s2", distance: 40, operation: "join" });
     await s.rebuildNow();
     // Every document sent to the kernel, as the radius it previews (null for none).
@@ -68,26 +89,44 @@ const check = (name, ok, detail) => {
       return rebuild(doc);
     };
   });
-  await page.waitForFunction(() => (window.store.buildState.result?.bodies ?? []).length > 0 && !window.store.buildState.building, null, { timeout: 60000 });
-  await page.evaluate(() => { window.__fundacad.handleAction("iso"); window.__fundacad.handleAction("fit"); });
+  await page.waitForFunction(
+    () => (window.store.buildState.result?.bodies ?? []).length > 0 && !window.store.buildState.building,
+    null,
+    { timeout: 60000 },
+  );
+  await page.evaluate(() => {
+    window.__fundacad.handleAction("iso");
+    window.__fundacad.handleAction("fit");
+  });
   await page.waitForTimeout(800);
 
-  const state = () => page.evaluate(() => {
-    const t = window.edgeFeature, s = window.store, b = s.buildState, v = window.viewport;
-    const box = [...document.querySelectorAll(".dim-input")].find((x) => x.style.display !== "none");
-    return {
-      active: t.active, value: Math.round(t.value * 1000) / 1000,
-      shown: t.shown, refusal: t.refusalShown, range: t.range,
-      handle: t.handle ? t.handle.group.children[1].material.color.getHexString() : null,
-      boxBad: box?.classList.contains("dim-bad") ?? null,
-      problem: box?.querySelector(".dim-problem")?.textContent ?? null,
-      prompt: document.querySelector("#prompt")?.textContent ?? "",
-      feats: s.document.features.filter((f) => f.type === "fillet" || f.type === "chamfer").map((f) => `${f.id}:${f.type}=${f.radius ?? f.distance}`),
-      onScreen: v.lastResult === b.result, stale: v.stale,
-      tris: b.result ? b.result.mesh.indices.length / 3 : null,
-      error: b.errorFeatureId, sent: window.__sent.length,
-    };
-  });
+  const state = () =>
+    page.evaluate(() => {
+      const t = window.edgeFeature,
+        s = window.store,
+        b = s.buildState,
+        v = window.viewport;
+      const box = [...document.querySelectorAll(".dim-input")].find((x) => x.style.display !== "none");
+      return {
+        active: t.active,
+        value: Math.round(t.value * 1000) / 1000,
+        shown: t.shown,
+        refusal: t.refusalShown,
+        range: t.range,
+        handle: t.handle ? t.handle.group.children[1].material.color.getHexString() : null,
+        boxBad: box?.classList.contains("dim-bad") ?? null,
+        problem: box?.querySelector(".dim-problem")?.textContent ?? null,
+        prompt: document.querySelector("#prompt")?.textContent ?? "",
+        feats: s.document.features
+          .filter((f) => f.type === "fillet" || f.type === "chamfer")
+          .map((f) => `${f.id}:${f.type}=${f.radius ?? f.distance}`),
+        onScreen: v.lastResult === b.result,
+        stale: v.stale,
+        tris: b.result ? b.result.mesh.indices.length / 3 : null,
+        error: b.errorFeatureId,
+        sent: window.__sent.length,
+      };
+    });
   const settle = async () => {
     await page.waitForTimeout(200);
     await page.waitForFunction(() => !window.store.buildState.building, null, { timeout: 30000 });
@@ -100,11 +139,18 @@ const check = (name, ok, detail) => {
       const r = (a * Math.PI) / 180;
       const sp = v.projectToScreen(new V(80 * Math.cos(r), 80 * Math.sin(r), 120));
       const hit = v.pickEdgeAt(sp.x, sp.y);
-      if (hit && hit.edge.points.every((p) => Math.abs(p[2] - 120) < 0.5 && Math.abs(Math.hypot(p[0], p[1]) - 80) < 0.5)) return { x: sp.x, y: sp.y };
+      if (
+        hit &&
+        hit.edge.points.every((p) => Math.abs(p[2] - 120) < 0.5 && Math.abs(Math.hypot(p[0], p[1]) - 80) < 0.5)
+      )
+        return { x: sp.x, y: sp.y };
     }
     return null;
   });
-  if (!edgePt) { console.error("the pocket's floor edge is not on screen"); process.exit(1); }
+  if (!edgePt) {
+    console.error("the pocket's floor edge is not on screen");
+    process.exit(1);
+  }
   // Where a handle's grab stem is on screen, which way it points, and mm per pixel.
   const grabOf = (group) => {
     group.updateMatrixWorld(true);
@@ -116,15 +162,27 @@ const check = (name, ok, detail) => {
     return { x: p.x, y: p.y, dx: (p.x - o.x) / len, dy: (p.y - o.y) / len, pw: v.pixelWorldSize(group.position) };
   };
   const armedGrab = () => page.evaluate(`(${grabOf})(window.edgeFeature.gizmo)`);
-  const passiveGrab = () => page.evaluate(`(() => {
+  const passiveGrab = () =>
+    page.evaluate(`(() => {
     let found = null;
     window.viewport.scene.scene.traverse((o) => { if (!found && o.type === "Group" && o.renderOrder === 999 && o.children.length === 4 && o.visible) found = o; });
     return found && (${grabOf})(found);
   })()`);
-  const selectEdge = () => page.evaluate(([x, y]) => { const v = window.viewport; v.selectOnlyEdge(v.pickEdgeAt(x, y).edge); }, [edgePt.x, edgePt.y]);
+  const selectEdge = () =>
+    page.evaluate(
+      ([x, y]) => {
+        const v = window.viewport;
+        v.selectOnlyEdge(v.pickEdgeAt(x, y).edge);
+      },
+      [edgePt.x, edgePt.y],
+    );
   const along = (g, from) => (mm) => ({ x: g.x + g.dx * ((mm - from) / g.pw), y: g.y + g.dy * ((mm - from) / g.pw) });
   const sweep = async (at, from, to, step, dwell) => {
-    for (let mm = from; mm <= to + 1e-9; mm += step) { const p = at(mm); await page.mouse.move(p.x, p.y); await page.waitForTimeout(dwell); }
+    for (let mm = from; mm <= to + 1e-9; mm += step) {
+      const p = at(mm);
+      await page.mouse.move(p.x, p.y);
+      await page.waitForTimeout(dwell);
+    }
   };
 
   // --- 1. the command's own handle, past the limit and back ------------------
@@ -140,22 +198,38 @@ const check = (name, ok, detail) => {
   await sweep(at, 2, 38, 2, 60);
   await settle();
   const good = await state();
-  check("a buildable radius previews normally", good.refusal === null && good.shown === good.value && !good.boxBad, good);
+  check(
+    "a buildable radius previews normally",
+    good.refusal === null && good.shown === good.value && !good.boxBad,
+    good,
+  );
   await sweep(at, 38, 46, 0.5, 90);
   await settle();
   let far = await state();
   check("the drag carries on past the limit", far.value >= 45, far.value);
   check("the handle turns red", far.refusal !== null && far.handle !== good.handle, far.handle);
-  check("the value box is refused with a plain reason", far.boxBad && /^Radius too large for the faces around this edge$/.test(far.problem ?? ""), far.problem);
+  check(
+    "the value box is refused with a plain reason",
+    far.boxBad && /^Radius too large for the faces around this edge$/.test(far.problem ?? ""),
+    far.problem,
+  );
   check("the prompt says what will be kept", /too large.*keeping/i.test(far.prompt), far.prompt);
-  check("the model keeps the last radius that built", far.shown !== null && far.shown <= 40 && far.onScreen && !far.stale, { shown: far.shown, stale: far.stale });
+  check(
+    "the model keeps the last radius that built",
+    far.shown !== null && far.shown <= 40 && far.onScreen && !far.stale,
+    { shown: far.shown, stale: far.stale },
+  );
   check("the refusal starts just past 40", far.range.refused > 40 && far.range.refused <= 41, far.range);
   await page.screenshot({ path: `${OUT}/1-refused.png` });
   const sentBefore = far.sent;
   await sweep(at, 46, 55, 0.5, 40);
   await settle();
   far = await state();
-  check("dragging further past a known refusal asks the kernel nothing", far.sent === sentBefore, `${sentBefore} -> ${far.sent}`);
+  check(
+    "dragging further past a known refusal asks the kernel nothing",
+    far.sent === sentBefore,
+    `${sentBefore} -> ${far.sent}`,
+  );
   const back = at(30);
   await page.mouse.move(back.x, back.y, { steps: 6 });
   const instant = await state();
@@ -172,7 +246,11 @@ const check = (name, ok, detail) => {
   await page.keyboard.press("Enter");
   await settle();
   const c1 = await state();
-  check("confirming a refused drag commits the last radius that built", !c1.active && c1.feats.length === 1 && c1.feats[0].endsWith(`=${beforeEnter.shown}`) && c1.error === null, c1.feats);
+  check(
+    "confirming a refused drag commits the last radius that built",
+    !c1.active && c1.feats.length === 1 && c1.feats[0].endsWith(`=${beforeEnter.shown}`) && c1.error === null,
+    c1.feats,
+  );
   await page.evaluate(() => window.store.undo());
   await settle();
 
@@ -197,7 +275,11 @@ const check = (name, ok, detail) => {
   await page.mouse.up();
   await settle();
   const c2 = await state();
-  check("releasing commits the last good radius, not the refused one", !c2.active && c2.feats.length === 1 && c2.feats[0].endsWith(`=${beforeRelease.shown}`), c2.feats);
+  check(
+    "releasing commits the last good radius, not the refused one",
+    !c2.active && c2.feats.length === 1 && c2.feats[0].endsWith(`=${beforeRelease.shown}`),
+    c2.feats,
+  );
   await page.evaluate(() => window.store.undo());
   await settle();
 
@@ -211,16 +293,27 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(150);
   const sent0 = (await state()).sent;
   await page.mouse.down();
-  for (let i = 1; i <= 40; i++) { const p = at(1.5 * i); await page.mouse.move(p.x, p.y); }
+  for (let i = 1; i <= 40; i++) {
+    const p = at(1.5 * i);
+    await page.mouse.move(p.x, p.y);
+  }
   await page.mouse.up();
   await settle();
   await page.waitForTimeout(500);
   await settle();
   const fling = await state();
   const sent = await page.evaluate((n) => window.__sent.slice(n), sent0);
-  check("40 pointermoves do not queue 40 kernel calls", sent.length <= 12, `${sent.length} rebuilds: ${JSON.stringify(sent)}`);
+  check(
+    "40 pointermoves do not queue 40 kernel calls",
+    sent.length <= 12,
+    `${sent.length} rebuilds: ${JSON.stringify(sent)}`,
+  );
   const flingR = fling.feats.length ? Number(fling.feats[0].split("=")[1]) : null;
-  check("what it commits is a radius that built, never 60", !fling.active && (flingR === null || (flingR <= 40 && fling.error === null)), fling.feats);
+  check(
+    "what it commits is a radius that built, never 60",
+    !fling.active && (flingR === null || (flingR <= 40 && fling.error === null)),
+    fling.feats,
+  );
   if (fling.feats.length) await page.evaluate(() => window.store.undo());
   await settle();
 
@@ -231,13 +324,23 @@ const check = (name, ok, detail) => {
   await page.mouse.click(edgePt.x, edgePt.y);
   await settle();
   const input = page.locator(".dim-input:visible input").first();
-  const type = async (v) => { await input.fill(v); await page.waitForTimeout(300); await settle(); await page.waitForTimeout(300); await settle(); };
+  const type = async (v) => {
+    await input.fill(v);
+    await page.waitForTimeout(300);
+    await settle();
+    await page.waitForTimeout(300);
+    await settle();
+  };
   await type("39.9");
   const fits = await state();
   check("39.9 builds, the largest radius that fits", fits.refusal === null && fits.shown === 39.9, fits);
   await type("45");
   const typed = await state();
-  check("a typed 45 is refused the same way and the model keeps 39.9", typed.refusal !== null && typed.boxBad && typed.shown === 39.9 && typed.tris === fits.tris, typed);
+  check(
+    "a typed 45 is refused the same way and the model keeps 39.9",
+    typed.refusal !== null && typed.boxBad && typed.shown === 39.9 && typed.tris === fits.tris,
+    typed,
+  );
   await page.evaluate(() => window.__fundacad.handleAction("top"));
   await page.waitForTimeout(700);
   await page.screenshot({ path: `${OUT}/4-typed-refused-top.png` });
@@ -246,7 +349,11 @@ const check = (name, ok, detail) => {
   await input.press("Enter");
   await settle();
   const stay = await state();
-  check("Enter on a refused typed value keeps the tool open and adds nothing", stay.active && stay.feats.length === 0, stay.prompt);
+  check(
+    "Enter on a refused typed value keeps the tool open and adds nothing",
+    stay.active && stay.feats.length === 0,
+    stay.prompt,
+  );
   await input.fill("25");
   await page.waitForTimeout(100);
   check("typing a smaller value clears the refusal", (await state()).refusal === null);
@@ -282,7 +389,11 @@ const check = (name, ok, detail) => {
   await page.keyboard.press("Enter");
   await settle();
   const c5 = await state();
-  check("and confirming replaces the fillet with the last good radius", !c5.active && c5.feats.length === 1 && c5.feats[0] === `${fid}:fillet=${e5.shown}`, c5.feats);
+  check(
+    "and confirming replaces the fillet with the last good radius",
+    !c5.active && c5.feats.length === 1 && c5.feats[0] === `${fid}:fillet=${e5.shown}`,
+    c5.feats,
+  );
   await edit();
   await page.keyboard.press("Tab");
   await settle();
@@ -292,7 +403,11 @@ const check = (name, ok, detail) => {
   await page.keyboard.press("Escape");
   await settle();
   const c6 = await state();
-  check("Esc leaves the committed fillet untouched", !c6.active && c6.feats[0] === `${fid}:fillet=${e5.shown}`, c6.feats);
+  check(
+    "Esc leaves the committed fillet untouched",
+    !c6.active && c6.feats[0] === `${fid}:fillet=${e5.shown}`,
+    c6.feats,
+  );
 
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall checks passed");

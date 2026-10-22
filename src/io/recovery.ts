@@ -122,13 +122,10 @@ export async function checkRecovery(store: DocumentStore) {
     const age = Math.max(1, Math.round((Date.now() - (env.savedAt || mtime)) / 60000));
     const from = env.source ? env.source.split(/[\\/]/).pop() : "an unsaved document";
     const { choose } = await import("../ui/choice");
-    const pick = await choose<"recover" | "discard">(
-      `Recover unsaved work? (${from}, ~${age} min old)`,
-      [
-        { value: "recover", label: "Recover", hint: "restore the snapshot" },
-        { value: "discard", label: "Discard", hint: "delete it" },
-      ],
-    );
+    const pick = await choose<"recover" | "discard">(`Recover unsaved work? (${from}, ~${age} min old)`, [
+      { value: "recover", label: "Recover", hint: "restore the snapshot" },
+      { value: "discard", label: "Discard", hint: "delete it" },
+    ]);
     if (pick === "recover") {
       store.load(JSON.stringify(env.doc));
       toast("Recovered unsaved work, use Save As to keep it", { kind: "info", timeout: 8000 });

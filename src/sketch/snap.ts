@@ -9,15 +9,7 @@ import { asRound } from "./entityDims";
 import { rectCorners } from "./region";
 import type { SketchPlane } from "./plane";
 
-export type SnapKind =
-  | "free"
-  | "grid"
-  | "endpoint"
-  | "midpoint"
-  | "center"
-  | "control"
-  | "curve"
-  | "align";
+export type SnapKind = "free" | "grid" | "endpoint" | "midpoint" | "center" | "control" | "curve" | "align";
 
 /** Which piece of geometry a snap caught: an endpoint index (dimPoint numbering),
  *  a line's midpoint, or the nearest point on a curve. Only set for sketch
@@ -91,11 +83,7 @@ export function snap(
     const d = Math.hypot(s.x - rawScreen.x, s.y - rawScreen.y);
     if (d <= pixelTol) {
       // within tolerance: prefer higher priority, then nearer
-      if (
-        !best ||
-        c.priority > best.priority ||
-        (c.priority === best.priority && d < bestD)
-      ) {
+      if (!best || c.priority > best.priority || (c.priority === best.priority && d < bestD)) {
         best = c;
         bestD = d;
       }
@@ -176,7 +164,13 @@ export function snap(
     // outside the round tolerance the point pass used. Snapping to it is right;
     // reporting it as an alignment with two zero-length guides is not.
     if (alignX && alignY && alignX.c === alignY.c) {
-      return { point: alignX.c.p.clone(), kind: alignX.c.kind, guides: [], label: snapLabel(alignX.c), ref: alignX.c.ref };
+      return {
+        point: alignX.c.p.clone(),
+        kind: alignX.c.kind,
+        guides: [],
+        label: snapLabel(alignX.c),
+        ref: alignX.c.ref,
+      };
     }
     const guides: SnapGuide[] = [];
     if (alignX) guides.push({ from: alignX.c.p.clone(), axis: "x" });
@@ -194,10 +188,7 @@ export function snap(
     // Lined up on x means standing on the anchor's vertical line, its y line.
     const line = alignX && !alignY ? alignX.c.lineLabels?.y : alignY && !alignX ? alignY.c.lineLabels?.x : undefined;
     return {
-      point: new THREE.Vector2(
-        alignX ? alignX.c.p.x : (g.x ?? raw.x),
-        alignY ? alignY.c.p.y : (g.y ?? raw.y),
-      ),
+      point: new THREE.Vector2(alignX ? alignX.c.p.x : (g.x ?? raw.x), alignY ? alignY.c.p.y : (g.y ?? raw.y)),
       kind: "align",
       guides,
       ...(line ? { label: line } : {}),
@@ -243,17 +234,28 @@ export function snapLabel(c: Pick<SnapCandidate, "kind" | "label">): string | un
 export function showsSnapMarker(tool: string, kind: SnapKind, label?: string): boolean {
   if (kind === "free") return false;
   if (tool !== "select") return true;
-  return kind === "endpoint" || kind === "midpoint" || kind === "center" || kind === "control" || (kind === "align" && !!label);
+  return (
+    kind === "endpoint" ||
+    kind === "midpoint" ||
+    kind === "center" ||
+    kind === "control" ||
+    (kind === "align" && !!label)
+  );
 }
 
 /** The world origin as a snap anchor, when the sketch plane passes through it. */
 export function originCandidate(plane: SketchPlane): SnapCandidate[] {
   const origin = new THREE.Vector3();
   if (Math.abs(plane.n.dot(origin.clone().sub(plane.origin))) > 1e-6) return [];
-  return [{
-    p: plane.to2D(origin), kind: "center", priority: 95, label: "Origin",
-    lineLabels: { x: axisName(plane.u), y: axisName(plane.v) },
-  }];
+  return [
+    {
+      p: plane.to2D(origin),
+      kind: "center",
+      priority: 95,
+      label: "Origin",
+      lineLabels: { x: axisName(plane.u), y: axisName(plane.v) },
+    },
+  ];
 }
 
 /** "X Axis" for a direction along a world axis, else a plain name for the line. */
@@ -305,7 +307,13 @@ export function pinOriginPoint(
 ): Extract<ResolvedEntity, { type: "point" }> {
   const existing = existingFixedPoint(entities, constraints, pos);
   if (existing) return existing;
-  const point: Extract<ResolvedEntity, { type: "point" }> = { type: "point", id: newId(), x: pos.x, y: pos.y, construction: true };
+  const point: Extract<ResolvedEntity, { type: "point" }> = {
+    type: "point",
+    id: newId(),
+    x: pos.x,
+    y: pos.y,
+    construction: true,
+  };
   entities.push(point);
   constraints.push({ type: "fix", e: point.id, p: 0 });
   return point;
@@ -341,19 +349,23 @@ export function dragSnap(
   const res = snap(raw, candidates, toScreen, 0, pixelTol);
   // A named line (an axis through the origin) is a real place to drop a point.
   if (res.kind === "align" && res.label) return res;
-  return res.kind === "endpoint" || res.kind === "midpoint" || res.kind === "center" || res.kind === "control" ? res : null;
+  return res.kind === "endpoint" || res.kind === "midpoint" || res.kind === "center" || res.kind === "control"
+    ? res
+    : null;
 }
 
 /** The nearest point of `cv` to `q`, or null when it falls past an arc's ends. */
 export function nearestOnCurve(cv: SnapCurve, q: THREE.Vector2): THREE.Vector2 | null {
   if (cv.kind === "line") {
-    const dx = cv.x2 - cv.x1, dy = cv.y2 - cv.y1;
+    const dx = cv.x2 - cv.x1,
+      dy = cv.y2 - cv.y1;
     const L2 = dx * dx + dy * dy;
     if (L2 < 1e-18) return null;
     const t = Math.min(1, Math.max(0, ((q.x - cv.x1) * dx + (q.y - cv.y1) * dy) / L2));
     return new THREE.Vector2(cv.x1 + t * dx, cv.y1 + t * dy);
   }
-  const vx = q.x - cv.cx, vy = q.y - cv.cy;
+  const vx = q.x - cv.cx,
+    vy = q.y - cv.cy;
   const len = Math.hypot(vx, vy);
   if (len < 1e-12 || !(cv.r > 0)) return null;
   if (cv.kind === "arc") {
@@ -385,9 +397,7 @@ export function curvesFromEntities(entities: ResolvedEntity[]): SnapCurve[] {
 }
 
 /** snap candidates from resolved sketch entities (numbers, not params) */
-export function candidatesFromEntities(
-  entities: ResolvedEntity[],
-): SnapCandidate[] {
+export function candidatesFromEntities(entities: ResolvedEntity[]): SnapCandidate[] {
   const out: SnapCandidate[] = [];
   const add = (x: number, y: number, kind: SnapKind, priority: number, ref?: SnapRef) =>
     out.push({ p: new THREE.Vector2(x, y), kind, priority, ...(ref ? { ref } : {}) });
@@ -458,20 +468,96 @@ export function candidatesFromEntities(
 // `dimPlace` mirrors SketchEntity's badge-label placement (see types.ts), it's
 // plain numbers already, so it survives resolution as a structural copy.
 export type ResolvedEntity =
-  | { type: "line"; id: string; x1: number; y1: number; x2: number; y2: number; construction?: boolean; dimPlace?: DimPlace }
-  | { type: "rectangle"; id: string; width: number; height: number; x: number; y: number; angle?: number; construction?: boolean; dimPlace?: DimPlace }
+  | {
+      type: "line";
+      id: string;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      construction?: boolean;
+      dimPlace?: DimPlace;
+    }
+  | {
+      type: "rectangle";
+      id: string;
+      width: number;
+      height: number;
+      x: number;
+      y: number;
+      angle?: number;
+      construction?: boolean;
+      dimPlace?: DimPlace;
+    }
   | { type: "circle"; id: string; radius: number; x: number; y: number; construction?: boolean; dimPlace?: DimPlace }
-  | { type: "arc"; id: string; x1: number; y1: number; x2: number; y2: number; mx: number; my: number; construction?: boolean }
+  | {
+      type: "arc";
+      id: string;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      mx: number;
+      my: number;
+      construction?: boolean;
+    }
   | { type: "spline"; id: string; points: { x: number; y: number }[]; construction?: boolean }
-  | { type: "bspline"; id: string; poles: { x: number; y: number }[]; degree?: number; closed?: boolean; knots?: number[]; construction?: boolean }
+  | {
+      type: "bspline";
+      id: string;
+      poles: { x: number; y: number }[];
+      degree?: number;
+      closed?: boolean;
+      knots?: number[];
+      construction?: boolean;
+    }
   | { type: "point"; id: string; x: number; y: number; construction?: boolean }
   // parametric shapes (rigid: the solver skips them; edited via their params)
-  | { type: "polygon"; id: string; x: number; y: number; radius: number; sides: number; angle: number; construction?: boolean; dimPlace?: DimPlace }
-  | { type: "slot"; id: string; x1: number; y1: number; x2: number; y2: number; width: number; construction?: boolean; dimPlace?: DimPlace }
-  | { type: "text"; id: string; text: string; x: number; y: number; height: number;
-      font?: string; style?: "regular" | "bold" | "italic" | "bolditalic";
-      align?: "left" | "center" | "right"; angle: number;
-      pathRef?: string; positionOnPath?: number; boxWidth?: number; construction?: boolean }
+  | {
+      type: "polygon";
+      id: string;
+      x: number;
+      y: number;
+      radius: number;
+      sides: number;
+      angle: number;
+      construction?: boolean;
+      dimPlace?: DimPlace;
+    }
+  | {
+      type: "slot";
+      id: string;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      width: number;
+      construction?: boolean;
+      dimPlace?: DimPlace;
+    }
+  | {
+      type: "text";
+      id: string;
+      text: string;
+      x: number;
+      y: number;
+      height: number;
+      font?: string;
+      style?: "regular" | "bold" | "italic" | "bolditalic";
+      align?: "left" | "center" | "right";
+      angle: number;
+      pathRef?: string;
+      positionOnPath?: number;
+      boxWidth?: number;
+      construction?: boolean;
+    }
   // projected reference geometry (fixed/linked): the curve is already plain
   // numbers, so resolution is a structural pass-through
-  | { type: "projected"; id: string; source: ProjectedSource; curve: ProjectedCurve; stale?: true; construction?: boolean };
+  | {
+      type: "projected";
+      id: string;
+      source: ProjectedSource;
+      curve: ProjectedCurve;
+      stale?: true;
+      construction?: boolean;
+    };

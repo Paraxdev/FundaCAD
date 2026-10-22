@@ -54,10 +54,13 @@ async function soft(page, fn, ms = 8000) {
 }
 
 async function setEnabled(page, on) {
-  await page.evaluate(async ([pid, value]) => {
-    const m = await import("/src/plugins/registry.ts");
-    m.setPluginEnabled(pid, value);
-  }, [ID, on]);
+  await page.evaluate(
+    async ([pid, value]) => {
+      const m = await import("/src/plugins/registry.ts");
+      m.setPluginEnabled(pid, value);
+    },
+    [ID, on],
+  );
   await page.waitForTimeout(800);
 }
 
@@ -78,7 +81,8 @@ async function view(page) {
       hasIcon: icons.iconPaths("texture").length > 0,
       featureLabel: meta.featureMeta({ type: "texture" }).label,
       // the rail button, in the category flyouts the rail draws
-      ribbonButton: (await import("/src/ui/railDefs.ts")).modelRail()
+      ribbonButton: (await import("/src/ui/railDefs.ts"))
+        .modelRail()
         .some((e) => (e.kind === "family" ? e.items : [e]).some((t) => t.label === "Texture")),
       // the panel, by what is on screen
       panelOpen: !!document.querySelector("[data-panel=texture]"),
@@ -140,8 +144,11 @@ async function view(page) {
     a.store.addFeature({ id: "b1", type: "box", length: 40, width: 40, height: 20 });
     await a.store.rebuildNow();
   });
-  await until(page, () => (window.__fundacad?.store?.buildState?.result?.mesh?.positions?.length ?? 0) > 0,
-    "the box to build");
+  await until(
+    page,
+    () => (window.__fundacad?.store?.buildState?.result?.mesh?.positions?.length ?? 0) > 0,
+    "the box to build",
+  );
 
   // Start the tool through handleAction, which is the APPLICATION'S dispatcher,
   // the same door the ribbon button and the command palette go through. Calling
@@ -158,10 +165,14 @@ async function view(page) {
 
   // Pick a face the way a click does, then let the tool's rAF tick notice.
   await page.evaluate(() => window.__fundacad.viewport.selectFaces([0]));
-  await until(page, () => {
-    const p = document.querySelector("[data-panel=texture]");
-    return !!p && /1 face selected/.test(p.textContent || "");
-  }, "the tool to notice the selection");
+  await until(
+    page,
+    () => {
+      const p = document.querySelector("[data-panel=texture]");
+      return !!p && /1 face selected/.test(p.textContent || "");
+    },
+    "the tool to notice the selection",
+  );
   check("the ambient selection reaches the plugin's own loop", true);
 
   // THE GESTURE HAS TO SURVIVE ITS OWN PREVIEW, which is the thing this whole
@@ -178,9 +189,12 @@ async function view(page) {
   // A SOFT wait, not `until`: when this regresses, the preview never lands at
   // all (the tool clears it along with the members), and a thrown timeout would
   // report itself instead of the two named checks below.
-  const landed = await soft(page,
-    () => (window.__fundacad.store.buildState.result?.mesh?.positions?.length ?? 0) > 400
-      && window.__fundacad.store.buildState.building === false);
+  const landed = await soft(
+    page,
+    () =>
+      (window.__fundacad.store.buildState.result?.mesh?.positions?.length ?? 0) > 400 &&
+      window.__fundacad.store.buildState.building === false,
+  );
   check("the tool's live preview reaches the model", landed);
   await settle(page);
   const survived = await page.evaluate(() => {
@@ -199,8 +213,11 @@ async function view(page) {
     const btn = [...p.querySelectorAll("button")].find((b) => (b.textContent || "").includes("Add"));
     btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
   });
-  await until(page, () => window.__fundacad.store.document.features.some((f) => f.type === "texture"),
-    "the texture feature to land in the document");
+  await until(
+    page,
+    () => window.__fundacad.store.document.features.some((f) => f.type === "texture"),
+    "the texture feature to land in the document",
+  );
   check("committing leaves a texture in the document", true);
 
   const after = await page.evaluate(() => {
@@ -208,34 +225,37 @@ async function view(page) {
     return { kind: f.kind, hasBody: !!f.body };
   });
   check("the committed feature names its pattern and its body", after.kind === "knurl" && after.hasBody);
-  check(
-    "the window is released after a commit",
-    (await page.evaluate(() => window.__fundacad.toolBusy())) === false,
-  );
+  check("the window is released after a commit", (await page.evaluate(() => window.__fundacad.toolBusy())) === false);
 
   // Re-opening it is the plugin's `edit` contribution, reached through the
   // application's editFeature, which has no case for a texture any more and
   // has to ask the table.
-  const featureId = await page.evaluate(() =>
-    window.__fundacad.store.document.features.find((x) => x.type === "texture").id);
+  const featureId = await page.evaluate(
+    () => window.__fundacad.store.document.features.find((x) => x.type === "texture").id,
+  );
   await page.evaluate((id) => window.__fundacad.editFeature(id), featureId);
   // "Apply" rather than "Add" is how the panel says it is editing something
   // that already exists, so this is also the check that it re-opened in the
   // right mode rather than merely opening.
-  await until(page, () => {
-    const p = document.querySelector("[data-panel=texture]");
-    return !!p && [...p.querySelectorAll("button")].some((b) => (b.textContent || "").includes("Apply"));
-  }, "the panel to re-open on the committed feature");
+  await until(
+    page,
+    () => {
+      const p = document.querySelector("[data-panel=texture]");
+      return !!p && [...p.querySelectorAll("button")].some((b) => (b.textContent || "").includes("Apply"));
+    },
+    "the panel to re-open on the committed feature",
+  );
   check("double-clicking the feature re-opens the plugin's tool", true);
   await page.evaluate(() => {
     const p = document.querySelector("[data-panel=texture]");
     const btn = [...p.querySelectorAll("button")].find((b) => (b.textContent || "").includes("Cancel"));
     btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
   });
-  await until(page, () => !document.querySelector("[data-panel=texture]"),
-    "the edit to be cancelled");
-  check("cancelling the edit closes the panel and releases the window",
-    (await page.evaluate(() => window.__fundacad.toolBusy())) === false);
+  await until(page, () => !document.querySelector("[data-panel=texture]"), "the edit to be cancelled");
+  check(
+    "cancelling the edit closes the panel and releases the window",
+    (await page.evaluate(() => window.__fundacad.toolBusy())) === false,
+  );
 
   // --- 4. and it rebuilds with the plugin switched OFF ---------------------
   // SWITCHED OFF IS NOT UNINSTALLED, and the difference is the point of this
@@ -269,8 +289,7 @@ async function view(page) {
     };
   });
   check("off: the texture is still in the document", rebuilt.stillThere);
-  check("off: the document still builds (off is not uninstalled)",
-    rebuilt.built && !rebuilt.error);
+  check("off: the document still builds (off is not uninstalled)", rebuilt.built && !rebuilt.error);
 
   await browser.close();
   if (failures.length) {

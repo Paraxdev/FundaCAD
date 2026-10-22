@@ -200,7 +200,7 @@ export function createSelection(
           if (edit && !edit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
         }
         break; // the values under the history entry (selectFeature above) are the
-               // edit surface for the rest
+      // edit surface for the rest
     }
   };
 

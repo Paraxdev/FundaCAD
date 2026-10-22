@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  createPrintabilityPanel, EMPHASIS_COLOR, type PrintabilityDeps,
+  createPrintabilityPanel,
+  EMPHASIS_COLOR,
+  type PrintabilityDeps,
 } from "../../plugins/FundaCAD.PrintToolbox/printabilityPanel";
 import { KIND_COLORS } from "../../plugins/FundaCAD.PrintToolbox/printability";
 import { EDGE_HOVER_COLOR } from "../../src/viewport/highlight";
@@ -29,9 +31,45 @@ const reply: PrintabilityReply = {
     { id: "body2", name: "Lid", up: [0, 0, 1], bed: 0, bedFace: null, openEdges: 0, solids: 1, insideOut: false },
   ],
   findings: [
-    { kind: "overhang", body: "body1", face: 3, other: null, value: 90, limit: 0, area: 100, low: 10, at: [5, 5, 10], extent: 10, note: "" },
-    { kind: "wall", body: "body1", face: 4, other: { body: "body1", face: 5 }, value: 0.6, limit: 0.8, area: 50, low: 0, at: [0, 5, 5], extent: 1, note: "" },
-    { kind: "gap", body: "body2", face: 1, other: { body: "body1", face: 2 }, value: 0.1, limit: 0.2, area: 20, low: 0, at: [10, 5, 5], extent: 4, note: "" },
+    {
+      kind: "overhang",
+      body: "body1",
+      face: 3,
+      other: null,
+      value: 90,
+      limit: 0,
+      area: 100,
+      low: 10,
+      at: [5, 5, 10],
+      extent: 10,
+      note: "",
+    },
+    {
+      kind: "wall",
+      body: "body1",
+      face: 4,
+      other: { body: "body1", face: 5 },
+      value: 0.6,
+      limit: 0.8,
+      area: 50,
+      low: 0,
+      at: [0, 5, 5],
+      extent: 1,
+      note: "",
+    },
+    {
+      kind: "gap",
+      body: "body2",
+      face: 1,
+      other: { body: "body1", face: 2 },
+      value: 0.1,
+      limit: 0.2,
+      area: 20,
+      low: 0,
+      at: [10, 5, 5],
+      extent: 4,
+      note: "",
+    },
   ],
   errors: [],
 };
@@ -54,7 +92,12 @@ function rig() {
   let settle: (r: PrintabilityResult) => void = () => {};
   const built = { features: [{ id: "shown" }] } as unknown as CadDocument;
   const docs: CadDocument[] = [];
-  const sub = <T>(set: Set<T>, fn: T) => { set.add(fn); return () => { set.delete(fn); }; };
+  const sub = <T>(set: Set<T>, fn: T) => {
+    set.add(fn);
+    return () => {
+      set.delete(fn);
+    };
+  };
 
   const viewport = {
     getSelectedBodies: () => selectedBodies,
@@ -69,8 +112,16 @@ function rig() {
     builtDocument: () => built,
     buildState: { result: { bodies: BUILT }, building: false } as BuildState,
     // Both replay at once, as the real store's do.
-    onDocChange: (fn: () => void) => { const off = sub(docListeners, fn); fn(); return off; },
-    onBuild: (fn: (s: BuildState) => void) => { const off = sub(buildListeners, fn); fn(store.buildState); return off; },
+    onDocChange: (fn: () => void) => {
+      const off = sub(docListeners, fn);
+      fn();
+      return off;
+    },
+    onBuild: (fn: (s: BuildState) => void) => {
+      const off = sub(buildListeners, fn);
+      fn(store.buildState);
+      return off;
+    },
     onOpen: (fn: () => void) => sub(openListeners, fn),
     isBodyVisible: (id: string) => !hidden.has(id),
   };
@@ -79,12 +130,19 @@ function rig() {
       docs.push(doc);
       calls.push(opts);
       onStarted?.(`req-${calls.length}`);
-      return new Promise<PrintabilityResult>((res) => { settle = res; });
+      return new Promise<PrintabilityResult>((res) => {
+        settle = res;
+      });
     },
-    cancel: async (id?: string) => { cancels.push(id); return true; },
+    cancel: async (id?: string) => {
+      cancels.push(id);
+      return true;
+    },
   };
   const deps = {
-    store, viewport, geometry,
+    store,
+    viewport,
+    geometry,
     hasBody: () => true,
     setStatus: (t: string) => statuses.push(t),
   } as unknown as PrintabilityDeps;
@@ -93,8 +151,19 @@ function rig() {
   const tints = () => marks.filter((m) => m.layer === "printability").at(-1)?.marks;
   const listening = () => docListeners.size + buildListeners.size + openListeners.size + stressListeners.size;
   return {
-    ui, marks, frames, statuses, calls, cancels, tints, docs, built, listening,
-    select: (ids: string[]) => { selectedBodies = ids; },
+    ui,
+    marks,
+    frames,
+    statuses,
+    calls,
+    cancels,
+    tints,
+    docs,
+    built,
+    listening,
+    select: (ids: string[]) => {
+      selectedBodies = ids;
+    },
     hide: (id: string) => hidden.add(id),
     settle: (r: PrintabilityResult) => settle(r),
     editDoc: () => docListeners.forEach((f) => f()),
@@ -190,9 +259,15 @@ describe("printability panel flow", () => {
     const r = rig();
     await checked(r);
     r.hide("body2");
-    r.rebuild([{ id: "body1", name: "Block", faceStart: 0, faceCount: 4 }, { id: "body2", name: "Lid", faceStart: 4, faceCount: 3 }]);
+    r.rebuild([
+      { id: "body1", name: "Block", faceStart: 0, faceCount: 4 },
+      { id: "body2", name: "Lid", faceStart: 4, faceCount: 3 },
+    ]);
     // The gap's own side is on the hidden Lid; its other side, on the Block, still shows.
-    const shown = [{ faceIds: [3], color: KIND_COLORS.overhang }, { faceIds: [2], color: KIND_COLORS.gap }];
+    const shown = [
+      { faceIds: [3], color: KIND_COLORS.overhang },
+      { faceIds: [2], color: KIND_COLORS.gap },
+    ];
     expect(r.tints()).toEqual(shown);
     r.ui.hover(1);
     expect(r.tints()).toEqual(shown);
@@ -256,7 +331,10 @@ describe("printability panel flow", () => {
 
   it("keeps the list of bodies for the panel's Bodies line in step with the build", () => {
     const r = rig();
-    expect(r.ui.bodies.value).toEqual([{ id: "body1", name: "Block" }, { id: "body2", name: "Lid" }]);
+    expect(r.ui.bodies.value).toEqual([
+      { id: "body1", name: "Block" },
+      { id: "body2", name: "Lid" },
+    ]);
     r.rebuild([{ id: "body1", name: "Block", faceStart: 0, faceCount: 6 }]);
     expect(r.ui.bodies.value).toEqual([{ id: "body1", name: "Block" }]);
   });

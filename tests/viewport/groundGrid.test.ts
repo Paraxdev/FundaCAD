@@ -14,7 +14,11 @@ describe("groundGridCells", () => {
   it("reaches past the corner of the viewport", () => {
     // Half a diagonal of cells reaches the corners exactly; the grid must run
     // further than that or its edge is inside the window.
-    for (const [wpp, diag] of [[0.1, 2200], [1, 1400], [0.004, 3000]] as const) {
+    for (const [wpp, diag] of [
+      [0.1, 2200],
+      [1, 1400],
+      [0.004, 3000],
+    ] as const) {
       const cell = cellFor(wpp);
       const corner = (wpp * diag) / 2 / cell;
       expect(groundGridCells(wpp, diag, cell), `${wpp} mm/px`).toBeGreaterThan(corner);
@@ -24,8 +28,7 @@ describe("groundGridCells", () => {
   it("is the same grid at every zoom", () => {
     // The count is what makes it look identical zoomed in and out: the cell
     // grows with the zoom and the number of them does not.
-    const counts = [0.001, 0.01, 0.1, 1, 10].map((wpp) =>
-      groundGridCells(wpp, 2000, cellFor(wpp)));
+    const counts = [0.001, 0.01, 0.1, 1, 10].map((wpp) => groundGridCells(wpp, 2000, cellFor(wpp)));
     expect(new Set(counts).size).toBe(1);
   });
 

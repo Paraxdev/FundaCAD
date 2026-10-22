@@ -29,19 +29,47 @@ export interface Control {
 export type Line = [depth: number, ref: string, role: string, label: string, flags: string[]];
 
 export const REGIONS = [
-  "titlebar", "menu", "toolrail", "history", "props", "items", "valuebox",
-  "dialog", "context", "render", "views", "status", "other",
+  "titlebar",
+  "menu",
+  "toolrail",
+  "history",
+  "props",
+  "items",
+  "valuebox",
+  "dialog",
+  "context",
+  "render",
+  "views",
+  "status",
+  "other",
 ] as const;
 
 const CONTROL = [
-  "button", "input", "select", "textarea", "a[href]",
-  "[role=tab]", "[role=button]", "[role=menuitem]", "[role=switch]", "[role=radio]",
-  ".ctx-item", ".cmdk-item", ".timeline-node", ".feature-row", ".tree-folder", ".tree-eye", ".opt-row",
-  "#docname", "#prompt", "[data-testid=selection-readout]",
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "a[href]",
+  "[role=tab]",
+  "[role=button]",
+  "[role=menuitem]",
+  "[role=switch]",
+  "[role=radio]",
+  ".ctx-item",
+  ".cmdk-item",
+  ".timeline-node",
+  ".feature-row",
+  ".tree-folder",
+  ".tree-eye",
+  ".opt-row",
+  "#docname",
+  "#prompt",
+  "[data-testid=selection-readout]",
 ].join(",");
 
 const TEXT_ONLY = "#docname, #prompt, [data-testid=selection-readout]";
-const LABEL_NOISE = ".menu-shortcut, .ctx-key, .cmdk-key, .menu-check, .dirty-mark, .t-caret, .tree-count, .choice-btn > small";
+const LABEL_NOISE =
+  ".menu-shortcut, .ctx-key, .cmdk-key, .menu-check, .dirty-mark, .t-caret, .tree-count, .choice-btn > small";
 const MAX_LABEL = 60;
 
 const realRect = (el: Element): Box => el.getBoundingClientRect();
@@ -65,7 +93,8 @@ export function labelOf(el: HTMLElement): string {
   const row = el.matches(".tree-eye") ? el.closest<HTMLElement>(".feature-row, .tree-folder") : null;
   if (row) return labelOf(row);
   const own = el.querySelector(":scope .t-name, :scope .tree-label, :scope .ctx-label, :scope .cmdk-label");
-  if (own && el.matches(".timeline-node, .feature-row, .tree-folder, .ctx-item, .cmdk-item")) return clip(visibleText(own));
+  if (own && el.matches(".timeline-node, .feature-row, .tree-folder, .ctx-item, .cmdk-item"))
+    return clip(visibleText(own));
   const aria = el.getAttribute("aria-label");
   if (aria) return clip(aria.trim());
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
@@ -81,7 +110,11 @@ export function labelOf(el: HTMLElement): string {
 
 /** The name a label is matched by: no trailing "(keys)", no case. */
 export function matchName(label: string): string {
-  return label.replace(/\s*\([^()]*\)\s*$/, "").replace(/\s+/g, " ").trim().toLowerCase();
+  return label
+    .replace(/\s*\([^()]*\)\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 /** Backdrops that cover the whole app, unlike the Console and selection panels, which are dialogs too. */
@@ -160,7 +193,8 @@ function flagsOf(el: HTMLElement, disabled: boolean): string[] {
   if (el.dataset.visible) return [el.dataset.visible === "false" ? "hidden" : "visible"];
   if (disabled) f.push("disabled");
   if (el.classList.contains("selected") || el.getAttribute("aria-selected") === "true") f.push("selected");
-  if (el.classList.contains("active") || el.classList.contains("on") || el.getAttribute("aria-pressed") === "true") f.push("on");
+  if (el.classList.contains("active") || el.classList.contains("on") || el.getAttribute("aria-pressed") === "true")
+    f.push("on");
   if (el.classList.contains("error")) f.push("error");
   if (el.classList.contains("suppressed")) f.push("suppressed");
   if (el.classList.contains("dirty")) f.push("dirty");
@@ -169,7 +203,8 @@ function flagsOf(el: HTMLElement, disabled: boolean): string[] {
   if (exp === "false" && el.matches(".tree-folder")) f.push("closed");
   if (el instanceof HTMLInputElement && el.type === "checkbox") f.push(el.checked ? "checked" : "unchecked");
   else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) f.push(`= "${clip(el.value)}"`);
-  else if (el instanceof HTMLSelectElement) f.push(`= "${clip(el.selectedOptions[0]?.textContent?.trim() ?? el.value)}"`);
+  else if (el instanceof HTMLSelectElement)
+    f.push(`= "${clip(el.selectedOptions[0]?.textContent?.trim() ?? el.value)}"`);
   return f;
 }
 
@@ -209,9 +244,19 @@ export function walkControls(doc: Document = document, opts: WalkOptions = {}): 
         const region = regionOf(el);
         if (box && !overlaps(r, box)) more[region] = (more[region] ?? 0) + 1;
         else {
-          const disabled = (el as HTMLButtonElement).disabled === true
-            || el.classList.contains("disabled") || el.getAttribute("aria-disabled") === "true";
-          controls.push({ el, ref: refOf(el), role: roleOf(el), label: labelOf(el), flags: flagsOf(el, disabled), region, disabled });
+          const disabled =
+            (el as HTMLButtonElement).disabled === true ||
+            el.classList.contains("disabled") ||
+            el.getAttribute("aria-disabled") === "true";
+          controls.push({
+            el,
+            ref: refOf(el),
+            role: roleOf(el),
+            label: labelOf(el),
+            flags: flagsOf(el, disabled),
+            region,
+            disabled,
+          });
         }
       }
       if (el.matches("button, input, select, textarea, .ctx-item, .menu-item")) return;
@@ -245,7 +290,11 @@ export function familyOf(name: string, entries: RailEntry[]): { family: FamilySt
         const label = matchName(t.label);
         return t.action === want || (pass === "exact" ? label === want : label.startsWith(want));
       });
-      if (hit) return { family: { ref: `family:${e.id}`, button: e.style === "variants" ? "right" : "left" }, pick: `pick:${hit.action}` };
+      if (hit)
+        return {
+          family: { ref: `family:${e.id}`, button: e.style === "variants" ? "right" : "left" },
+          pick: `pick:${hit.action}`,
+        };
     }
   }
   return null;

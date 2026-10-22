@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { branchLog, branchNames, copyName, liveSummary } from "../../src/ui/homeVersions";
 import type { DocSummary } from "../../src/io/library";
 
-const row = (id: string, parent: string | null, branch: string, time: number) => ({ id, parent, branch, message: id, time });
+const row = (id: string, parent: string | null, branch: string, time: number) => ({
+  id,
+  parent,
+  branch,
+  message: id,
+  time,
+});
 const s: DocSummary = {
   format: "funda",
   versions: [row("a", null, "main", 1), row("b", "a", "main", 2), row("c", "a", "alt", 3), row("d", "b", "main", 4)],

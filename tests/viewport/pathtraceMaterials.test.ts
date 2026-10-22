@@ -100,7 +100,15 @@ describe("path tracer material per finish key", () => {
 describe("material signature", () => {
   const edits: [string, (m: THREE.MeshPhysicalMaterial) => void][] = [
     ["ior", (m) => applyGlassLook(m, finish({ opacity: 0.2, metalness: 0, ior: 1.33 }), false)],
-    ["attenuation", (m) => applyGlassLook(m, finish({ opacity: 0.2, metalness: 0, attenuationColor: "#2a8f6a", attenuationDistance: 20 }), false)],
+    [
+      "attenuation",
+      (m) =>
+        applyGlassLook(
+          m,
+          finish({ opacity: 0.2, metalness: 0, attenuationColor: "#2a8f6a", attenuationDistance: 20 }),
+          false,
+        ),
+    ],
     ["dispersion", (m) => applyGlassLook(m, finish({ opacity: 0.2, metalness: 0, dispersion: 2 }), false)],
     ["iridescence", (m) => applyThinFilm(m, finish({ iridescence: 0.5 }), false)],
     ["specular colour", (m) => applyThinFilm(m, finish({ specularColor: "#00ff00" }), false)],

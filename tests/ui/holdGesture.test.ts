@@ -66,11 +66,7 @@ describe("holding", () => {
   it("does not run the default on the release that ends the hold either", () => {
     // ...and it must not run it a moment later, when the finger comes up.
     const { effects } = run([press(), hold, releaseOutside]);
-    expect(effects).toEqual([
-      { kind: "none" },
-      { kind: "open", groupId: "rectangle" },
-      { kind: "close" },
-    ]);
+    expect(effects).toEqual([{ kind: "none" }, { kind: "open", groupId: "rectangle" }, { kind: "close" }]);
   });
 
   it("ignores the hold on a button with no variants, leaving the click intact", () => {

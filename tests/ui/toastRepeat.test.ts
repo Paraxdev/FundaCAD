@@ -18,7 +18,8 @@ afterEach(() => vi.useRealTimers());
 
 describe("toasts that carry an action", () => {
   it("the same message and action shown twice is one row, running the newer action", () => {
-    const first = vi.fn(), second = vi.fn();
+    const first = vi.fn(),
+      second = vi.fn();
     toast("That sketch has a 3 mm gap", { action: { label: "Close gap", onClick: first } });
     toast("That sketch has a 3 mm gap", { action: { label: "Close gap", onClick: second } });
     const st = useToastStore();

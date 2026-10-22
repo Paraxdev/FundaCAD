@@ -22,8 +22,15 @@ export function setTextBackend(geom: GeometryBackend, rerender: () => void): voi
 
 function keyOf(e: TextEntity): string {
   return JSON.stringify([
-    e.text, e.font ?? "", e.height, e.style ?? "regular", e.align ?? "left",
-    e.angle, e.pathRef ?? "", e.positionOnPath ?? "", e.boxWidth ?? "",
+    e.text,
+    e.font ?? "",
+    e.height,
+    e.style ?? "regular",
+    e.align ?? "left",
+    e.angle,
+    e.pathRef ?? "",
+    e.positionOnPath ?? "",
+    e.boxWidth ?? "",
   ]);
 }
 

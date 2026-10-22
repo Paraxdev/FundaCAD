@@ -68,16 +68,18 @@ export async function exportPrintProject(
 
   // Same busy/cancel treatment as the app's own export and import: this path
   // tessellates every body at export grade before writing the project.
-  const res = await store.runBusy(
-    `Exporting ${path.split(/[\\/]/).pop() ?? "project"}`,
-    (onStarted) => geometry.exportWith!(store.document, path, PROJECT_EXPORTER, options, onStarted),
+  const res = await store.runBusy(`Exporting ${path.split(/[\\/]/).pop() ?? "project"}`, (onStarted) =>
+    geometry.exportWith!(store.document, path, PROJECT_EXPORTER, options, onStarted),
   );
   if (!res.ok) {
     if (res.cancelled) return null;
     await reportError(`Print export failed: ${res.message ?? "unknown error"}`);
     return null;
   }
-  void warnUnloadedFilaments(store, bodies.map((b) => b.id));
+  void warnUnloadedFilaments(
+    store,
+    bodies.map((b) => b.id),
+  );
   // Only a modal when there are warnings (features that didn't build); the
   // silent staging path shouldn't pop a dialog on the happy path.
   if (res.warnings?.length) {
@@ -121,9 +123,12 @@ async function warnUnloadedFilaments(store: DocumentStore, bodyIds: string[]) {
     if (!empty.length && !unassigned) return;
     const parts: string[] = [];
     if (empty.length) {
-      parts.push(`slot${empty.length > 1 ? "s" : ""} ${empty.map((s) => s + 1).join(", ")} ha${empty.length > 1 ? "ve" : "s"} no filament loaded on the printer`);
+      parts.push(
+        `slot${empty.length > 1 ? "s" : ""} ${empty.map((s) => s + 1).join(", ")} ha${empty.length > 1 ? "ve" : "s"} no filament loaded on the printer`,
+      );
     }
-    if (unassigned) parts.push(`${unassigned} bod${unassigned > 1 ? "ies are" : "y is"} unassigned (defaulting to slot 1)`);
+    if (unassigned)
+      parts.push(`${unassigned} bod${unassigned > 1 ? "ies are" : "y is"} unassigned (defaulting to slot 1)`);
     toast(`Exported, but ${parts.join("; ")}.`, { kind: "warning" });
   } catch {
     // printer offline/slow/unconfigured, the check is best-effort by design

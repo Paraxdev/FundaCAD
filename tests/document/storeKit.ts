@@ -7,11 +7,19 @@ export const box = (id: string, length: number, width = 7.5, height = 3.25) =>
 
 // Every rebuild fails at once, so a test sees only what the store itself does.
 export const stubBackend = {
-  async rebuild() { return { ok: false, error: { message: "stub" } }; },
+  async rebuild() {
+    return { ok: false, error: { message: "stub" } };
+  },
   async init() {},
-  onStatus() { return () => {}; },
-  onProgress() { return () => {}; },
-  async cancel() { return true; },
+  onStatus() {
+    return () => {};
+  },
+  onProgress() {
+    return () => {};
+  },
+  async cancel() {
+    return true;
+  },
   connected: true,
 } as unknown as GeometryBackend;
 
@@ -30,10 +38,17 @@ export const reopened = (s: DocumentStore) => opened(JSON.parse(s.toJSON()) as o
 export const study: StressStudy = {
   body: "body1",
   supports: [{ id: 1, type: "fixed", faces: [{ kind: "face", by: "nearest", point: [3.5, -2, 0.75], body: "body1" }] }],
-  loads: [{
-    id: 1, kind: "force", faces: [{ kind: "face", by: "nearest", point: [12.5, 4, 3.25], body: "body1" }],
-    force: 20, direction: "-Z", custom: [0.2, -0.1, -1], pressure: 0.1,
-  }],
+  loads: [
+    {
+      id: 1,
+      kind: "force",
+      faces: [{ kind: "face", by: "nearest", point: [12.5, 4, 3.25], body: "body1" }],
+      force: 20,
+      direction: "-Z",
+      custom: [0.2, -0.1, -1],
+      pressure: 0.1,
+    },
+  ],
   gravity: { on: false, direction: "-Z" },
   material: "PETG",
   custom: { E: 2000, nu: 0.35, yield: 40, density: 1.2 },

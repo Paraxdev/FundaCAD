@@ -97,12 +97,7 @@ function add() {
 </script>
 
 <template>
-  <FloatingPanel
-    :open="panels.params"
-    close-on-esc
-    panel-class="params-dialog"
-    @close="panels.params = false"
-  >
+  <FloatingPanel :open="panels.params" close-on-esc panel-class="params-dialog" @close="panels.params = false">
     <div class="measure-title">Parameters</div>
     <div class="params-body">
       <div class="params-section">User Parameters</div>
@@ -116,25 +111,17 @@ function add() {
         :class="{ 'param-stale': !!r.issue }"
         :title="r.issue"
       >
-        <ValidatedInput
-          :value="r.name"
-          :commit="(raw) => (raw === r.name ? null : store.renameParam(r.name, raw))"
-        />
-        <ValidatedInput
-          :value="r.def.expr"
-          :commit="(raw) => store.setParamExpr(r.name, raw)"
-        />
+        <ValidatedInput :value="r.name" :commit="(raw) => (raw === r.name ? null : store.renameParam(r.name, raw))" />
+        <ValidatedInput :value="r.def.expr" :commit="(raw) => store.setParamExpr(r.name, raw)" />
         <span class="params-value">{{ r.value }}</span>
-        <ValidatedInput
-          :value="r.def.comment ?? ''"
-          :commit="(raw) => (store.setParamComment(r.name, raw), null)"
-        />
+        <ValidatedInput :value="r.def.comment ?? ''" :commit="(raw) => (store.setParamComment(r.name, raw), null)" />
         <button
           class="params-del"
           :class="{ 'input-error': !!delError[r.name] }"
           :title="delError[r.name] ?? `Delete ${r.name}`"
           @click="del(r.name)"
-        ><Icon name="close" :size="14" /></button>
+          ><Icon name="close" :size="14"
+        /></button>
       </div>
 
       <div class="params-row params-add">
@@ -158,14 +145,8 @@ function add() {
           :class="{ 'param-stale': !!r.issue }"
           :title="r.issue"
         >
-          <ValidatedInput
-            :value="r.name"
-            :commit="(raw) => (raw === r.name ? null : store.renameParam(r.name, raw))"
-          />
-          <ValidatedInput
-            :value="r.def.expr"
-            :commit="(raw) => store.setParamExpr(r.name, raw)"
-          />
+          <ValidatedInput :value="r.name" :commit="(raw) => (raw === r.name ? null : store.renameParam(r.name, raw))" />
+          <ValidatedInput :value="r.def.expr" :commit="(raw) => store.setParamExpr(r.name, raw)" />
           <span class="params-value">{{ r.value }}</span>
           <!-- a dN has no comment and no delete: it dies with its target -->
           <span class="params-drives" :title="r.drives ?? ''">{{ r.drives }}</span>

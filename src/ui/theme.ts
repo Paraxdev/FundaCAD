@@ -209,11 +209,27 @@ const LIBRARY_KEY = "fundacad.themes";
 
 /** The palette half of _tokens.scss. Anything else in a file is dropped. */
 const PALETTE_TOKENS = new Set<string>([
-  "--bg", "--panel", "--panel-2", "--raised", "--raised-2", "--viewport-bg",
-  "--line", "--line-strong",
-  "--text", "--text-dim", "--text-mute",
-  "--accent", "--accent-hot", "--accent-tint", "--accent-tint-2", "--accent-glow", "--on-accent",
-  "--ok", "--warn", "--error", "--error-tint",
+  "--bg",
+  "--panel",
+  "--panel-2",
+  "--raised",
+  "--raised-2",
+  "--viewport-bg",
+  "--line",
+  "--line-strong",
+  "--text",
+  "--text-dim",
+  "--text-mute",
+  "--accent",
+  "--accent-hot",
+  "--accent-tint",
+  "--accent-tint-2",
+  "--accent-glow",
+  "--on-accent",
+  "--ok",
+  "--warn",
+  "--error",
+  "--error-tint",
   "--accent-blue",
 ]);
 
@@ -257,8 +273,7 @@ function writeLibrary(list: CustomTheme[]) {
   if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(LIBRARY_KEY, JSON.stringify(list));
-  } catch {
-  }
+  } catch {}
 }
 
 let library: CustomTheme[] = readLibrary();
@@ -342,7 +357,10 @@ export function initTheme() {
 // --- uploading and removing palettes ----------------------------------------
 
 function slug(label: string): string {
-  const base = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const base = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
   return `custom-${base || "theme"}`;
 }
 
@@ -362,9 +380,7 @@ function asMode(v: unknown): "dark" | "light" {
 /** Accepts a flat `{ "--bg": "#..." }` map or a `{ palette: { ... } }` wrapper. */
 function extractPalette(source: Record<string, unknown>): Record<string, string> {
   const raw =
-    source.palette && typeof source.palette === "object"
-      ? (source.palette as Record<string, unknown>)
-      : source;
+    source.palette && typeof source.palette === "object" ? (source.palette as Record<string, unknown>) : source;
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(raw)) {
     const token = key.toLowerCase();
@@ -399,7 +415,7 @@ export function addCustomTheme(source: unknown, fallbackLabel = "Custom theme"):
   if (Object.keys(palette).length === 0) {
     return {
       ok: false,
-      error: "No usable colours found. A theme is a JSON object like { \"--bg\": \"#141414\", \"--accent\": \"#f0982d\" }.",
+      error: 'No usable colours found. A theme is a JSON object like { "--bg": "#141414", "--accent": "#f0982d" }.',
     };
   }
   if (library.length >= MAX_CUSTOM) {

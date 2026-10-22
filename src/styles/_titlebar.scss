@@ -42,7 +42,9 @@
      whichever bar it appears in. */
   padding: var(--s-1) var(--s-3);
   text-transform: uppercase;
-  transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease),
+  transition:
+    color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
     background var(--t-fast) var(--ease);
 }
 .context-tab.sketch {
@@ -76,7 +78,9 @@
   margin: var(--s-2) 1px;
   cursor: pointer;
   border-radius: var(--r-sm);
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 .menu-btn:hover {
   background: var(--raised);
@@ -100,8 +104,14 @@
   animation: pop-in var(--t-fast) var(--ease);
 }
 @keyframes pop-in {
-  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
-  to   { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .menu-popup.hidden {
   display: none;
@@ -125,7 +135,9 @@
   padding: var(--s-3) var(--s-4);
   border-radius: var(--r-sm);
   cursor: pointer;
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 .menu-item:hover {
   background: var(--accent-tint);
@@ -160,7 +172,9 @@
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 .tb-btn:hover:not(:disabled) {
   background: var(--raised);
@@ -282,7 +296,9 @@
   font-size: 11px;
   letter-spacing: 0.3px;
   cursor: pointer;
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 #workspace-toggle .seg-btn + .seg-btn {
   border-left: 1px solid var(--line);

@@ -20,10 +20,7 @@
 // checks the built output for exactly that.
 
 /** Every plugin directory with a `main.ts`, as a loader that has not run. */
-const MAIN = import.meta.glob("../../plugins/*/main.ts") as Record<
-  string,
-  () => Promise<unknown>
->;
+const MAIN = import.meta.glob("../../plugins/*/main.ts") as Record<string, () => Promise<unknown>>;
 
 /** `../../plugins/Some.Thing/main.ts` -> `Some.Thing`. */
 function idOf(path: string): string {

@@ -48,8 +48,11 @@ describe("transforms keep shapes parametric", () => {
   it("translated shifts position, preserves shape params", () => {
     const t = translated(poly, 5, -3, "p2") as Extract<ResolvedEntity, { type: "polygon" }>;
     expect(t.type).toBe("polygon");
-    expect(t.x).toBe(6); expect(t.y).toBe(-1);
-    expect(t.radius).toBe(10); expect(t.sides).toBe(6); expect(t.angle).toBe(0.5);
+    expect(t.x).toBe(6);
+    expect(t.y).toBe(-1);
+    expect(t.radius).toBe(10);
+    expect(t.sides).toBe(6);
+    expect(t.angle).toBe(0.5);
   });
   it("rotated adds to a polygon's angle and stays a polygon (no explode)", () => {
     const [r] = rotated(poly, 0, 0, Math.PI / 2, "p2") as [Extract<ResolvedEntity, { type: "polygon" }>];

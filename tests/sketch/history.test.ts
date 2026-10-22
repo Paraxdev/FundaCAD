@@ -3,8 +3,11 @@ import { SketchHistory, cloneSnapshot, type SketchSnapshot } from "../../src/ske
 import type { ResolvedEntity } from "../../src/sketch/snap";
 
 const line = (id: string, x2 = 10): ResolvedEntity => ({ type: "line", id, x1: 0, y1: 0, x2, y2: 0 });
-const snap = (ents: ResolvedEntity[], cons: SketchSnapshot["constraints"] = []): SketchSnapshot =>
-  ({ entities: ents, constraints: cons, patterns: [] });
+const snap = (ents: ResolvedEntity[], cons: SketchSnapshot["constraints"] = []): SketchSnapshot => ({
+  entities: ents,
+  constraints: cons,
+  patterns: [],
+});
 
 describe("SketchHistory", () => {
   it("banks one step per change and restores the previous state", () => {

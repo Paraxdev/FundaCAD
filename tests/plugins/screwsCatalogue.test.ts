@@ -6,10 +6,28 @@
 import { describe, expect, it } from "vitest";
 import manifest from "../../plugins/FundaCAD.Screws/manifest.json";
 import {
-  FAMILIES, HOLES, catalogueSize, drivesOf, expand, formatInch, itemsOf, kindOf, lengthsFor, pitchesFor,
-  specRows, threadLengthFor, threadSize,
+  FAMILIES,
+  HOLES,
+  catalogueSize,
+  drivesOf,
+  expand,
+  formatInch,
+  itemsOf,
+  kindOf,
+  lengthsFor,
+  pitchesFor,
+  specRows,
+  threadLengthFor,
+  threadSize,
 } from "../../plugins/FundaCAD.Screws/catalogue";
-import { KINDS, PARTS, getPath, missingFields, specProblems, type FastenerSpec } from "../../plugins/FundaCAD.Screws/spec";
+import {
+  KINDS,
+  PARTS,
+  getPath,
+  missingFields,
+  specProblems,
+  type FastenerSpec,
+} from "../../plugins/FundaCAD.Screws/spec";
 import { exportLibrary, parseLibraryFile, type UserFastener } from "../../plugins/FundaCAD.Screws/library";
 import { NO_FILTERS, filterEntries, groupEntries, listEntries, parseQuery } from "../../plugins/FundaCAD.Screws/search";
 
@@ -43,7 +61,8 @@ describe("the fastener catalogue", () => {
         expect(threadSize(f, row.size), `${f.id} ${row.size} thread`).toBeDefined();
         expect(pitchesFor(f, row.size).length, `${f.id} ${row.size} pitch`).toBeGreaterThan(0);
         expect(HOLES[row.size], `${f.id} ${row.size} holes`).toBeDefined();
-        if (f.lengths || row.lengths) expect(lengthsFor(f, row).length, `${f.id} ${row.size} lengths`).toBeGreaterThan(0);
+        if (f.lengths || row.lengths)
+          expect(lengthsFor(f, row).length, `${f.id} ${row.size} lengths`).toBeGreaterThan(0);
       }
     }
   });
@@ -55,7 +74,8 @@ describe("the fastener catalogue", () => {
       for (const col of Object.keys(f.columns)) {
         if (!["dk", "s", "a", "f", "d2", "od", "m", "h", "k"].includes(col)) continue;
         const v = f.sizes.map((r) => Number(r[col]));
-        for (let i = 1; i < v.length; i++) expect(v[i]!, `${f.id} ${f.sizes[i]!.size} ${col}`).toBeGreaterThanOrEqual(v[i - 1]! * 0.9);
+        for (let i = 1; i < v.length; i++)
+          expect(v[i]!, `${f.id} ${f.sizes[i]!.size} ${col}`).toBeGreaterThanOrEqual(v[i - 1]! * 0.9);
       }
     }
   });
@@ -114,7 +134,18 @@ describe("the fastener catalogue", () => {
   it("builds a spec table with the standard, the dimensions, the thread and the holes", () => {
     const rows = specRows(expand({ familyId: "iso4762", size: "M3", length: 10 }), { size: "M3", volume: 200 });
     const labels = rows.map((r) => r.label.trim());
-    for (const want of ["Standard", "Head diameter", "Head height", "Across flats", "Thread", "Pitch", "Clearance hole", "Tap drill", "Counterbore", "Mass (steel)"]) {
+    for (const want of [
+      "Standard",
+      "Head diameter",
+      "Head height",
+      "Across flats",
+      "Thread",
+      "Pitch",
+      "Clearance hole",
+      "Tap drill",
+      "Counterbore",
+      "Mass (steel)",
+    ]) {
       expect(labels, want).toContain(want);
     }
     expect(rows.find((r) => r.label === "Mass (steel)")!.value).toBe("1.57 g");
@@ -153,9 +184,12 @@ describe("the fastener catalogue", () => {
 
 describe("a user-defined fastener", () => {
   const good = (): FastenerSpec => ({
-    kind: "screw", units: "mm", name: "Long M4 thumb",
+    kind: "screw",
+    units: "mm",
+    name: "Long M4 thumb",
     head: { type: "knurled", diameter: 16, height: 9.5, collarDiameter: 8, collarHeight: 3.5 },
-    drive: { type: "none" }, point: { type: "chamfer" },
+    drive: { type: "none" },
+    point: { type: "chamfer" },
     thread: { type: "metric", diameter: 4, pitch: 0.7, length: 30, hand: "right", modelled: false },
     length: 30,
   });
@@ -169,7 +203,11 @@ describe("a user-defined fastener", () => {
     delete s.head!["collarDiameter"];
     delete s.length;
     s.name = "";
-    expect(missingFields(s)).toEqual(["a name", "head collar diameter", "length (under the head, overall for countersunk)"]);
+    expect(missingFields(s)).toEqual([
+      "a name",
+      "head collar diameter",
+      "length (under the head, overall for countersunk)",
+    ]);
     expect(specProblems(s)[0]).toMatch(/^Missing: a name, head collar diameter/);
   });
 

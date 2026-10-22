@@ -37,8 +37,12 @@ function fullBody(id: string, base: number) {
   const counts = new Uint32Array([2]);
   return {
     body: {
-      id, name: id, etag: `etag-${id}`, faceCount: 1,
-      positions: { $buf: base }, indices: { $buf: base + 1 },
+      id,
+      name: id,
+      etag: `etag-${id}`,
+      faceCount: 1,
+      positions: { $buf: base },
+      indices: { $buf: base + 1 },
       faceIds: { $buf: base + 2 },
       edges: { $pts: { $buf: base + 3 }, $counts: { $buf: base + 4 }, body: id },
     },
@@ -48,8 +52,14 @@ function fullBody(id: string, base: number) {
 
 function manifestOf(ids: string[]) {
   return ids.map((id) => ({
-    id, name: id, etag: `etag-${id}`, faceCount: 1,
-    nVerts3: 9, nIdx: 3, nTris: 1, nEdges: 1,
+    id,
+    name: id,
+    etag: `etag-${id}`,
+    faceCount: 1,
+    nVerts3: 9,
+    nIdx: 3,
+    nTris: 1,
+    nEdges: 1,
   }));
 }
 
@@ -69,15 +79,24 @@ function headFrame(id: string, sid: string, ids: string[], extra: object = {}) {
 
 function chunkFrame(id: string, sid: string, seq: number, final: boolean, ids: string[]) {
   const parts = ids.map((bid, i) => fullBody(bid, i * 5));
-  return frame({
-    id,
-    stream: { sid, seq, final },
-    ...(final ? { ok: true } : { status: "chunk" }),
-    result: { bodies: parts.map((p) => p.body), $buffers: parts.flatMap(() => [
-      { dtype: "f32", len: 9 }, { dtype: "u32", len: 3 }, { dtype: "u32", len: 1 },
-      { dtype: "f32", len: 6 }, { dtype: "u32", len: 1 },
-    ]) },
-  }, parts.flatMap((p) => p.buffers));
+  return frame(
+    {
+      id,
+      stream: { sid, seq, final },
+      ...(final ? { ok: true } : { status: "chunk" }),
+      result: {
+        bodies: parts.map((p) => p.body),
+        $buffers: parts.flatMap(() => [
+          { dtype: "f32", len: 9 },
+          { dtype: "u32", len: 3 },
+          { dtype: "u32", len: 1 },
+          { dtype: "f32", len: 6 },
+          { dtype: "u32", len: 1 },
+        ]),
+      },
+    },
+    parts.flatMap((p) => p.buffers),
+  );
 }
 
 interface Inner {
@@ -105,8 +124,24 @@ describe("decodeBinaryFrame", () => {
     // made this read a's data back
     expect(Array.from(a.positions)).toEqual([0, 0, 0, 1, 0, 0, 0, 1, 0]);
     expect(Array.from(b.indices)).toEqual([0, 1, 2]);
-    expect(a.edges).toEqual([{ points: [[0, 0, 0], [1, 0, 0]], body: "a" }]);
-    expect(b.edges).toEqual([{ points: [[0, 0, 0], [1, 0, 0]], body: "b" }]);
+    expect(a.edges).toEqual([
+      {
+        points: [
+          [0, 0, 0],
+          [1, 0, 0],
+        ],
+        body: "a",
+      },
+    ]);
+    expect(b.edges).toEqual([
+      {
+        points: [
+          [0, 0, 0],
+          [1, 0, 0],
+        ],
+        body: "b",
+      },
+    ]);
     expect("$buffers" in (h.result as object)).toBe(false);
   });
 });
@@ -133,11 +168,13 @@ describe("chunked reply reassembly", () => {
     // also drift assemble()'s no-op signature, silently costing the
     // visibility-only fast path on every eye toggle.
     const { inner, replies } = pendingGeom();
-    inner.handleBinaryReply(headFrame("rq", "s1", ["a"], {
-      diagnostics: [{ kind: "note" }],
-      projectionUpdates: [{ feature: "f1" }],
-      featureErrors: [{ feature_id: "f2", message: "bad" }],
-    }));
+    inner.handleBinaryReply(
+      headFrame("rq", "s1", ["a"], {
+        diagnostics: [{ kind: "note" }],
+        projectionUpdates: [{ feature: "f1" }],
+        featureErrors: [{ feature_id: "f2", message: "bad" }],
+      }),
+    );
     inner.handleBinaryReply(chunkFrame("rq", "s1", 1, true, ["a"]));
 
     const r = replies[0].result.assembled;
@@ -197,7 +234,7 @@ describe("chunked reply reassembly", () => {
     const { inner, replies } = pendingGeom();
     inner.handleBinaryReply(headFrame("rq", "s1", ["a", "b"]));
     inner.handleBinaryReply(chunkFrame("rq", "s1", 1, false, ["a"]));
-    inner.handleBinaryReply(headFrame("rq", "s2", ["c"]));  // restart
+    inner.handleBinaryReply(headFrame("rq", "s2", ["c"])); // restart
     inner.handleBinaryReply(chunkFrame("rq", "s2", 1, true, ["c"]));
 
     expect(replies).toHaveLength(1);
@@ -257,17 +294,27 @@ describe("chunked reply reassembly", () => {
     expect(inner.streams.size).toBe(1);
 
     const parts = [fullBody("a", 0)];
-    inner.handleBinaryReply(frame({
-      id: "rq", ok: true,
-      result: {
-        protocol: 2, bbox: { min: [0, 0, 0], max: [1, 1, 1] },
-        bodies: parts.map((p) => p.body),
-        $buffers: [
-          { dtype: "f32", len: 9 }, { dtype: "u32", len: 3 }, { dtype: "u32", len: 1 },
-          { dtype: "f32", len: 6 }, { dtype: "u32", len: 1 },
-        ],
-      },
-    }, parts[0]!.buffers));
+    inner.handleBinaryReply(
+      frame(
+        {
+          id: "rq",
+          ok: true,
+          result: {
+            protocol: 2,
+            bbox: { min: [0, 0, 0], max: [1, 1, 1] },
+            bodies: parts.map((p) => p.body),
+            $buffers: [
+              { dtype: "f32", len: 9 },
+              { dtype: "u32", len: 3 },
+              { dtype: "u32", len: 1 },
+              { dtype: "f32", len: 6 },
+              { dtype: "u32", len: 1 },
+            ],
+          },
+        },
+        parts[0]!.buffers,
+      ),
+    );
 
     expect(replies).toHaveLength(1);
     expect(replies[0].ok).toBe(true);
@@ -278,17 +325,27 @@ describe("chunked reply reassembly", () => {
   it("leaves an unchunked single-frame reply on its old path", () => {
     const { inner, replies } = pendingGeom();
     const parts = [fullBody("a", 0)];
-    inner.handleBinaryReply(frame({
-      id: "rq", ok: true,
-      result: {
-        protocol: 2, bbox: { min: [0, 0, 0], max: [1, 1, 1] },
-        bodies: parts.map((p) => p.body),
-        $buffers: [
-          { dtype: "f32", len: 9 }, { dtype: "u32", len: 3 }, { dtype: "u32", len: 1 },
-          { dtype: "f32", len: 6 }, { dtype: "u32", len: 1 },
-        ],
-      },
-    }, parts[0]!.buffers));
+    inner.handleBinaryReply(
+      frame(
+        {
+          id: "rq",
+          ok: true,
+          result: {
+            protocol: 2,
+            bbox: { min: [0, 0, 0], max: [1, 1, 1] },
+            bodies: parts.map((p) => p.body),
+            $buffers: [
+              { dtype: "f32", len: 9 },
+              { dtype: "u32", len: 3 },
+              { dtype: "u32", len: 1 },
+              { dtype: "f32", len: 6 },
+              { dtype: "u32", len: 1 },
+            ],
+          },
+        },
+        parts[0]!.buffers,
+      ),
+    );
 
     expect(replies).toHaveLength(1);
     expect(replies[0].ok).toBe(true);

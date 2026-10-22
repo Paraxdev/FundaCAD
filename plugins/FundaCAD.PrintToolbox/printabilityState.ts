@@ -31,8 +31,14 @@ export function createPrintabilityState() {
   function show() {
     if (data.value) return;
     data.value = {
-      setup: newPrintabilitySetup(), running: false, requestId: null, result: null, error: null, stale: false,
-      hovered: null, picked: null,
+      setup: newPrintabilitySetup(),
+      running: false,
+      requestId: null,
+      result: null,
+      error: null,
+      stale: false,
+      hovered: null,
+      picked: null,
     };
   }
 

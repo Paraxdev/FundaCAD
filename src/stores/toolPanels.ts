@@ -74,8 +74,13 @@ export const useToolPanelStore = defineStore("toolPanels", () => {
   const measure = shallowRef<readonly MeasureRow[] | null>(null);
 
   return {
-    text, openText, commitText, cancelText,
-    projectFilter, projectAnchor, projectChange,
+    text,
+    openText,
+    commitText,
+    cancelText,
+    projectFilter,
+    projectAnchor,
+    projectChange,
     measure,
   };
 });

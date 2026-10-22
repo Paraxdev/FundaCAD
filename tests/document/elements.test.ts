@@ -8,8 +8,15 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  ancestryOf, childrenByParent, descendantsOf, type ElementDef, freshElementName,
-  isCyclic, reparented, withElementRemoved, wouldCycle,
+  ancestryOf,
+  childrenByParent,
+  descendantsOf,
+  type ElementDef,
+  freshElementName,
+  isCyclic,
+  reparented,
+  withElementRemoved,
+  wouldCycle,
 } from "../../src/document/elements";
 
 /** Chassis > Frame > Bracket, plus a sibling. */
@@ -34,7 +41,10 @@ describe("childrenByParent", () => {
     const kids = childrenByParent([{ id: "e9", name: "Orphan", parent: "nope" }]);
     expect(ids(kids.get(""))).toEqual(["e9"]);
     // the control: with the parent present it is NOT at the top
-    const ok = childrenByParent([{ id: "p", name: "P" }, { id: "e9", name: "Orphan", parent: "p" }]);
+    const ok = childrenByParent([
+      { id: "p", name: "P" },
+      { id: "e9", name: "Orphan", parent: "p" },
+    ]);
     expect(ids(ok.get(""))).toEqual(["p"]);
   });
 
@@ -94,7 +104,9 @@ describe("descendantsOf / wouldCycle", () => {
 describe("reparented", () => {
   it("moves an element and drops the field at the top level", () => {
     expect(reparented(TREE, "e3", "e4").find((e) => e.id === "e3")).toEqual({
-      id: "e3", name: "Bracket", parent: "e4",
+      id: "e3",
+      name: "Bracket",
+      parent: "e4",
     });
     // `parent` deleted, not set to undefined: the document omits what is empty.
     const top = reparented(TREE, "e3", null).find((e) => e.id === "e3")!;

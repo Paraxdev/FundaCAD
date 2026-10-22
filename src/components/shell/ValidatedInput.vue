@@ -81,7 +81,10 @@ function schedulePreview() {
 }
 
 function endPreview(committing: boolean) {
-  if (previewTimer) { clearTimeout(previewTimer); previewTimer = 0; }
+  if (previewTimer) {
+    clearTimeout(previewTimer);
+    previewTimer = 0;
+  }
   if (!previewing) return;
   previewing = false;
   props.previewEnd?.(committing);
@@ -132,7 +135,11 @@ watch(
     :class="{ 'input-error': !!error || !!problem, 'input-problem': !!problem }"
     :title="error ?? problem ?? hint"
     :placeholder="placeholder"
-    @input="error = null; settling = false; schedulePreview()"
+    @input="
+      error = null;
+      settling = false;
+      schedulePreview();
+    "
     @change="onChange"
     @blur="endPreview(false)"
     @keydown.esc="endPreview(false)"

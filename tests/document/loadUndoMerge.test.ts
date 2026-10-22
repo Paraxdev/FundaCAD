@@ -113,7 +113,11 @@ describe("undo of a replacing load", () => {
     expect(saved(s)).toEqual(before);
     s.redo();
     expect(saved(s)).toEqual(loaded);
-    expect([loaded["futureKey"], loaded["newerKey"], "olderKey" in loaded]).toEqual([{ kept: 2 }, { added: "yes" }, false]);
+    expect([loaded["futureKey"], loaded["newerKey"], "olderKey" in loaded]).toEqual([
+      { kept: 2 },
+      { added: "yes" },
+      false,
+    ]);
   });
 
   it("keeps only the sections the load changed in its step, never the geometry", () => {
@@ -133,7 +137,10 @@ describe("undo of a replacing load", () => {
     s.loadDocument(next, { replace: true });
     const top = (s as unknown as { undoStack: { state?: Map<string, { put?: string }> }[] }).undoStack.at(-1)!;
     const kept = [...top.state!].map(([k, v]) => [k, v.put === undefined ? undefined : JSON.parse(v.put)]);
-    expect(kept.sort()).toEqual([["environment", undefined], ["stress", study]]);
+    expect(kept.sort()).toEqual([
+      ["environment", undefined],
+      ["stress", study],
+    ]);
   });
 
   it("keeps no section when the load changed only the geometry", () => {
@@ -186,7 +193,8 @@ const steps: [string, object, CadDocument, (s: DocumentStore) => void][] = [
     "an edit with a step added at the rollback marker",
     { features: [box("f1", 10.5), box("f2", 4.25, 2), box("f3", 6.5)], rollback: 2 },
     { parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5), box("f4", 5.5)], rollback: 1 },
-    (s) => s.editAndAdd((d) => void ((d.features[0] as unknown as { length: number }).length = 8.25), [box("f5", 2.75)]),
+    (s) =>
+      s.editAndAdd((d) => void ((d.features[0] as unknown as { length: number }).length = 8.25), [box("f5", 2.75)]),
   ],
   [
     "a suppress toggled",
@@ -248,12 +256,15 @@ describe("undo of a step taken after a replacing load", () => {
 
   it("brings back the suppress set the load replaced after a removal of its suppressed step", () => {
     const s = opened({ features: [box("f1", 10.5), box("f2", 4.25, 2)], suppressed: ["f2"] });
-    s.loadDocument({ parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5)], suppressed: ["f9"] }, { replace: true });
+    s.loadDocument(
+      { parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5)], suppressed: ["f9"] },
+      { replace: true },
+    );
     s.removeFeature("f9");
     s.undo();
     s.undo();
-    expect([s.document.features.map((f) => f.id), s.isSuppressed("f2"), s.isSuppressed("f9"), s.rollbackIndex]).toEqual([
-      ["f1", "f2"], true, false, 2,
-    ]);
+    expect([s.document.features.map((f) => f.id), s.isSuppressed("f2"), s.isSuppressed("f9"), s.rollbackIndex]).toEqual(
+      [["f1", "f2"], true, false, 2],
+    );
   });
 });

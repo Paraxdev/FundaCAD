@@ -35,7 +35,10 @@ describe("overlay prefs", () => {
 
   it("survive a reload through storage", () => {
     const store = new Map<string, string>();
-    vi.stubGlobal("localStorage", { setItem: (k: string, v: string) => store.set(k, v), getItem: (k: string) => store.get(k) ?? null });
+    vi.stubGlobal("localStorage", {
+      setItem: (k: string, v: string) => store.set(k, v),
+      getItem: (k: string) => store.get(k) ?? null,
+    });
     try {
       setOverlay("stress", false, "render");
       const raw = store.get("fundacad.render");

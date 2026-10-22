@@ -55,7 +55,10 @@ export function installDevGlobals(e: Engine): void {
     handleAction: (a: string) => e.handleAction(a),
     // Home reads the library when it opens, so reopen it after this.
     home: {
-      useFakeLibrary: (files: FakeFile[], picks?: string[]) => { fake = fakeLibrary(files, picks); setLibrary(fake); },
+      useFakeLibrary: (files: FakeFile[], picks?: string[]) => {
+        fake = fakeLibrary(files, picks);
+        setLibrary(fake);
+      },
       thumbRequests: () => [...(fake?.thumbRequests ?? [])],
     },
     // The app's own module instance: a harness importing /src/ui/renderPrefs.ts

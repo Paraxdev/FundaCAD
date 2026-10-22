@@ -13,13 +13,23 @@ function backend() {
   const be = {
     async rebuild(doc: CadDocument) {
       sent.push(doc);
-      const result: RebuildResult = { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: { min: [0, 0, 0], max: [0, 0, 0] } };
+      const result: RebuildResult = {
+        mesh: { positions: [], indices: [], faceIds: [] },
+        edges: [],
+        bbox: { min: [0, 0, 0], max: [0, 0, 0] },
+      };
       return { ok: true as const, result };
     },
     async init() {},
-    onStatus() { return () => {}; },
-    onProgress() { return () => {}; },
-    async cancel() { return true; },
+    onStatus() {
+      return () => {};
+    },
+    onProgress() {
+      return () => {};
+    },
+    async cancel() {
+      return true;
+    },
   } as unknown as GeometryBackend;
   return { be, sent };
 }

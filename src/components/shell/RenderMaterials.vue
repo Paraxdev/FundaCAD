@@ -50,11 +50,22 @@ let offPreview: (() => void) | null = null;
 let offPrefs: (() => void) | null = null;
 let offEmission: (() => void) | null = null;
 onMounted(() => {
-  offPreview = onPreviewsChanged(() => { previewTick.value++; });
-  offPrefs = onRenderPrefsChange(() => { bloomOn.value = renderPrefs().bloom > 0; });
-  offEmission = onEmissionProgress((p) => { emitting.value = p; });
+  offPreview = onPreviewsChanged(() => {
+    previewTick.value++;
+  });
+  offPrefs = onRenderPrefsChange(() => {
+    bloomOn.value = renderPrefs().bloom > 0;
+  });
+  offEmission = onEmissionProgress((p) => {
+    emitting.value = p;
+  });
 });
-onUnmounted(() => { flushNumbers(); offPreview?.(); offPrefs?.(); offEmission?.(); });
+onUnmounted(() => {
+  flushNumbers();
+  offPreview?.();
+  offPrefs?.();
+  offEmission?.();
+});
 
 function preview(m: MaterialDef): string | null {
   previewTick.value; // dependency: re-ask once the reflections land
@@ -104,9 +115,7 @@ const matches = (m: MaterialDef) => {
 const used = computed(() => library.value.filter((m) => usage.value.has(m.id) && matches(m)));
 const all = computed(() => library.value.filter(matches));
 
-const selected = computed<MaterialDef | null>(
-  () => library.value.find((m) => m.id === selectedId.value) ?? null,
-);
+const selected = computed<MaterialDef | null>(() => library.value.find((m) => m.id === selectedId.value) ?? null);
 
 /** What an Apply would land on. Bodies come from the browser's selection;
  *  faces from the viewport's, which is the only place a face can be picked. */
@@ -133,10 +142,12 @@ onMounted(() => {
     const worn = faces.length
       ? faces.map((f) => store.faceMaterialId(f.body, f.face) ?? store.bodyMaterialId(f.body))
       : browser.selectedBodyIds.map((id) => store.bodyMaterialId(id));
-    wornId.value = worn.length && worn.every((w) => w === worn[0]) ? worn[0] ?? null : null;
+    wornId.value = worn.length && worn.every((w) => w === worn[0]) ? (worn[0] ?? null) : null;
   }, 250);
 });
-onUnmounted(() => { if (facePoll !== null) window.clearInterval(facePoll); });
+onUnmounted(() => {
+  if (facePoll !== null) window.clearInterval(facePoll);
+});
 
 function selectOnly(id: string | null) {
   selectedIds.value = id ? [id] : [];
@@ -151,7 +162,12 @@ function pick(id: string, e: MouseEvent, order: readonly MaterialDef[]) {
     selectOnly(null);
     return;
   }
-  const next = selectRow({ keys: selectedIds.value, anchor: anchorId.value }, order.map((m) => m.id), id, mods);
+  const next = selectRow(
+    { keys: selectedIds.value, anchor: anchorId.value },
+    order.map((m) => m.id),
+    id,
+    mods,
+  );
   selectedIds.value = [...next.keys];
   anchorId.value = next.anchor;
 }
@@ -162,10 +178,13 @@ async function deleteSelected() {
   const worn = ids.filter((id) => usage.value.has(id)).length;
   if (worn) {
     const what = ids.length === 1 ? "this material" : `these ${ids.length} materials`;
-    const answer = await choose(`Delete ${what}? What wears ${worn === 1 && ids.length === 1 ? "it" : "them"} goes back to the default grey.`, [
-      { value: "delete", label: "Delete" },
-      { value: "cancel", label: "Cancel" },
-    ]);
+    const answer = await choose(
+      `Delete ${what}? What wears ${worn === 1 && ids.length === 1 ? "it" : "them"} goes back to the default grey.`,
+      [
+        { value: "delete", label: "Delete" },
+        { value: "cancel", label: "Cancel" },
+      ],
+    );
     if (answer !== "delete") return;
   }
   store.removeMaterials(ids);
@@ -184,7 +203,11 @@ function openMenu(e: MouseEvent, m: MaterialDef) {
       ? `${selectionCount.value} ${selectionCount.value === 1 ? "body" : "bodies"}`
       : "";
   if (n === 1) {
-    items.push({ label: target ? `Apply to ${target}` : "Apply to selection", disabled: !target, onClick: () => applyToSelection() });
+    items.push({
+      label: target ? `Apply to ${target}` : "Apply to selection",
+      disabled: !target,
+      onClick: () => applyToSelection(),
+    });
     items.push({ label: "Duplicate", onClick: () => addMaterial() });
   }
   const worn = ids.filter((id) => usage.value.has(id));
@@ -194,7 +217,12 @@ function openMenu(e: MouseEvent, m: MaterialDef) {
     onClick: () => store.unassignMaterials(worn),
   });
   items.push({ separator: true, label: "" });
-  items.push({ label: n === 1 ? "Delete" : `Delete ${n} materials`, danger: true, shortcut: "Del", onClick: () => void deleteSelected() });
+  items.push({
+    label: n === 1 ? "Delete" : `Delete ${n} materials`,
+    danger: true,
+    shortcut: "Del",
+    onClick: () => void deleteSelected(),
+  });
   contextMenu(e.clientX, e.clientY, items);
 }
 
@@ -244,10 +272,26 @@ function addPreset(raw: unknown) {
 /** Push one edited field. Every control calls this, so there is one place where
  *  a value becomes a document change. */
 function set(
-  field: "name" | "color" | "metalness" | "roughness" | "opacity" | "emissive" | "clearcoat"
-    | "ior" | "thickness" | "attenuationDistance" | "dispersion" | "iridescence"
-    | "sheen" | "anisotropy" | "flakes" | "flakeSize" | "scatterDistance"
-    | "attenuationColor" | "specularColor",
+  field:
+    | "name"
+    | "color"
+    | "metalness"
+    | "roughness"
+    | "opacity"
+    | "emissive"
+    | "clearcoat"
+    | "ior"
+    | "thickness"
+    | "attenuationDistance"
+    | "dispersion"
+    | "iridescence"
+    | "sheen"
+    | "anisotropy"
+    | "flakes"
+    | "flakeSize"
+    | "scatterDistance"
+    | "attenuationColor"
+    | "specularColor",
   raw: string,
 ) {
   const m = selected.value;
@@ -339,7 +383,12 @@ function isGlass(m: MaterialDef): boolean {
 // the one already there. "None" removes it, so the material reads back plain.
 const SURFACE_KINDS = ["none", "noise", "scratches", "brushed", "voronoi", "wave"] as const;
 const SURFACE_LABEL: Record<string, string> = {
-  none: "None", noise: "Noise", scratches: "Scratches", brushed: "Brushed", voronoi: "Wear", wave: "Bands",
+  none: "None",
+  noise: "Noise",
+  scratches: "Scratches",
+  brushed: "Brushed",
+  voronoi: "Wear",
+  wave: "Bands",
 };
 
 function pickSurface(kind: string) {
@@ -444,14 +493,20 @@ async function doImport() {
 
     <!-- what the model is actually made of -->
     <section v-if="used.length" class="rd-section">
-      <h3 class="rd-head">In this document <span class="tree-count">{{ used.length }}</span></h3>
+      <h3 class="rd-head"
+        >In this document <span class="tree-count">{{ used.length }}</span></h3
+      >
       <button
         v-for="m in used"
         :key="m.id"
         class="rd-used"
         :class="{ 'is-selected': selectedSet.has(m.id) }"
         draggable="true"
-        :title="fmtKeys(`${m.name}, ${finishLabel(m)}. Drag onto a face. Ctrl or Shift click picks several, right-click for Delete.`)"
+        :title="
+          fmtKeys(
+            `${m.name}, ${finishLabel(m)}. Drag onto a face. Ctrl or Shift click picks several, right-click for Delete.`,
+          )
+        "
         @click="pick(m.id, $event, used)"
         @contextmenu="openMenu($event, m)"
         @dragstart="onDragStart($event, m)"
@@ -464,11 +519,12 @@ async function doImport() {
           <span class="rd-sub">{{ finishLabel(m) }}</span>
         </span>
         <span class="rd-used-count">
-          <template v-if="usage.get(m.id)?.bodies">{{ usage.get(m.id)!.bodies }}
-            {{ usage.get(m.id)!.bodies === 1 ? "body" : "bodies" }}</template>
+          <template v-if="usage.get(m.id)?.bodies"
+            >{{ usage.get(m.id)!.bodies }} {{ usage.get(m.id)!.bodies === 1 ? "body" : "bodies" }}</template
+          >
           <template v-if="usage.get(m.id)?.faces">
-            <br />{{ usage.get(m.id)!.faces }}
-            {{ usage.get(m.id)!.faces === 1 ? "face" : "faces" }}</template>
+            <br />{{ usage.get(m.id)!.faces }} {{ usage.get(m.id)!.faces === 1 ? "face" : "faces" }}</template
+          >
         </span>
       </button>
     </section>
@@ -491,11 +547,16 @@ async function doImport() {
           :aria-selected="selectedSet.has(m.id)"
           draggable="true"
           :data-material="m.id"
-          :title="wornId === m.id
-            ? `${m.name}, ${finishLabel(m)}. Already applied to the selection.`
-            : `${m.name}, ${finishLabel(m)}. Click to preview here, double-click or Apply below to use it. Drag onto a face, hold Shift for the whole body.`"
+          :title="
+            wornId === m.id
+              ? `${m.name}, ${finishLabel(m)}. Already applied to the selection.`
+              : `${m.name}, ${finishLabel(m)}. Click to preview here, double-click or Apply below to use it. Drag onto a face, hold Shift for the whole body.`
+          "
           @click="pick(m.id, $event, all)"
-          @dblclick="selectOnly(m.id); applyToSelection()"
+          @dblclick="
+            selectOnly(m.id);
+            applyToSelection();
+          "
           @contextmenu="openMenu($event, m)"
           @dragstart="onDragStart($event, m)"
           @dragend="endMaterialDrag()"
@@ -513,10 +574,8 @@ async function doImport() {
         {{ search ? "Nothing here matches that." : "This document has no materials." }}
       </div>
       <p class="sm-hint rd-howto">
-        Click a tile to preview it below; it is not applied until you
-        double-click, drag it onto the model, or press Apply. Drag onto a face
-        to dress just that face, hold Shift while you drop to dress the whole
-        body.
+        Click a tile to preview it below; it is not applied until you double-click, drag it onto the model, or press
+        Apply. Drag onto a face to dress just that face, hold Shift while you drop to dress the whole body.
       </p>
     </section>
 
@@ -554,7 +613,10 @@ async function doImport() {
         <span class="prefs-label">Metalness</span>
         <input
           class="sm-slider"
-          type="range" min="0" max="1" step="0.01"
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
           :value="finishOf(selected).metalness"
           @input="set('metalness', ($event.target as HTMLInputElement).value)"
         />
@@ -563,7 +625,10 @@ async function doImport() {
         <span class="prefs-label">Roughness</span>
         <input
           class="sm-slider"
-          type="range" min="0" max="1" step="0.01"
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
           :value="finishOf(selected).roughness"
           @input="set('roughness', ($event.target as HTMLInputElement).value)"
         />
@@ -572,7 +637,10 @@ async function doImport() {
         <span class="prefs-label">Transmission</span>
         <input
           class="sm-slider"
-          type="range" min="0" max="1" step="0.01"
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
           data-field="transmission"
           :value="transmissionOf(selected)"
           @input="setTransmission(($event.target as HTMLInputElement).value)"
@@ -585,26 +653,35 @@ async function doImport() {
             class="rd-heavy"
             data-heavy="emissive"
             title="Heavy effect: every glowing body adds lights and shadows, which can slow the view on a large model."
-          ><Icon name="warning" :size="13" /></span>
+            ><Icon name="warning" :size="13"
+          /></span>
         </span>
         <input
           class="sm-slider"
-          type="range" min="0" max="1" step="0.01"
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
           data-field="emissive"
           :value="finishOf(selected).emissive"
           @input="slide('emissive', ($event.target as HTMLInputElement).value)"
           @change="flushNumbers()"
         />
       </label>
-      <div v-if="emitting !== null" class="rd-emitting" role="progressbar" aria-label="Applying emission" :aria-valuenow="Math.round(emitting * 100)">
+      <div
+        v-if="emitting !== null"
+        class="rd-emitting"
+        role="progressbar"
+        aria-label="Applying emission"
+        :aria-valuenow="Math.round(emitting * 100)"
+      >
         <span class="rd-emitting-bar" :style="{ width: `${Math.round(emitting * 100)}%` }" />
       </div>
       <!-- Only where it applies. Bloom is what makes a glow read as light rather
            than as a flat bright patch, and a slider that quietly depends on a
            setting on another tab is a slider that looks broken. -->
       <div v-if="finishOf(selected).emissive > 0 && !bloomOn" class="sm-hint">
-        Emission is on for this material. Turn Bloom on under Environment to see it
-        spill light.
+        Emission is on for this material. Turn Bloom on under Environment to see it spill light.
       </div>
       <label v-if="finishOf(selected).emissive > 0" class="prefs-row">
         <span class="prefs-label">Lights other parts</span>
@@ -619,7 +696,10 @@ async function doImport() {
         <span class="prefs-label">Clearcoat</span>
         <input
           class="sm-slider"
-          type="range" min="0" max="1" step="0.01"
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
           :value="finishOf(selected).clearcoat"
           @input="set('clearcoat', ($event.target as HTMLInputElement).value)"
         />
@@ -629,7 +709,10 @@ async function doImport() {
         <input
           class="sm-slider"
           data-field="iridescence"
-          type="range" min="0" max="1" step="0.01"
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
           :value="finishOf(selected).iridescence"
           @input="set('iridescence', ($event.target as HTMLInputElement).value)"
         />
@@ -651,7 +734,10 @@ async function doImport() {
           <span class="prefs-label">{{ s.label }}</span>
           <input
             class="sm-slider"
-            type="range" min="0" max="1" step="0.01"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
             :data-field="s.field"
             :value="finishOf(selected)[s.field]"
             @input="set(s.field, ($event.target as HTMLInputElement).value)"
@@ -661,7 +747,10 @@ async function doImport() {
           <span class="prefs-label">Flake size (mm)</span>
           <input
             class="sm-slider"
-            type="range" min="0.02" max="2" step="0.01"
+            type="range"
+            min="0.02"
+            max="2"
+            step="0.01"
             data-field="flakeSize"
             :value="finishOf(selected).flakeSize"
             @input="set('flakeSize', ($event.target as HTMLInputElement).value)"
@@ -671,7 +760,10 @@ async function doImport() {
           <span class="prefs-label">Scatter (mm)</span>
           <input
             class="sm-slider"
-            type="range" min="0" max="20" step="0.1"
+            type="range"
+            min="0"
+            max="20"
+            step="0.1"
             data-field="scatterDistance"
             :value="finishOf(selected).scatterDistance"
             @input="set('scatterDistance', ($event.target as HTMLInputElement).value)"
@@ -690,24 +782,33 @@ async function doImport() {
             :class="{ active: finishOf(selected).ior === p.ior }"
             :data-ior="p.ior"
             @click="set('ior', String(p.ior))"
-          >{{ p.label }}</button>
+            >{{ p.label }}</button
+          >
         </div>
         <label class="prefs-row">
           <span class="prefs-label">IOR {{ finishOf(selected).ior.toFixed(2) }}</span>
           <input
             class="sm-slider"
             data-field="ior"
-            type="range" min="1" max="2.5" step="0.01"
+            type="range"
+            min="1"
+            max="2.5"
+            step="0.01"
             :value="finishOf(selected).ior"
             @input="set('ior', ($event.target as HTMLInputElement).value)"
           />
         </label>
         <div class="prefs-row" title="Auto measures how deep light travels through each body, a number overrides it">
-          <span class="prefs-label">Thickness {{ selected.thickness === undefined ? "auto" : `${selected.thickness} mm` }}</span>
+          <span class="prefs-label"
+            >Thickness {{ selected.thickness === undefined ? "auto" : `${selected.thickness} mm` }}</span
+          >
           <input
             class="sm-slider"
             data-field="thickness"
-            type="range" min="0.5" max="50" step="0.5"
+            type="range"
+            min="0.5"
+            max="50"
+            step="0.5"
             :value="selected.thickness ?? FALLBACK_THICKNESS"
             @input="set('thickness', ($event.target as HTMLInputElement).value)"
           />
@@ -716,14 +817,18 @@ async function doImport() {
             class="rd-chip"
             data-field="thickness-auto"
             @click="set('thickness', '')"
-          >Auto</button>
+            >Auto</button
+          >
         </div>
         <label class="prefs-row">
           <span class="prefs-label">Dispersion</span>
           <input
             class="sm-slider"
             data-field="dispersion"
-            type="range" min="0" max="10" step="0.1"
+            type="range"
+            min="0"
+            max="10"
+            step="0.1"
             :value="finishOf(selected).dispersion"
             @input="set('dispersion', ($event.target as HTMLInputElement).value)"
           />
@@ -747,7 +852,10 @@ async function doImport() {
           <input
             class="sm-slider"
             data-field="attenuationDistance"
-            type="range" min="1" max="200" step="1"
+            type="range"
+            min="1"
+            max="200"
+            step="1"
             :value="finishOf(selected).attenuationDistance"
             @input="set('attenuationDistance', ($event.target as HTMLInputElement).value)"
           />
@@ -770,42 +878,91 @@ async function doImport() {
             :class="{ active: (selected.surface?.kind ?? 'none') === k }"
             :data-surface="k"
             @click="pickSurface(k)"
-          >{{ SURFACE_LABEL[k] }}</button>
+            >{{ SURFACE_LABEL[k] }}</button
+          >
         </div>
         <template v-if="selected.surface">
           <label class="prefs-row">
             <span class="prefs-label">Scale</span>
-            <input class="sm-slider" type="range" min="0.5" max="30" step="0.5"
-              :value="selected.surface.scale" @input="setSurface('scale', ($event.target as HTMLInputElement).value)" />
+            <input
+              class="sm-slider"
+              type="range"
+              min="0.5"
+              max="30"
+              step="0.5"
+              :value="selected.surface.scale"
+              @input="setSurface('scale', ($event.target as HTMLInputElement).value)"
+            />
           </label>
           <label class="prefs-row">
             <span class="prefs-label">Amount</span>
-            <input class="sm-slider" type="range" min="0" max="1" step="0.01"
-              :value="selected.surface.amount" @input="setSurface('amount', ($event.target as HTMLInputElement).value)" />
+            <input
+              class="sm-slider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              :value="selected.surface.amount"
+              @input="setSurface('amount', ($event.target as HTMLInputElement).value)"
+            />
           </label>
           <label class="prefs-row">
             <span class="prefs-label">Bump</span>
-            <input class="sm-slider" type="range" min="0" max="1" step="0.01"
-              :value="selected.surface.bump ?? 0" @input="setSurface('bump', ($event.target as HTMLInputElement).value)" />
+            <input
+              class="sm-slider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              :value="selected.surface.bump ?? 0"
+              @input="setSurface('bump', ($event.target as HTMLInputElement).value)"
+            />
           </label>
-          <label v-if="selected.surface.kind === 'scratches' || selected.surface.kind === 'brushed' || selected.surface.kind === 'wave'" class="prefs-row">
+          <label
+            v-if="
+              selected.surface.kind === 'scratches' ||
+              selected.surface.kind === 'brushed' ||
+              selected.surface.kind === 'wave'
+            "
+            class="prefs-row"
+          >
             <span class="prefs-label">Angle</span>
-            <input class="sm-slider" type="range" min="0" max="3.14" step="0.01"
-              :value="selected.surface.angle ?? 0" @input="setSurface('angle', ($event.target as HTMLInputElement).value)" />
+            <input
+              class="sm-slider"
+              type="range"
+              min="0"
+              max="3.14"
+              step="0.01"
+              :value="selected.surface.angle ?? 0"
+              @input="setSurface('angle', ($event.target as HTMLInputElement).value)"
+            />
           </label>
           <label class="prefs-row">
             <span class="prefs-label">Tint</span>
-            <input class="mats-color" type="color"
-              :value="selected.surface.color ?? '#000000'" @input="setSurfaceColor(($event.target as HTMLInputElement).value)" />
+            <input
+              class="mats-color"
+              type="color"
+              :value="selected.surface.color ?? '#000000'"
+              @input="setSurfaceColor(($event.target as HTMLInputElement).value)"
+            />
           </label>
           <label class="prefs-row">
             <span class="prefs-label">Tint amount</span>
-            <input class="sm-slider" type="range" min="0" max="1" step="0.01"
-              :value="selected.surface.colorAmount ?? 0" @input="setSurface('colorAmount', ($event.target as HTMLInputElement).value)" />
+            <input
+              class="sm-slider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              :value="selected.surface.colorAmount ?? 0"
+              @input="setSurface('colorAmount', ($event.target as HTMLInputElement).value)"
+            />
           </label>
         </template>
-        <button class="rd-chip" data-editgraph style="margin-top:6px" @click="editingGraph = true">Edit graph…</button>
-        <div v-if="selected.surfaceGraph" class="sm-hint">Using a node graph, the picker above is ignored while it is set.</div>
+        <button class="rd-chip" data-editgraph style="margin-top: 6px" @click="editingGraph = true">Edit graph…</button>
+        <div v-if="selected.surfaceGraph" class="sm-hint"
+          >Using a node graph, the picker above is ignored while it is set.</div
+        >
       </div>
 
       <div class="mats-actions">
@@ -815,17 +972,13 @@ async function doImport() {
           :title="selectionCount || faceCount ? '' : 'Select a body or a face first'"
           @click="applyToSelection()"
         >
-          <template v-if="faceCount">Apply to {{ faceCount }}
-            {{ faceCount === 1 ? "face" : "faces" }}</template>
-          <template v-else-if="selectionCount">Apply to {{ selectionCount }}
-            {{ selectionCount === 1 ? "body" : "bodies" }}</template>
+          <template v-if="faceCount">Apply to {{ faceCount }} {{ faceCount === 1 ? "face" : "faces" }}</template>
+          <template v-else-if="selectionCount"
+            >Apply to {{ selectionCount }} {{ selectionCount === 1 ? "body" : "bodies" }}</template
+          >
           <template v-else>Apply to selection</template>
         </button>
-        <button
-          class="btn"
-          :disabled="!selectionCount && !faceCount"
-          @click="clearOnSelection()"
-        >Clear</button>
+        <button class="btn" :disabled="!selectionCount && !faceCount" @click="clearOnSelection()">Clear</button>
         <button class="btn" @click="deleteSelected()">Delete</button>
       </div>
     </section>
@@ -840,11 +993,7 @@ async function doImport() {
          element; a second root (this Teleport) made v-show a silent no op and
          left the material list drawn under the Environment and Camera tabs. -->
     <Teleport to="body">
-      <SurfaceNodeEditor
-        v-if="editingGraph && selected"
-        :material-id="selected.id"
-        @close="editingGraph = false"
-      />
+      <SurfaceNodeEditor v-if="editingGraph && selected" :material-id="selected.id" @close="editingGraph = false" />
     </Teleport>
     <RenderSections tab="material" />
   </div>

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { previewVerdict } from "../../src/features/previewVerdict";
 
-const state = (hasPreview: boolean, building: boolean, previewError: string | null) =>
-  ({ hasPreview, previewError, buildState: { building } });
+const state = (hasPreview: boolean, building: boolean, previewError: string | null) => ({
+  hasPreview,
+  previewError,
+  buildState: { building },
+});
 
 describe("previewVerdict", () => {
   it("commits a tool with no kernel preview straight away", () => {

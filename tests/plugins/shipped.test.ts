@@ -28,8 +28,7 @@ const FILES = import.meta.glob("../../plugins/*/*", {
   eager: true,
 }) as Record<string, string>;
 
-const has = (id: string, name: string) =>
-  Object.keys(FILES).some((p) => p.endsWith(`/plugins/${id}/${name}`));
+const has = (id: string, name: string) => Object.keys(FILES).some((p) => p.endsWith(`/plugins/${id}/${name}`));
 
 /** What a plugin of each kind must contain to be worth shipping. Mirrors ENTRY
  *  in scripts/build-plugins.py, which is the copy that refuses to package one

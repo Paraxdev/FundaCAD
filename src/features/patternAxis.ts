@@ -64,12 +64,7 @@ export function circularAxisFields(
 }
 
 /** The line the copies turn about, for the ghosts and the drawn axis. */
-export function axisLine(
-  place: AxisPlace,
-  named: Axis3,
-  centre: Vec3,
-  picked: PickedAxis | null,
-): AxisLineValue {
+export function axisLine(place: AxisPlace, named: Axis3, centre: Vec3, picked: PickedAxis | null): AxisLineValue {
   if (place === "picked" && picked) return { origin: picked.origin, dir: picked.dir };
   return { origin: place === "centre" ? centre : [0, 0, 0], dir: axisVector(named) };
 }

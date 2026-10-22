@@ -11,7 +11,9 @@ function fakeWindow() {
   const frames: (() => void)[] = [];
   const win = Object.assign(bus, {
     requestAnimationFrame: (cb: () => void) => frames.push(cb),
-    cancelAnimationFrame: (id: number) => { frames[id - 1] = () => {}; },
+    cancelAnimationFrame: (id: number) => {
+      frames[id - 1] = () => {};
+    },
   }) as unknown as Window;
   return { win, frames };
 }

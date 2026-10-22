@@ -5,7 +5,12 @@ import { setSaveFolder, suggestedSavePath } from "../../src/io/saveFolder";
 describe("an open", () => {
   it("closes Home and clears the Save As folder hint", () => {
     let fire = () => {};
-    const store = { onOpen: (cb: () => void) => { fire = cb; return () => {}; } };
+    const store = {
+      onOpen: (cb: () => void) => {
+        fire = cb;
+        return () => {};
+      },
+    };
     const home = { close: vi.fn() };
     wireHomeOnOpen(store, home);
     setSaveFolder("D:/projects/brackets");

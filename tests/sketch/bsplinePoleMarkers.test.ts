@@ -11,14 +11,21 @@ import { SketchPlane } from "../../src/sketch/plane";
 import type { SketchConstraint } from "../../src/types";
 
 const b: BsplineEntity = {
-  type: "bspline", id: "b",
-  poles: [{ x: 0, y: 0 }, { x: 10, y: 20 }, { x: 25, y: -10 }, { x: 40, y: 15 }, { x: 50, y: 0 }],
+  type: "bspline",
+  id: "b",
+  poles: [
+    { x: 0, y: 0 },
+    { x: 10, y: 20 },
+    { x: 25, y: -10 },
+    { x: 40, y: 15 },
+    { x: 50, y: 0 },
+  ],
 };
 const n = b.poles.length;
 
 /** Centres of the squares a LineSegments of pole squares draws. */
 function squareCentres(o: THREE.Object3D): THREE.Vector3[] {
-  const pos = ((o as THREE.LineSegments).geometry.getAttribute("position") as THREE.BufferAttribute);
+  const pos = (o as THREE.LineSegments).geometry.getAttribute("position") as THREE.BufferAttribute;
   const out: THREE.Vector3[] = [];
   for (let s = 0; s < pos.count / 8; s++) {
     const c = new THREE.Vector3();

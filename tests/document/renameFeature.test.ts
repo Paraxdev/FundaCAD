@@ -12,11 +12,19 @@ vi.stubGlobal("window", globalThis);
 
 function store() {
   const be = {
-    async rebuild() { return new Promise<never>(() => {}); },
+    async rebuild() {
+      return new Promise<never>(() => {});
+    },
     async init() {},
-    onStatus() { return () => {}; },
-    onProgress() { return () => {}; },
-    async cancel() { return true; },
+    onStatus() {
+      return () => {};
+    },
+    onProgress() {
+      return () => {};
+    },
+    async cancel() {
+      return true;
+    },
   } as unknown as GeometryBackend;
   return new DocumentStore(be, DOC);
 }

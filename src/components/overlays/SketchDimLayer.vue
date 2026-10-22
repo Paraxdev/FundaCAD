@@ -40,15 +40,15 @@ let raf = 0;
 const heldEdges = new Map<number, Held>();
 
 // The floating cards a label must not hide under, the prompt banner's list.
-const LEFT_CARDS = "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group";
+const LEFT_CARDS =
+  "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group";
 const RIGHT_CARDS = "#float-layer .float-right > *";
 const LABEL_GAP = 6;
 let cards: { left: Box[]; right: Box[] } = { left: [], right: [] };
 let cardsKey = "";
 let cardsAt = 0;
 
-const rects = (sel: string): Box[] =>
-  [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
+const rects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
 
 /** Re-read the cards a few times a second: they open, close and resize without
  *  the camera moving, which is all the pose check below watches. */
@@ -202,7 +202,10 @@ function onDown(e: PointerEvent, i: number, l: DimItem) {
   // element under the cursor may already have been patched away, never start a
   // drag on top of that. The click that follows lands on the rebuilt item, which
   // never saw suppressEdit, so the layer wide flag has to stop that edit.
-  if (l.suppressEdit) { suppressClick = true; return; }
+  if (l.suppressEdit) {
+    suppressClick = true;
+    return;
+  }
   select(i);
   beginDrag(l, e.currentTarget as HTMLElement, e);
 }
@@ -212,7 +215,8 @@ function beginDrag(item: DimItem, el: HTMLElement, e: PointerEvent) {
   const from = s.dimHooks?.planePoint(e.clientX, e.clientY) ?? null;
   if (!from) return; // no plane hook, or the cursor ray misses it (grazing view)
   drag = {
-    item, el,
+    item,
+    el,
     startClient: { x: e.clientX, y: e.clientY },
     from,
     base: item.place.clone(),
@@ -235,7 +239,8 @@ function onDragMove(e: PointerEvent) {
   const d = drag;
   if (!d) return;
   if (!d.moved) {
-    const dx = e.clientX - d.startClient.x, dy = e.clientY - d.startClient.y;
+    const dx = e.clientX - d.startClient.x,
+      dy = e.clientY - d.startClient.y;
     if (dx * dx + dy * dy < DRAG_PX ** 2) return; // still a click
     d.moved = true;
   }
@@ -374,11 +379,7 @@ function onWheel(e: WheelEvent) {
   <!-- Teleported to body, where the class appended itself: .sketch-dims is
        `position: fixed; inset: 0` and must not inherit a stacking context. -->
   <Teleport to="body">
-    <div
-      class="sketch-dims"
-      :class="{ 'dims-passive': s.dimsPassive }"
-      @wheel="onWheel"
-    >
+    <div class="sketch-dims" :class="{ 'dims-passive': s.dimsPassive }" @wheel="onWheel">
       <div
         v-for="(l, i) in s.dimItems"
         :key="i"

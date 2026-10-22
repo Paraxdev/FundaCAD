@@ -32,13 +32,23 @@ onMounted(place);
 watch(() => panels.projectAnchor, place, { flush: "post" });
 
 const root: CSSProperties = {
-  position: "fixed", zIndex: "40", display: "flex", gap: "6px", padding: "6px 8px",
-  background: "#20242c", border: "1px solid #3a4150", borderRadius: "6px",
-  boxShadow: "0 4px 14px rgba(0,0,0,0.35)", font: "12px system-ui, sans-serif",
+  position: "fixed",
+  zIndex: "40",
+  display: "flex",
+  gap: "6px",
+  padding: "6px 8px",
+  background: "#20242c",
+  border: "1px solid #3a4150",
+  borderRadius: "6px",
+  boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+  font: "12px system-ui, sans-serif",
 };
 const chip: CSSProperties = {
-  border: "1px solid #3a4150", borderRadius: "12px", padding: "3px 10px",
-  font: "inherit", cursor: "pointer",
+  border: "1px solid #3a4150",
+  borderRadius: "12px",
+  padding: "3px 10px",
+  font: "inherit",
+  cursor: "pointer",
 };
 const on: CSSProperties = { background: "#2f6fd0", color: "#ffffff" };
 const off: CSSProperties = { background: "#161a20", color: "#aab4c4" };
@@ -52,7 +62,8 @@ const off: CSSProperties = { background: "#161a20", color: "#aab4c4" };
         :key="c.key"
         :style="[chip, panels.projectFilter === c.key ? on : off]"
         @click="choose(c.key)"
-      >{{ c.label }}</button>
+        >{{ c.label }}</button
+      >
     </div>
   </Teleport>
 </template>

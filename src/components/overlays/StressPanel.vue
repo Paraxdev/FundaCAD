@@ -22,8 +22,19 @@ import { usePanelsStore } from "../../stores/panels";
 import FloatingPanel from "./FloatingPanel.vue";
 import NumberBox from "../shell/NumberBox.vue";
 import {
-  CUSTOM_MATERIAL, FORCE_DIRECTIONS, GRAVITY_DIRECTIONS, GRAVITY_MARK_COLOR, LOAD_MARK_COLOR, STRESS_MATERIALS,
-  SUPPORT_COLORS, SUPPORT_KINDS, cssHex, deformLabel, faceCountLabel, legendGradient, sameTarget,
+  CUSTOM_MATERIAL,
+  FORCE_DIRECTIONS,
+  GRAVITY_DIRECTIONS,
+  GRAVITY_MARK_COLOR,
+  LOAD_MARK_COLOR,
+  STRESS_MATERIALS,
+  SUPPORT_COLORS,
+  SUPPORT_KINDS,
+  cssHex,
+  deformLabel,
+  faceCountLabel,
+  legendGradient,
+  sameTarget,
   type StressTarget,
 } from "../../ui/stress";
 import { displayRound } from "../../ui/units";
@@ -44,7 +55,10 @@ onMounted(() => {
   offBuild = engine.store.onBuild(readBodies);
 });
 onUnmounted(() => offBuild?.());
-watch(() => !!panels.stress, (open) => open && readBodies());
+watch(
+  () => !!panels.stress,
+  (open) => open && readBodies(),
+);
 
 const setup = computed(() => panels.stress?.setup ?? null);
 const preset = computed(() => STRESS_MATERIALS.find((m) => m.name === setup.value?.material) ?? null);
@@ -72,12 +86,25 @@ const missingBody = computed(() => {
 // (not while a new Run replaces it) or a Run is refused, since what is in the
 // way is usually in the setup.
 const setupOpen = ref(true);
-watch(() => panels.stress?.result ?? null, (now, was) => {
-  if (now && !was) setupOpen.value = false;
-  if (!now && !panels.stress?.running) setupOpen.value = true;
-});
-watch(() => panels.stress?.error ?? null, (error) => { if (error) setupOpen.value = true; });
-watch(() => !!panels.stress, (open) => { if (!open) setupOpen.value = true; });
+watch(
+  () => panels.stress?.result ?? null,
+  (now, was) => {
+    if (now && !was) setupOpen.value = false;
+    if (!now && !panels.stress?.running) setupOpen.value = true;
+  },
+);
+watch(
+  () => panels.stress?.error ?? null,
+  (error) => {
+    if (error) setupOpen.value = true;
+  },
+);
+watch(
+  () => !!panels.stress,
+  (open) => {
+    if (!open) setupOpen.value = true;
+  },
+);
 
 /** The folded setup's one line: what is held, what pushes, and the material. */
 const setupSummary = computed(() => {
@@ -132,15 +159,28 @@ function close() {
 
       <div v-if="!setupOpen" class="measure-row stress-setup-folded">
         <span class="measure-k">{{ setupSummary }}</span>
-        <button type="button" class="btn stress-setup-toggle" title="Show the supports, loads and material" @click="setupOpen = true">Edit setup</button>
+        <button
+          type="button"
+          class="btn stress-setup-toggle"
+          title="Show the supports, loads and material"
+          @click="setupOpen = true"
+          >Edit setup</button
+        >
       </div>
 
       <template v-if="setupOpen">
         <template v-for="(x, i) in setup.supports" :key="'s' + x.id">
           <div class="measure-divider" />
           <div class="measure-row">
-            <span class="measure-k"><span class="stress-swatch" :style="{ background: supportColor(x.type) }" />Support {{ i + 1 }}</span>
-            <select :value="x.type" class="measure-select stress-support-type" :title="supportHint(x.type)" @change="onSupportType(x.id, $event)">
+            <span class="measure-k"
+              ><span class="stress-swatch" :style="{ background: supportColor(x.type) }" />Support {{ i + 1 }}</span
+            >
+            <select
+              :value="x.type"
+              class="measure-select stress-support-type"
+              :title="supportHint(x.type)"
+              @change="onSupportType(x.id, $event)"
+            >
               <option v-for="k in SUPPORT_KINDS" :key="k.value" :value="k.value" :title="k.hint">{{ k.label }}</option>
             </select>
           </div>
@@ -148,36 +188,56 @@ function close() {
             <span class="measure-k stress-count">{{ faceCountLabel(x.faces, x.spots) }}</span>
             <span class="measure-v stress-face-actions">
               <button
-                type="button" class="btn stress-place-support" :class="{ active: placing({ support: x.id }) }"
+                type="button"
+                class="btn stress-place-support"
+                :class="{ active: placing({ support: x.id }) }"
                 title="Click the body where it is held, no face of its own needed"
                 @click="engine.ui.panels.placeStressSpot({ support: x.id })"
-              >{{ placing({ support: x.id }) ? "Placing…" : "Place" }}</button>
+                >{{ placing({ support: x.id }) ? "Placing…" : "Place" }}</button
+              >
               <button
-                type="button" class="btn stress-set-support" title="Hold the whole of the faces selected in the view"
+                type="button"
+                class="btn stress-set-support"
+                title="Hold the whole of the faces selected in the view"
                 @click="engine.ui.panels.setStressFacesFromSelection({ support: x.id })"
-              >From selection</button>
+                >From selection</button
+              >
               <button
-                v-if="setup.supports.length > 1" type="button" class="btn stress-remove-support" title="Remove this support"
+                v-if="setup.supports.length > 1"
+                type="button"
+                class="btn stress-remove-support"
+                title="Remove this support"
                 @click="engine.ui.panels.removeStressSupport(x.id)"
-              >Remove</button>
+                >Remove</button
+              >
             </span>
           </div>
           <div v-for="(spot, k) in x.spots ?? []" :key="'ss' + x.id + '-' + k" class="measure-row stress-spot">
             <span class="measure-k">Spot {{ k + 1 }} radius</span>
             <span class="measure-v">
               <NumberBox v-model="spot.radius" class="measure-number stress-spot-radius" /> mm
-              <button type="button" class="btn stress-remove-spot" title="Remove this spot" @click="engine.ui.panels.removeStressSpot({ support: x.id }, k)">Remove</button>
+              <button
+                type="button"
+                class="btn stress-remove-spot"
+                title="Remove this spot"
+                @click="engine.ui.panels.removeStressSpot({ support: x.id }, k)"
+                >Remove</button
+              >
             </span>
           </div>
         </template>
         <div class="measure-row">
-          <button type="button" class="btn stress-add-support" @click="engine.ui.panels.addStressSupport()">Add support</button>
+          <button type="button" class="btn stress-add-support" @click="engine.ui.panels.addStressSupport()"
+            >Add support</button
+          >
         </div>
 
         <template v-for="(l, i) in setup.loads" :key="l.id">
           <div class="measure-divider" />
           <div class="measure-row">
-            <span class="measure-k"><span class="stress-swatch" :style="{ background: loadColor }" />Load {{ i + 1 }}</span>
+            <span class="measure-k"
+              ><span class="stress-swatch" :style="{ background: loadColor }" />Load {{ i + 1 }}</span
+            >
             <select v-model="l.kind" class="measure-select stress-load-kind">
               <option value="force">Force</option>
               <option value="pressure">Pressure</option>
@@ -187,26 +247,41 @@ function close() {
             <span class="measure-k stress-count">{{ faceCountLabel(l.faces, l.spots) }}</span>
             <span class="measure-v stress-face-actions">
               <button
-                type="button" class="btn stress-place-load" :class="{ active: placing({ load: l.id }) }"
+                type="button"
+                class="btn stress-place-load"
+                :class="{ active: placing({ load: l.id }) }"
                 title="Click the body where it pushes, no face of its own needed"
                 @click="engine.ui.panels.placeStressSpot({ load: l.id })"
-              >{{ placing({ load: l.id }) ? "Placing…" : "Place" }}</button>
+                >{{ placing({ load: l.id }) ? "Placing…" : "Place" }}</button
+              >
               <button
-                type="button" class="btn stress-set-load" title="Push on the whole of the faces selected in the view"
+                type="button"
+                class="btn stress-set-load"
+                title="Push on the whole of the faces selected in the view"
                 @click="engine.ui.panels.setStressFacesFromSelection({ load: l.id })"
-              >From selection</button>
+                >From selection</button
+              >
               <!-- Down to no load at all: a body under gravity alone is a study. -->
               <button
-                type="button" class="btn stress-remove-load" title="Remove this load"
+                type="button"
+                class="btn stress-remove-load"
+                title="Remove this load"
                 @click="engine.ui.panels.removeStressLoad(l.id)"
-              >Remove</button>
+                >Remove</button
+              >
             </span>
           </div>
           <div v-for="(spot, k) in l.spots ?? []" :key="'ls' + l.id + '-' + k" class="measure-row stress-spot">
             <span class="measure-k">Spot {{ k + 1 }} radius</span>
             <span class="measure-v">
               <NumberBox v-model="spot.radius" class="measure-number stress-spot-radius" /> mm
-              <button type="button" class="btn stress-remove-spot" title="Remove this spot" @click="engine.ui.panels.removeStressSpot({ load: l.id }, k)">Remove</button>
+              <button
+                type="button"
+                class="btn stress-remove-spot"
+                title="Remove this spot"
+                @click="engine.ui.panels.removeStressSpot({ load: l.id }, k)"
+                >Remove</button
+              >
             </span>
           </div>
           <template v-if="l.kind === 'force'">
@@ -223,7 +298,13 @@ function close() {
             <div v-if="l.direction === 'custom'" class="measure-row">
               <span class="measure-k">X, Y, Z</span>
               <span class="measure-v">
-                <NumberBox v-for="k in 3" :key="k" v-model="l.custom[k - 1]" class="measure-number stress-xyz" :title="String(l.custom[k - 1])" />
+                <NumberBox
+                  v-for="k in 3"
+                  :key="k"
+                  v-model="l.custom[k - 1]"
+                  class="measure-number stress-xyz"
+                  :title="String(l.custom[k - 1])"
+                />
               </span>
             </div>
           </template>
@@ -242,7 +323,11 @@ function close() {
             <input v-model="setup.gravity.on" type="checkbox" class="stress-gravity-on" />
             <span class="stress-swatch" :style="{ background: gravityColor }" />Gravity
           </label>
-          <select v-model="setup.gravity.direction" class="measure-select stress-gravity-dir" :disabled="!setup.gravity.on">
+          <select
+            v-model="setup.gravity.direction"
+            class="measure-select stress-gravity-dir"
+            :disabled="!setup.gravity.on"
+          >
             <option v-for="d in GRAVITY_DIRECTIONS" :key="d" :value="d">{{ d }}</option>
           </select>
         </div>
@@ -256,7 +341,10 @@ function close() {
           </select>
         </div>
         <div v-if="preset" class="measure-row">
-          <span class="measure-v measure-k">E {{ fmt(preset.E) }} MPa, ν {{ preset.nu }}, yield {{ fmt(preset.yield) }} MPa, {{ fmt(preset.density) }} g/cm³</span>
+          <span class="measure-v measure-k"
+            >E {{ fmt(preset.E) }} MPa, ν {{ preset.nu }}, yield {{ fmt(preset.yield) }} MPa,
+            {{ fmt(preset.density) }} g/cm³</span
+          >
         </div>
         <template v-else>
           <div class="measure-row">
@@ -273,7 +361,9 @@ function close() {
           </div>
           <div class="measure-row">
             <span class="measure-k">Density</span>
-            <span class="measure-v"><NumberBox v-model="setup.custom.density" class="measure-number stress-density" /> g/cm³</span>
+            <span class="measure-v"
+              ><NumberBox v-model="setup.custom.density" class="measure-number stress-density" /> g/cm³</span
+            >
           </div>
         </template>
         <div class="measure-row">
@@ -289,17 +379,26 @@ function close() {
 
       <div class="measure-row stress-actions">
         <button
-          type="button" class="btn btn-primary stress-run" :disabled="panels.stress.running"
+          type="button"
+          class="btn btn-primary stress-run"
+          :disabled="panels.stress.running"
           @click="engine.ui.panels.runStress()"
-        >{{ panels.stress.running ? "Running…" : "Run" }}</button>
+          >{{ panels.stress.running ? "Running…" : "Run" }}</button
+        >
         <button
-          type="button" class="btn stress-cancel" :disabled="!panels.stress.running"
+          type="button"
+          class="btn stress-cancel"
+          :disabled="!panels.stress.running"
           @click="engine.ui.panels.cancelStress()"
-        >Cancel</button>
+          >Cancel</button
+        >
         <button
-          v-if="panels.stress.colours !== 'none'" type="button" class="btn stress-colours"
+          v-if="panels.stress.colours !== 'none'"
+          type="button"
+          class="btn stress-colours"
           @click="engine.ui.panels.setStressColours(panels.stress.colours !== 'shown')"
-        >{{ panels.stress.colours === "shown" ? "Hide colours" : "Show colours" }}</button>
+          >{{ panels.stress.colours === "shown" ? "Hide colours" : "Show colours" }}</button
+        >
         <button type="button" class="btn stress-close" @click="close">Close</button>
       </div>
       <div v-if="panels.stress.error" class="measure-hint stress-error">{{ panels.stress.error }}</div>
@@ -313,29 +412,52 @@ function close() {
           </div>
           <div class="measure-row stress-deform-row">
             <input
-              class="stress-deform" type="range" min="0" :max="deform.max" :step="deform.max / 200" :value="deform.scale"
+              class="stress-deform"
+              type="range"
+              min="0"
+              :max="deform.max"
+              :step="deform.max / 200"
+              :value="deform.scale"
               @input="onDeform"
             />
-            <button type="button" class="btn stress-true-scale" title="Draw the deflection at its true size" @click="engine.ui.panels.setStressDeformation(1)">1x</button>
             <button
-              type="button" class="btn stress-animate" :class="{ active: deform.animate }"
+              type="button"
+              class="btn stress-true-scale"
+              title="Draw the deflection at its true size"
+              @click="engine.ui.panels.setStressDeformation(1)"
+              >1x</button
+            >
+            <button
+              type="button"
+              class="btn stress-animate"
+              :class="{ active: deform.animate }"
               @click="engine.ui.panels.setStressAnimate(!deform.animate)"
-            >{{ deform.animate ? "Stop" : "Animate" }}</button>
+              >{{ deform.animate ? "Stop" : "Animate" }}</button
+            >
           </div>
         </template>
         <div class="measure-row stress-probe-row">
           <!-- Stop probing stays pressable whatever the colours are doing. -->
           <button
-            type="button" class="btn stress-probe" :class="{ active: panels.stress.probe }"
+            type="button"
+            class="btn stress-probe"
+            :class="{ active: panels.stress.probe }"
             :disabled="panels.stress.colours === 'none' && !panels.stress.probe"
             @click="engine.ui.panels.setStressProbe(!panels.stress.probe)"
-          >{{ panels.stress.probe ? "Stop probing" : "Probe" }}</button>
+            >{{ panels.stress.probe ? "Stop probing" : "Probe" }}</button
+          >
         </div>
         <div v-for="(p, i) in panels.stress.pins" :key="'p' + p.id" class="measure-row stress-pin">
           <span class="measure-k">Probe {{ i + 1 }}</span>
           <span class="measure-v">
             {{ p.label }}
-            <button type="button" class="btn stress-remove-pin" title="Remove this probe" @click="engine.ui.panels.removeStressProbe(p.id)">Remove</button>
+            <button
+              type="button"
+              class="btn stress-remove-pin"
+              title="Remove this probe"
+              @click="engine.ui.panels.removeStressProbe(p.id)"
+              >Remove</button
+            >
           </span>
         </div>
         <div class="stress-legend" :style="{ background: gradient }" />
@@ -346,16 +468,27 @@ function close() {
         </div>
         <div v-for="(r, i) in panels.stress.result.rows" :key="i" class="measure-row">
           <span class="measure-k">{{ r.k }}</span>
-          <span class="measure-v" :class="{ 'stress-yields': r.k === 'Safety factor' && panels.stress.result.yields }">{{ r.v }}</span>
+          <span
+            class="measure-v"
+            :class="{ 'stress-yields': r.k === 'Safety factor' && panels.stress.result.yields }"
+            >{{ r.v }}</span
+          >
         </div>
-        <div v-for="(w, i) in panels.stress.result.warnings" :key="'w' + i" class="measure-hint stress-warning">{{ w }}</div>
+        <div v-for="(w, i) in panels.stress.result.warnings" :key="'w' + i" class="measure-hint stress-warning">{{
+          w
+        }}</div>
       </template>
 
       <div class="measure-hint">
         <template v-if="panels.stress.probe">Hover the body to read it, click to pin a probe, Esc to stop.</template>
-        <template v-else-if="panels.stress.placing">Click the body to put the spot there, Shift click to place several, Esc to stop.</template>
+        <template v-else-if="panels.stress.placing"
+          >Click the body to put the spot there, Shift click to place several, Esc to stop.</template
+        >
         <template v-else-if="panels.stress.colours === 'shown'">Hide the colours to pick faces on the body.</template>
-        <template v-else>Press Place and click the body where it is held or pushed, or select whole faces and use From selection. Drag an orb's rim to size it, a force's arrow tip to aim and size it.</template>
+        <template v-else
+          >Press Place and click the body where it is held or pushed, or select whole faces and use From selection. Drag
+          an orb's rim to size it, a force's arrow tip to aim and size it.</template
+        >
         Results are linear and approximate.
       </div>
     </template>

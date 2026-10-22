@@ -44,13 +44,17 @@ const menus = ref(markRaw(buildMenubar(engine)));
 let offPlugins: (() => void) | null = null;
 let offTheme: (() => void) | null = null;
 onMounted(() => {
-  offPlugins = onContribChange(() => { menus.value = markRaw(buildMenubar(engine)); });
+  offPlugins = onContribChange(() => {
+    menus.value = markRaw(buildMenubar(engine));
+  });
   offTheme = onThemeChange(() => {
     brandLockup.value = themeMode(getTheme()) === "light" ? brandLockupLight : brandLockupDark;
   });
 });
-onUnmounted(() => { offPlugins?.(); offTheme?.(); });
-
+onUnmounted(() => {
+  offPlugins?.();
+  offTheme?.();
+});
 </script>
 
 <template>
@@ -64,7 +68,8 @@ onUnmounted(() => { offPlugins?.(); offTheme?.(); });
       aria-label="Home"
       :aria-pressed="home.shown"
       @click="engine.ui.home.toggle()"
-    ><Icon name="home" :size="15" /></button>
+      ><Icon name="home" :size="15"
+    /></button>
     <!-- display: contents, so the bar's flex row and its narrow window rules see the controls as before. -->
     <div class="tb-rest" :inert="home.shown">
       <MenuBar :menus="menus" />
@@ -75,7 +80,8 @@ onUnmounted(() => { offPlugins?.(); offTheme?.(); });
         aria-label="Undo"
         :disabled="!ui.canUndo"
         @click="engine.doUndo()"
-      ><Icon name="undo" :size="15" /></button>
+        ><Icon name="undo" :size="15"
+      /></button>
       <button
         id="redo-btn"
         class="tb-btn"
@@ -83,7 +89,8 @@ onUnmounted(() => { offPlugins?.(); offTheme?.(); });
         aria-label="Redo"
         :disabled="!ui.canRedo"
         @click="engine.doRedo()"
-      ><Icon name="redo" :size="15" /></button>
+        ><Icon name="redo" :size="15"
+      /></button>
       <span id="context-tab" class="context-tab" :class="{ sketch: ui.sketchActive }">
         {{ ui.sketchActive ? "SKETCH" : "SOLID" }}
       </span>

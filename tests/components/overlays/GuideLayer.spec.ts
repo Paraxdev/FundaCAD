@@ -53,11 +53,23 @@ function setup() {
     buildState: {
       result: {
         bodies: [{ id: "body1", name: "Box", faceStart: 0, faceCount: 6 }],
-        edges: [{ id: 1, body: "body1", points: [[0, 0, 0], [1, 0, 0]] }],
+        edges: [
+          {
+            id: 1,
+            body: "body1",
+            points: [
+              [0, 0, 0],
+              [1, 0, 0],
+            ],
+          },
+        ],
       },
     } as unknown,
   };
-  const guide = new GuideSession(() => ({ found: true }), () => snap);
+  const guide = new GuideSession(
+    () => ({ found: true }),
+    () => snap,
+  );
   const engine = {
     guide,
     store,
@@ -139,15 +151,21 @@ describe("GuideLayer frame loop", () => {
     expect(g.faceCalls()).toBe(once * 2);
   });
 
-  for (const [kind, model] of [["a face", "body1:index=0"], ["a body", "body:body1"], ["an edge", "body1:longest"]]) {
+  for (const [kind, model] of [
+    ["a face", "body1:index=0"],
+    ["a body", "body:body1"],
+    ["an edge", "body1:longest"],
+  ]) {
     it(`${kind} step's outline follows a body the Move tool drags, and goes back when the move is cancelled`, async () => {
       const g = setup();
       g.guide.apply([{ kind: "highlight", seq: 1, target: { model }, caption: "Here" }]);
       await tick();
       frame();
       await tick();
-      const xs = () => [...document.querySelectorAll(".guide-model polyline")]
-        .flatMap((l) => (l.getAttribute("points") ?? "").split(" ").map((p) => Number(p.split(",")[0])));
+      const xs = () =>
+        [...document.querySelectorAll(".guide-model polyline")].flatMap((l) =>
+          (l.getAttribute("points") ?? "").split(" ").map((p) => Number(p.split(",")[0])),
+        );
       const rest = xs();
       expect(rest.length).toBeGreaterThan(0);
       const once = g.faceCalls();

@@ -33,10 +33,7 @@ export function popModal(): void {
   m.depth = Math.max(0, m.depth - 1);
 }
 
-export function choose<T extends string>(
-  title: string,
-  options: ChoiceOption<T>[],
-): Promise<T | null> {
+export function choose<T extends string>(title: string, options: ChoiceOption<T>[]): Promise<T | null> {
   const m = useModalStore();
   return new Promise<T | null>((resolve) => {
     m.depth++;

@@ -91,15 +91,13 @@ describe("crossAxis is clamped to [0, 0.9]", () => {
 
   /** load the module fresh against a persisted config */
   async function loadWith(saved: Record<string, unknown>) {
-    const store = new Map<string, string>([
-      ["fundacad.spacemouse.config", JSON.stringify(saved)],
-    ]);
+    const store = new Map<string, string>([["fundacad.spacemouse.config", JSON.stringify(saved)]]);
     vi.stubGlobal("localStorage", {
       getItem: (k: string) => store.get(k) ?? null,
       setItem: (k: string, v: string) => void store.set(k, v),
     });
     vi.resetModules();
-    return (await import("../../plugins/FundaCAD.SpaceMouse/spacemouse"));
+    return await import("../../plugins/FundaCAD.SpaceMouse/spacemouse");
   }
 
   it("clamps a persisted 5 down to 0.9", async () => {
@@ -134,7 +132,10 @@ describe("its settings", () => {
   it("adopts the oldest key once, with the v1 sensitivity rescale, as a share of the default", async () => {
     const store = new MemoryStorage();
     // v1 pan default was 0.00006, so twice that is twice the default
-    store.setItem("sindricad.spacemouse.config", JSON.stringify({ mode: "camera", panSens: 0.00012, deadzone: 40, bind: { zoom: { src: "tz", invert: true } } }));
+    store.setItem(
+      "sindricad.spacemouse.config",
+      JSON.stringify({ mode: "camera", panSens: 0.00012, deadzone: 40, bind: { zoom: { src: "tz", invert: true } } }),
+    );
     const m = await start(store);
     expect(m.settings.get("panPercent")).toBe(200);
     expect(m.settings.get("mode")).toBe("camera");

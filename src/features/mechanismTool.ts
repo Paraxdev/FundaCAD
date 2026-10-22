@@ -40,13 +40,7 @@ import {
   leanOutOfView,
   type DragHandle,
 } from "./manipulator";
-import {
-  ROTATE_SNAP_DEG,
-  angleInFrame,
-  ringDragDegenerate,
-  rotationFrame,
-  snapDegrees,
-} from "./transformGizmo";
+import { ROTATE_SNAP_DEG, angleInFrame, ringDragDegenerate, rotationFrame, snapDegrees } from "./transformGizmo";
 import { unwrapTurn } from "./screwMath";
 import { CanvasGesture } from "./canvasGesture";
 
@@ -135,20 +129,25 @@ export class MechanismTool {
 
     this.viewport.suspendPicking = true;
     this.gesture.attach();
-    this.handle = field === "offset" ? nameHandle(createDragHandle(), "offset") : nameHandle(createRotationArc(), "angle");
+    this.handle =
+      field === "offset" ? nameHandle(createDragHandle(), "offset") : nameHandle(createRotationArc(), "angle");
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo);
     this.dim.show(
-      [field === "offset"
-        ? { name: "offset", label: "Drive offset", kind: "length" }
-        : { name: "angle", label: "Drive angle", kind: "angle" }],
+      [
+        field === "offset"
+          ? { name: "offset", label: "Drive offset", kind: "length" }
+          : { name: "angle", label: "Drive angle", kind: "angle" },
+      ],
       () => this.commit(),
       () => this.cancel(),
     );
     this.dim.updateFromCursor({ [field]: this.value });
-    setPrompt(field === "offset"
-      ? "Drag the arrow to slide the drive joint, the linkage follows. The value can be typed. Enter applies, Esc cancels."
-      : "Drag the dial to turn the drive joint, the linkage follows. The value can be typed. Enter applies, Esc cancels.");
+    setPrompt(
+      field === "offset"
+        ? "Drag the arrow to slide the drive joint, the linkage follows. The value can be typed. Enter applies, Esc cancels."
+        : "Drag the dial to turn the drive joint, the linkage follows. The value can be typed. Enter applies, Esc cancels.",
+    );
     this.gesture.frame();
     return true;
   }

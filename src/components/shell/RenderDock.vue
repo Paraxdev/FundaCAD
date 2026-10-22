@@ -33,7 +33,11 @@ const tab = ref<Tab>("material");
 
 const open = ref(workspace() === "render");
 let off: (() => void) | null = null;
-onMounted(() => { off = onWorkspaceChange((w) => { open.value = w === "render"; }); });
+onMounted(() => {
+  off = onWorkspaceChange((w) => {
+    open.value = w === "render";
+  });
+});
 onUnmounted(() => off?.());
 </script>
 
