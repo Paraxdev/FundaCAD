@@ -376,7 +376,7 @@ describe("HomeScreen", () => {
     expect($$(".home-example-name").map((n) => n.textContent)).toEqual([
       "Wall bracket",
       "Box with a lid",
-      "3D printer",
+      "Capsule holder",
       "Plate",
       "Pinned lever",
     ]);
@@ -764,14 +764,14 @@ describe("Home on a first run", () => {
     ).toEqual([
       ["Wall bracket", "Find where it bends", "stress"],
       ["Box with a lid", "A lid that fits, ready to print", "shell"],
-      ["3D printer", "100 parts from a STEP file", "assembly"],
+      ["Capsule holder", "A cap that screws on, ready to print", "thread"],
       ["Plate", "Change a size, the holes follow", "box"],
       ["Pinned lever", "See the load on a pin", "rotate"],
     ]);
     expect($$(".home-example").map((c) => c.getAttribute("title"))).toEqual([
       "An L bracket on a wall. Open the Stress panel and run it to see where it bends most",
       "A box and a lid laid out for printing. Change innerWidth in Parameters and both parts follow",
-      "A printer frame imported from a STEP file. Hide or isolate its groups in Items, or turn on a section to look inside",
+      "A tube and a screw-on cap laid out for printing. Change innerDiameter in Parameters and both threads follow, or set screwedOn to 1 to see the cap on the tube",
       "A plate with four holes. Change width or depth in Parameters and the holes stay in their corners",
       "A lever on a pin. Open the Stress panel and run it to see the load around the pin",
     ]);
