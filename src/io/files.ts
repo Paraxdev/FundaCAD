@@ -235,6 +235,10 @@ export async function openDocument(
   store: DocumentStore,
   geometry: GeometryBackend,
   mayReplace: () => Promise<boolean> = async () => true,
+  placeImport: (names: string[], run: () => Promise<unknown>) => Promise<unknown> = async (_names, run) => {
+    closeHome();
+    await run();
+  },
 ) {
   if (isTauri()) {
     const { open } = await import("@tauri-apps/plugin-dialog");
@@ -257,8 +261,7 @@ export async function openDocument(
       if (!(await mayReplace())) return;
       await openDocumentAtPath(store, path, geometry);
     } else {
-      closeHome();
-      await importPath(store, geometry, path); // a mesh / CAD file → import as a body
+      await placeImport([path.split(/[\\/]/).pop() ?? path], () => importPath(store, geometry, path));
     }
   } else {
     const picked = await uploadText();
@@ -744,10 +747,10 @@ export async function importPath(
   geometry: GeometryBackend,
   path: string,
   unit?: ImportUnit,
-  opts: { source?: string } = {},
-) {
+  opts: { source?: string; batched?: boolean } = {},
+): Promise<ImportEnd> {
   const fmt = extToImportFormat(path);
-  await importWith(store, path, fmt, (onStarted, u) => geometry.importGeometry(path, fmt, onStarted, u), {
+  return importWith(store, path, fmt, (onStarted, u) => geometry.importGeometry(path, fmt, onStarted, u), {
     ...opts,
     unit,
   });
@@ -758,8 +761,15 @@ export async function importPath(
 export const MAX_DROPPED_IMPORT_BYTES = 90 * 1024 * 1024;
 
 /** Import a file the app has as bytes only, like one dropped on a browser tab.
- *  Its `source` is the bare name, there is no path to remember. */
-export async function importFileBytes(store: DocumentStore, geometry: GeometryBackend, file: File, unit?: ImportUnit) {
+ *  Its `source` is the bare name, there is no path to remember. With `opening` the import is how the document
+ *  opens, so its own writes leave a clean document clean. */
+export async function importFileBytes(
+  store: DocumentStore,
+  geometry: GeometryBackend,
+  file: File,
+  unit?: ImportUnit,
+  opts: { opening?: boolean; batched?: boolean } = {},
+): Promise<ImportEnd> {
   const fmt = extToImportFormat(file.name);
   const importBytes = geometry.importBytes?.bind(geometry);
   if (!importBytes) {
@@ -772,13 +782,13 @@ export async function importFileBytes(store: DocumentStore, geometry: GeometryBa
     );
     return;
   }
-  await importWith(
+  return importWith(
     store,
     file.name,
     fmt,
     async (onStarted, u) =>
       importBytes(file.name, fmt, bytesToBase64(new Uint8Array(await file.arrayBuffer())), onStarted, u),
-    { unit, retryable: false },
+    { unit, retryable: false, opening: opts.opening ?? false, batched: opts.batched ?? false },
   );
 }
 
@@ -796,20 +806,30 @@ async function importWith(
   path: string,
   fmt: ImportFormat,
   read: (onStarted: (id: string) => void, unit?: ImportUnit) => ReturnType<GeometryBackend["importGeometry"]>,
-  opts: { unit?: ImportUnit | undefined; source?: string; retryable?: boolean } = {},
-) {
-  let unit = opts.unit;
-  if (asksForUnit(fmt) && !unit) {
-    const picked = await askImportUnit(fmt);
-    if (!picked) return;
-    unit = picked;
+  opts: {
+    unit?: ImportUnit | undefined;
+    source?: string;
+    retryable?: boolean;
+    opening?: boolean;
+    batched?: boolean;
+  } = {},
+): Promise<ImportEnd> {
+  // Opening is not blocked while a file is read, and a document opened meanwhile must not receive the import.
+  let opened = false;
+  const offOpen = store.onOpen(() => (opened = true));
+  const res = await (async () => {
+    const unit = opts.unit ?? (asksForUnit(fmt) ? await askImportUnit(fmt) : undefined);
+    if (unit === null) return null;
+    // runBusy makes the import visible and stoppable; onStarted hands back the request id so Cancel targets it.
+    return store.runBusy(`Importing ${fileName(path)}`, (onStarted) => read(onStarted, unit), { holdHistory: true });
+  })().finally(offOpen);
+  if (!res) return;
+  // An open cancels the read, so a cancelled reply after one is a drop too, a failed read keeps its error.
+  if (opened && (res.ok || res.cancelled)) {
+    // A batch names every file it left out in one warning.
+    if (!opts.batched) await importDropped([fileName(path)]);
+    return "dropped";
   }
-  // runBusy makes the import visible and stoppable; onStarted hands back the request id so Cancel targets it.
-  const res = await store.runBusy(
-    `Importing ${path.split(/[\\/]/).pop() ?? "file"}`,
-    (onStarted) => read(onStarted, unit),
-    { holdHistory: true },
-  );
   if (!res.ok) {
     if (res.cancelled) {
       // Cancelled: say nothing and add nothing to the document. The path stays in session state only, since a
@@ -826,7 +846,10 @@ async function importWith(
     source: opts.source ?? path,
     taken: store.document.features.map((f) => f.id),
   });
-  store.addFeatures(features);
+  const cleanBefore = !store.dirty;
+  if (opts.opening) store.keepingClean(() => store.addFeatures(features));
+  else store.addFeatures(features);
+  const landedAt = cleanBefore ? store.editCount : null;
   const imported = features.find((f) => f.type === "import");
   if (!imported) {
     if (res.notes?.length) {
@@ -846,9 +869,10 @@ async function importWith(
 
   // The file's own colours become materials worn by the bodies it produced, or a coloured STEP assembly opens
   // as thousands of identical grey bodies.
-  if (await cancelledImport(store, imported, res)) return;
+  if (await cancelledImport(store, imported, res, landedAt)) return;
   const source = importSource(imported);
-  if (!(await adoptImportedColors(store, id, res, { joinImport: true, source }))) recolorOnRedo(store, imported, res);
+  const adopt = { joinImport: true, source, opening: opts.opening ?? false };
+  if (!(await adoptImportedColors(store, id, res, adopt))) recolorOnRedo(store, imported, res);
 
   // The file carried one dominant colour: report it and let whoever has a use for it decide. Awaited, because a
   // listener must rebuild before it finds the feature's bodies, or the import would report finished too early.
@@ -856,15 +880,53 @@ async function importWith(
   await announceImportedBody(id, res.color);
 }
 
+const fileName = (path: string) => path.split(/[\\/]/).pop() ?? "file";
+
+/** "dropped" when the file was read but left out, as another document was opened meanwhile. */
+type ImportEnd = "dropped" | undefined;
+
+/** Says imports were left out because another document was opened before they landed. */
+export async function importDropped(names: readonly string[]) {
+  if (!names.length) return;
+  const many = names.length > 1;
+  const list = many ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+  const { toast } = await import("../ui/toast");
+  const were = many ? "they were" : "it was";
+  toast(`${list} ${many ? "were" : "was"} not imported, another document was opened while ${were} read.`, {
+    kind: "warning",
+  });
+}
+
+/** Runs a batch of imports in turn and stops at the first document opened meanwhile, as the rest belong to the
+ *  one the batch began in. Each step imports with `batched`, so one warning names every file left out. */
+export async function importInTurn(
+  store: DocumentStore,
+  steps: readonly { name: string; run: () => Promise<ImportEnd | void> }[],
+): Promise<void> {
+  let opened = false;
+  const offOpen = store.onOpen(() => (opened = true));
+  const left: string[] = [];
+  try {
+    for (const step of steps) {
+      if (opened || (await step.run()) === "dropped") left.push(step.name);
+    }
+  } finally {
+    offOpen();
+  }
+  await importDropped(left);
+}
+
 const importSource = (f: Feature) =>
   f.type === "import" ? (f as Extract<Feature, { type: "import" }>).source : undefined;
 
 /** Waits for the build that brings `imported` in. A Cancel during it undoes the import as one step (Redo builds
- *  it again). True when nothing is left to do: cancelled, or another document was opened meanwhile. */
+ *  it again), and leaves the document clean when it was clean before the import and nothing changed since
+ *  `cleanAt`. True when nothing is left to do: cancelled, or another document was opened meanwhile. */
 async function cancelledImport(
   store: DocumentStore,
   imported: Feature,
   res: Parameters<typeof adoptImportedColors>[2],
+  cleanAt: number | null = null,
 ) {
   let opened = false;
   const offOpen = store.onOpen(() => (opened = true));
@@ -873,7 +935,9 @@ async function cancelledImport(
   const still = store.document.features.find((f) => f.id === imported.id);
   if (!store.buildState.cancelled || !still || importSource(still) !== importSource(imported)) return false;
   const has = (d: { features: { id: string }[] }) => d.features.some((f) => f.id === imported.id);
+  const untouched = cleanAt === store.editCount;
   const undone = store.undoIfTop((before) => !has(before) && has(store.document));
+  if (undone && untouched) store.markClean();
   if (undone) recolorOnRedo(store, imported, res);
   const name = importSource(imported)?.split(/[\\/]/).pop() || "the file";
   const { toast } = await import("../ui/toast");
@@ -928,8 +992,9 @@ export async function adoptImportedColors(
     nodes?: { name: string; parent: number | null; color?: string }[] | undefined;
     parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[] | undefined;
   },
-  opts: { joinImport?: boolean; only?: boolean; source?: string | undefined } = {},
+  opts: { joinImport?: boolean; only?: boolean; source?: string | undefined; opening?: boolean } = {},
 ): Promise<boolean> {
+  const own = <T>(fn: () => T): T => (opts.opening ? store.keepingClean(fn) : fn());
   const perNode = res.nodes ? nodeColors(res.nodes) : null;
   // Normalised once: it is the key into the map materialsForColors returns. nodeColors already normalises.
   const single = perNode ? null : asHex(res.color);
@@ -953,7 +1018,7 @@ export async function adoptImportedColors(
   if (!wanted.length) return true;
 
   const { add, byColor } = materialsForColors(wanted, store.materialLibrary);
-  if (add.length) store.importMaterials(add);
+  if (add.length) own(() => store.importMaterials(add));
 
   let opened = false;
   const offOpen = store.onOpen(() => (opened = true));
@@ -988,12 +1053,14 @@ export async function adoptImportedColors(
     }
   }
   const has = (d: { features: { id: string }[] }) => d.features.some((f) => f.id === featureId);
-  store.undoAsOne(
-    () => {
-      for (const [material, ids] of byMaterial) store.setBodiesMaterial(ids, material);
-    },
-    opts.joinImport ? (before) => !has(before) && has(store.document) : undefined,
-    { only: !!opts.only },
+  own(() =>
+    store.undoAsOne(
+      () => {
+        for (const [material, ids] of byMaterial) store.setBodiesMaterial(ids, material);
+      },
+      opts.joinImport ? (before) => !has(before) && has(store.document) : undefined,
+      { only: !!opts.only },
+    ),
   );
   return true;
 }

@@ -47,7 +47,7 @@ const COLOUR_BASELINE: Record<string, number> = {
   "src/styles/_glass.scss": 30,
   "src/styles/_inspector.scss": 15,
   "src/styles/_layout.scss": 5,
-  "src/styles/_modals.scss": 120,
+  "src/styles/_modals.scss": 118,
   "src/styles/_notice.scss": 1,
   "src/styles/_renderdock.scss": 5,
   "src/styles/_targetedit.scss": 2,

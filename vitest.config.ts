@@ -24,6 +24,8 @@ export default defineConfig({
     projects: [
       {
         resolve: { alias },
+        // The example STEP files are read whole by tests/templates through ?inline.
+        assetsInclude: ["**/*.stpz"],
         test: {
           name: "logic",
           include: ["tests/**/*.test.ts"],

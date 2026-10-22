@@ -10,8 +10,18 @@ import type { BugReportDeps } from "../../../src/ui/bugReporter";
 import BugReportDialog from "../../../src/components/overlays/BugReportDialog.vue";
 
 const invoke = vi.fn();
-vi.mock("@tauri-apps/api/core", () => ({ invoke: (cmd: string) => invoke(cmd) }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: async (cmd: string) =>
+    cmd === "system_info"
+      ? { system: "linux x86_64 · Ubuntu 24.04.1 LTS · AppImage", webview: "WebKitGTK 2.46.3" }
+      : invoke(cmd),
+}));
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: async () => "1.0.7" }));
+const plugins = vi.hoisted(() => ({ ids: new Set<string>() }));
+vi.mock("../../../src/plugins", async (orig) => ({
+  ...(await orig<typeof import("../../../src/plugins")>()),
+  installedIds: () => plugins.ids,
+}));
 
 enableAutoUnmount(afterEach);
 
@@ -72,6 +82,8 @@ describe("the bug report's app log", () => {
   });
   afterEach(() => {
     delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    delete window.__FUNDACAD_SAFE_MODE__;
+    plugins.ids = new Set();
   });
 
   it("attaches the tail in the app, before the document, and drops it when unticked", async () => {
@@ -80,13 +92,19 @@ describe("the bug report's app log", () => {
     await open();
     expect(invoke.mock.calls).toEqual([["log_tail"]]);
     expect($<HTMLInputElement>(".bug-log")!.checked).toBe(true);
-    expect(preview()).toContain("app log, last 2 KB");
+    expect(preview()).toContain(`app log (the end, user names hidden):\n${TAIL_A}`);
 
     tick(".bug-doc", true);
     const ticked = await copy();
     expect(ticked.at(-2)!.split("\n").slice(1).join("\n")).toEqual(TAIL_A);
     expect(ticked.at(-2)).toMatch(/^app log/);
     expect(ticked.at(-1)).toEqual(`document:\n{"features":[{"id":"f7"}]}`);
+    expect(ticked[0]!.split("\n").slice(0, 4)).toEqual([
+      "FundaCAD problem report (format 2)",
+      "version: 1.0.7 · channel beta",
+      "system: linux x86_64 · Ubuntu 24.04.1 LTS · AppImage",
+      "webview: WebKitGTK 2.46.3",
+    ]);
 
     tick(".bug-log", false);
     const unticked = await copy();
@@ -120,5 +138,20 @@ describe("the bug report's app log", () => {
     expect(preview()).not.toContain("app log");
     const sections = await copy();
     expect(sections.at(-1)!.startsWith("render pipeline:")).toBe(true);
+  });
+
+  it("names safe mode and the running plugins, or says off and none", async () => {
+    const header = async () => (await copy())[0]!.split("\n").slice(-2);
+    await open();
+    expect(await header()).toEqual(["safe mode: off", "plugins: none"]);
+    document.body.innerHTML = "";
+
+    window.__FUNDACAD_SAFE_MODE__ = { reason: "failedStarts", failedStarts: 3 };
+    plugins.ids = new Set(["screws", "printing-toolkit"]);
+    await open();
+    expect(await header()).toEqual([
+      "safe mode: on, the last 3 starts did not finish",
+      "plugins: printing-toolkit, screws",
+    ]);
   });
 });

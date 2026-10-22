@@ -19,7 +19,7 @@ afterEach(() => {
 // repository, so no package manager ever offers the next build.
 it("tells a .deb, .rpm or Flatpak install where its update comes from", async () => {
   (globalThis as Record<string, unknown>).window = { __TAURI_INTERNALS__: {} };
-  await checkForUpdates(true);
+  await checkForUpdates(true, async () => "go");
   expect(toasts).toHaveLength(1);
   expect(toasts[0]).not.toMatch(/package manager/);
   expect(toasts[0]).toMatch(/releases page/);
