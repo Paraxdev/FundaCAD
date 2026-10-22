@@ -1,5 +1,6 @@
 import { saveDocument } from "../io/files";
 import { choose } from "../ui/choice";
+import { PRODUCT_NAME } from "./channel";
 import type { BeforeInstall } from "../ui/updates";
 import type { Engine } from "./engine";
 
@@ -7,7 +8,7 @@ const isTauri = () => "__TAURI_INTERNALS__" in window;
 
 /** "part.funda*" while there are unsaved changes. */
 export function windowTitle(fileName: string, dirty: boolean): string {
-  return `${fileName}${dirty ? "*" : ""} · FundaCAD`;
+  return `${fileName}${dirty ? "*" : ""} · ${PRODUCT_NAME}`;
 }
 
 /** Resolves whether to go on; a Save As that was cancelled or failed leaves the document dirty, so that is a no. */
