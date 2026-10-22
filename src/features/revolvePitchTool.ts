@@ -72,7 +72,7 @@ export class RevolvePitchTool {
   private arcTube: THREE.Mesh | null = null;
   private arcGrab: THREE.Mesh | null = null;
   private arcHead: THREE.Mesh | null = null;
-  private arcMat: THREE.MeshLambertMaterial | null = null;
+  private arcMat: THREE.MeshBasicMaterial | null = null;
   /** What the arc was last built for, the span quantised so an orbit does not rebuild it every frame. */
   private arcKey = "";
   private arcEnd = new THREE.Vector3();
@@ -398,11 +398,10 @@ export class RevolvePitchTool {
   private buildArc() {
     const group = new THREE.Group();
     group.renderOrder = 999;
-    // Lit and depth-free like the straight handle, from the same accent token, so the two read as one set.
-    const mat = new THREE.MeshLambertMaterial({
+    // Unlit, untoned and depth-free like the straight handle, so it keeps the accent colour under any light.
+    const mat = new THREE.MeshBasicMaterial({
       color: themeColor("--accent", 0xff7a3c),
-      emissive: themeColor("--accent", 0xff7a3c),
-      emissiveIntensity: 0.5,
+      toneMapped: false,
       depthTest: false,
       depthWrite: false,
       transparent: true,
@@ -460,7 +459,6 @@ export class RevolvePitchTool {
     const hot = this.hoveringArc || this.grabbingAngle;
     const c = themeColor(hot ? "--accent-hot" : "--accent", hot ? 0xff9a5c : 0xff7a3c);
     this.arcMat.color.set(c);
-    this.arcMat.emissive.set(c);
   }
 
   /** Degrees about the axis, read in the axis's own plane. Null when that plane is nearly edge-on
