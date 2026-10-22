@@ -6,11 +6,8 @@ const POS_Q = 1e4;
 const NRM_Q = 1e3;
 const KEY = 7;
 
-/** Merges the vertices of `indices` that share a quantised position, a
- *  quantised normal AND a face id, rewriting `indices` in place to the welded
- *  numbering. Vertices are numbered in first-use order along `indices`, so the
- *  result is the same one a string key per vertex gave, at a fraction of the
- *  cost. `faceIds` is per triangle. */
+/** Merges vertices sharing a quantised position, normal AND face id, rewriting
+ *  `indices` in place in first-use order. `faceIds` is per triangle. */
 export function weldByFace(
   positions: Float32Array,
   normals: Float32Array,
@@ -23,8 +20,7 @@ export function weldByFace(
   const mask = size - 1;
   // slot -> welded vertex + 1, 0 is empty
   const table = new Int32Array(size);
-  // Doubles rather than int32: a quantised position in 0.1µm overflows 32 bits
-  // past about 214 m, and the string key this replaces never did.
+  // Doubles: a position quantised to 0.1µm overflows int32 past about 214 m.
   let keys = new Float64Array(Math.min(n, 1 << 14) * KEY);
   const outP = new Float32Array(n * 3);
   const outN = new Float32Array(n * 3);
@@ -97,7 +93,7 @@ export function weldByFace(
   return { positions: outP.slice(0, count * 3), normals: outN.slice(0, count * 3) };
 }
 
-/** Key equality as the string key saw it: -0 is 0 and NaN is NaN. */
+/** -0 equals 0 and NaN equals NaN. */
 function same(a: number, b: number): boolean {
   return a === b || (a !== a && b !== b);
 }

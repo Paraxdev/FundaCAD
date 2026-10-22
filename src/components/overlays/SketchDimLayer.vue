@@ -1,24 +1,6 @@
 <script setup lang="ts">
-// Persistent, editable dimension annotations on committed sketch geometry.
-// Replaces the DOM half of sketch/sketchDimensions.ts, which stays as the facade
-// SketchMode talks to (its constructor, method names and hook fields are
-// unchanged, see that file's header).
-//
-// The line this component draws, and the reason it is not "just" a v-for:
-//
-//   STRUCTURE is reactive. Which labels exist, what each reads, its class list,
-//   which one is selected, which one is being typed into.
-//
-//   POSITION is not, and must not be. Every label is projected from sketch mm
-//   through the sketch plane and the live camera to screen px, on every frame
-//   the camera moves. The loop at the bottom writes style.transform straight
-//   onto elements it collected into a PLAIN array, no ref, no reactive(), no
-//   scheduler. TimelineBar.vue's rollback drag draws the same line for the
-//   same reason.
-//
-// The label drag, the pointer-capture bookkeeping and the value editor's
-// focus/select are imperative here too: they are pointer- and cursor-rate code
-// resolved against the plane, not state anybody renders from.
+// Structure is reactive, position is not: the rAF loop projects sketch mm through the plane and live camera to screen
+// px and writes style.transform onto a plain array of elements. The drag and the editor's focus are imperative too.
 
 import * as THREE from "three";
 import { nextTick, onUnmounted, ref, watch } from "vue";
@@ -31,7 +13,6 @@ import type { Box } from "../../ui/promptPlacement";
 
 const s = useSketchAnnotationStore();
 
-// --- position: deliberately outside reactivity ----------------------------
 const els: (HTMLElement | null)[] = [];
 const leaders: (SVGGElement | null)[] = [];
 const scratch = new THREE.Vector3();
@@ -146,7 +127,7 @@ watch(
     // The new set is at the same camera as the old one, so the pose check would
     // otherwise skip it forever.
     lastPose = -1;
-    // A rebuild is also what ends an edit (the class wiped its innerHTML here).
+    // A rebuild also ends an edit.
     editing.value = null;
     editError.value = null;
   },
@@ -155,19 +136,13 @@ watch(
 
 onUnmounted(stop);
 
-// --- selection -----------------------------------------------------------
-// Which label the Delete key acts on. Set by a click or a right-click, dropped
-// on the next rebuild by showDims(), a selection whose label no longer exists
-// must not keep a stale delete armed.
+// Which label the Delete key acts on, dropped on the next rebuild so a stale delete is never armed.
 function select(i: number) {
   s.dimSelected = i;
 }
 
-// --- label drag (placement) ----------------------------------------------
-// A label is a click target first: under DRAG_PX of movement the release must
-// still open the value editor. Past it, the label follows the cursor and the
-// release freezes the placement. Matches the 4px / `dragMoved` idiom
-// SketchMode's body-drag and moveDrag already use.
+// Under DRAG_PX of movement a release still opens the value editor, past it the label follows the cursor (the same
+// 4px idiom as SketchMode's drags).
 const DRAG_PX = 4;
 
 interface Drag {
@@ -181,27 +156,19 @@ interface Drag {
 }
 /** plain, not a ref: read and written at pointer rate, rendered by nobody */
 let drag: Drag | null = null;
-/** a drag's release must not also open the value editor (the browser still
- *  fires `click` after `pointerup`). Cleared on the next pointerdown, so a
- *  normal click on any label right after a drag still edits. */
+/** A drag's release must not also open the editor, the browser still fires click after pointerup. Cleared on the next
+ *  pointerdown. */
 let suppressClick = false;
 
 function onDown(e: PointerEvent, i: number, l: DimItem) {
   e.stopPropagation();
-  // Primary button only. A badge sits ON the geometry it labels, a line's
-  // length badge lands at the midpoint, exactly where a user aims to right-click
-  // that line, and overlapPick REPLACES the selection with the single entity
-  // under the cursor. So an unguarded right press ate a two-entity selection
-  // before its constraint menu was ever built, and rebuilt the badge out from
-  // under its own contextmenu handler. A secondary press selects nothing, starts
-  // no drag, and leaves this element alive for the menu; middle-drag stays pan.
+  // Primary only: a badge sits where users right-click its line, and a secondary press would let overlapPick replace a
+  // two-entity selection and rebuild the badge under its own contextmenu handler. Middle drag stays pan.
   if (e.button !== 0) return;
   suppressClick = false;
   l.suppressEdit = s.dimHooks?.overlapPick(e) ?? false;
-  // overlapPick rebuilds every label when geometry claims the pick, so the
-  // element under the cursor may already have been patched away, never start a
-  // drag on top of that. The click that follows lands on the rebuilt item, which
-  // never saw suppressEdit, so the layer wide flag has to stop that edit.
+  // overlapPick may have rebuilt the label under the cursor, so no drag starts on it, and the layer-wide flag stops the
+  // edit the following click would open on the rebuilt item.
   if (l.suppressEdit) {
     suppressClick = true;
     return;
@@ -248,9 +215,8 @@ function onDragMove(e: PointerEvent) {
   const p = placeAt(e.clientX, e.clientY);
   if (!p) return;
   d.last = p;
-  // the host re-lays-out the dim and hands back where its label really goes, a
-  // perpendicular-only or radial-only dim tracks the cursor's useful component
-  // and ignores the rest, with no jump when the drag ends
+  // The host re-lays-out the dim and returns where its label really goes, so a perpendicular-only or radial-only dim
+  // tracks only its useful component and does not jump on release.
   const anchor = d.item.placeCommit!(p.x, p.y, false);
   if (anchor) {
     // anchor is a raw THREE.Vector2 mutated in place; the rAF loop reads it next
@@ -268,19 +234,13 @@ function onDragEnd(e: PointerEvent) {
   if (!d.moved) return; // a plain click: leave it to the click handler
   e.stopPropagation();
   suppressClick = true; // the click that follows this release is not an edit
-  // a release whose cursor misses the plane (grazing view) falls back to the
-  // last placement that did resolve, so the final rebuild still happens and the
-  // labels can't be left showing a half-finished drag
+  // A release off the plane (grazing view) falls back to the last resolved placement, so the final rebuild still runs.
   const p = placeAt(e.clientX, e.clientY) ?? d.last;
   if (p) d.item.placeCommit!(p.x, p.y, true);
 }
 
-// --- right-click ---------------------------------------------------------
-// The discoverable half of deleting a dimension; the Delete key (handled by
-// SketchMode via deleteSelected()) is the shortcut. A dimensional constraint has
-// no constraint glyph, glyphs.ts deliberately skips them, since they already
-// draw as dimension badges, so without these two there is no way to remove one
-// short of deleting the geometry under it. Reported 2026-08-02.
+// Dimensional constraints get no glyph (glyphs.ts skips them), so this and the Delete key are the only ways to remove
+// one short of deleting its geometry.
 function onContextMenu(e: MouseEvent, i: number, l: DimItem) {
   e.preventDefault();
   e.stopPropagation();
@@ -288,7 +248,6 @@ function onContextMenu(e: MouseEvent, i: number, l: DimItem) {
   s.dimHooks?.labelMenu(e, l.onDelete ? () => l.onDelete!() : null);
 }
 
-// --- value editor --------------------------------------------------------
 const editing = ref<number | null>(null);
 const editText = ref("");
 const editError = ref<string | null>(null);
@@ -304,11 +263,8 @@ function onClick(e: MouseEvent, i: number, l: DimItem) {
   beginEdit(i, l);
 }
 
-// Escape hatch. A label that floats over its own geometry loses every single
-// click to the pick underneath (overlapPick), which would leave it permanently
-// uneditable, and in the dimension tool an in-progress dimension claims clicks
-// too. A double-click is unambiguous, so it edits regardless of which one was
-// preferred on the singles.
+// Double-click always edits: single clicks on a label over its own geometry go to overlapPick, and the dimension tool
+// claims clicks too.
 function onDblClick(e: MouseEvent, i: number, l: DimItem) {
   if (l.driven) return;
   e.stopPropagation();
@@ -362,22 +318,15 @@ function onEditBlur() {
   if (!editError.value) revert();
 }
 
-/** A wheel notch that landed on this layer instead of the canvas.
- *
- *  The badges take pointer events so they can be clicked and dragged, which
- *  also takes the wheel; the viewport's wheel listener is on the canvas, so
- *  a notch over a badge used to do nothing at all. Bound on the CONTAINER
- *  rather than on each badge, so it catches the ones that are `pointer-events:
- *  none` in a drawing tool too, where the label is still drawn over the
- *  geometry and the wheel still has to get through. */
+/** The badges take pointer events, and so the wheel the canvas listens for. Bound on the container so it also catches
+ *  badges that are pointer-events none in a drawing tool. */
 function onWheel(e: WheelEvent) {
   s.dimViewport?.forwardWheel(e);
 }
 </script>
 
 <template>
-  <!-- Teleported to body, where the class appended itself: .sketch-dims is
-       `position: fixed; inset: 0` and must not inherit a stacking context. -->
+  <!-- Teleported: .sketch-dims is position fixed, inset 0, and must not inherit a stacking context. -->
   <Teleport to="body">
     <div class="sketch-dims" :class="{ 'dims-passive': s.dimsPassive }" @wheel="onWheel">
       <div
@@ -408,9 +357,8 @@ function onWheel(e: WheelEvent) {
       </div>
     </div>
   </Teleport>
-  <!-- A label kept on screen away from its dimension points back to it. Its own
-       layer, under the floating cards, so a leader running to a dimension behind
-       the Items card goes under the card rather than across it. -->
+  <!-- A label kept away from its dimension points back to it. Its own layer under the floating cards, so a leader to
+  a dimension behind the Items card goes under the card. -->
   <Teleport to="body">
     <svg v-if="s.dimItems.length" class="sketch-dim-leaders" aria-hidden="true">
       <g

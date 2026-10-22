@@ -1,9 +1,5 @@
-// Crash-recovery autosave. Rust owns the snapshot files (app_data_dir/recovery,
-// atomic writes via the recovery_* commands), deliberately OUTSIDE the
-// webview's tightened fs scope. The frontend just decides WHEN to snapshot:
-// 30 s after the last change (debounced), at most 2 min behind, and only while
-// the document is dirty. A successful manual save clears the slot, so a
-// recovery prompt on launch ≈ "the app died with unsaved work".
+// Crash-recovery autosave. Rust owns the snapshot files (recovery_* commands) outside the webview's fs scope;
+// this decides when: 30 s after the last edit, at most 2 min behind, only while dirty. A save clears the slot.
 
 import type { DocumentStore } from "../document/store";
 import { toast } from "../ui/toast";
@@ -50,10 +46,7 @@ export function installAutosave(store: DocumentStore) {
     if (!store.dirty || writing) return;
     writing = true;
     try {
-      // ONE compact stringify of the whole envelope (was: pretty-print →
-      // parse → re-stringify, three passes over a possibly multi-MB doc),
-      // and synchronously BEFORE any await, so the snapshot can't see a
-      // half-applied edit that lands while we're suspended.
+      // One compact stringify, synchronously before any await, so the snapshot cannot see a half-applied edit.
       const env: Envelope = {
         source: store.filePath,
         savedAt: Date.now(),
@@ -93,8 +86,7 @@ export function installAutosave(store: DocumentStore) {
   store.onMeta(schedule);
 }
 
-/** Drop the recovery snapshots for a just-saved document (called after a
- *  successful save, the on-disk file is now the truth). */
+/** Drop the recovery snapshots of a document that was just saved. */
 export async function clearRecovery(path: string | null) {
   if (!isTauri()) return;
   try {

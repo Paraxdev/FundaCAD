@@ -1,10 +1,5 @@
-//! Fillets and chamfers, the Python engine's `blends.py` and the fillet and chamfer handlers
-//! of the Python engine's `builder.py`.
-//!
-//! One kernel call on the whole group first, on a copy of the body. When that
-//! refuses, the edges are blended one at a time on the evolving body in a
-//! canonical order; an edge that still refuses fails the whole feature with a
-//! sentence that says whether a smaller size would have built.
+//! Fillets and chamfers, blends.py. One kernel call on the whole group first, on a copy. When that refuses the
+//! edges go one at a time in canonical order, and one that still refuses fails saying whether a smaller size builds.
 
 pub mod eval;
 pub mod ops;
@@ -121,9 +116,8 @@ fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at:
         py_g(size),
         label.to_lowercase()
     );
-    // Right at the limit the ball ends exactly on a face's edge and the kernel
-    // leaves a sliver face there, so the size offered stays a hair below it. A
-    // split's or an overlap's limit is a size that built, already on this grid.
+    // At the limit the ball ends exactly on a face's edge and the kernel leaves a sliver face, so the offer stays
+    // a hair below it. A split's or an overlap's limit is a size that built, already on this grid.
     let shown = |v: f64| {
         let v = if matches!(why, Misfit::Split | Misfit::Overlap) { v + 1e-6 } else { v - 1e-4 };
         let step = if v >= 1.0 { 100.0 } else { 1000.0 };
@@ -271,10 +265,8 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
         _ => None,
     };
     let draft = f.draft == Some(true);
-    // The Python engine's combined equal chamfer always refused ("Nothing to
-    // chamfer", build123d found no solid for the copied edges), so every corner
-    // was cut one edge at a time and came out pointed. Cut together, three
-    // edges meeting at a corner end in one triangle.
+    // All edges in one call, so three edges meeting at a corner end in one triangle. build123d's combined chamfer
+    // refused here ("Nothing to chamfer"), which is why the Python engine's corners came out pointed.
     let op = move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> {
         match d2 {
             None => build123d_chamfer(s, es, size),
@@ -298,13 +290,9 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
     )
 }
 
-/// `_DRAFT_FELL_BACK`: drags that needed the section build, with the smallest
-/// size they needed it at.
-///
-/// Keyed by size, unlike blends.py: a drag that fell back at 43.7 mm and then
-/// came down to 3 mm went straight to the section build, which the kernel's
-/// own filleter would have answered at once, and the section build's boolean
-/// can hang outright on such a small conic blend.
+/// `_DRAFT_FELL_BACK`: drags that needed the section build and the smallest size they needed it at. Keyed by
+/// size unlike blends.py, so a drag shrunk from 43.7 mm to 3 mm tries the kernel's filleter again first, since
+/// the section build's boolean can hang outright on such a small conic blend.
 static DRAFT_FELL_BACK: std::sync::Mutex<Vec<(String, f64)>> = std::sync::Mutex::new(Vec::new());
 
 fn fell_back_before(key: &str, size: f64) -> bool {
@@ -360,9 +348,8 @@ pub fn chord_radius(shape: &Shape, edge: &Shape, chord: f64) -> f64 {
     }
 }
 
-/// Seams out of the set. One an edge pick named is refused, the kernel would
-/// skip it and call the blend done. One a broad selector swept in (every edge,
-/// a face's edges) is no edge anyone sees and is left out quietly.
+/// Seams out of the set. One an edge pick named is refused, since the kernel would skip it and call the blend
+/// done. One a broad selector swept in is no edge anyone sees and is left out quietly.
 fn drop_seams(shape: &Shape, sels: &[Value], edges: Vec<Shape>, label: &str) -> FResult<Vec<Shape>> {
     let adj = crate::topo::FaceAdjacency::new(shape);
     let (seams, real): (Vec<Shape>, Vec<Shape>) = edges.into_iter().partition(|e| adj.is_seam(e));
@@ -523,10 +510,8 @@ fn rematch_edge(shape: &Shape, fp: &Map<String, Value>, max_mid_dist: f64, tol_p
     best.map(|b| b.1)
 }
 
-/// Blending a neighbour trims an edge but leaves it on its own curve, where an
-/// edge that blend made lies somewhere else. Without this the nearest edge was
-/// taken whatever it was: a notch corner's round landed on a 0.03 mm sliver its
-/// neighbour had left, and the corner stayed sharp with no error.
+/// Blending a neighbour trims an edge but leaves it on its own curve. Without this a notch corner's round once
+/// landed on a 0.03 mm sliver its neighbour left, and the corner stayed sharp with no error.
 fn still_on(orig: &Shape, target: &Shape, tol: f64) -> bool {
     let Ok(t) = EdgeEnt::new(target.clone()) else {
         return false;
@@ -534,9 +519,8 @@ fn still_on(orig: &Shape, target: &Shape, tol: f64) -> bool {
     crate::kernel::distance_to_point(orig, t.mid.to_array()).is_some_and(|d| d <= tol)
 }
 
-/// The asked for edges that `out` still has. A blended edge leaves nothing
-/// along its old line; the section build could hand one back untouched and
-/// call it done, a notch corner that stayed sharp without a word.
+/// The asked for edges that `out` still has. The section build could hand one back untouched and call it done,
+/// a notch corner that stayed sharp without a word.
 fn still_sharp(out: &Shape, edges: &[Shape]) -> Vec<Shape> {
     let after = crate::kernel::subshapes(out, crate::kernel::Kind::Edge);
     edges
@@ -639,9 +623,8 @@ struct BodyRef<'a> {
     shape: &'a Shape,
 }
 
-/// The largest of a few halvings of `blend_size` at which the edges build
-/// together. Each can refuse alone at any size, its round having nowhere to end
-/// short of the next one, while the chain as a whole fits smaller.
+/// The largest of a few halvings of `blend_size` at which the edges build together. Each can refuse alone at
+/// any size, its round having nowhere to end short of the next, while the chain as a whole fits smaller.
 fn group_fits_at(body: &Shape, edges: &[Shape], op: &BlendOp, blend_size: f64) -> Option<f64> {
     if edges.len() < 2 {
         return None;
@@ -720,9 +703,8 @@ fn blend_failure(
     )
 }
 
-/// An edge shorter than the blend that runs on from one of `edges` to a vertex
-/// the kernel gave up at: its length and that vertex. The kernel carries a blend
-/// on along a tangent sliver like that and then has to end it in the corner past it.
+/// An edge shorter than the blend that runs on from one of `edges` to a vertex the kernel gave up at, with its
+/// length. The kernel carries a blend along such a tangent sliver and then has to end it in the corner past it.
 fn short_edge_at(body: &Shape, edges: &[Shape], at: &[[f64; 3]], blend_size: f64) -> Option<(f64, [f64; 3])> {
     use crate::kernel::{subshapes, Kind};
     const SAME: f64 = 1e-4;
@@ -793,9 +775,8 @@ fn blend_edges(
     fid: &str,
     sels: &OneOrMany<Selector>,
     label: &str,
-    // What else shapes the blend: a fall back remembered for one profile says
-    // nothing about another, and would send its preview down another path
-    // than the commit takes.
+    // What else shapes the blend. A fall back remembered for one profile says nothing about another, and would
+    // send its preview down another path than the commit takes.
     variant: &str,
     op: &BlendOp,
     blend_size: f64,

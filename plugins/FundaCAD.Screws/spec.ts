@@ -1,6 +1,5 @@
-// A fastener spec: everything the geometry needs to build one fastener, for a catalogue entry and a
-// user-defined one alike. catalogue/fields.json says which numbers each kind and part type needs, and
-// geometry/scr_spec.py reads the same file, so the form, this check and the kernel agree.
+// catalogue/fields.json says which numbers each kind and part type needs, and geometry/scr_spec.py reads the same
+// file, so the form, this check and the kernel agree.
 
 import FIELDS from "./catalogue/fields.json";
 

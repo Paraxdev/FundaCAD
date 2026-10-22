@@ -1,15 +1,5 @@
-// The Stress panel's setup as a document field. A study is display state like
-// the body visibility: the rebuild never reads it, and a file is never refused
-// over it. What comes off disk is checked here once, so the panel can trust it;
-// anything it cannot read as a study is dropped whole, quietly, and the file
-// opens as if it had none.
-//
-// Numbers are the forgiving part. A cleared input in the panel reads as "", and
-// a hand-edited file may carry a string where a number belongs, so a number
-// that is not finite falls back to the panel's default for that field rather
-// than costing the user the whole setup. The structure is not forgiven: a load
-// that is not an object, or a support of a kind nobody knows, means the value
-// is something other than a study.
+// The Stress panel's setup, display state the rebuild never reads. Unreadable structure drops the whole study quietly;
+// a non-finite number (a cleared input reads as "") falls back to that field's default.
 
 import type { AxisDirection, Selector, StressSpot, StressStudy, StressSupportType } from "../types";
 
@@ -17,7 +7,6 @@ export const AXIS_DIRECTIONS: readonly AxisDirection[] = ["-Z", "+Z", "+X", "-X"
 export const SUPPORT_TYPES: readonly StressSupportType[] = ["fixed", "pinned", "slider"];
 const LOAD_DIRECTIONS = new Set<string>(["into", "custom", ...AXIS_DIRECTIONS]);
 
-/** The defaults a fresh panel starts from, and what a damaged number falls back to. */
 export const STUDY_DEFAULTS = {
   force: 100,
   pressure: 0.1,
@@ -27,7 +16,7 @@ export const STUDY_DEFAULTS = {
   nu: 0.35,
   yield: 40,
   density: 1.2,
-  /** mm, a spot's radius when the file's is not a size. */
+  // mm, a spot's radius when the file's is not a size.
   radius: 5,
 } as const;
 
@@ -37,15 +26,11 @@ function num(v: unknown, fallback: number): number {
   return typeof v === "number" && Number.isFinite(v) ? v : fallback;
 }
 
-/** Three finite numbers, a point or a direction. */
 export function isVec3(v: unknown): v is [number, number, number] {
   return Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n));
 }
 
-/** One face selector in a shape the engine and the panel can both read, by the
- *  face forms of the Selector union. The panel reads a selector's point to find
- *  the face in the view, so a point that is not three numbers is as damaged as
- *  a missing one. */
+// The panel finds the face by its selector's point, so a point that is not three numbers is as damaged as none.
 function isFaceSelector(s: unknown): boolean {
   if (!isRecord(s) || s["kind"] !== "face") return false;
   if (s["body"] !== undefined && typeof s["body"] !== "string") return false;
@@ -60,8 +45,7 @@ function isFaceSelector(s: unknown): boolean {
       const fp = s["fp"];
       const nth = s["nth"];
       if (nth !== undefined && !(typeof nth === "number" && Number.isInteger(nth))) return false;
-      // The engine scores whichever fingerprint fields are there; the panel
-      // needs the centroid to look for the face in the view.
+      // The engine scores whichever fingerprint fields exist; the panel needs the centroid to find the face.
       return (
         isRecord(fp) &&
         isVec3(fp["centroid"]) &&
@@ -75,16 +59,13 @@ function isFaceSelector(s: unknown): boolean {
   }
 }
 
-/** Face selectors as the engine reads them. Anything else in the list makes the
- *  list unreadable, since a face silently missing would change the answer. */
+// Anything else makes the list unreadable, since a silently missing face would change the answer.
 function faces(v: unknown): Selector[] | null {
   if (!Array.isArray(v) || !v.every(isFaceSelector)) return null;
   return structuredClone(v) as Selector[];
 }
 
-/** The spots of a support or a load, none for a missing list. A spot with no
- *  point is unreadable, as a place silently missing would change the answer;
- *  a radius that is not a size falls back like any other number. */
+// A spot with no point is unreadable, as a missing place would change the answer; a bad radius falls back.
 function spots(v: unknown): StressSpot[] | null {
   if (v === undefined || v === null) return [];
   if (!Array.isArray(v)) return null;
@@ -106,15 +87,13 @@ function id(v: unknown, i: number): number {
   return typeof v === "number" && Number.isInteger(v) && v > 0 ? v : i + 1;
 }
 
-/** Ids must be unique within a list for the panel to address its rows; a file
- *  with repeats is renumbered from 1 rather than refused. */
+// The panel addresses rows by id, so a file with repeats is renumbered from 1 rather than refused.
 function uniqueIds<T extends { id: number }>(rows: T[]): T[] {
   const seen = new Set(rows.map((r) => r.id));
   if (seen.size === rows.length) return rows;
   return rows.map((r, i) => ({ ...r, id: i + 1 }));
 }
 
-/** A study from a parsed document's `stress`, or null for anything that is not one. */
 export function normalizeStressStudy(raw: unknown): StressStudy | null {
   if (!isRecord(raw)) return null;
   const body = raw["body"] ?? null;

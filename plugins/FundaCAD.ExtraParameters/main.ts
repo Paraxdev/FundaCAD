@@ -1,12 +1,5 @@
-// Extra parameters: the controls, groups, configurations and checks over a
-// document's parameter table.
-//
-// The data is not here. A control, a group, a configuration and a check are all
-// part of the document (ParamDef and paramExtras in src/types.ts), because every
-// one of them names parameters and the params engine has to rename and delete
-// through them whether or not this is installed. A plugin that owned the data
-// would leave a configuration pointing at a parameter that was renamed while it
-// was switched off. What this owns is every surface that edits it.
+// The data lives in the document (ParamDef and paramExtras), since the params engine has to rename and delete
+// through it even while this plugin is off. What this owns is every surface that edits it.
 
 import ParametersSection from "./ParametersSection.vue";
 import SetupPanel from "./SetupPanel.vue";

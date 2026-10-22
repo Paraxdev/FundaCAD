@@ -1,7 +1,5 @@
-//! tests/vectors/body_ids.json, face_colors.json and hole_standards.json, recorded
-//! from the Python engine before it was retired and also replayed by
-//! tests/document/faceColorVectors.test.ts and tests/features/holeStandards.test.ts,
-//! and join_edits.json and handed_over.json, replayed by tests/document/bodyIds.test.ts.
+//! Replays tests/vectors body_ids, face_colors, hole_standards, join_edits and handed_over, which the TypeScript
+//! tests under tests/document and tests/features replay too, so the two sides cannot drift.
 
 use std::path::Path;
 

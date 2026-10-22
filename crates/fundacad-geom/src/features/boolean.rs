@@ -1,6 +1,5 @@
-//! Merging a new solid into the model and body to body booleans:
-//! the Python engine's `handler_util.py` `_combine` and the Python engine's `booleans.py`
-//! `_boolean_into_bodies`, `_do_boolean`, `_noop_eps`, `_sealed_void_diag`.
+//! Merging a new solid into the model and body to body booleans, `_combine` of handler_util.py and
+//! `_boolean_into_bodies`, `_do_boolean`, `_noop_eps` and `_sealed_void_diag` of booleans.py.
 
 use std::collections::HashSet;
 
@@ -62,14 +61,8 @@ fn overlap(a: Option<[f64; 6]>, b: Option<[f64; 6]>) -> bool {
         && a[5] >= b[2] - tol
 }
 
-/// `_in_slices`: `solid` chopped into `n` slabs across the axis it reaches
-/// furthest along.
-///
-/// The slabs are the same material as the whole, so a boolean applied to each
-/// in turn lands on the same answer. What changes is the intersection: each
-/// slab hands the kernel a short curve where the whole handed it one long one,
-/// and that is the entire repair. Fewer than `n` pieces come back when a plane
-/// misses, which is not a failure, the caller only needs more than one.
+/// `_in_slices`: `solid` chopped into `n` slabs across its longest axis, so the kernel meets short intersection
+/// curves instead of one long one. Fewer pieces come back when a plane misses, the caller only needs two.
 fn in_slices(solid: &Shape, n: usize) -> Vec<Shape> {
     let Some(bb) = kernel::bbox(solid) else {
         return Vec::new();
@@ -102,22 +95,10 @@ fn in_slices(solid: &Shape, n: usize) -> Vec<Shape> {
     pieces
 }
 
-/// `_retried_in_slices`: the same boolean again with the tool cut into slabs,
-/// for the one case where OCCT did nothing at all.
-///
-/// A long swept tool that runs nearly parallel to the face it meets defeats the
-/// kernel outright: the boolean reports IsDone, raises nothing, and hands the
-/// argument straight back. A fuse fails the same way and worse, the two come
-/// out as a disjoint lump with the whole tool volume "added" and nothing
-/// merged. Nothing about the geometry is wrong, the kernel simply cannot carry
-/// that one intersection curve end to end, and the same tool in two or four
-/// pieces can. It runs only where the alternative was to raise.
-///
-/// `accept` judges a sliced result; without one, any real change in volume
-/// counts. A fuse needs its own test, because a fuse that merged nothing still
-/// reports the whole tool volume as added. `Ok(None)` is the honest answer that
-/// the tool really does not reach. An `Err` is the kernel refusing every sliced
-/// attempt, which says nothing about reach and must not be read as a miss.
+/// `_retried_in_slices`, only where the alternative was to raise. A long swept tool nearly parallel to the face
+/// it meets makes OCCT hand the argument back as done, or fuse into a disjoint lump, while two or four slabs work.
+/// Without `accept` any volume change counts, a fuse needs its own test. `Ok(None)` is a true miss, an `Err` is
+/// the kernel refusing every slicing and says nothing about reach.
 fn retried_in_slices(
     shape: &Shape,
     tool: &Shape,
@@ -163,9 +144,8 @@ fn sliced(
 
 const HIDDEN_PROBES: usize = 4;
 
-/// Whether cutting `tool` out of `body` takes material, by the measure the cut
-/// itself is held to. Overlapping bounding boxes do not say so: a ring's box
-/// holds everything inside the ring.
+/// Whether cutting `tool` out of `body` takes material, by the measure the cut itself is held to. Bounding
+/// boxes do not say so: a ring's box holds everything inside the ring.
 fn cut_bites(body: &Shape, tool: &Shape, tool_vol: f64) -> bool {
     let Ok(left) = kernel::serial_bool(body, &[tool], BoolKind::Cut) else {
         return false;
@@ -174,10 +154,8 @@ fn cut_bites(body: &Shape, tool: &Shape, tool_vol: f64) -> bool {
     removed >= noop_eps(tool_vol) || kernel::count(&left, Kind::Solid) > kernel::count(body, Kind::Solid)
 }
 
-/// What a cut that removed nothing tells the user. `unseen` counts the hidden
-/// bodies it would have taken material from, and `recorded` says they come
-/// from the extrude's own `hiddenBodies`, which showing a body now does not
-/// change.
+/// What a cut that removed nothing tells the user. `unseen` counts hidden bodies it would have cut, `recorded`
+/// says they come from the extrude's own `hiddenBodies`, which showing a body now does not change.
 fn cut_missed(extrude: bool, unseen: usize, recorded: bool) -> &'static str {
     match (unseen, recorded) {
         (0, _) if extrude => "Cut removed nothing, the extrude doesn't reach any body. Drag the other way, or use Join.",
@@ -189,12 +167,9 @@ fn cut_missed(extrude: bool, unseen: usize, recorded: bool) -> &'static str {
     }
 }
 
-/// `_combine`: merge a solid a feature made the way its `operation` and
-/// `targets` ask. `name` labels a new body; a join keeps its target's name.
-///
-/// Named `targets` are acted on hidden or not. Without them the feature acts
-/// on every body it reaches that is not in `hidden`, which is the live eye
-/// states when the caller records no set of its own.
+/// `_combine`: merge a solid a feature made as its `operation` and `targets` ask, `name` labelling a new body.
+/// Named `targets` are acted on hidden or not, otherwise every reached body not in `hidden` (the live eye states
+/// unless the caller records its own set).
 pub fn combine(
     ctx: &mut Ctx,
     feature_id: &str,
@@ -274,12 +249,8 @@ pub fn combine(
             }
             let merged_vol = signed.abs();
             let mut merged_signed = Some(signed);
-            // What a fuse that really merged looks like: more material than the
-            // bodies held on their own, and less than those bodies plus the
-            // whole tool, because the overlap gets counted once instead of
-            // twice. Both ways of falling outside that window are the kernel
-            // giving up rather than the caller being wrong, so both get the
-            // sliced retry.
+            // A fuse that really merged has more material than the bodies alone and less than bodies plus tool, the overlap
+            // counted once. Outside that window the kernel gave up, so both ways get the sliced retry.
             let merged_properly = |s: &Shape| {
                 let v = kernel::volume_precise(s).abs();
                 hit_vol + noop_eps(prism_vol) < v && v < hit_vol + prism_vol - noop_eps(prism_vol)
@@ -292,10 +263,8 @@ pub fn combine(
                 retried_in_slices(&base, &solid, BoolKind::Fuse, Some(&merged_properly)).ok().flatten()
             };
             if merged_vol < hit_vol - noop_eps(hit_vol) {
-                // LESS than was there before. Nothing a union can legitimately
-                // do removes material, so the fuse itself came back wrong, and
-                // the usual reason is that the two shapes meet along a surface
-                // rather than crossing one another.
+                // Less than was there before. A union cannot remove material, so the fuse came back wrong, usually because
+                // the two shapes meet along a surface rather than crossing.
                 match repair(ctx) {
                     Some(fixed) => {
                         merged = fixed;
@@ -310,11 +279,8 @@ pub fn combine(
                     "Join added no material, the profile is already inside the body. Did you mean Cut?",
                 ));
             } else if merged_vol >= hit_vol + prism_vol - noop_eps(prism_vol) {
-                // The whole tool volume arrived and none of it merged, so the
-                // two came out of the fuse as separate lumps wearing one body's
-                // name. A tool that genuinely misses looks identical from here,
-                // which is why this only offers the repair and keeps the
-                // original result when the slices agree they do not meet.
+                // The whole tool volume arrived and none merged, two lumps under one name. A tool that truly misses looks the
+                // same, so this only offers the repair and keeps the original when the slices agree they do not meet.
                 if let Some(fixed) = repair(ctx) {
                     merged = fixed;
                     merged_signed = None;
@@ -377,10 +343,8 @@ pub fn combine(
             // A cut through a thin wall removes little next to its tool, and
             // still cut the body it parted.
             if hits.is_empty() || (removed < noop_eps(prism_vol) && !parted) {
-                // A cut that removed NOTHING is not always a cut that missed:
-                // OCCT hands a long swept tool's argument straight back
-                // sometimes, and the repair is to slice the tool. Try that
-                // before blaming the caller.
+                // A cut that removed nothing may not have missed: OCCT sometimes hands a long swept tool's argument straight
+                // back, and slicing the tool repairs it, so try that before blaming the caller.
                 let mut healed = false;
                 let mut refused = None;
                 for (i, shape, measured) in &mut results {
@@ -398,10 +362,8 @@ pub fn combine(
                     if let Some(e) = refused {
                         return Err(e.into());
                     }
-                    // No shown body lost anything, whether or not its box met
-                    // the tool's, so the hidden ones are asked directly. Two
-                    // are enough to pick the wording, and the probes are
-                    // capped because a missed preview pays for each one.
+                    // No shown body lost anything, so the hidden ones are asked directly. Two are enough to pick the wording, and
+                    // the probes are capped because a missed preview pays for each one.
                     let solid_box = kernel::bbox(&solid);
                     let unseen = skipped
                         .iter()

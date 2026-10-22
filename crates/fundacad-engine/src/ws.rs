@@ -1,18 +1,7 @@
-//! The WebSocket transport, for a browser, the e2e scripts and the Python
-//! protocol suites (docs/ENGINE.md, section 2.1).
-//!
-//! Replaces the serving half of the Python engine's `server.py` (`main`, `handle`,
-//! `_authorized`, `_mint_token`, `_ip_conns`): the same loopback address, port
-//! variable, token and Origin gate, per address connection cap, close codes,
-//! stdout readiness lines and port in use exit.
-//!
-//! tungstenite on one std thread per connection, no async runtime: the engine
-//! already owns its job thread, a loopback server holds a handful of sockets,
-//! and blocking writes of a 128 MiB frame are what a job's reply wants anyway.
-//! A socket has one reader and many writers (job replies, progress, read path
-//! answers), so the WebSocket sits behind a mutex. The reader waits for bytes
-//! with `peek` outside the lock and parses them under it with the socket put
-//! in non-blocking mode, so an idle connection never holds a writer back.
+//! The WebSocket transport for browsers, the e2e scripts and the protocol suites (docs/ENGINE.md, section 2.1).
+//! One std thread per connection and no async runtime: a loopback server holds a handful of sockets, and a job's
+//! 128 MiB reply wants a blocking write anyway. The reader peeks outside the socket's mutex and parses under it in
+//! non-blocking mode, so an idle connection never holds a writer back.
 
 use crate::{Client, Engine, EngineOptions, Jobs, Outbox, Respawn};
 use fundacad_protocol::{Message, MAX_FRAME};
@@ -32,8 +21,7 @@ pub const DEFAULT_PORT: u16 = 8765;
 /// so rather than report a crash.
 pub const EXIT_PORT_IN_USE: i32 = 3;
 
-/// server.py `MAX_CONNS_PER_IP`. Every client is on 127.0.0.1, so in practice
-/// this caps open sockets.
+/// Every client is on 127.0.0.1, so in practice this caps open sockets.
 pub const MAX_CONNS_PER_IP: usize = 8;
 
 /// A foreign Origin is refused even with the token; no Origin (a non-browser
@@ -46,9 +34,7 @@ pub const ALLOWED_ORIGINS: [&str; 5] = [
     "http://127.0.0.1:5173",
 ];
 
-/// Nothing supervises a `--ws` engine from outside, so a job that ignores a
-/// cancel this long is abandoned by the engine itself, where server.py kills
-/// its worker pool at once.
+/// Nothing supervises a `--ws` engine from outside, so it abandons a job that ignores a cancel this long by itself.
 const CANCEL_GRACE: Duration = Duration::from_secs(2);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -65,7 +51,7 @@ pub fn engine_env(suffix: &str) -> Option<String> {
     appenv(&format!("ENGINE_{suffix}")).or_else(|| appenv(&format!("SIDECAR_{suffix}")))
 }
 
-/// The token and Origin check every connection passes, server.py `_authorized`.
+/// The token and Origin check every connection passes.
 #[derive(Debug, Clone)]
 pub struct Gate {
     token: String,
@@ -429,9 +415,8 @@ fn drain(sock: &mut Socket, into: &mut Vec<Message>) -> ReadState {
     }
 }
 
-/// Sends a close frame and waits for the client to hang up. Dropping a socket
-/// with unread bytes resets it, and a reset can reach the client before the
-/// close frame is read, which would hide the close code.
+/// Sends a close frame and waits for the client to hang up: dropping a socket with unread bytes resets it, and the
+/// reset can reach the client before the close frame, hiding the close code.
 fn close_and_linger(sock: &mut Socket, code: CloseCode, reason: &'static str) {
     let _ = sock.close(Some(CloseFrame { code, reason: reason.into() }));
     let _ = sock.flush();

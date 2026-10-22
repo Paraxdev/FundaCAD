@@ -1,23 +1,5 @@
-// Pointer, wheel and touch input for the navigator.
-//
-// The buttons follow the active binding table (bindings.ts): by default right
-// orbits (pans while Shift is held or the orbit is locked), middle pans, and the
-// left button is never taken. A table may claim the left button with a
-// modifier held; that press, its moves and its release are then swallowed
-// before any tool sees them, unless a tool owns the left button. The pointer is captured for the drag, and pointerup, pointercancel and
-// lostpointercapture all end it, so a drag that leaves the window or is taken
-// by the system cannot leave a gesture running.
-//
-// The wheel is read per stream as a mouse wheel or a touchpad (wheelKind.ts):
-// a mouse wheel zooms, a touchpad's two-finger scroll orbits (or pans, by the
-// setting) with Shift doing the other, and a pinch zooms about the cursor.
-//
-// Touch: one finger orbits, two pan and pinch, three orbit (whatever tool is
-// up), a tap is a click and a long press is a right click. A finger is held back from the rest of the app until
-// it moves, lifts, or a second finger joins, so a two-finger gesture never
-// starts as a click or a stroke under its first finger. A finger that moves is
-// then replayed to the canvas as the press it was; a tool or the sketch that
-// claims the press (preventDefault) owns the drag, otherwise the view orbits.
+// Pointer, wheel and touch input for the navigator. The pointer is captured for a drag, and pointerup, pointercancel and
+// lostpointercapture all end it, so a drag the system takes cannot leave a gesture running.
 
 import type { Navigator } from "./navigator";
 import { CLICK_SLOP_PX } from "./navigator";
@@ -57,10 +39,8 @@ const BUTTON_MASK: Record<number, number> = { 0: 1, 1: 4, 2: 2 };
  *  and what each stands for. */
 const replayed = new WeakMap<Event, "tap" | "drag" | "menu" | "dblclick">();
 
-/** What a press the navigator replayed stands for: "tap", sent from inside the
- *  finger's release (after the release has passed every window capture
- *  listener), or "drag", sent as the finger starts to move and possibly about
- *  to orbit rather than to act. Null for any other event. */
+/** "tap" is sent from inside the finger's release, after it passed every window capture listener; "drag" as the finger
+ *  starts to move, maybe about to orbit. Null for any other event. */
 export function replayedPress(e: Event): "tap" | "drag" | null {
   const k = replayed.get(e);
   return k === "tap" || k === "drag" ? k : null;
@@ -83,7 +63,8 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
   const clock = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
   const now = () => clock() / 1000;
 
-  // --- mouse and pen ------------------------------------------------------------
+  // Buttons follow the binding table (bindings.ts), by default right orbits (pans with Shift or a locked orbit), middle
+  // pans. A modifier+left binding swallows its press before any tool sees it, unless a tool owns the left button.
   let mouse: {
     id: number;
     mask: number;
@@ -120,7 +101,7 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     release(id);
   };
 
-  // --- touch: the navigator's fingers ---------------------------------------------
+  // Touch: one finger orbits, two pan and pinch, three orbit whatever tool is up, a tap clicks, a long press right clicks.
   const touches = new Map<number, [number, number]>();
   let pinchDist = 0;
 
@@ -159,11 +140,8 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     } else nav.dragTo(x, y);
   };
 
-  // --- touch: who owns the fingers -------------------------------------------------
-  // "held": one finger down, not yet given to anyone. "nav": the navigator's.
-  // "app": the first finger is the app's (a tool claimed it, or a tap); any
-  // other finger is dropped. "spent": a long press opened the menu; nothing
-  // more happens until every finger is up.
+  // "held": one finger, given to no one yet; "nav": the navigator's; "app": a tool claimed the first finger or it tapped,
+  // other fingers dropped; "spent": a long press opened the menu, nothing until every finger is up.
   type Owner = "held" | "nav" | "app" | "spent";
   let owner: Owner | null = null;
   /** The touch's first finger; `shown` once its press went out to the app. */
@@ -338,9 +316,8 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     if (owner === "held" && isFirst) {
       clearPress();
       if (e.type === "pointerup") {
-        // A tap: the press goes out now, where the finger lifted so the
-        // release lands on it exactly (a tool reads any travel as a drag),
-        // and this release after it.
+        // A tap: the press goes out now, where the finger lifted, so the release lands on it exactly (a tool reads any travel
+        // as a drag).
         owner = "app";
         const n = countTap(e);
         replayDown(e, n);
@@ -362,9 +339,8 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     }
   };
 
-  // --- handlers ---------------------------------------------------------------------
-  // Captured on the canvas and bound before anything else is, so the touch
-  // rules run ahead of every tool's own listeners.
+  // Captured on the canvas and bound first, so the touch rules run ahead of every tool. A finger is held back until it
+  // moves, lifts or another joins, then replayed as its press; a tool that claims it (preventDefault) owns the drag.
   const onTouchCapture = (e: PointerEvent) => {
     if (e.pointerType !== "touch" || replayed.has(e)) return;
     if (e.type === "pointerdown") touchDown(e);
@@ -397,8 +373,7 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     else if (e.type === "pointerup" && rightPress) rightPress.upAt = clock();
   };
 
-  /** A modifier+left binding takes the press here, in capture, ahead of every
-   *  tool; middle and right are read in onDown, as they always were. */
+  /** A modifier+left binding takes the press here, in capture, ahead of every tool; middle and right are read in onDown. */
   const onMouseCapture = (e: PointerEvent) => {
     if (e.pointerType === "touch" || replayed.has(e)) return;
     noteRight(e);
@@ -482,7 +457,7 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
       sendMenu(e.clientX, e.clientY);
   };
 
-  // --- wheel --------------------------------------------------------------------------
+  // A mouse wheel zooms; a touchpad's two finger scroll orbits or pans by the setting, Shift the other (wheelKind.ts).
   const kinds = new WheelClassifier();
   /** Safari's pinch arrives as gesture events rather than ctrl+wheel. */
   let gestureScale: number | null = null;

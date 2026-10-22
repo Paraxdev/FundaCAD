@@ -1,9 +1,5 @@
-//! A round face resize is fast enough to drag: on the c1 report each lone
-//! face step builds in under 400 ms and a whole slot narrowing in under a
-//! second, and a drag asking the same face again at new sizes gets the same
-//! answers as fresh resizes. The timings only mean something in a release
-//! build, so that test is ignored by default:
-//! `cargo test --release -p fundacad-geom --test resize_speed -- --ignored`.
+//! A round face resize is fast enough to drag: on c1 a lone face step under 400 ms, a slot narrowing under a second.
+//! Timings need a release build: `cargo test --release -p fundacad-geom --test resize_speed -- --ignored`.
 
 use std::f64::consts::PI;
 use std::time::{Duration, Instant};

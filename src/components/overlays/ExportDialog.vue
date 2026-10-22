@@ -1,7 +1,4 @@
 <script setup lang="ts">
-// Export: format, which bodies, output units and, for the formats written as
-// triangles, how finely curved surfaces are faceted.
-
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useModalGate } from "../../composables/useModalGate";
 import { escapeClaimed } from "../../ui/escapeClaim";
@@ -87,9 +84,7 @@ function confirm() {
 const cancel = () => dialog.finish(null);
 
 function onKey(e: KeyboardEvent) {
-  // A picker's popover opens after this listener is bound, so it cannot stop
-  // this one from hearing the key first; escapeClaimed is how it says the
-  // Escape is already spoken for (ui/escapeClaim).
+  // A picker's popover binds its listener after this one, so escapeClaimed() is how it says the Escape is taken.
   if (e.key === "Escape" && !escapeClaimed()) {
     e.preventDefault();
     e.stopImmediatePropagation();

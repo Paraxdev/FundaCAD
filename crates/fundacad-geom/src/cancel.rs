@@ -1,9 +1,5 @@
-//! The running job's cancel, for work deep inside one feature.
-//!
-//! The builder checks for a cancel between features, which leaves a single
-//! long feature, a fillet that falls back to its lofted sections say, running
-//! for seconds after the user has moved on. A feature asks here instead,
-//! between its kernel calls and, through [`progress`], inside them.
+//! Cancel checks inside one feature. The builder only checks between features, so a long fillet could run for
+//! seconds after the user moved on. A feature asks here between kernel calls and, through [`progress`], inside them.
 
 use fundacad_protocol::CancelToken;
 use opencascade::progress::Progress;
@@ -28,7 +24,6 @@ pub fn install(token: Option<CancelToken>) -> Installed {
     Installed(TOKEN.with(|t| std::mem::replace(&mut *t.borrow_mut(), token)))
 }
 
-/// Whether the job this thread is working for has been cancelled.
 pub fn requested() -> bool {
     TOKEN.with(|t| t.borrow().as_ref().is_some_and(CancelToken::is_cancelled))
 }

@@ -14,9 +14,8 @@ pub(super) struct Expect<'a> {
     pub keep: &'a [Shape],
 }
 
-/// One valid solid that gained or lost material as asked. Solids are counted
-/// before anything unifies them: unifying a result in pieces has been seen to
-/// rewrite the shapes its input shares.
+/// One valid solid that gained or lost material as asked. Solids are counted before anything unifies them, since
+/// unifying a result in pieces has been seen to rewrite the shapes its input shares.
 pub fn checked_solid(before: &Shape, out: &Shape, cut: bool) -> Result<Shape, Bad> {
     one_solid(before, out, cut, false, None)
 }

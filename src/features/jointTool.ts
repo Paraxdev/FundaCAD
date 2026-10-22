@@ -1,23 +1,5 @@
-// Driving a joint where the joint is: an arrow that slides the moving body along
-// the mate axis (offset), and a dial that turns it about that axis (angle).
-//
-// A joint puts one body's face flush on another's; `offset` is how far it then
-// slides along the shared axis (a standoff or an overlap), and `angle` is how
-// far it turns about it (the clocking, and a revolute joint's whole freedom).
-// Both are quantities on the model, so they belong on the model: take hold of
-// the arrow and pull, or the dial and swing. The value boxes are still there and
-// still authoritative, the same contract every other manipulator keeps.
-//
-// Both handles stand on the REAL mate axis, which only the engine can place (it
-// alone resolves the two face selectors to a frame). It arrives each rebuild in
-// the build result's datumMarks, keyed by the joint's id (the joint handler
-// publishes it there, see builder._handle_joint). No mark, no handles: the tool
-// stands down and the value rows take over, the same fallback the revolve and
-// extrude arrows use when the geometry cannot carry them.
-//
-// Live preview, unlike the revolve arrow: a joint is a rigid RELOCATE, not a
-// sweep through the kernel, so the body follows the drag frame by frame without
-// lurching. The store coalesces the rebuilds.
+// Joint handles on the model: an arrow slides the moving body along the mate axis (offset), a dial turns it about it
+// (angle); the value boxes stay authoritative. A joint is a rigid relocate, so the preview is live.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -57,7 +39,6 @@ export class JointTool {
   private gizmo: THREE.Group | null = null;
   private handle: DragHandle | null = null;
   private quat = new THREE.Quaternion();
-  // the angle dial
   private dial: THREE.Group | null = null;
   private dialHandle: DragHandle | null = null;
   private dialX = new THREE.Vector3(1, 0, 0); // an in-plane reference perpendicular to dir
@@ -93,10 +74,8 @@ export class JointTool {
     });
   }
 
-  /** Open the handles on a committed joint. False sends the caller to the value
-   *  rows: a parameter drives the numbers, or the engine could not place the
-   *  mate axis this build (a reference no longer resolves), so there is no line
-   *  to stand the handles on. */
+  /** False sends the caller to the value rows: a parameter drives the numbers, or the engine placed no mate axis this
+   *  build. Only it places the axis, in the build's datumMarks keyed by the joint id (builder._handle_joint). */
   startEdit(featureId: string, onDone: (id: string | null) => void): boolean {
     if (this.active) return false;
     const f = this.store.document.features.find((x) => x.id === featureId);
@@ -226,8 +205,7 @@ export class JointTool {
     if (!this.active || !this.gizmo || !this.dial) return;
     this.anchor.copy(this.base).addScaledVector(this.dir, this.offset);
     const px = this.viewport.pixelWorldSize(this.anchor);
-    // the offset arrow, along the axis (tipped out of view when the axis aims at
-    // the camera, exactly as the revolve pitch arrow is)
+    // The offset arrow, tipped out of view when the axis aims at the camera, like the revolve pitch arrow.
     const fwd = this.viewport.camera.getWorldDirection(new THREE.Vector3());
     const right = new THREE.Vector3().setFromMatrixColumn(this.viewport.camera.matrixWorld, 0).normalize();
     this.quat.setFromUnitVectors(Y_AXIS, leanOutOfView(this.dir, fwd, right));
@@ -235,8 +213,7 @@ export class JointTool {
     this.gizmo.quaternion.copy(this.quat);
     this.gizmo.scale.setScalar(px);
     this.handle?.paint({ hot: this.hovering || this.grabbing });
-    // the angle dial, ringed in the plane perpendicular to the axis (local Z is
-    // the rotation axis = dir, so the ring lies where a turn about it lives)
+    // The angle dial rings the plane perpendicular to the axis (local Z is dir).
     const dy = new THREE.Vector3().crossVectors(this.dir, this.dialX).normalize();
     this.dial.position.copy(this.anchor);
     this.dial.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(this.dialX, dy, this.dir));

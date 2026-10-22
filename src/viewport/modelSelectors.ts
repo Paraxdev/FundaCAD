@@ -1,6 +1,5 @@
-// Model selectors read against the built model: faces by index, direction or
-// nearest point, edges by the faces they join or a point near them. Shared by the
-// agent harness picks and guide mode outlines.
+// Model selectors read against the built model: faces by index, direction or nearest point, edges by the faces they
+// join or a point near them. Shared by the agent harness picks and guide mode outlines.
 
 import * as THREE from "three";
 import type { DocumentStore } from "../document/store";

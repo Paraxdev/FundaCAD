@@ -1,9 +1,5 @@
-/* ============================================================================
-   GLASS, the finish on everything that floats over the viewport: squircle
-   corners, a blurred tinted fill with a sheen, a lit rim that catches the accent
-   at its far corner, and a neon core on whatever is switched on.
-   Loaded after the files that lay these surfaces out, so it only repaints them.
-   ============================================================================ */
+/* The glass finish on everything that floats over the viewport. Loaded after the files
+   that lay these surfaces out, so it only repaints them. */
 
 .float-card,
 .float-group,
@@ -130,8 +126,6 @@
   position: relative;
 }
 
-/* ---- rail -------------------------------------------------------------------- */
-
 .rail-tile,
 .home-new-card,
 .home-card,
@@ -173,9 +167,8 @@
     var(--float-bg);
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
   color: var(--accent-hot);
-  /* An even halo, not a downward drop: the rail tiles sit tight against their
-     neighbours, so a bloom offset to one side reads as a glow that has been
-     sliced off. Symmetric and modest keeps it a clean ring on every side. */
+  /* An even halo, not a drop: the rail tiles sit tight, so an offset bloom looks sliced
+     off. */
   box-shadow:
     var(--glass-inset),
     0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
@@ -207,8 +200,6 @@
     transform: translateX(-4px) scale(0.97);
   }
 }
-
-/* ---- controls and rows inside the glass ----------------------------------------- */
 
 .icon-btn,
 .float-card-close,
@@ -307,8 +298,6 @@
   box-shadow: none;
 }
 
-/* ---- the small chooser ------------------------------------------------------- */
-
 .choice-backdrop {
   background: rgba(5, 4, 9, 0.35);
   -webkit-backdrop-filter: blur(6px) saturate(1.2);
@@ -328,8 +317,6 @@
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
-
-/* ---- every other surface: dialogs, menus, toasts, docks, panels ---------------- */
 
 .modal-panel,
 .cmdk-card,
@@ -366,12 +353,8 @@
 #safe-mode-banner {
   box-shadow: var(--glass-inset), var(--float-shadow);
 }
-/* Everything else in the list above floats directly over the viewport, where
-   --float-shadow's soft dark blur reads fine. .modal-panel instead sits on
-   .modal-overlay's full-screen dark scrim, so that same soft black shadow has
-   no contrast to show against and the panel just looks like it stops dead at
-   the edge. This rule loads after _modals.scss's --shadow-3 on purpose, or
-   this would still be silently overridden by the shared rule above. */
+/* .modal-panel sits on a dark scrim where the soft --float-shadow has no contrast. Loads
+   after the --shadow-3 in _modals.scss on purpose. */
 .modal-panel {
   box-shadow: var(--glass-inset), var(--shadow-3);
 }
@@ -395,9 +378,8 @@
 .areachip {
   border-radius: var(--float-chip-radius);
 }
-/* .cmdk-card, .tgt-panel and .shortcut-hud-card are static in their own
-   partials, and without this their ::after rim resolves against the full screen
-   backdrop and is drawn around the window. */
+/* Static in their own partials, so without this the ::after rim resolves against the
+   full screen and is drawn around the window. */
 .modal-panel,
 .cmdk-card,
 .tgt-panel,
@@ -470,9 +452,8 @@
   backdrop-filter: blur(6px) saturate(1.2);
 }
 
-/* Home's paper: opaque, so the workspace stays out of sight, and static. The soft
-   lift and the accent hint are what the glass above catches; the grain is a
-   160px noise tile drawn once. */
+/* Home's paper, opaque so the workspace stays out of sight; the grain is a 160px noise
+   tile drawn once. */
 .home::before {
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
@@ -485,8 +466,6 @@
     var(--home-image) center / cover no-repeat,
     var(--bg);
 }
-
-/* ---- controls in those surfaces ------------------------------------------------ */
 
 .btn,
 .sm-input,
@@ -591,18 +570,13 @@
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
-/* ---- Home ------------------------------------------------------------------------ */
-
 /* The text keeps the theme's text colour: the accent on its own tint is too faint in light themes. */
 .home-nav-row.active {
   color: var(--text);
 }
 
-/* ---- no blur (ui/glassBlur.ts) ------------------------------------------------ */
-
-/* Potato mode or a software renderer: every repaint of a blurred panel re-blurs
-   the viewport behind it on the CPU, so the glass keeps its sheen, rim and
-   shadow but goes opaque. The `*` catches the hard-coded blurs in other files. */
+/* No blur (ui/glassBlur.ts): a software renderer re-blurs the viewport on the CPU every
+   repaint, so the glass goes opaque. The `*` catches hard coded blurs elsewhere. */
 html.no-glass-blur {
   --float-blur: none;
   --float-bg: var(--panel);

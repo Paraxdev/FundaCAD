@@ -1,6 +1,4 @@
-// Bed fit check: does the model's bounding box fit a printer bed, and if not,
-// what uniform scale would make it fit. Display-only, no feature, no History
-// row: just a toast telling you before you slice it and find out the hard way.
+// Display-only, no feature and no History row: a toast before you slice it and find out the hard way.
 
 import { definePluginSettings, readSetting, type SettingsSchema } from "fundacad";
 
@@ -29,10 +27,8 @@ export interface BedFitResult {
   scale: number;
 }
 
-/** Pure: whether `size` (a model's bounding box, mm) fits inside `bed`, and the
- *  uniform scale factor that would make it fit if not. The limiting axis is
- *  whichever ratio of bed to model is smallest; scaling by less than that still
- *  leaves it standing proud of the other two, but no smaller scale is needed. */
+/** Whether `size` (a model's bounding box, mm) fits inside `bed`, and the uniform scale that would make it fit, set
+ *  by the axis with the smallest bed to model ratio. */
 export function bedFit(size: Vec3, bed: Vec3): BedFitResult {
   const ratios = size.map((s, i) => (s <= 0 ? Infinity : bed[i]! / s));
   const scale = Math.min(1, ...ratios);
@@ -128,9 +124,8 @@ export function bedSizeOf(setting: BedFitSetting): Vec3 {
 
 export type CustomBedParse = { ok: true; size: Vec3 } | { ok: false; message: string };
 
-/** Pure: three typed numbers into a custom bed size, or the message to show
- *  beside the field that is wrong. Positive and finite is the whole rule, a
- *  bed of 0 or NaN mm is not a bed. */
+/** Three typed numbers into a custom bed size, or the message to show beside the wrong field. Positive and finite is
+ *  the whole rule. */
 export function parseCustomBedSize(width: number, depth: number, height: number): CustomBedParse {
   if ([width, depth, height].some((v) => !Number.isFinite(v) || v <= 0)) {
     return { ok: false, message: "Width, depth and height must all be positive numbers." };

@@ -1,15 +1,5 @@
-//! Selector resolution, replacing the Python engine's `geom_select.py` (with its tuning,
-//! selector_tuning.json beside it).
-//!
-//! Geometry is never referenced by index: a selector is a stored description
-//! (a pick point, a fingerprint, a direction) re-resolved against the rebuilt
-//! body every time. The forms and their rules are the Python module's, read as
-//! JSON the way the Python reads a dict, so a document resolves to the same
-//! entities, the same diagnostics and the same refusals in both engines.
-//!
-//! Edge forms: `axis`, `all`, `nearest`, `match`, `tangentChain`, `ofFace`, and a
-//! face selector in an edge field (the edges around those faces). Face forms:
-//! `normal`, `nearest`, `tracked`, `match`, `all`. A list of selectors is their union.
+//! Selector resolution. A selector is a stored description (pick point, fingerprint, direction)
+//! re-resolved against the rebuilt body every time, never an index. A list of selectors is their union.
 
 pub mod entity;
 pub mod eval;
@@ -35,7 +25,6 @@ use entity::{
 pub use plane::plane_fallback_reason;
 pub use tuning::Tuning;
 
-/// The reference codes of the Python engine's `errors.py`.
 pub const AMBIGUOUS_REFERENCE: &str = "ambiguousReference";
 pub const REFERENCE_NOT_FOUND: &str = "referenceNotFound";
 pub const PLANE_TILTED: &str = "planeTilted";
@@ -45,9 +34,8 @@ pub const REASON_SLID_OUT: &str = "this face moved out from under the saved pick
 const SHARED_POINT_TOL: f64 = 1e-6;
 const ON_SURFACE_TOL: f64 = 1e-4;
 
-/// One resolution's settings and where its diagnostics go. A diagnostic is a
-/// `ResolveDiag` object, pushed only when a resolution is worth acting on
-/// (lossy, or below 0.5 confidence), exactly as `_push_diag` gates it.
+/// A diagnostic is a `ResolveDiag` object, pushed only when a resolution is worth acting on, lossy or
+/// below 0.5 confidence.
 pub struct Resolver<'a> {
     pub tuning: &'a Tuning,
     pub diag: Option<&'a mut Vec<Value>>,
@@ -93,7 +81,7 @@ fn by_text(v: Option<&Value>) -> String {
     }
 }
 
-/// `nth` as `_resolve_one` reads it: whether one was given, and the int.
+/// Whether `nth` was given, and the int.
 fn nth_of(sel: &Map<String, Value>) -> (bool, Option<i64>) {
     match sel.get("nth") {
         None | Some(Value::Null) => (false, None),
@@ -107,7 +95,7 @@ fn pick_nth(nth: Option<i64>, len: usize) -> Option<usize> {
     nth.and_then(|n| usize::try_from(n).ok()).filter(|&n| n < len)
 }
 
-/// `_finite3(seq, want=3)`: three finite numbers rounded to 6 places.
+/// Three finite numbers rounded to 6 places.
 pub(crate) fn finite3(v: Option<&Value>) -> Option<[f64; 3]> {
     let items = v?.as_array()?;
     if items.len() != 3 {
@@ -156,7 +144,7 @@ impl<'a> Resolver<'a> {
         self.faces(part, &v)
     }
 
-    /// `resolve_edges`: a selector or a list of them to edges of `part`.
+    /// A selector or a list of them to edges of `part`.
     pub fn edges(&mut self, part: &Shape, sel: &Value) -> FResult<Vec<Shape>> {
         if kernel::is_null(part) {
             return Err(Fail::msg("no part to select edges from"));
@@ -164,7 +152,7 @@ impl<'a> Resolver<'a> {
         Ok(self.edge_ents(part, sel)?.into_iter().map(|e| e.shape).collect())
     }
 
-    /// `resolve_faces`: a selector or a list of them to faces of `part`.
+    /// A selector or a list of them to faces of `part`.
     pub fn faces(&mut self, part: &Shape, sel: &Value) -> FResult<Vec<Shape>> {
         if kernel::is_null(part) {
             return Err(Fail::msg("no part to select faces from"));
@@ -189,10 +177,8 @@ impl<'a> Resolver<'a> {
                     }
                 }
             }
-            // A match never refuses, so references whose edges were deleted all
-            // settle on whichever edge is left. Two that share an edge neither
-            // was picked near say the edge is not theirs. One alone cannot be
-            // told from an edge that moved, and is kept.
+            // A match never refuses, so references whose edges were deleted all settle on the edge left. Two that
+            // share an edge neither was picked near are told it is not theirs, one alone may have moved and is kept.
             let mut gone = 0;
             out.retain(|e| {
                 let from = picked_from.get(&key_bits(&e.dedup_key())).map_or(&[][..], Vec::as_slice);
@@ -210,9 +196,8 @@ impl<'a> Resolver<'a> {
             return Ok(out);
         }
         let m = as_object(sel)?;
-        // A face selector in an edge field means the edges around those faces.
-        // Read as an edge `nearest`, its point would round to whichever edge
-        // happened to be closest.
+        // Read as an edge `nearest`, a face selector's point would round to whichever edge happened to be
+        // closest, so it means the edges around those faces.
         if m.get("kind").and_then(Value::as_str) == Some("face") {
             let faces = self.face_ents(part, sel)?;
             return union_face_edges(&faces);
@@ -241,12 +226,8 @@ impl<'a> Resolver<'a> {
             Some("nearest") => {
                 let p = vector(need(m, "point")?)?;
                 let edges = edges_of(part)?;
-                // To the curve itself, since a full circle's midpoint sits at one
-                // fixed spot and a point elsewhere on it can be nearer another
-                // edge's midpoint. Within ON_SURFACE_TOL counts as on the edge, so
-                // a point on a shared vertex is an honest tie and not a pick
-                // decided by float noise, and the midpoint distance then settles it as it
-                // always did.
+                // To the curve itself, as a full circle's midpoint sits at one spot. Within ON_SURFACE_TOL counts as on
+                // it, so a point on a shared vertex is an honest tie that the midpoint distance then settles.
                 let on_curve: Option<Vec<f64>> = edges
                     .iter()
                     .map(|e| sa::distance_to_point(&e.shape, p.to_array()).map(|d| d.0.max(ON_SURFACE_TOL)))
@@ -369,7 +350,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    /// `_resolve_one` over edge costs, `(index, confidence, lossy, reason)`.
+    /// Over edge costs, `(index, confidence, lossy, reason)`.
     fn match_edge(
         &self,
         part: &Shape,
@@ -388,10 +369,8 @@ impl<'a> Resolver<'a> {
         Ok(resolve_one(self.tuning, &costs, &keys, nth))
     }
 
-    /// Where a lossy `match` landed, when that is no longer where it was
-    /// picked: a tie off its pick, or an edge further off than it could have
-    /// drifted. The pick is kept, so saved files build as before, and the note
-    /// says which edge it took.
+    /// Where a lossy `match` landed when that is no longer where it was picked. The pick is kept so saved
+    /// files build as before, and the note says which edge it took.
     fn stale_match(
         &self,
         part: &Shape,
@@ -417,7 +396,7 @@ impl<'a> Resolver<'a> {
         Some(note)
     }
 
-    /// `_faces_matching`: one face by fingerprint, never a refusal.
+    /// One face by fingerprint, never a refusal.
     fn faces_matching(&mut self, part: &Shape, fp: &Value, nth: (bool, Option<i64>)) -> FResult<Vec<FaceEnt>> {
         let fp = as_object(fp)?;
         let tol_pos = self.tuning.pos_tol(crate::kernel::bbox_diagonal(part));
@@ -429,10 +408,8 @@ impl<'a> Resolver<'a> {
         Ok(best.map(|i| take(faces, &[i])).unwrap_or_default())
     }
 
-    /// `_nearest_one`: the nearest candidate, or a refusal when the runner-up is
-    /// within NEAREST_TIE_BAND. Ambiguity is the discriminator, not distance: a
-    /// face that moved far from its pick point still resolves while it is the
-    /// unique nearest.
+    /// A refusal when the runner-up is within NEAREST_TIE_BAND. Ambiguity is the discriminator, not distance,
+    /// so a face that moved far from its pick still resolves while it is the unique nearest.
     fn nearest_one(
         &mut self,
         kind: Kind,
@@ -456,9 +433,8 @@ impl<'a> Resolver<'a> {
         let runner = scored.get(1).map_or(f64::INFINITY, |s| s.0);
         let margin = margin_of(best_d, runner);
         let band = self.tuning.nearest_tie_band;
-        // A clear nearest records nothing, however slim: `confidence` here would
-        // be a distance margin, and a consumer reads anything under 0.5 as a
-        // poor fingerprint match.
+        // A clear nearest records nothing however slim: `confidence` here would be a distance margin, and a
+        // consumer reads anything under 0.5 as a poor fingerprint match.
         if margin >= band {
             return Ok(Nearest { index: best });
         }
@@ -495,7 +471,6 @@ impl<'a> Resolver<'a> {
         })
     }
 
-    /// `_push_diag`.
     #[allow(clippy::too_many_arguments)]
     fn push(
         &mut self,
@@ -539,8 +514,7 @@ impl<'a> Resolver<'a> {
         diag.push(entry);
     }
 
-    /// `resolve_face_on_plane`: the planar face a sketch or datum plane is
-    /// anchored to, or `None` with the reason recorded. Never a refusal.
+    /// The planar face a sketch or datum plane is anchored to, or `None` with the reason recorded.
     pub fn face_on_plane(&mut self, part: Option<&Shape>, sel: &Value, normal: [f64; 3], label: &str) -> Option<Shape> {
         plane::resolve_face_on_plane(self, part, sel, normal, label)
     }
@@ -570,9 +544,8 @@ const GONE_REACH: f64 = 0.25;
 
 const GONE: &str = "the edge this was picked on is gone";
 
-/// Whether `p` is further from `e` than a pick on it could have drifted. The
-/// picked edge's own length sets the reach where it is known, an unrelated
-/// edge's would stretch it.
+/// Whether `p` is further from `e` than a pick on it could have drifted. The picked edge's own length
+/// sets the reach where known, an unrelated edge's would stretch it.
 fn far_from(e: &EdgeEnt, p: DVec3, picked_len: Option<f64>) -> bool {
     let reach = GONE_REACH * picked_len.filter(|l| *l > 0.0).unwrap_or(e.length);
     sa::distance_to_point(&e.shape, p.to_array()).is_some_and(|d| d.0 > reach)
@@ -587,8 +560,8 @@ fn matched_mid(sel: &Value) -> Option<DVec3> {
     finite3(m.get("fp")?.get("mid")).map(DVec3::from)
 }
 
-/// `_resolve_one`: the lowest cost, never a refusal. A runner-up within
-/// TIE_BAND is a tie, broken by `nth` over the canonical key order.
+/// The lowest cost, never a refusal. A runner-up within TIE_BAND is a tie, broken by `nth` over the
+/// canonical key order.
 fn resolve_one(
     t: &Tuning,
     costs: &[f64],
@@ -615,9 +588,8 @@ fn resolve_one(
     (Some(best), margin, lossy, lossy.then_some("marginal match"))
 }
 
-/// `_slid_out_winner` in the Python engine: a `nearest` face tie at a shared edge, re-scored on the
-/// untrimmed surfaces, which do separate a face the point still lies in from
-/// the wall it merely touches. Narrower than the refusal it replaces.
+/// A `nearest` face tie at a shared edge re-scored on the untrimmed surfaces, which separate a face the
+/// point lies in from a wall it merely touches.
 fn slid_out_pick(faces: &[FaceEnt], tied: &[usize], p: DVec3, band: f64) -> Option<(usize, f64)> {
     if tied.len() < 2 {
         return None;
@@ -642,10 +614,8 @@ fn slid_out_pick(faces: &[FaceEnt], tied: &[usize], p: DVec3, band: f64) -> Opti
     Some((best, margin))
 }
 
-/// The tied edges that are not seams, or all of them when that leaves none.
-/// A point where a wrapping wall's seam meets its rim is on both, and the
-/// seam's midpoint is the nearer one, but a seam is no edge to blend or
-/// measure from: the rim is preferred over it.
+/// A point where a wrapping wall's seam meets its rim is on both and the seam's midpoint is nearer, but a
+/// seam is no edge to blend or measure from, so the rim wins. All of them when that leaves none.
 fn real_edges(part: &Shape, edges: &[EdgeEnt], tied: &[usize]) -> Vec<usize> {
     if tied.len() < 2 {
         return tied.to_vec();
@@ -669,8 +639,7 @@ fn nearest_midpoint(to_mid: &[f64], tied: &[usize], band: f64) -> Option<TieBrea
     (margin_of(best_d, runner) >= band).then_some(TieBreak { index: best, reported: None })
 }
 
-/// `_tangent_chain`: the seed and every edge reached through a shared vertex
-/// with a collinear tangent. Visited by geometric key, as the Python does.
+/// The seed and every edge reached through a shared vertex with a collinear tangent, visited by geometric key.
 fn tangent_chain(t: &Tuning, edges: &[EdgeEnt], seed: usize) -> Vec<usize> {
     let tangent_at_point = |e: &EdgeEnt, p: DVec3| -> DVec3 {
         let at_start = match e.ends {
@@ -710,8 +679,7 @@ fn tangent_chain(t: &Tuning, edges: &[EdgeEnt], seed: usize) -> Vec<usize> {
     chain
 }
 
-/// `_rank_in_center_group`: (rank, group size) of a circle among the circles of
-/// `part` sharing its centre.
+/// (rank, group size) of a circle among the circles of `part` sharing its centre.
 fn rank_in_centre_group(e: &EdgeEnt, part_edges: &[EdgeEnt], tol: f64) -> Option<(usize, usize)> {
     let (c, r) = (e.centre()?, e.radius()?);
     let sibs: Vec<f64> = part_edges
@@ -725,7 +693,7 @@ fn rank_in_centre_group(e: &EdgeEnt, part_edges: &[EdgeEnt], tol: f64) -> Option
     Some((rank, sibs.len()))
 }
 
-/// `edge_fingerprint`: what a pick of `edge` persists for `by:"match"`.
+/// What a pick of `edge` persists for `by:"match"`.
 pub fn edge_fingerprint(edge: &Shape, part: &Shape) -> FResult<Value> {
     edge_fingerprint_with(Tuning::shipped(), edge, part)
 }
@@ -735,9 +703,8 @@ pub fn edge_fingerprint_with(t: &Tuning, edge: &Shape, part: &Shape) -> FResult<
     fingerprint_among(t, edge, &mut siblings)
 }
 
-/// Fingerprints of many edges of one part. A circle's fingerprint ranks it
-/// among the part's circles, which fingerprinting one edge at a time measured
-/// every edge of the part again for: inspect on a 55 face import took 73 s.
+/// Batched, as a circle's fingerprint ranks it among the part's circles and one edge at a time measured
+/// every edge again: inspect on a 55 face import took 73 s.
 pub fn edge_fingerprints(edges: &[Shape], part: &Shape) -> FResult<Vec<Value>> {
     let t = Tuning::shipped();
     let mut siblings = PartEdges::new(part);
@@ -790,7 +757,6 @@ fn fingerprint_among(t: &Tuning, edge: &Shape, siblings: &mut PartEdges<'_>) -> 
     Ok(fp)
 }
 
-/// `face_fingerprint`.
 pub fn face_fingerprint(face: &Shape) -> FResult<Value> {
     let f = FaceEnt::new(face.clone())?;
     let (c, n) = (f.centroid(), f.normal());
@@ -806,9 +772,8 @@ pub fn face_fingerprint(face: &Shape) -> FResult<Value> {
     Ok(fp)
 }
 
-/// blends.py `_group_sels_by_body`: selectors grouped by the body each one
-/// names, first seen first, an unbound selector on the active body. A named
-/// body that is gone refuses the feature rather than editing another one.
+/// Grouped by the body each names, first seen first, an unbound one on the active body. A named body that
+/// is gone refuses the feature rather than editing another.
 pub fn group_by_body<'s>(
     ctx: &Ctx,
     sels: &'s OneOrMany<Selector>,

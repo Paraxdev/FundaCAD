@@ -1,5 +1,4 @@
-// What the Printed look settings mean: the pure half, no host imports, so the
-// mapping from a person's choices to the ridges the viewport draws can be tested
+// The pure half with no host imports, so the mapping from a person's choices to the viewport's ridges is tested
 // without a window.
 
 export const DIRECTIONS = [

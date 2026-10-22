@@ -1,11 +1,5 @@
-// Headless re-solve of a CLOSED sketch after a parameter edit changed one of
-// its dimension-constraint values. The open sketch handles itself live
-// (SketchMode.syncParamValues); this runs for every other affected sketch so a
-// param-driven dim actually moves geometry instead of being decorative.
-//
-// Failure semantics (plan R2): a solve that fails or reports conflicts keeps
-// the OLD coordinates, the param edit still lands, and the caller surfaces
-// the sketch id so the user hears about it (never blocks the edit).
+// Headless re-solve of a CLOSED sketch after a param edit changed a dim value (the open sketch syncs live).
+// A failed or conflicting solve keeps the OLD coordinates and reports the sketch id; the edit still lands (plan R2).
 
 import type { Feature, Params, SketchEntity } from "../types";
 import { solveKeepingAxes } from "./sketchSolve";

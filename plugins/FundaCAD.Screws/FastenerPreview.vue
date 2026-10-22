@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// A small viewer of one generated fastener: the mesh comes from the geometry engine, so what is
-// shown is the solid that Insert would put in the model. Drag to turn it, wheel to zoom.
+// The mesh comes from the geometry engine, so the preview is the solid Insert would put in the model.
 
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as THREE from "three";

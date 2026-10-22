@@ -1,6 +1,5 @@
-//! Sketch shortcuts: a `polyline` and a `rectangle` by its corners are
-//! stored as the entities the app already knows, and a sketch's entities are
-//! checked when they are sent. Spawns the engine.
+//! A `polyline` and a corner `rectangle` are stored as entities the app knows, and a sketch's entities
+//! are checked when sent. Spawns the engine.
 
 mod common;
 

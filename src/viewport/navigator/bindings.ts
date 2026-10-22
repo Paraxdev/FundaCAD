@@ -1,8 +1,5 @@
-// Which mouse button, with which modifiers, orbits, pans, zooms or opens the
-// menu. One table is active: the default below, or the one a plugin holding the
-// input.remap grant contributed (plugins/contrib.ts). Selection is not in it,
-// the left button alone always selects and Shift or Ctrl with it adds to the
-// selection, so a left binding needs Alt.
+// Which mouse button and modifiers orbit, pan, zoom or open the menu: the default table, or a plugin's with the
+// input.remap grant (plugins/contrib.ts). The left button alone always selects, so a left binding needs Alt.
 
 export type PointerButton = "left" | "middle" | "right";
 export type PointerDrag = "orbit" | "pan" | "zoom" | "gesture";
@@ -115,8 +112,6 @@ export function bindingRows(table: readonly PointerBinding[]): { key: string; la
   for (const b of menus.values()) rows.push({ key: `${bindingKeys(b)} click`, label: cap(ACTION_NAMES[b.click!]) });
   return rows;
 }
-
-// --- the active table -----------------------------------------------------------
 
 let active: readonly PointerBinding[] = DEFAULT_BINDINGS;
 let gestureHandler: ((g: PointerGesture) => void) | null = null;

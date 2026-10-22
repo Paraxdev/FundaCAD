@@ -1,6 +1,5 @@
-//! The mesh export writers against the Python engine's, byte for byte on the
-//! same arrays (tests/export/gen.py on the legacy branch), and the export grade mesh against
-//! Python's by volume and area, since the kernels differ in version.
+//! The mesh export writers byte for byte against the Python engine's on the same arrays (tests/export/gen.py
+//! on the legacy branch), and the export grade mesh by volume and area, since the kernels differ in version.
 
 use blake2::digest::{Update, VariableOutput};
 use blake2::Blake2bVar;

@@ -1,6 +1,5 @@
-//! Joints, the Python engine's `joints.py`: one body placed by mating a frame on it to a
-//! frame on another, both re-resolved every rebuild so the assembly follows
-//! the parts.
+//! Joints, joints.py: one body placed by mating a frame on it to a frame on another, both re-resolved every
+//! rebuild so the assembly follows the parts.
 
 use fundacad_core::schema::{Joint, MateConnector, Num, Selector, Vec3};
 use glam::DVec3;
@@ -70,10 +69,8 @@ fn resolve_one(ctx: &mut Ctx, shape: &Shape, sel: &Selector, fid: &str, faces: b
     Ok(one?.into_iter().next())
 }
 
-/// The line an `axis` connector names: a round face's axis through the
-/// middle of the face, a flat face's normal through its centroid, a circle's
-/// centre line or a straight edge, pointing the way its largest component is
-/// positive so a pin and its hole agree.
+/// The line an `axis` connector names: a round face's axis, a flat face's normal, a circle's centre line or a
+/// straight edge, pointing where its largest component is positive so a pin and its hole agree.
 fn axis_line(found: Shape, edge: bool) -> Option<([f64; 3], [f64; 3])> {
     let line = |t: Turn| match t {
         Turn::Line { origin, dir } => Some((DVec3::from_array(origin), DVec3::from_array(dir))),

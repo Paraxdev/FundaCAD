@@ -1,7 +1,5 @@
-// Standard Thread: pick a round face, and the panel opens on the standard size
-// that face is nearest to, saying how far off nominal or tap drill it is. What
-// it writes is a core `thread` feature with the choice in `spec`, so the panel
-// reopens on it and the face is found again on every build.
+// The panel opens on the standard size nearest the picked round face. It writes a core `thread` feature with the choice
+// in `spec`, so the panel reopens on it and the face is found again on every build.
 
 import { shallowRef } from "vue";
 import { setPrompt, toast } from "fundacad";

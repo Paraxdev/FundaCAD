@@ -1,6 +1,4 @@
-//! Move, duplicate, scale, mirror and remove body, the Python engine's `builder.py`
-//! `_handle_move`, `_handle_duplicate`, `_handle_scale`, `_handle_mirror` and
-//! `_handle_remove_body`.
+//! Move, duplicate, scale, mirror and remove body, the `_handle_move` family of builder.py.
 
 use std::collections::HashSet;
 

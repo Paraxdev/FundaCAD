@@ -1,10 +1,5 @@
-//! Input addressed cache keys, the Python engine's `rebuild_cache.py` `_feature_sig`,
-//! `_param_closure`, `_feature_scope`, `_chain_keys_scoped`, `_env_sig` and
-//! `_blob_key`.
-//!
-//! `key_i = H(key_{i-1} ‖ sig_i ‖ scope_i)` seeded with `H(env)`. Geometry is
-//! never hashed, so kernel float noise cannot move a key; a matching key
-//! proves the document prefix and everything it could read are unchanged.
+//! Input addressed cache keys of rebuild_cache.py, `key_i = H(key_{i-1} ‖ sig_i ‖ scope_i)` seeded with `H(env)`.
+//! Geometry is never hashed, so kernel float noise cannot move a key.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -162,10 +157,8 @@ pub fn feature_scope(
     scope
 }
 
-/// A join, cut or intersect that names no `targets` skips the hidden bodies it
-/// reaches, so its result moves with the eye states. One that names them acts
-/// on them hidden or not, and an extrude that stores its own `hiddenBodies`
-/// reads that set, not the live one. A null there is read as absent.
+/// A join, cut or intersect without `targets` skips hidden bodies, so its key follows the eye states. With
+/// targets it ignores them, and an extrude with its own `hiddenBodies` (null read as absent) reads that set.
 fn reads_visibility(f: &Value) -> bool {
     if f.get("targets").and_then(Value::as_array).is_some_and(|t| !t.is_empty()) {
         return false;
@@ -177,23 +170,17 @@ fn reads_visibility(f: &Value) -> bool {
     ty == Some("press-pull") || f.get("operation").and_then(Value::as_str).is_some_and(|op| op != "new")
 }
 
-/// Bump when a feature, a kernel patch or a default can change the shape a
-/// document builds to: every checkpoint written before then misses. Re-recording
-/// tests/golden is the usual sign, and `GOLDEN_DIGESTS` in this file's tests
-/// fails until both move. A change shipped without a bump serves the old shapes
-/// from disk until an edit upstream of them; `FUNDACAD_DISK_CACHE=0` or
-/// `FUNDACAD_ENV_SIG` gets past that. A false bump costs one cold reopen, a
-/// missed one stale geometry, so bump when unsure.
+/// Bump when a feature, kernel patch or default can change the shape a document builds to, so older
+/// checkpoints miss. Re-recording tests/golden is the usual sign, and `GOLDEN_DIGESTS` fails until both move.
+/// A false bump costs one cold reopen, a missed one stale geometry, so bump when unsure.
 pub const GEOMETRY_VERSION: u32 = 2;
 
 /// Bump when what a checkpoint holds, or how `checkpoint.rs` reads one back,
 /// changes: a field it lacks comes back empty without an error.
 pub const CACHE_FORMAT: u32 = 1;
 
-/// `_env_sig`: everything outside the document that shapes geometry, so an app
-/// update or a second copy of the same engine finds the checkpoints the last
-/// one wrote. Plugins are keyed per feature in `chain_keys`, meshes on
-/// `mesh::CODE_VERSION`. `FUNDACAD_ENV_SIG` overrides it.
+/// `_env_sig`: everything outside the document that shapes geometry, so an app update finds the last one's
+/// checkpoints. Plugins are keyed per feature in `chain_keys`. `FUNDACAD_ENV_SIG` overrides it.
 pub fn env_sig() -> String {
     if let Some(forced) = std::env::var("FUNDACAD_ENV_SIG").ok().filter(|s| !s.is_empty()) {
         return forced;
@@ -219,9 +206,8 @@ pub fn env_sig_of(geometry: u32, format: u32, occt: &str, unvouched: Option<&str
     ])
 }
 
-/// A build of committed source is vouched for by `GEOMETRY_VERSION`. One with
-/// uncommitted edits keys on them, and one with no git identity, or from a host
-/// that never called `set_build`, on its binary's size and mtime.
+/// A build of committed source is vouched for by `GEOMETRY_VERSION`. One with uncommitted edits keys on them,
+/// one without a git identity or `set_build` on its binary's size and mtime.
 fn unvouched_build() -> Option<String> {
     unvouched(fundacad_engine::build()).map(|own| own.unwrap_or_else(exe_stamp))
 }
@@ -258,12 +244,9 @@ pub fn stored_geometry(f: &Value) -> Option<&str> {
     f.get("geom").and_then(Value::as_str).filter(|g| !g.is_empty())
 }
 
-/// `_chain_keys_scoped` over a document's features. `plugins` maps a feature
-/// type to the identity of the plugin bundle that runs it, so a checkpoint
-/// past a plugin feature is never served once that bundle changes, arrives or
-/// goes. `absent` holds the hashes of `stored_geometry` the blob store lacks:
-/// an import of one fails, and that failure is not its answer once the blob
-/// is there.
+/// `_chain_keys_scoped`. `plugins` maps a feature type to its plugin bundle identity, so a checkpoint past
+/// a plugin feature misses once that bundle changes, arrives or goes. `absent` holds the `stored_geometry`
+/// hashes the blob store lacks, so an import that failed for want of one is retried once it arrives.
 pub fn chain_keys(
     raw: &Value,
     env: &str,
@@ -484,10 +467,8 @@ mod tests {
         assert_eq!(unvouched(None), Some(None));
     }
 
-    /// Each tests/golden digest (CRLF read as LF, the MCP transcript left out)
-    /// with the `GEOMETRY_VERSION` it was pinned at. A re-record adds a pair at
-    /// a bumped version; a version that has not shipped may take one in place,
-    /// which these tests cannot tell from a missed bump.
+    /// Each tests/golden digest (CRLF read as LF, the MCP transcript left out) with the `GEOMETRY_VERSION` it was
+    /// pinned at. A re-record adds a pair at a bumped version, or replaces one at a version that has not shipped.
     const GOLDEN_DIGESTS: [(u32, &str); 2] =
         [(1, "74269bcbe84820d4693f680ddbf76ecc"), (2, "f6512ae1dbbc6e485eb4cd4252d480a1")];
 

@@ -1,5 +1,4 @@
-// What the panel and the Items rows read. Module refs rather than fields on an
-// app store: nothing outside this directory reads them.
+// Module refs rather than an app store, nothing outside this directory reads them.
 
 import { ref, shallowRef } from "vue";
 import type { V2 } from "./calibrate";

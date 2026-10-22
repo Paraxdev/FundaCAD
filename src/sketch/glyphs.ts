@@ -1,7 +1,5 @@
-// Constraint glyphs: a small on-canvas badge per GEOMETRIC constraint, showing
-// its type and letting the user see/delete relationships (Fusion's "Show
-// Constraints"). Dimensional constraints (distance/diameter/p2p/p2l/radius/angle)
-// are NOT glyphed here, they already render as editable dimension badges.
+// One on-canvas badge per GEOMETRIC constraint (Fusion's Show Constraints); dimensional constraints render as
+// their own editable dimension badges instead.
 
 import * as THREE from "three";
 import type { ResolvedEntity } from "./snap";
@@ -18,19 +16,15 @@ export interface ConstraintGlyph {
   pos: THREE.Vector2; // 2D sketch-plane position
 }
 
-/** The solver's diagnosis of a constraint, or null if clean. Conflict (can't be
- *  satisfied) takes precedence over over-defined (redundant/removable). This is
- *  the single source of that precedence, glyph and dimension badges both use it,
- *  so their red/amber can't drift apart. */
+/** Conflict (unsatisfiable) beats over-defined (redundant). The single source of that precedence, shared with the
+ *  dimension badges so their red and amber cannot drift apart. */
 export type ConstraintDiagnosis = "conflict" | "over";
 export function diagnosisOf(i: number, conflict: Set<number>, over: Set<number>): ConstraintDiagnosis | null {
   return conflict.has(i) ? "conflict" : over.has(i) ? "over" : null;
 }
 
-/** The name, icon and operands of a constraint, THE table, shared by the glyph
- *  badges and the list so a constraint cannot be called one thing on the canvas
- *  and another in the panel. Operand ids may be compound rectangle-edge ids
- *  (`<rectId>~<k>`); entityLabel decodes those. */
+/** THE table, shared by the glyph badges and the list so a constraint has one name on canvas and in the panel.
+ *  Operand ids may be rect edges (`<rectId>~<k>`), which entityLabel decodes. */
 export function constraintFace(c: SketchConstraint): {
   icon: string;
   name: string;
@@ -71,9 +65,7 @@ export function constraintFace(c: SketchConstraint): {
       return { icon: "vertical", name: "Aligned vertically", operands: [c.e1, c.e2] };
     case "fix":
       return { icon: "fix", name: "Fixed", operands: [c.e] };
-    // The dimensional constraints have no glyph, they ARE their badge on the
-    // canvas, but a list that showed only the geometric half would be lying
-    // about what is holding the sketch.
+    // Dimensional constraints have no glyph, but a list of only the geometric half would hide what holds the sketch.
     case "distance":
       return { icon: "distance", name: "Length", operands: [c.line] };
     case "diameter":

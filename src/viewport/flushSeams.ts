@@ -1,38 +1,11 @@
-// Hiding the scar where two aligned pieces meet.
-//
-// Split out of viewport.ts. A contact line between ALIGNED pieces, two mating
-// bodies, or glued solids inside one body, reads as a scar across what is
-// visibly one continuous surface. This hides an edge when two DISTINCT coplanar,
-// same-orientation planar faces sit on OPPOSITE SIDES of it, checked against the
-// actual triangles rather than inferred, so a hole rim (whose far side is empty
-// space) can never be swallowed. A real step keeps its line: a seam you can see
-// now MEANS misalignment.
-//
-// Display only. Nothing here reaches the document, and the edges are hidden on
-// the drawn geometry rather than removed from the model.
-//
-// It runs on every model load, so it reports what it cost: an assembly past
-// FLUSH_SEAM_MAX_EDGES is skipped outright, and the skip is announced through
-// sceneStats rather than being silent, a bug report from a large file should
-// show the seams were left visible ON PURPOSE, not that the feature broke.
+// Display only: hides an edge where two distinct coplanar, same orientation planar faces sit on opposite sides of it,
+// checked on the triangles so a hole rim never hides. Past FLUSH_SEAM_MAX_EDGES it is skipped, and sceneStats says so.
 
 import * as THREE from "three";
 import { edgeObjects, type BodyMesh, type ModelView } from "./render";
 
-// Flush-seam hiding is SUPERLINEAR in edge count, it builds a per-face map over
-// every triangle in the model and then scans candidate faces per edge. Measured
-// (Chromium, synthetic coplanar bodies, evals/harness/seam_cost.cjs):
-//
-//    edges    seamMs   µs/edge          edges    seamMs   µs/edge
-//    2,000       1.7       0.8         10,000      55.2       5.5
-//    5,000      12.5       2.5         20,000     134.6       6.7
-//                                      40,000     687.9      17.2
-//
-// Per-edge cost rises ~20x over that range, so the tail is what hurts: past
-// 20,000 edges the pass is already >60% of setModel and climbing quadratically.
-// A normally-modelled part is nowhere near this; an imported assembly is far
-// past it, and there, hiding contact lines between separate parts is arguably
-// wrong anyway, since part boundaries are what you want to see.
+// Superlinear, measured (evals/harness/seam_cost.cjs): 0.8 us an edge at 2,000 edges, 6.7 at 20,000, 17.2 at 40,000,
+// over 60% of setModel past the cap. An imported assembly that large wants its part boundaries seen anyway.
 export const FLUSH_SEAM_MAX_EDGES = 20_000;
 
 /** Hide the seams on `model`, and say what it cost. */
@@ -53,14 +26,8 @@ export function hideFlushSeams(model: ModelView | null): { ms: number; skipped: 
 function hideSeams(model: ModelView) {
   if (!model.edges.length) return;
 
-  // one pass over every body's own (already-isolated) index buffer: per-face
-  // normal / plane point / bbox / planarity / triangle list (curved faces
-  // never hide a seam). faceId is globally unique across bodies (the wire
-  // protocol partitions it per body), so a single Map keyed by faceId still
-  // spans the whole model correctly even though the triangles backing each
-  // entry now live in several different BufferGeometries, this is what lets
-  // a seam between two DIFFERENT mating bodies still hide, not just a seam
-  // within one body's own faces.
+  // faceId is unique across bodies (the wire protocol partitions it), so one Map spans the model and a seam between two
+  // mating bodies hides too. Curved faces never hide a seam.
   interface FInfo {
     planar: boolean;
     n: THREE.Vector3;

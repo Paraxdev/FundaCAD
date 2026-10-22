@@ -1,35 +1,14 @@
-// One gesture on the 3D canvas: the pointer and key listeners a modal tool puts
-// up while it is running, and the animation frame it drives its gizmo from.
-//
-// Nine tools were each declaring five bound-method fields, binding them in a
-// constructor, adding four listeners in start() and removing the same four in
-// cleanup(), plus their own raf handle to cancel. That is not shared behaviour
-// by accident: the set is the same because the contract is the same, a modal
-// tool takes the canvas, and it must give every part of it back. Splitting the
-// add from the remove across two hundred lines of a tool file is exactly how
-// one of the four gets forgotten and a dead tool keeps eating clicks.
-//
-// pointerdown is captured, so a tool sees a click before the viewport's own
-// selection handler does and can claim it; pointermove and pointerup are not,
-// because a tool only ever wants those after it has already claimed a drag.
-// keydown goes on window, captured, because focus may be anywhere.
-//
-// Extrude is deliberately NOT one of the callers: it binds pointerdown without
-// capture, so the viewport's own pick runs first and a click can change which
-// profile it is extruding. That is a different bargain, not an oversight, and
-// folding it in behind a flag would put the difference somewhere nobody reading
-// extrudeTool.ts would see it.
+// The canvas listeners and animation frame a modal tool holds, added and removed in one place so none is left behind.
+// Extrude does not use this: its uncaptured pointerdown lets the viewport pick change the profile first.
 
 import { escapeClaimed } from "../ui/escapeClaim";
 
-/** What the tool wants to be told. `frame` is optional: a tool with no live
- *  gizmo never asks for one. */
 export interface GestureHandlers {
   move(e: PointerEvent): void;
   down(e: PointerEvent): void;
   up?(e: PointerEvent): void;
   key(e: KeyboardEvent): void;
-  /** the per-frame pass; call `frame()` again from inside it to keep going */
+  /** call `frame()` again from inside it to keep going */
   frame?(): void;
 }
 
@@ -51,15 +30,16 @@ export class CanvasGesture {
     this.key = (e) => {
       if (e.key !== "Escape" || !escapeClaimed()) handlers.key(e);
     };
-    // raf is cleared BEFORE the pass runs, so a re-arm from inside it takes
+    // raf is cleared before the pass runs, so a re-arm from inside it takes
     this.tick = () => {
       this.raf = 0;
       handlers.frame?.();
     };
   }
 
-  /** Idempotent: a tool that re-enters its own pick phase calls this again, and
-   *  addEventListener ignores a repeat of the same type/listener/capture. */
+  /** Idempotent, for a tool re-entering its pick phase. pointerdown is captured so a tool claims a click before the
+   *  viewport selects; move and up are not, a tool wants them only once it has. keydown is on window, focus may be
+   *  anywhere. */
   attach() {
     this.el.addEventListener("pointermove", this.move);
     this.el.addEventListener("pointerdown", this.down, true);
@@ -67,7 +47,7 @@ export class CanvasGesture {
     window.addEventListener("keydown", this.key, true);
   }
 
-  /** Give the canvas back, pending frame included. */
+  /** Also cancels a pending frame. */
   detach() {
     this.el.removeEventListener("pointermove", this.move);
     this.el.removeEventListener("pointerdown", this.down, true);
@@ -77,14 +57,12 @@ export class CanvasGesture {
     this.raf = 0;
   }
 
-  /** Ask for one animation frame. Coalescing: a second call while one is
-   *  already pending is a no-op rather than a second queued pass. */
+  /** Coalesces: a call while one is already pending is a no-op. */
   frame() {
     if (this.raf) return;
     this.raf = requestAnimationFrame(this.tick);
   }
 
-  /** is a frame pending? (for tests, and for a tool that gates on it) */
   get framePending(): boolean {
     return this.raf !== 0;
   }

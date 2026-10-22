@@ -1,9 +1,4 @@
-//! Mesh file import, replaces the STL, 3MF, OBJ and GLB half of
-//! the Python engine's `mesh_import.py` (`_peek_triangle_count`, `_stl_distinct_normals`,
-//! `_sew_mesh_file`, `_read_obj_triangles`, `_glb_dominant_color`,
-//! `_read_glb`) with `shape_util._maybe_unify`, `_refacet_clean` and
-//! `_explode_solids`. The file parsers stand in for lib3mf, which build123d's
-//! `Mesher` reads through.
+//! STL, 3MF, OBJ and glTF import, the file parsers standing in for lib3mf.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::Read;
@@ -24,7 +19,6 @@ pub const MAX_IMPORT_SCAN_BYTES: u64 = 64 * 1024 * 1024;
 pub const MAX_IMPORT_FACET_DIRECTIONS: usize = 20_000;
 pub const GLB_MM_AS_UNITS_ABOVE: f64 = 10_000.0;
 
-/// Millimetres in one unit of the import picker's choices.
 pub fn mm_per_unit_name(unit: &str) -> Result<f64, String> {
     match unit {
         "mm" => Ok(1.0),
@@ -62,7 +56,7 @@ fn count_stream(r: impl Read, needle: &[u8], limit: u64, max_bytes: Option<u64>)
     count
 }
 
-/// `_peek_triangle_count`: the file's own count, before any geometry is built.
+/// The count the file itself states, read before any geometry is built.
 pub fn peek_triangle_count(path: &Path, fmt: &str) -> Option<u64> {
     let cap = MAX_IMPORT_TRIANGLES;
     match fmt {
@@ -145,7 +139,7 @@ fn distinct(normals: impl Iterator<Item = [f32; 3]>) -> Option<usize> {
     any.then_some(seen.len())
 }
 
-/// `_stl_distinct_normals` on a binary STL's stored facet normals.
+/// From a binary STL's stored facet normals.
 pub fn stl_distinct_normals(data: &[u8]) -> Option<usize> {
     if data.len() < 84 {
         return None;
@@ -263,7 +257,6 @@ fn threemf_meshes(path: &Path) -> Result<Vec<Triangles>, String> {
     Ok(out)
 }
 
-/// `_read_obj_triangles`.
 pub fn obj_triangles(text: &str) -> Result<Triangles, String> {
     let mut verts: Vec<[f64; 3]> = Vec::new();
     let mut tris: Vec<i64> = Vec::new();
@@ -299,8 +292,7 @@ pub fn obj_triangles(text: &str) -> Result<Triangles, String> {
     Ok((verts.into_iter().flatten().collect(), tris.into_iter().map(|i| i as u32).collect()))
 }
 
-/// `_glb_dominant_color`: the base colour of the material covering the most
-/// triangles, `#RRGGBB` in sRGB.
+/// The base colour of the material covering the most triangles, `#RRGGBB` in sRGB.
 pub fn glb_dominant_color(data: &[u8]) -> Option<String> {
     if data.len() < 20 || u32::from_le_bytes(data[0..4].try_into().ok()?) != 0x4654_6C67 {
         return None;
@@ -365,8 +357,7 @@ fn facet_gate(directions: Option<usize>) -> Result<(), String> {
     }
 }
 
-/// `_sew_mesh_file` after the read: unify, clean the facets, and refuse past
-/// the whole file face budget.
+/// Unifies, cleans the facets and refuses past the whole file face budget.
 fn finish_mesh(shapes: Vec<Shape>) -> Result<Shape, String> {
     if shapes.is_empty() {
         return Err("no geometry found in the mesh file".into());
@@ -394,7 +385,7 @@ fn finish_mesh(shapes: Vec<Shape>) -> Result<Shape, String> {
     Ok(shape)
 }
 
-/// `_sew_triangles`: the soup as a binary STL would carry it, single precision.
+/// The soup at single precision, as a binary STL would carry it.
 pub fn sew_triangles(pos: &[f64], idx: &[u32]) -> Result<Shape, String> {
     let pos32: Vec<f32> = pos.iter().map(|&v| v as f32).collect();
     if idx.iter().any(|&i| i as usize * 3 + 2 >= pos32.len()) {
@@ -421,7 +412,6 @@ pub struct MeshObject {
     pub idx: Vec<u32>,
 }
 
-/// The colour that the most triangles carry, `None` when none carries one.
 pub fn dominant_color(colors: impl Iterator<Item = Option<[u8; 3]>>) -> Option<[u8; 3]> {
     let mut count: IndexMap<[u8; 3], usize> = IndexMap::new();
     for c in colors.flatten() {
@@ -444,9 +434,8 @@ pub fn unit_color(c: [f64; 3]) -> [u8; 3] {
     c.map(|v| (v * scale).round_ties_even().clamp(0.0, 255.0) as u8)
 }
 
-/// Each object sewn, unified and cleaned on its own, so two objects that touch
-/// stay two bodies. One object answers its shape and colour, several answer a
-/// compound with `nodes` and `parts` as the assembly readers do.
+/// Each object sewn on its own, so two objects that touch stay two bodies.
+/// Several objects answer a compound with `nodes` and `parts` as the assembly readers do.
 pub fn finish_objects(objs: Vec<MeshObject>) -> Result<super::Imported, String> {
     super::stage::report(super::stage::BUILD, -1, -1);
     let objs: Vec<MeshObject> = objs.into_iter().filter(|o| o.idx.len() >= 3).collect();
@@ -497,8 +486,7 @@ pub fn finish_objects(objs: Vec<MeshObject>) -> Result<super::Imported, String> 
     Ok(super::Imported { shape: kernel::compound(shapes.iter()), fields })
 }
 
-/// Each object sewn, unified and cleaned on its own, behind the density
-/// gates, in the order given.
+/// Each object on its own, behind the density gates, in the order given.
 pub fn object_shapes(objs: &[MeshObject]) -> Result<Vec<Shape>, String> {
     let ntri: u64 = objs.iter().map(|o| (o.idx.len() / 3) as u64).sum();
     if ntri > MAX_IMPORT_TRIANGLES {
@@ -562,7 +550,7 @@ pub fn read_obj(path: &Path) -> Result<super::Imported, String> {
     sew_or_scan(&pos, &idx)
 }
 
-/// The file's triangles as one soup, every 3MF object together.
+/// Every 3MF object together in one soup.
 pub fn read_triangles(path: &Path, fmt: &str) -> Result<Triangles, String> {
     match fmt {
         "stl" => stl_triangles(&std::fs::read(path).map_err(|e| e.to_string())?),
@@ -593,14 +581,12 @@ fn sew_or_scan(pos: &[f64], idx: &[u32]) -> Result<super::Imported, String> {
     }
 }
 
-/// `_read_glb` then the shared sew path.
 pub fn read_glb(path: &Path, mm_per_unit: Option<f64>) -> Result<super::Imported, String> {
     let data = std::fs::read(path).map_err(|e| e.to_string())?;
     let (json, bin) = super::gltf::split_glb(&data)?;
     sew_gltf(&json, &[std::borrow::Cow::Borrowed(bin)], mm_per_unit)
 }
 
-/// A text .gltf through the GLB path, and its dominant colour.
 pub fn read_gltf(path: &Path, mm_per_unit: Option<f64>) -> Result<(super::Imported, Option<String>), String> {
     let (json, buffers) = super::gltf::load_gltf(path)?;
     Ok((sew_gltf(&json, &buffers, mm_per_unit)?, gltf_dominant_color(&json)))
@@ -625,9 +611,8 @@ fn sew_gltf(
     sew_or_scan(&pos, &idx)
 }
 
-/// Least squares `M y = r` for a small symmetric positive semidefinite `M`,
-/// singular directions below `rcond` of the largest dropped, as
-/// `numpy.linalg.lstsq` does.
+/// Least squares `M y = r` for a small symmetric positive semidefinite `M`, dropping
+/// singular directions below `rcond` of the largest as `numpy.linalg.lstsq` does.
 fn lstsq_symmetric(m: &[Vec<f64>], r: &[f64], rcond: f64) -> Vec<f64> {
     let k = r.len();
     let mut a: Vec<Vec<f64>> = m.to_vec();
@@ -693,9 +678,8 @@ fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-/// `_refacet_clean`: planar faces region grown by distance to an anchor
-/// plane, the mesh welded and snapped onto the region planes, each region
-/// rebuilt as one face and sewn. None keeps the input.
+/// Planar regions grown by distance to an anchor plane, the mesh welded and snapped onto
+/// them, each region rebuilt as one face and sewn. None keeps the input.
 pub fn refacet_clean(shape: &Shape, tol: f64) -> Option<Shape> {
     let facts = FaceFacts::new(shape).ok()?;
     if facts.count() == 0 || !facts.all_planar().ok()? {

@@ -1,8 +1,5 @@
-// The native tracer holds a small known picture against its reference once per
-// session, before the first traced frame. A failed check keeps the native
-// tracer off for the session, so a device that draws wrong greys Path traced
-// with the reason instead of showing a wrong picture. A check that could not
-// run is only logged.
+// Once per session before the first traced frame. A failed check greys Path traced with the reason instead of
+// showing a wrong picture; a check that could not run is only logged.
 
 import { crumb } from "../../diagnostics/breadcrumbs";
 import type { NativeProbe } from "./choose";
@@ -50,7 +47,6 @@ export function runSelfCheck(call: Call): Promise<SelfCheckAnswer | null> {
   return run;
 }
 
-/** The failed answer this session, or null while none failed. */
 export function failedSelfCheck(): SelfCheckAnswer | null {
   return failed;
 }

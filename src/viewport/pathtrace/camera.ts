@@ -7,13 +7,8 @@ export interface TraceLens {
   apertureRadius: number;
 }
 
-/** The lens that blurs like the Realtime bokeh pass, or null where that pass is
- *  off. The pass offsets its taps up to 0.4 of `dofblur` (a fraction of the
- *  width), with dofblur = depth offset * 0.006 / fStop, capped at 0.012 * blur,
- *  so a few millimetres from the focus its blur is flat. A thin lens of radius R
- *  blurs a point at depth d over R |d - f| / d on the focal plane, which grows
- *  with depth instead. R gives the pass's cap a quarter of the focus distance in
- *  front of the focus, or the pass's slope at the focus, whichever is smaller. */
+/** The Realtime bokeh blur goes flat a few mm off focus, a thin lens blur grows with depth, so R matches the
+ *  pass's cap a quarter of the focus distance in front, or its slope at the focus, whichever is smaller. */
 export function lensFor(
   camera: THREE.Camera,
   focusDistance: number,
@@ -28,10 +23,8 @@ export function lensFor(
   return { focusDistance, apertureRadius: Math.min(slope, cap) };
 }
 
-/** The camera the tracer looks through. Never the viewport's own: the tracer
- *  switches the camera it is given to WebGPU clip space and recomputes its
- *  projection, which would break the WebGL draw. `prev` is reused while it is
- *  the same kind of camera. */
+/** Never the viewport's own camera: the tracer switches it to WebGPU clip space and recomputes its
+ *  projection, which would break the WebGL draw. `prev` is reused while it is the same kind. */
 export function traceCameraFor(
   src: THREE.Camera,
   prev: THREE.Camera | null,

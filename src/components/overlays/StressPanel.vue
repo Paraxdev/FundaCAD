@@ -1,20 +1,6 @@
 <script setup lang="ts">
-// Inspect → Stress: a linear static analysis of one body. The user places a
-// support or a load on the body with a click (a spot, drawn as an orb), or
-// picks faces in the view and sets them as supports (fixed, pinned or sliding)
-// or as a load's faces, chooses a material, gravity if it matters, and runs it; the
-// result reads out here with a colour legend while the view shows the body
-// coloured by von Mises stress, deformed to taste, with probes pinned on it
-// (see ui/panels.ts runStress). The setup is saved with the document.
-//
-// No Esc-dismiss: Esc is how a face selection is cleared while picking, and it
-// must not throw the setup away with it. In probe mode Esc ends probe mode and
-// nothing else (viewport/stressGlyphs.ts).
-//
-// The panel floats over the model it analyses, so it keeps to a narrow column
-// at the side, and once a Run has a result the setup folds into one summary
-// line: the result, the deformation and the probe come up where the setup
-// was, and the setup opens again from its line or when the result goes.
+// No Esc dismiss: Esc clears a face selection while picking and must not throw the setup away. In probe mode Esc
+// ends probe mode only (viewport/stressGlyphs.ts).
 
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
@@ -49,9 +35,7 @@ function readBodies() {
 }
 let offBuild: (() => void) | null = null;
 onMounted(() => {
-  // onBuild replays at once, and this mounts inside app.mount(), before
-  // mountUi has made engine.ui: the first replay has no panels to ask, so the
-  // list is read again whenever the panel opens.
+  // onBuild replays at once, before mountUi has made engine.ui, so the list is read again whenever the panel opens.
   offBuild = engine.store.onBuild(readBodies);
 });
 onUnmounted(() => offBuild?.());
@@ -82,9 +66,8 @@ const missingBody = computed(() => {
   return b && !bodies.value.some((x) => x.id === b) ? b : null;
 });
 
-// Folded once a Run brings a result, open again when the result goes for good
-// (not while a new Run replaces it) or a Run is refused, since what is in the
-// way is usually in the setup.
+// Folded once a Run brings a result. Opens again when the result goes for good (not when a new Run replaces it) or a
+// Run is refused, since the cause is usually in the setup.
 const setupOpen = ref(true);
 watch(
   () => panels.stress?.result ?? null,

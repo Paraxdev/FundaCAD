@@ -1,17 +1,6 @@
-//! The surface texture's geometry as a FundaCAD plugin component, the Rust
-//! twin of geometry/*.py.
-//!
-//! Two registrations, because a texture happens at two times. The FEATURE
-//! validates the values against the body as it stands, so a bad value turns
-//! the row red at once, and stashes the spec on the body; it displaces nothing.
-//! The MESH PASS runs at tessellation against the FINAL shape, which is why a
-//! texture survives the booleans and fillets applied after it: it resolves the
-//! stored selector then, and displaces each face's triangulation.
-//!
-//! With grime on, the faces next to the textured ones are claimed too, tagged
-//! "bleed", and get a fading noise instead of the pattern (Python keeps that
-//! set in a module global between resolve and displace; a component keeps no
-//! state between calls, so the tag carries it).
+//! The Rust twin of geometry/*.py. The feature only validates and stashes the spec, the mesh pass displaces at
+//! tessellation against the final shape, so a texture survives later booleans and fillets. A component keeps no state
+//! between calls, so grime neighbours carry a "bleed" tag where Python keeps a module global.
 
 wit_bindgen::generate!({
     world: "plugin",
@@ -38,9 +27,7 @@ use serde_json::{json, Value};
 
 pub use fundacad::plugin::{feature, kernel};
 
-/// Bumped on ANY change to the displacement's output, as texture.py's
-/// CODE_VERSION is; it keys the mesh caches. The two halves share the number
-/// because they make the same mesh.
+/// Bump on any change to the displacement's output, together with texture.py's CODE_VERSION: it keys the mesh caches.
 pub const CODE_VERSION: u32 = 12;
 
 const BLEED: &str = "bleed";

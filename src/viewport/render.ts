@@ -1,7 +1,5 @@
-// Turn a RebuildResult into Three.js objects: one shaded Mesh+BufferGeometry PER
-// BODY (with per-triangle faceIds for picking) plus crisp fat edge lines. Bodies
-// are keyed by id so an unchanged body (same wire-protocol etag) can reuse its
-// previous GPU objects untouched instead of rebuilding, see Viewport.setModel().
+// One Mesh per body with per triangle faceIds, plus fat edge lines. Bodies are keyed by id so an unchanged body
+// (same etag) reuses its GPU objects, see Viewport.setModel().
 
 import * as THREE from "three";
 import type { RebuildResult } from "../types";
@@ -17,13 +15,8 @@ import { weldByFace } from "./weld";
 export { BodyEdges, EDGE_IDLE_COLOR, EDGE_IDLE_WIDTH };
 export type { EdgeRef };
 
-/** One body's own isolated Mesh + edges. `faceStart`/`faceCount` are the body's
- *  B-rep faceId sub-range (global, per the wire protocol), `faceIds` below are
- *  NOT remapped, so a faceId is always globally meaningful even though the
- *  triangle/vertex indices that carry it are local to this body's own buffers.
- *  `etag` is the engine's content fingerprint as of this build (undefined if
- *  the reply didn't carry one), Viewport.setModel() diffs on it to decide
- *  whether a body needs rebuilding at all. */
+/** `faceIds` are not remapped, so a faceId stays global while vertex indices are local to this body's buffers.
+ *  `etag` is the engine's content fingerprint (undefined if the reply had none), which setModel diffs on. */
 export interface BodyMesh {
   id: string;
   name: string;
@@ -34,14 +27,11 @@ export interface BodyMesh {
   faceIds: number[]; // one B-rep faceId per triangle, index = local faceIndex
   /** every edge of this body, merged into ONE object with ONE material */
   edges: BodyEdges;
-  // per-vertex base colors (this body's own buffer) the highlighter restores to
-  // (component/draft analysis overwrite this; default = BASE_COLOR everywhere).
+  // Base colours the highlighter restores to; component and draft analysis overwrite them.
   baseColors: Float32Array;
   /** Bumped on every rewrite of baseColors, so the traced copy knows to follow. */
   baseVersion?: number;
-  // B-rep faceId -> LOCAL triangle indices (into this body's own index buffer),
-  // precomputed once so highlight.ts/viewport.ts can touch just one face's/body's
-  // own triangles without scanning the whole body on each hover/select/measure.
+  // faceId to LOCAL triangle indices, so hover, select and measure touch one face without scanning the body.
   faceTriangles: Map<number, number[]>;
   /** A read-only reference scan: picked as a whole body, never face by face. */
   scan?: true;
@@ -49,16 +39,10 @@ export interface BodyMesh {
 
 export interface ModelView {
   bodies: BodyMesh[];
-  // ALL edges, flattened (every body's + orphans below), the flat list existing
-  // consumers (overlays.ts's curvature combs, edgeLineByMid, hideFlushSeams)
-  // already expect. These are REFERENCES now, not THREE objects: the drawable
-  // lives on the owning body's BodyEdges (ref.draw).
+  // Every body's edges plus the orphans, as refs; the drawable is the owning body's BodyEdges (ref.draw).
   edges: EdgeRef[];
-  // Edges whose `body` doesn't name a live body id. The current
-  // backend always tags every edge with its owning body, so in practice this is
-  // always empty, kept as a defensive fallback (rebuilt fresh every setModel()
-  // call, always visible, never moved with a body) so a body-less edge can't
-  // silently vanish if that invariant ever lapses.
+  // Edges whose `body` names no live body. Empty in practice since the backend tags every edge; kept so a
+  // body less edge cannot silently vanish if that ever lapses.
   orphanEdges: BodyEdges | null;
   box: THREE.Box3;
 }
@@ -70,9 +54,7 @@ export const BASE_COLOR = new THREE.Color(0x9aa7b4);
 export const SCAN_COLOR = new THREE.Color(0xc9b48f);
 export const SCAN_MATTE = { metalness: 0, roughness: 1 } as const;
 
-/** Split a RebuildResult's flat edge list by owning body id (see `orphans` above
- *  for the no-match fallback). `bodyIds` is the set of body ids present in this
- *  reply, so a stale `body` reference (a body that's gone) also falls to orphans. */
+/** A `body` not in `bodyIds`, a body that is gone, falls to the orphans too. */
 export function groupEdgesByBody(
   edges: RebuildResult["edges"],
   bodyIds: Set<string>,
@@ -95,35 +77,18 @@ function buildEdgeLines(edges: RebuildResult["edges"], resolution: THREE.Vector2
   return new BodyEdges(edges, resolution);
 }
 
-/** A one-time bucketing of the reply's single shared triangle array into
- *  per-body triangle lists, plus one shared global->local vertex scratch buffer.
- *
- *  Without this, buildBodyMesh is O(bodies x WHOLE-MODEL triangles): each body
- *  scans every triangle in the model to find its own, and allocates+fills its
- *  own whole-model `Int32Array` remap. That is invisible at 5 bodies and fatal
- *  at 3,000, measured 38.1s to build one imported assembly, 2.1s with this.
- *  Here the whole model is walked TWICE total, no matter how many bodies. */
+/** Without it buildBodyMesh is O(bodies x model triangles): 38.1s to build a 3,000 body assembly, 2.1s with it.
+ *  The whole model is walked twice, however many bodies. */
 export interface MeshPartition {
   /** body id -> indices into `result.mesh.faceIds` of the triangles it owns */
   trisByBody: Map<string, Int32Array>;
-  /** global vertex index -> body-local; -1 everywhere between bodies. Shared
-   *  across bodies and handed back clean by buildBodyMesh (which resets only
-   *  the entries it touched), refilling this per body is the very cost being
-   *  removed. */
+  /** Global vertex index to body local, -1 between bodies. Handed back clean by buildBodyMesh, since
+   *  refilling it per body is the very cost being removed. */
   remap: Int32Array;
 }
 
-/** Bucket `result`'s triangles by owning body, in two passes. Only bodies named in
- *  `rebuilding` get a list, an unchanged body keeps its GPU objects and is never
- *  passed to buildBodyMesh.
- *
- *  `opts.range` and `opts.remap` exist for PROGRESSIVE loads, where the reply's
- *  arrays are full-size but filled a chunk at a time. `range` is a CORRECTNESS
- *  requirement there: an unwritten slice is still zeros, and zero is a legitimate
- *  faceId, so scanning it would attribute every not-yet-arrived triangle to
- *  whichever body owns face 0. `remap` is the speed one, a caller-owned scratch
- *  buffer sized to the whole model, handed back clean, instead of O(chunks x model)
- *  allocation. Without opts the behaviour is unchanged. */
+/** Only `rebuilding` bodies get a list. On a progressive load `range` is required, since unwritten zeros read
+ *  as face 0, and `remap` is a caller owned scratch buffer handed back clean. */
 export function partitionMesh(
   result: RebuildResult,
   rebuilding: Iterable<string>,
@@ -133,11 +98,8 @@ export function partitionMesh(
   const wanted = rebuilding instanceof Set ? rebuilding : new Set(rebuilding);
   const { faceIds, positions } = result.mesh;
 
-  // faceId -> slot, so the per-triangle test is one array read instead of a
-  // range comparison against every body. -1 = a face nobody is rebuilding.
-  // Bounds come from the WANTED bodies only: a face outside them is skipped
-  // either way, and on a chunk that keeps this array chunk-sized rather than
-  // model-sized.
+  // faceId to slot, -1 for a face nobody is rebuilding. Bounds come from the wanted bodies only, so on a
+  // chunk this stays chunk sized.
   let faceBase = Infinity;
   let faceLimit = 0;
   for (const m of metas) {
@@ -167,9 +129,7 @@ export function partitionMesh(
     if (slot >= 0) counts[slot]!++;
   }
 
-  // pass 2: fill. Triangle ORDER within a body is preserved (ascending t), which
-  // is what keeps localFaceIds and the faceTriangles map identical to the
-  // scan-every-triangle path.
+  // Ascending t within a body keeps localFaceIds and faceTriangles identical to the scan every triangle path.
   const lists = slotBodies.map((_, i) => new Int32Array(counts[i]!));
   const cursor = new Int32Array(slotBodies.length);
   for (let t = tFrom; t < tTo; t++) {
@@ -185,15 +145,8 @@ export function partitionMesh(
   return { trisByBody, remap: opts?.remap ?? new Int32Array(positions.length / 3).fill(-1) };
 }
 
-/** Build one body's own isolated Mesh+BufferGeometry: slice its triangles out of
- *  the (still shared-array) wire mesh, result.mesh stays one concatenated set
- *  of arrays, per client.ts's assemble(), and remap to a dense local vertex
- *  range, so each body owns independent GPU buffers untouched by any other
- *  body's rebuild. `faceIds` in the slice stay their original (globally-unique)
- *  B-rep ids; only the vertex numbering is body-local.
- *
- *  `partition` is optional and purely a performance path: pass one when building
- *  several bodies from the same reply. Output is identical either way. */
+/** Remapped to a dense local vertex range, so each body owns GPU buffers no other rebuild touches; faceIds
+ *  stay global. `partition` is only a speed path for many bodies of one reply. */
 export function buildBodyMesh(
   result: RebuildResult,
   meta: { id: string; name: string; faceStart: number; faceCount: number; scan?: true | undefined },
@@ -207,9 +160,7 @@ export function buildBodyMesh(
   const { faceStart, faceCount } = meta;
   const faceEnd = faceStart + faceCount;
 
-  // The triangles this body owns. With a partition they were bucketed in one
-  // pass over the whole model; without one, the single-body live-preview drag
-  // path, scanning costs the same, so don't make the caller build one.
+  // Without a partition (the single body live preview drag) a scan costs the same, so none is needed.
   const shared = partition?.trisByBody.get(meta.id);
   let owned: Int32Array;
   if (shared) {
@@ -223,13 +174,9 @@ export function buildBodyMesh(
     owned = Int32Array.from(scan);
   }
 
-  // global vertex index -> local (dense); a flat typed array is preferred over a Map here,
-  // this runs per changed body on every live-preview drag tick, and Map<number,
-  // number> pays hashing/boxing on 3 lookups per triangle.
+  // A flat typed array, not a Map: this runs per changed body on every live preview drag tick.
   const remap = shared ? partition!.remap : new Int32Array(positions.length / 3).fill(-1);
-  // Preallocated rather than pushed: growing plain arrays one number at a time
-  // cost ~11 s of main thread across a 7M-triangle assembly. The first pass
-  // numbers the vertices, the second copies each one once.
+  // Preallocated: growing plain arrays one number at a time cost ~11 s of main thread on a 7M triangle assembly.
   const indexed = new Uint32Array(owned.length * 3);
   const firstUse: number[] = [];
   const localFaceIds: number[] = new Array(owned.length);
@@ -277,9 +224,7 @@ export function buildBodyMesh(
     }
   }
 
-  // Hand the SHARED remap back clean for the next body by clearing only the
-  // entries this body touched, O(this body), never O(model). Refilling a
-  // whole-model buffer per body is exactly the cost partitionMesh removes.
+  // Clears only the entries this body touched, O(body) rather than O(model).
   if (shared) {
     for (let k = 0; k < owned.length; k++) {
       const t = owned[k]!;
@@ -292,20 +237,8 @@ export function buildBodyMesh(
     }
   }
 
-  // A textured face arrives fully de-indexed, 3 unique vertices per triangle
-  // (measured 2.99 verts/tri), which is how the engine delivers per-triangle
-  // normals for faceted shading. Weld the duplicates back together.
-  //
-  // The key MUST include the faceId: welding on position+normal alone would let two
-  // coplanar neighbours share a vertex, and face colour is per-VERTEX here, so
-  // hover-painting one would bleed into the other.
-  //
-  // Triangle ORDER is untouched, so localFaceIds and faceTriangles stay valid. Only
-  // runs for a DE-INDEXED body. Every body now ships normals (true surface normals,
-  // with the engine already welding seam duplicates), and an ordinary indexed body
-  // arrives at ~1 vertex per triangle or fewer: running this pass over
-  // it would find nothing to merge and cost a hash insert per index on every
-  // live-preview tick.
+  // A textured face arrives de-indexed (2.99 verts/tri), so duplicates are welded. The key includes the faceId,
+  // or hover paint would bleed into a coplanar neighbour. An indexed body has nothing to merge and skips this.
   let posOut: ArrayLike<number> = localPositions;
   let nrmOut: ArrayLike<number> = localNormals;
   if (anyNormal && localIndices.length && localPositions.length > localIndices.length * 1.5) {
@@ -319,15 +252,11 @@ export function buildBodyMesh(
   // vertex number fits.
   const vertsOut = posOut.length / 3;
   geo.setIndex(new THREE.BufferAttribute(vertsOut > 65535 ? localIndices : Uint16Array.from(localIndices), 1));
-  // The engine ships true surface normals at shipping quality (a displaced face
-  // its plugin's), so shading does not depend on how fine the mesh is. A body
-  // without them, a large document's coarsened tier, keeps the client-side
-  // accumulation.
+  // True surface normals keep shading independent of mesh fineness; a large document's coarsened tier has
+  // none and keeps the client side accumulation.
   if (anyNormal) geo.setAttribute("normal", new THREE.BufferAttribute(f32(nrmOut), 3));
   else geo.computeVertexNormals();
 
-  // per-vertex color baked to the base albedo; highlight recolors a face's
-  // vertices without disturbing lighting (material.color is white).
   const vcount = posOut.length / 3;
   const colors = new Float32Array(vcount * 3);
   const base = meta.scan ? SCAN_COLOR : BASE_COLOR;
@@ -338,10 +267,8 @@ export function buildBodyMesh(
   }
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
-  // Physical (so glass can refract) on a capable machine; plain Standard on a
-  // weak one, where glass is alpha anyway, so it never pays for the physical
-  // BRDF it cannot use. The finish code only ever asks for transmission through
-  // applyGlassLook, which no-ops on a non-physical material, so both are safe.
+  // Physical so glass can refract; a weak machine gets Standard and alpha glass. applyGlassLook no-ops on a
+  // non physical material, so both are safe.
   const mat = renderLowPower
     ? new THREE.MeshStandardMaterial({
         color: 0xffffff,
@@ -357,9 +284,7 @@ export function buildBodyMesh(
     : new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
         vertexColors: true,
-        // The one definition of the app's default finish, shared with materials so
-        // that "no material" and "a material that says nothing about its finish"
-        // are the same picture rather than two nearly identical ones.
+        // Shared with materials, so "no material" and one silent on its finish are the same picture.
         metalness: FINISH.metalness,
         roughness: FINISH.roughness,
         flatShading: false,
@@ -373,21 +298,16 @@ export function buildBodyMesh(
   if (meta.scan) Object.assign(mat, SCAN_MATTE);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = "model";
-  // Cast and receive shadows so an emissive body/face lights AND shadows its
-  // neighbours. Costs nothing unless the renderer's shadow map is on and a light
-  // is a shadow-caster (syncEmitterLights, only off the brightest emitters).
+  // So an emissive body lights and shadows its neighbours. Free unless the shadow map is on and a light
+  // casts (syncEmitterLights, only the brightest emitters).
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  // Hover picking raycasts this mesh on every pointermove; without a BVH that
-  // is a full triangle scan (2.60ms median on a 50k-triangle textured body).
   scheduleRaycastIndex(geo); // built after the first paint, see raycastIndex.ts
 
   const edges = buildEdgeLines(bodyEdges, resolution);
 
-  // one pass over this body's own (already-sliced) triangle list, grouping
-  // LOCAL triangle indices by their B-rep faceId.
-  // A scan's one face is every triangle, a list nothing reads since a scan is
-  // never painted face by face, and at a few million triangles it is not small.
+  // A scan's one face is every triangle, a list nothing reads since a scan is never painted face by face,
+  // and at a few million triangles it is not small.
   const faceTriangles = new Map<number, number[]>();
   for (let t = 0; t < (meta.scan ? 0 : localFaceIds.length); t++) {
     const fid = localFaceIds[t];
@@ -410,45 +330,27 @@ export function buildBodyMesh(
     faceTriangles,
     ...(meta.scan ? { scan: true as const } : {}),
   };
-  // reverse lookup: a raycast hit's `.object` (the exact mesh hit) back to the
-  // BodyMesh that owns it, picking.ts/viewport.ts use this via faceIdOfHit().
+  // Maps a raycast hit's object back to its BodyMesh, see faceIdOfHit().
   mesh.userData.owner = body;
   return body;
 }
 
-/** All body meshes currently visible, the raycast target set for "the solid".
- *  three.js's Raycaster does NOT check `.visible` (only `layers.test()`), so any
- *  raycast against "the model" must filter explicitly; a hidden body is only
- *  `mesh.visible = false` now (not dropped from the geometry at build time). */
+/** three's Raycaster tests `layers` but not `.visible`, and a hidden body is only `mesh.visible = false`, so
+ *  every raycast against the model must filter. */
 export function visibleBodyMeshes(view: ModelView): THREE.Mesh[] {
   const out: THREE.Mesh[] = [];
   for (const b of view.bodies) if (b.mesh.visible) out.push(b.mesh);
   return out;
 }
 
-/** The B-rep faceId a raycast Intersection landed on, resolved via the hit
- *  mesh's own `userData.owner` (set in buildBodyMesh), `hit.faceIndex` is a
- *  LOCAL triangle index into whichever body mesh was actually hit. */
+/** `hit.faceIndex` is a LOCAL triangle index into whichever body mesh was hit. */
 export function faceIdOfHit(hit: THREE.Intersection): number {
   const owner = hit.object.userData.owner as BodyMesh | undefined;
   return owner?.faceIds[hit.faceIndex ?? 0] ?? 0;
 }
 
-/** The faint second pass that makes cross-section mode readable: what the cut takes
- *  away, drawn again at low alpha instead of simply not being there. A hard clip
- *  answers "what is inside this part" and destroys the answer to "where inside it
- *  am I looking". Each ghost SHARES its body's geometry (no copy, no upload) and
- *  carries the mirrored clip plane.
- *
- *  The three material settings are load-bearing: depthWrite OFF so several ghosts
- *  read through each other; DoubleSide because a cut leaves open shells and culling
- *  back faces would leave a hollow outline; ONE material recreated per mount rather
- *  than cached, because disposeBody's traversal disposes whatever it finds, so a
- *  rebuild replacing one body has already disposed every other ghost's material.
- *
- *  At alpha 0 nothing is built at all, which keeps the clean uncluttered cut free.
- *  Ghosts are CHILDREN of the body meshes, so they inherit a move-ghost's live
- *  transform and vanish with a hidden or replaced body for free. */
+/** depthWrite off so ghosts read through each other, DoubleSide since a cut leaves open shells, and a new
+ *  material per mount since disposeBody disposes whatever it finds. Nothing is built at alpha 0. */
 export function buildSectionGhosts(
   bodies: BodyMesh[],
   plane: THREE.Plane,
@@ -472,11 +374,8 @@ export function buildSectionGhosts(
   return { meshes, material };
 }
 
-/** faceId -> owning body, built lazily per ModelView and thrown away with it
- *  (a new reply always makes a new ModelView, so this can never go stale).
- *  Bodies own contiguous faceId ranges, so a sorted range table + binary search
- *  answers in log(bodies) instead of scanning, this runs on every hover, and a
- *  linear scan over an imported assembly's thousands of bodies is felt. */
+/** Per ModelView, which a new reply always replaces, so it never goes stale. Bodies own contiguous faceId
+ *  ranges, so a binary search keeps every hover at log(bodies) on a big assembly. */
 const faceIndexCache = new WeakMap<ModelView, { starts: Int32Array; bodies: BodyMesh[] }>();
 
 function faceIndexOf(view: ModelView) {
@@ -491,9 +390,7 @@ function faceIndexOf(view: ModelView) {
   return idx;
 }
 
-/** Which BodyMesh owns a global B-rep faceId (undefined if none, e.g. a stale
- *  id from before a rebuild). Shared by viewport.ts's public faceIdToBodyId and
- *  highlight.ts's per-body paint/restore, so the range lookup has one definition. */
+/** Undefined for a stale id from before a rebuild. The one range lookup viewport.ts and highlight.ts share. */
 export function bodyOfFace(view: ModelView, faceId: number): BodyMesh | undefined {
   const { starts, bodies } = faceIndexOf(view);
   // rightmost body whose faceStart <= faceId
@@ -530,25 +427,11 @@ export function reuseUnchanged(
   return prev;
 }
 
-/** Reset a REUSED body's transient per-model display state (clip plane, dimmed
- *  opacity, emphasized/hovered/selected edge styling) back to build-time
- *  defaults, i.e. make it look exactly like a freshly built body would. A
- *  reused body's mesh/material/edge objects are never recreated across a
- *  rebuild, so without this they'd keep whatever setClipPlane()/
- *  setModelDimmed()/emphasizeEdges()/Highlighter left on them from before this
- *  reply. The old single-merged-mesh code reset ALL of this on every rebuild by
- *  construction (a fresh mesh+materials every time); this keeps that same
- *  "lost on rebuild" guarantee uniform across every body, reused or not.
- *  Skips the mesh material when it's not this body's own (e.g. the shared
- *  zebra-stripe shader material is swapped in/out by Viewport.applyZebra(),
- *  never touched here). */
+/** A reused body's objects are never recreated, so without this they keep the clip, dim and edge styling from
+ *  before the reply. Skips a material not its own, such as the shared zebra shader. */
 export function resetBodyAppearance(body: BodyMesh) {
-  // Clear any leftover move-ghost POSE: a reused (etag-unchanged) body must sit
-  // at the origin unrotated and unscaled, its vertices already encode its true
-  // position, and the rebuild has just re-encoded them. Position alone was
-  // enough while the ghost could only translate; the gizmo now turns and
-  // resizes through the same ghost, and a leftover quaternion on a reused body
-  // draws the part twice-rotated with nothing on screen to say why.
+  // A reused body's vertices already encode its position, so a leftover move ghost pose (it turns and scales
+  // too) would draw the part transformed twice with nothing on screen to say why.
   body.mesh.position.set(0, 0, 0);
   body.mesh.quaternion.identity();
   body.mesh.scale.set(1, 1, 1);
@@ -564,33 +447,19 @@ export function resetBodyAppearance(body: BodyMesh) {
   body.edges.resetAppearance();
 }
 
-/** Every MeshStandardMaterial this body draws with: its own, plus the extra one
- *  per finish that a material dropped on a FACE adds (viewport.ts builds those
- *  as geometry groups over the same mesh).
- *
- *  The reason this exists rather than a cast at each call site: a body's
- *  `mesh.material` used to be exactly one material and four places wrote to it
- *  through a cast that quietly does nothing on an array. Each of those was a
- *  display state that would simply stop applying to a part with a chrome ring on
- *  it, x-ray, the sketch dim, the section clip and the rebuild reset, and none
- *  of them would have failed loudly.
- *
- *  Skips a material that is not the body's own (the shared zebra shader), which
- *  is the same thing the old `instanceof` check bought. */
+/** Its own material plus one per finish dropped on a face. A cast at each call site quietly does nothing on an
+ *  array, so x-ray, dim, clip and reset would stop applying. Skips the shared zebra shader. */
 export function bodyMaterials(body: BodyMesh): THREE.MeshStandardMaterial[] {
   const m = body.mesh.material;
   const list = Array.isArray(m) ? m : [m];
   return list.filter((x): x is THREE.MeshStandardMaterial => x instanceof THREE.MeshStandardMaterial);
 }
 
-// How glossy the clear lacquer itself is (its own roughness, not the base's). A
-// low value is a wet, hard, freshly-waxed coat, which is what a clearcoat is for.
+// The lacquer's own roughness; low is a wet, hard, freshly waxed coat.
 export const CLEARCOAT_ROUGHNESS = 0.08;
 
-/** Put a clear lacquer over the surface: the second glossy layer of car paint,
- *  glazed ceramic or a coated plastic. Physical-PBR only, so it no-ops on the
- *  plain Standard material a weak machine draws with (like glass). Toggling it
- *  across zero flips USE_CLEARCOAT, so it recompiles only on the crossing. */
+/** Physical PBR only, so it no-ops on the Standard material a weak machine draws with. Crossing zero flips
+ *  USE_CLEARCOAT, so it recompiles only on the crossing. */
 export function applyClearcoat(mat: THREE.MeshStandardMaterial, amount: number): void {
   const phys = mat as THREE.MeshPhysicalMaterial;
   if (!(phys as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial) return;
@@ -600,11 +469,8 @@ export function applyClearcoat(mat: THREE.MeshStandardMaterial, amount: number):
   if (was !== amount > 0) phys.needsUpdate = true;
 }
 
-// A weak machine (software rasteriser, tiny RAM) cannot afford transmission: it
-// re-renders the scene into a buffer for every glass draw, which is where a
-// low-end GPU stalls or drops the context. On such a machine glass falls back to
-// plain alpha, still see-through, just not refractive. Set once at renderer
-// creation (scene.detectLowPower); a scene with no glass pays nothing either way.
+// Transmission re-renders the scene per glass draw, where a low end GPU stalls or drops the context, so a
+// weak machine gets plain alpha glass. Set once at renderer creation (scene.detectLowPower).
 let renderLowPower = false;
 export function setRenderLowPower(v: boolean): void {
   renderLowPower = v;
@@ -613,23 +479,8 @@ export function isRenderLowPower(): boolean {
   return renderLowPower;
 }
 
-/** Give a translucent, non-metallic finish REAL glass: transmission (refraction)
- *  rather than flat alpha, so what is behind bends and the surface catches the
- *  light a sheet of glass does. Returns true when it took, so the caller leaves
- *  the plain opacity/transparent/depthWrite path alone.
- *
- *  Ghosts opt out: x-ray and the stale-model preview are see-through EFFECTS
- *  over the whole model, and bending the very thing the user is trying to look
- *  past is the opposite of the point, they keep the plain fade. A metal is never
- *  glass however thin its alpha, so a translucent chrome stays a tinted mirror.
- *
- *  Toggling transmission across zero flips the USE_TRANSMISSION shader define, so
- *  it recompiles the material, done only on the crossing, and applyBodyFinish
- *  runs on material CHANGES, not per frame, so the recompile is not a per-frame
- *  cost. Dispersion flips its own define, three bumps the version for it.
- *
- *  Auto thickness needs the mesh: its mean thickness is the uniform, and the
- *  per pixel pass in glassThickness measures the rest. */
+/** True when it took. Ghosts (x-ray, stale preview) keep the plain fade and a metal is never glass. Crossing zero
+ *  flips USE_TRANSMISSION, a recompile only on material changes. Auto thickness needs the mesh. */
 export function applyGlassLook(
   mat: THREE.MeshStandardMaterial,
   f: BodyFinish,
@@ -642,9 +493,8 @@ export function applyGlassLook(
   const was = phys.transmission > 0;
   phys.ior = f.ior;
   if (glassy) {
-    // A clearer material (lower opacity) transmits more; the +0.25 keeps even a
-    // frosted 0.6 visibly glassy, since flat alpha at that opacity already read
-    // as glass and transmission must not look LESS clear than the fade it replaces.
+    // The +0.25 keeps even a frosted 0.6 visibly glassy, so transmission never looks less clear than the
+    // alpha fade it replaces.
     phys.transmission = Math.min(1, 1 - f.opacity + 0.25);
     const auto = f.thickness === "auto";
     phys.thickness = auto ? meanThickness(mesh?.geometry) : (f.thickness as number);
@@ -680,10 +530,8 @@ export function applyThinFilm(mat: THREE.MeshStandardMaterial, f: BodyFinish, gh
 export const ANISOTROPY_PATCH = "anisotropy";
 export const SCATTER_PATCH = "scatter";
 
-// Bodies have no uv attribute, so three's derivative tangent frame is all zeros
-// and the anisotropic environment term turns NaN. The frame is rebuilt from the
-// axis projected on the surface, after any patch that bends the normal; where
-// the axis meets the surface head on it has no direction, so the stretch fades.
+// Bodies have no uv, so three's derivative tangent frame is zero and anisotropy turns NaN. The frame is rebuilt
+// from the axis projected on the surface, fading the stretch where the axis meets the surface head on.
 const ANISOTROPY: Omit<ShaderPatch, "uniforms"> = {
   name: ANISOTROPY_PATCH,
   key: "aniso1",
@@ -707,9 +555,8 @@ material.alphaT = mix(pow2(material.roughness), 1.0, pow2(material.anisotropy));
   },
 };
 
-// Raises only the roughness the refraction reads. The lights are summed before
-// aomap_fragment, so the surface highlight stays sharp while what is seen
-// through blurs. Not a replace: glassAuto already replaces transmission_fragment.
+// The lights are summed before aomap_fragment, so the highlight stays sharp while what is seen through blurs.
+// Not a replace, since glassAuto already replaces transmission_fragment.
 const SCATTER: Omit<ShaderPatch, "uniforms"> = {
   name: SCATTER_PATCH,
   key: "scatter1",
@@ -729,11 +576,8 @@ material.roughness = scKeep;
 
 const WHITE = new THREE.Color(1, 1, 1);
 
-/** Sheen, anisotropy and scatter. Physical-PBR only, dropped on a weak machine
- *  and on a ghost. `tint` is the body colour the sheen is lifted from, `axis`
- *  the world direction highlights stretch along. Call after applyGlassLook,
- *  scatter only takes on a finish that turned out see-through. Flakes are drawn
- *  by their own patch. */
+/** Physical PBR only, dropped on a weak machine and on a ghost. Call after applyGlassLook, since scatter only
+ *  takes on a finish that turned out see through. Flakes are drawn by their own patch. */
 export function applyFinishFields(
   mat: THREE.MeshStandardMaterial,
   f: BodyFinish,

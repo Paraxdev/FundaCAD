@@ -1,15 +1,5 @@
-// The colored 3MF PROJECT export, and the post-export check that goes with it.
-//
-// A project 3MF is aimed at one slicer, carries a preset naming one printer
-// model, maps palette slots onto physical toolheads, and finishes by asking a
-// machine on the network which filaments it has loaded. The file itself is
-// written by this plugin's exporter inside the geometry engine
-// (geometry/register.py), which the app reaches through its generic
-// `exportWith`.
-//
-// The app's own `Export…` is unchanged and still writes 3MF among its formats.
-// The difference is the word PROJECT: one object per body with a toolhead
-// assignment each, rather than one mesh.
+// The colored 3MF PROJECT export: one object per body with a toolhead assignment each, rather than the app's one-mesh
+// 3MF. This plugin's exporter in the geometry engine (geometry/register.py) writes it, reached through `exportWith`.
 
 import { contributedPalette, listModal, reportError, saveDialog, stripDocumentExt, toast } from "fundacad";
 import type { DocumentStore, GeometryBackend } from "fundacad";
@@ -24,11 +14,8 @@ export interface ProjectExport {
   presets?: boolean;
 }
 
-/** Export a colored multi-material 3MF PROJECT (Orca format): one object per body,
- *  palette slot → toolhead. With `opts.path` it writes there silently (the
- *  staging path the slicer hand-off opens); without, it prompts with a save
- *  dialog. `opts.presets` asks the exporter to flatten the user's slicer presets
- *  into the project. Returns null when cancelled or failed. */
+/** Export a colored multi-material 3MF PROJECT (Orca format), palette slot to toolhead. With `opts.path` it writes
+ *  there silently (the staging path the slicer hand-off opens), else it prompts. Null when cancelled or failed. */
 export async function exportPrintProject(
   store: DocumentStore,
   geometry: GeometryBackend,
@@ -94,13 +81,9 @@ export async function exportPrintProject(
   return out;
 }
 
-/** Best-effort post-export check: warn when the design uses palette slots whose
- *  toolhead has no filament loaded, or leaves bodies unassigned (they export as
- *  extruder 1). Fire-and-forget and bounded to 1.5 s: an unreachable, slow or
- *  unconfigured printer means no warning. Never blocks or fails the export.
- *
- *  Silent when nothing offers a palette. Every sentence it can produce is about
- *  toolheads and slot assignments, which is a choice the user was never offered. */
+/** Best-effort post-export check: warn when used palette slots have no filament loaded or bodies are unassigned
+ *  (they export as extruder 1). Fire-and-forget within 1.5 s, it never blocks or fails the export. Silent when nothing
+ *  offers a palette, since every warning is about toolhead choices the user was never offered. */
 async function warnUnloadedFilaments(store: DocumentStore, bodyIds: string[]) {
   if (!contributedPalette().length) return;
   try {

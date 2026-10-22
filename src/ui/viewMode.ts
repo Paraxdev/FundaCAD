@@ -1,10 +1,5 @@
-// How the viewport shades the model: Matcap (flat studio clay, the cheapest),
-// Realtime (the full PBR look) or Path traced. One choice per workspace, kept
-// in the render prefs, so modelling can stay on Matcap while Render opens on
-// the real look.
-//
-// No Vue and no Three here, same as workspace.ts: the low power tier comes in
-// as an argument so the headless suite can drive every case.
+// How the viewport shades the model (Matcap, Realtime, Path traced), one choice per workspace in the render prefs.
+// The low power tier comes in as an argument so the headless suite can drive every case.
 
 import { asViewMode, groundKey, renderPrefs, setRenderPref, type Ground, type ViewMode } from "./renderPrefs";
 import { workspace, type Workspace } from "./workspace";
@@ -19,10 +14,8 @@ export const VIEW_MODES: readonly { id: ViewMode; label: string; icon: string }[
   { id: "pathtraced", label: "Path traced", icon: "view-pathtraced" },
 ];
 
-/** The effective render tier: performance or potato mode, or a machine the
- *  viewport detected as weak (`auto`), whether the web view offers a real
- *  WebGPU adapter and whether the app has a native tracer (each undefined
- *  while its probe is still out). */
+/** Performance or potato mode or a weak machine (`auto`), plus WebGPU adapter and native tracer availability, each
+ *  undefined while its probe is out. */
 export interface RenderTier {
   lowPower: boolean;
   auto: boolean;

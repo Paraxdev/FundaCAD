@@ -1,9 +1,5 @@
-//! Stable body ids, a port of the Python engine's `body_ids.py`.
-//!
-//! A body's id is remembered against where it came from (the feature that made
-//! it, and which of that feature's bodies it was) in the document's `bodyIds`
-//! map, so switching off, failing or reordering a feature leaves every other
-//! body's id alone. A document without the map is numbered by position.
+//! Stable body ids. The document's `bodyIds` map remembers each id against the feature and index that made it, so
+//! disabling, failing or reordering a feature leaves other ids alone. Without the map, bodies number by position.
 
 use std::collections::HashSet;
 
@@ -127,15 +123,9 @@ pub fn is_feature_key(key: &str, feature_id: &str) -> bool {
         .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// Whether an edit from `before` (None for a feature that was not there) to
-/// `after` leaves the map's record of `after` stale: it joins now, and did not
-/// join the same targets before.
-///
-/// `assign` prefers a join's own record over the id it inherits, so a file
-/// numbered before the map existed keeps the fresh id its join was given. The
-/// same rule would keep the id a feature had as a new body after it became a
-/// join, and the merged body would not take its target's id, so the record has
-/// to go when the edit is made.
+/// Whether an edit from `before` (None for a new feature) to `after` leaves the map's record of `after` stale: it
+/// now joins targets it did not join before. `assign` prefers a join's own record over the id it inherits, so a
+/// former new body turned join would keep its old id instead of its target's unless the record goes with the edit.
 pub fn join_went_stale(before: Option<&Value>, after: &Value) -> bool {
     match join_targets(after) {
         Some(now) => before.and_then(join_targets) != Some(now),
@@ -143,10 +133,8 @@ pub fn join_went_stale(before: Option<&Value>, after: &Value) -> bool {
     }
 }
 
-/// Gives a document handed over whole, rather than opened from a file, an
-/// empty `bodyIds` map when it has none, true when it did. Without one it would
-/// be numbered like a file saved before the map existed, where a join took a
-/// fresh id instead of its target's.
+/// Gives a document handed over whole, not opened from a file, an empty `bodyIds` map when it has none, true when
+/// it did. Without one it numbers like a file saved before the map existed, where a join took a fresh id.
 pub fn ensure_map(doc: &mut serde_json::Map<String, Value>) -> bool {
     if doc.get("bodyIds").is_some_and(Value::is_object) {
         return false;

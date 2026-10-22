@@ -1,7 +1,5 @@
-// What a saved picture draws: the model and what lights it, nothing that is there
-// to work with. An allowlist, because tools and analyses add their handles and
-// markers straight to the scene, and a list of what to leave out would miss the
-// next one.
+// An allowlist of what a saved picture draws, because tools add their handles and markers straight to the
+// scene and a list of what to leave out would miss the next one.
 
 import * as THREE from "three";
 
@@ -28,8 +26,7 @@ function keepsTopLevel(o: THREE.Object3D, model: THREE.Object3D, references: boo
   return o === model || (o as THREE.Light).isLight === true || o.userData[KEEP] === true;
 }
 
-/** Hide everything in `scene` a picture must not show and return what puts each
- *  flag back as it was. */
+/** Returns what puts each flag back as it was. */
 export function hideForPicture(
   scene: THREE.Scene,
   model: THREE.Object3D,

@@ -1,9 +1,5 @@
-// Expression evaluation against a name→value scope. Values and results are in
-// canonical units (mm / degrees / raw counts). Evaluation never throws on
-// arithmetic (÷0 → Infinity); callers gate on Number.isFinite (a non-finite
-// result keeps the previous cached value, never ships into geometry). It DOES
-// throw ExprError on structural problems: unknown parameter, unknown function,
-// wrong arity, those are reject-at-commit errors.
+// Expression evaluation in canonical units (mm, degrees, counts). Arithmetic never throws (x/0 is Infinity) and
+// callers gate on Number.isFinite; structural problems (unknown name or function, wrong arity) throw ExprError.
 
 import { CONSTANTS, ExprError, FUNCTIONS, RESERVED_FUNCTIONS, parseExpr } from "./parse";
 import type { BinOp, ExprNode } from "./parse";

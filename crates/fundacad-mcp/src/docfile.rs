@@ -1,16 +1,6 @@
-//! FundaCAD document files on disk, in either format. A port of
-//! the Python MCP server's `docfile.py`.
-//!
-//! `.funda` is pretty JSON, `.fundab` is the binary format 2
-//! (docs/FUNDA-FORMAT.md), and a reader decides by the first bytes, never the
-//! name. Imported geometry is not part of the document object: a JSON file
-//! carries it in a trailing `geometry` map, a binary file in sections, and both
-//! land in the blob store the engine builds from, each blob published only once
-//! its bytes prove its hash.
-//!
-//! Writing the binary format needs Reed-Solomon parity that only the app
-//! computes, so a `.fundab` save here is refused with the way round it rather
-//! than written without its error correction.
+//! `.funda` is pretty JSON, `.fundab` the binary format 2 (docs/FUNDA-FORMAT.md), told apart by the first bytes.
+//! Geometry rides beside the document object and reaches the engine's store only once its bytes prove its hash.
+//! A `.fundab` save is refused, since only the app computes its Reed-Solomon parity.
 
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
@@ -96,14 +86,12 @@ pub fn read(path: &Path, root: Option<&Path>) -> Result<(Map<String, Value>, usi
     Ok((doc, blobs.len()))
 }
 
-/// The document object and its embedded geometry, each blob checked against
-/// its hash, and nothing written anywhere.
+/// Each blob checked against its hash, and nothing written anywhere.
 pub fn read_document(path: &Path) -> Result<(Map<String, Value>, Vec<(String, Vec<u8>)>), DocumentFileError> {
     read_document_full(path).map(|(doc, blobs, _)| (doc, blobs))
 }
 
-/// `read_document`, and the names of the sections of a `.fundab` that this
-/// build cannot read, which a JSON file has no place for.
+/// Also names the `.fundab` sections this build cannot read, which a JSON file has no place for.
 pub fn read_document_full(
     path: &Path,
 ) -> Result<(Map<String, Value>, Vec<(String, Vec<u8>)>, Vec<String>), DocumentFileError> {
@@ -188,9 +176,8 @@ pub fn referenced_geometry(doc: &Map<String, Value>) -> Vec<String> {
     out
 }
 
-/// Every other hash shaped string anywhere in `doc`. A feature of a type this
-/// version does not know may name a blob in any field, so such geometry is
-/// embedded when the store has it and skipped when it does not.
+/// Every other hash shaped string in `doc`: an unknown feature type may name a blob in any field,
+/// so such geometry is embedded when the store has it and skipped when it does not.
 pub fn optional_geometry(doc: &Map<String, Value>) -> Vec<String> {
     fn walk(v: &Value, out: &mut Vec<String>) {
         match v {
@@ -228,14 +215,12 @@ fn importing_features(doc: &Map<String, Value>, digests: &[String]) -> String {
         .join(", ")
 }
 
-/// Write `doc` as JSON with its referenced geometry embedded. Returns the
-/// number of blobs embedded.
+/// Returns the number of geometry blobs embedded.
 pub fn write(path: &Path, doc: &Map<String, Value>, root: Option<&Path>) -> Result<usize, DocumentFileError> {
     write_with(path, doc, root, &std::collections::HashMap::new())
 }
 
-/// `write`, with `fetched` holding geometry that came from somewhere other than
-/// the local store, the engine's socket as a rule.
+/// `fetched` holds geometry from somewhere other than the local store, the engine's socket as a rule.
 pub fn write_with(
     path: &Path,
     doc: &Map<String, Value>,
@@ -303,10 +288,8 @@ pub fn write_with(
     Ok(embedded)
 }
 
-// --- format 2, read without repair -------------------------------------------
-// The data shards are the stored bytes, so concatenating them and checking each
-// section's hash is a complete reader for an undamaged file (FUNDA-FORMAT.md,
-// "Reading", last paragraph). A damaged one is reported, and the app repairs it.
+// Format 2, read without repair: the data shards are the stored bytes, so joining them and checking
+// each section's hash reads an undamaged file (FUNDA-FORMAT.md, "Reading"). The app repairs a damaged one.
 
 fn u16_at(b: &[u8], at: usize) -> u16 {
     u16::from_le_bytes([b[at], b[at + 1]])
@@ -487,7 +470,7 @@ fn read_entry<R: Read + Seek>(z: &mut zip::ZipArchive<R>, name: &str) -> Option<
     Some(out)
 }
 
-// --- CBOR, enough of it to read a document -----------------------------------
+// Just enough CBOR to read a document.
 
 fn cbor(b: &[u8]) -> Result<Value, DocumentFileError> {
     let (value, _) = cbor_item(b, 0)?;

@@ -1,15 +1,5 @@
-// Cheaper frames while the camera moves, on a machine too slow to move it at full
-// quality. A reduced level draws the canvas at a lower pixel ratio, and on a low
-// power tier (performance mode included) also with 1px edge lines and without the
-// bloom and blur passes (PostChain). When the canvas
-// shrinks and grows back is the viewport's call (Viewport.applyMotionScale).
-//
-// Note: it is the canvas that shrinks, not an offscreen target. Under SwiftShader
-// the frame period follows the canvas size far more than the draw: a half size
-// target copied onto a full size canvas measured no faster at all.
-//
-// Driven by measurement only: a sample is the tick to tick period after a drawn
-// camera frame. A GPU that keeps up never leaves full quality.
+// Cheaper camera frames on a machine too slow at full quality: a lower canvas pixel ratio, plus on a low power tier 1px
+// edges and no bloom. The canvas itself shrinks, since under SwiftShader a half size offscreen target was no faster.
 
 import type { ViewMode } from "../ui/renderPrefs";
 
@@ -22,19 +12,13 @@ export const MOTION_BUDGET_MS = 40;
 const WINDOW = 4;
 /** A level measured over budget is not probed again for this long. */
 const REMEMBER_SLOW_MS = 30_000;
-/** Each level up that is tried and found slow again doubles how long it is
- *  remembered, up to this many doublings, so a machine that really is bound by
- *  pixels settles instead of resizing every half minute. */
+/** Each failed level up doubles how long it is remembered, up to this many doublings, so a pixel bound machine settles. */
 const MAX_PROBE_BACKOFF = 4;
 /** A step down has to take at least this share off the median, or the frame is
  *  not bound by pixels and the step is undone for good. */
 const MIN_GAIN = 0.1;
-/** How long a reduced level has to stay comfortably inside the budget before a
- *  level up is tried. The pixel pricing below assumes the whole frame is pixels,
- *  and a big imported model is mostly vertices, so it alone never let the level
- *  rise back once a busy GPU (a render in another app) had pushed it down. A try
- *  that turns out slow steps back down and is remembered for REMEMBER_SLOW_MS,
- *  longer each time it fails again, so the level cannot flap. */
+/** How long a reduced level must sit comfortably inside budget before a level up is tried; the pixel pricing alone never
+ *  rose again on a vertex bound model once a busy GPU had pushed it down. */
 const PROBE_MS = 3000;
 /** The share of the budget a reduced level must come in under to try a level
  *  up. Room enough for a 30 fps power plan (33 ms), which no size changes. */
@@ -86,9 +70,7 @@ export class MotionQuality {
   private probed = false;
   private probeFails = 0;
 
-  /** The last median measured at full quality, 0 before there is one or once it
-   *  is too old to say anything about the machine as it is now (an app that was
-   *  loading the GPU when it was measured may have finished). */
+  /** The last full quality median, 0 before one exists or once too old to describe the machine now. */
   fullPeriod(now: number): number {
     return now - this.fullAt <= REMEMBER_SLOW_MS ? this.fullMedian : 0;
   }

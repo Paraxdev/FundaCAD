@@ -1,15 +1,6 @@
-//! The durable checkpoint store, the Python engine's `geomstore.py`: one binary BREP blob
-//! per body state, mesh artifacts, and a checkpoint record per chain key.
-//!
-//! Where geomstore keeps its checkpoint rows in SQLite, a record here is the
-//! file `checkpoints/<chain key>.json`. Every lookup geomstore makes is by
-//! chain key, which a filename answers in one stat, the rename that
-//! publishes a blob publishes a record atomically too, and a record's mtime is
-//! its last access. That leaves nothing an index would add but a second copy
-//! of the truth to fall out of step, and a WAL beside the cache.
-//!
-//! Everything is soft state: a missing, short or unreadable file is a miss,
-//! never an error and never wrong geometry.
+//! The durable checkpoint store of geomstore.py: a BREP blob per body state, mesh artifacts, and a record per
+//! chain key as `checkpoints/<chain key>.json` rather than SQLite, since every lookup is by key and a rename
+//! publishes atomically. Everything is soft state: a missing or unreadable file is a miss, never an error.
 
 use std::fs;
 use std::io::Write;
@@ -242,9 +233,8 @@ impl GeomStore {
         }
     }
 
-    /// The deepest restorable checkpoint among `chain_keys` (index i is the key
-    /// after feature i). A record whose blobs went missing is removed and the
-    /// walk goes on to a shallower one.
+    /// The deepest restorable checkpoint among `chain_keys` (index i is the key after feature i). A record whose
+    /// blobs went missing is removed and the walk goes on to a shallower one.
     pub fn find_checkpoint(&self, chain_keys: &[String]) -> Option<(String, Checkpoint)> {
         for key in chain_keys.iter().rev() {
             let Some(path) = self.checkpoint_path(key) else {
@@ -311,9 +301,8 @@ impl GeomStore {
         removed
     }
 
-    /// Brings the blobs under `byte_cap`: orphans first, then unpinned
-    /// checkpoints in order of bytes per replay millisecond, a record always
-    /// removed before its blobs. Returns the checkpoints evicted.
+    /// Brings the blobs under `byte_cap`: orphans first, then unpinned checkpoints by bytes per replay millisecond,
+    /// a record always removed before its blobs. Returns the checkpoints evicted.
     pub fn evict(&self, byte_cap: u64) -> usize {
         let mut rows = self.all_checkpoints();
         let mut refcount: std::collections::HashMap<String, usize> = std::collections::HashMap::new();

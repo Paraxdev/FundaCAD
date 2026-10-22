@@ -7,24 +7,18 @@ import { claimEscape } from "../../ui/escapeClaim";
 
 const s = useContextMenuStore();
 
-// The check gutter is all-or-nothing per menu, not per row: a menu with no
-// toggles in it must not indent, and a menu with one must indent EVERY row or
-// the checked entry shifts sideways relative to its neighbours the moment it
-// turns on.
+// The check gutter is per menu: with any toggle every row indents, or the checked row shifts sideways as it turns on.
 const hasChecks = computed(() => s.items.some((it) => it.checked !== undefined));
 
 const menuEl = useTemplateRef<HTMLDivElement>("menuEl");
 const subEl = useTemplateRef<HTMLDivElement>("subEl");
 const rootRows = ref<HTMLElement[]>([]);
 
-// Final on-screen position, after the overflow nudge below.
 const pos = ref({ x: 0, y: 0 });
-// First paint is hidden: the nudge needs the rendered size, and a visible
-// pre-nudge frame would show the menu jumping. onMounted-equivalent timing
-// (flush: "post") runs before the browser paints, so this is belt-and-braces.
+// Hidden on first paint: the nudge needs the rendered size, and a pre-nudge frame would show the menu jump.
 const placed = ref(false);
 
-// --- flyout submenu (one level; CtxItem.children is not recursive) ---
+// One level of flyout, CtxItem.children is not recursive.
 const subIndex = ref<number | null>(null);
 const subPos = ref({ x: 0, y: 0 });
 const subPlaced = ref(false);
@@ -39,10 +33,8 @@ function closeSub() {
   subIndex.value = null;
   subPlaced.value = false;
 }
-// Hover-intent: moving diagonally from the parent item toward a lower flyout
-// entry crosses sibling rows, an instant close would retract the flyout mid-
-// travel, so sibling hover only *schedules* the close and entering the flyout
-// cancels it.
+// Hover intent: a diagonal move toward the flyout crosses sibling rows, so sibling hover only schedules the close and
+// entering the flyout cancels it.
 function scheduleSubClose() {
   cancelSubClose();
   subCloseTimer = window.setTimeout(closeSub, 300);
@@ -71,12 +63,8 @@ async function openSub(i: number) {
   subPlaced.value = true;
 }
 
-// --- row hover, for menus whose entries name something on screen ------------
-//
-// Tracked here rather than left to pointerenter/pointerleave alone, because the
-// leave does not always come: clicking a row, pressing Escape, or a pointerdown
-// outside all close the menu while the pointer is still over it, and each would
-// strand the preview lit with nothing left to turn it off.
+// Row hover is tracked here, not left to pointerleave: a click, Escape or outside press closes the menu under the
+// pointer with no leave event, stranding the preview lit.
 let hovered: CtxItem | null = null;
 
 function setHover(it: CtxItem | null) {
@@ -93,7 +81,6 @@ function activate(it: CtxItem) {
   it.onClick?.();
 }
 
-// --- dismissal ---
 function onDown(e: PointerEvent) {
   const t = e.target as Node;
   if (!menuEl.value?.contains(t) && !subEl.value?.contains(t)) s.close();
@@ -129,7 +116,6 @@ watch(
     await nextTick();
     const el = menuEl.value;
     if (el) {
-      // nudge back on-screen if it would overflow
       const r = el.getBoundingClientRect();
       const nx = r.right > window.innerWidth ? Math.max(4, s.x - r.width) : s.x;
       const ny = r.bottom > window.innerHeight ? Math.max(4, s.y - r.height) : s.y;
@@ -145,9 +131,8 @@ watch(
   { flush: "post" },
 );
 
-// A row added to a menu that is already open (an answer from the engine that
-// came late) can push the last row past the bottom edge. Only that overflow is
-// corrected, so the rows under the pointer stay where they are otherwise.
+// A row added to an open menu (a late engine answer) can overflow the bottom. Only that overflow is corrected, so the
+// rows under the pointer stay put.
 watch(
   () => s.items,
   async () => {
@@ -163,8 +148,7 @@ watch(
   { flush: "post" },
 );
 
-// closing (from an item click, dismissContextMenu(), a doc change...) must also
-// drop the global listeners
+// Closing by any path must also drop the global listeners.
 watch(
   () => s.open,
   (isOpen) => {

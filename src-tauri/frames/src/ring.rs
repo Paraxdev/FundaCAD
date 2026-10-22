@@ -26,10 +26,8 @@ pub struct Slot {
     pub generation: u32,
 }
 
-/// The bookkeeping of three buffers the page reads while the next frames are
-/// written. A slot is written only while the page does not hold it, so with
-/// two requests in flight the page never reads a half written frame. The
-/// memory itself belongs to the transport.
+/// Three buffers the page reads while the next frames are written. A slot is written only while the page does not hold
+/// it, so with two requests in flight the page never reads a half written frame.
 pub struct FrameRing {
     state: Mutex<State>,
     changed: Condvar,
@@ -72,12 +70,10 @@ impl FrameRing {
         }
     }
 
-    /// The frame in `slot` is complete and goes to the page.
     pub fn publish(&self, slot: Slot) {
         self.finish(slot, Phase::Held);
     }
 
-    /// Writing `slot` failed, nothing goes to the page.
     pub fn abandon(&self, slot: Slot) {
         self.finish(slot, Phase::Free);
     }
@@ -159,9 +155,8 @@ mod tests {
                 w.store(seq, Ordering::Relaxed);
             }
         }
-        // Every word, not only both ends: a torn frame can have matching ends.
-        // Read twice with a yield between, as a texture upload takes a while,
-        // so a slot written under the reader is caught reliably.
+        // Every word, read twice with a yield between: a torn frame can have matching ends, and a texture upload takes
+        // a while.
         fn intact(&self, i: usize, seq: u32) -> bool {
             let once = || self.0[i].iter().all(|w| w.load(Ordering::Relaxed) == seq);
             let first = once();

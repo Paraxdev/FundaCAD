@@ -1,6 +1,5 @@
-//! FreeCAD documents (.FCStd): a zip of `Document.xml` and one OCCT BREP per
-//! object. Only the XML and the BREPs are read, never anything a document
-//! could run.
+//! FreeCAD documents (.FCStd): a zip of `Document.xml` and one OCCT BREP per object. Only the XML and the BREPs
+//! are read, never anything a document could run.
 
 use std::collections::{HashMap, HashSet};
 use std::io::Read;

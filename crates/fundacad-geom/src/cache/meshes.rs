@@ -1,6 +1,5 @@
-//! The payload caches of the Python engine's `viewport_mesh.py`: in memory by body
-//! identity (`_MESH_CACHE`), and on disk as mesh artifacts keyed by the body's
-//! checkpoint blob key, `mesh::CODE_VERSION` and the deflections.
+//! The payload caches of viewport_mesh.py: in memory by body identity, and on disk as mesh artifacts keyed by
+//! the body's checkpoint blob key, `mesh::CODE_VERSION` and the deflections.
 
 use std::collections::HashMap;
 use std::time::Duration;

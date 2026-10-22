@@ -1,7 +1,5 @@
-//! Imported geometry reaching a saved file, and an opened file's geometry
-//! reaching the engine, when this process and the engine do not share a blob
-//! store. The engine is a stub that holds its blobs in memory, which is the
-//! point: nothing it has is on any disk this process looks at.
+//! Geometry moves between a saved file and an engine that shares no blob store with this process. The stub
+//! engine keeps its blobs in memory, so none is on a disk this process looks at.
 
 mod common;
 
@@ -31,9 +29,8 @@ fn geometry(seed: u32) -> Vec<u8> {
     (0..1000u32).map(|i| (i * 13 % 251 + seed) as u8).collect()
 }
 
-/// This process's own store, never the user's, and one per test binary since
-/// the variable is the process's. Only the open test writes to it, with a blob
-/// no other test uses, so for the rest every blob has to come through the socket.
+/// This process's own store, one per test binary. Only the open test writes to it, with its own blob,
+/// so for the rest every blob has to come through the socket.
 fn empty_local_store() {
     static DIR: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
     let dir = DIR.get_or_init(|| tempfile::tempdir().unwrap());

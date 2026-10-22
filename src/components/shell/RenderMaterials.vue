@@ -1,20 +1,8 @@
 <script setup lang="ts">
 import { fmtKeys } from "../../input/platform";
 import RenderSections from "./RenderSections.vue";
-// The material half of the Render workspace: what this document can be made of,
-// what it IS made of, and the editor for one of them.
-//
-// It replaces a modal dialog, and the change is not cosmetic. A library is
-// something you work from with the model in view: you pick a plastic, look at
-// the part, decide it is too shiny, and pull the roughness. A dialog covers the
-// thing being judged, which meant every adjustment was made against a memory of
-// what the part looked like a second ago. Docked beside the viewport, the part
-// changes while the slider moves.
-//
-// Editing is LIVE and there is no OK. Every change here is undoable in the
-// ordinary sense (change it back) and none of it is on the undo stack, so a
-// buffered copy would only be a second version of the library that the model was
-// not wearing.
+// Editing is live with no OK: none of it is on the undo stack, so a buffered copy would be a library the model is not
+// wearing.
 
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
@@ -40,9 +28,8 @@ const engine = useEngine();
 const store = engine.store;
 const browser = useBrowserStore();
 
-/** Bumped when the preview renderer has something new to say, which is once:
- *  the reflections arrive a beat after the panel opens (they are a dynamic
- *  import plus a cubemap) and every swatch is worth asking for again. */
+/** Bumped once, when the reflections arrive a beat after open (a dynamic import plus a cubemap), so every swatch is
+ *  asked for again. */
 const previewTick = ref(0);
 const bloomOn = ref(renderPrefs().bloom > 0);
 const emitting = ref(emissionProgress());
@@ -72,10 +59,8 @@ function preview(m: MaterialDef): string | null {
   return materialPreview(m);
 }
 
-/** The picked materials, as ids and not objects: the store hands back fresh
- *  objects on every edit, and holding one would freeze the editor on the
- *  material as it was before the last keystroke. The editor shows the one
- *  picked when exactly one is. */
+/** Ids, not objects: the store returns fresh objects on every edit, and holding one would freeze the editor on the
+ *  pre-keystroke material. */
 const selectedIds = ref<string[]>([]);
 const anchorId = ref<string | null>(null);
 const selectedSet = computed(() => new Set(selectedIds.value));
@@ -84,9 +69,7 @@ const search = ref("");
 
 const library = useBuildValue(() => [...store.materialLibrary]);
 
-/** How many bodies and how many faces wear each material. Two numbers because
- *  they are two different facts: a material on six bodies is the part's plastic,
- *  and one on two faces is a detail somebody dressed. */
+/** Bodies and faces wearing each material, two facts: six bodies is the part's plastic, two faces a dressed detail. */
 const usage = useBuildValue((b) => {
   const out = new Map<string, { bodies: number; faces: number }>();
   const bump = (id: string, k: "bodies" | "faces") => {
@@ -108,10 +91,7 @@ const matches = (m: MaterialDef) => {
   return `${m.name} ${finishLabel(m)} ${m.color}`.toLowerCase().includes(q);
 };
 
-/** The ones actually on the model, first, because they are the ones this
- *  document is about. An imported assembly arrives wearing fifteen of them and
- *  the library holds thirty; scrolling past twenty-nine unused rows to find the
- *  board's red is the whole problem this section solves. */
+/** The ones on the model first: an imported assembly wears fifteen of a thirty-strong library. */
 const used = computed(() => library.value.filter((m) => usage.value.has(m.id) && matches(m)));
 const all = computed(() => library.value.filter(matches));
 
@@ -124,16 +104,13 @@ const selectionCount = computed(() => {
   return browser.selectedBodyIds.length;
 });
 const faceCount = ref(0);
-/** The material the selection wears right now, or null when it wears none or
- *  several. A single click only picks a tile to look at and applies nothing,
- *  so this is what tells the tile on the model apart from the one picked. */
+/** What the selection wears now, null for none or several. A click only picks a tile to look at, so this tells the
+ *  tile on the model apart from the picked one. */
 const wornId = ref<string | null>(null);
 let facePoll: number | null = null;
 onMounted(() => {
-  // Polled rather than subscribed, because the face selection lives on the
-  // renderer's highlighter and emits nothing: it is changed by a click, by a
-  // box, by a rebuild remapping it, and by four tools. Four times a second is
-  // imperceptible for a button label and is one array length.
+  // Polled: the face selection lives on the highlighter and emits nothing (clicks, boxes, rebuild remaps, four tools).
+  // Four times a second is imperceptible for a button label.
   facePoll = window.setInterval(() => {
     faceCount.value = engine.viewport.getSelectedFaceIds().length;
     // A face with nothing of its own wears its body's material, and that is
@@ -239,9 +216,7 @@ function onKey(e: KeyboardEvent) {
 }
 
 function addMaterial() {
-  // Seeded from whatever is selected, because the way a library grows is "like
-  // that one, but darker", and starting from the app's default grey every time
-  // means dialling in a whole material to make a variant of one.
+  // Seeded from the selection, since a library grows as "like that one, but darker".
   const from = selected.value;
   const id = store.addMaterial({
     ...(from ? { ...from, name: `${from.name} copy` } : {}),
@@ -377,10 +352,8 @@ function isGlass(m: MaterialDef): boolean {
   return f.opacity < 1 && f.metalness < 0.5;
 }
 
-// --- procedural surface: pick a generator, then tune it. A separate path from
-// `set` above because the surface is one nested object, not a flat field: the
-// picker builds a fresh one with sensible defaults, and the sliders merge into
-// the one already there. "None" removes it, so the material reads back plain.
+// Procedural surface, separate from `set` because it is one nested object: the picker builds a fresh one with
+// defaults, the sliders merge into it, and None removes it.
 const SURFACE_KINDS = ["none", "noise", "scratches", "brushed", "voronoi", "wave"] as const;
 const SURFACE_LABEL: Record<string, string> = {
   none: "None",
@@ -423,10 +396,8 @@ function setSurfaceColor(raw: string) {
 // graph ignores the single-generator picker above it (the graph is preferred).
 const editingGraph = ref(false);
 
-/** The faces the viewport has selected, as the store addresses them. Goes
- *  through the viewport's band expansion so that dressing a cylinder the kernel
- *  split into two faces dresses both halves, which is what "this face" means to
- *  the person who picked it. */
+/** The viewport's selected faces as the store addresses them, through band expansion so a cylinder the kernel split in
+ *  two is dressed whole. */
 function selectedFaceTargets(): { body: string; face: number }[] {
   const out = new Map<string, { body: string; face: number }>();
   for (const fid of engine.viewport.getSelectedFaceIds()) {
@@ -491,7 +462,6 @@ async function doImport() {
       />
     </label>
 
-    <!-- what the model is actually made of -->
     <section v-if="used.length" class="rd-section">
       <h3 class="rd-head"
         >In this document <span class="tree-count">{{ used.length }}</span></h3
@@ -529,7 +499,6 @@ async function doImport() {
       </button>
     </section>
 
-    <!-- the library -->
     <section class="rd-section">
       <h3 class="rd-head">
         Library <span class="tree-count">{{ all.length }}</span>
@@ -588,7 +557,6 @@ async function doImport() {
       </div>
     </section>
 
-    <!-- the editor for the one that is selected -->
     <section v-if="selected" class="rd-section rd-edit">
       <h3 class="rd-head">{{ selected.name }}</h3>
       <label class="prefs-row">
@@ -677,9 +645,7 @@ async function doImport() {
       >
         <span class="rd-emitting-bar" :style="{ width: `${Math.round(emitting * 100)}%` }" />
       </div>
-      <!-- Only where it applies. Bloom is what makes a glow read as light rather
-           than as a flat bright patch, and a slider that quietly depends on a
-           setting on another tab is a slider that looks broken. -->
+      <!-- Only where it applies: a glow needs Bloom (another tab), and a slider silently depending on it looks broken. -->
       <div v-if="finishOf(selected).emissive > 0 && !bloomOn" class="sm-hint">
         Emission is on for this material. Turn Bloom on under Environment to see it spill light.
       </div>
@@ -988,10 +954,8 @@ async function doImport() {
       <button class="btn" @click="exportMaterialLibrary(store)">Export…</button>
     </div>
 
-    <!-- Inside the one root, not beside it. RenderDock hides the tabs it is not
-         showing with v-show, which only reaches a component with a single root
-         element; a second root (this Teleport) made v-show a silent no op and
-         left the material list drawn under the Environment and Camera tabs. -->
+    <!-- Inside the one root: RenderDock's v-show only reaches a single-root component, a second root left this list
+    drawn under the other tabs. -->
     <Teleport to="body">
       <SurfaceNodeEditor v-if="editingGraph && selected" :material-id="selected.id" @close="editingGraph = false" />
     </Teleport>

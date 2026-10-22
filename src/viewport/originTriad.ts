@@ -1,12 +1,5 @@
-// The world origin marker: three thin axis lines and a neutral dot, held at a
-// constant size on screen.
-//
-// A reference, never a handle. It used to be three shaded arrows with cones in
-// the same red, green and blue as the Move gizmo, and a user took it for a Move
-// gizmo left behind. So nothing here looks grabbable: hairlines that fade out
-// towards their ends rather than pointing, colours pulled towards grey, all of
-// it translucent and drawn below every manipulator. Nothing raycasts it except
-// Revolve's axis pick (features/featureStarters.ts), which asks for it by name.
+// A reference, never a handle: arrows in the Move gizmo's colours were taken for a leftover gizmo, so these
+// are muted hairlines. Only Revolve's axis pick (features/featureStarters.ts) raycasts it, by name.
 
 import * as THREE from "three";
 import { glyphWorldScale } from "./gizmoScale";
@@ -14,9 +7,7 @@ import { EDGE_HOVER_COLOR } from "./highlight";
 import { themeColor } from "./themeColors";
 import type { Axis3 } from "../types";
 
-/** The one axis-to-colour table in the scene. RGB for XYZ is the convention
- *  every CAD package draws, so it is hard-coded rather than themed: a theme that
- *  recoloured the axes would be lying about which one is which. */
+/** RGB for XYZ is the convention every CAD package draws, so it is hard coded rather than themed. */
 export const AXIS_COLOR = { x: 0xff5a5a, y: 0x46d97a, z: 0x4d8dff } as const;
 
 /** Arm length in screen pixels, scaled by the world size of a pixel every frame
@@ -157,9 +148,8 @@ export class OriginTriad {
     for (const m of this.dotMats) m.color.setHex(c);
   }
 
-  /** Light the arm standing for `axis`, or put all three back. Only Revolve's
-   *  axis pick calls this, in the colour an edge takes under the cursor, since
-   *  an arm and an edge are the two things that pick can take. */
+  /** Only Revolve's axis pick calls this, in the colour an edge takes under the cursor,
+   *  since an arm and an edge are the two things that pick can take. */
   highlight(axis: Axis3 | null) {
     this.arms.forEach((arm, i) => this.repaint[i]?.(arm.userData.axis === axis));
   }

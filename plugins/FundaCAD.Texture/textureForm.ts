@@ -1,21 +1,5 @@
-// What a texture IS, as far as anything that draws one is concerned: the seven
-// patterns, the value shape, the mapping between that shape and the form fields,
-// and the rules that decide which rows a given pattern even has.
-//
-// Pure, and imports nothing from the host. That is not an accident of what it
-// happens to need, it is what lets this file's tests run in a node environment
-// with no DOM and no app, which is where the interesting content is. The
-// visibility rules encode real engine behaviour (a FACETED wave has no shape
-// parameter at all) and have been wrong before, in a way that shows up as a
-// slider with nothing on the other end of it rather than as an error.
-//
-// THESE RULES USED TO BE IN THE APPLICATION, in document/optionFields.ts, where
-// `fieldApplies` opened with `if (type !== "texture") return true;`, a function
-// in the document layer whose entire body was one tool's business. They are
-// contributed back now, so the value rows for a committed texture ask this file
-// through the contribution table and get the same answer the panel does. Two
-// copies of "which kinds have an angle" is exactly how a tool panel and the rows
-// that edit the same feature afterwards come to disagree about it.
+// Pure and host free, so its tests run in node with no DOM. The visibility rules encode real engine behaviour (a faceted
+// wave has no shape parameter) and are contributed to the value rows, so the panel and the rows agree.
 
 import type { ChoiceField, Feature, FieldKind, FileField, Num, Selector, TargetField, ToggleField } from "fundacad";
 import { fieldError, fieldNumber } from "fundacad";
@@ -40,10 +24,8 @@ export type TextureKind =
 export type TextureMode = "faces" | "body";
 export type TextureProjection = "auto" | "triplanar" | "box";
 
-/** The patterns, grouped so a picker of sixteen stays legible. Read by the tool
- *  panel (as option groups) and, flattened, by the value rows that edit a texture
- *  after it is committed, so it reads the same before and after. Categories are
- *  geometric / organic / functional / image. */
+/** Grouped so a picker of sixteen stays legible, and flattened for the value rows so a texture reads the same before
+ *  and after it is committed. */
 export const TEXTURE_KIND_GROUPS: { label: string; kinds: { value: TextureKind; label: string }[] }[] = [
   {
     label: "Geometric",
@@ -76,9 +58,8 @@ export const TEXTURE_KIND_GROUPS: { label: string; kinds: { value: TextureKind; 
 /** The flat pattern list, derived from the groups so the two cannot drift. */
 export const TEXTURE_KINDS: { value: TextureKind; label: string }[] = TEXTURE_KIND_GROUPS.flatMap((g) => g.kinds);
 
-/** Kinds with a lattice or wave orientation to rotate. The others are isotropic
- *  or seed-driven (voronoi, noise, leather) or carry their own orientation in the
- *  file (image), so an Angle on them would be a control that does nothing. */
+/** Kinds with an orientation to rotate. Voronoi, noise and leather are isotropic or seeded and an image carries its own,
+ *  so an Angle there would do nothing. */
 export const ANGLE_KINDS: ReadonlySet<TextureKind> = new Set<TextureKind>([
   "knurl",
   "hex",
@@ -94,28 +75,17 @@ export const ANGLE_KINDS: ReadonlySet<TextureKind> = new Set<TextureKind>([
   "grip",
 ]);
 
-/** Kinds generated from a pseudo-random field, and so the only ones a Seed
- *  changes. */
+/** Kinds from a pseudo-random field, the only ones a Seed changes. */
 export const SEED_KINDS: ReadonlySet<TextureKind> = new Set<TextureKind>(["voronoi", "noise", "leather"]);
 
-/** The projection selector, and its seam controls, mean something only for a
- *  procedural pattern on a freeform face. A heightmap carries its own
- *  orientation, so it is always the odd one out (the geometry keeps it on the
- *  planar chart whatever this says), and the row is hidden rather than shown
- *  doing nothing. plane/cylinder/cone faces keep their exact chart in every
- *  mode, but the tool cannot know which faces are selected, so the control shows
- *  for every non-image kind and simply has no effect where the chart is exact. */
+/** Only a procedural pattern on a freeform face uses the projection, the geometry keeps a heightmap on the planar chart.
+ *  The tool cannot know which faces are selected, so the row shows for every non-image kind. */
 export const PROJECTION_KINDS: ReadonlySet<TextureKind> = new Set<TextureKind>(
   TEXTURE_KINDS.map((k) => k.value).filter((v) => v !== "image"),
 );
 
-/** Does this field mean anything, given what the feature's other fields say?
- *
- *  Governs the numeric rows as well as the dropdowns, which is the point of it:
- *  turn the Seed on a knurl and the model does not move, and nothing says why.
- *  The application owns the numeric inventory, a parameter can drive
- *  `texture1.seed` whether or not this is installed, and this decides which of
- *  those rows are worth showing. */
+/** Governs the numeric rows too: turn the Seed on a knurl and nothing moves, with nothing saying why. A parameter can
+ *  drive any field whether or not this is installed, this only decides which rows are shown. */
 export function textureFieldApplies(field: string, values: Record<string, unknown>): boolean {
   const kind = (values["kind"] ?? "knurl") as TextureKind;
   switch (field) {
@@ -129,49 +99,28 @@ export function textureFieldApplies(field: string, values: Record<string, unknow
     case "projection":
       return PROJECTION_KINDS.has(kind);
     case "seamBlend":
-      // triplanar's blend softness, meaningless outside triplanar (box has its
-      // own band control, auto has no seam to blend). Absent projection is the
-      // triplanar default.
+      // Triplanar blend softness only, box has its own band control and auto has no seam. No projection means triplanar.
       return PROJECTION_KINDS.has(kind) && (values["projection"] ?? "triplanar") === "triplanar";
     case "seamBand":
       return PROJECTION_KINDS.has(kind) && values["projection"] === "box";
     case "sharpness":
-      // The same slider means different things per surface, and for one pairing
-      // it means nothing: a FACETED wave is a fixed eight-join polyline with no
-      // shape parameter (the engine's `_wave_levels` says why). Under `round`
-      // waves is a real sine and the crispness still bites.
+      // A faceted wave is a fixed eight-join polyline with no shape parameter (the engine's `_wave_levels`), a round
+      // wave is a real sine where the crispness still bites.
       return ANGLE_KINDS.has(kind) && !(values["profile"] === "facet" && kind === "waves");
     default:
       return true;
   }
 }
 
-/** The label the shape slider carries, which depends on what it is currently
- *  doing. Contributed as this feature's `fieldLabel`, so the value rows and the
- *  panel call the same control the same thing. */
+/** Contributed as `fieldLabel`, so the value rows and the panel name the shape slider the same. */
 export function sharpnessLabel(profile: unknown): { text: string; title: string } {
   return profile === "round"
     ? { text: "Sharp", title: "Crispness of the smooth profile" }
     : { text: "Land", title: "Flat land on the crests: 0 = pure V-groove peaks, 1 = wide flat tops" };
 }
 
-/** The dropdowns a committed texture offers in the value rows. */
-/** The feature's parameter-drivable numeric rows.
- *
- *  MOVED OUT OF THE APPLICATION, and that move is the point. These seven rows
- *  were the last thing in src/document/numFields.ts that named a texture: the
- *  app knew a texture had a Depth and an Edge blend, in a table beside
- *  extrude's Distance and fillet's Radius, because the feature type was in its
- *  own union. It is not any more.
- *
- *  The kinds mean what they mean everywhere else: "length" is millimetres and
- *  converts to the display unit, "angle" is degrees, and "count" is this
- *  codebase's name for a real-valued unitless field, not an integer claim, so
- *  Sharpness (0..1) and Seed share it.
- *
- *  Which of these a given pattern actually READS is a separate question and is
- *  answered by `textureFieldApplies` below; a row that does not apply is not
- *  drawn. */
+/** "length" is millimetres shown in the display unit, "angle" is degrees, "count" is any real unitless value (Sharpness
+ *  0..1, Seed). textureFieldApplies decides which rows a pattern reads. */
 export const TEXTURE_NUM_FIELDS: readonly [string, string, FieldKind][] = [
   ["depth", "Depth", "length"],
   ["scale", "Scale", "length"],
@@ -191,12 +140,7 @@ export const TEXTURE_NUM_FIELDS: readonly [string, string, FieldKind][] = [
   ["seed", "Seed", "count"],
 ];
 
-/** The feature's editable geometry selection.
- *
- *  Empty is LEGAL here and means the whole body, which is a different statement
- *  from "no faces" and has to be spelled out or the row shows "0 faces" for a
- *  texture that covers everything. Moved out of
- *  src/features/selectionTargets.ts for the same reason as the rows above. */
+/** Empty is legal and means the whole body, spelled out so the row does not show "0 faces". */
 export const TEXTURE_TARGETS: readonly TargetField[] = [
   {
     field: "faces",
@@ -258,17 +202,9 @@ export const TEXTURE_CHOICE_FIELDS: ChoiceField[] = [
   },
 ];
 
-/** The switch a committed texture offers. */
 export const TEXTURE_TOGGLE_FIELDS: ToggleField[] = [{ field: "invert", label: "Invert heights", fallback: false }];
 
-/** The heightmap, in the value rows as well as in the panel.
- *
- *  `textureFieldApplies` already answered "does imagePath mean anything here",
- *  and the answer was read by nothing: there was no kind of row that could show
- *  a path, so choosing Heightmap in Properties changed the pattern to the one
- *  that reads an image and then offered no way to name one. Same field, same
- *  filters and same dialog as the Browse button in the panel, so a texture reads
- *  the same before and after it is committed. */
+/** The heightmap path in the value rows, with the same filters and dialog as the panel's Browse button. */
 export const TEXTURE_FILE_FIELDS: FileField[] = [
   {
     field: "imagePath",
@@ -304,22 +240,9 @@ export interface TextureValues {
   colorSlot?: number; // palette slot for a two-tone inlay; undefined = body color
 }
 
-/** A `texture` feature as it sits in the document.
- *
- *  THE SCHEMA LIVES HERE, and that is what owning a feature type means. It used
- *  to be thirty-five lines of the application's own `Feature` union in
- *  src/types.ts, which is why the app could describe, label and validate a
- *  texture whether or not this plugin existed. The app now carries the feature
- *  as a `PluginFeature`, two known keys and an index signature, and this is the
- *  only description of what is actually in it.
- *
- *  Every field except `kind` is optional, mirroring what the geometry accepts:
- *  register.py's validator supplies the same defaults, and a document written by
- *  an older version of this plugin is missing whichever ones it predates.
- *
- *  `Num` rather than `number` for the parameter-drivable ones: a field may hold
- *  a parameter NAME instead of a value, and the tool refuses to edit one that
- *  does (see startEdit) rather than overwriting the equation with a literal. */
+/** The only description of a `texture` feature, which the app carries as a `PluginFeature`. Every field but `kind` is
+ *  optional and register.py supplies the same defaults. A `Num` field may hold a parameter name, which the tool refuses
+ *  to overwrite with a literal (see startEdit). */
 export interface TextureFeature {
   id: string;
   type: "texture";
@@ -350,13 +273,7 @@ export interface TextureFeature {
   colorSlot?: Num;
 }
 
-/** Read a document feature as a texture, or null.
- *
- *  The cast is the honest shape of the boundary: the app hands out a
- *  `PluginFeature` because it genuinely does not know what the fields are, and
- *  this plugin does. Checking `type` is the whole of the check that can be made
- *  here; the geometry validates the values properly, on every build, and turns
- *  the timeline row red when they are wrong. */
+/** Checking `type` is all that can be done here, the geometry validates the values on every build. */
 export function asTexture(f: Feature | null | undefined): TextureFeature | null {
   return f && f.type === "texture" ? (f as unknown as TextureFeature) : null;
 }

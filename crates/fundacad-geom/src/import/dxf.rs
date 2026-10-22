@@ -1,6 +1,5 @@
-//! DXF, ASCII and binary R13 and later. Lines and curves in model space become
-//! sketch entities, one sketch per layer on the XY plane; 3DFACE, polyface and
-//! polygon mesh POLYLINEs and MESH become one triangle object per layer.
+//! DXF, ASCII and binary R13 and later. Model space lines and curves become sketch entities, one sketch per layer
+//! on XY, and 3DFACE, polyface and polygon mesh POLYLINEs and MESH one triangle object per layer.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::f64::consts::TAU;
@@ -425,9 +424,8 @@ impl Out {
         self.push(layer, E::Line(xy(a), xy(b)));
     }
 
-    /// `c + u cos t + v sin t` for `t` from `t0` over `sweep`, mapped by `m`:
-    /// a circle or arc when the image stays round, else a B-spline ellipse or a
-    /// fit spline through samples. `ends` are the exact end points of a bulge.
+    /// `c + u cos t + v sin t` for `t` from `t0` over `sweep`, mapped by `m`: a circle or arc when the image stays
+    /// round, else a B-spline ellipse or a fit spline. `ends` are the exact end points of a bulge.
     #[allow(clippy::too_many_arguments)]
     fn conic(
         &mut self,
@@ -779,9 +777,8 @@ fn mesh_entity(out: &mut Out, layer: &str, m: &Mat, e: &Ent) {
     out.triangles(layer, &pts, &faces);
 }
 
-/// One B-spline cut into pieces the sketch's `bspline` entity holds exactly:
-/// clamped ends and interior knots of multiplicity one. Knots of multiplicity
-/// two or more are raised to the degree by knot insertion and split there.
+/// One B-spline cut into pieces the sketch's `bspline` entity holds exactly, clamped with simple interior knots:
+/// knots of multiplicity two or more are raised to the degree by insertion and split there.
 fn split_bspline(poles: &[[f64; 3]], knots: &[f64], degree: usize) -> Vec<(Vec<[f64; 3]>, Vec<f64>)> {
     let p = degree;
     let mut u = knots.to_vec();
@@ -973,9 +970,8 @@ fn extent(ents: &[E]) -> f64 {
     (hi[0] - lo[0]).hypot(hi[1] - lo[1])
 }
 
-/// Welds the ends of one layer's entities with the sketch fuzz, turns an arc
-/// whose ends met into a circle, drops zero length lines and duplicates, and
-/// counts the ends nothing else meets.
+/// Welds the ends of one layer's entities with the sketch fuzz, makes an arc whose ends met a circle, drops zero
+/// length lines and duplicates, and counts the ends nothing else meets.
 fn weld(ents: Vec<E>) -> Welded {
     let tol = crate::kernel::sketch_fuzz(Some(extent(&ents)));
     let mut w = Welder::new(tol);

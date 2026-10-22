@@ -16,9 +16,8 @@ fn features(fillet: Option<Value>) -> Value {
     json!({ "features": fs })
 }
 
-/// One build at a time: two of these fillets run on parallel test threads
-/// made OCCT refuse ones it builds alone. The engine builds on a single job
-/// thread, so only the tests need this.
+/// One build at a time: two of these fillets on parallel test threads made OCCT refuse ones it builds
+/// alone. The engine builds on a single job thread, so only the tests need this.
 fn build(doc: &Value) -> Rebuild {
     build_timed(doc).0
 }
@@ -33,9 +32,8 @@ fn build_timed(doc: &Value) -> (Rebuild, f64) {
     (r, t.elapsed().as_secs_f64())
 }
 
-/// The reported document: a box extruded from a picked sketch region, whose
-/// orientation made the one-shot cut keep both top edge blends and the corner
-/// patch under the side blend. BRepCheck passed it, the section cap streaked.
+/// The reported document: a box from a picked sketch region whose orientation made the one-shot cut keep
+/// both top edge blends and the corner patch under the side blend, which BRepCheck passed.
 #[test]
 fn a_fillet_past_its_face_does_not_cover_the_model_twice() {
     let fillet = json!({"id": "f3", "type": "fillet", "radius": 30.1, "profile": 0.95, "edges": [
@@ -72,9 +70,8 @@ fn overlapping_g2_tools_leave_no_corner_standing() {
     assert!((v - 64_960.0).abs() < 50.0, "{v}");
 }
 
-/// The profile used to scale a weight, 400 at the corner patch, and a 0.671
-/// G2 corner ran past the engine's minute without progress: the engine
-/// restarted mid drag. Python took five minutes over the same one.
+/// A 0.671 G2 corner must finish inside the engine's minute: it once stalled and restarted the engine
+/// mid drag.
 #[test]
 fn a_g2_profile_builds_in_seconds_and_fills_in_order() {
     let mut last = 0.0;
@@ -103,9 +100,8 @@ fn the_debowler_rebuilds_to_its_reference_volume() {
     assert!((v - 76_893.47).abs() < 1.0, "{v}");
 }
 
-/// Past about 1.8 mm the inner notch corners cannot be rounded. The one edge
-/// at a time fallback used to round a 0.03 mm sliver instead and the section
-/// build handed the corners back sharp, both reported as success.
+/// Past about 1.8 mm the inner notch corners cannot be rounded, which must be an error, never a rounded
+/// 0.03 mm sliver or sharp corners reported as success.
 #[test]
 fn a_notch_round_that_cannot_be_built_says_so() {
     let r = build(&debowler(2.0));

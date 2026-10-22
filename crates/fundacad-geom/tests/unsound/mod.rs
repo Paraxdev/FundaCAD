@@ -1,6 +1,5 @@
-//! A 10 mm cube centred on the origin with its BREP text edited into a body
-//! that is not a closed solid facing outward, brought in the way a stored
-//! import is, as body1 "Casing".
+//! A 10 mm cube centred on the origin with its BREP text edited into a body that is not a closed solid facing
+//! outward, brought in as a stored import is, as body1 "Casing".
 
 use base64::Engine;
 use fundacad_core::CadDocument;
@@ -8,9 +7,8 @@ use fundacad_geom::builder::{self, NoWatch, Rebuild};
 use fundacad_geom::kernel;
 use serde_json::{json, Value};
 
-/// The lines that list what the cube's shell, solid and placing compound hold:
-/// the shell its faces as "-26 0 +16 0 ... *", the solid its shell as "+3 0 *",
-/// the compound the solid as "+2 1 *".
+/// The lines listing what the cube's shell, solid and placing compound hold: the shell its faces as
+/// "-26 0 +16 0 ... *", the solid its shell as "+3 0 *", the compound the solid as "+2 1 *".
 pub struct Records {
     shell: usize,
     solid: usize,

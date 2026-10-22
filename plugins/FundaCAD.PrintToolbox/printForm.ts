@@ -270,9 +270,8 @@ export function featureFor(
   } as unknown as Feature;
 }
 
-/** The feature a body-target tool makes: `bodies` when any are selected, left
- *  off entirely so the builder's own "active body" fallback applies (the same
- *  `whenEmpty` contract BODIES_TARGET declares). */
+/** The feature a body-target tool makes: `bodies` when any are selected, else left off so the builder's own "active
+ *  body" fallback applies (the `whenEmpty` contract BODIES_TARGET declares). */
 export function bodyFeatureFor(tool: PrintTool, id: string, bodyIds: readonly string[], buildDir: BuildDir): Feature {
   return {
     id,

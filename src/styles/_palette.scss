@@ -1,6 +1,4 @@
-/* ============================================================================
-   SKETCH PALETTE  (docked right inside the viewport)
-   ============================================================================ */
+/* The sketch palette, docked right inside the viewport. */
 .palette {
   position: absolute;
   top: var(--s-4);
@@ -12,10 +10,8 @@
   box-shadow: var(--shadow-3);
   padding: var(--s-4);
   z-index: 20;
-  /* The card grew a list, and a list has no length limit, a sketch can carry a
-     hundred relations. Cap the card at the viewport it is docked inside and let
-     the ONE scrollable part take the shortfall; everything above it is a fixed
-     set of controls that must not be squeezed. */
+  /* A sketch can carry a hundred relations: the card is capped at the viewport and only
+     the list scrolls, the controls above it never squeeze. */
   display: flex;
   flex-direction: column;
   max-height: calc(100% - var(--s-4) * 2);
@@ -38,10 +34,8 @@
   content: "";
   width: 6px;
   height: 6px;
-  /* A squircle, and off the radius scale on purpose: --r-xs would round a 6px
-     square into a circle, which is the shape the status pill's dot and the
-     prompt toast's dot already use. This mark has to stay distinguishable from
-     those at a glance, so its radius is a fraction of its own 6px, not a rung. */
+  /* Off the radius scale on purpose: --r-xs would make this 6px square a circle, like
+     the status pill and prompt toast dots it must not be mistaken for. */
   border-radius: 2px;
   background: var(--accent);
   box-shadow: 0 0 8px var(--accent-glow);
@@ -62,15 +56,10 @@
   justify-content: space-between;
   font-size: 12.5px;
   color: var(--text);
-  /* The shared list-row size (.tree-folder, .feature-row, .home-nav-row and
-     .choice-check all resolve to this pair). */
+  /* The shared list row size (.tree-folder, .feature-row, .home-nav-row, .choice-check). */
   padding: var(--s-2) var(--s-3);
-  /* The row bleeds out of the palette's own padding so its hover fill reaches
-     towards the card edge instead of floating in the middle. The bleed has to
-     equal the row's own inline padding, then card padding (--s-4) minus bleed
-     plus padding lands the LABEL back on --s-4, flush with the title and the
-     section rules above it. It was -6px against 8px of padding, which put every
-     row's text 2px right of everything else in the card. */
+  /* Bleeds by exactly its inline padding, so the hover fill reaches the card edge and the
+     label stays flush with the title. */
   margin: 0 calc(-1 * var(--s-3));
   border-radius: var(--r-sm);
   cursor: pointer;
@@ -85,9 +74,6 @@
   height: 15px;
   cursor: pointer;
 }
-/* ---- relations list ---- */
-/* A second section inside the card, so it needs the rule above it to breathe
-   away from the last toggle rather than sitting on top of it. */
 .palette-section-gap {
   margin-top: var(--s-4);
 }
@@ -109,12 +95,10 @@
 .rel-list {
   list-style: none;
   padding: 0;
-  /* Same bleed as .palette-row, so a row's hover fill lines up with the toggles
-     above it and the text stays flush with the card's own padding. */
+  /* Same bleed as .palette-row. */
   margin: 0 calc(-1 * var(--s-3));
-  /* About eight rows at a comfortable height, fewer on a short viewport: the
-     list is the only part of the card allowed to give ground. min-height 0 is
-     what lets a flex item shrink below its content at all. */
+  /* About eight rows, fewer on a short viewport: the only part of the card that shrinks, and
+     min-height 0 is what lets a flex item shrink below its content at all. */
   flex: 1 1 auto;
   min-height: 0;
   max-height: 216px;
@@ -132,9 +116,7 @@
 .rel-row:hover {
   background: var(--raised);
 }
-/* The badge, deliberately the same 16px square with the same accent border the
-   canvas glyph wears, the panel is naming the thing you can see on the
-   drawing, and it should look like the thing. */
+/* The same 16px square and accent border as the canvas glyph it names. */
 .rel-sym {
   flex: none;
   width: 16px;
@@ -156,8 +138,7 @@
   border-color: var(--warn);
   color: color-mix(in srgb, var(--warn) 60%, var(--text));
 }
-/* Implied relations are real and load-bearing but nobody drew them, so they
-   read as scenery: dimmed, dashed, and without a delete button. */
+/* Implied relations nobody drew read as scenery: dimmed, dashed, no delete button. */
 .rel-row.implied .rel-sym {
   border-style: dashed;
   border-color: var(--text-mute);
@@ -198,9 +179,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Kept out of the flow until the row is hovered, rather than hidden: a column
-   of crosses down the side of the list turns a reference into a control panel,
-   and the one you want is always the one under the cursor. */
+/* Out of the flow until hover: a column of crosses would turn the list into a control
+   panel. */
 .rel-del {
   flex: none;
   width: 18px;

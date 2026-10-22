@@ -52,9 +52,8 @@ fn scratch(name: &str) -> PathBuf {
     d
 }
 
-/// One blob store for the whole binary: the variable is process wide and tests
-/// run in parallel, so a test pointing it at its own folder pulls the store
-/// out from under another test between its import and its export.
+/// One blob store for the whole binary: the variable is process wide and tests run in parallel, so a test
+/// pointing it elsewhere pulls the store from under another between its import and its export.
 fn blob_dir() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| std::env::set_var("FUNDACAD_BLOB_DIR", scratch("blobs")));
@@ -303,10 +302,8 @@ fn a_revolved_tip_ending_on_the_axis_round_trips_as_a_closed_sphere() {
     blob_dir();
     let c = Client::new();
     let dir = scratch("tip");
-    // The profile an agent wrote, rounded to five places, which puts the tip
-    // arc's centre 1.9e-6 mm off the axis; and the same tip ending 1e-5 mm
-    // short of the axis, which revolved into a hair-thin tube that came back
-    // from STEP as a hole.
+    // An agent's profile rounded to five places puts the tip arc's centre 1.9e-6 mm off the axis. Ending
+    // 1e-5 short of the axis revolved into a hair-thin tube that came back from STEP as a hole.
     for tip_x in [0.0, 1e-5] {
         let path = p(&dir, &format!("tip{tip_x}.step"));
         let r = c.call(json!({"id": 1, "op": "export", "document": spike(tip_x), "format": "step", "path": path}));

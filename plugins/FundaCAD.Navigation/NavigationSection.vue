@@ -1,7 +1,5 @@
 <script setup lang="ts">
-// Below the plugin's declared settings: what the buttons do now, the radial
-// menu's items and the keys. A key goes to any command the palette offers, by
-// the same id.
+// A key goes to any command the palette offers, by the same id.
 
 import { computed, onUnmounted, ref } from "vue";
 import {
@@ -33,8 +31,6 @@ function setItem(ctx: RadialContext, slot: number, id: string) {
   while (list.length && !list[list.length - 1]) list.pop();
   updateConfig({ items: { ...cfg.value.items, [ctx]: list } });
 }
-
-// --- keys --------------------------------------------------------------------
 
 /** One row per action, in the table's order, plus the radial key while it is on. */
 const keyRows = computed(() => {

@@ -1,26 +1,11 @@
-// Which drawn edges belong to a given B-rep face, the geometry behind "select a
-// face, then fillet it", where the face is shorthand for every edge around it.
-//
-// It has to be geometry, because there is no topology to ask. The rebuild reply
-// carries faces (as triangles tagged with a face id) and edges (as polylines)
-// side by side and says nothing at all about which edges bound which face; the
-// engine's own edge->face map (tessellate.edge_polylines_by_body) is used to
-// drop coplanar seams and never crosses the wire. So an edge belongs to a face
-// when it LIES on it: every sample of its polyline sits on the face's surface.
-//
-// DOM/three-free, so vitest covers it headlessly, same discipline as
-// edgeMatch.ts next door, and for the same reason: this is the part that can be
-// wrong in a way the user sees (filleting the wrong ring of edges), while the
-// buffer walking that feeds it needs a real model to exist at all.
+// Which drawn edges lie on a B-rep face, for "select a face, then fillet it". The engine's edge to face map
+// (tessellate.edge_polylines_by_body) never crosses the wire, so an edge is on a face when every sample lies on it.
 
 export type Vec3 = [number, number, number];
 /** One world-space triangle of a face's tessellation. */
 export type Tri = readonly [Vec3, Vec3, Vec3];
 
-/** A face's triangles plus their bounding box, the box is the cheap reject that
- *  keeps the test near-linear: almost every edge of the body is nowhere near the
- *  face, and answering that costs six comparisons instead of a distance to every
- *  triangle. */
+/** The bounding box is the cheap reject that keeps the test near linear. */
 export interface FaceSurface {
   tris: readonly Tri[];
   min: Vec3;
@@ -41,22 +26,9 @@ export function faceSurface(tris: readonly Tri[]): FaceSurface {
   return { tris, min, max };
 }
 
-/** How far off a face a point may sit and still count as ON it, for a model of
- *  this bounding-box diagonal.
- *
- *  It is set by the TESSELLATION, not by any modelling intent, and the two sides
- *  of the comparison are meshed to different targets: edge polylines are sampled
- *  to a 0.01mm chord deviation (tessellate._EDGE_DEFLECTION) while surfaces get
- *  OCCT's relative deflection, measured at 0.05-0.15mm on real parts (see the
- *  _VIEWPORT_RELATIVE table in the Python engine's `server.py`). A round edge therefore bulges
- *  OUTSIDE the flat chords of its own face by up to that surface deviation, and
- *  a tolerance tighter than it would reject a cylinder's own rim.
- *
- *  The floor is what makes it safe on small parts, where the relative term
- *  collapses; the relative term is what keeps it from swallowing a neighbouring
- *  feature on a 400mm plate. Between the two failure modes this errs toward
- *  including an edge: every member is click-toggleable inside the edge tool, so
- *  one too many is one click from fixed, while one missing means re-picking. */
+/** Edges sample to 0.01mm (tessellate._EDGE_DEFLECTION), surfaces to 0.05-0.15mm (_VIEWPORT_RELATIVE in the engine's
+ *  server.py), so a round edge bulges outside its face's chords and a tighter tolerance rejects a cylinder's own rim.
+ *  The floor holds on small parts, the relative term spares a neighbour on a 400mm plate. Errs toward including. */
 export function faceEdgeTol(bboxDiag: number): number {
   if (!Number.isFinite(bboxDiag) || bboxDiag <= 0) return 0.25;
   return Math.max(0.25, 0.004 * bboxDiag);
@@ -139,21 +111,12 @@ function outsideBox(p: Vec3, face: FaceSurface, tol: number): boolean {
   return false;
 }
 
-/** How many points of an edge polyline are actually tested. A deviation-sampled
- *  arc can carry 500 of them and every one costs a pass over the face's
- *  triangles; a dozen spread along its length settles the question just as well,
- *  because an edge either lies on this face for its whole extent or leaves it
- *  immediately. */
+/** A dozen spread samples settle it as well as 500: an edge either lies on the face for its whole extent or leaves it
+ *  at once. */
 const MAX_SAMPLES = 12;
 
-/** The points to test for one polyline: up to MAX_SAMPLES spread over its
- *  samples, always including both ends.
- *
- *  Straight edges are the reason for the segment midpoints. The engine sends a
- *  straight edge as its two ENDPOINTS and nothing else
- *  (tessellate._line_endpoints), so testing "the polyline's points" alone would
- *  ask only about the two corners, and an edge that merely touches this face at
- *  both of its ends, without lying on it anywhere in between, would pass. */
+/** A short polyline gets its segment midpoints too: a straight edge arrives as only its two endpoints, and one touching
+ *  the face at both ends would pass. A long one is sampled MAX_SAMPLES times. */
 export function edgeSamples(points: readonly Vec3[]): Vec3[] {
   if (points.length < 2) return [...points];
   const out: Vec3[] = [];
@@ -172,9 +135,7 @@ export function edgeSamples(points: readonly Vec3[]): Vec3[] {
   return out;
 }
 
-/** Does this edge lie on this face? Every sample within `tol` of the surface,
- *  "every", because an edge that shares a corner or a stretch with the face is
- *  not an edge OF it. */
+/** Every sample, because an edge sharing only a corner or a stretch with the face is not an edge of it. */
 export function edgeLiesOnFace(points: readonly Vec3[], face: FaceSurface, tol: number): boolean {
   if (!face.tris.length || points.length < 2) return false;
   for (const p of edgeSamples(points)) {
@@ -184,9 +145,7 @@ export function edgeLiesOnFace(points: readonly Vec3[], face: FaceSurface, tol: 
   return true;
 }
 
-/** Every edge of `edges` that lies on `face`, input order preserved. Generic in
- *  the edge type so the viewport can hand it live EdgeRefs and get the same refs
- *  back, identity is what the selection is keyed on. */
+/** Input order kept, and the same refs handed back, since the selection is keyed on identity. */
 export function edgesOnFace<T extends { points: readonly Vec3[] }>(
   edges: readonly T[],
   face: FaceSurface,

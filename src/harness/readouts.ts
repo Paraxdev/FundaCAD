@@ -230,7 +230,6 @@ const boxOf = (el: Element | null): Box | null => {
   return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
 };
 
-/** The guide step on screen, or null. */
 export function guide(doc: Document = document): GuideReadout | null {
   const layer = doc.querySelector(".guide-layer");
   if (!layer) return null;

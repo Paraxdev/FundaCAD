@@ -1,6 +1,4 @@
-//! Exact B-rep measurements and clash checks of the live bodies: the `inspect`
-//! op (the Python engine's `inspect_model.py`, server.py `_inspect_job`) and the
-//! `interference` op (server.py `_interference_job`, `_min_distance`).
+//! Exact B-rep measurements and clash checks of the live bodies, the `inspect` and `interference` ops.
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
@@ -29,16 +27,14 @@ pub const MAX_INTERFERENCE_OPS: usize = 400;
 /// How long the pair sweep beats on its own, after that only a finished pair does.
 const SLOW_PAIR_BEATS: std::time::Duration = std::time::Duration::from_secs(300);
 
-/// The document of a request, rebuilt; the error reply when it cannot be.
 pub fn rebuild_request(req: &Map<String, Value>, watch: &dyn Watch) -> Result<(Value, Rebuild), JobResult> {
     let Some(doc) = req.get("document") else {
         return Err(error_result("'document'"));
     };
     let typed: CadDocument =
         CadDocument::from_value_lenient(doc).map_err(|e| error_result(&format!("the document does not parse: {e}")))?;
-    // Through the rebuild's own cache: an inspect right after a build of the
-    // same document replays nothing, where a cold rebuild of an import is
-    // most of a minute.
+    // The rebuild's own cache: an inspect right after a build replays nothing, where a cold
+    // rebuild of an import is most of a minute.
     let mut cache = crate::cache::global().lock().unwrap_or_else(|p| p.into_inner());
     let r = cache.rebuild(&typed, doc, watch).map_err(|_| error_result("cancelled"))?;
     Ok((doc.clone(), r))
@@ -56,7 +52,7 @@ fn vec3(v: &Value) -> [f64; 3] {
     std::array::from_fn(|k| v[k].as_f64().unwrap_or(0.0))
 }
 
-/// build123d `bounding_box()`: zeros when the box is void.
+/// Zeros when the box is void, as build123d's `bounding_box()`.
 pub(crate) fn bbox(shape: &Shape) -> [f64; 6] {
     let mut o = [0.0; 6];
     match fq::FQ_bbox(shape.raw(), true, &mut o) {
@@ -71,9 +67,8 @@ fn mass(shape: &Shape, kind: i32) -> Option<(f64, [f64; 3])> {
     Some((o[0], [o[1], o[2], o[3]]))
 }
 
-/// The quick integration is up to 3 percent low on lofted spline faces, so the
-/// precise one is preferred wherever the two disagree by more than its own
-/// millionth. Where they agree the quick figure stands, which is build123d's.
+/// The quick integration is up to 3 percent low on lofted spline faces, so the precise one wins
+/// where the two differ by more than its own millionth. Where they agree, build123d's quick figure stands.
 pub(crate) fn volume(shape: &Shape) -> Option<(f64, [f64; 3])> {
     let (quick, centre) = mass(shape, 3)?;
     let precise = crate::kernel::volume_precise(shape);
@@ -81,7 +76,7 @@ pub(crate) fn volume(shape: &Shape) -> Option<(f64, [f64; 3])> {
     Some((if differs { precise } else { quick }, centre))
 }
 
-/// `_axis_of`: the axis of a cylinder, cone, torus or surface of revolution.
+/// Of a cylinder, cone, torus or surface of revolution.
 fn axis_of(face: &Shape) -> Option<[f64; 3]> {
     let mut o = [0.0; 13];
     let kind = fq::FQ_surface(face.raw(), &mut o).ok()?;
@@ -157,7 +152,6 @@ fn edge_entry(
     Ok(Value::Object(e))
 }
 
-/// A body as `inspect_bodies` takes it.
 pub struct InspectBody<'a> {
     pub id: Value,
     pub name: Value,
@@ -169,8 +163,7 @@ pub struct InspectBody<'a> {
 pub enum Level {
     /// Sizes, mass properties and counts.
     Plain,
-    /// Plain, and the surface census and the seam, wrapping and open lists a
-    /// one line summary reads, without measuring any face or edge.
+    /// Plain, and the surface census and the seam, wrapping and open lists, measuring no face or edge.
     Summary,
     /// Plain, and every face and edge with its selector.
     Detail,
@@ -430,7 +423,6 @@ fn detail_lists(comp: &Shape, body_id: &Value, max_faces: usize, max_edges: usiz
     Ok((face_list, edge_list))
 }
 
-/// `inspect_bodies`.
 pub fn inspect_bodies(
     bodies: &[InspectBody<'_>],
     detail: bool,
@@ -546,7 +538,6 @@ fn cap(req: &Map<String, Value>, key: &str, default: usize) -> usize {
     }
 }
 
-/// The `inspect` op.
 pub fn inspect_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let (_, r) = match rebuild_request(req, watch) {
@@ -607,25 +598,21 @@ fn overlap(a: &[f64; 6], b: &[f64; 6], tol: f64) -> bool {
         && a[5] >= b[2] - tol
 }
 
-/// `_min_distance`: the distance and a nearest point on each shape.
+/// The distance and a nearest point on each shape.
 pub fn min_distance(a: &Shape, b: &Shape) -> Option<(f64, [f64; 3], [f64; 3])> {
     let d = a.distance(b, 0.0).ok()?;
     let s = d.solutions.first()?;
     Some((d.value, s.on_first.point.to_array(), s.on_second.point.to_array()))
 }
 
-/// What one candidate pair of the sweep found.
 enum Clash {
     Overlap(Value),
     Near(Value),
     Clear,
 }
 
-/// One pair of the sweep, `material` the two bodies as `soundness::material`
-/// hands them out. Common runs on copies: BOPAlgo may raise the
-/// tolerances of its arguments in place and meshing the result writes into
-/// faces it kept from them, so two pairs sharing a body cannot run at once on
-/// the originals, and the live bodies stay untouched.
+/// Common runs on copies: BOPAlgo may raise its arguments' tolerances in place and meshing the result
+/// writes into faces it kept, so two pairs sharing a body cannot run at once on the originals.
 fn clash(a: &BuiltBody, b: &BuiltBody, material: (&Shape, &Shape), threshold: Option<f64>) -> Clash {
     let common = kernel::copy(material.0)
         .and_then(|ca| kernel::copy(material.1).and_then(|cb| kernel::boolean_op(&ca, &[&cb], BoolKind::Common)))
@@ -661,10 +648,8 @@ fn clash(a: &BuiltBody, b: &BuiltBody, material: (&Shape, &Shape), threshold: Op
     }
 }
 
-/// The pairwise sweep of `_interference_job`, `max_ops` candidate pairs at most,
-/// the pairs checked on the engine's threads and reported in row order. A
-/// body that is not closed solids is listed under `unchecked` with why, and no
-/// pair with it is tested: its common comes back without an error and wrong.
+/// At most `max_ops` candidate pairs, run on the engine's threads and reported in row order. A body that
+/// is not closed solids goes under `unchecked` untested, its common would come back wrong without an error.
 pub fn interference(
     bodies: &[BuiltBody],
     clearance: Option<f64>,
@@ -762,7 +747,6 @@ pub fn interference(
     res
 }
 
-/// The `interference` op.
 pub fn interference_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let (_, r) = match rebuild_request(req, watch) {

@@ -1,7 +1,5 @@
-// What the kernel said about each preview a drag sent, shared by press/pull
-// and offset face: which values built, which were refused and why, and which
-// one the model on screen was built with, so a refused value holds the last
-// one that built.
+// Shared by press/pull and offset face: which preview values built or were refused, so a refused value holds
+// the last one that built.
 
 import type { RebuildState } from "../document/store";
 import type { Feature } from "../types";
@@ -23,8 +21,7 @@ function questionKey(f: Feature, dragged: readonly string[]): string {
 export type BuildReply = Pick<RebuildState, "previewBuilt" | "heldRefusal" | "errorFeatureId" | "errorMessage">;
 
 export class PreviewOutcomes {
-  /** The preview the model on screen was built with, null when it shows none.
-   *  setPreview's hold keeps it on screen through a refusal. */
+  /** Null when none shows; setPreview's hold keeps it on screen through a refusal. */
   shownFeature: Feature | null = null;
   /** the refusal painted on the handle, the value box and the prompt */
   refusal: string | null = null;
@@ -46,8 +43,7 @@ export class PreviewOutcomes {
     this.refusal = null;
   }
 
-  /** Record what the kernel said about the preview it was SENT, which during
-   *  a fast drag is often not the one on the handle any more. */
+  /** The reply for the preview it was sent, which in a fast drag is often not the one on the handle any more. */
   note(s: BuildReply, previewId: string) {
     const sent = s.previewBuilt?.find((f) => f.id === previewId) ?? null;
     const held = s.heldRefusal?.featureId === previewId ? s.heldRefusal : null;
@@ -72,16 +68,13 @@ export class PreviewOutcomes {
     return this.shownFeature !== null && featureKey(this.shownFeature) === key;
   }
 
-  /** The preview on screen when it differs from `current` only in the
-   *  `dragged` fields, so a value held from earlier in the drag still counts. */
+  /** Differs from `current` only in the `dragged` fields, so a value held from earlier in the drag still counts. */
   shownFor(current: Feature, dragged: readonly string[]): Feature | null {
     const f = this.shownFeature;
     return f && questionKey(f, dragged) === questionKey(current, dragged) ? f : null;
   }
 
-  /** Decide the refusal for the preview `key`, null when nothing is pushed.
-   *  It stays up until a value builds, so the box does not flicker while the
-   *  next answer is on its way. True when it changed. */
+  /** Null when nothing is pushed. Stays up until a value builds, so the box does not flicker; true when it changed. */
   refresh(key: string | null): boolean {
     const reason = key === null ? null : (this.refused.get(key) ?? (this.built.has(key) ? null : this.refusal));
     if (reason === this.refusal) return false;

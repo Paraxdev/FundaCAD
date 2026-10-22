@@ -1,9 +1,4 @@
-//! Flattening 3D geometry onto a sketch plane and recognising it again:
-//! the Python engine's `projection.py` (curves, the HLR silhouette, the silhouette
-//! correspondence), the Python engine's `projection_refresh.py` (the lenient refresh a
-//! rebuild runs per sketch, and the strict `projectGeometry` op) and
-//! builder.py `project_geometry`.
-//!
+//! Flattening 3D geometry onto a sketch plane and recognising it again on rebuild.
 //! Curves are JSON objects, the ProjectedCurve shapes the document stores.
 
 use std::collections::{HashMap, HashSet};
@@ -50,8 +45,7 @@ fn positions(edge: &Shape, ts: &[f64]) -> FResult<Vec<[f64; 3]>> {
     Ok(out.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect())
 }
 
-/// `_project_edge_to_plane`: exact for a line, and for a circle whose axis is
-/// the plane normal; sampled to a poly otherwise.
+/// Exact for a line and for a circle whose axis is the plane normal, sampled to a poly otherwise.
 pub fn project_edge(edge: &Shape, plane: &Frame) -> FResult<Value> {
     let curve = sa::edge_probe(edge).map_or(CurveType::Other, |p| p.curve);
     let pt = |p: [f64; 3]| {
@@ -123,7 +117,7 @@ fn pts(c: &Value) -> Vec<(f64, f64)> {
         .unwrap_or_default()
 }
 
-/// `_curve_close`: same kind and every number within `tol`.
+/// Same kind and every number within `tol`.
 pub fn curve_close(a: &Value, b: &Value, tol: f64) -> bool {
     if kind(a) != kind(b) {
         return false;
@@ -142,7 +136,6 @@ pub fn curve_close(a: &Value, b: &Value, tol: f64) -> bool {
     })
 }
 
-/// `_curve_reversed`.
 pub fn curve_reversed(c: &Value) -> Value {
     match kind(c) {
         Some("line") | Some("arc") => {
@@ -168,7 +161,7 @@ fn f(c: &Value, k: &str) -> f64 {
     num(c, k).unwrap_or(0.0)
 }
 
-/// `_curve_rep`: (end, end, mid).
+/// (end, end, mid).
 fn curve_rep(c: &Value) -> (P2, P2, P2) {
     match kind(c) {
         Some("line") => (
@@ -192,7 +185,7 @@ fn dist(p: P2, q: P2) -> f64 {
     (p.0 - q.0).hypot(p.1 - q.1)
 }
 
-/// `_curve_dist`: endpoint distance either way round plus the midpoint's.
+/// Endpoint distance either way round plus the midpoint's.
 pub fn curve_dist(a: &Value, b: &Value) -> f64 {
     if kind(a) != kind(b) {
         return f64::INFINITY;
@@ -205,7 +198,7 @@ pub fn curve_close_either(a: &Value, b: &Value) -> bool {
     curve_close(a, b, 1e-4) || curve_close(&curve_reversed(a), b, 1e-4)
 }
 
-/// `_curve_oriented`: `c` or its reverse, whichever keeps `cached`'s end order.
+/// `c` or its reverse, whichever keeps `cached`'s end order.
 fn curve_oriented(c: &Value, cached: &Value) -> Value {
     let ((c1, c2, _), (q1, q2, _)) = (curve_rep(c), curve_rep(cached));
     if dist(c1, q2) + dist(c2, q1) < dist(c1, q1) + dist(c2, q2) {
@@ -215,7 +208,7 @@ fn curve_oriented(c: &Value, cached: &Value) -> Value {
     }
 }
 
-/// `_project_silhouette`: the visible outline of `shape` on `plane`.
+/// The visible outline of `shape` on `plane`.
 pub fn silhouette(shape: &Shape, plane: &Frame) -> FResult<Vec<Value>> {
     let (o, n, x) = (plane.origin, plane.z, plane.x);
     let frame = [o[0], o[1], o[2], n[0], n[1], n[2], x[0], x[1], x[2]];
@@ -246,7 +239,7 @@ pub fn silhouette(shape: &Shape, plane: &Frame) -> FResult<Vec<Value>> {
     Ok(curves)
 }
 
-/// `_assign_silhouette`: one group's fresh curves to its siblings, `None` stale.
+/// One group's fresh curves to its siblings, `None` when stale.
 pub fn assign_silhouette(sibs: &[&Value], fresh: Option<&[Value]>) -> Vec<(String, Option<Value>)> {
     let id = |e: &Value| e.get("id").and_then(Value::as_str).unwrap_or("").to_owned();
     let cached = |e: &Value| e.get("curve").filter(|c| truthy(c)).cloned().unwrap_or_else(|| json!({}));
@@ -307,7 +300,7 @@ fn fail_text(f: &Fail) -> String {
     }
 }
 
-/// `_resolve_sketch_curve`: the source sketch's plane and the entity's local edges.
+/// The source sketch's plane and the entity's local edges.
 fn resolve_sketch_curve(
     ctx: &Ctx,
     features: &[Value],
@@ -355,7 +348,7 @@ fn located_projection(edges: &[Shape], from: &Frame, to: &Frame) -> FResult<Vec<
     edges.iter().map(|e| project_edge(&from.locate(e)?, to)).collect()
 }
 
-/// `_fresh_projection`, `None` when the source no longer resolves.
+/// `None` when the source no longer resolves.
 fn fresh_projection(
     ctx: &Ctx,
     e: &Value,
@@ -395,8 +388,7 @@ fn fresh_projection(
     }
 }
 
-/// `_recompute_projections`: the lenient refresh of one built sketch's
-/// projected entities against the bodies built before it.
+/// The lenient refresh of one built sketch's projected entities against the bodies built before it.
 pub fn refresh(ctx: &mut Ctx, feature: &Value, prefix: &[Value]) {
     let ents: Vec<&Value> = feature
         .get("entities")
@@ -481,7 +473,7 @@ fn require_body<'a>(bodies: &'a [BuiltBody], bid: Option<&Value>) -> FResult<&'a
     })
 }
 
-/// `_project_source`: one source strictly, `[{fp?, curve}]` or a refusal.
+/// One source strictly, `[{fp?, curve}]` or a refusal.
 fn project_source(
     ctx: &Ctx,
     src: &Value,
@@ -540,7 +532,7 @@ fn project_source(
     }
 }
 
-/// The `projectGeometry` op, builder.py `project_geometry`.
+/// The strict `projectGeometry` op.
 pub fn project_geometry_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     let (Some(document), Some(plane_spec)) = (req.get("document"), req.get("plane")) else {
         return error_result(if req.contains_key("document") { "'plane'" } else { "'document'" });

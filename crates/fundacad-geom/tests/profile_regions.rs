@@ -249,9 +249,8 @@ fn bounded_cut_lines_are_the_ones_reaching_the_box() {
     assert_eq!(got, want);
 }
 
-/// Sketch open asks for cut lines on the job thread every build shares, so
-/// the op answers from the build it holds and builds nothing of its own, not
-/// even a document it could build in a moment.
+/// Sketch open asks for cut lines on the job thread every build shares, so the op answers from the build it holds
+/// and builds nothing of its own, not even a quick document.
 #[test]
 fn profile_cuts_answers_from_the_held_build_and_never_builds_one() {
     std::env::set_var("FUNDACAD_DISK_CACHE", "0");

@@ -1,9 +1,5 @@
-//! Measurements over a shape: volume, area, bounding box, and the `measure`
-//! op between two entities.
-//!
-//! These are the numbers `inspect` reports and the tests assert on, so they
-//! come straight from `BRepGProp`, `BRepBndLib` and `BRepExtrema` rather than
-//! from a mesh.
+//! Volume, area, bounding box and the `measure` op, exact from BRepGProp, BRepBndLib and
+//! BRepExtrema rather than a mesh, since `inspect` reports them and the tests assert on them.
 
 use fundacad_engine::error_result;
 use fundacad_protocol::JobResult;
@@ -30,12 +26,10 @@ pub fn volume(shape: &Shape) -> f64 {
     shape.volume()
 }
 
-/// Sum of the area of every face.
 pub fn surface_area(shape: &Shape) -> f64 {
     shape.surface_area()
 }
 
-/// Bounding box of the shape, or `None` for empty geometry.
 pub fn bbox(shape: &Shape) -> Option<Bbox> {
     let bb = opencascade::bounding_box::aabb(shape);
     if bb.is_void() {
@@ -45,9 +39,8 @@ pub fn bbox(shape: &Shape) -> Option<Bbox> {
     Some(Bbox { min: [min.x, min.y, min.z], max: [max.x, max.y, max.z] })
 }
 
-/// The `measure` op: one entity's size, radius and axis, or two entities'
-/// distance with both closest points, centre or axis distance and angle.
-/// Raw values, the MCP side rounds them for the text.
+/// One entity's size, radius and axis, or two entities' distance with both closest points, centre
+/// or axis distance and angle. Raw values, the MCP side rounds them for the text.
 pub fn measure_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let _cancel = crate::cancel::install(watch.cancel_token());

@@ -1,45 +1,20 @@
-// How large a blend the geometry AROUND an edge can actually hold.
-//
-// The drag used to be bounded by one number for the whole document, a quarter of
-// the model's bbox diagonal, which is wrong in both directions at once. A
-// 100x100x2 plate has a 141mm diagonal, so the drag reached a 35mm fillet on a 2mm
-// rim; on a chunky part the same fraction refused fillets the kernel would have
-// built. The real constraint is LOCAL: a blend fails when it runs out of face to
-// sit on, which is decided by what is near THIS edge.
-//
-// Measured against EDGES, not faces. The engine has the real thing (edge-to-
-// nearest-non-touching-FACE via BRepExtrema, tools/gen_fillet_corpus.py) but it is
-// behind a round-trip and this number is needed live during a drag. Where the two
-// differ this reads SMALLER, which is the safe direction for a bound.
-//
-// No THREE, no DOM, so vitest reaches it with no viewport.
+// How large a blend the geometry around an edge can hold. It is local, as a 100x100x2 plate has a 141 mm diagonal
+// but a 2 mm rim, and a blend fails when it runs out of nearby face. No THREE or DOM, so vitest runs it headless.
 
 export type Pt3 = readonly [number, number, number];
 
-/** One edge as the viewport already stores it (viewport/edgeLines.EdgeRef).
- *  Structural rather than the real type so the tests need no THREE import. */
+/** viewport/edgeLines.EdgeRef, structural so the tests need no THREE import. */
 export interface ClearanceEdge {
   readonly id: string;
   readonly points: readonly Pt3[];
 }
 
-/** Half, because a blend eats into BOTH sides of the gap it sits in.
- *
- *  Two features a distance d apart each get to grow d/2 before they collide, so
- *  the far wall of a 2mm plate permits a 1mm rim fillet and not a hair more.
- *  Filleting only one of the pair is the common case and would permit the full
- *  d, but the bound has to hold for the selection the user actually made, and
- *  they routinely pick both rims at once. */
+/** A blend eats into both sides of a gap, and users often pick both rims at once, so a 2mm plate allows a 1mm
+ *  rim fillet. */
 export const CLEARANCE_SHARE = 0.5;
 
-/** Distance below which two edges count as touching rather than as neighbours.
- *
- *  Edges meeting at a shared vertex are at distance 0, and they are not a
- *  constraint, the two faces along the picked edge are precisely what the blend
- *  is meant to run across, and their bounding edges meet it at the corners. If
- *  those counted, every clearance would be 0 and the tool would refuse
- *  everything. Scaled to the model so it means the same thing on a 6mm cube and
- *  a 400mm plate; the floor covers a document with no geometry to scale by. */
+/** Edges sharing a vertex are at distance 0 but are what the blend runs across, not a constraint. Scaled to the
+ *  model, with a floor for a document with no geometry. */
 export function touchTolerance(modelScale: number): number {
   const s = Number.isFinite(modelScale) && modelScale > 0 ? modelScale : 0;
   return Math.max(1e-7, s * 1e-5);
@@ -55,13 +30,8 @@ function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
-/** Squared distance between two finite segments.
- *
- *  Ericson's ClosestPtSegmentSegment, clamped-parameter form. The degenerate
- *  branches are not defensive padding: a tessellated polyline routinely carries
- *  a zero-length segment where a curve was sampled at a cusp, and the
- *  general-case denominator is exactly 0 there, so without them the measure
- *  returns NaN and the bound silently becomes Infinity. */
+/** Ericson's ClosestPtSegmentSegment. Tessellation leaves zero length segments at cusps where the general
+ *  denominator is 0, so the degenerate branches keep NaN from turning the bound into Infinity. */
 export function segmentDistanceSq(p1: Pt3, q1: Pt3, p2: Pt3, q2: Pt3): number {
   const d1 = sub(q1, p1);
   const d2 = sub(q2, p2);
@@ -74,7 +44,6 @@ export function segmentDistanceSq(p1: Pt3, q1: Pt3, p2: Pt3, q2: Pt3): number {
   let t: number;
 
   if (a <= 1e-20 && e <= 1e-20) {
-    // both degenerate: point to point
     return dot(r, r);
   }
   if (a <= 1e-20) {
@@ -88,8 +57,7 @@ export function segmentDistanceSq(p1: Pt3, q1: Pt3, p2: Pt3, q2: Pt3): number {
     } else {
       const b = dot(d1, d2);
       const denom = a * e - b * b;
-      // denom == 0 means parallel; any s does, so start at 0 and let the
-      // clamping below place t.
+      // denom 0 means parallel; any s does, so start at 0 and let the clamp place t.
       s = denom > 1e-20 ? Math.min(1, Math.max(0, (b * f - c * e) / denom)) : 0;
       t = (b * s + f) / e;
       if (t < 0) {
@@ -130,9 +98,7 @@ export function polylineBox(points: readonly Pt3[]): Aabb | null {
   return { min, max };
 }
 
-/** Squared distance between two boxes, 0 when they overlap. A lower bound on
- *  the distance between anything inside them, which is what makes it usable as
- *  the reject test below. */
+/** 0 when they overlap. A lower bound on the distance between anything inside them, hence the reject test. */
 export function boxDistanceSq(a: Aabb, b: Aabb): number {
   const gx = Math.max(0, a.min[0] - b.max[0], b.min[0] - a.max[0]);
   const gy = Math.max(0, a.min[1] - b.max[1], b.min[1] - a.max[1]);
@@ -140,14 +106,8 @@ export function boxDistanceSq(a: Aabb, b: Aabb): number {
   return gx * gx + gy * gy + gz * gz;
 }
 
-/** Shortest distance between two polylines, or Infinity if either is empty.
- *
- *  `bestSq` lets the caller pass the best distance found so far: any pair whose
- *  boxes are already further apart than that cannot improve on it, so the
- *  segment loop is skipped entirely. On an imported assembly this is the
- *  difference between a measure that is free and one that stalls the selection,
- *  the overwhelming majority of edges are nowhere near the picked one, and each
- *  is rejected on a single box test. */
+/** Infinity if either is empty. Pairs whose boxes are already further apart than `bestSq` are skipped, which keeps
+ *  the measure from stalling the selection on an imported assembly. */
 export function polylineDistance(a: readonly Pt3[], b: readonly Pt3[], bestSq = Infinity): number {
   if (a.length < 2 || b.length < 2) return Infinity;
   let best = bestSq;
@@ -166,13 +126,8 @@ export function polylineDistance(a: readonly Pt3[], b: readonly Pt3[], bestSq = 
   return best === Infinity ? Infinity : Math.sqrt(best);
 }
 
-/** For a CLOSED edge, the blend's own turning radius as an upper bound, null for
- *  an open one.
- *
- *  Nearest-neighbour distance misses this entirely: the top rim of a tall thin
- *  cylinder is height/2 from the bottom rim and measures as roomy, but a fillet on
- *  it sweeps inward across the cap and runs out of cap at the axis. Half the
- *  largest bbox extent, exactly r for a circle. */
+/** Upper bound for a closed edge, null for an open one: a tall cylinder's top rim measures roomy, but its fillet
+ *  runs out of cap at the axis. Half the largest bbox extent, r for a circle. */
 export function closedLoopRadius(points: readonly Pt3[]): number | null {
   if (points.length < 3) return null;
   const first = points[0];
@@ -185,31 +140,22 @@ export function closedLoopRadius(points: readonly Pt3[]): number | null {
   const ez = box.max[2] - box.min[2];
   const span = Math.max(ex, ey, ez);
   if (!(span > 0)) return null;
-  // Closed means the tessellation brought the polyline back to where it began.
-  // Relative to the loop's own size, so it reads the same on a 0.5mm hole and a
-  // 400mm bore.
+  // Relative to the loop's own size, so it reads the same on a 0.5mm hole and a 400mm bore.
   const gap = Math.hypot(first[0] - last[0], first[1] - last[1], first[2] - last[2]);
   if (gap > span * 1e-4) return null;
   return span / 2;
 }
 
 export interface ClearanceRequest {
-  /** the edges the blend would be applied to */
   selected: readonly ClearanceEdge[];
-  /** every edge of the bodies involved, selected ones included (they are
-   *  filtered out by id, so the caller can hand over the body's list as-is) */
+  /** may include the selected edges, they are filtered out by id */
   all: readonly ClearanceEdge[];
-  /** the model's bounding-box diagonal, for the touch tolerance's scale */
+  /** the model's bounding box diagonal */
   modelScale: number;
 }
 
-/** The nearest thing the blend could collide with, in mm, or null when nothing
- *  qualifies and the caller should fall back to its global bound.
- *
- *  Null rather than Infinity, and the distinction is load-bearing: "nothing is
- *  near this edge" is a real answer on a lone primitive, but so is "we could not
- *  measure", and only the second should hand the decision back. Both arrive here
- *  as no-qualifying-neighbour, so neither may claim to be a measurement. */
+/** mm, or null rather than Infinity when nothing qualifies, so "could not measure" never passes as a measurement.
+ *  Edge to edge, live; the engine's face check (tools/gen_fillet_corpus.py) is a round trip and reads larger. */
 export function localClearance(req: ClearanceRequest): number | null {
   const { selected, all, modelScale } = req;
   if (selected.length === 0 || all.length === 0) return null;
@@ -219,8 +165,7 @@ export function localClearance(req: ClearanceRequest): number | null {
   const picked = new Set(selected.map((e) => e.id));
 
   const targets: { pts: readonly Pt3[]; box: Aabb }[] = [];
-  // A closed pick's own turning radius bounds the answer before any neighbour is
-  // consulted, and on a lone cylinder it is the ONLY bound there is.
+  // A closed pick's own turning radius bounds the answer, and on a lone cylinder it is the only bound.
   let cap = Infinity;
   for (const e of selected) {
     const box = polylineBox(e.points);
@@ -237,10 +182,7 @@ export function localClearance(req: ClearanceRequest): number | null {
     const box = polylineBox(other.points);
     if (!box) continue;
     for (const t of targets) {
-      // Cheap reject first, then the only-if-it-could-be-chosen reject. Note this
-      // cannot skip a TOUCHING neighbour early, touching pairs have box
-      // distance 0, which never rejects, so the tolerance test below still
-      // runs on exactly the pairs that need it.
+      // Touching pairs have box distance 0, so they are never rejected here and still reach the tolerance test.
       if (boxDistanceSq(box, t.box) >= bestSq) continue;
       const d = polylineDistance(t.pts, other.points, bestSq);
       if (!Number.isFinite(d)) continue;
@@ -253,13 +195,8 @@ export function localClearance(req: ClearanceRequest): number | null {
   return Number.isFinite(bestSq) ? Math.sqrt(bestSq) : null;
 }
 
-/** The largest blend the neighbourhood permits, from a measured clearance.
- *
- *  Deliberately NOT a hard promise that this value builds, OCCT's own limit
- *  depends on curvature and on how the blend runs off the ends of the chain,
- *  neither of which a distance can see. It is a bound that keeps the drag inside
- *  the range where success is plausible, which is all the old diagonal fraction
- *  was ever trying to be, done locally. */
+/** Not a promise that this builds: OCCT's limit also depends on curvature and the chain's ends. It only sizes the
+ *  opening value (seedValue) and must never bound the drag. */
 export function clearanceLimit(clearance: number | null): number | null {
   if (clearance == null || !Number.isFinite(clearance) || clearance <= 0) return null;
   return clearance * CLEARANCE_SHARE;

@@ -1,17 +1,5 @@
 <script setup lang="ts">
-// The log, on screen. Everything about WHAT is recorded lives in ui/logStore.ts;
-// this is the view.
-//
-// Two rules it exists to keep, both of which the toast breaks:
-//
-//   * Nothing is truncated. Messages wrap, they never clip, a kernel sentence
-//     is usually one long line and the tail is the part that says what to do.
-//   * Nothing expires. A toast is gone in eight seconds, which is not long
-//     enough to read a stack, let alone copy one.
-//
-// It subscribes with a plain counter rather than making the log reactive: the
-// store has to be writable from places with no active pinia (a window error
-// handler, module init), so the reactivity is on this side of the boundary.
+// The log view (ui/logStore.ts records it). Unlike a toast nothing is clipped or expires, a stack must be readable whole.
 
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import Icon from "../shell/Icon.vue";
@@ -29,6 +17,7 @@ import {
   type LogLevel,
 } from "../../ui/logStore";
 
+// A plain counter, not a reactive log: the store is written where no pinia is active (window error handler, module init).
 const tick = ref(0);
 const stop = onLogChange(() => tick.value++);
 onUnmounted(stop);
@@ -38,13 +27,10 @@ const open = computed(() => {
   return consoleOpen();
 });
 
-/** Which levels are shown. Errors and warnings on by default: the reason to open
- *  this is almost always that something failed, and info is mostly the running
- *  commentary of a working session. */
+/** Errors and warnings on by default, info is mostly running commentary. */
 const show = ref<Record<LogLevel, boolean>>({ error: true, warning: true, info: false });
 
-/** Declared here rather than inline in the template: a TypeScript cast is not
- *  valid template-expression syntax, and the parser rejects it. */
+/** Not inline in the template: a TypeScript cast is not valid template-expression syntax. */
 const LEVELS: LogLevel[] = ["error", "warning", "info"];
 
 const rows = computed<LogEntry[]>(() => {
@@ -89,9 +75,7 @@ watch(
   { immediate: true },
 );
 
-// Follow the tail, but only when already at it: scrolling up to read something
-// and being yanked back down by the next frame's error is the single most
-// annoying thing a log panel can do.
+// Follow the tail only when already at it, so reading scrolled up is not yanked back down.
 watch(rows, async () => {
   const el = body.value;
   if (!el) return;
@@ -108,9 +92,7 @@ async function copy(text: string, id: number | null) {
       if (copied.value === id) copied.value = null;
     }, 1200);
   } catch {
-    // Clipboard access can be refused; the text is still selectable by hand, so
-    // failing silently here is better than a toast about a failed copy landing
-    // in the very log the user is reading.
+    // A refused copy fails silently: the text is still selectable, and a toast would land in this very log.
   }
 }
 
@@ -119,8 +101,7 @@ const clockOf = (at: number) => new Date(at).toLocaleTimeString(undefined, { hou
 
 <template>
   <Teleport to="body">
-    <!-- v-if, not hidden: a panel left in the DOM over the viewport steals the
-         picks the geometry behind it should be getting. -->
+    <!-- v-if, not hidden: a panel left in the DOM over the viewport steals its picks. -->
     <div v-if="open" class="logcon" role="dialog" aria-label="Console">
       <div class="logcon-head">
         <span class="logcon-title">Console</span>
@@ -139,8 +120,7 @@ const clockOf = (at: number) => new Date(at).toLocaleTimeString(undefined, { hou
         <button type="button" class="logcon-btn" title="Copy everything shown" @click="copy(formatLog(rows), null)">
           <Icon name="copy" :size="14" />
         </button>
-        <!-- cleanUp, not a bin: the table has no bin, and an icon name that is
-             not in it renders as a blank square rather than failing loudly. -->
+        <!-- cleanUp, not bin: the icon table has no bin, and an unknown name renders as a blank square. -->
         <button type="button" class="logcon-btn" title="Clear" @click="clearLog()">
           <Icon name="cleanUp" :size="14" />
         </button>

@@ -1,9 +1,6 @@
 <script setup lang="ts">
-// A number box that reads what is typed through the shared measure grammar
-// (units, fractions, arithmetic, decimal comma) where a type="number" input
-// would refuse everything but digits. Text that does not parse keeps the last
-// good value in the model, turns the box red and puts the reason in its title,
-// the same signal ValidatedInput gives.
+// Reads typed text through the shared measure grammar (units, fractions, arithmetic, decimal comma). Unparsed text
+// keeps the last good value and turns the box red with the reason in its title, as ValidatedInput does.
 
 import { computed, ref, watch } from "vue";
 import { fieldError, fieldNumber } from "../../ui/measure";

@@ -1,8 +1,5 @@
-//! A cylinder, cone, sphere or torus face resized about its own axis or
-//! centre, the faces around it keeping their own surfaces and trimmed or
-//! extended to meet it. Faces running smoothly into it that the new size
-//! would leave behind either follow it, when they close into one loop along
-//! its axis, or the resize is refused.
+//! A cylinder, cone, sphere or torus face resized about its axis or centre, neighbours trimmed or extended to meet
+//! it. Smooth neighbours it would leave behind follow it when they close into one loop, else the resize is refused.
 
 mod band;
 mod cells;
@@ -49,11 +46,8 @@ pub use check::checked_solid;
 #[doc(hidden)]
 pub use memo::{forget, seen, Seen};
 
-/// `faces` moved `d` along their outward normal, so a positive `d` adds
-/// material. `faces` is one analytic curved face (its siblings on the same
-/// surface move with it), or a whole closed tangent run such as every face of
-/// a slot. `follow` lets the faces that run smoothly into a lone face follow
-/// it where the new size would leave them behind.
+/// `faces` moved `d` along their outward normal, positive adding material: one analytic curved face with its
+/// same surface siblings, or a whole closed tangent run. `follow` lets smooth neighbours of a lone face follow it.
 pub fn resize(part: &Shape, faces: &[Shape], d: f64, follow: bool) -> Resize {
     crate::bench::phase("resize", || resize_in(part, faces, d, follow))
 }

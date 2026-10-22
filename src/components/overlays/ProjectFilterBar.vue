@@ -1,8 +1,5 @@
 <script setup lang="ts">
-// Selection-filter chips for the sketch Project tool. Replaces the DOM half of
-// sketch/projectPanel.ts, which stays as the facade SketchMode calls; the chosen
-// filter itself lives in the store because the projection routine reads it
-// synchronously, mid-pick.
+// The chosen filter lives in the store because the projection routine reads it synchronously, mid-pick.
 
 import { onMounted, useTemplateRef, watch, type CSSProperties } from "vue";
 import { PROJECT_CHIPS, type ProjectFilter } from "../../sketch/projectPanel";
@@ -16,10 +13,7 @@ function choose(f: ProjectFilter) {
   panels.projectChange?.(f);
 }
 
-// Horizontal centring stays imperative and stays here: it needs the bar's own
-// rendered width, which does not exist until it is in the document, and it is a
-// measurement, the same reason TimelineBar.vue keeps gapIndexAt() out of
-// reactivity. (Untestable under happy-dom, which reports every width as 0.)
+// Centring stays imperative: it needs the bar's rendered width, which exists only once mounted (happy-dom reports 0).
 function place() {
   const r = panels.projectAnchor;
   const el = bar.value;

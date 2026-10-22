@@ -1,9 +1,5 @@
-// The command palette's fuzzy matcher, lifted out of the palette itself so it
-// stays testable as plain logic (no DOM, so it lives in the *.test.ts suite).
-
-/** Subsequence fuzzy score: every query char must appear in order; contiguous
- *  runs and start-of-string matches score higher; mild preference for short
- *  labels. Returns 0 for "no match", callers filter on `> 0`. */
+/** Subsequence fuzzy score: query chars in order, contiguous runs and start matches score higher, short labels
+ *  slightly preferred. 0 means no match. */
 export function score(q: string, text: string): number {
   if (!q) return 1;
   let ti = 0;

@@ -1,7 +1,5 @@
-// A mirror that names bodies stores its plane as {name}, which a build from
-// before targeted mirrors refuses. A bare "YZ" it would read, and reflect the
-// active body instead of the ones named. The engine refuses the bare form with
-// bodies, so every write goes through here.
+// A mirror naming bodies stores its plane as {name}: older builds would read a bare "YZ" and reflect the active body,
+// and the engine refuses the bare form with bodies, so every write goes through here.
 import type { CadDocument, Feature } from "../types";
 
 type Mirror = Extract<Feature, { type: "mirror" }>;

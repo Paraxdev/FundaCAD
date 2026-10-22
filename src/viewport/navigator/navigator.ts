@@ -1,7 +1,4 @@
-// The navigator: one pose, eased gestures applied as exact transforms, flights,
-// limits and the checks that keep the target on what is being looked at.
-// No DOM and no three.js cameras here; rig.ts binds it to both.
-//
+// No DOM and no three.js cameras here, rig.ts binds the navigator to both.
 // Pixel coordinates are the viewport's own, origin top left, y down.
 
 import * as THREE from "three";
@@ -41,8 +38,7 @@ export const WHEEL_LOG_PER_PX = Math.log(1.0016);
 export const PINCH_LOG_PER_PX = 0.01;
 /** Mouse orbit speed, radians per viewport height. */
 export const ORBIT_PER_HEIGHT = 2 * Math.PI;
-/** An orbit press that stays within this many pixels is a right click (the
- *  viewport's menu threshold), so it turns nothing. */
+/** An orbit press within this many pixels is a right click (the menu threshold), so it turns nothing. */
 export const CLICK_SLOP_PX = 5;
 /** Wheel pixels per pixel of a zoom drag: a 300 px drag is about a 4x zoom. */
 export const ZOOM_PER_DRAG_PX = 3;
@@ -119,8 +115,6 @@ export class Navigator {
     copyPose(this.stamp, this.pose);
   }
 
-  // --- events -----------------------------------------------------------------
-
   on(ev: NavigatorEvent, fn: () => void): () => void {
     this.listeners[ev].add(fn);
     return () => this.listeners[ev].delete(fn);
@@ -137,8 +131,6 @@ export class Navigator {
     this.version++;
     this.emit("change");
   }
-
-  // --- configuration ------------------------------------------------------------
 
   setFrame(width: number, height: number) {
     const w = Math.max(1, width);
@@ -212,8 +204,6 @@ export class Navigator {
     return { scene: this.scene, plane: this.plane, box: this.box, frame: this.frame };
   }
 
-  // --- reading ------------------------------------------------------------------
-
   eye(out = new THREE.Vector3()): THREE.Vector3 {
     return eyeOf(this.pose, out);
   }
@@ -239,8 +229,6 @@ export class Navigator {
   pivotAt(x: number, y: number): THREE.Vector3 {
     return this.orbitPoint?.clone() ?? this.opts.preferredPivot?.() ?? orbitPivot(this.pose, this.ctx(), x, y);
   }
-
-  // --- gestures -------------------------------------------------------------------
 
   /** A soft flight gives way to input at the frame on screen; a hard one does
    *  not take input at all. False when the input has to be ignored. */
@@ -403,10 +391,8 @@ export class Navigator {
     this.emit("inputstart");
   }
 
-  /** Two-finger scroll as an orbit: the view turns as if the fingers dragged
-   *  it, about the pivot under the cursor. `fresh` starts a new swipe, which
-   *  takes a new pivot; the rest of the swipe keeps that one, though the model
-   *  turns away from under the cursor that chose it. */
+  /** `fresh` starts a new swipe, which takes a new pivot; the rest of the swipe keeps it,
+   *  though the model turns away from under the cursor that chose it. */
   scrollOrbit(x: number, y: number, dx: number, dy: number, fresh = true) {
     if (this.locked) {
       this.scrollPan(x, y, dx, dy);
@@ -462,8 +448,6 @@ export class Navigator {
     ch.add(w.log);
     this.unsettled = true;
   }
-
-  // --- the frame ------------------------------------------------------------------
 
   /** Advance one frame of `dt` seconds. True when the pose changed. */
   update(dt: number): boolean {
@@ -570,9 +554,8 @@ export class Navigator {
     }
   }
 
-  /** After a gesture: put the target on the surface at the centre of the screen,
-   *  or, over empty space, inside the model's ball. Only along the view axis,
-   *  so nothing on screen moves. */
+  /** After a gesture, put the target on the surface at the screen centre or, over empty space,
+   *  inside the model's ball. Only along the view axis, so nothing on screen moves. */
   reseatAndContain() {
     const p = this.pose;
     const d = centreDepth(p, this.ctx());
@@ -647,8 +630,6 @@ export class Navigator {
     copyPose(this.good, p);
   }
 
-  // --- programmatic motions -----------------------------------------------------
-
   private stopAll() {
     this.zooms = [];
     this.orbit = null;
@@ -683,9 +664,8 @@ export class Navigator {
     this.flight = f;
   }
 
-  /** Where the view is going: a flight's destination while one is in the air,
-   *  so a programmatic change asked for mid-flight builds on it rather than on
-   *  the frame it happened to be at. */
+  /** A flight's destination while one is in the air, so a programmatic change asked for
+   *  mid-flight builds on it rather than on the frame it happened to be at. */
   private destination(): Pose {
     return clonePose(this.flight?.to ?? this.pose);
   }
@@ -862,9 +842,8 @@ export class Navigator {
     this.flyTo(p, { animate });
   }
 
-  /** Turn to an orientation about what is being looked at, the target, keeping
-   *  the scale, so a detail zoomed in on stays centred and the same size. When
-   *  that would leave the model wholly off screen the turn frames it instead. */
+  /** Turn about the target keeping the scale, so a zoomed detail stays centred and the same size.
+   *  When that would leave the model wholly off screen the turn frames it instead. */
   turnTo(q: THREE.Quaternion, animate = true) {
     if (!this.flight && this.unsettled) {
       this.unsettled = false;
@@ -910,8 +889,7 @@ export const FIT_MARGIN = 0.12;
 
 const corner = new THREE.Vector3();
 const axes = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] as const;
-/** Aim p at the box centre with the scale that puts its silhouette `margin`
- *  of the view in from every edge, keeping p's orientation, lens and mode.
+/** Aim p at the box centre with the scale that puts its silhouette `margin` in from every edge.
  *  False, p untouched, for an empty, non finite or zero size box. */
 export function frameBox(p: Pose, v: Frame, box: THREE.Box3, margin = FIT_MARGIN): boolean {
   if (box.isEmpty()) return false;

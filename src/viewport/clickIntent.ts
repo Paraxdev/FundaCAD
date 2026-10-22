@@ -1,6 +1,5 @@
-// What a click takes when the viewport picks body first, then faces: the first
-// click on a body takes the body, and a click on a body that is already chosen
-// takes the face or edge under the cursor instead.
+// Body first picking: the first click on a body takes the body, a click on a chosen body, or one the cursor paused
+// over, takes the face or edge under the cursor.
 
 export type SelectPolicy = "auto" | "faces" | "bodies";
 
@@ -24,9 +23,7 @@ export function clickTakes(s: ClickState): "body" | "part" {
   return s.additive && s.drilledBodies.size ? "part" : "body";
 }
 
-/** The body the cursor rests on and since when, the "or pause over it" half of
- *  the rule above: a click on a body the cursor has stayed on for the hover
- *  delay takes the part under it straight away. */
+/** A click on a body the cursor has rested on for the hover delay takes the part under it straight away. */
 export class DwellIntent {
   private cur: { bodyId: string; since: number } | null = null;
 
@@ -42,10 +39,8 @@ export class DwellIntent {
     return true;
   }
 
-  /** The pointer moved with a button held, an orbit or a box. That is not a
-   *  pause, so a hover from before it must not count after it (FI-3: the first
-   *  click after an orbit took a face or the whole body depending on how long
-   *  the orbit took). */
+  /** A drag with a button held (an orbit, a box) is not a pause, so an earlier hover must not count after it (FI-3: the
+   *  first click after an orbit depended on how long the orbit took). */
   held(): void {
     this.cur = null;
   }

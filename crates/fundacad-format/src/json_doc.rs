@@ -1,11 +1,6 @@
-//! The readable document file: `.funda` is pretty JSON, `.fundab` is the binary
-//! format in fnda.rs.
-//!
-//! JSON has nowhere to put an imported body's BREP, so the geometry the document
-//! references rides along in one top-level map, content hash to base64 BinTools
-//! bytes, written LAST so the feature tree is what a person sees first. Opening
-//! publishes each blob into the store only once its bytes prove the hash, the
-//! same rule the binary and ZIP readers follow.
+//! The readable `.funda`, pretty JSON. JSON has nowhere for an import's BREP, so the referenced geometry rides in one
+//! top-level map of content hash to base64 BinTools bytes, written last so a person sees the feature tree first.
+//! Opening publishes each blob only once its bytes prove the hash, as the binary and ZIP readers do.
 
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -57,11 +52,8 @@ fn fsync_dir(dir: &Path) {
     }
 }
 
-/// Publish a document at `dest` as pretty JSON, atomically.
-///
-/// The geometry map is spliced onto the end of the frontend's own text rather
-/// than re-serialised, because serde_json sorts keys and the file is meant to be
-/// read by a person.
+/// Publish a document at `dest` as pretty JSON, atomically. The geometry map is spliced onto the frontend's own text
+/// rather than reserialised, because serde_json sorts keys and the file is meant for a person to read.
 pub fn write_json_document(
     dest: &Path,
     document_json: &str,
@@ -128,10 +120,8 @@ pub fn write_json_document(
     Ok(())
 }
 
-/// Open a JSON document: publish its embedded geometry into `blob_dir`, each blob
-/// verified against its hash, and return the document without the geometry map.
-/// Text that is not a JSON object comes back untouched, so the frontend reports
-/// it the way it always has.
+/// Open a JSON document: publish its geometry into `blob_dir`, each blob verified against its hash, and return the
+/// document without the map. Text that is not a JSON object comes back untouched for the frontend to report.
 pub fn read_json_document(path: &Path, blob_dir: &Path) -> Result<String, String> {
     let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     if !text.contains(&format!("\"{EMBEDDED_GEOMETRY_KEY}\"")) {

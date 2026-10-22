@@ -1,23 +1,5 @@
-//! Native 3Dconnexion SpaceMouse reader.
-//!
-//! Tauri's Linux webview (WebKitGTK) has no WebHID, so the page can't read the
-//! device itself. We read its HID reports here in a background thread and
-//! forward 6DOF motion + button state to the frontend via Tauri events
-//! (`spacemouse:motion`, `spacemouse:button`); the frontend maps them onto the
-//! camera + actions.
-//!
-//! Linux: when `spacenavd` is running its socket is read first (see `spnav`), the
-//! daemon owns the device and no udev rule is needed. Without the socket hidapi
-//! opens the `/dev/hidrawN` node, so the udev rule MUST target
-//! `SUBSYSTEM=="hidraw"`, a `SUBSYSTEM=="usb"` rule changes the usb node, not
-//! hidraw, and will NOT grant access. See `packaging/99-spacemouse.rules`:
-//!   KERNEL=="hidraw*", ATTRS{idVendor}=="046d", MODE="0660", GROUP="input", TAG+="uaccess"
-//!   KERNEL=="hidraw*", ATTRS{idVendor}=="256f", MODE="0660", GROUP="input", TAG+="uaccess"
-//! Install: copy to `/etc/udev/rules.d/`, then
-//! `sudo udevadm control --reload && sudo udevadm trigger`, then replug.
-//!
-//! Set FUNDACAD_SPACEMOUSE_DEBUG=1 to log raw reports for tuning (the old
-//! SINDRICAD_ spelling still works).
+//! Native SpaceMouse reader, since WebKitGTK has no WebHID: reports become `spacemouse:motion` and `spacemouse:button`.
+//! Linux reads spacenavd first (`spnav`), else the udev rule in packaging/99-spacemouse.rules must target hidraw.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -34,34 +16,16 @@ mod spnav;
 // 3Dconnexion vendor ids: 0x256f (current 3Dconnexion), 0x046d (older Logitech-branded)
 const VENDORS: [u16; 2] = [0x256f, 0x046d];
 
-// HID usage that DEFINES a 6DOF controller: Generic Desktop (0x01) / Multi-axis
-// Controller (0x08). This is the spec's own signal, so it identifies ANY 3D mouse,
-// including models we've never heard of, which a product-id allowlist could
-// not. Measured on a real SpaceNavigator: 046d:c626 enumerates as usage 1/8,
-// while mice report 1/2 and keyboards 1/6.
+// Generic Desktop / Multi-axis Controller is the spec's 6DOF signal, so it finds any 3D mouse, unlike an id allowlist.
+// Measured: SpaceNavigator 046d:c626 enumerates as usage 1/8, mice as 1/2, keyboards as 1/6.
 const USAGE_PAGE_GENERIC_DESKTOP: u16 = 0x01;
 const USAGE_MULTI_AXIS: u16 = 0x08;
 const USAGE_MOUSE: u16 = 0x02;
 const USAGE_KEYBOARD: u16 = 0x06;
 
-/// Rank one HID interface as a 6DOF-controller candidate; `None` = never open it.
-/// Higher is better.
-///
-/// Matching on vendor id ALONE was a real bug: 0x046d is Logitech's, shared with
-/// every mouse and receiver they ship, and the old code took the first vendor match
-/// in enumeration order, so on a machine with a Logitech mouse it either blamed
-/// the wrong device or opened the mouse and fed its reports through as 6DOF motion.
-///
-/// Ranking rather than FILTERING is deliberate: a known-product-id list would
-/// reject a SpaceMouse Pro/Enterprise/Wireless whose id we never listed, which
-/// works today under the vendor match.
-///
-/// A field report (0.1.85, Linux: "it think my logitech mx anywhere 3s is a space
-/// mouse") showed the decoy check was not enough, since it can only fire when the
-/// platform populated the usage. So a vendor match whose usage IS known and is not
-/// multi-axis now scores `None`, and the remaining fallback, vendor match, usage
-/// unavailable, no longer streams on trust: `stream()` reads the report descriptor
-/// after opening and drops the device unless it declares Multi-axis.
+/// Higher is better, `None` never opens it. 0x046d is Logitech's, shared with their mice, so a vendor match whose known
+/// usage is not multi axis is refused, and one without usage info must prove itself in `stream()` from the report
+/// descriptor. Ranking rather than an id list keeps unlisted models working.
 fn rank(vendor_id: u16, usage_page: u16, usage: u16) -> Option<i32> {
     let multi_axis = usage_page == USAGE_PAGE_GENERIC_DESKTOP && usage == USAGE_MULTI_AXIS;
     let vendor = VENDORS.contains(&vendor_id);
@@ -71,9 +35,7 @@ fn rank(vendor_id: u16, usage_page: u16, usage: u16) -> Option<i32> {
     if decoy {
         return None;
     }
-    // usage_page 0 means the platform/hidapi build didn't populate usage info, so
-    // we genuinely cannot tell from enumeration alone, keep the vendor fallback,
-    // but stream() must confirm it against the report descriptor.
+    // usage_page 0: the platform did not populate usage, so keep the vendor fallback and let stream() confirm it.
     let usage_known = usage_page != 0;
     match (multi_axis, vendor, usage_known) {
         (true, true, _) => Some(3),      // a 3D mouse from a vendor we know
@@ -91,14 +53,8 @@ fn rank_device(d: &DeviceInfo) -> Option<i32> {
     rank(d.vendor_id(), d.usage_page(), d.usage())
 }
 
-/// Does this HID report descriptor declare a 6DOF controller?
-///
-/// This is the device describing ITSELF, which is the only evidence that settles
-/// the Logitech vendor-id collision on a platform that does not fill in usage
-/// info during enumeration. Walks the HID short-item encoding: each item is a
-/// prefix byte carrying tag/type/size, then 0, 1, 2 or 4 data bytes. We track the
-/// current Usage Page (global item, tag 0x0 type 0x1) and look for a Usage
-/// (local item, tag 0x0 type 0x2) of Multi-axis Controller under Generic Desktop.
+/// The device describing itself, the only evidence that settles the vendor collision when enumeration has no usage.
+/// Walks HID short items (a prefix byte with tag, type and size, then 0, 1, 2 or 4 bytes) for a Multi-axis Usage.
 fn declares_multi_axis(desc: &[u8]) -> bool {
     const ITEM_USAGE_PAGE: u8 = 0x04; // 0b0000_01_00
     const ITEM_USAGE: u8 = 0x08; // 0b0000_10_00
@@ -175,26 +131,16 @@ struct Buttons {
 /// Whether the reader should be running. Written by the commands below,
 /// read by the thread between reports.
 static WANTED: AtomicBool = AtomicBool::new(false);
-/// Whether a reader thread exists. Separate from WANTED because the two answer
-/// different questions and a thread takes a moment to notice it has been
-/// stopped; conflating them is how you end up with two readers on one device.
+/// Separate from WANTED: a thread takes a moment to notice it was stopped, and conflating the two leads to two readers
+/// on one device.
 static ALIVE: Mutex<bool> = Mutex::new(false);
 
 fn alive() -> std::sync::MutexGuard<'static, bool> {
     ALIVE.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Start reading the device, if the 3D mouse capability is turned on.
-///
-/// The frontend calls this rather than `setup` starting it unconditionally.
-/// A capability that is off must not hold the user's HID device open: on Linux
-/// opening it can be the thing that stops another program using it, and "the
-/// app is not reading your 3D mouse" has to be true at the device, not only in
-/// a listener that ignores the events.
-///
-/// Idempotent. A second call while a reader is alive does nothing, which is
-/// what lets the frontend call it on every start without tracking whether it
-/// already has.
+/// Called by the frontend only when the capability is on: one that is off must not hold the HID device open, which on
+/// Linux can lock out other programs. Idempotent while a reader is alive.
 #[tauri::command]
 pub fn spacemouse_start(app: AppHandle) {
     WANTED.store(true, Ordering::SeqCst);
@@ -207,23 +153,17 @@ pub fn spacemouse_start(app: AppHandle) {
     start(app);
 }
 
-/// Stop reading and let go of the device. Takes effect within about a second:
-/// the read below has a one-second timeout and the flag is checked each time
-/// around.
+/// Takes effect within about a second: the read below times out each second and checks the flag.
 #[tauri::command]
 pub fn spacemouse_stop() {
     WANTED.store(false, Ordering::SeqCst);
 }
 
-/// Spawn a background thread that connects to the first 3Dconnexion device and
-/// streams events. Reconnects (every 3s) if the device is missing/unplugged,
-/// and returns when the capability is turned off.
+/// A background thread that streams from the first 3Dconnexion device, reconnects every 3 s while it is missing, and
+/// returns when the capability is turned off.
 fn start(app: AppHandle) {
     thread::spawn(move || {
-        // Emit the "plugged in but unreadable" warning at most ONCE per run. The
-        // loop below retries every 3s forever, and this used to be an eprintln!
-        // nobody sees, so a user could plug in a SpaceMouse, get silence, and
-        // have no way to learn that a udev rule is all that was missing.
+        // Warn about a plugged in but unreadable device once per run, as the loop retries every 3 s forever.
         let mut warned = false;
         // The HID inventory is published whenever it CHANGES, see stream().
         let mut last_inventory: Option<String> = None;
@@ -255,10 +195,8 @@ fn start(app: AppHandle) {
                 thread::sleep(Duration::from_millis(100));
             }
         }
-        // Taken before the flag is cleared, and re-checked under it. Without
-        // that, a start arriving while this thread was winding down would find
-        // ALIVE still true, decline to spawn, and then watch this thread clear
-        // it: the capability would be on with nothing reading the device.
+        // Taken before the flag is cleared and checked again under it, or a start arriving while this thread winds down
+        // would see ALIVE true, not spawn, and leave nothing reading.
         let mut is_alive = alive();
         if WANTED.load(Ordering::SeqCst) {
             drop(is_alive);
@@ -299,14 +237,8 @@ struct DeviceBlocked {
     hint: Option<String>,
 }
 
-/// Every HID interface we could see, plus which one we chose. Recorded SILENTLY
-/// as a bug-report breadcrumb, never a toast.
-///
-/// This exists because the failure mode we most need to debug is the one that
-/// reported nothing: `NoDevice` is deliberately quiet (most users own no 3D
-/// mouse), so a tester whose device enumerates under an id we don't match, or
-/// on a collection we didn't pick, filed a report with no trace of the
-/// SpaceMouse at all. The whole point is to see hardware that is NOT ours.
+/// Every HID interface seen and the one chosen, a silent bug report breadcrumb. `NoDevice` is quiet, so this is how a
+/// device that enumerates under an id we do not match becomes visible.
 #[derive(Clone, Serialize)]
 pub struct DeviceInventory {
     picked: Option<String>,
@@ -315,15 +247,8 @@ pub struct DeviceInventory {
     note: Option<String>,
 }
 
-/// The last inventory, kept so the frontend can ASK for it.
-///
-/// Emitting it as an event was not enough: `spacemouse::start` runs in Tauri's
-/// `setup`, and the reader's first pass emits within milliseconds, long before
-/// the webview has run main.ts and registered a listener. Tauri does not replay
-/// events to listeners that arrive later, so the one diagnostic built for this
-/// exact situation was being dropped every single run. That is why the Logitech
-/// MX Anywhere report (0.1.85) arrived with no `[spacemouse]` breadcrumb at all
-/// and could not be told apart from an unrelated stuck-orbit bug.
+/// Kept for the frontend to ask for: the first pass emits long before the page listens, and Tauri does not replay
+/// events to late listeners.
 #[derive(Default)]
 pub struct Inventory(std::sync::Mutex<Option<DeviceInventory>>);
 
@@ -380,10 +305,8 @@ fn stream(app: &AppHandle, last: &mut Option<String>) -> Result<(), Blocked> {
 
 /// Picks and opens the best device, with the inventory of what was seen.
 fn open_best(api: &HidApi) -> (DeviceInventory, Result<Opened, Blocked>) {
-    // Rank every interface and take the BEST, not the first vendor match. We do
-    // NOT fall through to a lower-ranked device when the best one won't open: on
-    // Linux "won't open" means the udev rule is missing, and quietly opening some
-    // other Logitech device instead is precisely the bug being fixed here.
+    // Take the best and never fall through to a lower ranked one: on Linux a failed open means a missing udev rule, and
+    // opening another Logitech device instead is the bug this avoids.
     let mut ranked: Vec<(i32, &DeviceInfo)> =
         api.device_list().filter_map(|d| rank_device(d).map(|s| (s, d))).collect();
     ranked.sort_by(|a, b| b.0.cmp(&a.0));
@@ -396,10 +319,8 @@ fn open_best(api: &HidApi) -> (DeviceInventory, Result<Opened, Blocked>) {
 
     if let Some(&(score, info)) = ranked.first() {
         let name = info.product_string().unwrap_or("SpaceMouse").to_string();
-        // Enumeration only needs the USB node; OPENING needs the hidraw node,
-        // which is root-only until the udev rule lands. So "listed but won't
-        // open" is the signature of the missing rule (or of spacenavd holding
-        // the device).
+        // Enumeration needs only the USB node, opening needs the root only hidraw node, so listed but unopenable means
+        // a missing udev rule or spacenavd holding the device.
         match api.open_path(info.path()) {
             Err(e) => blocked = Some(Blocked::Unreadable { name, detail: e.to_string() }),
             Ok(dev) => {
@@ -417,9 +338,8 @@ fn open_best(api: &HidApi) -> (DeviceInventory, Result<Opened, Blocked>) {
                             ));
                         }
                         Proof::Unavailable(why) => {
-                            // Can't tell. Keep the old behaviour rather than
-                            // regress a device that works today, but SAY so:
-                            // this is the one path that can still misfire.
+                            // Cannot tell: keep working as before rather than regress a device, but say so, since this
+                            // path can still misfire.
                             note = Some(format!(
                                 "streaming {} on its vendor id alone, the report \
                                  descriptor was unavailable ({why})",
@@ -453,9 +373,8 @@ fn open_best(api: &HidApi) -> (DeviceInventory, Result<Opened, Blocked>) {
 }
 
 fn publish_on_change(app: &AppHandle, last: &mut Option<String>, inventory: DeviceInventory) {
-    // Publish on CHANGE, not once per run: a device plugged in later, or newly
-    // rejected, is news, while the no-device case retries every 3s forever and
-    // must not spam the log or the event channel.
+    // Publish on change: a device plugged in later is news, while the no device case retries every 3 s and must not
+    // spam.
     let fingerprint = format!("{:?}|{:?}|{}", inventory.picked, inventory.note, inventory.seen.len());
     if last.as_deref() != Some(fingerprint.as_str()) {
         *last = Some(fingerprint);
@@ -473,9 +392,8 @@ fn read_device(app: &AppHandle, opened: Opened, first: Option<Vec<u8>>) -> Resul
     let Opened { dev, vid, pid, name, .. } = opened;
     eprintln!("[spacemouse] connected {vid:04x}:{pid:04x} \"{name}\"");
 
-    // keep the latest translation + rotation so a report carrying only one of
-    // them (older devices split them across report ids 1 and 2) still emits a
-    // full, consistent 6DOF vector.
+    // Older devices split translation and rotation across report ids 1 and 2, so the latest of each makes a full
+    // vector.
     let mut t = [0f32; 3];
     let mut r = [0f32; 3];
     let mut buf = [0u8; 64];
@@ -553,17 +471,14 @@ mod tests {
         assert!(spacenav > UNPROVEN, "a declared 6DOF device needs no further proof");
     }
 
-    // The bug this change exists for: vendor 0x046d is Logitech's, so a plain
-    // vendor match could pick a MOUSE and feed its reports through as 6DOF.
+    // Vendor 0x046d is Logitech's, so a plain vendor match could feed a mouse's reports through as 6DOF.
     #[test]
     fn logitech_mouse_and_keyboard_are_never_opened() {
         assert_eq!(rank(LOGI, 0x01, 0x02), None, "a Logitech mouse");
         assert_eq!(rank(LOGI, 0x01, 0x06), None, "a Logitech keyboard");
     }
 
-    // A collection that told us what it is, and it is not 6DOF. There is nothing
-    // to fall back FOR, so it must not be opened, this is the branch that used
-    // to score 0 and let a Logitech HID++ / vendor-defined collection through.
+    // A collection that says it is not 6DOF has nothing to fall back for, so it must not be opened.
     #[test]
     fn a_known_non_multi_axis_usage_is_rejected_even_from_our_vendors() {
         assert_eq!(rank(LOGI, 0xff00, 0x01), None, "Logitech HID++ collection");
@@ -578,9 +493,7 @@ mod tests {
         assert!(rank(UNKNOWN, 0x01, 0x08).is_some());
     }
 
-    // Where usage info is unavailable we cannot tell from enumeration, so the
-    // vendor fallback stays, but only as UNPROVEN, which stream() then makes
-    // the device justify against its own report descriptor.
+    // Without usage info the vendor fallback stays, but only as UNPROVEN, for stream() to check against the descriptor.
     #[test]
     fn vendor_match_survives_when_usage_is_unpopulated() {
         assert_eq!(rank(CONNEXION, 0x00, 0x00), Some(UNPROVEN));
@@ -593,9 +506,7 @@ mod tests {
         assert_eq!(rank(0x3434, 0x01, 0x06), None, "Keychron keyboard");
     }
 
-    // --- report descriptors -------------------------------------------------
-    // The second half of the MX Anywhere fix: when enumeration gives us no usage,
-    // the device's own descriptor decides.
+    // When enumeration gives no usage, the device's own report descriptor decides.
 
     // Generic Desktop / Multi-axis Controller, the opening of every 3D mouse's
     // descriptor.
@@ -637,9 +548,7 @@ mod tests {
         assert!(!declares_multi_axis(MOUSE_DESC));
     }
 
-    // Usage 0x08 means Multi-axis ONLY under Generic Desktop. Under the Button
-    // page it is button 8, and reading it as a 3D mouse is the same class of
-    // mistake as trusting the vendor id.
+    // Usage 0x08 is Multi-axis only under Generic Desktop; under the Button page it is button 8.
     #[test]
     fn usage_8_on_another_page_is_not_multi_axis() {
         assert!(!declares_multi_axis(&[0x05, 0x09, 0x09, 0x08]));

@@ -9,11 +9,8 @@ function baseName(name: string): string {
   return name.split(/[\\/]/).pop() ?? name;
 }
 
-/** What a file dropped on the window should do, from its name alone.
- *
- *  Unknown names are refused here because extToImportFormat is total: handed a
- *  .txt it answers "step" and the user gets a STEP reader error about a text
- *  file. */
+/** What a dropped file should do, from its name alone. Unknown names are refused here because extToImportFormat
+ *  answers "step" for anything, even a .txt. */
 export function routeDroppedName(name: string): DropAction {
   const base = baseName(name);
   const dot = base.lastIndexOf(".");

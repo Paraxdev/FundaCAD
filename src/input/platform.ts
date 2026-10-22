@@ -15,9 +15,8 @@ export function isMac(): boolean {
   return /mac/i.test(nav.userAgentData?.platform || nav.platform || "");
 }
 
-/** A key hint as the platform writes it: Command and Option glyphs on macOS,
- *  Ctrl and Alt elsewhere. The hint tables stay written with Ctrl and Alt, the
- *  names the matchers and the plugin remap use, and are translated where shown. */
+/** A key hint as the platform writes it: Command and Option glyphs on macOS, Ctrl and Alt elsewhere. The tables
+ *  stay in Ctrl and Alt, the names the matchers and the plugin remap use. */
 export function fmtKeys(text: string): string {
   if (!isMac()) return text;
   return text.replace(/\bCtrl\b/g, COMMAND).replace(/\bAlt\b/g, OPTION);

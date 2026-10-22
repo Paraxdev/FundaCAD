@@ -1,12 +1,10 @@
-// Fit-point spline math: a Catmull-Rom curve interpolating the given points,
-// sampled to a polyline for rendering, region tracing, and snapping. The
-// engine builds the authoritative B-spline edge through the same fit points.
+// Catmull-Rom through the fit points, sampled for rendering, region tracing and snapping. The engine builds the
+// authoritative B-spline through the same points.
 
 import * as THREE from "three";
 
 type P = { x: number; y: number };
 
-/** sample a Catmull-Rom spline through `pts` as a polyline (segsPerSpan per leg). */
 export function splinePolyline(pts: P[], segsPerSpan = 16): THREE.Vector2[] {
   if (pts.length < 2) return pts.map((p) => new THREE.Vector2(p.x, p.y));
   if (pts.length === 2) {

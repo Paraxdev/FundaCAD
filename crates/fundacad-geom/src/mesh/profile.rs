@@ -1,9 +1,5 @@
-//! Viewport tolerances, replaces the tolerance half of the Python engine's `viewport_mesh.py`
-//! (`_viewport_profile`, `_effective_tolerance`).
-//!
-//! The viewport meshes with OCCT's relative deflection, a fraction of each
-//! feature's own size, so a 1 mm fillet gets a finer mesh than the face it sits
-//! on. The numbers were measured in the Python engine; re-measure before changing one.
+//! Viewport tolerances. OCCT's relative deflection sizes the mesh per feature, so a 1 mm fillet meshes
+//! finer than its face. The numbers were measured, re-measure before changing one.
 
 /// The wire default tolerance, what the size scaling is relative to.
 pub const DEFAULT_TOLERANCE: f64 = 0.1;
@@ -53,9 +49,7 @@ pub fn viewport_profile(n_bodies: usize) -> ViewportProfile {
     ViewportProfile { size_scale: 1.0, angular: VIEWPORT_ANG_TOL }
 }
 
-/// The relative deflection BRepMesh gets for a requested wire tolerance.
-/// Relative mode sizes per feature itself, so no bounding box term. The
-/// Python engine's absolute mode is switched off there and not ported.
+/// Relative mode sizes per feature itself, so there is no bounding box term.
 pub fn effective_tolerance(requested: f64, size_scale: f64) -> f64 {
     let scale = (requested / DEFAULT_TOLERANCE) * size_scale;
     DEFAULT_RELATIVE_DEFLECTION * scale

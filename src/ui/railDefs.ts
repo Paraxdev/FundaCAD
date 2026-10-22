@@ -1,9 +1,5 @@
-// What the floating tool rail shows, built from the ribbon tables so a tool is
-// still defined in exactly one place (ui/ribbonDefs.ts).
-//
-// Three modes: the model with nothing selected shows categories that open
-// flyouts, a selection shows the tools that can act on it, and a sketch shows
-// its own drawing tools with each family behind one button.
+// The floating tool rail, built from the ribbon tables (ui/ribbonDefs.ts). Nothing selected shows categories, a
+// selection shows the tools that act on it, and a sketch shows its drawing tools with each family behind one button.
 
 import { leavesOf, modelGroups, SKETCH, type Group, type ToolItem } from "./ribbonDefs";
 

@@ -1,24 +1,5 @@
-// A whole app, for a plugin's tests, in one object.
-//
-// The ask this answers was "plugins may request a dummy, injectable instance of
-// all core elements". The core elements are not what a plugin touches: it
-// touches the broker, and only the broker, so what a plugin needs injected is
-// one host. That is the difference between a test double that stays true and a
-// mock surface that grows a method every time the app does and quietly stops
-// resembling it.
-//
-// WHAT IS REAL HERE. The document ops. Parameters and the feature timeline are
-// plain data with rules over them, so this runs those rules: ids are assigned
-// the way ./appHost.ts assigns them, a bad edit is refused before anything is
-// written, and a plugin that adds a feature and reads the document back sees it.
-//
-// WHAT IS NOT, AND SAYS SO. `build`, `inspect`, `view` and `export` need the
-// geometry kernel, which is a separate process with OCCT in it and cannot be
-// stood up inside a unit test. They are answered from `answers`, which the test
-// supplies, and refuse by default with a message naming the option to set. A
-// canned success would be worse than a refusal: a plugin whose test passed
-// against a made-up bounding box has been told something false about its own
-// arithmetic.
+// A host for a plugin's tests. The document ops run the real rules. The geometry ops answer from `answers` and refuse
+// by default, because a made-up bounding box would tell a plugin something false about its own arithmetic.
 
 import type { CadDocument, Feature } from "../../types";
 import { allOpGrants, type Op } from "./ops";
@@ -27,18 +8,8 @@ import { createBroker, type Broker, type BrokerHost } from "./broker";
 import { UNSERVED } from "./appHost";
 import { ensureBodyIds } from "../../document/bodyIds";
 
-/** How the app names a new feature, mirroring `DocumentStore.nextId()`.
- *
- *  THIS IS NOT THE ONLY SCHEME IN THE SYSTEM, and an earlier version of this
- *  file said it was. The Python MCP server's `model.py` names features by type, `bx1` for a
- *  box and `ex1` for an extrude; the app names them `f1`, `f2`, counting from
- *  the number it already has. Both are hosts for the same op vocabulary and
- *  both are right, because an id is an id.
- *
- *  This double follows the APP, because ./appHost.ts is the host a compute
- *  plugin actually runs against. The lesson for a plugin author is the one that
- *  holds either way and is worth learning here rather than in the field: read
- *  the id `feature_add` returns, never predict it. */
+/** Mirrors `DocumentStore.nextId()` (f1, f2), while the Python MCP server names by type (bx1, ex1).
+ *  A plugin should read the id `feature_add` returns, never predict it. */
 const nextFeatureId = (existing: readonly string[]): string => {
   const used = new Set(existing);
   let n = used.size + 1;
@@ -48,9 +19,8 @@ const nextFeatureId = (existing: readonly string[]): string => {
 
 const ID_RE = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 
-/** Thrown inside the host, caught by the broker, and handed to the plugin as
- *  `{ ok: false, code: "failed" }`. Named so a test can tell a refused edit
- *  from a bug in the double itself. */
+/** Handed to the plugin as `{ ok: false, code: "failed" }`. Named so a test can tell a refused edit from a bug in the
+ *  double. */
 export class TestHostError extends Error {}
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -67,30 +37,19 @@ const obj = (v: unknown, what: string): Record<string, unknown> => {
   return v as Record<string, unknown>;
 };
 
-/** A canned reply, or a function of the arguments for a test that wants the
- *  reply to depend on what was asked.
- *
- *  Spelled out rather than `unknown | fn`, which collapses to `unknown` and
- *  takes the argument type of the function branch down with it. The cost is
- *  that a reply cannot itself be a function, which nothing an op returns is:
- *  every one of them is JSON on the wire. */
+/** A canned reply, or a function of the arguments. Spelled out because `unknown | fn` collapses to `unknown`.
+ *  A reply cannot itself be a function, and none is, since replies are JSON on the wire. */
 type Plain = string | number | boolean | null | readonly unknown[] | { [k: string]: unknown };
 export type Answer = ((args: Record<string, unknown>) => unknown) | Plain;
 
 export interface TestHostOptions {
   /** The document the session starts with. Empty if omitted. */
   document?: CadDocument;
-  /** The pretend disk: file name to contents. This is what a person could
-   *  choose from when the plugin calls `file_pick`, and where `file_write`
-   *  puts things. Names, not paths, because that is all a plugin ever sees. */
+  /** The pretend disk, file name to contents: what `file_pick` offers and where `file_write` puts things.
+   *  Names, not paths, because that is all a plugin ever sees. */
   files?: Record<string, string>;
-  /** Answers for the ops a unit test cannot really perform.
-   *
-   *  The four geometry ops refuse until one is given. `file_pick` and
-   *  `file_write` do not, they have a sensible default, but taking an answer
-   *  is how a test says WHAT THE PERSON DID: a file name to choose that one, or
-   *  `null` for a dialog that was dismissed. The dismissal branch is the one
-   *  every plugin author forgets, and it has to be reachable. */
+  /** Answers for ops a unit test cannot perform; the geometry ops refuse until given one. For `file_pick` and
+   *  `file_write` it says what the person did: a file name, or `null` for a dismissed dialog. */
   answers?: Partial<Record<Op, Answer>>;
   /** What `schema` reports. Empty unless a test cares. */
   featureTypes?: string[];
@@ -101,14 +60,11 @@ export interface TestHostOptions {
 }
 
 export interface TestHost extends BrokerHost {
-  /** The document as it stands. A copy: a test that mutated it would be editing
-   *  the app's state from outside the door this whole design is about. */
+  /** A copy, so a test cannot edit the app's state from outside the broker. */
   document(): CadDocument;
   /** The pretend disk, likewise copied. */
   files(): Record<string, string>;
-  /** Every op the host was asked to perform, in order, after the broker allowed
-   *  it. Refusals are not here; they never reached the host, which is exactly
-   *  what makes this list worth asserting on. */
+  /** Every op the broker allowed, in order. Refusals never reach the host, so they are not here. */
   calls(): { op: Op; args: Record<string, unknown> }[];
 }
 
@@ -118,8 +74,7 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
   let doc: CadDocument = clone(opts.document ?? EMPTY);
   const files: Record<string, string> = { ...(opts.files ?? {}) };
   const log: { op: Op; args: Record<string, unknown> }[] = [];
-  /** Handles minted by `file_pick`, exactly as the real one keeps them: a
-   *  plugin can read what it was handed and nothing else. */
+  /** Handles minted by `file_pick`, as the real host keeps them: a plugin reads what it was handed and nothing else. */
   const handed = new Map<string, string>();
   let nextHandle = 1;
 
@@ -153,11 +108,8 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
     return typeof answer === "function" ? (answer as (a: Record<string, unknown>) => unknown)(args) : answer;
   };
 
-  /** Which file a person would plausibly pick, given the filter.
-   *
-   *  Advisory, exactly as the real dialog's filter is: it narrows what is
-   *  offered first, it does not narrow what could be chosen. A test wanting a
-   *  different answer says so with `answers: { file_pick: "other.stl" }`. */
+  /** Advisory like the real dialog's filter: it orders what is offered first, not what could be chosen.
+   *  A test wanting another file says `answers: { file_pick: "other.stl" }`. */
   const wouldPick = (extensions: unknown): string | null => {
     const names = Object.keys(files).sort();
     const exts = Array.isArray(extensions)
@@ -201,11 +153,8 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
           return { ok: true };
         }
 
-        // Refused, in the app's own words, because the app refuses them. These
-        // two used to be served here against the pretend disk, which made this
-        // double a liar in the one direction that costs the most: a plugin
-        // whose tests passed on `doc_open` would have met a refusal the first
-        // time anybody ran it. All three take a PATH, and a plugin has no paths.
+        // Refused in the app's own words, because the app refuses them: all three take a PATH, and a plugin has no
+        // paths.
         case "doc_open":
         case "doc_import":
         case "doc_save":
@@ -234,9 +183,7 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
         case "file_read": {
           const handle = str(args.handle, "handle");
           const name = handed.get(handle);
-          // The real one answers the same way for a handle that does not exist
-          // and for one belonging to somebody else, so this does too: a plugin
-          // that branches on the difference would be branching on nothing.
+          // The real host answers the same for a missing handle and for somebody else's, so this does too.
           if (name === undefined) {
             throw new TestHostError("that file was not offered to this plugin");
           }
@@ -256,9 +203,7 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
             throw new TestHostError("pass `text` or `base64`, not both");
           }
           const name = answer === undefined ? str(args.suggested, "suggested") : String(answer);
-          // base64 is kept as it arrived. The pretend disk holds text, and a
-          // double that decoded it would be claiming to know an encoding the
-          // real one hands straight to the filesystem.
+          // base64 is kept as it arrived: the real host hands it straight to the filesystem without decoding.
           const body = typeof text === "string" ? text : (b64 as string);
           files[name] = body;
           return { name, len: body.length };
@@ -270,9 +215,7 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
           if (typeof expr !== "string" && typeof expr !== "number") {
             throw new TestHostError("expr must be a number or an expression");
           }
-          // Numbers only. The real table evaluates expressions over other
-          // parameters, and a half-working evaluator here would be a second
-          // expression language for plugin authors to learn the quirks of.
+          // Numbers only: a half-working evaluator here would be a second expression language for plugin authors.
           const value = typeof expr === "number" ? expr : Number(expr);
           if (!Number.isFinite(value)) {
             throw new TestHostError(`the test double takes numbers, not expressions like ${JSON.stringify(expr)}`);
@@ -280,12 +223,8 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
           const unit = args.unit === "deg" || args.unit === "count" ? args.unit : "mm";
           (doc.paramDefs ??= {})[name] = { expr: String(expr), value, unit };
           doc.parameters[name] = value;
-          // No `value` in the reply, matching ./appHost.ts, which cannot give
-          // one: the real store validates synchronously and commits the
-          // cascade asynchronously, so the evaluated number is not available
-          // when the call returns. A plugin that needs it reads the document
-          // back. tests/plugins/appHost.spec.ts is what caught the two
-          // disagreeing about this.
+          // No `value` in the reply, matching ./appHost.ts: the real store commits the cascade asynchronously, so the
+          // number is not ready when the call returns. tests/plugins/appHost.spec.ts caught the two disagreeing.
           return { ok: true, name };
         }
 
@@ -369,14 +308,12 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
 }
 
 export interface TestBroker extends Broker {
-  /** The app behind the door, for a test that wants to assert on the state
-   *  afterwards rather than only on what came back. */
+  /** The app behind the door, for asserting on the state afterwards. */
   host: TestHost;
 }
 
-/** A broker over a test host. Grants default to everything the op table asks
- *  for, so a plugin's own tests are about the plugin; a test ABOUT permissions
- *  passes the narrower set it wants to prove is enough. */
+/** Grants default to everything the op table asks for, so a plugin's tests are about the plugin.
+ *  A test about permissions passes the narrower set it wants to prove is enough. */
 export function testBroker(opts: TestHostOptions & { grants?: readonly Grant[]; plugin?: string } = {}): TestBroker {
   const host = testHost(opts);
   const broker = createBroker({

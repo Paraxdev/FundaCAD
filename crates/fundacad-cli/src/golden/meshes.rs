@@ -65,12 +65,8 @@ fn centroids(p: &[P3], tris: &[[usize; 3]]) -> Vec<P3> {
         .collect()
 }
 
-/// diff_meshes.surface_gap: the largest distance from a triangle centroid of
-/// (p, i) to the surface (q, j), measured against the triangles whose
-/// centroids are the nearest few, then against every triangle for a centroid
-/// those leave further than `tol`. A large fan triangle of a planar cap can
-/// have no centroid among the nearest few while lying flat on the other side's
-/// cap, which the same disk triangulated the other way round.
+/// diff_meshes.surface_gap: the largest centroid to surface distance, against the nearest few triangles and then
+/// all of them past `tol`, since a big fan triangle of a flat cap can have no centroid among the nearest few.
 fn surface_gap(p: &[P3], i: &[[usize; 3]], q: &[P3], j: &[[usize; 3]], k: usize, tol: f64) -> f64 {
     if i.is_empty() || j.is_empty() {
         return if i.len() == j.len() { 0.0 } else { f64::INFINITY };

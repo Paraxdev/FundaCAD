@@ -1,12 +1,6 @@
-//! Expression evaluation against a name to value scope, a port of
-//! `src/params/eval.ts`.
-//!
-//! Arithmetic never fails (a division by zero is infinite, the caller gates on
-//! finiteness); structure does (unknown parameter or function, wrong arity).
-//! Truth is a number: comparisons and logic give 1 or 0, and NaN poisons them
-//! so a broken input cannot quietly read as false. The JavaScript semantics of
-//! `Math.round`, `Math.min`, `Math.max` and `Math.pow` are kept on purpose,
-//! they are what the document's cached values were computed with.
+//! Expression evaluation, a port of `src/params/eval.ts`. Arithmetic never fails (x / 0 is infinite, the caller
+//! gates on finiteness), structure does. Truth is 1 or 0 and NaN poisons it, so a broken input never reads as false.
+//! JavaScript's `Math.round`, `min`, `max` and `pow` are kept on purpose: the document's cached values used them.
 
 use super::parse::{constant, parse_expr, BinOp, Expr, ExprError, FUNCTIONS, RESERVED_FUNCTIONS};
 

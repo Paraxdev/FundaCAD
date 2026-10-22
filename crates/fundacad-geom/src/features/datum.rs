@@ -1,9 +1,5 @@
-//! Datum planes and axes, the Python engine's `builder.py` `_handle_datum_plane` and
-//! `_handle_datum_axis`.
-//!
-//! A datum plane made on a face follows it (face_anchor.rs) and an axis made
-//! on an edge re-resolves that edge. A reference that stops resolving is not an
-//! error: the datum keeps the cached placement the document stored.
+//! Datum planes and axes, `_handle_datum_plane` and `_handle_datum_axis` of builder.py. A datum follows its face
+//! or edge, and a reference that stops resolving is not an error: the datum keeps its cached placement.
 
 use fundacad_core::schema::{DatumAxis, DatumPlane, OneOrMany};
 use opencascade::primitives::Shape;
@@ -58,9 +54,8 @@ pub struct Pose {
     pub spin: f64,
 }
 
-/// The reference frame moved by `pose`. The turns are intrinsic X then Y then
-/// Z, so each one is about an axis the later ones leave alone, which is what
-/// lets a gizmo drag one angle without disturbing the others.
+/// The reference frame moved by `pose`. The turns are intrinsic X, Y, Z, so each is about an axis the later
+/// ones leave alone, which lets a gizmo drag one angle without disturbing the others.
 pub fn place(base: &Frame, pose: &Pose) -> PlaneRecord {
     let (x, y, z) = (DVec3::from(base.x), DVec3::from(base.y), DVec3::from(base.z));
     let o = DVec3::from(base.origin) + x * pose.shift[0] + y * pose.shift[1] + z * pose.shift[2];

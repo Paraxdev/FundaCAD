@@ -1,27 +1,5 @@
-// Driving a mechanism where its drive joint is: an arrow along the joint's axis
-// for a slider drive (the offset), a dial about it for a revolute one (the angle).
-//
-// The drive is the one number that moves the whole linkage, so it belongs on the
-// model the way a joint's offset and angle do (see jointTool.ts, whose handles
-// these are): take hold and the linkage follows, rebuilt by the engine each step.
-// The value box is still there and still authoritative.
-//
-// The axis is the drive joint's reference frame as the engine solved it, which
-// only the engine can place. It arrives each rebuild in the build result's
-// datumMarks under the mechanism's id. No mark (no drive, or the linkage did not
-// close this build), no handle: the tool stands down and the value rows take over.
-// A mechanism fresh from the starter has no drive value, and the engine then
-// leaves the parts as modelled; the mark's `value` says where that is, and the
-// handle starts from it rather than from 0, which would jump the linkage.
-//
-// Unlike the joint's handles this one keeps working when the drive value is a
-// bare reference to a parameter (`crank_angle`): the drag then writes the
-// parameter, the way the fillet arrow does, so everything else that reads it moves
-// too. A real expression stays refused, a drag cannot write a number into it.
-//
-// The preview builds in place, so the features after the mechanism (an
-// interference check, a body that joins the moved parts) stay on screen while the
-// linkage moves.
+// Drive handle on a mechanism: an arrow along a slider drive's axis, a dial about a revolute one. The axis comes
+// from the build's datumMarks under the mechanism id, and the handle starts from the mark's value, not 0.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -51,13 +29,12 @@ export class MechanismTool {
   active = false;
 
   private id: string | null = null;
-  /** `offset` for a slider drive (the arrow), `angle` for a revolute one (the dial) */
   private field: "offset" | "angle" = "angle";
-  /** the parameter the drive value merely references, written instead of the field */
+  /** A parameter the drive value references, written by the drag instead of the field. */
   private paramRef: string | null = null;
   private base = new THREE.Vector3(); // the drive axis origin, value 0 for a slider
-  private dir = new THREE.Vector3(0, 0, 1); // the drive axis direction
-  private anchor = new THREE.Vector3(); // where the handle stands
+  private dir = new THREE.Vector3(0, 0, 1);
+  private anchor = new THREE.Vector3();
   private dialX = new THREE.Vector3(1, 0, 0); // an in-plane reference perpendicular to dir
   private value = 0;
   private opened = 0;
@@ -94,10 +71,8 @@ export class MechanismTool {
     });
   }
 
-  /** Open the drive handle on a committed mechanism. False sends the caller to the
-   *  value rows: there is no drive (or it names a rigid joint), an expression drives
-   *  the value, the engine published no drive axis this build, or the value is
-   *  unset and the mark does not say where the linkage stands. */
+  /** False sends the caller to the value rows: no drive, an expression drives it, no drive axis this build,
+   *  or the value is unset and the mark does not say where the linkage stands. */
   startEdit(featureId: string, onDone: (id: string | null) => void): boolean {
     if (this.active) return false;
     const f = this.store.document.features.find((x) => x.id === featureId);
@@ -243,8 +218,7 @@ export class MechanismTool {
     this.pushPreview();
   }
 
-  /** Where the cursor sits about the drive axis, in degrees, read in the axis's own
-   *  plane. Null when that plane is nearly edge-on (see JointTool.cursorTurn). */
+  /** Degrees about the drive axis in its own plane, null when that plane is nearly edge-on. */
   private cursorTurn(x: number, y: number): number | null {
     const view = this.viewport.camera.getWorldDirection(new THREE.Vector3());
     if (ringDragDegenerate(view.dot(this.dir))) return null;
@@ -260,6 +234,8 @@ export class MechanismTool {
     return this.viewport.probe(x, y, (rc) => rc.intersectObjects(gizmo.children, false).length > 0) ?? false;
   }
 
+  // In place, so the features after the mechanism (an interference check, a body joining the moved parts) stay on
+  // screen while the linkage moves.
   private pushPreview() {
     if (!this.active || !this.id) return;
     const f = this.store.document.features.find((x) => x.id === this.id);
@@ -285,8 +261,7 @@ export class MechanismTool {
     if (this.paramRef) {
       const refused = this.store.commitFeatureEdit(id, null, { name: this.paramRef, value: this.value });
       if (refused) toast(refused, { kind: "warning" });
-      // A commit has ended the preview itself; after a refusal this puts the
-      // committed model back.
+      // A commit already ended the preview; after a refusal this puts the committed model back.
       this.cleanup(true);
     } else {
       const patch = { [this.field]: this.value } as unknown as Partial<Feature>;

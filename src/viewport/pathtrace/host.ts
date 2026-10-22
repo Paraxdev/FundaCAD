@@ -1,6 +1,5 @@
-// Runs the tracer from the viewport's own loop: starts it the first time Path
-// traced is drawn, keeps its canvas under the WebGL one, feeds it the mirror
-// scene and the camera, and traces only while traceState says so.
+// Starts the tracer the first time Path traced is drawn, keeps its canvas under the WebGL one, and
+// traces only while traceState says so.
 
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
@@ -471,9 +470,8 @@ export class PathTraceHost {
     this.cameraDirty = true;
   }
 
-  /** False while the scene is refused or a tree is still building, so the
-   *  Realtime frame stays up. Each kind of change takes the cheapest tracer
-   *  call that covers it. */
+  /** False while the scene is refused or a tree is still building, so the Realtime frame stays up.
+   *  Each kind of change takes the cheapest tracer call that covers it. */
   private syncScene(b: TracerBackend, f: TraceFrame): boolean {
     const bodies = collectBodies(f.root);
     if (this.refuseIfOver(bodies)) return false;

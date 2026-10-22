@@ -1,6 +1,4 @@
-// Scene setup: renderer, lights, Z-up grid + axes, origin plane tiles.
-// CAD convention is Z-up (matches build123d), so the ground grid lies
-// in the XY plane and cameras use up = +Z.
+// Z is up (as in build123d), so the ground grid lies in the XY plane and cameras use up = +Z.
 
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
@@ -55,44 +53,25 @@ export interface SceneBundle {
   originTiles: OriginTiles;
   grid: AdaptiveGrid;
   triad: OriginTriad;
-  /** How a frame actually gets drawn: directly, or through the passes. Exposed
-   *  as the object rather than as two lambdas so a diagnostic can read back what
-   *  the chain is doing, which is the only way to tell that rendering through it
-   *  has not quietly given up the multisampling (see PostChain.samples). */
+  /** The object rather than two lambdas, so a diagnostic can read back whether rendering through it gave up
+   *  the multisampling (see PostChain.samples). */
   post: PostChain;
-  /** The AUTO hardware detection (see detectLowPower): true on a machine the app
-   *  judged too weak for the expensive effects. The EFFECTIVE tier that gates
-   *  glass, pixel ratio and light count is this OR the manual performance-mode
-   *  pref, and lives in render.isRenderLowPower(); this field is just the
-   *  hardware half, for anything that wants to know what the machine is. */
+  /** The hardware half only (detectLowPower). The effective tier that gates glass, pixel ratio and light count
+   *  also counts the performance mode pref, see render.isRenderLowPower(). */
   lowPower: boolean;
-  /** Re-read ui/renderPrefs and apply it: lighting, what the model reflects,
-   *  and what it is drawn against. Called once at construction and again from
-   *  every change; the caller asks for a frame afterwards. */
+  /** Re-reads ui/renderPrefs; the caller asks for a frame afterwards. */
   applyRenderPrefs: () => void;
-  /** Re-aim and re-size the key light's shadow to the current model. Called after
-   *  a rebuild (the model moved or grew) and when the shadows setting changes. */
+  /** Called after a rebuild (the model moved or grew) and when the shadows setting changes. */
   frameShadows: () => void;
-  /** Put the full render back for one still while potato mode is on: the power
-   *  tier, the pass chain and the environment. Returns the undo, or null when
-   *  potato mode is off and there is nothing to lift. */
+  /** The full render for one still while potato mode is on. Returns the undo, or null when potato mode is off. */
   beginFullQuality: () => (() => void) | null;
   /** Multiply the pixel ratio for camera motion on a slow machine (motionQuality.ts);
    *  1 puts it back. True when the drawing buffer changed size. */
   setMotionScale: (scale: number) => boolean;
 }
 
-/** How many minor cells the ground grid spans, for a viewport `diagonalPx`
- *  across at `worldPerPixel` and `cell` mm per cell.
- *
- *  It was a flat 100. A constant cannot be right here, because the thing it has
- *  to cover is measured in pixels and the cell is too: a hundred 64px cells is
- *  6400px of grid, which is five screens on a laptop and barely two on a wide
- *  monitor. The same build ran out at one size and paid for lattice nobody could
- *  see at the other. Sized from the view it cannot do either.
- *
- *  Rounded up to a whole number of MAJOR cells, because the two GridHelpers are
- *  built from the same span and the major one divides it by five. */
+/** Cells and view are both measured in pixels, so no constant fits: 100 cells of 64px is five laptop screens but
+ *  barely two on a wide monitor. Rounded up to whole major cells, since the major grid divides the span by five. */
 export function groundGridCells(worldPerPixel: number, diagonalPx: number, cell: number): number {
   const want = (worldPerPixel * diagonalPx * GROUND_COVER) / cell;
   const cells = Number.isFinite(want) && want > 0 ? Math.ceil(want) : MIN_GROUND_CELLS;
@@ -100,30 +79,16 @@ export function groundGridCells(worldPerPixel: number, diagonalPx: number, cell:
   return Math.ceil(clamped / 5) * 5;
 }
 
-/** Diagonals of the viewport the ground grid runs, either side of the view
- *  centre. Six diagonals across is well past what a flat-on view can show, which
- *  is the margin the grazing views need: a ground plane is usually looked at
- *  from a low angle, and there the far half of it is compressed into the top of
- *  the frame and a lattice that stops has its edge drawn right across the view.
- *
- *  Deliberately more generous than the sketch plane's (planeGrid.GRID_COVER),
- *  which is looked at square on and has nowhere to run to. */
+/** A grazing view compresses the far half into the top of the frame, where a lattice that stops draws its edge
+ *  across the view. More than planeGrid.GRID_COVER, which is looked at square on. */
 const GROUND_COVER = 3;
 /** Never fewer than this, so a degenerate scale still leaves a grid to orient
  *  by, and never more, so one cannot cost a frame. */
 const MIN_GROUND_CELLS = 40;
 const MAX_GROUND_CELLS = 600;
 
-/** A ground grid (XY plane) whose spacing snaps to nice 1/2/5x10^n mm values and
- *  rescales with zoom, recentred on the camera target so it always fills the view
- *  with round-number lines. Dim minor lines and brighter major ones every 5th.
- *
- *  Drawn as ONE shader plane, not two GridHelpers. A GL_LINES primitive is a 1px
- *  line with no anti-aliasing of its own, so it shimmered as it reprojected under
- *  an orbit, which was the grid's flicker. The shader derives each line's width
- *  from its own screen-space derivative (fwidth), so a line is a soft one-pixel
- *  band that holds still while the camera turns, at any zoom or angle. The plane
- *  fades out toward its own edge so the finite quad shows no border. */
+/** One shader plane, not GridHelpers: GL_LINES are unantialiased 1px lines that shimmered under an orbit. fwidth
+ *  makes each line a soft one pixel band at any zoom, and the plane fades out toward its edge. */
 export class AdaptiveGrid {
   readonly group = new THREE.Group();
   step = 1; // current minor-line spacing in mm
@@ -194,14 +159,8 @@ export class AdaptiveGrid {
     this.applyTheme();
   }
 
-  /** Re-read the grid's line colours from the theme. Minor lines a legible cool
-   *  grey so the lattice reads at a glance instead of sinking into the ground;
-   *  major lines carry a hint of the theme accent so every fifth line stands out
-   *  and the grid belongs to the app rather than being anonymous chrome. The
-   *  accent is pulled most of the way back down to the major grey, so a major
-   *  line is clearly tinted without glowing over the model. Called at
-   *  construction and again on every theme change (viewport wires it), because
-   *  the viewport cannot re-cascade CSS the way the chrome does. */
+  /** Majors take a hint of the accent, pulled back toward the major grey so they never glow over the model.
+   *  Called on every theme change, since the viewport cannot re-cascade CSS the way the chrome does. */
   applyTheme() {
     const minor = new THREE.Color(themeColor("--grid-minor", 0x3a414d));
     const major = new THREE.Color(themeColor("--grid-major", 0x5c6b7a));
@@ -210,10 +169,8 @@ export class AdaptiveGrid {
     (this.mat.uniforms.uMajorC!.value as THREE.Color).copy(major.lerp(accent, 0.4));
   }
 
-  /** worldPerPixel = world mm covered by one screen pixel at the target.
-   *  diagonalPx = the viewport's own diagonal, which is what decides how far the
-   *  lattice has to run. gridZ = the height the grid sits at (the model's floor,
-   *  or 0 when empty). */
+  /** worldPerPixel is world mm per screen pixel at the target, diagonalPx decides how far the lattice runs,
+   *  gridZ is the model's floor or 0 when empty. */
   update(targetX: number, targetY: number, worldPerPixel: number, diagonalPx: number, gridZ = 0) {
     this.group.position.z = gridZ; // track the model floor every frame, even if x/y/cell are cached
     const cell = gridStep(worldPerPixel, 0);
@@ -235,18 +192,8 @@ export class AdaptiveGrid {
   }
 }
 
-/** Which renderer the webview reports, recorded once at startup.
- *
- *  TRUST THIS ONLY ON WINDOWS/macOS. WebKitGTK, the engine a Linux Tauri build
- *  runs on, deliberately SPOOFS WEBGL_debug_renderer_info for fingerprinting
- *  resistance and reports "Apple GPU / Apple Inc." on any hardware, so neither
- *  the name nor a software-rasteriser guess means anything there. Verified on
- *  this machine: the string said "Apple GPU" while the web process actually had
- *  /dev/dri/renderD128 open with libdrm_amdgpu + libgallium mapped, i.e. a real
- *  Radeon. The reliable Linux check is the process's open DRI fds, not WebGL.
- *
- *  Still worth recording: it is real on the other two platforms, and knowing it
- *  is spoofed is itself the answer when a Linux report blames the GPU. */
+/** Trust it only on Windows and macOS: WebKitGTK spoofs WEBGL_debug_renderer_info as "Apple GPU" on any hardware
+ *  (seen on a Radeon). On Linux the process's open DRI fds tell the truth. */
 function recordGpu(renderer: THREE.WebGLRenderer) {
   let desc = "unknown";
   try {
@@ -274,12 +221,8 @@ function unmaskedRendererName(renderer: THREE.WebGLRenderer): string {
   }
 }
 
-/** A machine that must not be asked for the expensive effects (transmission, a
- *  high pixel ratio, a pile of lights): a software rasteriser or the basic
- *  fallback adapter, or a device reporting very little RAM. Deliberately narrow,
- *  it only fires on the machines that genuinely can't cope, so a normal
- *  integrated GPU keeps the full look; the cost of guessing WRONG here is a
- *  plainer picture, not a crash. */
+/** Deliberately narrow: a software rasteriser, the basic fallback adapter or very little RAM. A wrong guess
+ *  costs a plainer picture, not a crash. */
 function detectLowPower(rendererName: string): boolean {
   if (isSoftwareRendererName(rendererName)) return true;
   const mem = (navigator as { deviceMemory?: number }).deviceMemory;
@@ -298,13 +241,8 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const name = unmaskedRendererName(renderer);
   const autoLowPower = detectLowPower(name);
   setSoftwareRenderer(isSoftwareRendererName(name));
-  // The effective tier is the auto detection OR the manual "performance mode"
-  // pref, re-applied on every pref change (the bundle's applyRenderPrefs below):
-  // glass falls back to alpha (no transmission pass), and the pixel ratio is
-  // capped HARD, a retina panel over a weak GPU is four times the pixels it can
-  // draw, the surest way to a dropped context. 2 elsewhere keeps edges crisp
-  // without going to native 3x. Applied once here for the frames before the
-  // first pref-apply lands.
+  // On a weak tier the pixel ratio is capped hard, since a retina panel over a weak GPU is the surest way to a
+  // dropped context. Applied here for the frames before the first pref apply lands.
   renderer.shadowMap.type = SHADOW_MAP_TYPE;
   let fullQuality = false;
   let motionScale = 1;
@@ -319,41 +257,26 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
     const low = autoLowPower || p.performanceMode || potatoOn();
     setRenderLowPower(low);
     renderer.setPixelRatio(pixelRatio(low));
-    // Emitter shadows are the one expensive lighting extra; a weak machine drops
-    // them (the emitter still lights, it just does not occlude). Flipping this
-    // makes the lights and materials recompile, which the pref-apply already does.
+    // A weak machine drops emitter shadows, the one expensive lighting extra; the emitter still lights.
+    // Flipping this recompiles lights and materials, which the pref apply already does.
     renderer.shadowMap.enabled = !low;
   };
   applyPowerTier();
-  // Tone mapping, always, and NEUTRAL of the several on offer.
-  //
-  // Without any, everything above full brightness clips flat: a specular
-  // highlight on polished metal, a light-coloured part under the key light and
-  // anything emissive all arrive as the same white, and the shape of the
-  // highlight (which is what tells you the surface is curved) is gone with it.
-  //
-  // Neutral rather than ACES or filmic because this is CAD. The other two are
-  // film looks: they shift hue and lift contrast across the whole image, so a
-  // part assigned #b06a3b is no longer drawn #b06a3b, which makes the material
-  // library lie. Neutral (the Khronos PBR tone mapper) is the identity through
-  // the range colours actually live in and only compresses the top end, so the
-  // highlight rolls off and the colour is still the colour.
+  // Neutral tone mapping: without any, highlights clip flat and lose the shape that shows curvature, and ACES or
+  // filmic shift hue, so a part's assigned colour would no longer be drawn as itself.
   renderer.toneMapping = THREE.NeutralToneMapping;
   recordGpu(renderer);
 
   const scene = new THREE.Scene();
 
-  // --- lighting rig (key + fill + ambient) for a clean product look ---
   const rig = buildLightRig(renderPrefs(), isHdrHeld);
   const keyLight = lightOf(rig, "key")!;
   const fillLight = lightOf(rig, "fill")!;
   const key = new THREE.DirectionalLight(keyLight.colour, scaled(rig, keyLight.intensity));
   key.position.set(...keyLight.direction).multiplyScalar(KEY_DISTANCE);
   scene.add(key);
-  // The key light can OPTIONALLY cast a grounded shadow (renderPrefs.shadows). Set
-  // up its shadow map once; the ortho frustum is framed to the model by
-  // frameKeyShadow whenever the model or the setting changes. The target is added
-  // so the light can be re-aimed at the model centre without moving its DIRECTION.
+  // frameKeyShadow frames the ortho frustum to the model. The target is in the scene so the light can be
+  // re-aimed at the model centre without moving its direction.
   scene.add(key.target);
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.bias = -0.0006;
@@ -369,7 +292,6 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   );
   scene.add(hemi);
 
-  // --- Z-up adaptive ground grid in the XY plane (rescales with zoom) ---
   const grid = new AdaptiveGrid(scene);
   markOverlay(grid.group, "grid");
 
@@ -433,11 +355,8 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   };
 }
 
-/** Aim the key light's shadow camera at the model and size its ortho frustum to
- *  fit, so a small part gets a crisp shadow and a large one is not clipped. The
- *  light's DIRECTION is preserved (it is re-placed along its existing direction,
- *  the target moved to the model centre), so only the shadow changes, not the
- *  lighting. Cheap: it reads each body's cached bounding box, not its vertices. */
+/** frameShadows keeps the key light's direction and sizes the ortho frustum to the model, so a small part gets a
+ *  crisp shadow and a large one is not clipped. It reads cached bounding boxes only. */
 const _shadowBox = new THREE.Box3();
 const _shadowSphere = new THREE.Sphere();
 /** The key light's direction, from renderPrefs, set by applyRenderPrefs. */
@@ -461,19 +380,8 @@ function frameKeyShadow(key: THREE.DirectionalLight, modelGroup: THREE.Group): v
   cam.updateProjectionMatrix();
 }
 
-/** Drawing the frame, with or without the passes.
- *
- *  Two paths on purpose, and the direct one is the default. A composer renders
- *  into an offscreen target and blits it back, which costs a full-screen copy
- *  and, more to the point, gives up the canvas's own multisampling unless the
- *  target asks for it. Everything that is not bloom is better off never leaving
- *  the canvas, so with bloom off this is `renderer.render` and nothing else.
- *
- *  Built LAZILY and kept: the passes are a dynamic import (they are not small)
- *  and a set of render targets, and the setting can be switched off and on
- *  again. Until the import lands, the direct path draws, so the viewport is
- *  never waiting on it for a frame, the model simply gains its bloom a beat
- *  after the setting is switched on. */
+/** Direct by default: a composer's offscreen target costs a full screen copy and gives up the canvas's
+ *  multisampling. The passes are a lazy dynamic import, and until they land the direct path draws. */
 
 export class PostChain {
   private composer: import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer | null = null;
@@ -515,10 +423,7 @@ export class PostChain {
   private clearWas = new THREE.Color();
   private clearNow = new THREE.Color();
   private camera: THREE.Camera | null = null;
-  /** How far in front of the camera is sharp, in world units. Written by the
-   *  viewport once per frame from the orbit distance, because that is the point
-   *  the view is ABOUT: whatever you have centred is what stays in focus, which
-   *  needs no control of its own and is never wrong. */
+  /** In world units, from the orbit distance once per frame: whatever you have centred stays in focus. */
   focusDistance = 1;
   /** Something on the model glows or is shiny, which the path tracer's bloom reads.
    *  Written by the viewport with each finish pass. */
@@ -547,10 +452,8 @@ export class PostChain {
 
   private switching: RealtimeQuality | null = null;
 
-  /** Moves to `q` once it can be drawn without a hitch: High first loads the passes
-   *  and links the programs of its prepass and overlay twins, and until that has
-   *  finished the frames keep the stages they had. A later call supersedes an
-   *  earlier one still waiting. */
+  /** High first loads the passes and links its twins' programs, and until then frames keep their stages.
+   *  A later call supersedes one still waiting. */
   async switchRealtimeQuality(q: RealtimeQuality, camera: THREE.Camera): Promise<void> {
     if (q === this.switching || (this.switching === null && q === this.quality)) return;
     this.switching = q;
@@ -636,23 +539,13 @@ export class PostChain {
   /** Asked for a frame once the passes have loaded, so bloom does not wait on the next input. */
   onReady: () => void = () => {};
 
-  /** How many samples the offscreen buffer takes, or 0 when there is no buffer
-   *  because bloom is off and the canvas is being drawn straight to.
-   *
-   *  For reading BACK. A composer's default render target has no multisampling
-   *  at all, so turning bloom on would silently trade the antialiasing the
-   *  canvas was created with for a glow, and on a model made of straight edges
-   *  that is a bad trade nobody asked for. Cheaper to assert than to notice. */
+  /** For reading back: a composer's default target has no multisampling, so bloom would silently trade the
+   *  canvas's antialiasing for a glow. 0 when drawing straight to the canvas. */
   get samples(): number {
     return this.composer ? (this.composer.renderTarget1.samples ?? 0) : 0;
   }
 
-  /** Whether the depth-of-field pass is currently drawing.
-   *
-   *  For reading BACK, like `samples` above. The pass is switched off on an
-   *  orthographic camera whatever the setting says, so "the slider is up" and
-   *  "the blur is happening" are two different facts and only this one is the
-   *  one a diagnostic wants. */
+  /** For reading back: the pass is off on an orthographic camera whatever the setting says. */
   get bokehOn(): boolean {
     return this.bokeh?.enabled ?? false;
   }
@@ -667,17 +560,14 @@ export class PostChain {
     this.bloom?.setSize(this.glowSize.x, this.glowSize.y);
   }
 
-  /** Whether anything in the settings needs a pass at all. The direct path is
-   *  the default and stays the default: a viewport with no bloom and no blur
-   *  never leaves the canvas, and never pays the full-screen copy. */
+  /** A viewport with no bloom and no blur never leaves the canvas, so it never pays the full screen copy. */
   private wanted(): { bloom: boolean; blur: boolean } {
     const p = renderPrefs();
     return { bloom: p.bloom > 0 && this.glows, blur: p.focusBlur > 0 };
   }
 
-  /** `motion` is a camera frame on a machine that cannot keep up. On a low power
-   *  tier (performance mode included) it draws 1px edge lines and no passes until
-   *  the view settles, otherwise the full look stays on while the camera moves. */
+  /** `motion` is a camera frame on a machine that cannot keep up: a low power tier draws 1px edges and no
+   *  passes until the view settles, otherwise the full look stays on. */
   render(camera: THREE.Camera, motion = false, forceRealtime = false, facts: FrameFacts | null = null) {
     if (this.matcap && (this.viewMode !== "matcap" || this.potatoOn())) {
       this.matcap.dispose();
@@ -835,9 +725,7 @@ export class PostChain {
     want: { bloom: boolean; blur: boolean },
     modelOnly: boolean,
   ) {
-    // The pass chain is built once and re-aimed, rather than rebuilt whenever
-    // the camera object changes (it does: perspective and orthographic are two
-    // objects the rig swaps between).
+    // Built once and re-aimed, since the rig swaps between a perspective and an orthographic camera object.
     if (this.camera !== camera) {
       this.camera = camera;
       for (const pass of composer.passes) {
@@ -860,18 +748,14 @@ export class PostChain {
       }
     }
     if (this.bokeh) {
-      // OFF on an orthographic camera, whatever the setting says. Depth of field
-      // is an artefact of a lens, and a parallel projection has none; the pass
-      // would still blur by depth, which is a photograph of something no camera
-      // could take and is exactly the view chosen for measuring off.
+      // Off on an orthographic camera whatever the setting says: a parallel projection has no lens, and it is
+      // the view chosen for measuring off.
       const lens = want.blur && (camera as THREE.PerspectiveCamera).isPerspectiveCamera === true;
       this.bokeh.enabled = lens;
       if (lens) {
         const u = this.bokeh.materialBokeh.uniforms;
         u["focus"]!.value = this.focusDistance;
-        // The f-stop, inverted: a SMALLER number is a wider hole and less in
-        // focus, which is the one thing about aperture everybody already knows
-        // and the reason the control is in stops rather than in 0..1.
+        // The f-stop inverted: a smaller number is a wider hole and less in focus.
         u["aperture"]!.value = (1 / p.aperture) * 0.006;
         u["maxblur"]!.value = p.focusBlur * 0.012;
       }
@@ -882,19 +766,15 @@ export class PostChain {
       composer.setPixelRatio(pr);
       this.bloom?.setSize(this.glowSize.x, this.glowSize.y);
     }
-    // The RenderPass does not clear, this does. The OutputPass tone maps the
-    // clear, so it is the inverse of the tone mapper. Then the plain colour again
-    // with the target still bound: WebGLState caches a clear value converted for
-    // the target bound at setClearColor (sRGB for the canvas), and the
-    // transmission buffer of any glass clears from that cache, in linear.
+    // The OutputPass tone maps the clear, so this clears with the inverse. Then the plain colour again with the
+    // target bound, since glass's transmission buffer clears from WebGLState's cached value, in linear.
     r.setRenderTarget(composer.readBuffer);
     r.setClearColor(this.clearNow, alpha);
     r.clear();
     r.setClearColor(this.clearWas, alpha);
     setComposing(true, this.clearWas);
-    // Note: three's shadow pass sets that cached clear to white and leaves it, and
-    // the RenderPass never clears after it, so on a frame that redraws the shadow
-    // maps (every still, a moved light) glass showed a white buffer through it.
+    // Note: three's shadow pass leaves that cached clear white, so a frame that redraws the shadow maps
+    // showed a white buffer through glass.
     const shadows = r.shadowMap as THREE.WebGLShadowMap | undefined;
     const drawShadows = shadows?.render;
     if (shadows && drawShadows) {
@@ -948,11 +828,8 @@ export class PostChain {
   /** Synchronous once the modules are in, so a still can build the chain on the spot. */
   private build(): import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer {
     const { EffectComposer, RenderPass, UnrealBloomPass, BokehPass, OutputPass } = this.passes!;
-    // Our own target, for the `samples`. EffectComposer's default target has
-    // none, so rendering through it would silently throw away the antialiasing
-    // the canvas was created with, and a CAD model is mostly straight edges:
-    // that reads as the whole viewport suddenly going jagged, which is a far
-    // worse trade than any glow is worth.
+    // Our own target, for its `samples`: EffectComposer's default has none, which would turn a viewport of
+    // straight CAD edges jagged.
     const buffer = new THREE.WebGLRenderTarget(this.size.x, this.size.y, {
       type: THREE.HalfFloatType,
       samples: 4,
@@ -968,19 +845,15 @@ export class PostChain {
     render.render = (...args) => this.timed("main", () => drawModel(...args));
     const b = bloomSettings(renderPrefs().bloom);
     const bloom = new UnrealBloomPass(this.size.clone(), b.strength, b.radius, b.threshold);
-    // BEFORE the bloom, deliberately. Blur first and bloom second is a light
-    // spilling off an out-of-focus highlight, which is what an open lens
-    // actually does; the other way round is a sharp glow pasted over a soft
-    // picture, and it reads as a mistake even to somebody who could not say why.
+    // Before the bloom: light spilling off an out of focus highlight is what an open lens does, the other
+    // order pastes a sharp glow over a soft picture.
     const bokeh = new BokehPass(this.scene, camera, { focus: 1, aperture: 0.0002, maxblur: 0.01 });
     bokeh.enabled = false;
     composer.addPass(render);
     composer.addPass(bokeh);
     composer.addPass(bloom);
-    // LAST, and it is what makes the two paths agree: rendering into a target
-    // skips the tone mapping and the colour-space conversion the canvas path
-    // does in the material shader, and this pass is where they happen instead.
-    // Without it the whole viewport comes back washed out and over-bright.
+    // Last: a target skips the tone mapping and colour space conversion the canvas path does in the shader,
+    // and this pass does them instead, or the viewport comes back washed out.
     composer.addPass(new OutputPass());
     // addPass sized the glow in device pixels, setSize keeps it at CSS size.
     bloom.setSize(this.glowSize.x, this.glowSize.y);
@@ -1013,19 +886,10 @@ export class PostChain {
   }
 }
 
-/** The neutral room the model reflects, built once and kept.
- *
- *  Lazily, and cached forever after: it is a render to a cubemap plus a PMREM
- *  pass, tens of milliseconds, and the setting can be switched off and on again.
- *  Never disposed for the same reason, there is exactly one of these per
- *  process and it is a few hundred KiB of texture.
- *
- *  Generated rather than loaded. An HDR file would be a network fetch (or an
- *  asset in the bundle) for something the renderer can produce from a handful of
- *  boxes, and the app deliberately fetches nothing at start-up. */
+/** Generated, not loaded, since the app fetches nothing at start up. Built lazily (a cubemap render plus PMREM,
+ *  tens of ms) and never disposed, one per process. */
 const envCache = new Map<string, THREE.Texture>();
-/** Imported panoramas are keyed by rotation and exposure too, so only the last
- *  few are kept; the built in rooms stay for the session as they always have. */
+/** Imported panoramas are keyed by rotation and exposure too, so only the last few are kept. */
 const KEEP_CUSTOM = 2;
 
 /** What `p` lights with as a cache key, or null for none, which includes an
@@ -1073,10 +937,8 @@ export function environmentRoomFor(p: Readonly<RenderPrefs>): { scene: THREE.Sce
 
 export function environmentRoom(id: Exclude<Environment, "none">): { scene: THREE.Scene; dispose(): void } {
   if (id === "studio") {
-    // three's own, kept as it is: it is a Y-up room, which is a quarter turn
-    // from this app's world, and it has looked right since the day materials
-    // landed. Turning it upright would be changing what every existing
-    // document reflects to fix something nobody can see.
+    // three's own Y up room, a quarter turn from this world, kept as it is: turning it upright would change
+    // what every existing document reflects.
     const room = new RoomEnvironment();
     return { scene: room, dispose: () => room.dispose() };
   }
@@ -1090,17 +952,8 @@ async function environmentMap(renderer: THREE.WebGLRenderer, p: Readonly<RenderP
   return environmentMapNow(renderer, p);
 }
 
-/** Put the user's viewport settings on a scene.
- *
- *  ONE writer for all three, because they are one statement about exposure: the
- *  lighting rig and the environment are multiplied by the same brightness, so
- *  they cannot drift into a model lit from one side at one exposure and
- *  reflecting at another.
- *
- *  The environment is built ASYNCHRONOUSLY (a render pass, run a task later)
- *  and the rest is applied at once, so the viewport is never waiting on it
- *  to draw a frame: the model appears flat-lit and gains its reflections a beat
- *  later, which is what it did before this existed. */
+/** One writer, because the rig and the environment share one brightness and must not drift apart. The
+ *  environment builds a task later, so the model appears flat lit first and gains reflections a beat later. */
 function applyRenderPrefs(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
@@ -1115,11 +968,8 @@ function applyRenderPrefs(
   lights.key.intensity = scaled(rig, keyLight.intensity);
   lights.fill.intensity = scaled(rig, fillLight.intensity);
   lights.hemi.intensity = scaled(rig, rig.hemisphere.intensity);
-  // The ground follows the app's palette by default, reading a token off the
-  // document root exactly as the stylesheet does (see themeColors.ts), so a
-  // theme that wants its own 3D ground gets one. The fixed grounds below are
-  // for looking at a PART rather than at the app, so they ignore the theme on
-  // purpose: comparing two finishes needs the same ground both times.
+  // The default ground reads a theme token as the stylesheet does (themeColors.ts). The fixed grounds ignore the
+  // theme on purpose, so two finishes compare on the same ground.
   renderer.setClearColor(
     p.background === "theme" ? themeColor("--viewport-bg", 0x1a1d21) : BACKGROUND_COLOR[p.background],
     1,
@@ -1135,9 +985,7 @@ function applyRenderPrefs(
   const behind = p.envBackground && hdrHashOf(p.environment) !== null;
   if (!behind) scene.background = null;
   void environmentMap(renderer, p).then((tex) => {
-    // Re-checked, not assumed: the setting may have been changed again while the
-    // cubemap was being generated, and writing it then would put back the
-    // environment the user has just moved on from.
+    // Re-checked: the setting may have changed again while the cubemap was being generated.
     const now = renderPrefs();
     if (environmentKey(now) !== want || now.potatoMode) return;
     scene.environment = tex;

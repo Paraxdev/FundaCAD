@@ -1,7 +1,5 @@
-//! What Home learns about document files on disk: names, times and sizes,
-//! never contents. Reached through home_commands.rs rather than the webview fs
-//! scope, which stays narrow. No Tauri in here, so scripts/check-home-disk.sh
-//! can run these tests on Windows, where the app's own test binary cannot start.
+//! What Home learns about documents on disk: names, times and sizes, never contents. Tauri free so
+//! scripts/check-home-disk.sh can run these tests on Windows, where the app's test binary cannot start.
 
 use serde::Serialize;
 use std::time::UNIX_EPOCH;
@@ -50,9 +48,8 @@ pub(crate) fn is_document(name: &str) -> bool {
         .is_some_and(|(stem, ext)| !stem.is_empty() && DOC_EXTS.iter().any(|d| ext.eq_ignore_ascii_case(d)))
 }
 
-/// The documents in `dir` and its subfolders down to LIST_DEPTH, breadth first so a
-/// cut at LIST_CAP keeps the shallow ones. Links are not followed and dot folders are
-/// skipped (version control, sync tool state).
+/// Breadth first down to LIST_DEPTH, so a cut at LIST_CAP keeps the shallow ones. Links are not followed and dot
+/// folders (version control, sync state) are skipped.
 pub fn list_dir(dir: &str) -> Result<ListResult, String> {
     let root = std::path::PathBuf::from(dir);
     if !std::fs::metadata(&root).map_err(|e| e.to_string())?.is_dir() {

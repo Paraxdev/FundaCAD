@@ -1,15 +1,8 @@
-/* ============================================================================
-   MAIN, the stage | the render dock
-   ============================================================================ */
 #main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  /* The single row must be capped at #main's own height. Left implicit it is
-     auto-sized, so the tallest panel's CONTENT set the row height (measured:
-     #main 723px, row 811px) and the browser, viewport and canvas all stretched
-     to 811px and painted 88px down over the timeline, hiding the buttons in the
-     bottom-left. min-height on #main does not help: it bounds #main, not the
-     track inside it. Same reason the columns are minmax(0, 1fr). */
+  /* An implicit row sized to the tallest panel's content (#main 723px, row 811px) and
+     painted over the timeline. min-height on #main bounds #main, not the track. */
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
 }
@@ -26,14 +19,8 @@
   height: 100%;
 }
 
-/* The area-selection rubber band. Fixed, not absolute: it is placed from
-   client coordinates (the viewport works in those throughout) and it is
-   appended to <body>, so an absolutely-positioned one would be offset by
-   whatever the nearest positioned ancestor happened to be.
-
-   The two verdicts are dressed differently, and they have to be, because the
-   difference is only useful while the drag is still running: a solid edge
-   takes what is wholly inside, a dashed one takes anything it touches. */
+/* Fixed, not absolute: placed in client coordinates and appended to <body>. A solid
+   edge takes what is wholly inside, a dashed one anything it touches. */
 .areabox {
   position: fixed;
   z-index: 40;
@@ -46,9 +33,8 @@
   background: rgba(122, 162, 247, 0.06);
 }
 
-/* What the box will take, on the box. Above the band's own z-index so it is
-   never drawn under it, and never a pointer target: it follows the cursor, so a
-   chip that took events would take the pointerup that ends the drag. */
+/* Above the band's z-index so it is never drawn under it. Never a pointer target: it follows
+   the cursor and would take the pointerup that ends the drag. */
 .areachip {
   position: fixed;
   z-index: 41;
@@ -90,11 +76,8 @@
   border-radius: 3px;
 }
 
-/* Frame-rate readout, viewport bottom-right. Deliberately quiet: it is a
-   diagnostic you glance at, not a control. It DOES take pointer events, because
-   a `title` tooltip never fires on a pointer-events:none element, that is the
-   whole reason the readout can explain itself on hover. It sits in the corner
-   and is ~90px wide, so the picking area it costs is negligible. */
+/* Takes pointer events on purpose: a title tooltip never fires on a pointer-events:none
+   element. */
 .fps {
   position: absolute;
   right: var(--s-4);
@@ -106,24 +89,20 @@
     Menlo,
     Consolas,
     monospace;
-  font-variant-numeric: tabular-nums; /* digits stop twitching as the value changes */
+  font-variant-numeric: tabular-nums;
   color: var(--text-dim);
   cursor: default;
   user-select: none;
   z-index: 15;
 }
 
-/* default buttons (used in panels, inspector, etc.) */
 button {
   background: var(--panel-2);
   color: var(--text);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
-  /* The app's default control size, and the one every other button is measured
-     against, .btn in a dialog resolves to the same pair. 6px/11px put this at
-     a ~29px box, which is under the ~32px that reads as comfortably clickable
-     and is why the panels felt packed; one rung up on each axis lands at ~33px
-     without turning a CAD panel into a settings page. */
+  /* The default control size every button is measured against (.btn resolves the same).
+     About 33px tall: 6px/11px gave 29px, under the 32px that reads as clickable. */
   padding: var(--s-3) var(--s-4);
   font-size: 12px;
   font-weight: 500;

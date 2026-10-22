@@ -1,10 +1,5 @@
-//! The JSON Schema each tool advertises for its arguments.
-//!
-//! Written out rather than derived from a Rust struct, and for the reason the
-//! Python server wrote them out: the descriptions ARE the tool. An agent that
-//! has never clicked on anything decides what to send from these sentences, so
-//! they are carried over word for word from the Python MCP server's `server.py`
-//! and the shapes stay the ones a host already knows.
+//! Each tool's argument schema, written by hand because the descriptions are the tool: an agent
+//! decides what to send from them, so they stay word for word those of the Python server.
 
 use rmcp::model::JsonObject;
 use serde_json::{json, Value};
@@ -458,7 +453,7 @@ pub fn export() -> JsonObject {
     )
 }
 
-// --- the ui tools, standalone only -------------------------------------------
+// The ui tools, standalone only.
 
 pub fn ui_open() -> JsonObject {
     object(

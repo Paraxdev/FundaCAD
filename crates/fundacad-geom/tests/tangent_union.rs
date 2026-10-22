@@ -1,11 +1,5 @@
-//! A join whose flat sides only touch a cylinder along a line has to come out
-//! closed. In the claw grabber a blade 10 wide joined onto an r 5 hub, and
-//! OCCT's fuse left the two touch lines on the blade's side faces as INTERNAL
-//! edges: the shell stayed closed and the volume right, but each line bounded
-//! one face and inspect listed it OPEN. The clean after a boolean drops them.
-//!
-//! And a feature that does leave a solid with holes in its skin says so in the
-//! build, since no volume check sees it.
+//! A join whose flat sides only touch a cylinder along a line must come out closed: OCCT's fuse leaves the touch
+//! lines as INTERNAL edges that inspect lists OPEN (the claw grabber's blade on its hub), the clean drops them.
 
 use base64::Engine;
 use fundacad_core::CadDocument;
@@ -140,6 +134,7 @@ fn open_box_brep() -> String {
     base64::engine::general_purpose::STANDARD.encode(out.join("\n") + "\n")
 }
 
+/// No volume check sees holes in a solid's skin, so the build says so.
 #[test]
 fn a_solid_left_open_is_called_out_in_the_build() {
     let doc = json!({"parameters": {}, "features": [

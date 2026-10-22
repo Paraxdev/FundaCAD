@@ -1,11 +1,5 @@
-//! Message framing on the engine worker's stdin and stdout.
-//!
-//! No Python counterpart: the Python engine spoke WebSocket, whose text and binary
-//! messages this mirrors one to one so the app can relay without parsing.
-//!
-//! Each message is `[u32 LE payload_len][u8 kind][payload]`, where
-//! `payload_len` counts the payload only, kind 1 is UTF-8 JSON text and kind 2
-//! a binary reply frame. A payload may not exceed `MAX_PAYLOAD`.
+//! Framing on the engine worker's stdin and stdout: `[u32 LE payload_len][u8 kind][payload]`, kind 1 is UTF-8 JSON
+//! text, kind 2 a binary reply frame. It mirrors WebSocket messages one to one so the app relays without parsing.
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -103,10 +97,8 @@ struct IdOnly {
     id: Option<Value>,
 }
 
-/// The request id a message belongs to: the top-level `id` of a text message,
-/// or of a binary frame's JSON header. `None` when there is none, or it is
-/// null, or the message is malformed. The other fields are skipped without
-/// being built, so a large text reply costs one scan.
+/// The top-level `id` of a text message or of a binary frame's JSON header, `None` when absent, null or malformed.
+/// The other fields are skipped without being built, so a large text reply costs one scan.
 pub fn message_id(msg: &Message) -> Option<Value> {
     let json = match msg {
         Message::Text(s) => s.as_bytes(),

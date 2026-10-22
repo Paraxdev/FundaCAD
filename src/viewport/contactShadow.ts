@@ -1,12 +1,5 @@
-// The soft shadow a part leaves on the ground it stands on.
-//
-// An orthographic depth render of the bodies from below, blurred, is the
-// darkness of a catcher plane at the model floor: dark where a body touches it,
-// fading as the body rises away. The bodies change rarely next to the camera,
-// so it is drawn again only when a key over the casters changes, and a frame
-// pays one transparent quad. With Shadows on, a second quad on the same plane
-// takes the key light's shadow. Both quads have their own materials, nothing
-// here touches a body material.
+// The soft shadow a part leaves on the ground: a blurred orthographic depth render from below, baked again only when
+// the casters' key changes, so a frame pays one transparent quad. Nothing here touches a body material.
 
 import * as THREE from "three";
 import { HorizontalBlurShader } from "three/examples/jsm/shaders/HorizontalBlurShader.js";

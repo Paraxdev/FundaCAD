@@ -1,7 +1,5 @@
-// The unit a glTF, VRML or X3D file is in. Those formats leave it to the
-// reader, the specs say metres and nearly everything that writes them means
-// whatever its own unit was, so each import asks and the last answer is the
-// next default. A per-user preference, not part of any document.
+// The unit of a glTF, VRML or X3D file. The specs say metres but writers rarely mean it, so each import asks
+// and the last answer, a per-user preference, is the next default.
 
 import type { ImportFormat } from "../types";
 import { choose } from "../ui/choice";

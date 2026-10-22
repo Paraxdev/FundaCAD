@@ -1,5 +1,4 @@
-//! The meshed half of a rebuild reply: the builder's bodies handed to the
-//! viewport payload loop in `mesh`, with their face owners in face order.
+//! The meshed half of a rebuild reply, the builder's bodies with their face owners in face order.
 
 use fundacad_protocol::JobResult;
 use serde_json::{Map, Value};

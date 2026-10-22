@@ -37,12 +37,10 @@ impl Watch for EngineWatch<'_> {
     }
 }
 
-/// server.py `_rebuild_job`, without the caches.
 pub fn rebuild_result(doc: &Value, tolerance: f64, known: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     rebuild_with(doc, tolerance, known, watch, None)
 }
 
-/// server.py `_rebuild_job` over `rebuild_cached`.
 pub fn rebuild_result_cached(
     doc: &Value,
     tolerance: f64,
@@ -107,9 +105,8 @@ fn rebuild_with(
     }
 }
 
-/// Faces a mesh pass left plain, as `featureErrors` of the features that
-/// claimed them, so a texture that could not apply raises the error notice
-/// although its feature built.
+/// Faces a mesh pass left plain become `featureErrors` of their features, so a texture that could
+/// not apply raises the error notice although its feature built.
 fn add_pass_errors(fields: &mut Map<String, Value>, failed: Vec<Value>) {
     let errors: Vec<builder::FeatureError> = failed
         .iter()
@@ -202,9 +199,8 @@ mod tests {
         assert_eq!(Value::Object(m), json!({"protocol": 2, "bodies": [], "bbox": null}));
     }
 
-    /// The field report's fillet: three edges meeting at a corner, a radius
-    /// the kernel's own filleter refuses, so it falls back to the lofted
-    /// section blend, seconds of work in one feature.
+    /// The field report's fillet: three edges at a corner, a radius the kernel's filleter refuses, so it
+    /// falls back to the lofted section blend, seconds of work in one feature.
     fn corner_fillet(radius: f64) -> Value {
         let edge = |p: [f64; 3]| json!({"kind": "edge", "by": "nearest", "point": p, "body": "body1"});
         json!({"parameters": {}, "bodyIds": {"f2:0": "body1"}, "features": [
@@ -295,7 +291,7 @@ impl Jobs for GeomJobs {
         if fresh {
             cache.purge(doc);
         }
-        // server.py `_compute_all_job` rebuilds with no known etags, every body full.
+        // No known etags, so every body comes back full.
         let none = Map::new();
         let known = if fresh { &none } else { known };
         rebuild_result_cached(doc, tolerance, known, &EngineWatch(ctx), &mut cache)

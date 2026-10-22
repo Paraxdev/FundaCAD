@@ -1,7 +1,5 @@
-//! The stdio transport end to end: this test binary starts itself as a worker
-//! (`--worker`) and talks to it over real pipes, the way the app does. It is a
-//! GUI subsystem program like the shipped app, which sets up its standard
-//! streams differently from a console one.
+//! The stdio transport end to end: this test binary starts itself as a `--worker` and talks to it over real pipes, as
+//! the app does. It is a GUI subsystem program like the app, whose standard streams are set up differently.
 
 #![windows_subsystem = "windows"]
 

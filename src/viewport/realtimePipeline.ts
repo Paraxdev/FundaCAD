@@ -1,8 +1,5 @@
-// The High tier of the realtime frame: the model drawn on its own into the HDR
-// target, with a prepass of normals, roughness and depth beside it for the screen
-// space effects that read them, and the overlays drawn after the OutputPass on the
-// canvas, so they are never bloomed, blurred or tone mapped twice. The glow mask
-// at the end keeps bloom to glowing faces on either tier.
+// High tier: the model alone into the HDR target with a prepass for the screen space effects, and overlays after
+// the OutputPass so they are never bloomed, blurred or tone mapped twice.
 
 import * as THREE from "three";
 import type { RealtimeQualityPref, ViewMode } from "../ui/renderPrefs";
@@ -30,9 +27,8 @@ export function highRefusal(t: QualityTier): string | null {
   return null;
 }
 
-/** The quality the realtime view runs at for a saved choice. Auto is Standard
- *  until the machine is measured. `reason` is why High is refused on this tier,
- *  whatever was chosen, for the tooltip of the row. */
+/** Auto is Standard until the machine is measured. `reason` is why High is refused on this tier, whatever
+ *  was chosen, for the row's tooltip. */
 export function resolveRealtimeQuality(
   pref: RealtimeQualityPref,
   t: QualityTier,
@@ -43,9 +39,7 @@ export function resolveRealtimeQuality(
 
 export type Stage = "prepass" | "model" | "bokeh" | "bloom" | "output" | "compose";
 
-/** What the viewport knows about a frame and PostChain does not. The loop, a
- *  picture and a screenshot pass it; null is a caller that does not say, which
- *  keeps today's path. */
+/** What the viewport knows about a frame and PostChain does not; null is a caller that does not say. */
 export interface FrameFacts {
   moving: boolean;
   /** X ray, wireframe, stale, peek or a dimmed model behind a sketch. */
@@ -157,12 +151,8 @@ class Twins<T extends THREE.Material> {
   }
 }
 
-/** One render of the scene with some meshes swapped and some hidden, everything
- *  given back in the finally, whatever the draw throws.
- *
- *  Note: a swapped mesh's own draw hook is off for the render. Hooks write the
- *  uniforms of the material they were made for (a section cap's hatch), which a
- *  twin does not have, and the model pass has already run them this frame. */
+/** Note: a swapped mesh's own draw hook is off for the render, since hooks write uniforms a twin lacks
+ *  (a section cap's hatch) and the model pass already ran them this frame. */
 function drawSwapped(
   r: THREE.WebGLRenderer,
   scene: THREE.Scene,
@@ -315,13 +305,8 @@ function depthTwin(): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({ colorWrite: false });
 }
 
-/** The overlays over the finished model picture on the canvas. The model's meshes
- *  are drawn again as depth only twins, with their clipping and stencil, so an
- *  overlay is hidden behind the model exactly as on the direct path.
- *
- *  Note: with the full draw mask on purpose. Lights live on layer 0 and three
- *  culls them by the camera mask, so a mask without layer 0 draws lit gizmos dark
- *  and compiles a second, unlit, program for each of their materials. */
+/** Note: the full draw mask on purpose. Lights on layer 0 are culled by the camera mask, so without it
+ *  gizmos draw dark and compile a second, unlit program per material. */
 export class OverlayCompose {
   private twins = new Twins(depthTwin);
 
@@ -412,11 +397,8 @@ function glowTwin(): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial();
 }
 
-/** The bloom's mask: glowing faces white, every other solid body black, depth
- *  tested so a body in front hides a glow behind it.
- *
- *  Note: a lit white face reaches the luminance of a glowing one (2.55 against
- *  3.16 linear at bloom 0.4), so no threshold alone can keep it from blooming. */
+/** Depth tested, so a body in front hides a glow. Note: a lit white face reaches a glowing one's luminance
+ *  (2.55 against 3.16 linear at bloom 0.4), so no threshold alone keeps it from blooming. */
 export class GlowMask {
   readonly target = new THREE.WebGLRenderTarget(1, 1, { samples: 0, depthBuffer: true });
   private twins = new Twins(glowTwin);

@@ -1,5 +1,4 @@
-//! Safe calls into the builder's OpenCASCADE operations (opencascade-sys
-//! `builder_ops`), over the `Shape` the rest of the crate uses.
+//! Safe calls into the builder's OpenCASCADE operations, over the crate's `Shape`.
 
 use cxx::UniquePtr;
 use opencascade::primitives::Shape;
@@ -163,9 +162,8 @@ pub fn volume(s: &Shape) -> f64 {
     ffi::bo_volume(s.raw())
 }
 
-/// `volume` integrated to a millionth of the body. The quick one misses by about
-/// a percent on lofted spline faces, so a verdict that hangs on a small change
-/// is checked with this before it refuses anything.
+/// `volume` integrated to a millionth of the body. The quick one misses by about a percent on lofted
+/// spline faces, so a verdict that hangs on a small change checks with this before refusing.
 pub fn volume_precise(s: &Shape) -> f64 {
     ffi::bo_volume_precise(s.raw())
 }
@@ -180,9 +178,8 @@ pub fn bbox(s: &Shape) -> Option<[f64; 6]> {
     ffi::bo_bbox(s.raw(), true, &mut out).then_some(out)
 }
 
-/// A box from the B-rep's own geometry, never a triangulation, so the same
-/// shape always gets the same one. Looser than `bbox` on a B-spline, and
-/// milliseconds where `bbox` of an import that was never meshed is seconds.
+/// From the B-rep's own geometry, never a triangulation, so stable for a shape. Looser than `bbox` on
+/// a B-spline, but milliseconds where `bbox` of a never meshed import is seconds.
 pub fn coarse_bbox(s: &Shape) -> Option<[f64; 6]> {
     let mut out = [0.0; 6];
     matches!(opencascade_sys::face_query::FQ_bbox(s.raw(), false, &mut out), Ok(true)).then_some(out)
@@ -195,9 +192,8 @@ thread_local! {
     static DIAGONALS: Remembered<f64> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// An exact box of a B-spline body takes 200 ms, and a blend asks for the same
-/// body's again with every selector it matches and every retry that fails. The
-/// shapes are held, so a freed one's address is never read as another's.
+/// An exact B-spline box takes 200 ms and a blend asks again per selector and retry. The shapes are
+/// held, so a freed one's address is never read as another's.
 fn remembered<T: Copy>(
     memo: &'static std::thread::LocalKey<Remembered<T>>,
     s: &Shape,
@@ -229,7 +225,6 @@ pub fn remember_copy(from: &Shape, to: &Shape) {
     share(&DIAGONALS, from, to);
 }
 
-/// `bbox`, remembered for the last few shapes.
 fn bbox_remembered(s: &Shape) -> Option<[f64; 6]> {
     remembered(&BOXES, s, || bbox(s))
 }
@@ -272,9 +267,8 @@ pub fn outline_center(face: &Shape) -> Option<[f64; 3]> {
 /// `[umin, umax, vmin, vmax]` of a face's outer boundary along the unit
 /// directions `u` and `v`, measured on the curves, not a mesh of them.
 pub fn outline_extent(face: &Shape, u: [f64; 3], v: [f64; 3]) -> Option<[f64; 4]> {
-    // A copy without the mesh: `axial_extent` bounds a meshed edge by its
-    // polygon grown by the mesh deflection, so a face drawn once would measure
-    // larger than the same face built fresh.
+    // A copy without the mesh: `axial_extent` bounds a meshed edge by its polygon grown by the
+    // deflection, so a face drawn once would measure larger than the same face built fresh.
     let wire = outer_wire(face)?.deep_copy(true, false).ok()?;
     let (u0, u1) = axial_extent(&wire, [0.0; 3], u)?;
     let (v0, v1) = axial_extent(&wire, [0.0; 3], v)?;
@@ -296,9 +290,8 @@ pub fn void_count(s: &Shape) -> i32 {
     ffi::bo_void_count(s.raw())
 }
 
-/// Edges of the shape's solids that bound only one face. Zero for a closed
-/// solid; anything else is a hole in its skin that the volume does not show.
-/// A line drawn inside a face, as an imprint leaves, is not one.
+/// Edges of the solids that bound only one face, a hole in the skin the volume does not show.
+/// Zero for a closed solid. A line drawn inside a face, as an imprint leaves, is not one.
 pub fn open_edge_count(s: &Shape) -> usize {
     usize::try_from(ffi::bo_open_edge_count(s.raw())).unwrap_or(0)
 }
@@ -380,9 +373,8 @@ pub fn rotated_about(s: &Shape, origin: [f64; 3], dir: [f64; 3], deg: f64) -> KR
     )
 }
 
-/// `s` turned by the rotation whose columns `x` and `z` are where the world x
-/// and z axes go, then shifted by `shift`. Only the location changes, so the
-/// moved body shares its geometry and triangulation with the original.
+/// The rotation's columns `x` and `z` are where the world x and z axes go. Only the location
+/// changes, so the moved body shares geometry and triangulation with the original.
 pub fn rigid_moved(s: &Shape, x: [f64; 3], z: [f64; 3], shift: [f64; 3]) -> KResult<Shape> {
     // Mated flush with no offset or angle, a world frame onto (shift, z, x) is
     // exactly the rigid move.
@@ -579,18 +571,14 @@ pub fn boolean_op(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Sha
     Ok(out)
 }
 
-/// booleans.py `_serial_bool`: with the pick fuzz, cleaned. Python forced it
-/// serial because OCP's parallel BOP was 5x slower on many glyph tools; OCCT
-/// 7.8.1 here is 3x faster in parallel on those, and gives the same bytes on
-/// the golden corpus.
+/// With the pick fuzz, cleaned. Runs parallel: OCCT 7.8.1 is 3x faster that way on many glyph
+/// tools and gives the same bytes on the golden corpus.
 pub fn serial_bool(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Shape> {
     serial_bool_known(base, tools, kind, &[]).map(|(s, _)| s)
 }
 
-/// `serial_bool` handed the operands' signed volumes, the base's then each
-/// tool's, so the plausibility check does not integrate them again; empty
-/// measures them. Also gives the result's signed volume when the clean left
-/// the checked result exactly as it was.
+/// `serial_bool` given the operands' signed volumes, base then each tool, so the check skips
+/// integrating them; empty measures them. Gives the result's volume when the clean left it as is.
 pub fn serial_bool_known(
     base: &Shape,
     tools: &[&Shape],
@@ -631,10 +619,8 @@ pub fn serial_bool_known(
     Ok((out, unchanged.then_some(checked_vol)))
 }
 
-/// A test hook, nothing in the engine calls it: the check `serial_bool` holds
-/// its own result to, for a result made elsewhere. `result` when it could be
-/// what `kind` gives from these operands, the boolean done again when not, an
-/// error when that is no better.
+/// Test hook only: the check `serial_bool` holds its own result to. `result` when `kind` could give
+/// it from these operands, else the boolean redone, an error when that is no better.
 #[doc(hidden)]
 pub fn bool_checked(result: &Shape, base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<(Shape, Rung)> {
     let t = compound(tools.iter().copied());
@@ -672,7 +658,6 @@ fn operand_fuzz(base: &Shape, tools: &[&Shape]) -> f64 {
     pick_fuzz(ext)
 }
 
-/// the Python engine's `pick_fuzz.py`.
 pub fn pick_fuzz(extent_mm: Option<f64>) -> f64 {
     const FLOOR_MM: f64 = 1e-6;
     const CEILING_MM: f64 = 1e-3;
@@ -685,9 +670,8 @@ pub fn pick_fuzz(extent_mm: Option<f64>) -> f64 {
     }
 }
 
-/// The fuzz where sketch curves split the model. A corner the app snapped to a
-/// model vertex arrives up to a few 1e-5 mm off it whatever the part's size, and
-/// an exact split leaves an edge that short, so anything within a sliver merges.
+/// A corner the app snapped to a model vertex arrives up to a few 1e-5 mm off whatever the part's
+/// size, and an exact split leaves an edge that short, so anything within a sliver merges.
 pub fn sketch_fuzz(extent_mm: Option<f64>) -> f64 {
     pick_fuzz(extent_mm).max(crate::mesh::edges::SLIVER_EDGE_MM)
 }
@@ -746,9 +730,8 @@ pub fn edge_spline(points: &[[f64; 2]]) -> KResult<Shape> {
     run("GeomAPI_Interpolate", || format!("{} points {points:?}", points.len()), || ffi::bo_edge_spline(&flat))
 }
 
-/// The degree and distinct knots a control-point B-spline is built with, the rule
-/// src/sketch/bspline.ts evaluates: the degree lowered to fit the poles, stored
-/// knots when they are well formed, else uniform 0, 1, 2, ...
+/// The rule src/sketch/bspline.ts evaluates: the degree lowered to fit the poles, stored knots
+/// when they are well formed, else uniform 0, 1, 2, ...
 pub fn bspline_knots(n: usize, degree: Option<f64>, closed: bool, stored: Option<&[f64]>) -> (usize, Vec<f64>) {
     let want = degree.filter(|d| d.is_finite()).map_or(3.0, |d| d.round().max(1.0));
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -852,9 +835,8 @@ pub fn split_profile_cells(
     ))
 }
 
-/// The model edges `split_profile_cells` cuts along, as polylines within
-/// `deflection`: those reaching the box of the `reach` points, else over the
-/// whole plane. None when an edge will not sample.
+/// The model edges `split_profile_cells` cuts along as polylines within `deflection`: those reaching
+/// the box of the `reach` points, else the whole plane. None when an edge will not sample.
 pub fn profile_cuts(
     shapes: &[&Shape],
     origin: [f64; 3],
@@ -936,9 +918,8 @@ pub fn prism_taper(face: &Shape, d: [f64; 3], taper: f64, plane: &Frame, dprism:
     )
 }
 
-/// `s` with every vertex within `tol` of the axis moved onto it and every arc
-/// centred within `tol` of it rebuilt centred on it, None when nothing needed
-/// that. See `bo_snap_to_axis`.
+/// Vertices within `tol` of the axis moved onto it and arcs centred within `tol` rebuilt centred
+/// on it, None when nothing needed that. See `bo_snap_to_axis`.
 pub fn snap_to_axis(s: &Shape, origin: [f64; 3], dir: [f64; 3], tol: f64) -> Option<Shape> {
     let [ox, oy, oz] = origin;
     let [dx, dy, dz] = dir;

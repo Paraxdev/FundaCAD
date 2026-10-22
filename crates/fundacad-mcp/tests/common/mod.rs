@@ -1,9 +1,5 @@
-//! What the integration suites share: an engine that answers whatever the test
-//! wants, and the MCP server driven over its real stdio protocol.
-//!
-//! The Python suites stubbed `srv.link`, a Python object. Here the seam is a
-//! socket, so the stub is a socket too, which costs a few lines and buys the
-//! link, the framing and the reply matching being under test as well.
+//! What the integration suites share: a fake engine on a real socket, so the link, framing and reply matching
+//! are under test too, and the MCP server driven over its real stdio protocol.
 
 #![allow(dead_code)]
 
@@ -23,11 +19,8 @@ pub fn free_port() -> u16 {
     l.local_addr().expect("bound").port()
 }
 
-/// One call the fake engine took: the op, its payload, and what the file the
-/// payload named held AT THE TIME. That last part is the only moment it exists
-/// for an inline import: by the time the tool returns the temporary file has
-/// been deleted, so a test that looked afterwards would find nothing and be
-/// unable to tell a correct write from no write at all.
+/// The op, its payload, and what the file the payload named held AT THE TIME:
+/// an inline import's temporary file is deleted by the time the tool returns.
 #[derive(Debug, Clone)]
 pub struct Call {
     pub op: String,
@@ -46,8 +39,7 @@ pub struct FakeEngine {
 }
 
 impl FakeEngine {
-    /// Serve `answer` on a free loopback port. The handler gets the op and the
-    /// payload and returns the reply body; `id` is filled in here.
+    /// The handler gets the op and the payload and returns the reply body; `id` is filled in here.
     pub fn start(answer: impl Fn(&str, &Map<String, Value>) -> Value + Send + Sync + 'static) -> FakeEngine {
         // Bound here, before returning, so a client that connects straight
         // away never races the listener into existence.
@@ -149,8 +141,6 @@ pub fn is_error(result: &rmcp::model::CallToolResult) -> bool {
     result.is_error.unwrap_or(false)
 }
 
-// --- the server as a process -------------------------------------------------
-
 /// The built `fundacad-mcp` binary, beside the test binary.
 pub fn mcp_binary() -> PathBuf {
     let exe = std::env::current_exe().expect("a test binary has a path");
@@ -164,16 +154,8 @@ pub fn engine_binary() -> PathBuf {
     profile.join(if cfg!(windows) { "fundacad-engine.exe" } else { "fundacad-engine" })
 }
 
-/// A session file nothing can find, so a test on a machine with FundaCAD open
-/// never attaches to it.
-///
-/// NO TEST MAY FIND THE RUNNING APP. Discovery reads a session file the app
-/// publishes in its app data directory, so a server built by a test on such a
-/// machine attaches to it, and every tool that changes the document then PUSHES
-/// that change into the document on the user's screen. Running the Python suite
-/// once with the app open put six features into it, one undo step each: the
-/// tests passed their own assertions against the app's document rather than
-/// their own, and the damage was in another process.
+/// A session file nothing can find. NO TEST MAY FIND THE RUNNING APP: a server that attached would push every
+/// change into the document on the user's screen, as one Python suite run did with six features.
 pub fn no_app() -> PathBuf {
     std::env::temp_dir().join("fundacad-no-app-in-tests.json")
 }
@@ -308,12 +290,8 @@ pub fn env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
     pairs.iter().map(|(k, v)| ((*k).to_string(), (*v).to_string())).collect()
 }
 
-// --- a real engine, and the window's half of a live session -------------------
-
-/// `fundacad-engine --ws` on a port of its own, and the session file that
-/// advertises it. The file lives in a temporary directory and the MCP server is
-/// pointed at it by environment variable, so no test ever writes into the app
-/// data directory a real session would use.
+/// `fundacad-engine --ws` on its own port. The session file advertising it lives in a temp dir the server is
+/// pointed at by env var, so no test writes into the real app data directory.
 pub struct RealEngine {
     pub port: u16,
     pub token: String,
@@ -362,11 +340,8 @@ impl RealEngine {
         let _ = std::fs::remove_file(&self.session);
     }
 
-    /// The environment an MCP host would give the server.
-    ///
-    /// No token in it, deliberately. An explicit token takes the override path,
-    /// which would attach without exercising discovery at all, the thing these
-    /// tests exist to check.
+    /// No token, deliberately: an explicit token takes the override path
+    /// and would skip the discovery these tests check.
     pub fn mcp_env(&self, mode: &str, advertised: bool) -> BTreeMap<String, String> {
         let session = if advertised { self.session.clone() } else { self.dir.join("nothing-here.json") };
         let mut env = BTreeMap::new();
@@ -396,9 +371,8 @@ pub fn a_document(n: usize, tag: &str) -> Value {
                              .collect::<Vec<Value>>()})
 }
 
-/// What `src/live/liveSession.ts` does, in the fewest lines that keep its
-/// rules: publish and collect in one call, apply through the document, raise
-/// the revision on every change, and remember what was applied.
+/// `src/live/liveSession.ts` in the fewest lines that keep its rules: publish and collect in one call, apply
+/// through the document, raise the revision on every change, remember what was applied.
 pub struct Host {
     pub socket: fundacad_mcp::link::Socket,
     pub rev: i64,

@@ -1,11 +1,4 @@
 <script setup lang="ts">
-// Below the controller's declared settings: which pad is being read, and what
-// each button does.
-//
-// A button binds to any command the palette offers, by the same id, so this
-// list can never name a command the app does not have, and a command a plugin
-// adds shows up here the moment that plugin is on.
-
 import { computed, onUnmounted, reactive } from "vue";
 import {
   BINDABLE,
@@ -30,7 +23,8 @@ function bind(i: number, v: string) {
   setGamepadConfig({ buttons: { [i]: v } });
 }
 
-/** The palette's commands, grouped the way the palette groups them. */
+// A button binds to a palette command by its id, so it never names a command the app lacks, and a command a plugin
+// adds shows up the moment that plugin is on. Grouped the way the palette groups them.
 const groups = computed(() => {
   const out = new Map<string, { id: string; label: string }[]>();
   const seen = new Set<string>();

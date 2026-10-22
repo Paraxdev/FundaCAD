@@ -1,10 +1,5 @@
-//! The MCP server against the Python server's frozen transcript.
-//!
-//! tests/golden/mcp_parity.golden.json is what `diff_servers.py` saw the Python
-//! server answer to tools/parity.jsonl, recorded by
-//! the Python engine's `freeze_goldens.py` before the Python server was deleted. This
-//! replays the script on one fresh private server and wants every reply word
-//! for word.
+//! Replays tools/parity.jsonl on a fresh private server and wants every reply word for word as in the
+//! Python server's frozen transcript, tests/golden/mcp_parity.golden.json.
 
 mod common;
 

@@ -1,9 +1,5 @@
-// Procedural surfaces live in the Realtime fragment shader, which the tracer
-// does not run, so each one is evaluated once at a few points per triangle and
-// averaged into the mirror's vertex colours. The bump is dropped, roughness
-// keeps its mean offset per slot. A CAD flat face has only four vertices, so a
-// point sample at each vertex would alias; area weighted triangle samples give
-// the face its average tint instead.
+// The tracer does not run the Realtime shader, so each surface is averaged into the mirror's vertex colours, bump
+// dropped. A CAD flat face has four vertices, so area weighted triangle samples stand in for per vertex ones.
 
 import * as THREE from "three";
 import { surfaceBakeShader, type SurfaceBakeShader } from "../proceduralSurface";

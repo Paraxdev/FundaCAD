@@ -1,13 +1,3 @@
-/* ============================================================================
-   Utilities
-
-   (This section used to be headed "SKETCH CONTEXTUAL TOOLBAR + utilities" and
-   led with #sketchbar / .sketchbar-label / .sketchbar-sep. Those were dead,
-   no element in index.html, no reference anywhere in src/, so they were
-   dropped when the stylesheet was split into partials. The sketch contextual
-   toolbar is the RIBBON in sketch context (see _ribbon.scss) plus the docked
-   palette (_palette.scss); this was an earlier design that left its CSS behind.)
-   ============================================================================ */
 .hidden {
   display: none !important;
 }
@@ -23,7 +13,6 @@ button.finish:hover {
   border-color: rgba(74, 208, 125, 0.7);
 }
 
-/* ---- prompt toast (viewport instruction banner) ---- */
 .prompt {
   position: absolute;
   top: var(--s-5);
@@ -40,9 +29,7 @@ button.finish:hover {
   backdrop-filter: blur(14px) saturate(1.3);
   border: 1px solid var(--line-strong);
   color: var(--text);
-  /* Roomier than any other pill in the app, and that is the point: this is the
-     banner that tells you what the armed tool wants next, so it has to read as
-     an announcement rather than as another piece of chrome. */
+  /* Roomier than any other pill: it announces what the armed tool wants next. */
   padding: var(--s-3) var(--s-5);
   border-radius: var(--r-pill);
   font-size: 12px;
@@ -73,14 +60,8 @@ button.finish:hover {
   }
 }
 
-/* ---- on-canvas dimension input ----
-   Left off the spacing scale on purpose, like the sketch dimension labels in
-   _browser.scss and for the same reason: `position: fixed` with coordinates
-   computed from a projected 3D point, so its box is sized against the geometry
-   it is floating over rather than against the chrome's rhythm. It is also the
-   most keyboard-driven surface in the app, it appears under the cursor and is
-   dismissed with Enter or Esc, so growing it to look tidier costs picking area
-   on the model and buys nothing. */
+/* Off the spacing scale like the sketch dimension labels in _browser.scss: placed from a
+   projected 3D point, so sized against the geometry, not the chrome. */
 .dim-input {
   position: fixed;
   display: flex;
@@ -88,25 +69,14 @@ button.finish:hover {
   z-index: 200;
   pointer-events: auto;
 }
-/* A box that places itself in the free space (the Hole box, about 560px wide)
-   wraps its fields to a second row in a window narrower than it, instead of
-   cutting the last of them off. */
+/* A box placed in free space (the Hole box, about 560px) wraps its fields in a narrower
+   window instead of cutting the last off. */
 .dim-input.fits-window {
   flex-wrap: wrap;
   max-width: calc(100vw - 2 * var(--s-3));
 }
-/* The engine's own sentence about why the value on screen cannot be built,
-   under the boxes that hold it.
-   
-   Here rather than in the status bar, which is where it used to go and is at the
-   far edge of the window from a cursor that is mid-drag. And not a tooltip: a
-   tooltip needs a hover the hand cannot spare while it is holding a handle.
-   
-   Wide enough for a real sentence. These messages name the measurement that is
-   wrong and the one it is wrong against, which is what makes them worth showing
-   at all, and truncating one to fit leaves the half that says "cannot".
-   Hung under the row rather than in it, so a long one wraps at its own cap
-   instead of widening the box and pushing it off the arrow it belongs to. */
+/* The engine's reason sits by the cursor, not in the far status bar or a tooltip the dragging hand cannot
+   hover. Never truncate it, the cut leaves the half that says "cannot". Hung under the row so it wraps. */
 .dim-problem {
   position: absolute;
   top: calc(100% + var(--s-1));
@@ -125,10 +95,8 @@ button.finish:hover {
   padding: var(--s-1) var(--s-2);
   box-shadow: var(--shadow-2);
 }
-/* Every field turns, not the one last touched. The kernel refuses a FEATURE:
-   "3 mm tall but climbs only 1 mm each turn" is about the pitch and the angle
-   together, and the user is the one who knows which of the two they would
-   rather move. */
+/* Every field turns: the kernel refuses a feature, not a field, and the user picks which
+   value to move. */
 .dim-bad .dim-field {
   border-color: var(--error);
   background: var(--error-tint);
@@ -136,10 +104,8 @@ button.finish:hover {
 .dim-bad .dim-field input {
   color: var(--error);
 }
-/* One row: NAME [value] UNIT. The name and the unit are chrome at the ends and
-   the value is the thing, which is why they are on one line rather than the
-   label sitting above in its own tier, the box hangs next to the cursor over
-   the model and every pixel of height is picking area given away. */
+/* One row, NAME [value] UNIT: the box hangs over the model, and every pixel of height is
+   picking area given away. */
 .dim-field {
   display: flex;
   align-items: center;
@@ -155,8 +121,7 @@ button.finish:hover {
   padding: 3px var(--s-1);
   box-shadow: var(--shadow-2);
 }
-/* Typing is what turns the readout into an INPUT. Until then the box is
-   something the drag is writing to and the user is only watching. */
+/* Typing turns the readout into an input; until then the drag writes to it. */
 .dim-field.typed {
   border-color: var(--accent);
   background: var(--panel-2);
@@ -165,8 +130,8 @@ button.finish:hover {
   flex: none;
 }
 .dim-field input {
-  /* width is set inline, from the content, a formula must not be typed into a
-     box sized for three digits */
+  /* Width is set inline from the content, so a formula never meets a box sized for three
+     digits. */
   min-width: 0;
   border: none;
   background: none;
@@ -183,8 +148,8 @@ button.finish:hover {
 .dim-field input:focus {
   outline: none;
 }
-/* The unit is a button: clicking it changes what the field is showing without
-   retyping the number. It has to read as pressable at 9px, hence the border. */
+/* A button that changes the shown unit without retyping; the border makes it read as
+   pressable at 9px. */
 .dim-unit {
   flex: none;
   border: 1px solid var(--line);
@@ -228,7 +193,6 @@ button.finish:hover {
 .dim-unit-item.active {
   color: var(--accent);
 }
-/* visible confirm/cancel on the heads-up input (Enter/Esc equivalents) */
 .dim-btn {
   align-self: stretch;
   width: 26px;
@@ -238,16 +202,12 @@ button.finish:hover {
   font-weight: 700;
   cursor: pointer;
   box-shadow: var(--shadow-2);
-  /* Explicit, because these hold an <svg stroke="currentColor"> and a <button>
-     does NOT inherit colour, it defaults to the UA's `buttontext`, which on a
-     dark surface resolved to almost the background and drew the confirm/cancel
-     marks as two empty boxes. Text glyphs got away with it; an icon does not. */
+  /* A <button> does not inherit colour, and UA buttontext drew the currentColor svg
+     marks as empty boxes on a dark surface. */
   color: var(--text);
 }
-/* A mode, not a verb, so it is wider than the 26px icon buttons and carries a
-   word. Off is the same quiet box as the rest of the cluster; on is the accent,
-   because the whole reason it is here is to be readable at a glance while the
-   eye is on the number beside it. */
+/* A mode, not a verb, so wider than the icon buttons and with a word. On is the accent,
+   readable at a glance beside the number. */
 .dim-btn.dim-toggle,
 .dim-btn.dim-direction {
   width: auto;
@@ -288,7 +248,7 @@ button.finish:hover {
   background: var(--error-tint);
 }
 
-/* ---- fillet profile, a live section glyph in the heads-up row ---- */
+/* The fillet profile, a live section glyph in the heads-up row. */
 .profile-chip-wrap {
   position: relative;
   display: flex;
@@ -486,7 +446,6 @@ button.finish:hover {
   color: var(--text-mute);
 }
 
-/* ---- toast notifications (bottom-center, above the timeline) ---- */
 .toast-stack {
   position: fixed;
   left: 50%;
@@ -529,8 +488,7 @@ button.finish:hover {
 }
 .toast-action {
   flex: 0 0 auto;
-  /* Badge height but button width: it has to stay short enough not to grow the
-     toast, and wide enough to be an obvious target for a one-shot Undo. */
+  /* Badge height so the toast does not grow, button width so Undo is easy to hit. */
   padding: var(--s-1) var(--s-4);
   border-radius: var(--r-sm);
   border: 1px solid var(--accent);
@@ -553,11 +511,8 @@ button.finish:hover {
   transition: opacity 0.18s var(--ease);
 }
 
-/* Shared look for the app's <select>s. `appearance: none` is the load-bearing
-   part: without it the engine draws its own button face and simply ignores
-   background/color, which is exactly how the Units control ended up light. The
-   arrow has to be redrawn once appearance is off, so it comes in as a background
-   image; keep the right padding clear of it. */
+/* Without appearance: none the engine ignores background and color. The arrow is then
+   redrawn as a background image, keep the right padding clear of it. */
 .units select,
 .params-row select {
   appearance: none;
@@ -567,16 +522,14 @@ button.finish:hover {
   background-position: right 7px center;
   background-size: 9px 6px;
 }
-/* The popup list is a native menu. color-scheme above is what darkens it on
-   engines that honour it; these are belt and braces for the ones that read
-   option colours instead. */
+/* A native menu: color-scheme darkens it where honoured, these cover engines that read
+   option colours. */
 .units select option,
 .params-row select option {
   background: var(--panel-2);
   color: var(--text);
 }
 
-/* ---- unit selector in the top bar ---- */
 .units {
   display: flex;
   align-items: center;
@@ -592,9 +545,7 @@ button.finish:hover {
   color: var(--text);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
-  /* Field size, and the same 22px right-hand exception as .params-row: that
-     number is clearance for the arrow drawn as a background image above, so it
-     is tied to `background-position`/`background-size`, not to the scale. */
+  /* The same 22px arrow clearance as .params-row, tied to the background image. */
   padding: var(--s-2) 22px var(--s-2) var(--s-3);
   font: inherit;
   font-size: 12px;

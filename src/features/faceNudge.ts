@@ -1,15 +1,5 @@
-// Where the drag handle stands on a selected FACE, and what grabbing it does.
-//
-// The mirror of edgeNudge.ts: same arrow, same loop (selectionNudge.ts), same
-// one-press gesture, pointed along the face normal and handing over to
-// PressPullTool instead of EdgeFeatureTool.
-//
-// The anchor and the normal come from viewport.selectedFacesForPressPull(),
-// which is the SAME call PressPullTool.start() makes off the same selection.
-// That is not laziness, it is the correctness argument: the tool arms inside
-// the pointerdown that grabbed this handle, and if the two derived their
-// geometry independently the arrow would jump the instant the user committed to
-// the drag. One source, no divergence possible.
+// Where the drag handle stands on a selected face, the mirror of edgeNudge.ts handing over to PressPullTool. The
+// anchor and normal come from viewport.selectedFacesForPressPull(), the call the tool makes, so the arrow cannot jump.
 
 import * as THREE from "three";
 import type { NudgePlacement } from "./selectionNudge";
@@ -25,21 +15,9 @@ export interface FacePreselection {
   lead?: RoundFace | null;
 }
 
-/** The placement for a face selection, or null when there is none.
- *
- *  A multi-face selection gets ONE handle, standing on the first face and
- *  pointing along its normal, again matching the tool, which pushes every
- *  selected face by the one distance measured along that same first normal,
- *  or away from the axis when the first face is round, since a whole slot
- *  picked face by face resizes as that face does.
- *
- *  On a round face the arrow points AWAY FROM THE AXIS rather than along the
- *  face normal, because the drag it arms is a resize. Away from the axis on a
- *  bore as well as a boss: pulling the handle outward means a bigger hole and a
- *  bigger shaft alike, and the difference between them is a sign the tool
- *  applies on the way to the kernel, not a direction the user has to think
- *  about. The face normal is not merely unhelpful here, on a closed cylinder it
- *  is the average of normals that cancel, so it is not a direction at all. */
+/** Several faces get one handle on the first face, as the tool measures along that first normal. On a round face it
+ *  points away from the axis, bore or boss alike, since the drag is a resize and a closed cylinder's averaged normal
+ *  is not a direction. */
 export function faceNudgePlacement(
   pre: FacePreselection | null,
   onGrab: (clientX: number, clientY: number) => void,
@@ -49,11 +27,8 @@ export function faceNudgePlacement(
   if (axis.lengthSq() < 0.5) return null; // degenerate normal, nothing to point along
   return {
     anchor: pre.anchor.clone(),
-    // Fixed, unlike the edge handle's: a face's normal is a property of the
-    // geometry, so orbiting must NOT swing the arrow. Pointing outward is also
-    // the honest default, the drag starts at zero and pulling material out is
-    // what the arrow is inviting; pushing in is the same gesture reversed, and
-    // the tool turns the arrow red and flips it when the value goes negative.
+    // Fixed, unlike the edge handle's: a face's normal is geometry, so orbiting must not swing it. The tool turns the
+    // arrow red and flips it when the value goes negative.
     axis: () => axis,
     grab: onGrab,
   };

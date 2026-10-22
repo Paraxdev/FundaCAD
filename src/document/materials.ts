@@ -1,32 +1,7 @@
-// Materials: what a body is made of, as far as the picture is concerned.
-//
-// WHAT THIS IS AND IS NOT. A material here is APPEARANCE, a colour and a
-// finish: how matt it is, how metallic, how much light goes through it. It is
-// not a physical property (no density, no modulus, nothing computes a mass from
-// it), and it is not geometry: assigning one changes what the viewport draws and
-// nothing else, so a document with every material deleted rebuilds
-// byte-identically to one that never had any.
-//
-// WHY IT IS NOT THE FILAMENT PALETTE. The document already carries a `palette`
-// of up to four slots, and those mean "make this part from filament N".
-// That is a manufacturing instruction, which is why it is capped at four and why the multi-colour
-// capability owns it. A material library has neither cap nor machine, is about
-// what a part LOOKS like, and is the thing an imported assembly's own colours
-// land in. They coexist: a body can carry both, and where it does the palette
-// slot is preferred on screen, because a slot is a deliberate choice about a real
-// print and a material is usually whatever the file said.
-//
-// This module is the pure half: no store, no Vue, no DOM, no file system. What
-// a material is, what its defaults are, how one is read back from a library file
-// somebody else wrote, and how an arbitrary colour finds the closest one.
+// Materials are appearance only (colour and finish): no mass, no geometry, so deleting them all rebuilds identically.
+// Unlike the four slot filament `palette`, a manufacturing choice that wins on screen, they have no cap and no machine.
 
-/** One material. Everything but id/name/color is optional and absent means the
- *  app's own default finish (see FINISH below), so the common case, a colour
- *  with nothing else said about it, is three fields on disk. */
-/** A procedural surface pattern on a material: noise, scratches, brushed streaks
- *  or cellular wear, computed in the shader (viewport/proceduralSurface.ts) and
- *  driving roughness, a bump and a colour tint. Triplanar, so it needs no UVs.
- *  The eventual node editor produces a richer form of this. */
+// Procedural pattern computed in the shader (viewport/proceduralSurface.ts), triplanar so it needs no UVs.
 export interface SurfaceSpec {
   kind: "noise" | "scratches" | "brushed" | "voronoi" | "wave";
   scale: number; // feature size in mm
@@ -37,15 +12,9 @@ export interface SurfaceSpec {
   colorAmount?: number; // 0..1
 }
 
-/** One node of a material's surface graph, the general form the node editor
- *  produces. A generator (noise/scratches/brushed/voronoi) reads world space and
- *  gives a float; `fresnel` gives a float that rises at grazing angles (edge
- *  wear, rim); `ramp` turns a float into a colour (two stops); `colorramp` maps a
- *  float through many colour stops; `mix` blends two floats; `math` combines two
- *  floats (multiply/add/min/max/pow); `output` is the sink with roughness / bump
- *  / colour ports. Params are baked into the compiled shader (numbers, or
- *  "#rrggbb"; a colorramp keeps its stops as a "pos:hex;..." string); `in` wires
- *  an input port to another node's id. See viewport/proceduralSurface.ts. */
+// A surface graph node (see viewport/proceduralSurface.ts). Generators read world space and give a float, `fresnel`
+// rises at grazing angles, `ramp`/`colorramp` map a float to colour, `mix`/`math` combine floats, `output` is the sink.
+// Params are baked into the shader (numbers, "#rrggbb", a colorramp's "pos:hex;..." stops); `in` wires port to node id.
 export interface SurfaceNode {
   id: string;
   type:
@@ -62,93 +31,67 @@ export interface SurfaceNode {
     | "output";
   params?: Record<string, number | string>;
   in?: Record<string, string>;
-  /** Canvas position in the node editor. Layout only, ignored by the compiler
-   *  and by graphKey, so dragging a node never recompiles the shader. */
+  // Layout only, ignored by the compiler and graphKey, so dragging a node never recompiles the shader.
   x?: number;
   y?: number;
 }
 
 export interface SurfaceGraph {
   nodes: SurfaceNode[];
-  output: string; // id of the output node
+  // Id of the output node.
+  output: string;
 }
 
+// Everything but id, name and color is optional, absent meaning the default FINISH, so a plain colour is three fields.
 export interface MaterialDef {
   id: string;
   name: string;
-  /** "#rrggbb", lower case. The one field the viewport always uses. */
+  // "#rrggbb", lower case.
   color: string;
-  /** 0..1. How metallic: 0 is a dielectric (plastic, paint), 1 is bare metal. */
+  // 0..1, 0 is a dielectric (plastic, paint), 1 is bare metal.
   metalness?: number;
-  /** 0..1. How rough: 0 is a mirror, 1 is chalk. */
+  // 0..1, 0 is a mirror, 1 is chalk.
   roughness?: number;
-  /** 0..1. 1 is opaque, which is the default and is omitted when it holds. */
+  // 0..1, omitted at the default 1 (opaque).
   opacity?: number;
-  /** 0..1. How much light the surface gives off ITSELF, on top of the light
-   *  falling on it. A screen, an indicator, a light guide: the parts of an
-   *  assembly that are not lit but lighting.
-   *
-   *  A number and not a second colour, deliberately. A material already has a
-   *  colour and a part that glows glows in its own colour; a separate emissive
-   *  colour is a second thing to keep in step with the first, and the case it
-   *  buys (a red part that glows green) is not one anybody has asked for. What
-   *  it costs is one slider instead of a slider and a picker. */
+  // 0..1, self lit in the material's own colour: a second emissive colour would be one more thing to keep in step.
   emissive?: number;
-  /** 0..1. A clear lacquer over the surface: a second, glossy, dielectric layer
-   *  the way car paint, glazed ceramic or a coated plastic has one. It keeps the
-   *  base colour and roughness (a matte base stays matte UNDER a wet-looking
-   *  sheen) and adds the hard bright highlight of the coat on top. A physical-PBR
-   *  feature, so it is dropped on the lightweight render like glass is. */
+  // 0..1 glossy dielectric coat over the base, like car paint. Physical PBR only, dropped on the lightweight render.
   clearcoat?: number;
-  /** Index of refraction of a see-through finish, 1 (air) to 2.5. Water 1.33,
-   *  glass 1.5, diamond 2.42. */
+  // Index of refraction of a see-through finish, 1 (air) to 2.5: water 1.33, glass 1.5, diamond 2.42.
   ior?: number;
-  /** mm of material light travels through on a see-through finish, an override.
-   *  Absent is auto: the viewport measures it from the body per pixel. */
+  // mm light travels through a see-through finish. Absent is auto, measured from the body per pixel.
   thickness?: number;
-  /** "#rrggbb" colour light turns into as it travels through, the green of a
-   *  thick bottle. Absent is clear. */
+  // "#rrggbb" light turns into as it travels through. Absent is clear.
   attenuationColor?: string;
-  /** mm after which light has fully taken on attenuationColor. 0 means never,
-   *  which is what absent means too. */
+  // mm until light fully takes on attenuationColor. 0 or absent means never.
   attenuationDistance?: number;
-  /** 0..10. How far apart the colours of refracted light fan out, the fire of
-   *  a cut diamond. Needs some thickness to be seen. */
+  // 0..10, the fire of a cut diamond. Needs some thickness to be seen.
   dispersion?: number;
-  /** 0..1. A thin film over the surface, the rainbow of a soap bubble or an
-   *  oil slick. Works on any finish, not only see-through ones. */
+  // 0..1 thin film rainbow, on any finish.
   iridescence?: number;
-  /** "#rrggbb" tint of the highlight a non-metal reflects. Absent is white. */
+  // "#rrggbb" tint of a non-metal's highlight. Absent is white.
   specularColor?: string;
-  /** 0..1. A soft rim of light at grazing angles, the velvet of a matte, slightly
-   *  fibrous surface. */
+  // 0..1 soft rim at grazing angles, velvet.
   sheen?: number;
-  /** 0..1. Highlights stretched in one direction, along the layer lines of a
-   *  print or the grain of brushed metal. */
+  // 0..1 highlights stretched along one direction, like print layer lines or brushed grain.
   anisotropy?: number;
-  /** 0..1. How many tiny mirror facets are in the surface: glitter, metal flake
-   *  paint. */
+  // 0..1 glitter or metal flake density.
   flakes?: number;
-  /** mm, the size of one flake. */
+  // mm per flake.
   flakeSize?: number;
-  /** mm after which light inside a see-through finish has scattered, the milk of
-   *  a translucent part. 0 is clear. */
+  // mm until light inside a see-through finish has scattered. 0 is clear.
   scatterDistance?: number;
-  /** False when a part that gives off light should not light the parts around
-   *  it, it still glows. Only written when false. */
+  // False when a glowing part should not light its neighbours. Only written when false.
   castsLight?: boolean;
-  /** Procedural surface detail (noise / scratches / brushed / wear). Absent for
-   *  a plain material. The single-generator form the picker writes. */
+  // The single generator form the picker writes.
   surface?: SurfaceSpec;
-  /** The full node graph, what the node editor produces. Takes precedence over
-   *  `surface` when present. Absent for a plain or single-generator material. */
+  // The node editor's full graph, preferred over `surface`.
   surfaceGraph?: SurfaceGraph;
 }
 
-/** The finish an unspecified material has, which is exactly the one every body
- *  in this app has always been drawn with (see viewport/render.ts). Sharing the
- *  numbers is what makes "no material" and "a material that says nothing about
- *  its finish" the same picture instead of two nearly identical ones. */
+// The finish bodies have always been drawn with (viewport/render.ts), so "no material" and a finish-less material
+// draw the same picture.
 export const FINISH = {
   metalness: 0.1,
   roughness: 0.55,
@@ -168,9 +111,7 @@ export const FINISH = {
   castsLight: true,
 } as const;
 
-/** The four numbers the renderer wants, never undefined, so the render path has
- *  no branches in it. Named because it now travels: the store hands a map of
- *  them to the viewport on every build. */
+// Never undefined, so the render path has no branches.
 export interface BodyFinish {
   metalness: number;
   roughness: number;
@@ -190,14 +131,11 @@ export interface BodyFinish {
   castsLight: boolean;
   attenuationColor?: string;
   specularColor?: string;
-  /** Carried straight through when a material has one, so the viewport can build
-   *  the procedural shader. Undefined is the common case. */
   surface?: SurfaceSpec;
   surfaceGraph?: SurfaceGraph;
 }
 
-/** A finish that can throw a highlight bright enough to bloom. A node graph is
- *  counted as shiny because it can drive emission. */
+// A node graph counts as shiny because it can drive emission.
 export function isShiny(f: BodyFinish): boolean {
   return (
     f.emissive > 0 ||
@@ -212,10 +150,7 @@ export function isShiny(f: BodyFinish): boolean {
   );
 }
 
-/** A finish that draws exactly like a body with no material at all, so the
- *  store can leave it out of the map it hands the viewport. Every field counts:
- *  one left out here is a material whose only change is that field, and that
- *  change never reaches the screen. */
+// Every field must be compared: one left out would be a material whose only change never reaches the screen.
 export function isDefaultFinish(f: BodyFinish): boolean {
   return (
     f.metalness === FINISH.metalness &&
@@ -266,19 +201,8 @@ export function finishOf(m: MaterialDef | undefined): BodyFinish {
   };
 }
 
-/** What a finish reads as, in words. "Glossy, metallic", "Matte", "Satin, lit".
- *
- *  For the list beside the rendered swatch, and it is not decoration: the sphere
- *  says what the material looks like and this says what it IS, which is what a
- *  search box can match on and what a screen reader gets instead of a picture.
- *  Two parts, because they answer different questions, how polished the surface
- *  is, and what kind of stuff it is.
- *
- *  The kinds are ordered rather than combined. A material can be shiny AND
- *  see-through AND metallic on paper, but a phrase listing three qualities is
- *  read by nobody; the one that is picked is the one that changes the picture
- *  most. Something that gives off light is a light whatever else it is, and
- *  something you can see through is see-through before it is anything else. */
+// "Glossy, metallic": surface then kind, for search and screen readers. Kinds are ranked, not combined: a light is a
+// light, and see-through comes before anything else.
 export function finishLabel(m: MaterialDef | undefined): string {
   const f = finishOf(m);
   const gloss = f.roughness <= 0.18 ? "Glossy" : f.roughness <= 0.45 ? "Satin" : "Matte";
@@ -299,21 +223,9 @@ export function finishLabel(m: MaterialDef | undefined): string {
   return kind ? `${gloss}, ${kind}` : gloss;
 }
 
-/** The library a new document starts with.
- *
- *  Generic engineering and print materials, named for the stuff and not for any
- *  supplier's product. Deliberately short: a starter library is a set of
- *  examples showing what the fields do, and a hundred rows nobody chose is a
- *  list to scroll past rather than a library to work from. Adding to it is one
- *  button.
- *
- *  EVERY ENTRY IS ALREADY IN NORMAL FORM, i.e. normalizeMaterial leaves it
- *  alone, and materials.test.ts holds that. It is not cosmetic: a field holding
- *  the same value as the default is dropped on read, so an entry carrying one
- *  would fail to round-trip through an export, and the store's "is this still
- *  the untouched library" check, which is what keeps an unstyled document from
- *  writing a materials block at all, would answer no the moment the file was
- *  reopened. */
+// Generic materials named for the stuff, not a supplier's product, and deliberately short: examples of the fields.
+// Every entry is already in normal form (materials.test.ts holds it): a default-valued field is dropped on read, which
+// would break export round trips and the store's untouched library check that keeps plain documents free of materials.
 export const STARTER_LIBRARY: readonly MaterialDef[] = Object.freeze([
   { id: "m-aluminium", name: "Aluminium", color: "#b8bcc0", metalness: 0.9, roughness: 0.35 },
   { id: "m-steel", name: "Steel", color: "#8f959b", metalness: 0.95, roughness: 0.28 },
@@ -322,9 +234,7 @@ export const STARTER_LIBRARY: readonly MaterialDef[] = Object.freeze([
   { id: "m-gold", name: "Gold", color: "#d4af37", metalness: 1, roughness: 0.22 },
   { id: "m-chrome", name: "Chrome", color: "#e8ecf0", metalness: 1, roughness: 0.03 },
   { id: "m-titanium", name: "Titanium", color: "#9a9ea3", metalness: 0.9, roughness: 0.42 },
-  // Clearcoat pair: a metallic-flake base under a hard clear lacquer, and a matte
-  // dielectric under a glaze. Both keep their base roughness and gain the coat's
-  // bright sheen, which is the whole point of the field.
+  // Clearcoat pair: both keep their base roughness and gain the coat's bright sheen.
   { id: "m-carpaint", name: "Car paint, red", color: "#a51321", metalness: 0.55, roughness: 0.38, clearcoat: 1 },
   { id: "m-ceramic", name: "Ceramic, glazed", color: "#eceae4", metalness: 0.0, roughness: 0.32, clearcoat: 1 },
   { id: "m-plastic-white", name: "Plastic, white", color: "#e8e8e8", metalness: 0.02, roughness: 0.6 },
@@ -332,9 +242,7 @@ export const STARTER_LIBRARY: readonly MaterialDef[] = Object.freeze([
   { id: "m-rubber", name: "Rubber", color: "#1d1f22", metalness: 0.0, roughness: 0.95 },
   { id: "m-wood", name: "Wood", color: "#9a6b3f", metalness: 0.0, roughness: 0.8 },
   { id: "m-glass", name: "Glass", color: "#cfe4ee", metalness: 0.0, roughness: 0.05, opacity: 0.25 },
-  // Glass family: frosted is rough glass, tinted takes its colour from depth
-  // rather than from its surface, and diamond fans the colours out. Thickness is
-  // left auto on all of them, the body says how deep light travels.
+  // Glass family: thickness is left auto, the body says how deep light travels.
   { id: "m-glass-frosted", name: "Glass, frosted", color: "#e6eef2", metalness: 0.0, roughness: 0.5, opacity: 0.3 },
   {
     id: "m-glass-tinted",
@@ -357,19 +265,13 @@ export const STARTER_LIBRARY: readonly MaterialDef[] = Object.freeze([
     dispersion: 5,
   },
   { id: "m-acrylic", name: "Acrylic, clear", color: "#dfeaf0", metalness: 0.0, roughness: 0.15, opacity: 0.45 },
-  // The one entry that is not a material you could hold: a lit indicator. It is
-  // in the starter library because the emissive slider is otherwise a control
-  // whose effect nobody sees until they have already guessed what it does.
+  // A lit indicator, so the emissive slider has a visible example.
   { id: "m-emitter", name: "Indicator, lit", color: "#42e07a", metalness: 0.0, roughness: 0.4, emissive: 0.8 },
 ]);
 
 const HEX = /^#?[0-9a-f]{6}$/i;
 
-/** A colour string as "#rrggbb", or null when it is not one.
- *
- *  Three-digit hex is expanded rather than refused: it is what a person types
- *  into a library file by hand, and refusing it would be refusing a colour over
- *  its spelling. */
+// Three digit hex is expanded, since that is what people type into a library file by hand.
 export function asHex(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const t = raw.trim();
@@ -385,14 +287,8 @@ const clampRange = (v: unknown, lo: number, hi: number): number | undefined =>
   typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : undefined;
 const clamp01 = (v: unknown): number | undefined => clampRange(v, 0, 1);
 
-/** One entry of a library file as this app understands it, or null.
- *
- *  Null for anything with no usable colour, because a material without one is
- *  not a material that renders oddly, it is a row that can be assigned to a body
- *  and then change nothing. Everything else is repaired rather than refused: an
- *  out-of-range roughness is clamped, a missing name falls back to the id, and a
- *  missing id is minted from the name, so a hand-written file that gets a field
- *  wrong loses that field and not the material. */
+// Null without a usable colour: such a row assigns but changes nothing. Everything else is repaired (clamped, name
+// from id, id from name), so a bad field loses that field and not the material.
 export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -401,8 +297,7 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
   const name = typeof r["name"] === "string" && r["name"].trim() ? r["name"].trim() : "";
   const id = typeof r["id"] === "string" && r["id"].trim() ? r["id"].trim() : slugId(name || `material ${index + 1}`);
   const out: MaterialDef = { id, name: name || id, color };
-  // Omit-when-default, so a plain colour round-trips as three fields and a
-  // library written by this app reads back byte-identically.
+  // Omit-when-default, so a library written by this app reads back byte-identically.
   const metalness = clamp01(r["metalness"]);
   const roughness = clamp01(r["roughness"]);
   const opacity = clamp01(r["opacity"]);
@@ -445,8 +340,7 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
   if (surface) out.surface = surface;
   const graph = normalizeGraph(r["surfaceGraph"]);
   if (graph) out.surfaceGraph = graph;
-  // A later build's fields ride through, as the Rust schema's flattened extra
-  // does, so opening and saving here does not strip them.
+  // A later build's fields ride through, like the Rust schema's flattened extra, so a save does not strip them.
   const carried = out as unknown as Record<string, unknown>;
   for (const key of Object.keys(r)) {
     if (KNOWN_MATERIAL_KEYS.has(key) || key === "__proto__") continue;
@@ -497,10 +391,7 @@ const NODE_TYPES: readonly SurfaceNode["type"][] = [
   "output",
 ];
 
-/** Narrow an untrusted surface graph, or drop it. Structural only: a node needs
- *  an id and a known type; the output must name a node. The compiler treats a
- *  missing wire or param as a default, so a partial-but-shaped graph is kept
- *  rather than refused. */
+// Structural only: the compiler defaults a missing wire or param, so a partial but shaped graph is kept.
 export function normalizeGraph(raw: unknown): SurfaceGraph | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const r = raw as Record<string, unknown>;
@@ -524,9 +415,7 @@ export function normalizeGraph(raw: unknown): SurfaceGraph | undefined {
 
 const SURFACE_KINDS: readonly SurfaceSpec["kind"][] = ["noise", "scratches", "brushed", "voronoi", "wave"];
 
-/** Narrow an untrusted surface object, or drop it. A bad kind or a non-positive
- *  scale is not a surface, so the material reads back as plain rather than as a
- *  shader that does nothing or throws. */
+// A bad kind or non-positive scale drops the surface, so the material reads back plain rather than as a broken shader.
 export function normalizeSurface(raw: unknown): SurfaceSpec | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const r = raw as Record<string, unknown>;
@@ -547,7 +436,7 @@ export function normalizeSurface(raw: unknown): SurfaceSpec | undefined {
   return out;
 }
 
-/** A name to an id that is safe in a file name, a URL and a JSON key. */
+// Safe in a file name, a URL and a JSON key.
 export function slugId(name: string): string {
   const slug = name
     .toLowerCase()
@@ -556,7 +445,6 @@ export function slugId(name: string): string {
   return `m-${slug || "material"}`;
 }
 
-/** Make `id` unique against `taken`, by suffixing a number. */
 export function uniqueId(id: string, taken: ReadonlySet<string>): string {
   if (!taken.has(id)) return id;
   for (let n = 2; ; n++) {
@@ -565,7 +453,6 @@ export function uniqueId(id: string, taken: ReadonlySet<string>): string {
   }
 }
 
-/** A name no other material uses, "Copper", then "Copper 2", … */
 export function freshMaterialName(materials: readonly MaterialDef[], base = "Material"): string {
   const taken = new Set(materials.map((m) => m.name.toLowerCase()));
   if (!taken.has(base.toLowerCase())) return base;
@@ -575,19 +462,14 @@ export function freshMaterialName(materials: readonly MaterialDef[], base = "Mat
   }
 }
 
-/** What a library file holds, as this app writes it. `version` is there so a
- *  later shape can be told from this one without guessing from the fields. */
+// `version` lets a later shape be told apart without guessing from the fields.
 export interface MaterialLibraryFile {
   version: 1;
   materials: MaterialDef[];
 }
 
-/** Read a library file. Never throws: a file somebody else wrote is data, and
- *  the useful answer to a broken one is the materials that were readable plus a
- *  sentence about the rest, not an exception in a file dialog.
- *
- *  Both shapes are accepted, `{materials:[…]}` and a bare `[…]`, because the
- *  bare array is what a person exports from a spreadsheet or writes by hand. */
+// Never throws: a broken file gives the readable materials plus a sentence. A bare `[…]` is accepted too, as a
+// spreadsheet export or hand-written file would be.
 export function parseLibrary(json: string): { materials: MaterialDef[]; problem: string | null } {
   let parsed: unknown;
   try {
@@ -622,8 +504,6 @@ export function parseLibrary(json: string): { materials: MaterialDef[]; problem:
   return { materials: out, problem };
 }
 
-/** Write a library file, pretty, because the point of exporting one is that
- *  somebody can open it. */
 export function serializeLibrary(materials: readonly MaterialDef[]): string {
   const file: MaterialLibraryFile = { version: 1, materials: materials.map((m) => ({ ...m })) };
   return JSON.stringify(file, null, 2);
@@ -635,19 +515,8 @@ function rgb(hex: string): [number, number, number] | null {
   return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 }
 
-/** The material closest to `hex`, or null when nothing is within `tolerance`.
- *
- *  A TOLERANCE, unlike the palette's nearest-slot match, which always answers.
- *  The palette has four physical slots and every part has to print from one of
- *  them, so "nearest" is the whole question. A library is open-ended, and the
- *  useful answer to an imported colour nothing in the library resembles is "this
- *  is a new material", not "here is the least wrong of the ten you had". The
- *  default is a squared RGB distance of 24 per channel, close enough that two
- *  shades of the same grey match and two greys apart do not.
- *
- *  Squared RGB and not a perceptual space, deliberately: what is being matched
- *  is a colour a CAD system wrote into a file, usually one of a handful of round
- *  numbers, and not two photographs. */
+// Unlike the palette's nearest slot, a library match has a tolerance: an unlike import colour is a new material.
+// Squared RGB, 24 per channel by default, is enough for the round numbers CAD files write.
 export function nearestMaterial(
   hex: string,
   materials: readonly MaterialDef[],
@@ -669,16 +538,8 @@ export function nearestMaterial(
   return bestD <= tolerance ? best : null;
 }
 
-// --- what an imported file's own colours become -------------------------------
-
-/** Rough colour names, for naming a material nothing in the library matched.
- *
- *  A STEP file's colours have no names at all (XCAF stores an RGB triple per
- *  product), so "Imported #b06a3b" is the honest alternative and it is a
- *  terrible row to have in a library: unreadable, unsortable, and identical in
- *  shape to the nine beside it. A rough name is wrong about the exact shade and
- *  right about which row is which, which is what a list is for. The file's own
- *  material name is preferred wherever it has one (3MF and glTF do). */
+// Rough names for minted materials: STEP colours have no names, and "Imported #b06a3b" rows are unreadable.
+// A file's own material name (3MF, glTF) is preferred wherever it exists.
 const BASIC_COLORS: readonly [string, number][] = [
   ["black", 0x1a1a1a],
   ["white", 0xf0f0f0],
@@ -694,7 +555,6 @@ const BASIC_COLORS: readonly [string, number][] = [
   ["brown", 0x8a5a30],
 ];
 
-/** A rough name for a colour, e.g. "#b06a3b" -> "brown". */
 export function colorName(hex: string): string {
   const want = rgb(hex);
   if (!want) return "colour";
@@ -711,24 +571,8 @@ export function colorName(hex: string): string {
   return best;
 }
 
-/** Turn the colours an imported file carried into material assignments.
- *
- *  PURE, and the whole decision: which colours already have a material in this
- *  document, and what to call the ones that do not. The IO half (running the
- *  rebuild, finding which bodies the import produced, writing to the store)
- *  stays in io/files.ts.
- *
- *  MATCHING FIRST, then minting. Importing two revisions of the same assembly
- *  must not leave two libraries of near-identical greys, and a document whose
- *  library already says what "aluminium" looks like should have the imported
- *  aluminium parts wear that material rather than a second one called "Imported
- *  grey". `nearestMaterial` has a tolerance for exactly this: close enough is
- *  the same material, and anything else is genuinely new.
- *
- *  Returns the materials to add and a colour → material id map covering every
- *  input colour it could read. A colour it could not read is absent from the map
- *  rather than assigned something, because a body wearing a material nobody
- *  chose is worse than a body left grey. */
+// Matches before minting, so two revisions of one assembly do not leave two libraries of near-identical greys. IO lives
+// in io/files.ts. An unreadable colour is absent from the map: a material nobody chose is worse than grey.
 export function materialsForColors(
   colors: readonly { color: string; name?: string | undefined }[],
   library: readonly MaterialDef[],
@@ -737,13 +581,8 @@ export function materialsForColors(
   const byColor = new Map<string, string>();
   const taken = new Set(library.map((m) => m.id));
   const names = new Set(library.map((m) => m.name.toLowerCase()));
-  // A file's colour is a colour and nothing else. Matching it to a material
-  // that is SEE-THROUGH imports a claim the file never made, and the result is
-  // not a slightly wrong shade, it is a part you can no longer see: the
-  // reference board's pale lavender lands within tolerance of Glass, and every
-  // one of its fifteen occurrences opened at a quarter opacity, which reads as
-  // a broken import rather than as a material choice. Opaque candidates only;
-  // an imported colour that resembles glass mints its own opaque material.
+  // Opaque candidates only: the reference board's lavender matched Glass and opened at quarter opacity, like a broken
+  // import. A colour that resembles glass mints its own opaque material.
   const opaque = (m: MaterialDef) => (m.opacity ?? 1) >= 1;
   for (const entry of colors) {
     const hex = asHex(entry.color);
@@ -765,16 +604,8 @@ export function materialsForColors(
   return { add, byColor };
 }
 
-/** The colour an assembly node shows, INHERITED from its nearest coloured
- *  ancestor when it has none of its own.
- *
- *  XCAF stores a colour on the label that carries one and says nothing about the
- *  labels below it, and a real assembly is coloured at the level somebody
- *  bothered to colour: a subassembly painted red holds twenty parts with no
- *  colour of their own, all of which are red. Reading the leaf alone throws away
- *  most of what the file said, so the walk goes up.
- *
- *  Cycle-safe (a hand-edited manifest can loop) and bounded by the node count. */
+// XCAF colours only the label someone coloured, so a red subassembly's twenty parts inherit by walking up.
+// Cycle safe for hand-edited manifests and bounded by the node count.
 export function nodeColors(
   nodes: readonly { parent: number | null; color?: string | undefined }[],
 ): (string | undefined)[] {

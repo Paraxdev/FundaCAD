@@ -127,10 +127,8 @@ pub(super) fn tangent_run(adj: &FaceAdjacency, group: &[Shape]) -> Vec<Shape> {
     flood(adj, group, |k| matches!(k, EdgeKind::Tangent | EdgeKind::SameSurface))
 }
 
-/// Where the neighbour stops meeting the face, as (on a shrink, on a grow): a
-/// tangent neighbour at the face's own size, a plane along the axis at its
-/// distance from it, a cylinder along the axis where the two circles touch.
-/// None for a neighbour a size change can never leave behind.
+/// Where the neighbour stops meeting the face as (on a shrink, on a grow): a tangent one at the face's size, a
+/// plane along the axis at its distance, a cylinder where the circles touch. None when a size change never leaves it.
 fn contact(s: &Surf, nb: &Nb) -> Option<(f64, f64)> {
     if nb.kind == Some(EdgeKind::Tangent) {
         return Some((s.size(), s.size()));
@@ -159,9 +157,8 @@ pub(super) struct Lost {
     pub contact: f64,
 }
 
-/// The neighbours a size change of `delta` would leave behind: ones that run
-/// away from the face outward on a shrink smaller than where they meet it, or
-/// inward on a grow past it.
+/// The neighbours a size change of `delta` would leave behind: ones running away outward on a shrink below
+/// where they meet, or inward on a grow past it.
 pub(super) fn left_behind(s: &Surf, nbs: &[Nb], delta: f64) -> Vec<Lost> {
     let r2 = s.size() + delta;
     nbs.iter()
@@ -180,9 +177,8 @@ pub(super) fn left_behind(s: &Surf, nbs: &[Nb], delta: f64) -> Vec<Lost> {
         .collect()
 }
 
-/// The tangent neighbours worth splitting the band along: one running inward
-/// that a shrink pulls away from, like the ball under a narrowed bore. One
-/// running outward is crossed by a grow and trimmed by it instead.
+/// The tangent neighbours worth splitting the band along: one running inward that a shrink pulls away from,
+/// like the ball under a narrowed bore. One running outward is crossed and trimmed by a grow instead.
 pub(super) fn splits_band(s: &Surf, nb: &Nb, delta: f64) -> bool {
     match nb.kind {
         Some(EdgeKind::Tangent) => delta < 0.0 && spread(s, nb).is_some_and(|(_, hi)| hi <= 1e-6),

@@ -1,27 +1,5 @@
-// The previews a drag paints before the kernel has said anything.
-//
-// Split out of viewport.ts. Every one of these is the same bargain: a rebuild
-// through the engine is exact and takes long enough that a drag would lurch,
-// so the frontend draws what the result is going to be and the real feature is
-// committed on release. Nothing here ever reaches the document.
-//
-// Four of them, and they are different KINDS of cheat:
-//
-//   - press/pull builds new geometry (a prism raised off the picked faces), so
-//     it is a mesh of its own that is thrown away on commit;
-//   - a move touches no geometry at all, a rigid transform is a matrix on the
-//     body objects, zero vertex writes, and picking follows it because raycasts
-//     read matrixWorld;
-//   - a pattern is the move trick N times over, drawn as cloned meshes.
-//   - a fillet/chamfer sweeps an approximate wedge along the picked edges from
-//     the mesh's own triangles, since (unlike press/pull) the real result isn't
-//     a simple offset of anything already on screen; features/blendGhost.ts has
-//     the geometry, this only supplies the edges' points and adjacent-face
-//     normals it needs and turns the answer into a mesh.
-//
-// The move ghost is the one with a real hand-off: on commit the offset STAYS
-// until the rebuilt body arrives, because dropping it would snap the part back
-// for the frame or two the round trip takes.
+// The previews a drag paints before the kernel answers; nothing here reaches the document. On commit the move ghost's
+// offset stays until the rebuilt body arrives, or the part would snap back for a frame or two.
 
 import * as THREE from "three";
 import { pushAll } from "../lib/pushAll";
@@ -49,18 +27,14 @@ export interface GhostHost {
   faceNormalWorld(faceId: number): THREE.Vector3;
 }
 
-/** One picked edge as the blend ghost needs it: structural, like
- *  blendClearance.ts's ClearanceEdge, so a caller can hand over its own
- *  EdgeRef/GhostEdge without importing viewport/edgeLines.ts here. */
+/** Structural, like blendClearance.ts's ClearanceEdge, so callers hand over EdgeRefs without this importing edgeLines.ts. */
 export interface BlendGhostEdge {
   readonly body: string | undefined;
   readonly points: readonly Pt3[];
 }
 
-/** A standalone, non-indexed buffer of just `faceIds`' own triangles (their
- *  body's own position buffer, unindexed so faces from different bodies can
- *  share one geometry with no index-space collision), or null when none of
- *  them own a triangle. The features-mode pattern ghost's template. */
+/** `faceIds`' own triangles unindexed, so faces of different bodies can share one geometry, or null when they own none.
+ *  The features mode pattern ghost's template. */
 function facesGeometry(model: ModelView, faceIds: readonly number[]): THREE.BufferGeometry | null {
   const out: number[] = [];
   for (const faceId of faceIds) {
@@ -85,18 +59,10 @@ function facesGeometry(model: ModelView, faceIds: readonly number[]): THREE.Buff
 export class GhostLayer {
   constructor(private host: GhostHost) {}
 
-  // --- Press/Pull ghost: an instant frontend-only preview of the extrude so the
-  // drag feels immediate (the real OCCT result needs a full rebuild and only lands
-  // on commit). For each selected face we offset its triangles by distance·normal
-  // (the cap) and raise walls from the face's boundary edges → a translucent prism.
+  // Press/pull ghost: each face's triangles offset by distance times normal (the cap), with walls raised from its boundary.
   private ppGhost: THREE.Mesh | null = null;
-  /** `along` a round face makes the offset RADIAL and per-vertex instead of
-   *  one constant vector: a resized cylinder is not a translated one, and its
-   *  face normal is the average that cancels to nothing anyway. `distance` is
-   *  then the outward radial delta (bigger = away from the axis, or from a
-   *  sphere's centre), not the kernel's signed push. `along` "normal" offsets
-   *  each vertex along the surface normal there, a cone or a torus offset by
-   *  the kernel's signed push. */
+  /** `along` a round face offsets radially per vertex (a resized cylinder is not a translated one), `distance` then being
+   *  the outward radial delta; "normal" offsets each vertex along its surface normal by the kernel's signed push. */
   setPressPullGhost(faceIds: number[], distance: number, along?: RoundFace | "normal" | null) {
     this.clearPressPullGhost();
     const model = this.host.model();
@@ -106,8 +72,7 @@ export class GhostLayer {
     const round = along && along !== "normal" ? along : null;
     const centre = round?.centre ? new THREE.Vector3(...round.centre) : null;
     for (const faceId of faceIds) {
-      // per-body model: resolve the face's owning body and read its own buffers
-      // (vertex indices below are body-local, consistent with wv()'s source).
+      // Vertex indices below are local to the face's owning body.
       const body = bodyOfFace(model, faceId);
       const triIdx = body?.faceTriangles.get(faceId);
       if (!body || !triIdx || triIdx.length === 0) continue;
@@ -146,9 +111,7 @@ export class GhostLayer {
         push(moved(i1, facet));
         push(moved(i2, facet));
       }
-      // A resized or offset curved face keeps its neighbours on their own
-      // surfaces, so a wall from its old boundary would draw a step the result
-      // does not have.
+      // A resized curved face keeps its neighbours on their own surfaces, so a wall from its old boundary would draw a step.
       if (along) continue;
       // boundary walls: an edge interior to the face appears in two triangles
       // (toggled out); a boundary edge appears once (kept).
@@ -201,14 +164,8 @@ export class GhostLayer {
     this.host.requestRender();
   }
 
-  // --- Fillet/chamfer ghost: an instant approximation of the blend so a radius/
-  // distance drag reads live instead of waiting on OCCT. Unlike press/pull, a
-  // blend isn't a simple offset of a picked face, it depends on the two faces
-  // that meet at the edge, so this samples the ALREADY-DISPLAYED mesh around
-  // each picked edge for the wedge its two faces make and hands the geometry to
-  // features/blendGhost.ts, which sweeps it. An edge whose faces can't be
-  // pinned down (a seam, a T-junction, two faces meeting almost flat) is
-  // simply left out rather than drawn wrong, see edgeFaceSamples.
+  // Fillet/chamfer ghost: samples the displayed mesh around each picked edge for its two faces' wedge, which
+  // features/blendGhost.ts sweeps. An edge whose faces cannot be pinned down is left out rather than drawn wrong.
   private blendGhostMesh: THREE.Mesh | null = null;
 
   /** `capped` paints it as a refused size held back to `size`, the largest
@@ -257,12 +214,8 @@ export class GhostLayer {
     this.host.requestRender();
   }
 
-  // --- Move ghost: a rigid move needs no rebuild, so a drag only poses the
-  // selected bodies' mesh and edge objects; raycasts read matrixWorld, refreshed
-  // on every frame. On commit the pose stays until the rebuilt body (new etag,
-  // new mesh at identity) arrives, so a drag begun before that, as on a big
-  // import, composes onto the pose the old mesh wears, and a rebuilt mesh that
-  // lands mid-drag takes over from it.
+  // Move ghost: a rigid move only poses the bodies' objects, and raycasts follow matrixWorld. On commit the pose stays
+  // until the rebuilt body arrives, and a drag begun before that composes onto the old mesh's pose.
   private moveGhost: { model: ModelView; drag: THREE.Matrix4; bodies: MovePose[] } | null = null;
   beginBodyMoveGhost(bodyIds: string[]) {
     this.endBodyMoveGhost(true);
@@ -302,17 +255,8 @@ export class GhostLayer {
     }
     this.host.requestRender();
   }
-  // --- Pattern ghosts: translucent copies of a body, one per pattern cell -----
-  //
-  // The copies share the source body's geometry buffers, a ghost is a second
-  // draw of the same vertices, so twenty of them cost twenty draw calls and no
-  // memory. Rebuilt only when the SET changes (a different body, a different
-  // count); a drag that only moves the copies rewrites matrices.
-  //
-  // Ghosts rather than a live rebuild, for the same reason the move ghost
-  // exists: a pattern is a rigid repeat, its copies are known exactly on this
-  // side, and asking the kernel to union twenty solids per frame of a drag would
-  // make the drag unusable to show something the drag already knows.
+  // Pattern ghosts share the source body's geometry, so twenty copies cost twenty draw calls and no memory, and are rebuilt
+  // only when the set changes. A kernel union of twenty solids per drag frame would be unusable.
   private ghosts: { key: string; copies: THREE.Group[] } | null = null;
   private patternGhostMat: THREE.MeshBasicMaterial | null = null;
 
@@ -333,9 +277,7 @@ export class GhostLayer {
         side: THREE.DoubleSide,
       });
       const copies: THREE.Group[] = [];
-      // Copy 0 is the original and is already on screen: ghosting it would only
-      // tint the body you can see. The matrices still include it, so the indices
-      // line up with the pattern's own numbering.
+      // Copy 0 is the original, already on screen. The matrices still include it so indices match the pattern's numbering.
       for (let i = 1; i < matrices.length; i++) {
         const g = new THREE.Group();
         g.matrixAutoUpdate = false;
@@ -372,13 +314,8 @@ export class GhostLayer {
     this.host.requestRender();
   }
 
-  // A features-mode pattern (patternTool.ts, features arg): the copies are of
-  // the listed features' own faces, not the whole body they sit on, so a hole
-  // patterned in a plate ghosts six holes, not six plates.
-  //
-  // Unlike setPatternGhost, the template geometry is not shared with the model:
-  // it is a fresh, standalone buffer of just those faces' triangles, built once
-  // per face set and reused (like the body ghosts) across every copy's matrix.
+  // A features mode pattern copies only the listed features' faces (a patterned hole ghosts six holes, not six plates),
+  // from a standalone buffer built once per face set.
   private featureGhosts: { key: string; geo: THREE.BufferGeometry; copies: THREE.Mesh[] } | null = null;
 
   setPatternFeatureGhost(faceIds: readonly number[], matrices: readonly THREE.Matrix4[]) {
@@ -455,17 +392,8 @@ function placeWorld(obj: THREE.Object3D, world: THREE.Matrix4) {
   obj.updateMatrixWorld();
 }
 
-// --- blend ghost support: which two faces meet an edge, read off the mesh ---
-//
-// The wire protocol never says which faces border an edge, so this asks the
-// already-tessellated mesh instead. The edge polyline and the body's own
-// triangulation are two SEPARATE discretization passes though: a polyline
-// point is not, in general, also a mesh vertex (real gaps run 0.8-1.4mm), and
-// a straight edge's polyline is just its two endpoints, which are corners
-// where three faces meet. So an open edge is resampled at points strictly
-// BETWEEN its ends to find its faces, and its end sections are carried out to
-// the true endpoints afterwards; a closed loop has no corner and is sampled
-// all the way round.
+// Blend ghost support. The wire never says which faces border an edge, and polyline points are not mesh vertices (gaps of
+// 0.8-1.4mm), so an open edge is sampled strictly between its corner ends and carried out to them afterwards.
 
 interface TriRec {
   faceId: number;
@@ -477,10 +405,8 @@ interface TriRec {
   vn: [THREE.Vector3, THREE.Vector3, THREE.Vector3] | null;
 }
 
-/** A body's triangles in flat arrays, and a uniform hash grid of them bucketed
- *  by centroid, cell size set from the mesh's own average edge length.
- *  `tolerance` is how far a sample point may sit from the nearest triangle and
- *  still count as on it. */
+/** A uniform hash grid of a body's triangles by centroid, cell size from the mean edge length. `tolerance` is how far a
+ *  sample may sit from a triangle and still be on it. */
 interface TriGrid {
   count: number;
   /** each triangle's three corners, 9 numbers */
@@ -660,9 +586,8 @@ const scratchClosest = new THREE.Vector3();
  *  body without true normals has them averaged across the very edge sampled. */
 const VERTEX_NORMAL_AGREEMENT = Math.cos(Math.PI / 6);
 
-/** The face's surface normal at `at` on `tri`, up to sign: the shipped vertex
- *  normals interpolated there when they agree with the facet, else the facet's.
- *  The facet alone is off by half a facet's turn on a curved face. */
+/** Up to sign: the shipped vertex normals interpolated at `at` when they agree with the facet, else the facet's, which is
+ *  off by half a facet's turn on a curved face. */
 function surfaceNormal(tri: TriRec, at: THREE.Vector3): THREE.Vector3 {
   if (tri.vn) {
     const n = THREE.Triangle.getInterpolation(
@@ -733,10 +658,8 @@ function cellsNear(grid: TriGrid, p: Pt3): number[][] {
   return out;
 }
 
-/** The two faces nearest one point on an edge, each with its surface normal
- *  there and the triangle it came from, or null when fewer than two distinct
- *  faces have a triangle within tolerance. Searched among `among` when given,
- *  else the grid cells around the point, and only `within` of it. */
+/** The two nearest distinct faces with their normals and triangles, null when fewer than two lie within tolerance.
+ *  Searched among `among` when given, else the grid cells around `p`, and only `within` of it. */
 function facesAtPoint(
   body: BodyMesh,
   p: Pt3,
@@ -813,9 +736,7 @@ function trianglesNear(grid: TriGrid, pts: readonly Pt3[], within: number): Int3
   return Int32Array.from(out);
 }
 
-/** The direction that leaves the edge at `p` across the face `tri` belongs to:
- *  in the face's tangent plane, perpendicular to the edge, signed by the
- *  triangle vertex that stands furthest off the edge. */
+/** In the face's tangent plane, perpendicular to the edge, signed by the triangle vertex standing furthest off it. */
 function intoFace(tri: TriRec, normal: THREE.Vector3, p: THREE.Vector3, tangent: THREE.Vector3): THREE.Vector3 | null {
   const d = tangent.clone().cross(normal);
   if (d.lengthSq() < 1e-12) return null;
@@ -829,12 +750,8 @@ function intoFace(tri: TriRec, normal: THREE.Vector3, p: THREE.Vector3, tangent:
   return best < 0 ? d.negate() : d;
 }
 
-/** How far the face runs from the edge at `p` before it ends, measured along
- *  `into` in the plane across the edge: the furthest point where that plane
- *  cuts the face's own triangles, ahead of the edge and not swung further
- *  sideways than it is ahead (which a far wall of the same face would be).
- *  Looked for among `tris`, which must hold every triangle of the face the
- *  plane cuts. Infinity when the plane finds nothing to measure. */
+/** How far the face runs from `p` along `into` in the plane across the edge, ignoring a far wall swung further sideways
+ *  than ahead. `tris` must hold every triangle of the face the plane cuts; Infinity when it finds nothing. */
 function faceReach(
   g: TriGrid,
   face: number,
@@ -903,10 +820,8 @@ function faceReach(
  *  first, before the whole tolerance. */
 const NEAR_EDGE = 1;
 
-/** Triangle tests one edge may spend sectioning the body, and triangles its
- *  planes may cut in all, past which the outline is left out and the ghost
- *  falls back to capping at the face ends. A straight edge's parallel planes
- *  are sorted out in one pass, so there only the cuts count. */
+/** Past this many triangle tests sectioning the body the outline is left out and the ghost caps at the face ends. A
+ *  straight edge's parallel planes are sorted in one pass, so there only the cuts count. */
 const OUTLINE_TESTS = 2e6;
 const OUTLINE_CUTS = 4e5;
 /** Outline segments kept across one edge's samples, nearest the edge first. */
@@ -961,12 +876,8 @@ function cutsAlongLine(
   return lists;
 }
 
-/** The body cut by the plane through `p` across `tangent`, as 2D segments
- *  x0,y0,x1,y1 in the frame (x, y) with `p` at the origin, from the triangles
- *  `among` or else all of them. Each crossing is worked out from the vertex
- *  on or ahead of the plane, so the two triangles sharing an edge put their
- *  segments' common end at exactly the same point. The result is a view of a
- *  buffer the next call reuses. */
+/** 2D segments x0,y0,x1,y1 with `p` at the origin. Crossings are worked from the vertex on or ahead of the plane, so
+ *  neighbours share exact ends. The result is a view of a buffer the next call reuses. */
 function bodyOutline(
   body: BodyMesh,
   p: THREE.Vector3,
@@ -1017,9 +928,8 @@ function bodyOutline(
   return out.subarray(0, n);
 }
 
-/** How much the face `tri` belongs to curls toward `side` as it leaves the
- *  edge along `into`, in 1/mm, read off the turn of the shipped normals from
- *  `p` to the triangle's far vertex. 0 when the mesh has no normals to trust. */
+/** How much the face curls toward `side` leaving the edge along `into`, in 1/mm, from the turn of the shipped normals.
+ *  0 when the mesh has no normals to trust. */
 function faceBend(
   tri: TriRec,
   normalAtP: THREE.Vector3,
@@ -1064,11 +974,8 @@ function isClosedPolyline(pts: readonly Pt3[]): boolean {
   return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) <= Math.max(total * 1e-4, 1e-6);
 }
 
-/** `count` points along an edge polyline, evenly spaced by arc length. An open
- *  one is inset from both ends so a straight edge's two corner points (where
- *  a third face joins in) are never sampled; a closed one is walked all the way
- *  round from its first point, without repeating it at the end. Null on a
- *  degenerate (zero-length) polyline. */
+/** Evenly spaced by arc length. An open edge is inset from both ends so its corner points are never sampled, a closed
+ *  one is walked round without repeating its first point. Null when zero length. */
 function resampleEdge(pts: readonly Pt3[], count: number, closed = false): Pt3[] | null {
   const cum: number[] = [0];
   for (let i = 1; i < pts.length; i++) {
@@ -1102,9 +1009,7 @@ function sampleCount(polylineLen: number): number {
   return Math.min(64, Math.max(12, polylineLen));
 }
 
-/** An edge is still drawable with some samples missing; below this many the
- *  ribbon would be too sparse to read as a fillet, so the whole edge is
- *  dropped instead. */
+/** Fewer valid samples would be too sparse to read as a fillet, so the whole edge is dropped. */
 const MIN_VALID_SAMPLES = 4;
 
 export interface EdgeGhostSamples {
@@ -1112,10 +1017,8 @@ export interface EdgeGhostSamples {
   closed: boolean;
 }
 
-/** A picked edge's resolved samples, by identity of its `points` array. The
- *  first accepted preview already shows the blend applied, and the sharp
- *  corner this ghost sweeps no longer exists in that model, so the faces are
- *  resolved once, against the model the gesture started on, and reused. */
+/** Keyed by the edge's `points` identity. Resolved once against the gesture's starting model, since the first preview
+ *  already lacks the sharp corner this ghost sweeps. */
 const edgeSampleCache = new WeakMap<readonly Pt3[], EdgeGhostSamples>();
 
 /** `from` turned by the rotation that takes tangent `t0` to `t1`, what carries
@@ -1137,10 +1040,8 @@ function endSample(point: Pt3, t1: THREE.Vector3 | null, s: EdgeSample): EdgeSam
   return { ...s, point, tangent: [t1.x, t1.y, t1.z], into1: turned(s.into1, t0, t1), into2: turned(s.into2, t0, t1) };
 }
 
-/** Every EdgeSample along one picked edge, face 1 pinned to the SAME physical
- *  face (by faceId) throughout, or null when the edge's body is gone, it has
- *  fewer than 2 points, or too few samples find their two faces. A single
- *  unresolved sample (a seam, a T-junction) is skipped on its own. */
+/** Face 1 pinned to the same faceId throughout. Null when the body is gone, the edge has fewer than 2 points or too few
+ *  samples find their faces; a single unresolved sample (a seam, a T-junction) is skipped. */
 function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSamples | null {
   const cached = edgeSampleCache.get(edge.points);
   if (cached) return cached;

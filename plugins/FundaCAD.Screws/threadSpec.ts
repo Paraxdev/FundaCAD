@@ -1,6 +1,4 @@
-// Standard threads for the core `thread` feature: which size a round face is,
-// and the groove or ridge profile each family cuts. The engine only sweeps a
-// profile; every standard number lives here, beside the fastener tables.
+// Standard threads for the core `thread` feature. The engine only sweeps a profile, every standard number lives here.
 
 import THREADS from "./catalogue/threads.json";
 
@@ -134,10 +132,8 @@ export interface NearestThread {
   offBy: number;
 }
 
-/** The standard thread a round face most likely is. A shaft is matched by its
- *  major diameter; a bore by its tap drill or, failing that, its nominal size,
- *  so an M6 tap bore of 5.0 reads as M6 and not as M5. Coarse is preferred
- *  over fine, and ISO over UNC/UNF, when two sizes are equally near. */
+/** A shaft is matched by its major diameter, a bore by its tap drill or else its nominal size, so an M6 tap bore of 5.0
+ *  reads as M6, not M5. Ties prefer coarse over fine and ISO over UNC/UNF. */
 export function nearestThread(
   faceDiameter: number,
   external: boolean,

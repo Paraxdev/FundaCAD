@@ -1,25 +1,5 @@
-// The sketch's relations as a LIST: every constraint on it in one place, what
-// each one references, and what the solver makes of it.
-//
-// The canvas shows constraints as glyphs pinned to the geometry they act on,
-// which is the right way to answer "what is holding THIS line down". It is the
-// wrong way to answer "what is holding this sketch down", and that is the
-// question somebody asks when a sketch will not move the way they expect. A
-// glyph you cannot find is indistinguishable from a glyph that is not there; a
-// sketch with no constraints at all looks exactly like one whose glyphs are off
-// screen; and a relation the solver DERIVED rather than one somebody drew has
-// no glyph to look for in the first place.
-//
-// That last one is the interesting case here. Two endpoints at the same
-// position compile to one solver point (sketchSolve's coincKey merge), so a
-// chain drawn end to end is genuinely joined with nothing recorded anywhere,
-// the corner holds, and there is no constraint, no glyph, and nothing in the
-// saved file to say so. Those are listed below as IMPLIED: real, load-bearing,
-// and not deletable, because there is no record to delete. A join drawn with
-// Snap on records a coincident as well, which the merge absorbs (see
-// tests/sketch/coincidence.test.ts), and is listed once, as that record.
-//
-// Pure: entities and constraints in, rows out. No DOM, no store, no viewport.
+// The sketch's relations as a list, including IMPLIED joins: endpoints at one position compile to one solver point
+// (sketchSolve's coincKey merge), a real join with no record, glyph or saved trace, so it is listed but not deletable.
 
 import type { ResolvedEntity } from "./snap";
 import type { SketchConstraint } from "../types";
@@ -30,22 +10,18 @@ import { fmtDim } from "./annotationFormat";
 
 export { constraintFace } from "./glyphs";
 
-/** One line of the relations list. */
 export interface RelationRow {
-  /** Index into the constraint array, and so the delete target. Null for an
-   *  implied relation, which has no record behind it to remove. */
+  /** Null for an implied relation, which has no record to delete. */
   index: number | null;
-  /** The same icon the canvas glyph uses, so the two never disagree about
-   *  what a constraint looks like. */
+  /** The canvas glyph's icon, so the two never disagree. */
   icon: string;
-  /** What it is called, in the words the ribbon buttons use. */
+  /** In the words the ribbon buttons use. */
   name: string;
-  /** What it acts on: "Line 1 and Line 3". Empty when it acts on nothing that
-   *  still exists. */
+  /** "Line 1 and Line 3", empty when it acts on nothing that still exists. */
   detail: string;
-  /** The driving value, formatted, for the dimensional constraints. */
+  /** Only on dimensional constraints. */
   value?: string;
-  /** Entity ids to light up while the row is hovered. */
+  /** Lit while the row is hovered. */
   entities: string[];
   state: ConstraintDiagnosis | null;
   /** A reference dimension: measured, not driving. */
@@ -71,11 +47,8 @@ const KIND_NAME: Record<string, string> = {
   projected: "Reference",
 };
 
-/** What to call an entity in a sentence: its kind plus its position among the
- *  others of that kind, which is the only handle a sketch entity has, they
- *  carry ids, not names. Decodes the compound rectangle-edge operand form.
- *  Returns null for an id nothing answers to, so a stale constraint reads as
- *  acting on nothing rather than on "undefined". */
+/** Kind plus position among its kind, the only handle an entity has (ids, not names). Decodes rect-edge operands,
+ *  null for an id nothing answers to, so a stale constraint reads as acting on nothing. */
 export function entityLabel(ents: ResolvedEntity[], id: string): string | null {
   const t = id.indexOf("~");
   if (t >= 0) {
@@ -93,11 +66,8 @@ export function entityLabel(ents: ResolvedEntity[], id: string): string | null {
   return `${KIND_NAME[target.type] ?? target.type} ${n}`;
 }
 
-/** Endpoints that sit on top of each other, and so compile to one solver point.
- *
- *  The same key the solver merges on, deliberately: a list that used its own
- *  idea of "attached" would show joins the solver does not hold and miss ones
- *  it does. Only groups of two or more count, a lone endpoint is not a join. */
+/** Endpoints that compile to one solver point. Uses the solver's own merge key on purpose, so the list never shows
+ *  joins the solver does not hold. A lone endpoint is not a join. */
 export function impliedJoins(ents: ResolvedEntity[], recorded: readonly SketchConstraint[] = []): RelationRow[] {
   const at = new Map<string, string[]>();
   const add = (x: number, y: number, id: string) => {
@@ -162,7 +132,7 @@ function joinedByRecords(ids: string[], recorded: readonly SketchConstraint[]): 
   return ids.every((id) => reached.has(id));
 }
 
-/** Every recorded constraint on the sketch, in the order they were added. */
+/** In the order they were added. */
 export function constraintRows(
   ents: ResolvedEntity[],
   constraints: SketchConstraint[],
@@ -188,7 +158,7 @@ export function constraintRows(
   });
 }
 
-/** The whole list: what was drawn, then what the geometry implies. */
+/** What was drawn, then what the geometry implies. */
 export function relationRows(
   ents: ResolvedEntity[],
   constraints: SketchConstraint[],
@@ -198,11 +168,7 @@ export function relationRows(
   return [...constraintRows(ents, constraints, conflicts, over), ...impliedJoins(ents, constraints)];
 }
 
-/** How the degrees-of-freedom count reads to a person.
- *
- *  `dof < 0` is "no solve has run", which is the state a sketch with no
- *  constraints stays in, it is not the same as zero, and reporting it as
- *  "fully defined" would be exactly backwards. */
+/** `dof < 0` means no solve has run, which a sketch without constraints stays in, and is not "fully defined". */
 export function dofSummary(dof: number, conflict: boolean): string {
   if (conflict) return "Conflicting constraints";
   if (dof < 0) return "Not constrained";

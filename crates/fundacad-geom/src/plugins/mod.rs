@@ -1,14 +1,5 @@
-//! The plugin host, replacing the Python engine's `plugin_geometry.py` and
-//! the Python engine's `shape_generate.py` (docs/ENGINE.md 2.3).
-//!
-//! A plugin bundle's geometry is a WebAssembly component (the world in
-//! `wit/plugin.wit`) named by the manifest's `geometryWasm`. Manifests are read
-//! for every plugin on disk, so a document can name the plugin it needs while
-//! that plugin is absent; a component is compiled the first time one of its
-//! declared names is used. Each call runs in a fresh instance under a time
-//! budget, a memory cap and a WASI context with no files, no network and no
-//! environment. Plugins installed, updated or removed while the engine runs are
-//! picked up at the next lookup, as the Python pool restarts on a new stamp.
+//! The plugin host. A bundle's geometry is a WebAssembly component (`wit/plugin.wit`), each call a fresh
+//! instance under a time budget, a memory cap and WASI with no files, network or environment.
 
 mod host;
 mod kernel_api;
@@ -34,9 +25,7 @@ pub const MANIFEST_TYPES: &str = "featureTypes";
 pub const MANIFEST_EXPORTERS: &str = "exporters";
 pub const MANIFEST_GENERATORS: &str = "shapeGenerators";
 
-/// A feature is supervised per feature in Python (STALL_TIMEOUT).
 pub const FEATURE_BUDGET: Duration = Duration::from_secs(60);
-/// server.py gives `generateShape` 180 s.
 pub const GENERATE_BUDGET: Duration = Duration::from_secs(180);
 pub const EXPORT_BUDGET: Duration = Duration::from_secs(600);
 pub const MESH_PASS_BUDGET: Duration = Duration::from_secs(60);
@@ -93,9 +82,8 @@ impl Registry {
             .collect();
     }
 
-    /// Read the plugin directories again when the last look is stale. Read once
-    /// at start, a plugin installed while the engine ran stayed "unknown
-    /// feature type" until the app was restarted.
+    /// Reads the plugin directories again when the last look is stale, so a plugin installed while the
+    /// engine runs is found without a restart.
     fn rescan(&mut self) {
         if !self.discovered || self.checked.is_some_and(|t| t.elapsed() < RESCAN_EVERY) {
             return;
@@ -121,12 +109,8 @@ fn current() -> MutexGuard<'static, Registry> {
     reg
 }
 
-/// Read every installed plugin's manifest, `plugin_geometry.discover`.
-///
-/// Explicit, and only the server startup path calls it, exactly as the Python
-/// engine does: a bare `builder::rebuild` has no plugins at all and a feature
-/// type nothing built in owns is "unknown feature type", the same sentence the
-/// Python builder gives on its own. Idempotent.
+/// Only server startup calls it: a bare `builder::rebuild` has no plugins, and a type nothing built in
+/// owns is "unknown feature type". Idempotent.
 pub fn load() {
     let mut reg = registry();
     if reg.discovered {
@@ -146,7 +130,7 @@ pub fn reset_for_tests() {
     reg.checked = None;
 }
 
-/// `plugin_roots`: FUNDACAD_PLUGIN_DIR, then a checkout's own plugins/.
+/// FUNDACAD_PLUGIN_DIR, then a checkout's own plugins/.
 pub fn plugin_roots() -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = Vec::new();
     if let Some(dir) = std::env::var_os("FUNDACAD_PLUGIN_DIR").filter(|d| !d.is_empty()) {
@@ -329,9 +313,8 @@ fn compile(d: &Declared) -> Loaded {
     }
 }
 
-/// `plugin_geometry.unregistered`'s sentences, for a feature type, a shape
-/// generator or an exporter. A plugin on disk that declares the name owns it
-/// whether or not its component loads, so the sentence names the plugin.
+/// For a feature type, a shape generator or an exporter. A plugin on disk that declares the name owns
+/// it whether or not its component loads, so the sentence names the plugin.
 fn missing(claim: Claim, name: &str, m: Missing) -> String {
     let subject = match claim {
         Claim::Feature => "this".to_owned(),
@@ -378,7 +361,6 @@ pub fn run_feature(ctx: &mut Ctx, type_name: &str, raw: &Value, cancel: Option<C
     Some(c.run_feature(ctx, type_name, raw, cancel).map_err(|(message, code)| Fail::Value { message, code }))
 }
 
-/// The `generateShape` op.
 pub fn generate_shape_result(req: &Map<String, Value>, cancel: Option<CancelToken>) -> JobResult {
     match generate_shape(req, cancel) {
         Ok(m) => JobResult::Json(m),
@@ -407,7 +389,6 @@ fn generate_shape(req: &Map<String, Value>, cancel: Option<CancelToken>) -> Resu
     kernel_api::generated_reply(&shape, output)
 }
 
-/// The `exportWith` op.
 pub fn export_with_result(
     req: &Map<String, Value>,
     watch: &dyn crate::builder::Watch,
@@ -454,9 +435,8 @@ fn identity(entry: &mut Entry) -> String {
     id
 }
 
-/// Each feature type a plugin on disk declares, to the identity of the bundle
-/// that runs it, so a cached build of a plugin feature is keyed on the code
-/// that made it. A type no plugin declares is absent.
+/// Each declared feature type to its bundle's identity, so a cached build of a plugin feature is keyed
+/// on the code that made it.
 pub fn feature_identities() -> HashMap<String, String> {
     let mut reg = current();
     let mut out = HashMap::new();
@@ -472,9 +452,8 @@ pub fn feature_identities() -> HashMap<String, String> {
     out
 }
 
-/// `plugin_geometry.cache_key`: every pass on a body with its code version and
-/// its bundle's identity, `None` when it has none. A pass whose plugin is not
-/// loaded keys as -1.
+/// Every pass on a body with its code version and bundle identity, `None` when it has none. A pass
+/// whose plugin is not loaded keys as -1.
 pub fn pass_cache_key(specs: &[Value]) -> Option<String> {
     if specs.is_empty() {
         return None;
@@ -533,10 +512,8 @@ impl PassFailure {
     }
 }
 
-/// `plugin_geometry.resolve` over every spec on a body, as face index in
-/// `faces` order to the claim on it, and the specs that failed to resolve.
-/// A later spec is preferred over a face an earlier one also claimed,
-/// timeline order whichever plugins the two come from.
+/// Face index in `faces` order to its claim, and the specs that failed to resolve. A later spec wins a
+/// face an earlier one also claimed, in timeline order whichever plugins they come from.
 pub fn claim_faces(
     shape: &opencascade::primitives::Shape,
     faces: &[opencascade::primitives::Shape],
@@ -570,9 +547,8 @@ pub fn claim_faces(
     (out, failed)
 }
 
-/// One claimed face displaced by the pass that claimed it, or why it could
-/// not be, which leaves the face as the kernel meshed it. The face must have
-/// just been meshed: the pass reads its stored triangulation.
+/// Or why it could not be, leaving the face as the kernel meshed it. The face must be freshly meshed,
+/// as the pass reads its stored triangulation.
 pub fn displace_face(
     face: &opencascade::primitives::Shape,
     claim: &PassClaim,

@@ -1,6 +1,5 @@
-//! Datums rebuilt from model references every rebuild: the `through` planes and
-//! axes and a datum point's `at`. A reference that stops resolving keeps the
-//! cached placement and leaves a diagnostic, never an error.
+//! Datums rebuilt from model references every rebuild: `through` planes and axes and a datum point's `at`. A
+//! reference that stops resolving keeps the cached placement and leaves a diagnostic, never an error.
 
 use fundacad_core::schema::{AxisThrough, DatumAxis, DatumPlane, DatumPoint, PlaneOf, PlaneThrough, PointAt, Selector};
 use glam::{DQuat, DVec3};
@@ -82,9 +81,8 @@ impl<'c> Look<'c> {
         }
     }
 
-    /// A face picked by a point can hand over a cap once the radius or length
-    /// changes a lot, so a face that is not round falls back to the round face
-    /// whose surface passes nearest the point.
+    /// A face picked by a point can hand over a cap once the radius or length changes a lot, so a face that is
+    /// not round falls back to the round face whose surface passes nearest the point.
     fn round_face_axis(&mut self, sel: &Selector) -> Option<(DVec3, DVec3)> {
         if let Some((o, d, _)) = self.face(sel).and_then(|s| cylinder_axis(&s)) {
             return Some((o, d));
@@ -168,9 +166,8 @@ impl<'c> Look<'c> {
 
 type Lost = (Vec<Value>, Option<(&'static str, [f64; 3])>);
 
-/// The diagnostics a lost reference leaves. A selector that gave nothing is
-/// named the way the re-pick flow looks for it; otherwise one of its own when
-/// the resolver said nothing, so the timeline always shows why it froze.
+/// The diagnostics a lost reference leaves: a selector that gave nothing is named as the re-pick flow looks for
+/// it, else a note of its own when the resolver said nothing, so the timeline always shows why it froze.
 fn lost(ctx: &mut Ctx, id: &str, (mut notes, missed): Lost, what: &str) {
     match missed {
         Some((kind, at)) => ctx.diagnostics.push(serde_json::json!({
@@ -251,8 +248,7 @@ pub fn plane_through(ctx: &mut Ctx, f: &DatumPlane, through: &PlaneThrough) -> F
             };
             match look.edge(edge).and_then(|e| e.as_edge()) {
                 Some(e) => {
-                    // The cached normal is the path's tangent where the plane
-                    // was made, in the direction it was drawn, so the edge's
+                    // The cached normal is the path's tangent where the plane was made, in drawing direction, so the edge's
                     // tangent there says which end t counts from.
                     let made_at = nearest_fraction(&e, DVec3::from(cached.origin) + moved_by(&e, edge));
                     let frac = match at {
@@ -286,10 +282,8 @@ pub fn plane_through(ctx: &mut Ctx, f: &DatumPlane, through: &PlaneThrough) -> F
             }
             _ => None,
         },
-        // Turned about the fingerprint's direction, not the kernel's, so the
-        // sense of the angle is the app's and survives an edit reversing the
-        // edge; the normal is not flipped toward the cache, so an angle past
-        // 90 degrees keeps turning a sketch on it instead of mirroring it.
+        // Turned about the fingerprint's direction, so the angle's sense survives an edit reversing the edge. The normal
+        // is not flipped toward the cache, so past 90 degrees a sketch on it keeps turning instead of mirroring.
         PlaneThrough::Angle { edge, from } => match (look.line(edge), look.plane(from)?) {
             (Some((o, d)), Some((_, nr))) => {
                 let d = match fp_vec(edge, "dir") {

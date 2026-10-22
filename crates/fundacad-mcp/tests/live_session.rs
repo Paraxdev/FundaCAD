@@ -1,37 +1,13 @@
-//! Three processes, one document. A port of
-//! the Python MCP server's `test_live_session.py`.
-//!
-//! Everything else about the live session is tested with the other side stubbed
-//! out: `fundacad-engine`'s own suite holds the rules with no socket, and
-//! `tests/live/liveSession.test.ts` holds the window's loop with no engine.
-//! Both would still pass if the two halves had agreed on different field names,
-//! or if discovery never found a running app at all.
-//!
-//! So this one stubs nothing that carries a message. It starts a real engine,
-//! writes a real session file, runs a host loop that does what
-//! `src/live/liveSession.ts` does (publish, collect, apply, raise the revision),
-//! and drives `fundacad-mcp` over its actual stdio protocol.
-//!
-//! The controls are the point, and each is a way this could pass while being
-//! useless:
-//!
-//!   * with no session file, the agent must work on a PRIVATE document. Without
-//!     this, an "attached" result proves nothing: a server that ignored the
-//!     whole mechanism and always spawned its own engine would look identical as
-//!     long as nobody checked whose document it was reading.
-//!   * an edit against a stale revision must be refused. This is the rule that
-//!     stops an agent overwriting what a person did while it was thinking.
-//!   * a window sharing read-only must refuse the edit BY NAME. A refusal that
-//!     arrived as a timeout would be indistinguishable from a hung app.
+//! Three processes, one document: a real engine, a real session file, a host loop doing what
+//! `src/live/liveSession.ts` does, and `fundacad-mcp` over stdio, since the stubbed suites pass even if
+//! the halves disagree on field names. Each case has a control, so none can pass vacuously.
 
 mod common;
 
 use common::{a_document, Host, Mcp, RealEngine, ToolReply};
 use serde_json::{json, Value};
 
-/// Run one tool call while the host loop keeps publishing, because the call
-/// does not return until the app has adopted the edit and the app only adopts
-/// on its own loop. That is what the app does; here it means a thread.
+/// The call returns only once the app adopts the edit, which it does on its own loop, here a thread.
 async fn while_pumping(
     mut mcp: Mcp,
     host: &mut Host,
@@ -78,10 +54,7 @@ async fn an_agent_reads_and_edits_the_document_the_app_has_open() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn an_edit_against_a_stale_revision_is_refused() {
-    // Driven at the wire rather than through a tool, because the MCP path
-    // re-reads before every call and so can never itself be stale, which is the
-    // design working, and is exactly why the refusal underneath it has to be
-    // proven separately.
+    // At the wire, not through a tool: the MCP path re-reads before every call and so can never be stale itself.
     let engine = RealEngine::start();
     let mut host = Host::new(engine.socket().await);
     host.tick().await;
@@ -157,9 +130,7 @@ async fn with_no_app_advertised_the_agent_works_on_its_own_copy() {
 
 #[test]
 fn attach_mode_refuses_to_start_rather_than_working_on_a_copy() {
-    // `attach` exists for a host configured to work on the open document and
-    // nothing else. Falling back quietly there would look like the edits are
-    // being ignored, which is the failure hardest to diagnose from the outside.
+    // `attach` is for a host meant for the open document only, where a quiet fallback would look like ignored edits.
     let engine = RealEngine::start();
     let env = engine.mcp_env("attach", false);
     let mut cmd = std::process::Command::new(common::mcp_binary());

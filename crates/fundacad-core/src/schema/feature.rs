@@ -227,9 +227,8 @@ feature_struct!(DeleteFace {
 
 plain_struct!(PlaneName { name: Plane3 });
 
-/// A mirror's `plane`, a world plane or datum plane by name. A mirror that
-/// names `bodies` writes it as `{name}`, which a build from before targeted
-/// mirrors refuses; a bare name it would read and reflect the active body.
+/// A mirror's `plane`, a world or datum plane by name. A mirror naming `bodies` writes `{name}`, which older builds
+/// refuse, rather than a bare name they would read as a mirror of the active body.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MirrorPlane {
@@ -283,10 +282,8 @@ feature_struct!(Sweep {
 });
 
 feature_struct!(
-    /// The reference (`planeId`, else `face`, else `plane`), shifted by
-    /// `shiftX`/`shiftY`/`offset` along its own axes, then turned about that
-    /// point: `tiltX` about the reference x, `tiltY` about the y that leaves,
-    /// `spin` about the normal that leaves. Angles in degrees.
+    /// The reference (`planeId`, else `face`, else `plane`) shifted by `shiftX`, `shiftY` and `offset` along its own
+    /// axes, then turned there: `tiltX` about its x, `tiltY` about the new y, `spin` about the new normal, in degrees.
     DatumPlane {
         plane: PlaneSpec,
         #[serde(default, skip_serializing_if = "Option::is_none")] offset: Option<Num>,
@@ -347,9 +344,8 @@ pub enum PlaneOf {
     Named { plane: String },
 }
 
-/// A point a datum is built from. On an edge: `end` is start, end or mid, else
-/// `t` is a fraction 0..1; `point` is where it was, which picks the end
-/// meant when an edit reverses the edge. On a face, its centre.
+/// A point a datum is built from. On an edge, `end` (start, end or mid) or else the fraction `t`, with `point` telling
+/// which end was meant when an edit reverses the edge. On a face, its centre.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum PointAt {
@@ -535,14 +531,10 @@ open_enum! {
 }
 
 feature_struct!(
-    /// A helical groove (`cut`, the default) or ridge (`join`) swept along a
-    /// round face that is found again at every build. Each `profile` point is
-    /// `[into, along]` in mm: into the material from the face, and along the axis
-    /// from the profile's centre line. `pitch` is the axial distance between
-    /// neighbouring grooves, the lead is `pitch * starts`. `axis` only says which
-    /// way the face runs, `offset` and `length` are measured from its first end
-    /// that way. `clearance` moves the whole thread that far into the material.
-    /// `spec` belongs to the tool that wrote the feature and is never read here.
+    /// A helical groove (`cut`, the default) or ridge (`join`) on a round face found again at every build. Each
+    /// `profile` point is `[into, along]` in mm from the face and the profile's centre line; `pitch` is the axial
+    /// spacing, the lead `pitch * starts`. `axis` only orients the face, `offset` and `length` run from its first end,
+    /// `clearance` sinks the whole thread, and `spec` belongs to the tool that wrote it.
     Thread {
         face: Selector,
         profile: Vec<[Real; 2]>,
@@ -585,9 +577,8 @@ feature_struct!(
 );
 
 feature_struct!(
-    /// Text laid on a face, wrapped along a round one so the letters keep their
-    /// size. `at` places the anchor as fractions of the face's (u, v) range and
-    /// is preferred over `point`; operation join embosses, cut engraves.
+    /// Text laid on a face, wrapped around a round one so the letters keep their size. `at`, in fractions of the face's
+    /// (u, v) range, wins over `point`; join embosses, cut engraves.
     TextOnFace {
         face: Selector,
         text: String,
@@ -621,9 +612,8 @@ feature_struct!(PatternLinear {
     #[serde(default, skip_serializing_if = "Option::is_none")] features: Option<Vec<String>>,
 });
 feature_struct!(
-    /// `axis` is X, Y, Z, a line, or `{datum}` naming a datum axis above the
-    /// pattern. `axisRef` makes the axis follow an edge or face, with the line
-    /// in `axis` as the cache.
+    /// `axis` is X, Y, Z, a line, or `{datum}` naming a datum axis above the pattern; `axisRef` makes it follow an edge
+    /// or face, with the line in `axis` as the cache.
     PatternCircular {
         count: Num, angle: Num, axis: PatternAxis,
         #[serde(default, skip_serializing_if = "Option::is_none")] axis_ref: Option<Selector>,

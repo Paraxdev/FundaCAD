@@ -1,6 +1,5 @@
-//! The `printability` op as the app calls it: findings with their faces,
-//! the settings and bodies they were checked with, lay flat and the
-//! refusals.
+//! The `printability` op as the app calls it: findings with their faces, the settings and bodies they were checked
+//! with, lay flat and the refusals.
 
 use fundacad_geom::builder::NoWatch;
 use fundacad_geom::printcheck::op::printability_result;

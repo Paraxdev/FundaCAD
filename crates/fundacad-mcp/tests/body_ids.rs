@@ -1,6 +1,5 @@
-//! A document built in one session comes out of a fresh one with the same body
-//! ids and the same volumes, whether it travels through `doc_get` and
-//! `doc_set` or through a saved file. Spawns the engine.
+//! A document built in one session comes out of a fresh one with the same body ids and volumes, through
+//! `doc_get` and `doc_set` or a saved file. Spawns the engine.
 
 mod common;
 
@@ -13,9 +12,8 @@ fn session() -> Mcp {
     Mcp::start(&BTreeMap::new(), &std::env::temp_dir())
 }
 
-/// The shape of the timeline that lost its ids: a join, a join that names
-/// body1, then a sphere and a cylinder that later features address as body2
-/// and body3.
+/// The timeline that once lost its ids: a join, a join naming body1, then a sphere and a cylinder
+/// that later features address as body2 and body3.
 fn timeline() -> Vec<Value> {
     vec![
         json!({"id": "floor", "type": "box", "length": 100, "width": 100, "height": 6, "operation": "new"}),
@@ -132,9 +130,7 @@ fn a_file_saved_before_the_map_keeps_the_numbering_it_was_made_with() {
 
 #[test]
 fn a_revolve_made_a_join_through_doc_set_keeps_its_targets_id() {
-    // The report: a revolve set to join into body1 came out as body3. It had
-    // been built as a new body first, and the edit that made it a join went
-    // through doc_get and doc_set, which kept its record of body3.
+    // A revolve built as a new body, then made a join into body1 through doc_get and doc_set, came out as body3.
     let mut mcp = session();
     let sketch = json!({"id": "sk", "type": "sketch", "plane": "XZ", "entities": [
         {"type": "rectangle", "width": 4, "height": 10, "x": 12, "y": 0, "angle": 0}]});
