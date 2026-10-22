@@ -172,12 +172,12 @@ inline BlShape blend_fillet(const TopoDS_Shape &shape, const TopoDS_Shape &edges
 // both 20 mm Y faces at 3/12, where 12 at one corner of each face and 3 at the other fits.
 enum BlSidesKind { BL_SIDES_MAP, BL_SIDES_MAP_FITS, BL_SIDES_FIT, BL_SIDES_TOUCH, BL_SIDES_NONE };
 
-// `concave`: with no fit, a concave edge on a face map order runs past, which the section build
-// would clamp or cross unseen.
+// `unseen`: with no fit, an edge the section build would get wrong in map order: a concave fill on a
+// face it runs past, clamped or crossed, or a chamfer at an inside corner while setbacks just meet.
 struct BlSides {
   int kind = BL_SIDES_MAP;
   std::vector<char> second;
-  int concave = -1;
+  int unseen = -1;
 };
 
 struct BlSeg {
@@ -274,7 +274,8 @@ inline int bl_face_fit(const BlFace &f, const std::vector<double> &off, double t
 }
 
 // `second` puts d1 on the map's last face. Map order stays wherever it fits; only straight edged planes are judged.
-// Setbacks may just meet unless a concave fill meets another chamfer, which the section build never checks.
+// Setbacks may just meet unless a concave fill meets another chamfer, which the section build never checks,
+// or two chamfers meet at an inside corner, where it ends each square and leaves their mitre standing.
 inline BlSides bl_chamfer_sides(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &es,
                                 const std::vector<double> &d1, const std::vector<double> &d2) {
   BlSides out;
@@ -289,6 +290,7 @@ inline BlSides bl_chamfer_sides(const TopoDS_Shape &shape, const std::vector<Top
     TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, anc);
     TopTools_IndexedMapOfShape face_ids;
     std::vector<std::array<int, 2>> on(m), seg_at(m, std::array<int, 2>{-1, -1});
+    int cornered = -1;
     double tol = 1e-6;
     for (size_t i = 0; i < m; ++i) {
       int idx = anc.FindIndex(es[i]);
@@ -356,6 +358,13 @@ inline BlSides bl_chamfer_sides(const TopoDS_Shape &shape, const std::vector<Top
         else if (inside(mid - in * step)) s.in = -in;
         else return out;
       }
+      for (const BlSeg &s : f.segs)
+        for (int k = 0; k < 2 && s.edge >= 0; ++k) {
+          const BlSeg &o = f.segs[s.nb[k]];
+          gp_XY at = k ? s.b : s.a;
+          gp_XY away = (o.a - at).SquareModulus() < (o.b - at).SquareModulus() ? o.b - o.a : o.a - o.b;
+          if (o.edge >= 0 && away.Dot(s.in) < 0) cornered = s.edge;
+        }
     }
     std::vector<char> concave(m, 0);
     for (size_t i = 0; i < m; ++i) {
@@ -384,7 +393,7 @@ inline BlSides bl_chamfer_sides(const TopoDS_Shape &shape, const std::vector<Top
     };
     auto passes = [&](size_t fi, const std::vector<char> &sec, bool touch) {
       int got = fit(fi, sec);
-      return got == 0 || (got == 1 && touch && (faces[fi].convex || faces[fi].edges.size() == 1));
+      return got == 0 || (got == 1 && touch && cornered < 0 && (faces[fi].convex || faces[fi].edges.size() == 1));
     };
     bool map_fits = true;
     for (size_t fi = 0; fi < faces.size() && map_fits; ++fi) map_fits = passes(fi, out.second, true);
@@ -444,16 +453,21 @@ inline BlSides bl_chamfer_sides(const TopoDS_Shape &shape, const std::vector<Top
       out.kind = BL_SIDES_FIT;
       return out;
     }
-    if (got == 0 && (got = search(true)) == 1) {
+    if (got == 0 && cornered < 0 && (got = search(true)) == 1) {
       out.kind = BL_SIDES_TOUCH;
       return out;
     }
     out.second.assign(m, 0);
     out.kind = got < 0 ? BL_SIDES_MAP : BL_SIDES_NONE;
-    for (size_t fi = 0; fi < faces.size() && got == 0 && out.concave < 0; ++fi)
+    for (size_t fi = 0; fi < faces.size() && got == 0 && out.unseen < 0; ++fi)
       if (!faces[fi].convex && !passes(fi, out.second, true))
         for (int e : faces[fi].edges)
-          if (concave[e] && out.concave < 0) out.concave = e;
+          if (concave[e] && out.unseen < 0) out.unseen = e;
+    if (got == 0 && out.unseen < 0 && cornered >= 0) {
+      int worst = 0;
+      for (size_t fi = 0; fi < faces.size(); ++fi) worst = std::max(worst, fit(fi, out.second));
+      if (worst == 1) out.unseen = cornered;
+    }
     return out;
   } catch (const Standard_Failure &) {
     out.second.assign(m, 0);
