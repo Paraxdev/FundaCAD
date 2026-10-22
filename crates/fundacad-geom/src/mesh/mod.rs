@@ -16,6 +16,7 @@ use fundacad_protocol::{Edge, FullBody, MeshResult, WireBody};
 use opencascade::mesh_access::MeshAccess;
 use opencascade::primitives::Shape;
 use serde_json::{json, Map, Value};
+use std::sync::Arc;
 
 /// Bump whenever the payload changes for the same input, it keys the mesh artifact cache.
 pub const CODE_VERSION: u32 = 11;
@@ -44,24 +45,36 @@ pub struct MeshBody<'a> {
 /// A store of built payloads, consulted before a body is meshed. What it
 /// returns and stores has the envelope keys stripped.
 pub trait PayloadCache {
-    fn get(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile) -> Option<FullBody>;
+    fn get(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile) -> Option<Cached>;
     fn put(
         &mut self,
         body: &MeshBody<'_>,
         tolerance: f64,
         profile: ViewportProfile,
-        payload: &FullBody,
+        payload: FullBody,
+        etag: &str,
         build: std::time::Duration,
     );
+}
+
+/// A stored payload with the `etag_with` it was stored under, valid while the hit key matches.
+pub struct Cached {
+    pub etag: String,
+    pub payload: Arc<FullBody>,
+}
+
+enum Built {
+    Fresh(FullBody),
+    Hit(Cached),
 }
 
 pub struct NoPayloadCache;
 
 impl PayloadCache for NoPayloadCache {
-    fn get(&mut self, _: &MeshBody<'_>, _: f64, _: ViewportProfile) -> Option<FullBody> {
+    fn get(&mut self, _: &MeshBody<'_>, _: f64, _: ViewportProfile) -> Option<Cached> {
         None
     }
-    fn put(&mut self, _: &MeshBody<'_>, _: f64, _: ViewportProfile, _: &FullBody, _: std::time::Duration) {}
+    fn put(&mut self, _: &MeshBody<'_>, _: f64, _: ViewportProfile, _: FullBody, _: &str, _: std::time::Duration) {}
 }
 
 pub const ENVELOPE_KEYS: [&str; 7] = ["id", "name", "etag", "nodeRef", "faceColors", "partColor", "scan"];
@@ -76,9 +89,13 @@ pub fn strip_envelope(full: &FullBody) -> FullBody {
 }
 
 fn with_envelope(body: &MeshBody<'_>, payload: FullBody) -> FullBody {
+    let tag = etag_with(&payload, pass_key(body).as_deref());
+    with_etag(body, payload, &tag)
+}
+
+fn with_etag(body: &MeshBody<'_>, payload: FullBody, tag: &str) -> FullBody {
     let mut out = payload;
-    let tag = etag_with(&out, pass_key(body).as_deref());
-    let mut fields = envelope(body, &tag);
+    let mut fields = envelope(body, tag);
     fields.extend(std::mem::take(&mut out.fields));
     out.fields = fields;
     out
@@ -351,8 +368,19 @@ pub fn pass_key(body: &MeshBody<'_>) -> Option<String> {
     }
 }
 
+thread_local! {
+    static HASHED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many etags this thread has hashed, so a test can see a cached body was not hashed again.
+#[doc(hidden)]
+pub fn etags_hashed() -> usize {
+    HASHED.with(std::cell::Cell::get)
+}
+
 /// `etag`, with the mesh passes mixed in.
 pub fn etag_with(body: &FullBody, passes: Option<&str>) -> String {
+    HASHED.with(|n| n.set(n.get() + 1));
     let mut h = match Blake2bVar::new(16) {
         Ok(h) => h,
         Err(_) => return String::new(),
@@ -453,14 +481,13 @@ fn built_payloads(
     profile: ViewportProfile,
     cache: &mut dyn PayloadCache,
     on_body: &mut dyn FnMut(usize, usize),
-) -> Vec<Option<FullBody>> {
+) -> Vec<Option<Built>> {
     let total = bodies.len();
-    let mut out: Vec<Option<FullBody>> = Vec::with_capacity(total);
+    let mut out: Vec<Option<Built>> = Vec::with_capacity(total);
     let mut misses: Vec<usize> = Vec::new();
     let ticked = std::sync::atomic::AtomicUsize::new(0);
     for (i, body) in bodies.iter().enumerate() {
-        let cached =
-            body.shape.and_then(|_| cache.get(body, tolerance, profile)).map(|payload| with_envelope(body, payload));
+        let cached = body.shape.and_then(|_| cache.get(body, tolerance, profile)).map(Built::Hit);
         if cached.is_none() && body.shape.is_some() {
             misses.push(i);
         } else {
@@ -494,8 +521,9 @@ fn built_payloads(
     };
     for (k, (full, took)) in made {
         let i = misses[k];
-        cache.put(&bodies[i], tolerance, profile, &strip_envelope(&full), took);
-        out[i] = Some(full);
+        let tag = full.fields.get("etag").and_then(Value::as_str).unwrap_or_default();
+        cache.put(&bodies[i], tolerance, profile, strip_envelope(&full), tag, took);
+        out[i] = Some(Built::Fresh(full));
     }
     out
 }
@@ -515,8 +543,21 @@ pub fn mesh_result_full(
     let mut built = built_payloads(bodies, tolerance, profile, cache, on_body);
     let mut failed = Vec::new();
     for (i, body) in bodies.iter().enumerate() {
-        let Some(mut full) = built[i].take() else {
-            continue;
+        let mut full = match built[i].take() {
+            None => continue,
+            Some(Built::Fresh(full)) => full,
+            // Read off the shared payload in the order the full path below takes them, so the reply bytes match.
+            Some(Built::Hit(c)) if known.get(&body.id).and_then(Value::as_str) == Some(c.etag.as_str()) => {
+                if let Some(Value::Array(f)) = c.payload.fields.get(PASS_ERRORS) {
+                    failed.extend(f.iter().cloned());
+                }
+                boxes.push(c.payload.fields.get("bbox").cloned().unwrap_or(Value::Null));
+                let mut stub = envelope(body, &c.etag);
+                stub.insert("unchanged".into(), Value::Bool(true));
+                out.push(WireBody::Stub(stub));
+                continue;
+            }
+            Some(Built::Hit(c)) => with_etag(body, Arc::unwrap_or_clone(c.payload), &c.etag),
         };
         if let Some(Value::Array(f)) = full.fields.remove(PASS_ERRORS) {
             failed.extend(f);

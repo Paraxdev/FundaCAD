@@ -2,13 +2,14 @@
 //! the body's checkpoint blob key, `mesh::CODE_VERSION` and the deflections.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use fundacad_protocol::{Edge, FullBody};
 use serde_json::{Map, Value};
 
 use super::store::GeomStore;
-use crate::mesh::{self, effective_tolerance, MeshBody, PayloadCache, ViewportProfile};
+use crate::mesh::{self, effective_tolerance, Cached, MeshBody, PayloadCache, ViewportProfile};
 
 /// `_MESH_PERSIST_MIN_MS`: cheaper payloads are not worth a disk write.
 pub const PERSIST_MIN: Duration = Duration::from_millis(50);
@@ -21,7 +22,8 @@ struct RamPayload {
     /// `mesh::pass_key`: a mesh pass spec or its code version changing on the
     /// same shape must mesh again.
     passes: Option<String>,
-    payload: FullBody,
+    etag: String,
+    payload: Arc<FullBody>,
 }
 
 #[derive(Default)]
@@ -87,25 +89,27 @@ pub struct Tiered<'a> {
 }
 
 impl PayloadCache for Tiered<'_> {
-    fn get(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile) -> Option<FullBody> {
+    fn get(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile) -> Option<Cached> {
         let req = request(tolerance, profile);
         let passes = mesh::pass_key(body);
         if let (Some(ident), Some(hit)) = (body.identity, self.payloads.ram.get(&body.id)) {
             if hit.identity == ident && hit.request == req && hit.passes == passes {
                 self.payloads.ram_hits += 1;
-                return Some(hit.payload.clone());
+                return Some(Cached { etag: hit.etag.clone(), payload: Arc::clone(&hit.payload) });
             }
         }
         let store = self.store?;
         let key = body.mesh_key.as_deref()?;
         let payload = decode(&store.get_mesh(&body_artifact_key(key, passes.as_deref(), tolerance, profile))?)?;
         self.payloads.disk_hits += 1;
+        let etag = mesh::etag_with(&payload, passes.as_deref());
+        let payload = Arc::new(payload);
         if let Some(identity) = body.identity {
-            self.payloads
-                .ram
-                .insert(body.id.clone(), RamPayload { identity, request: req, passes, payload: payload.clone() });
+            let entry =
+                RamPayload { identity, request: req, passes, etag: etag.clone(), payload: Arc::clone(&payload) };
+            self.payloads.ram.insert(body.id.clone(), entry);
         }
-        Some(payload)
+        Some(Cached { etag, payload })
     }
 
     fn put(
@@ -113,7 +117,8 @@ impl PayloadCache for Tiered<'_> {
         body: &MeshBody<'_>,
         tolerance: f64,
         profile: ViewportProfile,
-        payload: &FullBody,
+        payload: FullBody,
+        etag: &str,
         build: Duration,
     ) {
         self.payloads.meshed += 1;
@@ -121,14 +126,18 @@ impl PayloadCache for Tiered<'_> {
         if let (Some(store), Some(key)) = (self.store, body.mesh_key.as_deref()) {
             if build >= self.persist_after || profile.size_scale != 1.0 {
                 let at = body_artifact_key(key, passes.as_deref(), tolerance, profile);
-                let _ = store.put_mesh(&at, &encode(payload));
+                let _ = store.put_mesh(&at, &encode(&payload));
             }
         }
         if let Some(identity) = body.identity {
-            self.payloads.ram.insert(
-                body.id.clone(),
-                RamPayload { identity, request: request(tolerance, profile), passes, payload: payload.clone() },
-            );
+            let entry = RamPayload {
+                identity,
+                request: request(tolerance, profile),
+                passes,
+                etag: etag.to_owned(),
+                payload: Arc::new(payload),
+            };
+            self.payloads.ram.insert(body.id.clone(), entry);
         }
     }
 }
