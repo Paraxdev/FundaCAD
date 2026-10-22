@@ -84,9 +84,9 @@ describe("TILE_SHAPE", () => {
   // A rail tile is 40 px with a 17 px squircle corner (--rail-tile, --float-tile-radius).
   it("is clearly bigger than a rail tile and rounds like one, with the app's squircle", () => {
     expect(TILE_SHAPE).toEqual({
-      sizePx: 68,
-      gapPx: 10,
-      radiusPx: 29,
+      sizePx: 85,
+      gapPx: 12,
+      radiusPx: 36,
       exponent: SQUIRCLE_EXPONENT,
       octant: { x: 1, y: -1, z: 1 },
     });
@@ -99,9 +99,9 @@ describe("TILE_SHAPE", () => {
 describe("tilePose", () => {
   it("puts each default tile in its own quadrant of the home octant", () => {
     expect(PLANES.map((k) => tilePose(k, TILE_SHAPE))).toEqual([
-      { centre: [44, -44, 0], u: [1, 0, 0], v: [0, 1, 0], normal: [0, 0, 1] },
-      { centre: [44, 0, 44], u: [1, 0, 0], v: [0, 0, 1], normal: [0, -1, 0] },
-      { centre: [0, -44, 44], u: [0, 1, 0], v: [0, 0, 1], normal: [1, 0, 0] },
+      { centre: [54.5, -54.5, 0], u: [1, 0, 0], v: [0, 1, 0], normal: [0, 0, 1] },
+      { centre: [54.5, 0, 54.5], u: [1, 0, 0], v: [0, 0, 1], normal: [0, -1, 0] },
+      { centre: [0, -54.5, 54.5], u: [0, 1, 0], v: [0, 0, 1], normal: [1, 0, 0] },
     ]);
   });
 
@@ -303,7 +303,11 @@ describe("OriginTiles", () => {
     const ctx = {
       clearRect: () => {},
       fillText: (s: string) => drawn.push(s),
+      strokeText: () => {},
       fillStyle: "",
+      strokeStyle: "",
+      lineJoin: "",
+      lineWidth: 0,
       font: "",
       textAlign: "",
       textBaseline: "",
@@ -319,7 +323,7 @@ describe("OriginTiles", () => {
     expect(drawn).toEqual([]);
     t.setShown(true);
     expect(drawn).toEqual(["XY", "XZ", "YZ"]);
-    expect({ fill: ctx.fillStyle, font: ctx.font.includes("Space Grotesk"), size: ctx.font.includes("44px") }).toEqual({
+    expect({ fill: ctx.fillStyle, font: ctx.font.includes("Space Grotesk"), size: ctx.font.includes("60px") }).toEqual({
       fill: "#ffffff",
       font: true,
       size: true,
@@ -330,7 +334,7 @@ describe("OriginTiles", () => {
     t.setShown(true);
     expect(drawn.length).toBe(6);
     const map = (child(t.planes.YZ, "label") as THREE.Sprite).material.map!;
-    expect(map.image as { width: number; height: number }).toMatchObject({ width: 112, height: 64 });
+    expect(map.image as { width: number; height: number }).toMatchObject({ width: 152, height: 88 });
     t.dispose();
   });
 
@@ -425,9 +429,9 @@ describe("OriginTiles", () => {
         .toArray()
         .map((n) => Math.round(n * 1e9) / 1e9 + 0);
     expect(PLANES.map(corner)).toEqual([
-      [64 * 0.37, -24 * 0.37, 0].map((n) => Math.round(n * 1e9) / 1e9),
-      [64 * 0.37, 0, 64 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
-      [0, -24 * 0.37, 64 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
+      [74.5 * 0.37, -34.5 * 0.37, 0].map((n) => Math.round(n * 1e9) / 1e9),
+      [74.5 * 0.37, 0, 74.5 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
+      [0, -34.5 * 0.37, 74.5 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
     ]);
     t.dispose();
   });

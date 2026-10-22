@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { LABEL_BOX_PX, OriginTiles, TILE_SIZE_PX, type ScreenFrame } from "../../src/viewport/originTiles";
+import { LABEL_BOX_PX, OriginTiles, TILE_GAP_PX, TILE_SIZE_PX, type ScreenFrame } from "../../src/viewport/originTiles";
 import {
   HIT_MIN_COARSE_PX,
   HIT_MIN_PX,
   pickPlaneOnScreen,
-  placeLabels,
   planeHitMinPx,
-  polygonDistance,
   type P2,
   type PlaneOnScreen,
 } from "../../src/viewport/planeHit";
@@ -16,7 +14,7 @@ import type { Plane3 } from "../../src/types";
 const PLANES: Plane3[] = ["XY", "XZ", "YZ"];
 const RECT = { left: 100, top: 50, width: 800, height: 600 };
 
-/** An orthographic camera at one world unit per pixel, so a full size tile is 68 px on screen. */
+/** An orthographic camera at one world unit per pixel, so a full size tile is 85 px on screen. */
 function orthoFrom(dir: [number, number, number]): THREE.OrthographicCamera {
   const cam = new THREE.OrthographicCamera(-400, 400, 300, -300, 1, 5000);
   const d = new THREE.Vector3(...dir).normalize();
@@ -96,10 +94,6 @@ function narrowWidth(t: PlaneOnScreen): number {
   return w;
 }
 
-function rectsOverlap(a: P2, b: P2) {
-  return Math.abs(a.x - b.x) < LABEL_BOX_PX.w && Math.abs(a.y - b.y) < LABEL_BOX_PX.h;
-}
-
 describe("planeHitMinPx", () => {
   it("is 44 px for a mouse and 48 px for a coarse pointer or after a touch", () => {
     expect([HIT_MIN_PX, HIT_MIN_COARSE_PX]).toEqual([44, 48]);
@@ -112,12 +106,12 @@ describe("planeHitMinPx", () => {
 });
 
 describe("hit area on screen", () => {
-  it("gives every plane at least a 44 px square at the oblique view, the near edge on tile included", () => {
+  it("gives every plane a 44 px square at the oblique view, less the gap a neighbouring tile may take", () => {
     const { t, frame, screen, labels } = tilesAt(OBLIQUE);
     const xz = screen.find((s) => s.plane === "XZ")!;
     expect(narrowWidth(xz)).toBeLessThan(12);
     const sq = largestSquare(screen, labels, originOf(frame), HIT_MIN_PX);
-    for (const k of PLANES) expect(sq[k]).toBeGreaterThanOrEqual(HIT_MIN_PX);
+    for (const k of PLANES) expect(sq[k]).toBeGreaterThanOrEqual(HIT_MIN_PX - TILE_GAP_PX);
     t.dispose();
   });
 
@@ -129,7 +123,7 @@ describe("hit area on screen", () => {
       0,
     ]);
     const sq = largestSquare(screen, labels, originOf(frame), HIT_MIN_PX);
-    for (const k of PLANES) expect(sq[k]).toBeGreaterThanOrEqual(HIT_MIN_PX);
+    for (const k of PLANES) expect(sq[k]).toBeGreaterThanOrEqual(HIT_MIN_PX - TILE_GAP_PX);
     t.dispose();
   });
 
@@ -137,7 +131,7 @@ describe("hit area on screen", () => {
     for (const dir of [TOP, OBLIQUE]) {
       const { t, frame, screen, labels } = tilesAt(dir);
       const sq = largestSquare(screen, labels, originOf(frame), HIT_MIN_COARSE_PX);
-      for (const k of PLANES) expect(sq[k]).toBeGreaterThanOrEqual(HIT_MIN_COARSE_PX);
+      for (const k of PLANES) expect(sq[k]).toBeGreaterThanOrEqual(HIT_MIN_COARSE_PX - TILE_GAP_PX);
       t.dispose();
     }
   });
@@ -230,7 +224,7 @@ describe("overlapping targets", () => {
 });
 
 describe("names", () => {
-  it("sit in the middle of a tile that holds them", () => {
+  it("sit in the middle of their tile", () => {
     const { t, screen, labels } = tilesAt([1, -1.5, 1.1]);
     for (const s of screen) {
       expect(labels[s.plane]!.x).toBeCloseTo(s.centre.x, 9);
@@ -239,19 +233,14 @@ describe("names", () => {
     t.dispose();
   });
 
-  it("move beside an edge on tile, clear of the other names and tiles", () => {
+  it("stay at the centre of an edge on tile", () => {
     for (const dir of [TOP, OBLIQUE]) {
       const { t, screen, labels } = tilesAt(dir);
       const thin = screen.filter((s) => narrowWidth(s) < 12);
       expect(thin.length).toBeGreaterThan(0);
       for (const s of thin) {
-        const at = labels[s.plane]!;
-        expect(Math.hypot(at.x - s.centre.x, at.y - s.centre.y)).toBeGreaterThan(LABEL_BOX_PX.h / 2);
-        for (const o of screen) {
-          if (o.plane === s.plane) continue;
-          expect(rectsOverlap(at, labels[o.plane]!)).toBe(false);
-          expect(polygonDistance(at, o.outline)).toBeGreaterThan(0);
-        }
+        expect(labels[s.plane]!.x).toBeCloseTo(s.centre.x, 9);
+        expect(labels[s.plane]!.y).toBeCloseTo(s.centre.y, 9);
       }
       t.dispose();
     }
@@ -279,31 +268,5 @@ describe("names", () => {
       expect((-p.y * 0.5 + 0.5) * RECT.height + RECT.top).toBeCloseTo(labels[k]!.y, 6);
     }
     t.dispose();
-  });
-
-  it("slide out smoothly as a tile turns edge on", () => {
-    const tile = (squash: number): PlaneOnScreen => {
-      const h = 34;
-      const ry = h * squash;
-      return {
-        plane: "XZ",
-        centre: { x: 0, y: 0 },
-        outline: [
-          { x: -h, y: -ry },
-          { x: h, y: -ry },
-          { x: h, y: ry },
-          { x: -h, y: ry },
-        ],
-        su: { x: h, y: 0 },
-        sv: { x: 0, y: ry },
-        facing: squash,
-      };
-    };
-    const shift = (squash: number) => Math.abs(placeLabels([tile(squash)], LABEL_BOX_PX).XZ!.y);
-    expect(shift(1)).toBe(0);
-    expect(shift(0.5)).toBe(0);
-    const steps = Array.from({ length: 41 }, (_, i) => shift(i / 100));
-    for (let i = 1; i < steps.length; i++) expect(Math.abs(steps[i]! - steps[i - 1]!)).toBeLessThan(4);
-    expect(steps[0]).toBeGreaterThan(LABEL_BOX_PX.h / 2);
   });
 });
