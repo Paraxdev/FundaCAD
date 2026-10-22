@@ -906,8 +906,14 @@ export class DocumentStore {
     this.st.committedShown = null;
     this.st.provisional = null;
     this.st.restoreArmed = false;
+    // Only the build on the wire stops. Its loop goes on and sends the replacing document next, which an abort of the
+    // loop's op would refuse before it went out. Other ops of the document run on (an import lands in the replacement).
+    const f = this.st.inflight;
+    if (!f) return;
+    f.dropped = true;
+    f.cancelled = true;
     // Cancel kills the pool worker, the only way to interrupt an OCCT call already under way.
-    void this.cancelBusy();
+    if (f.id) void this.geometry.cancel?.(f.id);
   }
 
   // Not for a replace load, where an armed tool stays and keeps previewing.
@@ -2945,7 +2951,7 @@ export class DocumentStore {
   // new body ids).
   async rebuildNow(): Promise<void> {
     const st = this.st;
-    if (this.restoreCommitted()) return;
+    if (!st.computeAllQueued && this.restoreCommitted()) return;
     if (this.settleEmptyLocally(st)) return;
     if (st.rebuilding) {
       st.rebuildQueued = true;
@@ -2954,13 +2960,16 @@ export class DocumentStore {
       return;
     }
     st.rebuilding = true;
+    const computeAll = this.geometry.computeAll?.bind(this.geometry);
     const drain = (async () => {
       await this.runBusy(
-        "Rebuilding",
+        st.computeAllQueued && computeAll ? "Computing all" : "Rebuilding",
         async (onStarted) => {
           try {
             do {
               st.rebuildQueued = false;
+              const all = st.computeAllQueued && !!computeAll;
+              st.computeAllQueued = false;
               this.emitBuildStarted();
               const sent = this.doc;
               const previewing = !!(this.preview || this.editPreview);
@@ -2970,10 +2979,15 @@ export class DocumentStore {
               const flight: NonNullable<SessionState["inflight"]> = { gen: ++this.sendGen, id: null, cancelled: false };
               st.inflight = flight;
               markSent();
-              const reply = await this.geometry.rebuild(effective, undefined, (id) => {
+              const send = (id: string) => {
+                if (flight.dropped) throw new OpCancelled();
                 flight.id = id;
                 onStarted(id);
-              });
+              };
+              const reply =
+                all && computeAll
+                  ? await computeAll(effective, undefined, send)
+                  : await this.geometry.rebuild(effective, undefined, send);
               markReceived();
               st.inflight = null;
               if (!st.session.alive) break;
@@ -2981,7 +2995,11 @@ export class DocumentStore {
               // Superseded and stopped: the newer queued request is what the user waits for. A user Cancel stops the
               // queue too.
               if (!reply.ok && reply.cancelled && flight.byUser) this.st.rebuildQueued = false;
-              if (!reply.ok && reply.cancelled && this.st.rebuildQueued) continue;
+              if (!reply.ok && reply.cancelled && this.st.rebuildQueued) {
+                // An edit stopped a Compute All, which still owes the user a pass past every cache.
+                if (all) st.computeAllQueued = true;
+                continue;
+              }
               if (key !== null && this.refusedProvisional(reply, key)) continue;
               if (!previewing) this.keepBodyIds(sent, reply);
               const settled = this.settledBuild(reply, sentPreview);
@@ -2991,6 +3009,8 @@ export class DocumentStore {
               this.build = settled;
               if (key !== null && reply.ok) this.st.committedShown = { key, state: settled };
               this.emitBuild();
+              // Compute All is the explicit retry the valve toast promises, so it re-arms the valve first.
+              if (reply.ok && all) this.rearmProjectionValve();
               // After publishing; a failed rebuild says nothing about projections.
               if (reply.ok) this.maybeQueueProjectionRefresh(reply.result.projectionUpdates);
             } while (st.rebuildQueued);
@@ -2998,6 +3018,7 @@ export class DocumentStore {
             // Here, not in the outer finally: runBusy's teardown awaits, and a refresh queued in that window would be dropped.
             st.rebuilding = false;
             st.inflight = null;
+            st.computeAllQueued = false;
           }
         },
         { rebuild: true },
@@ -3019,6 +3040,7 @@ export class DocumentStore {
     if (this.preview || this.editPreview || this.effectiveDoc().features.length) return false;
     this.staleThrough = this.sendGen;
     st.rebuildQueued = false;
+    st.computeAllQueued = false;
     this.supersede();
     if (this.build.streamed !== null) this.emitBuildAbort();
     this.committedFailures = new Set();
@@ -3111,36 +3133,16 @@ export class DocumentStore {
     return true;
   }
 
-  // Past every cache layer, for a suspected stale result.
+  // Past every cache layer, for a suspected stale result. It is a pass of the rebuild loop, so an edit made while it
+  // runs is built after it, and it has the rebuild's progress, chunks, History row and Cancel.
   async computeAllNow() {
-    const ca = this.geometry.computeAll?.bind(this.geometry);
-    if (!ca) return this.scheduleRebuild(true);
+    if (!this.geometry.computeAll) return this.scheduleRebuild(true);
     const st = this.st;
-    if (st.rebuilding) {
-      st.rebuildQueued = true;
-      return;
+    if (st.rebuildTimer != null) {
+      clearTimeout(st.rebuildTimer);
+      st.rebuildTimer = null;
     }
-    st.rebuilding = true;
-    try {
-      this.emitBuildStarted();
-      const sent = this.doc;
-      const previewing = !!(this.preview || this.editPreview);
-      const sentPreview = this.previewSnapshot();
-      const reply = await ca(this.effectiveDoc());
-      if (!st.session.alive) return;
-      if (!previewing) this.keepBodyIds(sent, reply);
-      const settled = this.settledBuild(reply, sentPreview);
-      if (this.build.streamed !== null && (!reply.ok || settled.heldRefusal)) this.emitBuildAbort();
-      this.build = settled;
-      this.emitBuild();
-      // Compute All is the explicit retry the valve toast promises: re-arm it and route the recomputed projection
-      // updates through the normal refresh path.
-      if (reply.ok) {
-        this.rearmProjectionValve();
-        this.maybeQueueProjectionRefresh(reply.result.projectionUpdates);
-      }
-    } finally {
-      st.rebuilding = false;
-    }
+    st.computeAllQueued = true;
+    await this.rebuildNow();
   }
 }
