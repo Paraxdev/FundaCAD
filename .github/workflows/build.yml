@@ -66,6 +66,10 @@ jobs:
       - name: Bundle smoke driver tests
         run: python3 tests/build/test_bundle_smoke.py
 
+      # The notes part of the release job's Publish step, against a stub gh.
+      - name: Release notes tests
+        run: python3 tests/build/test_release_notes.py
+
       # The plugin sandbox is a worker ENTRY, so Rollup treats its exports as
       # unreachable and drops them. That produced a chunk with none of the
       # sandbox in it, past every unit test, and would have failed at the first
@@ -705,10 +709,20 @@ jobs:
           R='${{ github.repository }}'
           MAX=25
 
-          # The warning section 6 calls not optional, and it comes first
-          # because a reader who stops after the first screen has to have read
-          # it.
-          cat > notes.md <<'WARN'
+          # Hand written notes kept in the repo go above the generated part
+          # and replace its commit list, so a promotion no longer overwrites
+          # them. Without the file the generated notes alone are published.
+          NOTES="docs/release-notes/$RELEASE.md"
+          if [ -s "$NOTES" ]; then
+            { cat "$NOTES"; printf '\n\n---\n\n'; } > notes.md
+          else
+            : > notes.md
+          fi
+
+          # The warning section 6 calls not optional. With hand written notes
+          # it follows them, otherwise it comes first because a reader who
+          # stops after the first screen has to have read it.
+          cat >> notes.md <<'WARN'
           > ### Read this first
           >
           > **This is FundaCAD 1.0 on the Rust geometry engine.** It replaces
@@ -748,44 +762,46 @@ jobs:
             prev="$SINCE"
             branch=main
           fi
-          if [ "$RELEASE" != stable ]; then
-            # The commit the rolling tag is on RIGHT NOW: the build this
-            # replaces. Read BEFORE the tag is moved, further down.
-            prev=$(gh api "repos/$R/git/ref/tags/$TAG" --jq .object.sha 2>/dev/null || true)
-          fi
-          commits=''
-          if [ -n "$prev" ] && [ "$prev" != "$SHA" ]; then
-            commits=$(gh api "repos/$R/compare/$prev...$SHA" \
-              --jq '[.commits[] | select((.parents | length) < 2)] | reverse' 2>/dev/null || true)
-          fi
-          span="since [\`${prev:0:7}\`](https://github.com/$R/compare/$prev...$SHA)"
-          if [ -z "$commits" ] || [ "$(jq 'length' <<<"$commits")" -eq 0 ]; then
-            commits=$(gh api "repos/$R/commits?sha=$SHA&per_page=$MAX" \
-              --jq '[.[] | select((.parents | length) < 2)]')
-            span="the newest on \`$branch\`"
-          fi
-          total=$(jq 'length' <<<"$commits")
-
-          {
-            printf '\n## Changes, %s\n\n' "$span"
-            jq -r --arg base "https://github.com/$R/commit/" --argjson max "$MAX" '
-              def clip($n): if (length) > $n then (.[0:$n] | sub("\\s+$"; "")) + "…" else . end;
-              .[0:$max][]
-              | .sha as $sha
-              | (.commit.message | split("\n")) as $l
-              | ($l[0] | gsub("[\\[\\]]"; "")) as $subject
-              | ($l[1:] | map(select(test("\\S"))) | join(" ")
-                        | gsub("\\s+"; " ") | gsub("[\\[\\]]"; "")) as $body
-              | (($subject | capture("^(?<t>[a-z]+)(\\([^)]*\\))?!?: (?<r>.+)$"))
-                  // {t: "commit", r: $subject}) as $c
-              | "- " + $c.t + "(`" + $sha[0:7] + "`): ["
-                + ($c.r | clip(90)) + "](" + $base + $sha + ")"
-                + (if ($body | length) == 0 then "" else " " + ($body | clip(160)) end)
-            ' <<<"$commits"
-            if [ "$total" -gt "$MAX" ]; then
-              printf '\nand %d more.\n' "$((total - MAX))"
+          if [ ! -s "$NOTES" ]; then
+            if [ "$RELEASE" != stable ]; then
+              # The commit the rolling tag is on RIGHT NOW: the build this
+              # replaces. Read BEFORE the tag is moved, further down.
+              prev=$(gh api "repos/$R/git/ref/tags/$TAG" --jq .object.sha 2>/dev/null || true)
             fi
-          } >> notes.md
+            commits=''
+            if [ -n "$prev" ] && [ "$prev" != "$SHA" ]; then
+              commits=$(gh api "repos/$R/compare/$prev...$SHA" \
+                --jq '[.commits[] | select((.parents | length) < 2)] | reverse' 2>/dev/null || true)
+            fi
+            span="since [\`${prev:0:7}\`](https://github.com/$R/compare/$prev...$SHA)"
+            if [ -z "$commits" ] || [ "$(jq 'length' <<<"$commits")" -eq 0 ]; then
+              commits=$(gh api "repos/$R/commits?sha=$SHA&per_page=$MAX" \
+                --jq '[.[] | select((.parents | length) < 2)]')
+              span="the newest on \`$branch\`"
+            fi
+            total=$(jq 'length' <<<"$commits")
+
+            {
+              printf '\n## Changes, %s\n\n' "$span"
+              jq -r --arg base "https://github.com/$R/commit/" --argjson max "$MAX" '
+                def clip($n): if (length) > $n then (.[0:$n] | sub("\\s+$"; "")) + "…" else . end;
+                .[0:$max][]
+                | .sha as $sha
+                | (.commit.message | split("\n")) as $l
+                | ($l[0] | gsub("[\\[\\]]"; "")) as $subject
+                | ($l[1:] | map(select(test("\\S"))) | join(" ")
+                          | gsub("\\s+"; " ") | gsub("[\\[\\]]"; "")) as $body
+                | (($subject | capture("^(?<t>[a-z]+)(\\([^)]*\\))?!?: (?<r>.+)$"))
+                    // {t: "commit", r: $subject}) as $c
+                | "- " + $c.t + "(`" + $sha[0:7] + "`): ["
+                  + ($c.r | clip(90)) + "](" + $base + $sha + ")"
+                  + (if ($body | length) == 0 then "" else " " + ($body | clip(160)) end)
+              ' <<<"$commits"
+              if [ "$total" -gt "$MAX" ]; then
+                printf '\nand %d more.\n' "$((total - MAX))"
+              fi
+            } >> notes.md
+          fi
 
           printf '\n---\n\nUnsigned: Windows SmartScreen needs "More info", then "Run anyway"; macOS may call the app damaged, which `xattr -dr com.apple.quarantine /Applications/FundaCAD.app` clears. [Install notes](https://github.com/%s#install).\n' \
             "$R" >> notes.md
@@ -794,7 +810,9 @@ jobs:
             printf '\nNot rebuilt this time, so any copy here is from an earlier build: %s.\n' "$partial" >> notes.md
           fi
           if [ "$SELF_UPDATES" = yes ]; then
-            printf '\nInstalled copies update themselves from the newest %s release.\n' "$RELEASE" >> notes.md
+            # Betas installed before the signing key changed cannot verify
+            # the new key's updates, so hand written notes say who updates.
+            [ -s "$NOTES" ] || printf '\nCopies installed before the signing key changed need one manual install of this build, after that they update themselves from the newest %s release.\n' "$RELEASE" >> notes.md
           else
             printf '\nThis build does not update itself, so take a new installer from this page when you want a newer one.\n' >> notes.md
           fi
