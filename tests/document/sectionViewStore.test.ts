@@ -3,7 +3,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { DocumentStore, KNOWN_DOC_KEYS, carriedKeys } from "../../src/document/store";
-import { isEmptyDiff } from "../../src/document/versions";
+import { isEmptyDiff, type VersionRepo } from "../../src/document/versions";
 import type { GeometryBackend } from "../../src/geometry/client";
 import type { CadDocument, Feature, SectionView } from "../../src/types";
 
@@ -171,6 +171,39 @@ describe("the section cut in the document", () => {
     store.restoreVersion(first);
     expect(store.document.features.map((f) => f.id)).toEqual(["a1"]);
     expect(store.sectionView).toEqual(CUT);
+  });
+
+  // An older app keeps the cut as a key it does not know, and its versions record such keys.
+  it("restores a version an older app saved with a cut in it without that cut, and sees no change after", () => {
+    const old = fresh();
+    old.saveVersion("old");
+    const repo = old.versionRepo as VersionRepo;
+    const v = repo.versions[0]!;
+    const rest = { ...(JSON.parse(repo.objects[v.tree.rest]!) as object), sectionView: CUT_C };
+    repo.objects["old-rest"] = JSON.stringify(rest);
+    v.tree.rest = "old-rest";
+    old.addFeature(box("a2", 9));
+    const store = fresh();
+    store.load(old.toJSON());
+    store.setSectionView(structuredClone(CUT));
+    store.restoreVersion(store.versionRepo!.versions[0]!.id);
+    expect([store.document.features.map((f) => f.id), store.sectionView, saved(store).sectionView]).toEqual([["a1"], CUT, CUT]);
+    expect(store.changesSinceVersion()).toEqual({ added: [], removed: [], changed: [], settings: false });
+    store.load(doc([box("b1", 1)]));
+    expect([store.sectionView, store.versionRepo]).toEqual([null, null]);
+  });
+
+  it("still sees a setting changed since an older app's version with a cut in it", () => {
+    const old = fresh();
+    old.saveVersion("old");
+    const repo = old.versionRepo as VersionRepo;
+    const v = repo.versions[0]!;
+    repo.objects["old-rest"] = JSON.stringify({ ...(JSON.parse(repo.objects[v.tree.rest]!) as object), sectionView: CUT_C });
+    v.tree.rest = "old-rest";
+    const store = fresh();
+    store.load(old.toJSON());
+    store.setParam("depth", 12.5);
+    expect(store.changesSinceVersion()).toEqual({ added: [], removed: [], changed: [], settings: true });
   });
 
   it("writes back a cut it cannot read while it has none of its own, and lets a cut set here replace it", () => {
