@@ -5,9 +5,10 @@ import ideaRaw from "../../.github/ISSUE_TEMPLATE/idea.yml?raw";
 import configRaw from "../../.github/ISSUE_TEMPLATE/config.yml?raw";
 import securityMd from "../../SECURITY.md?raw";
 import zensicalToml from "../../manual/zensical.toml?raw";
+import { BUG_FORM_FIELDS } from "../../src/ui/reportText";
 
 // Old app versions keep sending these query names to the form, so a rename breaks every report they open.
-const BUG_IDS_THE_APP_SENDS = ["what", "version", "os"];
+const BUG_IDS_THE_APP_SENDS: string[] = [...BUG_FORM_FIELDS];
 
 // A Windows checkout with autocrlf hands the files over with CRLF, which the renames below would not find.
 const lf = (text: string) => text.replace(/\r\n/g, "\n");

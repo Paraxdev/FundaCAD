@@ -11,6 +11,12 @@ import type { Viewport } from "../viewport/viewport";
 import type { SketchMode } from "../sketch/sketchMode";
 import { asFeature } from "../types";
 import type { Feature } from "../types";
+import { logEntries } from "./logStore";
+import { buildReport, recentErrors } from "./reportText";
+import type { SystemInfo } from "./systemInfo";
+import { safeMode, safeModeWhy } from "./safeMode";
+import { installedIds, RELEASE_TAG } from "../plugins";
+import { pluginEnabled } from "../plugins/registry";
 
 export interface BugReportDeps {
   store: DocumentStore;
@@ -29,6 +35,8 @@ export interface BugReportForm {
   crumbs: string[];
   /** The render pipeline trail (diagnostics/pipelineLog.ts), kept apart from the crumbs since it is long. */
   pipeline: string[];
+  errors: string[];
+  system: SystemInfo;
   /** The log tail with user names hidden; null when unticked, in a browser, or before the app wrote one. */
   logTail: string | null;
 }
@@ -45,13 +53,24 @@ export function bugContext(deps: BugReportDeps): {
   crumbs: string[];
   pipeline: string[];
   faults: boolean;
+  errors: string[];
 } {
   return {
     connected: deps.geometry.connected,
     crumbs: [...deps.viewport.sceneStats(), ...breadcrumbs()],
     pipeline: pipelineLog(),
     faults: hasFaults(),
+    errors: recentErrors(logEntries()),
   };
+}
+
+export function activePlugins(): string[] {
+  return [...installedIds()].filter(pluginEnabled).sort();
+}
+
+function safeModeLine(): string | null {
+  const info = safeMode();
+  return info ? `on, ${safeModeWhy(info)}` : null;
 }
 
 export async function appLogTail(): Promise<string | null> {
@@ -87,32 +106,6 @@ function openSketchCrumb(store: DocumentStore, live: Feature | null): string | n
   );
 }
 
-function reportText(
-  description: string,
-  version: string,
-  connected: boolean,
-  crumbs: string[],
-  pipeline: string[],
-  logTail: string | null,
-  documentJson: string | null,
-): string {
-  return [
-    `FundaCAD bug report`,
-    `version: ${version} · ${navigator.userAgent.slice(0, 80)}`,
-    `geometry engine connected: ${connected}`,
-    ``,
-    description,
-    ``,
-    `recent events:`,
-    ...crumbs.map((c) => `  ${c}`),
-    ``,
-    `render pipeline:`,
-    ...pipeline.map((c) => `  ${c}`),
-    ...(logTail ? [``, `app log (the end, user names hidden):`, logTail.trimEnd()] : []),
-    ...(documentJson ? [``, `document:`, documentJson] : []),
-  ].join("\n");
-}
-
 /** Resolves true when the dialog should close, false only when the clipboard was refused so the text is not lost. */
 export async function submitBugReport(deps: BugReportDeps, form: BugReportForm): Promise<boolean> {
   const { store, sketch } = deps;
@@ -120,16 +113,22 @@ export async function submitBugReport(deps: BugReportDeps, form: BugReportForm):
   const sketchCrumb = openSketchCrumb(store, live);
   // Prepended, since a reader skims the top of a pasted report.
   const crumbList = sketchCrumb ? [sketchCrumb, ...form.crumbs] : form.crumbs;
-  const connected = form.connected;
-  const text = reportText(
-    form.description,
-    form.version,
-    connected,
-    crumbList,
-    form.pipeline,
-    form.logTail,
-    form.includeDocument ? documentWithOpenSketch(store, live) : null,
-  );
+  const { text } = buildReport({
+    version: form.version,
+    channel: RELEASE_TAG,
+    system: form.system.system,
+    webview: form.system.webview,
+    userAgent: navigator.userAgent,
+    connected: form.connected,
+    safeMode: safeModeLine(),
+    plugins: activePlugins(),
+    description: form.description,
+    events: crumbList,
+    errors: form.errors,
+    pipeline: form.pipeline,
+    log: form.logTail,
+    document: form.includeDocument ? documentWithOpenSketch(store, live) : null,
+  });
   try {
     await navigator.clipboard.writeText(text);
     toast("Bug report copied. Paste it into a new issue on the tracker.", { kind: "info" });

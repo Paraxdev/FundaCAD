@@ -6,6 +6,7 @@ import { useDialogStore } from "../../stores/dialogs";
 import { useModalGate } from "../../composables/useModalGate";
 import { appLogTail, bugContext, submitBugReport, type BugReportDeps } from "../../ui/bugReporter";
 import { appVersion } from "../../ui/updates";
+import { systemInfo, type SystemInfo } from "../../ui/systemInfo";
 
 const dialogs = useDialogStore();
 // Non-null whenever this is rendered, App.vue gates on the same field.
@@ -22,10 +23,11 @@ const includeDocument = ref(false);
 const includeLog = ref(true);
 const logTail = ref<string | null>(null);
 const version = ref("…");
+const system = ref<SystemInfo>({ system: "…", webview: null });
 const copying = ref(false);
 
 // Snapshotted at open, not at send: see BugReportForm.
-const { connected, crumbs, pipeline, faults } = bugContext(deps);
+const { connected, crumbs, pipeline, faults, errors } = bugContext(deps);
 
 const desc = useTemplateRef<HTMLTextAreaElement>("desc");
 
@@ -62,6 +64,8 @@ async function copy() {
     connected,
     crumbs,
     pipeline,
+    errors,
+    system: system.value,
     logTail: includeLog.value ? logTail.value : null,
   });
   copying.value = false;
@@ -81,9 +85,10 @@ onMounted(async () => {
   window.addEventListener("keydown", onKey, true);
   desc.value?.focus();
   // The version comes from Tauri a tick late, so it is fetched after focus rather than awaited before paint.
-  const [v, tail] = await Promise.all([appVersion(), appLogTail()]);
+  const [v, tail, sys] = await Promise.all([appVersion(), appLogTail(), systemInfo()]);
   version.value = v;
   logTail.value = tail;
+  system.value = sys;
 });
 onUnmounted(() => window.removeEventListener("keydown", onKey, true));
 </script>
