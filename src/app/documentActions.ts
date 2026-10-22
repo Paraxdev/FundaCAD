@@ -56,7 +56,7 @@ function backToBlank(store: Engine["store"]): void {
   else store.newDocument();
 }
 
-async function importNamed(e: HomeImportEngine, name: string, run: () => Promise<void>): Promise<void> {
+async function importNamed(e: HomeImportEngine, name: string, run: () => Promise<unknown>): Promise<void> {
   e.store.markOpenedWithoutPath(name);
   closeHome();
   await run();
@@ -65,7 +65,11 @@ async function importNamed(e: HomeImportEngine, name: string, run: () => Promise
 
 /** A blank document takes the files, anything else asks whether they join it or start a new one. `run` is the
  *  caller's own import loop. False when the maker cancelled and nothing ran. */
-export async function importFromHome(e: HomeImportEngine, names: string[], run: () => Promise<void>): Promise<boolean> {
+export async function importFromHome(
+  e: HomeImportEngine,
+  names: string[],
+  run: () => Promise<unknown>,
+): Promise<boolean> {
   const first = names[0];
   if (first === undefined) return false;
   if (isBlankDocument(e)) {
@@ -95,7 +99,7 @@ export async function importFromHome(e: HomeImportEngine, names: string[], run: 
 }
 
 /** Imports go into the open document, as assemblies are built, unless Home is up. */
-export async function placeImport(e: HomeImportEngine, names: string[], run: () => Promise<void>): Promise<boolean> {
+export async function placeImport(e: HomeImportEngine, names: string[], run: () => Promise<unknown>): Promise<boolean> {
   if (homeIsOpen()) return importFromHome(e, names, run);
   await run();
   return true;
@@ -125,7 +129,7 @@ async function importExample(e: ExampleEngine, info: TemplateInfo): Promise<void
   try {
     const file = await templateFile(info.id);
     // importFileBytes watches for an open only from here on, so one during the fetch is caught here.
-    if (replaced) await importDropped(file.name);
+    if (replaced) await importDropped([file.name]);
     else await importFileBytes(e.store, e.geometry, file, undefined, { opening: true });
   } catch (err) {
     await reportError(`Couldn't open the ${info.name} example: ${err instanceof Error ? err.message : String(err)}`);
