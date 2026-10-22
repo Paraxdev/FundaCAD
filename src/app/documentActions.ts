@@ -44,7 +44,39 @@ export function importedName(file: string): string {
 
 /** The document every first start shows behind Home. */
 export function isBlankDocument(e: Pick<Engine, "store" | "sketch">): boolean {
-  return !e.store.filePath && !e.store.document.features.length && !e.store.dirty && !e.sketch.active;
+  return (
+    !e.store.filePath &&
+    !e.store.document.features.length &&
+    !e.store.dirty &&
+    !e.sketch.active &&
+    !openingImports.has(e.store)
+  );
+}
+
+// A document an import is opening has no feature until its file is read, yet it is not blank.
+const openingImports = new WeakMap<object, object>();
+
+/** Marks `store`'s document as opened by an import until `end`, or until another document is opened. */
+function openingImport(store: Engine["store"]) {
+  const mark = {};
+  openingImports.set(store, mark);
+  const leave = () => {
+    if (openingImports.get(store) === mark) openingImports.delete(store);
+  };
+  let replaced = false;
+  const offOpen = store.onOpen(() => {
+    replaced = true;
+    leave();
+  });
+  return {
+    get replaced() {
+      return replaced;
+    },
+    end() {
+      offOpen();
+      leave();
+    },
+  };
 }
 
 type HomeImportEngine = Pick<Engine, "store" | "sketch" | "viewport">;
@@ -59,8 +91,13 @@ function backToBlank(store: Engine["store"]): void {
 async function importNamed(e: HomeImportEngine, name: string, run: () => Promise<unknown>): Promise<void> {
   e.store.markOpenedWithoutPath(name);
   closeHome();
-  await run();
-  backToBlank(e.store);
+  const opening = openingImport(e.store);
+  try {
+    await run();
+  } finally {
+    opening.end();
+  }
+  if (!opening.replaced) backToBlank(e.store);
 }
 
 /** A blank document takes the files, anything else asks whether they join it or start a new one. `run` is the
@@ -124,19 +161,18 @@ async function importExample(e: ExampleEngine, info: TemplateInfo): Promise<void
   e.viewport.resetCamera(false);
   e.store.markOpenedWithoutPath(info.name);
   closeHome();
-  let replaced = false;
-  const offOpen = e.store.onOpen(() => (replaced = true));
+  const opening = openingImport(e.store);
   try {
     const file = await templateFile(info.id);
     // importFileBytes watches for an open only from here on, so one during the fetch is caught here.
-    if (replaced) await importDropped([file.name]);
+    if (opening.replaced) await importDropped([file.name]);
     else await importFileBytes(e.store, e.geometry, file, undefined, { opening: true });
   } catch (err) {
     await reportError(`Couldn't open the ${info.name} example: ${err instanceof Error ? err.message : String(err)}`);
   } finally {
-    offOpen();
+    opening.end();
   }
-  if (!replaced) backToBlank(e.store);
+  if (!opening.replaced) backToBlank(e.store);
 }
 
 type VersionEngine = Pick<Engine, "store" | "sketch" | "geometry" | "toolAtWork" | "setStatus">;
