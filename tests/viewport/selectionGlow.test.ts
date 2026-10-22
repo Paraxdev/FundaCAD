@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { glowFade, makeSelectionGlow, screenCoverage } from "../../src/viewport/selectionGlow";
 import { Highlighter } from "../../src/viewport/highlight";
 import type { ModelView } from "../../src/viewport/render";
@@ -70,5 +70,52 @@ describe("a glow drawn by a pass that overrides every material", () => {
     own.uniforms.uFade!.value = -1;
     call(own);
     expect(own.uniforms.uFade!.value).toBeGreaterThan(0);
+  });
+});
+
+describe("a section cut clips the glow and the face hover", () => {
+  // The glow and face hover materials are shared module state, so each case starts from a fresh module.
+  const fresh = async () => {
+    vi.resetModules();
+    return import("../../src/viewport/selectionGlow");
+  };
+  const cut = new THREE.Plane(new THREE.Vector3(3, -4, 12).divideScalar(13), -40);
+  const geometry = new THREE.BoxGeometry(30, 20, 12);
+  const clipOf = (m: THREE.Material) => ({ clipping: (m as THREE.ShaderMaterial).clipping ?? null, planes: m.clippingPlanes });
+  const hoverColor = new THREE.Color(0.2, 0.7, 0.5);
+
+  it("reaches materials made before the cut and after it", async () => {
+    const g = await fresh();
+    const select = g.makeSelectionGlow(geometry, "select").material as THREE.Material;
+    const faceBefore = g.makeFaceHoverOverlay(new Float32Array(9), hoverColor).material as THREE.Material;
+    g.clipSelectionOverlays([cut]);
+    const hover = g.makeSelectionGlow(geometry, "hover").material as THREE.Material;
+    expect([clipOf(select), clipOf(hover), { planes: faceBefore.clippingPlanes }]).toEqual([
+      { clipping: true, planes: [cut] },
+      { clipping: true, planes: [cut] },
+      { planes: [cut] },
+    ]);
+  });
+
+  it("clips a face hover made after the cut, and no cut clears all three", async () => {
+    const g = await fresh();
+    const select = g.makeSelectionGlow(geometry, "select").material as THREE.Material;
+    g.clipSelectionOverlays([cut]);
+    const hover = g.makeSelectionGlow(geometry, "hover").material as THREE.Material;
+    const face = g.makeFaceHoverOverlay(new Float32Array(9), hoverColor).material as THREE.Material;
+    expect(face.clippingPlanes).toEqual([cut]);
+    g.clipSelectionOverlays(null);
+    expect([select.clippingPlanes, hover.clippingPlanes, face.clippingPlanes]).toEqual([null, null, null]);
+  });
+
+  it("the glow shader carries three's clipping chunks", async () => {
+    const g = await fresh();
+    const m = g.makeSelectionGlow(geometry, "select").material as THREE.ShaderMaterial;
+    expect([
+      m.vertexShader.includes("#include <clipping_planes_pars_vertex>"),
+      m.vertexShader.includes("#include <clipping_planes_vertex>"),
+      m.fragmentShader.includes("#include <clipping_planes_pars_fragment>"),
+      m.fragmentShader.includes("#include <clipping_planes_fragment>"),
+    ]).toEqual([true, true, true, true]);
   });
 });
