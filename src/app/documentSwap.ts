@@ -1,4 +1,5 @@
 import type { DocumentStore } from "../document/store";
+import { setWorkspace } from "../ui/workspace";
 
 export interface DocumentSwapTarget {
   /** Every armed tool, with its preview, handles and panel, and its listeners
@@ -33,5 +34,7 @@ export function wireDocumentSwap(store: Pick<DocumentStore, "onOpen">, e: Docume
     // Last, the handlers above may still read the old model.
     e.viewport.clearModel();
     e.browser.forgetDocumentFolders();
+    // The workspace belongs to the sitting with a document, so the next one starts in Model like the first did.
+    setWorkspace("model");
   });
 }
