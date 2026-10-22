@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { edgePoint, faceInfo, facePoint, planePoint, resolveEdge, resolveFace, sketchPoint, worldPoint, type PickHost } from "../../src/harness/picks";
 import { HarnessError } from "../../src/harness/locate";
+import { OriginTiles } from "../../src/viewport/originTiles";
 
 type V = [number, number, number];
 
@@ -234,6 +235,31 @@ describe("planes and free points", () => {
     expect(planePoint(h, "xy", all).what).toBe("plane XY");
     expect(err(() => planePoint(h, "p1", all)).kind).toBe("Occluded");
     expect(err(() => planePoint(h, "p9", all)).kind).toBe("NotFound");
+  });
+
+  it("finds each origin tile where it is drawn beside the origin", () => {
+    const { h } = rig();
+    const tiles = new OriginTiles(new THREE.Scene());
+    tiles.setShown(true);
+    tiles.group.scale.setScalar(0.375);
+    // Tile centres (26, -26, 0), (26, 0, 26) and (0, -26, 26) px, through the rig's projection.
+    const centres = { XY: [168.25, 539], XZ: [197.5, 402.5], YZ: [70.75, 441.5] } as const;
+    const vp = h.viewport as unknown as Record<string, unknown>;
+    vp.scene = { scene: new THREE.Scene(), planes: tiles.planes };
+    vp.pickConstructionAt = (x: number, y: number) => {
+      for (const [plane, [cx, cy]] of Object.entries(centres)) {
+        if (Math.abs(x - cx) < 1 && Math.abs(y - cy) < 1) return { kind: "base", plane };
+      }
+      return null;
+    };
+    expect(["XY", "XZ", "YZ"].map((k) => planePoint(h, k, all))).toEqual([
+      { x: 168.25, y: 539, what: "plane XY" },
+      { x: 197.5, y: 402.5, what: "plane XZ" },
+      { x: 70.75, y: 441.5, what: "plane YZ" },
+    ]);
+    tiles.setShown(false);
+    expect(err(() => planePoint(h, "XZ", all)).kind).toBe("Occluded");
+    tiles.dispose();
   });
 
   it("says how a hidden plane is shown", () => {

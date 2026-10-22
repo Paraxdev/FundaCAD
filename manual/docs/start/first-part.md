@@ -2,7 +2,7 @@
 
 This makes a plate 40 mm by 20 mm and 5 mm thick, with a 6 mm hole, and exports it for your slicer.
 
-**Sketch.** Click New Document, press S and click the XY plane, which lies flat on the floor. Press R and click two opposite corners.
+**Sketch.** Click New Document, press S and click the XY tile beside the origin, which lies flat on the floor. Press R and click two opposite corners.
 
 ![A rough rectangle drawn on the sketch plane](../img/first-part-rectangle.png)
 

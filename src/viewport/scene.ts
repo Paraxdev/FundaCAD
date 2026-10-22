@@ -1,4 +1,4 @@
-// Scene setup: renderer, lights, Z-up grid + axes, sketch planes.
+// Scene setup: renderer, lights, Z-up grid + axes, origin plane tiles.
 // CAD convention is Z-up (matches build123d), so the ground grid lies
 // in the XY plane and cameras use up = +Z.
 
@@ -24,14 +24,17 @@ import { hdrHashOf, type Environment, type RenderPrefs } from "../ui/renderPrefs
 import { hdrRoom, heldHdr } from "./hdrRegistry";
 import { themeColor } from "./themeColors";
 import { buildLightRig, environmentKeyOf, lightOf, scaled } from "./lightRig";
-import { AXIS_COLOR, OriginTriad } from "./originTriad";
+import { OriginTriad } from "./originTriad";
+import { OriginTiles } from "./originTiles";
 import { markOverlay } from "./overlayKinds";
 
 export interface SceneBundle {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
   modelGroup: THREE.Group; // rebuilt geometry lives here
+  /** The tiles' fill meshes, the pick targets, tagged `userData.plane`. */
   planes: Record<"XY" | "XZ" | "YZ", THREE.Mesh>;
+  originTiles: OriginTiles;
   grid: AdaptiveGrid;
   triad: OriginTriad;
   /** How a frame actually gets drawn: directly, or through the passes. Exposed
@@ -353,22 +356,9 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const triad = new OriginTriad(scene);
   markOverlay(triad.group, "origin");
 
-  // --- sketch planes (semi-transparent, toggled per active sketch) ---
-  // Coloured by their NORMAL axis, which is the convention the triad above is
-  // read through and the only one that makes the two agree: XY is normal to Z so
-  // it is blue, XZ is normal to Y so it is green, and YZ is normal to X so it is
-  // RED. Two of the three already followed the rule; YZ was orange, which named
-  // no axis at all.
-  const planes = {
-    XY: makePlane(AXIS_COLOR.z, "XY"),
-    XZ: makePlane(AXIS_COLOR.y, "XZ"),
-    YZ: makePlane(AXIS_COLOR.x, "YZ"),
-  };
-  for (const p of Object.values(planes)) {
-    markOverlay(p, "origin");
-    p.visible = false;
-    scene.add(p);
-  }
+  const originTiles = new OriginTiles(scene);
+  markOverlay(originTiles.group, "origin");
+  const planes = originTiles.planes;
 
   const modelGroup = new THREE.Group();
   scene.add(modelGroup);
@@ -381,7 +371,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   };
 
   return {
-    renderer, scene, modelGroup, planes, grid, triad, post, lowPower: autoLowPower,
+    renderer, scene, modelGroup, planes, originTiles, grid, triad, post, lowPower: autoLowPower,
     applyRenderPrefs: () => {
       applyPowerTier(); // pick up a toggled performance-mode pref
       applyRenderPrefs(renderer, scene, { key, fill, hemi });
@@ -1088,62 +1078,4 @@ function applyRenderPrefs(
     // exactly as the light it casts.
     scene.background = behind && now.envBackground ? tex : null;
   });
-}
-
-function makePlane(color: number, kind: "XY" | "XZ" | "YZ"): THREE.Mesh {
-  const geo = new THREE.PlaneGeometry(60, 60);
-  const mat = new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.08,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  });
-  const mesh = new THREE.Mesh(geo, mat);
-  // PlaneGeometry is in XY by default.
-  if (kind === "XZ") mesh.rotateX(Math.PI / 2);
-  if (kind === "YZ") mesh.rotateY(Math.PI / 2);
-  mesh.renderOrder = -1;
-  mesh.userData.plane = kind;
-  // Which plane this is, said on the plane itself. Three tinted squares at 8%
-  // opacity are told apart only by their colour, and that asks the reader to
-  // hold a colour-to-plane table in their head; the label carries it for them.
-  mesh.add(planeLabel(kind, color));
-  return mesh;
-}
-
-/** The plane's name, at one corner of its quad, in the plane's own colour.
- *
- *  A Sprite rather than a textured quad: the plane is DoubleSide and gets looked
- *  at from behind as often as not, where flat text reads mirrored. A sprite
- *  faces the camera, so it is the right way round from everywhere. The canvas
- *  precedent is viewCube.ts, which already draws text into the scene this way. */
-function planeLabel(kind: "XY" | "XZ" | "YZ", color: number): THREE.Sprite {
-  const canvas = document.createElement("canvas");
-  canvas.width = 128;
-  canvas.height = 64;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    ctx.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
-    ctx.font = "700 44px Inter, system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(kind, 64, 34);
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.anisotropy = 4;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: tex,
-    transparent: true,
-    // Same reason the quad does not: these sit under the model, and a label that
-    // fought the depth buffer would flicker against the grid it lies on.
-    depthWrite: false,
-    depthTest: false,
-  }));
-  sprite.scale.set(11, 5.5, 1);
-  // A corner of the 60x60 quad, in the quad's own local axes, so it lands on the
-  // plane's edge whichever way the plane was turned.
-  sprite.position.set(24, -25.5, 0);
-  sprite.renderOrder = -1;
-  return sprite;
 }

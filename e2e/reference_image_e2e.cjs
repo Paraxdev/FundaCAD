@@ -80,7 +80,10 @@ const HASH = "429c5bc1257ce3bdfc611423f2302bd2";
   console.log("1. insert on XY");
   await page.evaluate(() => window.__fundacad.handleAction("referenceImage"));
   await page.waitForTimeout(400);
-  const xy = await screen([30, 30, 0]);
+  const xy = await page.evaluate(() => {
+    const m = window.viewport.scene.planes.XY;
+    return window.viewport.projectToScreen(m.getWorldPosition(m.position.clone()));
+  });
   await page.mouse.move(xy.x, xy.y);
   const chooser = page.waitForEvent("filechooser", { timeout: 5000 });
   await page.mouse.click(xy.x, xy.y);
