@@ -303,7 +303,6 @@ fn vec_of(v: Option<&Value>, what: &str, default: Vec3) -> Result<Vec3, String> 
     Ok((n[0], n[1], n[2]))
 }
 
-/// shape_generate.py `place`.
 pub fn place_json(s: &Shape, placement: &Value) -> Result<Shape, String> {
     let o = vec_of(placement.get("origin"), "origin", (0.0, 0.0, 0.0))?;
     let z = vec_of(placement.get("zAxis"), "zAxis", (0.0, 0.0, 1.0))?;
@@ -318,7 +317,7 @@ pub enum Blend {
     Chamfer(f64, f64),
 }
 
-/// A batch blend, then with `one_by_one` blends.py `_sequential_blend`.
+/// A batch blend, or sequential blends with `one_by_one`.
 pub fn blend(s: &Shape, edges: &[Shape], how: Blend, one_by_one: bool) -> Result<(Shape, u32), String> {
     if edges.is_empty() {
         return Err("no edges to blend".into());
@@ -377,7 +376,7 @@ fn round_to(v: f64, digits: i32) -> f64 {
     (v * m).round() / m
 }
 
-/// shape_generate.py `_measure` plus the mesh or the stored blob.
+/// Measurements plus the mesh or the stored blob.
 pub fn generated_reply(s: &Shape, output: &str) -> Result<Map<String, Value>, String> {
     let solids = items(s, Items::Solids);
     if solids.is_empty() {
@@ -426,7 +425,6 @@ pub fn generated_reply(s: &Shape, output: &str) -> Result<Map<String, Value>, St
     Ok(m)
 }
 
-/// server.py `_plugin_export_job`.
 pub fn export_with(
     req: &Map<String, Value>,
     watch: &dyn Watch,
