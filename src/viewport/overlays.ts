@@ -148,7 +148,8 @@ export function buildStressMesh(
     lin[i + 2] = c.b;
   }
   geo.setAttribute("color", new THREE.BufferAttribute(lin, 3));
-  geo.setIndex(indices instanceof Uint32Array ? new THREE.Uint32BufferAttribute(indices, 1) : Array.from(indices));
+  // Shared with the drawn surface, which nothing writes after it is made.
+  geo.setIndex(indices instanceof Uint32Array ? new THREE.BufferAttribute(indices, 1) : Array.from(indices));
   geo.computeVertexNormals();
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
