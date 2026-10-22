@@ -226,6 +226,10 @@ const check = (name, ok, detail) => {
   await page.evaluate(() => window.__fundacad.editFeature("s2"));
   await page.waitForTimeout(2500);
   await page.evaluate(() => window.sketch.setTool("select"));
+  // The spline sits above the part that framed the view, under the top bar, so back off a step.
+  await page.mouse.move(700, 468);
+  await page.mouse.wheel(0, 300);
+  await page.waitForTimeout(800);
   const onFit = await scr(0, 42);
   await page.mouse.click(onFit.x, onFit.y, { button: "right" });
   await page.waitForTimeout(500);
