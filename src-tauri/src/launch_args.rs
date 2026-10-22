@@ -1,5 +1,5 @@
 //! The Tauri free half of launch.rs: which documents a launch names and the queue they wait in. Tauri free so
-//! scripts/check-launch-args.sh can run these tests on Windows, where the app's test binary cannot start.
+//! scripts/check-launch-args.sh can run its tests (tests/unit/launch_args.rs) without the webview stack.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};

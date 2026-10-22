@@ -1225,11 +1225,11 @@ grant would give them two chances to disagree about it.
 
 ## Tests
 
-`bundle.rs` carries the refusals and their controls. On Linux CI they run with
-everything else; on a Windows box the app's own test binary cannot start (it
-links the webview stack and dies with `STATUS_ENTRYPOINT_NOT_FOUND` before the
-first test), so `scripts/check-plugin-guards.sh` compiles that one file in a
-crate with no Tauri in it and runs the same tests. It then builds a real plugin
+`bundle.rs` carries the refusals, `src-tauri/tests/unit/plugins/bundle.rs` the
+tests of them and their controls. On Linux CI they run with everything else;
+`scripts/check-plugin-guards.sh` compiles `bundle.rs` and `handed.rs` with their
+tests in a crate with no Tauri in it, so they run on a Windows box without the
+webview stack. It then builds a real plugin
 bundle and unpacks it with the real extractor, which is the only test that
 covers the packaging script and the guard together.
 

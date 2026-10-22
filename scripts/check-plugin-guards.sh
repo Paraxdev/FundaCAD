@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
-# Run the plugin bundle guards on a machine where the app's own test binary
-# cannot start.
+# Run the plugin bundle guards without building the app's webview stack.
 #
 # src-tauri/src/plugins/bundle.rs holds the refusals that stop a downloaded
 # plugin from writing outside its own directory, from being fetched from
 # somewhere other than the releases host, and from arriving with permissions
-# other than the ones its installer screen showed. They have unit tests. On
-# Linux CI `cargo test --lib` runs them with everything else.
+# other than the ones its installer screen showed. Their tests are in
+# src-tauri/tests/unit/plugins, and Linux CI runs them with everything else.
 #
-# It does not run on this Windows box: linking fundacad_lib pulls in the webview
-# stack, and the resulting test executable dies with STATUS_ENTRYPOINT_NOT_FOUND
-# before a single test starts (`cargo test --lib -- --list` fails identically,
-# so it is the binary, not the tests). That would leave the guards shipping
-# having never been executed here.
+# The app's lib test executable dies on this Windows box with
+# STATUS_ENTRYPOINT_NOT_FOUND before a single test starts, so the test still
+# inline in handed.rs would otherwise ship having never been executed here.
 #
 # So: build bundle.rs on its own, in a throwaway crate that links serde, sha2
 # and zip and nothing else, and run its tests against the real file. Same
@@ -45,6 +42,10 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
+# The tests name the app's lib.
+[lib]
+name = "fundacad_lib"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -61,10 +62,21 @@ TOML
 SRCW="$(cygpath -m "$SRC" 2>/dev/null || echo "$SRC")"
 HANDEDW="$(cygpath -m "$HANDED" 2>/dev/null || echo "$HANDED")"
 cat > "$OUT/src/lib.rs" <<RS
-#[path = "$SRCW"]
-pub mod bundle;
-#[path = "$HANDEDW"]
-pub mod handed;
+pub mod plugins {
+    #[path = "$SRCW"]
+    pub mod bundle;
+    #[path = "$HANDEDW"]
+    pub mod handed;
+}
+RS
+
+TESTS="$(cygpath -m "$REPO/src-tauri/tests/unit/plugins" 2>/dev/null || echo "$REPO/src-tauri/tests/unit/plugins")"
+mkdir -p "$OUT/tests"
+cat > "$OUT/tests/unit.rs" <<RS
+#[path = "$TESTS/bundle.rs"]
+mod bundle;
+#[path = "$TESTS/handed.rs"]
+mod handed;
 RS
 
 # The bundle as it will be published, built by the same script CI runs.
@@ -73,13 +85,12 @@ rm -rf "$BUNDLE"
 python "$REPO/scripts/build-plugins.py" "$BUNDLE" FundaCAD.MultiColor >/dev/null
 ZIP="$(cygpath -m "$BUNDLE/plugin-FundaCAD.MultiColor.zip" 2>/dev/null || echo "$BUNDLE/plugin-FundaCAD.MultiColor.zip")"
 
-mkdir -p "$OUT/tests"
 cat > "$OUT/tests/real_bundle.rs" <<'RS'
 //! The bundle the release job publishes, unpacked by the extractor the app
 //! ships. Not a fixture: the path comes from the packaging script that just
 //! ran.
 
-use plugin_guard::bundle::extract_into;
+use fundacad_lib::plugins::bundle::extract_into;
 
 #[test]
 fn a_published_bundle_unpacks_and_declares_itself() {
