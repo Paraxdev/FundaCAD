@@ -761,8 +761,15 @@ export async function importPath(
 export const MAX_DROPPED_IMPORT_BYTES = 90 * 1024 * 1024;
 
 /** Import a file the app has as bytes only, like one dropped on a browser tab.
- *  Its `source` is the bare name, there is no path to remember. */
-export async function importFileBytes(store: DocumentStore, geometry: GeometryBackend, file: File, unit?: ImportUnit) {
+ *  Its `source` is the bare name, there is no path to remember. With `opening` the import is how the document
+ *  opens, so its own writes leave a clean document clean. */
+export async function importFileBytes(
+  store: DocumentStore,
+  geometry: GeometryBackend,
+  file: File,
+  unit?: ImportUnit,
+  opts: { opening?: boolean } = {},
+) {
   const fmt = extToImportFormat(file.name);
   const importBytes = geometry.importBytes?.bind(geometry);
   if (!importBytes) {
@@ -781,7 +788,7 @@ export async function importFileBytes(store: DocumentStore, geometry: GeometryBa
     fmt,
     async (onStarted, u) =>
       importBytes(file.name, fmt, bytesToBase64(new Uint8Array(await file.arrayBuffer())), onStarted, u),
-    { unit, retryable: false },
+    { unit, retryable: false, opening: opts.opening ?? false },
   );
 }
 
@@ -799,7 +806,7 @@ async function importWith(
   path: string,
   fmt: ImportFormat,
   read: (onStarted: (id: string) => void, unit?: ImportUnit) => ReturnType<GeometryBackend["importGeometry"]>,
-  opts: { unit?: ImportUnit | undefined; source?: string; retryable?: boolean } = {},
+  opts: { unit?: ImportUnit | undefined; source?: string; retryable?: boolean; opening?: boolean } = {},
 ) {
   let unit = opts.unit;
   if (asksForUnit(fmt) && !unit) {
@@ -829,7 +836,10 @@ async function importWith(
     source: opts.source ?? path,
     taken: store.document.features.map((f) => f.id),
   });
-  store.addFeatures(features);
+  const cleanBefore = !store.dirty;
+  if (opts.opening) store.keepingClean(() => store.addFeatures(features));
+  else store.addFeatures(features);
+  const landedAt = cleanBefore ? store.editCount : null;
   const imported = features.find((f) => f.type === "import");
   if (!imported) {
     if (res.notes?.length) {
@@ -849,9 +859,10 @@ async function importWith(
 
   // The file's own colours become materials worn by the bodies it produced, or a coloured STEP assembly opens
   // as thousands of identical grey bodies.
-  if (await cancelledImport(store, imported, res)) return;
+  if (await cancelledImport(store, imported, res, landedAt)) return;
   const source = importSource(imported);
-  if (!(await adoptImportedColors(store, id, res, { joinImport: true, source }))) recolorOnRedo(store, imported, res);
+  const adopt = { joinImport: true, source, opening: opts.opening ?? false };
+  if (!(await adoptImportedColors(store, id, res, adopt))) recolorOnRedo(store, imported, res);
 
   // The file carried one dominant colour: report it and let whoever has a use for it decide. Awaited, because a
   // listener must rebuild before it finds the feature's bodies, or the import would report finished too early.
@@ -863,11 +874,13 @@ const importSource = (f: Feature) =>
   f.type === "import" ? (f as Extract<Feature, { type: "import" }>).source : undefined;
 
 /** Waits for the build that brings `imported` in. A Cancel during it undoes the import as one step (Redo builds
- *  it again). True when nothing is left to do: cancelled, or another document was opened meanwhile. */
+ *  it again), and leaves the document clean when it was clean before the import and nothing changed since
+ *  `cleanAt`. True when nothing is left to do: cancelled, or another document was opened meanwhile. */
 async function cancelledImport(
   store: DocumentStore,
   imported: Feature,
   res: Parameters<typeof adoptImportedColors>[2],
+  cleanAt: number | null = null,
 ) {
   let opened = false;
   const offOpen = store.onOpen(() => (opened = true));
@@ -876,7 +889,9 @@ async function cancelledImport(
   const still = store.document.features.find((f) => f.id === imported.id);
   if (!store.buildState.cancelled || !still || importSource(still) !== importSource(imported)) return false;
   const has = (d: { features: { id: string }[] }) => d.features.some((f) => f.id === imported.id);
+  const untouched = cleanAt === store.editCount;
   const undone = store.undoIfTop((before) => !has(before) && has(store.document));
+  if (undone && untouched) store.markClean();
   if (undone) recolorOnRedo(store, imported, res);
   const name = importSource(imported)?.split(/[\\/]/).pop() || "the file";
   const { toast } = await import("../ui/toast");
@@ -931,8 +946,9 @@ export async function adoptImportedColors(
     nodes?: { name: string; parent: number | null; color?: string }[] | undefined;
     parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[] | undefined;
   },
-  opts: { joinImport?: boolean; only?: boolean; source?: string | undefined } = {},
+  opts: { joinImport?: boolean; only?: boolean; source?: string | undefined; opening?: boolean } = {},
 ): Promise<boolean> {
+  const own = <T>(fn: () => T): T => (opts.opening ? store.keepingClean(fn) : fn());
   const perNode = res.nodes ? nodeColors(res.nodes) : null;
   // Normalised once: it is the key into the map materialsForColors returns. nodeColors already normalises.
   const single = perNode ? null : asHex(res.color);
@@ -956,7 +972,7 @@ export async function adoptImportedColors(
   if (!wanted.length) return true;
 
   const { add, byColor } = materialsForColors(wanted, store.materialLibrary);
-  if (add.length) store.importMaterials(add);
+  if (add.length) own(() => store.importMaterials(add));
 
   let opened = false;
   const offOpen = store.onOpen(() => (opened = true));
@@ -991,12 +1007,14 @@ export async function adoptImportedColors(
     }
   }
   const has = (d: { features: { id: string }[] }) => d.features.some((f) => f.id === featureId);
-  store.undoAsOne(
-    () => {
-      for (const [material, ids] of byMaterial) store.setBodiesMaterial(ids, material);
-    },
-    opts.joinImport ? (before) => !has(before) && has(store.document) : undefined,
-    { only: !!opts.only },
+  own(() =>
+    store.undoAsOne(
+      () => {
+        for (const [material, ids] of byMaterial) store.setBodiesMaterial(ids, material);
+      },
+      opts.joinImport ? (before) => !has(before) && has(store.document) : undefined,
+      { only: !!opts.only },
+    ),
   );
   return true;
 }
