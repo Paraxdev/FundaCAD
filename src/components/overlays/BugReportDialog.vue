@@ -58,9 +58,11 @@ const previousAt = previous
   : null;
 
 const desc = useTemplateRef<HTMLTextAreaElement>("desc");
+const askedForText = ref(false);
 
 function described(): boolean {
   if (description.value.trim()) return true;
+  askedForText.value = true;
   desc.value?.focus();
   return false;
 }
@@ -124,6 +126,9 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
           rows="4"
           placeholder="What happened? What did you expect?"
         ></textarea>
+        <div v-if="askedForText && !description.trim()" class="bug-note bug-need-text" role="alert">
+          Say what happened first, then send the report.
+        </div>
         <label v-if="logTail !== null" class="bug-check">
           <input v-model="includeLog" type="checkbox" class="bug-log" />
           Include the app log (user names hidden)
@@ -146,6 +151,9 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
         </div>
         <details class="bug-preview">
           <summary>What will be sent</summary>
+          <div class="bug-note">
+            Your words, then technical notes for whoever fixes it: the version, your system, the last steps and errors.
+          </div>
           <pre>{{ composed.preview }}</pre>
         </details>
         <div v-if="previous" class="bug-again">

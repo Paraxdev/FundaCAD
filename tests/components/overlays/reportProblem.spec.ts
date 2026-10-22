@@ -138,14 +138,21 @@ describe("Report a problem", () => {
   it("is titled Report a problem and sends nothing without a description", async () => {
     await open();
     expect($("#bug-report-title")!.textContent).toBe("Report a problem");
-    for (const empty of ["", "  \n "]) {
+    expect($(".bug-need-text")).toBeNull();
+    for (const [empty, button] of [
+      ["", ".bug-github"],
+      ["  \n ", ".bug-send"],
+    ] as const) {
       await type(empty);
       $<HTMLButtonElement>(".bug-shot")!.focus();
-      click(".bug-github");
+      click(button);
       await flushPromises();
       expect(document.activeElement).toBe($(".bug-desc"));
+      expect($(".bug-need-text")?.getAttribute("role")).toBe("alert");
     }
     expect([h.order, h.toasts, shown()]).toEqual([[], [], true]);
+    await type("Fillet on the lid fails");
+    expect($(".bug-need-text")).toBeNull();
 
     await type("x");
     click(".bug-github");
