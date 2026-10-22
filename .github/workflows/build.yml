@@ -555,6 +555,54 @@ jobs:
           if-no-files-found: error
           path: FundaCAD_*.flatpak
 
+  # The packages in clean distro containers. The bundle job runs on a runner
+  # with every library linux-deps installs, so a wrong Depends (WebKitGTK 4.1,
+  # GTK 3, libsoup 3) passes there; here apt has to resolve it from nothing,
+  # and the AppImage meets a Fedora that has only python3. Not in the
+  # release job's needs: for now a Depends break shows red but does not hold
+  # the beta. On dev it also leaves the run green.
+  deb-install:
+    needs: [channel, bundle]
+    if: >-
+      !cancelled() && (needs.bundle.result == 'success'
+        || (needs.channel.outputs.gated == 'false'
+            && (needs.bundle.result == 'failure' || needs.bundle.result == 'cancelled')))
+    continue-on-error: ${{ needs.channel.outputs.gated == 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ubuntu:22.04
+            kind: deb
+          - image: ubuntu:24.04
+            kind: deb
+          - image: debian:12
+            kind: deb
+          - image: fedora:40
+            kind: appimage
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: fundacad-bundle-ubuntu-22.04
+          path: linux
+
+      - name: Install ${{ matrix.kind }} in ${{ matrix.image }} and build a box
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir pkg
+          case "${{ matrix.kind }}" in
+            deb) find linux -name '*.deb' -exec cp {} pkg/ \; ;;
+            appimage) find linux -name '*.AppImage' -exec cp {} pkg/ \; ;;
+          esac
+          [ -n "$(ls pkg)" ] || { echo "::error::no package in the bundle artifact"; exit 1; }
+          docker run --rm -v "$PWD":/w -w /w ${{ matrix.image }} \
+            sh scripts/package-install-smoke.sh ${{ matrix.kind }} /w/pkg
+
   # The rolling "beta" pre-release from main, the rolling "development"
   # pre-release from dev, or a stable release from a tag.
   #
