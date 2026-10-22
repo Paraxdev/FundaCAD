@@ -111,6 +111,27 @@ export function featureMeta(f: { type: string; operation?: unknown; thin?: unkno
   );
 }
 
+type Nameable = { type: string; name?: string; source?: string; nodes?: readonly { name: string; parent: number | null }[]; operation?: unknown; thin?: unknown };
+
+/** The one root of an import's assembly tree, the folder name Items shows. */
+export function assemblyName(f: Nameable): string | null {
+  const roots = f.type === "import" ? (f.nodes ?? []).filter((n) => n.parent === null) : [];
+  return roots.length === 1 ? roots[0]!.name || null : null;
+}
+
+/** The name History and Items agree on. An import takes its assembly name, but only while its
+ *  name is still the file's: `source` is a path, and the engine names an import after the file
+ *  stem (or the stem of a .gz one), so a name that is not that was typed. */
+export function stepName(f: Nameable): string {
+  const own = f.name?.trim() ?? "";
+  const asm = assemblyName(f);
+  if (asm && own && f.source) {
+    const file = (f.source.split(/[\x5c/]/).pop() ?? "").toLowerCase();
+    if (file.startsWith(`${own.toLowerCase()}.`)) return asm;
+  }
+  return own || featureMeta(f).label;
+}
+
 /** The same answer for a whole feature, when the caller has one. */
 export function labelOf(f: Feature): string {
   return featureMeta(f as { type: string; operation?: unknown; thin?: unknown }).label;

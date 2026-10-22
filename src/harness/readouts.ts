@@ -4,7 +4,7 @@
 import { SKETCH_MODIFY } from "../app/actionTables";
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
-import { featureMeta } from "../ui/featureMeta";
+import { stepName } from "../ui/featureMeta";
 import { logEntries } from "../ui/logStore";
 import { sketchRail } from "../ui/railDefs";
 
@@ -33,12 +33,11 @@ export function history(h: ReadHost): { count: number; at: string; rows: History
   if (failed && store.buildState.errorMessage) errors.set(failed, store.buildState.errorMessage);
   const roll = store.rollbackIndex;
   const rows = features.map((f, i): HistoryRow => {
-    const named = (f as { name?: string }).name;
     let state = "";
     if (i >= roll) state = "rolled back";
     else if (store.isSuppressed(f.id)) state = "suppressed";
     else if (errors.has(f.id)) state = `error: ${errors.get(f.id)}`;
-    return { id: f.id, name: named || featureMeta(f).label, type: f.type, state };
+    return { id: f.id, name: stepName(f as Parameters<typeof stepName>[0]), type: f.type, state };
   });
   const at = roll >= features.length ? "at end" : `rolled back to ${roll}`;
   return { count: features.length, at, rows };

@@ -6,8 +6,8 @@ import { toast } from "../../src/ui/toast";
 import { useToastStore } from "../../src/stores/toasts";
 import { mountApp } from "./fixture";
 
-function host(over: Partial<{ roll: number; suppressed: string[]; hidden: string[]; busy: object; building: boolean }> = {}): read.ReadHost {
-  const features = [
+function host(over: Partial<{ roll: number; suppressed: string[]; hidden: string[]; busy: object; building: boolean; features: object[] }> = {}): read.ReadHost {
+  const features = over.features ?? [
     { id: "s1", type: "sketch" },
     { id: "e1", type: "extrude", name: "Plate" },
     { id: "d1", type: "draft" },
@@ -66,6 +66,29 @@ describe("history", () => {
       ["d1", "Draft", "error: the angle tips the face past vertical"],
       ["f1", "Fillet", "rolled back"],
     ]);
+  });
+});
+
+describe("history of an import", () => {
+  const nodes = [{ name: "Gearbox", parent: null }, { name: "Shaft", parent: 0 }, { name: "Cover", parent: 0 }];
+  const names = (features: object[]) => read.history(host({ features })).rows.map((r) => r.name);
+
+  it("uses the assembly name Items shows, while the import still has the name of its file", () => {
+    expect(names([
+      { id: "i1", type: "import", format: "step", name: "gear-box_v3", source: "D:\\cad\\in\\Gear-Box_V3.step", nodes },
+      { id: "i2", type: "import", format: "step", name: "pump", source: "/home/u/pump.stp.gz", nodes: [{ name: "Pump body", parent: null }] },
+    ])).toEqual(["Gearbox", "Pump body"]);
+  });
+
+  it("keeps the name when it was typed, or the file or its tree cannot say otherwise", () => {
+    expect(names([
+      { id: "i1", type: "import", format: "step", name: "Housing", source: "/in/gear.step", nodes },
+      { id: "i2", type: "import", format: "step", name: "gear", nodes },
+      { id: "i3", type: "import", format: "step", name: "gear", source: "/in/gear.step", nodes: [{ name: "A", parent: null }, { name: "B", parent: null }] },
+      { id: "i4", type: "import", format: "step", name: "gear", source: "/in/gear.step", nodes: [{ name: "", parent: null }] },
+      { id: "i5", type: "import", format: "stl", name: "gear", source: "/in/gear.stl" },
+      { id: "i6", type: "import", format: "step", name: "gear", source: "/in/gearbox.step", nodes },
+    ])).toEqual(["Housing", "gear", "gear", "gear", "gear", "gear"]);
   });
 });
 

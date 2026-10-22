@@ -10,7 +10,7 @@ import { useDocValue, useBuildValue } from "../../app/useDoc";
 import { useSelectionStore } from "../../stores/selection";
 import { useTimelineStore } from "../../stores/timeline";
 import { useShellStore } from "../../stores/shell";
-import { featureMeta } from "../../ui/featureMeta";
+import { featureMeta, stepName } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
 import { buildProgress, busyLine, CANCEL_DELAY_MS, historyShowsBusy, historyShowsEmpty } from "../../ui/buildProgress";
@@ -43,6 +43,7 @@ const features = useDocValue((doc) =>
       id: f.id,
       type: f.type,
       name: (f as { name?: string }).name ?? "",
+      shown: stepName(f as Parameters<typeof stepName>[0]),
       hasCondition: activeWhen !== undefined,
       inactive: activeWhen === 0,
     };
@@ -185,12 +186,13 @@ function metaFor(f: { type: string; operation?: unknown }) {
   return featureMeta(f);
 }
 
-function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: number) {
+function chipTitle(f: { id: string; type: string; name?: string; shown?: string; inactive?: boolean }, i: number) {
   const err = errors.value.get(f.id);
   const note = notes.value.get(f.id);
   const placeholder = placeholders.value.get(f.id);
   return (
     `${i + 1} · ${metaFor(f).label}` +
+    (f.type === "import" && f.name && f.shown !== f.name ? `\nFile: ${f.name}` : "") +
     (f.inactive ? "\nSwitched off: its Active when condition is 0" : "") +
     (placeholder !== undefined ? `\n${placeholderNote(placeholder)}` : "") +
     // A plain-text word, not a warning sign: this is a `title` attribute, and
@@ -516,7 +518,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                   @keydown.stop="$event.key === 'Enter' ? finishRename($event, true) : $event.key === 'Escape' ? finishRename($event, false) : undefined"
                   @blur="finishRename($event, true)"
                 />
-                <span v-else class="t-name">{{ f.name || metaFor(f).label }}</span>
+                <span v-else class="t-name">{{ f.shown }}</span>
                 <Icon class="t-caret" :name="selection.featureId === f.id ? 'caretDown' : 'caretRight'" :size="12" />
               </div>
               <!-- The feature's own values, under the chip you clicked. The
