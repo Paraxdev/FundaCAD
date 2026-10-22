@@ -394,6 +394,11 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     section: new SectionTool(e.viewport, {
       toolBusy: () => e.toolBusy(),
       afterEdit: () => e.restoreBodyGizmo(),
+      saved: {
+        get: () => e.store.sectionView,
+        set: (v) => e.store.setSectionView(v),
+        onChange: (fn) => e.store.onSectionViewChange(fn),
+      },
       datumDef: (id) => {
         const f = asFeature(e.store.document.features.find((x) => x.id === id), "datumPlane");
         return f ? e.datumPlaneDef(f) : null;

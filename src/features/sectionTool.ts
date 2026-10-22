@@ -3,7 +3,8 @@
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
-import type { Plane3, PlaneDef, Vec3 } from "../types";
+import type { Plane3, PlaneDef, SectionView, Vec3 } from "../types";
+import { SECTION_GHOSTS, sameSectionView } from "../document/sectionView";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { isEditableTarget } from "../ui/focus";
@@ -49,6 +50,12 @@ export interface SectionDeps {
   datumDef?: (id: string) => PlaneDef | null;
   /** After an explicit confirm, not one forced by another tool taking the screen. */
   afterEdit?: () => void;
+  /** Where the cut is saved. The tool writes every change to it and takes on any change it did not write. */
+  saved?: {
+    get(): Readonly<SectionView> | null;
+    set(v: SectionView | null): void;
+    onChange(fn: (v: Readonly<SectionView> | null) => void): () => void;
+  };
 }
 
 export class SectionTool {
@@ -71,6 +78,9 @@ export class SectionTool {
   private sawIdle = false;
   private onDone: (() => void) | null = null;
   private releaseTree: (() => void) | null = null;
+  private writing = false;
+  /** The cut as the store holds it, normalised, so the echo of a write is not mistaken for a change. */
+  private savedCut: Readonly<SectionView> | null = null;
 
   private dim = new DimInput();
   private pointV = new THREE.Vector3();
@@ -95,6 +105,7 @@ export class SectionTool {
       down: (e) => this.onPickDown(e),
       key: (e) => this.onPickKey(e),
     });
+    deps.saved?.onChange((v) => this.adopt(v));
   }
 
   get phase(): SectionPhase {
@@ -158,10 +169,17 @@ export class SectionTool {
     if (!this.active) return;
     this.side = this.side === 1 ? -1 : 1;
     this.pushPlane();
+    this.save();
   }
 
   /** Remove the cut, from any phase. */
   stop() {
+    const had = this.active;
+    this.clear();
+    if (had) this.save(null);
+  }
+
+  private clear() {
     const was = this.state;
     if (was === "off") return;
     if (was === "aiming") this.endPick();
@@ -174,6 +192,44 @@ export class SectionTool {
     }
     this.setPhase("off");
     this.finishDone();
+  }
+
+  private save(cut: SectionView | null = this.view()) {
+    const saved = this.deps.saved;
+    if (!saved) return;
+    this.writing = true;
+    try {
+      saved.set(cut);
+    } finally {
+      this.writing = false;
+    }
+    this.savedCut = saved.get();
+  }
+
+  private view(): SectionView {
+    return {
+      origin: [...this.origin],
+      normal: [...this.normal],
+      offset: this.offset,
+      side: this.side,
+      ghost: SECTION_GHOSTS[this.ghost] ?? "soft",
+    };
+  }
+
+  /** A cut that changed under the tool (an open, New, a version, an assistant's edit) ends any aim or edit. */
+  private adopt(v: Readonly<SectionView> | null) {
+    if (this.writing || sameSectionView(v, this.savedCut)) return;
+    this.savedCut = v;
+    if (!v) return this.clear();
+    this.endEdit();
+    this.origin = [...v.origin];
+    this.normal = [...v.normal];
+    this.offset = v.offset;
+    this.side = v.side;
+    const level = SECTION_GHOSTS.indexOf(v.ghost);
+    this.ghost = level < 0 ? GHOST_DEFAULT : level;
+    this.pushPlane();
+    this.setPhase("on");
   }
 
   /** For a document swap: an aim ends, an edit is kept on, and nothing else changes. */
@@ -283,6 +339,7 @@ export class SectionTool {
     this.offset = 0;
     this.side = 1;
     this.pushPlane();
+    this.save();
     this.beginEdit();
   }
 
@@ -343,6 +400,7 @@ export class SectionTool {
       if (stepped === this.offset) return;
       this.offset = stepped;
       this.pushPlane();
+      this.save();
       this.dim.updateFromCursor({ offset: Math.abs(this.offset) });
       return;
     }
@@ -388,6 +446,7 @@ export class SectionTool {
       e.stopImmediatePropagation();
       this.ghost = nextGhostLevel(this.ghost);
       this.pushPlane();
+      this.save();
       this.prompt();
     }
   }
@@ -407,6 +466,7 @@ export class SectionTool {
       if (v != null && Math.abs(v - this.offset) > 1e-6) {
         this.offset = v;
         this.pushPlane();
+        this.save();
       }
     }
   }
@@ -435,6 +495,7 @@ export class SectionTool {
     if (v == null || v === this.offset) return;
     this.offset = v;
     this.pushPlane();
+    this.save();
   }
 
   private prompt() {

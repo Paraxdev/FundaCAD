@@ -43,6 +43,13 @@ document has imported bodies, one more top-level key comes last:
   is the hash of the PNG or JPEG bytes, embedded in `geometry` like any other
   hash string value, so those bytes are an image, not a BREP. A version without
   the key carries it as an unknown top level key, image included.
+- `sectionView` is the section cut that is on, absent when none is: `origin` (a
+  point on the defining plane, mm), `normal` (its unit normal), `offset` (mm
+  along `normal` to the cut), `side` (1 keeps the half `normal` points into, -1
+  the other) and `ghost` (`hidden`, `faint`, `soft` or `strong`, how the removed
+  half is drawn). It is a view: the engine never reads it, undo leaves it alone
+  and versions leave it out. Unknown fields are kept, and a version without the
+  key carries it as an unknown top level key.
 
 The reference writer and reader is `crates/fundacad-format/src/json_doc.rs`.
 The browser build has no Rust to call, so `src/io/files.ts` writes and reads the

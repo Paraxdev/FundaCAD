@@ -127,8 +127,8 @@ Where state may live:
 
 | Kind of state | Where | Examples |
 |---|---|---|
-| The document and anything saved with it | `DocumentStore` | features, overlays, materials, versions |
-| One viewport's view of the model | `Viewport` | selection, section view, emitter lights |
+| The document and anything saved with it | `DocumentStore` | features, overlays, materials, versions, the saved section cut |
+| One viewport's view of the model | `Viewport` | selection, the drawn section clip, emitter lights |
 | A user preference | a settings module read with `storedSetting` and a change listener | `renderPrefs`, `units`, `theme` |
 | A cache keyed by what it describes | module level, bounded with `LruCache` | material previews, glyph outlines |
 | UI state shared between components | a Pinia store | `shell`, `selection`, `timeline` |

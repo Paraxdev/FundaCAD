@@ -15,7 +15,7 @@ import {
   type VersionDiff,
   type VersionRepo,
 } from "./versions";
-import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ResolveDiag, Selector, StressStudy, Vec3, ViewCubeSide, ViewOverride } from "../types";
+import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ResolveDiag, SectionView, Selector, StressStudy, Vec3, ViewCubeSide, ViewOverride } from "../types";
 import { asFeature } from "../types";
 import { applyProjectionUpdate } from "../types";
 import type { EngineWait, FaceAnchorReply, FaceAxisReply, GeometryBackend, PatternAxisReply, ProjectionResult } from "../geometry/client";
@@ -34,6 +34,7 @@ import { forgetStaleJoins, joinSignatures } from "./bodyIds";
 import { canonicalMirrorPlanes } from "./mirrorPlane";
 import { normalizeStressStudy } from "./stressStudy";
 import { normalizeDocEnvironment, sameDocEnvironment, type DocEnvironment } from "./docEnvironment";
+import { readSectionView, sameSectionView, sectionViewExtras } from "./sectionView";
 import { readsBodyVisibility } from "./readsVisibility";
 import * as params from "../params/engine";
 import { extrasEmpty, trialConfiguration } from "../params/extras";
@@ -153,7 +154,7 @@ export const KNOWN_DOC_KEYS: ReadonlySet<string> = new Set([
   "version", "parameters", "paramDefs", "paramExtras", "features", "viewOverrides", "bodyIds",
   "suppressed", "rollback", "sketchVisibility", "bodyVisibility", "planeVisibility", "bodyNames",
   "bodyColors", "bodyElement", "bodyMaterial", "faceMaterials", "importColorSource", "elements",
-  "materials", "palette", "stress", "environment", "versions", "geometry", "referenceImages",
+  "materials", "palette", "stress", "environment", "versions", "geometry", "referenceImages", "sectionView",
 ]);
 const ELEMENT_KEYS: ReadonlySet<string> = new Set(["id", "name", "parent"]);
 
@@ -331,7 +332,10 @@ export class DocumentStore {
   private refCoalesce: { key: string; top: unknown; after: { v: Record<string, unknown>[] } } | null = null;
   /** A section this version could not read (a newer study or repo shape), kept
    *  whole and written back while this document has none of its own. */
-  private unreadSections: { stress?: unknown; environment?: unknown; versions?: unknown } = {};
+  private unreadSections: { stress?: unknown; environment?: unknown; versions?: unknown; sectionView?: unknown } = {};
+  /** The section cut that is on. Off `doc` and off the undo stack: undo never moves it and it builds nothing. */
+  private cut: SectionView | null = null;
+  private cutListeners = new Set<(v: Readonly<SectionView> | null) => void>();
   /** The `version` the open document was stamped with, 1 when it had none. */
   openedVersion = FORMAT_VERSION;
   /** Sections of the opened `.fundab` this version does not read, as the app
@@ -661,6 +665,7 @@ export class DocumentStore {
     this.repo = null;
     this.stress = null;
     this.environment = null;
+    this.cut = null;
     this.unknownKeys = {};
     this.setRefImagesQuiet([]);
     this.unreadSections = {};
@@ -673,6 +678,7 @@ export class DocumentStore {
     this.discardModelForReplacement();
     this.emitDoc();
     this.emitMeta();
+    this.emitSectionView();
     this.scheduleRebuild(true);
   }
 
@@ -1713,6 +1719,35 @@ export class DocumentStore {
     if (!opts.quiet) this.markDirty();
   }
 
+  get sectionView(): Readonly<SectionView> | null {
+    return this.cut;
+  }
+
+  /** Save the cut that is on with the document (null for none), off the undo stack. Fields this version does not
+   *  read stay on the cut until it is turned off. */
+  setSectionView(view: SectionView | null) {
+    const read = view ? readSectionView({ ...sectionViewExtras(this.cut), ...view }) : null;
+    if (view && !read) return;
+    if (sameSectionView(read, this.cut)) return;
+    this.cut = read;
+    if (read) delete this.unreadSections.sectionView;
+    this.markDirty();
+    this.emitSectionView();
+  }
+
+  /** Called now, on every change, and at the end of every open and New. */
+  onSectionViewChange(fn: (v: Readonly<SectionView> | null) => void): () => void {
+    this.cutListeners.add(fn);
+    fn(this.cut);
+    return () => {
+      this.cutListeners.delete(fn);
+    };
+  }
+
+  private emitSectionView() {
+    for (const fn of [...this.cutListeners]) fn(this.cut);
+  }
+
   // --- elements: the user's own folders over the bodies ---------------------
   // Display only and off the undo stack. Visibility, name, material and colour
   // moved onto it (writeOverlayBatch), a folder move has not: it could use the
@@ -2202,6 +2237,8 @@ export class DocumentStore {
     else if (unread.stress !== undefined) raw["stress"] = structuredClone(unread.stress);
     if (this.environment) out.environment = { ...this.environment, settings: { ...this.environment.settings } };
     else if (unread.environment !== undefined) raw["environment"] = structuredClone(unread.environment);
+    if (this.cut) out.sectionView = structuredClone(this.cut);
+    else if (unread.sectionView !== undefined) raw["sectionView"] = structuredClone(unread.sectionView);
     if (withVersions && this.repo) out.versions = this.repo;
     else if (withVersions && unread.versions !== undefined) raw["versions"] = structuredClone(unread.versions);
     return out;
@@ -2213,9 +2250,10 @@ export class DocumentStore {
     return this.repo;
   }
 
-  /** The document as a version records it. */
+  /** The document as a version records it. A section cut is a view, not part of the model. */
   workingSnapshot(): Snapshot {
-    return JSON.parse(JSON.stringify(this.toObject(false))) as Snapshot;
+    const { sectionView: _, ...doc } = this.toObject(false);
+    return JSON.parse(JSON.stringify(doc)) as Snapshot;
   }
 
   /** Whether the file came with versions this version cannot read, which the
@@ -2309,10 +2347,20 @@ export class DocumentStore {
     this.openedVersion = typeof parsed.version === "number" ? parsed.version : 1;
     // A replacing load sharing no feature with this one is a different document
     // after all, and sections it did not come with must not be saved into it.
-    if (!opts.replace || !sharesAFeature(this.doc.features, parsed.features ?? [])) this.carriedSections = [];
+    const sameDoc = !!opts.replace && sharesAFeature(this.doc.features, parsed.features ?? []);
+    if (!sameDoc) this.carriedSections = [];
     this.unknownKeys = carriedKeys(parsed as unknown as Record<string, unknown>, KNOWN_DOC_KEYS);
     this.setRefImagesQuiet(readReferenceImages(parsed.referenceImages));
+    // An assistant's edit or a version of the same document brings no cut of its own, and keeps the one on screen.
+    const keepCut = sameDoc && parsed.sectionView === undefined;
+    const unreadCut = this.unreadSections.sectionView;
     this.unreadSections = {};
+    if (keepCut) {
+      if (unreadCut !== undefined) this.unreadSections.sectionView = unreadCut;
+    } else {
+      this.cut = readSectionView(parsed.sectionView);
+      if (parsed.sectionView != null && !this.cut) this.unreadSections.sectionView = structuredClone(parsed.sectionView);
+    }
     if (parsed.versions != null && !this.repo) this.unreadSections.versions = structuredClone(parsed.versions);
     if (parsed.stress != null && !this.stress) this.unreadSections.stress = structuredClone(parsed.stress);
     if (parsed.environment != null && !this.environment) this.unreadSections.environment = structuredClone(parsed.environment);
@@ -2349,6 +2397,7 @@ export class DocumentStore {
     if (!opts.replace) this.dropToolPreview();
     this.discardModelForReplacement();
     this.emitDoc();
+    this.emitSectionView();
     this.scheduleRebuild(true);
   }
   loadDocument(doc: CadDocument, opts: { replace?: boolean } = {}) {

@@ -8,7 +8,8 @@ import { SectionTool, type SectionDeps, type SectionPhase } from "../../src/feat
 import { clipPlaneAt } from "../../src/features/sectionMath";
 import { usePromptStore } from "../../src/stores/prompt";
 import type { Viewport } from "../../src/viewport/viewport";
-import type { Vec3 } from "../../src/types";
+import type { SectionView, Vec3 } from "../../src/types";
+import { readSectionView } from "../../src/document/sectionView";
 
 const CENTRE: Vec3 = [37.5, -12, 20];
 
@@ -380,5 +381,138 @@ describe("section phases", () => {
     off();
     tool.start("Y");
     expect(seen).toHaveLength(6);
+  });
+});
+
+/** A store that normalises what it is given, as DocumentStore does, and tells every listener. */
+function fakeSaved(initial: SectionView | null = null) {
+  let cut = initial && readSectionView(initial);
+  const writes: (SectionView | null)[] = [];
+  const listeners = new Set<(v: SectionView | null) => void>();
+  const tell = () => { for (const fn of [...listeners]) fn(cut); };
+  return {
+    writes,
+    saved: {
+      get: () => cut,
+      set: (v: SectionView | null) => {
+        writes.push(v && structuredClone(v));
+        cut = v && readSectionView(v);
+        tell();
+      },
+      onChange: (fn: (v: SectionView | null) => void) => {
+        listeners.add(fn);
+        fn(cut);
+        return () => { listeners.delete(fn); };
+      },
+    },
+    outside: (v: SectionView | null) => {
+      cut = v && readSectionView(v);
+      tell();
+    },
+  };
+}
+
+describe("the section and its saved cut", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    frames = new Map();
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+      const id = nextFrame++;
+      frames.set(id, fn);
+      return id;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
+  });
+  afterEach(() => {
+    for (const t of made.splice(0)) t.stop();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  const cut = (offset: number, extra: Partial<SectionView> = {}): SectionView =>
+    ({ origin: CENTRE, normal: [0, 0, 1], offset, side: 1, ghost: "soft", ...extra });
+  const OTHER: SectionView = { origin: [-14, 33, 7.5], normal: [0, -0.8, 0.6], offset: 4.75, side: -1, ghost: "strong" };
+
+  it("writes the cut when it starts, on each drag step and on Enter, and null on Off", () => {
+    const store = fakeSaved();
+    const { tool, canvas, state } = setup({ saved: store.saved });
+    tool.start("Z");
+    flushFrames();
+    state.hit = true;
+    pointer(canvas, "pointerdown", 30);
+    pointer(canvas, "pointermove", 34);
+    pointer(canvas, "pointermove", 37.5);
+    pointer(canvas, "pointerup", 37.5);
+    key(type("-2"), "Enter");
+    tool.stop();
+    expect(store.writes).toEqual([cut(0), cut(4), cut(7.5), cut(-2), null]);
+  });
+
+  it("writes a flip and a ghost step, and nothing for edit() or a confirm with nothing typed", () => {
+    const store = fakeSaved();
+    const { tool, canvas } = setup({ saved: store.saved });
+    tool.start("Z");
+    key(canvas, "g");
+    tool.confirm();
+    tool.edit();
+    tool.confirm();
+    tool.flip();
+    expect(store.writes).toEqual([cut(0), cut(0, { ghost: "strong" }), cut(0, { ghost: "strong", side: -1 })]);
+  });
+
+  it("does not take the echo of its own write, normalised, for a change", () => {
+    const store = fakeSaved();
+    const { tool, sent, canvas } = setup({ saved: store.saved });
+    tool.start({ kind: "plane", def: { origin: [37.5, -12, 2], normal: [0, 0, 2], xdir: [1, 0, 0] } });
+    key(canvas, "g");
+    expect(tool.phase).toBe("editing");
+    expect(store.writes).toEqual([
+      cut(0, { origin: [37.5, -12, 2], normal: [0, 0, 2] }),
+      cut(0, { origin: [37.5, -12, 2], normal: [0, 0, 2], ghost: "strong" }),
+    ]);
+    expect(store.saved.get()).toEqual(cut(0, { origin: [37.5, -12, 2], ghost: "strong" }));
+    const at = clipPlaneAt([37.5, -12, 2], [0, 0, 1], 0, 1);
+    expect(sent).toEqual([{ ...at, ghost: 0.14 }, { ...at, ghost: 0.3 }]);
+  });
+
+  it("takes on a cut changed under it: an edit ends, an aim ends once, and null turns it off", () => {
+    const a = fakeSaved();
+    const one = setup({ saved: a.saved });
+    one.tool.start("Z");
+    a.outside(OTHER);
+    expect(one.tool.phase).toBe("on");
+    expect(handles(one.scene)).toHaveLength(0);
+    expect(one.sent.at(-1)).toEqual({ ...clipPlaneAt(OTHER.origin, OTHER.normal, 4.75, -1), ghost: 0.3 });
+    a.outside(null);
+    expect(one.tool.phase).toBe("off");
+    expect(one.sent.at(-1)).toBeNull();
+    expect(a.writes).toEqual([cut(0)]);
+
+    const b = fakeSaved();
+    const two = setup({ saved: b.saved });
+    const done = vi.fn();
+    two.tool.start({ kind: "pick" }, done);
+    b.outside(OTHER);
+    expect(two.tool.phase).toBe("on");
+    expect(done).toHaveBeenCalledTimes(1);
+    expect(b.writes).toEqual([]);
+  });
+
+  it("leaves an edit alone when the same cut comes back from outside", () => {
+    const store = fakeSaved();
+    const { tool } = setup({ saved: store.saved });
+    tool.start("Z");
+    store.outside(cut(0));
+    expect(tool.phase).toBe("editing");
+  });
+
+  it("puts a saved cut on when it is made, with that cut's ghost", () => {
+    const store = fakeSaved(OTHER);
+    const { tool, sent, scene } = setup({ saved: store.saved });
+    expect(tool.phase).toBe("on");
+    expect(sent).toEqual([{ ...clipPlaneAt(OTHER.origin, OTHER.normal, 4.75, -1), ghost: 0.3 }]);
+    expect(handles(scene)).toHaveLength(0);
+    tool.edit();
+    expect(Number(input()!.value)).toBe(4.75);
   });
 });
