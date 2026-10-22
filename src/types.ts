@@ -771,10 +771,12 @@ export interface CadDocument {
   }[];
   /** body id → material id. */
   bodyMaterial?: Record<string, string>;
-  /** `bodyId#localFaceIndex` → material id: a material on ONE FACE, for the
-   *  chrome ring on a printed knob. Display-only like everything above it, and
-   *  see document/faceMaterials.ts for what that key promises across an edit. */
+  /** `bodyId#localFaceIndex` → material id, at the face list of the build the
+   *  file was saved with. Display-only like everything above it. */
   faceMaterials?: Record<string, string>;
+  /** The same keys → that face's print, which finds it again after a rebuild
+   *  reorders the face list (document/faceRefs.ts). */
+  facePrints?: Record<string, import("./document/faceRefs").FacePrint>;
   /** import feature id → "faces" where an import's parts wear their face
    *  colours over their body colours. Absent means "bodies". */
   importColorSource?: Record<string, ImportColorSource>;
