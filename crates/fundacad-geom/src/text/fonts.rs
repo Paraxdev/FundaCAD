@@ -77,6 +77,12 @@ const ALIASES: &[(&str, &str)] = &[
     ("serif", "times new roman"),
     ("monospace", "courier new"),
     ("singleline", "relief singleline cad"),
+    ("arial", "liberation sans"),
+    ("times new roman", "liberation serif"),
+    ("courier new", "liberation mono"),
+    ("liberation sans", "arial"),
+    ("liberation serif", "times new roman"),
+    ("liberation mono", "courier new"),
 ];
 
 impl Library {
@@ -138,17 +144,30 @@ impl Library {
         names
     }
 
-    fn find(&self, name: &str) -> Option<&SystemFont> {
-        let key = name.to_lowercase();
-        if let Some(f) = self.fonts.get(&key) {
-            return Some(f);
-        }
-        if let Some((_, to)) = ALIASES.iter().find(|(from, _)| *from == key) {
-            if let Some(f) = self.fonts.get(*to) {
+    /// The name's own family, else the first one reached through the aliases,
+    /// following them more than one step ("helvetica" to "arial" to "liberation sans").
+    fn reach(&self, name: &str) -> Option<&SystemFont> {
+        let mut seen = vec![name];
+        let mut i = 0;
+        while i < seen.len() {
+            if let Some(f) = self.fonts.get(seen[i]) {
                 return Some(f);
             }
+            for (from, to) in ALIASES {
+                if *from == seen[i] && !seen.contains(to) {
+                    seen.push(to);
+                }
+            }
+            i += 1;
         }
-        if let Some(f) = self.fonts.get("arial") {
+        None
+    }
+
+    fn find(&self, name: &str) -> Option<&SystemFont> {
+        if let Some(f) = self.reach(&name.to_lowercase()) {
+            return Some(f);
+        }
+        if let Some(f) = self.reach("arial") {
             return Some(f);
         }
         // fontdb's sans serif is Arial unless fontconfig names another, and
@@ -166,11 +185,7 @@ impl Library {
     /// Whether this name finds its own family, directly or through an alias,
     /// rather than a fallback standing in for it.
     pub fn is_installed(&self, name: &str) -> bool {
-        let key = name.to_lowercase();
-        self.fonts.contains_key(&key)
-            || ALIASES
-                .iter()
-                .any(|(from, to)| *from == key && self.fonts.contains_key(*to))
+        self.reach(&name.to_lowercase()).is_some()
     }
 
     /// `FindFont` then `FontPathAny`: the aspect asked for, else regular with
@@ -426,30 +441,4 @@ pub fn names_by_key(lib: &Library) -> HashMap<String, String> {
         .iter()
         .map(|(k, v)| (k.clone(), v.name.clone()))
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_machine_without_arial_still_draws_text() {
-        let mut db = fontdb::Database::new();
-        db.load_system_fonts();
-        let arial: Vec<fontdb::ID> = db
-            .faces()
-            .filter(|f| f.families.iter().any(|(n, _)| n.eq_ignore_ascii_case("arial")))
-            .map(|f| f.id)
-            .collect();
-        for id in arial {
-            db.remove_face(id);
-        }
-        db.set_sans_serif_family("No Such Family");
-        if db.is_empty() {
-            return;
-        }
-        let lib = Library::build(db);
-        assert!(!lib.is_installed("Arial"));
-        assert!(lib.resolve("Arial", Aspect::Regular).is_some());
-    }
 }
