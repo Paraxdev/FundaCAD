@@ -6,6 +6,7 @@ import { setPrompt } from "../ui/prompt";
 import { isEditableTarget } from "../ui/focus";
 import { awaitTreePick, treePickRefusal, type TreePick, type TreePickAnswer } from "../ui/treePick";
 import { CanvasGesture } from "./canvasGesture";
+import { freshIds } from "./moveTarget";
 import { pickPlaneTarget, type PlanePickTarget } from "./facePlanePick";
 import { featureLabel } from "./patternSources";
 import { showMirrorPanel } from "./mirrorPanel";
@@ -25,13 +26,13 @@ import {
 } from "./mirrorFields";
 
 const BASE_PLANES: readonly Plane3[] = ["XY", "XZ", "YZ"];
-export const PLANE_REFUSED = "Pick an origin plane or a datum plane";
+export const PLANE_REFUSED = "That face is curved, pick a flat face or a plane";
 
 type PlaneAt = (viewport: Viewport, x: number, y: number) => PlanePickTarget;
 
 let nextPanelId = 1;
 
-/** 3D Mirror: bodies in Objects, an origin or datum plane in the plane field, ghost copies as the preview. */
+/** 3D Mirror: bodies in Objects, an origin plane, datum plane or flat face in the plane field, ghosts as the preview. */
 export class MirrorTool {
   active = false;
   private fields: MirrorFields<MirrorPlanePick> = startFields([]);
@@ -77,12 +78,13 @@ export class MirrorTool {
   commit(): boolean {
     const f = this.fields;
     if (!this.active || !f.line || !f.objects.length) return false;
-    const [feature] = mirrorFeatures(() => this.store.nextId(), f.objects, f.line);
+    const ids = freshIds(this.store, 2);
+    const features = mirrorFeatures(() => ids.shift()!, f.objects, f.line);
     const done = this.onDone;
     this.viewport.setSelectedBodies([]);
     this.cleanup();
-    this.store.addFeature(feature!);
-    done?.(feature!.id);
+    this.store.addFeatures(features);
+    done?.(features[features.length - 1]!.id);
     return true;
   }
 
@@ -125,6 +127,7 @@ export class MirrorTool {
   private planeOf(t: PlanePickTarget): MirrorPlanePick | null {
     if (t?.kind === "base") return { kind: "base", plane: t.spec };
     if (t?.kind === "datum") return { kind: "datum", id: t.id, def: t.spec };
+    if (t?.kind === "face" && t.face.kind === "planar") return { kind: "face", face: t.face };
     return null;
   }
 
@@ -134,6 +137,7 @@ export class MirrorTool {
     if (this.fields.active === "objects" || keep) {
       vp.hoverPlane(null);
       vp.hoverDatum(null);
+      vp.clearHover();
       const id = vp.bodyIdAt(e.clientX, e.clientY);
       vp.hoverBody(id);
       vp.domElement.style.cursor = id ? "pointer" : "default";
@@ -141,9 +145,12 @@ export class MirrorTool {
     }
     vp.hoverBody(null);
     const t = this.planeAt(vp, e.clientX, e.clientY);
-    vp.hoverPlane(t?.kind === "base" ? t.spec : null);
-    vp.hoverDatum(t?.kind === "datum" ? t.id : null);
-    vp.domElement.style.cursor = this.planeOf(t) ? "pointer" : "default";
+    const plane = this.planeOf(t);
+    if (plane?.kind === "face") vp.hoverFaceAt(e.clientX, e.clientY);
+    else vp.clearHover();
+    vp.hoverPlane(plane?.kind === "base" ? plane.plane : null);
+    vp.hoverDatum(plane?.kind === "datum" ? plane.id : null);
+    vp.domElement.style.cursor = plane ? "pointer" : "default";
   }
 
   /** A miss is not a cancel, and lets the press through so the view still orbits. */
@@ -217,6 +224,7 @@ export class MirrorTool {
   private planeLabel(p: MirrorPlanePick | null): string {
     if (!p) return "Nothing picked";
     if (p.kind === "base") return `${p.plane} plane`;
+    if (p.kind === "face") return "Flat face";
     const f = this.store.document.features.find((x) => x.id === p.id);
     return f ? featureLabel(f) : p.id;
   }
@@ -225,7 +233,7 @@ export class MirrorTool {
     const f = this.fields;
     const objects = countLabel(f.objects.length, "body", "bodies");
     const want =
-      f.active === "objects" ? "Objects · click a body to mirror" : "Mirror plane · click an origin or datum plane";
+      f.active === "objects" ? "Objects · click a body to mirror" : "Mirror plane · click a plane or a flat face";
     setPrompt(`${refusal ? `${refusal} · ` : ""}${want} · ${objects} · Enter · Esc`);
     showMirrorPanel({
       id: this.panelId,
@@ -262,6 +270,7 @@ export class MirrorTool {
     vp.hoverPlane(null);
     vp.hoverDatum(null);
     vp.hoverBody(null);
+    vp.clearHover();
     vp.clearPatternGhost();
     vp.domElement.style.cursor = "default";
     vp.suspendPicking = false;
