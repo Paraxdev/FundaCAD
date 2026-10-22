@@ -12,9 +12,8 @@ const natural = (me: HTMLElement) => ({
   height: me.offsetHeight,
 });
 
-/** Sets --row-top, --row-left and --row-right on `el` to keep it clear of the floating cards: the top row, else the
- *  top row with `data-narrow` set (its children drop their words), else the first row down with room, else the top
- *  row narrow and over what it must cover, as the prompt does. */
+/** Sets --row-top, --row-left and --row-right so `el` clears the floating cards: top row, else top row with
+ *  `data-narrow`, else the first row down with room, else top row narrow and overlapping, as the prompt does. */
 export function useClearOfCards(el: Readonly<Ref<HTMLElement | null>>, minWidth = 160) {
   let frame = 0;
   let ro: ResizeObserver | null = null;
