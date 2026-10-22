@@ -1,13 +1,5 @@
-// The node body tool: place nodes in 3D, link them into chains, move, turn and
-// resize the picked one with the app's own gizmo, and watch the smooth body
-// they make rebuild behind them.
-//
-// A click on a body puts a node on its surface, a click on a datum plane puts
-// one on that plane, and a click in open space puts one on the plane facing
-// the view through the picked node (the ground when nothing is picked). With
-// "Link new nodes" on, each new node extends the chain from the picked one, so
-// a limb is drawn by clicking along it. Alt-drag from a node pulls a linked
-// copy out of it. Shift-click links the picked node to the one clicked.
+// A click puts a node on a body's surface, on a datum plane, or on the plane facing the view through the picked node.
+// "Link new nodes" extends the chain from the picked node, Alt-drag pulls out a linked copy, Shift-click links two.
 
 import * as THREE from "three";
 import { ALL_HANDLES, setPrompt } from "fundacad";
@@ -75,8 +67,6 @@ export class NodeTool {
   private readonly tick = () => this.frame();
 
   constructor(private readonly e: Engine) {}
-
-  // --- lifecycle -------------------------------------------------------------
 
   start(onDone: (id: string | null) => void) {
     if (this.active) return;
@@ -208,8 +198,6 @@ export class NodeTool {
     this.down = null;
   }
 
-  // --- the document ----------------------------------------------------------
-
   private node(id: string | null): NodeValues | null {
     return (id && this.working?.nodes.find((n) => n.id === id)) || null;
   }
@@ -314,8 +302,6 @@ export class NodeTool {
     this.changed();
   }
 
-  // --- picking a node --------------------------------------------------------
-
   private select(id: string | null) {
     if (this.e.tools.move.active) this.e.tools.move.cancel();
     this.selected = this.node(id) ? id : null;
@@ -366,9 +352,8 @@ export class NodeTool {
     const view = vp.viewDirection();
     const sel = this.node(this.selected);
     if (sel) {
-      // The picked node's own level whenever the view looks down on it at all,
-      // so a limb drawn in an angled view stays where it looks like it goes;
-      // from nearly level, the upright world plane facing the view.
+      // The picked node's own level whenever the view looks down on it at all, so an angled view draws where it
+      // looks like it goes; from nearly level, the upright world plane facing the view.
       const axis = Math.abs(view.z) > 0.35 ? 2 : Math.abs(view.x) > Math.abs(view.y) ? 0 : 1;
       const normal = new THREE.Vector3().setComponent(axis, 1);
       const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, centerOf(sel));
@@ -404,8 +389,6 @@ export class NodeTool {
     this.select(id);
     this.changed({ immediate: true });
   }
-
-  // --- pointer and keys ------------------------------------------------------
 
   private pointerDown(e: PointerEvent) {
     if (e.button !== 0 || !this.active) return;
@@ -478,9 +461,8 @@ export class NodeTool {
       this.cancel();
       return;
     }
-    // The gizmo's own value box holds the focus while it is up. Left at 0 it
-    // has nothing to say, so Enter finishes the body and Delete removes the
-    // node, as they do with nothing focused.
+    // The gizmo's value box keeps the focus while it is up. Left at 0 it has nothing to say, so Enter finishes the
+    // body and Delete removes the node, as with nothing focused.
     const idleGizmoBox = typing && !!t?.closest(".dim-input") && Number((t as HTMLInputElement).value || 0) === 0;
     if (typing && !(idleGizmoBox && (e.key === "Enter" || e.key === "Delete"))) return;
     if (e.key === "Enter") {
@@ -493,8 +475,6 @@ export class NodeTool {
       this.removeNode(this.selected);
     }
   }
-
-  // --- the gizmo's target ----------------------------------------------------
 
   private target(id: string): MoveTarget {
     const n0 = structuredClone(this.node(id)!);
@@ -563,8 +543,6 @@ export class NodeTool {
       reopen: () => (this.active && this.node(id) && this.selected === id ? this.target(id) : null),
     };
   }
-
-  // --- drawing ---------------------------------------------------------------
 
   private clearOverlay() {
     const g = this.overlay;

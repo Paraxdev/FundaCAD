@@ -1,5 +1,4 @@
-// What the node panel draws, and the ways back to the tool. Module refs rather
-// than a store, for the reason plugins/FundaCAD.Texture/panel.ts gives.
+// What the node panel draws. Module refs rather than a store, for the reason plugins/FundaCAD.Texture/panel.ts gives.
 
 import { shallowRef } from "vue";
 import type { NodeFeature, NodeValues } from "./nodeForm";
