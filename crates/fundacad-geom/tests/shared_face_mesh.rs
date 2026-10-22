@@ -1,7 +1,5 @@
-//! A joined body shares the faces the join left alone with the tool it kept,
-//! and holds a patterned tool's faces once per copy. The kernel stores one
-//! mesh per shared face, so the body must come out whole whichever body was
-//! meshed before it and at whatever fineness, in the viewport and in an STL.
+//! A joined body shares untouched faces with the kept tool, once per pattern copy, and the kernel stores one mesh per
+//! shared face, so the body must come out whole whichever body was meshed first and at any fineness.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};
@@ -20,9 +18,8 @@ fn outline(points: [[f64; 2]; 4]) -> Vec<Value> {
         .collect()
 }
 
-/// A revolved tube (body1) with a grip bump revolved 14 degrees inside its
-/// wall (body2), `copies` of the bump around the axis, joined onto the tube
-/// with the bumps kept. `height` only makes each document a new one.
+/// A revolved tube (body1) joined with `copies` grip bumps (body2) revolved 14 degrees inside its wall, bumps kept.
+/// `height` only makes each document a new one.
 fn tube_with_bumps(copies: usize, height: f64) -> Vec<Shape> {
     let mut features = vec![
         json!({"id": "tubeSk", "type": "sketch", "plane": "XZ",

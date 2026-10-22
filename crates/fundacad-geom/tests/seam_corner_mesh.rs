@@ -1,9 +1,5 @@
-//! A cut whose corner lands a few 1e-5 mm beside the seam of a revolved tube
-//! leaves edges that short between the seam and the corner. The kernel's
-//! mesher folds such an edge into one node on the cylinder and keeps its
-//! points on the flat wall beside it, so the two faces must be brought to the
-//! same nodes or the viewport, an STL and the printability check all get a
-//! mesh with holes.
+//! A cut corner a few 1e-5 mm beside a revolved tube's seam leaves short edges that the kernel's mesher folds into
+//! one node on the cylinder but not on the flat wall, so both faces must share nodes or the mesh has holes.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};
@@ -26,9 +22,8 @@ fn outline(points: [[f64; 2]; 4]) -> Vec<Value> {
     (0..4).map(|i| line(&format!("l{i}"), points[i], points[(i + 1) % 4])).collect()
 }
 
-/// A tube revolved about Z, its seam at azimuth 0, with a diamond cut through
-/// the wall whose top and bottom corners sit `offset` mm beside the seam, the
-/// whole part `s` times the size.
+/// A tube revolved about Z, seam at azimuth 0, with a diamond cut through the wall whose top and bottom corners sit
+/// `offset` mm beside the seam, the whole part `s` times the size.
 fn tube(offset: f64, patterned: bool, s: f64) -> Value {
     tube_cut_to(offset, patterned, s, 17.2)
 }
@@ -163,9 +158,8 @@ fn a_cut_with_a_corner_on_the_seam_or_a_millionth_beside_it_meshes_closed() {
 
 #[test]
 fn a_body_is_still_valid_after_its_mesh_folded_a_short_edge() {
-    // BRepCheck also holds every stored edge polygon to the deflection it
-    // claims, so a fold the mesher left unrecorded turns the body invalid for
-    // the features that check their input in a live session.
+    // BRepCheck also holds every stored edge polygon to its claimed deflection, so a fold the mesher left unrecorded
+    // makes the body invalid for features that check their input in a live session.
     for (label, raw) in [
         ("direct cut, corner 1e-4 mm off the seam", tube(1e-4, false, 1.0)),
         ("pattern, corner at the rim 1.9e-5 mm off the seam", tube_cut_to(1.9e-5, true, 1.0, 30.0)),
@@ -183,11 +177,8 @@ fn a_body_is_still_valid_after_its_mesh_folded_a_short_edge() {
 
 #[test]
 fn a_cut_with_a_corner_at_the_rim_beside_the_seam_meshes_closed() {
-    // The corner leaves a triangle of the wall between the seam, the rim and
-    // the cut, as wide as the corner is off the seam. The mesher gives a face
-    // that small no triangles, or one where its outline needs five. The cut
-    // also meets the rim along one radial line, a side the top face and both
-    // walls of the cut share: that one belongs to the model and is no hole.
+    // The corner leaves a wall triangle as wide as its offset, which the mesher gives no triangles or too few. The
+    // cut's radial line on the rim is shared by the top face and both cut walls, so it belongs to the model.
     for (patterned, offset, cuts) in
         [(false, 1e-4, 1), (false, -1e-4, 1), (true, 1.9e-5, 4), (true, 1e-4, 4), (true, -1e-4, 4)]
     {

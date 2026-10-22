@@ -1,6 +1,5 @@
-//! A cup whose outer rim is already rounded, its inner rim filleted past the
-//! wall: the fillet is one revolved face that carves the rim, not a band of
-//! lofted sections that cuts the wall in two and takes half a minute.
+//! A cup with a rounded outer rim, its inner rim filleted past the wall: the fillet is one revolved face carving the
+//! rim, not a band of lofted sections that cuts the wall in two and takes half a minute.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
@@ -41,9 +40,8 @@ fn build(doc: &Value) -> (Rebuild, f64) {
     (r, t.elapsed().as_secs_f64())
 }
 
-/// The rim's section is the arc of a ball resting on the wall and on the
-/// rim's tangent plane, revolved: what is left is the base less the ring
-/// outside that ball's torus.
+/// The rim's section is the arc of a ball resting on the wall and the rim's tangent plane, revolved: what is left
+/// is the base less the ring outside that ball's torus.
 fn carved(base: &opencascade::primitives::Shape, r: f64) -> f64 {
     let (x0, x1) = (R - OUTER - 0.1, R - OUTER + r);
     let ring = kernel::polygon_face(&[[x0, 0.0, H - r], [x1, 0.0, H - r], [x1, 0.0, H + 1.0], [x0, 0.0, H + 1.0]])

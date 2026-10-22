@@ -1,10 +1,5 @@
-//! `unify_body` may never quietly eat a constituent, and a join of tangent
-//! swept tubes has to come out as one merged solid.
-//!
-//! The volume bracket of shape_util.py `_unify_body` cannot see the failure on
-//! its own: when the fuse drops a constituent the result is exactly the largest
-//! one, and the largest one is the bracket's floor. Measured on two tangent
-//! swept tubes, OCCT 7.8.1 returned the bigger tube alone.
+//! `unify_body` may never quietly eat a constituent: a fuse that drops one returns exactly the largest, the floor of
+//! shape_util.py's volume bracket, as OCCT 7.8.1 did on two tangent swept tubes.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};
@@ -77,8 +72,7 @@ fn a_join_of_tangent_swept_tubes_merges_both() {
     assert_eq!(r.bodies.len(), 1, "the join keeps one body");
     let body = &r.bodies[0];
     assert_eq!(kernel::count(&body.shape, Kind::Solid), 1, "one merged solid");
-    // The Python engine measures 2716742 from the kernel; the top tube alone is
-    // 1898918, which is what the lost second tube used to leave behind.
+    // The Python engine measures 2716742 from the kernel, the top tube alone is 1898918.
     let vol = kernel::volume(&body.shape).abs();
     assert!((vol - 2_716_742.0).abs() < 0.005 * 2_716_742.0, "volume {vol}, the down tube is missing at 1898918");
 }

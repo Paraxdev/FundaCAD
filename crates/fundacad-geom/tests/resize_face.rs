@@ -1,7 +1,5 @@
-//! A round face resized about its own axis: the faces around it keep their
-//! own surfaces and are trimmed or extended to meet it, a slot end shrunk
-//! below the slot's half width narrows the whole slot, and sizes with no
-//! valid result are refused with the reason.
+//! A round face resized about its own axis: its neighbours keep their surfaces and are trimmed or extended to meet it,
+//! a slot end shrunk below half width narrows the whole slot, and sizes with no valid result are refused.
 
 use std::f64::consts::PI;
 
@@ -42,7 +40,6 @@ fn slot() -> Shape {
     cut(&plate(10.0), &tool)
 }
 
-/// The slot's volume at width `w`.
 fn slot_volume(w: f64) -> f64 {
     16000.0 - 10.0 * (16.0 * w + PI * (w / 2.0) * (w / 2.0))
 }
