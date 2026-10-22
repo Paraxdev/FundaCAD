@@ -27,13 +27,16 @@ import { markOverlay } from "./overlayKinds";
 // of a large face's far corners, so a plate filling the view read as grazing
 // everywhere and the rim washed the whole screen in the accent.
 const VERT = /* glsl */ `
+  #include <clipping_planes_pars_vertex>
   varying vec3 vN;
   varying vec3 vW;
   void main() {
     vec4 wp = modelMatrix * vec4(position, 1.0);
     vN = normalize(mat3(modelMatrix) * normal);
     vW = wp.xyz;
-    gl_Position = projectionMatrix * viewMatrix * wp;
+    vec4 mvPosition = viewMatrix * wp;
+    gl_Position = projectionMatrix * mvPosition;
+    #include <clipping_planes_vertex>
   }
 `;
 
@@ -44,7 +47,9 @@ const FRAG = /* glsl */ `
   uniform float uFade;
   varying vec3 vN;
   varying vec3 vW;
+  #include <clipping_planes_pars_fragment>
   void main() {
+    #include <clipping_planes_fragment>
     // fresnel: 0 facing the camera, 1 at the grazing silhouette
     vec3 v = isOrthographic
       ? vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2])
@@ -71,6 +76,14 @@ export type GlowKind = keyof typeof INTENSITY;
 // scope material drag stutter on a large assembly. A disposer that does free a
 // shared one on teardown is harmless: three re-initialises it on its next use.
 const materials = new Map<GlowKind, THREE.ShaderMaterial>();
+let clipPlanes: THREE.Plane[] | null = null;
+
+/** Clips every glow and the face hover to the section cut (the viewport's own plane array), null for none. */
+export function clipSelectionOverlays(planes: THREE.Plane[] | null) {
+  clipPlanes = planes;
+  for (const mat of materials.values()) mat.clippingPlanes = planes;
+  if (faceHoverMaterial) faceHoverMaterial.clippingPlanes = planes;
+}
 
 function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
   let mat = materials.get(kind);
@@ -92,6 +105,8 @@ function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
       depthWrite: false,
       side: THREE.FrontSide,
       blending: THREE.NormalBlending,
+      clipping: true,
+      clippingPlanes: clipPlanes,
     });
     followComposer(mat);
     materials.set(kind, mat);
@@ -134,6 +149,7 @@ export function makeFaceHoverOverlay(positions: Float32Array, color: THREE.Color
     polygonOffset: true,
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1,
+    clippingPlanes: clipPlanes,
   });
   faceHoverMaterial.color.copy(color);
   const geo = new THREE.BufferGeometry();

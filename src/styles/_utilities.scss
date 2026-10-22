@@ -253,7 +253,8 @@ button.finish:hover {
   color: var(--text);
 }
 .dim-btn.dim-toggle.on,
-.dim-btn.dim-direction.on {
+.dim-btn.dim-direction.on,
+.section-chip-btn.active {
   color: var(--accent-hot);
   border-color: var(--accent);
   background: var(--accent-tint);

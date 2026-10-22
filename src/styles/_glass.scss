@@ -30,6 +30,7 @@
 .roundtrip,
 .sel-readout,
 .normal-to-sketch,
+.section-chip,
 .snap-tag,
 .sketch-dim,
 .sketch-glyph {
@@ -76,6 +77,7 @@
 .roundtrip,
 .sel-readout,
 .normal-to-sketch,
+.section-chip,
 .snap-tag,
 .sketch-dim,
 .sketch-glyph {
@@ -209,6 +211,7 @@
 .ctx-item,
 .opt-row,
 .pop-wide,
+.section-chip-btn,
 .choice-btn,
 .choice-check,
 #browser .browser-filter,
@@ -262,14 +265,16 @@
   box-shadow: var(--glass-inset), 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent), var(--float-shadow);
 }
 .dim-btn.dim-toggle.on,
-.dim-btn.dim-direction.on {
+.dim-btn.dim-direction.on,
+.section-chip-btn.active {
   /* Mixed into an opaque dark, not transparency: over a pale model a see-through
      tint washed the label out. */
   background: color-mix(in srgb, var(--accent) 20%, var(--panel));
 }
 
 .pop-wide,
-.palette-btn {
+.palette-btn,
+.section-chip-btn {
   corner-shape: squircle;
   border-radius: var(--float-chip-radius);
   background: rgba(255, 255, 255, 0.06);
@@ -277,7 +282,8 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .pop-wide:hover,
-.palette-btn:hover {
+.palette-btn:hover,
+.section-chip-btn:hover:not(.disabled) {
   background: rgba(255, 255, 255, 0.1);
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
@@ -531,7 +537,8 @@
    specificity, so without this the ring never shows on them. */
 .btn:focus-visible,
 .pop-wide:focus-visible,
-.palette-btn:focus-visible {
+.palette-btn:focus-visible,
+.section-chip-btn:focus-visible {
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-glow);
 }
 

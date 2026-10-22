@@ -9,6 +9,7 @@ import { bodyOfFace, edgeObjects, faceIdOfHit, visibleBodyMeshes } from "./rende
 import type { BodyEdges, EdgeRef } from "./edgeLines";
 import { edgeSelectorFrom } from "./edgeMatch";
 import { flushRaycastIndex } from "./raycastIndex";
+import { firstKeptHit, keptPoint, SECTION_PICK_SLACK } from "./sectionPick";
 import { hitScale } from "../input/pointerKind";
 import { overlayLayer } from "./overlayKinds";
 import {
@@ -98,6 +99,12 @@ export class Picker {
     return this.targetCache.targets;
   }
 
+  private clip: THREE.Plane | null = null;
+  /** The section cut picks honour, held by reference so a dragged cut needs no call; null for none. */
+  setClip(plane: THREE.Plane | null) {
+    this.clip = plane;
+  }
+
   /** Drop the cached raycast targets, call after anything that changes which
    *  bodies or edges are drawn (hideFlushSeams, body show/hide). */
   invalidate() {
@@ -127,10 +134,9 @@ export class Picker {
     const cands = this.pickEdgeCandidates(clientX, clientY, rect, camera, view);
 
     this.raycaster.setFromCamera(this.ndc, camera); // ndc set by pickEdgeCandidates
-    // one Mesh per visible body now (not caching this list like visibleEdges,
-    // body counts are small, unlike edge counts, so a per-move filter is cheap).
-    const fHits = this.raycaster.intersectObjects(visibleBodyMeshes(view), false);
-    const fHit = fHits[0];
+    const scale = modelScale(view);
+    const kept = firstKeptHit(this.raycaster, visibleBodyMeshes(view), this.clip, SECTION_PICK_SLACK * scale);
+    const fHit = kept && !kept.cap ? kept.hit : undefined;
     let face: FaceHit | null = null;
     if (fHit) {
       const faceId = faceIdOfHit(fHit);
@@ -151,7 +157,6 @@ export class Picker {
     // extent walk's early exit at BAND_CAP_EXTENT_PX still means "capped" and a
     // finger simply gets the same shape of band at fingertip size.
     const faceBand = edgeBandPx(face ? faceScreenExtentPx(view, face.faceId, camera, rect) : null) * hitScale();
-    const scale = modelScale(view);
     // Over a face only candidates within a few px of the pointer get a sight
     // ray, so the bodies near the ray are gathered for the radius asked so far.
     let near: THREE.Mesh[] = [];
@@ -219,8 +224,8 @@ export class Picker {
   private pointVisible(point: THREE.Vector3, camera: THREE.Camera, meshes: THREE.Mesh[], scale: number): boolean {
     const p = this.scratch.copy(point).project(camera);
     this.sightRay.setFromCamera(this.sightNdc.set(p.x, p.y), camera);
-    const hit = this.sightRay.intersectObjects(meshes, false)[0];
-    return !occludedEdge(this.sightRay.ray.origin.distanceTo(point), hit?.distance ?? null, scale);
+    const kept = firstKeptHit(this.sightRay, meshes, this.clip, SECTION_PICK_SLACK * scale);
+    return !occludedEdge(this.sightRay.ray.origin.distanceTo(point), kept?.distance ?? null, scale);
   }
 
   /** Every edge the cursor could have meant, nearest first in SCREEN space,
@@ -260,6 +265,8 @@ export class Picker {
     // raycaster tests invisible objects too, which would give ghost edge picks
     const eHits = this.raycaster.intersectObjects(this.edgeTargets(view), false);
     if (!eHits.length) return [];
+    // Line2 ignores the raycaster's near and far, so an edge is kept or dropped by its point nearest the ray.
+    const slack = SECTION_PICK_SLACK * modelScale(view);
 
     const byEdge = new Map<EdgeRef, EdgeCandidate>();
     for (const h of eHits) {
@@ -269,6 +276,7 @@ export class Picker {
       const edge = draw?.refAtSegment(h.faceIndex ?? -1);
       if (!edge) continue;
       const p = (h as any).pointOnLine ?? h.point;
+      if (this.clip && !keptPoint(p, this.clip, slack)) continue;
       this.scratch.copy(p).project(camera);
       const sx = (this.scratch.x * 0.5 + 0.5) * rect.width + rect.left;
       const sy = (-this.scratch.y * 0.5 + 0.5) * rect.height + rect.top;
@@ -443,7 +451,7 @@ function edgeScreenLengthPx(edge: EdgeRef, camera: THREE.Camera, rect: DOMRect):
 
 /** The model's overall size, for the tolerance above. Zero for an empty view,
  *  which occludedEdge reads as "use the absolute floor". */
-function modelScale(view: ModelView): number {
+export function modelScale(view: ModelView): number {
   const d = view.box.isEmpty() ? 0 : view.box.getSize(new THREE.Vector3()).length();
   return Number.isFinite(d) ? d : 0;
 }

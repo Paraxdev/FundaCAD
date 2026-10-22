@@ -14,7 +14,7 @@ import { DocumentStore, EMPTY_DOCUMENT } from "../../src/document/store";
 import { GUIDE_LINGER_MS, LiveSessionHost } from "../../src/live/liveSession";
 import { GuideSession } from "../../src/ui/guide/guideSession";
 import { emptySnapshot } from "../../src/ui/guide/wait";
-import type { CadDocument } from "../../src/types";
+import type { CadDocument, SectionView } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 
 /** A backend that records what the host published and replays a scripted reply.
@@ -105,6 +105,29 @@ describe("the window's half of a live session", () => {
     expect(store.document.features).toHaveLength(3);
     store.undo();
     expect(store.document.features, "the edit was not undoable").toHaveLength(0);
+    await host.stop();
+  });
+
+  it("publishes no section cut, so an edit made against an older publish keeps the cut the user has now", async () => {
+    const cutA: SectionView = { origin: [41.5, -12, 8.25], normal: [0.6, 0.8, 0], offset: 3.5, side: 1, ghost: "soft" };
+    const cutB: SectionView = { origin: [-7, 22.5, 14], normal: [0, 0.6, -0.8], offset: -2.25, side: -1, ghost: "strong" };
+    store.loadDocument(doc(2));
+    store.setSectionView(structuredClone(cutA));
+    const host = new LiveSessionHost(store, geo, () => true);
+    host.start();
+    await host.tick();
+    const published = geo.sent.filter((m) => m.op === "session_host").at(-1)!.payload["document"] as CadDocument;
+    expect("sectionView" in published).toBe(false);
+    expect(published.features.map((f) => f.id)).toEqual(["f0", "f1"]);
+
+    for (const [i, now] of [null, cutB].entries()) {
+      store.setSectionView(now && structuredClone(now));
+      const edited = { ...structuredClone(published), features: [...published.features, { id: `x${i}`, type: "box" }] };
+      geo.reply = { ok: true, guests: ["an assistant"], proposals: [{ id: `p${i}`, name: "an assistant", note: null, document: edited }] };
+      await host.tick();
+      expect(store.document.features.map((f) => f.id)).toEqual(["f0", "f1", `x${i}`]);
+      expect(store.sectionView).toEqual(now);
+    }
     await host.stop();
   });
 

@@ -109,11 +109,12 @@ describe("top level data this version does not know", () => {
       importColorSource: { i1: "faces" },
       stress: study,
       environment: { settings: { exposure: 1 } },
+      sectionView: { origin: [12, -7.5, 4], normal: [0, 0.6, 0.8], offset: 3.25, side: -1, ghost: "strong" },
     });
     store.saveVersion("first");
     const written = Object.keys(saved(store));
     expect(written.filter((k) => !KNOWN_DOC_KEYS.has(k))).toEqual([]);
-    for (const k of ["stress", "environment", "versions", "elements", "materials", "palette", "rollback"]) {
+    for (const k of ["stress", "environment", "sectionView", "versions", "elements", "materials", "palette", "rollback"]) {
       expect(written).toContain(k);
     }
   });

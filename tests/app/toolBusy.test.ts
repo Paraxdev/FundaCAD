@@ -26,6 +26,8 @@ function fakeEngine(over: {
   sketch?: boolean;
   pattern?: boolean;
   datumPose?: boolean;
+  sectionOn?: boolean;
+  sectionAiming?: boolean;
   mode?: "faces" | "bodies";
 } = {}) {
   let cancelled = 0;
@@ -40,7 +42,7 @@ function fakeEngine(over: {
       move: { active: over.move ?? false, cancel: () => { cancelled++; } },
       edgeFeature: off, pressPull: off, faceOffset: off, draft: off, thread: off, textOnFace: off, hole: off,
       loft: off, planeOffset: off, datumPose: { active: over.datumPose ?? false }, lightAim: off, pattern: off, measure: off, targetEdit: off,
-      revolvePitch: off, joint: off, mechanism: off, section: { picking: false },
+      revolvePitch: off, joint: off, mechanism: off, section: { picking: over.sectionAiming ?? false, editing: false, active: over.sectionOn ?? false },
     },
   } as unknown as Engine;
   return { e, cancels: () => cancelled };
@@ -72,6 +74,15 @@ describe("toolBusy versus toolOwnsScreen", () => {
   it("still counts a Move that is up alongside another tool", () => {
     const t = createToolBusy(fakeEngine({ move: true, extrude: true }).e);
     expect(t.toolOwnsScreen()).toBe(true);
+  });
+});
+
+describe("a section", () => {
+  it("counts while aiming and not while its cut is on", () => {
+    const on = createToolBusy(fakeEngine({ sectionOn: true }).e);
+    expect([on.toolBusy(), on.toolOwnsScreen()]).toEqual([false, false]);
+    const aiming = createToolBusy(fakeEngine({ sectionAiming: true }).e);
+    expect([aiming.toolBusy(), aiming.toolOwnsScreen()]).toEqual([true, true]);
   });
 });
 

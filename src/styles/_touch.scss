@@ -90,7 +90,8 @@ textarea,
   .timeline-cancel,
   .timeline-related,
   .dim-btn,
-  .dim-unit {
+  .dim-unit,
+  .section-chip-btn {
     position: relative;
   }
 
@@ -114,6 +115,7 @@ textarea,
   .timeline-related::before,
   .dim-btn::before,
   .dim-unit::before,
+  .section-chip-btn::before,
   .sketch-dim::before,
   .sketch-glyph::before,
   // ::before already draws the marker's line and the track's rail, so these
@@ -293,6 +295,10 @@ textarea,
   }
   .dim-btn.dim-no::before {
     right: -8px;
+  }
+  // About 27px tall; the 8px gap between them is split.
+  .section-chip-btn::before {
+    inset: -7px -4px;
   }
   // Less to the left, where the number being typed is.
   .dim-unit::before {

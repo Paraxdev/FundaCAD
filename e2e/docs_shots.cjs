@@ -573,7 +573,22 @@ const STILLS = {
     await page.getByText("horizontal cut").click();
     await sleep(2000);
     await ctx.park();
-    await ctx.still("section-handle", { x: 280, y: 60, width: 880, height: 720 });
+    await ctx.still("section-handle", { x: 280, y: 40, width: 880, height: 740 });
+  },
+
+  async "section-chip"(ctx) {
+    const { page } = ctx;
+    await ctx.features(bracket());
+    await ctx.view("iso", 0);
+    await ctx.centre();
+    await page.evaluate(() => window.__fundacad.handleAction("section"));
+    await sleep(800);
+    await page.getByText("horizontal cut").click();
+    await sleep(1200);
+    await page.keyboard.press("Enter");
+    await sleep(1500);
+    await ctx.park();
+    await ctx.still("section-chip", { x: 280, y: 40, width: 880, height: 740 });
   },
 
   async "properties-panel"(ctx) {
