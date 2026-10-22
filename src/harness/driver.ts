@@ -1,6 +1,5 @@
-// The page half of the agent harness (tools/harness). It answers where things
-// are and what is on screen; every action is real input sent by the Python side.
-// Loaded only in a dev build opened with ?harness=1.
+// The page half of the agent harness (tools/harness), loaded only in a dev build with ?harness=1. It answers
+// where things are and what is on screen; every action is real input from the Python side.
 
 import { findControl, HarnessError, noValueBox, stamp, covered, toolPath } from "./locate";
 import { REGIONS, screenLines, walkControls, type WalkOptions } from "./screenTree";
