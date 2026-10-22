@@ -218,6 +218,19 @@ describe("the core does not depend on the capabilities it can turn off", () => {
     // dropped its featureTypes.
     expect(owned.length, "no plugin declares a feature type").toBeGreaterThan(0);
 
+    // Keys that share a feature type's word because an API the core has to speak
+    // chose it. Each is pinned to its file and its exact line, and an entry that
+    // matches nothing fails as well, so the list cannot become a place to hide in.
+    // These used to dodge the rule by sharing a line with another key, which any
+    // formatter undoes.
+    const foreign = [
+      // WebGPU's bind group layout entry
+      { file: "/src/viewport/pathtrace/atrous.ts", line: 'texture: { sampleType: "unfilterable-float" },' },
+      // three.js's RenderToScreen material, the one the tracer fades through
+      { file: "/src/viewport/pathtrace/tracePost.ts", line: "texture: THREE.Texture | null;" },
+    ];
+    const unmatched = new Set(foreign);
+
     const offenders: string[] = [];
     for (const [file, src] of Object.entries(sources)) {
       if (!file.includes("/src/")) continue;
@@ -230,11 +243,15 @@ describe("the core does not depend on the capabilities it can turn off", () => {
         lines.forEach((line, i) => {
           const code = line.replace(/\/\/.*$/, "");
           if (/^\s*[*]/.test(line) || /^\s*\/\//.test(line)) return; // comment
-          if (re.test(code)) offenders.push(`${file}:${i + 1} names ${plugin}'s ${type}`);
+          if (!re.test(code)) return;
+          const known = foreign.find((f) => file.endsWith(f.file) && code.trim() === f.line);
+          if (known) unmatched.delete(known);
+          else offenders.push(`${file}:${i + 1} names ${plugin}'s ${type}`);
         });
       }
     }
     expect(offenders).toEqual([]);
+    expect([...unmatched]).toEqual([]);
   });
 
   it("knows no printer or slicer exists, in the window, the shell or the engine", () => {
