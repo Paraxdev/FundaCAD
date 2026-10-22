@@ -5,16 +5,17 @@
 //
 // Usage (vite + engine running):
 //   SC_TOKEN=<t> SC_CHROME=<exe> SC_URL=http://localhost:5952/ SC_ENGINE_PORT=8952 \
-//     [SC_GPU=1] [SC_VARIANTS=1] node e2e/origin_tiles_e2e.cjs [outDir]
+//     [SC_GPU=1] [SC_VARIANTS=1] [SC_OUT=<dir>] node e2e/origin_tiles_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
-const OUT = path.resolve(process.env.SC_OUT || process.argv[2] || "origin_tiles_shots");
+const OUT = path.resolve(process.argv[2] || process.env.SC_OUT || path.join(os.tmpdir(), "origin_tiles_shots"));
 const VARIANTS = process.env.SC_VARIANTS === "1";
 // A real GPU antialiases the rounded corners the comparison renders are about.
 const GPU = process.env.SC_GPU === "1" || VARIANTS;
