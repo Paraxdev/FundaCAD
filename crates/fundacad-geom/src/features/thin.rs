@@ -1,6 +1,5 @@
-//! The wall of a thin extrude: sketch curves chained end to end, offset to
-//! each side in the sketch's own 2D, corners mitred, and the walls fused into
-//! planar faces the extrude then pushes like any profile.
+//! The wall of a thin extrude: sketch curves chained end to end, offset to each side in 2D, corners mitred, and
+//! the walls fused into planar faces the extrude then pushes like any profile.
 
 use std::f64::consts::TAU;
 
@@ -193,10 +192,9 @@ struct Chain<'a> {
 /// The sharpest angle between two curves that a wall still mitres.
 const SHARPEST_MITRE_DEG: f64 = 20.0;
 
-/// The links joined end to end, a chain stopping where curves end or branch. A
-/// branch whose curves all leave into one half plane passes the two that bound
-/// the empty side straight through, so that outer corner is mitred, not notched,
-/// when they are not too sharp to mitre. Its other curves still end at the branch.
+/// The links joined end to end, a chain stopping where curves end or branch. A branch whose curves all leave into
+/// one half plane passes the two bounding the empty side through, so that outer corner is mitred, not notched,
+/// unless too sharp. Its other curves still end at the branch.
 fn chains<'a>(links: Vec<Link<'a>>, tol: f64) -> Vec<Chain<'a>> {
     let mut nodes: Vec<P> = Vec::new();
     let mut node = |p: P| -> usize {
