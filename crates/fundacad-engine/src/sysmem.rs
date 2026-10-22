@@ -1,15 +1,10 @@
-//! Available physical memory, replaces the Python engine's `sysmem.py`.
-//!
-//! Every probe answers None rather than guessing: an unknown figure must leave
-//! the caller free to proceed, since refusing an import on a probe that failed
-//! is worse than the out of memory kill it was meant to prevent.
+//! Available physical memory. Every probe answers None rather than guessing: refusing an import on a failed probe is
+//! worse than the out of memory kill the refusal is meant to prevent.
 
 use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 
-/// Memory that can plausibly be allocated right now, in bytes. sysinfo reads
-/// MemAvailable on Linux (not MemFree, which leaves out reclaimable page
-/// cache), free plus reclaimable pages on macOS and `ullAvailPhys` on Windows,
-/// the same sources sysmem.py reads.
+/// Memory that can plausibly be allocated now, in bytes: MemAvailable on Linux (MemFree leaves out reclaimable page
+/// cache), free plus reclaimable pages on macOS, `ullAvailPhys` on Windows.
 pub fn available_bytes() -> Option<u64> {
     let sys = System::new_with_specifics(RefreshKind::nothing().with_memory(MemoryRefreshKind::nothing().with_ram()));
     if sys.total_memory() == 0 {
