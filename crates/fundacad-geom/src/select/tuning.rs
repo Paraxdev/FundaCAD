@@ -1,9 +1,5 @@
-//! The scoring constants of `by:"match"` and `by:"nearest"`, the Python engine's `geom_select.py`
-//! `_DEFAULTS` overridden by selector_tuning.json.
-//!
-//! The shipped JSON is compiled in and is what the app runs with: its TIE_BAND
-//! (0.05) is not the code default (0.15). An eval hands a different file to
-//! `configure`, as `eval_selector_survival.py --config` does.
+//! The scoring constants of `by:"match"` and `by:"nearest"`, defaults overridden by the compiled-in
+//! selector_tuning.json. Its TIE_BAND (0.05) is not the code default (0.15).
 
 use std::sync::OnceLock;
 
@@ -66,7 +62,7 @@ impl Tuning {
         })
     }
 
-    /// `configure(src)`: known keys holding numbers override, anything else is ignored.
+    /// Known keys holding numbers override, anything else is ignored.
     pub fn configure(&mut self, src: &Value) {
         let fields: [(&str, &mut f64); 15] = [
             ("ANG_TOL", &mut self.ang_tol),
