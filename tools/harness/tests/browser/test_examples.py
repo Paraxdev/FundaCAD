@@ -36,3 +36,7 @@ def test_extrude_reedit(s):
 
 def test_big_model_orbit(s, tmp_path):
     example("big_model_orbit").run(s, tmp_path)
+
+
+def test_shipped_examples(s):
+    example("shipped_examples").run(s)

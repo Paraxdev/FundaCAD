@@ -373,14 +373,19 @@ describe("HomeScreen", () => {
     open([{ path: "C:/work/gear.funda", openedAt: 1 }]);
     expect($$(".home-new-card").map((c) => c.querySelector(".home-new-name")!.textContent)).toEqual(["Blank", "Open…"]);
     expect($(".home-new-template")).toBeNull();
-    expect($$(".home-example-name").map((n) => n.textContent)).toEqual(["Wall bracket", "Plate", "Pinned lever"]);
+    expect($$(".home-example-name").map((n) => n.textContent)).toEqual([
+      "Wall bracket",
+      "Box with a lid",
+      "Plate",
+      "Pinned lever",
+    ]);
     expect($(".home-examples")!.closest(".home-scroll")).toBe($(".home-grid")!.closest(".home-scroll"));
     expect($(".home-section")!.textContent).toBe("Examples");
   });
 
   it("starts a document from an example card", async () => {
     const { cb } = open();
-    $$(".home-example")[1]!.click();
+    $$(".home-example")[2]!.click();
     await flushPromises();
     expect(cb.newFromTemplate).toHaveBeenCalledWith("plate");
   });
@@ -410,7 +415,7 @@ describe("HomeScreen", () => {
     ["the browser build", null, "Recent documents appear here in the desktop app."],
   ] as const)("shows the examples with no recent documents in %s", (_where, lib, empty) => {
     open([], {}, lib);
-    expect($$(".home-example")).toHaveLength(3);
+    expect($$(".home-example")).toHaveLength(4);
     expect($(".home-empty")!.textContent).toBe(empty);
   });
 
@@ -757,11 +762,13 @@ describe("Home on a first run", () => {
       ]),
     ).toEqual([
       ["Wall bracket", "Stress study ready", "stress"],
+      ["Box with a lid", "Two parts, 0.2 mm fit", "shell"],
       ["Plate", "Sized by parameters", "box"],
       ["Pinned lever", "Stress study ready", "rotate"],
     ]);
     expect($$(".home-example").map((c) => c.getAttribute("title"))).toEqual([
       "An L bracket with a stress study ready to run",
+      "A box and a lid that fits it, sized by parameters, laid out for printing",
       "A plate with four holes, sized by parameters",
       "A lever on a pin with a stress study ready to run",
     ]);
