@@ -20,11 +20,8 @@ pub(super) fn settle(polled: Result<wgpu::PollStatus, wgpu::PollError>, limit: D
     }
 }
 
-/// The next band after one of `rows` took `took`: scaled towards `target`,
-/// at most doubling per step so one fast band over the sky cannot jump to a
-/// full frame over the model, in multiples of the workgroup's 8 rows. Never
-/// under MIN_BAND_PATHS: on a GPU shared with another app a band's time is
-/// mostly waiting for its turn, and smaller bands only add submits.
+/// Scaled towards `target`, at most doubling per step so one fast band over the sky cannot jump to a full frame over
+/// the model, in multiples of 8 rows. Never under MIN_BAND_PATHS: on a shared GPU a band mostly waits its turn.
 pub fn adapt_rows(rows: u32, width: u32, height: u32, took: Duration, target: Duration) -> u32 {
     let ratio = (target.as_secs_f64() / took.as_secs_f64().max(1e-6)).clamp(0.25, 2.0);
     let want = (rows as f64 * ratio).round() as u32;
@@ -205,11 +202,9 @@ impl Tracer {
         self.sample - before
     }
 
-    /// One frame for the transport: applies pending scene changes, traces for
-    /// `budget` and resolves. At the cap it hands out the held frame without
-    /// touching the GPU, and the denoised one once it lands; below it a
-    /// software band that ends mid sample still traces on, so the sample count
-    /// is no sign of a finished picture. Black once the device faulted.
+    /// Applies pending scene changes, traces for `budget` and resolves. At the cap it hands out the held frame, then
+    /// the
+    /// denoised one; a software band can end mid sample, so the sample count is no sign of a finished picture.
     pub fn frame(&mut self, w: u32, h: u32, budget: Duration) -> Vec<u8> {
         if self.fault().is_some() {
             return vec![0; w.max(1) as usize * h.max(1) as usize * 4];

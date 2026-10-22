@@ -1,9 +1,6 @@
-//! Samples per second and time to a sample count, one JSON line per run.
-//! BENCH_PATH rq|sw, BENCH_SCENE small|many|big or one of tests/common
-//! (golden, studio, hdr-sun, emitter, glass, metal, assembly), BENCH_W, BENCH_H,
-//! BENCH_SPP, BENCH_BUDGET (software paths per dispatch). BENCH_RMSE=<target of
-//! 255> on a scene with a committed reference traces at the reference's size and
-//! adds the samples and seconds until the picture first reaches the target.
+//! Samples per second and time to a sample count, one JSON line per run. BENCH_PATH rq|sw, BENCH_SCENE small|many|big
+//! or a tests/common scene, BENCH_W, BENCH_H, BENCH_SPP, BENCH_BUDGET (software paths per dispatch). BENCH_RMSE=<target
+//! of 255> on a scene with a committed reference adds the samples and seconds until the picture reaches the target.
 
 #[path = "../tests/common/mod.rs"]
 mod common;

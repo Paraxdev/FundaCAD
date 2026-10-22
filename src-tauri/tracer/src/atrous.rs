@@ -1,6 +1,5 @@
-//! The edge aware a-trous filter of src/viewport/pathtrace/atrous.ts on the
-//! CPU, the denoise at the cap when Open Image Denoise is not installed. Same
-//! constants, same trust mask, same demodulation by albedo.
+//! The edge aware a-trous filter of src/viewport/pathtrace/atrous.ts on the CPU, the denoise at the cap without Open
+//! Image Denoise: same constants, trust mask and demodulation by albedo.
 
 use crate::denoise::Input;
 

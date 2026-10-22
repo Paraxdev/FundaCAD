@@ -224,8 +224,7 @@ impl Api {
         Ok(d)
     }
 
-    /// The ray tracing filter on linear HDR colour with clean albedo and
-    /// normal guides, as the `oidn` crate was driven before.
+    /// The ray tracing filter on linear HDR colour with clean albedo and normal guides.
     pub fn denoise(&self, input: &Input, quality: Quality) -> Result<Vec<f32>, String> {
         let n = input.width * input.height * 3;
         if input.color.len() != n || input.albedo.len() != n || input.normal.len() != n {

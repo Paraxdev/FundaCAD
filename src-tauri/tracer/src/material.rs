@@ -1,7 +1,5 @@
-//! The page's traced material (materials.ts traceMaterialFrom, the P3 mapping)
-//! packed for the GPU. The page sends the mirror's materials, so a baked
-//! procedural slot already arrives white with its roughness offset applied and
-//! its colour in the vertex colours.
+//! The page's traced material (materials.ts traceMaterialFrom, the P3 mapping) packed for the GPU. A baked procedural
+//! slot arrives white from the mirror, its roughness offset applied and its colour in the vertex colours.
 
 use serde::Deserialize;
 
