@@ -1,5 +1,5 @@
-// A confirmed section stays on as a view state: orbit, Fillet on F, Esc and undo all leave the cut in place.
-// The model is a tapered asymmetric block off the origin with an off centre pocket, cut along a slanted side face.
+// A confirmed section stays on as a view state through orbit, Fillet, Esc and undo, and the Section on chip edits,
+// flips and removes it. The model is a tapered block off the origin with a pocket, cut along a slanted side face.
 //
 // Usage (vite + engine running):
 //   SC_TOKEN=<t> SC_CHROME=<exe> SC_URL=http://localhost:5952/ SC_ENGINE_PORT=8952 [SC_OUT=<dir>] \
@@ -110,7 +110,7 @@ function modelDoc() {
     await settle();
 
     // A point on the front side face (the one from (30,-20) to (118,-12)), found with the app's own picker.
-    const face = await page.evaluate(([poly, h]) => {
+    const findFace = () => page.evaluate(([poly, h]) => {
       const v = window.viewport;
       const V = v.camera.position.constructor;
       const [a, b] = poly;
@@ -123,15 +123,39 @@ function modelDoc() {
             const s = v.projectToScreen(p);
             const hit = v.pickFaceForPressPull(s.x, s.y);
             if (hit && Math.abs(hit.normal.z) > 0.05 && hit.normal.y < -0.5)
-              return { x: s.x, y: s.y, normal: [hit.normal.x, hit.normal.y, hit.normal.z] };
+              return { x: s.x, y: s.y, normal: [hit.normal.x, hit.normal.y, hit.normal.z], point: [hit.anchor.x, hit.anchor.y, hit.anchor.z] };
           }
       return null;
     }, [POLY, HEIGHT]);
+    const face = await findFace();
     check("found a point on the tapered front face", !!face, face);
     if (!face) throw new Error("no face point");
+    const tile = page.locator('.tool-rail [data-action="section"], [data-action="section"]:visible').first();
+    const typeOffset = async (text) => {
+      await page.locator(".dim-input input").first().click();
+      await page.keyboard.press("Control+A");
+      await page.keyboard.type(text);
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(300);
+    };
+    // The part 1 cut again, from the iso view: the bulk kept, 9.5 mm in from the front face.
+    const makeCut = async () => {
+      await page.evaluate(() => { window.__fundacad.handleAction("iso"); window.__fundacad.handleAction("fit"); });
+      await page.waitForTimeout(600);
+      const f = await findFace();
+      await tile.click();
+      await page.waitForTimeout(400);
+      await page.locator(".choice-btn", { hasText: "Face or plane" }).click();
+      await page.waitForTimeout(300);
+      await page.mouse.click(f.x, f.y);
+      await page.waitForTimeout(300);
+      await clickEmpty();
+      await page.keyboard.press("f");
+      await typeOffset("-9.5");
+      return f;
+    };
 
     console.log("\n[part 1: confirm keeps the cut on]");
-    const tile = page.locator('.tool-rail [data-action="section"], [data-action="section"]:visible').first();
     await tile.click();
     await page.waitForTimeout(400);
     await page.locator(".choice-btn", { hasText: "Face or plane" }).click();
@@ -151,11 +175,7 @@ function modelDoc() {
     s = await state();
     check("F while editing keeps the bulk", s.phase === "editing" && dot(s.plane, face.normal) < -0.999, s.plane);
 
-    await page.locator(".dim-input input").first().click();
-    await page.keyboard.press("Control+A");
-    await page.keyboard.type("-9.5");
-    await page.keyboard.press("Enter");
-    await page.waitForTimeout(300);
+    await typeOffset("-9.5");
     s = await state();
     check("Enter keeps the cut on with no handle and no box",
       s.phase === "on" && s.sectioned && s.handles === 0 && s.box === 0, s);
@@ -198,6 +218,85 @@ function modelDoc() {
     check("undo of a model edit leaves the cut on and where it was",
       dist === HEIGHT && s.phase === "on" && s.sectioned && JSON.stringify(s.plane) === JSON.stringify(kept), { dist, s });
     await shot("01_on");
+
+    console.log("\n[part 2: the chip]");
+    const chip = () => page.evaluate(() => {
+      const c = document.querySelector('[data-testid="section-chip"]');
+      if (!c) return null;
+      const r = c.getBoundingClientRect();
+      const edit = c.querySelector('[data-testid="section-edit"]');
+      return {
+        text: c.textContent, pressed: edit.getAttribute("aria-pressed"),
+        box: { left: r.left, top: r.top, right: r.right, bottom: r.bottom },
+      };
+    });
+    const around = (b, pad) => ({ x: b.left - pad, y: b.top - pad, width: b.right - b.left + 2 * pad, height: b.bottom - b.top + 2 * pad });
+    let c = await chip();
+    check("the chip says Section on while the cut is on", !!c && c.text.includes("Section on") && c.pressed === "false", c);
+    await shot("02_chip_noir");
+    await page.screenshot({ path: `${OUT}/02_chip_noir_close.png`, clip: around(c.box, 24) });
+
+    await page.click('[data-testid="section-edit"]');
+    await page.waitForTimeout(300);
+    s = await state();
+    const shownValue = () => page.evaluate(() =>
+      [...document.querySelectorAll(".dim-input")].find((b) => b.style.display !== "none")?.querySelector("input")?.value);
+    let value = await shownValue();
+    c = await chip();
+    check("Edit brings the handle and the box back on the same cut, pressed",
+      s.phase === "editing" && s.handles === 1 && Number(value) === 9.5 && c.pressed === "true" &&
+        JSON.stringify(s.plane) === JSON.stringify(kept), { s, value, pressed: c.pressed });
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    s = await state();
+    check("Esc keeps it on again", s.phase === "on" && s.handles === 0 && s.box === 0, s);
+
+    await page.click('[data-testid="section-flip"]');
+    await page.waitForTimeout(300);
+    s = await state();
+    check("Flip reverses the drawn plane and stays on",
+      s.phase === "on" && s.plane.slice(0, 4).every((v, i) => Math.abs(v + kept[i]) < 1e-3), { plane: s.plane, kept });
+    await page.click('[data-testid="section-flip"]');
+    await page.waitForTimeout(200);
+
+    await page.evaluate(() => { document.documentElement.classList.add("no-glass-blur"); window.viewport.requestRender(); });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${OUT}/02_chip_blur_off.png`, clip: around(c.box, 24) });
+    await page.evaluate(() => { document.documentElement.classList.remove("no-glass-blur"); window.viewport.requestRender(); });
+    await page.evaluate(async () => (await import("/src/ui/theme.ts")).setTheme("solarized-light"));
+    await page.waitForTimeout(500);
+    await shot("02_chip_solarized");
+    await page.screenshot({ path: `${OUT}/02_chip_solarized_close.png`, clip: around(c.box, 24) });
+    await page.evaluate(async () => (await import("/src/ui/theme.ts")).setTheme("fundacad"));
+
+    await page.evaluate(() => { document.documentElement.dataset.pointer = "touch"; });
+    await page.waitForTimeout(200);
+    const hits = await page.evaluate(() => [...document.querySelectorAll(".section-chip-btn")].map((b) => {
+      const r = b.getBoundingClientRect();
+      const before = getComputedStyle(b, "::before");
+      return Math.round(r.height - parseFloat(before.top) - parseFloat(before.bottom));
+    }));
+    check("each chip button takes a finger of about 40px", hits.length === 3 && hits.every((h) => h >= 38), hits);
+    await page.evaluate(() => { delete document.documentElement.dataset.pointer; });
+
+    await page.setViewportSize({ width: 760, height: 900 });
+    await page.waitForTimeout(800);
+    c = await chip();
+    const cards = await page.evaluate(() => [...document.querySelectorAll(
+      "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group, #float-layer .float-right > *",
+    )].map((o) => { const r = o.getBoundingClientRect(); return { id: o.id || o.className, left: r.left, top: r.top, right: r.right, bottom: r.bottom }; })
+      .filter((r) => r.right > r.left && r.bottom > r.top));
+    const hitCards = cards.filter((r) => r.left < c.box.right && r.right > c.box.left && r.top < c.box.bottom && r.bottom > c.box.top);
+    check("at a 760px window the chip clears every card", hitCards.length === 0, { chip: c.box, hitCards });
+    await shot("02_chip_760");
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await page.waitForTimeout(500);
+
+    await page.click('[data-testid="section-off"]');
+    await page.waitForTimeout(300);
+    s = await state();
+    c = await chip();
+    check("Off removes the cut and the chip", s.phase === "off" && !s.sectioned && c === null, { s, c });
   } catch (err) {
     console.error(err);
     failures++;
