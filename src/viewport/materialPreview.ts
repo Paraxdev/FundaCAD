@@ -1,25 +1,5 @@
-// The little sphere beside a material's name.
-//
-// A REAL render, by the same renderer class and the same tone mapping the
-// viewport uses, rather than a CSS gradient dressed up as one. The two things a
-// swatch has to answer are "is this shiny" and "is this see-through", and a flat
-// square cannot answer either: a coloured square is the same square whether the
-// material is chalk or chrome. A lit sphere answers both in one glance, which is
-// why every renderer in the world shows one.
-//
-// STANDARDISED, and that is the point of doing it here instead of in the
-// viewport. Every preview is lit identically, from the same angle, against the
-// same ground, whatever the document's own brightness or environment happen to
-// be set to. Comparing two finishes is only possible when the only thing that
-// differs between the two pictures is the finish.
-//
-// ONE renderer, one scene, one sphere, reused for every material and kept for
-// the life of the process: a WebGL context is expensive to create and browsers
-// cap how many may exist, so a context per swatch would fall over on a library
-// of twenty. Each preview is a render into that one canvas followed by a
-// toDataURL, and the results are cached by what the material LOOKS like, so a
-// library with six shades of the same plastic renders six times and a list
-// scrolled up and down renders none.
+// The lit sphere beside a material's name: a real render with the viewport's tone mapping under one fixed rig and
+// backdrop, so finishes compare. One shared WebGL context (browsers cap them), results cached by appearance.
 
 import * as THREE from "three";
 import { finishOf, type MaterialDef } from "../document/materials";
@@ -27,16 +7,10 @@ import { applyClearcoat, applyFinishFields, applyGlassLook, applyThinFilm } from
 import { finishKey } from "./bodyFinish";
 import { LruCache } from "../lib/lruCache";
 
-/** Rendered at this many pixels square, then shown at whatever size the CSS
- *  asks for. Deliberately larger than the ~56px it is drawn at: this is one
- *  render into one canvas, and a swatch that goes soft on a high-DPI screen
- *  reads as a bitmap somebody stretched. */
+/** Larger than the ~56px it is shown at, so a swatch stays sharp on a high DPI screen. */
 const SIZE = 160;
 
-/** What a material looks like, as a string. Two materials with the same answer
- *  render to the same picture, so the cache is keyed on this rather than on the
- *  id: a copy of a material is not a second render, and RENAMING one is not a
- *  cache miss. */
+/** The cache key, so a copy or a rename of a material is not a second render. */
 export function previewKey(m: MaterialDef): string {
   return `${m.color}|${finishKey(finishOf(m))}`;
 }
@@ -56,14 +30,7 @@ let dead = false; // context creation failed once; stop trying
 const cache = new LruCache<string, string>(160);
 const ready = new Set<() => void>();
 
-/** The ground the sphere sits against: a soft top-to-bottom gradient, drawn
- *  once into a 2D canvas and used as the scene background.
- *
- *  Not the panel's own colour, and not the theme's. A preview whose background
- *  followed the app would change every time the theme did, so two screenshots of
- *  the same material would not match and neither would two swatches sitting side
- *  by side in different panels. This is a photographer's sweep: one fixed, mid
- *  grey backdrop that flatters neither a light material nor a dark one. */
+/** A fixed mid grey sweep, not the theme's colour, so swatches match across panels, themes and screenshots. */
 function backdrop(): THREE.Texture {
   const c = document.createElement("canvas");
   c.width = 4;
@@ -88,9 +55,7 @@ function build(): Rig | null {
     renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: false,
-      // Read back with toDataURL immediately after the render. Without this the
-      // browser is free to have cleared the buffer by then, and the swatch comes
-      // back blank on exactly the machines that clear most eagerly.
+      // toDataURL reads right after the render; without this some machines clear the buffer first and the swatch is blank.
       preserveDrawingBuffer: true,
     });
   } catch {
@@ -113,9 +78,8 @@ function build(): Rig | null {
   const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), material);
   scene.add(ball);
 
-  // The rig, fixed forever: a key from the upper left (the streak that says
-  // "polished"), a cool fill from below right so the dark side is not black, and
-  // a little ambient so a matt material still shows its colour.
+  // Fixed forever: a key from the upper left for the polished streak, a cool fill from below right so the dark side is
+  // not black, and a little ambient for matt colours.
   const key = new THREE.DirectionalLight(0xffffff, 3.2);
   key.position.set(-2.2, 2.6, 2.4);
   scene.add(key);
@@ -129,13 +93,8 @@ function build(): Rig | null {
   return rig;
 }
 
-/** Reflections, so a metal is not a black ball.
- *
- *  Asynchronous (a dynamic import plus a cubemap render), and every preview
- *  drawn before it lands is drawn without it, which is exactly what the viewport
- *  does with the same environment and for the same reason. When it arrives the
- *  cache is dropped and the subscribers are told, so the swatches redraw once
- *  with reflections instead of the panel waiting on a texture to show a list. */
+/** Reflections, so a metal is not a black ball. Loaded async: previews drawn before it lack it, and on arrival the
+ *  cache drops and subscribers redraw once. */
 let envLoading = false;
 async function loadEnvironment(): Promise<void> {
   if (envLoading || !rig) return;
@@ -161,9 +120,6 @@ export function onPreviewsChanged(fn: () => void): () => void {
   return () => ready.delete(fn);
 }
 
-/** A data: URL of `m` rendered as a lit sphere, or null when this machine would
- *  not give us a context. Cached by appearance, so calling it per row per frame
- *  is a map lookup. */
 /** The camera sits on +Z, so a world Z tangent would point at the viewer and the
  *  stretch would fade out of the swatch. Screen up shows it. */
 const SWATCH_AXIS = new THREE.Vector3(0, 1, 0);
@@ -184,15 +140,15 @@ export function dressPreview(mat: THREE.MeshStandardMaterial, m: MaterialDef): v
     mat.depthWrite = f.opacity >= 1;
   }
   applyFinishFields(mat, f, false, m.color, SWATCH_AXIS);
-  // The emissive tint is the material's OWN colour, as the viewport does it, so
-  // a lit indicator previews as a glowing ball of the right hue rather than a
-  // white one. There is no bloom out here, so the slider shows as a surface that
-  // does not go dark on its shaded side.
+  // The emissive tint is the material's own colour, as in the viewport, so a lit indicator glows its own hue. With no
+  // bloom here it shows as a surface that does not go dark on its shaded side.
   mat.emissive.set(f.emissive > 0 ? m.color : 0x000000);
   mat.emissiveIntensity = f.emissive;
   mat.needsUpdate = true;
 }
 
+/** A data: URL of `m` as a lit sphere, null when this machine gives no context. Cached by appearance, so calling it
+ *  per row per frame is a map lookup. */
 export function materialPreview(m: MaterialDef): string | null {
   const k = previewKey(m);
   const hit = cache.get(k);

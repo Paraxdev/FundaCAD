@@ -1,10 +1,5 @@
-// Per pass GPU time, read back a few frames late so it never stalls the frame.
-//
-// EXT_disjoint_timer_query_webgl2 allows one TIME_ELAPSED query at a time, so a
-// pass inside another (the shadow maps inside the main render) pauses the outer
-// one: every name reports its own time without its children.
-// Without the extension only the period of the whole frame is known, from a
-// GpuFence, and it is an upper bound at the polling granularity.
+// Per pass GPU time, read back a few frames late. One TIME_ELAPSED query runs at a time, so a nested pass pauses the
+// outer one; without the extension only a GpuFence frame period is known, an upper bound.
 
 import { GpuFence } from "./gpuFence";
 

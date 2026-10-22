@@ -1,25 +1,12 @@
-// Glass that measures itself. A glass material with auto thickness reads, per
-// pixel, the nearest back face of its own body from a small pre pass (world
-// normal and a body id in colour, depth beside it) and refracts at both
-// surfaces: entry with the front normal, exit with the back face normal. Where
-// that data is missing (a back facing fragment, a silhouette pixel, another
-// glass body in front, the swatch, a frame drawn outside SceneView.render) the
-// body's mean thickness 2V/A from the display mesh is used instead.
-//
-// Choices worth knowing: the background distance behind the exit point is
-// unknown (three keeps no depth of the opaque scene), so the exit bend is
-// carried for one thickness, as three already does for the entry bend. Total
-// internal reflection at the exit keeps the inside ray. Glass inside glass: the
-// outer body's front pixels see the inner body's back face, so they use the
-// outer body's mean thickness.
+// Auto thickness glass reads its body's nearest back face per pixel from a pre pass and refracts at both surfaces,
+// falling back to the mean thickness 2V/A where that data is missing. The exit bend is carried for one thickness.
 import * as THREE from "three";
 import { getPatch, removePatch, setPatch, type ShaderPatch } from "./shaderPatches";
 
 export const FALLBACK_THICKNESS = 3;
 
-/** Mean thickness of a closed mesh, 2 * volume / area, in its own units. Exact
- *  for a plate, a third of the edge for a cube. Open or flat meshes give the
- *  fallback. Cached on the geometry, a rebuilt body brings a new one. */
+/** 2 * volume / area in the mesh's units: exact for a plate, a third of the edge for a cube. Open or flat meshes give
+ *  the fallback. Cached on the geometry. */
 export function meanThickness(geo: THREE.BufferGeometry | undefined): number {
   if (!geo) return FALLBACK_THICKNESS;
   const cached = geo.userData["fcMeanThickness"];

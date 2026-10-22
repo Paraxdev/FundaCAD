@@ -1,10 +1,5 @@
-// Highlighting without post-processing: edges recolor their own span of their
-// body's shared instance-color buffer; faces recolor their own vertex-color
-// range (per-face tessellation keeps each face's vertices distinct, so this
-// only tints the one face).
-//
-// Edges are held by EdgeRef, not by a THREE object, a ref is stable for the
-// life of its body, so Set membership works exactly as it did with Line2.
+// Highlighting without post-processing: an edge recolours its span of its body's instance colour buffer, a face its own
+// vertex colour range (per-face tessellation keeps each face's vertices distinct).
 
 import * as THREE from "three";
 import { pushAll } from "../lib/pushAll";
@@ -20,16 +15,11 @@ import {
 
 const EDGE_BASE = new THREE.Color(0x1b1f24);
 const HOVER = new THREE.Color(0xffd089); // pale hot amber (under cursor)
-/** Exported so the over-drawn emphasis line (viewport/edgeEmphasis.ts) is the
- *  same colour as the tint it reinforces, two hover colours would read as two
- *  different states. */
+/** Shared with edgeEmphasis.ts so the emphasis line matches the tint it reinforces. */
 export const EDGE_HOVER_COLOR = HOVER.getHex();
-// molten amber for SELECTED (the Forge accent), distinct from the paler hover
-// and the muted-ember "pickable" emphasis; reads as forged/locked-in.
+// Selected, the Forge accent, distinct from the paler hover.
 const SELECT = new THREE.Color(0xff7a3c);
-// ERROR: the edge a fillet/chamfer failed on. Highest paint precedence, hover
-// and select must never overwrite it, or the "which edge is the problem" signal
-// disappears the moment the user mouses over it.
+// The edge a fillet or chamfer failed on. Highest precedence, or the signal vanishes once the user mouses over it.
 const ERROR = new THREE.Color(0xe23b3b);
 
 /** Recolor one edge through the merged object that draws it. */
@@ -60,9 +50,8 @@ export function sameHover(a: HoverState | undefined, b: HoverState | undefined):
 
 export class Highlighter {
   private hoveredEdge: EdgeRef | null = null;
-  /** Every face the cursor is over. More than one when the face under the
-   *  cursor is a piece of a run the kernel had to split (faceBands): the hover
-   *  has to show the whole run, or the click that takes it is a surprise. */
+  /** More than one when the face under the cursor is a piece of a split run (faceBands), so the hover shows what the
+   *  click will take. */
   private hoveredFaces: readonly number[] = [];
   private hoveredBody: string | null = null;
   private selectedEdges = new Set<EdgeRef>();
@@ -79,22 +68,14 @@ export class Highlighter {
     for (const b of view.bodies) removeSelectionGlows(b.mesh);
   }
 
-  /** body id -> BodyMesh, built once on first use.
-   *
-   *  Both paint paths used a linear `this.view.bodies.find(...)` per call, which
-   *  on an imported assembly's few thousand bodies is a scan per painted body,
-   *  and selection paints in loops. Safe to cache with no invalidation because
-   *  viewport.setModel() builds a fresh ModelView AND a fresh Highlighter
-   *  together, so `view` never changes under an instance. */
+  /** Built once: a linear find per painted body scans thousands on an import. No invalidation needed, setModel() builds a
+   *  fresh ModelView and Highlighter together. */
   private byId: Map<string, BodyMesh> | null = null;
 
-  /** Live selection/hover overlay per body (see selectionGlow.ts). Parented to
-   *  the body mesh, so it follows a move-ghost drag and is torn down with the
-   *  model; keyed here so a hover-then-select swaps the intensity cleanly. */
+  /** Selection and hover overlay per body (selectionGlow.ts), parented to its mesh so it follows a move ghost drag and
+   *  goes with the model. */
   private bodyGlows = new Map<string, THREE.Mesh>();
-  /** The hovered faces' overlay on a glowing body (makeFaceHoverOverlay), kept
-   *  by key once taken down, since every pointer move clears the hover and sets
-   *  it again. */
+  /** Kept by key once taken down, since every pointer move clears the hover and sets it again. */
   private hoverOverlay: { key: string; meshes: THREE.Mesh[]; shown: boolean } | null = null;
 
   private bodyById(bodyId: string): BodyMesh | undefined {
@@ -114,10 +95,8 @@ export class Highlighter {
     for (const draw of edgeObjects(this.view)) draw.setColorAll(this.edgeBase, skip);
   }
 
-  /** Paint these edges as ERRORS (red), replacing any previous error set.
-   *  Precedence: error > select > hover, the error tint survives hover and
-   *  selection toggles until the set is replaced (each rebuild re-derives it
-   *  from the latest diagnostics, so it clears naturally when fixed). */
+  /** Replaces the previous error set. Error beats select beats hover, until a rebuild re-derives the set from the latest
+   *  diagnostics. */
   setErrorEdges(lines: EdgeRef[]) {
     const next = new Set(lines);
     for (const e of this.errorEdges) {
@@ -156,9 +135,7 @@ export class Highlighter {
     const was = this.hoveredFaces;
     if (was.length === faceIds.length && was.every((f, i) => f === faceIds[i])) return;
     const now = new Set(faceIds);
-    // Only the faces LEAVING the hover are restored. Repainting the whole run
-    // each time would flicker the members that are staying, and a run can be
-    // most of a body's skin.
+    // Only faces leaving the hover are restored: repainting the whole run would flicker the members staying.
     for (const f of was) {
       if (!now.has(f) && !this.selectedFaces.has(f)) this.restoreFace(f);
     }
@@ -226,9 +203,8 @@ export class Highlighter {
     this.hoverOverlay = null;
   }
 
-  /** Free what this highlighter made for itself. The viewport calls it before
-   *  replacing the highlighter on a rebuild; the cached hover overlay is off
-   *  every mesh while hidden, so nothing else would ever reach it. */
+  /** Called before the viewport replaces the highlighter on a rebuild. The cached hover overlay is off every mesh while
+   *  hidden, so nothing else would reach it. */
   dispose() {
     this.dropHoverOverlay();
   }
@@ -272,10 +248,7 @@ export class Highlighter {
     this.syncHoverOverlay();
   }
 
-  /** Add to the selection without the toggle. A box drag over a region that
-   *  overlaps what is already selected must ADD, not un-select the overlap,
-   *  toggling would make the second sweep of a two-sweep selection eat the
-   *  first one's result. */
+  /** Adds without toggling, so the second sweep of a box over an overlap does not eat the first one's result. */
   selectEdge(line: EdgeRef) {
     if (!this.selectedEdges.has(line)) this.toggleSelectEdge(line);
   }
@@ -309,8 +282,6 @@ export class Highlighter {
     this.syncHoverOverlay();
   }
 
-  // --- whole-body selection (Bodies selection mode) ---------------------------
-
   toggleSelectBody(bodyId: string) {
     if (this.selectedBodies.has(bodyId)) {
       this.selectedBodies.delete(bodyId);
@@ -323,11 +294,7 @@ export class Highlighter {
     }
   }
 
-  /** Light the body under the cursor, for a tool that is asking WHICH body.
-   *
-   *  Same precedence as the face and edge hovers: a body that is already
-   *  selected keeps the selected colour, because the answer to "is this one
-   *  already taken" has to survive the cursor passing over it. */
+  /** For a tool asking which body. A selected body keeps the selected colour as the cursor passes over it. */
   hoverBody(bodyId: string | null) {
     if (this.hoveredBody === bodyId) return;
     if (this.hoveredBody !== null && !this.selectedBodies.has(this.hoveredBody)) {
@@ -379,10 +346,8 @@ export class Highlighter {
     }
   }
 
-  /** Show a body's selection/hover glow: a fresnel overlay child of its mesh
-   *  (selectionGlow.ts), replacing any glow already on it so a hover that turns
-   *  into a selection swaps intensity rather than stacking two draws. Nothing is
-   *  written to the vertex buffer, so there is nothing to leave behind. */
+  /** A fresnel overlay child of the mesh (selectionGlow.ts), replacing any glow on it so a hover turning into a selection
+   *  swaps intensity rather than stacking two draws. */
   private showBodyGlow(bodyId: string, kind: GlowKind) {
     const body = this.bodyById(bodyId);
     if (!body) return;
@@ -410,9 +375,7 @@ export class Highlighter {
     else paintIdle(e, this.edgeBase);
   }
 
-  /** Show or leave out the selection and hover tints. Off, the sets keep
-   *  following clicks, so the tree and the properties still do; a failing
-   *  edge stays red either way. */
+  /** Off, the sets keep following clicks so the tree and properties still do; a failing edge stays red either way. */
   setPaintShown(on: boolean) {
     if (on === this.paintShown) return;
     if (on) {
@@ -520,18 +483,12 @@ export class Highlighter {
     attr.needsUpdate = true;
   }
 
-  /** Set the per-face base color (component / draft analysis) and repaint every
-   *  non-selected face to it. Selected faces keep their highlight but their base
-   *  updates so they restore correctly on deselect. Pass `() => BASE_COLOR` to
-   *  clear an analysis. Body selections re-apply on top afterward. Loops every
-   *  body's own buffer (faceIds are globally unique, so the same faceId never
-   *  reappears in two bodies, each body only ever repaints its own faces). */
+  /** The per-face base colour (component or draft analysis); `() => BASE_COLOR` clears it. Selected faces keep their tint
+   *  but take the new base for deselect. faceIds are global, so each body repaints only its own. */
   setBase(colorOf: (faceId: number) => THREE.Color, only?: Iterable<BodyMesh>) {
     const cache = new Map<number, THREE.Color>();
-    // `only` restricts the repaint to the bodies given. A progressive load paints
-    // each chunk's bodies as they arrive; without the restriction every chunk
-    // would re-upload the WHOLE model's vertex colours (0.39 s at 3,071 bodies),
-    // turning an O(model) job into O(chunks x model).
+    // A progressive load paints each chunk's bodies as they arrive; without `only` each chunk would re-upload the whole
+    // model (0.39 s at 3,071 bodies).
     for (const body of only ?? this.view.bodies) {
       const colorAttr = body.mesh.geometry.getAttribute("color") as THREE.BufferAttribute;
       const index = body.mesh.geometry.getIndex();
@@ -555,14 +512,10 @@ export class Highlighter {
           if (!selected) colorAttr.setXYZ(v, col.r, col.g, col.b);
         }
       }
-      // This is a full-buffer rewrite (every face), not a scoped one, clear any
-      // pending partial ranges a prior paintFace left queued so the
-      // renderer does a full upload here instead of replaying a stale sub-range.
+      // A full buffer rewrite, so drop partial ranges a prior paintFace queued, or the renderer replays a stale sub-range.
       colorAttr.clearUpdateRanges();
       colorAttr.needsUpdate = true;
       body.baseVersion = (body.baseVersion ?? 0) + 1;
     }
-    // Whole-body selections are a fresnel overlay now, independent of the base
-    // colours this rewrites, so there is nothing to re-apply on top.
   }
 }

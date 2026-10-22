@@ -1,11 +1,5 @@
-// Matcap view mode's draw. For the length of one render every body's PBR
-// material is swapped for a MeshMatcapMaterial twin, the emitter lights are
-// hidden and the shadow maps are left as they are, then everything is put back.
-// The real materials are never written to, so leaving Matcap brings glass,
-// emission, clearcoat and surfaces back exactly, and nothing is rebuilt.
-//
-// Drawn straight to the current target in one call: no composer, no glass back
-// pass, no shadow pass, and the canvas keeps its multisampling.
+// Matcap mode swaps every body's material for a MeshMatcapMaterial twin for one render and puts it back, so leaving
+// Matcap restores everything without a rebuild. One draw straight to the target, no composer or shadow pass.
 
 import * as THREE from "three";
 import { isCostlyLight, isPbr, mirror } from "./potato";
