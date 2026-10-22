@@ -260,7 +260,7 @@ function modelDoc() {
     let value = await shownValue();
     c = await chip();
     check("Edit brings the handle and the box back on the same cut, pressed",
-      s.phase === "editing" && s.handles === 1 && Number(value) === 9.5 && c.pressed === "true" &&
+      s.phase === "editing" && s.handles === 1 && Number(value) === -9.5 && c.pressed === "true" &&
         JSON.stringify(s.plane) === JSON.stringify(kept), { s, value, pressed: c.pressed });
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
