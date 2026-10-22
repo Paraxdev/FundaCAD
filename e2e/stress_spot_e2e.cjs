@@ -121,7 +121,7 @@ const check = (name, ok, detail) => {
     placed.faces === 0 && placed.bodies === 0,
     `${placed.faces} faces, ${placed.bodies} bodies`,
   );
-  check("the row is disarmed after one spot", placed.label === "Place", JSON.stringify(placed.label));
+  check("the row is disarmed after one spot", placed.label === "Click on body", JSON.stringify(placed.label));
   check("the row counts it", placed.count[1] === "1 spot", JSON.stringify(placed.count));
   await shot("2-placed");
 
@@ -157,7 +157,7 @@ const check = (name, ok, detail) => {
   check("the field sets it back", (await state()).spots?.[0]?.radius === 3);
 
   await page.click(".stress-direction");
-  await page.click('.select-pop .opt-row:has(.opt-label:text-is("-Z"))');
+  await page.click('.select-pop .opt-row:has(.opt-label:text-is("Down (-Z)"))');
   await page.fill(".stress-force", "40");
   await page.click(".stress-run");
   await page.waitForFunction(() => !!document.querySelector(".stress-key-row, .stress-error"), null, {

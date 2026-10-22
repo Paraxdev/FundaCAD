@@ -10,6 +10,7 @@ import Icon from "../shell/Icon.vue";
 import Tabs from "../ui/Tabs.vue";
 import StressSetupStep from "./StressSetupStep.vue";
 import StressResultsStep from "./StressResultsStep.vue";
+import { buildStressRequest } from "../../ui/stress";
 
 type Step = "setup" | "results";
 
@@ -33,6 +34,7 @@ watch(
 
 const setup = computed(() => panels.stress?.setup ?? null);
 const result = computed(() => panels.stress?.result ?? null);
+const ready = computed(() => !!setup.value && buildStressRequest(setup.value).ok);
 
 // Results once a Run brings one, Set up when it goes or a Run is refused, since the cause is usually in the setup.
 const step = ref<Step>("setup");
@@ -100,7 +102,8 @@ function close() {
           >Click the body to place a spot, Shift click for more, Esc to stop.</template
         >
         <template v-else-if="step === 'results' && result">Results are linear and approximate.</template>
-        <template v-else>Pick faces with Place or Use selected, then Run.</template>
+        <template v-else-if="ready">Ready, press Run.</template>
+        <template v-else>Give each support and load its faces, then Run.</template>
       </div>
 
       <div v-if="step === 'setup'" class="stress-foot">

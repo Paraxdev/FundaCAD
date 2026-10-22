@@ -48,7 +48,9 @@ This file starts on 2026-08-03. For anything before that, see the
   Details. When the model or the setup changes after a Run, Results says so and
   offers Run again. Closing the panel keeps the last result, so opening it again
   shows the colours and readings without another Run. The panel wears the app's
-  own selects, switches and buttons.
+  own selects, switches and buttons, its buttons say what they do (Click on body,
+  Use selected faces), directions read Down, Up, Left and so on, and the hint
+  says Ready once the setup can run.
 
 - **The section is saved with the document.** A cut that is on is saved in the
   file and is back when you open it. New and Open no longer carry a cut over

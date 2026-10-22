@@ -1300,11 +1300,11 @@ async function runStress(ctx) {
   await ctx.view("iso", 0);
   await slide(ctx, -100);
   await railPick(ctx, "cat:INSPECT", "stress");
-  await page.getByRole("button", { name: "Place" }).first().click();
+  await page.getByRole("button", { name: "Click on body" }).first().click();
   const a = await ctx.at([10, 9, 8]);
   await ctx.clickAt(a.x, a.y);
   await sleep(700);
-  await page.getByRole("button", { name: "Place" }).nth(1).click();
+  await page.getByRole("button", { name: "Click on body" }).nth(1).click();
   const l = await ctx.at([-12, 0, 24]);
   await ctx.clickAt(l.x, l.y);
   await sleep(700);

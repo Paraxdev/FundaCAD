@@ -7,6 +7,7 @@ import Icon from "../shell/Icon.vue";
 import Select from "../ui/Select.vue";
 import StressMaterialFields from "./StressMaterialFields.vue";
 import {
+  AXIS_LABELS,
   FORCE_DIRECTIONS,
   GRAVITY_DIRECTIONS,
   GRAVITY_MARK_COLOR,
@@ -33,7 +34,7 @@ const LOAD_KINDS = [
   { value: "force", label: "Force" },
   { value: "pressure", label: "Pressure" },
 ] as const;
-const gravityOptions = GRAVITY_DIRECTIONS.map((d) => ({ value: d, label: d }));
+const gravityOptions = GRAVITY_DIRECTIONS.map((d) => ({ value: d, label: AXIS_LABELS[d] }));
 
 // The analysed body when the current model does not have it (the timeline rolled back before it), so the list can
 // still name what the setup is for.
@@ -112,14 +113,14 @@ function placing(target: StressTarget): boolean {
             :aria-pressed="placing({ support: x.id })"
             title="Click the body to place a spot"
             @click="engine.ui.panels.placeStressSpot({ support: x.id })"
-            >{{ placing({ support: x.id }) ? "Placing…" : "Place" }}</button
+            >{{ placing({ support: x.id }) ? "Placing…" : "Click on body" }}</button
           >
           <button
             type="button"
             class="btn stress-set-support"
             title="Use the faces selected in the view"
             @click="engine.ui.panels.setStressFacesFromSelection({ support: x.id })"
-            >Use selected</button
+            >Use selected faces</button
           >
         </span>
       </div>
@@ -144,7 +145,7 @@ function placing(target: StressTarget): boolean {
     </button>
 
     <div class="rd-head stress-caption"
-      >Loads <span class="tree-count">{{ setup.loads.length || "" }}</span></div
+      >Loads <span class="tree-count">{{ setup.loads.length }}</span></div
     >
     <div v-for="(l, i) in setup.loads" :key="l.id" class="stress-item">
       <div class="stress-item-head">
@@ -172,14 +173,14 @@ function placing(target: StressTarget): boolean {
             :aria-pressed="placing({ load: l.id })"
             title="Click the body to place a spot"
             @click="engine.ui.panels.placeStressSpot({ load: l.id })"
-            >{{ placing({ load: l.id }) ? "Placing…" : "Place" }}</button
+            >{{ placing({ load: l.id }) ? "Placing…" : "Click on body" }}</button
           >
           <button
             type="button"
             class="btn stress-set-load"
             title="Use the faces selected in the view"
             @click="engine.ui.panels.setStressFacesFromSelection({ load: l.id })"
-            >Use selected</button
+            >Use selected faces</button
           >
         </span>
       </div>
