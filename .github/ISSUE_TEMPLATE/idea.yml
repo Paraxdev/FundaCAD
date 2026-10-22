@@ -1,0 +1,27 @@
+name: Idea
+description: Something that would help you make your parts.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        FundaCAD keeps assemblies, stress checks and 3D printing in the app itself.
+        Tools for other trades fit best as plugins, see [docs/PLUGINS.md](https://github.com/Paraxdev/fundacad/blob/main/docs/PLUGINS.md).
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to make?
+      description: The part or project, and the step where FundaCAD gets in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you do it today?
+      description: A workaround, another tool, or not at all.
