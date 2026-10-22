@@ -5,10 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import * as THREE from "three";
 import { SectionTool, type SectionDeps, type SectionPhase } from "../../src/features/sectionTool";
-import { clipPlaneAt } from "../../src/features/sectionMath";
+import { clipPlaneAt, sectionAnchor } from "../../src/features/sectionMath";
+import { HANDLE_UP } from "../../src/features/manipulator";
 import { usePromptStore } from "../../src/stores/prompt";
 import type { Viewport } from "../../src/viewport/viewport";
-import type { SectionView, Vec3 } from "../../src/types";
+import type { PlaneDef, SectionView, Vec3 } from "../../src/types";
 import { readSectionView } from "../../src/document/sectionView";
 
 const CENTRE: Vec3 = [37.5, -12, 20];
@@ -399,6 +400,29 @@ describe("section phases", () => {
     pointer(canvas, "pointerup", 37.5);
     expect(sent.at(-1)).toEqual(plane(7.5, 1, 0.14));
     expect(Number(input()!.value)).toBe(7.5);
+  });
+
+  it("a slanted plane drags along its own normal, and F flips the kept side and the handle about it", () => {
+    const def: PlaneDef = { origin: [52, -7, 31], normal: [0, -0.6, 0.8], xdir: [1, 0, 0] };
+    const anchor = sectionAnchor(def.origin, def.normal, CENTRE);
+    const at = (offset: number, side: 1 | -1): Sent => ({ ...clipPlaneAt(anchor, def.normal, offset, side), ghost: 0.14 });
+    const { tool, canvas, state, sent, scene } = setup();
+    tool.start({ kind: "plane", def });
+    flushFrames();
+    expect(sent).toEqual([at(0, 1)]);
+    state.hit = true;
+    // The pointer ray runs along +X at height z = y, so it meets this normal's line 0.8 per unit of y.
+    pointer(canvas, "pointerdown", 30);
+    pointer(canvas, "pointermove", 42.5);
+    pointer(canvas, "pointerup", 42.5);
+    expect(sent.at(-1)).toEqual(at(10, 1));
+    key(canvas, "f");
+    flushFrames();
+    expect(sent.at(-1)).toEqual(at(10, -1));
+    const handle = handles(scene)[0]!;
+    const round = (v: THREE.Vector3) => v.toArray().map((x) => Math.round(x * 1e6) / 1e6 + 0);
+    expect(round(handle.position)).toEqual(round(new THREE.Vector3(...anchor).addScaledVector(new THREE.Vector3(...def.normal), 10)));
+    expect(round(HANDLE_UP.clone().applyQuaternion(handle.quaternion))).toEqual([0, 0.6, -0.8]);
   });
 
   it("onChange reports every phase until it is unsubscribed", () => {
