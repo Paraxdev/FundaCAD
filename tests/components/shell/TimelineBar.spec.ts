@@ -38,6 +38,7 @@ interface Opts {
   preview?: { id: string; inPlace?: boolean } | null;
   sketch?: { editing: string | null };
   suppressed?: string[];
+  features?: object[];
 }
 
 function mountBar(o: Opts = {}) {
@@ -78,7 +79,7 @@ function mountBar(o: Opts = {}) {
     noteCommitted: () => {},
     store: {
       document: {
-        features: [
+        features: o.features ?? [
           { id: "sk", type: "sketch", plane: "XY", entities: [] },
           { id: "ex1", type: "extrude", sketch: "sk", distance: 2 },
           { id: "rv", type: "revolve", sketch: "sk" },
@@ -111,7 +112,7 @@ function mountBar(o: Opts = {}) {
   const chip = (id: string) => w.get(`.timeline-node[data-id="${id}"]`);
   const dbl = (id: string) => chip(id).trigger("dblclick");
   const tool = (n: string) => tools[n] as Tool;
-  return { log, status, chip, dbl, tool };
+  return { log, status, chip, dbl, tool, w };
 }
 
 /** A heads-up box with `text` typed into its one field, as a tool shows it. */
@@ -219,5 +220,24 @@ describe("History row double click while another edit is open", () => {
     await m.chip("rv").trigger("click");
     expect(m.log).toEqual([]);
     expect(useSelectionStore().featureId).toBe("ex1");
+  });
+});
+
+describe("an import's chip", () => {
+  const nodes = [{ name: "Gearbox", parent: null }, { name: "Shaft", parent: 0 }];
+  const imp = (id: string, name: string, extra: object = {}) =>
+    ({ id, type: "import", format: "step", name, source: "/in/gear-box.step", ...extra });
+
+  it("is named by the assembly Items shows and keeps the file name in its tooltip", () => {
+    const m = mountBar({ features: [imp("i1", "gear-box", { nodes })] });
+    expect(m.chip("i1").find(".t-name").text()).toBe("Gearbox");
+    expect(m.chip("i1").attributes("title")).toContain("File: gear-box");
+  });
+
+  it("is named by its own name when it was renamed or has no assembly, with no file line", () => {
+    const m = mountBar({ features: [imp("i1", "Housing", { nodes }), imp("i2", "gear-box")] });
+    expect(m.chip("i1").find(".t-name").text()).toBe("Housing");
+    expect(m.chip("i2").find(".t-name").text()).toBe("gear-box");
+    expect(m.chip("i2").attributes("title")).not.toContain("File:");
   });
 });
