@@ -86,6 +86,17 @@ describe("undo after a restore", () => {
     expect(s.versionRepo!.branches).toEqual({ main: v1.id, lean: lean.id });
   });
 
+  it("tells meta listeners when undo and redo move the branch, after it moved", () => {
+    const { s, v1 } = workedOn();
+    s.branchFromVersion(v1.id, "lean");
+    const seen: string[] = [];
+    s.onMeta(() => seen.push(s.versionRepo!.current));
+    seen.length = 0;
+    s.undo();
+    s.redo();
+    expect(seen).toEqual(["main", "lean"]);
+  });
+
   it("takes back a branch switch made before a replacing load that carried the versions, or leaves them as the load put them", () => {
     const carried = (drop: (d: CadDocument) => void) => {
       const { s, v1 } = workedOn();
