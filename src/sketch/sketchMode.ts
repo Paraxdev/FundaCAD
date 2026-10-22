@@ -62,6 +62,7 @@ import { clampPlace, pickDimTarget } from "./dimensionTool";
 import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
 import { newEntityId, newConstraintId, isDimConstraint, notePatternId } from "./id";
 import { SketchHistory, cloneSnapshot, type SketchSnapshot } from "./history";
+import { allConstruction, toggleConstruction } from "./construction";
 import { isPlainNumber, parseField } from "../ui/units";
 import { RIGID_ENTITY_NUM_FIELDS, coerceForField, type FieldKind } from "../document/numFields";
 import type { SketchBinding } from "../document/store";
@@ -2107,6 +2108,15 @@ export class SketchMode {
     this.afterModify();
   }
 
+  /** False with nothing selected, so the caller can arm construction mode instead. */
+  toggleSelectedConstruction(): boolean {
+    if (!this.active || !this.entities.some((e) => this.selected.has(e.id))) return false;
+    this.entities = toggleConstruction(this.entities, this.selected);
+    this.afterModify();
+    this.onState?.();
+    return true;
+  }
+
   /** "Edit as Control Points": the selected fit-point splines become control-point ones. */
   private convertSelectedSplines() {
     for (const e of [...this.entities]) {
@@ -3501,6 +3511,12 @@ export class SketchMode {
       ...(constraintItems.length
         ? [...constraintItems.map((o) => ({ label: o.label, onClick: o.apply })), { separator: true, label: "" }]
         : []),
+      {
+        label: "Construction",
+        checked: allConstruction(chosen, this.selected),
+        onClick: () => this.toggleSelectedConstruction(),
+      },
+      { separator: true, label: "" },
       { label: n > 1 ? `Delete ${n} entities` : "Delete", danger: true, onClick: () => this.deleteSelected() },
     ];
     contextMenu(e.clientX, e.clientY, items);
