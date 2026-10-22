@@ -1,17 +1,5 @@
-// Cross-section MODE (Inspect): a clipping plane you drag through the model, defined
-// by a world axis, a face you click, or a datum plane.
-//
-// It STAYS ON, orbit, select, fillet an edge you just exposed, and the cut is still
-// there. The view state lives on the Viewport (setSectionView) so it survives the
-// rebuilds those operations cause, and this file keeps no document state. While
-// another tool owns the gesture the handle and offset box get out of the way and
-// our keys go quiet, the same bargain selectionNudge.ts strikes: a passive
-// affordance that ate Escape would be a mode the user never entered.
-//
-// And what it cuts away goes faint rather than VANISHING, watching half an assembly
-// disappear tells you nothing about where the visible half sits inside it. The dial
-// runs down to fully hidden, because a clean uncluttered cut is often right and was
-// this tool's entire previous behaviour.
+// Cross section (Inspect): a clipping plane along an axis, a clicked face or a datum plane. Editing shows the handle,
+// the offset box and the F and G keys; confirming keeps the cut on as a view state the Viewport keeps through rebuilds.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -47,36 +35,31 @@ function baseDef(plane: Plane3): PlaneDef {
   return { origin: p.origin.toArray(), normal: p.n.toArray(), xdir: p.u.toArray() };
 }
 
-/** What defines the cut. `pick` defers the answer to the user's next click on a
- *  face or a construction plane, the tool owns that pick rather than the
- *  caller, so every entry point (ribbon, palette, menu) gets the same aiming
- *  behaviour without repeating the plumbing. */
+/** `pick` leaves the plane to the user's next click on a face or a construction plane. */
 export type SectionSource =
   | { kind: "axis"; axis: "X" | "Y" | "Z" }
   | { kind: "plane"; def: PlaneDef }
   | { kind: "pick" };
 
+export type SectionPhase = "off" | "aiming" | "editing" | "on";
+
 export interface SectionDeps {
-  /** Another tool/sketch owns the gesture: stand down (but keep cutting). */
+  /** Another tool or a sketch owns the gesture. */
   toolBusy?: () => boolean;
-  /** Placement of a datum-plane feature by id, the document lives outside this
-   *  file, so clicking a construction plane asks the app what it is. */
   datumDef?: (id: string) => PlaneDef | null;
+  /** After an explicit confirm, not one forced by another tool taking the screen. */
+  afterEdit?: () => void;
 }
 
 export class SectionTool {
-  /** Cross-section mode is on (cutting). Deliberately NOT part of toolBusy():
-   *  the whole point is that you keep working with the cut in place. */
-  active = false;
-  /** Waiting for the user to click the face/plane to cut along. THIS is a modal
-   *  pick and does belong in toolBusy(). */
-  picking = false;
+  private state: SectionPhase = "off";
+  private listeners = new Set<(p: SectionPhase) => void>();
 
   private plane = new THREE.Plane();
   private origin: Vec3 = [0, 0, 0]; // a point on the defining plane
   private normal: Vec3 = [0, 0, 1]; // its unit normal, also the drag axis
   private offset = 0;
-  private side: 1 | -1 = 1; // which half to keep (F flips)
+  private side: 1 | -1 = 1;
   private ghost = GHOST_DEFAULT;
 
   private gizmo: THREE.Group | null = null;
@@ -85,8 +68,7 @@ export class SectionTool {
   private grabbing = false;
   private grabOffset = 0;
   private grabProj = 0;
-  /** true while the handle + offset box are stood down for another tool */
-  private standing = false;
+  private sawIdle = false;
   private onDone: (() => void) | null = null;
   private releaseTree: (() => void) | null = null;
 
@@ -94,8 +76,6 @@ export class SectionTool {
   private pointV = new THREE.Vector3();
   private axisV = new THREE.Vector3();
 
-  // two gestures, because the tool takes the canvas twice for different
-  // reasons: once to AIM (click a face or plane) and once to DRAG the cut
   private readonly gesture: CanvasGesture;
   private readonly pickGesture: CanvasGesture;
 
@@ -110,7 +90,6 @@ export class SectionTool {
       key: (e) => this.onKey(e),
       frame: () => this.tick(),
     });
-    // no `up`: aiming is a click, and nothing happens on the release
     this.pickGesture = new CanvasGesture(viewport.domElement, {
       move: (e) => this.onPickMove(e),
       down: (e) => this.onPickDown(e),
@@ -118,24 +97,98 @@ export class SectionTool {
     });
   }
 
-  /** Enter cross-section mode. The bare axis letters are the original call shape
-   *  and still work. */
+  get phase(): SectionPhase {
+    return this.state;
+  }
+
+  /** A cut is drawn. Not counted by toolBusy(), so every other tool works with the cut on. */
+  get active(): boolean {
+    return this.state === "editing" || this.state === "on";
+  }
+
+  get editing(): boolean {
+    return this.state === "editing";
+  }
+
+  /** Waiting for the face or plane to cut along, a modal pick that toolBusy() counts. */
+  get picking(): boolean {
+    return this.state === "aiming";
+  }
+
+  onChange(fn: (p: SectionPhase) => void): () => void {
+    this.listeners.add(fn);
+    fn(this.state);
+    return () => {
+      this.listeners.delete(fn);
+    };
+  }
+
+  private setPhase(p: SectionPhase) {
+    if (p === this.state) return;
+    this.state = p;
+    for (const fn of [...this.listeners]) fn(p);
+  }
+
   start(src: SectionSource | "X" | "Y" | "Z", onDone?: () => void) {
-    if (this.active || this.picking) return;
+    if (this.state !== "off") return;
     if (!this.viewport.modelBox()) return;
     this.onDone = onDone ?? null;
     const source: SectionSource = typeof src === "string" ? { kind: "axis", axis: src } : src;
-    if (source.kind === "pick") {
-      this.beginPick();
-      return;
+    if (source.kind === "pick") this.beginPick();
+    // A world axis has no clicked point, so the cut starts through the middle of the model.
+    else if (source.kind === "axis") this.arm(this.modelCentre(), AXES[source.axis] ?? [0, 0, 1]);
+    else this.armOn(source.def);
+  }
+
+  /** Keep the cut and put the handle away, applying a valid typed offset first. */
+  confirm() {
+    if (this.state !== "editing") return;
+    this.applyTypedOffset();
+    this.finishEdit(true);
+    this.deps.afterEdit?.();
+  }
+
+  /** Bring the handle back on the cut that is on. */
+  edit() {
+    if (this.state === "on") this.beginEdit();
+  }
+
+  /** Keep the other half, without moving the cut. */
+  flip() {
+    if (!this.active) return;
+    this.side = this.side === 1 ? -1 : 1;
+    this.pushPlane();
+  }
+
+  /** Remove the cut, from any phase. */
+  stop() {
+    const was = this.state;
+    if (was === "off") return;
+    if (was === "aiming") this.endPick();
+    else {
+      if (was === "editing") {
+        this.dropChrome();
+        setPrompt(null);
+      }
+      this.viewport.setSectionView(null);
     }
-    if (source.kind === "axis") {
-      // A world axis has no clicked point to anchor on, so the cut starts
-      // through the middle of what is on screen.
-      this.arm(this.modelCentre(), AXES[source.axis] ?? [0, 0, 1]);
-      return;
-    }
-    this.armOn(source.def);
+    this.setPhase("off");
+    this.finishDone();
+  }
+
+  /** For a document swap: an aim ends, an edit is kept on, and nothing else changes. */
+  endEdit() {
+    if (this.state === "aiming") {
+      this.endPick();
+      this.setPhase("off");
+      this.finishDone();
+    } else if (this.state === "editing") this.finishEdit(true);
+  }
+
+  private finishDone() {
+    const done = this.onDone;
+    this.onDone = null;
+    done?.();
   }
 
   private modelCentre(): Vec3 {
@@ -144,22 +197,16 @@ export class SectionTool {
     return [c.x, c.y, c.z];
   }
 
-  /** Cut along a face / datum plane.
-   *
-   *  Anchored on the point of that plane NEAREST the model, not on the
-   *  definition's own origin: a face plane's origin is the world origin
-   *  projected onto it (planeMath explains why it has to be), which for an
-   *  off-centre part can sit far outside the geometry, and the handle would
-   *  stand out there, off screen, on a cut the user can see perfectly well. */
+  /** Anchored on the point of the plane nearest the model: a face plane's own origin is the world origin projected
+   *  onto it, which for an off centre part puts the handle off screen. */
   private armOn(def: PlaneDef) {
     const { origin, normal } = sectionFromPlaneDef(def);
     this.arm(sectionAnchor(origin, normal, this.modelCentre()), normal);
   }
 
-  // --- aiming: click a face or a construction plane --------------------------
+  // --- aiming ----------------------------------------------------------------
 
   private beginPick() {
-    this.picking = true;
     this.viewport.suspendPicking = true;
     this.viewport.showAllPlanes(true);
     this.pickGesture.attach();
@@ -171,11 +218,10 @@ export class SectionTool {
       return true;
     }, () => this.stop());
     setPrompt("Click a face or plane to cut along · Esc");
+    this.setPhase("aiming");
   }
 
   private endPick() {
-    if (!this.picking) return;
-    this.picking = false;
     this.releaseTree?.();
     this.releaseTree = null;
     this.viewport.suspendPicking = false;
@@ -202,7 +248,7 @@ export class SectionTool {
   private onPickDown(e: PointerEvent) {
     if (e.button !== 0) return;
     const def = this.planeAt(e.clientX, e.clientY);
-    if (!def) return; // clicked nothing cuttable, stay in the pick rather than arm on a guess
+    if (!def) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     this.endPick();
@@ -212,13 +258,11 @@ export class SectionTool {
   private onPickKey(e: KeyboardEvent) {
     if (e.key !== "Escape") return;
     this.endPick();
-    const done = this.onDone;
-    this.onDone = null;
-    done?.();
+    this.setPhase("off");
+    this.finishDone();
   }
 
-  /** A construction plane is preferred over the body behind it: it is a thing the user
-   *  placed deliberately, so clicking it means it. */
+  /** A construction plane wins over the body behind it: the user placed it on purpose. */
   private planeAt(x: number, y: number): PlaneDef | null {
     const datum = this.viewport.pickDatumAt(x, y);
     if (datum) {
@@ -231,25 +275,55 @@ export class SectionTool {
     return target.spec;
   }
 
-  // --- the cut ---------------------------------------------------------------
+  // --- editing ---------------------------------------------------------------
 
   private arm(origin: Vec3, normal: Vec3) {
-    this.active = true;
     this.origin = origin;
     this.normal = normal;
     this.offset = 0;
     this.side = 1;
     this.pushPlane();
+    this.beginEdit();
+  }
+
+  private beginEdit() {
+    this.sawIdle = false;
     this.gesture.attach();
     this.handle = nameHandle(createDragHandle(), "section");
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo, "section");
-    this.showChrome();
+    this.dim.show([{ name: "offset", label: "Offset", kind: "length" }], () => this.confirm());
+    this.dim.updateFromCursor({ offset: Math.abs(this.offset) });
+    this.place();
+    this.prompt();
+    this.setPhase("editing");
     this.gesture.frame();
+    this.viewport.requestRender();
   }
 
-  /** Hand the current cut to the viewport, which owns it from here, including
-   *  putting it back after every rebuild. */
+  /** `ownPrompt` is false when another tool took over and has already written its own line. */
+  private finishEdit(ownPrompt: boolean) {
+    this.dropChrome();
+    if (ownPrompt) setPrompt(null);
+    this.setPhase("on");
+  }
+
+  private dropChrome() {
+    this.gesture.detach();
+    this.viewport.domElement.style.cursor = "default";
+    this.dim.hide();
+    if (this.gizmo) {
+      this.viewport.removeFromScene(this.gizmo);
+      this.handle?.dispose();
+      this.gizmo = null;
+      this.handle = null;
+    }
+    this.grabbing = false;
+    this.hovering = false;
+    this.viewport.requestRender();
+  }
+
+  /** The viewport owns the cut from here, including putting it back after every rebuild. */
   private pushPlane() {
     const c = clipPlaneAt(this.origin, this.normal, this.offset, this.side);
     this.plane.set(this.axisV.set(c.normal[0], c.normal[1], c.normal[2]), c.constant);
@@ -262,7 +336,6 @@ export class SectionTool {
   }
 
   private onMove(e: PointerEvent) {
-    if (this.standing) return;
     if (this.grabbing) {
       const proj = this.dragProj(e.clientX, e.clientY);
       const raw = this.grabOffset + (proj - this.grabProj);
@@ -290,10 +363,8 @@ export class SectionTool {
   }
 
   private onDown(e: PointerEvent) {
-    if (e.button !== 0 || this.standing) return;
-    // Only OUR handle is ours. Every other click still belongs to the user,
-    // selecting a face through the cut is most of the point of the mode.
-    if (!this.hitGizmo(e.clientX, e.clientY)) return;
+    // Only the handle is ours, every other click still selects through the cut.
+    if (e.button !== 0 || !this.hitGizmo(e.clientX, e.clientY)) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     this.grabbing = true;
@@ -306,27 +377,13 @@ export class SectionTool {
   }
 
   private onKey(e: KeyboardEvent) {
-    // Our keys are bare letters, and the mode outlives every other tool, so
-    // while one of those is running, they are ITS keys.
-    if (this.standing) return;
-    // …and while the user is typing they are the FIELD's keys. This matters more
-    // here than for a normal tool: the mode stays up across renames, parameter
-    // edits and every dimension box in the app, so an unguarded "f" would flip
-    // the kept half of the model from inside a text input the section has
-    // nothing to do with.
-    //
-    // Escape aimed at OUR OWN offset box is the one carve-out, and it is not
-    // optional: showChrome focuses that box the instant the mode arms, so
-    // without it the very first Escape a user presses lands in an input and the
-    // mode would have no way out at all. (DimInput deliberately leaves Escape to
-    // the owning tool; sketchMode.onKey makes the identical carve-out.)
+    // A text field keeps its keys, except Esc in our own box, which holds focus from the moment editing starts.
     const escInOwnDim = e.key === "Escape" && this.dim.isActive && this.dim.ownsTarget(e.target);
     if (!escInOwnDim && isEditableTarget(e.target)) return;
-    if (e.key === "Escape") this.stop();
+    if (e.key === "Escape") this.confirm();
     else if (e.key === "f" || e.key === "F") {
       e.stopImmediatePropagation(); // F is also Fillet
-      this.side = this.side === 1 ? -1 : 1;
-      this.pushPlane();
+      this.flip();
     } else if (e.key === "g" || e.key === "G") {
       e.stopImmediatePropagation();
       this.ghost = nextGhostLevel(this.ghost);
@@ -336,37 +393,17 @@ export class SectionTool {
   }
 
   private tick() {
-    if (!this.active || !this.gizmo) return;
+    if (this.state !== "editing" || !this.gizmo) return;
+    // Another tool taking the screen confirms the edit, on a rise only: a flag already up when editing began
+    // (a chooser closing, a Move gizmo) must not end it on its first frame.
+    if (this.deps.toolBusy?.()) {
+      if (this.sawIdle) return this.finishEdit(false);
+    } else this.sawIdle = true;
     this.gesture.frame();
-    // Reconcile rather than subscribe: a tool can arm from a shortcut, a menu,
-    // the palette or the browser tree, and none of those route through anything
-    // this file could listen to. One predicate call per frame, in a state the
-    // user is deliberately in.
-    const busy = this.deps.toolBusy?.() ?? false;
-    if (busy !== this.standing) {
-      this.standing = busy;
-      if (busy) this.hideChrome();
-      else this.showChrome();
-    }
-    if (this.standing) return;
-    const c = this.centre();
-    this.gizmo.position.copy(c);
-    this.gizmo.quaternion.setFromUnitVectors(
-      HANDLE_UP,
-      this.axisV.set(this.normal[0], this.normal[1], this.normal[2]).multiplyScalar(this.side),
-    );
-    this.gizmo.scale.setScalar(this.viewport.pixelWorldSize(c));
-    // The viewport renders on demand and a raycast reads matrixWorld, which only
-    // a render refreshes, so between two draws the handle would be hit-tested
-    // where it USED to be: visible, but not grabbable.
-    this.gizmo.updateMatrixWorld(true);
-    this.handle?.paint({ hot: this.hovering || this.grabbing });
-    const s = this.viewport.projectToScreen(c);
-    this.dim.position(s.x, s.y);
+    this.place();
     if (!this.grabbing && this.dim.isUserDriven("offset")) {
+      // Read the typed value only through isUserDriven, never the |value| the box shows while dragging.
       const v = this.dim.getValue("offset");
-      // typed sign is preferred; only read back through isUserDriven, never the |value|
-      // the box shows while dragging (the abs-display trap)
       if (v != null && Math.abs(v - this.offset) > 1e-6) {
         this.offset = v;
         this.pushPlane();
@@ -374,87 +411,42 @@ export class SectionTool {
     }
   }
 
-  /** Enter in the field (or its check button) sets the exact offset. */
+  private place() {
+    const g = this.gizmo;
+    if (!g) return;
+    const c = this.centre();
+    g.position.copy(c);
+    g.quaternion.setFromUnitVectors(
+      HANDLE_UP,
+      this.axisV.set(this.normal[0], this.normal[1], this.normal[2]).multiplyScalar(this.side),
+    );
+    g.scale.setScalar(this.viewport.pixelWorldSize(c));
+    // The viewport renders on demand and a raycast reads matrixWorld, so without this the handle is hit tested
+    // where it was drawn last.
+    g.updateMatrixWorld(true);
+    this.handle?.paint({ hot: this.hovering || this.grabbing });
+    const s = this.viewport.projectToScreen(c);
+    this.dim.position(s.x, s.y);
+  }
+
   private applyTypedOffset() {
-    if (!this.dim.isUserDriven("offset")) return; // a dragged value is already live
+    if (!this.dim.isUserDriven("offset")) return;
     const v = this.dim.getValue("offset");
-    if (v == null) return;
+    if (v == null || v === this.offset) return;
     this.offset = v;
     this.pushPlane();
   }
 
-  private showChrome() {
-    if (this.gizmo) this.gizmo.visible = true;
-    this.dim.show(
-      [{ name: "offset", label: "Offset", kind: "length" }],
-      () => this.applyTypedOffset(),
-      () => this.stop(),
-    );
-    this.dim.updateFromCursor({ offset: Math.abs(this.offset) });
-    const s = this.viewport.projectToScreen(this.centre());
-    this.dim.position(s.x, s.y);
-    this.prompt();
-    this.viewport.requestRender();
-  }
-
-  private hideChrome() {
-    if (this.gizmo) this.gizmo.visible = false;
-    this.hovering = false;
-    this.grabbing = false;
-    this.dim.hide();
-    // No setPrompt(null) here: the tool that just took over has already written
-    // its own line, and clearing would wipe it.
-    this.viewport.requestRender();
-  }
-
   private prompt() {
     setPrompt(
-      `Section on (ghost: ${ghostLabel(this.ghost)}), drag the handle to move the cut · ` +
-        `type a value + Enter · G ghosts more/less · F flips the kept side · Esc closes`,
+      `Drag the handle or type an offset · F flips the kept side · G changes the ghost (${ghostLabel(this.ghost)}) · ` +
+        `Enter or Esc keeps the cut`,
     );
   }
 
   private hitGizmo(x: number, y: number): boolean {
     const gizmo = this.gizmo;
-    if (!gizmo || !gizmo.visible) return false;
+    if (!gizmo) return false;
     return this.viewport.probe(x, y, (rc) => rc.intersectObjects(gizmo.children, false).length > 0) ?? false;
-  }
-
-  stop() {
-    const wasPicking = this.picking;
-    this.endPick();
-    if (!this.active) {
-      // Stopped from the AIMING step (the Section button pressed again, say).
-      // The caller is still owed its completion callback, the same one Escape
-      // during the pick delivers, or a caller that armed us and waited would
-      // wait forever, and the stale closure would fire on some later stop.
-      if (wasPicking) {
-        const done = this.onDone;
-        this.onDone = null;
-        done?.();
-      }
-      return;
-    }
-    const el = this.viewport.domElement;
-    this.gesture.detach();
-    el.style.cursor = "default";
-    this.dim.hide();
-    this.viewport.setSectionView(null);
-    if (this.gizmo) {
-      this.viewport.removeFromScene(this.gizmo);
-      this.handle?.dispose();
-      this.gizmo = null;
-      this.handle = null;
-    }
-    this.active = false;
-    this.grabbing = false;
-    this.hovering = false;
-    // Only clear the prompt if it is still OURS: closing the mode from under a
-    // running tool must not blank that tool's line.
-    if (!this.standing) setPrompt(null);
-    this.standing = false;
-    const done = this.onDone;
-    this.onDone = null;
-    done?.();
   }
 }
