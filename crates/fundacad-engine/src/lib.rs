@@ -238,12 +238,18 @@ fn spawn_job_thread<J: Jobs>(pool: Arc<Pool<J>>, mut jobs: J) {
     }
 }
 
-/// Leaves the job thread running `serial` to finish on its own and hands the
-/// queue to a fresh one, server.py's `_kill_pool` plus `_new_pool`.
-fn abandon<J: Jobs>(pool: &Arc<Pool<J>>, abandoned: &AtomicBool, serial: u64) {
-    let Some(make) = pool.respawn.clone() else { return };
+/// Answers job `serial` between freeing its slot and starting a fresh job thread,
+/// so a later cancel misses it and no queued reply overtakes it (`_kill_pool`, `_new_pool`).
+fn abandon<J: Jobs>(
+    pool: &Arc<Pool<J>>,
+    abandoned: &AtomicBool,
+    serial: u64,
+    answer: impl FnOnce(),
+) {
+    let Some(make) = pool.respawn.clone() else { return answer() };
     abandoned.store(true, Ordering::SeqCst);
     clear_running(pool, serial);
+    answer();
     spawn_job_thread(pool.clone(), make());
 }
 
@@ -543,11 +549,16 @@ fn run_one<J: Jobs>(
     let on_breach = {
         let pool = pool.clone();
         let abandoned = abandoned.clone();
-        move || {
+        let out = out.clone();
+        move |reply: Message| {
+            let answer = || {
+                let _ = out.send(&mut std::iter::once(reply));
+            };
             if pool.opts.exit_on_breach {
+                answer();
                 std::process::exit(EXIT_BREACH);
             }
-            abandon(&pool, &abandoned, serial)
+            abandon(&pool, &abandoned, serial, answer)
         }
     };
     let watchdog = spawn_watchdog(
@@ -623,7 +634,16 @@ fn run_one<J: Jobs>(
         chunked: truthy(req.get("chunked")),
     };
     let mut reply = send_reply(id, result, opts, Some(cancel), Limits::default());
-    let _ = out.send(&mut reply);
+    // Frees the slot just before the last message: a stream checks its cancel
+    // token between chunks, and a cancel reaches that token only through the slot.
+    let mut answer = std::iter::from_fn(|| {
+        let m = reply.next();
+        if reply.is_done() {
+            clear_running(pool, serial);
+        }
+        m
+    });
+    let _ = out.send(&mut answer);
     clear_running(pool, serial);
 }
 
@@ -656,7 +676,7 @@ struct WatchedJob {
 /// clock or ignores a cancel past its grace, server.py `_run_stall` and `_run`.
 fn spawn_watchdog(
     mut job: WatchedJob,
-    on_breach: impl FnOnce() + Send + 'static,
+    on_breach: impl FnOnce(Message) + Send + 'static,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         let step = Duration::from_millis(50);
@@ -686,8 +706,7 @@ fn spawn_watchdog(
                 }
                 job.cancel.cancel();
                 let text = envelope::reply_for(&job.id, &breach.result_in(doing.as_deref()));
-                let _ = job.out.send(&mut std::iter::once(Message::Text(text)));
-                on_breach();
+                on_breach(Message::Text(text));
                 return;
             }
             if job.frames == Frames::None || waited < PROGRESS_EVERY {

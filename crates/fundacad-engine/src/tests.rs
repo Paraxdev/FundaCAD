@@ -505,11 +505,7 @@ fn a_silent_job_is_reaped_and_the_queue_behind_it_still_runs() {
     let next = reply_to(&rx, "next");
     assert_eq!(next["ok"], true, "{next}");
     assert!(t0.elapsed() < Duration::from_secs(5), "{:?}", t0.elapsed());
-    let cleared = Instant::now();
-    while e.running.lock().unwrap().is_some() {
-        assert!(cleared.elapsed() < Duration::from_secs(5), "the reaped slot never cleared");
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    assert!(e.running.lock().unwrap().is_none());
 }
 
 #[test]
@@ -694,4 +690,134 @@ fn a_delta_patches_its_own_clients_document_not_the_last_one_sent() {
     say(&app, json!({"id": "a2", "op": "rebuild", "baseRevision": 1, "revision": 2,
         "ops": {"set": [[0, {"id": "f1b"}]]}}));
     assert_eq!(reply_to(&a_rx, "a2")["result"]["bodies"].as_array().unwrap().len(), 1);
+}
+
+fn ack(id: &str, cancelled: bool) -> Value {
+    json!({"id": id, "ok": true, "result": {"cancelled": cancelled}})
+}
+
+#[test]
+fn a_cancel_sent_after_the_grace_answer_finds_nothing_running() {
+    let (e, rx) = respawning_after(
+        EngineOptions {
+            cancel_grace: Some(Duration::from_millis(300)),
+            ..EngineOptions::default()
+        },
+        Duration::from_millis(300),
+    );
+    send(&e, json!({"id": "long", "op": "rebuild", "document": {"sleep": 30}}));
+    until_running(&e);
+    send(&e, json!({"id": "c", "op": "cancel", "target": "long"}));
+    assert_eq!(reply_to(&rx, "c"), ack("c", true));
+    assert_eq!(reply_to(&rx, "long")["cancelled"], true);
+    send(&e, json!({"id": "c2", "op": "cancel"}));
+    assert_eq!(reply_to(&rx, "c2"), ack("c2", false));
+    send(&e, json!({"id": "c3", "op": "cancel", "target": "long"}));
+    assert_eq!(reply_to(&rx, "c3"), ack("c3", false));
+    send(&e, json!({"id": "after", "op": "rebuild", "document": {"sleep": 0}}));
+    assert_eq!(reply_to(&rx, "after")["ok"], true);
+}
+
+#[test]
+fn a_cancel_sent_after_an_answer_finds_nothing_running() {
+    let (e, rx) = respawning_after(EngineOptions::default(), Duration::from_millis(300));
+    send(&e, json!({"id": "a", "op": "rebuild", "document": {"sleep": 0.05}}));
+    assert_eq!(reply_to(&rx, "a")["ok"], true);
+    send(&e, json!({"id": "c", "op": "cancel", "target": "a"}));
+    assert_eq!(reply_to(&rx, "c"), ack("c", false));
+}
+
+fn fake_engine(out: Arc<dyn Outbox>) -> Engine {
+    Engine::start(
+        Fake {
+            gate: None,
+            rebuilds: Arc::new(AtomicI64::new(0)),
+        },
+        out,
+    )
+}
+
+fn streamed_rebuild(id: &str, bodies: usize) -> Value {
+    let features: Vec<Value> = (0..bodies).map(|i| json!({"id": format!("f{i}")})).collect();
+    json!({"id": id, "op": "rebuild", "binary": true, "chunked": true,
+           "document": {"features": features}})
+}
+
+fn binary_head(m: Message) -> Value {
+    let Message::Binary(b) = m else { panic!("expected a binary frame") };
+    let n = u32::from_le_bytes(b[0..4].try_into().unwrap()) as usize;
+    serde_json::from_slice(&b[4..4 + n]).unwrap()
+}
+
+#[test]
+fn a_cancel_sent_after_a_streamed_answer_finds_nothing_running() {
+    for (bodies, frames) in [(0, 1), (1, 2), (3, 2)] {
+        let (tx, rx) = channel();
+        let e = fake_engine(Arc::new(Lagging(Collect(Mutex::new(tx)), Duration::from_millis(300))));
+        send(&e, streamed_rebuild("r", bodies));
+        let mut got = 1;
+        while binary_head(next(&rx))["stream"]["final"] != true {
+            got += 1;
+        }
+        assert_eq!(got, frames, "{bodies} bodies");
+        send(&e, json!({"id": "c", "op": "cancel"}));
+        assert_eq!(text(next(&rx)), ack("c", false), "{bodies} bodies");
+    }
+}
+
+/// Holds the job thread after the first binary frame until the test opens the
+/// gate, without holding the channel, so a cancel can be acked meanwhile.
+struct HeldAfterHead {
+    out: Collect,
+    gate: Mutex<Receiver<()>>,
+    held: AtomicBool,
+}
+
+impl Outbox for HeldAfterHead {
+    fn send(&self, msgs: &mut dyn Iterator<Item = Message>) -> io::Result<()> {
+        for m in msgs {
+            let head = matches!(m, Message::Binary(_)) && !self.held.swap(true, Ordering::SeqCst);
+            self.out.send(&mut std::iter::once(m))?;
+            if head {
+                let _ = self.gate.lock().unwrap().recv_timeout(Duration::from_secs(10));
+            }
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn a_cancel_between_the_frames_of_a_streamed_answer_ends_it_cancelled() {
+    let (tx, rx) = channel();
+    let (gate_tx, gate_rx) = channel();
+    let e = fake_engine(Arc::new(HeldAfterHead {
+        out: Collect(Mutex::new(tx)),
+        gate: Mutex::new(gate_rx),
+        held: AtomicBool::new(false),
+    }));
+    send(&e, streamed_rebuild("r", 2));
+    assert_eq!(binary_head(next(&rx))["stream"]["final"], false);
+    send(&e, json!({"id": "c", "op": "cancel", "target": "r"}));
+    assert_eq!(text(next(&rx)), ack("c", true));
+    gate_tx.send(()).unwrap();
+    assert_eq!(
+        text(next(&rx)),
+        json!({"id": "r", "ok": false, "cancelled": true, "error": {"message": "cancelled"}})
+    );
+    assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
+}
+
+#[test]
+fn a_request_right_after_another_clients_answer_is_not_queued_behind_it() {
+    let (tx, _rx) = channel();
+    let engine = Arc::new(fake_engine(Arc::new(Collect(Mutex::new(tx)))));
+    let (a_tx, a_rx) = channel();
+    let (b_tx, b_rx) = channel();
+    let a = engine.client(Arc::new(Collect(Mutex::new(a_tx))));
+    let b = engine.client(Arc::new(Lagging(Collect(Mutex::new(b_tx)), Duration::from_millis(300))));
+    say(&b, json!({"id": "b0", "op": "rebuild", "document": {"features": [{"id": "f1"}]}}));
+    assert_eq!(reply_to(&b_rx, "b0")["ok"], true);
+    say(&a, json!({"id": "a1", "op": "rebuild", "document": {"features": [{"id": "f1"}, {"id": "f2"}]}}));
+    let statuses = statuses_until(&a_rx, "a1");
+    assert!(statuses.iter().all(|s| s == "building"), "{statuses:?}");
 }
