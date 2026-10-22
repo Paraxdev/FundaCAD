@@ -326,7 +326,7 @@ export class Viewport {
 
   /** A chunked reply being drawn and a tool's suspension are two independent reasons, deliberately apart. */
   private get pickSuppressed(): boolean {
-    return this.suspendPicking || this.streaming;
+    return this.suspendPicking || this.streaming || this.outOfDate;
   }
   // Until the user moves the camera the model stays framed on resize: under remote
   // desktops and fractional scaling the canvas settles a frame after the first fit.
@@ -1245,6 +1245,16 @@ export class Viewport {
     this.requestRender();
   }
 
+  // Behind its document (app/staleModel.ts): ghosted like a refused preview, and nothing on it can be picked.
+  private outOfDate = false;
+  setModelOutOfDate(on: boolean) {
+    if (this.outOfDate === on) return;
+    this.outOfDate = on;
+    if (on) this.highlighter?.clearHover();
+    this.applyBodyFinish();
+    this.requestRender();
+  }
+
   private finish = new BodyFinishLayer({
     model: () => this.model,
     scene: () => this.scene,
@@ -1327,7 +1337,12 @@ export class Viewport {
   private applyBodyFinish() {
     if (!this.model) return;
     this.peek = this.resolvePeek();
-    this.finish.apply({ xray: this.xray, stale: this.stale, wireframe: this.wireframe, peek: this.peek });
+    this.finish.apply({
+      xray: this.xray,
+      stale: this.stale || this.outOfDate,
+      wireframe: this.wireframe,
+      peek: this.peek,
+    });
     if (this.wireframe && !this.edgesEmphasized) this.highlighter?.setEdgeBase(EDGE_WIRE);
     this.syncBloomable();
     this.scene.frameShadows();
@@ -2880,6 +2895,7 @@ export class Viewport {
     this.userMovedCamera = false;
     this.showSketchFace(null);
     this.setStaleModel(false);
+    this.setModelOutOfDate(false);
   }
 
   stepView(dir: "left" | "right" | "up" | "down", fine: boolean) {
@@ -4131,7 +4147,7 @@ export class Viewport {
   }
 
   private get ghosted(): boolean {
-    return this.xray || this.wireframe || this.stale || this.peek.size > 0 || this.sketchDimmed;
+    return this.xray || this.wireframe || this.stale || this.outOfDate || this.peek.size > 0 || this.sketchDimmed;
   }
 
   private drawPicture<T>(

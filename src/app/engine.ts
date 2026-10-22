@@ -85,6 +85,7 @@ import { useUiStore } from "../stores/ui";
 import { useBrowserStore } from "../stores/browser";
 import { createDocBridge, type DocBridge } from "./docBridge";
 import { wireDocumentSwap } from "./documentSwap";
+import { watchOutOfDate } from "./staleModel";
 import { LiveSessionHost } from "../live/liveSession";
 import { GuideSession } from "../ui/guide/guideSession";
 import { resolveTarget, takeSnapshot } from "../ui/guide/probe";
@@ -417,6 +418,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     viewport: e.viewport,
     browser: useBrowserStore(),
   });
+  watchOutOfDate(e.store, (on) => e.viewport.setModelOutOfDate(on));
   installEnvironmentSync(e.store);
 
   return e;

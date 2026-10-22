@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildProgress, historyShowsBusy, historyShowsEmpty, waitLabel } from "../../src/ui/buildProgress";
+import { buildProgress, historyShowsBusy, historyShowsEmpty, runningRows, waitLabel } from "../../src/ui/buildProgress";
 
 describe("buildProgress", () => {
   it("is indeterminate before the first progress report", () => {
@@ -49,15 +49,30 @@ describe("waitLabel", () => {
   });
 });
 
+const reb = { rebuild: true };
+const imp = { rebuild: false };
+
 describe("historyShowsEmpty", () => {
-  it("keeps an empty document empty while its own rebuild waits", () => {
-    expect(historyShowsEmpty(0, { active: true, rebuild: true })).toBe(true);
-    expect(historyShowsEmpty(0, { active: false, rebuild: false })).toBe(true);
+  it("keeps an empty document empty while its own rebuild waits, and when idle", () => {
+    expect([historyShowsEmpty(0, [reb]), historyShowsEmpty(0, [])]).toEqual([true, true]);
   });
 
-  it("gives way to an import into an empty document, and to any feature", () => {
-    expect(historyShowsEmpty(0, { active: true, rebuild: false })).toBe(false);
-    expect(historyShowsEmpty(2, { active: false, rebuild: false })).toBe(false);
+  it("gives way to an import into an empty document whichever op started last, and to any feature", () => {
+    expect([
+      historyShowsEmpty(0, [imp]),
+      historyShowsEmpty(0, [imp, reb]),
+      historyShowsEmpty(0, [reb, imp]),
+      historyShowsEmpty(2, []),
+    ]).toEqual([false, false, false, false]);
+  });
+});
+
+describe("runningRows", () => {
+  it("lists every op but the document's own rebuild, oldest first", () => {
+    const a = { key: 1, rebuild: false };
+    const b = { key: 2, rebuild: true };
+    const c = { key: 3, rebuild: false };
+    expect([runningRows([a, b, c]), runningRows([b]), runningRows([])]).toEqual([[a, c], [], []]);
   });
 });
 
@@ -65,16 +80,19 @@ describe("historyShowsBusy", () => {
   const wait = { who: "assistant" as const, name: "Claude", op: "import" };
 
   it("says what an empty document's rebuild is waiting behind, with its Cancel", () => {
-    expect(historyShowsBusy(0, { active: true, rebuild: true, waiting: wait })).toBe(true);
+    expect(historyShowsBusy(0, { active: true, waiting: wait }, [reb])).toBe(true);
   });
 
   it("stays quiet for an empty document's own rebuild that is not waiting", () => {
-    expect(historyShowsBusy(0, { active: true, rebuild: true, waiting: null })).toBe(false);
+    expect(historyShowsBusy(0, { active: true, waiting: null }, [reb])).toBe(false);
   });
 
   it("shows any other busy op, and nothing when idle", () => {
-    expect(historyShowsBusy(0, { active: true, rebuild: false, waiting: null })).toBe(true);
-    expect(historyShowsBusy(3, { active: true, rebuild: true, waiting: null })).toBe(true);
-    expect(historyShowsBusy(3, { active: false, rebuild: false, waiting: null })).toBe(false);
+    expect([
+      historyShowsBusy(0, { active: true, waiting: null }, [imp]),
+      historyShowsBusy(0, { active: true, waiting: null }, [imp, reb]),
+      historyShowsBusy(3, { active: true, waiting: null }, [reb]),
+      historyShowsBusy(3, { active: false, waiting: null }, []),
+    ]).toEqual([true, true, true, false]);
   });
 });
