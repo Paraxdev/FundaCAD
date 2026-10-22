@@ -1,4 +1,11 @@
-import { importFileBytes, openDocument, openDocumentAtPath, reportError, type OpenOutcome } from "../io/files";
+import {
+  importDropped,
+  importFileBytes,
+  openDocument,
+  openDocumentAtPath,
+  reportError,
+  type OpenOutcome,
+} from "../io/files";
 import { choose } from "../ui/choice";
 import type { Engine } from "./engine";
 import { TEMPLATES, templateFile, templateText, type TemplateInfo } from "../templates";
@@ -116,7 +123,10 @@ async function importExample(e: ExampleEngine, info: TemplateInfo): Promise<void
   let replaced = false;
   const offOpen = e.store.onOpen(() => (replaced = true));
   try {
-    await importFileBytes(e.store, e.geometry, await templateFile(info.id), undefined, { opening: true });
+    const file = await templateFile(info.id);
+    // importFileBytes watches for an open only from here on, so one during the fetch is caught here.
+    if (replaced) await importDropped(file.name);
+    else await importFileBytes(e.store, e.geometry, file, undefined, { opening: true });
   } catch (err) {
     await reportError(`Couldn't open the ${info.name} example: ${err instanceof Error ? err.message : String(err)}`);
   } finally {

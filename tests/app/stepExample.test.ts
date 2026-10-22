@@ -5,7 +5,7 @@ import type { GeometryBackend } from "../../src/geometry/client";
 import type { CadDocument, Feature, RebuildResult } from "../../src/types";
 import type { Engine } from "../../src/app/engine";
 import { Home, homeIsOpen, type HomeCallbacks } from "../../src/ui/home";
-import { importFileBytes } from "../../src/io/files";
+import { importFileBytes, importPath } from "../../src/io/files";
 
 vi.stubGlobal("window", globalThis);
 
@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   asked: [] as string[],
   imported: [] as string[],
   reported: [] as string[],
+  told: [] as string[],
   // The maker's edit while the file is read, and while the import's first build runs (after it landed).
   reading: null as null | ((store: DocumentStore) => void),
   building: null as null | ((store: DocumentStore) => void),
@@ -29,7 +30,7 @@ vi.mock("../../src/ui/choice", () => ({
   },
 }));
 vi.mock("../../src/ui/toast", () => ({
-  toast: (msg: string, o: { kind?: string } = {}) => void (o.kind === "error" && h.reported.push(msg)),
+  toast: (msg: string, o: { kind?: string } = {}) => void (o.kind === "error" ? h.reported : h.told).push(msg),
 }));
 vi.mock("../../src/templates", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/templates")>()),
@@ -45,6 +46,13 @@ const SAVED: Feature[] = [
 ] as unknown as Feature[];
 
 const importOf = (doc: CadDocument) => doc.features.find((f) => f.type === "import");
+
+async function read(name: string) {
+  h.imported.push(name);
+  h.reading?.(h.store!);
+  if (!h.land) return { ok: false as const, message: "the file has no solids" };
+  return { ok: true as const, name: "printer", geom: "brep", solid: true, color: "#c0392b" };
+}
 
 const geometry = {
   async rebuild(doc: CadDocument) {
@@ -66,10 +74,10 @@ const geometry = {
     return { ok: true as const, result };
   },
   async importBytes(name: string) {
-    h.imported.push(name);
-    h.reading?.(h.store!);
-    if (!h.land) return { ok: false as const, message: "the file has no solids" };
-    return { ok: true as const, name: "printer", geom: "brep", solid: true, color: "#c0392b" };
+    return read(name);
+  },
+  async importGeometry(path: string) {
+    return read(path.split("/").pop()!);
   },
   async init() {},
   onStatus: () => () => {},
@@ -112,6 +120,13 @@ function seen(store: DocumentStore) {
 const environment = (s: DocumentStore) => s.setDocumentEnvironment({ preset: "studio" } as never);
 const rename = (s: DocumentStore) => s.renameFeature(importOf(s.document)!.id, "Frame on the bench");
 const material = (s: DocumentStore) => void s.addMaterial({ name: "PETG orange" });
+const opens =
+  (path: string, o: { dirty?: boolean } = {}) =>
+  (s: DocumentStore) => {
+    s.load(JSON.stringify({ parameters: {}, features: SAVED, version: 10 }));
+    s.markSaved(path);
+    if (o.dirty) s.addFeature({ id: "sk4", type: "sketch", plane: "XY", entities: [] } as unknown as Feature);
+  };
 const sketch = (s: DocumentStore) =>
   s.addFeature({ id: "sk3", type: "sketch", plane: "YZ", entities: [] } as unknown as Feature);
 
@@ -121,6 +136,7 @@ beforeEach(() => {
     asked: [],
     imported: [],
     reported: [],
+    told: [],
     reading: null,
     building: null,
     land: true,
@@ -181,17 +197,6 @@ describe("the 3D printer example", () => {
     h.reading = () => void ((e.sketch as { hasUncommittedEdits: boolean }).hasUncommittedEdits = true);
     await newFromTemplate(e, "printer");
     expect([store.dirty, hasUnsavedWork(e)]).toEqual([false, true]);
-  });
-
-  it("leaves a document opened during the import alone", async () => {
-    const { e, store } = rig();
-    h.reading = (s) => {
-      s.load(JSON.stringify({ parameters: {}, features: SAVED, version: 10 }));
-      s.markSaved("D:/jigs/Gear.funda");
-      s.addFeature({ id: "sk4", type: "sketch", plane: "XY", entities: [] } as unknown as Feature);
-    };
-    await newFromTemplate(e, "printer");
-    expect(seen(store)).toMatchObject({ name: "Gear.funda", path: "D:/jigs/Gear.funda", dirty: true });
   });
 
   it("asks before replacing unsaved work and does nothing when refused", async () => {
@@ -278,9 +283,104 @@ describe("the 3D printer example", () => {
   });
 });
 
-describe("a cancelled import", () => {
-  const motor = () => new File([new Uint8Array([73, 83, 79])], "motor.step");
+const motor = () => new File([new Uint8Array([73, 83, 79])], "motor.step");
+const dropped = (name: string) => `${name} was not imported, another document was opened while it was read.`;
 
+describe("a document opened while an import reads", () => {
+  const gear = { name: "Gear.funda", path: "D:/jigs/Gear.funda", home: false, reported: [] };
+
+  it.each([
+    ["clean", false, ["sketch", "extrude"]],
+    ["with unsaved work", true, ["sketch", "extrude", "sketch"]],
+  ])("keeps the 3D printer example out of an opened document %s", async (_what, dirty, features) => {
+    const { e, store } = rig();
+    h.reading = opens("D:/jigs/Gear.funda", { dirty });
+    await newFromTemplate(e, "printer");
+    expect(seen(store)).toEqual({ ...gear, features, dirty, imported: ["printer.stpz"] });
+    expect(h.told).toEqual([dropped("printer.stpz")]);
+  });
+
+  it("keeps the 3D printer example out of a document opened while its file is fetched", async () => {
+    const { e, store } = rig();
+    h.file = async () => {
+      opens("D:/jigs/Gear.funda")(h.store!);
+      return new File([new Uint8Array([31, 139])], "printer.stpz");
+    };
+    await newFromTemplate(e, "printer");
+    expect(seen(store)).toEqual({ ...gear, features: ["sketch", "extrude"], dirty: false, imported: [] });
+    expect(h.told).toEqual([dropped("printer.stpz")]);
+  });
+
+  it("keeps it out of the last of two documents opened one after the other", async () => {
+    const { e, store } = rig();
+    h.reading = (s) => {
+      opens("D:/jigs/Gear.funda")(s);
+      opens("D:/jigs/Hinge.funda")(s);
+    };
+    await newFromTemplate(e, "printer");
+    expect(seen(store)).toEqual({
+      ...gear,
+      features: ["sketch", "extrude"],
+      name: "Hinge.funda",
+      path: "D:/jigs/Hinge.funda",
+      dirty: false,
+      imported: ["printer.stpz"],
+    });
+    expect(h.told).toEqual([dropped("printer.stpz")]);
+  });
+
+  it.each([
+    ["a dropped STEP", () => importFileBytes(h.store!, geometry, motor())],
+    ["a STEP opened by path", () => importPath(h.store!, geometry, "D:/parts/motor.step")],
+  ])("keeps %s out of it", async (_how, run) => {
+    const { store } = rig();
+    h.reading = opens("D:/jigs/Gear.funda");
+    await run();
+    expect(seen(store)).toEqual({
+      ...gear,
+      features: ["sketch", "extrude"],
+      dirty: false,
+      home: true,
+      imported: ["motor.step"],
+    });
+    expect(h.told).toEqual([dropped("motor.step")]);
+  });
+
+  it.each([
+    ["a dropped STEP", () => importFileBytes(h.store!, geometry, motor())],
+    ["a STEP opened by path", () => importPath(h.store!, geometry, "D:/parts/motor.step")],
+  ])("still lands %s when nothing else was opened", async (_how, run) => {
+    const { store } = rig();
+    await run();
+    expect(seen(store)).toEqual({
+      features: ["sketch", "extrude", "import"],
+      name: "Bracket.funda",
+      path: "D:/jigs/Bracket.funda",
+      dirty: true,
+      home: true,
+      imported: ["motor.step"],
+      reported: [],
+    });
+    expect(h.told).toEqual([]);
+  });
+
+  it("lands the next import into the document that was opened", async () => {
+    const { e, store } = rig();
+    h.reading = opens("D:/jigs/Gear.funda");
+    await newFromTemplate(e, "printer");
+    h.reading = null;
+    await importFileBytes(store, geometry, motor());
+    expect(seen(store)).toEqual({
+      ...gear,
+      features: ["sketch", "extrude", "import"],
+      dirty: true,
+      imported: ["printer.stpz", "motor.step"],
+    });
+    expect(h.told).toEqual([dropped("printer.stpz")]);
+  });
+});
+
+describe("a cancelled import", () => {
   it("opened from Home over a blank document leaves it blank, untitled and clean", async () => {
     const { e, store } = rig();
     store.newDocument();
