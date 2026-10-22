@@ -65,6 +65,11 @@ export function installRebuildBridge(e: Engine): void {
   e.noteCommitted = (id: string | null) => {
     if (id) lastCommittedId = id;
   };
+  // An example opens framed as a fresh window frames it, wherever the camera was in the document before.
+  e.frameNextModel = () => {
+    e.viewport.resetCamera(false);
+    pendingFit = true;
+  };
 
   // The only chunk subscriber; buildState.result keeps the previous document for the whole stream, so nothing else
   // can see a partial model.

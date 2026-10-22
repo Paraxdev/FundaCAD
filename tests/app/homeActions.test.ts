@@ -12,7 +12,8 @@ function fakeEngine(dirty = false) {
     load: vi.fn(),
     markOpenedWithoutPath: vi.fn(),
   };
-  return { e: { store, sketch: { hasUncommittedEdits: false } } as unknown as Engine, store };
+  const frameNextModel = vi.fn();
+  return { e: { store, sketch: { hasUncommittedEdits: false }, frameNextModel } as unknown as Engine, store };
 }
 
 describe("newFromTemplate", () => {
@@ -25,6 +26,7 @@ describe("newFromTemplate", () => {
     await newFromTemplate(e, "plate");
     expect(JSON.parse(store.load.mock.calls[0]![0] as string).features.length).toBeGreaterThan(0);
     expect(store.markOpenedWithoutPath).toHaveBeenCalledWith("Plate");
+    expect((e.frameNextModel as ReturnType<typeof vi.fn>).mock.calls).toEqual([[]]);
   });
 
   it("does nothing when the unsaved work is kept", async () => {
@@ -32,5 +34,6 @@ describe("newFromTemplate", () => {
     const { e, store } = fakeEngine(true);
     await newFromTemplate(e, "plate");
     expect(store.load).not.toHaveBeenCalled();
+    expect(e.frameNextModel).not.toHaveBeenCalled();
   });
 });

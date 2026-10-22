@@ -94,7 +94,7 @@ export async function placeImport(e: HomeImportEngine, names: string[], run: () 
   return true;
 }
 
-type ExampleEngine = Pick<Engine, "store" | "sketch" | "viewport" | "geometry">;
+type ExampleEngine = Pick<Engine, "store" | "sketch" | "viewport" | "geometry" | "frameNextModel">;
 
 /** Save then asks where to keep it, so the template itself is never written. */
 export async function newFromTemplate(e: ExampleEngine, id: string): Promise<void> {
@@ -104,6 +104,7 @@ export async function newFromTemplate(e: ExampleEngine, id: string): Promise<voi
   if (info.source === "step") return importExample(e, info);
   e.store.load(await templateText(id));
   e.store.markOpenedWithoutPath(info.name);
+  e.frameNextModel();
 }
 
 /** The import a maker's own STEP takes, into a new document that stays clean until the maker changes it. */
