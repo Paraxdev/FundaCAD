@@ -6,7 +6,8 @@ import { usePanelsStore } from "../../src/stores/panels";
 import type { StressOptions, StressReply, StressResult } from "../../src/geometry/client";
 import type { CadDocument, StressStudy, Vec3 } from "../../src/types";
 import type { StressGlyphHandlers, StressGlyphModel } from "../../src/viewport/stressGlyphs";
-import { swingScale } from "../../src/ui/stress";
+import { autoDeformScale, probeLabel, probeValues, swingScale } from "../../src/ui/stress";
+import { drawnCorner, engineHit, refineSurface } from "../../src/ui/stressSurface";
 
 // The Stress panel's facade against a hand-made viewport, store and engine:
 // faces come from the selection stamped with their body, Run sends what the
@@ -301,13 +302,16 @@ describe("stress panel flow", () => {
     await run;
     expect(usePanelsStore().stress!.running).toBe(false);
     expect(usePanelsStore().stress!.result?.rows.find((x) => x.k === "Safety factor")?.v).toBe("12.5");
+    // One engine triangle is drawn two levels finer, sixteen triangles, over the engine's own range.
+    const drawn = refineSurface(reply.surface!, 2);
     expect(r.overlays.at(-1)).toEqual({
       bodyId: "b1",
-      positions: reply.surface!.positions,
-      indices: [0, 1, 2],
-      values: [1, 4, 2],
+      positions: drawn.positions,
+      indices: drawn.indices,
+      values: drawn.values,
       range: { min: 1, max: 4 },
     });
+    expect(drawn.indices.length / 3).toBe(16);
   });
 
   it("cancels by its own request id and stays quiet about it", async () => {
@@ -391,7 +395,8 @@ describe("stress panel across changes", () => {
     expect(p.stress!.setup.supports[0]!.faces.faceIds).toEqual([2]);
     expect(p.stress!.result).not.toBeNull();
     r.ui.setStressColours(true);
-    expect(r.overlays.at(-1)).toMatchObject({ bodyId: "b1", values: [1, 4, 2] });
+    expect(r.overlays.at(-1)).toMatchObject({ bodyId: "b1" });
+    expect(Array.from((r.overlays.at(-1) as { values: Float32Array }).values).slice(0, 3)).toEqual([1, 4, 2]);
   });
 
   it("finds the faces again on a rebuild that renumbers them, and marks the new ids", () => {
@@ -722,7 +727,12 @@ describe("the deformed shape and the probe", () => {
     const p = usePanelsStore();
     const auto = p.stress!.deform!.auto;
     expect(p.stress!.deform).toEqual({ scale: auto, auto, max: 4 * auto, animate: false });
-    expect(r.overlays.at(-1)).toMatchObject({ displacement: moving.surface!.displacement, scale: auto });
+    // The scale is the engine mesh's; the drawn shape bends by the refined displacement.
+    expect(auto).toBe(autoDeformScale(moving.surface!.positions, moving.surface!.displacement!));
+    expect(r.overlays.at(-1)).toMatchObject({
+      displacement: refineSurface(moving.surface!, 2).displacement,
+      scale: auto,
+    });
     r.ui.setStressDeformation(1);
     expect(r.deformations.at(-1)).toBe(1);
     expect(p.stress!.deform!.scale).toBe(1);
@@ -730,6 +740,38 @@ describe("the deformed shape and the probe", () => {
     r.ui.setStressColours(false);
     r.ui.setStressColours(true);
     expect(r.overlays.at(-1)).toMatchObject({ scale: 1 });
+  });
+
+  it("draws a result over the triangle budget as the engine sent it", async () => {
+    const r = rig();
+    setUp(r);
+    const n = 50_001;
+    const big: StressReply = {
+      ...moving,
+      surface: { ...moving.surface!, indices: Array.from({ length: n * 3 }, (_, i) => i % 3) },
+    };
+    const run = r.ui.runStress();
+    r.settle({ ok: true, result: big });
+    await run;
+    const o = r.overlays.at(-1) as { indices: Uint32Array; positions: Float32Array };
+    expect({ triangles: o.indices.length / 3, vertices: o.positions.length / 3 }).toEqual({
+      triangles: n,
+      vertices: 3,
+    });
+  });
+
+  it("keeps a pinned point on its drawn triangle when the deformation changes", async () => {
+    const r = rig();
+    await deformed(r);
+    const p = usePanelsStore();
+    r.ui.setStressProbe(true);
+    const hit = { tri: 13, weights: [0.25, 0.25, 0.5] as Vec3, point: [0, 0, 0] as Vec3 };
+    r.handlers().pinProbe(hit);
+    const label = p.stress!.pins[0]!.label;
+    r.ui.setStressDeformation(37.5);
+    expect(p.stress!.pins.map((x) => ({ tri: x.tri, weights: x.weights, label: x.label }))).toEqual([
+      { tri: 13, weights: [0.25, 0.25, 0.5], label },
+    ]);
   });
 
   it("animates on frames until the panel closes", async () => {
@@ -766,10 +808,18 @@ describe("the deformed shape and the probe", () => {
     r.ui.setStressProbe(true);
     expect(p.stress!.probe).toBe(true);
     expect(r.glyphCalls).toContain("probe true");
-    const hit = { tri: 0, weights: [0.5, 0.5, 0] as Vec3, point: [50, 0, -1] as Vec3 };
-    expect(r.handlers().probeLabel(hit)).toBe("2.5 MPa, 1 mm");
+    // A hit on the drawn mesh reads the engine's surface: at an engine vertex its own values, between them the
+    // engine's interpolation in the engine triangle the drawn one lies in.
+    const drawn = refineSurface(moving.surface!, 2);
+    const corner = drawnCorner(drawn, 1)!;
+    const hit = { ...corner, point: [100, 0, -2] as Vec3 };
+    expect(r.handlers().probeLabel(hit)).toBe("4 MPa, 2 mm");
+    const inner = { tri: 9, weights: [0.2, 0.5, 0.3] as Vec3, point: [0, 0, 0] as Vec3 };
+    const at = engineHit(drawn, inner.tri, inner.weights)!;
+    expect(r.handlers().probeLabel(inner)).toBe(probeLabel(probeValues(moving.surface!, at.tri, at.weights)!, "mm"));
     r.handlers().pinProbe(hit);
-    expect(p.stress!.pins.map((x) => x.label)).toEqual(["2.5 MPa, 1 mm"]);
+    expect(p.stress!.pins.map((x) => x.label)).toEqual(["4 MPa, 2 mm"]);
+    expect(p.stress!.pins.map((x) => [x.tri, x.weights])).toEqual([[corner.tri, corner.weights]]);
     expect(r.glyphCalls.at(-1)).toBe("pins 1");
     r.ui.removeStressProbe(p.stress!.pins[0]!.id);
     expect(p.stress!.pins).toEqual([]);
@@ -1082,7 +1132,10 @@ describe("playing and pausing the deformation", () => {
     clock = 1200;
     r.ui.pauseStressAnimation();
     const held = swingScale(REST + 200, scale);
-    expect({ animate: p.stress!.deform!.animate, drawn: r.deformations.at(-1) }).toEqual({ animate: false, drawn: held });
+    expect({ animate: p.stress!.deform!.animate, drawn: r.deformations.at(-1) }).toEqual({
+      animate: false,
+      drawn: held,
+    });
     clock = 5000;
     r.ui.setStressAnimate(true);
     frame(5000);

@@ -8,6 +8,7 @@ import type { GeometryBackend } from "../geometry/client";
 import type { StressGlyphHandlers, StressGlyphModel } from "../viewport/stressGlyphs";
 import { getUnit, toDisplay, displayRound } from "./units";
 import { usePanelsStore, type PanelRow, type ClashRow, type ClearanceRow, type StressProbePin } from "../stores/panels";
+import { engineHit, refineLevel, refineSurface, type DrawnSurface } from "./stressSurface";
 import {
   AXES,
   LOAD_MARK_COLOR,
@@ -193,7 +194,7 @@ export function createPanels(deps: PanelsDeps) {
   // The build the face sets' display ids came from; on another build they are found again from their selector points.
   let facesFor: unknown = null;
   // The last result's colours, its document and probe surface, so "Show colours" restores them without a new Run.
-  let colours: { overlay: StressOverlay; epoch: number; surface: ProbeSurface } | null = null;
+  let colours: { overlay: StressOverlay; epoch: number; surface: ProbeSurface; drawn: DrawnSurface } | null = null;
   // The study as last written to (or read from) the document, so an edit is
   // saved once and a study the document gained some other way (a version put
   // back, an assistant's edit) is told apart from the panel's own.
@@ -574,7 +575,8 @@ export function createPanels(deps: PanelsDeps) {
       l.force = was.force;
     },
     probeLabel(hit) {
-      const v = colours ? probeValues(colours.surface, hit.tri, hit.weights) : null;
+      const at = colours ? engineHit(colours.drawn, hit.tri, hit.weights) : null;
+      const v = colours && at ? probeValues(colours.surface, at.tri, at.weights) : null;
       return v ? probeLabel(v, getUnit()) : null;
     },
     pinProbe(hit) {
@@ -972,17 +974,20 @@ export function createPanels(deps: PanelsDeps) {
     if (r.surface) {
       const disp = r.surface.displacement;
       const moves = !!disp && disp.length === r.surface.positions.length;
+      // Drawn finer than the engine's mesh so the part bends smoothly; the numbers stay the engine's.
+      const drawn = refineSurface(r.surface, refineLevel(r.surface.indices.length / 3));
       colours = {
         overlay: {
           bodyId: r.body,
-          positions: r.surface.positions,
-          indices: r.surface.indices,
-          values: r.surface.vonMises,
+          positions: drawn.positions,
+          indices: drawn.indices,
+          values: drawn.values,
           range: view.legend,
-          ...(moves ? { displacement: disp } : {}),
+          ...(moves && drawn.displacement ? { displacement: drawn.displacement } : {}),
         },
         epoch,
         surface: r.surface,
+        drawn,
       };
       if (moves) {
         const auto = autoDeformScale(r.surface.positions, disp!);
