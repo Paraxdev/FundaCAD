@@ -190,7 +190,8 @@ Linux the second launch hands its argv over through the single instance plugin
 and exits, on macOS the Opened event comes to the running app. Every path lands
 in one queue (`launch.rs`) that the page takes from once recovery has settled,
 and it opens the first. `sh scripts/check-launch-args.sh` runs the parsing tests
-on Windows, including ones that start a process with the command lines the
+(`src-tauri/tests/unit/launch_args.rs`) on Windows without the webview stack,
+including ones that start a process with the command lines the
 installers register.
 
 ## Code signing & notarization

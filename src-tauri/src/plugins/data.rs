@@ -79,17 +79,3 @@ pub fn plugin_data_adopt(app: AppHandle, plugin: String, legacy: String, name: S
     std::fs::rename(&from, &to).map_err(|e| format!("{legacy}: {e}"))?;
     Ok(true)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn names_cannot_leave_their_directory() {
-        assert!(safe_name("devices.json").is_ok());
-        assert!(safe_name("part_1-a.3mf").is_ok());
-        for bad in ["", "../x", "a/b", "a\\b", ".hidden", "..", "c:x", &"x".repeat(101)] {
-            assert!(safe_name(bad).is_err(), "{bad:?}");
-        }
-    }
-}

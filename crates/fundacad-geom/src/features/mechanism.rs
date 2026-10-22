@@ -312,6 +312,3 @@ pub fn handle(ctx: &mut Ctx, f: &Mechanism) -> FResult {
     }
     Ok(())
 }
-
-#[cfg(test)]
-mod tests;

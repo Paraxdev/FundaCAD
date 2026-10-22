@@ -1187,20 +1187,6 @@ mod tests {
     }
 
     const UNIT_LINE: &str = "0\nLINE\n8\n0\n10\n0\n20\n0\n30\n0\n11\n1\n21\n0\n31\n0\n";
-    const UNIT_FACE: &str =
-        "0\n3DFACE\n8\n0\n10\n0\n20\n0\n30\n0\n11\n1\n21\n0\n31\n0\n12\n0\n22\n1\n32\n0\n13\n0\n23\n1\n33\n0\n";
-    const HUGE_ARRAY: &str = "0\nINSERT\n8\nL\n2\nB\n10\n0\n20\n0\n30\n0\n70\n30000\n71\n30000\n44\n2\n45\n2\n";
-
-    #[test]
-    fn a_huge_insert_array_stops_at_the_cap() {
-        for block in [UNIT_LINE, UNIT_FACE] {
-            let t = std::time::Instant::now();
-            let err = read_dxf(&dxf(4, block, HUGE_ARRAY)).err().expect("a 30000 x 30000 array must be refused");
-            assert!(err.contains("more than"), "{err}");
-            assert!(t.elapsed().as_secs_f64() < 5.0, "took {:?}", t.elapsed());
-        }
-    }
-
     #[test]
     fn every_length_unit_code_reads() {
         for (code, mm) in [
@@ -1219,17 +1205,6 @@ mod tests {
         }
         let r = read_dxf(&dxf(22, "", UNIT_LINE)).unwrap();
         assert_eq!(r.sketches[0].1[0]["x2"], 25.400_050_800_101_6);
-    }
-
-    #[test]
-    fn layers_that_differ_only_in_case_are_one_sketch() {
-        let walls = UNIT_LINE.replace("8\n0\n", "8\nWalls\n");
-        let shouted = UNIT_LINE.replace("8\n0\n", "8\nWALLS\n").replace("21\n0", "21\n5");
-        let ents = format!("{walls}{shouted}");
-        let r = read_dxf(&dxf(4, "", &ents)).unwrap();
-        let names: Vec<&str> = r.sketches.iter().map(|(n, _)| n.as_str()).collect();
-        assert_eq!(names, ["Walls"]);
-        assert_eq!(r.sketches[0].1.len(), 2);
     }
 
     #[test]

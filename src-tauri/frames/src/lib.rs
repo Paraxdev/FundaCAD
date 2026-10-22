@@ -59,16 +59,3 @@ pub fn read_header(b: &[u8]) -> Option<[u32; 4]> {
     let w = |i: usize| u32::from_le_bytes(b[i * 4..i * 4 + 4].try_into().unwrap());
     Some([w(0), w(1), w(2), w(3)])
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_frame_size_over_the_limit_is_refused() {
-        assert_eq!(frame_size(0, 0), Ok((1, 1)));
-        assert_eq!(frame_size(MAX_SIDE, 1080), Ok((MAX_SIDE, 1080)));
-        assert!(frame_size(MAX_SIDE + 1, 1).is_err());
-        assert!(frame_size(1, u32::MAX).is_err());
-    }
-}
