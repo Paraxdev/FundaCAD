@@ -1,21 +1,14 @@
 // The camera rig contract, and the factory that picks an implementation.
-//
 // Mouse map: right = orbit, middle = pan, wheel = zoom, Shift+right = pan.
-// Right orbits and middle pans, rather than the other way round, because the
-// button you hold for most of a session should be the one your hand rests on.
-// Middle-drag then reads as "shove the drawing about", which is what it is: in a
-// sketch the pan IS moving the sketch under the cursor, and the orbit is off.
 
 import type * as THREE from "three";
 import { createLegacyRig } from "./legacyRig";
 import { createNavigatorRig } from "./navigator/rig";
 import { navigatorChoice } from "../ui/interactionPrefs";
 
-/** What the rig may ask of the scene it looks at. The viewport provides it; the
- *  headless tests provide analytic stand-ins. */
+/** The viewport provides it, the headless tests provide analytic stand-ins. */
 export interface NavScene {
-  /** Distance along a world ray (unit `dir`) to the first visible model surface,
-   *  or null for a miss. */
+  /** Distance along a unit world ray to the first visible model surface, null on a miss. */
   raycast(origin: THREE.Vector3, dir: THREE.Vector3): number | null;
   /** Height of the ground plane while it is drawn, else null. */
   groundZ(): number | null;
@@ -52,16 +45,14 @@ export type NavEvent = "inputstart" | "inputend" | "change" | "rest";
 export interface CameraRig {
   get active(): THREE.Camera;
   isOrtho(): boolean;
-  /** 'auto' = perspective while orbiting, orthographic whenever the view axis
-   *  is world-axis-aligned, so straight-on views are truly flat (no parallax
-   *  skew between bodies). */
+  /** 'auto' = perspective while orbiting, orthographic whenever the view axis is world axis aligned, so straight on views
+   *  have no parallax skew between bodies. */
   projectionMode(): ProjectionMode;
   setProjectionMode(mode: ProjectionMode): void;
   resize(w: number, h: number): void;
   /** Advance one frame. True when the pose on screen changed. */
   update(dt: number): boolean;
 
-  // --- reading the pose ------------------------------------------------------
   /** The point at the centre of the screen that the view turns and scales about. */
   getTarget(out?: THREE.Vector3): THREE.Vector3;
   getPosition(out?: THREE.Vector3): THREE.Vector3;
@@ -75,7 +66,6 @@ export interface CameraRig {
   getState(): CameraState;
   setState(state: CameraState, animate?: boolean): void;
 
-  // --- the scene -------------------------------------------------------------
   setScene(scene: NavScene | null): void;
   /** The model's bounds, which set the zoom-out limit and the clip planes, and
    *  each body's, which the perspective near plane may be pushed out to. */
@@ -84,7 +74,6 @@ export interface CameraRig {
   setAnchorPlane(plane: THREE.Plane | null): void;
   setLimits(limits: Partial<NavLimits>): void;
 
-  // --- input -----------------------------------------------------------------
   on(event: NavEvent, fn: () => void): () => void;
   /** Shorthand for on("inputstart"): the user has taken the camera. */
   onInputStart(fn: () => void): () => void;
@@ -98,7 +87,6 @@ export interface CameraRig {
   /** Whether that lock is on. The 3D mouse obeys it too, so it reads it here. */
   orbitLocked(): boolean;
 
-  // --- motions ---------------------------------------------------------------
   /** Zoom by a multiplicative factor (>1 out, <1 in) toward `pivot`, else
    *  toward the surface at the centre of the screen. */
   zoomBy(factor: number, pivot?: THREE.Vector3): void;
@@ -151,12 +139,8 @@ export interface CameraRig {
   /** Orient to an arbitrary view direction (eye = target + dir·d) with a chosen
    *  world up. Used by the ViewCube for corners, edges and redefined sides. */
   setViewDir(dir: THREE.Vector3, up: THREE.Vector3): void;
-  /** Square the camera to a plane: up = `up`, looking down -`normal`.
-   *
-   *  `opts.animate` flies there over a few hundred milliseconds instead of
-   *  cutting; `opts.onArrive` runs when it lands (immediately when it snapped),
-   *  which is where anything that must not happen mid-flight belongs, forcing
-   *  the flat projection, baselining the sketch lock. */
+  /** Square the camera to a plane: up = `up`, looking down -`normal`. `onArrive` runs when a flight lands (at once when it
+   *  snaps), the place for anything that must not happen mid flight. */
   lookAtPlane(
     origin: THREE.Vector3,
     normal: THREE.Vector3,

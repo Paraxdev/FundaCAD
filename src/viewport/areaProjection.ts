@@ -1,6 +1,5 @@
-// The model projected to the screen for a box drag. Every face keeps its screen
-// bounding box, which settles a window outright and rules most of the model out
-// for a crossing, so only a crossing that really overlaps walks triangles.
+// The model projected to the screen for a box drag. Each face keeps its screen bounding box, so only a crossing
+// that really overlaps one walks its triangles.
 
 import * as THREE from "three";
 import type { EdgeRef, ModelView } from "./render";

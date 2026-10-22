@@ -31,10 +31,8 @@ export function onHdrRegistered(fn: (hash: string) => void): () => void {
   return () => listeners.delete(fn);
 }
 
-/** The panorama on the inside of a sphere, so the Realtime PMREM and the Path
- *  traced cube both take it exactly like a built in room. Three's equirect is
- *  Y up and this world is Z up, so the sphere is tipped a quarter turn, then
- *  turned `rotationDeg` about Z. Exposure is baked into the texture. */
+/** On the inside of a sphere, so the Realtime PMREM and the traced cube take it like a built in room. Tipped a quarter
+ *  turn (three's equirect is Y up), then turned `rotationDeg` about Z; exposure is baked in. */
 export function hdrRoom(h: HeldHdr, rotationDeg: number, exposure: number): { scene: THREE.Scene; dispose(): void } {
   const { width, height } = h.light;
   const half = toHalfRgba(h.light, 2 ** exposure);

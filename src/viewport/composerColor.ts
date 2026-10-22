@@ -1,10 +1,7 @@
 import * as THREE from "three";
 
-/** The clear colour for the composer's offscreen target, linear in and out.
- *
- *  The canvas path never tone maps its clear, the composer's OutputPass tone maps
- *  everything in its target, the clear included. Clearing with the inverse of the
- *  tone mapper is what keeps the background the same colour with bloom on. */
+/** Linear in and out. Unlike the canvas path, the composer's OutputPass tone maps its clear too, so clearing with the
+ *  inverse of the tone mapper keeps the background the same with bloom on. */
 export function composerClearColor(
   bg: THREE.Color,
   toneMapping: THREE.ToneMapping,
@@ -17,10 +14,8 @@ export function composerClearColor(
   return out.setRGB(x[0]! / e, x[1]! / e, x[2]! / e, THREE.LinearSRGBColorSpace);
 }
 
-/** The bloom threshold, raised above the composer's clear so the ground never
- *  blooms. A light ground cleared with the inverse of the tone mapper sits near
- *  or above the top of the slider's threshold. The weights are the high pass
- *  shader's `luminance`. */
+/** Raised above the composer's clear so the ground never blooms: a light ground cleared with the inverse tone map sits
+ *  near the top of the slider. The weights are the high pass shader's `luminance`. */
 export function thresholdAboveGround(threshold: number, clear: THREE.Color): number {
   const luma = 0.2126729 * clear.r + 0.7151522 * clear.g + 0.072175 * clear.b;
   return Math.max(threshold, luma + 0.05);
@@ -66,14 +61,8 @@ export function setComposing(on: boolean, clear?: THREE.Color): void {
   if (clear) ground.copy(clear);
 }
 
-/** For a ShaderMaterial that writes display colours straight to gl_FragColor,
- *  with no colour management: in the canvas path they reach the screen as they
- *  are, in the composer they are linear values the OutputPass tone maps and
- *  encodes. `displayColor` undoes both while the composer draws, so a grid or a
- *  glow looks the same with bloom on. `displayOverGround` also blends as the
- *  canvas does, in display space, which only holds over the clear colour: the
- *  composer blends in linear, and thin dark lines on a light ground came out
- *  lighter. */
+/** For a ShaderMaterial writing display colours straight to gl_FragColor. `displayColor` undoes the composer's tone map
+ *  and encode, and `displayOverGround` also blends in display space, so a grid or glow looks the same with bloom on. */
 export const DISPLAY_COLOR_GLSL = /* glsl */ `
 uniform float uComposing;
 uniform vec3 uGround;

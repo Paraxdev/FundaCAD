@@ -1,7 +1,5 @@
-// The one description of how a scene is lit, shared by Realtime and the tracer.
-// Hemisphere placement rule: in Path traced the hemisphere is added only by
-// pathtrace/environment.ts, in Realtime only in its own PMREM source when an
-// environment map is bound, and the HemisphereLight stays when none is bound.
+// The one description of how a scene is lit, shared by Realtime and the tracer. The hemisphere goes in only through
+// pathtrace/environment.ts when traced, Realtime's own PMREM source when a map is bound, else the HemisphereLight.
 
 import { groundKey, hdrHashOf, type Background, type Ground, type RenderPrefs } from "../ui/renderPrefs";
 import { keyDirection, type Vec3 } from "./keyLight";
@@ -67,7 +65,7 @@ export interface LightRig {
   ground: RigGround;
 }
 
-/** The lighting at brightness 1, the light level the app has always had. */
+/** The lighting at brightness 1. */
 export const KEY_INTENSITY = 2.0;
 export const FILL_INTENSITY = 0.6;
 export const HEMI_INTENSITY = 0.6;
