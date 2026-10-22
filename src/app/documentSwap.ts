@@ -1,4 +1,5 @@
 import type { DocumentStore } from "../document/store";
+import type { DocumentSession } from "../document/session";
 
 export interface DocumentSwapTarget {
   /** Every armed tool, with its preview, handles and panel, and its listeners
@@ -12,15 +13,15 @@ export interface DocumentSwapTarget {
   viewport: {
     clearSelection(): void;
     setSelectedBodies(ids: string[]): void;
-    clearModel(): void;
+    endDocument(): void;
   };
   browser: { forgetDocumentFolders(): void };
 }
 
-/** New and Open take the old document off screen in the same call that replaces
- *  it, not when the engine answers for the new one. */
-export function wireDocumentSwap(store: Pick<DocumentStore, "onOpen">, e: DocumentSwapTarget) {
-  return store.onOpen(() => {
+/** New and Open take the old document off screen while its session ends, in the same call that replaces it, not
+ *  when the engine answers for the new one. */
+export function wireDocumentSwap(store: Pick<DocumentStore, "sessions">, e: DocumentSwapTarget) {
+  const swap = () => {
     e.cancelTools();
     if (e.sketch.active) e.sketch.cancel();
     // Left selected, a face is found again by position in the next document's model.
@@ -31,7 +32,12 @@ export function wireDocumentSwap(store: Pick<DocumentStore, "onOpen">, e: Docume
     e.overlay.clearRegionSelection();
     e.forgetLastCommit();
     // Last, the handlers above may still read the old model.
-    e.viewport.clearModel();
+    e.viewport.endDocument();
     e.browser.forgetDocumentFolders();
-  });
+  };
+  const own = (s: DocumentSession) => {
+    s.own(swap);
+  };
+  own(store.sessions.current);
+  return store.sessions.onBegin(own);
 }

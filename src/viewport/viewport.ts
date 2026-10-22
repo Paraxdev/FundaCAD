@@ -2871,6 +2871,17 @@ export class Viewport {
     this.requestRender();
   }
 
+  /** Everything the view holds for one document, released when its session ends. */
+  endDocument() {
+    this.clearModel();
+    this.streamMemo = null;
+    this.edgeBatchesOf = null;
+    this.lastHover = null;
+    this.userMovedCamera = false;
+    this.showSketchFace(null);
+    this.setStaleModel(false);
+  }
+
   stepView(dir: "left" | "right" | "up" | "down", fine: boolean) {
     this.rig.stepView(dir, fine);
     this.requestRender();

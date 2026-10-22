@@ -191,4 +191,20 @@ describe("engine requests and document sessions", () => {
     const without = await r.g.cancel();
     expect({ without, sent: r.sent.map((s) => s.op) }).toEqual({ without: false, sent: ["rebuild"] });
   });
+
+  it("a request made while its session is ending is refused unsent, one in the next session goes out", async () => {
+    const r = rig();
+    let during: Promise<string> | null = null;
+    r.host.current.own(() => {
+      during = outcome(r.g.rebuild(doc));
+    });
+    r.host.begin("new");
+    const after = outcome(r.g.generateShape("gear", { teeth: 8 }));
+    r.text({ id: r.sent[0]!.id, ok: true, result: {} });
+    expect({ during: await during, after: await after, sent: r.sent.map((s) => s.op) }).toEqual({
+      during: "SessionEnded",
+      after: "resolved",
+      sent: ["generateShape"],
+    });
+  });
 });

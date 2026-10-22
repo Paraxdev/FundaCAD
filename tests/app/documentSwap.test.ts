@@ -55,7 +55,7 @@ function harness(browser?: { forgetDocumentFolders(): void }) {
     viewport: {
       clearSelection: () => calls.push("clearSelection"),
       setSelectedBodies: () => calls.push("setSelectedBodies"),
-      clearModel: () => calls.push("clearModel"),
+      endDocument: () => calls.push("endDocument"),
     },
     browser: browser ?? { forgetDocumentFolders: () => calls.push("forgetDocumentFolders") },
   });
@@ -81,9 +81,13 @@ describe("New and Open clear the view at once", () => {
         "setSelectedBodies",
         "clearRegionSelection",
         "forgetLastCommit",
-        "clearModel",
+        "endDocument",
       ]);
       expect(calls).not.toContain("build:old");
+      // The second document's session owns the next swap, and it runs once.
+      calls.length = 0;
+      store.newDocument();
+      expect(calls.filter((c) => c === "endDocument")).toEqual(["endDocument"]);
     });
   }
 
@@ -92,7 +96,7 @@ describe("New and Open clear the view at once", () => {
     await store.rebuildNow();
     calls.length = 0;
     store.load(JSON.stringify(DOC), { replace: true });
-    expect(calls).not.toContain("clearModel");
+    expect(calls).not.toContain("endDocument");
   });
 });
 
