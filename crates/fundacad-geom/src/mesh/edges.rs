@@ -1,10 +1,5 @@
-//! Edge polylines for the outline pass, replaces `edge_polylines_by_body`,
-//! `_edge_points` and `_meets_smoothly` of the Python engine's `tessellate.py`.
-//!
-//! Dropped, as in any MCAD: the seam between two coplanar planar faces, the
-//! wrap-around seam of a closed periodic face (one face listed twice) and a
-//! degenerate edge (a pole or an apex). The Python engine's per-TShape polyline memo
-//! is a cache and is not ported.
+//! Edge polylines for the outline pass. Dropped as in any MCAD: the seam between two coplanar planes,
+//! the wrap seam of a closed periodic face, and a degenerate edge (a pole or an apex).
 
 use opencascade::mesh_access::MeshAccess;
 
@@ -15,10 +10,8 @@ pub const EDGE_DEFLECTION: f64 = 0.01;
 /// an odd point count.
 pub const EDGE_MIN_SEG: usize = 4;
 pub const EDGE_MAX_SEG: usize = 512;
-/// A sample is kept while no segment strays more than this many deflections
-/// from the curve. OCCT's quasi uniform sampler measures its sag from the end
-/// tangents, and takes a whole helix turn, whose end tangents are parallel,
-/// as one chord; its other results land on the target and are kept as they are.
+/// OCCT's quasi uniform sampler measures sag from the end tangents and takes a whole helix turn as one
+/// chord, so a sample is kept only while no segment strays more than this many deflections.
 pub const EDGE_SLACK: f64 = 4.0;
 /// Segments of the parameter walk used when the deflection sampler cannot run.
 pub const EDGE_FALLBACK_SEG: usize = 24;
@@ -37,11 +30,8 @@ pub struct EdgeLine {
     pub smooth: bool,
 }
 
-/// Every drawn edge of one body, in edge-to-face map order.
-///
-/// The edges go out to other threads: each one builds its own adaptors and
-/// nothing is written back to the shape, and the results are collected by edge
-/// index, so the list is the one a serial walk produces.
+/// In edge-to-face map order. Edges go to other threads, build their own adaptors and write nothing back,
+/// and results are collected by index, so the list matches a serial walk.
 pub fn edge_polylines(access: &MeshAccess) -> Vec<EdgeLine> {
     let cos_tol = 1.0f64.to_radians().cos();
     let plane: Vec<Option<[f64; 3]>> = (0..access.face_count()).map(|f| access.face_plane_normal(f)).collect();
@@ -146,10 +136,8 @@ fn sample_by_deflection(
     Some(out)
 }
 
-/// A uniform parameter walk of `min_seg` segments, kept if it is within the
-/// slack, else doubled until it is within `deflection` or reaches `max_seg`.
-/// Every count is `min_seg` times a power of two, so the middle point stays
-/// the parametric midpoint.
+/// Kept if within the slack, else doubled until within `deflection` or at `max_seg`. Counts stay `min_seg`
+/// times a power of two, so the middle point stays the parametric midpoint.
 fn checked_walk(
     access: &MeshAccess,
     e: usize,
@@ -184,10 +172,8 @@ fn checked_walk(
     Some(pts)
 }
 
-/// Each segment's middle parameter, the curve's point there and the worst
-/// distance from the curve to its segment. The curve is also probed at the
-/// golden section of every segment: a helix that turns a whole number of times
-/// per segment meets the chord at its middle, never at an irrational fraction.
+/// Each segment's middle parameter, curve point and worst sag. Also probed at each segment's golden
+/// section, as a helix turning whole times per segment meets the chord at its middle.
 fn mid_sag(access: &MeshAccess, e: usize, pts: &[[f64; 3]], us: &[f64]) -> Option<(Vec<f64>, Vec<[f64; 3]>, f64)> {
     const PROBES: [f64; 3] = [0.5, 0.381_966_011_250_105, 0.618_033_988_749_895];
     if pts.len() != us.len() {
@@ -212,13 +198,8 @@ fn to_segment(p: [f64; 3], a: [f64; 3], b: [f64; 3]) -> f64 {
     (0..3).map(|k| (ap[k] - t * ab[k]).powi(2)).sum::<f64>().sqrt()
 }
 
-/// Whether the two faces on either side share a tangent plane along the edge,
-/// sampled at the middle first so a crease costs one sample. Unsigned, tangent
-/// faces can carry opposite surface orientations.
-///
-/// `MeshAccess::edge_smooth` is the same walk with the adaptors built once,
-/// and is what the pass above calls; this stays as the reference the test
-/// below and the bench suite's `smooth` stage check it against.
+/// Unsigned, tangent faces can carry opposite orientations. The reference the test and the bench's
+/// `smooth` stage check `MeshAccess::edge_smooth` against, which is what the pass calls.
 pub fn meets_smoothly(access: &MeshAccess, e: usize) -> bool {
     let cos_tol = SMOOTH_EDGE_DEG.to_radians().cos();
     let Some((t0, t1)) = access.edge_brep_range(e) else {
