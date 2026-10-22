@@ -1,8 +1,5 @@
-//! A file whose solids face into their material is turned outward where it is
-//! read, and the import says so. A document that already stores such a solid
-//! keeps it as it is, since a face selector saved against it carries the
-//! normal it had, and keeps the build's warning. tests/fixtures/inside_out_*
-//! are written by tests/step/gen_inside_out.py.
+//! A file whose solids face into their material is turned outward where read, and the import says so. A
+//! stored solid stays as it is, saved face selectors carry its normal. Fixtures by tests/step/gen_inside_out.py.
 
 #[allow(dead_code)]
 mod unsound;
@@ -155,10 +152,8 @@ fn a_solid_whose_faces_disagree_is_left_as_it_is() {
     );
 }
 
-/// A hollow part comes in as one solid with its void as a second shell, kept
-/// as one body when the import is not split into its parts. Wound inside out
-/// as a whole, both shells are turned. With only its outside wound the wrong
-/// way its shells disagree, and it is left for the build to warn about.
+/// A hollow part is one solid with its void as a second shell. Wound inside out as a whole both shells
+/// are turned, with only its outside wrong they disagree and it is left for the build to warn about.
 #[test]
 fn a_hollow_mesh_is_turned_only_when_all_of_it_faces_inward() {
     let whole = cubes_stl(&[([0.0; 3], 10.0, true), ([2.0; 3], 6.0, false)], "hollow_inward.stl");
@@ -189,9 +184,8 @@ fn parts_of_one_mesh_wound_inside_out_are_all_turned() {
     assert!(r.bodies.iter().all(|b| kernel::inward_solids(&b.shape) == 0), "a part still faces inward");
 }
 
-/// The STEP reader holds the shell of a solid it turned outward reversed. It
-/// does the same to a solid whose faces disagree, which then faces no one way
-/// and measures a volume of either sign, so that one is not said to be turned.
+/// The STEP reader holds a turned solid's shell reversed, and does the same to one whose faces disagree,
+/// which faces no one way and measures either sign, so that one is not said to be turned.
 #[test]
 fn only_a_solid_the_reader_left_facing_outward_is_said_to_be_turned() {
     let shape = |edit| brep_b64_to_shape(&unsound::cube_brep(edit)).unwrap_or_else(|_| panic!("decodes"));
@@ -207,9 +201,8 @@ fn only_a_solid_the_reader_left_facing_outward_is_said_to_be_turned() {
     assert_eq!(kernel::reader_turned_solids(&shape(unsound::sound)), 0);
 }
 
-/// The STEP reader turns a solid outward itself as it reads it, the import
-/// says which. It also mends a solid whose faces disagree and then turns that
-/// one too, which is OCCT's healing and not undone here.
+/// The STEP reader turns a solid outward itself and the import says which. It also mends and turns a
+/// solid whose faces disagree, which is OCCT's healing and not undone here.
 #[test]
 fn a_step_file_written_inside_out_comes_in_outward_and_the_import_says_so() {
     let reply = imported(&fixture("inside_out_cube.step"), "step");
