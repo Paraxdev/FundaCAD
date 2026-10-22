@@ -636,20 +636,31 @@ export async function exportModel(
   const fmt = settings.format;
   // GLB carries one material per body, so it needs the palette and slots. runBusy as in importPath: an export
   // replays the whole history, and onStarted lets Cancel target this export rather than a later rebuild.
-  const res = await store.runBusy(`Exporting ${path.split(/[\\/]/).pop() ?? "file"}`, (onStarted) =>
-    geometry.export(
-      store.document,
-      fmt,
-      path,
-      {
-        ...opts,
-        palette: store.colorPalette,
-        bodyColors: store.bodyColorsMap(),
-        ...(isMeshFormat(fmt) ? { mesh: meshWire(settings) } : {}),
-      },
-      onStarted,
-    ),
-  );
+  const file = fileName(path);
+  const res = await store
+    .runBusy(`Exporting ${file}`, (onStarted) =>
+      geometry.export(
+        store.document,
+        fmt,
+        path,
+        {
+          ...opts,
+          palette: store.colorPalette,
+          bodyColors: store.bodyColorsMap(),
+          ...(isMeshFormat(fmt) ? { mesh: meshWire(settings) } : {}),
+        },
+        onStarted,
+      ),
+    )
+    .catch((e: unknown) => {
+      if (isSessionEnded(e)) return { ok: false as const, cancelled: true, message: "export cancelled" };
+      throw e;
+    });
+  if (!session.alive && !res.ok) {
+    const { toast } = await import("../ui/toast");
+    toast(`${file} was not written, its document was closed during the export.`, { kind: "warning" });
+    return;
+  }
   if (!res.ok) {
     // The user stopped it, so say nothing rather than "Export failed: cancelled".
     if (res.cancelled) return;
