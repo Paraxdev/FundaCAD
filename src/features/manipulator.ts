@@ -95,6 +95,7 @@ export function screenPlaneOrientation(
   if (right.lengthSq() < 1e-9) right.set(1, 0, 0).projectOnPlane(fwd);
   if (right.lengthSq() < 1e-9) right.set(0, 1, 0).projectOnPlane(fwd);
   right.normalize();
+  // back x right: the obvious fwd x right has determinant -1.
   const up = new THREE.Vector3().crossVectors(back, right).normalize();
   return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, back));
 }

@@ -234,6 +234,8 @@ export class MechanismTool {
     return this.viewport.probe(x, y, (rc) => rc.intersectObjects(gizmo.children, false).length > 0) ?? false;
   }
 
+  // In place, so the features after the mechanism (an interference check, a body joining the moved parts) stay on
+  // screen while the linkage moves.
   private pushPreview() {
     if (!this.active || !this.id) return;
     const f = this.store.document.features.find((x) => x.id === this.id);

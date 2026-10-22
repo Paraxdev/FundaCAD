@@ -219,6 +219,8 @@ export class RevolvePitchTool {
     }
   }
 
+  // A drag moves only the dashed helix, the curve the engine sweeps along. A rebuild per frame of a revolve with a
+  // dozen turns makes the drag lurch, so the engine builds on release.
   private onMove(e: PointerEvent) {
     if (this.grabbing) {
       // Measured from `base`, which does not move. `anchor` is recomputed from the pitch every frame, so measuring
@@ -345,7 +347,8 @@ export class RevolvePitchTool {
     }
   }
 
-  /** Restarting the timer on every change makes a number typed digit by digit build once. */
+  /** A typed value is rebuilt by the engine, or the box reads 600 while the shaded solid stays the 360 it was built
+   *  as. Restarting the timer on every change makes a number typed digit by digit build once. */
   private schedulePreview() {
     if (this.previewTimer) clearTimeout(this.previewTimer);
     this.previewTimer = window.setTimeout(() => {
@@ -354,7 +357,8 @@ export class RevolvePitchTool {
     }, TYPED_PREVIEW_MS);
   }
 
-  /** Taken from the document each time, not cached, so other changes to the feature are carried, not reverted. */
+  /** Taken from the document each time, not cached, so other changes to the feature are carried, not reverted.
+   *  A preview is not an undo step, so the value box stays the thing that commits. */
   private pushPreview() {
     if (!this.active || !this.id) return;
     const f = this.store.document.features.find((x) => x.id === this.id);
@@ -475,7 +479,8 @@ export class RevolvePitchTool {
   /** By distance, not order: the two leave the anchor at right angles, so a ray passes through both, and the
    *  straight arrow's grab volume answers a third of the way along the curve. */
   private pick(x: number, y: number): "pitch" | "angle" | null {
-    // The head too: the tube ends where it begins, and the point is what a hand goes for.
+    // The head too: the tube ends where the head begins, so without it the last tenth of the curve, the point a
+    // hand goes for, took no press.
     const parts = this.arc?.visible ? [this.arcGrab, this.arcHead].filter((o): o is THREE.Mesh => !!o) : [];
     const gizmo = this.gizmo;
     return this.viewport.probe(x, y, (rc): "pitch" | "angle" | null => {

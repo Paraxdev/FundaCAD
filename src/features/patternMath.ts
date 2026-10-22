@@ -5,7 +5,8 @@ import type { Axis3 } from "../types";
 
 /** 1 is legal mid-gesture, on the way to 2, but not to commit. */
 export const MIN_COUNT = 1;
-/** The gesture's ceiling, not a kernel limit: type a value in the field to go higher. */
+/** The gesture's ceiling, not a kernel limit: the kernel unions 400 copies but takes about a minute, and a count
+ *  reached by holding a key down is not one anyone meant. Type a value in the field to go higher. */
 export const MAX_DRAG_COUNT = 100;
 
 export function clampCount(n: number): number {

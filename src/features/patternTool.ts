@@ -1,5 +1,5 @@
-// Interactive Pattern, set up in the viewport. The copies are ghosts, not a rebuild: patternMath holds the arithmetic
-// the engine's builder.py applies too. Features mode repeats the faces `features` own instead of whole bodies.
+// Pattern set up in the viewport with ghost copies, not a rebuild; patternMath shares the engine's builder.py rule.
+// Features mode repeats the faces `features` own, not whole bodies. C moves a circular axis between origin and middle.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";

@@ -5,7 +5,8 @@ import type { Feature, Selector, TrackedFaceRecord, Vec3 } from "../types";
 import { edgeMatchSelectorFrom } from "../viewport/edgeMatch";
 import { trackedFace, withExtent } from "./holeFace";
 
-// Every feature field that can carry selectors, each `Selector | Selector[]`.
+// Every feature field that can carry selectors, each `Selector | Selector[]`: fillet/chamfer `edges`, press-pull and
+// deleteFace `face` (+ `upTo`), shell/offsetFace/thicken/draft `faces`, datumAxis `axisEdge`.
 const SELECTOR_FIELDS = ["edges", "face", "faces", "upTo", "axisEdge"] as const;
 type SelectorField = (typeof SELECTOR_FIELDS)[number];
 // Datum references nest their selectors inside these, at any depth.
