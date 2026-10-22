@@ -93,6 +93,41 @@ describe("face materials across a fillet", () => {
     expect(JSON.parse(again.store.toJSON()).faceMaterials).toEqual({ "body2#3": "m-brass" });
   });
 
+  it("names each one whose face a rebuild took, until the face comes back, and none from a reload", async () => {
+    const { store, box } = opened();
+    await store.rebuildNow();
+    expect(store.hiddenFaceMaterials()).toEqual([]);
+    store.setFacesMaterial([{ body: "body1", face: 3 }, { body: "body1", face: 2 }], "m-steel");
+    store.setFacesMaterial([{ body: "body1", face: 7 }, { body: "body2", face: 1 }], "m-brass");
+    box.result = reply("unstep");
+    await store.rebuildNow();
+    const lost = store.hiddenFaceMaterials();
+    expect(lost).toEqual([expect.any(String), expect.any(String)]);
+    expect(new Set(lost).size).toBe(2);
+    expect(entries(store)).toEqual({ "body1#4": "m-brass", "body2#1": "m-brass" });
+
+    const unstep = reply("unstep");
+    box.result = { ...unstep, bodies: unstep.bodies!.filter((b) => b.id !== "body2") };
+    await store.rebuildNow();
+    expect(store.hiddenFaceMaterials()).toEqual([...lost, expect.any(String)]);
+    box.result = reply("base");
+    await store.rebuildNow();
+    expect(store.hiddenFaceMaterials()).toEqual([]);
+    expect(entries(store)).toEqual({ "body1#3": "m-steel", "body1#2": "m-steel", "body1#7": "m-brass", "body2#1": "m-brass" });
+
+    box.result = reply("unstep");
+    await store.rebuildNow();
+    const again = opened(store.toJSON());
+    again.box.result = reply("unstep");
+    await again.store.rebuildNow();
+    expect(again.store.hiddenFaceMaterials()).toEqual([]);
+    expect(entries(again.store)).toEqual({ "body1#4": "m-brass", "body2#1": "m-brass" });
+    again.store.load(JSON.stringify(DOC));
+    await again.store.rebuildNow();
+    expect(again.store.hiddenFaceMaterials()).toEqual([]);
+    expect(entries(again.store)).toEqual({});
+  });
+
   it("a file from before prints keeps its indices on its first build and follows a fillet after it", async () => {
     const { store, box } = opened(JSON.stringify({ ...DOC, version: 10, faceMaterials: { "body1#0": "m-steel", "body1#8": "m-brass" } }));
     await store.rebuildNow();

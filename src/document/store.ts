@@ -300,6 +300,12 @@ class FaceRefOverlay extends Overlay<FaceRef> {
     this.memo = { result, rev: this.rev, on, owners };
     return this.memo;
   }
+  /** Refs found on a face earlier in this session that the build on screen has no face for. */
+  hidden(): string[] {
+    const on = this.resolution();
+    if (!on) return [];
+    return [...on.faces].filter(([id, faces]) => !faces.length && on.track.seen.has(id)).map(([id]) => id);
+  }
   override writeJSON(out: Record<string, unknown>) {
     if (!this.size) return;
     const { materials, prints } = savedFaceRefs(this.entries(), this.resolution(), this.built());
@@ -1996,6 +2002,11 @@ export class DocumentStore {
     let n = 0;
     for (const [, ref] of this.faceMaterial.entries()) if (ref.body === bodyId) n++;
     return n;
+  }
+
+  /** Ids of the face materials whose face the build on screen lost, kept to come back with it. */
+  hiddenFaceMaterials(): string[] {
+    return this.faceMaterial.hidden();
   }
 
   /** Assign a material to faces (null clears them). Batched and emitting once,
