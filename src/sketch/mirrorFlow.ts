@@ -224,8 +224,9 @@ export class MirrorFlow {
     const f = this.fields;
     if (!f) return;
     this.drawPreview();
-    const objects = countLabel(f.objects.length, "entity", "entities");
-    const want = f.active === "objects" ? "Objects · click what to mirror" : "Mirror line · click a line";
+    const objects = countLabel(f.objects.length, "object", "objects");
+    const want =
+      f.active === "objects" ? "Objects · click what to mirror, Shift adds more" : "Mirror line · click a line";
     this.host.prompt(this.refusal ?? `${want} · ${objects} · Enter · Esc`);
     this.host.showPanel({
       id: this.panelId,

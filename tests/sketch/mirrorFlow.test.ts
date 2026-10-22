@@ -78,7 +78,7 @@ describe("MirrorFlow start", () => {
     const p = r.panel()!;
     expect(p.active).toBe("line");
     expect(p.fields.map((f) => [f.key, f.value, f.filled])).toEqual([
-      ["objects", "2 entities", true],
+      ["objects", "2 objects", true],
       ["line", "Nothing picked", false],
     ]);
     expect(p.ready).toBe(false);
@@ -163,7 +163,7 @@ describe("MirrorFlow picking", () => {
     r.flow.begin();
     r.flow.click(ON.ax, false);
     expect([...r.selected]).toEqual(["c1"]);
-    expect(r.panel()!.fields[0]!.value).toBe("1 entity");
+    expect(r.panel()!.fields[0]!.value).toBe("1 object");
     expect(r.log.prompts.at(-1)).toBe(LINE_LEFT_OBJECTS);
   });
 
@@ -171,7 +171,7 @@ describe("MirrorFlow picking", () => {
     const r = rig(["c1"]);
     r.flow.begin();
     r.flow.click(ON.ax, false);
-    expect(r.panel()!.fields[0]!.value).toBe("1 entity");
+    expect(r.panel()!.fields[0]!.value).toBe("1 object");
     expect(r.log.prompts.at(-1)).not.toBe(LINE_LEFT_OBJECTS);
     expect(r.log.prompts.at(-1)).toContain("Mirror line");
   });
@@ -295,7 +295,7 @@ describe("MirrorFlow commit and cancel", () => {
     r.flow.begin();
     const p = r.panel()!;
     expect(p.id).not.toBe(firstId);
-    expect(p.fields.map((f) => f.value)).toEqual(["1 entity", "Nothing picked"]);
+    expect(p.fields.map((f) => f.value)).toEqual(["1 object", "Nothing picked"]);
     expect(r.log.previews.at(-1)).toEqual({ copies: [], line: null, hover: null });
   });
 

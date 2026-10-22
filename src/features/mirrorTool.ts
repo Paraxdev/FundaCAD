@@ -233,7 +233,9 @@ export class MirrorTool {
     const f = this.fields;
     const objects = countLabel(f.objects.length, "body", "bodies");
     const want =
-      f.active === "objects" ? "Objects · click a body to mirror" : "Mirror plane · click a plane or a flat face";
+      f.active === "objects"
+        ? "Objects · click a body to mirror, Shift adds more"
+        : "Mirror plane · click a plane or a flat face";
     setPrompt(`${refusal ? `${refusal} · ` : ""}${want} · ${objects} · Enter · Esc`);
     showMirrorPanel({
       id: this.panelId,

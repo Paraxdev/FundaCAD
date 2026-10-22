@@ -135,7 +135,7 @@ describe("sketch Mirror inside SketchMode", () => {
     const { s } = makeSketch(["l1"]);
     expect(s.mirrorFlow.running).toBe(true);
     expect(panel()!.active).toBe("line");
-    expect(values()).toEqual(["1 entity", "Nothing picked"]);
+    expect(values()).toEqual(["1 object", "Nothing picked"]);
   });
 
   it("cancel, as New and Open call it, closes the panel and ends the run", () => {
@@ -193,7 +193,7 @@ describe("sketch Mirror inside SketchMode", () => {
     key(s, "Backspace");
     expect(s.entities).toEqual(sketch());
     expect([...s.selected]).toEqual(["l1", "c1"]);
-    expect(values()).toEqual(["2 entities", "Nothing picked"]);
+    expect(values()).toEqual(["2 objects", "Nothing picked"]);
   });
 
   it("undo mid run ends it on Select with the annotations clickable again", () => {
