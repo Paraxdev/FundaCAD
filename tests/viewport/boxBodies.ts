@@ -40,8 +40,28 @@ export function boxReply(lumps: readonly Lump[]): RebuildResult {
   return { mesh: { positions, indices, faceIds }, edges, bbox: { min: box.min.toArray(), max: box.max.toArray() }, bodies };
 }
 
+// An open sheet of one face, a quad whose corners wind round its front, as a surface body is.
+export function withSheet(r: RebuildResult, body: string, corners: readonly THREE.Vector3[]): RebuildResult {
+  const base = r.mesh.positions.length / 3;
+  const face = r.mesh.faceIds.length ? Math.max(...r.mesh.faceIds) + 1 : 0;
+  const box = new THREE.Box3(new THREE.Vector3(...r.bbox.min), new THREE.Vector3(...r.bbox.max)).union(new THREE.Box3().setFromPoints([...corners]));
+  return {
+    ...r,
+    mesh: {
+      positions: [...r.mesh.positions, ...corners.flatMap((c) => c.toArray())],
+      indices: [...r.mesh.indices, base, base + 1, base + 2, base, base + 2, base + 3],
+      faceIds: [...r.mesh.faceIds, face, face],
+    },
+    bbox: { min: box.min.toArray(), max: box.max.toArray() },
+    bodies: [...(r.bodies ?? []), { id: body, name: body, faceStart: face, faceCount: 1 }],
+  };
+}
+
 export function boxView(lumps: readonly Lump[], w: number, h: number): ModelView {
-  const r = boxReply(lumps);
+  return replyView(boxReply(lumps), w, h);
+}
+
+export function replyView(r: RebuildResult, w: number, h: number): ModelView {
   const res = new THREE.Vector2(w, h);
   const bodies = r.bodies!.map((b) => buildBodyMesh(r, b, r.edges.filter((e) => e.body === b.id), res, undefined));
   return {
