@@ -9,21 +9,12 @@
 // say so is to cut the part in two, which changes the geometry to describe the
 // picture.
 //
-// HOW A FACE IS NAMED, and the honest limit of it. `bodyId#localFaceIndex`, the
-// face's position in its own body's face list. That is the same name the colours
-// inside an imported STEP travel under (document/faceColors.ts), so it is not a
-// new kind of promise, and it is stable for exactly as long as the body's face
-// list is: moving the part, changing a dimension it does not add faces to, or
-// reopening the file all keep it. Adding a fillet does NOT: the new faces
-// renumber the ones after them, and an assignment can land on a neighbour.
-//
-// That is a real limit and it is the reason this is display state rather than a
-// feature. Nothing downstream reads it, no geometry depends on it, and an
-// assignment that drifts is a face wearing the wrong finish, which is visible,
-// undoable in one gesture, and costs nothing else. Making it drift-proof means a
-// selector the kernel re-resolves on every rebuild, which is the machinery
-// fillets use, and it is a lot of machinery to spend on which of two greys a
-// face is.
+// HOW A FACE IS NAMED. `bodyId#localFaceIndex`, the face's position in its
+// body's face list in the build on screen, the same name an imported STEP's face
+// colours travel under (document/faceColors.ts). A fillet or a cut reorders that
+// list, so the store keeps each assignment as a ref that follows its face from
+// build to build (document/faceRefs.ts) and hands this module the keys it
+// resolved to.
 //
 // Pure: no store, no Vue, no renderer. What a key is, and how a set of
 // assignments plus a build result becomes the two maps the viewport wants.

@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import type { ResolvedEntity } from "./snap";
-import type { SketchConstraint } from "../types";
+import type { OffsetPair, SketchConstraint } from "../types";
 import { entitySegments, polygonPoints } from "./region";
 import { newEntityId } from "./id";
 import { arcCenterRadius } from "./arc";
@@ -362,7 +362,7 @@ export function signedOffsetAt(e: ResolvedEntity, p: THREE.Vector2): number | nu
  *  link that doesn't exist. */
 export type OffsetResult = {
   entities: ResolvedEntity[];
-  pairs: { src: string; cpy: string }[];
+  pairs: OffsetPair[];
   linked: boolean;
 };
 
@@ -378,7 +378,7 @@ export function offsetEntity(
   const e = ents[index];
   if (!e) return null;
   let copy: ResolvedEntity | null = null;
-  let pairs: { src: string; cpy: string }[] = [];
+  let pairs: OffsetPair[] = [];
   let linked = true;
   const id = newEntityId();
   if (e.type === "rectangle") {
@@ -490,7 +490,7 @@ type Member = { i: number; e: ChainE; from: THREE.Vector2; to: THREE.Vector2; cc
  *  centre plus the offset radius, and their endpoints ride on that circle. */
 type Off =
   | { kind: "line"; src: string; a: THREE.Vector2; b: THREE.Vector2; dir: THREE.Vector2 }
-  | { kind: "arc"; src: string; a: THREE.Vector2; b: THREE.Vector2; C: THREE.Vector2; R: number; ccw: boolean };
+  | { kind: "arc"; src: string; a: THREE.Vector2; b: THREE.Vector2; C: THREE.Vector2; R: number; ccw: boolean; flip: boolean };
 
 /** How far a miter may travel from the original corner, as a multiple of |dist|.
  *  Two nearly-collinear offset lines intersect arbitrarily far away, which used
@@ -609,6 +609,7 @@ export function offsetChain(
   // could offset the chain to either side depending on how the walk happened to
   // run. signedOffsetAt measures the cursor in offsetEntity's terms, and this is
   // what keeps the preview under the cursor.
+  const value = dist;
   const picked = path.find((m) => m.i === index);
   if (picked) {
     const backwards = picked.from.distanceTo(v(picked.e.x1, picked.e.y1)) > 1e-9;
@@ -627,13 +628,14 @@ export function offsetChain(
     }
     const g = arcGeom(m.e);
     if (!g) return null;
-    const R = g.R + (m.ccw ? -dist : dist);
+    const dR = m.ccw ? -dist : dist;
+    const R = g.R + dR;
     if (R < 1e-3) return null;
     const at = (p: THREE.Vector2) => {
       const a = Math.atan2(p.y - g.C.y, p.x - g.C.x);
       return v(g.C.x + Math.cos(a) * R, g.C.y + Math.sin(a) * R);
     };
-    return { kind: "arc", src: m.e.id, a: at(m.from), b: at(m.to), C: g.C, R, ccw: m.ccw };
+    return { kind: "arc", src: m.e.id, a: at(m.from), b: at(m.to), C: g.C, R, ccw: m.ccw, flip: dR !== value };
   };
 
   /** Move the shared corner of two adjacent offset members onto their
@@ -687,7 +689,7 @@ export function offsetChain(
     if (live.length < 1) return null;
   }
 
-  const pairs: { src: string; cpy: string }[] = [];
+  const pairs: OffsetPair[] = [];
   const copies: ResolvedEntity[] = [];
   for (const o of offs) {
     const srcEnt = ents.find((x) => x.id === o.src) ?? {};
@@ -699,7 +701,7 @@ export function offsetChain(
       const arc = arcFromEnds(o.C, o.R, o.a, o.b, o.ccw, srcEnt);
       if (!arc) continue; // swept to nothing
       copies.push(arc);
-      pairs.push({ src: o.src, cpy: arc.id });
+      pairs.push({ src: o.src, cpy: arc.id, ...(o.flip ? { flip: true } : {}) });
     }
   }
   if (!copies.length) return null;

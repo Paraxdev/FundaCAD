@@ -128,6 +128,25 @@ describe("the section cut in the document", () => {
     expect(store.sectionView).toBeNull();
   });
 
+  it("stays where it is through an undo and a redo of a replacing load, also one that brought a cut", () => {
+    const store = fresh();
+    const palette = [{ name: "Teal", color: "#2a9d8f" }];
+    const before = saved(store).palette;
+    store.setSectionView(structuredClone(CUT));
+    store.load(doc([box("a1", 3), box("a2", 4)], { sectionView: CUT_C, palette }), { replace: true });
+    expect(store.sectionView).toEqual(CUT_C);
+    store.undo();
+    expect(store.document.features.map((f) => f.id)).toEqual(["a1"]);
+    expect(saved(store).palette).toEqual(before);
+    expect(store.sectionView).toEqual(CUT_C);
+    store.setSectionView(null);
+    store.redo();
+    expect(store.document.features.map((f) => f.id)).toEqual(["a1", "a2"]);
+    expect(saved(store).palette).toEqual(palette);
+    expect(store.sectionView).toBeNull();
+    expect("sectionView" in saved(store)).toBe(false);
+  });
+
   it("leaves versions out of it: a cut is no change, and restoring a version keeps it", () => {
     const store = fresh();
     store.saveVersion("first");

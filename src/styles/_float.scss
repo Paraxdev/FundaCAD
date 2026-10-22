@@ -382,7 +382,10 @@
   text-align: left;
   font: inherit;
 }
-.rail-btn:hover {
+/* Outranks the generic button:hover and button.active (_layout.scss), whose
+   accent fill would otherwise paint a slab behind a lit tile and its pill. */
+.rail-btn:hover,
+.rail-btn.active {
   background: none;
   border-color: transparent;
 }

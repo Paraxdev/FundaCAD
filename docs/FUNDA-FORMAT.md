@@ -75,6 +75,14 @@ wrong type. These finish fields came with the filament materials:
 A field a reader does not know is kept as it is and written back on save, so a
 file from a newer version keeps its materials.
 
+`faceMaterials` maps `bodyId#localFaceIndex` to a material id, at the face
+numbering of the build the file was saved with. `facePrints` holds, under the
+same keys, a print of each face: `centroid`, `normal`, `area`, `surface`
+(`plane` or `curved`), `points` (up to 12 points inside the face, x y z flat)
+and `faces` (the body's face count). A fillet or a cut renumbers the faces, and
+the print finds each one again. A file without `facePrints` keeps its indices on
+its first build; an older reader ignores the prints and reads the indices.
+
 ## Binary (.fundab), format 2
 
 A `.fundab` file holds one FundaCAD document and the geometry it references. It is
