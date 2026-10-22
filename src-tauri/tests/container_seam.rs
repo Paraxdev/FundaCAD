@@ -1,13 +1,5 @@
-//! End-to-end check of the seam between the engine and the document container.
-//!
-//! The engine stores an import's geometry in the blob store, and the app's
-//! container (container.rs) packs that store into a saved file and unpacks it
-//! somewhere else. Each half has its own tests; this proves they compose: a
-//! blob the ENGINE wrote survives the app's container round trip into a store
-//! that has never seen it, and the engine rebuilds from it there. A mismatch in
-//! the hash, the filename convention or the directory the worker is told would
-//! slip through both halves and show up as "the geometry vanished" on a user's
-//! machine.
+//! The engine's blob store and the app's container compose: a blob the engine wrote survives a container round trip
+//! into a fresh store and the engine rebuilds from it there, which catches a hash, filename or directory mismatch.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -34,7 +26,6 @@ fn an_engine_blob_survives_the_container_and_rebuilds() {
     let blobs_a = dir.join("blobs_a"); // the authoring machine
     let blobs_b = dir.join("blobs_b"); // a machine that has never seen this file
 
-    // 1. The engine imports a real STEP assembly and stores its geometry.
     let store = BlobStore::open(&blobs_a).unwrap();
     let imported = import::import_geometry(&fixture("asm_nested.step"), "step", &store).unwrap();
     let hash = imported["geom"].as_str().expect("the import names its blob").to_owned();
@@ -45,7 +36,7 @@ fn an_engine_blob_survives_the_container_and_rebuilds() {
     let blob = blobs_a.join(format!("{hash}.bbrep"));
     assert!(blob.exists(), "the engine did not write {}", blob.display());
 
-    // 2. The app packages it, exactly as `container_save` does.
+    // Packaged exactly as `container_save` does.
     let doc = format!(
         r#"{{"version":5,"parameters":{{}},"features":[{{"id":"f1","type":"import","name":"Asm","format":"step","geom":"{hash}"}}]}}"#
     );
@@ -55,7 +46,6 @@ fn an_engine_blob_survives_the_container_and_rebuilds() {
     fundacad_lib::container::write_container(&dest, &doc, &map, &BTreeMap::new(), &[], "seam-test")
         .expect("write_container failed");
 
-    // 3. The app opens it somewhere that has never seen this geometry.
     let (got_doc, manifest) = fundacad_lib::container::read_container(&dest, &blobs_b, None).expect("read_container");
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&got_doc).unwrap(),
@@ -65,9 +55,7 @@ fn an_engine_blob_survives_the_container_and_rebuilds() {
     assert_eq!(manifest.blobs.len(), 1);
     assert!(blobs_b.join(format!("{hash}.bbrep")).exists());
 
-    // 4. The engine rebuilds from the EXTRACTED blob, with no other geometry
-    //    around. The builder reads the store the worker is told about, the
-    //    variable `engine::configure_env` sets.
+    // Rebuild from the extracted blob alone, through the variable `engine::configure_env` sets.
     std::env::set_var("FUNDACAD_BLOB_DIR", &blobs_b);
     let value: serde_json::Value = serde_json::from_str(&got_doc).unwrap();
     let typed: CadDocument = serde_json::from_value(value.clone()).unwrap();
