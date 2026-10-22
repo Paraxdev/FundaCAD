@@ -4,8 +4,8 @@
 use glam::{DVec2, DVec3};
 use serde_json::{json, Value};
 
-use crate::builder::{self, NoWatch, Rebuild};
-use crate::kernel;
+use fundacad_geom::builder::{self, NoWatch, Rebuild};
+use fundacad_geom::kernel;
 
 fn build(features: Value) -> Rebuild {
     let doc = json!({ "features": features });
