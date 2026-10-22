@@ -95,7 +95,7 @@ export const NON_REPEATABLE = new Set([
 
 /** Entity patterns word their own prompt as curves are picked and the pattern
  *  is placed, so a state change must not reset it to a line of this table. */
-export const SELF_PROMPTING = new Set<SketchTool>(["patternRect", "patternCircular"]);
+export const SELF_PROMPTING = new Set<SketchTool>(["patternRect", "patternCircular", "mirror"]);
 
 export const SKETCH_PROMPTS: Record<string, string> = {
   select: "Line (L) · Rectangle (R) · Circle (C) · Arc (A) · Trim (T)",
@@ -118,7 +118,7 @@ export const SKETCH_PROMPTS: Record<string, string> = {
   circle3: "Click three points on the circle · Esc",
   centerRectangle: "Click the centre, then a corner · Esc",
   rectangle3: "Click both ends of one edge, then the thickness · Esc",
-  mirror: "Select entities, then click the mirror line · Esc",
+  mirror: "Click what to mirror, then the mirror line · Enter · Esc",
   dimension: "Click a line or circle, type a value · Enter · Esc",
   trim: "Click a curve to trim to its crossings · Esc",
   fillet: "Click two lines, type a radius · Enter · Esc",
