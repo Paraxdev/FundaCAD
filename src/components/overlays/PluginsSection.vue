@@ -8,6 +8,7 @@ import { contributedSettings, onContribChange } from "../../plugins/contrib";
 import { removePluginSettings, settingMatches } from "../../plugins/settings";
 import { pluginFocus } from "../../plugins/settingsFocus";
 import PluginSettingsForm from "./PluginSettingsForm.vue";
+import Icon from "../shell/Icon.vue";
 import {
   inspectFile,
   inspectUrl,
@@ -261,6 +262,17 @@ async function drop(id: string, name: string) {
         <div class="plug-summary">{{ manifest ? manifest.summary : "" }}</div>
       </div>
       <div class="plug-controls">
+        <button
+          v-if="sectionsOf(rec.id).length"
+          class="btn plug-settings-btn"
+          :class="{ on: settingsOpen(rec.id) }"
+          :aria-expanded="settingsOpen(rec.id)"
+          data-plugin-settings-toggle
+          @click="toggleSettings(rec.id)"
+        >
+          <Icon name="settings" :size="16" />
+          Settings
+        </button>
         <span class="param-switch" :title="on[rec.id] === false ? 'Switched off' : 'Running'">
           <input
             :id="`prefs-plugin-${rec.id}`"
@@ -282,19 +294,9 @@ async function drop(id: string, name: string) {
       <button class="plug-link" @click="showing = showing === rec.id ? '' : rec.id">
         {{ showing === rec.id ? "Hide what it uses" : "What it uses" }}
       </button>
-      <template v-if="sectionsOf(rec.id).length">
-        <button
-          class="plug-link"
-          :aria-expanded="settingsOpen(rec.id)"
-          data-plugin-settings-toggle
-          @click="toggleSettings(rec.id)"
-        >
-          {{ settingsOpen(rec.id) ? "Hide settings" : "Settings" }}
-        </button>
-        <label class="plug-forget">
-          <input v-model="forget[rec.id]" type="checkbox" /> Remove forgets its settings
-        </label>
-      </template>
+      <label v-if="sectionsOf(rec.id).length" class="plug-forget">
+        <input v-model="forget[rec.id]" type="checkbox" /> Remove forgets its settings
+      </label>
     </div>
 
     <div v-if="settingsOpen(rec.id)" class="plug-settings" :data-plugin-settings="rec.id">
@@ -372,18 +374,20 @@ async function drop(id: string, name: string) {
         <div class="plug-name">{{ manifest ? manifest.name : id }}</div>
         <div class="plug-summary">{{ manifest ? manifest.summary : "" }}</div>
       </div>
+      <div class="plug-controls">
+        <button
+          class="btn plug-settings-btn"
+          :class="{ on: settingsOpen(id) }"
+          :aria-expanded="settingsOpen(id)"
+          data-plugin-settings-toggle
+          @click="toggleSettings(id)"
+        >
+          <Icon name="settings" :size="16" />
+          Settings
+        </button>
+      </div>
     </div>
-    <div class="plug-state">
-      Running from source, not installed.
-      <button
-        class="plug-link"
-        :aria-expanded="settingsOpen(id)"
-        data-plugin-settings-toggle
-        @click="toggleSettings(id)"
-      >
-        {{ settingsOpen(id) ? "Hide settings" : "Settings" }}
-      </button>
-    </div>
+    <div class="plug-state">Running from source, not installed.</div>
     <div v-if="settingsOpen(id)" class="plug-settings" :data-plugin-settings="id">
       <PluginSettingsForm
         v-for="s in sectionsOf(id)"
