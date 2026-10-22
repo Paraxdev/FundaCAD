@@ -1,11 +1,12 @@
-// Screen space glyphs (manipulators, markers) keep a constant pixel size until they would cover GLYPH_MODEL_FRACTION of
-// the model on screen, then shrink with it to a floor. In viewport/ because features/manipulator.ts imports it.
+// Screen space glyphs keep a constant pixel size (20mm origin arrows measured 1253 px on a fitted 6mm block) until they
+// cover GLYPH_MODEL_FRACTION of the model on screen, then shrink to a floor. In viewport/ as manipulator.ts imports it.
 
 /** Most of the model's on-screen size a glyph may occupy. */
 export const GLYPH_MODEL_FRACTION = 0.45;
 
 /** Multiplier on the constant pixel scale: 1 with nothing to measure against, never 0, which would collapse the grab
- *  volume too. `minScale` is the caller's: a handle must stay hittable, a marker only visible. */
+ *  volume too. `minScale` is the caller's floor, as a glyph too small to aim at is a lost control: a handle must stay
+ *  hittable, a marker only visible. */
 export function glyphScale(
   glyphPx: number,
   modelDiagonal: number | null,

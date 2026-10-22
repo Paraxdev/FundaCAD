@@ -1,6 +1,5 @@
-// Eased gestures. Each channel eases an amount toward what the input asked for
-// and hands back, every frame, an increment the navigator applies as an exact
-// transform about the channel's own fixed centre.
+// Eased gestures. Each channel eases an amount toward what the input asked for and hands back, every frame, an
+// increment the navigator applies as an exact transform about the channel's own fixed centre.
 
 import * as THREE from "three";
 import { Spring } from "./math";

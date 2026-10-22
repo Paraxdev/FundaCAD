@@ -4,7 +4,8 @@
 /** Just past the viewport's 3px click threshold, so a wobbling click never flashes a one pixel box. */
 export const AREA_DRAG_MIN_PX = 4;
 
-/** What a box takes. `window` = wholly inside; `crossing` = touched at all. */
+/** What a box takes. `window` = wholly inside; `crossing` = touched at all. The drag direction picks it, as Shift
+ *  already adds to the selection. */
 export type AreaMode = "window" | "crossing";
 
 /** `bodies` takes whole bodies whatever the viewport is picking; `all` follows the current selection mode. */

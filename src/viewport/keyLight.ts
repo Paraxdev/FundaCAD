@@ -1,6 +1,5 @@
-// Which way the key light shines from, as the two angles the render settings
-// store: azimuth round the up axis from +X and elevation above the ground, in
-// degrees. Z is up. Pure numbers so the settings can hold them without three.
+// Which way the key light shines from, as the render settings store it: azimuth round the up axis (Z) from +X and
+// elevation above the ground, in degrees. Pure numbers so the settings can hold them without three.
 
 export type Vec3 = [number, number, number];
 
