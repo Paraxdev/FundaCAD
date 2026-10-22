@@ -60,6 +60,10 @@ and takes about twenty minutes. The technical notes are in `docs/`.
 - [`docs/MCP.md`](docs/MCP.md), how an AI assistant connects and what it can do
 - [`docs/PLUGINS.md`](docs/PLUGINS.md), writing plugins and what they may reach
 
+## Reporting problems
+
+New issue offers two forms: a Problem report and an Idea. The Problem report asks what happened, the steps and your system, and has a box for the report the app copies for you. A security problem goes to the private reporting in [SECURITY.md](SECURITY.md).
+
 ## About the code / AI Disclosure
 
 Most of the code and tests here are written by AI. I decide what gets built, steer it, and use the app actively.
