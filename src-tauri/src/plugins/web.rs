@@ -1,14 +1,6 @@
-//! One HTTPS request to a host a plugin named in its manifest. The native half
-//! of the `network` grant, the way localnet.rs is the half of `network.local`.
-//!
-//! The inverse of localnet's rule: only public addresses, never a private,
-//! loopback or link-local one, so the engine port and the local network stay
-//! out of reach even for a name that resolves there. The request is pinned to
-//! the addresses that were checked, and redirects come back to the plugin
-//! instead of being followed, so it decides whether to sign the next hop.
-//!
-//! Headers carry the plugin's credentials, so nothing here logs them and no
-//! error string includes them.
+//! The native half of the `network` grant: one HTTPS request to a host the plugin's manifest names. Public addresses
+//! only, pinned to the checked ones, and redirects go back to the plugin to sign. Headers carry credentials, so nothing
+//! here logs them.
 
 use serde::{Deserialize, Serialize};
 use std::io::Write;
@@ -28,9 +20,8 @@ const MAX_TIMEOUT_MS: u64 = 900_000;
 const DOWNLOADS: &str = "downloads";
 const STALE: Duration = Duration::from_secs(24 * 3600);
 
-/// The manifests of shipped plugins that hold `network`. A plugin installed
-/// from a release bundle is checked against its consent record instead; this
-/// covers the ones the dev build runs from source. A test keeps it complete.
+/// Shipped plugins holding `network`, for the dev build that runs them from source; an installed bundle is checked
+/// against its consent record instead. A test keeps this list complete.
 const SHIPPED: &[&str] = &[include_str!("../../../plugins/FundaCAD.Onshape/manifest.json")];
 
 #[derive(Deserialize)]

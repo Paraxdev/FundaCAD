@@ -1,38 +1,15 @@
-//! Everything about a plugin bundle that is arithmetic on bytes and text: what
-//! an archive entry is allowed to be called, what a download URL is allowed to
-//! be, what its digest is, and whether what arrived is what the person was
-//! shown.
-//!
-//! Split from the commands next door so it can be compiled and run WITHOUT
-//! linking Tauri. Every function in here is a refusal that has to work, and the
-//! crate's own test binary cannot start on this machine (a webview DLL fault
-//! that has nothing to do with these lines), so the guards would otherwise ship
-//! having never once been executed. See scripts/check-plugin-guards.sh, which
-//! builds this file on its own and runs the tests below against it.
-//!
-//! It knows NOTHING about what a permission means. The vocabulary lives in
-//! src/plugins/manifest.ts, which is also what renders the screen the user
-//! answers; all this side does is compare the grants shown against the grants
-//! that arrived, as sets of opaque strings. Teaching both sides the meaning of
-//! a grant would give them two chances to disagree about it.
+//! Plugin bundle checks that are arithmetic on bytes and text: entry names, download URLs, digests and grants. Tauri
+//! free
+//! so scripts/check-plugin-guards.sh can run these tests on their own. Grants are opaque strings here, their meaning
+//! lives in src/plugins/manifest.ts.
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-/// Where this project's own plugins are published.
-///
-/// This is a PROVENANCE claim and not a security boundary, and the difference
-/// is worth being exact about because this constant used to be both. A bundle
-/// from here was published by whoever can publish this repository's releases; a
-/// bundle from anywhere else was not. That is all it says. What a plugin may
-/// then do is decided by the grants it declared and the sandbox its kind runs
-/// in, neither of which knows or cares where the bytes came from.
-///
-/// Keeping the two apart is what lets a third party publish a plugin at all,
-/// which was the point: an origin allowlist that only ever admits us is not a
-/// permission model, it is a distribution monopoly wearing one.
+/// A provenance label only, never a permission: what a plugin may do comes from its declared grants and its sandbox,
+/// which is what lets third parties publish plugins.
 pub const BUNDLE_PREFIX: &str = "https://github.com/Paraxdev/fundacad/releases/download/";
 
 /// Caps. A plugin is source, not a runtime: the interpreter it runs on is
@@ -41,9 +18,7 @@ pub const MAX_DOWNLOAD: usize = 32 * 1024 * 1024;
 const MAX_UNPACKED: u64 = 64 * 1024 * 1024;
 const MAX_ENTRIES: usize = 4000;
 
-/// The manifest fields that make up the promise, as sets to be compared. Kept
-/// deliberately dumb: strings in, strings out, no opinion about what any of
-/// them mean.
+/// The manifest fields that make up the promise, compared as plain string sets.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Consented {
     pub kind: String,
@@ -52,8 +27,6 @@ pub struct Consented {
     #[serde(default)]
     pub hosts: Vec<String>,
 }
-
-// ---------------------------------------------------------------------------
 
 fn hex_of(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len() * 2);
@@ -69,11 +42,8 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     hex_of(&h.finalize())
 }
 
-/// Whether a URL is one of this project's own release assets.
-///
-/// Used to LABEL a plugin, never to permit one. The prefix test works only
-/// because the prefix ends at a path separator: `https://github.com/Paraxdev/`
-/// as a prefix would also match `https://github.com/Paraxdev.evil.com/`.
+/// Labels a plugin, never permits one. The prefix test works only because the prefix ends at a path separator,
+/// without it `https://github.com/Paraxdev` would also match `https://github.com/Paraxdev.evil.com/`.
 pub fn is_official_url(url: &str) -> bool {
     if !url.starts_with(BUNDLE_PREFIX) {
         return false;
@@ -84,33 +54,15 @@ pub fn is_official_url(url: &str) -> bool {
     !tail.is_empty() && !tail.contains("..") && !tail.contains('@') && !tail.contains("://")
 }
 
-/// Whether a URL may be fetched at all.
-///
-/// A bundle URL arrives from the webview, so it is not trusted to be a URL we
-/// would have chosen. What is enforced here is the transport and the shape, not
-/// the host: HTTPS, a host that is a host, and nothing in the authority that
-/// makes the address mean something other than it reads.
-///
-/// HTTPS IS NOT NEGOTIABLE, and it is the one thing this function is really
-/// for. Over plain HTTP the bytes are whatever the network decided they should
-/// be, and every check downstream, the digest, the manifest comparison, the
-/// extractor, would then be run faithfully against an attacker's archive. It
-/// is also what makes the origin shown on the consent screen worth showing:
-/// with TLS the host in the URL is the host that answered.
-///
-/// WHAT IS NOT CHECKED, deliberately: whether the host is one we like. Private
-/// and loopback addresses are allowed, because a self-hosted plugin server on a
-/// company network is a legitimate thing to install from and this is a desktop
-/// app fetching on a person's own behalf, not a server following a link it was
-/// handed.
+/// HTTPS, a real host and nothing in the authority that changes its meaning. HTTPS is the point: without it every later
+/// check runs against whatever the network sent. Private and loopback hosts are allowed on purpose (self hosted
+/// servers).
 pub fn allowed_bundle_url(url: &str) -> bool {
     const SCHEME: &str = "https://";
     if !url.starts_with(SCHEME) {
         return false;
     }
-    // No spaces, no controls, anywhere. A URL containing either is one whose
-    // reading depends on which parser you ask, and the parser that matters is
-    // the one at the other end rather than this one.
+    // No spaces or controls: how such a URL reads depends on which parser you ask.
     if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
         return false;
     }
@@ -126,24 +78,14 @@ pub fn allowed_bundle_url(url: &str) -> bool {
     if authority.is_empty() {
         return false;
     }
-    // Userinfo, refused early and by name. REDUNDANT TODAY: `@` is not in the
-    // host character set below, so removing this line changes no answer, which
-    // was checked rather than assumed. It stays because the charset is the sort
-    // of thing that gets loosened one character at a time, for an underscore,
-    // for an IDN, and this is the refusal that must not be loosened with it.
+    // Userinfo, refused by name. Redundant while `@` is outside the host charset below, kept for when that charset gets
+    // loosened.
     if authority.contains('@') {
         return false;
     }
 
-    // Strip a port and check what is left is a plausible host. This is the
-    // check that actually stops `https://github.com@evil.example.com/x.zip`,
-    // which reads as GitHub to a person and resolves somewhere else: the
-    // consent screen shows this string, so a URL that reads as one host and
-    // reaches another is the thing that must not get past.
-    //
-    // Bracketed IPv6 is not accepted: it is not needed to reach a plugin
-    // server, and admitting a second address syntax here means a second one to
-    // be wrong about.
+    // This stops `https://github.com@evil.example.com/x.zip`, which the consent screen would show as GitHub. Bracketed
+    // IPv6 is refused: no plugin server needs it, and a second address syntax is a second one to get wrong.
     let host = match authority.rsplit_once(':') {
         Some((h, port)) => {
             if port.is_empty() || !port.chars().all(|c| c.is_ascii_digit()) {
@@ -159,18 +101,8 @@ pub fn allowed_bundle_url(url: &str) -> bool {
     host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
 }
 
-/// The path an archive entry may be written to, relative to the plugin
-/// directory, or None if it may not be written at all.
-///
-/// Zip entry names are attacker-controlled text. An entry called
-/// `../../../../fundacad-mcp.exe` is a perfectly legal archive and
-/// a complete compromise of the app, so this is the guard the whole extractor
-/// stands on. Written by hand rather than leaning on the zip crate's
-/// `enclosed_name()`, because it is the one function here whose failure is
-/// silent and total, and because it can then be stricter than that helper: no
-/// backslashes at all (a separator on Windows and an ordinary character
-/// elsewhere, which is exactly the sort of difference that ships a hole to one
-/// platform), and no name that is merely empty.
+/// Where an archive entry may be written, relative to the plugin dir. Entry names are attacker text, so the extractor
+/// stands on this; hand written to be stricter than zip's `enclosed_name()`: no backslash at all, no empty name.
 pub fn safe_entry(name: &str) -> Option<PathBuf> {
     if name.is_empty() || name.len() > 512 {
         return None;
@@ -205,11 +137,8 @@ pub fn safe_entry(name: &str) -> Option<PathBuf> {
     }
 }
 
-/// Whether what arrived is what was agreed to. Set equality, and the error says
-/// which way it differs: a bundle asking for LESS than advertised is still a
-/// refusal, because the screen the user answered was not a description of this
-/// bundle, and a chain that tolerates one direction of drift is a chain that
-/// has to be argued about every time it fires.
+/// Set equality of what arrived and what was agreed to. Asking for less is still a refusal, since the screen the user
+/// answered did not describe this bundle.
 pub fn grants_match(expect: &Consented, found: &Consented) -> Result<(), String> {
     if expect.kind != found.kind {
         return Err(format!("the bundle is a {} plugin, the one described was {}", found.kind, expect.kind));
@@ -235,11 +164,7 @@ pub fn grants_match(expect: &Consented, found: &Consented) -> Result<(), String>
     Ok(())
 }
 
-/// Unpack a zip into `dest`, refusing anything that tries to leave it.
-///
-/// Takes bytes rather than a path so that the whole of the interesting
-/// behaviour, every refusal included, can be driven from a test that builds its
-/// archive in memory and never touches the network.
+/// Takes bytes rather than a path so every refusal can be tested with an in memory archive.
 pub fn extract_into(bytes: &[u8], dest: &Path) -> Result<(), String> {
     let reader = std::io::Cursor::new(bytes);
     let mut zip = zip::ZipArchive::new(reader).map_err(|e| format!("not a zip: {e}"))?;
@@ -250,9 +175,7 @@ pub fn extract_into(bytes: &[u8], dest: &Path) -> Result<(), String> {
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| format!("unreadable entry: {e}"))?;
         let raw = entry.name().to_string();
-        // A symlink's "content" is its target, so an extractor that writes it as
-        // a file is harmless but an extractor that recreates it is a second way
-        // out of the directory. We do neither, and say so.
+        // Recreating a symlink would be a second way out of the directory, so symlinks are refused by name.
         if let Some(mode) = entry.unix_mode() {
             if mode & 0o170000 == 0o120000 {
                 return Err(format!("bundle holds a symbolic link: {raw}"));
@@ -287,16 +210,9 @@ pub fn now_secs() -> u64 {
 /// An id from the webview names a directory, so it gets the same treatment as
 /// an archive entry: a closed character set, not a sanitiser.
 pub fn safe_id(id: &str) -> Result<&str, String> {
-    // `Publisher.Name`, or a bare `Name`. Mirrors ID in src/plugins/manifest.ts.
-    //
-    // THE DOT IS WHY THIS IS WRITTEN OUT rather than left as one character
-    // class. An id is joined onto the plugins root to make a directory, so it
-    // is the only thing standing between a manifest and a path; allowing '.'
-    // anywhere would allow `..`, and allowing a leading '.' would allow an id
-    // to land on `.staging-x` or `.inspect-x`, which are real directories this
-    // module creates and deletes. Requiring every segment to START WITH A
-    // LETTER is what forbids all of those at once, and it is a rule about the
-    // shape of a name rather than a list of strings to remember.
+    // `Publisher.Name` or `Name`, mirroring ID in src/plugins/manifest.ts. Every segment must start with a letter,
+    // which
+    // forbids `..` and the dot directories this module creates, like `.staging-x`.
     fn segment(part: &str) -> bool {
         !part.is_empty()
             && part.len() <= 31
@@ -322,9 +238,7 @@ mod tests {
     use super::*;
     use std::io::Write;
 
-    /// An id becomes a directory name, so this is a path guard wearing the word
-    /// "id". Every refusal below is a path that would otherwise be joined onto
-    /// the plugins root.
+    /// An id becomes a directory under the plugins root, so every refusal below is a path guard.
     #[test]
     fn an_id_from_the_webview_cannot_name_a_directory_of_its_choosing() {
         for bad in [
@@ -356,9 +270,7 @@ mod tests {
             assert!(safe_id(bad).is_err(), "should not be a usable plugin id: {bad:?}");
         }
 
-        // The controls. Without these the test passes just as well against a
-        // safe_id that refuses everything, which would be a plugin system that
-        // installs nothing.
+        // The controls: a safe_id that refused everything would pass the loop above too.
         for good in [
             "FundaCAD.MCP",
             "FundaCAD.MultiColor",
@@ -417,9 +329,7 @@ mod tests {
         ] {
             assert!(safe_entry(hostile).is_none(), "an escaping entry was allowed: {hostile:?}");
         }
-        // The control. If the guard refused everything it would pass the loop
-        // above while making the feature impossible, and nothing else here
-        // would notice.
+        // The control: a guard that refused everything would pass the loop above.
         assert_eq!(safe_entry("manifest.json"), Some(PathBuf::from("manifest.json")));
         assert_eq!(safe_entry("pkg/sub/mod.py"), Some(PathBuf::from("pkg").join("sub").join("mod.py")));
         assert_eq!(safe_entry("./a.py"), Some(PathBuf::from("a.py")));
@@ -456,9 +366,7 @@ mod tests {
             assert!(!allowed_bundle_url(bad), "a bad URL was allowed: {bad}");
         }
 
-        // The control. Every refusal above is worth nothing unless ordinary
-        // URLs, ours, someone else's, a self-hosted one on a port, go
-        // through, which is the whole reason the host is no longer checked.
+        // The control: ordinary URLs, ours, someone else's, a self hosted one on a port, must go through.
         for good in [
             "https://github.com/Paraxdev/fundacad/releases/download/beta/plugin-mcp.zip",
             "https://github.com/someone/else/releases/download/v1/plugin-x.zip",

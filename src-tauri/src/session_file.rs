@@ -1,46 +1,15 @@
-//! Where a running FundaCAD says how to reach it.
-//!
-//! The engine's live session port and token live in this process's memory and nowhere else,
-//! which is why an outside program, the MCP server `fundacad-mcp`, a probe script,
-//! has never been able to join a session in progress. It could only start a
-//! second engine of its own and work on a copy. That is a safe default and a
-//! poor one for the thing an agent is most often asked to do, which is change
-//! the part the user is looking at.
-//!
-//! So a running app drops one small file naming its port and token, and removes
-//! it on the way out.
-//!
-//! ## The token is now on disk, and that is a real change
-//!
-//! Whoever holds the token can drive the geometry engine: rebuild, import,
-//! export. The file is written user-only (0600 on Unix; on Windows the per-user
-//! AppData tree is already ACLed to the account), so the reader has to be a
-//! process running as this user, which is a process that can already read the
-//! user's documents directly. The engine adds no reach beyond that.
-//!
-//! What it DOES add is reach into the document open in the app right now, and
-//! that is gated separately, in the frontend, by a setting the user can see and
-//! an indicator that says when someone is attached. Nothing here grants it.
-//!
-//! ## A file left behind by a crash means nothing
-//!
-//! The file is removed on a clean exit and NOT on a kill, so a stale one is
-//! ordinary. It is therefore a hint, never an assertion: a reader has to dial
-//! the port and present the token, and treat a refusal as "no app". Liveness is
-//! not stored, a pid can be recycled, and checking one portably is more code
-//! than the handshake the reader needs to do anyway.
+//! Where a running FundaCAD says how to reach its live engine, so `fundacad-mcp` can join the session on screen. The
+//! token file is user only, readable only by processes that could read the user's documents anyway, and joining the
+//! open document is gated in the frontend. A file left by a crash is a hint: a reader dials and treats a refusal as no
+//! app.
 
 use std::path::{Path, PathBuf};
 
-/// The file's name inside the app data directory. Read by `crates/fundacad-mcp/src/app_session.rs`,
-/// which resolves the same directory from the bundle identifier, change one and
-/// the other stops finding it, which is why both name the constant in a comment.
+/// Also read by `crates/fundacad-mcp/src/app_session.rs`, which resolves the same directory from the bundle identifier.
 pub const FILE_NAME: &str = "session.json";
 
-/// The document this app writes about itself. Serialised by hand: it is four
-/// fields and a dependency on serde_json for them would be the tail wagging the
-/// dog. `port` and `token` are what a client needs; `pid` is for a human reading
-/// the file while working out which of two windows they are looking at.
+/// Serialised by hand, four fields are not worth a serde_json dependency. `pid` is for a human telling two windows
+/// apart.
 #[derive(Debug, PartialEq, Eq)]
 pub struct SessionInfo {
     pub port: u16,
@@ -48,13 +17,7 @@ pub struct SessionInfo {
     pub pid: u32,
 }
 
-/// JSON for a session file. Pure, so the escaping can be asserted without a
-/// filesystem.
-///
-/// The token comes from `random_token`, which is hex, so it needs no escaping,
-/// but writing it unescaped would make this function correct only for as long as
-/// that stays true, and a token containing a quote would produce a file that
-/// silently parses into a DIFFERENT token. Escaped, always.
+/// Always escaped, though the token is hex today: a quote in a token would silently parse into a different token.
 pub fn to_json(info: &SessionInfo) -> String {
     format!("{{\"port\":{},\"token\":{},\"pid\":{}}}\n", info.port, json_string(&info.token), info.pid)
 }
@@ -79,12 +42,7 @@ fn json_string(s: &str) -> String {
     out
 }
 
-/// Write the session file under `dir`, creating the directory if needed.
-///
-/// Written to a temporary name and renamed into place, because a reader can
-/// arrive at any moment and a half-written file is a parse error the reader
-/// would have to distinguish from a missing one. Rename is atomic on both
-/// platforms we ship.
+/// Written to a temporary name and renamed, so a reader never sees a half written file.
 pub fn write_into(dir: &Path, info: &SessionInfo) -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
     let path = dir.join(FILE_NAME);
@@ -103,17 +61,14 @@ fn restrict(path: &Path) -> std::io::Result<()> {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
 }
 
-/// Windows: the file inherits the ACL of the per-user AppData directory, which
-/// already excludes other accounts. Nothing to tighten, and an explicit ACL edit
-/// here would be a way to get it wrong.
+/// Windows: the file inherits the per user AppData ACL, which already excludes other accounts, and an explicit ACL
+/// edit would only be a way to get it wrong.
 #[cfg(not(unix))]
 fn restrict(_path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Remove the file. Best-effort by design: this runs on the way out, and an app
-/// that refused to exit because it could not delete a hint file would be trading
-/// a small problem for a much larger one. A leftover is handled by the reader.
+/// Best effort: this runs on the way out, and a leftover is handled by the reader.
 pub fn remove_from(dir: &Path) {
     let _ = std::fs::remove_file(dir.join(FILE_NAME));
 }
@@ -128,10 +83,7 @@ mod tests {
         assert_eq!(to_json(&info), "{\"port\":8765,\"token\":\"abc123\",\"pid\":42}\n");
     }
 
-    /// A token is hex today. If it ever stops being, an unescaped quote would
-    /// end the string early and the file would parse into a token that is not
-    /// the one this app is using, every client refused, and the file looking
-    /// perfectly fine to a human reading it.
+    /// An unescaped quote would end the string early, and every client would be refused by a file that looks fine.
     #[test]
     fn a_token_with_json_syntax_in_it_survives_the_round_trip() {
         let nasty = "a\"b\\c\nd";

@@ -1,7 +1,6 @@
-//! A plugin's secrets, such as API keys, in the operating system's credential
-//! store: Credential Manager on Windows, the Keychain on macOS, the Secret
-//! Service on Linux. Never a file, never the document. When the store is not
-//! there the call fails and says so, it does not fall back to plain text.
+//! A plugin's secrets in the OS credential store (Credential Manager, Keychain, Secret Service), never a file. Without
+//! a
+//! store the call fails, it never falls back to plain text.
 
 use keyring::Entry;
 

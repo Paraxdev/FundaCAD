@@ -1,9 +1,5 @@
-//! A plugin's own small files: its settings, and the outputs it hands to
-//! another program. One directory per plugin, `app_data_dir()/plugin-data/<id>`.
-//!
-//! Kept apart from the installed bundle on purpose. Reinstalling or updating a
-//! plugin replaces its bundle directory whole, and a person's configuration must
-//! survive that.
+//! A plugin's own small files, settings and outputs, in `app_data_dir()/plugin-data/<id>`. Kept apart from the bundle,
+//! which a reinstall replaces whole, so configuration survives.
 
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
@@ -67,10 +63,8 @@ pub fn plugin_data_path(app: AppHandle, plugin: String, name: String) -> Result<
     Ok(path.to_string_lossy().into_owned())
 }
 
-/// Move a JSON file this plugin's code kept directly under the app data
-/// directory, from before plugins had a directory of their own, into its data
-/// directory as `name`. Does nothing when there is no such file or `name`
-/// already exists. Returns whether it moved anything.
+/// Moves a JSON file this plugin kept directly under the app data dir, from before plugins had their own directory, to
+/// `name`. Does nothing when there is none or `name` exists, and returns whether it moved.
 #[tauri::command]
 pub fn plugin_data_adopt(app: AppHandle, plugin: String, legacy: String, name: String) -> Result<bool, String> {
     let legacy = safe_name(&legacy)?;
