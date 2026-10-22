@@ -1,12 +1,5 @@
-// A small menu-bar with dropdown menus (File, …). Each menu is a button that
-// opens a popup of items; clicking an item runs it and closes the popup, and
-// clicking anywhere else closes it. Disabled items are skipped.
-//
-// The right-click context menu that used to live at the bottom of this file is
-// now stores/contextMenu.ts + components/overlays/ContextMenuHost.vue.
-// `contextMenu(x, y, items)` and `dismissContextMenu()` keep their signatures,
-// so browserTree, timeline, sketchMode, contextMenus.ts and the ViewCube are
-// bit-identical at their call sites.
+// Menu item types that app/menubarDef.ts builds against (rendered by components/shell/MenuBar.vue), and the shared
+// context menu entry points backed by stores/contextMenu.ts.
 import { useContextMenuStore, type CtxItem } from "../stores/contextMenu";
 import { useRadialMenuStore } from "../stores/radialMenu";
 import { RadialSession, pickRadial, type RadialTrigger } from "./radialMenu";
@@ -28,26 +21,15 @@ export interface MenuDef {
   items: MenuItem[];
 }
 
-// The Menubar class that used to live here is
-// components/shell/MenuBar.vue. MenuItem/MenuDef above are still the contract
-// app/menubarDef.ts builds against, and the disabled()/checked() thunks still
-// mean "re-evaluate every time the menu opens", the component does that with a
-// tick ref instead of walking the popup's DOM and poking attributes.
-
 export type { CtxItem };
 
-/** Close the open context menu (if any). For tool/mode exits, normal dismissal
- *  (outside pointerdown, Escape, item click) is handled by the menu itself. */
+/** For tool and mode exits; ordinary dismissal is handled by the menu itself. */
 export function dismissContextMenu(): void {
   useContextMenuStore().close();
 }
 
-/** Pop a right-click context menu at (x,y) with the given items. Closes on an
- *  outside pointerdown or Escape. One shared engine for every right-click
- *  surface (viewport, timeline, browser tree, sketch mode, ViewCube).
- *
- *  Opening replaces whatever was open, which is the same semantics the old
- *  module-level `activeClose` singleton had. */
+/** One shared engine for every right-click surface. Closes on an outside pointerdown or Escape, and opening replaces
+ *  whatever was open. */
 export function contextMenu(x: number, y: number, items: CtxItem[]): void {
   useContextMenuStore().show(x, y, items);
 }
@@ -62,9 +44,7 @@ export interface MenuAtOptions {
 
 let radial: RadialSession | null = null;
 
-/** Open a menu at a point, as a list or a ring. Opening replaces whatever menu
- *  was open. Items, icons, one level of children in the list and any depth in
- *  the ring. */
+/** Opening replaces whatever menu was open. One level of children in the list, any depth in the ring. */
 export function openMenuAt(x: number, y: number, items: CtxItem[], opts: MenuAtOptions = {}): void {
   radial?.close();
   if ((opts.style ?? "list") === "list") {

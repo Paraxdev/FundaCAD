@@ -1,34 +1,6 @@
-// One place where a typed measurement becomes a number.
-//
-// Every value surface in the app reads through here: the heads-up field on a
-// drag, the inspector rows, the sketch dimension boxes, the parameters table.
-// They used to each call parseFloat, which meant "2mm" parsed as 2 in whatever
-// the display unit happened to be, "1 inch" parsed as 1, and a fraction parsed
-// as its first digit. All three are silent: you get a number, just not yours.
-//
-// What can be typed:
-//
-//   2            a bare number, in whatever unit the field is showing
-//   2mm  2 mm    a unit, attached or spaced
-//   1inch  2.5"  spelled out, abbreviated, or as a symbol
-//   2'5"         compound, high unit first (feet and inches, metres and cm)
-//   1/2"         a fraction
-//   1 1/2 in     a mixed fraction
-//   2mm+3cm      arithmetic across units
-//   10x20        x reads as multiply, as it does on every drawing
-//   width/2      a document parameter
-//
-// The arithmetic, the parameter references and the functions are the document's
-// existing expression language (params/parse.ts), this does NOT reimplement
-// them. What it adds is the unit vocabulary and the notations that language has
-// no room for: symbols, compounds and fractions. Those are normalised into an
-// expression the existing parser already accepts, so there is one evaluator and
-// one set of precedence rules.
-//
-// No dimensional analysis. "2mm * 3mm" is 6, not 6mm², exactly as the
-// expression language has always behaved. Getting that right needs a type
-// system on values, which is a bigger change than this and is not needed to
-// stop the failures above.
+// Every value field reads typed measurements through here. Units, symbols, compounds (2'5"), fractions (1 1/2 in),
+// `x` as multiply and parameters are normalised into the expression language of params/parse.ts, the one evaluator.
+// No dimensional analysis: "2mm * 3mm" is 6.
 
 import { ExprError, parseExpr } from "../params/parse";
 import { evalNode } from "../params/eval";
@@ -108,27 +80,18 @@ export function commonUnits(dim: Dim): UnitDef[] {
 export interface Measured {
   /** canonical: mm for a length, degrees for an angle */
   value: number;
-  /** the unit the user actually WROTE, or null for a bare number. This is what
-   *  makes the field unit-agnostic: typing "1 inch" into a field showing mm
-   *  means inches, and the field can adopt that as its display unit. */
+  /** The unit the user wrote, or null for a bare number; typing "1 inch" into a mm field means inches. */
   unit: UnitDef | null;
-  /** true when the text was more than a literal, an expression, a compound or
-   *  a fraction. Surfaces show these with an fx marker rather than editing them
-   *  as a plain number. */
+  /** More than a literal (an expression, compound or fraction); surfaces mark these fx rather than edit them. */
   derived: boolean;
 }
-
-// --- normalising the notations the expression language has no room for -------
 
 const DIGIT = /[0-9]/;
 /** Symbols that are units on their own. Kept out of the identifier scanner
  *  because none of them is a letter. */
 const SYMBOLIC = new Set(['"', "'", "″", "′", "°", "µ"]);
 
-/** `1/2 in` and `1 1/2 in`, a fraction is a way of writing ONE value, not a
- *  term inside a formula, so it is only recognised when it is the whole input.
- *  Mixing it into arithmetic would make "1 1/2" ambiguous with "1 + 1/2" versus
- *  "1 * 1/2", and neither reading is obviously right. */
+/** A fraction is one value, recognised only as the whole input: inside arithmetic "1 1/2" is ambiguous. */
 const FRACTION = /^([+-]?)\s*(?:(\d+)\s+)?(\d+)\s*\/\s*(\d+)\s*(.*)$/;
 
 function matchUnitAt(src: string, i: number): { unit: UnitDef; end: number } | null {
@@ -144,7 +107,6 @@ function matchUnitAt(src: string, i: number): { unit: UnitDef; end: number } | n
   return null;
 }
 
-/** The number, if one starts at `i`. */
 function matchNumberAt(src: string, i: number): { value: number; end: number } | null {
   let j = i;
   while (j < src.length && DIGIT.test(src[j]!)) j++;
@@ -169,13 +131,8 @@ interface Normalised {
 const TYPOGRAPHIC_MINUS = /[\u2212\u2012\u2013\uFE63\uFF0D]/g;
 const DECIMAL_COMMA = /(\d),(\d+)/;
 
-/** What a keyboard or a paste may hand us that means the same thing as ASCII:
- *  the minus signs a word processor or a locale substitutes, and a decimal
- *  comma. A comma is read as a decimal point only when it is the lone comma in
- *  a value with no point and no brackets (so a function's argument list is
- *  never touched), and never when exactly three digits follow it, where "1,000"
- *  could as easily be a thousand as one. That case is refused rather than
- *  guessed. */
+/** Locale minus signs and a decimal comma become ASCII. A comma is a decimal point only when it is the lone comma with
+ *  no point or brackets, and never before exactly three digits, where "1,000" is refused rather than guessed. */
 export function canonicalTyping(raw: string): string {
   const src = raw.replace(TYPOGRAPHIC_MINUS, "-").trim();
   if (!src.includes(",") || src.includes("(") || src.includes(".")) return src;
@@ -188,10 +145,8 @@ export function canonicalTyping(raw: string): string {
   return src.replace(DECIMAL_COMMA, "$1.$2");
 }
 
-/** Rewrite the typed text into the expression language, folding every unit into
- *  the canonical one. A unit becomes a plain multiplication rather than a `mm`
- *  suffix so that feet, microns and thou, which the document language has no
- *  suffix for, travel the same path as millimetres. */
+/** A unit becomes a multiplication rather than a suffix, so feet, microns and thou, which the language has no suffix
+ *  for, travel the same path as mm. */
 export function normalise(raw: string): Normalised {
   const src = canonicalTyping(raw);
   if (!src) throw new ExprError("empty value");
@@ -244,10 +199,7 @@ export function normalise(raw: string): Normalised {
       let j = num.end;
       while (src[j] === " ") j++;
       const u = matchUnitAt(src, j);
-      // A bare number sitting straight after a unit group is not a compound and
-      // not arithmetic, `2"5` and `2mm 3` are half-finished thoughts. Joining
-      // them silently (as concatenation, or as an implied +) would commit a
-      // number the user never wrote.
+      // A bare number right after a unit group (`2"5`, `2mm 3`) is half finished; joining it would invent a number.
       if (!u && pendingJoin) throw new ExprError(`put an operator between "${out}" and "${src.slice(i)}"`);
       if (u) {
         // Two unit groups with nothing between them is a compound: 2'5", 1m 20cm.
@@ -277,9 +229,7 @@ export function normalise(raw: string): Normalised {
     derived = derived || !/[0-9.\s]/.test(ch);
     i++;
 
-    // A unit may also follow a closed group: "(2+3)mm", "(width+1)in". The
-    // language attaches suffixes to number literals only, so it becomes a
-    // multiplication, which is what a unit has been all along here.
+    // A unit after a closed group, "(2+3)mm": the language suffixes only literals, so it becomes a multiplication.
     if (ch === ")") {
       let j = i;
       while (src[j] === " ") j++;
@@ -297,20 +247,8 @@ export function normalise(raw: string): Normalised {
   return { expr: out, unit, derived };
 }
 
-// --- the public entry point --------------------------------------------------
-
-/** Read typed text as a measurement.
- *
- *  `displayUnit` is what a BARE number means, the unit the field is currently
- *  showing. A written unit is always preferred over it, which is the whole point: the
- *  field shows mm, you type "1 inch", you get an inch.
- *
- *  `params` is the document's parameter scope, so "width/2" resolves. Pass {}
- *  where there is none.
- *
- *  Throws ExprError with a message worth showing when the text is not a value.
- *  Returning null instead would put the caller in the position of inventing the
- *  reason, and "that is not a number" is never the interesting part. */
+/** `displayUnit` is what a bare number means, a written unit always wins. `params` resolves "width/2", {} for none.
+ *  Throws ExprError with a message worth showing, so callers do not invent the reason. */
 export function parseMeasure(raw: string, displayUnit: UnitDef | null, params: Record<string, number> = {}): Measured {
   const n = normalise(raw);
   const value = evalNode(parseExpr(n.expr), params);
@@ -321,9 +259,7 @@ export function parseMeasure(raw: string, displayUnit: UnitDef | null, params: R
   return { value: scaled, unit: n.unit, derived: n.derived };
 }
 
-/** Same, but null instead of throwing, for the live path, where every
- *  keystroke passes through a half-typed value and an exception per character
- *  is not an error, it is the user still typing. */
+/** Null instead of throwing, for the live path where a half-typed value is the user still typing. */
 export function tryParseMeasure(
   raw: string,
   displayUnit: UnitDef | null,
@@ -336,7 +272,6 @@ export function tryParseMeasure(
   }
 }
 
-/** The message to show for text that will not parse. */
 export function measureError(
   raw: string,
   displayUnit: UnitDef | null,
@@ -350,43 +285,18 @@ export function measureError(
   }
 }
 
-/** A plain number box read through the shared grammar, as a drop-in for
- *  `Number.parseFloat`: NaN for blank or unparseable text, so a caller's own
- *  fallback keeps working. Bare numbers are taken as they are, a written unit
- *  is folded into mm or degrees. */
+/** A drop-in for `Number.parseFloat`: NaN for blank or unparseable text, a written unit folded into mm or degrees. */
 export function fieldNumber(raw: string): number {
   return tryParseMeasure(raw, null)?.value ?? Number.NaN;
 }
 
-/** The inline message for a number box. Blank is not an error, the form has
- *  its own fallback for that. */
+/** Blank is not an error, the form has its own fallback. */
 export function fieldError(raw: string): string | null {
   return raw.trim() === "" ? null : measureError(raw, null);
 }
 
-// --- showing one back --------------------------------------------------------
-
-/** How many decimals a value is worth SHOWING at, and the one thing that earns
- *  more of them.
- *
- *  It used to be six, on the reasoning that six is past any tolerance the kernel
- *  works to and short of where doubles start lying. Both halves are true and the
- *  conclusion was still wrong: a field reading `24.098723` is not more precise
- *  than one reading `24.1`, it is less legible, and the four digits nobody asked
- *  for are the solver's arithmetic, not a decision anyone made.
- *
- *  So two places, and the exception that makes two places safe: a value that is
- *  ALREADY a three-decimal number is left alone. That is the signature of a
- *  number somebody chose, typed into a field, or landed on by a drag, which
- *  quantises to a nice 1/2/5 step (viewport/dragStep.ts) and so never arrives at
- *  1.375 by accident. Blunting those to 1.38 would be destroying information;
- *  blunting 24.098723 is discarding noise. Within float fuzz, because the length
- *  a sketch reports is usually a SUBTRACTION of two chosen numbers and
- *  10.123 - 3.377 does not land on 6.746 exactly.
- *
- *  Under 1mm two places is no longer rounding but erasure, 0.0523 would come
- *  back as 0.05 and 0.0012 as nothing at all, so below there the rule switches
- *  to three significant digits, still stopping at six places. */
+/** Two decimals, except a value already on three decimals within float fuzz (typed, or a drag's 1/2/5 step) is kept,
+ *  and under 1mm it switches to three significant digits, up to six places, so small values are not erased. */
 export function roundForDisplay(v: number): number {
   if (!Number.isFinite(v)) return v;
   const chosen = Math.round(v * 1e3) / 1e3;

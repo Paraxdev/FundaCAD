@@ -1,9 +1,5 @@
-// What Home sits on: the theme's paper (the default), the dimmed workspace, or a
-// picture of the user's own.
-//
-// The picture lives in IndexedDB in the desktop build too: the Tauri fs scope
-// reaches no app data folder and there is no asset protocol to show a file from
-// one, while WebView2 keeps IndexedDB in the app's own data folder anyway.
+// Home's backdrop: the theme's paper, the dimmed workspace, or the user's picture. The picture is in IndexedDB on
+// desktop too: the Tauri fs scope reaches no app data folder, and WebView2 keeps IndexedDB there anyway.
 
 import { readSetting } from "./storedSetting";
 
@@ -62,8 +58,6 @@ export function homeBackgroundClass(bg: HomeBackground, imageUrl: string | null)
 export function homeBackgroundStyle(bg: HomeBackground, imageUrl: string | null): Record<string, string> | undefined {
   return bg === "image" && imageUrl ? { "--home-image": `url("${imageUrl}")` } : undefined;
 }
-
-// ---- the picture ------------------------------------------------------------
 
 export interface HomeImageStore {
   get(): Promise<Blob | undefined>;
