@@ -2428,12 +2428,18 @@ export class DocumentStore {
   private stateSections(): Map<string, string> {
     const out = this.toObject(false) as unknown as Record<string, unknown>;
     for (const k of GEOMETRY_KEYS) delete out[k];
+    // In id order, since undo of a cleared id sets it back at the end of its map.
+    for (const { overlay: { jsonKey: k } } of this.overlays) {
+      const map = out[k] as Record<string, unknown> | undefined;
+      if (map) out[k] = Object.fromEntries(Object.entries(map).sort(([a], [b]) => (a < b ? -1 : 1)));
+    }
     out["bodyVisibility"] = [out["bodyVisibility"] ?? null, this.isolate];
     return new Map([...Object.entries(out).map(([k, v]) => [k, JSON.stringify(v)] as const), ...this.timelineSections()]);
   }
+  /** The suppress set sorted, since toggling a step off and back moves it to the end. */
   private timelineSections(): Map<string, string> {
     const out = new Map<string, string>();
-    if (this.suppressed.size) out.set("suppressed", JSON.stringify([...this.suppressed]));
+    if (this.suppressed.size) out.set("suppressed", JSON.stringify([...this.suppressed].sort()));
     if (this.rollback !== null) out.set("rollback", JSON.stringify(this.rollback));
     return out;
   }

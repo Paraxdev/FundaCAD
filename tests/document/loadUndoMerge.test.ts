@@ -189,6 +189,18 @@ const steps: [string, object, CadDocument, (s: DocumentStore) => void][] = [
     (s) => s.editAndAdd((d) => void ((d.features[0] as unknown as { length: number }).length = 8.25), [box("f5", 2.75)]),
   ],
   [
+    "a suppress toggled",
+    { features: [box("f1", 10.5), box("f2", 4.25, 2), box("f3", 6.5)], suppressed: ["f3", "f2"] },
+    { parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5), box("f4", 5.5)], suppressed: ["f9", "f4"] },
+    (s) => s.toggleSuppress("f9"),
+  ],
+  [
+    "a body colour cleared",
+    { features: [box("f1", 10.5)], bodyColors: { body2: 2, body1: 5 } },
+    { parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5)], bodyColors: { body3: 1, body2: 4 } },
+    (s) => s.setBodyColorSlot("body3", null),
+  ],
+  [
     "an isolate",
     { features: [box("f1", 10.5), box("f2", 4.25, 2)], bodyVisibility: { body3: false } },
     { parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5)] },
