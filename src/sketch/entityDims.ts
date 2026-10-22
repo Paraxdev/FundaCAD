@@ -503,7 +503,7 @@ export function asRound(e: ResolvedEntity): { x: number; y: number; r: number } 
 /** a circle/arc reduced to the circle its rim lies on */
 export interface Round { x: number; y: number; r: number }
 
-const RIM_EPS = 1e-9;
+export const RIM_EPS = 1e-9;
 
 /** The SIGNED edge-to-edge clearance planegcs's `c2cdistance` measures, verified
  *  against the installed wasm:
