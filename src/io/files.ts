@@ -808,18 +808,20 @@ async function importWith(
   read: (onStarted: (id: string) => void, unit?: ImportUnit) => ReturnType<GeometryBackend["importGeometry"]>,
   opts: { unit?: ImportUnit | undefined; source?: string; retryable?: boolean; opening?: boolean } = {},
 ) {
-  let unit = opts.unit;
-  if (asksForUnit(fmt) && !unit) {
-    const picked = await askImportUnit(fmt);
-    if (!picked) return;
-    unit = picked;
+  // Opening is not blocked while a file is read, and a document opened meanwhile must not receive the import.
+  let opened = false;
+  const offOpen = store.onOpen(() => (opened = true));
+  const res = await (async () => {
+    const unit = opts.unit ?? (asksForUnit(fmt) ? await askImportUnit(fmt) : undefined);
+    if (unit === null) return null;
+    // runBusy makes the import visible and stoppable; onStarted hands back the request id so Cancel targets it.
+    return store.runBusy(`Importing ${fileName(path)}`, (onStarted) => read(onStarted, unit), { holdHistory: true });
+  })().finally(offOpen);
+  if (!res) return;
+  if (opened && res.ok) {
+    await importDropped(path);
+    return;
   }
-  // runBusy makes the import visible and stoppable; onStarted hands back the request id so Cancel targets it.
-  const res = await store.runBusy(
-    `Importing ${path.split(/[\\/]/).pop() ?? "file"}`,
-    (onStarted) => read(onStarted, unit),
-    { holdHistory: true },
-  );
   if (!res.ok) {
     if (res.cancelled) {
       // Cancelled: say nothing and add nothing to the document. The path stays in session state only, since a
@@ -868,6 +870,14 @@ async function importWith(
   // listener must rebuild before it finds the feature's bodies, or the import would report finished too early.
   if (res.color === undefined) return;
   await announceImportedBody(id, res.color);
+}
+
+const fileName = (path: string) => path.split(/[\\/]/).pop() ?? "file";
+
+/** Says an import was left out because another document was opened before it landed. */
+export async function importDropped(path: string) {
+  const { toast } = await import("../ui/toast");
+  toast(`${fileName(path)} was not imported, another document was opened while it was read.`, { kind: "warning" });
 }
 
 const importSource = (f: Feature) =>
