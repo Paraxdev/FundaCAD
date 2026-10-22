@@ -1,5 +1,4 @@
-// Resolve a sketch feature's entities (whose numeric fields may be parameter
-// names) into plain-number entities for rendering/snapping/region detection.
+// Sketch entities whose numeric fields may be parameter names, resolved to plain numbers.
 
 import type { Feature, Num, Params, SketchEntity } from "../types";
 import { dimPlaceOf } from "../types";
@@ -16,20 +15,15 @@ export function resolveNum(x: Num, params: Params): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-/** Resolve ONLY the sketch's real (persisted) entities, no pattern expansion.
- *  Use this wherever the result feeds back into edits/persistence (e.g. the
- *  sketch-editor session); see resolveEntities for the render/detect variant
- *  that also includes derived pattern copies. */
+/** No pattern expansion: use this wherever the result feeds back into edits or persistence. */
 export function resolveRealEntities(sketch: Extract<Feature, { type: "sketch" }>, params: Params): ResolvedEntity[] {
-  // reserve every saved id first so generated ids for any id-less entities
-  // can't collide with persisted ones (or with later-drawn geometry)
+  // Reserve every saved id first so generated ids cannot collide with persisted or later-drawn ones.
   for (const e of sketch.entities) noteEntityId(e.id);
 
   const out: ResolvedEntity[] = [];
   for (const e of sketch.entities) {
     const c = e.construction ? { construction: true } : {};
-    // badge label placement: plain numbers already, so it rides along unresolved
-    // (omitted when absent, byte stability, like every persisted optional)
+    // Plain numbers already, omitted when absent for byte stability like every persisted optional.
     const place = dimPlaceOf(e);
     const dp = place ? { dimPlace: place } : {};
     const id = e.id ?? newEntityId();
@@ -143,8 +137,7 @@ export function resolveRealEntities(sketch: Extract<Feature, { type: "sketch" }>
         ...dp,
       });
     } else if (e.type === "projected") {
-      // structural pass-through: the cached curve is plain numbers (no Num),
-      // and source/stale never resolve, they identify, not measure
+      // The cached curve is plain numbers, and source and stale identify rather than measure.
       out.push({
         type: "projected",
         id,
@@ -158,13 +151,8 @@ export function resolveRealEntities(sketch: Extract<Feature, { type: "sketch" }>
   return out;
 }
 
-/** Resolve a sketch's real entities AND every pattern's derived copies, in one
- *  flat array, for callers that only render/inspect (never persist) the
- *  result: committed-sketch overlay rendering, region detection for those
- *  sketches, and the per-entity dimension list under a sketch. The copies are
- *  derived here, never stored as real entities, do NOT feed this back into
- *  `sketch.entities` (see resolveRealEntities for the editable, persist-safe
- *  subset; that's what the sketch-editor session uses). */
+/** Real entities plus derived pattern copies, for render and inspect only: never feed this back into
+ *  `sketch.entities`, the copies are not stored. */
 export function resolveEntities(sketch: Extract<Feature, { type: "sketch" }>, params: Params): ResolvedEntity[] {
   const out = resolveRealEntities(sketch, params);
   if (sketch.patterns?.length) {
@@ -174,7 +162,6 @@ export function resolveEntities(sketch: Extract<Feature, { type: "sketch" }>, pa
   return out;
 }
 
-/** serialize a resolved (numeric) entity back to a document SketchEntity */
 export function toSketchEntity(e: ResolvedEntity): SketchEntity {
   const c = e.construction ? { construction: true } : {};
   const place = dimPlaceOf(e);
