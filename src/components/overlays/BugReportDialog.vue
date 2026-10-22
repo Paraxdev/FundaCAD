@@ -46,7 +46,7 @@ const preview = computed(() =>
       : `render pipeline: no faults, ${pipeline.length} lines attached`,
     ...(logTail.value === null
       ? []
-      : [`+ app log, the last ${Math.ceil(logTail.value.length / 1024)} KB, user names hidden (only if checked)`]),
+      : [`+ app log, last ${Math.ceil(logTail.value.length / 1024)} KB, user names hidden (if checked)`]),
     `+ current document (only if checked)`,
   ].join("\n"),
 );
