@@ -10,7 +10,7 @@ function viewOf(over: Partial<MirrorPanelView> = {}): MirrorPanelView {
   return {
     id: 4,
     fields: [
-      { key: "objects", label: "Objects", icon: "select-all", value: "3 entities", filled: true },
+      { key: "objects", label: "Objects", icon: "select-all", value: "3 objects", filled: true },
       { key: "line", label: "Mirror line", icon: "line", value: "Nothing picked", filled: false },
     ],
     active: "line",
@@ -39,7 +39,7 @@ describe("MirrorToolPanel", () => {
     expect(rows.map((r) => r.dataset.field)).toEqual(["objects", "line"]);
     expect(rows.map((r) => r.classList.contains("active"))).toEqual([false, true]);
     expect(rows.map((r) => r.querySelector(".icon-btn")!.getAttribute("aria-pressed"))).toEqual(["false", "true"]);
-    expect(rows.map((r) => r.querySelector(".mirror-field-v")!.textContent)).toEqual(["3 entities", "Nothing picked"]);
+    expect(rows.map((r) => r.querySelector(".mirror-field-v")!.textContent)).toEqual(["3 objects", "Nothing picked"]);
   });
 
   it("enables a clear button only on a filled field and passes its key", async () => {
@@ -50,13 +50,22 @@ describe("MirrorToolPanel", () => {
     clears[0]!.click();
     expect(v.onClear).toHaveBeenCalledTimes(1);
     expect(v.onClear).toHaveBeenCalledWith("objects");
+    expect(v.onActivate).not.toHaveBeenCalled();
   });
 
   it("makes a field active from its toggle", () => {
     const v = viewOf();
     mountView(v);
     $(".mirror-field .icon-btn")[0]!.click();
-    expect(v.onActivate).toHaveBeenCalledWith("objects");
+    expect(vi.mocked(v.onActivate).mock.calls).toEqual([["objects"]]);
+  });
+
+  it("makes a field active from anywhere on its row", () => {
+    const v = viewOf();
+    mountView(v);
+    $(".mirror-field .mirror-field-k")[0]!.click();
+    $(".mirror-field .mirror-field-v")[1]!.click();
+    expect(vi.mocked(v.onActivate).mock.calls).toEqual([["objects"], ["line"]]);
   });
 
   it("holds the Mirror button until both fields are filled", () => {
@@ -64,10 +73,22 @@ describe("MirrorToolPanel", () => {
     const w = mountView(waiting);
     const primary = () => $(".mirror-actions .btn-primary")[0] as HTMLButtonElement;
     expect(primary().disabled).toBe(true);
+    expect(primary().title).toBe("Pick mirror line first");
     w.unmount();
+    const [objects, line] = viewOf().fields;
+    const empty = viewOf({
+      fields: [
+        { ...objects, value: "Nothing picked", filled: false },
+        { ...line, value: "Nothing picked", filled: false },
+      ],
+    });
+    const e = mountView(empty);
+    expect(primary().title).toBe("Pick objects and mirror line first");
+    e.unmount();
     const ready = viewOf({ ready: true });
     mountView(ready);
     expect(primary().disabled).toBe(false);
+    expect(primary().hasAttribute("title")).toBe(false);
     primary().click();
     expect(ready.onCommit).toHaveBeenCalledTimes(1);
     ($(".mirror-actions .btn:not(.btn-primary)")[0] as HTMLButtonElement).click();
