@@ -1,36 +1,15 @@
-// What a saved document is called on disk.
-//
-// The app has been called three things. It saved `.sindri`, then `.neocad`, and
-// it saves `.funda` now, and it opens all three, permanently. That asymmetry is
-// the whole design: an extension is not a brand decision once files exist,
-// because every `.sindri` and every `.neocad` already on someone's disk or in
-// someone's repository has to keep opening, and there is no upgrade step that
-// can reach them. Reading an old name costs one array entry; refusing it costs
-// the user their work.
-//
-// A LIST rather than a second constant, because there is now more than one past
-// name and there will be more than two if this happens again. The order is
-// newest first, which is the order a reader wants and the order the strip regex
-// wants (a longer name that ends in a shorter one would otherwise strip badly).
-//
-// Nothing rewrites an existing file's name. Opening a `.neocad` and saving over
-// it keeps the `.neocad`; only Save As offers the new name. Silently renaming
-// what someone opened would break their own links to it.
-//
-// Kept apart from files.ts so the Rust side has one obvious counterpart to stay
-// in step with, src-tauri/src/lib.rs gates the double-click open path on the
-// same names, and a mismatch there means an association that opens a blank
-// window rather than an error.
+// What a saved document is called on disk. Past names (.sindri, .neocad) open forever since files on disk cannot be
+// upgraded, and nothing renames an opened file; only Save As offers the new name. Keep in step with
+// src-tauri/src/lib.rs, which gates double-click open on the same names (a mismatch opens a blank window).
 
 /** The extension new documents are saved as: readable JSON. */
 export const DOC_EXT = "funda";
 
-/** The compact binary document. Rust picks the
- *  format from this extension when saving (src-tauri/src/json_doc.rs); opening
- *  reads the format from the bytes, so a misnamed file still opens. */
+/** The compact binary document. Rust picks the save format from this extension (src-tauri/src/json_doc.rs);
+ *  opening reads the format from the bytes, so a misnamed file still opens. */
 export const BINARY_DOC_EXT = "fundab";
 
-/** The extensions documents were saved as before, newest first. Read forever. */
+/** The extensions documents were saved as before, newest first, the order the strip regex needs. Read forever. */
 export const LEGACY_DOC_EXTS: readonly string[] = ["neocad", "sindri"];
 
 /** Every extension that names one of our documents, `json` included: a pre-v5
@@ -43,12 +22,7 @@ export function isDocumentExt(ext: string | undefined | null): boolean {
   return typeof ext === "string" && DOC_EXTS.includes(ext.toLowerCase());
 }
 
-/** A file name with our extension removed, whichever one it carries.
- *
- *  Used to derive a default name for an export, so it has to strip every past
- *  extension too: a part opened from `bracket.neocad` should export as
- *  `bracket.stl`, not `bracket.neocad.stl`.
- */
+/** A file name with any of our extensions removed, past ones too, so `bracket.neocad` exports as `bracket.stl`. */
 export function stripDocumentExt(name: string): string {
   const alts = [BINARY_DOC_EXT, DOC_EXT, ...LEGACY_DOC_EXTS].join("|");
   return name.replace(new RegExp(`\\.(${alts})$`, "i"), "");

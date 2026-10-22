@@ -1,6 +1,5 @@
-// The app's side of inserting and linking FundaCAD documents: the file dialog,
-// reading a document off disk, and where the intermediate STEP is written.
-// io/fundaInsert.ts is the part that does not need the native shell.
+// The native side of inserting and linking FundaCAD documents: the dialog, reading off disk, the temp STEP path.
+// io/fundaInsert.ts holds the part that needs no native shell.
 
 import type { DocumentStore } from "../document/store";
 import type { GeometryBackend } from "../geometry/client";
