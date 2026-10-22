@@ -182,12 +182,19 @@ export async function solveSketch(input: SolveInput): Promise<SolveResult> {
     prims.push({ id: l.id, type: "line", p1_id: l.p1, p2_id: l.p2 });
   for (const c of input.circles)
     prims.push({ id: c.id, type: "circle", c_id: c.center, radius: c.radius });
+  const fixedIds = new Set(input.points.filter((p) => p.fixed).map((p) => p.id));
   for (const a of input.arcs ?? []) {
     prims.push({
       id: a.id, type: "arc", c_id: a.center, start_id: a.start, end_id: a.end,
       radius: a.radius, start_angle: a.startAngle, end_angle: a.endAngle,
     });
-    prims.push({ id: `${a.id}_rules`, type: "arc_rules", a_id: a.id });
+    // With all three points fixed, arc_rules puts 4 equations on the arc's 3 own params, which planegcs
+    // reports as redundant, and as a conflict once user geometry is tied to the arc, so pin the params instead.
+    if (fixedIds.has(a.center) && fixedIds.has(a.start) && fixedIds.has(a.end)) {
+      const pins = { start_angle: a.startAngle, end_angle: a.endAngle, radius: a.radius };
+      for (const [prop, value] of Object.entries(pins))
+        prims.push({ id: `${a.id}~${prop}`, type: "difference", param1: 0, param2: { o_id: a.id, prop }, difference: value });
+    } else prims.push({ id: `${a.id}_rules`, type: "arc_rules", a_id: a.id });
   }
   for (const c of input.constraints) prims.push(toGcsConstraint(c));
   if (input.drag) {
