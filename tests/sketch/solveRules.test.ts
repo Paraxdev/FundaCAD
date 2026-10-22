@@ -92,6 +92,10 @@ describe("solveKeepingAxes", () => {
     const v = r.entities[1] as Extract<ResolvedEntity, { type: "line" }>;
     expect([r.ok, v.x2 - v.x1, v.y2]).toEqual([true, expect.closeTo(0, 9), expect.closeTo(58, 9)]);
   });
+  it("holds no axis on a slanted leg drawn leftwards", async () => {
+    expect(await solveKeepingAxes([foot, line("v", 110, 50, 104, 58)], [...fix("h", 0), { type: "distance", line: "h", value: 14 }]))
+      .toEqual({ entities: near([line("h", 100, 50, 114, 50), line("v", 114, 50, 104, 58)]), dof: 3, ok: true, conflicts: [], overDefined: [] });
+  });
   it("falls back to the plain solve when held axes would conflict", async () => {
     const cons: SketchConstraint[] = [...fix("h", 0), { type: "angle", l1: "h", l2: "v", value: 80 }];
     expect(await solveKeepingAxes([foot, leg], cons)).toEqual(await compileAndSolve([foot, leg], cons));
@@ -121,6 +125,11 @@ describe("merged ends", () => {
   it("snaps a spline end coincident onto a line through its last point", async () => {
     const r = await compileAndSolve([spline, line("b", 118, 49, 124, 57)], [...fix("b", 0, 1), { type: "coincident", e1: "s", p1: 1, e2: "b", p2: 0 }]);
     expect(r.entities).toEqual(near([{ ...spline, points: [{ x: 100, y: 50 }, { x: 105, y: 56 }, { x: 118, y: 49 }] }, line("b", 118, 49, 124, 57)]));
+  });
+  it("pulls a line end coincident onto the last sample of a projected poly", async () => {
+    const poly = { type: "projected", id: "P", source: { kind: "sketchCurve", sketch: "s0", entity: "e0" }, curve: { kind: "poly", pts: [[100, 50], [104, 53], [110, 51]] } } as ResolvedEntity;
+    const r = await compileAndSolve([poly, line("b", 112, 56, 120, 60)], [...fix("b", 1), { type: "coincident", e1: "b", p1: 0, e2: "P", p2: 1 }]);
+    expect(r).toEqual(near({ entities: [poly, line("b", 110, 51, 120, 60)], dof: 0, ok: true, conflicts: [], overDefined: [] }));
   });
   it("merges points into one 0.001 bucket", () => {
     expect([coincKey(100.4996, 50.0004), coincKey(100.5004, 49.9996), coincKey(100.5006, 50)]).toEqual(["100500,50000", "100500,50000", "100501,50000"]);
