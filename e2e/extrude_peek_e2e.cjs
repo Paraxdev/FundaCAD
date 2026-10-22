@@ -124,7 +124,7 @@ const check = (name, ok, detail) => {
   const during = JSON.parse(await looks());
   const inCut = during.find((b) => b.id === cyl).mats[0];
   check("the body the cut goes into is see-through", inCut.transparent && inCut.opacity < 1 && !inCut.depthWrite, JSON.stringify(inCut));
-  check("its finish is off while ghosted, like x-ray", inCut.clearcoat === 0);
+  check("its finish is off while ghosted, like x-ray", (inCut.clearcoat ?? 0) === 0);
   check("bodies the cut does not reach are untouched",
     JSON.stringify(during.filter((b) => b.id !== cyl)) === JSON.stringify(JSON.parse(before).filter((b) => b.id !== cyl)));
   check("the hidden body stays hidden", during.find((b) => b.id === hidden).visible === false);
@@ -188,8 +188,20 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(400);
   await page.keyboard.type("-10");
   await page.waitForTimeout(800);
-  check("press/pull pushing in ghosts the body", (await opacityOf(cyl)) < 1);
+  check("an auto push shows the pushed body itself, so nothing ghosts", (await opacityOf(cyl)) === 1);
+  // Auto, Join, Cut: only an explicit Cut previews inside the body.
+  const toggle = await page.$(".dim-input .dim-toggle");
+  for (let i = 0; i < 2 && toggle; i++) {
+    await toggle.dispatchEvent("pointerdown");
+    await page.waitForTimeout(300);
+  }
+  await page.waitForTimeout(800);
+  check("press/pull Cut pushing in ghosts the body", (await opacityOf(cyl)) < 1);
   await shot("5_presspull_push");
+  for (let i = 0; i < 3 && toggle; i++) {
+    await toggle.dispatchEvent("pointerdown");
+    await page.waitForTimeout(300);
+  }
   await page.keyboard.press("Control+a");
   await page.keyboard.type("10");
   await page.waitForTimeout(800);
