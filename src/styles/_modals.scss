@@ -749,20 +749,17 @@
 }
 
 .bug-report-card {
-  width: 440px;
+  width: 520px;
   max-width: calc(100vw - 32px);
+  max-height: 88vh;
+  overflow: auto;
 }
 .bug-report-card .bug-desc {
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
   margin: var(--s-3) 0;
-  background: var(--panel-1, #161a20);
-  color: inherit;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
-  padding: var(--s-2) var(--s-3);
-  font: inherit;
+  font-size: 12px;
 }
 .bug-report-card .bug-check {
   display: block;
@@ -775,12 +772,50 @@
   font-size: 11.5px;
 }
 .bug-report-card .bug-preview pre {
-  max-height: 140px;
+  max-height: 220px;
   overflow: auto;
-  background: rgba(0, 0, 0, 0.25);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
   border-radius: var(--r-sm);
   padding: var(--s-2) var(--s-3);
   white-space: pre-wrap;
+}
+.bug-report-card .bug-shot-row,
+.bug-report-card .bug-again {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin: var(--s-2) 0;
+  font-size: 12px;
+}
+.bug-report-card .bug-shot-saved {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin: var(--s-1) 0 var(--s-2);
+}
+.bug-report-card .bug-shot-saved img {
+  width: 96px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.bug-report-card .bug-note,
+.bug-report-card .bug-shot-saved,
+.bug-report-card .bug-again {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.bug-report-card .bug-note {
+  margin-top: var(--s-2);
+  line-height: 1.45;
+}
+.bug-report-card .bug-doc-big {
+  margin: 0 0 var(--s-2);
+}
+.bug-report-card .btn:disabled,
+.bug-report-card .choice-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* Materials: library and editor side by side, since picking a material and dragging a
