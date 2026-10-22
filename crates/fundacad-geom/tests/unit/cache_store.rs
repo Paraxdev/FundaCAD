@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
 
-pub fn scratch(name: &str) -> PathBuf {
+fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("fundacad-geomstore-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     dir

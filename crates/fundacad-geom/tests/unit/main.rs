@@ -1,6 +1,7 @@
 //! The crate's unit tests, in one binary because every file at the top of tests/ links OpenCASCADE again.
 
 mod bench;
+mod builder_fmt;
 mod cache_keys;
 mod cache_meshes;
 mod cache_store;
