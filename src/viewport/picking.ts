@@ -134,10 +134,14 @@ export class Picker {
       if (px > nearPx) near = this.occludersNear((nearPx = Math.max(px, 2 * nearPx, 4)), camera, rect, view);
       return near;
     };
+    const sight = sightBudget();
     const i = preferredEdge(
       cands.map((c) => ({
         screenDist: c.screenDist,
-        occluded: () => !this.pointVisible(c.point, camera, occluders(c.screenDist + 1), scale),
+        occluded: () => {
+          const meshes = occluders(c.screenDist + 1);
+          return !sight(meshes.length) || !this.pointVisible(c.point, camera, meshes, scale);
+        },
         bandPx: () =>
           edgeBandForPx(
             faceBand,
@@ -166,7 +170,8 @@ export class Picker {
     if (!opts?.visibleOnly) return cands[0] ?? null;
     const scale = modelScale(view);
     const near = this.occludersNear(farthestPx(cands), camera, rect, view);
-    return cands.find((c) => this.pointVisible(c.point, camera, near, scale)) ?? null;
+    const sight = sightBudget();
+    return cands.find((c) => sight(near.length) && this.pointVisible(c.point, camera, near, scale)) ?? null;
   }
 
   /** The candidates whose nearest point is in plain view. */
@@ -306,6 +311,20 @@ export function meshesNearRay(
   const px = pixelSize(camera, viewHeightPx);
   if (!px) return [...meshes];
   return meshes.filter((m) => sphereNearRay(worldSphere(m), ray, px, radiusPx));
+}
+
+/** Body tests the sight rays of one pick may spend, 5 to 12 ms on the SV08. Zoomed out there all 1097 bodies lie near
+ *  every sight ray, and a hover cast up to 152 rays, 31 ms. */
+export const SIGHT_TEST_BUDGET = 24_000;
+
+/** Grants sight rays until their body tests reach `budget`. The ray that crosses it is still cast, so one always is. */
+export function sightBudget(budget = SIGHT_TEST_BUDGET): (meshes: number) => boolean {
+  let spent = 0;
+  return (meshes) => {
+    if (spent >= budget) return false;
+    spent += meshes;
+    return true;
+  };
 }
 
 /** Edge segments per pixel of a body's drawn disc above which a pick skips its edges. Past one segment a pixel the
