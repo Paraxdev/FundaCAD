@@ -55,8 +55,17 @@ export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFil
               name: env.name,
               run: async () => {
                 const { importEnvironmentFile } = await import("../ui/environmentImport");
-                const refused = await importEnvironmentFile(e.store, envFile);
-                if (refused) await reportError(refused);
+                // The panorama is read and stored before the look changes, a document opened by then keeps its own.
+                let opened = false;
+                let left = false;
+                const offOpen = e.store.onOpen(() => (opened = true));
+                try {
+                  const refused = await importEnvironmentFile(e.store, envFile, { leftOut: () => (left = opened) });
+                  if (refused) await reportError(refused);
+                } finally {
+                  offOpen();
+                }
+                return left ? ("dropped" as const) : undefined;
               },
             },
           ]
