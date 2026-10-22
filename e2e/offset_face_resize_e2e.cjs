@@ -157,6 +157,7 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   // --- 2. dragging out previews and the handle rides --------------------------
   const g = await grab();
   check("the arrow is under the pointer where it is drawn", g.hit);
+  const from = { x: g.pos.x, y: g.pos.y };
   await walk(g.pos, 0.6);
   await settle();
   await page.waitForFunction(() => window.__fundacad.faceOffset.outcomes.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
@@ -168,10 +169,13 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   const vGrown = await volume();
   check("the preview took material away", vGrown < v0 - 1, { v0, vGrown });
   const grownTo = t.shown;
+  const perUnit = { x: (g.pos.x - from.x) / t.value, y: (g.pos.y - from.y) / t.value };
   await shot("02_grown");
 
   // --- 3. on in past R 2 is refused, the grown end held ------------------------
-  await walk(g.pos, -0.2);
+  // One move, not a walk: walking back through R 2 lets a preview of the unchanged face
+  // land on the way, and then there is no grown end left to hold.
+  await page.mouse.move(g.pos.x - perUnit.x * (t.value + 0.2), g.pos.y - perUnit.y * (t.value + 0.2));
   await settle();
   await page.waitForFunction(() => window.__fundacad.faceOffset.outcomes.refusal !== null, null, { timeout: 120000 }).catch(() => {});
   t = await tool();

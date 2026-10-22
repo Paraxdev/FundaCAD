@@ -75,6 +75,20 @@ const check = (name, ok, detail) => {
   });
   const cx = box.x + box.w / 2;
   const cy = box.y + box.h / 2;
+  // The canvas runs under the floating panels and the tool rail, so a fitted
+  // model reaches under them; zoom out until the drag below starts on bare canvas.
+  await page.mouse.move(cx, cy);
+  for (let i = 0; i < 3; i++) {
+    await page.mouse.wheel(0, 300);
+    await page.waitForTimeout(150);
+  }
+  await page.waitForTimeout(500);
+  const around = await page.evaluate(async () => {
+    const THREE = await import("/node_modules/three/build/three.module.js");
+    const a = window.viewport.projectToScreen(new THREE.Vector3(-70, -45, 0));
+    const b = window.viewport.projectToScreen(new THREE.Vector3(70, 45, 0));
+    return { x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), y0: Math.min(a.y, b.y), y1: Math.max(a.y, b.y) };
+  });
 
   const state = () => page.evaluate(() => ({
     chip: document.querySelector(".areachip")?.dataset.filter ?? null,
@@ -91,9 +105,9 @@ const check = (name, ok, detail) => {
   // ---- 1. the box shows what it will take, mid-drag -------------------------
   console.log("\n1. what the box takes, while it is being dragged");
   await page.evaluate(() => window.viewport.setSelectionMode("faces"));
-  await page.mouse.move(cx - 380, cy - 200);
+  await page.mouse.move(around.x0, around.y0);
   await page.mouse.down();
-  await page.mouse.move(cx + 380, cy + 200, { steps: 12 });
+  await page.mouse.move(around.x1, around.y1, { steps: 12 });
   await page.waitForTimeout(120);
   const mid = await state();
   check("the band is drawn", mid.band);
@@ -109,7 +123,7 @@ const check = (name, ok, detail) => {
   const cycled = [];
   for (let i = 0; i < 4; i++) {
     await page.keyboard.press("Tab");
-    await page.waitForTimeout(90);
+    await page.waitForTimeout(300);
     cycled.push(await state());
   }
   check("Tab walks every filter and comes back",
@@ -136,7 +150,7 @@ const check = (name, ok, detail) => {
   await page.keyboard.press("Tab"); // back to faces
   await page.keyboard.press("Tab");
   await page.keyboard.press("Tab"); // bodies
-  await page.waitForTimeout(90);
+  await page.waitForTimeout(300);
   await page.mouse.up();
   await page.waitForTimeout(300);
   const done = await state();

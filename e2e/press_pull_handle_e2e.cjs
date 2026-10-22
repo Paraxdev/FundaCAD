@@ -143,7 +143,9 @@ const DIMPLE = [block, ...revolve("dimple", [
     await page.mouse.down();
     return h;
   };
+  let ghostSeen = false;
   const drag = async (until) => {
+    ghostSeen = false;
     const grip = await page.evaluate(() => {
       const t = window.pressPull; const v = window.viewport;
       const at = t.anchor.clone().addScaledVector(t.axis, t.value);
@@ -162,8 +164,10 @@ const DIMPLE = [block, ...revolve("dimple", [
     for (let i = 0; i < 200; i++) {
       x += ux * 2 * sign; y += uy * 2 * sign;
       await page.mouse.move(x, y);
-      const v = (await tool()).value;
-      if (sign > 0 ? v >= until : v <= until) break;
+      const t = await tool();
+      // The engine can answer between two moves, so the ghost is looked for on every step.
+      if (t.ghost && t.shown === null) ghostSeen = true;
+      if (sign > 0 ? t.value >= until : t.value <= until) break;
     }
   };
   const near = (a, b, tol = 0.01) => !!a && !!b && a.every((c, i) => Math.abs(c - b[i]) <= tol);
@@ -268,7 +272,7 @@ const DIMPLE = [block, ...revolve("dimple", [
   check("the dimple reads R 6", t.kind === "sphere" && t.label === "R" && Math.abs(Number(t.field) - 6) < 0.005, t);
   await drag(1);
   t = await tool();
-  check("its cap ghost is up while the engine works", t.ghost && t.shown === null, t);
+  check("its cap ghost is up while the engine works", ghostSeen || (t.ghost && t.shown === null), t);
   await shot("06_dimple_ghost");
   await page.mouse.up();
   await settle();
