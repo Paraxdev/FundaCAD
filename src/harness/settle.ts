@@ -10,7 +10,7 @@ import { HarnessError } from "./locate";
 export interface SettleHost {
   store: Pick<DocumentStore, "buildState" | "busyState" | "rebuildPending" | "onBuild" | "onDocChange">;
   geometry: Pick<GeometryBackend, "connected" | "inFlight">;
-  viewport: Pick<Viewport, "renderIdle" | "traceStatus">;
+  viewport: Pick<Viewport, "renderIdle" | "gpuIdle" | "traceStatus">;
 }
 
 export interface Quiet {
@@ -21,6 +21,7 @@ export interface Quiet {
   busyPct: number | null;
   inFlight: number;
   renderIdle: boolean;
+  gpuIdle: boolean;
   trace: { state: string; samples: number };
 }
 
@@ -35,13 +36,14 @@ export function probe(h: SettleHost): Quiet {
     busyPct: busy.active ? busy.pct : null,
     inFlight: h.geometry.inFlight ?? 0,
     renderIdle: h.viewport.renderIdle,
+    gpuIdle: h.viewport.gpuIdle,
     trace: { state: t.state, samples: t.samples },
   };
 }
 
 export function isQuiet(q: Quiet, trace?: number): boolean {
   const traced = trace == null || (q.trace.state === "done" && q.trace.samples >= trace);
-  return q.open && !q.pending && !q.building && !q.busy && q.inFlight === 0 && q.renderIdle && traced;
+  return q.open && !q.pending && !q.building && !q.busy && q.inFlight === 0 && q.renderIdle && q.gpuIdle && traced;
 }
 
 /** One line on what is still going on. */
@@ -52,6 +54,7 @@ export function describeQuiet(q: Quiet, trace?: number): string {
   if (q.busy) parts.push(`busy "${q.busy}"${q.busyPct != null ? ` ${Math.round(q.busyPct)}%` : ""}`);
   if (q.inFlight) parts.push(`${q.inFlight} request${q.inFlight === 1 ? "" : "s"} in flight`);
   if (!q.renderIdle) parts.push("drawing");
+  else if (!q.gpuIdle) parts.push("GPU still drawing");
   if (trace != null) parts.push(`trace ${q.trace.state} ${q.trace.samples}/${trace} samples`);
   parts.push(q.open ? "socket open" : "socket closed");
   return parts.join(", ");
