@@ -1,7 +1,5 @@
-//! A `match` edge reference never refuses, so one whose edge was deleted used
-//! to settle on whatever edge was left and blend that. Two cases can be told
-//! from an edge that merely moved: the best match is another kind of curve far
-//! from the pick, or several references share one edge none was picked near.
+//! A `match` edge reference never refuses, so one whose edge was deleted settles on what is left. It is told
+//! from a moved edge when the best match is another curve kind far off, or several references share an edge.
 
 use std::f64::consts::PI;
 

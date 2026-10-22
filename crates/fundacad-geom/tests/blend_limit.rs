@@ -1,8 +1,5 @@
-//! A blend the kernel refuses is built from its sections. A fill past its
-//! faces is clamped to them, a flare or a bowl; a cut may carve on past a face
-//! into the air above it. It refuses, with the largest size that fits, a cut
-//! that would dig into the body beyond a face and a blend that cuts the body
-//! in pieces.
+//! A blend the kernel refuses is built from its sections: a fill past its faces is clamped, a cut may carve
+//! into the air, and digging into the body or cutting it in pieces refuses with the largest size that fits.
 
 use std::f64::consts::PI;
 
@@ -156,9 +153,8 @@ fn turned(pts: &[[f64; 2]], arc: usize, centre: [f64; 2]) -> Vec<Value> {
     ]
 }
 
-/// What a ball resting on the rim's inner face and its top plane cuts away,
-/// revolved: the part of the ring between the two contacts that lies outside
-/// the ball.
+/// What a ball resting on the rim's inner face and its top plane cuts away, revolved: the ring between
+/// the two contacts outside the ball.
 fn carved(base: &Shape, inner: [f64; 2], centre: [f64; 2], r: f64) -> f64 {
     let (x0, x1, z0, z1) = (inner[0] - 1e-3, centre[0], inner[1], centre[1] + r + 1.0);
     let ring = kernel::polygon_face(&[[x0, 0.0, z0], [x1, 0.0, z0], [x1, 0.0, z1], [x0, 0.0, z1]])
@@ -170,9 +166,8 @@ fn carved(base: &Shape, inner: [f64; 2], centre: [f64; 2], r: f64) -> f64 {
     kernel::volume(&kernel::boolean_op(base, &[&tool], BoolKind::Cut).expect("carve"))
 }
 
-/// The ball on the inner face: `bend` the centre of that face's arc in the
-/// profile and `radius` its radius, the ball `r` outside it and under the top
-/// plane at `top`. Its centre and its contact with the arc.
+/// The ball `r` outside the inner face's profile arc (`bend`, `radius`) and under the top plane at `top`:
+/// its centre and its contact with the arc.
 fn ball_on(bend: [f64; 2], radius: f64, top: f64, r: f64) -> ([f64; 2], [f64; 2]) {
     let cz = top - r;
     let cx = bend[0] + ((radius + r).powi(2) - (cz - bend[1]).powi(2)).sqrt();
@@ -194,9 +189,8 @@ fn check_rim(features: &[Value], rim: [f64; 3], outer: f64, bend: [f64; 2], radi
     assert!(secs < 10.0, "{r}: took {secs} s");
 }
 
-/// A pocket whose wall is a quarter round, a concave torus from the top face
-/// down to the floor. The rim's ball stays on the torus at every size, past
-/// the top face's outer edge it carves the rim away.
+/// A pocket whose wall is a quarter round torus from top to floor. The rim's ball stays on the torus at
+/// every size, and past the top face's outer edge it carves the rim away.
 #[test]
 fn a_rim_next_to_a_concave_torus_rounds_and_carves() {
     let features =
@@ -234,10 +228,8 @@ fn a_boss_rim_rounded_past_the_boss_refuses() {
     built(&doc(features, Some(fillet([10.0, 0.0, 15.0], 4.99))));
 }
 
-/// A post 3 tall leaning in 20 degrees on a plate 4 thick, under a 45 degree
-/// seat cone. Rounded past the post's foot, the ball still rests on the cone
-/// while its centre is out under the plate, and its other contact would dig a
-/// groove into the plate round the post.
+/// A post 3 tall leaning 20 degrees on a 4 thick plate under a 45 degree seat cone. Rounded past the foot,
+/// the ball's other contact would dig a groove into the plate round the post.
 #[test]
 fn a_seat_round_past_the_post_foot_refuses() {
     let lean = 20f64.to_radians();
@@ -267,9 +259,8 @@ fn neck_plate() -> Vec<Value> {
     shouldered_neck(0.0)
 }
 
-/// The same with the plates' inner ends leaning: each runs from the neck's
-/// corner `lean` further out along x at the plate's far side, or in for less
-/// than 0.
+/// The same with the plates' inner ends leaning, each running `lean` further out along x at the plate's
+/// far side, or in for less than 0.
 fn shouldered_neck(lean: f64) -> Vec<Value> {
     let (a, b) = (10.0 + lean, 10.0);
     let plan = [
@@ -328,10 +319,8 @@ fn refuses_up_to(doc: &Value, fits: &str) {
     eprintln!("refused in {secs:.2} s: {msg}");
 }
 
-/// The flat neck's top edge runs out between the plates' inner ends. Those end
-/// faces meet the top face at a convex corner, and the body lies beyond their
-/// planes from the neck, so they are no end for the round to be cut off at:
-/// the kernel refuses past 4 and the section build carves the neck down.
+/// The plates' inner end faces meet the top at a convex corner with the body beyond their planes, so they
+/// are no end for the round: the kernel refuses past 4 and the section build carves the neck down.
 #[test]
 fn a_round_on_a_flat_neck_carves_it() {
     let features = neck_plate();
@@ -376,11 +365,8 @@ fn a_slot_through_a_neck_rounded_to_its_limit_cuts_it() {
     }
 }
 
-/// The neck with its plates' inner ends leaning out and then in, oblique
-/// shoulders beside the rounded edge's ends. Out, the plates stay clear of the
-/// round. In, they reach over the neck's far side, and the round carves what
-/// of them its sections sweep, as it carves the neck, and nothing past the
-/// neck's ends.
+/// Plates' inner ends leaning out stay clear of the round. Leaning in they reach over the neck's far side,
+/// and the round carves what its sections sweep, as it carves the neck, and nothing past the neck's ends.
 #[test]
 fn a_round_beside_oblique_shoulders_carves_only_its_sweep() {
     let r = 6.0;
@@ -409,10 +395,8 @@ fn a_round_beside_oblique_shoulders_carves_only_its_sweep() {
     assert!((got - want).abs() < 0.05, "leaning in: volume {got}, the sweep leaves {want}");
 }
 
-/// A neck bent round the Z axis, radius 18 to 22 over 60 degrees, between two
-/// plates 10 to 30 out whose radial ends stand beside the neck's outer top
-/// edge. The round on that curved edge carves the neck as the flat one does,
-/// the section revolved.
+/// A neck bent round Z, radius 18 to 22 over 60 degrees, between plates 10 to 30 out. The round on its
+/// curved outer top edge carves the neck as the flat one does, the section revolved.
 #[test]
 fn a_round_on_a_curved_neck_carves_it() {
     let at = |rad: f64, deg: f64| [rad * deg.to_radians().cos(), rad * deg.to_radians().sin()];
@@ -476,10 +460,8 @@ fn a_round_that_cuts_the_body_in_pieces_refuses() {
     built(&doc(features, Some(fillet([0.0, -2.0, 4.0], 13.63))));
 }
 
-/// rim_blend.rs's cup, recess 25 wide and 24.1 deep under an r5 outer round:
-/// its inner rim rounded past the wall's foot. The ball's centre is out past
-/// the cup's side, so it carves the rim deeper, into the wall below the floor's
-/// level, rather than digging into another part.
+/// rim_blend.rs's cup, recess 25 wide and 24.1 deep under an r5 outer round, its inner rim rounded past
+/// the wall's foot. The ball's centre is past the cup's side, so it carves the rim deeper, not another part.
 #[test]
 fn a_rim_carved_past_the_wall_foot_builds() {
     let features = vec![
@@ -498,9 +480,8 @@ fn a_rim_carved_past_the_wall_foot_builds() {
     let v = kernel::volume(&out);
     assert!((v - 24_817.434).abs() < 0.01, "volume {v}");
     assert!((kernel::bbox(&out).expect("box")[5] - 20.0).abs() < 1e-6);
-    // At 30 the carve reaches the cup's foot and parts the floor from the wall,
-    // which main built as two pieces. At 29.99 it leaves the floor held by a
-    // wall 0.01 thick.
+    // At 30 the carve reaches the cup's foot and parts the floor from the wall, which main built as two
+    // pieces. At 29.99 a wall 0.01 thick still holds the floor.
     for r in [29.99, 30.0, 35.0] {
         refuses_up_to(&doc(features.clone(), Some(fillet([25.0, 0.0, 30.0], r))), "29.98");
     }

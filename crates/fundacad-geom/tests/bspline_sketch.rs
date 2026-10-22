@@ -1,6 +1,5 @@
-//! Control-point B-spline sketch entities: OCCT's curve agrees with the sampled
-//! points in tests/vectors/bspline.json (recorded by tests/sketch/bspline.test.ts),
-//! and a bspline profile extrudes and revolves into a valid solid.
+//! Control-point B-spline sketch entities: OCCT's curve agrees with tests/vectors/bspline.json (recorded
+//! by tests/sketch/bspline.test.ts), and a bspline profile extrudes and revolves into a valid solid.
 
 use std::path::Path;
 

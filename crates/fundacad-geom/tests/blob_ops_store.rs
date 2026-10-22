@@ -1,6 +1,5 @@
-//! The blob ops read and write the same store `import` publishes to and a
-//! rebuild reads from, with the environment a private engine gets: a cache
-//! directory of its own and no data directory named at all.
+//! The blob ops use the store `import` publishes to and a rebuild reads, under a private engine's
+//! environment: its own cache directory and no data directory.
 
 use fundacad_engine::{Engine, Outbox};
 use fundacad_geom::jobs::GeomJobs;

@@ -1,8 +1,5 @@
-//! The kernel's mesher triangulates a face in its own parameters, where a pole
-//! (the tip of a sphere, the corner patch three fillets leave, the point a
-//! lofted spline face closes to) is a whole side of the face. That side gets
-//! two nodes at the one point and a triangle between them, which has no area.
-//! No mesh handed out may hold one: a voxeliser refuses the STL over it.
+//! The mesher gives a surface pole (a sphere tip, a three fillet corner patch, a loft's closing point) two
+//! nodes at one point with a triangle without area between. No mesh handed out may hold one.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};

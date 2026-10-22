@@ -20,8 +20,8 @@ fn corner(radius: f64, profile: f64) -> Rebuild {
     builder::rebuild(&typed, &doc, &NoWatch).expect("not cancelled")
 }
 
-/// 28.7 fits a 29.7 face as a G1 fillet, but a G2 one sets back 44.5 and used
-/// to eat the whole side face, or spend minutes in the boolean first.
+/// 28.7 fits a 29.7 face as a G1 fillet, but a G2 one sets back 44.5 and must neither eat the whole side
+/// face nor spend minutes in the boolean first.
 #[test]
 fn a_g2_fillet_that_runs_off_the_face_is_refused() {
     let r = corner(28.7, -0.324);
