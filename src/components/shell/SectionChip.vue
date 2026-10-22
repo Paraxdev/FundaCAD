@@ -50,7 +50,14 @@ function onEdit() {
 </script>
 
 <template>
-  <div v-if="shown" class="section-chip" role="toolbar" aria-label="Section view" data-testid="section-chip">
+  <div
+    v-if="shown"
+    class="section-chip"
+    role="toolbar"
+    aria-label="Section view"
+    data-testid="section-chip"
+    @mousedown.prevent
+  >
     <span class="section-chip-label" title="Section on">
       <Icon name="section" :size="14" />
       <span class="section-chip-text">Section on</span>
