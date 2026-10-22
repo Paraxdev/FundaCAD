@@ -20,9 +20,14 @@ export function loadLibrary(): UserFastener[] {
   try {
     const parsed = JSON.parse(raw) as { items?: unknown };
     if (!Array.isArray(parsed.items)) return [];
-    return parsed.items.filter((it): it is UserFastener =>
-      !!it && typeof it === "object" && typeof (it as UserFastener).id === "string" &&
-      !!(it as UserFastener).spec && typeof (it as UserFastener).spec === "object");
+    return parsed.items.filter(
+      (it): it is UserFastener =>
+        !!it &&
+        typeof it === "object" &&
+        typeof (it as UserFastener).id === "string" &&
+        !!(it as UserFastener).spec &&
+        typeof (it as UserFastener).spec === "object",
+    );
   } catch {
     return [];
   }
@@ -62,7 +67,8 @@ export function parseLibraryFile(text: string): { specs: FastenerSpec[]; problem
   obj.fasteners.forEach((raw, i) => {
     const spec = raw as FastenerSpec;
     const found = raw && typeof raw === "object" ? specProblems(spec) : ["not a fastener"];
-    if (found.length) problems.push(`${(spec && typeof spec.name === "string" && spec.name) || `entry ${i + 1}`}: ${found.join("; ")}`);
+    if (found.length)
+      problems.push(`${(spec && typeof spec.name === "string" && spec.name) || `entry ${i + 1}`}: ${found.join("; ")}`);
     else specs.push(spec);
   });
   return { specs, problems };

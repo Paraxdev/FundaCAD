@@ -7,7 +7,11 @@ import { themes } from "../../src/ui/theme";
 
 const sources = Object.fromEntries(
   Object.entries(
-    import.meta.glob(["../../src/styles/*.scss", "../../src/components/**/*.vue"], { query: "?raw", import: "default", eager: true }) as Record<string, string>,
+    import.meta.glob(["../../src/styles/*.scss", "../../src/components/**/*.vue"], {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }) as Record<string, string>,
   ).map(([path, text]) => [path.replace(/^(\.\.\/)+/, ""), text]),
 );
 
@@ -47,12 +51,17 @@ function contrast(fg: Rgba, bg: Rgba): number {
 }
 
 const NOIR = Object.fromEntries(
-  [...(sources["src/styles/_tokens.scss"] ?? "").matchAll(/^\s*(--[\w-]+):\s*(#[0-9a-f]{6}|rgba?\([^)]*\));/gim)].map((m) => [m[1], m[2]]),
+  [...(sources["src/styles/_tokens.scss"] ?? "").matchAll(/^\s*(--[\w-]+):\s*(#[0-9a-f]{6}|rgba?\([^)]*\));/gim)].map(
+    (m) => [m[1], m[2]],
+  ),
 );
 
 const shipped = themes()
   .filter((t) => !t.custom)
-  .map((t) => ({ label: t.label, palette: { ...NOIR, ...("palette" in t ? (t.palette as Record<string, string>) : {}) } }));
+  .map((t) => ({
+    label: t.label,
+    palette: { ...NOIR, ...("palette" in t ? (t.palette as Record<string, string>) : {}) },
+  }));
 
 function pairs(p: Record<string, string>): [string, Rgba, Rgba][] {
   const c = (name: string) => parse(p[name] ?? `missing ${name}`);
@@ -64,7 +73,11 @@ function pairs(p: Record<string, string>): [string, Rgba, Rgba][] {
     ["SOLID chip, --text-dim on --panel-2", c("--text-dim"), panel2],
     ["--text-dim on --panel", c("--text-dim"), panel],
     ["SKETCH chip, --accent-hot on --accent-tint over --panel-2", c("--accent-hot"), over(c("--accent-tint"), panel2)],
-    ["active segment and render chip, --accent-hot on --accent-tint-2 over --panel", c("--accent-hot"), over(c("--accent-tint-2"), panel)],
+    [
+      "active segment and render chip, --accent-hot on --accent-tint-2 over --panel",
+      c("--accent-hot"),
+      over(c("--accent-tint-2"), panel),
+    ],
     ["readouts, --text-dim on glass", c("--text-dim"), glass],
     ["snap tag and sketch dims, --text on glass", c("--text"), glass],
     ["constraint glyphs, --accent-hot on glass", c("--accent-hot"), glass],
@@ -107,7 +120,10 @@ describe("theme contrast", () => {
   function resolve(value: string, p: Record<string, string>): Rgba {
     const token = /^var\((--[\w-]+)\)$/.exec(value);
     if (token) return parse(p[token[1] ?? ""] ?? `missing ${token[1]}`);
-    const cm = /^color-mix\(in srgb,\s*(var\(--[\w-]+\)|#[0-9a-f]{6})\s+(\d+)%,\s*(var\(--[\w-]+\)|#[0-9a-f]{6})\)$/i.exec(value);
+    const cm =
+      /^color-mix\(in srgb,\s*(var\(--[\w-]+\)|#[0-9a-f]{6})\s+(\d+)%,\s*(var\(--[\w-]+\)|#[0-9a-f]{6})\)$/i.exec(
+        value,
+      );
     if (cm) return mix(resolve(cm[1] ?? "", p), Number(cm[2]) / 100, resolve(cm[3] ?? "", p));
     return parse(value);
   }

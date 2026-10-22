@@ -148,8 +148,14 @@
   font-size: 10px;
   line-height: 1;
 }
-.rel-row.conflict .rel-sym { border-color: var(--error); color: color-mix(in srgb, var(--error) 60%, var(--text)); }
-.rel-row.over .rel-sym { border-color: var(--warn); color: color-mix(in srgb, var(--warn) 60%, var(--text)); }
+.rel-row.conflict .rel-sym {
+  border-color: var(--error);
+  color: color-mix(in srgb, var(--error) 60%, var(--text));
+}
+.rel-row.over .rel-sym {
+  border-color: var(--warn);
+  color: color-mix(in srgb, var(--warn) 60%, var(--text));
+}
 /* Implied relations are real and load-bearing but nobody drew them, so they
    read as scenery: dimmed, dashed, and without a delete button. */
 .rel-row.implied .rel-sym {
@@ -225,4 +231,3 @@
 .spacer {
   flex: 1;
 }
-

@@ -13,10 +13,17 @@ const study: StressStudy = {
     { id: 1, type: "fixed", faces: [{ kind: "face", by: "nearest", point: [0, 0, 0], body: "body1" }] },
     { id: 2, type: "pinned", faces: [{ kind: "face", by: "nearest", point: [5, 0, 3], body: "body1" }] },
   ],
-  loads: [{
-    id: 1, kind: "force", faces: [{ kind: "face", by: "nearest", point: [50, 0, 5], body: "body1" }],
-    force: 20, direction: "-Z", custom: [0, 0, -1], pressure: 0.1,
-  }],
+  loads: [
+    {
+      id: 1,
+      kind: "force",
+      faces: [{ kind: "face", by: "nearest", point: [50, 0, 5], body: "body1" }],
+      force: 20,
+      direction: "-Z",
+      custom: [0, 0, -1],
+      pressure: 0.1,
+    },
+  ],
   gravity: { on: true, direction: "-Z" },
   material: "PETG",
   custom: { E: 2000, nu: 0.35, yield: 40, density: 1.2 },
@@ -69,10 +76,18 @@ describe("normalizeStressStudy", () => {
     const fine = [
       { kind: "face", by: "normal", dir: [0, 0, 1], body: "body1" },
       { kind: "face", by: "tracked", point: [0, 0, 0], normal: [0, 0, 1], body: "body1" },
-      { kind: "face", by: "match", fp: { centroid: [70, 0, 57.5], normal: [1, 0, 0], area: 120, surface: "plane" }, nth: 0, body: "body1" },
+      {
+        kind: "face",
+        by: "match",
+        fp: { centroid: [70, 0, 57.5], normal: [1, 0, 0], area: 120, surface: "plane" },
+        nth: 0,
+        body: "body1",
+      },
       { kind: "face", by: "match", fp: { centroid: [0, 0, 0] }, body: "body1" },
     ];
-    expect(normalizeStressStudy({ ...study, supports: [{ id: 1, type: "fixed", faces: fine }] })!.supports[0]!.faces).toEqual(fine);
+    expect(
+      normalizeStressStudy({ ...study, supports: [{ id: 1, type: "fixed", faces: fine }] })!.supports[0]!.faces,
+    ).toEqual(fine);
   });
 
   it("forgives a number that is not one, and fills what an older study leaves out", () => {
@@ -110,9 +125,13 @@ describe("normalizeStressStudy", () => {
 
 function stubBackend(): GeometryBackend {
   return {
-    async rebuild() { return { ok: false, error: { message: "stub" } }; },
+    async rebuild() {
+      return { ok: false, error: { message: "stub" } };
+    },
     async init() {},
-    onStatus() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
     connected: true,
   } as unknown as GeometryBackend;
 }
@@ -184,7 +203,10 @@ describe("spots in a study", () => {
   };
 
   it("are read back, a missing normal and all", () => {
-    const spots = [{ at: [50, 0, 5], radius: 3, normal: [0, 0, 1] }, { at: [40, 0, 5], radius: 2 }];
+    const spots = [
+      { at: [50, 0, 5], radius: 3, normal: [0, 0, 1] },
+      { at: [40, 0, 5], radius: 2 },
+    ];
     expect(normalizeStressStudy(withSpots(spots))!.loads[0]!.spots).toEqual(spots);
   });
 
@@ -194,8 +216,12 @@ describe("spots in a study", () => {
   });
 
   it("forgive a radius that is not a size, but not a spot with no point", () => {
-    expect(normalizeStressStudy(withSpots([{ at: [1, 2, 3], radius: "wide" }]))!.loads[0]!.spots).toEqual([{ at: [1, 2, 3], radius: 5 }]);
-    expect(normalizeStressStudy(withSpots([{ at: [1, 2, 3], radius: -1 }]))!.loads[0]!.spots).toEqual([{ at: [1, 2, 3], radius: 5 }]);
+    expect(normalizeStressStudy(withSpots([{ at: [1, 2, 3], radius: "wide" }]))!.loads[0]!.spots).toEqual([
+      { at: [1, 2, 3], radius: 5 },
+    ]);
+    expect(normalizeStressStudy(withSpots([{ at: [1, 2, 3], radius: -1 }]))!.loads[0]!.spots).toEqual([
+      { at: [1, 2, 3], radius: 5 },
+    ]);
     expect(normalizeStressStudy(withSpots([{ radius: 3 }]))).toBeNull();
     expect(normalizeStressStudy(withSpots({ at: [1, 2, 3], radius: 3 }))).toBeNull();
   });

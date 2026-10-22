@@ -229,10 +229,7 @@ fn a_fork_fuses_and_blends_or_says_why_not() {
     let plain = one_solid(&build(vec![y_shape(None)]));
     let r = build(vec![y_shape(Some(2.0))]);
     let blended = one_solid(&r);
-    let warned = r
-        .diagnostics
-        .iter()
-        .any(|d| d.get("kind").and_then(Value::as_str) == Some("edgeOpFailed"));
+    let warned = r.diagnostics.iter().any(|d| d.get("kind").and_then(Value::as_str) == Some("edgeOpFailed"));
     if !warned {
         // A concave junction rounded over adds material.
         assert!(blended > plain, "{blended} vs {plain}");

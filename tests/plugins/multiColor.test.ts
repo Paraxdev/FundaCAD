@@ -8,7 +8,12 @@
 
 import { describe, it, expect } from "vitest";
 
-import { bodyColorMenuItems, nearestPaletteSlot, paintFrom, staleSlots } from "../../plugins/FundaCAD.MultiColor/palette";
+import {
+  bodyColorMenuItems,
+  nearestPaletteSlot,
+  paintFrom,
+  staleSlots,
+} from "../../plugins/FundaCAD.MultiColor/palette";
 import type { DocumentStore } from "../../src/document/store";
 
 describe("nearestPaletteSlot", () => {
@@ -59,7 +64,9 @@ describe("the body colour menu", () => {
         { name: "Red", color: "#d23b30" },
       ],
       bodyColorSlot: () => (current == null ? undefined : current),
-      setBodyColorSlot: (_id: string, s: number | null) => { current = s; },
+      setBodyColorSlot: (_id: string, s: number | null) => {
+        current = s;
+      },
     } as unknown as DocumentStore;
   }
 
@@ -85,14 +92,26 @@ describe("the body colour menu", () => {
 });
 
 describe("what the viewport is told to paint", () => {
-  const store = (bodies: unknown[], slots: Record<string, number>) => ({
-    colorPalette: [{ name: "White", color: "#e8e8e8" }, { name: "Red", color: "#d23b30" }],
-    buildState: { result: { bodies } },
-    bodyColorSlot: (id: string) => slots[id],
-  }) as unknown as DocumentStore;
+  const store = (bodies: unknown[], slots: Record<string, number>) =>
+    ({
+      colorPalette: [
+        { name: "White", color: "#e8e8e8" },
+        { name: "Red", color: "#d23b30" },
+      ],
+      buildState: { result: { bodies } },
+      bodyColorSlot: (id: string) => slots[id],
+    }) as unknown as DocumentStore;
 
   it("gives a body the colour of the slot it was assigned", () => {
-    const p = paintFrom(store([{ id: "b1", faceStart: 0 }, { id: "b2", faceStart: 4 }], { b1: 1 }));
+    const p = paintFrom(
+      store(
+        [
+          { id: "b1", faceStart: 0 },
+          { id: "b2", faceStart: 4 },
+        ],
+        { b1: 1 },
+      ),
+    );
     expect(p.bodies).toEqual({ b1: "#d23b30" });
     // The control: an unassigned body is ABSENT, not painted a default. The
     // viewport's own material is what an unpainted body should look like.
@@ -102,9 +121,7 @@ describe("what the viewport is told to paint", () => {
   it("turns a body's dense texture-slot array into global face indices", () => {
     // faceStart 4 and a slot on the body's third face is global face 6, which is
     // the whole reason this is not just a copy of the array.
-    const p = paintFrom(
-      store([{ id: "b1", faceStart: 4, faceColorSlots: [null, null, 0, 1] }], {}),
-    );
+    const p = paintFrom(store([{ id: "b1", faceStart: 4, faceColorSlots: [null, null, 0, 1] }], {}));
     expect(p.faces).toEqual({ 6: "#e8e8e8", 7: "#d23b30" });
   });
 
@@ -118,10 +135,18 @@ describe("what the viewport is told to paint", () => {
 describe("staleSlots", () => {
   // Slot 1 wears the name an unlabelled toolhead derives, so the fixture is a
   // machine that AGREES with the palette; every case below is one change to it.
-  const pal = [{ name: "Polymaker PLA", color: "#d23b30" }, { name: "Toolhead 2", color: "#e8e8e8" }];
+  const pal = [
+    { name: "Polymaker PLA", color: "#d23b30" },
+    { name: "Toolhead 2", color: "#e8e8e8" },
+  ];
   const loaded = (over: Partial<{ vendor: string; material: string; color: string; present: boolean }>[]) =>
     over.map((o, i) => ({
-      index: i, present: true, vendor: "Polymaker", material: "PLA", color: "#d23b30", ...o,
+      index: i,
+      present: true,
+      vendor: "Polymaker",
+      material: "PLA",
+      color: "#d23b30",
+      ...o,
     }));
 
   it("says nothing is stale when the machine matches the palette", () => {
@@ -129,14 +154,24 @@ describe("staleSlots", () => {
   });
 
   it("names the slot whose colour drifted", () => {
-    expect(staleSlots(pal, loaded([{ color: "#00ff00" }, { vendor: "", material: "", color: "#e8e8e8" }]))).toEqual([0]);
+    expect(staleSlots(pal, loaded([{ color: "#00ff00" }, { vendor: "", material: "", color: "#e8e8e8" }]))).toEqual([
+      0,
+    ]);
   });
 
   it("says nothing about a toolhead with nothing in it", () => {
     // An empty toolhead is not a disagreement, the sync leaves that slot alone,
     // so calling it stale would light the dot amber forever on a machine with
     // three of its four heads unloaded.
-    expect(staleSlots(pal, loaded([{ present: false, color: "#00ff00" }, { vendor: "", material: "", color: "#e8e8e8" }]))).toEqual([]);
+    expect(
+      staleSlots(
+        pal,
+        loaded([
+          { present: false, color: "#00ff00" },
+          { vendor: "", material: "", color: "#e8e8e8" },
+        ]),
+      ),
+    ).toEqual([]);
   });
 
   it("says nothing about a toolhead the palette has no slot for", () => {

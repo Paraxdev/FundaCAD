@@ -212,15 +212,9 @@ export class ViewCube {
     const mat = new THREE.MeshBasicMaterial({ color: base, transparent: true, opacity: NUB_IDLE_OPACITY });
     const mesh = new THREE.Mesh(geo, mat);
     // place at the cube surface in the direction's components (±HALF per nonzero axis)
-    mesh.position.set(
-      Math.sign(dir.x) * HALF,
-      Math.sign(dir.y) * HALF,
-      Math.sign(dir.z) * HALF,
-    );
+    mesh.position.set(Math.sign(dir.x) * HALF, Math.sign(dir.y) * HALF, Math.sign(dir.z) * HALF);
     this.group.add(mesh);
-    const up = dir.z !== 0 && dir.x === 0 && dir.y === 0
-      ? new THREE.Vector3(0, 1, 0)
-      : new THREE.Vector3(0, 0, 1);
+    const up = dir.z !== 0 && dir.x === 0 && dir.y === 0 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
     this.parts.push({
       kind,
       dir: dir.clone().normalize(),
@@ -339,9 +333,7 @@ export class ViewCube {
     const rect = this.canvas.getBoundingClientRect();
     const left = rect.right - SIZE - MARGIN - this.rightInset;
     const top = rect.top + MARGIN;
-    return (
-      clientX >= left && clientX <= left + SIZE && clientY >= top && clientY <= top + SIZE
-    );
+    return clientX >= left && clientX <= left + SIZE && clientY >= top && clientY <= top + SIZE;
   }
 
   private installPointer() {
@@ -399,10 +391,7 @@ export class ViewCube {
     const left = rect.right - SIZE - MARGIN - this.rightInset;
     const top = rect.top + MARGIN;
     // NDC within the corner box
-    this.ndc.set(
-      ((clientX - left) / SIZE) * 2 - 1,
-      -((clientY - top) / SIZE) * 2 + 1,
-    );
+    this.ndc.set(((clientX - left) / SIZE) * 2 - 1, -((clientY - top) / SIZE) * 2 + 1);
     this.raycaster.setFromCamera(this.ndc, this.camera);
     const meshes = this.parts.map((p) => p.mesh);
     const hits = this.raycaster.intersectObjects(meshes, false);
@@ -467,26 +456,28 @@ export class ViewCube {
       },
     ]);
   }
-
 }
 
 // the 12 edge midpoint directions (two nonzero ±1 components)
 function edgeDirs(): THREE.Vector3[] {
   const out: THREE.Vector3[] = [];
   const ax = [-1, 1];
-  for (const a of ax) for (const b of ax) {
-    out.push(new THREE.Vector3(a, b, 0));
-    out.push(new THREE.Vector3(a, 0, b));
-    out.push(new THREE.Vector3(0, a, b));
-  }
+  for (const a of ax)
+    for (const b of ax) {
+      out.push(new THREE.Vector3(a, b, 0));
+      out.push(new THREE.Vector3(a, 0, b));
+      out.push(new THREE.Vector3(0, a, b));
+    }
   return out;
 }
 
 // the 8 corner directions (all three components ±1)
 function cornerDirs(): THREE.Vector3[] {
   const out: THREE.Vector3[] = [];
-  for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) {
-    out.push(new THREE.Vector3(x, y, z));
-  }
+  for (const x of [-1, 1])
+    for (const y of [-1, 1])
+      for (const z of [-1, 1]) {
+        out.push(new THREE.Vector3(x, y, z));
+      }
   return out;
 }

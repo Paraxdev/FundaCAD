@@ -25,8 +25,7 @@ export function cloneSnapshot(s: SketchSnapshot): SketchSnapshot {
   return JSON.parse(JSON.stringify(s)) as SketchSnapshot;
 }
 
-const same = (a: SketchSnapshot, b: SketchSnapshot) =>
-  JSON.stringify(a) === JSON.stringify(b);
+const same = (a: SketchSnapshot, b: SketchSnapshot) => JSON.stringify(a) === JSON.stringify(b);
 
 export class SketchHistory {
   private undoStack: SketchSnapshot[] = [];
@@ -91,8 +90,14 @@ export class SketchHistory {
     return cloneSnapshot(next);
   }
 
-  get canUndo(): boolean { return this.undoStack.length > 0; }
-  get canRedo(): boolean { return this.redoStack.length > 0; }
+  get canUndo(): boolean {
+    return this.undoStack.length > 0;
+  }
+  get canRedo(): boolean {
+    return this.redoStack.length > 0;
+  }
   /** depth, for tests and diagnostics */
-  get depth(): number { return this.undoStack.length; }
+  get depth(): number {
+    return this.undoStack.length;
+  }
 }

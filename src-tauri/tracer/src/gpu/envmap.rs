@@ -45,12 +45,26 @@ impl EnvMap {
             let lights = storage(device, 256, wgpu::BufferUsages::empty());
             let tables = vec![[1.0, 1.0, 8.0, 9.0], [0.0, 2.0, 0.0, 0.0]];
             queue.write_buffer(&lights, 0, bytes(&tables));
-            return EnvMap { texture: texture(device, queue, 1, 1, &[0; 4]), lights, tables, held: None, mean: 0.0, up: 0.0 };
+            return EnvMap {
+                texture: texture(device, queue, 1, 1, &[0; 4]),
+                lights,
+                tables,
+                held: None,
+                mean: 0.0,
+                up: 0.0,
+            };
         };
         let tables = e.tables();
         let lights = storage(device, (tables.len() * 16).max(256) as u64, wgpu::BufferUsages::empty());
         queue.write_buffer(&lights, 0, bytes(&tables));
-        EnvMap { texture: texture(device, queue, e.width, e.height, &e.rgba), lights, mean: tables[1][0], up: tables[1][2], tables, held: Some(e) }
+        EnvMap {
+            texture: texture(device, queue, e.width, e.height, &e.rgba),
+            lights,
+            mean: tables[1][0],
+            up: tables[1][2],
+            tables,
+            held: Some(e),
+        }
     }
 }
 

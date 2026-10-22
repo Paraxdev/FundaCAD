@@ -34,9 +34,7 @@ describe("ambiguousCandidates", () => {
     expect(ambiguousCandidates([c(1, "Edge · Body 1"), c(1.1, "Edge · Body 1")])).toEqual([]);
     // ...and it is the LABEL that decides, not the geometry: add a third that
     // does say something different and the question is worth asking again.
-    const out = ambiguousCandidates([
-      c(1, "Edge · Body 1"), c(1.1, "Edge · Body 1"), c(1.2, "Edge · Body 2"),
-    ]);
+    const out = ambiguousCandidates([c(1, "Edge · Body 1"), c(1.1, "Edge · Body 1"), c(1.2, "Edge · Body 2")]);
     expect(out.map((x) => x.label)).toEqual(["Edge · Body 1", "Edge · Body 2"]);
   });
 
@@ -44,7 +42,10 @@ describe("ambiguousCandidates", () => {
     // So the entry the user picks is the one they were closest to among the
     // edges that call themselves that.
     const out = ambiguousCandidates([c(2, "A"), c(0.5, "A"), c(1, "B")]);
-    expect(out.map((x) => [x.label, x.screenDist])).toEqual([["A", 0.5], ["B", 1]]);
+    expect(out.map((x) => [x.label, x.screenDist])).toEqual([
+      ["A", 0.5],
+      ["B", 1],
+    ]);
   });
 
   it("uses the band as a distance from the NEAREST, not from the cursor", () => {

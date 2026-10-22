@@ -179,9 +179,6 @@ fn printability_says_a_body_is_not_a_sound_solid() {
     let JobResult::Json(reply) = printability_result(&m, &NoWatch) else { panic!("expected a JSON result") };
     assert!(reply.get("error").is_none(), "{reply:?}");
     let report = reply["report"].as_str().expect("report");
-    assert!(
-        report.contains("not a sound solid: it has faces that point the wrong way, at 4 of its edges"),
-        "{report}"
-    );
+    assert!(report.contains("not a sound solid: it has faces that point the wrong way, at 4 of its edges"), "{report}");
     assert!(reply["bodies"][0]["fault"].as_str().is_some_and(|f| f.contains("wrong way")), "{}", reply["bodies"][0]);
 }

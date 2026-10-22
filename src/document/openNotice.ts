@@ -42,7 +42,10 @@ export function openNotices(doc: Pick<CadDocument, "features">, openedVersion: n
   const total = unknown.reduce((n, u) => n + u.count, 0);
   if (total === 0) {
     if (newer) {
-      out.unshift({ message: `${NEWER} Anything this version does not know is kept and saved with the file.`, kind: "info" });
+      out.unshift({
+        message: `${NEWER} Anything this version does not know is kept and saved with the file.`,
+        kind: "info",
+      });
     }
     return out;
   }

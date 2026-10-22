@@ -42,11 +42,16 @@ export const useToastStore = defineStore("toasts", () => {
     // The same line again restarts the one already showing rather than stacking
     // a copy: the stack grows up over the canvas and a copy can take a click.
     // With the same button it takes the newer action, the command that asked last.
-    const same = items.value.find((x) => !x.leaving && x.message === message && x.kind === kind && x.action?.label === action?.label);
+    const same = items.value.find(
+      (x) => !x.leaving && x.message === message && x.kind === kind && x.action?.label === action?.label,
+    );
     if (same) {
       if (action) same.action = markRaw(action);
       window.clearTimeout(timers.get(same.id));
-      timers.set(same.id, window.setTimeout(() => dismiss(same.id), timeout));
+      timers.set(
+        same.id,
+        window.setTimeout(() => dismiss(same.id), timeout),
+      );
       return same.id;
     }
     const id = nextId++;
@@ -62,7 +67,10 @@ export const useToastStore = defineStore("toasts", () => {
     // failed-feature toast offers "Show" / "Re-pick face"). There is nothing to
     // gain from proxying it and a real cost if a Feature rides along.
     items.value.push({ id, message, kind, ...(action ? { action: markRaw(action) } : {}), leaving: false });
-    timers.set(id, window.setTimeout(() => dismiss(id), timeout));
+    timers.set(
+      id,
+      window.setTimeout(() => dismiss(id), timeout),
+    );
     return id;
   }
 

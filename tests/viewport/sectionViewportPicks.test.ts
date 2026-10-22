@@ -8,7 +8,8 @@ import { Picker } from "../../src/viewport/picking";
 import { Viewport } from "../../src/viewport/viewport";
 import { boxView, STEP, STEP_CUT, STEP_FACES, STEP_FRAME, stepCamera, stepPoint } from "./boxBodies";
 
-const W = 800, H = 600;
+const W = 800,
+  H = 600;
 const camera = stepCamera(W, H);
 const screen = (p: THREE.Vector3) => {
   const s = p.clone().project(camera);
@@ -26,7 +27,9 @@ function bare(cut: boolean, selected: string[] = []) {
   picker.setClip(cut ? STEP_CUT : null);
   Object.assign(vp, {
     picker,
-    canvas: { getBoundingClientRect: () => ({ left: 0, top: 0, width: W, height: H, right: W, bottom: H, x: 0, y: 0 }) },
+    canvas: {
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: W, height: H, right: W, bottom: H, x: 0, y: 0 }),
+    },
     rig: { active: camera },
     selectPolicy: "auto",
     selectionMode: "bodies",
@@ -61,7 +64,10 @@ describe("the Viewport's body casts on a section's cap", () => {
   it("the body is there, its faces are not, and past the cap the floor is", () => {
     const { vp } = bare(true);
     const at = (p: { x: number; y: number }) => [vp.bodyIdAt(p.x, p.y), vp.faceIdAt(p.x, p.y)];
-    expect([at(CAP), at(FLOOR)]).toEqual([["step", null], ["step", STEP_FACES.lowTop]]);
+    expect([at(CAP), at(FLOOR)]).toEqual([
+      ["step", null],
+      ["step", STEP_FACES.lowTop],
+    ]);
     const before = bare(false).vp;
     expect([before.bodyIdAt(CAP.x, CAP.y), before.faceIdAt(CAP.x, CAP.y)]).toEqual(["step", STEP_FACES.tallTop]);
   });
@@ -76,15 +82,22 @@ describe("the Viewport's body casts on a section's cap", () => {
     const { vp } = bare(true);
     expect(vp.pickFaceForPressPull(CAP.x, CAP.y)).toBeNull();
     const f = vp.pickFaceForPressPull(FLOOR.x, FLOOR.y)!;
-    expect({ faceId: f.faceId, bodyId: f.bodyId, up: f.normal.dot(up), anchor: f.anchor.distanceTo(stepPoint(38, -5, 10)) })
-      .toEqual({ faceId: STEP_FACES.lowTop, bodyId: "step", up: expect.closeTo(1, 6), anchor: expect.closeTo(0, 3) });
+    expect({
+      faceId: f.faceId,
+      bodyId: f.bodyId,
+      up: f.normal.dot(up),
+      anchor: f.anchor.distanceTo(stepPoint(38, -5, 10)),
+    }).toEqual({ faceId: STEP_FACES.lowTop, bodyId: "step", up: expect.closeTo(1, 6), anchor: expect.closeTo(0, 3) });
   });
 
   it("a drop on the cap has no target, past it the floor's face takes it", () => {
     const { vp, shown } = bare(true);
     expect([vp.dropTargetAt(CAP.x, CAP.y, "face"), vp.dropTargetAt(CAP.x, CAP.y, "body")]).toEqual([null, null]);
-    expect(vp.dropTargetAt(FLOOR.x, FLOOR.y, "face"))
-      .toEqual({ bodyId: "step", faceId: STEP_FACES.lowTop, localFace: STEP_FACES.lowTop });
+    expect(vp.dropTargetAt(FLOOR.x, FLOOR.y, "face")).toEqual({
+      bodyId: "step",
+      faceId: STEP_FACES.lowTop,
+      localFace: STEP_FACES.lowTop,
+    });
     expect(shown).toEqual([null, [STEP_FACES.lowTop]]);
   });
 
@@ -98,20 +111,32 @@ describe("the Viewport's body casts on a section's cap", () => {
     expect(vp.surfaceHitAt(CAP.x, CAP.y)).toEqual({ distance: expect.closeTo(toCut, 2), faceId: null });
     expect(pivot(CAP)).toBeCloseTo(toCut, 2);
     const floor = ray(FLOOR).origin.distanceTo(stepPoint(38, -5, 10));
-    expect(vp.surfaceHitAt(FLOOR.x, FLOOR.y)).toEqual({ distance: expect.closeTo(floor, 3), faceId: STEP_FACES.lowTop });
+    expect(vp.surfaceHitAt(FLOOR.x, FLOOR.y)).toEqual({
+      distance: expect.closeTo(floor, 3),
+      faceId: STEP_FACES.lowTop,
+    });
     expect(pivot(FLOOR)).toBeCloseTo(floor, 3);
     const top = bare(false);
-    expect(top.vp.surfaceHitAt(CAP.x, CAP.y)).toEqual({ distance: expect.closeTo(toCut - 16 / Math.abs(top.ray(CAP).direction.dot(up)), 3), faceId: STEP_FACES.tallTop });
+    expect(top.vp.surfaceHitAt(CAP.x, CAP.y)).toEqual({
+      distance: expect.closeTo(toCut - 16 / Math.abs(top.ray(CAP).direction.dot(up)), 3),
+      faceId: STEP_FACES.tallTop,
+    });
   });
 });
 
 describe("a click on a section's cap under the auto policy", () => {
   it("takes the body, also when it is already selected, as there is no face to drill to", () => {
-    expect([bare(true).vp.bodyClickAt(CAP.x, CAP.y), bare(true, ["step"]).vp.bodyClickAt(CAP.x, CAP.y)]).toEqual(["step", "step"]);
+    expect([bare(true).vp.bodyClickAt(CAP.x, CAP.y), bare(true, ["step"]).vp.bodyClickAt(CAP.x, CAP.y)]).toEqual([
+      "step",
+      "step",
+    ]);
   });
 
   it("past the cap a selected body still drills to its face, and without the cut the top takes the body", () => {
-    expect([bare(true, ["step"]).vp.bodyClickAt(FLOOR.x, FLOOR.y), bare(false).vp.bodyClickAt(CAP.x, CAP.y)]).toEqual([null, "step"]);
+    expect([bare(true, ["step"]).vp.bodyClickAt(FLOOR.x, FLOOR.y), bare(false).vp.bodyClickAt(CAP.x, CAP.y)]).toEqual([
+      null,
+      "step",
+    ]);
   });
 
   it("off the body takes nothing", () => {

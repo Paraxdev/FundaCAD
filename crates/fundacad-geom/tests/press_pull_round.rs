@@ -73,7 +73,9 @@ fn end_radii(body: &Shape) -> Vec<f64> {
     faces(body)
         .iter()
         .map(surface)
-        .filter(|(k, d, l, _)| *k == 1 && d.cross(DVec3::X).length() < 1e-9 && (l.y - AXIS.0).hypot(l.z - AXIS.1) < 1e-6)
+        .filter(|(k, d, l, _)| {
+            *k == 1 && d.cross(DVec3::X).length() < 1e-9 && (l.y - AXIS.0).hypot(l.z - AXIS.1) < 1e-6
+        })
         .map(|(_, _, _, r)| (r * 1e9).round() / 1e9)
         .collect()
 }
@@ -148,7 +150,12 @@ fn three_pushes_equal_one_push_of_their_sum() {
     let mut raw = through("f6");
     feature(&mut raw, "f6")["distance"] = json!(-0.6);
     let one = body(&raw);
-    assert!(close(kernel::volume(&three), kernel::volume(&one), 1e-3), "{} against {}", kernel::volume(&three), kernel::volume(&one));
+    assert!(
+        close(kernel::volume(&three), kernel::volume(&one), 1e-3),
+        "{} against {}",
+        kernel::volume(&three),
+        kernel::volume(&one)
+    );
     assert_eq!(faces(&three).len(), faces(&one).len());
 }
 
@@ -212,7 +219,12 @@ fn every_face_of_the_slot_selected_widens_it_once() {
     );
     let b = body(&raw);
     let want = slot_drawn(5.0);
-    assert!(close(kernel::volume(&b), kernel::volume(&want), 1e-3), "{} against {}", kernel::volume(&b), kernel::volume(&want));
+    assert!(
+        close(kernel::volume(&b), kernel::volume(&want), 1e-3),
+        "{} against {}",
+        kernel::volume(&b),
+        kernel::volume(&want)
+    );
     assert_eq!(faces(&b).len(), faces(&want).len());
     assert_eq!(end_radii(&b), vec![2.5]);
 }
@@ -226,7 +238,12 @@ fn offset_face_on_the_slot_end_equals_the_press_pull() {
         json!({"id": "off", "type": "offsetFace", "faces": f6["face"], "distance": -0.65, "body": "body1"}),
     );
     let b = body(&raw);
-    assert!(close(kernel::volume(&b), kernel::volume(&pushed), 1e-3), "{} against {}", kernel::volume(&b), kernel::volume(&pushed));
+    assert!(
+        close(kernel::volume(&b), kernel::volume(&pushed), 1e-3),
+        "{} against {}",
+        kernel::volume(&b),
+        kernel::volume(&pushed)
+    );
     assert!(close(kernel::volume(&b), 50937.978, 1e-2), "{}", kernel::volume(&b));
     assert_eq!(faces(&b).len(), faces(&pushed).len());
     assert_eq!(end_radii(&b), vec![2.65]);
@@ -256,10 +273,8 @@ fn follow_tangent_is_a_field_the_build_reads() {
 #[test]
 fn a_slot_grown_out_through_the_top_says_so_under_both_features() {
     let picks: Vec<Value> = SLOT_FACES.iter().map(|p| json!({"kind": "face", "by": "nearest", "point": p})).collect();
-    let pushed = add(
-        through("f5"),
-        json!({"id": "grow", "type": "press-pull", "face": picks, "distance": -3, "body": "body1"}),
-    );
+    let pushed =
+        add(through("f5"), json!({"id": "grow", "type": "press-pull", "face": picks, "distance": -3, "body": "body1"}));
     let offset = add(
         through("f5"),
         json!({"id": "grow", "type": "offsetFace", "faces": picks, "distance": -3, "body": "body1"}),
@@ -267,7 +282,8 @@ fn a_slot_grown_out_through_the_top_says_so_under_both_features() {
     for raw in [&pushed, &offset] {
         let r = rebuild(raw);
         assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
-        let said: Vec<_> = r.diagnostics.iter().filter(|d| d["feature_id"] == "grow").map(|d| d["reason"].clone()).collect();
+        let said: Vec<_> =
+            r.diagnostics.iter().filter(|d| d["feature_id"] == "grow").map(|d| d["reason"].clone()).collect();
         assert!(said.iter().any(|m| m == "the offset broke through the outside of Body1"), "{said:?}");
     }
     assert!(close(kernel::volume(&body(&pushed)), kernel::volume(&body(&offset)), 1e-3));

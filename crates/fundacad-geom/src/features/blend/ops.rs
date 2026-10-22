@@ -51,10 +51,7 @@ pub enum Built {
     Invalid,
 }
 
-fn built(
-    r: Result<UniquePtr<TopoDS_Shape>, cxx::Exception>,
-    status: i32,
-) -> Result<(Shape, Built), String> {
+fn built(r: Result<UniquePtr<TopoDS_Shape>, cxx::Exception>, status: i32) -> Result<(Shape, Built), String> {
     let p = r.map_err(|e| exception_text(&e))?;
     let state = match status {
         0 => Built::Done,
@@ -75,12 +72,7 @@ pub fn fillet(shape: &Shape, edges: &[Shape], radii: &[f64]) -> Result<(Shape, B
     })
 }
 
-pub fn chamfer(
-    shape: &Shape,
-    edges: &[Shape],
-    d1: &[f64],
-    d2: &[f64],
-) -> Result<(Shape, Built), String> {
+pub fn chamfer(shape: &Shape, edges: &[Shape], d1: &[f64], d2: &[f64]) -> Result<(Shape, Built), String> {
     let es = kernel::compound(edges);
     let mut status = 0;
     let began = std::time::Instant::now();
@@ -127,9 +119,8 @@ pub fn copy(shape: &Shape, edges: &[Shape]) -> Option<(Shape, Vec<Shape>)> {
 /// blends.py `_edge_dihedral_deg`.
 pub fn dihedral_deg(shape: &Shape, edge: &Shape) -> Option<f64> {
     let mid = EdgeEnt::new(edge.clone()).ok()?.mid;
-    let d = crate::bench::phase("blend_dihedral", || {
-        ffi::blend_dihedral_deg(shape.raw(), edge.raw(), mid.x, mid.y, mid.z)
-    });
+    let d =
+        crate::bench::phase("blend_dihedral", || ffi::blend_dihedral_deg(shape.raw(), edge.raw(), mid.x, mid.y, mid.z));
     (d >= 0.0).then_some(d)
 }
 
@@ -152,9 +143,7 @@ pub fn conic(shape: &Shape, edges: &[Shape], radius: f64, profile: f64) -> Resul
         0 if !out.is_null() => {
             let shape = Shape::from_raw(out);
             if kernel::is_null(&shape) {
-                Err(BlendErr::Kernel(
-                    "Fillet: the conic profile produced no usable solid".into(),
-                ))
+                Err(BlendErr::Kernel("Fillet: the conic profile produced no usable solid".into()))
             } else {
                 Ok(shape)
             }
@@ -190,9 +179,7 @@ pub fn section(
     }
     let again = section_with(shape, edges, chamfer, sizes, size2, unit, g2, draft, profile, false)?;
     if super::overlap::folds_over_itself(shape, &again, size) {
-        return Err(SectionErr::Blend(
-            "at this size the blend folds over itself".into(),
-        ));
+        return Err(SectionErr::Blend("at this size the blend folds over itself".into()));
     }
     Ok(again)
 }
@@ -236,9 +223,7 @@ fn section_with(
         0 if !out.is_null() => {
             let shape = Shape::from_raw(out);
             if kernel::is_null(&shape) {
-                Err(SectionErr::Value(
-                    "the blend produced no usable solid".into(),
-                ))
+                Err(SectionErr::Value("the blend produced no usable solid".into()))
             } else {
                 OVERRUN.with(|c| c.set(overrun_of(&message)));
                 Ok(shape)

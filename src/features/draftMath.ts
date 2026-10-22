@@ -38,7 +38,9 @@ const MIN_LEVER = 1e-3;
  *  and a stable one is preferred over a prettier one that moves when the mesh does. */
 export function pullAxisFor(normal: readonly [number, number, number]): Axis3 {
   const [nx, ny, nz] = normal;
-  const ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
+  const ax = Math.abs(nx),
+    ay = Math.abs(ny),
+    az = Math.abs(nz);
   if (ax <= ay && ax <= az) return "X";
   if (ay <= az) return "Y";
   return "Z";

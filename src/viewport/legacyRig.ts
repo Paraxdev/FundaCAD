@@ -10,11 +10,16 @@ import { anchorDolly, groundAnchor, orthoZoomStep } from "./zoomAnchor";
 import { ease, flightSeconds, worthFlying } from "./viewFlight";
 import { cameraFlightsOn } from "../ui/motion";
 import type {
-  CameraRig, CameraState, FitOptions, NavEvent, NavLimits, NavScene, ProjectionMode, StandardView,
+  CameraRig,
+  CameraState,
+  FitOptions,
+  NavEvent,
+  NavLimits,
+  NavScene,
+  ProjectionMode,
+  StandardView,
 } from "./cameras";
-import {
-  MIN_PERSP_DIST, NEAR_AT_REST, maxViewHalfHeight, orthoDepth, perspFar, perspNear,
-} from "./clipPlanes";
+import { MIN_PERSP_DIST, NEAR_AT_REST, maxViewHalfHeight, orthoDepth, perspFar, perspNear } from "./clipPlanes";
 
 CameraControls.install({ THREE });
 
@@ -32,10 +37,7 @@ const EMPTY_VIEW_MM = 50;
 /** Where a fresh window's camera sits, relative to what it looks at. */
 const HOME_EYE = new THREE.Vector3(80, -120, 90);
 
-export function createLegacyRig(
-  dom: HTMLElement,
-  aspect: number,
-): CameraRig & { controls: CameraControls } {
+export function createLegacyRig(dom: HTMLElement, aspect: number): CameraRig & { controls: CameraControls } {
   const persp = new THREE.PerspectiveCamera(FOV, aspect, NEAR_AT_REST, 10000);
   persp.up.set(0, 0, 1); // Z-up
   persp.position.copy(HOME_EYE);
@@ -64,8 +66,12 @@ export function createLegacyRig(
   let flight: {
     t: number; // seconds elapsed
     dur: number;
-    eye0: THREE.Vector3; tgt0: THREE.Vector3; q0: THREE.Quaternion;
-    eye1: THREE.Vector3; tgt1: THREE.Vector3; q1: THREE.Quaternion;
+    eye0: THREE.Vector3;
+    tgt0: THREE.Vector3;
+    q0: THREE.Quaternion;
+    eye1: THREE.Vector3;
+    tgt1: THREE.Vector3;
+    q1: THREE.Quaternion;
     up1: THREE.Vector3;
     onArrive: (() => void) | null;
   } | null = null;
@@ -130,10 +136,7 @@ export function createLegacyRig(
     } else {
       // ortho -> persp: reproduce the ortho apparent height at the target
       const halfH = (ortho.top - ortho.bottom) / 2 / ortho.zoom;
-      const newDist = Math.max(
-        MIN_PERSP_DIST,
-        halfH / Math.tan((persp.fov * Math.PI) / 360),
-      );
+      const newDist = Math.max(MIN_PERSP_DIST, halfH / Math.tan((persp.fov * Math.PI) / 360));
       usingOrtho = false;
       active = to;
       controls.camera = to as THREE.PerspectiveCamera & THREE.OrthographicCamera;
@@ -198,8 +201,12 @@ export function createLegacyRig(
       // to correct.
       if (d.lengthSq() > 1e-18) {
         controls.setLookAt(
-          pos.x + d.x, pos.y + d.y, pos.z + d.z,
-          tgt.x + d.x, tgt.y + d.y, tgt.z + d.z,
+          pos.x + d.x,
+          pos.y + d.y,
+          pos.z + d.z,
+          tgt.x + d.x,
+          tgt.y + d.y,
+          tgt.z + d.z,
           true, // the goal only: damping still carries the rendered camera
         );
         tgt.add(d);
@@ -260,11 +267,7 @@ export function createLegacyRig(
     persp.up.copy(flightUp);
     ortho.up.copy(flightUp);
     controls.updateCameraUp();
-    controls.setLookAt(
-      flightEye.x, flightEye.y, flightEye.z,
-      flightTgt.x, flightTgt.y, flightTgt.z,
-      false,
-    );
+    controls.setLookAt(flightEye.x, flightEye.y, flightEye.z, flightTgt.x, flightTgt.y, flightTgt.z, false);
     return true;
   }
 
@@ -272,9 +275,14 @@ export function createLegacyRig(
 
   let navScene: NavScene | null = null;
   const listeners: Record<NavEvent, Set<() => void>> = {
-    inputstart: new Set(), inputend: new Set(), change: new Set(), rest: new Set(),
+    inputstart: new Set(),
+    inputend: new Set(),
+    change: new Set(),
+    rest: new Set(),
   };
-  const emit = (ev: NavEvent) => { for (const fn of listeners[ev]) fn(); };
+  const emit = (ev: NavEvent) => {
+    for (const fn of listeners[ev]) fn();
+  };
   controls.addEventListener("controlstart", () => emit("inputstart"));
   controls.addEventListener("controlend", () => emit("inputend"));
   controls.addEventListener("update", () => emit("change"));
@@ -326,7 +334,9 @@ export function createLegacyRig(
   dom.addEventListener("pointerdown", (e) => {
     if (e.button === 2) rig.setOrbitPoint(rig.pivotAt(e.clientX, e.clientY));
   });
-  const endPivot = (e: PointerEvent) => { if (e.button === 2 || e.type === "pointercancel") rig.setOrbitPoint(null); };
+  const endPivot = (e: PointerEvent) => {
+    if (e.button === 2 || e.type === "pointercancel") rig.setOrbitPoint(null);
+  };
   window.addEventListener("pointerup", endPivot);
   window.addEventListener("pointercancel", endPivot);
 
@@ -354,10 +364,7 @@ export function createLegacyRig(
       r = EMPTY_VIEW_MM;
       c.set(0, 0, 0);
     }
-    const dir = controls
-      .getPosition(new THREE.Vector3())
-      .sub(controls.getTarget(new THREE.Vector3()))
-      .normalize();
+    const dir = controls.getPosition(new THREE.Vector3()).sub(controls.getTarget(new THREE.Vector3())).normalize();
     if (dir.lengthSq() < 1e-6) dir.set(1, -1, 0.8).normalize();
     let dist: number;
     if (usingOrtho) {
@@ -494,9 +501,7 @@ export function createLegacyRig(
         const minZoom = Math.max(controls.minZoom, Math.min(ceilingZoom, curZoom));
         // The zoom and the truck come from ONE call, against the controls' own
         // limits, see orthoZoomStep for what happened when they came from two.
-        const { zoom: newZoom, truck: k } = orthoZoomStep(
-          curZoom, f, minZoom, controls.maxZoom,
-        );
+        const { zoom: newZoom, truck: k } = orthoZoomStep(curZoom, f, minZoom, controls.maxZoom);
         pendingOrthoZoom = newZoom;
         if (pivot) {
           // keep the cursor point fixed on screen: TRUCK camera and target together
@@ -509,15 +514,7 @@ export function createLegacyRig(
           const dx = (pivot.x - target.x) * k;
           const dy = (pivot.y - target.y) * k;
           const dz = (pivot.z - target.z) * k;
-          controls.setLookAt(
-            pos.x + dx,
-            pos.y + dy,
-            pos.z + dz,
-            target.x + dx,
-            target.y + dy,
-            target.z + dz,
-            false,
-          );
+          controls.setLookAt(pos.x + dx, pos.y + dy, pos.z + dz, target.x + dx, target.y + dy, target.z + dz, false);
         }
         controls.zoomTo(newZoom, false);
         return;
@@ -611,15 +608,7 @@ export function createLegacyRig(
       ortho.up.copy(u);
       controls.updateCameraUp();
       const t = controls.getTarget(new THREE.Vector3());
-      controls.setLookAt(
-        t.x + n.x * d,
-        t.y + n.y * d,
-        t.z + n.z * d,
-        t.x,
-        t.y,
-        t.z,
-        true,
-      );
+      controls.setLookAt(t.x + n.x * d, t.y + n.y * d, t.z + n.z * d, t.x, t.y, t.z, true);
     },
     lookAtPlane(origin, normal, up, opts) {
       rollAngle = 0;
@@ -658,8 +647,12 @@ export function createLegacyRig(
       flight = {
         t: 0,
         dur: flightSeconds(turn, zoomRatio),
-        eye0: from, tgt0: fromTgt, q0,
-        eye1: eye, tgt1: origin.clone(), q1,
+        eye0: from,
+        tgt0: fromTgt,
+        q0,
+        eye1: eye,
+        tgt1: origin.clone(),
+        q1,
         up1: up.clone(),
         onArrive: opts?.onArrive ?? null,
       };
@@ -830,9 +823,20 @@ export function createLegacyRig(
     },
     lerpLookAt(eyeA, targetA, eyeB, targetB, t, animate = false) {
       controls.lerpLookAt(
-        eyeA.x, eyeA.y, eyeA.z, targetA.x, targetA.y, targetA.z,
-        eyeB.x, eyeB.y, eyeB.z, targetB.x, targetB.y, targetB.z,
-        t, animate,
+        eyeA.x,
+        eyeA.y,
+        eyeA.z,
+        targetA.x,
+        targetA.y,
+        targetA.z,
+        eyeB.x,
+        eyeB.y,
+        eyeB.z,
+        targetB.x,
+        targetB.y,
+        targetB.z,
+        t,
+        animate,
       );
     },
     setViewScale(scale, animate = false) {

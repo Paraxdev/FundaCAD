@@ -53,14 +53,17 @@ const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCas
 const byName = (a: HomeEntry, b: HomeEntry) => fold(a.name).localeCompare(fold(b.name));
 
 export function sortEntries(entries: readonly HomeEntry[], mode: SortMode): HomeEntry[] {
-  const time = (e: HomeEntry) => (mode === "opened" ? e.openedAt : e.editedAt ?? e.openedAt) ?? 0;
+  const time = (e: HomeEntry) => (mode === "opened" ? e.openedAt : (e.editedAt ?? e.openedAt)) ?? 0;
   return [...entries].sort((a, b) => (mode === "name" ? 0 : time(b) - time(a)) || byName(a, b));
 }
 
 /** Every word of the query is somewhere in the text, case and accents ignored. */
 export function matchesQuery(text: string, query: string): boolean {
   const hay = fold(text);
-  return fold(query).split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+  return fold(query)
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((w) => hay.includes(w));
 }
 
 export function filterEntries(entries: readonly HomeEntry[], query: string): HomeEntry[] {

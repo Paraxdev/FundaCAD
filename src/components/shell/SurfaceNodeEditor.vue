@@ -24,24 +24,67 @@ const store = useEngine().store;
 
 type NodeType = SurfaceNode["type"];
 const LABEL: Record<NodeType, string> = {
-  noise: "Noise", scratches: "Scratches", brushed: "Brushed", voronoi: "Wear", wave: "Bands",
-  fresnel: "Fresnel", ramp: "Ramp", colorramp: "Color Ramp", mix: "Mix", math: "Math", output: "Output",
+  noise: "Noise",
+  scratches: "Scratches",
+  brushed: "Brushed",
+  voronoi: "Wear",
+  wave: "Bands",
+  fresnel: "Fresnel",
+  ramp: "Ramp",
+  colorramp: "Color Ramp",
+  mix: "Mix",
+  math: "Math",
+  output: "Output",
 };
-const ADDABLE: NodeType[] = ["noise", "scratches", "brushed", "voronoi", "wave", "fresnel", "ramp", "colorramp", "mix", "math"];
+const ADDABLE: NodeType[] = [
+  "noise",
+  "scratches",
+  "brushed",
+  "voronoi",
+  "wave",
+  "fresnel",
+  "ramp",
+  "colorramp",
+  "mix",
+  "math",
+];
 const MATH_OPS = ["multiply", "add", "subtract", "min", "max", "pow"];
 // input ports per type, and the output type each node produces (for wiring rules)
 const INPUTS: Record<NodeType, string[]> = {
-  noise: [], scratches: [], brushed: [], voronoi: [], wave: [], fresnel: [],
-  ramp: ["t"], colorramp: ["t"], mix: ["a", "b", "t"], math: ["a", "b"], output: ["roughness", "bump", "color"],
+  noise: [],
+  scratches: [],
+  brushed: [],
+  voronoi: [],
+  wave: [],
+  fresnel: [],
+  ramp: ["t"],
+  colorramp: ["t"],
+  mix: ["a", "b", "t"],
+  math: ["a", "b"],
+  output: ["roughness", "bump", "color"],
 };
 const OUT_TYPE: Record<NodeType, "float" | "vec3" | "none"> = {
-  noise: "float", scratches: "float", brushed: "float", voronoi: "float", wave: "float", fresnel: "float",
-  ramp: "vec3", colorramp: "vec3", mix: "float", math: "float", output: "none",
+  noise: "float",
+  scratches: "float",
+  brushed: "float",
+  voronoi: "float",
+  wave: "float",
+  fresnel: "float",
+  ramp: "vec3",
+  colorramp: "vec3",
+  mix: "float",
+  math: "float",
+  output: "none",
 };
 // what each INPUT port expects, so a float cannot be wired into a colour port
 // (which would be a shader type error)
 const PORT_TYPE: Record<string, "float" | "vec3"> = {
-  t: "float", a: "float", b: "float", roughness: "float", bump: "float", color: "vec3",
+  t: "float",
+  a: "float",
+  b: "float",
+  roughness: "float",
+  bump: "float",
+  color: "vec3",
 };
 // A data type reads at a glance: a value (float) is a blue circle, a colour
 // (vec3) an amber square, on the ports AND on the wire between them, so "what
@@ -50,13 +93,31 @@ const outClass = (t: NodeType) => `t-${OUT_TYPE[t]}`;
 const inClass = (port: string) => `t-${PORT_TYPE[port] ?? "float"}`;
 // A small icon per node, so a card is recognised by shape not only by its name.
 const ICON: Record<NodeType, string> = {
-  noise: "node-noise", scratches: "node-scratches", brushed: "node-brushed", voronoi: "node-voronoi", wave: "node-wave",
-  fresnel: "node-fresnel", ramp: "node-ramp", colorramp: "node-colorramp", mix: "node-mix", math: "node-math", output: "node-output",
+  noise: "node-noise",
+  scratches: "node-scratches",
+  brushed: "node-brushed",
+  voronoi: "node-voronoi",
+  wave: "node-wave",
+  fresnel: "node-fresnel",
+  ramp: "node-ramp",
+  colorramp: "node-colorramp",
+  mix: "node-mix",
+  math: "node-math",
+  output: "node-output",
 };
 // Node families, for the coloured stripe down a card's left edge.
 const CATEGORY: Record<NodeType, string> = {
-  noise: "tex", scratches: "tex", brushed: "tex", voronoi: "tex", wave: "tex",
-  fresnel: "input", ramp: "color", colorramp: "color", mix: "conv", math: "conv", output: "out",
+  noise: "tex",
+  scratches: "tex",
+  brushed: "tex",
+  voronoi: "tex",
+  wave: "tex",
+  fresnel: "input",
+  ramp: "color",
+  colorramp: "color",
+  mix: "conv",
+  math: "conv",
+  output: "out",
 };
 
 const NODE_W = 150;
@@ -66,7 +127,12 @@ let seq = 0;
 const uid = () => `n${Date.now().toString(36)}${(seq++).toString(36)}`;
 
 function defaultGraph(): SurfaceGraph {
-  return { output: "out", nodes: [{ id: "out", type: "output", x: 420, y: 120, params: { roughAmount: 0.5, bumpAmount: 0.4, colorAmount: 0.4 } }] };
+  return {
+    output: "out",
+    nodes: [
+      { id: "out", type: "output", x: 420, y: 120, params: { roughAmount: 0.5, bumpAmount: 0.4, colorAmount: 0.4 } },
+    ],
+  };
 }
 function defaults(type: NodeType): Record<string, number | string> {
   if (type === "ramp") return { colorA: "#201810", colorB: "#e0a060" };
@@ -85,7 +151,9 @@ const g = ref<SurfaceGraph>(clone(material.value?.surfaceGraph ?? defaultGraph()
 function sync() {
   store.updateMaterial(props.materialId, { surfaceGraph: clone(g.value) });
 }
-function node(id: string): SurfaceNode | undefined { return g.value.nodes.find((n) => n.id === id); }
+function node(id: string): SurfaceNode | undefined {
+  return g.value.nodes.find((n) => n.id === id);
+}
 
 function addNode(type: NodeType, at?: { x: number; y: number }) {
   let x: number, y: number;
@@ -98,7 +166,8 @@ function addNode(type: NodeType, at?: { x: number; y: number }) {
     // canvas), so unproject it directly rather than through toWorld, which
     // expects page coordinates. Cascade off the centre so successive adds do not
     // stack exactly on top of one another (which would bury the lower ports).
-    const cw = canvasEl.value?.clientWidth ?? 600, ch = canvasEl.value?.clientHeight ?? 300;
+    const cw = canvasEl.value?.clientWidth ?? 600,
+      ch = canvasEl.value?.clientHeight ?? 300;
     const off = (g.value.nodes.length % 6) * 26;
     x = Math.round((cw / 2 - pan.value.x) / zoom.value - NODE_W / 2 + off);
     y = Math.round((ch / 2 - pan.value.y) / zoom.value - 20 + off);
@@ -118,11 +187,17 @@ const addMenu = ref<{ x: number; y: number; wx: number; wy: number } | null>(nul
 const screenCursor = ref({ x: 0, y: 0 });
 function openAddMenu() {
   const r = canvasEl.value?.getBoundingClientRect();
-  let sx = screenCursor.value.x, sy = screenCursor.value.y;
-  if (sx === 0 && sy === 0) { sx = (canvasEl.value?.clientWidth ?? 600) / 2; sy = (canvasEl.value?.clientHeight ?? 300) / 2; }
+  let sx = screenCursor.value.x,
+    sy = screenCursor.value.y;
+  if (sx === 0 && sy === 0) {
+    sx = (canvasEl.value?.clientWidth ?? 600) / 2;
+    sy = (canvasEl.value?.clientHeight ?? 300) / 2;
+  }
   addMenu.value = {
-    x: (r?.left ?? 0) + sx, y: (r?.top ?? 0) + sy,
-    wx: (sx - pan.value.x) / zoom.value, wy: (sy - pan.value.y) / zoom.value,
+    x: (r?.left ?? 0) + sx,
+    y: (r?.top ?? 0) + sy,
+    wx: (sx - pan.value.x) / zoom.value,
+    wy: (sy - pan.value.y) / zoom.value,
   };
 }
 function pickAdd(type: NodeType) {
@@ -132,8 +207,13 @@ function pickAdd(type: NodeType) {
 function onKey(e: KeyboardEvent) {
   const t = e.target as HTMLElement | null;
   if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
-  if (e.shiftKey && (e.key === "a" || e.key === "A")) { e.preventDefault(); openAddMenu(); }
-  else if (e.key === "Escape" && addMenu.value) { addMenu.value = null; e.stopPropagation(); }
+  if (e.shiftKey && (e.key === "a" || e.key === "A")) {
+    e.preventDefault();
+    openAddMenu();
+  } else if (e.key === "Escape" && addMenu.value) {
+    addMenu.value = null;
+    e.stopPropagation();
+  }
 }
 onMounted(() => window.addEventListener("keydown", onKey));
 onUnmounted(() => window.removeEventListener("keydown", onKey));
@@ -146,7 +226,10 @@ function removeNode(id: string) {
   }
   sync();
 }
-function clearGraph() { g.value = defaultGraph(); sync(); }
+function clearGraph() {
+  g.value = defaultGraph();
+  sync();
+}
 
 // --- wiring: drag a dot to a dot, or click one then the other ---------------
 const armed = ref<string | null>(null);
@@ -173,7 +256,10 @@ function clickInput(nodeId: string, port: string) {
 }
 function disconnect(nodeId: string, port: string) {
   const n = node(nodeId);
-  if (n?.in && n.in[port]) { delete n.in[port]; sync(); }
+  if (n?.in && n.in[port]) {
+    delete n.in[port];
+    sync();
+  }
 }
 
 // --- params ----------------------------------------------------------------
@@ -201,7 +287,10 @@ const NUM_PARAMS: Record<NodeType, NumParam[]> = {
   wave: [SCALE, ANGLE],
   mix: [{ key: "t", label: "Mix", min: 0, max: 1, step: 0.01, def: 0.5 }],
   // a/b sliders show only for the ports left unwired; the op is a select below
-  math: [{ key: "a", label: "A", min: 0, max: 1, step: 0.01, def: 0.5 }, { key: "b", label: "B", min: 0, max: 1, step: 0.01, def: 0.5 }],
+  math: [
+    { key: "a", label: "A", min: 0, max: 1, step: 0.01, def: 0.5 },
+    { key: "b", label: "B", min: 0, max: 1, step: 0.01, def: 0.5 },
+  ],
   fresnel: [{ key: "power", label: "Power", min: 0.5, max: 8, step: 0.1, def: 3 }],
   ramp: [],
   colorramp: [],
@@ -211,8 +300,10 @@ const NUM_PARAMS: Record<NodeType, NumParam[]> = {
     { key: "colorAmount", label: "Colour", min: 0, max: 1, step: 0.01, def: 0.4 },
   ],
 };
-const pnum = (n: SurfaceNode, key: string, d = 0) => (typeof n.params?.[key] === "number" ? (n.params[key] as number) : d);
-const pcol = (n: SurfaceNode, key: string, d: string) => (typeof n.params?.[key] === "string" ? (n.params[key] as string) : d);
+const pnum = (n: SurfaceNode, key: string, d = 0) =>
+  typeof n.params?.[key] === "number" ? (n.params[key] as number) : d;
+const pcol = (n: SurfaceNode, key: string, d: string) =>
+  typeof n.params?.[key] === "string" ? (n.params[key] as string) : d;
 
 // --- colorramp stops: "pos:hex;pos:hex" kept in edit order (the compiler sorts) -
 type Stop = { pos: number; hex: string };
@@ -226,15 +317,44 @@ function rampStops(n: SurfaceNode): Stop[] {
     const hex = part.slice(i + 1).trim();
     if (Number.isFinite(pos) && /^#[0-9a-fA-F]{6}$/.test(hex)) out.push({ pos: Math.min(Math.max(pos, 0), 1), hex });
   }
-  return out.length >= 2 ? out : [{ pos: 0, hex: "#000000" }, { pos: 1, hex: "#ffffff" }];
+  return out.length >= 2
+    ? out
+    : [
+        { pos: 0, hex: "#000000" },
+        { pos: 1, hex: "#ffffff" },
+      ];
 }
 function writeStops(id: string, stops: Stop[]) {
   setParam(id, "stops", stops.map((s) => `${s.pos.toFixed(3)}:${s.hex}`).join(";"), false);
 }
-function setStopColor(id: string, i: number, hex: string) { const s = rampStops(node(id)!); const st = s[i]; if (st) { st.hex = hex; writeStops(id, s); } }
-function setStopPos(id: string, i: number, pos: number) { const s = rampStops(node(id)!); const st = s[i]; if (st) { st.pos = Math.min(Math.max(pos, 0), 1); writeStops(id, s); } }
-function addStop(id: string) { const s = rampStops(node(id)!); s.push({ pos: 0.5, hex: "#808080" }); writeStops(id, s); }
-function removeStop(id: string, i: number) { const s = rampStops(node(id)!); if (s.length > 2) { s.splice(i, 1); writeStops(id, s); } }
+function setStopColor(id: string, i: number, hex: string) {
+  const s = rampStops(node(id)!);
+  const st = s[i];
+  if (st) {
+    st.hex = hex;
+    writeStops(id, s);
+  }
+}
+function setStopPos(id: string, i: number, pos: number) {
+  const s = rampStops(node(id)!);
+  const st = s[i];
+  if (st) {
+    st.pos = Math.min(Math.max(pos, 0), 1);
+    writeStops(id, s);
+  }
+}
+function addStop(id: string) {
+  const s = rampStops(node(id)!);
+  s.push({ pos: 0.5, hex: "#808080" });
+  writeStops(id, s);
+}
+function removeStop(id: string, i: number) {
+  const s = rampStops(node(id)!);
+  if (s.length > 2) {
+    s.splice(i, 1);
+    writeStops(id, s);
+  }
+}
 function rampGradient(n: SurfaceNode): string {
   const s = [...rampStops(n)].sort((a, b) => a.pos - b.pos);
   return `linear-gradient(to right, ${s.map((x) => `${x.hex} ${(x.pos * 100).toFixed(1)}%`).join(", ")})`;
@@ -250,13 +370,15 @@ const worldStyle = computed(() => ({
 }));
 function toWorld(clientX: number, clientY: number) {
   const r = canvasEl.value?.getBoundingClientRect();
-  const lx = clientX - (r?.left ?? 0), ly = clientY - (r?.top ?? 0);
+  const lx = clientX - (r?.left ?? 0),
+    ly = clientY - (r?.top ?? 0);
   return { x: (lx - pan.value.x) / zoom.value, y: (ly - pan.value.y) / zoom.value };
 }
 function onWheel(e: WheelEvent) {
   e.preventDefault();
   const r = canvasEl.value?.getBoundingClientRect();
-  const cx = e.clientX - (r?.left ?? 0), cy = e.clientY - (r?.top ?? 0);
+  const cx = e.clientX - (r?.left ?? 0),
+    cy = e.clientY - (r?.top ?? 0);
   const old = zoom.value;
   const next = clamp(old * (e.deltaY < 0 ? 1.1 : 1 / 1.1), 0.35, 2.5);
   pan.value.x = cx - (cx - pan.value.x) * (next / old);
@@ -267,13 +389,21 @@ function fit() {
   const ns = g.value.nodes;
   const el = canvasEl.value;
   if (!ns.length || !el) return;
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   for (const n of ns) {
-    const x = n.x ?? 0, y = n.y ?? 0;
-    minX = Math.min(minX, x); minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x + NODE_W); maxY = Math.max(maxY, y + 120);
+    const x = n.x ?? 0,
+      y = n.y ?? 0;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + NODE_W);
+    maxY = Math.max(maxY, y + 120);
   }
-  const pad = 40, cw = el.clientWidth, ch = el.clientHeight;
+  const pad = 40,
+    cw = el.clientWidth,
+    ch = el.clientHeight;
   const z = clamp(Math.min(cw / (maxX - minX + pad * 2), ch / (maxY - minY + pad * 2)), 0.35, 1.4);
   zoom.value = z;
   pan.value = { x: cw / 2 - ((minX + maxX) / 2) * z, y: ch / 2 - ((minY + maxY) / 2) * z };
@@ -303,16 +433,25 @@ function onMove(e: PointerEvent) {
   cursor.value = toWorld(e.clientX, e.clientY);
   if (wire.value) wire.value.moved = true;
   if (panning.value) {
-    pan.value = { x: panning.value.px + (e.clientX - panning.value.sx), y: panning.value.py + (e.clientY - panning.value.sy) };
+    pan.value = {
+      x: panning.value.px + (e.clientX - panning.value.sx),
+      y: panning.value.py + (e.clientY - panning.value.sy),
+    };
     return;
   }
   const d = drag.value;
   if (!d) return;
   const n = node(d.id);
-  if (n) { n.x = Math.round(cursor.value.x - d.ox); n.y = Math.round(cursor.value.y - d.oy); }
+  if (n) {
+    n.x = Math.round(cursor.value.x - d.ox);
+    n.y = Math.round(cursor.value.y - d.oy);
+  }
 }
 function onUp(e: PointerEvent) {
-  if (drag.value) { drag.value = null; sync(); }
+  if (drag.value) {
+    drag.value = null;
+    sync();
+  }
   panning.value = null;
   if (wire.value) {
     const w = wire.value;
@@ -321,7 +460,10 @@ function onUp(e: PointerEvent) {
       // a real drag: drop it on whatever input dot is under the pointer
       const el = document.elementFromPoint(e.clientX, e.clientY)?.closest("[data-in]");
       const din = el?.getAttribute("data-in");
-      if (din) { const i = din.indexOf(":"); tryWire(din.slice(0, i), din.slice(i + 1), w.from); }
+      if (din) {
+        const i = din.indexOf(":");
+        tryWire(din.slice(0, i), din.slice(i + 1), w.from);
+      }
       armed.value = null;
     }
     // a press without a drag leaves the dot armed, so click-then-click still works
@@ -339,7 +481,9 @@ function onResizeMove(e: PointerEvent) {
   if (!resizing.value) return;
   panelH.value = clamp(resizing.value.h + (resizing.value.y - e.clientY), 220, window.innerHeight * 0.9);
 }
-function onResizeUp() { resizing.value = null; }
+function onResizeUp() {
+  resizing.value = null;
+}
 
 // --- wire geometry (from node x/y + fixed port offsets) --------------------
 const outPos = (n: SurfaceNode) => ({ x: (n.x ?? 0) + NODE_W, y: (n.y ?? 0) + 16 });
@@ -353,7 +497,11 @@ const wires = computed(() => {
     INPUTS[n.type].forEach((port, i) => {
       const src = n.in?.[port];
       const s = src ? node(src) : undefined;
-      if (s) { const a = outPos(s), b = inPos(n, i); out.push({ d: bez(a.x, a.y, b.x, b.y), t: OUT_TYPE[s.type] }); }
+      if (s) {
+        const a = outPos(s),
+          b = inPos(n, i);
+        out.push({ d: bez(a.x, a.y, b.x, b.y), t: OUT_TYPE[s.type] });
+      }
     });
   }
   return out;
@@ -403,19 +551,22 @@ const pending = computed(() => {
         >
           <div class="ne-node-head" @pointerdown="startDrag(n, $event)">
             <Icon class="ne-icon" :name="ICON[n.type]" :size="12" />{{ LABEL[n.type] }}
-            <button v-if="n.type !== 'output'" class="ne-x" @pointerdown.stop @click="removeNode(n.id)"><Icon name="close" :size="12" /></button>
+            <button v-if="n.type !== 'output'" class="ne-x" @pointerdown.stop @click="removeNode(n.id)"
+              ><Icon name="close" :size="12"
+            /></button>
           </div>
           <!-- input ports (dot colour + shape says what type this port needs) -->
           <div
             v-for="(port, i) in INPUTS[n.type]"
             :key="port"
             class="ne-port ne-in"
-            :style="{ top: (30 + i * 20) + 'px' }"
+            :style="{ top: 30 + i * 20 + 'px' }"
             :data-in="n.id + ':' + port"
             :title="PORT_TYPE[port] === 'vec3' ? port + ' (colour)' : port + ' (value)'"
             @pointerup.stop="wire && wire.moved ? tryWire(n.id, port, wire.from) : null"
             @click="n.in?.[port] ? disconnect(n.id, port) : clickInput(n.id, port)"
-          ><span class="ne-dot" :class="inClass(port)"></span>{{ port }}</div>
+            ><span class="ne-dot" :class="inClass(port)"></span>{{ port }}</div
+          >
           <!-- output port (dot colour + shape says what type this node outputs) -->
           <div
             v-if="OUT_TYPE[n.type] !== 'none'"
@@ -425,39 +576,80 @@ const pending = computed(() => {
             :title="OUT_TYPE[n.type] === 'vec3' ? 'outputs a colour' : 'outputs a value'"
             @pointerdown.stop="startWire(n.id, $event)"
             @click="armed = armed === n.id ? null : n.id"
-          >out<span class="ne-dot" :class="outClass(n.type)"></span></div>
+            >out<span class="ne-dot" :class="outClass(n.type)"></span
+          ></div>
           <!-- params -->
-          <div class="ne-params" :style="{ paddingTop: (INPUTS[n.type].length ? INPUTS[n.type].length * 20 + 8 : 6) + 'px' }">
+          <div
+            class="ne-params"
+            :style="{ paddingTop: (INPUTS[n.type].length ? INPUTS[n.type].length * 20 + 8 : 6) + 'px' }"
+          >
             <label v-if="n.type === 'math'" class="ne-prow">
               <span>Op</span>
-              <select class="ne-select" :value="pcol(n, 'op', 'multiply')"
-                @change="setParam(n.id, 'op', ($event.target as HTMLSelectElement).value, false)">
+              <select
+                class="ne-select"
+                :value="pcol(n, 'op', 'multiply')"
+                @change="setParam(n.id, 'op', ($event.target as HTMLSelectElement).value, false)"
+              >
                 <option v-for="o in MATH_OPS" :key="o" :value="o">{{ o }}</option>
               </select>
             </label>
             <!-- a/b constant only matters while that port is unwired -->
-            <label v-for="p in NUM_PARAMS[n.type]" v-show="!(n.type === 'math' && n.in?.[p.key])" :key="p.key" class="ne-prow">
+            <label
+              v-for="p in NUM_PARAMS[n.type]"
+              v-show="!(n.type === 'math' && n.in?.[p.key])"
+              :key="p.key"
+              class="ne-prow"
+            >
               <span>{{ p.label }}</span>
-              <input class="sm-slider" type="range" :min="p.min" :max="p.max" :step="p.step"
+              <input
+                class="sm-slider"
+                type="range"
+                :min="p.min"
+                :max="p.max"
+                :step="p.step"
                 :value="pnum(n, p.key, p.def)"
-                @input="setParam(n.id, p.key, ($event.target as HTMLInputElement).value, true)" />
+                @input="setParam(n.id, p.key, ($event.target as HTMLInputElement).value, true)"
+              />
             </label>
             <template v-if="n.type === 'ramp'">
-              <label class="ne-prow"><span>A</span>
-                <input class="mats-color" type="color" :value="pcol(n, 'colorA', '#201810')"
-                  @input="setParam(n.id, 'colorA', ($event.target as HTMLInputElement).value, false)" /></label>
-              <label class="ne-prow"><span>B</span>
-                <input class="mats-color" type="color" :value="pcol(n, 'colorB', '#e0a060')"
-                  @input="setParam(n.id, 'colorB', ($event.target as HTMLInputElement).value, false)" /></label>
+              <label class="ne-prow"
+                ><span>A</span>
+                <input
+                  class="mats-color"
+                  type="color"
+                  :value="pcol(n, 'colorA', '#201810')"
+                  @input="setParam(n.id, 'colorA', ($event.target as HTMLInputElement).value, false)"
+              /></label>
+              <label class="ne-prow"
+                ><span>B</span>
+                <input
+                  class="mats-color"
+                  type="color"
+                  :value="pcol(n, 'colorB', '#e0a060')"
+                  @input="setParam(n.id, 'colorB', ($event.target as HTMLInputElement).value, false)"
+              /></label>
             </template>
             <template v-if="n.type === 'colorramp'">
               <div class="ne-ramp-bar" :style="{ background: rampGradient(n) }"></div>
               <div v-for="(st, si) in rampStops(n)" :key="si" class="ne-prow ne-stop">
-                <input class="mats-color" type="color" :value="st.hex"
-                  @input="setStopColor(n.id, si, ($event.target as HTMLInputElement).value)" />
-                <input class="sm-slider" type="range" min="0" max="1" step="0.01" :value="st.pos"
-                  @input="setStopPos(n.id, si, Number(($event.target as HTMLInputElement).value))" />
-                <button class="ne-x" @pointerdown.stop @click="removeStop(n.id, si)"><Icon name="close" :size="12" /></button>
+                <input
+                  class="mats-color"
+                  type="color"
+                  :value="st.hex"
+                  @input="setStopColor(n.id, si, ($event.target as HTMLInputElement).value)"
+                />
+                <input
+                  class="sm-slider"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  :value="st.pos"
+                  @input="setStopPos(n.id, si, Number(($event.target as HTMLInputElement).value))"
+                />
+                <button class="ne-x" @pointerdown.stop @click="removeStop(n.id, si)"
+                  ><Icon name="close" :size="12"
+                /></button>
               </div>
               <button class="rd-chip ne-addstop" @click="addStop(n.id)">+ stop</button>
             </template>
@@ -473,7 +665,9 @@ const pending = computed(() => {
         <div class="ne-addhead">Add</div>
         <div v-for="grp in ADD_GROUPS" :key="grp.label" class="ne-addgrp">
           <div class="ne-addgrp-label">{{ grp.label }}</div>
-          <button v-for="t in grp.items" :key="t" class="ne-additem" :data-add-menu="t" @click="pickAdd(t)">{{ LABEL[t] }}</button>
+          <button v-for="t in grp.items" :key="t" class="ne-additem" :data-add-menu="t" @click="pickAdd(t)">{{
+            LABEL[t]
+          }}</button>
         </div>
       </div>
     </template>
@@ -481,67 +675,304 @@ const pending = computed(() => {
 </template>
 
 <style scoped>
-.ne-overlay { position: fixed; z-index: 60; display: flex; flex-direction: column; }
-.ne-resize { height: 7px; margin-top: -3px; cursor: ns-resize; flex: none; }
-.ne-resize::after { content: ""; display: block; width: 46px; height: 3px; margin: 2px auto 0;
-  border-radius: 2px; background: var(--line-strong); }
-.ne-bar { display: flex; gap: 6px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.ne-title-main { font-weight: 600; margin-right: 8px; }
-.ne-spacer { flex: 1; }
-.ne-canvas { position: relative; flex: 1; overflow: hidden; background:
-  radial-gradient(circle, var(--line) 1px, transparent 1px) 0 0 / 22px 22px; touch-action: none; cursor: grab; }
-.ne-world { position: absolute; inset: 0; }
-.ne-wires { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
-.ne-wire { fill: none; stroke: var(--accent); stroke-width: 2; opacity: 0.85; }
-.ne-wire-pending { stroke-dasharray: 4 3; opacity: 0.6; }
-.ne-node { position: absolute; background: var(--glass-sheen), var(--float-bg-solid); border: 1px solid var(--float-line);
-  border-radius: var(--float-tile-radius); corner-shape: squircle; box-shadow: var(--glass-inset), var(--float-shadow); font-size: 12px; user-select: none; }
-.ne-node.ne-output { border-color: var(--accent); }
-.ne-node-head { padding: 4px 8px; font-weight: 600; cursor: grab; border-bottom: 1px solid var(--line);
-  display: flex; justify-content: space-between; align-items: center; }
-.ne-x { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
-.ne-params { padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
-.ne-prow { display: flex; align-items: center; gap: 6px; }
-.ne-prow > span { width: 46px; color: var(--text-dim); }
-.ne-select { flex: 1; background: rgba(255, 255, 255, 0.04); color: var(--text); border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--float-chip-radius); corner-shape: squircle; font-size: 11px; padding: 1px 4px; }
-.ne-ramp-bar { height: 12px; border-radius: var(--r-sm); border: 1px solid var(--line); margin-bottom: 2px; }
-.ne-stop { gap: 4px; }
-.ne-stop .mats-color { width: 22px; flex: none; }
-.ne-stop .sm-slider { flex: 1; }
-.ne-addstop { align-self: flex-start; padding: 1px 6px; font-size: 11px; }
-.ne-port { position: absolute; display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); cursor: pointer; }
-.ne-in { left: -6px; }
-.ne-out { right: -6px; flex-direction: row-reverse; top: 14px; }
-.ne-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); border: 1px solid var(--accent); flex: none; }
-.ne-dot:hover { background: var(--accent); }
-.ne-out.armed .ne-dot { background: var(--accent); }
+.ne-overlay {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+}
+.ne-resize {
+  height: 7px;
+  margin-top: -3px;
+  cursor: ns-resize;
+  flex: none;
+}
+.ne-resize::after {
+  content: "";
+  display: block;
+  width: 46px;
+  height: 3px;
+  margin: 2px auto 0;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.ne-bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.ne-title-main {
+  font-weight: 600;
+  margin-right: 8px;
+}
+.ne-spacer {
+  flex: 1;
+}
+.ne-canvas {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  background: radial-gradient(circle, var(--line) 1px, transparent 1px) 0 0 / 22px 22px;
+  touch-action: none;
+  cursor: grab;
+}
+.ne-world {
+  position: absolute;
+  inset: 0;
+}
+.ne-wires {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.ne-wire {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  opacity: 0.85;
+}
+.ne-wire-pending {
+  stroke-dasharray: 4 3;
+  opacity: 0.6;
+}
+.ne-node {
+  position: absolute;
+  background: var(--glass-sheen), var(--float-bg-solid);
+  border: 1px solid var(--float-line);
+  border-radius: var(--float-tile-radius);
+  corner-shape: squircle;
+  box-shadow: var(--glass-inset), var(--float-shadow);
+  font-size: 12px;
+  user-select: none;
+}
+.ne-node.ne-output {
+  border-color: var(--accent);
+}
+.ne-node-head {
+  padding: 4px 8px;
+  font-weight: 600;
+  cursor: grab;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ne-x {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.ne-params {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ne-prow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ne-prow > span {
+  width: 46px;
+  color: var(--text-dim);
+}
+.ne-select {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--float-chip-radius);
+  corner-shape: squircle;
+  font-size: 11px;
+  padding: 1px 4px;
+}
+.ne-ramp-bar {
+  height: 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  margin-bottom: 2px;
+}
+.ne-stop {
+  gap: 4px;
+}
+.ne-stop .mats-color {
+  width: 22px;
+  flex: none;
+}
+.ne-stop .sm-slider {
+  flex: 1;
+}
+.ne-addstop {
+  align-self: flex-start;
+  padding: 1px 6px;
+  font-size: 11px;
+}
+.ne-port {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.ne-in {
+  left: -6px;
+}
+.ne-out {
+  right: -6px;
+  flex-direction: row-reverse;
+  top: 14px;
+}
+.ne-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  border: 1px solid var(--accent);
+  flex: none;
+}
+.ne-dot:hover {
+  background: var(--accent);
+}
+.ne-out.armed .ne-dot {
+  background: var(--accent);
+}
 /* data type by colour AND shape: a value is a blue circle, a colour an amber square */
-.ne-dot.t-float { border-color: #5aa9f0; }
-.ne-dot.t-vec3 { border-color: #f0b45a; border-radius: 2px; }
-.ne-dot.t-float:hover, .ne-out.armed .ne-dot.t-float { background: #5aa9f0; }
-.ne-dot.t-vec3:hover, .ne-out.armed .ne-dot.t-vec3 { background: #f0b45a; }
-.ne-wire.w-float { stroke: #5aa9f0; }
-.ne-wire.w-vec3 { stroke: #f0b45a; }
-.ne-icon { display: inline-block; width: 14px; margin-right: 4px; text-align: center; opacity: 0.8; }
-.ne-legend { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); }
+.ne-dot.t-float {
+  border-color: #5aa9f0;
+}
+.ne-dot.t-vec3 {
+  border-color: #f0b45a;
+  border-radius: 2px;
+}
+.ne-dot.t-float:hover,
+.ne-out.armed .ne-dot.t-float {
+  background: #5aa9f0;
+}
+.ne-dot.t-vec3:hover,
+.ne-out.armed .ne-dot.t-vec3 {
+  background: #f0b45a;
+}
+.ne-wire.w-float {
+  stroke: #5aa9f0;
+}
+.ne-wire.w-vec3 {
+  stroke: #f0b45a;
+}
+.ne-icon {
+  display: inline-block;
+  width: 14px;
+  margin-right: 4px;
+  text-align: center;
+  opacity: 0.8;
+}
+.ne-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
 /* a coloured stripe down the left edge names the node's family at a glance */
-.ne-node[data-cat="tex"] { border-left: 3px solid #5aa9f0; }
-.ne-node[data-cat="color"] { border-left: 3px solid #f0b45a; }
-.ne-node[data-cat="input"] { border-left: 3px solid #c58af0; }
-.ne-node[data-cat="conv"] { border-left: 3px solid #8ad0b0; }
-.ne-node[data-cat="out"] { border-left: 3px solid var(--accent); }
-.ne-zoom { position: absolute; right: 8px; bottom: 6px; font-size: 11px; color: var(--text-dim);
-  background: var(--float-bg-solid); border: 1px solid var(--float-line); border-radius: var(--float-chip-radius); corner-shape: squircle; padding: 1px 6px; pointer-events: none; }
-.ne-hint { font-size: 11px; color: var(--text-dim); border: 1px solid var(--float-line); border-radius: var(--float-chip-radius); corner-shape: squircle; padding: 1px 6px; }
-.ne-addbackdrop { position: fixed; inset: 0; z-index: 70; }
-.ne-addmenu { position: fixed; z-index: 71; min-width: 130px; max-height: 70vh; overflow-y: auto;
-  background: var(--glass-sheen), var(--float-bg-solid); -webkit-backdrop-filter: var(--float-blur); backdrop-filter: var(--float-blur);
-  border: 1px solid var(--float-line); border-radius: var(--float-tile-radius); corner-shape: squircle; box-shadow: var(--glass-inset), var(--float-shadow); padding: 5px; }
-.ne-addhead { font-weight: 600; font-size: 11px; color: var(--text-dim); padding: 2px 6px 4px; }
-.ne-addgrp { border-top: 1px solid var(--line); padding-top: 2px; margin-top: 2px; }
-.ne-addgrp-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); padding: 2px 6px; }
-.ne-additem { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text);
-  font-size: 12px; padding: 3px 8px; border-radius: var(--float-chip-radius); corner-shape: squircle; cursor: pointer; }
-.ne-additem:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.ne-node[data-cat="tex"] {
+  border-left: 3px solid #5aa9f0;
+}
+.ne-node[data-cat="color"] {
+  border-left: 3px solid #f0b45a;
+}
+.ne-node[data-cat="input"] {
+  border-left: 3px solid #c58af0;
+}
+.ne-node[data-cat="conv"] {
+  border-left: 3px solid #8ad0b0;
+}
+.ne-node[data-cat="out"] {
+  border-left: 3px solid var(--accent);
+}
+.ne-zoom {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--float-bg-solid);
+  border: 1px solid var(--float-line);
+  border-radius: var(--float-chip-radius);
+  corner-shape: squircle;
+  padding: 1px 6px;
+  pointer-events: none;
+}
+.ne-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  border: 1px solid var(--float-line);
+  border-radius: var(--float-chip-radius);
+  corner-shape: squircle;
+  padding: 1px 6px;
+}
+.ne-addbackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+}
+.ne-addmenu {
+  position: fixed;
+  z-index: 71;
+  min-width: 130px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--glass-sheen), var(--float-bg-solid);
+  -webkit-backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
+  border: 1px solid var(--float-line);
+  border-radius: var(--float-tile-radius);
+  corner-shape: squircle;
+  box-shadow: var(--glass-inset), var(--float-shadow);
+  padding: 5px;
+}
+.ne-addhead {
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 2px 6px 4px;
+}
+.ne-addgrp {
+  border-top: 1px solid var(--line);
+  padding-top: 2px;
+  margin-top: 2px;
+}
+.ne-addgrp-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  padding: 2px 6px;
+}
+.ne-additem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: var(--float-chip-radius);
+  corner-shape: squircle;
+  cursor: pointer;
+}
+.ne-additem:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
 </style>

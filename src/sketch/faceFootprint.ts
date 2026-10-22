@@ -42,11 +42,7 @@ export function planeTolerance(modelScale: number): number {
  *  plane has both ends off it but passes any single-point test at the crossing,
  *  and admitting one would cut the profile along a line that is not a boundary
  *  of anything. */
-export function edgeLiesInPlane(
-  e: FootprintEdge,
-  plane: SketchPlane,
-  tol: number,
-): boolean {
+export function edgeLiesInPlane(e: FootprintEdge, plane: SketchPlane, tol: number): boolean {
   if (e.points.length < 2) return false;
   const p = new THREE.Vector3();
   for (const q of e.points) {
@@ -149,7 +145,12 @@ const covers = (outer: Box, inner: Box) =>
  *  this model, with room to draw on before the next ask. */
 function askReach(need: Box, had: Box | null): Box {
   const b = had
-    ? { minx: Math.min(need.minx, had.minx), miny: Math.min(need.miny, had.miny), maxx: Math.max(need.maxx, had.maxx), maxy: Math.max(need.maxy, had.maxy) }
+    ? {
+        minx: Math.min(need.minx, had.minx),
+        miny: Math.min(need.miny, had.miny),
+        maxx: Math.max(need.maxx, had.maxx),
+        maxy: Math.max(need.maxy, had.maxy),
+      }
     : need;
   const m = Math.max(b.maxx - b.minx, b.maxy - b.miny) * 0.5 + 1;
   return { minx: b.minx - m, miny: b.miny - m, maxx: b.maxx + m, maxy: b.maxy + m };
@@ -171,7 +172,13 @@ export interface CutCache {
 }
 
 export function profileCutCache(src: CutSource): CutCache {
-  interface Entry { epoch: unknown; reach: Box | null; lines: THREE.Vector2[][]; askedEpoch: unknown; asked: Box | null }
+  interface Entry {
+    epoch: unknown;
+    reach: Box | null;
+    lines: THREE.Vector2[][];
+    askedEpoch: unknown;
+    asked: Box | null;
+  }
   const NONE = Symbol("never asked");
   let doc: unknown = NONE;
   let byPlane = new WeakMap<SketchPlane, Entry>();
@@ -198,21 +205,24 @@ export function profileCutCache(src: CutSource): CutCache {
       unanswered = NONE;
       const entry = e;
       const map = byPlane;
-      void src.cuts(plane, reach).then((lines) => {
-        if (byPlane !== map) return;
-        if (!lines) {
-          if (src.epoch() !== now) src.landed();
-          else unanswered = now;
-          return;
-        }
-        if (src.epoch() !== now) return;
-        if (entry.epoch === now && entry.reach && covers(entry.reach, reach)) return;
-        const v = new THREE.Vector3();
-        entry.epoch = now;
-        entry.reach = reach;
-        entry.lines = lines.map((l) => l.map((p) => plane.to2D(v.set(p[0], p[1], p[2]), new THREE.Vector2())));
-        src.landed();
-      }).catch(() => undefined);
+      void src
+        .cuts(plane, reach)
+        .then((lines) => {
+          if (byPlane !== map) return;
+          if (!lines) {
+            if (src.epoch() !== now) src.landed();
+            else unanswered = now;
+            return;
+          }
+          if (src.epoch() !== now) return;
+          if (entry.epoch === now && entry.reach && covers(entry.reach, reach)) return;
+          const v = new THREE.Vector3();
+          entry.epoch = now;
+          entry.reach = reach;
+          entry.lines = lines.map((l) => l.map((p) => plane.to2D(v.set(p[0], p[1], p[2]), new THREE.Vector2())));
+          src.landed();
+        })
+        .catch(() => undefined);
     }
     return e.lines;
   };
@@ -230,7 +240,10 @@ export function faceFocus(loops: readonly THREE.Vector2[][], at: THREE.Vector2):
     const box = new THREE.Box2().setFromPoints(loop as THREE.Vector2[]);
     const size = box.getSize(new THREE.Vector2());
     const area = size.x * size.y;
-    if (area < bestArea) { bestArea = area; best = box; }
+    if (area < bestArea) {
+      bestArea = area;
+      best = box;
+    }
   }
   return best ? best.getCenter(new THREE.Vector2()) : null;
 }

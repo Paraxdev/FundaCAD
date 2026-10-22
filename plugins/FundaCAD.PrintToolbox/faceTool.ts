@@ -55,10 +55,12 @@ export class FaceTool {
     return sel.selectors.flatMap((s, i) => {
       if (!("point" in s)) return [];
       const faceId = sel.faceIds[i];
-      return [{
-        point: s.point as [number, number, number],
-        body: faceId === undefined ? null : this.viewport.faceIdToBodyId(faceId),
-      }];
+      return [
+        {
+          point: s.point as [number, number, number],
+          body: faceId === undefined ? null : this.viewport.faceIdToBodyId(faceId),
+        },
+      ];
     });
   }
 

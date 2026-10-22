@@ -83,7 +83,7 @@ export class PreviewOutcomes {
    *  It stays up until a value builds, so the box does not flicker while the
    *  next answer is on its way. True when it changed. */
   refresh(key: string | null): boolean {
-    const reason = key === null ? null : this.refused.get(key) ?? (this.built.has(key) ? null : this.refusal);
+    const reason = key === null ? null : (this.refused.get(key) ?? (this.built.has(key) ? null : this.refusal));
     if (reason === this.refusal) return false;
     this.refusal = reason;
     return true;

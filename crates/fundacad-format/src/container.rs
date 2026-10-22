@@ -114,18 +114,13 @@ pub fn looks_like_container(path: &Path) -> bool {
 
 fn looks_like_zip(path: &Path) -> bool {
     let mut buf = [0u8; 2];
-    File::open(path)
-        .and_then(|mut f| f.read_exact(&mut buf))
-        .map(|_| &buf == b"PK")
-        .unwrap_or(false)
+    File::open(path).and_then(|mut f| f.read_exact(&mut buf)).map(|_| &buf == b"PK").unwrap_or(false)
 }
 
 fn is_safe_key(key: &str) -> bool {
     !key.is_empty()
         && !key.contains("..")
-        && key
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+        && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
 }
 
 /// fsync a directory so a rename INTO it is durable across a crash. Tolerant of
@@ -149,10 +144,7 @@ fn uuid_hex() -> String {
     // Failure here would mean no entropy source at all; a timestamp is a fine
     // fallback for a name that only has to be unique within one directory.
     if getrandom::getrandom(&mut b).is_err() {
-        let t = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
+        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
         b[..16].copy_from_slice(&t.to_le_bytes()[..16.min(16)]);
     }
     hex(&b)
@@ -170,11 +162,8 @@ pub fn write_container(
 ) -> Result<Manifest, String> {
     let info = crate::fnda::json_to_cbor(&serde_json::json!({ "app": app, "hashAlg": HASH_ALG }).to_string())?;
     let document = crate::fnda::json_to_cbor(document_json)?;
-    let meshes: BTreeMap<String, PathBuf> = mesh_paths
-        .iter()
-        .filter(|(k, p)| is_safe_key(k) && p.exists())
-        .map(|(k, p)| (k.clone(), p.clone()))
-        .collect();
+    let meshes: BTreeMap<String, PathBuf> =
+        mesh_paths.iter().filter(|(k, p)| is_safe_key(k) && p.exists()).map(|(k, p)| (k.clone(), p.clone())).collect();
     let carried: Vec<(crate::fnda::Carried, PathBuf)> = carried.iter().filter(|(_, p)| p.exists()).cloned().collect();
     for src in blob_paths.values() {
         std::fs::metadata(src).map_err(|e| format!("could not read geometry {}: {e}", src.display()))?;
@@ -187,7 +176,10 @@ pub fn write_container(
     let tmp = temp_sibling(dest);
     let build = || -> Result<Vec<crate::fnda::Entry>, String> {
         let mut file = std::io::BufWriter::new(File::create(&tmp).map_err(|e| e.to_string())?);
-        let entries = crate::fnda::write(&mut file, &crate::fnda::document_sections(&info, &document, blob_paths, &meshes, &carried))?;
+        let entries = crate::fnda::write(
+            &mut file,
+            &crate::fnda::document_sections(&info, &document, blob_paths, &meshes, &carried),
+        )?;
         let file = file.into_inner().map_err(|e| e.to_string())?;
         file.sync_all().map_err(|e| e.to_string())?;
         Ok(entries)
@@ -254,25 +246,16 @@ pub fn write_zip_container(
         meshes: Vec::new(),
     };
     for (h, src) in blob_paths {
-        let bytes = std::fs::metadata(src)
-            .map_err(|e| format!("could not read geometry {}: {e}", src.display()))?
-            .len();
-        manifest.blobs.push(BlobRow {
-            entry: format!("geom/{h}.bbrep"),
-            hash: h.clone(),
-            bytes,
-        });
+        let bytes =
+            std::fs::metadata(src).map_err(|e| format!("could not read geometry {}: {e}", src.display()))?.len();
+        manifest.blobs.push(BlobRow { entry: format!("geom/{h}.bbrep"), hash: h.clone(), bytes });
     }
     for (k, src) in mesh_paths {
         let bytes = match std::fs::metadata(src) {
             Ok(m) => m.len(),
             Err(_) => continue, // a cache entry that vanished is not an error
         };
-        manifest.meshes.push(MeshRow {
-            entry: format!("mesh/{k}.bin"),
-            key: k.clone(),
-            bytes,
-        });
+        manifest.meshes.push(MeshRow { entry: format!("mesh/{k}.bin"), key: k.clone(), bytes });
     }
 
     if let Some(parent) = dest.parent() {
@@ -290,12 +273,9 @@ pub fn write_zip_container(
 
         // STORED and first, so the manifest is readable by a hex dump or a
         // minimal reader with no decompressor in the loop.
-        let stored = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored)
-            .large_file(true);
-        let deflated = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated)
-            .large_file(true);
+        let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored).large_file(true);
+        let deflated =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated).large_file(true);
         // Packed f32/u32 barely compresses; level 1 keeps the write fast.
         let deflated_fast = deflated.compression_level(Some(1));
 
@@ -460,10 +440,7 @@ pub fn read_manifest(path: &Path) -> Result<Manifest, String> {
         ));
     }
     if manifest.hash_alg != HASH_ALG {
-        return Err(format!(
-            "This document uses an unsupported hash ({}).",
-            manifest.hash_alg
-        ));
+        return Err(format!("This document uses an unsupported hash ({}).", manifest.hash_alg));
     }
     Ok(manifest)
 }
@@ -477,11 +454,7 @@ pub fn read_manifest(path: &Path) -> Result<Manifest, String> {
 ///
 /// A hash mismatch is a HARD error: it means truncation or tampering, and
 /// silently accepting the bytes would put wrong geometry in front of the user.
-pub fn read_container(
-    path: &Path,
-    blob_dir: &Path,
-    mesh_dir: Option<&Path>,
-) -> Result<(String, Manifest), String> {
+pub fn read_container(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>) -> Result<(String, Manifest), String> {
     read_container_checked(path, blob_dir, mesh_dir).map(|(doc, manifest, _)| (doc, manifest))
 }
 
@@ -496,14 +469,11 @@ pub fn read_container_checked(
         let manifest = manifest_of(&opened.entries, "");
         return Ok((opened.document_json, manifest, opened.report));
     }
-    read_zip_container(path, blob_dir, mesh_dir).map(|(doc, manifest)| (doc, manifest, crate::fnda::RepairReport::default()))
+    read_zip_container(path, blob_dir, mesh_dir)
+        .map(|(doc, manifest)| (doc, manifest, crate::fnda::RepairReport::default()))
 }
 
-fn read_zip_container(
-    path: &Path,
-    blob_dir: &Path,
-    mesh_dir: Option<&Path>,
-) -> Result<(String, Manifest), String> {
+fn read_zip_container(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>) -> Result<(String, Manifest), String> {
     let manifest = read_manifest(path)?;
     std::fs::create_dir_all(blob_dir).map_err(|e| e.to_string())?;
     if let Some(d) = mesh_dir {
@@ -550,16 +520,13 @@ fn extract_verified(
 ) -> Result<(), String> {
     let tmp = temp_sibling(final_path);
     let mut run = || -> Result<(), String> {
-        let mut src = z
-            .by_name(entry)
-            .map_err(|_| format!("This document is missing part of its geometry ({entry})."))?;
+        let mut src =
+            z.by_name(entry).map_err(|_| format!("This document is missing part of its geometry ({entry})."))?;
         let mut out = File::create(&tmp).map_err(|e| e.to_string())?;
         let mut h = Blake2b128::new();
         let mut buf = vec![0u8; 1 << 20];
         loop {
-            let n = src.read(&mut buf).map_err(|_| {
-                "This document is damaged and cannot be opened.".to_string()
-            })?;
+            let n = src.read(&mut buf).map_err(|_| "This document is damaged and cannot be opened.".to_string())?;
             if n == 0 {
                 break;
             }
@@ -616,10 +583,7 @@ mod tests {
     fn hash_matches_python() {
         assert_eq!(hash_bytes(b""), "cae66941d9efbd404e4d88758ea67670");
         assert_eq!(hash_bytes(b"fundacad"), "5648909c8c0ccf6096c0e672255e68a0");
-        assert_eq!(
-            hash_bytes(&[0x00u8, 0xff].repeat(8)),
-            "2a7271a37f134cb3bfb8ff7e507e0da7"
-        );
+        assert_eq!(hash_bytes(&[0x00u8, 0xff].repeat(8)), "2a7271a37f134cb3bfb8ff7e507e0da7");
         assert_eq!(hash_bytes(b"x").len(), 32, "blake2b-128 as hex");
     }
 
@@ -649,10 +613,7 @@ mod tests {
         {
             let mut z = zip::ZipArchive::new(File::open(&dest).unwrap()).unwrap();
             assert_eq!(z.by_index(0).unwrap().name(), MANIFEST_NAME);
-            assert_eq!(
-                z.by_name(MANIFEST_NAME).unwrap().compression(),
-                zip::CompressionMethod::Stored
-            );
+            assert_eq!(z.by_name(MANIFEST_NAME).unwrap().compression(), zip::CompressionMethod::Stored);
             assert!(
                 z.by_name(&format!("geom/{hb}.bbrep")).unwrap().compressed_size() < 500_000,
                 "the compressible blob should actually have shrunk"
@@ -676,10 +637,8 @@ mod tests {
 
         // Re-reading is idempotent, not a duplicate-write, and leaves no litter.
         read_container(&dest, &out, Some(&meshes_out)).unwrap();
-        let names: Vec<_> = std::fs::read_dir(&out)
-            .unwrap()
-            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
-            .collect();
+        let names: Vec<_> =
+            std::fs::read_dir(&out).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
         assert_eq!(names.len(), 2, "re-read did not duplicate: {names:?}");
         assert!(!names.iter().any(|n| n.contains(".tmp-")), "temp files left: {names:?}");
 
@@ -721,10 +680,7 @@ mod tests {
         let out = dir.join("blobs");
         let err = read_container(&tampered, &out, None).unwrap_err();
         assert!(err.contains("does not match"), "unexpected message: {err}");
-        assert!(
-            !out.join(format!("{h}.bbrep")).exists(),
-            "a mismatching blob must never be published"
-        );
+        assert!(!out.join(format!("{h}.bbrep")).exists(), "a mismatching blob must never be published");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -765,11 +721,7 @@ mod tests {
                     hash: h.clone(),
                     bytes: data.len() as u64,
                 }],
-                meshes: vec![MeshRow {
-                    entry: "m".into(),
-                    key: "../../pwned".into(),
-                    bytes: 1,
-                }],
+                meshes: vec![MeshRow { entry: "m".into(), key: "../../pwned".into(), bytes: 1 }],
             };
             z.start_file(MANIFEST_NAME, opts).unwrap();
             z.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
@@ -782,10 +734,8 @@ mod tests {
 
         let out = dir.join("blobs");
         read_container(&evil, &out, Some(&dir.join("meshes"))).unwrap();
-        let names: Vec<_> = std::fs::read_dir(&out)
-            .unwrap()
-            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
-            .collect();
+        let names: Vec<_> =
+            std::fs::read_dir(&out).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
         assert_eq!(names, vec![format!("{h}.bbrep")], "nothing escaped the store");
         assert!(!is_safe_key("../../pwned"));
         let _ = std::fs::remove_dir_all(&dir);
@@ -818,11 +768,8 @@ mod tests {
         {
             let mut z = zip::ZipWriter::new(File::create(&p).unwrap());
             z.start_file(MANIFEST_NAME, SimpleFileOptions::default()).unwrap();
-            let m = format!(
-                r#"{{"container":{},"hashAlg":"{}","blobs":[],"meshes":[]}}"#,
-                CONTAINER_VERSION + 1,
-                HASH_ALG
-            );
+            let m =
+                format!(r#"{{"container":{},"hashAlg":"{}","blobs":[],"meshes":[]}}"#, CONTAINER_VERSION + 1, HASH_ALG);
             z.write_all(m.as_bytes()).unwrap();
             z.finish().unwrap();
         }
@@ -910,7 +857,8 @@ mod tests {
         let carry = dir.join("sections");
         let opened = open_document_full(&src, &dir.join("blobs"), None, Some(&carry)).unwrap();
         assert_eq!(opened.carried.len(), 1);
-        let carried: Vec<_> = opened.carried.iter().map(|c| (c.clone(), carry.join(format!("{}.bin", c.hash)))).collect();
+        let carried: Vec<_> =
+            opened.carried.iter().map(|c| (c.clone(), carry.join(format!("{}.bin", c.hash)))).collect();
 
         let bin = dir.join("again.fundab");
         let json = dir.join("again.funda");
@@ -918,7 +866,10 @@ mod tests {
         write_document(&json, &opened.document, &b, &m, &carried, "t").unwrap();
         let again = open_document_full(&bin, &dir.join("blobs"), None, Some(&dir.join("sections2"))).unwrap();
         assert_eq!(again.carried, opened.carried);
-        assert_eq!(std::fs::read(dir.join("sections2").join(format!("{}.bin", again.carried[0].hash))).unwrap(), payload);
+        assert_eq!(
+            std::fs::read(dir.join("sections2").join(format!("{}.bin", again.carried[0].hash))).unwrap(),
+            payload
+        );
         assert!(open_document_full(&json, &dir.join("blobs"), None, Some(&carry)).unwrap().carried.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }

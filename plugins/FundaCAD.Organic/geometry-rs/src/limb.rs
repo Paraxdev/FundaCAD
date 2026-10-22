@@ -29,7 +29,11 @@ pub fn tangents(p: &[V]) -> Vec<V> {
     }
     let mirror = |chord: V, inner: V| {
         let m = math::sub(math::mul(chord, 2.0 * math::dot(chord, inner)), inner);
-        if math::dot(m, chord) > 1e-6 { math::unit(m) } else { chord }
+        if math::dot(m, chord) > 1e-6 {
+            math::unit(m)
+        } else {
+            chord
+        }
     };
     t[0] = mirror(chords[0], t[1]);
     t[n - 1] = mirror(chords[n - 2], t[n - 2]);

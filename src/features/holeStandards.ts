@@ -28,7 +28,17 @@ export const CLEARANCE: Record<HoleSize, readonly [number, number, number]> = {
 
 /** Tap drill for the coarse pitch. */
 export const TAP_DRILL: Record<HoleSize, number> = {
-  M2: 1.6, "M2.5": 2.05, M3: 2.5, M4: 3.3, M5: 4.2, M6: 5.0, M8: 6.8, M10: 8.5, M12: 10.2, M16: 14.0, M20: 17.5,
+  M2: 1.6,
+  "M2.5": 2.05,
+  M3: 2.5,
+  M4: 3.3,
+  M5: 4.2,
+  M6: 5.0,
+  M8: 6.8,
+  M10: 8.5,
+  M12: 10.2,
+  M16: 14.0,
+  M20: 17.5,
 };
 
 /** ISO 4762 socket head cap screw: counterbore diameter and depth. */
@@ -48,7 +58,17 @@ export const COUNTERBORE: Record<HoleSize, readonly [number, number]> = {
 
 /** ISO 10642 90 degree countersunk head: countersink diameter at the face. */
 export const COUNTERSINK: Record<HoleSize, number> = {
-  M2: 4.4, "M2.5": 5.5, M3: 6.9, M4: 9.2, M5: 11.5, M6: 13.7, M8: 18.3, M10: 22.7, M12: 27.2, M16: 33.9, M20: 40.6,
+  M2: 4.4,
+  "M2.5": 5.5,
+  M3: 6.9,
+  M4: 9.2,
+  M5: 11.5,
+  M6: 13.7,
+  M8: 18.3,
+  M10: 22.7,
+  M12: 27.2,
+  M16: 33.9,
+  M20: 40.6,
 };
 
 /** Brass heat-set inserts: bore diameter and depth. */
@@ -108,10 +128,14 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
  *  so switching a custom hole to a counterbore never leaves a row empty. */
 function customDims(holeType: HoleType, d: number): HoleDims {
   switch (holeType) {
-    case "counterbore": return { cbDiameter: round2(d * 1.9), cbDepth: round2(d) };
-    case "countersink": return { csDiameter: round2(d * 2), csAngle: 90 };
-    case "insert": return { leadIn: INSERT_LEAD_IN };
-    default: return {};
+    case "counterbore":
+      return { cbDiameter: round2(d * 1.9), cbDepth: round2(d) };
+    case "countersink":
+      return { csDiameter: round2(d * 2), csAngle: 90 };
+    case "insert":
+      return { leadIn: INSERT_LEAD_IN };
+    default:
+      return {};
   }
 }
 
@@ -134,9 +158,10 @@ export function holeChoicePatch(
   const next = { ...f, ...patch } as HoleFeature;
   const holeType = next.holeType ?? "simple";
   if (holeType === "insert" && next.extent === "through") next.extent = patch.extent = "blind";
-  const std = holeType === "insert" || next.standard !== "custom"
-    ? standardDims(holeType, next.standard, next.size, next.fit)
-    : {};
+  const std =
+    holeType === "insert" || next.standard !== "custom"
+      ? standardDims(holeType, next.standard, next.size, next.fit)
+      : {};
   const d = std.diameter ?? (typeof next.diameter === "number" ? next.diameter : 3);
   const overwrite: readonly HoleDimField[] =
     field === "fit" ? ["diameter"] : field === "extent" ? [] : (Object.keys(std) as HoleDimField[]);
@@ -212,7 +237,10 @@ export function newHoleFields(
   const std = standardDims(holeType, standard, size, fit);
   const diameter = std.diameter ?? CLEARANCE[size][1];
   return {
-    holeType, standard, size, fit,
+    holeType,
+    standard,
+    size,
+    fit,
     extent: holeType === "insert" ? "blind" : extent,
     ...customDims(holeType, diameter),
     ...std,

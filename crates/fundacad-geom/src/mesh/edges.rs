@@ -44,9 +44,7 @@ pub struct EdgeLine {
 /// index, so the list is the one a serial walk produces.
 pub fn edge_polylines(access: &MeshAccess) -> Vec<EdgeLine> {
     let cos_tol = 1.0f64.to_radians().cos();
-    let plane: Vec<Option<[f64; 3]>> = (0..access.face_count())
-        .map(|f| access.face_plane_normal(f))
-        .collect();
+    let plane: Vec<Option<[f64; 3]>> = (0..access.face_count()).map(|f| access.face_plane_normal(f)).collect();
     let work = crate::par::Shared((access, &plane));
     let lines = crate::par::map_indexed(access.edge_count(), move |e| {
         let (access, plane) = *work.get();
@@ -55,12 +53,7 @@ pub fn edge_polylines(access: &MeshAccess) -> Vec<EdgeLine> {
     lines.into_iter().flatten().collect()
 }
 
-fn one_edge(
-    access: &MeshAccess,
-    plane: &[Option<[f64; 3]>],
-    cos_tol: f64,
-    e: usize,
-) -> Option<EdgeLine> {
+fn one_edge(access: &MeshAccess, plane: &[Option<[f64; 3]>], cos_tol: f64, e: usize) -> Option<EdgeLine> {
     let plane_of = |f: usize| plane.get(f).copied().flatten();
     let faces = access.edge_faces(e);
     if faces.len() == 2 {
@@ -80,10 +73,7 @@ fn one_edge(
         return None;
     }
     let points = edge_points(access, e)?;
-    let length: f64 = points
-        .windows(2)
-        .map(|w| (0..3).map(|k| (w[1][k] - w[0][k]).powi(2)).sum::<f64>().sqrt())
-        .sum();
+    let length: f64 = points.windows(2).map(|w| (0..3).map(|k| (w[1][k] - w[0][k]).powi(2)).sum::<f64>().sqrt()).sum();
     if length < SLIVER_EDGE_MM {
         return None;
     }
@@ -109,9 +99,7 @@ fn uniform_param_points(access: &MeshAccess, e: usize, n: usize) -> Option<Vec<[
     if u1.partial_cmp(&u0) != Some(std::cmp::Ordering::Greater) {
         return None;
     }
-    let params: Vec<f64> = (0..=n)
-        .map(|j| u0 + (u1 - u0) * (j as f64 / n as f64))
-        .collect();
+    let params: Vec<f64> = (0..=n).map(|j| u0 + (u1 - u0) * (j as f64 / n as f64)).collect();
     access.edge_values(e, &params)
 }
 
@@ -136,9 +124,7 @@ fn sample_by_deflection(
         return checked_walk(access, e, deflection, min_seg, max_seg);
     }
     let picks: Vec<usize> = if n - 1 > max_seg {
-        (0..=max_seg)
-            .map(|i| py_round(i as f64 * (n - 1) as f64 / max_seg as f64))
-            .collect()
+        (0..=max_seg).map(|i| py_round(i as f64 * (n - 1) as f64 / max_seg as f64)).collect()
     } else {
         (0..n).collect()
     };
@@ -175,9 +161,7 @@ fn checked_walk(
     if u1.partial_cmp(&u0) != Some(std::cmp::Ordering::Greater) {
         return None;
     }
-    let mut us: Vec<f64> = (0..=min_seg)
-        .map(|j| u0 + (u1 - u0) * (j as f64 / min_seg as f64))
-        .collect();
+    let mut us: Vec<f64> = (0..=min_seg).map(|j| u0 + (u1 - u0) * (j as f64 / min_seg as f64)).collect();
     let mut pts = access.edge_values(e, &us)?;
     let mut limit = EDGE_SLACK * deflection;
     while us.len() - 1 < max_seg {
@@ -204,27 +188,17 @@ fn checked_walk(
 /// distance from the curve to its segment. The curve is also probed at the
 /// golden section of every segment: a helix that turns a whole number of times
 /// per segment meets the chord at its middle, never at an irrational fraction.
-fn mid_sag(
-    access: &MeshAccess,
-    e: usize,
-    pts: &[[f64; 3]],
-    us: &[f64],
-) -> Option<(Vec<f64>, Vec<[f64; 3]>, f64)> {
+fn mid_sag(access: &MeshAccess, e: usize, pts: &[[f64; 3]], us: &[f64]) -> Option<(Vec<f64>, Vec<[f64; 3]>, f64)> {
     const PROBES: [f64; 3] = [0.5, 0.381_966_011_250_105, 0.618_033_988_749_895];
     if pts.len() != us.len() {
         return None;
     }
-    let probes: Vec<f64> = us
-        .windows(2)
-        .flat_map(|w| PROBES.map(|f| w[0] + (w[1] - w[0]) * f))
-        .collect();
+    let probes: Vec<f64> = us.windows(2).flat_map(|w| PROBES.map(|f| w[0] + (w[1] - w[0]) * f)).collect();
     let at = access.edge_values(e, &probes)?;
     if at.len() != probes.len() {
         return None;
     }
-    let worst = (0..at.len())
-        .map(|i| to_segment(at[i], pts[i / 3], pts[i / 3 + 1]))
-        .fold(0.0f64, f64::max);
+    let worst = (0..at.len()).map(|i| to_segment(at[i], pts[i / 3], pts[i / 3 + 1])).fold(0.0f64, f64::max);
     let mids = probes.iter().step_by(3).copied().collect();
     let mid_pts = at.iter().step_by(3).copied().collect();
     Some((mids, mid_pts, worst))
@@ -234,11 +208,7 @@ fn to_segment(p: [f64; 3], a: [f64; 3], b: [f64; 3]) -> f64 {
     let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     let ap = [p[0] - a[0], p[1] - a[1], p[2] - a[2]];
     let len2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
-    let t = if len2 > 0.0 {
-        ((ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / len2).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
+    let t = if len2 > 0.0 { ((ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / len2).clamp(0.0, 1.0) } else { 0.0 };
     (0..3).map(|k| (ap[k] - t * ab[k]).powi(2)).sum::<f64>().sqrt()
 }
 
@@ -267,9 +237,7 @@ pub fn meets_smoothly(access: &MeshAccess, e: usize) -> bool {
             }
             *slot = [n[0] / mag, n[1] / mag, n[2] / mag];
         }
-        let d = normals[0][0] * normals[1][0]
-            + normals[0][1] * normals[1][1]
-            + normals[0][2] * normals[1][2];
+        let d = normals[0][0] * normals[1][0] + normals[0][1] * normals[1][1] + normals[0][2] * normals[1][2];
         if d.abs() < cos_tol {
             return false;
         }
@@ -287,11 +255,7 @@ mod tests {
         let access = MeshAccess::new(shape);
         let cos_tol = SMOOTH_EDGE_DEG.to_radians().cos();
         for e in 0..access.edge_count() {
-            assert_eq!(
-                meets_smoothly(&access, e),
-                access.edge_smooth(e, cos_tol),
-                "edge {e} disagrees"
-            );
+            assert_eq!(meets_smoothly(&access, e), access.edge_smooth(e, cos_tol), "edge {e} disagrees");
         }
     }
 
@@ -306,8 +270,7 @@ mod tests {
         agrees(&kernel::make_torus(10.0, 3.0).expect("a torus"));
         let b = kernel::make_box(20.0, 20.0, 10.0).expect("a box");
         let edges = kernel::subshapes(&b, Kind::Edge);
-        let (filleted, _) = crate::features::blend::ops::fillet(&b, &edges, &vec![2.0; edges.len()])
-            .expect("a fillet");
+        let (filleted, _) = crate::features::blend::ops::fillet(&b, &edges, &vec![2.0; edges.len()]).expect("a fillet");
         agrees(&filleted);
     }
 }

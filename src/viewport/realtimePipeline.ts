@@ -33,7 +33,10 @@ export function highRefusal(t: QualityTier): string | null {
 /** The quality the realtime view runs at for a saved choice. Auto is Standard
  *  until the machine is measured. `reason` is why High is refused on this tier,
  *  whatever was chosen, for the tooltip of the row. */
-export function resolveRealtimeQuality(pref: RealtimeQualityPref, t: QualityTier): { quality: RealtimeQuality; reason: string | null } {
+export function resolveRealtimeQuality(
+  pref: RealtimeQualityPref,
+  t: QualityTier,
+): { quality: RealtimeQuality; reason: string | null } {
   const reason = highRefusal(t);
   return { quality: pref === "high" && reason === null ? "high" : "standard", reason };
 }
@@ -117,7 +120,11 @@ function seenThrough(m: THREE.Material): boolean {
   return isGlassAuto(m) || (p.transmission ?? 0) > 0 || (m.transparent && m.opacity < 1) || m.colorWrite === false;
 }
 
-interface Swapped { mesh: THREE.Mesh; material: THREE.Mesh["material"]; hook?: THREE.Object3D["onBeforeRender"] }
+interface Swapped {
+  mesh: THREE.Mesh;
+  material: THREE.Mesh["material"];
+  hook?: THREE.Object3D["onBeforeRender"];
+}
 
 const noHook: THREE.Object3D["onBeforeRender"] = () => {};
 
@@ -169,7 +176,11 @@ function drawSwapped(
   const shadows = r.shadowMap;
   const autoUpdate = shadows.autoUpdate;
   const cameraMask = camera.layers.mask;
-  const restore: Swapped[] = swap.map((s) => ({ mesh: s.mesh, material: s.mesh.material, hook: s.mesh.onBeforeRender }));
+  const restore: Swapped[] = swap.map((s) => ({
+    mesh: s.mesh,
+    material: s.mesh.material,
+    hook: s.mesh.onBeforeRender,
+  }));
   try {
     for (const s of swap) {
       s.mesh.material = s.material;
@@ -192,7 +203,9 @@ function drawSwapped(
   }
 }
 
-interface PrepassTwin extends THREE.MeshNormalMaterial { userData: { rough: { value: number } } }
+interface PrepassTwin extends THREE.MeshNormalMaterial {
+  userData: { rough: { value: number } };
+}
 
 function prepassTwin(): PrepassTwin {
   const m = new THREE.MeshNormalMaterial() as PrepassTwin;
@@ -202,7 +215,10 @@ function prepassTwin(): PrepassTwin {
     shader.uniforms.uRough = rough;
     shader.fragmentShader = shader.fragmentShader
       .replace("void main() {", "uniform float uRough;\nvoid main() {")
-      .replace("gl_FragColor = vec4( normalize( normal ) * 0.5 + 0.5, diffuseColor.a );", "gl_FragColor = vec4( normalize( normal ) * 0.5 + 0.5, uRough );");
+      .replace(
+        "gl_FragColor = vec4( normalize( normal ) * 0.5 + 0.5, diffuseColor.a );",
+        "gl_FragColor = vec4( normalize( normal ) * 0.5 + 0.5, uRough );",
+      );
   };
   m.customProgramCacheKey = () => "rt-prepass";
   return m;
@@ -315,7 +331,10 @@ export class OverlayCompose {
     scene.traverseVisible((o) => {
       if (!drawable(o) || !onModelLayer(o)) return;
       const mesh = o as THREE.Mesh;
-      if (mesh.isMesh !== true || materialsOf(mesh).some((m) => (m as { isLineMaterial?: boolean }).isLineMaterial === true)) {
+      if (
+        mesh.isMesh !== true ||
+        materialsOf(mesh).some((m) => (m as { isLineMaterial?: boolean }).isLineMaterial === true)
+      ) {
         hide.push(o);
         return;
       }
@@ -368,7 +387,11 @@ export class OverlayCompose {
 
 export function glows(m: THREE.Material): boolean {
   const s = m as THREE.MeshStandardMaterial;
-  return s.isMeshStandardMaterial === true && s.emissiveIntensity > 0 && (s.emissive.r > 0 || s.emissive.g > 0 || s.emissive.b > 0);
+  return (
+    s.isMeshStandardMaterial === true &&
+    s.emissiveIntensity > 0 &&
+    (s.emissive.r > 0 || s.emissive.g > 0 || s.emissive.b > 0)
+  );
 }
 
 const HIGH_PASS_TEXEL = "vec4 texel = texture2D( tDiffuse, vUv );";
@@ -378,8 +401,9 @@ const HIGH_PASS_TEXEL = "vec4 texel = texture2D( tDiffuse, vUv );";
 export function maskHighPass(m: THREE.ShaderMaterial, mask: THREE.Texture): boolean {
   if (!m.fragmentShader.includes(HIGH_PASS_TEXEL)) return false;
   m.uniforms["tMask"] = { value: mask };
-  m.fragmentShader = "uniform sampler2D tMask;\n"
-    + m.fragmentShader.replace(HIGH_PASS_TEXEL, `${HIGH_PASS_TEXEL}\n\ttexel *= texture2D( tMask, vUv ).r;`);
+  m.fragmentShader =
+    "uniform sampler2D tMask;\n" +
+    m.fragmentShader.replace(HIGH_PASS_TEXEL, `${HIGH_PASS_TEXEL}\n\ttexel *= texture2D( tMask, vUv ).r;`);
   m.needsUpdate = true;
   return true;
 }
@@ -426,7 +450,10 @@ export class GlowMask {
       t.blending = THREE.NoBlending;
       return t;
     };
-    const swap = bodies.map((mesh) => ({ mesh, material: Array.isArray(mesh.material) ? mesh.material.map(twin) : twin(mesh.material) }));
+    const swap = bodies.map((mesh) => ({
+      mesh,
+      material: Array.isArray(mesh.material) ? mesh.material.map(twin) : twin(mesh.material),
+    }));
     return { swap, hide };
   }
 

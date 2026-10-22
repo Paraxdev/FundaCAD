@@ -98,7 +98,10 @@ export function captureConfiguration(doc: CadDocument, id: string, name: string)
 /** Apply a configuration to a COPY of the document, one value at a time so a
  *  value may read one set before it. The error names the first value that does
  *  not fit, and nothing is applied then. */
-export function trialConfiguration(doc: CadDocument, cfg: ParamConfiguration): { ok: true; doc: CadDocument } | { ok: false; error: string } {
+export function trialConfiguration(
+  doc: CadDocument,
+  cfg: ParamConfiguration,
+): { ok: true; doc: CadDocument } | { ok: false; error: string } {
   const draft = structuredClone(doc);
   const defs = defsOf(draft);
   for (const [name, expr] of Object.entries(cfg.values)) {

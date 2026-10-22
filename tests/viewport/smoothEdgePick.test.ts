@@ -108,25 +108,41 @@ describe("preferredEdge, cost on a big assembly", () => {
   };
 
   it("casts one sight ray when the nearest edge is in band and visible", () => {
-    const { cs, calls } = counted(5000, (i) => 0.1 + i * 0.01, () => false);
+    const { cs, calls } = counted(
+      5000,
+      (i) => 0.1 + i * 0.01,
+      () => false,
+    );
     expect(preferredEdge(cs, true)).toBe(0);
     expect(calls.occluded).toBe(1);
   });
 
   it("casts none for edges outside their band over a face", () => {
-    const { cs, calls } = counted(5000, (i) => EDGE_NEAR_PX + 1 + i * 0.01, () => false);
+    const { cs, calls } = counted(
+      5000,
+      (i) => EDGE_NEAR_PX + 1 + i * 0.01,
+      () => false,
+    );
     expect(preferredEdge(cs, true)).toBeNull();
     expect(calls.occluded).toBe(0);
   });
 
   it("stops at the first visible edge past occluded ones", () => {
-    const { cs, calls } = counted(5000, (i) => 0.1 + i * 0.0001, (i) => i < 3);
+    const { cs, calls } = counted(
+      5000,
+      (i) => 0.1 + i * 0.0001,
+      (i) => i < 3,
+    );
     expect(preferredEdge(cs, true)).toBe(3);
     expect(calls.occluded).toBe(4);
   });
 
   it("measures no band with no face under the pointer", () => {
-    const { cs, calls } = counted(5000, (i) => 20 + i, () => false);
+    const { cs, calls } = counted(
+      5000,
+      (i) => 20 + i,
+      () => false,
+    );
     expect(preferredEdge(cs, false)).toBe(0);
     expect(calls.band).toBe(0);
   });

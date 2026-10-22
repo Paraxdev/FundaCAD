@@ -16,7 +16,9 @@ export function claimEscape(): () => void {
   return () => {
     if (released) return;
     released = true;
-    setTimeout(() => { claims--; }, 0);
+    setTimeout(() => {
+      claims--;
+    }, 0);
   };
 }
 

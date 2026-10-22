@@ -77,7 +77,8 @@ export function sketchTool(groups: Group[] = modelGroups()): RailTool | null {
 }
 
 function sketchLeaf(action: string): ToolItem {
-  for (const g of SKETCH) for (const it of g.items) for (const leaf of leavesOf(it)) if (leaf.action === action) return leaf;
+  for (const g of SKETCH)
+    for (const it of g.items) for (const leaf of leavesOf(it)) if (leaf.action === action) return leaf;
   throw new Error(`sketch rail names an unknown tool: ${action}`);
 }
 
@@ -105,7 +106,11 @@ const SKETCH_SLOTS: readonly SketchSlot[] = [
   { id: "corner", label: "Fillet", actions: ["fillet-sketch", "chamfer-sketch"] },
   "move-sketch",
   "mirror-sketch",
-  { id: "pattern", label: "Pattern", actions: ["patternRect", "patternCircular", "boltCircle", "hexHoles", "honeycomb", "gridHoles"] },
+  {
+    id: "pattern",
+    label: "Pattern",
+    actions: ["patternRect", "patternCircular", "boltCircle", "hexHoles", "honeycomb", "gridHoles"],
+  },
   "project",
   "text",
   "trim",
@@ -113,7 +118,20 @@ const SKETCH_SLOTS: readonly SketchSlot[] = [
   {
     id: "constrain",
     label: "Constrain",
-    actions: ["horizontal", "vertical", "parallel", "perpendicular", "equal", "tangent", "coincident", "concentric", "midpoint", "collinear", "symmetric", "fix"],
+    actions: [
+      "horizontal",
+      "vertical",
+      "parallel",
+      "perpendicular",
+      "equal",
+      "tangent",
+      "coincident",
+      "concentric",
+      "midpoint",
+      "collinear",
+      "symmetric",
+      "fix",
+    ],
   },
   "tie-loose-ends",
 ];

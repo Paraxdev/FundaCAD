@@ -84,7 +84,9 @@ pub fn tail(dir: &Path, max: u64) -> Option<String> {
         // One byte before the cut tells whether it falls on a line start.
         let back = u64::from(from > 0);
         let mut buf = Vec::new();
-        if file.seek(SeekFrom::Start(from - back)).is_err() || file.take(len - from + back).read_to_end(&mut buf).is_err() {
+        if file.seek(SeekFrom::Start(from - back)).is_err()
+            || file.take(len - from + back).read_to_end(&mut buf).is_err()
+        {
             continue;
         }
         left -= len - from;

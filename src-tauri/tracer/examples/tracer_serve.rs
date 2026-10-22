@@ -26,8 +26,8 @@ use std::time::Duration;
 use fundacad_engine::ws::{appenv, mint_token, Gate};
 use fundacad_frames::{frame_size, Current, FrameSource, Notes, Reopen, Transport, WebSocketTransport};
 use fundacad_tracer::{
-    decode_colors, decode_env, decode_mesh, denoise, oidn, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Quality, Tracer,
-    TracerOptions,
+    decode_colors, decode_env, decode_mesh, denoise, oidn, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Quality,
+    Tracer, TracerOptions,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -299,7 +299,9 @@ impl Dev {
         let (generation, port) = (t.generation(), t.port());
         let (id, displaced) = self.open.replace(t);
         drop(displaced);
-        Ok(json!({ "id": id, "kind": "websocket", "generation": generation, "port": port, "token": token, "source": source }))
+        Ok(
+            json!({ "id": id, "kind": "websocket", "generation": generation, "port": port, "token": token, "source": source }),
+        )
     }
 
     /// A tracer made only to answer is released again.
@@ -318,7 +320,9 @@ impl Dev {
                     reason: None,
                 }
             }
-            Err(e) => Probe { available: false, path: None, adapter: None, denoise: false, denoiser: None, reason: Some(e) },
+            Err(e) => {
+                Probe { available: false, path: None, adapter: None, denoise: false, denoiser: None, reason: Some(e) }
+            }
         };
         if !was_open {
             drop(self.tracer.release());
@@ -350,7 +354,12 @@ impl Dev {
             Message::Text(t) => match serde_json::from_str::<Value>(t.as_str()) {
                 Ok(v) => {
                     let cmd = v.get("cmd").and_then(Value::as_str).unwrap_or_default().to_string();
-                    (v.get("id").cloned().unwrap_or(Value::Null), cmd, v.get("args").cloned().unwrap_or(json!({})), None)
+                    (
+                        v.get("id").cloned().unwrap_or(Value::Null),
+                        cmd,
+                        v.get("args").cloned().unwrap_or(json!({})),
+                        None,
+                    )
                 }
                 Err(e) => return Some(reply(Value::Null, Err(format!("not a request: {e}")))),
             },

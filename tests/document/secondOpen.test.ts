@@ -58,7 +58,11 @@ describe("open A then open B", () => {
   it("B does not get A's unreadable sections", () => {
     const a = opened({ stress: { future: true }, environment: { name: "future", sky: 3 }, versions: { v: 2 } });
     const first = saved(a);
-    expect([first.stress, first.environment, first.versions]).toEqual([{ future: true }, { name: "future", sky: 3 }, { v: 2 }]);
+    expect([first.stress, first.environment, first.versions]).toEqual([
+      { future: true },
+      { name: "future", sky: 3 },
+      { v: 2 },
+    ]);
     a.load(JSON.stringify(B));
     expect(saved(a)).toEqual(saved(opened(B)));
   });
@@ -67,9 +71,17 @@ describe("open A then open B", () => {
     const a = busyA();
     const before = a.toJSON();
     let parser = "";
-    try { JSON.parse("{\"features\": [") } catch (e) { parser = (e as Error).message; }
+    try {
+      JSON.parse('{"features": [');
+    } catch (e) {
+      parser = (e as Error).message;
+    }
     let err: unknown = null;
-    try { a.load("{\"features\": ["); } catch (e) { err = e; }
+    try {
+      a.load('{"features": [');
+    } catch (e) {
+      err = e;
+    }
     expect(err).toBeInstanceOf(UnreadableDocumentError);
     expect((err as Error).message.endsWith(parser)).toBe(true);
     expect((err as Error).message).not.toContain("SyntaxError");
@@ -142,20 +154,33 @@ describe("the projection valve", () => {
   const upd = (curve: object) => ({ sketch: "s1", entity: "p1", curve: { ...curve }, stale: false });
   const pdoc = () => ({
     parameters: {},
-    features: [{
-      id: "s1", type: "sketch", plane: "XY", name: "Sketch1",
-      entities: [{
-        id: "p1", type: "projected",
-        source: { kind: "edge", body: "body1", sel: { kind: "edge", by: "match", fp: { mid: [1.5, -2, 0], dir: [0.8, 0.6, 0] } } },
-        curve: { ...CURVE0 },
-      }],
-    }],
+    features: [
+      {
+        id: "s1",
+        type: "sketch",
+        plane: "XY",
+        name: "Sketch1",
+        entities: [
+          {
+            id: "p1",
+            type: "projected",
+            source: {
+              kind: "edge",
+              body: "body1",
+              sel: { kind: "edge", by: "match", fp: { mid: [1.5, -2, 0], dir: [0.8, 0.6, 0] } },
+            },
+            curve: { ...CURVE0 },
+          },
+        ],
+      },
+    ],
   });
-  const settle = () => new Promise<void>((res) => {
-    let i = 0;
-    const tick = () => (++i > 30 ? res() : void setTimeout(tick, 0));
-    tick();
-  });
+  const settle = () =>
+    new Promise<void>((res) => {
+      let i = 0;
+      const tick = () => (++i > 30 ? res() : void setTimeout(tick, 0));
+      tick();
+    });
 
   it("tripped in one document does not pause projection refresh in the next", async () => {
     const calls: unknown[] = [];
@@ -168,12 +193,21 @@ describe("the projection valve", () => {
         ok: true,
         result: {
           mesh: { positions: new Float32Array(0), indices: new Uint32Array(0), faceIds: new Uint32Array(0) },
-          edges: [], bbox: { min: [0, 0, 0], max: [1, 1, 1] },
+          edges: [],
+          bbox: { min: [0, 0, 0], max: [1, 1, 1] },
           ...(u?.length ? { projectionUpdates: u } : {}),
         },
       };
     };
-    const backend = { rebuild: reply, computeAll: reply, async init() {}, onStatus() { return () => {}; }, connected: true };
+    const backend = {
+      rebuild: reply,
+      computeAll: reply,
+      async init() {},
+      onStatus() {
+        return () => {};
+      },
+      connected: true,
+    };
     const store = new DocumentStore(backend as unknown as GeometryBackend, pdoc() as unknown as CadDocument);
     const warnings: string[] = [];
     store.onWarning = (m) => void warnings.push(m);
@@ -183,7 +217,9 @@ describe("the projection valve", () => {
     expect(warnings.some((w) => w.includes("paused"))).toBe(true);
     store.load(JSON.stringify(pdoc()));
     await settle();
-    expect((store.document.features[0] as unknown as { entities: { curve: object }[] }).entities[0]!.curve).toEqual(CURVE1);
+    expect((store.document.features[0] as unknown as { entities: { curve: object }[] }).entities[0]!.curve).toEqual(
+      CURVE1,
+    );
     expect(calls.length).toBe(8);
   });
 });

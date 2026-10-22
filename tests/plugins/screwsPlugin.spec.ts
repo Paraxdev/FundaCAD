@@ -9,7 +9,12 @@ import { insertFastener, placementFromSelection, specOfBody } from "../../plugin
 import { expand } from "../../plugins/FundaCAD.Screws/catalogue";
 import { dragging, open } from "../../plugins/FundaCAD.Screws/state";
 import {
-  contributedAction, contributedBodyMenu, contributedOverlays, contributedRibbon, contributors, resetContributions,
+  contributedAction,
+  contributedBodyMenu,
+  contributedOverlays,
+  contributedRibbon,
+  contributors,
+  resetContributions,
 } from "../../src/plugins/contrib";
 import type { Engine } from "../../src/app/engine";
 
@@ -21,20 +26,46 @@ function fakeEngine() {
     planar: true,
     snapY: 2,
     calls: [] as unknown[][],
-    reply: { ok: true, shape: { solid: true, valid: true, faces: 20, volume: 132, bbox: { min: [0, 0, 0], max: [1, 1, 1] }, geom: "a".repeat(32) } } as unknown,
+    reply: {
+      ok: true,
+      shape: {
+        solid: true,
+        valid: true,
+        faces: 20,
+        volume: 132,
+        bbox: { min: [0, 0, 0], max: [1, 1, 1] },
+        geom: "a".repeat(32),
+      },
+    } as unknown,
   };
   const viewport = {
     domElement: canvas,
-    selectedFacesForPressPull: () => state.faces.length
-      ? { faceIds: state.faces, anchor: new THREE.Vector3(1, 2, 3), normal: new THREE.Vector3(0, 1, 0), selectors: [], bodyId: "b1", round: null }
-      : null,
-    planarFace: () => (state.planar ? { normal: new THREE.Vector3(0, 1, 0), origin: new THREE.Vector3(1, 2, 3) } : null),
-    pickFaceForPressPull: () => ({ faceId: 7, anchor: new THREE.Vector3(9, 2, 9), normal: new THREE.Vector3(0, 1, 0), bodyId: "b1" }),
+    selectedFacesForPressPull: () =>
+      state.faces.length
+        ? {
+            faceIds: state.faces,
+            anchor: new THREE.Vector3(1, 2, 3),
+            normal: new THREE.Vector3(0, 1, 0),
+            selectors: [],
+            bodyId: "b1",
+            round: null,
+          }
+        : null,
+    planarFace: () =>
+      state.planar ? { normal: new THREE.Vector3(0, 1, 0), origin: new THREE.Vector3(1, 2, 3) } : null,
+    pickFaceForPressPull: () => ({
+      faceId: 7,
+      anchor: new THREE.Vector3(9, 2, 9),
+      normal: new THREE.Vector3(0, 1, 0),
+      bodyId: "b1",
+    }),
     pointAt: () => ({ p: new THREE.Vector3(4, state.snapY, 6), kind: "vertex" }),
   };
   const store = {
     nextId: () => `f${state.added.length + 1}`,
-    addFeature: (f: Record<string, unknown>) => { state.added.push(f); },
+    addFeature: (f: Record<string, unknown>) => {
+      state.added.push(f);
+    },
     document: { features: state.added },
     buildState: { result: { bodies: [{ id: "b1", faceOwners: ["f1", "f1"] }] } },
   };
@@ -42,7 +73,10 @@ function fakeEngine() {
     viewport,
     store,
     geometry: {
-      generateShape: vi.fn(async (...args: unknown[]) => { state.calls.push(args); return state.reply; }),
+      generateShape: vi.fn(async (...args: unknown[]) => {
+        state.calls.push(args);
+        return state.reply;
+      }),
     },
     setStatus: vi.fn(),
     noteCommitted: vi.fn(),
@@ -82,10 +116,17 @@ describe("the fastener library, switched on and off", () => {
     const id = await insertFastener(engine.e, spec, null);
     expect(id).toBe("f1");
     expect(engine.state.calls[0]).toEqual(["fastener", spec, { output: "store" }]);
-    expect(engine.state.added).toEqual([{
-      id: "f1", type: "import", format: "brep", name: "ISO 4762 M3x10", geom: "a".repeat(32), solid: true,
-      generatedBy: { plugin: "FundaCAD.Screws", spec },
-    }]);
+    expect(engine.state.added).toEqual([
+      {
+        id: "f1",
+        type: "import",
+        format: "brep",
+        name: "ISO 4762 M3x10",
+        geom: "a".repeat(32),
+        solid: true,
+        generatedBy: { plugin: "FundaCAD.Screws", spec },
+      },
+    ]);
     expect(specOfBody(engine.e, "b1")).toEqual(spec);
     const menu = contributedBodyMenu("b1");
     expect(menu.map((m) => m.label)).toEqual(["Fastener Specs..."]);
@@ -117,7 +158,11 @@ describe("the fastener library, switched on and off", () => {
     Object.assign(drop, { clientX: 10, clientY: 20 });
     engine.canvas.dispatchEvent(drop);
     await vi.waitFor(() => expect(engine.state.added).toHaveLength(1));
-    expect(engine.state.calls[0]).toEqual(["fastener", spec, { output: "store", placement: { origin: [4, 2, 6], zAxis: [0, 1, 0] } }]);
+    expect(engine.state.calls[0]).toEqual([
+      "fastener",
+      spec,
+      { output: "store", placement: { origin: [4, 2, 6], zAxis: [0, 1, 0] } },
+    ]);
     expect(drop.defaultPrevented).toBe(true);
   });
 
@@ -128,7 +173,10 @@ describe("the fastener library, switched on and off", () => {
     Object.defineProperty(drop, "dataTransfer", { value: { types: ["application/x-fundacad-fastener"] } });
     engine.canvas.dispatchEvent(drop);
     await vi.waitFor(() => expect(engine.state.added).toHaveLength(1));
-    expect((engine.state.calls[0]![2] as { placement: unknown }).placement).toEqual({ origin: [9, 2, 9], zAxis: [0, 1, 0] });
+    expect((engine.state.calls[0]![2] as { placement: unknown }).placement).toEqual({
+      origin: [9, 2, 9],
+      zAxis: [0, 1, 0],
+    });
   });
 
   it("takes everything away when switched off", () => {

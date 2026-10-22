@@ -101,22 +101,13 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown, true));
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="req"
-      class="choice-backdrop"
-      @pointerdown.self="cancel()"
-    >
+    <div v-if="req" class="choice-backdrop" @pointerdown.self="cancel()">
       <div class="choice-card" ref="card" role="dialog" aria-modal="true" :aria-labelledby="titleId">
         <div :id="titleId" class="choice-title">{{ req.title }}</div>
 
         <!-- choose(): a row of option buttons -->
         <div v-if="req.kind === 'choose'" class="choice-row">
-          <button
-            v-for="opt in req.options"
-            :key="opt.value"
-            class="choice-btn"
-            @click="finish(opt.value)"
-          >
+          <button v-for="opt in req.options" :key="opt.value" class="choice-btn" @click="finish(opt.value)">
             <span>{{ opt.label }}</span>
             <small v-if="opt.hint">{{ opt.hint }}</small>
           </button>
@@ -125,11 +116,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown, true));
         <!-- chooseMulti(): a checkbox list + Cancel/confirm -->
         <template v-else-if="req.kind === 'multi'">
           <div class="choice-checklist">
-            <label
-              v-for="(opt, i) in req.options"
-              :key="opt.value"
-              class="choice-check"
-            >
+            <label v-for="(opt, i) in req.options" :key="opt.value" class="choice-check">
               <input type="checkbox" :value="opt.value" v-model="checked[i]" />
               <span>{{ opt.label }}</span>
               <small v-if="opt.hint">{{ opt.hint }}</small>
@@ -137,11 +124,9 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown, true));
           </div>
           <div class="choice-row">
             <button class="choice-btn" @click="cancel()"><span>Cancel</span></button>
-            <button
-              class="choice-btn choice-primary"
-              :disabled="okDisabled"
-              @click="confirmMulti()"
-            ><span>{{ req.confirmLabel }}</span></button>
+            <button class="choice-btn choice-primary" :disabled="okDisabled" @click="confirmMulti()"
+              ><span>{{ req.confirmLabel }}</span></button
+            >
           </div>
         </template>
 

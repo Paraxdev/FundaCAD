@@ -36,9 +36,7 @@ export interface ElementDef {
  *  caught in a cycle (see `ancestryOf`). Both are the same rule: a folder that
  *  cannot be placed is shown at the top rather than dropped, because a folder
  *  that is not drawn is a folder whose contents have vanished. */
-export function childrenByParent(
-  elements: readonly ElementDef[],
-): Map<string, ElementDef[]> {
+export function childrenByParent(elements: readonly ElementDef[]): Map<string, ElementDef[]> {
   const byId = new Map(elements.map((e) => [e.id, e]));
   // Cyclic membership decided ONCE for the whole list, not per element: the
   // obvious `elements.filter(e => isCyclic(elements, e.id))` is quadratic, and
@@ -128,21 +126,13 @@ export function descendantsOf(elements: readonly ElementDef[], id: string): Set<
  *  that produces a subtree nothing can reach, and the drop has to be refused
  *  rather than repaired afterwards. A `parent` of null (top level) is always
  *  allowed. */
-export function wouldCycle(
-  elements: readonly ElementDef[],
-  id: string,
-  parent: string | null,
-): boolean {
+export function wouldCycle(elements: readonly ElementDef[], id: string, parent: string | null): boolean {
   return parent !== null && descendantsOf(elements, id).has(parent);
 }
 
 /** `elements` with `id` moved under `parent` (null = top level), or the list
  *  unchanged when that move would loop or names an element that is not there. */
-export function reparented(
-  elements: readonly ElementDef[],
-  id: string,
-  parent: string | null,
-): ElementDef[] {
+export function reparented(elements: readonly ElementDef[], id: string, parent: string | null): ElementDef[] {
   if (!elements.some((e) => e.id === id)) return [...elements];
   if (parent !== null && !elements.some((e) => e.id === parent)) return [...elements];
   if (wouldCycle(elements, id, parent)) return [...elements];
@@ -191,16 +181,8 @@ export function withElementRemoved(
  *  Unique among SIBLINGS rather than globally, because "Bracket" under two
  *  different subassemblies is how real assemblies are named and renaming one of
  *  them would be inventing a distinction the user did not make. */
-export function freshElementName(
-  elements: readonly ElementDef[],
-  parent: string | null,
-  base = "Element",
-): string {
-  const taken = new Set(
-    elements
-      .filter((e) => (e.parent ?? null) === parent)
-      .map((e) => e.name.toLowerCase()),
-  );
+export function freshElementName(elements: readonly ElementDef[], parent: string | null, base = "Element"): string {
+  const taken = new Set(elements.filter((e) => (e.parent ?? null) === parent).map((e) => e.name.toLowerCase()));
   if (!taken.has(base.toLowerCase())) return base;
   for (let n = 2; ; n++) {
     const name = `${base} ${n}`;

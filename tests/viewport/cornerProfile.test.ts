@@ -47,7 +47,10 @@ describe("conicCorner", () => {
 
   it("takes 1, 2 and many segments, and at least 1", () => {
     const at = (n: number) => conicCorner([4, 0], [4, 3], [0, 3], 0.25, n);
-    expect(at(1)).toEqual([[4, 0], [0, 3]]);
+    expect(at(1)).toEqual([
+      [4, 0],
+      [0, 3],
+    ]);
     expect(at(0)).toEqual(at(1));
     expect(at(-3)).toEqual(at(1));
     expect(at(2).length).toBe(3);
@@ -73,15 +76,28 @@ describe("conicWeight", () => {
 describe("roundedSquare", () => {
   it("draws the whole outline counter clockwise from the (+, -) corner", () => {
     expect(roundedSquare(10, 3, 0.5, 2)).toEqual([
-      [2, -5], [4.25, -4.25], [5, -2],
-      [5, 2], [4.25, 4.25], [2, 5],
-      [-2, 5], [-4.25, 4.25], [-5, 2],
-      [-5, -2], [-4.25, -4.25], [-2, -5],
+      [2, -5],
+      [4.25, -4.25],
+      [5, -2],
+      [5, 2],
+      [4.25, 4.25],
+      [2, 5],
+      [-2, 5],
+      [-4.25, 4.25],
+      [-5, 2],
+      [-5, -2],
+      [-4.25, -4.25],
+      [-2, -5],
     ]);
   });
 
   it("is the plain square at leg 0 and below", () => {
-    const square = [[18.5, -18.5], [18.5, 18.5], [-18.5, 18.5], [-18.5, -18.5]];
+    const square = [
+      [18.5, -18.5],
+      [18.5, 18.5],
+      [-18.5, 18.5],
+      [-18.5, -18.5],
+    ];
     expect(roundedSquare(37, 0, 0.25, 10)).toEqual(square);
     expect(roundedSquare(37, -2, 0.25, 10)).toEqual(square);
   });

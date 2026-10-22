@@ -108,7 +108,11 @@ function arrow(tip: V, dir: V, size: number): [V, V][] {
  *  sits exactly at midpoint(a,b) + place, which is what makes a drag delta
  *  composable with it. */
 export function linearDim(
-  a: V, b: V, offDir: V, value: number, offOverride?: number,
+  a: V,
+  b: V,
+  offDir: V,
+  value: number,
+  offOverride?: number,
 ): { labelPos: V; lines: [V, V][]; place: V } {
   const off = dimOffset(offOverride === undefined ? defaultOffset(value) : Math.abs(offOverride));
   const dirOff = offOverride !== undefined && offOverride < 0 ? offDir.clone().negate() : offDir;
@@ -138,14 +142,20 @@ const linear = linearDim;
  *  runs along the axis and `offOverride` sets how far it sits from the pair's middle
  *  across it; the label is at midpoint(a,b) + place, as with linearDim. */
 export function axisLinearDim(
-  a: V, b: V, axis: "x" | "y", value: number, offOverride?: number,
+  a: V,
+  b: V,
+  axis: "x" | "y",
+  value: number,
+  offOverride?: number,
 ): { labelPos: V; lines: [V, V][]; place: V } {
   const across = axis === "x" ? "y" : "x";
   const m = a.clone().add(b).multiplyScalar(0.5);
-  const at = offOverride !== undefined
-    ? m[across] + offOverride
-    : Math.max(a[across], b[across]) + dimOffset(defaultOffset(value));
-  const da = a.clone(), db = b.clone();
+  const at =
+    offOverride !== undefined
+      ? m[across] + offOverride
+      : Math.max(a[across], b[across]) + dimOffset(defaultOffset(value));
+  const da = a.clone(),
+    db = b.clone();
   da[across] = at;
   db[across] = at;
   const dir = db.clone().sub(da);
@@ -182,21 +192,22 @@ function arcPolyline(c: V, r: number, from: number, sweep: number): [V, V][] {
   return out;
 }
 
-const ccwRad = (from: number, to: number) => ((to - from) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+const ccwRad = (from: number, to: number) => (((to - from) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
 
 /** The rim gap from an arc's nearer end round to direction `ang`, empty when `ang` is
  *  already on the arc, so a radius or diameter placed off the arc still meets it. */
 function arcExtension(e: ResolvedEntity, c: V, r: number, ang: number): [V, V][] {
   if (e.type !== "arc") return [];
   const at = (x: number, y: number) => Math.atan2(y - c.y, x - c.x);
-  const a1 = at(e.x1, e.y1), a2 = at(e.x2, e.y2), am = at(e.mx, e.my);
+  const a1 = at(e.x1, e.y1),
+    a2 = at(e.x2, e.y2),
+    am = at(e.mx, e.my);
   const s = ccwRad(a1, a2);
   const [start, span] = ccwRad(a1, am) < s ? [a1, s] : [a2, 2 * Math.PI - s];
   if (ccwRad(start, ang) <= span + 1e-9) return [];
-  const pastEnd = ccwRad(start + span, ang), beforeStart = ccwRad(ang, start);
-  return pastEnd <= beforeStart
-    ? arcPolyline(c, r, start + span, pastEnd)
-    : arcPolyline(c, r, ang, beforeStart);
+  const pastEnd = ccwRad(start + span, ang),
+    beforeStart = ccwRad(ang, start);
+  return pastEnd <= beforeStart ? arcPolyline(c, r, start + span, pastEnd) : arcPolyline(c, r, ang, beforeStart);
 }
 
 /** An angle dim's arc between its two rays at the label's distance from the crossing,
@@ -206,7 +217,8 @@ function angleArc(s1: LineSeg, s2: LineSeg, rays: [AngleRay, AngleRay] | undefin
   if (!x) return [];
   const { from, sweepDeg } = wedgeRays(s1, s2, rays);
   const r = Math.max(labelPos.distanceTo(x), px(OFFSET_PX, 4));
-  const a0 = Math.atan2(from.y, from.x), sweep = (sweepDeg * Math.PI) / 180;
+  const a0 = Math.atan2(from.y, from.x),
+    sweep = (sweepDeg * Math.PI) / 180;
   const lines = arcPolyline(x, r, a0, sweep);
   const aSize = arrowSize(r * sweep);
   const e0 = v(x.x + r * Math.cos(a0), x.y + r * Math.sin(a0));
@@ -227,7 +239,8 @@ function angleArc(s1: LineSeg, s2: LineSeg, rays: [AngleRay, AngleRay] | undefin
 }
 
 function cross(u: V, s: LineSeg): number {
-  const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
+  const dx = s.x2 - s.x1,
+    dy = s.y2 - s.y1;
   const l = Math.hypot(dx, dy) || 1;
   return (u.x * dy - u.y * dx) / l;
 }
@@ -259,7 +272,10 @@ function linearOverride(e: ResolvedEntity, field: DimField, offDir: V, defaults?
  *  A label dragged past the rim pulls a leader out to itself; the arrowheads
  *  stay on the rim, because that's what the dimension actually measures. */
 export function diameterDim(
-  cx: number, cy: number, r: number, place: V | null,
+  cx: number,
+  cy: number,
+  r: number,
+  place: V | null,
 ): { labelPos: V; lines: [V, V][]; place: V } {
   const c = v(cx, cy);
   const len = place ? place.length() : 0;
@@ -274,11 +290,7 @@ export function diameterDim(
   const far = c.clone().addScaledVector(u, Math.max(r, place && len > 1e-9 ? len : 0));
   return {
     labelPos: c.clone().add(off),
-    lines: [
-      [tail.clone(), far],
-      ...arrow(tail, u.clone().negate(), aSize),
-      ...arrow(tip, u, aSize),
-    ],
+    lines: [[tail.clone(), far], ...arrow(tail, u.clone().negate(), aSize), ...arrow(tip, u, aSize)],
     place: off,
   };
 }
@@ -319,7 +331,7 @@ export function staggeredDefaults(ents: ResolvedEntity[]): Map<string, DimPlace>
     let inner = 0; // the rim just inside this one (0 = the shared centre)
     sorted.forEach((e, k) => {
       if (e.type !== "circle") return;
-      const ang = (Math.PI / 4) + k * (Math.PI / 2); // 45°, 135°, 225°, 315°, …
+      const ang = Math.PI / 4 + k * (Math.PI / 2); // 45°, 135°, 225°, 315°, …
       const dist = (inner + e.radius) / 2;
       inner = e.radius;
       out.set(e.id, { diameter: { ox: Math.cos(ang) * dist, oy: Math.sin(ang) * dist } });
@@ -332,12 +344,45 @@ export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] 
   if (e.type === "rectangle") {
     const hw = e.width / 2;
     const hh = e.height / 2;
-    const wDir = v(0, -1), hDir = v(-1, 0);
-    const w = linear(v(e.x - hw, e.y - hh), v(e.x + hw, e.y - hh), wDir, e.width, linearOverride(e, "width", wDir, defaults));
-    const h = linear(v(e.x - hw, e.y - hh), v(e.x - hw, e.y + hh), hDir, e.height, linearOverride(e, "height", hDir, defaults));
+    const wDir = v(0, -1),
+      hDir = v(-1, 0);
+    const w = linear(
+      v(e.x - hw, e.y - hh),
+      v(e.x + hw, e.y - hh),
+      wDir,
+      e.width,
+      linearOverride(e, "width", wDir, defaults),
+    );
+    const h = linear(
+      v(e.x - hw, e.y - hh),
+      v(e.x - hw, e.y + hh),
+      hDir,
+      e.height,
+      linearOverride(e, "height", hDir, defaults),
+    );
     return [
-      { field: "width", label: "Width", valueMm: e.width, labelPos: w.labelPos, lines: w.lines, place: w.place, write: (mm) => { e.width = mm; } },
-      { field: "height", label: "Height", valueMm: e.height, labelPos: h.labelPos, lines: h.lines, place: h.place, write: (mm) => { e.height = mm; } },
+      {
+        field: "width",
+        label: "Width",
+        valueMm: e.width,
+        labelPos: w.labelPos,
+        lines: w.lines,
+        place: w.place,
+        write: (mm) => {
+          e.width = mm;
+        },
+      },
+      {
+        field: "height",
+        label: "Height",
+        valueMm: e.height,
+        labelPos: h.labelPos,
+        lines: h.lines,
+        place: h.place,
+        write: (mm) => {
+          e.height = mm;
+        },
+      },
     ];
   }
   if (e.type === "circle") {
@@ -350,7 +395,9 @@ export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] 
         labelPos: d.labelPos,
         lines: d.lines,
         place: d.place,
-        write: (mm) => { e.radius = mm / 2; },
+        write: (mm) => {
+          e.radius = mm / 2;
+        },
       },
     ];
   }
@@ -371,28 +418,57 @@ export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] 
     const p = placeOf(e, "radius", defaults);
     const dist = p ? Math.max(p.x * c.x + p.y * c.y, dimOffset(0)) : rr * 0.6;
     const end = Math.max(rr, dist); // a label past the vertex pulls the line out to it
-    return [{
-      field: "radius", label: "Radius", valueMm: rr,
-      labelPos: v(e.x + c.x * dist, e.y + c.y * dist),
-      lines: [[v(e.x, e.y), v(e.x + c.x * end, e.y + c.y * end)]],
-      place: c.clone().multiplyScalar(dist),
-      write: (mm) => { e.radius = mm; },
-    }];
+    return [
+      {
+        field: "radius",
+        label: "Radius",
+        valueMm: rr,
+        labelPos: v(e.x + c.x * dist, e.y + c.y * dist),
+        lines: [[v(e.x, e.y), v(e.x + c.x * end, e.y + c.y * end)]],
+        place: c.clone().multiplyScalar(dist),
+        write: (mm) => {
+          e.radius = mm;
+        },
+      },
+    ];
   }
   if (e.type === "slot") {
-    const A = v(e.x1, e.y1), B = v(e.x2, e.y2);
+    const A = v(e.x1, e.y1),
+      B = v(e.x2, e.y2);
     const len = A.distanceTo(B) || 1;
-    const dir = B.clone().sub(A).multiplyScalar(1 / len);
+    const dir = B.clone()
+      .sub(A)
+      .multiplyScalar(1 / len);
     const perp = v(-dir.y, dir.x);
     const ll = linear(A, B, perp, len, linearOverride(e, "length", perp, defaults));
     const wDir = dir.clone().negate();
-    const wa = A.clone().addScaledVector(perp, e.width / 2), wb = A.clone().addScaledVector(perp, -e.width / 2);
+    const wa = A.clone().addScaledVector(perp, e.width / 2),
+      wb = A.clone().addScaledVector(perp, -e.width / 2);
     const wl = linear(wa, wb, wDir, e.width, linearOverride(e, "width", wDir, defaults));
     return [
-      { field: "length", label: "Length", valueMm: len, labelPos: ll.labelPos, lines: ll.lines, place: ll.place,
-        write: (mm) => { e.x2 = e.x1 + dir.x * mm; e.y2 = e.y1 + dir.y * mm; } },
-      { field: "width", label: "Width", valueMm: e.width, labelPos: wl.labelPos, lines: wl.lines, place: wl.place,
-        write: (mm) => { e.width = mm; } },
+      {
+        field: "length",
+        label: "Length",
+        valueMm: len,
+        labelPos: ll.labelPos,
+        lines: ll.lines,
+        place: ll.place,
+        write: (mm) => {
+          e.x2 = e.x1 + dir.x * mm;
+          e.y2 = e.y1 + dir.y * mm;
+        },
+      },
+      {
+        field: "width",
+        label: "Width",
+        valueMm: e.width,
+        labelPos: wl.labelPos,
+        lines: wl.lines,
+        place: wl.place,
+        write: (mm) => {
+          e.width = mm;
+        },
+      },
     ];
   }
   // line: dimension parallel to it, offset to the left normal
@@ -474,7 +550,8 @@ export function lineOperand(
   const k = Number(id.slice(t + 1));
   if (!base || base.type !== "rectangle" || !Number.isInteger(k) || k < 0 || k > 3) return null;
   const c = rectCorners(base.x, base.y, base.width, base.height, base.angle);
-  const a = c[k], b = c[(k + 1) % 4];
+  const a = c[k],
+    b = c[(k + 1) % 4];
   return a && b ? { x1: a.x, y1: a.y, x2: b.x, y2: b.y } : null;
 }
 
@@ -501,7 +578,11 @@ export function asRound(e: ResolvedEntity): { x: number; y: number; r: number } 
 // re-checks can never drift apart.
 
 /** a circle/arc reduced to the circle its rim lies on */
-export interface Round { x: number; y: number; r: number }
+export interface Round {
+  x: number;
+  y: number;
+  r: number;
+}
 
 export const RIM_EPS = 1e-9;
 
@@ -528,7 +609,8 @@ export function rimNesting(c1: Round, c2: Round): "c1" | "c2" | null {
 /** the two rim points realising `rimGap`, the annotation's endpoints. `fallback`
  *  supplies the direction when the centres coincide (concentric). */
 export function rimGapPoints(c1: Round, c2: Round, fallback: V): { a: V; b: V } {
-  const dx = c2.x - c1.x, dy = c2.y - c1.y;
+  const dx = c2.x - c1.x,
+    dy = c2.y - c1.y;
   const d = Math.hypot(dx, dy);
   if (d < RIM_EPS) return radialGapPoints(c1, c2, fallback);
   const u = v(dx / d, dy / d);
@@ -561,7 +643,9 @@ export function radialGapPoints(inner: Round, outer: Round, dir: V): { a: V; b: 
 /** point → nearest rim point (planegcs `p2cdistance` = |dist(p, centre) - r|,
  *  UNSIGNED, the point may sit inside). Null when the point is at the centre. */
 export function pointRimPoints(p: V, c: Round): { a: V; b: V } | null {
-  const dx = p.x - c.x, dy = p.y - c.y, d = Math.hypot(dx, dy);
+  const dx = p.x - c.x,
+    dy = p.y - c.y,
+    d = Math.hypot(dx, dy);
   if (d < RIM_EPS) return null;
   return { a: p.clone(), b: v(c.x + (dx / d) * c.r, c.y + (dy / d) * c.r) };
 }
@@ -576,7 +660,9 @@ export function lineRimPoints(
 ): { a: V; b: V } | null {
   const t = paramOnSeg(v(seg.x1, seg.y1), v(seg.x2, seg.y2), v(c.x, c.y));
   const foot = v(seg.x1 + t * (seg.x2 - seg.x1), seg.y1 + t * (seg.y2 - seg.y1));
-  const nx = c.x - foot.x, ny = c.y - foot.y, d = Math.hypot(nx, ny);
+  const nx = c.x - foot.x,
+    ny = c.y - foot.y,
+    d = Math.hypot(nx, ny);
   if (d < RIM_EPS) return null;
   return { a: v(c.x - (nx / d) * c.r, c.y - (ny / d) * c.r), b: foot };
 }
@@ -587,9 +673,16 @@ export function lineRimPoints(
  *  points expose their single point at 0). The picker, the label renderer, and
  *  the docs in types.ts all hang off this one list. */
 export function dimRefPoints(e: ResolvedEntity): { p: number; pos: V }[] {
-  if (e.type === "line") return [{ p: 0, pos: v(e.x1, e.y1) }, { p: 1, pos: v(e.x2, e.y2) }];
+  if (e.type === "line")
+    return [
+      { p: 0, pos: v(e.x1, e.y1) },
+      { p: 1, pos: v(e.x2, e.y2) },
+    ];
   if (e.type === "arc") {
-    const out = [{ p: 0, pos: v(e.x1, e.y1) }, { p: 1, pos: v(e.x2, e.y2) }];
+    const out = [
+      { p: 0, pos: v(e.x1, e.y1) },
+      { p: 1, pos: v(e.x2, e.y2) },
+    ];
     const cc = circumcenter({ x: e.x1, y: e.y1 }, { x: e.x2, y: e.y2 }, { x: e.mx, y: e.my });
     if (cc) out.push({ p: 2, pos: v(cc.x, cc.y) });
     return out;
@@ -600,7 +693,8 @@ export function dimRefPoints(e: ResolvedEntity): { p: number; pos: V }[] {
   }
   if (e.type === "spline") {
     const out: { p: number; pos: V }[] = [];
-    const a = e.points[0], b = e.points[e.points.length - 1];
+    const a = e.points[0],
+      b = e.points[e.points.length - 1];
     if (a) out.push({ p: 0, pos: v(a.x, a.y) });
     if (b && e.points.length > 1) out.push({ p: 1, pos: v(b.x, b.y) });
     return out;
@@ -611,10 +705,17 @@ export function dimRefPoints(e: ResolvedEntity): { p: number; pos: V }[] {
     // the solver registers (sketchSolve projected branch): line/arc endpoints
     // 0/1, arc center 2, circle center 0, poly first/last samples 0/1
     const cv = e.curve;
-    if (cv.kind === "line") return [{ p: 0, pos: v(cv.x1, cv.y1) }, { p: 1, pos: v(cv.x2, cv.y2) }];
+    if (cv.kind === "line")
+      return [
+        { p: 0, pos: v(cv.x1, cv.y1) },
+        { p: 1, pos: v(cv.x2, cv.y2) },
+      ];
     if (cv.kind === "circle") return [{ p: 0, pos: v(cv.x, cv.y) }];
     if (cv.kind === "arc") {
-      const out = [{ p: 0, pos: v(cv.x1, cv.y1) }, { p: 1, pos: v(cv.x2, cv.y2) }];
+      const out = [
+        { p: 0, pos: v(cv.x1, cv.y1) },
+        { p: 1, pos: v(cv.x2, cv.y2) },
+      ];
       const cc = asRound(e); // the one circumcenter-for-projected-arc rule
       if (cc) out.push({ p: 2, pos: v(cc.x, cc.y) });
       return out;
@@ -658,7 +759,9 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       if (!e) return;
       const cr = asRound(e);
       if (!cr || (e.type !== "circle" && e.type !== "arc")) return;
-      const cx = cr.x, cy = cr.y, r = cr.r;
+      const cx = cr.x,
+        cy = cr.y,
+        r = cr.r;
       // the label sits at centre + place, inside or outside the rim; the radial line
       // runs out to whichever is further, the label or the rim
       const pv = place ? v(place.ox, place.oy) : null;
@@ -668,7 +771,9 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       const reach = Math.max(r, off.length());
       const rim = v(cx + d.x * r, cy + d.y * r);
       out.push({
-        cIndex: i, valueMm: driven ? r : c.value, driven,
+        cIndex: i,
+        valueMm: driven ? r : c.value,
+        driven,
         labelPos: v(cx + off.x, cy + off.y),
         lines: [
           [v(cx, cy), v(cx + d.x * reach, cy + d.y * reach)],
@@ -700,7 +805,8 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
     }
     // angle (line-to-line): a label between the two lines, value in degrees
     if (c.type === "angle") {
-      const s1 = lineOperand(byId, c.l1), s2 = lineOperand(byId, c.l2);
+      const s1 = lineOperand(byId, c.l1),
+        s2 = lineOperand(byId, c.l2);
       if (!s1 || !s2) return;
       const m1 = v((s1.x1 + s1.x2) / 2, (s1.y1 + s1.y2) / 2);
       const m2 = v((s2.x1 + s2.x2) / 2, (s2.y1 + s2.y2) / 2);
@@ -708,13 +814,19 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       const off = place ? v(place.ox, place.oy) : v(0, 0); // free 2D: a straight offset
       labelPos.add(off);
       out.push({
-        cIndex: i, valueMm: driven ? measuredAngleDeg(s1, s2, c.rays) : c.value, labelPos,
-        lines: angleArc(s1, s2, c.rays, labelPos), kind: "angle", driven, place: off,
+        cIndex: i,
+        valueMm: driven ? measuredAngleDeg(s1, s2, c.rays) : c.value,
+        labelPos,
+        lines: angleArc(s1, s2, c.rays, labelPos),
+        kind: "angle",
+        driven,
+        place: off,
       });
       return;
     }
     if (c.type === "hDistance" || c.type === "vDistance") {
-      const e1 = byId.get(c.e1), e2 = byId.get(c.e2);
+      const e1 = byId.get(c.e1),
+        e2 = byId.get(c.e2);
       const a = e1 ? refPoint(e1, c.p1) : null;
       const b = e2 ? refPoint(e2, c.p2) : null;
       if (!a || !b) return;
@@ -723,7 +835,14 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       if (Math.abs(meas) < 1e-6) return;
       const off = place ? (axis === "x" ? place.oy : place.ox) : undefined;
       const lin = axisLinearDim(a, b, axis, Math.abs(meas), off);
-      out.push({ cIndex: i, labelPos: lin.labelPos, valueMm: driven ? meas : c.value, lines: lin.lines, driven, place: lin.place });
+      out.push({
+        cIndex: i,
+        labelPos: lin.labelPos,
+        valueMm: driven ? meas : c.value,
+        lines: lin.lines,
+        driven,
+        place: lin.place,
+      });
       return;
     }
     // each branch yields the measured pair (a, b); the shared tail draws it.
@@ -739,7 +858,8 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       return e ? asRound(e) : null;
     };
     if (c.type === "p2pDistance") {
-      const e1 = byId.get(c.e1), e2 = byId.get(c.e2);
+      const e1 = byId.get(c.e1),
+        e2 = byId.get(c.e2);
       a = e1 ? refPoint(e1, c.p1) : null;
       b = e2 ? refPoint(e2, c.p2) : null;
       value = c.value;
@@ -748,17 +868,20 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       a = pe ? refPoint(pe, c.p) : null;
       const seg = lineOperand(byId, c.line);
       if (a && seg) {
-        const A = v(seg.x1, seg.y1), B = v(seg.x2, seg.y2);
+        const A = v(seg.x1, seg.y1),
+          B = v(seg.x2, seg.y2);
         const t = paramOnSeg(A, B, a);
         b = v(seg.x1 + t * (seg.x2 - seg.x1), seg.y1 + t * (seg.y2 - seg.y1)); // foot of the perpendicular
       }
       value = c.value;
     } else if (c.type === "radialGap") {
-      const i = round(c.inner), o = round(c.outer);
+      const i = round(c.inner),
+        o = round(c.outer);
       if (i && o) ({ a, b } = radialGapPoints(i, o, placeDir));
       value = c.value;
     } else if (c.type === "c2cDistance") {
-      const r1 = round(c.c1), r2 = round(c.c2);
+      const r1 = round(c.c1),
+        r2 = round(c.c2);
       if (r1 && r2) ({ a, b } = rimGapPoints(r1, r2, placeDir));
       value = c.value;
     } else if (c.type === "c2lDistance") {
@@ -786,12 +909,14 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       if (so && co) {
         // source midpoint → the foot of its perpendicular on the copy line
         const m = v((so.x1 + so.x2) / 2, (so.y1 + so.y2) / 2);
-        const A = v(co.x1, co.y1), B = v(co.x2, co.y2);
+        const A = v(co.x1, co.y1),
+          B = v(co.x2, co.y2);
         const t = paramOnSeg(A, B, m);
         a = m;
         b = v(co.x1 + t * (co.x2 - co.x1), co.y1 + t * (co.y2 - co.y1));
       } else if (pr) {
-        const s = round(pr.src), q = round(pr.cpy);
+        const s = round(pr.src),
+          q = round(pr.cpy);
         // radialGapPoints wants inner-then-outer; an inward offset makes the
         // COPY the inner one, so order by radius rather than by pair role
         if (s && q) ({ a, b } = radialGapPoints(s.r <= q.r ? s : q, s.r <= q.r ? q : s, placeDir));
@@ -807,7 +932,14 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
     // = how far off the geometry, sign = which side
     const off = place ? place.ox * nrm.x + place.oy * nrm.y : undefined;
     const lin = linear(a, b, nrm, meas, off);
-    out.push({ cIndex: i, labelPos: lin.labelPos, valueMm: driven ? meas : value, lines: lin.lines, driven, place: lin.place });
+    out.push({
+      cIndex: i,
+      labelPos: lin.labelPos,
+      valueMm: driven ? meas : value,
+      lines: lin.lines,
+      driven,
+      place: lin.place,
+    });
   });
   return out;
 }

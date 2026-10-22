@@ -109,10 +109,7 @@ impl Library {
                 }
             });
         }
-        let mut lib = Library {
-            db,
-            fonts: IndexMap::new(),
-        };
+        let mut lib = Library { db, fonts: IndexMap::new() };
         for (name, aspect, face) in kernel.into_iter().chain(b123d) {
             lib.register(name, aspect, face);
         }
@@ -126,10 +123,7 @@ impl Library {
         let entry = self
             .fonts
             .entry(name.to_lowercase())
-            .or_insert_with(|| SystemFont {
-                name,
-                aspects: [None, None, None, None],
-            });
+            .or_insert_with(|| SystemFont { name, aspects: [None, None, None, None] });
         let slot = &mut entry.aspects[aspect as usize];
         if slot.is_none() {
             *slot = Some(face);
@@ -173,10 +167,7 @@ impl Library {
         // fontdb's sans serif is Arial unless fontconfig names another, and
         // the one it names need not be installed, so the query can find nothing.
         self.db
-            .query(&fontdb::Query {
-                families: &[fontdb::Family::SansSerif],
-                ..fontdb::Query::default()
-            })
+            .query(&fontdb::Query { families: &[fontdb::Family::SansSerif], ..fontdb::Query::default() })
             .and_then(|id| self.db.face(id)?.families.first().map(|f| f.0.to_lowercase()))
             .and_then(|family| self.fonts.get(&family))
             .or_else(|| self.fonts.values().next())
@@ -193,21 +184,12 @@ impl Library {
     pub fn resolve(&self, name: &str, aspect: Aspect) -> Option<Resolved<'_>> {
         let font = self.find(name)?;
         if let Some(face) = &font.aspects[aspect as usize] {
-            return Some(Resolved {
-                face,
-                synthetic_italic: false,
-            });
+            return Some(Resolved { face, synthetic_italic: false });
         }
         if let Some(face) = &font.aspects[Aspect::Regular as usize] {
-            return Some(Resolved {
-                face,
-                synthetic_italic: matches!(aspect, Aspect::Italic | Aspect::BoldItalic),
-            });
+            return Some(Resolved { face, synthetic_italic: matches!(aspect, Aspect::Italic | Aspect::BoldItalic) });
         }
-        font.aspects.iter().flatten().next().map(|face| Resolved {
-            face,
-            synthetic_italic: false,
-        })
+        font.aspects.iter().flatten().next().map(|face| Resolved { face, synthetic_italic: false })
     }
 }
 
@@ -220,27 +202,12 @@ fn decode(n: &ttf_parser::name::Name<'_>) -> Option<String> {
             if n.name.len() % 2 != 0 {
                 return None;
             }
-            let units: Vec<u16> = n
-                .name
-                .chunks_exact(2)
-                .map(|c| u16::from_be_bytes([c[0], c[1]]))
-                .collect();
+            let units: Vec<u16> = n.name.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
             String::from_utf16(&units).ok()
         }
         (PlatformId::Macintosh, 0) => {
             let high: Vec<char> = MAC_ROMAN_HIGH.chars().collect();
-            Some(
-                n.name
-                    .iter()
-                    .map(|&b| {
-                        if b < 0x80 {
-                            char::from(b)
-                        } else {
-                            high[usize::from(b - 0x80)]
-                        }
-                    })
-                    .collect(),
-            )
+            Some(n.name.iter().map(|&b| if b < 0x80 { char::from(b) } else { high[usize::from(b - 0x80)] }).collect())
         }
         _ => None,
     }
@@ -248,19 +215,14 @@ fn decode(n: &ttf_parser::name::Name<'_>) -> Option<String> {
 
 /// The first decodable record with this id, in table order.
 fn first_name(face: &Face<'_>, id: u16) -> Option<String> {
-    face.names()
-        .into_iter()
-        .filter(|n| n.name_id == id)
-        .find_map(|n| decode(&n))
+    face.names().into_iter().filter(|n| n.name_id == id).find_map(|n| decode(&n))
 }
 
 /// The English record FreeType prefers: Windows US English, any Windows, then
 /// Mac Roman English.
 fn english_name(face: &Face<'_>, id: u16) -> Option<String> {
     let names: Vec<_> = face.names().into_iter().filter(|n| n.name_id == id).collect();
-    let pick = |f: &dyn Fn(&ttf_parser::name::Name<'_>) -> bool| {
-        names.iter().filter(|n| f(n)).find_map(|n| decode(n))
-    };
+    let pick = |f: &dyn Fn(&ttf_parser::name::Name<'_>) -> bool| names.iter().filter(|n| f(n)).find_map(|n| decode(n));
     pick(&|n| n.platform_id == PlatformId::Windows && n.language_id == 0x409)
         .or_else(|| pick(&|n| n.platform_id == PlatformId::Windows))
         .or_else(|| pick(&|n| n.platform_id == PlatformId::Macintosh && n.language_id == 0))
@@ -323,37 +285,18 @@ fn split_subfamily(family: &str, subfamily: &str) -> (String, Aspect) {
     let italic = has("Italic") || has("Oblique");
     let (kept, aspect): (Vec<&str>, Aspect) = if has("Bold") {
         (
-            labels
-                .iter()
-                .copied()
-                .filter(|l| !matches!(*l, "Bold" | "Italic" | "Oblique"))
-                .collect(),
-            if italic {
-                Aspect::BoldItalic
-            } else {
-                Aspect::Bold
-            },
+            labels.iter().copied().filter(|l| !matches!(*l, "Bold" | "Italic" | "Oblique")).collect(),
+            if italic { Aspect::BoldItalic } else { Aspect::Bold },
         )
     } else if italic {
-        (
-            labels
-                .iter()
-                .copied()
-                .filter(|l| !matches!(*l, "Italic" | "Oblique"))
-                .collect(),
-            Aspect::Italic,
-        )
+        (labels.iter().copied().filter(|l| !matches!(*l, "Italic" | "Oblique")).collect(), Aspect::Italic)
     } else if has("Regular") {
         (Vec::new(), Aspect::Regular)
     } else {
         (labels, Aspect::Regular)
     };
     let sub = kept.join(" ");
-    let name = if sub.is_empty() {
-        family.to_owned()
-    } else {
-        format!("{family} {sub}")
-    };
+    let name = if sub.is_empty() { family.to_owned() } else { format!("{family} {sub}") };
     (name.trim().to_owned(), aspect)
 }
 
@@ -365,11 +308,7 @@ fn build123d_names(face: &Face<'_>, id: fontdb::ID) -> Vec<(String, Aspect, Face
     let inst = instances(face);
     let subfamilies: Vec<String> = if face.raw_face().table(Tag::from_bytes(b"fvar")).is_some() {
         let ids: Vec<u16> = inst.iter().map(|i| i.subfamily).collect();
-        face.names()
-            .into_iter()
-            .filter(|n| ids.contains(&n.name_id))
-            .filter_map(|n| decode(&n))
-            .collect()
+        face.names().into_iter().filter(|n| ids.contains(&n.name_id)).filter_map(|n| decode(&n)).collect()
     } else {
         vec![first_name(face, name_id::SUBFAMILY).unwrap_or_default()]
     };
@@ -380,11 +319,8 @@ fn build123d_names(face: &Face<'_>, id: fontdb::ID) -> Vec<(String, Aspect, Face
             let (name, aspect) = split_subfamily(&family, sub);
             // Note: build123d numbers the face `i << 16` by the name record's
             // position, which FreeType reads as named instance i, 0 the default.
-            let coords = if i == 0 {
-                Vec::new()
-            } else {
-                inst.get(i - 1).map(|x| x.coords.clone()).unwrap_or_default()
-            };
+            let coords =
+                if i == 0 { Vec::new() } else { inst.get(i - 1).map(|x| x.coords.clone()).unwrap_or_default() };
             (name, aspect, FaceRef { id, coords })
         })
         .collect()
@@ -392,13 +328,9 @@ fn build123d_names(face: &Face<'_>, id: fontdb::ID) -> Vec<(String, Aspect, Face
 
 fn kernel_names(face: &Face<'_>, id: fontdb::ID) -> Vec<(String, Aspect, FaceRef)> {
     let typographic = english_name(face, name_id::TYPOGRAPHIC_FAMILY);
-    let family = typographic
-        .clone()
-        .or_else(|| english_name(face, name_id::FAMILY))
-        .unwrap_or_default();
+    let family = typographic.clone().or_else(|| english_name(face, name_id::FAMILY)).unwrap_or_default();
     let default_style = if typographic.is_some() {
-        english_name(face, name_id::TYPOGRAPHIC_SUBFAMILY)
-            .or_else(|| english_name(face, name_id::SUBFAMILY))
+        english_name(face, name_id::TYPOGRAPHIC_SUBFAMILY).or_else(|| english_name(face, name_id::SUBFAMILY))
     } else {
         english_name(face, name_id::SUBFAMILY)
     }
@@ -415,15 +347,8 @@ fn kernel_names(face: &Face<'_>, id: fontdb::ID) -> Vec<(String, Aspect, FaceRef
             (false, false) if style == "Oblique" => Aspect::Italic,
             (false, false) => Aspect::Regular,
         };
-        let extra: Vec<&str> = style
-            .split_whitespace()
-            .filter(|w| !ASPECT_WORDS.contains(w) && *w != "Book")
-            .collect();
-        let name = if extra.is_empty() {
-            family.clone()
-        } else {
-            format!("{family} {}", extra.join(" "))
-        };
+        let extra: Vec<&str> = style.split_whitespace().filter(|w| !ASPECT_WORDS.contains(w) && *w != "Book").collect();
+        let name = if extra.is_empty() { family.clone() } else { format!("{family} {}", extra.join(" ")) };
         (name, aspect, FaceRef { id, coords })
     };
     let mut out = vec![one(&default_style, Vec::new())];
@@ -437,8 +362,5 @@ fn kernel_names(face: &Face<'_>, id: fontdb::ID) -> Vec<(String, Aspect, FaceRef
 
 /// Faces keyed by what a lookup is asked, for tests.
 pub fn names_by_key(lib: &Library) -> HashMap<String, String> {
-    lib.fonts
-        .iter()
-        .map(|(k, v)| (k.clone(), v.name.clone()))
-        .collect()
+    lib.fonts.iter().map(|(k, v)| (k.clone(), v.name.clone())).collect()
 }

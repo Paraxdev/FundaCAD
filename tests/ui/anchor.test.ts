@@ -6,7 +6,11 @@ const rect = (left: number, top: number, w = 40, h = 40) => ({ left, top, right:
 
 describe("placeBeside", () => {
   it("puts the box on the side asked for, top aligned", () => {
-    expect(placeBeside(rect(20, 100), { width: 200, height: 150 }, "right", win)).toEqual({ left: 68, top: 100, side: "right" });
+    expect(placeBeside(rect(20, 100), { width: 200, height: 150 }, "right", win)).toEqual({
+      left: 68,
+      top: 100,
+      side: "right",
+    });
   });
 
   it("flips to the other side when the asked side runs off the window", () => {

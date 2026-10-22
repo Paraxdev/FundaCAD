@@ -59,8 +59,9 @@ async function mounted(engine?: Engine) {
 async function pick(w: Awaited<ReturnType<typeof mounted>>, trigger: string, label: string) {
   await w.get(trigger).trigger("click");
   await flushPromises();
-  const row = Array.from(document.body.querySelectorAll<HTMLElement>(".opt-row"))
-    .find((r) => r.textContent?.trim() === label);
+  const row = Array.from(document.body.querySelectorAll<HTMLElement>(".opt-row")).find(
+    (r) => r.textContent?.trim() === label,
+  );
   if (!row) throw new Error(`no option "${label}" for ${trigger}`);
   row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   await flushPromises();

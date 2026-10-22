@@ -65,10 +65,7 @@ fn a_hole_repeats_six_times_around_z() {
     let b = only_body(&r);
     assert_eq!(kernel::count(&b.shape, Kind::Solid), 1);
     close(kernel::volume(&b.shape), BOX - 6.0 * hole_vol());
-    let round = kernel::subshapes(&b.shape, Kind::Face)
-        .iter()
-        .filter(|f| !kernel::face_is_planar(f))
-        .count();
+    let round = kernel::subshapes(&b.shape, Kind::Face).iter().filter(|f| !kernel::face_is_planar(f)).count();
     assert!(round >= 6, "six hole walls, got {round}");
 }
 
@@ -453,17 +450,13 @@ fn the_pattern_axis_op_finds_a_cylinder_axis() {
     let doc = around(json!("Z"), None);
     let req = json!({"document": doc,
                      "ref": {"kind": "face", "by": "nearest", "point": [35, 30, 5], "body": "body1"}});
-    let JobResult::Json(got) = pattern_axis_result(req.as_object().unwrap(), &NoWatch) else {
-        panic!("a json reply")
-    };
+    let JobResult::Json(got) = pattern_axis_result(req.as_object().unwrap(), &NoWatch) else { panic!("a json reply") };
     let o = &got["axis"]["origin"];
     let d = &got["axis"]["dir"];
     assert!((o[0].as_f64().unwrap() - 30.0).abs() < 1e-6 && (o[1].as_f64().unwrap() - 30.0).abs() < 1e-6, "{got:?}");
     assert!((d[2].as_f64().unwrap() - 1.0).abs() < 1e-9, "points up: {got:?}");
     let req = json!({"document": around(json!("Z"), None),
                      "ref": {"kind": "face", "by": "normal", "dir": [0.6, 0.0, 0.8], "body": "body1"}});
-    let JobResult::Json(got) = pattern_axis_result(req.as_object().unwrap(), &NoWatch) else {
-        panic!("a json reply")
-    };
+    let JobResult::Json(got) = pattern_axis_result(req.as_object().unwrap(), &NoWatch) else { panic!("a json reply") };
     assert!(got.contains_key("reason"), "{got:?}");
 }

@@ -21,7 +21,10 @@ const slots = computed(() => {
       data-radial-menu
       :style="{ left: `${store.state.x}px`, top: `${store.state.y}px` }"
     >
-      <div class="radial-hub" :style="{ width: `${RADIAL_DEADZONE_PX * 2}px`, height: `${RADIAL_DEADZONE_PX * 2}px` }"></div>
+      <div
+        class="radial-hub"
+        :style="{ width: `${RADIAL_DEADZONE_PX * 2}px`, height: `${RADIAL_DEADZONE_PX * 2}px` }"
+      ></div>
       <div
         v-for="s in slots"
         :key="s.i"

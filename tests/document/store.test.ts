@@ -18,7 +18,9 @@ function stubBackend(
       return reply();
     },
     async init() {},
-    onStatus() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
     connected: true,
   } as unknown as GeometryBackend;
 }
@@ -206,10 +208,12 @@ describe("elements (the user's folders over the bodies)", () => {
 
   it("drops an element with no id rather than carrying a folder nothing can name", () => {
     const reloaded = new DocumentStore(stubBackend([]), doc());
-    reloaded.load(JSON.stringify({
-      ...doc(),
-      elements: [{ name: "Nameless" }, { id: "e1", name: "" }, { id: "e2", name: "Rig" }],
-    }));
+    reloaded.load(
+      JSON.stringify({
+        ...doc(),
+        elements: [{ name: "Nameless" }, { id: "e1", name: "" }, { id: "e2", name: "Rig" }],
+      }),
+    );
     expect(reloaded.bodyElements).toEqual([
       { id: "e1", name: "e1" }, // a blank name falls back to the id, still aimable
       { id: "e2", name: "Rig" },
@@ -226,7 +230,9 @@ describe("rebuildNow resolves when the RESULT is published", () => {
   it("waits for the in-flight drain instead of returning at once", async () => {
     vi.useRealTimers(); // a real await, not a fake-timer one
     let release: (() => void) | null = null;
-    const gate = new Promise<void>((r) => { release = r; });
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
     let calls = 0;
     const backend = {
       async rebuild(): Promise<RebuildReply> {
@@ -243,7 +249,9 @@ describe("rebuildNow resolves when the RESULT is published", () => {
         } as RebuildReply;
       },
       async init() {},
-      onStatus() { return () => {}; },
+      onStatus() {
+        return () => {};
+      },
       connected: true,
     } as unknown as GeometryBackend;
 
@@ -273,7 +281,9 @@ describe("rebuildNow resolves when the RESULT is published", () => {
         return { ok: true, result: { bodies: [], featureErrors: [] } } as unknown as RebuildReply;
       },
       async init() {},
-      onStatus() { return () => {}; },
+      onStatus() {
+        return () => {};
+      },
       connected: true,
     } as unknown as GeometryBackend;
     const store = new DocumentStore(backend, doc());
@@ -336,7 +346,12 @@ describe("undo does not skip a visibility change and eat a feature instead (NV-1
   });
 
   it("setBodiesVisibility batches several ids as one undo step", () => {
-    store.setBodiesVisibility(new Map([["body1", false], ["body2", false]]));
+    store.setBodiesVisibility(
+      new Map([
+        ["body1", false],
+        ["body2", false],
+      ]),
+    );
     expect(store.isBodyVisible("body1")).toBe(false);
     expect(store.isBodyVisible("body2")).toBe(false);
     store.undo();
@@ -486,10 +501,12 @@ describe("undo covers material, rename and colour too, not just visibility (FI-5
   it("keeps an edit made after the feature its own step, and the materials one step of their own", () => {
     store.addFeature(box("nb10"));
     store.addFeature(box("edit"));
-    expect(store.undoAsOne(() => {
-      store.setBodiesMaterial(["body1"], "m-brass");
-      store.setBodiesMaterial(["body2"], "m-steel");
-    }, added("nb10"))).toBe(false);
+    expect(
+      store.undoAsOne(() => {
+        store.setBodiesMaterial(["body1"], "m-brass");
+        store.setBodiesMaterial(["body2"], "m-steel");
+      }, added("nb10")),
+    ).toBe(false);
 
     store.undo();
     expect(store.bodyMaterialId("body1")).toBeUndefined();
@@ -508,7 +525,9 @@ describe("undo covers material, rename and colour too, not just visibility (FI-5
     store.undo();
     store.undo();
     store.redo();
-    expect(store.undoAsOne(() => store.setBodiesMaterial(["body1"], "m-brass"), added("nb11"), { only: true })).toBe(true);
+    expect(store.undoAsOne(() => store.setBodiesMaterial(["body1"], "m-brass"), added("nb11"), { only: true })).toBe(
+      true,
+    );
     expect(store.canRedo).toBe(true);
     store.undo();
     expect(store.bodyMaterialId("body1")).toBeUndefined();
@@ -540,7 +559,9 @@ describe("undo covers material, rename and colour too, not just visibility (FI-5
     let finish!: () => void;
     const seen: boolean[] = [];
     const off = store.onBusy(() => seen.push(store.canUndo));
-    const reading = store.runBusy("Importing a.step", () => new Promise<void>((r) => (finish = r)), { holdHistory: true });
+    const reading = store.runBusy("Importing a.step", () => new Promise<void>((r) => (finish = r)), {
+      holdHistory: true,
+    });
     expect([store.canUndo, store.canRedo]).toEqual([false, false]);
     store.undo();
     store.redo();
@@ -613,7 +634,8 @@ describe("materials (what a body is made of, on screen)", () => {
     const reloaded = new DocumentStore(stubBackend([]), doc());
     reloaded.load(store.toJSON());
     expect(reloaded.materialLibrary.find((m) => m.id === "m-brass")).toMatchObject({
-      name: "Bronze", color: "#a06020",
+      name: "Bronze",
+      color: "#a06020",
     });
     expect(reloaded.bodyMaterialOf("body1")?.name).toBe("Anodised blue");
     const again = new DocumentStore(stubBackend([]), doc());
@@ -628,7 +650,11 @@ describe("materials (what a body is made of, on screen)", () => {
     const reloaded = new DocumentStore(stubBackend([]), doc());
     reloaded.load(store.toJSON());
     expect(reloaded.materialLibrary.find((m) => m.id === id)).toEqual({
-      id, name: "Pearl", color: "#eeeeff", roughness: 0.2, ...extra,
+      id,
+      name: "Pearl",
+      color: "#eeeeff",
+      roughness: 0.2,
+      ...extra,
     });
     const again = new DocumentStore(stubBackend([]), doc());
     again.load(reloaded.toJSON());
@@ -636,12 +662,22 @@ describe("materials (what a body is made of, on screen)", () => {
   });
 
   it("adds a picked preset as a plain copy that survives save and load, in one undo step", () => {
-    const preset = { id: "x", name: "Bronze glaze", color: "#B5A642", metalness: 0.9, surfaceGraph: { nodes: [{ id: "o", type: "output" }], output: "o" } };
+    const preset = {
+      id: "x",
+      name: "Bronze glaze",
+      color: "#B5A642",
+      metalness: 0.9,
+      surfaceGraph: { nodes: [{ id: "o", type: "output" }], output: "o" },
+    };
     const id = store.addMaterialPreset(preset)!;
     const again = store.addMaterialPreset(preset)!;
     expect(new Set([id, again]).size).toBe(2);
     expect(store.materialLibrary.find((m) => m.id === again)!.name).toBe("Bronze glaze 2");
-    expect(store.materialLibrary.find((m) => m.id === id)).toMatchObject({ name: "Bronze glaze", color: "#b5a642", metalness: 0.9 });
+    expect(store.materialLibrary.find((m) => m.id === id)).toMatchObject({
+      name: "Bronze glaze",
+      color: "#b5a642",
+      metalness: 0.9,
+    });
     const reloaded = new DocumentStore(stubBackend([]), doc());
     reloaded.load(store.toJSON());
     expect(reloaded.materialLibrary.find((m) => m.id === id)).toEqual(store.materialLibrary.find((m) => m.id === id));
@@ -747,13 +783,18 @@ describe("materials (what a body is made of, on screen)", () => {
     store.setFacesMaterial([{ body: "body1", face: 2 }], "m-glass");
     store.removeMaterial("m-glass");
     expect(store.faceMaterialId("body1", 2)).toBeUndefined();
-    expect(store.toJSON()).not.toContain("\"m-glass\"");
+    expect(store.toJSON()).not.toContain('"m-glass"');
   });
 
   it("clears every face of a body in one gesture, and only that body", () => {
-    store.setFacesMaterial([
-      { body: "body1", face: 0 }, { body: "body1", face: 1 }, { body: "body2", face: 0 },
-    ], "m-copper");
+    store.setFacesMaterial(
+      [
+        { body: "body1", face: 0 },
+        { body: "body1", face: 1 },
+        { body: "body2", face: 0 },
+      ],
+      "m-copper",
+    );
     expect(store.faceMaterialCount("body1")).toBe(2);
     store.clearFaceMaterials(["body1"]);
     expect(store.faceMaterialCount("body1")).toBe(0);
@@ -837,12 +878,23 @@ describe("projected-entity persistence (byte stability)", () => {
     const withProjected = (): CadDocument => ({
       parameters: {},
       features: [
-        { id: "s1", type: "sketch", plane: "XY", entities: [
-          { type: "projected", id: "p1",
-            source: { kind: "edge", body: "body1",
-              sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } } },
-            curve: { kind: "line", x1: 0, y1: 0, x2: 20, y2: 0 } },
-        ] },
+        {
+          id: "s1",
+          type: "sketch",
+          plane: "XY",
+          entities: [
+            {
+              type: "projected",
+              id: "p1",
+              source: {
+                kind: "edge",
+                body: "body1",
+                sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } },
+              },
+              curve: { kind: "line", x1: 0, y1: 0, x2: 20, y2: 0 },
+            },
+          ],
+        },
       ] as Feature[],
     });
     const store = new DocumentStore(stubBackend([]), withProjected());
@@ -861,12 +913,13 @@ describe("projected-entity persistence (byte stability)", () => {
 });
 
 describe("prefixFeatures (Project tool's prefix-document rule)", () => {
-  const feats = (): Feature[] => [
-    { id: "s1", type: "sketch", plane: "XY", entities: [] },
-    { id: "e1", type: "extrude", sketch: "s1", distance: 10, operation: "new" },
-    { id: "s2", type: "sketch", plane: "XY", entities: [] },
-    { id: "e2", type: "extrude", sketch: "s2", distance: 5, operation: "join" },
-  ] as Feature[];
+  const feats = (): Feature[] =>
+    [
+      { id: "s1", type: "sketch", plane: "XY", entities: [] },
+      { id: "e1", type: "extrude", sketch: "s1", distance: 10, operation: "new" },
+      { id: "s2", type: "sketch", plane: "XY", entities: [] },
+      { id: "e2", type: "extrude", sketch: "s2", distance: 5, operation: "join" },
+    ] as Feature[];
   const none = new Set<string>();
 
   it("new sketch: everything up to the rollback marker", () => {
@@ -902,7 +955,10 @@ describe("previewError", () => {
     vi.useFakeTimers();
     rebuilds = [];
     reply = { ok: false, error: { message: "stub" } };
-    store = new DocumentStore(stubBackend(rebuilds, () => reply), doc());
+    store = new DocumentStore(
+      stubBackend(rebuilds, () => reply),
+      doc(),
+    );
   });
   afterEach(() => void vi.useRealTimers());
 
@@ -1105,7 +1161,12 @@ describe("suppress and unsuppress are undo steps", () => {
     look();
     store.redo();
     look();
-    expect(seen).toEqual([[true, true], [true, false], [true, true], [false, false]]);
+    expect(seen).toEqual([
+      [true, true],
+      [true, false],
+      [true, true],
+      [false, false],
+    ]);
   });
 
   it("undo rebuilds without the suppression", async () => {

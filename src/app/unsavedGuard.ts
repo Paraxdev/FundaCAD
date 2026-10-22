@@ -49,7 +49,9 @@ export function installUnsavedGuard(e: Engine): void {
         { value: "save", label: "Save" },
         { value: "discard", label: "Don't save", hint: "close and lose the changes" },
         { value: "cancel", label: "Cancel" },
-      ]).finally(() => { asking = false; });
+      ]).finally(() => {
+        asking = false;
+      });
       if (pick === "discard") return;
       if (pick === "save") {
         await saveDocument(e.store);

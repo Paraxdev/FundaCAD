@@ -15,7 +15,10 @@ const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const OUT = path.resolve(process.argv[2] || "orbit_pivot_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail !== undefined ? `, ${JSON.stringify(detail)}` : ""}`);
@@ -26,20 +29,36 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
   await page.waitForTimeout(1500);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(300); }
-  const rect = (id, w, h, x = 0, y = 0) => ({ id, type: "sketch", plane: "XY", entities: [{ type: "rectangle", width: w, height: h, x, y }] });
-  await page.evaluate(async (fs) => {
-    window.store.loadDocument({ parameters: {}, features: fs });
-    await window.store.rebuildNow();
-  }, [
-    rect("a", 10, 10), { id: "ea", type: "extrude", sketch: "a", distance: 10, operation: "new" },
-    rect("b", 10, 10, 400), { id: "eb", type: "extrude", sketch: "b", distance: 10, operation: "new" },
-  ]);
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(300);
+  }
+  const rect = (id, w, h, x = 0, y = 0) => ({
+    id,
+    type: "sketch",
+    plane: "XY",
+    entities: [{ type: "rectangle", width: w, height: h, x, y }],
+  });
+  await page.evaluate(
+    async (fs) => {
+      window.store.loadDocument({ parameters: {}, features: fs });
+      await window.store.rebuildNow();
+    },
+    [
+      rect("a", 10, 10),
+      { id: "ea", type: "extrude", sketch: "a", distance: 10, operation: "new" },
+      rect("b", 10, 10, 400),
+      { id: "eb", type: "extrude", sketch: "b", distance: 10, operation: "new" },
+    ],
+  );
   await page.waitForTimeout(400);
   await page.waitForFunction(() => !window.store.buildState.building, null, { timeout: 60000 });
   await page.waitForTimeout(800);
@@ -49,10 +68,12 @@ const check = (name, ok, detail) => {
     window.viewport.requestRender();
   });
   await page.waitForTimeout(800);
-  const screen = () => page.evaluate(() => {
-    const v = window.viewport; const V = v.camera.position.constructor;
-    return v.projectToScreen(new V(0, 0, 5));
-  });
+  const screen = () =>
+    page.evaluate(() => {
+      const v = window.viewport;
+      const V = v.camera.position.constructor;
+      return v.projectToScreen(new V(0, 0, 5));
+    });
   const before = await screen();
   await page.screenshot({ path: path.join(OUT, "01_before.png") });
   const box = await page.evaluate(() => {
@@ -75,8 +96,16 @@ const check = (name, ok, detail) => {
   const after = await screen();
   await page.screenshot({ path: path.join(OUT, "02_after.png") });
   const moved = Math.hypot(after.x - before.x, after.y - before.y);
-  check("the near box stays on screen", after.x > box.left && after.x < box.left + box.width && after.y > box.top && after.y < box.top + box.height, after);
-  check("and moves no further than the orbit itself would carry a point beside it", moved < 500, { before, after, moved });
+  check(
+    "the near box stays on screen",
+    after.x > box.left && after.x < box.left + box.width && after.y > box.top && after.y < box.top + box.height,
+    after,
+  );
+  check("and moves no further than the orbit itself would carry a point beside it", moved < 500, {
+    before,
+    after,
+    moved,
+  });
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
   process.exit(failures ? 1 : 0);

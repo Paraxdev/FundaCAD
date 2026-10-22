@@ -6,11 +6,37 @@ import * as THREE from "three";
 import { asFeature } from "../types";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
-import type { Feature, ParamTarget, PlaneSpec, ProjectionUpdate, Selector, SketchConstraint, SketchPattern } from "../types";
+import type {
+  Feature,
+  ParamTarget,
+  PlaneSpec,
+  ProjectionUpdate,
+  Selector,
+  SketchConstraint,
+  SketchPattern,
+} from "../types";
 import { applyProjectionUpdate, dimPlaceOf, isBadgeEntity, isPlacedDim } from "../types";
 import { SketchPlane } from "./plane";
-import { SketchOverlay, type WorldRegion, controlPolygonObjects, curveObjects, poleMarkerObjects, dimensionLineObjects, CURVE_COLOR, PREVIEW_COLOR, SELECT_COLOR } from "./overlay";
-import { constrainedPoles, degreeChoices, deletePole, insertPole, polygonParam, splineToBspline, type BsplineEntity } from "./bsplineEdit";
+import {
+  SketchOverlay,
+  type WorldRegion,
+  controlPolygonObjects,
+  curveObjects,
+  poleMarkerObjects,
+  dimensionLineObjects,
+  CURVE_COLOR,
+  PREVIEW_COLOR,
+  SELECT_COLOR,
+} from "./overlay";
+import {
+  constrainedPoles,
+  degreeChoices,
+  deletePole,
+  insertPole,
+  polygonParam,
+  splineToBspline,
+  type BsplineEntity,
+} from "./bsplineEdit";
 import { bsplineDegree, bsplineMinPoles, poleOfRef } from "./bspline";
 import { DimInput } from "./dimInput";
 import { TextPanel } from "./textPanel";
@@ -21,7 +47,17 @@ import { SketchDimensions, type ExtraDim } from "./sketchDimensions";
 import { SketchGlyphs } from "./sketchGlyphs";
 import { RelationsPanel } from "./relationsPanel";
 import { constraintGlyphs, diagnosisOf, patternGlyphs } from "./glyphs";
-import { asRound, entityDims, constraintDims, dimRefPoints, curveKind, setDimPixelScale, staggeredDefaults, type DimField, type ConstraintDim } from "./entityDims";
+import {
+  asRound,
+  entityDims,
+  constraintDims,
+  dimRefPoints,
+  curveKind,
+  setDimPixelScale,
+  staggeredDefaults,
+  type DimField,
+  type ConstraintDim,
+} from "./entityDims";
 import { clampPlace, pickDimTarget } from "./dimensionTool";
 import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
 import { newEntityId, newConstraintId, isDimConstraint, notePatternId } from "./id";
@@ -33,16 +69,55 @@ import { circumcenter } from "./arc";
 import { compileAndSolve, coincKey, constraintIndexOf, solveKeepingAxes } from "./sketchSolve";
 import { SolverUnavailable } from "./solver";
 import { resolveRealEntities, toSketchEntity } from "./resolve";
-import { applyDrivingDimsDirect, waitsForSolver, dimAnchor, drivenBadges, drivingDimFor, findDrivingDim, type DrivingDim } from "./directDims";
+import {
+  applyDrivingDimsDirect,
+  waitsForSolver,
+  dimAnchor,
+  drivenBadges,
+  drivingDimFor,
+  findDrivingDim,
+  type DrivingDim,
+} from "./directDims";
 import { expandPattern, reflectedRect, translated } from "./pattern";
-import { candidatesFromEntities, curvesFromEntities, dragSnap, originCandidate, settleOriginPin, showsSnapMarker, snap, type OriginPinRequest, type SnapGuide, type SnapKind, type SnapCandidate, type SnapCurve, type SnapRef } from "./snap";
-import { bindNew, inferArcRelations, inferLineRelations, NEW_ENTITY, tagged, tangentArcMid, tangentFrom, type InferResult } from "./inferRelations";
+import {
+  candidatesFromEntities,
+  curvesFromEntities,
+  dragSnap,
+  originCandidate,
+  settleOriginPin,
+  showsSnapMarker,
+  snap,
+  type OriginPinRequest,
+  type SnapGuide,
+  type SnapKind,
+  type SnapCandidate,
+  type SnapCurve,
+  type SnapRef,
+} from "./snap";
+import {
+  bindNew,
+  inferArcRelations,
+  inferLineRelations,
+  NEW_ENTITY,
+  tagged,
+  tangentArcMid,
+  tangentFrom,
+  type InferResult,
+} from "./inferRelations";
 import type { ResolvedEntity } from "./snap";
 import { hitPx } from "../input/pointerKind";
 import { detectRegions, entityPolyline, profileBounds, rectCorners, rectFromThreePoints } from "./region";
 import { AreaBox } from "../viewport/areaBox";
 import { Disposer } from "../lib/disposer";
-import { allInsideRect, convexTouchesRect, dragBox, isAreaDrag, pointInRect, type AreaMode, type ScreenRect } from "../viewport/areaSelect";
+import {
+  allInsideRect,
+  convexTouchesRect,
+  dragBox,
+  isAreaDrag,
+  pointInRect,
+  type AreaMode,
+  type ScreenRect,
+} from "../viewport/areaSelect";
 import { faceFocus, loopsFromEdgePolys, planeEdges, type PlaneEdge } from "./faceFootprint";
 import { isExactPlaneEdge, meshBodyIds } from "./planeEdgePick";
 import { boundaryAnchors, footprintAnchors, loopCentroid } from "./anchors";
@@ -53,7 +128,14 @@ import { gapReport, looseEnds, nothingToTiePrompt, tieConstraints, type LooseEnd
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
 import { dropSeparatedJoins } from "./joins";
 import { sketchToolKey } from "./toolKeys";
-import { ConstraintTools, CONSTRAINT_TOOLS, nearestRectSide, type ConstraintHost, type ConstraintOption, type ConstraintPick } from "./constraintTools";
+import {
+  ConstraintTools,
+  CONSTRAINT_TOOLS,
+  nearestRectSide,
+  type ConstraintHost,
+  type ConstraintOption,
+  type ConstraintPick,
+} from "./constraintTools";
 import { PatternFlow, PATTERN_TOOLS, ENTITY_PATTERNS, type PatternHost } from "./patternFlow";
 import { DimFlow, type DimHost } from "./dimFlow";
 import { ProjectPanel } from "./projectPanel";
@@ -168,7 +250,6 @@ const DIM_SCALE_TOL = 1.05;
  *  (overlay.ts), so this doubles as the scale factor per mm-per-pixel. */
 const SNAP_MARKER_PX = 6;
 
-
 export class SketchMode {
   active = false;
   tool: SketchTool = "select";
@@ -202,7 +283,13 @@ export class SketchMode {
   private candidates: SnapCandidate[] = []; // cached; rebuilt when entities change
   private curves: SnapCurve[] = [];
   /** What the last snapAt caught, so a click commits what the hover previewed. */
-  private lastHit: { p: THREE.Vector2; raw: THREE.Vector2; kind: SnapKind; ref?: SnapRef | undefined; noSnap?: boolean } | null = null;
+  private lastHit: {
+    p: THREE.Vector2;
+    raw: THREE.Vector2;
+    kind: SnapKind;
+    ref?: SnapRef | undefined;
+    noSnap?: boolean;
+  } | null = null;
   private baseRef: SnapRef | null = null;
   private arcStartRef: SnapRef | null = null;
   private arcEndRef: SnapRef | null = null;
@@ -221,7 +308,14 @@ export class SketchMode {
   /** where each entity was last clicked to select it, so a rectangle can stand for that side */
   private pickedAt = new Map<string, THREE.Vector2>();
   /** a press on empty space that becomes a selection box once it travels */
-  private boxDown: { x: number; y: number; additive: boolean; shift: boolean; base: Set<string>; region: WorldRegion | null } | null = null;
+  private boxDown: {
+    x: number;
+    y: number;
+    additive: boolean;
+    shift: boolean;
+    base: Set<string>;
+    region: WorldRegion | null;
+  } | null = null;
   private areaBox = new AreaBox();
   /** The Relations list in the Sketch Palette. */
   private relations = new RelationsPanel();
@@ -408,14 +502,18 @@ export class SketchMode {
       constraints: () => this.constraints,
       pickTol: () => this.pickTol(),
       getFilletFirst: () => this.modifyFlow.getFilletFirst(),
-      setFilletFirst: (v) => { this.modifyFlow.setFilletFirst(v); },
+      setFilletFirst: (v) => {
+        this.modifyFlow.setFilletFirst(v);
+      },
       requestSolve: () => this.requestSolve(),
       warn: (msg) => toast(msg),
     };
     this.constraintTools = new ConstraintTools(constraintHost);
     const patternHost: PatternHost = {
       tool: () => this.tool,
-      setActiveTool: (t) => { this.tool = t; },
+      setActiveTool: (t) => {
+        this.tool = t;
+      },
       setTool: (t) => this.setTool(t),
       selected: () => this.selected,
       patterns: () => this.patterns,
@@ -480,7 +578,9 @@ export class SketchMode {
         this.entities = list;
       },
       selected: () => this.selected,
-      setSelected: (ids) => { this.selected = ids; },
+      setSelected: (ids) => {
+        this.selected = ids;
+      },
       dim: () => this.dim,
       overlay: () => this.overlay,
       plane: () => this.plane,
@@ -489,7 +589,9 @@ export class SketchMode {
       planePoint: (e) => this.planePoint(e),
       afterModify: () => this.afterModify(),
       setDrivingDimension: (c) => this.setDrivingDimension(c),
-      addConstraints: (cs) => { this.constraints.push(...cs); },
+      addConstraints: (cs) => {
+        this.constraints.push(...cs);
+      },
       planeEdges: () => this.modelPlaneEdges,
       projectModelEdges: (edges) => this.projectFlow.projectModelEdges(edges),
       emphasiseModelEdges: (edges) => this.viewport.emphasiseEdges(edges),
@@ -524,19 +626,21 @@ export class SketchMode {
     this.face = face ?? null;
     this.store = store;
     // Once per session: the body under an open sketch cannot change.
-    const inPlane = planeEdges(
-      this.viewport.visibleEdgeLines(),
-      this.plane,
-      this.viewport.modelDiagonal() ?? 0,
-    );
+    const inPlane = planeEdges(this.viewport.visibleEdgeLines(), this.plane, this.viewport.modelDiagonal() ?? 0);
     this.footprintEdges = inPlane.map((x) => x.poly);
     this.footprint = loopsFromEdgePolys(this.footprintEdges);
-    const meshBodies = inPlane.length ? meshBodyIds(store.buildState.result?.bodies, store.document.features) : new Set<string>();
+    const meshBodies = inPlane.length
+      ? meshBodyIds(store.buildState.result?.bodies, store.document.features)
+      : new Set<string>();
     this.modelPlaneEdges = inPlane.flatMap(({ edge, poly }) =>
-      edge.body && isExactPlaneEdge(edge, meshBodies) ? [{ edge: { body: edge.body, points: edge.points }, poly }] : []);
+      edge.body && isExactPlaneEdge(edge, meshBodies) ? [{ edge: { body: edge.body, points: edge.points }, poly }] : [],
+    );
     this.history.reset(); // fresh history per session (armed once entities load)
     this.pickedAt = new Map();
-    if (!this.fonts.length) void fetchFonts().then((f) => { this.fonts = f; });
+    if (!this.fonts.length)
+      void fetchFonts().then((f) => {
+        this.fonts = f;
+      });
 
     // load existing entities if editing
     this.entities = [];
@@ -603,8 +707,13 @@ export class SketchMode {
       if (this.raf) cancelAnimationFrame(this.raf);
       this.raf = 0;
     });
-    this.unsubInputStart = this.viewport.rig.onInputStart(() => { this.navigatedDuringSketch = true; });
-    session.add(() => { this.unsubInputStart?.(); this.unsubInputStart = null; });
+    this.unsubInputStart = this.viewport.rig.onInputStart(() => {
+      this.navigatedDuringSketch = true;
+    });
+    session.add(() => {
+      this.unsubInputStart?.();
+      this.unsubInputStart = null;
+    });
 
     this.overlay.update(store.document, this.editingId ?? "__active__");
     this.refreshActive();
@@ -665,9 +774,7 @@ export class SketchMode {
   private maybeDivideFace(sketch: Feature) {
     if (sketch.type !== "sketch" || !this.face || !this.store) return;
     const ents = [...this.entities, ...this.derivedEntities()];
-    const hasEdge = ents.some(
-      (e) => !e.construction && e.type !== "point" && e.type !== "text",
-    );
+    const hasEdge = ents.some((e) => !e.construction && e.type !== "point" && e.type !== "text");
     if (!hasEdge) return;
     // With NO footprint, so the question is whether the CURVES close an area,
     // not whether they carve up the face they lie on (they do, and that is the
@@ -720,7 +827,10 @@ export class SketchMode {
     this.viewport.rig.setOrbitLocked(false); // restore free orbit in model mode
     this.viewport.suspendPicking = false;
     this.active = false;
-    if (!this.viewSquare) { this.viewSquare = true; this.onViewSquare?.(true); }
+    if (!this.viewSquare) {
+      this.viewSquare = true;
+      this.onViewSquare?.(true);
+    }
     this.base = null;
     this.inferTag.hide();
     this.chainStart = null;
@@ -785,7 +895,10 @@ export class SketchMode {
     if (this.dropTextPreview()) this.refreshActive();
     this.overlay.setPreview([]);
     this.constraintTools.resetPending();
-    if (!keepSelection && this.selected.size) { this.selected.clear(); this.refreshActive(); }
+    if (!keepSelection && this.selected.size) {
+      this.selected.clear();
+      this.refreshActive();
+    }
     if (preselected.length) this.dimFlow.seedDimPicks(preselected);
     this.patternFlow.flushPending(); // don't lose an in-progress pattern
     if (t === "patternCircular" && this.active && this.selected.size) {
@@ -835,9 +948,10 @@ export class SketchMode {
       const loops = e.type === "text" ? this.overlay.activeTextLoops(e.id) : [entityPolyline(e)];
       const shapes = loops.map((l) => l.flatMap(screen)).filter((pts) => pts.length);
       if (!shapes.length) continue;
-      const hit = mode === "window"
-        ? shapes.every((pts) => allInsideRect(pts, rect))
-        : shapes.some((pts) => touches(e.type === "text" ? [...pts, pts[0]!, pts[1]!] : pts));
+      const hit =
+        mode === "window"
+          ? shapes.every((pts) => allInsideRect(pts, rect))
+          : shapes.some((pts) => touches(e.type === "text" ? [...pts, pts[0]!, pts[1]!] : pts));
       if (hit) next.add(e.id);
     }
     for (const id of next) if (!base.has(id)) this.pickedAt.delete(id);
@@ -851,8 +965,7 @@ export class SketchMode {
     return {
       plane: () => this.plane,
       selection: () => this.entities.filter((e) => this.selected.has(e.id) && e.type !== "projected"),
-      showPreview: (ents) =>
-        this.overlay.setPreview(ents ? curveObjects(ents, this.plane, PREVIEW_COLOR, true) : []),
+      showPreview: (ents) => this.overlay.setPreview(ents ? curveObjects(ents, this.plane, PREVIEW_COLOR, true) : []),
       apply: (map, copy) => this.modifyFlow.applyTransform(map, copy),
       outline: (e) => this.overlay.activeTextLoops(e.id).flat(),
     };
@@ -901,17 +1014,20 @@ export class SketchMode {
     // an in-progress dimension holds entity REFERENCES, and a solve replaces
     // every entity object, re-read the picks off the fresh list
     if (this.dimFlow.picking) this.dimFlow.refreshDimPlan();
-    if (this.dimsVisible) this.dims.show(this.entities, this.plane, this.constraintDimExtras(), drivenBadges(this.entities, this.constraints));
+    if (this.dimsVisible)
+      this.dims.show(
+        this.entities,
+        this.plane,
+        this.constraintDimExtras(),
+        drivenBadges(this.entities, this.constraints),
+      );
     else this.dims.hide();
     if (this.glyphsVisible) this.glyphs.show(this.allGlyphs(), this.plane, this.conflictIdx, this.overIdx);
     else this.glyphs.hide();
     // The list, from the same four inputs the badges take. refreshActive is the
     // choke point every constraint change and every finished solve passes
     // through, which is why it goes here rather than at each of those sites.
-    this.relations.show(
-      this.entities, this.constraints, this.conflictIdx, this.overIdx,
-      this.lastDof, this.conflict,
-    );
+    this.relations.show(this.entities, this.constraints, this.conflictIdx, this.overIdx, this.lastDof, this.conflict);
     this.showLooseEnds();
     // On-demand renderer: a keyboard-driven repaint (e.g. async text glyphs landing
     // via redraw()) fires no pointer event, so force a frame or it won't draw until
@@ -951,7 +1067,12 @@ export class SketchMode {
       setPrompt(nothingToTiePrompt(le, gap));
       if (gap.kind === "gap" && !this.solverDead) {
         toast(`Tie the ${gap.open} open ends across the ${Number(gap.gapMm.toPrecision(2))} mm gap?`, {
-          action: { label: "Close gap", onClick: () => { if (this.active) void this.tieLooseEnds(gap.reach); } },
+          action: {
+            label: "Close gap",
+            onClick: () => {
+              if (this.active) void this.tieLooseEnds(gap.reach);
+            },
+          },
         });
       }
       return { tied: 0, ...left() };
@@ -1001,7 +1122,10 @@ export class SketchMode {
    * dimension labels wait for refreshActive() on end. */
   private refreshDragGeometry() {
     this.entityVersion++;
-    this.overlay.setActiveSketch([...curveObjects(this.entities, this.plane, this.activeColor()), ...this.polygonObjects()]);
+    this.overlay.setActiveSketch([
+      ...curveObjects(this.entities, this.plane, this.activeColor()),
+      ...this.polygonObjects(),
+    ]);
     // Glyphs are a store push the layer projects anyway, so they ride along with the drag.
     if (this.glyphsVisible) this.glyphs.show(this.allGlyphs(), this.plane, this.conflictIdx, this.overIdx);
   }
@@ -1022,8 +1146,9 @@ export class SketchMode {
     this.updateGrid();
     this.updateAnnotationScale();
     this.updateSnapScale();
-    const square = !this.viewport.rig.isFlying()
-      && viewSquareToPlane(this.viewDir(), this.plane.n.toArray() as [number, number, number]);
+    const square =
+      !this.viewport.rig.isFlying() &&
+      viewSquareToPlane(this.viewDir(), this.plane.n.toArray() as [number, number, number]);
     if (square !== this.viewSquare) {
       this.viewSquare = square;
       this.onViewSquare?.(square);
@@ -1088,7 +1213,13 @@ export class SketchMode {
     // in-flight constraint solve) and re-derives regions and snap candidates,
     // none of which depend on the zoom. Only the annotation geometry does.
     this.overlay.setActiveSketch(this.activeCurves(this.derivedEntities()));
-    if (this.dimsVisible) this.dims.show(this.entities, this.plane, this.constraintDimExtras(), drivenBadges(this.entities, this.constraints));
+    if (this.dimsVisible)
+      this.dims.show(
+        this.entities,
+        this.plane,
+        this.constraintDimExtras(),
+        drivenBadges(this.entities, this.constraints),
+      );
     this.showLooseEnds();
     this.viewport.requestRender();
   }
@@ -1226,7 +1357,9 @@ export class SketchMode {
       this.setDrivingDimension(c);
       return;
     }
-    entityDims(e).find((d) => d.field === field)?.write(mm);
+    entityDims(e)
+      .find((d) => d.field === field)
+      ?.write(mm);
     this.refreshActive();
   }
 
@@ -1236,16 +1369,17 @@ export class SketchMode {
   private applyDrivingDimsDirectly() {
     if (waitsForSolver(this.entities, this.constraints) > 0 && !this.axisDimToast) {
       this.axisDimToast = true;
-      toast("The solver is not running, so horizontal and vertical distances between two entities wait for it", { timeout: 12000 });
+      toast("The solver is not running, so horizontal and vertical distances between two entities wait for it", {
+        timeout: 12000,
+      });
     }
     if (!applyDrivingDimsDirect(this.entities, this.constraints)) return;
     this.entityVersion++; // guards any in-flight solve against this write
     if (!this.directDimToast) {
       this.directDimToast = true;
-      toast(
-        "The solver is not running, so this value is applied to the shape rather than kept as a live dimension",
-        { timeout: 12000 },
-      );
+      toast("The solver is not running, so this value is applied to the shape rather than kept as a live dimension", {
+        timeout: 12000,
+      });
     }
     this.refreshActive();
     this.onState?.();
@@ -1273,7 +1407,11 @@ export class SketchMode {
 
   /** Persist a dragged badge placement; dragging back onto the geometry clears it. */
   private commitEntityPlace(
-    index: number, field: DimField, ox: number, oy: number, done: boolean,
+    index: number,
+    field: DimField,
+    ox: number,
+    oy: number,
+    done: boolean,
   ): THREE.Vector2 | null {
     const e = this.entities[index];
     if (!e || !isBadgeEntity(e)) return null; // not a badge-bearing type
@@ -1321,10 +1459,10 @@ export class SketchMode {
         // to (constraintDims omits `place` for the ones that don't)
         ...(d.place
           ? {
-            place: d.place,
-            placeCommit: (ox: number, oy: number, done: boolean) =>
-              this.commitConstraintPlace(d.cIndex, ox, oy, done),
-          }
+              place: d.place,
+              placeCommit: (ox: number, oy: number, done: boolean) =>
+                this.commitConstraintPlace(d.cIndex, ox, oy, done),
+            }
           : {}),
         commit: (val: number) => {
           const c = this.constraints[d.cIndex];
@@ -1357,8 +1495,10 @@ export class SketchMode {
   private setDrivingDimension(c: SketchConstraint) {
     // radialGap and c2cDistance are one intent in two formulations, so one target.
     const rimPair = (k: SketchConstraint): string | null =>
-      k.type === "radialGap" ? [k.inner, k.outer].sort().join("|")
-        : k.type === "c2cDistance" ? [k.c1, k.c2].sort().join("|")
+      k.type === "radialGap"
+        ? [k.inner, k.outer].sort().join("|")
+        : k.type === "c2cDistance"
+          ? [k.c1, k.c2].sort().join("|")
           : null;
     const sameTarget = (k: SketchConstraint): boolean => {
       if (c.type === "distance" && k.type === "distance") return k.line === c.line;
@@ -1380,7 +1520,11 @@ export class SketchMode {
       if (pair !== null) return pair === rimPair(k);
       // One dim per offset operation, keyed by its copies; the id is inherited for bindings.
       if (c.type === "offset" && k.type === "offset") {
-        const key = (o: typeof c) => o.pairs.map((p) => p.cpy).sort().join("|");
+        const key = (o: typeof c) =>
+          o.pairs
+            .map((p) => p.cpy)
+            .sort()
+            .join("|");
         return key(c) === key(k);
       }
       if (c.type === "c2lDistance" && k.type === "c2lDistance") return k.circle === c.circle && k.line === c.line;
@@ -1426,7 +1570,12 @@ export class SketchMode {
   private drainBindings(sketchId: string): SketchBinding[] {
     const out: SketchBinding[] = [];
     for (const [key, b] of this.pendingBindings) {
-      out.push({ target: SketchMode.targetOf(key, sketchId), expr: b.expr, kind: b.kind, ...(b.name ? { name: b.name } : {}) });
+      out.push({
+        target: SketchMode.targetOf(key, sketchId),
+        expr: b.expr,
+        kind: b.kind,
+        ...(b.name ? { name: b.name } : {}),
+      });
     }
     this.pendingBindings.clear();
     return out;
@@ -1445,7 +1594,11 @@ export class SketchMode {
 
   /** A plain number in display units, or an expression (optionally `name=expr`) in
    *  canonical units. `expr` is null for a number; `name` only when renaming. */
-  private evalDimInput(raw: string, kind: FieldKind, key: string | null): { value: number; expr: string | null; name?: string } | { error: string } {
+  private evalDimInput(
+    raw: string,
+    kind: FieldKind,
+    key: string | null,
+  ): { value: number; expr: string | null; name?: string } | { error: string } {
     if (isPlainNumber(raw)) {
       const value = parseField(raw, kind);
       if (value == null || (kind !== "angle" && !(value > 0))) return { error: "invalid value" };
@@ -1493,7 +1646,9 @@ export class SketchMode {
     const bindable = RIGID_ENTITY_NUM_FIELDS[e.type]?.some(([f]) => f === field);
     if (!bindable) return "this dimension can't hold an expression yet";
     return this.commitExprInput(`e:${e.id}:${field}`, "length", raw, (v) => {
-      entityDims(e).find((d) => d.field === field)?.write(coerceForField(field, v));
+      entityDims(e)
+        .find((d) => d.field === field)
+        ?.write(coerceForField(field, v));
       this.refreshActive();
       this.onState?.();
     });
@@ -1624,7 +1779,10 @@ export class SketchMode {
     // the click landed away from every dimension: drop the label selection so a
     // later Delete can't remove a dimension the user is no longer pointing at.
     this.dims.clearSelection();
-    if (e.button === 2) { this.rightDownAt = { x: e.clientX, y: e.clientY }; this.rightDragged = false; }
+    if (e.button === 2) {
+      this.rightDownAt = { x: e.clientX, y: e.clientY };
+      this.rightDragged = false;
+    }
     if (e.button !== 0) return; // left only; middle/right still navigate
     // Project picks 3D model geometry / committed sketch curves, it needs the
     // raw client coords, so it branches BEFORE the plane-point conversion.
@@ -1662,8 +1820,11 @@ export class SketchMode {
     // shares that point and inherits the fix. The pin is only made once the
     // shape commits (requestSolve), so a cancelled shape leaves nothing (SK-10).
     if (
-      hit.kind === "center" && hit.label === "Origin" &&
-      this.tool !== "select" && !MODIFY_TOOLS.has(this.tool) && !PATTERN_TOOLS.has(this.tool)
+      hit.kind === "center" &&
+      hit.label === "Origin" &&
+      this.tool !== "select" &&
+      !MODIFY_TOOLS.has(this.tool) &&
+      !PATTERN_TOOLS.has(this.tool)
     ) {
       this.originPin ??= { at: p.clone(), count: this.entities.length };
     }
@@ -1672,7 +1833,8 @@ export class SketchMode {
       // Note: Chromium reports detail 0 on pointerdown, so a double press is timed here
       const now = performance.now();
       const last = this.lastPress;
-      const secondPress = e.detail >= 2 || (now - last.t < 450 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 6);
+      const secondPress =
+        e.detail >= 2 || (now - last.t < 450 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 6);
       this.lastPress = secondPress ? { t: 0, x: 0, y: 0 } : { t: now, x: e.clientX, y: e.clientY };
       this.selectedPole = null; // a release on a pole picks it again
       // grab a point to drag it, connected/constrained geometry follows
@@ -1687,7 +1849,11 @@ export class SketchMode {
         this.dragRefusedToast = false;
         this.dragSnapshot = JSON.parse(JSON.stringify(this.entities)); // for Esc-cancel revert
         this.dragAnchors = this.anchorsAwayFrom(gp.idx, gp.p);
-        try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
+        try {
+          this.viewport.domElement.setPointerCapture(e.pointerId);
+        } catch {
+          /* capture optional */
+        }
         return;
       }
       // no draggable vertex under the cursor → (de)select the entity body / area
@@ -1727,7 +1893,11 @@ export class SketchMode {
           shift: e.shiftKey,
           stretch: [],
         };
-        try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
+        try {
+          this.viewport.domElement.setPointerCapture(e.pointerId);
+        } catch {
+          /* capture optional */
+        }
         return;
       }
       // A text has no segments for pickEntity, so it is grabbed anywhere in its block.
@@ -1742,7 +1912,11 @@ export class SketchMode {
           stretch: [],
           region: this.overlay.activeRegionAt(raw),
         };
-        try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
+        try {
+          this.viewport.domElement.setPointerCapture(e.pointerId);
+        } catch {
+          /* capture optional */
+        }
         return;
       }
       // Otherwise a profile AREA (patterned cells and sub-areas carved by a
@@ -1756,12 +1930,20 @@ export class SketchMode {
         base: e.shiftKey || e.ctrlKey || e.metaKey ? new Set(this.selected) : new Set(),
         region: this.overlay.activeRegionAt(raw),
       };
-      try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
+      try {
+        this.viewport.domElement.setPointerCapture(e.pointerId);
+      } catch {
+        /* capture optional */
+      }
       return;
     }
     if (PATTERN_TOOLS.has(this.tool)) {
       if (this.patternFlow.grabCentre(e.clientX, e.clientY)) {
-        try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
+        try {
+          this.viewport.domElement.setPointerCapture(e.pointerId);
+        } catch {
+          /* capture optional */
+        }
         return;
       }
       if (this.pickPatternSources(this.planePoint(e) ?? p)) return;
@@ -1775,11 +1957,18 @@ export class SketchMode {
       // click on existing text → edit it (discoverable: the text tool also edits);
       // otherwise begin a placement: drag to define a box, or release for a point anchor
       const te = this.textEntityAt(p);
-      if (te) { this.editText(te, e); return; }
+      if (te) {
+        this.editText(te, e);
+        return;
+      }
       this.textBoxStart = p.clone();
       this.textBoxEnd = null;
       this.textBoxScreen = { x: e.clientX, y: e.clientY };
-      try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      try {
+        this.viewport.domElement.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
       return;
     }
     if (this.tool === "polygon") return this.polygonClick(p);
@@ -1819,7 +2008,10 @@ export class SketchMode {
       this.arcStartRef = ref;
     } else if (tangent) {
       const m = tangentArcMid(this.arcStart, tangent.dir, p);
-      if (!m) { toast("That point is straight ahead, a tangent arc needs it off to one side"); return; }
+      if (!m) {
+        toast("That point is straight ahead, a tangent arc needs it off to one side");
+        return;
+      }
       this.arcEnd = p.clone();
       this.arcEndRef = ref;
       this.arcClick(m);
@@ -1831,7 +2023,15 @@ export class SketchMode {
       const b = this.arcEnd;
       const id = newEntityId();
       const geom = { x1: a.x, y1: a.y, x2: b.x, y2: b.y, mx: p.x, my: p.y };
-      const inf = inferArcRelations(id, geom, this.arcStartRef, this.arcEndRef, this.entities, INFER_TOL_DEG, this.gridSnap);
+      const inf = inferArcRelations(
+        id,
+        geom,
+        this.arcStartRef,
+        this.arcEndRef,
+        this.entities,
+        INFER_TOL_DEG,
+        this.gridSnap,
+      );
       const ent: ResolvedEntity = { type: "arc", id, ...geom, mx: inf.mid.x, my: inf.mid.y };
       if (this.constructionMode) ent.construction = true;
       this.entities.push(ent);
@@ -1887,7 +2087,8 @@ export class SketchMode {
   private bsplineClick(p: THREE.Vector2) {
     const pts = this.splinePts;
     const tol = this.pickTol();
-    const first = pts[0], last = pts[pts.length - 1];
+    const first = pts[0],
+      last = pts[pts.length - 1];
     if (first && pts.length >= 3 && first.distanceTo(p) <= tol) return this.finishBspline(true);
     if (last && last.distanceTo(p) <= tol) return this.finishBspline(false);
     pts.push(p.clone());
@@ -1917,7 +2118,8 @@ export class SketchMode {
     if (!pts.length) return this.overlay.setPreview([]);
     const closing = pts.length >= 3 && pts[0]!.distanceTo(cursor) <= this.pickTol();
     const draft: BsplineEntity = {
-      type: "bspline", id: "",
+      type: "bspline",
+      id: "",
       poles: [...pts, ...(closing ? [] : [cursor])].map((q) => ({ x: q.x, y: q.y })),
       ...(closing ? { closed: true } : {}),
     };
@@ -1943,7 +2145,9 @@ export class SketchMode {
 
   private polygonLegAt(p: THREE.Vector2): boolean {
     const tol = this.pickTol();
-    return this.entities.some((e) => e.type === "bspline" && this.selected.has(e.id) && polygonParam(e, p, tol) !== null);
+    return this.entities.some(
+      (e) => e.type === "bspline" && this.selected.has(e.id) && polygonParam(e, p, tol) !== null,
+    );
   }
 
   /** Double-click on a selected control-point spline's polygon, or on any one's
@@ -2014,7 +2218,15 @@ export class SketchMode {
       const a = this.clickPts[0];
       if (a) {
         const vertex = this.polygonVertex(a, cursor);
-        pv.push({ type: "polygon", id: "", x: a.x, y: a.y, radius: a.distanceTo(vertex), sides: Math.max(3, Math.round(this.polygonSides)), angle: (Math.atan2(vertex.y - a.y, vertex.x - a.x) * 180) / Math.PI });
+        pv.push({
+          type: "polygon",
+          id: "",
+          x: a.x,
+          y: a.y,
+          radius: a.distanceTo(vertex),
+          sides: Math.max(3, Math.round(this.polygonSides)),
+          angle: (Math.atan2(vertex.y - a.y, vertex.x - a.x) * 180) / Math.PI,
+        });
         dims = { radius: a.distanceTo(vertex) };
       }
     } else if (this.tool === "slot") {
@@ -2093,21 +2305,30 @@ export class SketchMode {
       t === "circle2"
         ? [{ name: "diameter", label: "Diameter", icon: "diameter", positive: true }]
         : t === "polygon"
-          ? [{ name: "radius", label: "R", positive: true }, { name: "sides", label: "N", kind: "count" as const, integer: true, atLeast: 3 }]
+          ? [
+              { name: "radius", label: "R", positive: true },
+              { name: "sides", label: "N", kind: "count" as const, integer: true, atLeast: 3 },
+            ]
           : t === "centerRectangle"
-            ? [{ name: "width", label: "W", positive: true }, { name: "height", label: "H", positive: true }]
+            ? [
+                { name: "width", label: "W", positive: true },
+                { name: "height", label: "H", positive: true },
+              ]
             : t === "rectangle3"
-              // W is live from the first click (it is the edge being drawn); H
-              // only means anything once that edge exists, and typing into it
-              // early would be typing into a field with no geometry behind it.
-              ? this.clickPts.length === 1
+              ? // W is live from the first click (it is the edge being drawn); H
+                // only means anything once that edge exists, and typing into it
+                // early would be typing into a field with no geometry behind it.
+                this.clickPts.length === 1
                 ? [{ name: "width", label: "W", positive: true }]
-                : [{ name: "width", label: "W", positive: true }, { name: "height", label: "H", positive: true }]
-            : t === "slot"
-              ? this.clickPts.length === 1
-                ? [{ name: "length", label: "L", positive: true }]
-                : [{ name: "width", label: "W", positive: true }]
-              : null;
+                : [
+                    { name: "width", label: "W", positive: true },
+                    { name: "height", label: "H", positive: true },
+                  ]
+              : t === "slot"
+                ? this.clickPts.length === 1
+                  ? [{ name: "length", label: "L", positive: true }]
+                  : [{ name: "width", label: "W", positive: true }]
+                : null;
     if (!defs) return;
     this.dim.show(defs, () => this.multiClickAt(this.lastCursor.clone()));
   }
@@ -2184,10 +2405,7 @@ export class SketchMode {
     return Math.atan2(right.dot(this.plane.v), right.dot(this.plane.u));
   }
 
-  private rectContaining(
-    p: THREE.Vector2,
-    phi: number,
-  ): { x: number; y: number; width: number } | null {
+  private rectContaining(p: THREE.Vector2, phi: number): { x: number; y: number; width: number } | null {
     let best: { x: number; y: number; width: number } | null = null;
     let bestArea = Infinity;
     for (const e of this.entities) {
@@ -2254,9 +2472,15 @@ export class SketchMode {
     const id = editEntity ? editEntity.id : newEntityId();
     const construction = editEntity ? !!editEntity.construction : this.constructionMode;
     const build = (v: TextValues): ResolvedEntity => ({
-      type: "text", id, text: v.text,
-      x: anchor.x, y: anchor.y, height: v.height, style: v.style,
-      align: box ? "center" : v.align, angle: v.angle + phiDeg,
+      type: "text",
+      id,
+      text: v.text,
+      x: anchor.x,
+      y: anchor.y,
+      height: v.height,
+      style: v.style,
+      align: box ? "center" : v.align,
+      angle: v.angle + phiDeg,
       ...(v.font ? { font: v.font } : {}),
       ...(v.boxWidth ? { boxWidth: v.boxWidth } : box ? { boxWidth: box.width } : {}),
       ...(editEntity?.pathRef !== undefined ? { pathRef: editEntity.pathRef } : {}),
@@ -2265,7 +2489,9 @@ export class SketchMode {
     });
     const initial: Partial<TextValues> = editEntity
       ? {
-          text: editEntity.text, height: editEntity.height, angle: editEntity.angle - phiDeg,
+          text: editEntity.text,
+          height: editEntity.height,
+          angle: editEntity.angle - phiDeg,
           ...(editEntity.style ? { style: editEntity.style } : {}),
           ...(editEntity.align ? { align: editEntity.align } : {}),
           ...(editEntity.font ? { font: editEntity.font } : {}),
@@ -2375,7 +2601,6 @@ export class SketchMode {
     this.patternFlow.edit(patId);
   }
 
-
   private polygonClick(p: THREE.Vector2) {
     if (!this.clickPts.length) {
       this.clickPts = [p.clone()];
@@ -2400,8 +2625,13 @@ export class SketchMode {
     if (r < 1e-4) return;
     const angle = (Math.atan2(vertex.y - center.y, vertex.x - center.x) * 180) / Math.PI;
     const e: ResolvedEntity = {
-      type: "polygon", id: newEntityId(), x: center.x, y: center.y,
-      radius: r, sides: Math.max(3, Math.round(this.polygonSides)), angle,
+      type: "polygon",
+      id: newEntityId(),
+      x: center.x,
+      y: center.y,
+      radius: r,
+      sides: Math.max(3, Math.round(this.polygonSides)),
+      angle,
     };
     this.addDrawn(e);
   }
@@ -2556,8 +2786,12 @@ export class SketchMode {
     const typed = { width: this.dim.isUserDriven("width"), height: this.dim.isUserDriven("height") };
     this.dim.hide();
     const ent: ResolvedEntity = {
-      type: "rectangle", id: newEntityId(),
-      width: r.width, height: r.height, x: r.x, y: r.y,
+      type: "rectangle",
+      id: newEntityId(),
+      width: r.width,
+      height: r.height,
+      x: r.x,
+      y: r.y,
       // Omitted when it is 0, so an axis-aligned rectangle drawn with this tool
       // is byte-identical to one drawn with the others.
       ...(r.angle ? { angle: r.angle } : {}),
@@ -2585,10 +2819,12 @@ export class SketchMode {
   }
   /** reflect a 2D point across the infinite line through a→b */
   private reflectPoint(x: number, y: number, a: THREE.Vector2, b: THREE.Vector2): { x: number; y: number } {
-    const dx = b.x - a.x, dy = b.y - a.y;
+    const dx = b.x - a.x,
+      dy = b.y - a.y;
     const len2 = dx * dx + dy * dy || 1;
     const t = ((x - a.x) * dx + (y - a.y) * dy) / len2;
-    const px = a.x + t * dx, py = a.y + t * dy; // foot of perpendicular
+    const px = a.x + t * dx,
+      py = a.y + t * dy; // foot of perpendicular
     return { x: 2 * px - x, y: 2 * py - y };
   }
   /** a reflected COPY of an entity (fresh id) across the line a→b */
@@ -2597,7 +2833,8 @@ export class SketchMode {
     const id = newEntityId();
     const c = e.construction ? { construction: true } : {};
     if (e.type === "line") {
-      const p1 = rp(e.x1, e.y1), p2 = rp(e.x2, e.y2);
+      const p1 = rp(e.x1, e.y1),
+        p2 = rp(e.x2, e.y2);
       return { type: "line", id, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, ...c };
     }
     if (e.type === "circle") {
@@ -2610,7 +2847,9 @@ export class SketchMode {
     }
     if (e.type === "arc") {
       // reflection flips orientation, so the through-point reflects too
-      const p1 = rp(e.x1, e.y1), p2 = rp(e.x2, e.y2), m = rp(e.mx, e.my);
+      const p1 = rp(e.x1, e.y1),
+        p2 = rp(e.x2, e.y2),
+        m = rp(e.mx, e.my);
       return { type: "arc", id, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, mx: m.x, my: m.y, ...c };
     }
     if (e.type === "spline") {
@@ -2624,16 +2863,21 @@ export class SketchMode {
       return { ...e, id, x: at.x, y: at.y };
     }
     // point
-    const q = rp((e as Extract<ResolvedEntity, { type: "point" }>).x, (e as Extract<ResolvedEntity, { type: "point" }>).y);
+    const q = rp(
+      (e as Extract<ResolvedEntity, { type: "point" }>).x,
+      (e as Extract<ResolvedEntity, { type: "point" }>).y,
+    );
     return { type: "point", id, x: q.x, y: q.y, ...c };
   }
-
 
   private onPointerMove(e: PointerEvent) {
     // right-DRAG is camera pan (viewport TRUCK), not a menu gesture, the same
     // 5 px rule the viewport's own context-click guard uses
-    if (this.rightDownAt && !this.rightDragged &&
-      Math.hypot(e.clientX - this.rightDownAt.x, e.clientY - this.rightDownAt.y) > 5) {
+    if (
+      this.rightDownAt &&
+      !this.rightDragged &&
+      Math.hypot(e.clientX - this.rightDownAt.x, e.clientY - this.rightDownAt.y) > 5
+    ) {
       this.rightDragged = true;
     }
     if (this.active && this.tool === "project") {
@@ -2651,7 +2895,8 @@ export class SketchMode {
     if (!this.active || this.tool === "select") {
       if (this.dragFrom) {
         if (!this.dragMoved) {
-          const dx = e.clientX - this.dragStartClient.x, dy = e.clientY - this.dragStartClient.y;
+          const dx = e.clientX - this.dragStartClient.x,
+            dy = e.clientY - this.dragStartClient.y;
           if (dx * dx + dy * dy < 16) return; // <4px: still a click, don't solve yet
           this.dragMoved = true;
         }
@@ -2664,7 +2909,8 @@ export class SketchMode {
         if (!raw) return;
         const md = this.moveDrag;
         if (!md.started) {
-          const dx = e.clientX - md.startClient.x, dy = e.clientY - md.startClient.y;
+          const dx = e.clientX - md.startClient.x,
+            dy = e.clientY - md.startClient.y;
           if (dx * dx + dy * dy < 16) return; // <4px: still a click, not a move
           // projected geometry never body-drags (fixed reference); disarm so a
           // plain click still selects it in endDrag()
@@ -2679,7 +2925,8 @@ export class SketchMode {
           const ent = this.entities[md.idx];
           if (ent) md.stretch = this.stretchTargets(md.idx, this.attachmentPoints(ent));
         }
-        const dx = raw.x - md.last.x, dy = raw.y - md.last.y;
+        const dx = raw.x - md.last.x,
+          dy = raw.y - md.last.y;
         md.last.copy(raw);
         const ent = this.entities[md.idx];
         if (ent) this.entities[md.idx] = translated(ent, dx, dy, ent.id);
@@ -2721,8 +2968,14 @@ export class SketchMode {
       this.bsplinePreview(hit.p);
       return;
     }
-    if (this.tool === "polygon" || this.tool === "slot" || this.tool === "circle2" ||
-        this.tool === "circle3" || this.tool === "centerRectangle" || this.tool === "rectangle3") {
+    if (
+      this.tool === "polygon" ||
+      this.tool === "slot" ||
+      this.tool === "circle2" ||
+      this.tool === "circle3" ||
+      this.tool === "centerRectangle" ||
+      this.tool === "rectangle3"
+    ) {
       this.multiClickPreview(hit.p, e);
       return;
     }
@@ -2733,12 +2986,27 @@ export class SketchMode {
 
     if (this.textBoxStart) {
       this.textBoxEnd = hit.p.clone();
-      const s = this.textBoxStart, w = Math.abs(hit.p.x - s.x), h = Math.abs(hit.p.y - s.y);
+      const s = this.textBoxStart,
+        w = Math.abs(hit.p.x - s.x),
+        h = Math.abs(hit.p.y - s.y);
       if (w > 0.5 && h > 0.5) {
-        this.overlay.setPreview(curveObjects(
-          [{ type: "rectangle", id: "__textbox__", width: w, height: h, x: (s.x + hit.p.x) / 2, y: (s.y + hit.p.y) / 2, construction: true }],
-          this.plane, PREVIEW_COLOR,
-        ));
+        this.overlay.setPreview(
+          curveObjects(
+            [
+              {
+                type: "rectangle",
+                id: "__textbox__",
+                width: w,
+                height: h,
+                x: (s.x + hit.p.x) / 2,
+                y: (s.y + hit.p.y) / 2,
+                construction: true,
+              },
+            ],
+            this.plane,
+            PREVIEW_COLOR,
+          ),
+        );
       }
       return;
     }
@@ -2751,14 +3019,26 @@ export class SketchMode {
       if (this.tool === "circle" && geom.entity?.type === "circle") {
         // The diameter is drawn through the centre along the drag, and its field
         // sits on that line where the eye already is.
-        const c = this.base, r = geom.entity.radius;
+        const c = this.base,
+          r = geom.entity.radius;
         const u = hit.p.clone().sub(c);
         if (u.lengthSq() < 1e-12) u.set(1, 0);
         u.normalize();
-        const diameter = curveObjects([{
-          type: "line", id: "__diameter__", construction: true,
-          x1: c.x - u.x * r, y1: c.y - u.y * r, x2: c.x + u.x * r, y2: c.y + u.y * r,
-        }], this.plane, PREVIEW_COLOR);
+        const diameter = curveObjects(
+          [
+            {
+              type: "line",
+              id: "__diameter__",
+              construction: true,
+              x1: c.x - u.x * r,
+              y1: c.y - u.y * r,
+              x2: c.x + u.x * r,
+              y2: c.y + u.y * r,
+            },
+          ],
+          this.plane,
+          PREVIEW_COLOR,
+        );
         const at = this.viewport.projectToScreen(this.plane.to3D(c.x + (u.x * r) / 2, c.y + (u.y * r) / 2));
         this.dim.positionCentred(at.x, at.y);
         this.overlay.setPreview([geom.preview, ...diameter]);
@@ -2812,15 +3092,23 @@ export class SketchMode {
         offsetPick: this.modifyFlow.offsetting,
         dragging: !!(this.dragFrom || this.moveDrag),
         pendingGeometry:
-          !!this.base || !!this.arcStart || this.modifyFlow.filletArmed || this.splinePts.length > 0 ||
-          this.clickPts.length > 0 || this.dimFlow.picking || !!this.dimFlow.plan ||
+          !!this.base ||
+          !!this.arcStart ||
+          this.modifyFlow.filletArmed ||
+          this.splinePts.length > 0 ||
+          this.clickPts.length > 0 ||
+          this.dimFlow.picking ||
+          !!this.dimFlow.plan ||
           this.constraintTools.hasPending(),
         selection: this.selected.size > 0,
         tool: this.tool,
         overlay: escapeClaimed(),
       });
       if (action === "none") return;
-      if (action === "cancel-offset") { this.modifyFlow.cancelOffset(); return; }
+      if (action === "cancel-offset") {
+        this.modifyFlow.cancelOffset();
+        return;
+      }
       if (action === "cancel-drag") {
         // cancel an in-progress drag: revert geometry to its pre-drag positions
         if (this.dragSnapshot) this.entities = this.dragSnapshot;
@@ -2925,9 +3213,8 @@ export class SketchMode {
     const ar = (ang * Math.PI) / 180;
     // The snapped point as is: a round trip through polar lands a grid corner at
     // 5.999995816, which onLattice() rejects. Only typed values are reconstructed.
-    const end = typedLen || typedAng
-      ? new THREE.Vector2(a.x + Math.cos(ar) * len, a.y + Math.sin(ar) * len)
-      : cursor.clone();
+    const end =
+      typedLen || typedAng ? new THREE.Vector2(a.x + Math.cos(ar) * len, a.y + Math.sin(ar) * len) : cursor.clone();
     const ent: ResolvedEntity = { type: "line", id: "", x1: a.x, y1: a.y, x2: end.x, y2: end.y };
     const dims: Record<string, number> = { length: len, angle: ang };
     return { dims, preview: this.entityCurve(ent), entity: ent };
@@ -3019,7 +3306,11 @@ export class SketchMode {
       this.inferTag.hide();
       return;
     }
-    this.inferTag.show(inf.glyphs, inf.relations.filter(tagged).map((r) => r.type), this.viewport.projectToScreen(this.plane.to3D(inf.end.x, inf.end.y)));
+    this.inferTag.show(
+      inf.glyphs,
+      inf.relations.filter(tagged).map((r) => r.type),
+      this.viewport.projectToScreen(this.plane.to3D(inf.end.x, inf.end.y)),
+    );
     if (inf.hints.length) this.overlay.setGuides(inf.hints, this.plane, this.planeMmPerPx());
   }
 
@@ -3067,7 +3358,10 @@ export class SketchMode {
   private showDimFields() {
     const defs =
       this.tool === "rectangle"
-        ? [{ name: "width", label: "W", positive: true }, { name: "height", label: "H", positive: true }]
+        ? [
+            { name: "width", label: "W", positive: true },
+            { name: "height", label: "H", positive: true },
+          ]
         : this.tool === "circle"
           ? [{ name: "diameter", label: "Diameter", icon: "diameter", positive: true }]
           : [
@@ -3086,7 +3380,14 @@ export class SketchMode {
     // Hold Ctrl to suppress snapping for fine placement (raw cursor position).
     if (noSnap) {
       this.lastHit = { p: p2d.clone(), raw: p2d.clone(), kind: "free", noSnap: true };
-      return { p: p2d, kind: "free" as SnapKind, world, guides: [] as SnapGuide[], label: undefined, ref: undefined as SnapRef | undefined };
+      return {
+        p: p2d,
+        kind: "free" as SnapKind,
+        world,
+        guides: [] as SnapGuide[],
+        label: undefined,
+        ref: undefined as SnapRef | undefined,
+      };
     }
     const res = snap(
       p2d,
@@ -3115,15 +3416,19 @@ export class SketchMode {
   }
 
   private showSnap(
-    hit: { kind: SnapKind; world: THREE.Vector3; p?: THREE.Vector2; guides?: SnapGuide[]; label?: string | undefined } | null,
+    hit: {
+      kind: SnapKind;
+      world: THREE.Vector3;
+      p?: THREE.Vector2;
+      guides?: SnapGuide[];
+      label?: string | undefined;
+    } | null,
   ) {
     // The guides go up or down with the snap itself: a line left standing after
     // the cursor has moved off the row it named is a claim about where the next
     // click will land, and it would be a false one.
     this.overlay.setGuides(
-      hit?.p && hit.guides?.length
-        ? hit.guides.map((g) => [g.from, hit.p!] as const)
-        : [],
+      hit?.p && hit.guides?.length ? hit.guides.map((g) => [g.from, hit.p!] as const) : [],
       this.plane,
       this.planeMmPerPx(),
     );
@@ -3201,9 +3506,15 @@ export class SketchMode {
     objs.push(...this.polygonObjects());
     if (this.dimsVisible) {
       this.cdims = constraintDims(this.entities, this.constraints);
-      objs.push(...dimensionLineObjects(
-        this.entities, this.plane, this.cdims.flatMap((d) => d.lines), undefined, drivenBadges(this.entities, this.constraints),
-      ));
+      objs.push(
+        ...dimensionLineObjects(
+          this.entities,
+          this.plane,
+          this.cdims.flatMap((d) => d.lines),
+          undefined,
+          drivenBadges(this.entities, this.constraints),
+        ),
+      );
     } else {
       this.cdims = [];
     }
@@ -3293,15 +3604,24 @@ export class SketchMode {
     this.rightDownAt = null;
     this.rightDragged = false;
     if (dragged) return;
-    if (this.tool === "dimension") { this.openDimensionMenu(e); return; }
-    if (this.tool === "offset") { this.modifyFlow.openOffsetMenu(e); return; }
+    if (this.tool === "dimension") {
+      this.openDimensionMenu(e);
+      return;
+    }
+    if (this.tool === "offset") {
+      this.modifyFlow.openOffsetMenu(e);
+      return;
+    }
     if (this.tool !== "select") return;
     const raw = this.planePoint(e);
     const idx = raw ? pickEntity(this.entities, raw, this.pickTol()) : -1;
     const hit = idx >= 0 ? this.entities[idx] : undefined;
     if (hit) {
       const id = hit.id;
-      if (!this.selected.has(id)) { this.selected = new Set([id]); this.refreshActive(); }
+      if (!this.selected.has(id)) {
+        this.selected = new Set([id]);
+        this.refreshActive();
+      }
     }
     const gp = raw ? this.pickPoint(raw) : null;
     const poleOf = gp && gp.pole >= 0 ? this.entities[gp.idx] : undefined;
@@ -3330,19 +3650,38 @@ export class SketchMode {
     const constraintItems = this.constraintOptions(raw);
     const items: CtxItem[] = [
       ...(linked
-        ? [{ label: linked > 1 ? `Break Link (${linked})` : "Break Link", onClick: () => this.modifyFlow.breakSelectedLinks() }]
+        ? [
+            {
+              label: linked > 1 ? `Break Link (${linked})` : "Break Link",
+              onClick: () => this.modifyFlow.breakSelectedLinks(),
+            },
+          ]
         : []),
       ...(chosen.some((x) => x.type === "spline")
         ? [{ label: "Edit as Control Points", onClick: () => this.convertSelectedSplines() }]
         : []),
       ...(bsplines.length
         ? [
-            ...degreeChoices(bsplines).map((c) => ({ ...c, onClick: () => this.reshapeSelectedBsplines({ degree: c.degree }) })),
+            ...degreeChoices(bsplines).map((c) => ({
+              ...c,
+              onClick: () => this.reshapeSelectedBsplines({ degree: c.degree }),
+            })),
             bsplines.every((x) => x.closed)
               ? { label: "Open Curve", onClick: () => this.reshapeSelectedBsplines({ closed: false }) }
-              : { label: "Close Curve", disabled: bsplines.some((x) => x.poles.length < 3), onClick: () => this.reshapeSelectedBsplines({ closed: true }) },
+              : {
+                  label: "Close Curve",
+                  disabled: bsplines.some((x) => x.poles.length < 3),
+                  onClick: () => this.reshapeSelectedBsplines({ closed: true }),
+                },
             ...(this.selectedPole && bsplines.some((x) => x.id === this.selectedPole?.id)
-              ? [{ label: "Delete Control Point", onClick: () => { this.deleteSelectedPole(); } }]
+              ? [
+                  {
+                    label: "Delete Control Point",
+                    onClick: () => {
+                      this.deleteSelectedPole();
+                    },
+                  },
+                ]
               : []),
             { separator: true, label: "" },
           ]
@@ -3364,37 +3703,56 @@ export class SketchMode {
     const isDia = plan?.kind === "diameter";
     const items: CtxItem[] = [
       {
-        label: "Pick Circle/Arc Tangent", checked: this.dimFlow.tangentArmed,
+        label: "Pick Circle/Arc Tangent",
+        checked: this.dimFlow.tangentArmed,
         onClick: () => {
           const armed = this.dimFlow.toggleTangent();
-          setPrompt(armed
-            ? "Tangent pick armed, click a circle or arc to measure to its EDGE"
-            : "Tangent pick cleared");
+          setPrompt(
+            armed ? "Tangent pick armed, click a circle or arc to measure to its EDGE" : "Tangent pick cleared",
+          );
         },
       },
       {
-        label: "Reflex angle", checked: this.dimFlow.reflex, disabled: plan?.kind !== "angle",
+        label: "Reflex angle",
+        checked: this.dimFlow.reflex,
+        disabled: plan?.kind !== "angle",
         onClick: () => {
           const on = this.dimFlow.toggleReflex();
-          setPrompt(on ? "Reflex angle: measures the outside of the wedge" : "Angle: measures the wedge the cursor is in");
+          setPrompt(
+            on ? "Reflex angle: measures the outside of the wedge" : "Angle: measures the wedge the cursor is in",
+          );
         },
       },
       { separator: true, label: "" },
       {
-        label: "Radius", checked: lone && !isDia, disabled: !lone,
+        label: "Radius",
+        checked: lone && !isDia,
+        disabled: !lone,
         onClick: () => this.setDimRoundPref("radius"),
       },
       {
-        label: "Diameter", checked: lone && isDia, disabled: !lone,
+        label: "Diameter",
+        checked: lone && isDia,
+        disabled: !lone,
         onClick: () => this.setDimRoundPref("diameter"),
       },
       { separator: true, label: "" },
       {
-        label: "Driven (reference)", checked: this.referenceMode,
-        onClick: () => { this.setReferenceDim(!this.referenceMode); this.onState?.(); },
+        label: "Driven (reference)",
+        checked: this.referenceMode,
+        onClick: () => {
+          this.setReferenceDim(!this.referenceMode);
+          this.onState?.();
+        },
       },
       { separator: true, label: "" },
-      { label: "OK", disabled: !plan, onClick: () => { if (this.dimFlow.plan) this.dimFlow.commitDim(); } },
+      {
+        label: "OK",
+        disabled: !plan,
+        onClick: () => {
+          if (this.dimFlow.plan) this.dimFlow.commitDim();
+        },
+      },
       { label: "Cancel", onClick: () => this.dimFlow.cancelDim() },
     ];
     contextMenu(e.clientX, e.clientY, items);
@@ -3450,16 +3808,23 @@ export class SketchMode {
   /** Drop constraints on entities that are gone or the wrong type. The switch is
    *  exhaustive so a new constraint type is a compile error, not a silent drop. */
   private pruneConstraints() {
-    const ids = (pred: (e: ResolvedEntity) => boolean) =>
-      new Set(this.entities.filter(pred).map((e) => e.id));
+    const ids = (pred: (e: ResolvedEntity) => boolean) => new Set(this.entities.filter(pred).map((e) => e.id));
     const lineIds = ids((e) => curveKind(e) === "line");
     const circleIds = ids((e) => curveKind(e) === "circle");
     // entities that own a center (circle/arc), for concentric/radius/equalRadius
-    const roundIds = ids((e) => { const k = curveKind(e); return k === "circle" || k === "arc"; });
+    const roundIds = ids((e) => {
+      const k = curveKind(e);
+      return k === "circle" || k === "arc";
+    });
     const curveIds = ids((e) => curveKind(e) !== undefined);
     // a pole index beyond a control-point spline's poles names nothing
-    const polesOf = new Map(this.entities.flatMap((e) => (e.type === "bspline" ? [[e.id, e.poles.length] as const] : [])));
-    const at = (id: string, p: number) => { const n = polesOf.get(id); return n === undefined || poleOfRef(p, n) >= 0; };
+    const polesOf = new Map(
+      this.entities.flatMap((e) => (e.type === "bspline" ? [[e.id, e.poles.length] as const] : [])),
+    );
+    const at = (id: string, p: number) => {
+      const n = polesOf.get(id);
+      return n === undefined || poleOfRef(p, n) >= 0;
+    };
     // entities exposing at least one dimensionable reference point (p2p/p2l/fix targets)
     const refIds = ids((e) => dimRefPoints(e).length > 0);
     const rectIds = ids((e) => e.type === "rectangle");
@@ -3472,40 +3837,67 @@ export class SketchMode {
     };
     this.constraints = this.constraints.filter((c) => {
       switch (c.type) {
-        case "horizontal": case "vertical": case "distance": return hasLineOperand(c.line);
-        case "parallel": case "perpendicular": case "equal": case "collinear": case "angle":
+        case "horizontal":
+        case "vertical":
+        case "distance":
+          return hasLineOperand(c.line);
+        case "parallel":
+        case "perpendicular":
+        case "equal":
+        case "collinear":
+        case "angle":
           return hasLineOperand(c.l1) && hasLineOperand(c.l2);
-        case "diameter": return roundIds.has(c.circle);
-        case "tangent": return hasLineOperand(c.line) && circleIds.has(c.circle);
-        case "tangent2": return (curveIds.has(c.a) || hasLineOperand(c.a)) && (curveIds.has(c.b) || hasLineOperand(c.b));
-        case "equalRadius": return roundIds.has(c.a) && roundIds.has(c.b);
-        case "coincident": case "horizontalPoints": case "verticalPoints":
+        case "diameter":
+          return roundIds.has(c.circle);
+        case "tangent":
+          return hasLineOperand(c.line) && circleIds.has(c.circle);
+        case "tangent2":
+          return (curveIds.has(c.a) || hasLineOperand(c.a)) && (curveIds.has(c.b) || hasLineOperand(c.b));
+        case "equalRadius":
+          return roundIds.has(c.a) && roundIds.has(c.b);
+        case "coincident":
+        case "horizontalPoints":
+        case "verticalPoints":
           return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
-        case "concentric": return roundIds.has(c.c1) && roundIds.has(c.c2);
-        case "midpoint": return refIds.has(c.e) && at(c.e, c.p) && hasLineOperand(c.line);
-        case "pointOnCurve": return refIds.has(c.e) && at(c.e, c.p) && (hasLineOperand(c.curve) || roundIds.has(c.curve));
-        case "symmetric": return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2) && hasLineOperand(c.line);
-        case "radius": return roundIds.has(c.e);
-        case "p2pDistance": case "hDistance": case "vDistance": return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
-        case "p2lDistance": return refIds.has(c.e) && at(c.e, c.p) && hasLineOperand(c.line);
+        case "concentric":
+          return roundIds.has(c.c1) && roundIds.has(c.c2);
+        case "midpoint":
+          return refIds.has(c.e) && at(c.e, c.p) && hasLineOperand(c.line);
+        case "pointOnCurve":
+          return refIds.has(c.e) && at(c.e, c.p) && (hasLineOperand(c.curve) || roundIds.has(c.curve));
+        case "symmetric":
+          return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2) && hasLineOperand(c.line);
+        case "radius":
+          return roundIds.has(c.e);
+        case "p2pDistance":
+        case "hDistance":
+        case "vDistance":
+          return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
+        case "p2lDistance":
+          return refIds.has(c.e) && at(c.e, c.p) && hasLineOperand(c.line);
         // rim (edge-to-edge) dims, a round operand is a circle OR an arc
-        case "radialGap": return roundIds.has(c.inner) && roundIds.has(c.outer);
-        case "c2cDistance": return roundIds.has(c.c1) && roundIds.has(c.c2);
-        case "c2lDistance": return roundIds.has(c.circle) && hasLineOperand(c.line);
-        case "p2cDistance": return refIds.has(c.e) && at(c.e, c.p) && roundIds.has(c.circle);
-        case "fix": return refIds.has(c.e) && at(c.e, c.p);
+        case "radialGap":
+          return roundIds.has(c.inner) && roundIds.has(c.outer);
+        case "c2cDistance":
+          return roundIds.has(c.c1) && roundIds.has(c.c2);
+        case "c2lDistance":
+          return roundIds.has(c.circle) && hasLineOperand(c.line);
+        case "p2cDistance":
+          return refIds.has(c.e) && at(c.e, c.p) && roundIds.has(c.circle);
+        case "fix":
+          return refIds.has(c.e) && at(c.e, c.p);
         // Shrink the pairs; drop the offset only when none remain.
         case "offset": {
           c.pairs = c.pairs.filter(
             (pr) =>
-              (hasLineOperand(pr.src) && hasLineOperand(pr.cpy)) ||
-              (roundIds.has(pr.src) && roundIds.has(pr.cpy)),
+              (hasLineOperand(pr.src) && hasLineOperand(pr.cpy)) || (roundIds.has(pr.src) && roundIds.has(pr.cpy)),
           );
           return c.pairs.length > 0;
         }
         // unreachable while the switch is exhaustive; keeps (rather than drops)
         // a variant tsc failed to flag
-        default: return c satisfies never;
+        default:
+          return c satisfies never;
       }
     });
   }
@@ -3518,7 +3910,10 @@ export class SketchMode {
     this.patterns = this.patterns.filter((pat) => {
       if (!("sources" in pat)) return true; // preset patterns (hex/honeycomb/boltCircle/gridHoles) have no sources
       const survivors = pat.sources.filter((id) => ids.has(id));
-      if (survivors.length === 0) { droppedCount++; return false; }
+      if (survivors.length === 0) {
+        droppedCount++;
+        return false;
+      }
       pat.sources = survivors;
       return true;
     });
@@ -3584,16 +3979,25 @@ export class SketchMode {
 
   /** An open sketch holds edits the document has not got yet. Undoing back to
    *  where the session began leaves none. */
-  get hasUncommittedEdits(): boolean { return this.active && this.history.canUndo; }
+  get hasUncommittedEdits(): boolean {
+    return this.active && this.history.canUndo;
+  }
 
-  get canUndoSketch(): boolean { return this.history.canUndo; }
-  get canRedoSketch(): boolean { return this.history.canRedo; }
+  get canUndoSketch(): boolean {
+    return this.history.canUndo;
+  }
+  get canRedoSketch(): boolean {
+    return this.history.canRedo;
+  }
 
   /** True whenever a sketch is open, even with nothing to undo: the document undo would drop the sketch. */
   undoEdit(): boolean {
     if (!this.active) return false;
     const prev = this.history.undo(this.snapshot());
-    if (!prev) { setPrompt("Nothing left to undo in this sketch"); return true; }
+    if (!prev) {
+      setPrompt("Nothing left to undo in this sketch");
+      return true;
+    }
     this.applyHistory(prev);
     return true;
   }
@@ -3601,7 +4005,10 @@ export class SketchMode {
   redoEdit(): boolean {
     if (!this.active) return false;
     const next = this.history.redo(this.snapshot());
-    if (!next) { setPrompt("Nothing to redo in this sketch"); return true; }
+    if (!next) {
+      setPrompt("Nothing to redo in this sketch");
+      return true;
+    }
     this.applyHistory(next);
     return true;
   }
@@ -3660,7 +4067,11 @@ export class SketchMode {
             // Keep the anchor on the fixed point, or the next search grabs another point.
             if (!this.dragRefusedToast) {
               this.dragRefusedToast = true;
-              toast(r.dragRefused === "projected" ? PROJECTED_FIXED_MSG : "That point is fixed, delete its Fix constraint to move it");
+              toast(
+                r.dragRefused === "projected"
+                  ? PROJECTED_FIXED_MSG
+                  : "That point is fixed, delete its Fix constraint to move it",
+              );
             }
           } else if (this.dragFrom) {
             this.dragFrom.set(d.toX, d.toY); // track grabbed pt
@@ -3668,7 +4079,11 @@ export class SketchMode {
           this.refreshDragGeometry(); // curves only; dims/candidates rebuilt on endDrag
         } else {
           this.solveDirty = false;
-          if (this.constraints.length === 0) { this.lastDof = -1; this.conflict = false; continue; }
+          if (this.constraints.length === 0) {
+            this.lastDof = -1;
+            this.conflict = false;
+            continue;
+          }
           const ver = this.entityVersion;
           const dim = this.dimSolve;
           this.dimSolve = null;
@@ -3677,7 +4092,11 @@ export class SketchMode {
             : await compileAndSolve(this.entities, this.constraints);
           if (!this.active) break;
           // geometry changed mid-solve (a draw committed): discard, re-solve
-          if (this.entityVersion !== ver) { this.dimSolve ??= dim; this.solveDirty = true; continue; }
+          if (this.entityVersion !== ver) {
+            this.dimSolve ??= dim;
+            this.solveDirty = true;
+            continue;
+          }
           this.conflict = r.conflicts.length > 0;
           this.conflictIdx = parseConflictIdx(r.conflicts);
           this.overIdx = parseConflictIdx(r.overDefined);
@@ -3724,11 +4143,13 @@ export class SketchMode {
     if (e.type === "rectangle") return rectCorners(e.x, e.y, e.width, e.height, e.angle).map((q) => q.clone());
     if (e.type === "spline") {
       const last = e.points.length - 1;
-      const a = e.points[0], b = e.points[last];
+      const a = e.points[0],
+        b = e.points[last];
       return a && b ? [new THREE.Vector2(a.x, a.y), new THREE.Vector2(b.x, b.y)] : [];
     }
     if (e.type === "bspline" && !e.closed) {
-      const a = e.poles[0], b = e.poles[e.poles.length - 1];
+      const a = e.poles[0],
+        b = e.poles[e.poles.length - 1];
       return a && b ? [new THREE.Vector2(a.x, a.y), new THREE.Vector2(b.x, b.y)] : [];
     }
     if (e.type === "circle" || e.type === "point") return [new THREE.Vector2(e.x, e.y)];
@@ -3743,17 +4164,33 @@ export class SketchMode {
     this.entities.forEach((e, i) => {
       if (i === movedIdx) return;
       if (e.type === "line" || e.type === "arc") {
-        if (near(e.x1, e.y1)) out.push((dx, dy) => { e.x1 += dx; e.y1 += dy; });
-        if (near(e.x2, e.y2)) out.push((dx, dy) => { e.x2 += dx; e.y2 += dy; });
+        if (near(e.x1, e.y1))
+          out.push((dx, dy) => {
+            e.x1 += dx;
+            e.y1 += dy;
+          });
+        if (near(e.x2, e.y2))
+          out.push((dx, dy) => {
+            e.x2 += dx;
+            e.y2 += dy;
+          });
       } else if (e.type === "spline" || (e.type === "bspline" && !e.closed)) {
         const pts = e.type === "spline" ? e.points : e.poles;
         const last = pts.length - 1;
         for (const k of [0, last]) {
           const q = pts[k];
-          if (q && near(q.x, q.y)) out.push((dx, dy) => { q.x += dx; q.y += dy; });
+          if (q && near(q.x, q.y))
+            out.push((dx, dy) => {
+              q.x += dx;
+              q.y += dy;
+            });
         }
       } else if (e.type === "point") {
-        if (near(e.x, e.y)) out.push((dx, dy) => { e.x += dx; e.y += dy; });
+        if (near(e.x, e.y))
+          out.push((dx, dy) => {
+            e.x += dx;
+            e.y += dy;
+          });
       }
     });
     return out;
@@ -3770,27 +4207,41 @@ export class SketchMode {
     let bestD = tol * tol;
     let cur = -1;
     const consider = (x: number, y: number, pole = -1) => {
-      const dx = x - p.x, dy = y - p.y;
+      const dx = x - p.x,
+        dy = y - p.y;
       const d = dx * dx + dy * dy;
-      if (d <= bestD) { bestD = d; best = new THREE.Vector2(x, y); bestIdx = cur; bestPole = pole; }
+      if (d <= bestD) {
+        bestD = d;
+        best = new THREE.Vector2(x, y);
+        bestIdx = cur;
+        bestPole = pole;
+      }
     };
     this.entities.forEach((e, i) => {
       cur = i;
-      if (e.type === "line") { consider(e.x1, e.y1); consider(e.x2, e.y2); }
-      else if (e.type === "circle") consider(e.x, e.y);
-      else if (e.type === "arc") { consider(e.x1, e.y1); consider(e.x2, e.y2); }
-      else if (e.type === "spline") for (const q of e.points) consider(q.x, q.y);
+      if (e.type === "line") {
+        consider(e.x1, e.y1);
+        consider(e.x2, e.y2);
+      } else if (e.type === "circle") consider(e.x, e.y);
+      else if (e.type === "arc") {
+        consider(e.x1, e.y1);
+        consider(e.x2, e.y2);
+      } else if (e.type === "spline") for (const q of e.points) consider(q.x, q.y);
       else if (e.type === "bspline") {
         // off-curve poles are only grabbable while their polygon is on screen
         const shown = this.selected.has(e.id);
         const last = e.poles.length - 1;
-        e.poles.forEach((q, k) => { if (shown || (!e.closed && (k === 0 || k === last))) consider(q.x, q.y, k); });
-      }
-      else if (e.type === "point") consider(e.x, e.y);
+        e.poles.forEach((q, k) => {
+          if (shown || (!e.closed && (k === 0 || k === last))) consider(q.x, q.y, k);
+        });
+      } else if (e.type === "point") consider(e.x, e.y);
       else if (e.type === "rectangle") {
-        const hw = e.width / 2, hh = e.height / 2;
-        consider(e.x - hw, e.y - hh); consider(e.x + hw, e.y - hh);
-        consider(e.x + hw, e.y + hh); consider(e.x - hw, e.y + hh);
+        const hw = e.width / 2,
+          hh = e.height / 2;
+        consider(e.x - hw, e.y - hh);
+        consider(e.x + hw, e.y - hh);
+        consider(e.x + hw, e.y + hh);
+        consider(e.x - hw, e.y + hh);
       }
     });
     return best ? { p: best, idx: bestIdx, pole: bestPole } : null;
@@ -3799,18 +4250,30 @@ export class SketchMode {
   /** Snap anchors minus the grabbed entity and anything joined to the grabbed point, which move with it. */
   private anchorsAwayFrom(idx: number, grabbed: THREE.Vector2): SnapCandidate[] {
     const at = coincKey(grabbed.x, grabbed.y);
-    const still = this.entities.filter((e, i) =>
-      i !== idx && !this.attachmentPoints(e).some((q) => coincKey(q.x, q.y) === at));
+    const still = this.entities.filter(
+      (e, i) => i !== idx && !this.attachmentPoints(e).some((q) => coincKey(q.x, q.y) === at),
+    );
     return [...candidatesFromEntities(still), ...this.faceAnchorCandidates(), ...originCandidate(this.plane)];
   }
 
   /** The cursor on the plane, pulled onto an anchor it is near unless Ctrl is held. */
   private dragPointTarget(e: PointerEvent): THREE.Vector2 | null {
     const raw = this.planePoint(e);
-    const res = raw && !e.ctrlKey
-      ? dragSnap(raw, this.dragAnchors, (q) => this.viewport.projectToScreen(this.plane.to3D(q.x, q.y)), hitPx(10))
-      : null;
-    this.showSnap(res ? { kind: res.kind, p: res.point, world: this.plane.to3D(res.point.x, res.point.y), label: res.label, guides: res.guides } : null);
+    const res =
+      raw && !e.ctrlKey
+        ? dragSnap(raw, this.dragAnchors, (q) => this.viewport.projectToScreen(this.plane.to3D(q.x, q.y)), hitPx(10))
+        : null;
+    this.showSnap(
+      res
+        ? {
+            kind: res.kind,
+            p: res.point,
+            world: this.plane.to3D(res.point.x, res.point.y),
+            label: res.label,
+            guides: res.guides,
+          }
+        : null,
+    );
     return res?.point ?? raw;
   }
 
@@ -3824,7 +4287,11 @@ export class SketchMode {
   private endDrag(pointerId?: number) {
     if (this.patternFlow.releaseCentre()) {
       if (pointerId != null) {
-        try { this.viewport.domElement.releasePointerCapture(pointerId); } catch { /* not captured */ }
+        try {
+          this.viewport.domElement.releasePointerCapture(pointerId);
+        } catch {
+          /* not captured */
+        }
       }
       return;
     }
@@ -3833,7 +4300,11 @@ export class SketchMode {
       const boxed = this.areaBox.visible;
       this.cancelBox();
       if (pointerId != null) {
-        try { this.viewport.domElement.releasePointerCapture(pointerId); } catch { /* not captured */ }
+        try {
+          this.viewport.domElement.releasePointerCapture(pointerId);
+        } catch {
+          /* not captured */
+        }
       }
       if (boxed) {
         if (!b.additive) this.overlay.clearRegionSelection();
@@ -3852,7 +4323,10 @@ export class SketchMode {
           this.finish(true);
           return;
         }
-        if (!b.additive && this.selected.size) { this.selected.clear(); this.refreshActive(); }
+        if (!b.additive && this.selected.size) {
+          this.selected.clear();
+          this.refreshActive();
+        }
         this.overlay.toggleRegionSelection(b.region, b.additive);
         return;
       }
@@ -3865,22 +4339,31 @@ export class SketchMode {
     }
     if (this.textBoxStart) {
       // finish a text placement: a real drag = a box (wrap width); a click = point anchor
-      const s = this.textBoxStart, screen = this.textBoxScreen ?? { x: 0, y: 0 }, end = this.textBoxEnd;
+      const s = this.textBoxStart,
+        screen = this.textBoxScreen ?? { x: 0, y: 0 },
+        end = this.textBoxEnd;
       this.textBoxStart = null;
       this.textBoxEnd = null;
       this.textBoxScreen = null;
       if (pointerId != null) {
-        try { this.viewport.domElement.releasePointerCapture(pointerId); } catch { /* not captured */ }
+        try {
+          this.viewport.domElement.releasePointerCapture(pointerId);
+        } catch {
+          /* not captured */
+        }
       }
       this.overlay.setPreview([]);
       const phi = this.viewRightAngle();
       if (end) {
-        const dx = end.x - s.x, dy = end.y - s.y;
-        const cos = Math.cos(phi), sin = Math.sin(phi);
+        const dx = end.x - s.x,
+          dy = end.y - s.y;
+        const cos = Math.cos(phi),
+          sin = Math.sin(phi);
         const wView = Math.abs(dx * cos + dy * sin); // box extent along screen-right (wrap width)
         const hView = Math.abs(-dx * sin + dy * cos); // box extent along screen-up
         if (wView > 1 && hView > 1) {
-          const cx = (s.x + end.x) / 2, cy = (s.y + end.y) / 2;
+          const cx = (s.x + end.x) / 2,
+            cy = (s.y + end.y) / 2;
           this.openTextPanel(new THREE.Vector2(cx, cy), screen, { x: cx, y: cy, width: wView }, undefined, phi);
           return;
         }
@@ -3892,7 +4375,11 @@ export class SketchMode {
       const md = this.moveDrag;
       this.moveDrag = null;
       if (pointerId != null) {
-        try { this.viewport.domElement.releasePointerCapture(pointerId); } catch { /* not captured */ }
+        try {
+          this.viewport.domElement.releasePointerCapture(pointerId);
+        } catch {
+          /* not captured */
+        }
       }
       const ent = this.entities[md.idx];
       if (!md.started) {
@@ -3926,7 +4413,11 @@ export class SketchMode {
     this.dragAnchors = [];
     this.showSnap(null);
     if (pointerId != null) {
-      try { this.viewport.domElement.releasePointerCapture(pointerId); } catch { /* not captured */ }
+      try {
+        this.viewport.domElement.releasePointerCapture(pointerId);
+      } catch {
+        /* not captured */
+      }
     }
     if (!this.dragMoved) {
       // never moved: a click on a vertex, (de)select the owning entity, same
@@ -3942,7 +4433,10 @@ export class SketchMode {
           this.selected = new Set([ent.id]);
         }
       }
-      this.selectedPole = ent?.type === "bspline" && this.dragPole >= 0 && this.selected.has(ent.id) ? { id: ent.id, k: this.dragPole } : null;
+      this.selectedPole =
+        ent?.type === "bspline" && this.dragPole >= 0 && this.selected.has(ent.id)
+          ? { id: ent.id, k: this.dragPole }
+          : null;
       this.refreshActive();
       return;
     }
@@ -3978,7 +4472,8 @@ export class SketchMode {
       this.overlay.setPreview([
         this.entityCurve({ type: "arc", id: "", x1: a.x, y1: a.y, x2: cursor.x, y2: cursor.y, mx: m.x, my: m.y }),
       ]);
-      const rel = t.relation.type === "collinear" ? { type: "tangent2" as const, a: NEW_ENTITY, b: t.relation.l1 } : t.relation;
+      const rel =
+        t.relation.type === "collinear" ? { type: "tangent2" as const, a: NEW_ENTITY, b: t.relation.l1 } : t.relation;
       this.showInfer({ end: cursor, relations: [rel], glyphs: ["tangent"], hints: [] });
       return;
     }

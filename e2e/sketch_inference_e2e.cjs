@@ -21,7 +21,10 @@ const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = path.resolve(process.argv[2] || "sketch_inference_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -30,56 +33,101 @@ const check = (name, ok, detail) => {
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
-  const browser = await chromium.launch({ executablePath: EXE, args: (process.env.SC_CHROME_ARGS ?? "--use-angle=swiftshader --no-sandbox").split(" ").filter(Boolean) });
+  const browser = await chromium.launch({
+    executablePath: EXE,
+    args: (process.env.SC_CHROME_ARGS ?? "--use-angle=swiftshader --no-sandbox").split(" ").filter(Boolean),
+  });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-  await page.addInitScript(([t, port]) => {
-    const N = window.WebSocket;
-    class P extends N {
-      constructor(u, p) {
-        const s = String(u).replace(":8765", `:${port}`).replace(/([?&])token=[^&]*/, `$1token=${t}`);
-        super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
+  await page.addInitScript(
+    ([t, port]) => {
+      const N = window.WebSocket;
+      class P extends N {
+        constructor(u, p) {
+          const s = String(u)
+            .replace(":8765", `:${port}`)
+            .replace(/([?&])token=[^&]*/, `$1token=${t}`);
+          super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+        }
       }
-    }
-    window.WebSocket = P;
-  }, [TOKEN, ENGINE_PORT]);
+      window.WebSocket = P;
+    },
+    [TOKEN, ENGINE_PORT],
+  );
   await page.goto(URL);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   const k = { x: 90 + 10 * Math.cos(Math.PI / 4), y: 10 * Math.sin(Math.PI / 4) };
   await page.evaluate(async (k) => {
-    window.store.addFeature({ id: "s1", type: "sketch", plane: "XY", entities: [
-      { type: "line", id: "R", x1: 0, y1: 60, x2: 34.641, y2: 80 },
-      { type: "arc", id: "K", x1: 100, y1: 0, x2: k.x, y2: k.y, mx: 90 + 10 * Math.cos(Math.PI / 8), my: 10 * Math.sin(Math.PI / 8) },
-      { type: "line", id: "M", x1: 0, y1: -40, x2: 40, y2: -40 },
-      { type: "circle", id: "C", x: 70, y: -60, radius: 10 },
-      { type: "line", id: "P", x1: -60, y1: 100, x2: -20, y2: 100 },
-      { type: "line", id: "G", x1: -60, y1: -80, x2: 60, y2: -80 },
-    ] });
+    window.store.addFeature({
+      id: "s1",
+      type: "sketch",
+      plane: "XY",
+      entities: [
+        { type: "line", id: "R", x1: 0, y1: 60, x2: 34.641, y2: 80 },
+        {
+          type: "arc",
+          id: "K",
+          x1: 100,
+          y1: 0,
+          x2: k.x,
+          y2: k.y,
+          mx: 90 + 10 * Math.cos(Math.PI / 8),
+          my: 10 * Math.sin(Math.PI / 8),
+        },
+        { type: "line", id: "M", x1: 0, y1: -40, x2: 40, y2: -40 },
+        { type: "circle", id: "C", x: 70, y: -60, radius: 10 },
+        { type: "line", id: "P", x1: -60, y1: 100, x2: -20, y2: 100 },
+        { type: "line", id: "G", x1: -60, y1: -80, x2: 60, y2: -80 },
+      ],
+    });
     await window.store.rebuildNow();
   }, k);
   await page.evaluate(() => window.__fundacad.editFeature("s1"));
   await page.waitForTimeout(3000);
   await page.evaluate(() => window.sketch.setTool("select"));
   await page.mouse.move(800, 450);
-  for (let i = 0; i < 3; i++) { await page.mouse.wheel(0, 240); await page.waitForTimeout(120); }
+  for (let i = 0; i < 3; i++) {
+    await page.mouse.wheel(0, 240);
+    await page.waitForTimeout(120);
+  }
   await page.waitForTimeout(600);
 
-  const scr = (x, y) => page.evaluate(([x, y]) => window.viewport.projectToScreen(window.sketch.plane.to3D(x, y)), [x, y]);
-  const hover = async (x, y, dy = 0) => { const s = await scr(x, y); await page.mouse.move(s.x, s.y + dy, { steps: 6 }); await page.waitForTimeout(200); return { x: s.x, y: s.y + dy }; };
-  const click = async (x, y, dy = 0) => { const s = await hover(x, y, dy); await page.mouse.click(s.x, s.y); await page.waitForTimeout(250); };
-  const tag = () => page.evaluate(() => {
-    const el = document.querySelector('[data-testid="infer-tag"]');
-    return el && !el.hidden ? el.dataset.relations : "";
-  });
+  const scr = (x, y) =>
+    page.evaluate(([x, y]) => window.viewport.projectToScreen(window.sketch.plane.to3D(x, y)), [x, y]);
+  const hover = async (x, y, dy = 0) => {
+    const s = await scr(x, y);
+    await page.mouse.move(s.x, s.y + dy, { steps: 6 });
+    await page.waitForTimeout(200);
+    return { x: s.x, y: s.y + dy };
+  };
+  const click = async (x, y, dy = 0) => {
+    const s = await hover(x, y, dy);
+    await page.mouse.click(s.x, s.y);
+    await page.waitForTimeout(250);
+  };
+  const tag = () =>
+    page.evaluate(() => {
+      const el = document.querySelector('[data-testid="infer-tag"]');
+      return el && !el.hidden ? el.dataset.relations : "";
+    });
   const cons = () => page.evaluate(() => JSON.parse(JSON.stringify(window.sketch.constraints)));
   const ents = () => page.evaluate(() => JSON.parse(JSON.stringify(window.sketch.entities)));
   const newCons = async (before) => (await cons()).slice(before.length);
   const tool = (t) => page.evaluate((t) => window.sketch.setTool(t), t);
-  const polar = (o, len, deg) => [o[0] + len * Math.cos((deg * Math.PI) / 180), o[1] + len * Math.sin((deg * Math.PI) / 180)];
+  const polar = (o, len, deg) => [
+    o[0] + len * Math.cos((deg * Math.PI) / 180),
+    o[1] + len * Math.sin((deg * Math.PI) / 180),
+  ];
 
   // 1. chain
   await tool("line");
@@ -100,13 +148,25 @@ const check = (name, ok, detail) => {
   let added = (await newCons(before)).filter((c) => c.type !== "fix");
   const joins = added.filter((c) => c.type === "coincident");
   added = added.filter((c) => c.type !== "coincident");
-  check("the chain recorded horizontal, vertical, parallel", JSON.stringify(added.map((c) => c.type)) === '["horizontal","vertical","parallel"]', JSON.stringify(added));
-  check("and a coincident on each of its two joins", joins.length === 2 && joins.every((c) => c.p1 === 0 && c.p2 === 1), JSON.stringify(joins));
+  check(
+    "the chain recorded horizontal, vertical, parallel",
+    JSON.stringify(added.map((c) => c.type)) === '["horizontal","vertical","parallel"]',
+    JSON.stringify(added),
+  );
+  check(
+    "and a coincident on each of its two joins",
+    joins.length === 2 && joins.every((c) => c.p1 === 0 && c.p2 === 1),
+    JSON.stringify(joins),
+  );
   const all = await ents();
   const l3 = all[all.length - 1];
   const ang = (Math.atan2(l3.y2 - l3.y1, l3.x2 - l3.x1) * 180) / Math.PI;
   const rAng = (Math.atan2(20, 34.641) * 180) / Math.PI;
-  check("the parallel line was committed exactly parallel, as previewed", Math.abs(ang - rAng) < 1e-6, `${ang} vs ${rAng}`);
+  check(
+    "the parallel line was committed exactly parallel, as previewed",
+    Math.abs(ang - rAng) < 1e-6,
+    `${ang} vs ${rAng}`,
+  );
   await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
 
@@ -130,14 +190,27 @@ const check = (name, ok, detail) => {
   await click(70, -50, -3);
   await page.keyboard.press("Escape");
   added = await newCons(before);
-  check("the arc end join, tangent2, midpoint and pointOnCurve were recorded", JSON.stringify(added.map((c) => c.type)) === '["coincident","tangent2","midpoint","pointOnCurve"]', JSON.stringify(added));
+  check(
+    "the arc end join, tangent2, midpoint and pointOnCurve were recorded",
+    JSON.stringify(added.map((c) => c.type)) === '["coincident","tangent2","midpoint","pointOnCurve"]',
+    JSON.stringify(added),
+  );
   const onEnd = (await ents()).at(-1);
-  check("the on-curve end sits on the circle", Math.abs(Math.hypot(onEnd.x2 - 70, onEnd.y2 + 60) - 10) < 1e-6, JSON.stringify(onEnd));
-  const nBefore = (await ents()).length, cBefore = (await cons()).length;
+  check(
+    "the on-curve end sits on the circle",
+    Math.abs(Math.hypot(onEnd.x2 - 70, onEnd.y2 + 60) - 10) < 1e-6,
+    JSON.stringify(onEnd),
+  );
+  const nBefore = (await ents()).length,
+    cBefore = (await cons()).length;
   await page.evaluate(() => window.sketch.undoEdit());
   await page.waitForTimeout(400);
-  check("one undo takes the last line and its pointOnCurve together",
-    (await ents()).length === nBefore - 1 && (await cons()).length === cBefore - 1 && (await cons()).at(-1).type === "midpoint");
+  check(
+    "one undo takes the last line and its pointOnCurve together",
+    (await ents()).length === nBefore - 1 &&
+      (await cons()).length === cBefore - 1 &&
+      (await cons()).at(-1).type === "midpoint",
+  );
 
   // 3. fillet and tangent arc
   before = await cons();
@@ -152,8 +225,16 @@ const check = (name, ok, detail) => {
   const now = await cons();
   added = now.filter((c) => !had.has(JSON.stringify(c)));
   const gone = before.filter((c) => !now.some((d) => JSON.stringify(d) === JSON.stringify(c)));
-  check("a sketch fillet records its two tangencies", added.length === 2 && added.every((c) => c.type === "tangent2"), JSON.stringify(added));
-  check("and drops the corner join it pulled apart", gone.length === 1 && gone[0].type === "coincident", JSON.stringify(gone));
+  check(
+    "a sketch fillet records its two tangencies",
+    added.length === 2 && added.every((c) => c.type === "tangent2"),
+    JSON.stringify(added),
+  );
+  check(
+    "and drops the corner join it pulled apart",
+    gone.length === 1 && gone[0].type === "coincident",
+    JSON.stringify(gone),
+  );
   before = await cons();
   await tool("arc");
   await page.keyboard.press("a");
@@ -163,8 +244,15 @@ const check = (name, ok, detail) => {
   await page.screenshot({ path: path.join(OUT, "si-3-tangent-arc.png") });
   await click(l3.x2 + 5, l3.y2 + 20);
   added = await newCons(before);
-  check("the tangent arc records its join and tangent2 to the parallel line",
-    added.length === 2 && added[0].type === "coincident" && added[0].e2 === l3.id && added[1].type === "tangent2" && added[1].b === l3.id, JSON.stringify(added));
+  check(
+    "the tangent arc records its join and tangent2 to the parallel line",
+    added.length === 2 &&
+      added[0].type === "coincident" &&
+      added[0].e2 === l3.id &&
+      added[1].type === "tangent2" &&
+      added[1].b === l3.id,
+    JSON.stringify(added),
+  );
   await page.keyboard.press("a");
 
   // 4. snap off
@@ -175,7 +263,11 @@ const check = (name, ok, detail) => {
   await click(20, -40);
   await page.keyboard.press("Escape");
   added = await newCons(before);
-  check("with Snap off a midpoint end records nothing", !added.some((c) => c.type === "midpoint"), JSON.stringify(added));
+  check(
+    "with Snap off a midpoint end records nothing",
+    !added.some((c) => c.type === "midpoint"),
+    JSON.stringify(added),
+  );
   await page.evaluate(() => window.sketch.setGridSnap(true));
 
   // 5. glyph lifetime, Ctrl, curve snap per tool
@@ -205,7 +297,11 @@ const check = (name, ok, detail) => {
   await page.keyboard.up("Control");
   await page.keyboard.press("Escape");
   added = await newCons(before);
-  check("with Ctrl held a line 1.5 degrees off parallel guesses nothing", plainTag === "parallel" && ctrlTag === "" && !added.some((c) => c.type === "parallel"), `${plainTag} ${ctrlTag} ${JSON.stringify(added)}`);
+  check(
+    "with Ctrl held a line 1.5 degrees off parallel guesses nothing",
+    plainTag === "parallel" && ctrlTag === "" && !added.some((c) => c.type === "parallel"),
+    `${plainTag} ${ctrlTag} ${JSON.stringify(added)}`,
+  );
   await tool("circle");
   await hover(70, -50, -3);
   const circleKind = await page.evaluate(() => window.sketch.lastHit?.kind);
@@ -225,25 +321,48 @@ const check = (name, ok, detail) => {
   added = await newCons(before);
   const typedLine = (await ents()).at(-1);
   check("a typed length records no midpoint", !added.some((c) => c.type === "midpoint"), JSON.stringify(added));
-  check("and the solved line keeps the typed 50 mm", Math.abs(Math.hypot(typedLine.x2 - typedLine.x1, typedLine.y2 - typedLine.y1) - 50) < 1e-6, JSON.stringify(typedLine));
+  check(
+    "and the solved line keeps the typed 50 mm",
+    Math.abs(Math.hypot(typedLine.x2 - typedLine.x1, typedLine.y2 - typedLine.y1) - 50) < 1e-6,
+    JSON.stringify(typedLine),
+  );
 
   // 7. the lattice is preferred over a curve it lies on
   const step = await page.evaluate(() => window.sketch.snapStep());
   const mmpp = await page.evaluate(() => window.sketch.planeMmPerPx());
-  const lx = Math.round(-20 / step) * step, sy = Math.round(-50 / step) * step;
+  const lx = Math.round(-20 / step) * step,
+    sy = Math.round(-50 / step) * step;
   await tool("line");
   before = await cons();
   await click(lx, sy);
   await hover(lx + 2 * mmpp, -80, 2);
-  const gridHit = await page.evaluate(() => ({ p: window.sketch.lastHit.p.toArray(), kind: window.sketch.lastHit.kind, ref: window.sketch.lastHit.ref }));
-  check("a cursor just off a grid aligned line lands on the lattice point and names the curve",
-    gridHit.p[0] === lx && gridHit.p[1] === -80 && gridHit.ref?.at === "curve", JSON.stringify(gridHit));
-  await page.mouse.click(...(await page.evaluate(([x, y, d]) => { const s = window.viewport.projectToScreen(window.sketch.plane.to3D(x, y)); return [s.x, s.y + d]; }, [lx + 2 * mmpp, -80, 2])));
+  const gridHit = await page.evaluate(() => ({
+    p: window.sketch.lastHit.p.toArray(),
+    kind: window.sketch.lastHit.kind,
+    ref: window.sketch.lastHit.ref,
+  }));
+  check(
+    "a cursor just off a grid aligned line lands on the lattice point and names the curve",
+    gridHit.p[0] === lx && gridHit.p[1] === -80 && gridHit.ref?.at === "curve",
+    JSON.stringify(gridHit),
+  );
+  await page.mouse.click(
+    ...(await page.evaluate(
+      ([x, y, d]) => {
+        const s = window.viewport.projectToScreen(window.sketch.plane.to3D(x, y));
+        return [s.x, s.y + d];
+      },
+      [lx + 2 * mmpp, -80, 2],
+    )),
+  );
   await page.waitForTimeout(400);
   await page.keyboard.press("Escape");
   added = await newCons(before);
-  check("the line dropped from a grid point records vertical and on curve",
-    added.some((c) => c.type === "vertical") && added.some((c) => c.type === "pointOnCurve"), JSON.stringify(added));
+  check(
+    "the line dropped from a grid point records vertical and on curve",
+    added.some((c) => c.type === "vertical") && added.some((c) => c.type === "pointOnCurve"),
+    JSON.stringify(added),
+  );
 
   // 8. the tangent arc mode shows a prompt and ends with the tool
   const prompt = () => page.evaluate(() => document.querySelector("#prompt")?.textContent ?? "");
@@ -251,10 +370,17 @@ const check = (name, ok, detail) => {
   await page.keyboard.press("a");
   check("A in the arc tool shows the tangent arc prompt", /Tangent arc/.test(await prompt()), await prompt());
   await tool("line");
-  check("changing tool clears the prompt and the mode", !/Tangent arc/.test(await prompt()) && (await page.evaluate(() => window.sketch.tangentArc)) === false, await prompt());
+  check(
+    "changing tool clears the prompt and the mode",
+    !/Tangent arc/.test(await prompt()) && (await page.evaluate(() => window.sketch.tangentArc)) === false,
+    await prompt(),
+  );
   await tool("arc");
   await page.keyboard.press("a");
-  check("and A arms it again", /Tangent arc/.test(await prompt()) && (await page.evaluate(() => window.sketch.tangentArc)) === true);
+  check(
+    "and A arms it again",
+    /Tangent arc/.test(await prompt()) && (await page.evaluate(() => window.sketch.tangentArc)) === true,
+  );
   await page.keyboard.press("a");
   check("A again takes the prompt away", !/Tangent arc/.test(await prompt()), await prompt());
   await tool("select");
@@ -262,4 +388,7 @@ const check = (name, ok, detail) => {
   console.log(failures ? `${failures} FAILED` : "ALL PASS");
   await browser.close();
   process.exit(failures ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

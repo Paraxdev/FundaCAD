@@ -102,20 +102,21 @@ impl PayloadCache for Tiered<'_> {
         let payload = decode(&store.get_mesh(&body_artifact_key(key, passes.as_deref(), tolerance, profile))?)?;
         self.payloads.disk_hits += 1;
         if let Some(identity) = body.identity {
-            self.payloads.ram.insert(
-                body.id.clone(),
-                RamPayload {
-                    identity,
-                    request: req,
-                    passes,
-                    payload: payload.clone(),
-                },
-            );
+            self.payloads
+                .ram
+                .insert(body.id.clone(), RamPayload { identity, request: req, passes, payload: payload.clone() });
         }
         Some(payload)
     }
 
-    fn put(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile, payload: &FullBody, build: Duration) {
+    fn put(
+        &mut self,
+        body: &MeshBody<'_>,
+        tolerance: f64,
+        profile: ViewportProfile,
+        payload: &FullBody,
+        build: Duration,
+    ) {
         self.payloads.meshed += 1;
         let passes = mesh::pass_key(body);
         if let (Some(store), Some(key)) = (self.store, body.mesh_key.as_deref()) {
@@ -127,12 +128,7 @@ impl PayloadCache for Tiered<'_> {
         if let Some(identity) = body.identity {
             self.payloads.ram.insert(
                 body.id.clone(),
-                RamPayload {
-                    identity,
-                    request: request(tolerance, profile),
-                    passes,
-                    payload: payload.clone(),
-                },
+                RamPayload { identity, request: request(tolerance, profile), passes, payload: payload.clone() },
             );
         }
     }
@@ -226,22 +222,12 @@ pub fn decode(data: &[u8]) -> Option<FullBody> {
         let smooth = r.u8()? != 0;
         let k = r.u32()?;
         let flat = r.f32s(k.checked_mul(3)?)?;
-        edges.push(Edge {
-            points: flat.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect(),
-            smooth,
-        });
+        edges.push(Edge { points: flat.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect(), smooth });
     }
     if !r.0.is_empty() {
         return None;
     }
-    Some(FullBody {
-        fields,
-        positions,
-        normals,
-        indices,
-        face_ids,
-        edges,
-    })
+    Some(FullBody { fields, positions, normals, indices, face_ids, edges })
 }
 
 #[cfg(test)]

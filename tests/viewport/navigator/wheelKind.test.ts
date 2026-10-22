@@ -4,8 +4,17 @@
 import { describe, expect, it } from "vitest";
 import { STREAM_GAP_MS, WheelClassifier, wheelEvidence } from "../../../src/viewport/navigator/wheelKind";
 
-const ev = (init: Partial<{ deltaX: number; deltaY: number; deltaMode: number; shiftKey: boolean; ctrlKey: boolean; wheelDeltaY: number; wheelDeltaX: number }>) =>
-  ({ deltaX: 0, deltaY: 0, deltaMode: 0, shiftKey: false, ctrlKey: false, ...init });
+const ev = (
+  init: Partial<{
+    deltaX: number;
+    deltaY: number;
+    deltaMode: number;
+    shiftKey: boolean;
+    ctrlKey: boolean;
+    wheelDeltaY: number;
+    wheelDeltaX: number;
+  }>,
+) => ({ deltaX: 0, deltaY: 0, deltaMode: 0, shiftKey: false, ctrlKey: false, ...init });
 
 describe("wheelEvidence", () => {
   it("reads whole notches as a mouse", () => {

@@ -86,6 +86,7 @@ export function featurePlaceholders(src: PlaceholderSources): Map<string, string
 /** What a placeholder chip and its properties say about a feature of `type`. */
 export function placeholderNote(type: string): string {
   const owner = featureTypeOwner(type);
-  if (owner) return `Not included: it needs the "${owner.name}" plugin, which is not running here. It is kept and saved with the file.`;
+  if (owner)
+    return `Not included: it needs the "${owner.name}" plugin, which is not running here. It is kept and saved with the file.`;
   return "Not included: this version of FundaCAD does not know this feature type. It is kept and saved with the file. A newer FundaCAD or a plugin can build it.";
 }

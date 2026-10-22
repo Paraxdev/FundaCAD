@@ -34,7 +34,11 @@ describe("SketchPlane base planes", () => {
 });
 
 describe("SketchPlane from a PlaneDef", () => {
-  const spec = { origin: [1, 2, 3] as [number, number, number], normal: [0, 0, 1] as [number, number, number], xdir: [1, 0, 0] as [number, number, number] };
+  const spec = {
+    origin: [1, 2, 3] as [number, number, number],
+    normal: [0, 0, 1] as [number, number, number],
+    xdir: [1, 0, 0] as [number, number, number],
+  };
   it("builds an orthonormal basis at the given origin", () => {
     const p = new SketchPlane(spec);
     expect([p.origin.x, p.origin.y, p.origin.z]).toEqual([1, 2, 3]);

@@ -28,6 +28,7 @@ function flip() {
       :aria-label="label"
       :disabled="disabled"
       @click.stop="flip"
-    ><i></i></button>
+      ><i></i
+    ></button>
   </div>
 </template>

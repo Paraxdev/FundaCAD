@@ -14,7 +14,13 @@ const MIME: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg
 /** Where an inserted image starts, before it is calibrated. */
 const START_WIDTH = 100;
 
-interface Drag { id: string; plane: THREE.Plane; frame: SketchPlane; from: V2; start: RefImage }
+interface Drag {
+  id: string;
+  plane: THREE.Plane;
+  frame: SketchPlane;
+  from: V2;
+  start: RefImage;
+}
 
 export class RefImageTool {
   /** True from the first click of a calibration or a drag to its end. */
@@ -23,14 +29,20 @@ export class RefImageTool {
   private suspendedBefore = false;
   private gesture = 0;
 
-  constructor(private readonly e: Engine, private readonly layer: ImageLayer) {}
+  constructor(
+    private readonly e: Engine,
+    private readonly layer: ImageLayer,
+  ) {}
 
   missing(id: string): boolean {
     return this.layer.missing(id);
   }
 
   images(): RefImage[] {
-    return this.e.store.referenceImages().map(readRefImage).filter((r): r is RefImage => r !== null);
+    return this.e.store
+      .referenceImages()
+      .map(readRefImage)
+      .filter((r): r is RefImage => r !== null);
   }
 
   private image(id: string): RefImage | undefined {
@@ -48,7 +60,12 @@ export class RefImageTool {
   }
 
   remove(id: string) {
-    this.e.store.setReferenceImages(this.e.store.referenceImages().filter((r) => r.id !== id).map((r) => structuredClone(r)));
+    this.e.store.setReferenceImages(
+      this.e.store
+        .referenceImages()
+        .filter((r) => r.id !== id)
+        .map((r) => structuredClone(r)),
+    );
     if (selected.value === id) selected.value = null;
   }
 
@@ -79,13 +96,25 @@ export class RefImageTool {
   async add(file: File, plane: PlaneSpec, datumId: string | null): Promise<string | null> {
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
     const mime = file.type === "image/png" || file.type === "image/jpeg" ? file.type : MIME[ext];
-    if (!mime) { toast("A reference image has to be a PNG or a JPEG"); return null; }
-    if (file.size > MAX_BYTES) { toast("That image is over 32 MB, save a smaller copy and insert that"); return null; }
+    if (!mime) {
+      toast("A reference image has to be a PNG or a JPEG");
+      return null;
+    }
+    if (file.size > MAX_BYTES) {
+      toast("That image is over 32 MB, save a smaller copy and insert that");
+      return null;
+    }
     const put = this.e.geometry.blobPut?.bind(this.e.geometry);
-    if (!put) { toast("Inserting an image needs the geometry engine"); return null; }
+    if (!put) {
+      toast("Inserting an image needs the geometry engine");
+      return null;
+    }
     const bytes = new Uint8Array(await file.arrayBuffer());
     const px = await pixelSize(bytes, mime);
-    if (!px) { toast(`${file.name} could not be read as an image`); return null; }
+    if (!px) {
+      toast(`${file.name} could not be read as an image`);
+      return null;
+    }
     let hash: string;
     try {
       hash = await put(bytes);
@@ -97,8 +126,21 @@ export class RefImageTool {
     const list = this.e.store.referenceImages();
     const id = freshId(list);
     const entry: RefImage = {
-      id, name: file.name, image: hash, mime, px, plane, ...(datumId ? { planeId: datumId } : {}),
-      at: [0, 0], width: START_WIDTH, angle: 0, flipX: false, flipY: false, opacity: 0.5, locked: false, hidden: false,
+      id,
+      name: file.name,
+      image: hash,
+      mime,
+      px,
+      plane,
+      ...(datumId ? { planeId: datumId } : {}),
+      at: [0, 0],
+      width: START_WIDTH,
+      angle: 0,
+      flipX: false,
+      flipY: false,
+      opacity: 0.5,
+      locked: false,
+      hidden: false,
     };
     this.e.store.setReferenceImages([...list.map((r) => structuredClone(r)), { ...entry }]);
     selected.value = id;
@@ -110,7 +152,10 @@ export class RefImageTool {
   startCalibrate(id: string) {
     const r = this.image(id);
     if (!r) return;
-    if (r.locked) { toast("The image is locked, unlock it to calibrate"); return; }
+    if (r.locked) {
+      toast("The image is locked, unlock it to calibrate");
+      return;
+    }
     if (this.e.toolBusy()) return;
     this.begin();
     calibrating.value = { id, stage: "first" };
@@ -173,9 +218,15 @@ export class RefImageTool {
     ev.preventDefault();
     ev.stopImmediatePropagation();
     const r = this.image(step.id);
-    if (!r) { this.end(); return; }
+    if (!r) {
+      this.end();
+      return;
+    }
     const p = this.pointOn(r, ev.clientX, ev.clientY);
-    if (!p || !onImage(r, p)) { setPrompt("Click a point on the image itself"); return; }
+    if (!p || !onImage(r, p)) {
+      setPrompt("Click a point on the image itself");
+      return;
+    }
     if (step.stage === "first") {
       calibrating.value = { id: step.id, stage: "second", a: p };
       setPrompt("Click the second point on the image");
@@ -205,7 +256,13 @@ export class RefImageTool {
     ev.preventDefault();
     ev.stopImmediatePropagation();
     const frame = this.layer.planeOf(r);
-    this.drag = { id: r.id, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(frame.n, frame.origin), frame, from, start: r };
+    this.drag = {
+      id: r.id,
+      plane: new THREE.Plane().setFromNormalAndCoplanarPoint(frame.n, frame.origin),
+      frame,
+      from,
+      start: r,
+    };
     this.active = true;
     const el = this.e.viewport.domElement;
     el.setPointerCapture?.(ev.pointerId);

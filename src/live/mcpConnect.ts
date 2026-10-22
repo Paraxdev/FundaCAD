@@ -6,7 +6,6 @@
 // with `--engine --ws`, and it attaches to a running window by itself through
 // session.json.
 
-
 export type McpHost = "claude-code" | "claude-desktop" | "other";
 
 export const MCP_HOSTS: readonly { id: McpHost; label: string }[] = [
@@ -53,14 +52,12 @@ export function mcpSetupFor(host: McpHost, server: string): { text: string; hint
     case "claude-desktop":
       return {
         text: mcpConfigBlock(mcpServerLaunch(server)),
-        hint:
-          "Add this to claude_desktop_config.json (Settings, Developer, Edit Config), then restart Claude Desktop.",
+        hint: "Add this to claude_desktop_config.json (Settings, Developer, Edit Config), then restart Claude Desktop.",
       };
     case "other":
       return {
         text: `${quoted(server)} --mcp`,
-        hint:
-          "Start this program over stdio with --mcp. Hosts that read an mcpServers block take the same one Claude Desktop does.",
+        hint: "Start this program over stdio with --mcp. Hosts that read an mcpServers block take the same one Claude Desktop does.",
       };
   }
 }

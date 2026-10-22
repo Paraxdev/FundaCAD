@@ -13,15 +13,15 @@ type Node = { name: string; parent: number | null };
 /** The shape the Python engine's `step_assembly.py` emits for asm_nested.step: a root with a
  *  subassembly instanced twice, each holding two products. */
 const NESTED: Node[] = [
-  { name: "Robot", parent: null },       // 0
-  { name: "Electronics", parent: 0 },    // 1
-  { name: "Board", parent: 1 },          // 2
-  { name: "MCU", parent: 2 },            // 3
-  { name: "Header (x2)", parent: 2 },    // 4
-  { name: "Board", parent: 1 },          // 5  <- same NAME, different occurrence
-  { name: "MCU", parent: 5 },            // 6
-  { name: "Header (x2)", parent: 5 },    // 7
-  { name: "Chassis", parent: 0 },        // 8
+  { name: "Robot", parent: null }, // 0
+  { name: "Electronics", parent: 0 }, // 1
+  { name: "Board", parent: 1 }, // 2
+  { name: "MCU", parent: 2 }, // 3
+  { name: "Header (x2)", parent: 2 }, // 4
+  { name: "Board", parent: 1 }, // 5  <- same NAME, different occurrence
+  { name: "MCU", parent: 5 }, // 6
+  { name: "Header (x2)", parent: 5 }, // 7
+  { name: "Chassis", parent: 0 }, // 8
 ];
 
 const trees = (nodes: Node[]) => new Map([["f1", nodes]]);
@@ -48,10 +48,7 @@ describe("buildAssemblyGroups", () => {
     // Both are called "Board". Keyed on the NODE INDEX, not the display name,
     // they must stay two independent groups, otherwise selecting or collapsing
     // one silently affects the other.
-    const out = buildAssemblyGroups(
-      [body("body1", "MCU", "f1/3"), body("body2", "MCU", "f1/6")],
-      trees(NESTED),
-    )!;
+    const out = buildAssemblyGroups([body("body1", "MCU", "f1/3"), body("body2", "MCU", "f1/6")], trees(NESTED))!;
     const electronics = out.roots[0]!.children[0]!;
     expect(electronics.children).toHaveLength(2);
     expect(electronics.children.map((c) => c.label)).toEqual(["Board", "Board"]);
@@ -60,18 +57,12 @@ describe("buildAssemblyGroups", () => {
 
   it("groups every solid of a multi-solid product under one node", () => {
     const out = buildAssemblyGroups(
-      [
-        body("body1", "Header (x2) 1", "f1/4"),
-        body("body2", "Header (x2) 2", "f1/4"),
-      ],
+      [body("body1", "Header (x2) 1", "f1/4"), body("body2", "Header (x2) 2", "f1/4")],
       trees(NESTED),
     )!;
     const board = out.roots[0]!.children[0]!.children[0]!;
     expect(board.children).toHaveLength(1);
-    expect(board.children[0]!.bodies.map((b) => b.name)).toEqual([
-      "Header (x2) 1",
-      "Header (x2) 2",
-    ]);
+    expect(board.children[0]!.bodies.map((b) => b.name)).toEqual(["Header (x2) 1", "Header (x2) 2"]);
   });
 
   it("counts every descendant body, not just direct children", () => {
@@ -116,10 +107,7 @@ describe("buildAssemblyGroups", () => {
   });
 
   it("falls back to a placeholder for an unnamed product", () => {
-    const out = buildAssemblyGroups(
-      [body("body1", "x", "f1/0")],
-      trees([{ name: "", parent: null }]),
-    )!;
+    const out = buildAssemblyGroups([body("body1", "x", "f1/0")], trees([{ name: "", parent: null }]))!;
     expect(out.roots[0]!.label).toBe("Part");
   });
 
@@ -142,10 +130,7 @@ describe("buildAssemblyGroups", () => {
   });
 
   it("mixes assembly bodies with ordinary ones in the same document", () => {
-    const out = buildAssemblyGroups(
-      [body("body1", "Extrude1"), body("body2", "MCU", "f1/3")],
-      trees(NESTED),
-    )!;
+    const out = buildAssemblyGroups([body("body1", "Extrude1"), body("body2", "MCU", "f1/3")], trees(NESTED))!;
     expect(out.loose.map((b) => b.name)).toEqual(["Extrude1"]);
     expect(out.roots).toHaveLength(1);
   });
@@ -157,8 +142,13 @@ describe("buildBodyTree", () => {
   const el = (id: string, name: string, parent?: string): ElementDef =>
     parent === undefined ? { id, name } : { id, name, parent };
   const assigned = (pairs: [string, string][]) => new Map(pairs);
-  const labels = (g: TreeGroup): unknown =>
-    [g.kind, g.label, g.total, g.bodies.map((b) => b.id), g.children.map(labels)];
+  const labels = (g: TreeGroup): unknown => [
+    g.kind,
+    g.label,
+    g.total,
+    g.bodies.map((b) => b.id),
+    g.children.map(labels),
+  ];
 
   it("draws the flat list unchanged when there is neither an element nor an assembly", () => {
     const out = buildBodyTree([body("body1", "Body1"), body("body2", "Body2")], trees([]), [], new Map());
@@ -177,7 +167,10 @@ describe("buildBodyTree", () => {
       [body("body1", "A"), body("body2", "B"), body("body3", "C")],
       trees([]),
       [el("e1", "Rig"), el("e2", "Motor", "e1")],
-      assigned([["body1", "e1"], ["body2", "e2"]]),
+      assigned([
+        ["body1", "e1"],
+        ["body2", "e2"],
+      ]),
     );
     expect(out.groups.map(labels)).toEqual([
       ["element", "Rig", 2, ["body1"], [["element", "Motor", 1, ["body2"], []]]],
@@ -225,8 +218,7 @@ describe("materialMenu, the dressed-face row", () => {
     { id: "m-a", name: "A", color: "#111111" },
     { id: "m-b", name: "B", color: "#222222" },
   ];
-  const labels = (m: { children?: { label: string }[] }) =>
-    (m.children ?? []).map((c) => c.label);
+  const labels = (m: { children?: { label: string }[] }) => (m.children ?? []).map((c) => c.label);
 
   it("offers nothing about faces when none are dressed", () => {
     // An entry that is always there and almost always does nothing is an entry
@@ -247,7 +239,12 @@ describe("materialMenu, the dressed-face row", () => {
 
   it("runs the clear it was handed", () => {
     let ran = 0;
-    const m = materialMenu(LIB, ["body1"], undefined, () => {}, { count: 2, clear: () => { ran++; } });
+    const m = materialMenu(LIB, ["body1"], undefined, () => {}, {
+      count: 2,
+      clear: () => {
+        ran++;
+      },
+    });
     const row = (m.children ?? []).find((c) => c.label.startsWith("Clear"));
     row?.onClick?.();
     expect(ran).toBe(1);

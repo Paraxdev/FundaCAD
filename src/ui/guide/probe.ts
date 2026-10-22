@@ -10,13 +10,27 @@ import type { Snapshot } from "./wait";
 
 export interface ProbeHost {
   store: Pick<DocumentStore, "buildState" | "document">;
-  viewport: Pick<Viewport, "faceTriangles" | "bodyPose" | "projectToScreen" | "getSelectedFaceIds" | "getSelectedBodies" | "selectedEdgeLines" | "domElement">;
+  viewport: Pick<
+    Viewport,
+    | "faceTriangles"
+    | "bodyPose"
+    | "projectToScreen"
+    | "getSelectedFaceIds"
+    | "getSelectedBodies"
+    | "selectedEdgeLines"
+    | "domElement"
+  >;
   /** Fillet and Chamfer keep their picked edges as members, not as the selection. */
   tools?: { edgeFeature: { readonly active: boolean; memberRows(): { resolved: boolean }[] } };
 }
 
 /** Lines to outline, each a polyline, in `body`'s rest frame: apply its live pose to draw them. */
-export type ModelShape = { kind: "face" | "edge" | "body"; body: string | null; lines: THREE.Vector3[][]; name: string };
+export type ModelShape = {
+  kind: "face" | "edge" | "body";
+  body: string | null;
+  lines: THREE.Vector3[][];
+  name: string;
+};
 
 type ShapeHost = SelectorHost & { store: ProbeHost["store"]; viewport: Partial<Pick<Viewport, "bodyPose">> };
 
@@ -26,8 +40,13 @@ function boundary(tris: THREE.Triangle[]): THREE.Vector3[][] {
   const key = (v: THREE.Vector3) => `${v.x.toFixed(4)},${v.y.toFixed(4)},${v.z.toFixed(4)}`;
   const seen = new Map<string, { a: THREE.Vector3; b: THREE.Vector3; n: number }>();
   for (const t of tris) {
-    for (const [a, b] of [[t.a, t.b], [t.b, t.c], [t.c, t.a]] as const) {
-      const ka = key(a), kb = key(b);
+    for (const [a, b] of [
+      [t.a, t.b],
+      [t.b, t.c],
+      [t.c, t.a],
+    ] as const) {
+      const ka = key(a),
+        kb = key(b);
       const k = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
       const e = seen.get(k);
       if (e) e.n++;
@@ -92,7 +111,9 @@ function valueBox(doc: Document): Snapshot["value"] {
   const focused = doc.activeElement?.closest?.<HTMLElement>(".dim-field[data-field]");
   const field = focused ?? doc.querySelector<HTMLElement>(".dim-field.typed[data-field]");
   const input = field?.querySelector("input");
-  return field && input ? { field: field.dataset.field ?? "", text: input.value.trim(), typed: field.classList.contains("typed") } : null;
+  return field && input
+    ? { field: field.dataset.field ?? "", text: input.value.trim(), typed: field.classList.contains("typed") }
+    : null;
 }
 
 export function takeSnapshot(h: ProbeHost, doc: Document = document): Snapshot {

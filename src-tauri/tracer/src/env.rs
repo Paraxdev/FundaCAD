@@ -342,7 +342,13 @@ mod tests {
         for up in [Up::Y, Up::Z] {
             let white = Environment::from_rgb("w", 64, 32, up, |_, _| [1.0; 3]).tables()[1][2];
             assert!((white - PI).abs() < 1e-2, "{up:?}: a white sphere gives an up face pi, got {white}");
-            let sky = Environment::from_rgb("s", 64, 32, up, |c, r| if direction(up, (c as f32 + 0.5) / 64.0, (r as f32 + 0.5) / 32.0)[2] > 0.0 { [0.0; 3] } else { [1.0; 3] });
+            let sky = Environment::from_rgb("s", 64, 32, up, |c, r| {
+                if direction(up, (c as f32 + 0.5) / 64.0, (r as f32 + 0.5) / 32.0)[2] > 0.0 {
+                    [0.0; 3]
+                } else {
+                    [1.0; 3]
+                }
+            });
             assert_eq!(sky.tables()[1][2], 0.0, "{up:?}: light from below reaches an up face");
         }
     }

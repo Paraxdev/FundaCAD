@@ -20,7 +20,11 @@ import { useUiStore } from "../../stores/ui";
 const ui = useUiStore();
 const active = ref(workspace());
 let off: (() => void) | null = null;
-onMounted(() => { off = onWorkspaceChange((w) => { active.value = w; }); });
+onMounted(() => {
+  off = onWorkspaceChange((w) => {
+    active.value = w;
+  });
+});
 onUnmounted(() => off?.());
 </script>
 
@@ -38,9 +42,7 @@ onUnmounted(() => off?.());
       :class="{ active: active === w.id }"
       :data-workspace="w.id"
       :aria-pressed="active === w.id"
-      :title="w.id === 'render'
-        ? 'Render: materials, environment and camera'
-        : 'Model: the full width, every tool'"
+      :title="w.id === 'render' ? 'Render: materials, environment and camera' : 'Model: the full width, every tool'"
       @click="setWorkspace(w.id)"
     >
       <Icon :name="w.icon" :size="14" /><span>{{ w.label }}</span>

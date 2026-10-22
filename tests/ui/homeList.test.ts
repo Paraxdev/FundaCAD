@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { buildEntries, displayName, filterEntries, folderEntries, folderLabel, folderName, folderPath, folderSort, sortEntries, type HomeEntry } from "../../src/ui/homeList";
+import {
+  buildEntries,
+  displayName,
+  filterEntries,
+  folderEntries,
+  folderLabel,
+  folderName,
+  folderPath,
+  folderSort,
+  sortEntries,
+  type HomeEntry,
+} from "../../src/ui/homeList";
 
 describe("displayName", () => {
   it("drops the folder and the extension", () => {
@@ -34,7 +45,13 @@ describe("buildEntries", () => {
     const list = buildEntries(recents, "D:\\p\\b.funda");
     expect(list.map((e) => e.name)).toEqual(["a", "b"]);
     expect(list.map((e) => e.open)).toEqual([false, true]);
-    expect(list[0]).toMatchObject({ path: "D:\\p\\a.funda", folder: "D:/p", openedAt: 300, editedAt: null, missing: false });
+    expect(list[0]).toMatchObject({
+      path: "D:\\p\\a.funda",
+      folder: "D:/p",
+      openedAt: 300,
+      editedAt: null,
+      missing: false,
+    });
   });
 
   it("takes the edit time and the missing flag from the stats", () => {
@@ -43,12 +60,22 @@ describe("buildEntries", () => {
       ["D:\\p\\b.funda", { path: "D:\\p\\b.funda", exists: false, mtimeMs: null, size: null }],
     ]);
     const list = buildEntries(recents, null, stats);
-    expect(list.map((e) => [e.editedAt, e.missing])).toEqual([[999, false], [null, true]]);
+    expect(list.map((e) => [e.editedAt, e.missing])).toEqual([
+      [999, false],
+      [null, true],
+    ]);
   });
 });
 
-const entry = (name: string, folder: string, openedAt: number | null, editedAt: number | null): HomeEntry =>
-  ({ path: `${folder}/${name}.funda`, name, folder, openedAt, editedAt, missing: false, open: false });
+const entry = (name: string, folder: string, openedAt: number | null, editedAt: number | null): HomeEntry => ({
+  path: `${folder}/${name}.funda`,
+  name,
+  folder,
+  openedAt,
+  editedAt,
+  missing: false,
+  open: false,
+});
 
 describe("sortEntries", () => {
   const list = [entry("b", "x", 3, 10), entry("a", "x", 3, 30), entry("c", "x", 1, null), entry("Ä", "x", 2, 20)];
@@ -73,7 +100,11 @@ describe("sortEntries", () => {
 });
 
 describe("filterEntries", () => {
-  const list = [entry("Bracket", "clients/acme", 1, 1), entry("Gear", "parts/Zürich", 1, 1), entry("Lever", "parts/misc", 1, 1)];
+  const list = [
+    entry("Bracket", "clients/acme", 1, 1),
+    entry("Gear", "parts/Zürich", 1, 1),
+    entry("Lever", "parts/misc", 1, 1),
+  ];
   const names = (q: string) => filterEntries(list, q).map((e) => e.name);
 
   it("keeps everything for an empty query", () => {
@@ -102,7 +133,15 @@ describe("folderEntries", () => {
     const out = folderEntries(files, [{ path: "D:/proj/a.funda", openedAt: 9 }], "D:/proj/sub/b.fundab");
     expect(out).toEqual([
       { path: "D:/proj/a.funda", name: "a", folder: "D:/proj", openedAt: 9, editedAt: 50, missing: false, open: false },
-      { path: "D:/proj/sub/b.fundab", name: "b", folder: "proj/sub", openedAt: null, editedAt: 70, missing: false, open: true },
+      {
+        path: "D:/proj/sub/b.fundab",
+        name: "b",
+        folder: "proj/sub",
+        openedAt: null,
+        editedAt: 70,
+        missing: false,
+        open: true,
+      },
     ]);
   });
 

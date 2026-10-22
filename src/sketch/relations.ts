@@ -58,9 +58,17 @@ export interface RelationRow {
 const isAngle = (c: SketchConstraint) => c.type === "angle";
 
 const KIND_NAME: Record<string, string> = {
-  line: "Line", rectangle: "Rectangle", circle: "Circle", arc: "Arc",
-  spline: "Spline", bspline: "Control point spline", point: "Point", polygon: "Polygon", slot: "Slot",
-  text: "Text", projected: "Reference",
+  line: "Line",
+  rectangle: "Rectangle",
+  circle: "Circle",
+  arc: "Arc",
+  spline: "Spline",
+  bspline: "Control point spline",
+  point: "Point",
+  polygon: "Polygon",
+  slot: "Slot",
+  text: "Text",
+  projected: "Reference",
 };
 
 /** What to call an entity in a sentence: its kind plus its position among the
@@ -95,7 +103,9 @@ export function impliedJoins(ents: ResolvedEntity[], recorded: readonly SketchCo
   const add = (x: number, y: number, id: string) => {
     const k = coincKey(x, y);
     const list = at.get(k);
-    if (list) { if (!list.includes(id)) list.push(id); } else at.set(k, [id]);
+    if (list) {
+      if (!list.includes(id)) list.push(id);
+    } else at.set(k, [id]);
   };
   for (const e of ents) {
     if (e.construction) continue;
@@ -103,11 +113,13 @@ export function impliedJoins(ents: ResolvedEntity[], recorded: readonly SketchCo
       add(e.x1, e.y1, e.id);
       add(e.x2, e.y2, e.id);
     } else if (e.type === "spline") {
-      const a = e.points[0], b = e.points[e.points.length - 1];
+      const a = e.points[0],
+        b = e.points[e.points.length - 1];
       if (a) add(a.x, a.y, e.id);
       if (b) add(b.x, b.y, e.id);
     } else if (e.type === "bspline" && !e.closed) {
-      const a = e.poles[0], b = e.poles[e.poles.length - 1];
+      const a = e.poles[0],
+        b = e.poles[e.poles.length - 1];
       if (a) add(a.x, a.y, e.id);
       if (b) add(b.x, b.y, e.id);
     } else if (e.type === "point") {
@@ -121,7 +133,10 @@ export function impliedJoins(ents: ResolvedEntity[], recorded: readonly SketchCo
       index: null,
       icon: "coincident",
       name: "Coincident",
-      detail: ids.map((id) => entityLabel(ents, id)).filter(Boolean).join(" and "),
+      detail: ids
+        .map((id) => entityLabel(ents, id))
+        .filter(Boolean)
+        .join(" and "),
       entities: ids,
       state: null,
       implied: true,
@@ -137,7 +152,11 @@ function joinedByRecords(ids: string[], recorded: readonly SketchConstraint[]): 
     grew = false;
     for (const c of recorded) {
       if (c.type !== "coincident" || !ids.includes(c.e1) || !ids.includes(c.e2)) continue;
-      if (reached.has(c.e1) !== reached.has(c.e2)) { reached.add(c.e1); reached.add(c.e2); grew = true; }
+      if (reached.has(c.e1) !== reached.has(c.e2)) {
+        reached.add(c.e1);
+        reached.add(c.e2);
+        grew = true;
+      }
     }
   }
   return ids.every((id) => reached.has(id));

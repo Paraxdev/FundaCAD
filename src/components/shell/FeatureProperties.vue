@@ -41,7 +41,15 @@ import FileRow from "./FileRow.vue";
 import SelectionTargetRow from "./SelectionTargetRow.vue";
 import { displayRound, plainNumber } from "../../ui/units";
 import { onPreviewError } from "../../ui/previewError";
-import { commonUnits, toUnit, tryParseMeasure, unitById, type Dim, type Measured, type UnitDef } from "../../ui/measure";
+import {
+  commonUnits,
+  toUnit,
+  tryParseMeasure,
+  unitById,
+  type Dim,
+  type Measured,
+  type UnitDef,
+} from "../../ui/measure";
 import { contextMenu } from "../../ui/menu";
 import { resolveEntities, resolveRealEntities, toSketchEntity } from "../../sketch/resolve";
 import { entityDims } from "../../sketch/entityDims";
@@ -95,19 +103,21 @@ const targetRows = useDocValue((doc) => {
 
 // A feature of a type this version does not know shows no fields, so it stays
 // exactly as the newer version wrote it.
-const placeholder = useBuildValue((b) => featurePlaceholders({ skippedFeatures: b?.result?.skippedFeatures }).get(props.featureId) ?? null);
+const placeholder = useBuildValue(
+  (b) => featurePlaceholders({ skippedFeatures: b?.result?.skippedFeatures }).get(props.featureId) ?? null,
+);
 // What the build had to say about this feature, the same note its history chip
 // carries, written out where the feature's values are read.
 const buildNote = useBuildValue((b) =>
   placeholder.value !== null
     ? placeholderNote(placeholder.value)
     : b
-    ? featureNotes({
-        featureErrors: b.result?.featureErrors,
-        errorFeatureId: b.errorFeatureId,
-        diagnostics: b.result?.diagnostics,
-      }).get(props.featureId) ?? null
-    : null,
+      ? (featureNotes({
+          featureErrors: b.result?.featureErrors,
+          errorFeatureId: b.errorFeatureId,
+          diagnostics: b.result?.diagnostics,
+        }).get(props.featureId) ?? null)
+      : null,
 );
 
 // The features a pattern repeats, by name. Read only: which features is chosen
@@ -191,8 +201,15 @@ function measure(raw: string, showing: UnitDef | null, dim: Dim): Measured | str
 /** "Line", "Arc", ... capitalised for the row label; entity.type is otherwise
  *  only ever spelled lowercase, for JSON. */
 const TYPE_NAME: Record<string, string> = {
-  line: "Line", arc: "Arc", circle: "Circle", rectangle: "Rectangle",
-  slot: "Slot", polygon: "Polygon", bspline: "Curve", spline: "Curve", point: "Point",
+  line: "Line",
+  arc: "Arc",
+  circle: "Circle",
+  rectangle: "Rectangle",
+  slot: "Slot",
+  polygon: "Polygon",
+  bspline: "Curve",
+  spline: "Curve",
+  point: "Point",
 };
 
 const sketchRows = useDocValue((doc) => {
@@ -205,7 +222,9 @@ const sketchRows = useDocValue((doc) => {
   // showing "Length" is where SK-7 lived, so ONLY a type with more than one
   // dimensioned entity gets a "Line 1" / "Line 2" prefix to tell them apart.
   const perType = new Map<string, number>();
-  resolved.forEach((e, i) => { if (dimsOf[i]!.length) perType.set(e.type, (perType.get(e.type) ?? 0) + 1); });
+  resolved.forEach((e, i) => {
+    if (dimsOf[i]!.length) perType.set(e.type, (perType.get(e.type) ?? 0) + 1);
+  });
   const out: { key: string; label: string; unit: string; value: string; index: number; field: string }[] = [];
   const seen = new Map<string, number>();
   resolved.forEach((e, i) => {
@@ -261,13 +280,22 @@ function commitSketchDim(row: { key: string; index: number; field: string }, raw
       return null;
     }
     void (async () => {
-      const solved = await solve({ ...f, constraints: driven }, store.document.parameters, dimAnchor(resolved, driven, driven[driven.length - 1]!));
-      if (!solved) { toast(`Could not satisfy this ${row.field} with the sketch's other constraints`); return; }
+      const solved = await solve(
+        { ...f, constraints: driven },
+        store.document.parameters,
+        dimAnchor(resolved, driven, driven[driven.length - 1]!),
+      );
+      if (!solved) {
+        toast(`Could not satisfy this ${row.field} with the sketch's other constraints`);
+        return;
+      }
       store.updateFeature(f.id, { entities: solved.entities, constraints: driven } as Partial<Feature>);
     })();
     return null;
   }
-  entityDims(copy).find((x) => x.field === row.field)?.write(m.value);
+  entityDims(copy)
+    .find((x) => x.field === row.field)
+    ?.write(m.value);
   const entities = f.entities.map((ent, j) => (j === row.index ? toSketchEntity(copy) : ent));
   store.updateFeature(f.id, { entities } as Partial<Feature>);
   return null;
@@ -340,7 +368,8 @@ function setOption(field: string, value: string | boolean) {
   const hole = asFeature(f, "hole");
   if (hole) {
     patch = holeChoicePatch(hole, field, value, (k) =>
-      store.isParamBound({ kind: "feature", feature: hole.id, field: k }));
+      store.isParamBound({ kind: "feature", feature: hole.id, field: k }),
+    );
   }
   if (f?.type === "chamfer" && field === "chamferType" && value === "twoDistance" && f.distance2 == null) {
     patch.distance2 = f.distance;
@@ -363,39 +392,41 @@ const featureRows = useDocValue(() => {
   // the other end of it: turn the Seed on a knurl and the model does not move,
   // and nothing says why. The rule lives with the field inventory so the tool
   // that creates the feature and the rows that edit it hide the same ones.
-  return fields.filter(([field]) => fieldApplies(f.type, field, values)).map(([field, label, kind]) => {
-    const cur = readField(values, field) as Num | undefined;
-    const target: ParamTarget = { kind: "feature", feature: f.id, field };
-    const bound = store.boundExpr(target);
-    const u = unitOf(field, kind);
-    // a bound field edits its EXPRESSION (canonical units); a plain field shows
-    // its number in the unit the row is showing (counts are unitless and raw)
-    const shown = bound
-      ? bound.expr
-      : typeof cur === "number"
-        ? String(u ? toUnit(cur, u) : displayRound(cur))
-        : (cur ?? "");
-    const fx = bound && store.isParamBound(target);
-    return {
-      key: field,
-      // Not every label is a constant. One tool's shape slider is a flat LAND
-      // width on a faceted surface and a crispness on a smooth one, and calling
-      // both "Sharpness" describes neither, so whoever owns the feature type
-      // gets to answer, and the inventory's label is what it falls back to.
-      label: fieldLabel(f.type, field, values)?.text ?? label,
-      rule: featureValueRule(f.type, field),
-      // An expression is written in CANONICAL units so a file evaluates the
-      // same on every machine, which is a fact about it and not a display
-      // choice, so the chip states it and is not offered as a picker.
-      unit: bound ? (dimOf(kind) === "angle" ? "°" : dimOf(kind) ? "mm" : "") : (u?.label ?? ""),
-      pickable: !bound && !!u,
-      value: String(shown),
-      target,
-      kind,
-      rowClass: fx ? "fx-row" : undefined,
-      rowTitle: fx && bound ? `${bound.name} = ${bound.expr} = ${displayRound(bound.value)}` : undefined,
-    };
-  });
+  return fields
+    .filter(([field]) => fieldApplies(f.type, field, values))
+    .map(([field, label, kind]) => {
+      const cur = readField(values, field) as Num | undefined;
+      const target: ParamTarget = { kind: "feature", feature: f.id, field };
+      const bound = store.boundExpr(target);
+      const u = unitOf(field, kind);
+      // a bound field edits its EXPRESSION (canonical units); a plain field shows
+      // its number in the unit the row is showing (counts are unitless and raw)
+      const shown = bound
+        ? bound.expr
+        : typeof cur === "number"
+          ? String(u ? toUnit(cur, u) : displayRound(cur))
+          : (cur ?? "");
+      const fx = bound && store.isParamBound(target);
+      return {
+        key: field,
+        // Not every label is a constant. One tool's shape slider is a flat LAND
+        // width on a faceted surface and a crispness on a smooth one, and calling
+        // both "Sharpness" describes neither, so whoever owns the feature type
+        // gets to answer, and the inventory's label is what it falls back to.
+        label: fieldLabel(f.type, field, values)?.text ?? label,
+        rule: featureValueRule(f.type, field),
+        // An expression is written in CANONICAL units so a file evaluates the
+        // same on every machine, which is a fact about it and not a display
+        // choice, so the chip states it and is not offered as a picker.
+        unit: bound ? (dimOf(kind) === "angle" ? "°" : dimOf(kind) ? "mm" : "") : (u?.label ?? ""),
+        pickable: !bound && !!u,
+        value: String(shown),
+        target,
+        kind,
+        rowClass: fx ? "fx-row" : undefined,
+        rowTitle: fx && bound ? `${bound.name} = ${bound.expr} = ${displayRound(bound.value)}` : undefined,
+      };
+    });
 });
 
 /** Route raw field input.
@@ -433,7 +464,12 @@ function previewNumber(row: { key: string; kind: FieldKind }, raw: string): numb
 /** The row's own refusal of what was typed, the heads-up box's rule and words
  *  for the same field. Shown under the row from Enter until the next edit. */
 const typedProblem = ref<{ row: string; message: string } | null>(null);
-watch(() => props.featureId, () => { typedProblem.value = null; });
+watch(
+  () => props.featureId,
+  () => {
+    typedProblem.value = null;
+  },
+);
 
 function rowProblem(key: string): string | null {
   if (typedProblem.value?.row === key) return typedProblem.value.message;
@@ -557,12 +593,7 @@ function commitField(
       <label>Features</label>
       <div class="param-value">{{ repeatedLabels.join(", ") }}</div>
     </div>
-    <SelectionTargetRow
-      v-for="t in targetRows"
-      :key="`s:${t.field}`"
-      :feature-id="featureId"
-      :target="t"
-    />
+    <SelectionTargetRow v-for="t in targetRows" :key="`s:${t.field}`" :feature-id="featureId" :target="t" />
     <ChoiceRow
       v-for="c in choiceRows"
       :key="`c:${c.field}`"
@@ -596,7 +627,7 @@ function commitField(
       :value="r.value"
       :unit="r.unit"
       :pick-unit="(x, y) => pickUnit(r.key, 'length', x, y)"
-      hint="a value with any unit (2mm, 1 inch, 1/2&quot;)"
+      hint='a value with any unit (2mm, 1 inch, 1/2")'
       :commit="(raw) => commitSketchDim(r, raw)"
     />
     <ValidatedRow
@@ -609,7 +640,7 @@ function commitField(
       :pick-unit="r.pickable ? (x, y) => pickUnit(r.key, r.kind, x, y) : undefined"
       :row-class="r.rowClass"
       :row-title="r.rowTitle"
-      hint="a value with any unit (2mm, 1 inch, 1/2&quot;), a parameter, or an expression"
+      hint='a value with any unit (2mm, 1 inch, 1/2"), a parameter, or an expression'
       :commit="(raw) => commitField(r, raw)"
       :preview="(raw) => previewField(r, raw)"
       :preview-end="endPreview"

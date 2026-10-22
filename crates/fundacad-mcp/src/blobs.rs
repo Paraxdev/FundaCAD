@@ -45,10 +45,8 @@ pub async fn fetch(link: &EngineLink, hash: &str) -> Result<Option<Vec<u8>>, Str
     let b64 = base64::engine::general_purpose::STANDARD;
     let mut data: Vec<u8> = Vec::new();
     loop {
-        let reply = link
-            .call("blobRead", json!({"hash": hash, "offset": data.len()}))
-            .await
-            .map_err(|e| e.to_string())?;
+        let reply =
+            link.call("blobRead", json!({"hash": hash, "offset": data.len()})).await.map_err(|e| e.to_string())?;
         let r = reply_result(&reply, "blobRead")?;
         if r.get("missing") == Some(&json!(true)) {
             return Ok(None);
@@ -80,10 +78,7 @@ pub async fn push(link: &EngineLink, blobs: &[(String, Vec<u8>)]) -> Result<usiz
         return Ok(0);
     }
     let hashes: Vec<&str> = blobs.iter().map(|(h, _)| h.as_str()).collect();
-    let reply = link
-        .call("blobHas", json!({"hashes": hashes}))
-        .await
-        .map_err(|e| e.to_string())?;
+    let reply = link.call("blobHas", json!({"hashes": hashes})).await.map_err(|e| e.to_string())?;
     let r = reply_result(&reply, "blobHas")?;
     let missing: Vec<&str> = r
         .get("missing")

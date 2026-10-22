@@ -1,23 +1,46 @@
 import { describe, it, expect } from "vitest";
-import { deletePole, insertPole, polygonParam, splineToBspline, type BsplineEntity } from "../../src/sketch/bsplineEdit";
+import {
+  deletePole,
+  insertPole,
+  polygonParam,
+  splineToBspline,
+  type BsplineEntity,
+} from "../../src/sketch/bsplineEdit";
 import { bsplineNearestParam, bsplinePoint, bsplineRange, poleRef } from "../../src/sketch/bspline";
 import { splinePolyline } from "../../src/sketch/spline";
 import type { SketchConstraint } from "../../src/types";
 
 const open: BsplineEntity = {
-  type: "bspline", id: "b",
-  poles: [{ x: 0, y: 0 }, { x: 10, y: 20 }, { x: 25, y: -10 }, { x: 40, y: 15 }, { x: 50, y: 0 }],
+  type: "bspline",
+  id: "b",
+  poles: [
+    { x: 0, y: 0 },
+    { x: 10, y: 20 },
+    { x: 25, y: -10 },
+    { x: 40, y: 15 },
+    { x: 50, y: 0 },
+  ],
 };
 const ring: BsplineEntity = {
-  type: "bspline", id: "b", closed: true,
-  poles: [{ x: 0, y: -20 }, { x: 25, y: -18 }, { x: 30, y: 5 }, { x: 12, y: 28 }, { x: -15, y: 22 }, { x: -28, y: 0 }],
+  type: "bspline",
+  id: "b",
+  closed: true,
+  poles: [
+    { x: 0, y: -20 },
+    { x: 25, y: -18 },
+    { x: 30, y: 5 },
+    { x: 12, y: 28 },
+    { x: -15, y: 22 },
+    { x: -28, y: 0 },
+  ],
 };
 
 function sameCurve(a: BsplineEntity, b: BsplineEntity) {
   const [lo, hi] = bsplineRange(a);
   for (let i = 0; i <= 200; i++) {
     const t = lo + ((hi - lo) * i) / 200;
-    const p = bsplinePoint(a, t), q = bsplinePoint(b, t);
+    const p = bsplinePoint(a, t),
+      q = bsplinePoint(b, t);
     expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeLessThan(1e-9);
   }
 }
@@ -44,7 +67,8 @@ describe("inserting a pole", () => {
   });
 
   it("on a closed curve's polygon leg keeps the curve", () => {
-    const P = ring.poles[2]!, Q = ring.poles[3]!;
+    const P = ring.poles[2]!,
+      Q = ring.poles[3]!;
     const mid = { x: (P.x + Q.x) / 2, y: (P.y + Q.y) / 2 };
     expect(polygonParam(ring, mid, 0.5)).not.toBeNull();
     const r = insertPole(ring, mid, 0.5, [])!;
@@ -78,7 +102,13 @@ describe("deleting a pole", () => {
 // Each case runs the sketch solver many times and can pass the
 // 5 s default while the machine is busy building.
 describe("Edit as Control Points", { timeout: 20_000 }, () => {
-  const fit = [{ x: 0, y: 0 }, { x: 12, y: 18 }, { x: 30, y: 4 }, { x: 44, y: 22 }, { x: 60, y: 6 }];
+  const fit = [
+    { x: 0, y: 0 },
+    { x: 12, y: 18 },
+    { x: 30, y: 4 },
+    { x: 44, y: 22 },
+    { x: 60, y: 6 },
+  ];
 
   it("follows the spline as drawn and keeps its ends and their constraints", () => {
     const cons: SketchConstraint[] = [{ type: "fix", e: "s", p: 1 }];

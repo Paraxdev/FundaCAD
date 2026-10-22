@@ -128,7 +128,9 @@ fn a_cut_that_names_no_target_refuses_when_all_it_reaches_is_hidden() {
 /// ring itself never touches.
 fn ring_cut_around(mut bodies: Vec<Value>, vis: Value) -> Value {
     bodies.push(json!({"id": "sk", "type": "sketch", "plane": "XZ", "entities": [{"type": "circle", "radius": 2, "x": 6, "y": 0}]}));
-    bodies.push(json!({"id": "groove", "type": "revolve", "sketch": "sk", "axis": "Z", "angle": 360, "operation": "cut"}));
+    bodies.push(
+        json!({"id": "groove", "type": "revolve", "sketch": "sk", "axis": "Z", "angle": 360, "operation": "cut"}),
+    );
     json!({"parameters": {}, "bodyVisibility": vis, "features": bodies})
 }
 
@@ -145,10 +147,7 @@ fn a_shown_body_the_cut_only_boxes_in_does_not_hide_that_the_one_it_reaches_is_h
 
     // The same holds the other way round: a hidden body that is only boxed in is not reached.
     let r = build(&ring_cut_around(vec![speck], json!({"body1": false})));
-    assert_eq!(
-        messages(&r),
-        ["Cut removed nothing, the shape doesn't reach any body. Move it into one, or use Join."]
-    );
+    assert_eq!(messages(&r), ["Cut removed nothing, the shape doesn't reach any body. Move it into one, or use Join."]);
 }
 
 #[test]

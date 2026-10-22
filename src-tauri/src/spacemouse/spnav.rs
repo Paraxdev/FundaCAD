@@ -8,8 +8,7 @@ use hidapi::HidApi;
 use tauri::{AppHandle, Emitter};
 
 use super::{
-    describe, emit_motion, open_best, publish, read_device, Blocked, Buttons, DeviceInventory,
-    Opened, WANTED,
+    describe, emit_motion, open_best, publish, read_device, Blocked, Buttons, DeviceInventory, Opened, WANTED,
 };
 
 struct Hid(Opened);
@@ -19,11 +18,7 @@ impl Device for Hid {
         let n = self.0.dev.read_timeout(buf, ms).map_err(io::Error::other)?;
         // Only motion (1, 2) and button (3) reports count as the device sending,
         // so a status report at rest does not take the mouse from the daemon.
-        Ok(if n > 0 && matches!(buf[0], 1..=3) {
-            n
-        } else {
-            0
-        })
+        Ok(if n > 0 && matches!(buf[0], 1..=3) { n } else { 0 })
     }
 }
 
@@ -42,23 +37,19 @@ pub fn through_daemon(app: &AppHandle, last: &mut Option<String>) -> Result<(), 
         let opened = api.as_ref().map(open_best);
         if std::mem::take(&mut first_try) {
             let note = match opened.as_ref().map(|(_, o)| o) {
-                Some(Ok(o)) => Some(format!(
-                    "{} is readable directly too, the first of the two to send is used",
-                    o.described
-                )),
-                Some(Err(Blocked::Unreadable { name, detail })) => Some(format!(
-                    "\"{name}\" is not readable directly ({detail}), only spacenavd can send"
-                )),
+                Some(Ok(o)) => {
+                    Some(format!("{} is readable directly too, the first of the two to send is used", o.described))
+                }
+                Some(Err(Blocked::Unreadable { name, detail })) => {
+                    Some(format!("\"{name}\" is not readable directly ({detail}), only spacenavd can send"))
+                }
                 _ => None,
             };
             publish(
                 app,
                 DeviceInventory {
                     picked: Some(format!("spacenavd {path}")),
-                    seen: api
-                        .iter()
-                        .flat_map(|a| a.device_list().map(describe))
-                        .collect(),
+                    seen: api.iter().flat_map(|a| a.device_list().map(describe)).collect(),
                     note,
                 },
             );

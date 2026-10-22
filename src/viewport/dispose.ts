@@ -12,11 +12,7 @@ export function disposeObject(root: THREE.Object3D) {
     if (o.geometry?.boundsTree) o.geometry.disposeBoundsTree?.();
     o.geometry?.dispose?.();
 
-    const mats = Array.isArray(o.material)
-      ? o.material
-      : o.material
-        ? [o.material]
-        : [];
+    const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
     for (const m of mats) {
       for (const k in m) {
         const v = m[k];

@@ -48,10 +48,7 @@ const dotStyle = computed(() => ({
   width: "8px",
   height: "8px",
   borderRadius: "50%",
-  background:
-    online.value == null ? "#888"
-      : !online.value ? "#d23b30"
-        : isStale.value ? "#d2a83b" : "#3ba55d",
+  background: online.value == null ? "#888" : !online.value ? "#d23b30" : isStale.value ? "#d2a83b" : "#3ba55d",
   display: "inline-block",
   marginRight: "6px",
 }));
@@ -75,7 +72,9 @@ function arm() {
   if (!filaments) return;
   if (!probedOnce) {
     probedOnce = true;
-    void filaments.probe().then((ok) => { online.value = ok; });
+    void filaments.probe().then((ok) => {
+      online.value = ok;
+    });
   }
   if (pollTimer == null) pollTimer = window.setInterval(() => void poll(), 30_000);
 }
@@ -100,8 +99,16 @@ async function sync() {
   if (wrote) stale.value = [];
 }
 
-watch(hasBodies, (v) => { if (v) arm(); }, { immediate: true });
-onUnmounted(() => { if (pollTimer != null) clearInterval(pollTimer); });
+watch(
+  hasBodies,
+  (v) => {
+    if (v) arm();
+  },
+  { immediate: true },
+);
+onUnmounted(() => {
+  if (pollTimer != null) clearInterval(pollTimer);
+});
 </script>
 
 <template>
@@ -120,9 +127,18 @@ onUnmounted(() => { if (pollTimer != null) clearInterval(pollTimer); });
       <button
         class="pal-sync"
         title="Sync filaments from printer"
-        style="background: none; border: none; color: inherit; cursor: pointer; font-size: 13px; padding: 0 4px; margin-right: 6px"
+        style="
+          background: none;
+          border: none;
+          color: inherit;
+          cursor: pointer;
+          font-size: 13px;
+          padding: 0 4px;
+          margin-right: 6px;
+        "
         @click.stop="sync()"
-      ><Icon name="sync" :size="14" /></button>
+        ><Icon name="sync" :size="14"
+      /></button>
       <span class="tree-count">{{ store.colorPalette.length }}</span>
     </div>
 
@@ -136,7 +152,15 @@ onUnmounted(() => { if (pollTimer != null) clearInterval(pollTimer); });
         <input
           type="color"
           class="pal-swatch"
-          style="width: 18px; height: 18px; border: none; background: none; padding: 0; cursor: pointer; vertical-align: middle"
+          style="
+            width: 18px;
+            height: 18px;
+            border: none;
+            background: none;
+            padding: 0;
+            cursor: pointer;
+            vertical-align: middle;
+          "
           :value="slot.color"
           @change="store.setPaletteSlot(i, { color: ($event.target as HTMLInputElement).value })"
         />
@@ -146,11 +170,9 @@ onUnmounted(() => { if (pollTimer != null) clearInterval(pollTimer); });
           rename-on-dblclick
           :rename="(name: string) => store.setPaletteSlot(i, { name })"
         />
-        <span
-          v-if="slot.material"
-          class="pal-material"
-          style="margin-left: 6px; opacity: 0.55; font-size: 11px"
-        >{{ slot.material }}</span>
+        <span v-if="slot.material" class="pal-material" style="margin-left: 6px; opacity: 0.55; font-size: 11px">{{
+          slot.material
+        }}</span>
       </div>
     </template>
   </template>

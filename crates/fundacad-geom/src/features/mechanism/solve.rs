@@ -55,9 +55,17 @@ pub fn auto_x(z: DVec3) -> DVec3 {
     let (a, b, c) = (z.x, z.y, z.z);
     let (aa, ba, ca) = (a.abs(), b.abs(), c.abs());
     let d = if ba <= aa && ba <= ca {
-        if aa > ca { DVec3::new(-c, 0.0, a) } else { DVec3::new(c, 0.0, -a) }
+        if aa > ca {
+            DVec3::new(-c, 0.0, a)
+        } else {
+            DVec3::new(c, 0.0, -a)
+        }
     } else if aa <= ba && aa <= ca {
-        if ba > ca { DVec3::new(0.0, -c, b) } else { DVec3::new(0.0, c, -b) }
+        if ba > ca {
+            DVec3::new(0.0, -c, b)
+        } else {
+            DVec3::new(0.0, c, -b)
+        }
     } else if aa > ba {
         DVec3::new(-b, a, 0.0)
     } else {
@@ -95,10 +103,7 @@ pub struct Pose {
 
 impl Pose {
     pub fn modelled(bodies: usize) -> Pose {
-        Pose {
-            rot: vec![DQuat::IDENTITY; bodies],
-            shift: vec![DVec3::ZERO; bodies],
-        }
+        Pose { rot: vec![DQuat::IDENTITY; bodies], shift: vec![DVec3::ZERO; bodies] }
     }
 }
 
@@ -156,19 +161,18 @@ fn log(q: DQuat) -> DVec3 {
 pub fn wrap(a: f64) -> f64 {
     let t = std::f64::consts::TAU;
     let r = a - t * (a / t).round();
-    if r <= -std::f64::consts::PI { r + t } else { r }
+    if r <= -std::f64::consts::PI {
+        r + t
+    } else {
+        r
+    }
 }
 
 const STEP_LIMIT: usize = 60;
 
 impl Problem {
     pub fn new(joints: Vec<Joint>, centres: Vec<DVec3>, scale: f64) -> Problem {
-        let mut p = Problem {
-            joints,
-            centres,
-            scale: if scale > 1e-9 { scale } else { 1.0 },
-            modelled: Vec::new(),
-        };
+        let mut p = Problem { joints, centres, scale: if scale > 1e-9 { scale } else { 1.0 }, modelled: Vec::new() };
         let pose = Pose::modelled(p.centres.len());
         p.modelled = (0..p.joints.len())
             .map(|j| {
@@ -197,11 +201,7 @@ impl Problem {
     fn place(&self, pose: &Pose, body: Option<usize>, f: &Frame) -> Frame {
         let Some(i) = body else { return *f };
         let (q, c) = (pose.rot[i], self.centres[i]);
-        Frame {
-            p: q * (f.p - c) + c + pose.shift[i],
-            z: q * f.z,
-            x: q * f.x,
-        }
+        Frame { p: q * (f.p - c) + c + pose.shift[i], z: q * f.z, x: q * f.x }
     }
 
     /// Joint `j`'s two frames at `pose`.

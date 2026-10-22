@@ -43,9 +43,7 @@ pub fn threads() -> usize {
         .ok()
         .and_then(|v| v.parse::<usize>().ok())
         .filter(|&n| n > 0)
-        .unwrap_or_else(|| {
-            std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get)
-        })
+        .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get))
 }
 
 /// True when a pass over `n` items is worth handing to other threads.
@@ -86,20 +84,14 @@ pub fn map_indexed<R: Send>(n: usize, f: impl Fn(usize) -> R + Sync + Send) -> V
 }
 
 /// `f` over `0..n` in parallel, the results flattened in index order.
-pub fn flat_map_indexed<R: Send>(
-    n: usize,
-    f: impl Fn(usize) -> Vec<R> + Sync + Send,
-) -> Vec<R> {
+pub fn flat_map_indexed<R: Send>(n: usize, f: impl Fn(usize) -> Vec<R> + Sync + Send) -> Vec<R> {
     map_indexed(n, f).into_iter().flatten().collect()
 }
 
 /// `f` over every index the groups hold: groups run beside each other, a
 /// group's own members run in order on one thread, and the results come back
 /// sorted by index, which is the order a serial walk would have produced.
-pub fn map_grouped<R: Send>(
-    groups: &[Vec<usize>],
-    f: impl Fn(usize) -> R + Sync + Send,
-) -> Vec<(usize, R)> {
+pub fn map_grouped<R: Send>(groups: &[Vec<usize>], f: impl Fn(usize) -> R + Sync + Send) -> Vec<(usize, R)> {
     let work = Shared((&f, groups));
     let mut out: Vec<(usize, R)> = flat_map_indexed(groups.len(), move |g| {
         let (f, groups) = *work.get();
@@ -111,10 +103,7 @@ pub fn map_grouped<R: Send>(
 
 /// Each shape's face `TShape` addresses.
 pub fn face_tshapes(shape: &Shape) -> Vec<u64> {
-    crate::kernel::subshapes(shape, crate::kernel::Kind::Face)
-        .iter()
-        .map(|f| fq::FQ_tshape(f.raw()))
-        .collect()
+    crate::kernel::subshapes(shape, crate::kernel::Kind::Face).iter().map(|f| fq::FQ_tshape(f.raw())).collect()
 }
 
 /// The shapes split into groups that share no face with each other, each group

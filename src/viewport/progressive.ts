@@ -47,10 +47,18 @@ export class ProgressiveModel {
     private readonly dispose: DisposeFn,
   ) {}
 
-  get current(): ModelView | null { return this.view; }
-  get streaming(): boolean { return this.epoch >= 0; }
-  get filled(): number { return this.slots.reduce((n, b) => n + (b ? 1 : 0), 0); }
-  get total(): number { return this.slots.length; }
+  get current(): ModelView | null {
+    return this.view;
+  }
+  get streaming(): boolean {
+    return this.epoch >= 0;
+  }
+  get filled(): number {
+    return this.slots.reduce((n, b) => n + (b ? 1 : 0), 0);
+  }
+  get total(): number {
+    return this.slots.length;
+  }
 
   /** Start a stream. `manifest` names every body of the reply in final order and
    *  is authoritative: a body of the previous model that it does not name is
@@ -137,7 +145,8 @@ export class ProgressiveModel {
     // written yet: those are still zeros, and zero is a legitimate faceId, so an
     // unranged pass would hand every unwritten triangle to whoever owns face 0.
     const partition: MeshPartition = partitionMesh(
-      result, wanted.map((m) => m.id),
+      result,
+      wanted.map((m) => m.id),
       { range: triRange, ...(this.remap ? { remap: this.remap } : {}) },
     );
     for (const m of wanted) {
@@ -145,7 +154,10 @@ export class ProgressiveModel {
       this.group.add(body.mesh);
       this.group.add(body.edges.object);
       const old = this.stale.get(m.id);
-      if (old) { this.remove(old); this.stale.delete(m.id); } // atomic swap
+      if (old) {
+        this.remove(old);
+        this.stale.delete(m.id);
+      } // atomic swap
       body.mesh.visible = !hidden.has(m.id);
       body.edges.setBodyVisible(body.mesh.visible);
       body.edges.flush();

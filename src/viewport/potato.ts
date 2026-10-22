@@ -27,12 +27,30 @@ const PRUNE_AFTER_FRAMES = 30;
 /** Plain Material fields copied onto a twin every frame. None of them changes the
  *  shader program, so copying them never recompiles. */
 export const MIRRORED = [
-  "side", "transparent", "opacity", "alphaTest", "blending", "premultipliedAlpha",
-  "depthTest", "depthWrite", "depthFunc", "colorWrite",
-  "polygonOffset", "polygonOffsetFactor", "polygonOffsetUnits",
-  "stencilWrite", "stencilFunc", "stencilRef", "stencilFuncMask", "stencilWriteMask",
-  "stencilFail", "stencilZFail", "stencilZPass",
-  "clippingPlanes", "clipIntersection", "visible",
+  "side",
+  "transparent",
+  "opacity",
+  "alphaTest",
+  "blending",
+  "premultipliedAlpha",
+  "depthTest",
+  "depthWrite",
+  "depthFunc",
+  "colorWrite",
+  "polygonOffset",
+  "polygonOffsetFactor",
+  "polygonOffsetUnits",
+  "stencilWrite",
+  "stencilFunc",
+  "stencilRef",
+  "stencilFuncMask",
+  "stencilWriteMask",
+  "stencilFail",
+  "stencilZFail",
+  "stencilZPass",
+  "clippingPlanes",
+  "clipIntersection",
+  "visible",
 ] as const;
 
 export function mirror(dst: THREE.Material, src: THREE.Material) {
@@ -60,7 +78,10 @@ export function isCostlyLight(o: THREE.Object3D): boolean {
   return l.isRectAreaLight === true || l.isPointLight === true || l.isSpotLight === true;
 }
 
-interface MatTwin { cheap: THREE.MeshLambertMaterial; seen: number }
+interface MatTwin {
+  cheap: THREE.MeshLambertMaterial;
+  seen: number;
+}
 interface LineTwin {
   proxy: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
   source: THREE.BufferGeometry;
@@ -133,7 +154,9 @@ export class PotatoDraw {
     if (!this.target) {
       // Stencil kept: the section caps draw through it.
       this.target = new THREE.WebGLRenderTarget(this.size.x, this.size.y, {
-        depthBuffer: true, stencilBuffer: true, colorSpace: THREE.SRGBColorSpace,
+        depthBuffer: true,
+        stencilBuffer: true,
+        colorSpace: THREE.SRGBColorSpace,
       });
       // Note: three only tone maps and encodes to sRGB when drawing to the canvas
       // or to an XR target. Flagged as one, and stored as plain RGBA8, this target
@@ -230,8 +253,10 @@ export class PotatoDraw {
     c.wireframe = src.wireframe;
     // These shape the compiled program, which three only rebuilds on a version bump.
     if (
-      c.vertexColors !== src.vertexColors || c.flatShading !== src.flatShading
-      || !!c.map !== !!src.map || !!c.emissiveMap !== !!src.emissiveMap
+      c.vertexColors !== src.vertexColors ||
+      c.flatShading !== src.flatShading ||
+      !!c.map !== !!src.map ||
+      !!c.emissiveMap !== !!src.emissiveMap
     ) {
       c.vertexColors = src.vertexColors;
       c.flatShading = src.flatShading;
@@ -260,8 +285,13 @@ export class PotatoDraw {
       const proxy = new THREE.LineSegments(g, new THREE.LineBasicMaterial());
       proxy.matrixAutoUpdate = false;
       t = {
-        proxy, source: geo, posData: start.data, colData: colStart?.data ?? null,
-        posVersion: start.data.version, colVersion: colStart?.data.version ?? 0, seen: 0,
+        proxy,
+        source: geo,
+        posData: start.data,
+        colData: colStart?.data ?? null,
+        posVersion: start.data.version,
+        colVersion: colStart?.data.version ?? 0,
+        seen: 0,
       };
       this.lines.set(line, t);
     }

@@ -36,10 +36,16 @@ describe("the tracer self check", () => {
   it("logs a failing answer and refuses to start, so no wrong picture is shown", async () => {
     const calls: string[] = [];
     const t = tracer(failing, calls);
-    await expect(t.init()).rejects.toThrow("the native tracer drew its test scene wrong on software (diff 9.50 over 3.40 of 255)");
+    await expect(t.init()).rejects.toThrow(
+      "the native tracer drew its test scene wrong on software (diff 9.50 over 3.40 of 255)",
+    );
     await expect(tracer(failing, calls).init()).rejects.toBeInstanceOf(TracerRefused);
     expect(failedSelfCheck()).toEqual(failing);
-    expect(breadcrumbs().some((b) => /tracer self check FAILED on software: diff 9\.50, threshold 3\.40 of 255, 410 ms/.test(b))).toBe(true);
+    expect(
+      breadcrumbs().some((b) =>
+        /tracer self check FAILED on software: diff 9\.50, threshold 3\.40 of 255, 410 ms/.test(b),
+      ),
+    ).toBe(true);
   });
 
   it("starts on a passing answer", async () => {
@@ -48,9 +54,16 @@ describe("the tracer self check", () => {
   });
 
   it("greys Path traced with the reason when no WebGPU can stand in, and leaves WebGPU where it can", async () => {
-    const probe = { available: true, path: "software" as const, adapter: "Apple Paravirtual device (Metal, integrated GPU)" };
+    const probe = {
+      available: true,
+      path: "software" as const,
+      adapter: "Apple Paravirtual device (Metal, integrated GPU)",
+    };
     const refused = refusedBySelfCheck(probe, failing);
-    expect(pathTracedBlock({ lowPower: false, auto: false, webgpu: false, native: refused })).toEqual({ reason: "nogpu", tooltip: PATH_TRACING_SELF_CHECK });
+    expect(pathTracedBlock({ lowPower: false, auto: false, webgpu: false, native: refused })).toEqual({
+      reason: "nogpu",
+      tooltip: PATH_TRACING_SELF_CHECK,
+    });
     expect(pathTracedBlock({ lowPower: false, auto: false, webgpu: false, native: probe })).toBeNull();
     expect(chooseTracer("auto", { webgpu: true, native: refused })).toBe("webgpu");
     expect(chooseTracer("native", { webgpu: false, native: refused })).toBeNull();
@@ -58,7 +71,9 @@ describe("the tracer self check", () => {
 
   it("asks after the native tracer is open, which frames_open does", async () => {
     const calls: string[] = [];
-    await tracer(failing, calls).init().catch(() => {});
+    await tracer(failing, calls)
+      .init()
+      .catch(() => {});
     expect(calls.indexOf("pt_selfcheck")).toBeGreaterThan(calls.indexOf("connect"));
     expect(calls.indexOf("connect")).toBeGreaterThanOrEqual(0);
   });
@@ -76,7 +91,9 @@ describe("the tracer self check", () => {
   it("asks once per session once it has answered, and again after an error", async () => {
     const calls: string[] = [];
     await tracer(new Error("not open"), calls).init();
-    await tracer(failing, calls).init().catch(() => {});
+    await tracer(failing, calls)
+      .init()
+      .catch(() => {});
     await expect(tracer(failing, calls).init()).rejects.toThrow(/test scene wrong/);
     expect(calls.filter((c) => c === "pt_selfcheck")).toHaveLength(2);
   });

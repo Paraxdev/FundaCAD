@@ -39,11 +39,7 @@ export class RelationsPanel {
   ) {
     const store = useSketchRelationsStore();
     store.hooks = this.hooks;
-    store.show(
-      relationRows(entities, constraints, conflicts, over),
-      dofSummary(dof, conflict),
-      conflict,
-    );
+    store.show(relationRows(entities, constraints, conflicts, over), dofSummary(dof, conflict), conflict);
   }
 
   hide() {

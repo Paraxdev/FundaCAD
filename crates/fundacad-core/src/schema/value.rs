@@ -59,10 +59,7 @@ pub struct UnresolvedNum(pub String);
 impl Num {
     /// The value, a parameter name looked up in `params`. Any other string is
     /// an error, never a guess, exactly as the Python builder refuses it.
-    pub fn resolve<'a>(
-        &self,
-        params: impl Fn(&str) -> Option<f64> + 'a,
-    ) -> Result<f64, UnresolvedNum> {
+    pub fn resolve<'a>(&self, params: impl Fn(&str) -> Option<f64> + 'a) -> Result<f64, UnresolvedNum> {
         match self {
             Num::Number(r) => Ok(r.get()),
             Num::Expr(name) => params(name).ok_or_else(|| UnresolvedNum(name.clone())),
@@ -97,9 +94,7 @@ impl<'de> Deserialize<'de> for Num {
         match Value::deserialize(d)? {
             Value::Number(n) => Ok(Num::Number(Real(n))),
             Value::String(s) => Ok(Num::Expr(s)),
-            other => Err(D::Error::custom(format!(
-                "expected a number or a parameter name, got {other}"
-            ))),
+            other => Err(D::Error::custom(format!("expected a number or a parameter name, got {other}"))),
         }
     }
 }
@@ -138,9 +133,7 @@ impl<'de, T: serde::de::DeserializeOwned> Deserialize<'de> for OneOrMany<T> {
                 .collect::<Result<Vec<T>, _>>()
                 .map(OneOrMany::Many)
                 .map_err(D::Error::custom),
-            v => serde_json::from_value(v)
-                .map(OneOrMany::One)
-                .map_err(D::Error::custom),
+            v => serde_json::from_value(v).map(OneOrMany::One).map_err(D::Error::custom),
         }
     }
 }
@@ -150,10 +143,7 @@ pub mod nullable {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     #[allow(clippy::option_option)]
-    pub fn serialize<S: Serializer, T: Serialize>(
-        v: &Option<Option<T>>,
-        s: S,
-    ) -> Result<S::Ok, S::Error> {
+    pub fn serialize<S: Serializer, T: Serialize>(v: &Option<Option<T>>, s: S) -> Result<S::Ok, S::Error> {
         match v {
             Some(inner) => inner.serialize(s),
             None => s.serialize_none(),
@@ -161,9 +151,7 @@ pub mod nullable {
     }
 
     #[allow(clippy::option_option)]
-    pub fn deserialize<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
-        d: D,
-    ) -> Result<Option<Option<T>>, D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> {
         Option::<T>::deserialize(d).map(Some)
     }
 }

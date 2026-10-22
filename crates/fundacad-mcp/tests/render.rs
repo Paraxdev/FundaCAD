@@ -67,18 +67,12 @@ fn draw(meshes: &[Value], req: &ViewRequest) -> Canvas {
 
 /// How many pixels are not the background.
 fn painted(c: &Canvas) -> usize {
-    (0..c.h)
-        .flat_map(|y| (0..c.w).map(move |x| (x, y)))
-        .filter(|(x, y)| off_background(c.pixel(*x, *y)))
-        .count()
+    (0..c.h).flat_map(|y| (0..c.w).map(move |x| (x, y))).filter(|(x, y)| off_background(c.pixel(*x, *y))).count()
 }
 
 fn off_background(p: Rgb) -> bool {
     let bg = r::BACKGROUND;
-    (0..3)
-        .map(|k| (i32::from(p[k]) - i32::from(bg[k])).abs())
-        .sum::<i32>()
-        > 12
+    (0..3).map(|k| (i32::from(p[k]) - i32::from(bg[k])).abs()).sum::<i32>() > 12
 }
 
 fn same(a: &Canvas, b: &Canvas) -> bool {
@@ -86,9 +80,7 @@ fn same(a: &Canvas, b: &Canvas) -> bool {
 }
 
 fn channel_sum(c: &Canvas, rows: std::ops::Range<u32>, channel: usize) -> i64 {
-    rows.flat_map(|y| (0..c.w).map(move |x| (x, y)))
-        .map(|(x, y)| i64::from(c.pixel(x, y)[channel]))
-        .sum()
+    rows.flat_map(|y| (0..c.w).map(move |x| (x, y))).map(|(x, y)| i64::from(c.pixel(x, y)[channel])).sum()
 }
 
 // --- the camera --------------------------------------------------------------
@@ -114,11 +106,7 @@ fn looking_straight_down_does_not_collapse() {
     // without the fallback the whole image is one pixel wide.
     for name in ["top", "bottom"] {
         let canvas = draw(&[cube("b1")], &request(120, 120, name));
-        assert!(
-            painted(&canvas) > 5000,
-            "{name} view painted {} pixels",
-            painted(&canvas)
-        );
+        assert!(painted(&canvas) > 5000, "{name} view painted {} pixels", painted(&canvas));
     }
 }
 
@@ -134,10 +122,7 @@ fn world_up_lands_in_the_upper_half_of_the_image() {
     // the LOWER half is what a correct projection produces.
     let reds_top = channel_sum(&canvas, 0..100, 0);
     let reds_bottom = channel_sum(&canvas, 100..200, 0);
-    assert!(
-        reds_bottom > reds_top,
-        "the body at z = -30 was not drawn at the bottom"
-    );
+    assert!(reds_bottom > reds_top, "the body at z = -30 was not drawn at the bottom");
 }
 
 #[test]
@@ -164,15 +149,8 @@ fn focus_frames_the_size_it_was_asked_for() {
     let mut close_req = request(200, 200, "front");
     close_req.focus = json!({"at": [0, 0, 0], "size": 20});
     let close = draw(&[big], &close_req);
-    assert!(
-        painted(&wide) < 200 * 200,
-        "the fitted view should leave a margin"
-    );
-    assert_eq!(
-        painted(&close),
-        200 * 200,
-        "a 20mm window on a 200mm box must fill the frame"
-    );
+    assert!(painted(&wide) < 200 * 200, "the fitted view should leave a margin");
+    assert_eq!(painted(&close), 200 * 200, "a 20mm window on a 200mm box must fill the frame");
 }
 
 // --- the raster --------------------------------------------------------------
@@ -203,10 +181,7 @@ fn the_nearer_surface_wins() {
     let canvas = draw(&[near, far], &request(200, 200, "front"));
     let mid = canvas.pixel(100, 100);
     // BODY_COLORS[0] is the bluish one: blue channel above red.
-    assert!(
-        mid[2] > mid[0],
-        "the far body painted over the near one: {mid:?}"
-    );
+    assert!(mid[2] > mid[0], "the far body painted over the near one: {mid:?}");
 }
 
 #[test]
@@ -217,10 +192,7 @@ fn the_control_for_the_depth_test() {
     let near = box_mesh([20.0; 3], [0.0, -40.0, 0.0], "b2");
     let canvas = draw(&[far, near], &request(200, 200, "front"));
     let mid = canvas.pixel(100, 100);
-    assert!(
-        mid[0] > mid[2],
-        "the near body (reddish) was not chosen: {mid:?}"
-    );
+    assert!(mid[0] > mid[2], "the near body (reddish) was not chosen: {mid:?}");
 }
 
 #[test]
@@ -243,16 +215,8 @@ fn a_highlighted_face_is_painted_and_only_that_face() {
     let hidden = draw(&[cube("b1")], &away);
 
     assert_eq!(orange(&plain), 0, "nothing should be orange without a highlight");
-    assert!(
-        orange(&lit) > 1000,
-        "the highlighted face painted {} pixels",
-        orange(&lit)
-    );
-    assert_eq!(
-        orange(&hidden),
-        0,
-        "a face pointing away from the camera must not show through the body"
-    );
+    assert!(orange(&lit) > 1000, "the highlighted face painted {} pixels", orange(&lit));
+    assert_eq!(orange(&hidden), 0, "a face pointing away from the camera must not show through the body");
 }
 
 #[test]
@@ -261,25 +225,18 @@ fn the_inside_of_a_surface_is_drawn_darker() {
     // boss look identical, which is the one thing a section is for.
     let base: Rgb = [200, 200, 200];
     let out: u32 = r::shade(base, [0.0, 0.0, 1.0]).iter().map(|c| u32::from(*c)).sum();
-    let inside: u32 = r::shade(base, [0.0, 0.0, -1.0])
-        .iter()
-        .map(|c| u32::from(*c))
-        .sum();
+    let inside: u32 = r::shade(base, [0.0, 0.0, -1.0]).iter().map(|c| u32::from(*c)).sum();
     assert!(f64::from(inside) < f64::from(out) * 0.8);
 }
 
 // --- sections ----------------------------------------------------------------
 
 fn rows_painted(c: &Canvas) -> usize {
-    (0..c.h)
-        .filter(|y| (0..c.w).any(|x| off_background(c.pixel(x, *y))))
-        .count()
+    (0..c.h).filter(|y| (0..c.w).any(|x| off_background(c.pixel(x, *y)))).count()
 }
 
 fn cols_painted(c: &Canvas) -> usize {
-    (0..c.w)
-        .filter(|x| (0..c.h).any(|y| off_background(c.pixel(*x, y))))
-        .count()
+    (0..c.w).filter(|x| (0..c.h).any(|y| off_background(c.pixel(*x, y)))).count()
 }
 
 #[test]
@@ -318,13 +275,10 @@ fn a_section_that_misses_the_model_removes_nothing() {
 fn the_default_cut_is_through_the_middle_wherever_the_part_sits() {
     let box_high = box_mesh([20.0; 3], [0.0, 0.0, 137.0], "b1");
     let bounds = r::model_bounds(&[&box_high]);
-    let plane = r::section_plane(&json!({"axis": "Z"}), bounds)
-        .expect("Z is a known axis")
-        .expect("a section was asked for");
+    let plane =
+        r::section_plane(&json!({"axis": "Z"}), bounds).expect("Z is a known axis").expect("a section was asked for");
     let (normal, offset) = plane;
-    assert!(
-        (normal[0]).abs() < 1e-9 && (normal[1]).abs() < 1e-9 && (normal[2] - 1.0).abs() < 1e-9
-    );
+    assert!((normal[0]).abs() < 1e-9 && (normal[1]).abs() < 1e-9 && (normal[2] - 1.0).abs() < 1e-9);
     assert!((offset - 137.0).abs() < 1e-9, "{offset}");
 }
 
@@ -363,10 +317,7 @@ fn a_keep_word_that_is_not_a_side_is_refused() {
     let Err(message) = out else {
         panic!("keep='middle' was accepted and quietly given a meaning");
     };
-    assert!(
-        message.contains("middle") && message.contains("max"),
-        "{message}"
-    );
+    assert!(message.contains("middle") && message.contains("max"), "{message}");
 }
 
 #[test]
@@ -379,25 +330,14 @@ fn clipping_a_triangle_keeps_the_right_area() {
         .map(|[p0, p1, p2]| {
             let u = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
             let v = [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]];
-            let cr = [
-                u[1] * v[2] - u[2] * v[1],
-                u[2] * v[0] - u[0] * v[2],
-                u[0] * v[1] - u[1] * v[0],
-            ];
+            let cr = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
             0.5 * (cr[0] * cr[0] + cr[1] * cr[1] + cr[2] * cr[2]).sqrt()
         })
         .sum();
     // the kept region is the triangle minus the corner beyond x = 5
     assert!((area - (50.0 - 12.5)).abs() < 1e-9, "{area}");
-    assert!(
-        r::clip_triangle(a, b, c, n, -1.0).is_empty(),
-        "nothing should survive a plane before it"
-    );
-    assert_eq!(
-        r::clip_triangle(a, b, c, n, 50.0).len(),
-        1,
-        "everything should survive a plane past it"
-    );
+    assert!(r::clip_triangle(a, b, c, n, -1.0).is_empty(), "nothing should survive a plane before it");
+    assert_eq!(r::clip_triangle(a, b, c, n, 50.0).len(), 1, "everything should survive a plane past it");
 }
 
 #[test]
@@ -439,10 +379,7 @@ fn only_the_named_bodies_are_drawn() {
     one_req.bodies = Some(vec!["b1".into()]);
     let one = draw(&[a, b], &one_req);
     // BODY_COLORS[1] is the reddish one, and b2 is the only body wearing it
-    assert!(
-        reddish(&both) > 1000,
-        "the second body should be visible when both are drawn"
-    );
+    assert!(reddish(&both) > 1000, "the second body should be visible when both are drawn");
     assert_eq!(reddish(&one), 0, "the filtered-out body was drawn anyway");
     assert!(painted(&one) > 1000, "the kept body was not drawn");
     let mid = one.pixel(100, 100);
@@ -481,11 +418,8 @@ impl Drawable for Painted {
 /// The cube's corners coloured by height: low on the scale below, high above.
 fn painted_cube() -> Painted {
     let mesh = cube("b1");
-    let colors = mesh
-        .positions()
-        .chunks_exact(3)
-        .map(|p| r::stress_color(if p[2] > 0.0 { 1.0 } else { 0.0 }))
-        .collect();
+    let colors =
+        mesh.positions().chunks_exact(3).map(|p| r::stress_color(if p[2] > 0.0 { 1.0 } else { 0.0 })).collect();
     Painted { mesh, colors }
 }
 
@@ -518,10 +452,7 @@ fn the_colour_bar_is_drawn_only_when_asked_and_the_model_makes_room() {
     with_bar_req.color_bar = true;
     let with_bar = r::render(&[painted_cube()], &with_bar_req).expect("drawn");
     let frame = |c: &Canvas| {
-        (0..c.h)
-            .flat_map(|y| (0..c.w).map(move |x| (x, y)))
-            .filter(|(x, y)| c.pixel(*x, *y) == r::BAR_FRAME)
-            .count()
+        (0..c.h).flat_map(|y| (0..c.w).map(move |x| (x, y))).filter(|(x, y)| c.pixel(*x, *y) == r::BAR_FRAME).count()
     };
     assert_eq!(frame(&plain), 0, "a plain render has no bar");
     assert!(frame(&with_bar) > 200);

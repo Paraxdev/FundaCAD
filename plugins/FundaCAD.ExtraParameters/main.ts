@@ -17,12 +17,22 @@ import type { Engine } from "fundacad";
 const ID = "FundaCAD.ExtraParameters";
 
 export async function activate(_e: Engine): Promise<() => void> {
-  const open = () => { setupOpen.value = true; };
+  const open = () => {
+    setupOpen.value = true;
+  };
 
   const off = contribute(ID, {
     browserSections: [{ key: "parameters", component: ParametersSection }],
     overlays: [SetupPanel],
-    menus: [{ menu: "Edit", items: [{ separator: true, label: "" }, { label: "Parameter Setup…", onClick: open }] }],
+    menus: [
+      {
+        menu: "Edit",
+        items: [
+          { separator: true, label: "" },
+          { label: "Parameter Setup…", onClick: open },
+        ],
+      },
+    ],
     actions: { "parameter-setup": open },
   });
 

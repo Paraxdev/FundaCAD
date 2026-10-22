@@ -24,10 +24,7 @@ pub const MAX_BREP_BYTES: usize = 64 * 1024 * 1024;
 
 fn has_magic(data: &[u8], magic: &[u8]) -> bool {
     let head = &data[..data.len().min(magic.len() + 2)];
-    let start = head
-        .iter()
-        .position(|b| !matches!(b, b'\n' | b'\r' | b' '))
-        .unwrap_or(head.len());
+    let start = head.iter().position(|b| !matches!(b, b'\n' | b'\r' | b' ')).unwrap_or(head.len());
     head[start..].starts_with(magic)
 }
 
@@ -35,9 +32,7 @@ fn has_magic(data: &[u8], magic: &[u8]) -> bool {
 /// chooses both the bytes and the hash they are stored under.
 pub fn blob_to_shape(data: &[u8]) -> FResult<Shape> {
     if !has_magic(data, BINTOOLS_MAGIC) {
-        return Err(Fail::msg(
-            "stored geometry is not a valid binary BREP (bad header)",
-        ));
+        return Err(Fail::msg("stored geometry is not a valid binary BREP (bad header)"));
     }
     let shape = xcaf::from_bin(data).map_err(|_| Fail::Internal("Standard_Failure".into()))?;
     if kernel::is_null(&shape) {
@@ -97,9 +92,7 @@ pub fn brep_b64_to_shape(b64: &str) -> FResult<Shape> {
     // The clock alone names two reads of the same tick alike, and each then
     // loads whichever body was written last.
     static NTH: AtomicU64 = AtomicU64::new(0);
-    let nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos());
+    let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
     let path = std::env::temp_dir().join(format!(
         "fundacad-{}-{nonce:x}-{}.brep",
         std::process::id(),
@@ -115,9 +108,7 @@ pub fn brep_b64_to_shape(b64: &str) -> FResult<Shape> {
 fn import_shape(f: &Import) -> FResult<Shape> {
     let b64 = f.brep.as_deref().filter(|s| !s.is_empty());
     if let Some(digest) = f.geom.as_deref().filter(|s| !s.is_empty()) {
-        let data = BlobStore::open(blobstore::default_root())
-            .ok()
-            .and_then(|store| store.get_bytes(digest));
+        let data = BlobStore::open(blobstore::default_root()).ok().and_then(|store| store.get_bytes(digest));
         if let Some(data) = data {
             return blob_to_shape(&data);
         }
@@ -137,27 +128,16 @@ fn import_shape(f: &Import) -> FResult<Shape> {
 
 /// `_assembly_root_index`: the first node without a parent.
 fn root_index(nodes: &[ImportNode]) -> Option<usize> {
-    nodes
-        .iter()
-        .position(|n| matches!(n.parent, None | Some(None)))
+    nodes.iter().position(|n| matches!(n.parent, None | Some(None)))
 }
 
 fn non_empty<T>(v: &Option<Option<Vec<T>>>) -> Option<&[T]> {
-    v.as_ref()
-        .and_then(Option::as_ref)
-        .map(Vec::as_slice)
-        .filter(|s| !s.is_empty())
+    v.as_ref().and_then(Option::as_ref).map(Vec::as_slice).filter(|s| !s.is_empty())
 }
 
 /// `_bind_assembly`: false, with the reason recorded, when the manifest and
 /// the geometry disagree.
-fn bind_assembly(
-    ctx: &mut Ctx,
-    f: &Import,
-    shape: &Shape,
-    nodes: &[ImportNode],
-    parts: &[ImportPart],
-) -> bool {
+fn bind_assembly(ctx: &mut Ctx, f: &Import, shape: &Shape, nodes: &[ImportNode], parts: &[ImportPart]) -> bool {
     let children = kernel::children(shape);
     if children.len() != parts.len() {
         ctx.skip_feature(
@@ -173,18 +153,12 @@ fn bind_assembly(
     }
     let mut bound = Vec::with_capacity(parts.len());
     for (i, (child, part)) in children.into_iter().zip(parts).enumerate() {
-        let node = part
-            .node
-            .as_i64()
-            .and_then(|n| usize::try_from(n).ok())
-            .filter(|&n| n < nodes.len());
+        let node = part.node.as_i64().and_then(|n| usize::try_from(n).ok()).filter(|&n| n < nodes.len());
         let Some(node) = node.filter(|_| !kernel::is_null(&child)) else {
             ctx.skip_feature(
                 &f.id,
                 "import",
-                &format!(
-                    "assembly manifest entry {i} does not refer to a known part , falling back to unnamed bodies"
-                ),
+                &format!("assembly manifest entry {i} does not refer to a known part , falling back to unnamed bodies"),
             );
             return false;
         };
@@ -208,10 +182,7 @@ fn bind_assembly(
     }
     let mut seen: HashMap<usize, usize> = HashMap::new();
     for (child, node, part) in bound {
-        let mut label = Some(nodes[node].name.as_str())
-            .filter(|s| !s.is_empty())
-            .unwrap_or(base_name(f))
-            .to_owned();
+        let mut label = Some(nodes[node].name.as_str()).filter(|s| !s.is_empty()).unwrap_or(base_name(f)).to_owned();
         if owned[&node] > 1 {
             let n = seen.entry(node).or_default();
             *n += 1;
@@ -219,10 +190,7 @@ fn bind_assembly(
         }
         let meta = ImportedMeta {
             node_ref: Some(format!("{}/{node}", f.id)),
-            face_colors: part
-                .face_colors
-                .as_ref()
-                .and_then(|c| serde_json::to_value(c).ok()),
+            face_colors: part.face_colors.as_ref().and_then(|c| serde_json::to_value(c).ok()),
             part_color: part.color.clone(),
             intact: false,
             scan: false,
@@ -233,9 +201,7 @@ fn bind_assembly(
 }
 
 fn base_name(f: &Import) -> &str {
-    Some(f.name.as_str())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("Imported")
+    Some(f.name.as_str()).filter(|s| !s.is_empty()).unwrap_or("Imported")
 }
 
 pub fn handle(ctx: &mut Ctx, f: &Import) -> FResult {
@@ -254,19 +220,12 @@ pub fn handle(ctx: &mut Ctx, f: &Import) -> FResult {
         let root = nodes.and_then(|n| root_index(n).map(|r| (r, &n[r])));
         let (name, node_ref) = match root {
             Some((r, node)) => (
-                Some(node.name.as_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or(&base)
-                    .to_owned(),
+                Some(node.name.as_str()).filter(|s| !s.is_empty()).unwrap_or(&base).to_owned(),
                 Some(format!("{}/{r}", f.id)),
             ),
             None => (base, None),
         };
-        let meta = ImportedMeta {
-            node_ref,
-            intact: true,
-            ..Default::default()
-        };
+        let meta = ImportedMeta { node_ref, intact: true, ..Default::default() };
         ctx.new_body_with(shape, Some(name), None, meta);
         return Ok(());
     }

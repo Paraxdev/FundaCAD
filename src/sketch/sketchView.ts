@@ -17,11 +17,7 @@ function dot(a: Vec3, b: Vec3): number {
 }
 
 function cross(a: Vec3, b: Vec3): Vec3 {
-  return [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-  ];
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
 
 /** Unit vector, or null when there is no direction to be had. */
@@ -84,9 +80,7 @@ export function sketchXdir(normal: Vec3): Vec3 {
   }
   const axis = WORLD_AXES[(dominant + 1) % 3]!;
   const k = dot(n, axis);
-  return (
-    unit([axis[0] - n[0] * k, axis[1] - n[1] * k, axis[2] - n[2] * k]) ?? [1, 0, 0]
-  );
+  return unit([axis[0] - n[0] * k, axis[1] - n[1] * k, axis[2] - n[2] * k]) ?? [1, 0, 0];
 }
 
 /** The sketch plane for a picked face: its own plane, normal pointing out of the
@@ -100,11 +94,7 @@ export function sketchXdir(normal: Vec3): Vec3 {
  *  Viewport.pickFacePlane, planeOffsetTool and the datum planes all project the
  *  world origin for the same reason, so this keeps every route to a plane on one
  *  lattice. */
-export function faceSketchPlane(
-  normal: Vec3,
-  point: Vec3,
-  inside: Vec3 | null = null,
-): PlaneDef {
+export function faceSketchPlane(normal: Vec3, point: Vec3, inside: Vec3 | null = null): PlaneDef {
   const n = outwardNormal(unit(normal) ?? FALLBACK_N, point, inside);
   const xdir = sketchXdir(n);
   const d = dot(n, point);
@@ -167,11 +157,7 @@ export const SQUARE_TOL_DEG = 8;
  *  Sign-blind: looking at the plane from behind is just as square as looking at
  *  it from in front, and which side you are on is settled at entry
  *  (viewport/viewFlight.viewSideNormal) rather than re-litigated every frame. */
-export function viewSquareToPlane(
-  viewDir: Vec3,
-  normal: Vec3,
-  tolDeg: number = SQUARE_TOL_DEG,
-): boolean {
+export function viewSquareToPlane(viewDir: Vec3, normal: Vec3, tolDeg: number = SQUARE_TOL_DEG): boolean {
   const d = unit(viewDir);
   const n = unit(normal);
   if (!d || !n) return true; // nothing to measure: assume it still holds

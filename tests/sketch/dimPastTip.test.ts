@@ -9,7 +9,11 @@ const VIEW: ScreenRect = { left: 0, top: 0, right: 1400, bottom: 900 };
 const BOX = { w: 160, h: 30 };
 const PAST = 10;
 
-function clearOfArrow(at: { left: number; top: number }, base: { x: number; y: number }, tip: { x: number; y: number }): boolean {
+function clearOfArrow(
+  at: { left: number; top: number },
+  base: { x: number; y: number },
+  tip: { x: number; y: number },
+): boolean {
   for (let i = 0; i <= 20; i++) {
     const x = base.x + ((tip.x - base.x) * i) / 20;
     const y = base.y + ((tip.y - base.y) * i) / 20;

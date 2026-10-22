@@ -3,13 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import {
-  axialSpan,
-  axisLine,
-  ResizeGuides,
-  sizeLine,
-  type GuideHost,
-} from "../../src/features/resizeGuides";
+import { axialSpan, axisLine, ResizeGuides, sizeLine, type GuideHost } from "../../src/features/resizeGuides";
 import type { Vec3 } from "../../src/types";
 
 // The c1 slot end: a half cylinder of r 2 along X on y 7.125, z 20, x 0 to 25.
@@ -20,7 +14,11 @@ const close = (a: Vec3, b: Vec3) => a.forEach((v, i) => expect(v).toBeCloseTo(b[
 
 describe("axialSpan", () => {
   it("measures the face along the axis from its origin", () => {
-    const pts: Vec3[] = [[0, 9.125, 20], [25, 7.125, 22], [10, 5.125, 20]];
+    const pts: Vec3[] = [
+      [0, 9.125, 20],
+      [25, 7.125, 22],
+      [10, 5.125, 20],
+    ];
     expect(axialSpan(pts, SLOT_AXIS)).toEqual([-12, 13]);
   });
 
@@ -63,7 +61,9 @@ describe("ResizeGuides", () => {
     };
     return { h, scene, renders: () => renders };
   };
-  const ends = (line: THREE.Line | null): number[] => [...(line!.geometry.getAttribute("position").array as Float32Array)];
+  const ends = (line: THREE.Line | null): number[] => [
+    ...(line!.geometry.getAttribute("position").array as Float32Array),
+  ];
 
   it("draws a solid axis line and a dashed size line with screen sized dashes", () => {
     const { h, scene } = host();
@@ -82,7 +82,12 @@ describe("ResizeGuides", () => {
   it("only asks for a render when something moved, and takes both lines down on clear", () => {
     const { h, scene, renders } = host();
     const g = new ResizeGuides();
-    const s = { axis: SLOT_AXIS, span: [-12, 13] as [number, number], handle: new THREE.Vector3(...SLOT_HANDLE), full: true };
+    const s = {
+      axis: SLOT_AXIS,
+      span: [-12, 13] as [number, number],
+      handle: new THREE.Vector3(...SLOT_HANDLE),
+      full: true,
+    };
     g.update(h, s);
     const after = renders();
     g.update(h, s);

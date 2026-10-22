@@ -10,7 +10,8 @@ import {
   THREAD_DEPTH_RATIO,
   THREAD_HALF_WIDTH_RATIO,
   coarsePitchFor,
-  threadAngleDeg, grooveProfile,
+  threadAngleDeg,
+  grooveProfile,
   threadProfile,
   threadTurns,
 } from "../../src/features/threadMath";
@@ -126,7 +127,7 @@ describe("grooveProfile", () => {
     const depth = Math.max(...g.map(([into]) => into));
     expect(depth).toBeCloseTo(0.6134 * p, 4);
     const [[i0, a0], [i1, a1]] = [g[0]!, g[1]!];
-    expect(Math.atan2(a1 - a0, i1 - i0) * 180 / Math.PI).toBeCloseTo(30, 1);
+    expect((Math.atan2(a1 - a0, i1 - i0) * 180) / Math.PI).toBeCloseTo(30, 1);
     const width = Math.max(...g.map(([, a]) => a)) - Math.min(...g.map(([, a]) => a));
     expect(width).toBeLessThan(p);
     expect(Math.min(...g.map(([into]) => into))).toBeLessThan(0);

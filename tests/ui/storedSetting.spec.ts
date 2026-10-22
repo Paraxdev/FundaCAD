@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { readSetting } from "../../src/ui/storedSetting";
 
 const NEW = "fundacad.thing";
-const MID = "neocad.thing";   // the name in between the two renames
+const MID = "neocad.thing"; // the name in between the two renames
 const OLD = "sindricad.thing";
 
 describe("readSetting", () => {

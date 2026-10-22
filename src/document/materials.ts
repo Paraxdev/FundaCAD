@@ -29,11 +29,11 @@
  *  The eventual node editor produces a richer form of this. */
 export interface SurfaceSpec {
   kind: "noise" | "scratches" | "brushed" | "voronoi" | "wave";
-  scale: number;      // feature size in mm
-  amount: number;     // 0..1, roughness push
-  angle?: number;     // radians, scratch/brushed/wave direction
-  bump?: number;      // 0..1, relief
-  color?: string;     // "#rrggbb" tint
+  scale: number; // feature size in mm
+  amount: number; // 0..1, roughness push
+  angle?: number; // radians, scratch/brushed/wave direction
+  bump?: number; // 0..1, relief
+  color?: string; // "#rrggbb" tint
   colorAmount?: number; // 0..1
 }
 
@@ -48,7 +48,18 @@ export interface SurfaceSpec {
  *  an input port to another node's id. See viewport/proceduralSurface.ts. */
 export interface SurfaceNode {
   id: string;
-  type: "noise" | "scratches" | "brushed" | "voronoi" | "wave" | "fresnel" | "ramp" | "colorramp" | "mix" | "math" | "output";
+  type:
+    | "noise"
+    | "scratches"
+    | "brushed"
+    | "voronoi"
+    | "wave"
+    | "fresnel"
+    | "ramp"
+    | "colorramp"
+    | "mix"
+    | "math"
+    | "output";
   params?: Record<string, number | string>;
   in?: Record<string, string>;
   /** Canvas position in the node editor. Layout only, ignored by the compiler
@@ -139,9 +150,22 @@ export interface MaterialDef {
  *  numbers is what makes "no material" and "a material that says nothing about
  *  its finish" the same picture instead of two nearly identical ones. */
 export const FINISH = {
-  metalness: 0.1, roughness: 0.55, opacity: 1, emissive: 0, clearcoat: 0,
-  ior: 1.5, thickness: "auto", attenuationDistance: 0, dispersion: 0, iridescence: 0,
-  sheen: 0, anisotropy: 0, flakes: 0, flakeSize: 0.1, scatterDistance: 0, castsLight: true,
+  metalness: 0.1,
+  roughness: 0.55,
+  opacity: 1,
+  emissive: 0,
+  clearcoat: 0,
+  ior: 1.5,
+  thickness: "auto",
+  attenuationDistance: 0,
+  dispersion: 0,
+  iridescence: 0,
+  sheen: 0,
+  anisotropy: 0,
+  flakes: 0,
+  flakeSize: 0.1,
+  scatterDistance: 0,
+  castsLight: true,
 } as const;
 
 /** The four numbers the renderer wants, never undefined, so the render path has
@@ -175,8 +199,17 @@ export interface BodyFinish {
 /** A finish that can throw a highlight bright enough to bloom. A node graph is
  *  counted as shiny because it can drive emission. */
 export function isShiny(f: BodyFinish): boolean {
-  return f.emissive > 0 || f.metalness >= 0.5 || f.roughness < 0.3 || f.clearcoat > 0 || f.iridescence > 0 || f.opacity < 1
-    || f.anisotropy > 0 || f.flakes > 0 || !!f.surfaceGraph;
+  return (
+    f.emissive > 0 ||
+    f.metalness >= 0.5 ||
+    f.roughness < 0.3 ||
+    f.clearcoat > 0 ||
+    f.iridescence > 0 ||
+    f.opacity < 1 ||
+    f.anisotropy > 0 ||
+    f.flakes > 0 ||
+    !!f.surfaceGraph
+  );
 }
 
 /** A finish that draws exactly like a body with no material at all, so the
@@ -184,15 +217,28 @@ export function isShiny(f: BodyFinish): boolean {
  *  one left out here is a material whose only change is that field, and that
  *  change never reaches the screen. */
 export function isDefaultFinish(f: BodyFinish): boolean {
-  return f.metalness === FINISH.metalness && f.roughness === FINISH.roughness
-    && f.opacity === FINISH.opacity && f.emissive === FINISH.emissive
-    && f.clearcoat === FINISH.clearcoat && f.ior === FINISH.ior
-    && f.thickness === FINISH.thickness && f.attenuationDistance === FINISH.attenuationDistance
-    && f.dispersion === FINISH.dispersion && f.iridescence === FINISH.iridescence
-    && f.sheen === FINISH.sheen && f.anisotropy === FINISH.anisotropy && f.flakes === FINISH.flakes
-    && f.flakeSize === FINISH.flakeSize && f.scatterDistance === FINISH.scatterDistance
-    && f.castsLight === FINISH.castsLight
-    && !f.attenuationColor && !f.specularColor && !f.surface && !f.surfaceGraph;
+  return (
+    f.metalness === FINISH.metalness &&
+    f.roughness === FINISH.roughness &&
+    f.opacity === FINISH.opacity &&
+    f.emissive === FINISH.emissive &&
+    f.clearcoat === FINISH.clearcoat &&
+    f.ior === FINISH.ior &&
+    f.thickness === FINISH.thickness &&
+    f.attenuationDistance === FINISH.attenuationDistance &&
+    f.dispersion === FINISH.dispersion &&
+    f.iridescence === FINISH.iridescence &&
+    f.sheen === FINISH.sheen &&
+    f.anisotropy === FINISH.anisotropy &&
+    f.flakes === FINISH.flakes &&
+    f.flakeSize === FINISH.flakeSize &&
+    f.scatterDistance === FINISH.scatterDistance &&
+    f.castsLight === FINISH.castsLight &&
+    !f.attenuationColor &&
+    !f.specularColor &&
+    !f.surface &&
+    !f.surfaceGraph
+  );
 }
 
 export function finishOf(m: MaterialDef | undefined): BodyFinish {
@@ -236,13 +282,20 @@ export function finishOf(m: MaterialDef | undefined): BodyFinish {
 export function finishLabel(m: MaterialDef | undefined): string {
   const f = finishOf(m);
   const gloss = f.roughness <= 0.18 ? "Glossy" : f.roughness <= 0.45 ? "Satin" : "Matte";
-  const kind = f.emissive > 0 ? "lit"
-    : f.opacity < 1 ? "transparent"
-      : f.metalness >= 0.5 ? "metallic"
-        : f.flakes > 0 ? "glitter"
-          : f.anisotropy >= 0.3 ? "brushed"
-            : f.sheen >= 0.3 ? "velvet"
-              : "";
+  const kind =
+    f.emissive > 0
+      ? "lit"
+      : f.opacity < 1
+        ? "transparent"
+        : f.metalness >= 0.5
+          ? "metallic"
+          : f.flakes > 0
+            ? "glitter"
+            : f.anisotropy >= 0.3
+              ? "brushed"
+              : f.sheen >= 0.3
+                ? "velvet"
+                : "";
   return kind ? `${gloss}, ${kind}` : gloss;
 }
 
@@ -284,12 +337,24 @@ export const STARTER_LIBRARY: readonly MaterialDef[] = Object.freeze([
   // left auto on all of them, the body says how deep light travels.
   { id: "m-glass-frosted", name: "Glass, frosted", color: "#e6eef2", metalness: 0.0, roughness: 0.5, opacity: 0.3 },
   {
-    id: "m-glass-tinted", name: "Glass, tinted", color: "#d8efe6", metalness: 0.0, roughness: 0.05, opacity: 0.2,
-    attenuationColor: "#2a8f6a", attenuationDistance: 20,
+    id: "m-glass-tinted",
+    name: "Glass, tinted",
+    color: "#d8efe6",
+    metalness: 0.0,
+    roughness: 0.05,
+    opacity: 0.2,
+    attenuationColor: "#2a8f6a",
+    attenuationDistance: 20,
   },
   {
-    id: "m-diamond", name: "Diamond", color: "#f4f8fb", metalness: 0.0, roughness: 0, opacity: 0.1,
-    ior: 2.42, dispersion: 5,
+    id: "m-diamond",
+    name: "Diamond",
+    color: "#f4f8fb",
+    metalness: 0.0,
+    roughness: 0,
+    opacity: 0.1,
+    ior: 2.42,
+    dispersion: 5,
   },
   { id: "m-acrylic", name: "Acrylic, clear", color: "#dfeaf0", metalness: 0.0, roughness: 0.15, opacity: 0.45 },
   // The one entry that is not a material you could hold: a lit indicator. It is
@@ -334,10 +399,7 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
   const color = asHex(r["color"] ?? r["colour"] ?? r["hex"]);
   if (!color) return null;
   const name = typeof r["name"] === "string" && r["name"].trim() ? r["name"].trim() : "";
-  const id =
-    typeof r["id"] === "string" && r["id"].trim()
-      ? r["id"].trim()
-      : slugId(name || `material ${index + 1}`);
+  const id = typeof r["id"] === "string" && r["id"].trim() ? r["id"].trim() : slugId(name || `material ${index + 1}`);
   const out: MaterialDef = { id, name: name || id, color };
   // Omit-when-default, so a plain colour round-trips as three fields and a
   // library written by this app reads back byte-identically.
@@ -394,14 +456,45 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
 }
 
 const KNOWN_MATERIAL_KEYS: ReadonlySet<string> = new Set([
-  "id", "name", "color", "colour", "hex", "metalness", "roughness", "opacity", "emissive", "clearcoat",
-  "ior", "thickness", "attenuationColor", "attenuationDistance", "dispersion", "iridescence",
-  "specularColor", "surface", "surfaceGraph",
-  "sheen", "anisotropy", "flakes", "flakeSize", "scatterDistance", "castsLight",
+  "id",
+  "name",
+  "color",
+  "colour",
+  "hex",
+  "metalness",
+  "roughness",
+  "opacity",
+  "emissive",
+  "clearcoat",
+  "ior",
+  "thickness",
+  "attenuationColor",
+  "attenuationDistance",
+  "dispersion",
+  "iridescence",
+  "specularColor",
+  "surface",
+  "surfaceGraph",
+  "sheen",
+  "anisotropy",
+  "flakes",
+  "flakeSize",
+  "scatterDistance",
+  "castsLight",
 ]);
 
 const NODE_TYPES: readonly SurfaceNode["type"][] = [
-  "noise", "scratches", "brushed", "voronoi", "wave", "fresnel", "ramp", "colorramp", "mix", "math", "output",
+  "noise",
+  "scratches",
+  "brushed",
+  "voronoi",
+  "wave",
+  "fresnel",
+  "ramp",
+  "colorramp",
+  "mix",
+  "math",
+  "output",
 ];
 
 /** Narrow an untrusted surface graph, or drop it. Structural only: a node needs
@@ -473,10 +566,7 @@ export function uniqueId(id: string, taken: ReadonlySet<string>): string {
 }
 
 /** A name no other material uses, "Copper", then "Copper 2", … */
-export function freshMaterialName(
-  materials: readonly MaterialDef[],
-  base = "Material",
-): string {
+export function freshMaterialName(materials: readonly MaterialDef[], base = "Material"): string {
   const taken = new Set(materials.map((m) => m.name.toLowerCase()));
   if (!taken.has(base.toLowerCase())) return base;
   for (let n = 2; ; n++) {
@@ -511,7 +601,7 @@ export function parseLibrary(json: string): { materials: MaterialDef[]; problem:
       ? (parsed as { materials: unknown[] }).materials
       : null;
   if (!rows) {
-    return { materials: [], problem: "no materials in it, expected a list or {\"materials\": [...]}" };
+    return { materials: [], problem: 'no materials in it, expected a list or {"materials": [...]}' };
   }
   const out: MaterialDef[] = [];
   const taken = new Set<string>();
@@ -542,11 +632,7 @@ export function serializeLibrary(materials: readonly MaterialDef[]): string {
 function rgb(hex: string): [number, number, number] | null {
   const h = asHex(hex);
   if (!h) return null;
-  return [
-    parseInt(h.slice(1, 3), 16),
-    parseInt(h.slice(3, 5), 16),
-    parseInt(h.slice(5, 7), 16),
-  ];
+  return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 }
 
 /** The material closest to `hex`, or null when nothing is within `tolerance`.
@@ -594,10 +680,18 @@ export function nearestMaterial(
  *  right about which row is which, which is what a list is for. The file's own
  *  material name is preferred wherever it has one (3MF and glTF do). */
 const BASIC_COLORS: readonly [string, number][] = [
-  ["black", 0x1a1a1a], ["white", 0xf0f0f0], ["grey", 0x808080],
-  ["red", 0xd23b30], ["orange", 0xe07a1f], ["yellow", 0xe0c020],
-  ["green", 0x3aa04a], ["cyan", 0x30b0b8], ["blue", 0x3050c8],
-  ["purple", 0x7a3fb0], ["pink", 0xd88098], ["brown", 0x8a5a30],
+  ["black", 0x1a1a1a],
+  ["white", 0xf0f0f0],
+  ["grey", 0x808080],
+  ["red", 0xd23b30],
+  ["orange", 0xe07a1f],
+  ["yellow", 0xe0c020],
+  ["green", 0x3aa04a],
+  ["cyan", 0x30b0b8],
+  ["blue", 0x3050c8],
+  ["purple", 0x7a3fb0],
+  ["pink", 0xd88098],
+  ["brown", 0x8a5a30],
 ];
 
 /** A rough name for a colour, e.g. "#b06a3b" -> "brown". */

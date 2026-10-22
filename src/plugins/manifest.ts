@@ -73,7 +73,7 @@ const COPY: Record<Grant, GrantCopy> = {
   "files.write": { can: "Save files where you tell it to" },
   // `can` is filled in with the hosts, which is the whole reason this grant
   // carries them: "can use the internet" is not a decision anybody can make.
-  "network": { can: "Connect to the internet", cannot: "Use the internet" },
+  network: { can: "Connect to the internet", cannot: "Use the internet" },
   // No host list, unlike `network`: what it reaches is bounded by address
   // (private and link-local only, see src-tauri/src/plugins/localnet.rs), and
   // the devices a person has on their own network are theirs to name.
@@ -148,9 +148,7 @@ export interface PluginManifest {
   geometryWasm: string;
 }
 
-export type ParseResult =
-  | { ok: true; manifest: PluginManifest }
-  | { ok: false; why: string };
+export type ParseResult = { ok: true; manifest: PluginManifest } | { ok: false; why: string };
 
 // `Publisher.Name`, or a bare name for the ones that predate the convention.
 //
@@ -190,8 +188,7 @@ export function sameId(a: string, b: string): boolean {
 }
 
 const isGrant = (v: unknown): v is Grant => (GRANTS as readonly unknown[]).includes(v);
-const isKind = (v: unknown): v is PluginKind =>
-  (PLUGIN_KINDS as readonly unknown[]).includes(v);
+const isKind = (v: unknown): v is PluginKind => (PLUGIN_KINDS as readonly unknown[]).includes(v);
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
@@ -351,7 +348,5 @@ export function promiseCovers(consented: PluginManifest, incoming: PluginManifes
   if (consented.kind !== incoming.kind) return false;
   const had = new Set<string>(consented.grants);
   const hadHosts = new Set<string>(consented.hosts);
-  return (
-    incoming.grants.every((g) => had.has(g)) && incoming.hosts.every((h) => hadHosts.has(h))
-  );
+  return incoming.grants.every((g) => had.has(g)) && incoming.hosts.every((h) => hadHosts.has(h));
 }

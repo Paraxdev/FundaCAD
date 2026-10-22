@@ -8,8 +8,8 @@ use opencascade::primitives::Shape;
 use opencascade::select_access::{self as sa, CurveType, SurfaceType};
 use serde_json::Value;
 
-use super::solid_ops::faces_of;
 use super::face_anchor::{agree_with, cylinder_axis, plane_from_point_normal, unit, with_x_dir, Placement};
+use super::solid_ops::faces_of;
 use crate::builder::plane::{named, plane_of, PlaneRef};
 use crate::builder::{missing_reference, Ctx, FResult};
 use crate::kernel::{self, Frame};
@@ -137,17 +137,15 @@ impl<'c> Look<'c> {
             PointAt::Datum { datum } => {
                 self.above(datum, "datum")?;
                 self.ctx
-                .datum_marks
-                .get(datum)
-                .and_then(|m| m.get("position"))
-                .and_then(arr3)
-                .or_else(|| self.ctx.points.get(datum).map(|p| DVec3::from(*p)))
+                    .datum_marks
+                    .get(datum)
+                    .and_then(|m| m.get("position"))
+                    .and_then(arr3)
+                    .or_else(|| self.ctx.points.get(datum).map(|p| DVec3::from(*p)))
             }
-            PointAt::Face { face } => self
-                .face(face)
-                .and_then(|f| sa::face_probe(&f))
-                .and_then(|p| p.centre)
-                .map(DVec3::from),
+            PointAt::Face { face } => {
+                self.face(face).and_then(|f| sa::face_probe(&f)).and_then(|p| p.centre).map(DVec3::from)
+            }
             PointAt::Edge { edge, end, t, point } => {
                 let frac = match end.as_deref() {
                     Some("start") => 0.0,
@@ -166,7 +164,6 @@ impl<'c> Look<'c> {
             }
         })
     }
-
 }
 
 type Lost = (Vec<Value>, Option<(&'static str, [f64; 3])>);
@@ -299,12 +296,10 @@ pub fn plane_through(ctx: &mut Ctx, f: &DatumPlane, through: &PlaneThrough) -> F
                     Some(s) if d.dot(s) < 0.0 => -d,
                     _ => d,
                 };
-                unit(nr - d * d.dot(nr))
-                    .and_then(|np| plane_from_point_normal(o, rotate(np, d, angle)))
-                    .map(|mut p| {
-                        p.origin = o.to_array();
-                        with_x_dir(p, DVec3::from(cached.x))
-                    })
+                unit(nr - d * d.dot(nr)).and_then(|np| plane_from_point_normal(o, rotate(np, d, angle))).map(|mut p| {
+                    p.origin = o.to_array();
+                    with_x_dir(p, DVec3::from(cached.x))
+                })
             }
             _ => None,
         },

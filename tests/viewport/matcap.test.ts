@@ -19,10 +19,20 @@ function rig() {
   const scene = new THREE.Scene();
   const clip = [new THREE.Plane(new THREE.Vector3(0, 0, 1), 3)];
   const pbr = new THREE.MeshPhysicalMaterial({
-    color: 0x336699, vertexColors: true, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
-    clearcoat: 1, transmission: 0.5, emissive: 0xff0000, emissiveIntensity: 3,
-    polygonOffset: true, polygonOffsetFactor: 1, colorWrite: false,
-    stencilWrite: true, stencilRef: 2,
+    color: 0x336699,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.4,
+    side: THREE.DoubleSide,
+    clearcoat: 1,
+    transmission: 0.5,
+    emissive: 0xff0000,
+    emissiveIntensity: 3,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    colorWrite: false,
+    stencilWrite: true,
+    stencilRef: 2,
   });
   pbr.clippingPlanes = clip;
   const body = new THREE.Mesh(new THREE.BoxGeometry(), pbr);
@@ -57,8 +67,23 @@ function rig() {
     },
   } as unknown as THREE.WebGLRenderer;
   return {
-    scene, body, multi, faces, preview, glow, pbr, clip, area, point, renderer, seen, shadowMap,
-    camera: new THREE.PerspectiveCamera(), failNext: () => { fail = true; },
+    scene,
+    body,
+    multi,
+    faces,
+    preview,
+    glow,
+    pbr,
+    clip,
+    area,
+    point,
+    renderer,
+    seen,
+    shadowMap,
+    camera: new THREE.PerspectiveCamera(),
+    failNext: () => {
+      fail = true;
+    },
   };
 }
 
@@ -148,7 +173,10 @@ describe("MatcapDraw", () => {
   it("makes each matcap once and gives each style its own look", () => {
     for (const id of MATCAP_STYLES) expect(matcapTexture(id)).toBe(matcapTexture(id));
     expect(matcapTexture("metal")).not.toBe(matcapTexture("clay"));
-    const mid = (id: (typeof MATCAP_STYLES)[number]) => matcapPixels(id, 8).slice((4 * 8 + 4) * 4, (4 * 8 + 4) * 4 + 3).join();
+    const mid = (id: (typeof MATCAP_STYLES)[number]) =>
+      matcapPixels(id, 8)
+        .slice((4 * 8 + 4) * 4, (4 * 8 + 4) * 4 + 3)
+        .join();
     expect(new Set(MATCAP_STYLES.map(mid)).size).toBe(MATCAP_STYLES.length);
   });
 
@@ -194,13 +222,20 @@ describe("PostChain in Matcap", () => {
       getDrawingBufferSize: (v: THREE.Vector2) => v.set(64, 32),
       getPixelRatio: () => 1,
       getRenderTarget: () => current,
-      setRenderTarget: (t: unknown) => { current = t; },
-      render: (s: THREE.Scene) => { draws.push({ scene: s, target: current }); },
+      setRenderTarget: (t: unknown) => {
+        current = t;
+      },
+      render: (s: THREE.Scene) => {
+        draws.push({ scene: s, target: current });
+      },
     } as unknown as THREE.WebGLRenderer;
     const post = new PostChain(renderer, scene, potatoOn, () => false);
     const composed: string[] = [];
     (post as unknown as { composer: unknown }).composer = {
-      passes: [], render: () => composed.push("render"), setPixelRatio: () => {}, setSize: () => {},
+      passes: [],
+      render: () => composed.push("render"),
+      setPixelRatio: () => {},
+      setSize: () => {},
     };
     const body = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
     body.userData.owner = { id: "body1" };

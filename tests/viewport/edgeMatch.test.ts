@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { polylineMid, nearestEdgeByMid, nearestEdgeByCurve, toggleSelectorByMid, midMatchTol, edgeSelectorFrom, type Vec3 } from "../../src/viewport/edgeMatch";
+import {
+  polylineMid,
+  nearestEdgeByMid,
+  nearestEdgeByCurve,
+  toggleSelectorByMid,
+  midMatchTol,
+  edgeSelectorFrom,
+  type Vec3,
+} from "../../src/viewport/edgeMatch";
 
 const line = (a: Vec3, b: Vec3, n = 5): { points: Vec3[] } => {
   const points: Vec3[] = [];
@@ -12,7 +20,12 @@ const line = (a: Vec3, b: Vec3, n = 5): { points: Vec3[] } => {
 
 describe("polylineMid", () => {
   it("returns the arc-length midpoint, not the index-middle sample", () => {
-    const pts: Vec3[] = [[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0]];
+    const pts: Vec3[] = [
+      [0, 0, 0],
+      [1, 0, 0],
+      [2, 0, 0],
+      [3, 0, 0],
+    ];
     expect(polylineMid(pts)).toEqual([1.5, 0, 0]); // NOT index floor(4/2) = [2,0,0]
   });
 
@@ -22,18 +35,32 @@ describe("polylineMid", () => {
   // CORNER, clicking a tall box's vertical edge filleted a short top edge,
   // whose centre is nearer the corner.
   it("handles a two-sample straight edge (the pick-one-edge-fillet-another bug)", () => {
-    expect(polylineMid([[0, 0, 0], [0, 0, 35]])).toEqual([0, 0, 17.5]);
+    expect(
+      polylineMid([
+        [0, 0, 0],
+        [0, 0, 35],
+      ]),
+    ).toEqual([0, 0, 17.5]);
   });
 
   it("walks unevenly spaced samples by length, not by index", () => {
-    const pts: Vec3[] = [[0, 0, 0], [9, 0, 0], [10, 0, 0]];
+    const pts: Vec3[] = [
+      [0, 0, 0],
+      [9, 0, 0],
+      [10, 0, 0],
+    ];
     expect(polylineMid(pts)).toEqual([5, 0, 0]); // index-middle would say [9,0,0]
   });
 
   it("survives degenerate input", () => {
     expect(polylineMid([])).toBeUndefined();
     expect(polylineMid([[2, 3, 4]])).toEqual([2, 3, 4]);
-    expect(polylineMid([[2, 3, 4], [2, 3, 4]])).toEqual([2, 3, 4]); // zero length
+    expect(
+      polylineMid([
+        [2, 3, 4],
+        [2, 3, 4],
+      ]),
+    ).toEqual([2, 3, 4]); // zero length
   });
 });
 
@@ -84,8 +111,18 @@ describe("nearestEdgeByMid, legacy selector compatibility", () => {
   // A document saved before the arc-length fix holds the OLD index-middle point.
   // Reopening that fillet for editing must still find its edges, or the ghosts
   // silently vanish on every pre-existing document.
-  const vertical: { points: Vec3[] } = { points: [[0, 0, 0], [0, 0, 35]] };
-  const top: { points: Vec3[] } = { points: [[0, 0, 35], [20, 0, 35]] };
+  const vertical: { points: Vec3[] } = {
+    points: [
+      [0, 0, 0],
+      [0, 0, 35],
+    ],
+  };
+  const top: { points: Vec3[] } = {
+    points: [
+      [0, 0, 35],
+      [20, 0, 35],
+    ],
+  };
 
   it("matches a point saved under the OLD convention (the edge's end sample)", () => {
     expect(nearestEdgeByMid([vertical, top], [0, 0, 35], 0.5)).toBe(0);
@@ -104,7 +141,12 @@ describe("edgeSelectorFrom, the body stamp", () => {
   // Regression for the silent wrong-body bug: a fillet/chamfer selector that
   // does not name its body lets the engine fall back to the last-created body,
   // and `by:"nearest"` then blends an edge of a body the user never clicked.
-  const vertical = { points: [[0, 0, 0], [0, 0, 35]] as Vec3[] };
+  const vertical = {
+    points: [
+      [0, 0, 0],
+      [0, 0, 35],
+    ] as Vec3[],
+  };
 
   it("stamps the body that owns the picked edge", () => {
     expect(edgeSelectorFrom({ ...vertical, body: "body2" })).toEqual({
@@ -123,7 +165,13 @@ describe("edgeSelectorFrom, the body stamp", () => {
 
   it("uses the arc-length midpoint, not the index middle", () => {
     // three samples, unevenly spaced: index-middle would give [0,0,1]
-    const uneven = { points: [[0, 0, 0], [0, 0, 1], [0, 0, 10]] as Vec3[] };
+    const uneven = {
+      points: [
+        [0, 0, 0],
+        [0, 0, 1],
+        [0, 0, 10],
+      ] as Vec3[],
+    };
     expect(edgeSelectorFrom(uneven)!.point).toEqual([0, 0, 5]);
   });
 
@@ -168,8 +216,10 @@ describe("nearestEdgeByCurve", () => {
       }),
     });
     const outline = [
-      line([-750, -500, 0], [750, -500, 0], 2), line([750, -500, 0], [750, 500, 0], 2),
-      line([750, 500, 0], [-750, 500, 0], 2), line([-750, 500, 0], [-750, -500, 0], 2),
+      line([-750, -500, 0], [750, -500, 0], 2),
+      line([750, -500, 0], [750, 500, 0], 2),
+      line([750, 500, 0], [-750, 500, 0], 2),
+      line([-750, 500, 0], [-750, -500, 0], 2),
     ];
     const cap = 0.02 * Math.hypot(1500, 1000);
     const holes = [0, 20, 40, 80, 100].map(hole); // no hole at 60

@@ -34,13 +34,7 @@ import {
   leanOutOfView,
   type DragHandle,
 } from "./manipulator";
-import {
-  ROTATE_SNAP_DEG,
-  angleInFrame,
-  ringDragDegenerate,
-  rotationFrame,
-  snapDegrees,
-} from "./transformGizmo";
+import { ROTATE_SNAP_DEG, angleInFrame, ringDragDegenerate, rotationFrame, snapDegrees } from "./transformGizmo";
 import { unwrapTurn } from "./screwMath";
 import { CanvasGesture } from "./canvasGesture";
 
@@ -108,8 +102,7 @@ export class JointTool {
     const f = this.store.document.features.find((x) => x.id === featureId);
     if (!f || f.type !== "joint") return false;
     const jt = f as Joint;
-    const bound = (field: string) =>
-      this.store.isParamBound({ kind: "feature", feature: jt.id, field });
+    const bound = (field: string) => this.store.isParamBound({ kind: "feature", feature: jt.id, field });
     if (bound("offset") || bound("angle")) return false;
     if (jt.offset != null && typeof jt.offset !== "number") return false;
     if (jt.angle != null && typeof jt.angle !== "number") return false;
@@ -147,7 +140,9 @@ export class JointTool {
       () => this.cancel(),
     );
     this.dim.updateFromCursor({ offset: this.offset, angle: this.angle });
-    setPrompt("Drag the arrow to slide the joined body along the mate axis, the dial to turn it about the axis. Either can be typed. Enter applies, Esc cancels.");
+    setPrompt(
+      "Drag the arrow to slide the joined body along the mate axis, the dial to turn it about the axis. Either can be typed. Enter applies, Esc cancels.",
+    );
     this.gesture.frame();
     return true;
   }

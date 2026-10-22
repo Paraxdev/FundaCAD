@@ -56,13 +56,9 @@ async function browse() {
       <button type="button" class="file-pick" @click="browse">
         {{ value ? basename(value) : "Choose…" }}
       </button>
-      <button
-        v-if="value"
-        type="button"
-        class="file-clear"
-        title="Clear the file"
-        @click="commit('')"
-      ><Icon name="close" :size="12" /></button>
+      <button v-if="value" type="button" class="file-clear" title="Clear the file" @click="commit('')"
+        ><Icon name="close" :size="12"
+      /></button>
     </div>
   </div>
 </template>

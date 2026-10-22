@@ -3,18 +3,13 @@
 use std::f64::consts::PI;
 
 use crate::g::{self, py_g, V};
-use crate::read::{
-    circular_openings, cylinder_of, edge_points, end_is_open, holes_from_faces, picked_faces, plane_of,
-};
+use crate::read::{circular_openings, cylinder_of, edge_points, end_is_open, holes_from_faces, picked_faces, plane_of};
 use crate::{feature, kernel, Shape, F};
 
 fn layer_height(f: &F, label: &str) -> Result<f64, String> {
     let h = f.num("layerHeight", 0.2)?;
     if !(0.01..=5.0).contains(&h) {
-        return Err(format!(
-            "{label}: the layer height must be between 0.01 and 5 mm (got {})",
-            py_g(h)
-        ));
+        return Err(format!("{label}: the layer height must be between 0.01 and 5 mm (got {})", py_g(h)));
     }
     Ok(h)
 }
@@ -86,7 +81,8 @@ pub fn counterbore_bridge(f: &F) -> Result<(), String> {
                 ));
             }
             let (center, r) = openings[0];
-            let outer_wire = fc.outer_wire().ok_or_else(|| format!("{label}: the picked face has no outer boundary"))?;
+            let outer_wire =
+                fc.outer_wire().ok_or_else(|| format!("{label}: the picked face has no outer boundary"))?;
             let outer_pts = edge_points(&outer_wire);
             let probe = (0.1 * lh).max(0.01);
             if !walled(&shape, center, n, &outer_pts, probe) {
@@ -101,19 +97,15 @@ pub fn counterbore_bridge(f: &F) -> Result<(), String> {
                     ));
                 }
             }
-            let reach = outer_pts
-                .iter()
-                .map(|p| g::norm(g::sub(*p, center)))
-                .fold(f64::NEG_INFINITY, f64::max)
-                + 1.0;
+            let reach = outer_pts.iter().map(|p| g::norm(g::sub(*p, center))).fold(f64::NEG_INFINITY, f64::max) + 1.0;
             let (hx, hy) = g::perp_frame_rotated(n, turn);
             let footprint = kernel::face_from_wire(&outer_wire)?;
             let slab = kernel::prism(&footprint, g::mul(n, -total))?;
             for (k, pts) in bridge_openings(center, hx, hy, r, reach, count).into_iter().enumerate() {
                 let pts: Vec<V> = pts.into_iter().map(|p| g::lin(p, &[(-(k as f64) * lh, n)])).collect();
                 let layer = g::prism(&pts, g::mul(n, -lh))?;
-                let tool = g::common(&slab, &layer)
-                    .ok_or_else(|| format!("{label}: could not shape layer {}", k + 1))?;
+                let tool =
+                    g::common(&slab, &layer).ok_or_else(|| format!("{label}: could not shape layer {}", k + 1))?;
                 tools.push(tool);
             }
         }
@@ -164,9 +156,7 @@ fn openings_for(
         return Ok(out);
     }
     let Some((n, _)) = plane_of(fc) else {
-        return Err(format!(
-            "{label}: pick the inside face of a round hole, or the flat face it opens onto"
-        ));
+        return Err(format!("{label}: pick the inside face of a round hole, or the flat face it opens onto"));
     };
     let out: Vec<_> = circular_openings(fc)
         .into_iter()

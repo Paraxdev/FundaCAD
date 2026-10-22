@@ -43,7 +43,8 @@ function vShowComponents(path: string): { tag: string; path: string }[] {
   const tags = new Set<string>();
   const walk = (children: TemplateChildNode[]) => {
     for (const c of elements(children)) {
-      if (/^[A-Z]/.test(c.tag) && c.props.some((p) => p.type === NodeTypes.DIRECTIVE && p.name === "show")) tags.add(c.tag);
+      if (/^[A-Z]/.test(c.tag) && c.props.some((p) => p.type === NodeTypes.DIRECTIVE && p.name === "show"))
+        tags.add(c.tag);
       walk(c.children);
     }
   };
@@ -59,7 +60,9 @@ describe("components hidden with v-show", () => {
   const uses = Object.keys(sources).flatMap((f) => vShowComponents(f));
 
   it("finds the Render dock's tabs, so the check is not vacuous", () => {
-    expect(uses.map((u) => u.tag)).toEqual(expect.arrayContaining(["RenderMaterials", "RenderEnvironment", "RenderCamera"]));
+    expect(uses.map((u) => u.tag)).toEqual(
+      expect.arrayContaining(["RenderMaterials", "RenderEnvironment", "RenderCamera"]),
+    );
   });
 
   it.each(uses.map((u) => [u.tag, u] as const))("%s renders exactly one root element", (_tag, u) => {

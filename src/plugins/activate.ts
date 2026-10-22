@@ -80,10 +80,7 @@ async function devLoaders(): Promise<Record<string, () => Promise<unknown>>> {
  *  INSTALLED FIRST, and never the other way round. The installed copy is the one
  *  somebody consented to and the one a release actually shipped; a development
  *  build that quietly preferred its own would be testing something nobody has. */
-async function moduleFor(
-  id: string,
-  dev: Record<string, () => Promise<unknown>>,
-): Promise<PluginModule | null> {
+async function moduleFor(id: string, dev: Record<string, () => Promise<unknown>>): Promise<PluginModule | null> {
   const code = await pluginCode(id);
   if (code !== null) return evaluatePlugin(id, code, await hostModules());
   const load = dev[id];
@@ -147,7 +144,10 @@ export function activatePlugins(e: Engine): () => void {
   // The dev set arrives a tick later (it is behind a dynamic import), so sync
   // again once it is known. In a shipped build this resolves to nothing and the
   // second sync is a no-op over an unchanged set.
-  void devLoaders().then((loaders) => { dev = loaders; sync(); });
+  void devLoaders().then((loaders) => {
+    dev = loaders;
+    sync();
+  });
   // What is on disk is not known until it has been asked for, and asking is a
   // command round-trip. Kicked off here rather than at a call site, so nothing
   // has to remember that starting the plugins needs this first.

@@ -31,18 +31,30 @@ const GAP = 0.1;
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
     page.on("pageerror", (e) => res.errors.push(e.message));
-    await page.addInitScript(([port]) => {
-      try { localStorage.removeItem("fundacad.render"); } catch { /* fresh profile */ }
-      const N = window.WebSocket;
-      window.WebSocket = class extends N {
-        constructor(u, p) { super(String(u).replace("127.0.0.1:8765", "127.0.0.1:" + port), p); }
-      };
-    }, [PORT]);
+    await page.addInitScript(
+      ([port]) => {
+        try {
+          localStorage.removeItem("fundacad.render");
+        } catch {
+          /* fresh profile */
+        }
+        const N = window.WebSocket;
+        window.WebSocket = class extends N {
+          constructor(u, p) {
+            super(String(u).replace("127.0.0.1:8765", "127.0.0.1:" + port), p);
+          }
+        };
+      },
+      [PORT],
+    );
     await page.goto(`http://localhost:${VITE}/?token=${TOKEN}`);
     await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 90000 });
     await page.waitForTimeout(1500);
     const modal = await page.$(".modal-close");
-    if (modal) { await modal.click(); await page.waitForTimeout(300); }
+    if (modal) {
+      await modal.click();
+      await page.waitForTimeout(300);
+    }
 
     await page.evaluate(async (gap) => {
       const s = window.store;
@@ -68,7 +80,8 @@ const GAP = 0.1;
       const paint = (id, v) => {
         const b = vp.model.bodies.find((x) => x.id === id);
         const c = b.mesh.geometry.attributes.color;
-        c.array.fill(v); c.needsUpdate = true;
+        c.array.fill(v);
+        c.needsUpdate = true;
         b.baseColors.fill(v);
       };
       paint("body1", 1);
@@ -82,47 +95,75 @@ const GAP = 0.1;
     }, CONTROL);
     res.setup = setup;
 
-    const step = (d) => page.evaluate(async (d) => {
-      const vp = window.viewport;
-      const V = vp.rig.active.position.constructor;
-      const T = new V(0, 0, 0);
-      vp.rig.setLookAt(new V(0, -0.6 * d, 0.8 * d), T, false);
-      const shot = async (under) => {
-        vp.model.bodies.find((x) => x.id === "body1").mesh.visible = under;
-        vp.requestRender();
-        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-        const url = vp.screenshotPNG();
-        const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = url; });
-        const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
-        const g = c.getContext("2d"); g.drawImage(img, 0, 0);
-        return { url, data: g.getImageData(0, 0, img.width, img.height).data, w: img.width, h: img.height };
-      };
-      const alone = await shot(false);
-      const both = await shot(true);
-      const cam = vp.rig.active;
-      const q = [[-170, -170], [170, -170], [170, 170], [-170, 170]].map(([x, y]) => {
-        const v = new V(x, y, 0.1).project(cam);
-        return [(v.x + 1) / 2 * alone.w, (1 - v.y) / 2 * alone.h];
-      });
-      const inside = (x, y) => {
-        let s = 0;
-        for (let i = 0; i < 4; i++) {
-          const [ax, ay] = q[i], [bx, by] = q[(i + 1) % 4];
-          const c = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
-          if (c !== 0) { if (s === 0) s = Math.sign(c); else if (Math.sign(c) !== s) return false; }
-        }
-        return true;
-      };
-      let n = 0, bad = 0;
-      const lum = (a, i) => 0.2126 * a[i] + 0.7152 * a[i + 1] + 0.0722 * a[i + 2];
-      for (let y = 0; y < alone.h; y += 2) for (let x = 0; x < alone.w; x += 2) {
-        if (!inside(x, y)) continue;
-        const i = (y * alone.w + x) * 4;
-        n++;
-        if (Math.abs(lum(both.data, i) - lum(alone.data, i)) > 24) bad++;
-      }
-      return { d, near: cam.near, far: cam.far, dist: cam.position.distanceTo(T), n, bad, url: bad ? both.url : null };
-    }, d);
+    const step = (d) =>
+      page.evaluate(async (d) => {
+        const vp = window.viewport;
+        const V = vp.rig.active.position.constructor;
+        const T = new V(0, 0, 0);
+        vp.rig.setLookAt(new V(0, -0.6 * d, 0.8 * d), T, false);
+        const shot = async (under) => {
+          vp.model.bodies.find((x) => x.id === "body1").mesh.visible = under;
+          vp.requestRender();
+          await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          const url = vp.screenshotPNG();
+          const img = await new Promise((ok, no) => {
+            const i = new Image();
+            i.onload = () => ok(i);
+            i.onerror = no;
+            i.src = url;
+          });
+          const c = document.createElement("canvas");
+          c.width = img.width;
+          c.height = img.height;
+          const g = c.getContext("2d");
+          g.drawImage(img, 0, 0);
+          return { url, data: g.getImageData(0, 0, img.width, img.height).data, w: img.width, h: img.height };
+        };
+        const alone = await shot(false);
+        const both = await shot(true);
+        const cam = vp.rig.active;
+        const q = [
+          [-170, -170],
+          [170, -170],
+          [170, 170],
+          [-170, 170],
+        ].map(([x, y]) => {
+          const v = new V(x, y, 0.1).project(cam);
+          return [((v.x + 1) / 2) * alone.w, ((1 - v.y) / 2) * alone.h];
+        });
+        const inside = (x, y) => {
+          let s = 0;
+          for (let i = 0; i < 4; i++) {
+            const [ax, ay] = q[i],
+              [bx, by] = q[(i + 1) % 4];
+            const c = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+            if (c !== 0) {
+              if (s === 0) s = Math.sign(c);
+              else if (Math.sign(c) !== s) return false;
+            }
+          }
+          return true;
+        };
+        let n = 0,
+          bad = 0;
+        const lum = (a, i) => 0.2126 * a[i] + 0.7152 * a[i + 1] + 0.0722 * a[i + 2];
+        for (let y = 0; y < alone.h; y += 2)
+          for (let x = 0; x < alone.w; x += 2) {
+            if (!inside(x, y)) continue;
+            const i = (y * alone.w + x) * 4;
+            n++;
+            if (Math.abs(lum(both.data, i) - lum(alone.data, i)) > 24) bad++;
+          }
+        return {
+          d,
+          near: cam.near,
+          far: cam.far,
+          dist: cam.position.distanceTo(T),
+          n,
+          bad,
+          url: bad ? both.url : null,
+        };
+      }, d);
 
     let worst = null;
     for (let d = 200; d <= 1500; d *= 1.02) {
@@ -138,12 +179,18 @@ const GAP = 0.1;
     const covered = res.steps.every((s) => s.n > 2000 && Math.abs(s.dist - s.d) < 1e-3 * s.d);
     check("every step framed the plate", covered, res.steps.filter((s) => !(s.n > 2000)).slice(0, 3));
     const fights = res.steps.filter((s) => s.bad > 0);
-    if (CONTROL) console.log(`control: ${fights.length} of ${res.steps.length} steps fight, worst ${JSON.stringify(worst)}`);
-    else check("no step shows the plate underneath", fights.length === 0, { fights: fights.length, worst, first: fights[0] });
+    if (CONTROL)
+      console.log(`control: ${fights.length} of ${res.steps.length} steps fight, worst ${JSON.stringify(worst)}`);
+    else
+      check("no step shows the plate underneath", fights.length === 0, {
+        fights: fights.length,
+        worst,
+        first: fights[0],
+      });
     check("no page errors", res.errors.length === 0, res.errors.slice(0, 3));
   } catch (e) {
     failed++;
-    res.errors.push(String(e && e.stack || e));
+    res.errors.push(String((e && e.stack) || e));
     console.log("FAIL", e);
   } finally {
     fs.writeFileSync(path.join(OUT, "coplanar_plates.json"), JSON.stringify(res, null, 1));

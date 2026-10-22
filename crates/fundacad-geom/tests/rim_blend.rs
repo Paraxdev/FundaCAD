@@ -63,17 +63,9 @@ fn a_rim_fillet_past_a_rounded_wall_is_one_face() {
     let (r, secs) = build(&cup(Some(INNER)));
     let out = &r.bodies[0].shape;
 
-    assert!(
-        !r.diagnostics.iter().any(|d| d["code"] == "bodySplit"),
-        "{:?}",
-        r.diagnostics
-    );
+    assert!(!r.diagnostics.iter().any(|d| d["code"] == "bodySplit"), "{:?}", r.diagnostics);
     assert_eq!(kernel::count(out, Kind::Solid), 1);
-    assert_eq!(
-        kernel::count(out, Kind::Face),
-        kernel::count(base, Kind::Face) + 1,
-        "the fillet is one face"
-    );
+    assert_eq!(kernel::count(out, Kind::Face), kernel::count(base, Kind::Face) + 1, "the fillet is one face");
     let want = carved(base, INNER);
     let got = kernel::volume(out);
     assert!((got - want).abs() < 1e-3 * want, "volume {got}, the carved rim holds {want}");

@@ -25,7 +25,9 @@ function start(o: PrintabilityOptions = opts) {
   const g = new Geometry();
   const inner = g as unknown as Inner;
   let started: string | null = null;
-  const done = g.printability(doc, o, (id) => { started = id; });
+  const done = g.printability(doc, o, (id) => {
+    started = id;
+  });
   const sent = JSON.parse(inner.outbox[0]!) as Record<string, unknown>;
   const reply = (v: object) => inner.onMessage(JSON.stringify({ id: sent.id, ...v }));
   return { done, sent, reply, started: () => started };

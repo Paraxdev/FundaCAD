@@ -82,7 +82,9 @@ enum Answer {
 
 fn answer(r: Resize) -> Answer {
     match r {
-        Resize::Built(s) => Answer::Built(kernel::volume(&s), DVec3::from(kernel::center_of_mass(&s).expect("a centre"))),
+        Resize::Built(s) => {
+            Answer::Built(kernel::volume(&s), DVec3::from(kernel::center_of_mass(&s).expect("a centre")))
+        }
         Resize::Refused(Fail::Value { code: Some(code), .. }) => Answer::Refused(code),
         Resize::Refused(f) => panic!("refused without a code: {f:?}"),
         Resize::Failed => Answer::Failed,

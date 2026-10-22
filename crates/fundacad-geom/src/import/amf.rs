@@ -106,7 +106,11 @@ pub fn read_amf(data: Vec<u8>) -> Result<(Vec<MeshObject>, Vec<String>), String>
             Event::End(_) => {
                 let Some(local) = path.pop() else { continue };
                 let parent = path.last().map_or("", String::as_str);
-                let num = || text.trim().parse::<f64>().map_err(|_| bad(format!("<{local}> holds '{}', not a number", text.trim())));
+                let num = || {
+                    text.trim()
+                        .parse::<f64>()
+                        .map_err(|_| bad(format!("<{local}> holds '{}', not a number", text.trim())))
+                };
                 match (parent, local.as_str()) {
                     ("coordinates", "x") => xyz[0] = num()?,
                     ("coordinates", "y") => xyz[1] = num()?,

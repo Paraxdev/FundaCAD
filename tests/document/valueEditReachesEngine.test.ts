@@ -82,7 +82,11 @@ describe("a value edit reaches the engine", () => {
     const { transport, store } = await setup();
     const fields = ["dx", "dy", "dz", "rx", "ry", "rz"] as const;
     for (const [n, field] of fields.entries()) {
-      store.setTargetValue({ kind: "feature", feature: "m1", field }, n + 5, field.startsWith("r") ? "angle" : "length");
+      store.setTargetValue(
+        { kind: "feature", feature: "m1", field },
+        n + 5,
+        field.startsWith("r") ? "angle" : "length",
+      );
       await vi.runAllTimersAsync();
       expect((engineCopy(transport.sent, "m1") as unknown as Record<string, number>)[field]).toBe(n + 5);
     }

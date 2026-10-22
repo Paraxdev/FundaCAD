@@ -55,7 +55,12 @@ describe("tools", () => {
     contribute("A", { tools: [tool("a1", { min: 2 })] });
     const t = contributedTools()[0]!;
     expect(t).toMatchObject({
-      id: "a1", label: "a1", iconName: "a1", consumes: ["face"], source: "selection", min: 2,
+      id: "a1",
+      label: "a1",
+      iconName: "a1",
+      consumes: ["face"],
+      source: "selection",
+      min: 2,
     });
   });
 });
@@ -135,13 +140,15 @@ describe("features", () => {
 
   it("carries the four behaviours, not just the labels", () => {
     contribute("A", {
-      features: [feature("texture", {
-        fieldApplies: (field: string) => field !== "seed",
-        fieldLabel: (field: string) => (field === "sharpness" ? { text: "Land" } : null),
-        edit: () => false,
-        choiceFields: [{ field: "kind", label: "Pattern", options: [], fallback: "knurl" }],
-        toggleFields: [{ field: "invert", label: "Invert", fallback: false }],
-      })],
+      features: [
+        feature("texture", {
+          fieldApplies: (field: string) => field !== "seed",
+          fieldLabel: (field: string) => (field === "sharpness" ? { text: "Land" } : null),
+          edit: () => false,
+          choiceFields: [{ field: "kind", label: "Pattern", options: [], fallback: "knurl" }],
+          toggleFields: [{ field: "invert", label: "Invert", fallback: false }],
+        }),
+      ],
     });
     const f = contributedFeature("texture")!;
     expect(f.fieldApplies!("seed", {})).toBe(false);

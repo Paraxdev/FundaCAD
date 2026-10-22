@@ -4,19 +4,46 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  RELIEF, RELIEF_GLSL, reliefAlbedo, reliefFade, reliefHash, reliefRoughness, reliefSeam, reliefSigma2,
-  reliefTilt, reliefTread, reliefVariance, glslFloat,
+  RELIEF,
+  RELIEF_GLSL,
+  reliefAlbedo,
+  reliefFade,
+  reliefHash,
+  reliefRoughness,
+  reliefSeam,
+  reliefSigma2,
+  reliefTilt,
+  reliefTread,
+  reliefVariance,
+  glslFloat,
 } from "../../src/viewport/relief";
 
-interface Row { f: number; c: number; depth: number; w: number; tilt: number; tread: number; seam: number;
-  fade: number; sigma2: number; roughness: number; albedo: number }
-const fixture = Object.values(import.meta.glob("../fixtures/relief_profile.json", { import: "default", eager: true }))[0] as {
-  constants: Record<string, number>; variance: Record<string, number>; hash: { k: number; h: number }[]; rows: Row[];
+interface Row {
+  f: number;
+  c: number;
+  depth: number;
+  w: number;
+  tilt: number;
+  tread: number;
+  seam: number;
+  fade: number;
+  sigma2: number;
+  roughness: number;
+  albedo: number;
+}
+const fixture = Object.values(
+  import.meta.glob("../fixtures/relief_profile.json", { import: "default", eager: true }),
+)[0] as {
+  constants: Record<string, number>;
+  variance: Record<string, number>;
+  hash: { k: number; h: number }[];
+  rows: Row[];
 };
 
 describe("relief profile against the fixture", () => {
   it("has the fixture's constants", () => {
-    for (const [k, v] of Object.entries(fixture.constants)) expect(RELIEF[k as keyof typeof RELIEF], k).toBeCloseTo(v, 12);
+    for (const [k, v] of Object.entries(fixture.constants))
+      expect(RELIEF[k as keyof typeof RELIEF], k).toBeCloseTo(v, 12);
   });
 
   it("gives every row's numbers", () => {

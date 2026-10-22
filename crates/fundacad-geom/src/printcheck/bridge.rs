@@ -78,14 +78,11 @@ pub fn span(
         // counts: a small fillet into the wall drops under a thousandth of a
         // mm in its first facet, and a step up or an open end never drops at all.
         let held = edges.get(key).into_iter().flatten().filter(|t| !in_face.contains(t)).any(|&t| {
-            b.tris[t]
-                .iter()
-                .filter(|&&q| b.key(q) != b.key(i) && b.key(q) != b.key(j))
-                .any(|&q| {
-                    let p = b.pts[q];
-                    let size = p.iter().fold(height.abs(), |m, c| m.max(c.abs()));
-                    height - dot(p, up) > DROP * (1.0 + size)
-                })
+            b.tris[t].iter().filter(|&&q| b.key(q) != b.key(i) && b.key(q) != b.key(j)).any(|&q| {
+                let p = b.pts[q];
+                let size = p.iter().fold(height.abs(), |m, c| m.max(c.abs()));
+                height - dot(p, up) > DROP * (1.0 + size)
+            })
         });
         if held {
             support.push((flat(b.pts[i]), flat(b.pts[j])));
@@ -150,7 +147,11 @@ pub fn span(
 /// is a corner, or a ceiling's edge right over another body's top: held.
 fn reach(q: [f64; 2], d: [f64; 2], support: &[([f64; 2], [f64; 2])], free: &[([f64; 2], [f64; 2])]) -> f64 {
     let held = nearest(q, d, support);
-    if held <= nearest(q, d, free) + 1e-6 { held } else { f64::INFINITY }
+    if held <= nearest(q, d, free) + 1e-6 {
+        held
+    } else {
+        f64::INFINITY
+    }
 }
 
 /// How far from `q` along `d` the nearest of `edges` is.

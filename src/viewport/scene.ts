@@ -7,7 +7,14 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { stickyFact } from "../diagnostics/breadcrumbs";
 import { gridStep } from "../sketch/planeGrid";
 import { isRenderLowPower, setRenderLowPower } from "./render";
-import { composerClearColor, DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer, setComposing, thresholdAboveGround } from "./composerColor";
+import {
+  composerClearColor,
+  DISPLAY_COLOR_GLSL,
+  displayColorUniforms,
+  followComposer,
+  setComposing,
+  thresholdAboveGround,
+} from "./composerColor";
 import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs";
 import { GlassBackPass, glassBodyCount } from "./glassThickness";
 import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
@@ -16,7 +23,18 @@ import { MatcapDraw } from "./matcap";
 import { GpuTimer } from "./gpuTimer";
 import { OverlayDraw } from "./pathtrace/overlayDraw";
 import { viewCamera, type FrameView } from "./pathtrace/frameCamera";
-import { GlowMask, maskHighPass, ModelPrepass, OverlayCompose, highAsked, stagesFor, type FrameFacts, type FrameState, type RealtimeQuality, type Stage } from "./realtimePipeline";
+import {
+  GlowMask,
+  maskHighPass,
+  ModelPrepass,
+  OverlayCompose,
+  highAsked,
+  stagesFor,
+  type FrameFacts,
+  type FrameState,
+  type RealtimeQuality,
+  type Stage,
+} from "./realtimePipeline";
 import type { ViewMode } from "../ui/renderPrefs";
 import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
 import { buildRoom, disposeRoom } from "./environments";
@@ -76,7 +94,7 @@ export interface SceneBundle {
  *  Rounded up to a whole number of MAJOR cells, because the two GridHelpers are
  *  built from the same span and the major one divides it by five. */
 export function groundGridCells(worldPerPixel: number, diagonalPx: number, cell: number): number {
-  const want = worldPerPixel * diagonalPx * GROUND_COVER / cell;
+  const want = (worldPerPixel * diagonalPx * GROUND_COVER) / cell;
   const cells = Number.isFinite(want) && want > 0 ? Math.ceil(want) : MIN_GROUND_CELLS;
   const clamped = Math.min(Math.max(cells, MIN_GROUND_CELLS), MAX_GROUND_CELLS);
   return Math.ceil(clamped / 5) * 5;
@@ -136,7 +154,9 @@ export class AdaptiveGrid {
           gl_Position = projectionMatrix * viewMatrix * wp;
         }
       `,
-      fragmentShader: DISPLAY_COLOR_GLSL + /* glsl */ `
+      fragmentShader:
+        DISPLAY_COLOR_GLSL +
+        /* glsl */ `
         varying vec2 vWorld;
         uniform float uCell;
         uniform float uMajor;
@@ -371,7 +391,15 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   };
 
   return {
-    renderer, scene, modelGroup, planes, originTiles, grid, triad, post, lowPower: autoLowPower,
+    renderer,
+    scene,
+    modelGroup,
+    planes,
+    originTiles,
+    grid,
+    triad,
+    post,
+    lowPower: autoLowPower,
     applyRenderPrefs: () => {
       applyPowerTier(); // pick up a toggled performance-mode pref
       applyRenderPrefs(renderer, scene, { key, fill, hemi });
@@ -424,9 +452,12 @@ function frameKeyShadow(key: THREE.DirectionalLight, modelGroup: THREE.Group): v
   key.target.position.copy(_shadowSphere.center);
   key.target.updateMatrixWorld();
   const cam = key.shadow.camera;
-  cam.left = -r * 1.25; cam.right = r * 1.25;
-  cam.top = r * 1.25; cam.bottom = -r * 1.25;
-  cam.near = r * 0.5; cam.far = r * 6;
+  cam.left = -r * 1.25;
+  cam.right = r * 1.25;
+  cam.top = r * 1.25;
+  cam.bottom = -r * 1.25;
+  cam.near = r * 0.5;
+  cam.far = r * 6;
   cam.updateProjectionMatrix();
 }
 
@@ -565,7 +596,9 @@ export class PostChain {
   get timer(): GpuTimer {
     if (this.timerRef) return this.timerRef;
     const r = this.renderer;
-    const timer = (this.timerRef = new GpuTimer(typeof r.getContext === "function" ? (r.getContext() as WebGL2RenderingContext) : null));
+    const timer = (this.timerRef = new GpuTimer(
+      typeof r.getContext === "function" ? (r.getContext() as WebGL2RenderingContext) : null,
+    ));
     return timer;
   }
 
@@ -585,7 +618,9 @@ export class PostChain {
         timer.end("shadow", (r.info?.render?.calls ?? 0) !== calls);
       }
     };
-    return () => { shadows.render = draw; };
+    return () => {
+      shadows.render = draw;
+    };
   }
 
   /** Whether this frame draws shadow maps at all. While it does not, the
@@ -657,7 +692,13 @@ export class PostChain {
       if (edges) {
         const b = (this.edgeBatches ??= new EdgeBatches());
         b.begin(edges);
-        this.edgesDrawn = { merged: b.drawn.members, segments: b.drawn.segments, thin: edges.thin, weight: edges.weight, builtMs: b.builtMs };
+        this.edgesDrawn = {
+          merged: b.drawn.members,
+          segments: b.drawn.segments,
+          thin: edges.thin,
+          weight: edges.weight,
+          builtMs: b.builtMs,
+        };
       }
       this.renderPlan(plan, camera);
     } finally {
@@ -733,7 +774,12 @@ export class PostChain {
     }
   }
 
-  private frameState(camera: THREE.Camera, motion: boolean, forceRealtime: boolean, facts: FrameFacts | null): FrameState {
+  private frameState(
+    camera: THREE.Camera,
+    motion: boolean,
+    forceRealtime: boolean,
+    facts: FrameFacts | null,
+  ): FrameState {
     const want = this.wanted();
     const s: FrameState = {
       quality: this.quality,
@@ -888,9 +934,7 @@ export class PostChain {
   }
 
   private async fetchPasses() {
-    const [
-      { EffectComposer }, { RenderPass }, { UnrealBloomPass }, { BokehPass }, { OutputPass },
-    ] = await Promise.all([
+    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { BokehPass }, { OutputPass }] = await Promise.all([
       import("three/examples/jsm/postprocessing/EffectComposer.js"),
       import("three/examples/jsm/postprocessing/RenderPass.js"),
       import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),

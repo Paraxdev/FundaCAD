@@ -46,7 +46,10 @@ describe("the bundle job", () => {
   });
 
   it("starts the AppImage, the .deb's binary and the Windows exe with --mcp", () => {
-    const text = all.filter(runsSmoke).map((s) => s.text).join("\n");
+    const text = all
+      .filter(runsSmoke)
+      .map((s) => s.text)
+      .join("\n");
     expect(text).toMatch(/\.AppImage/);
     expect(text).toMatch(/--appimage-extract-and-run/);
     expect(text).toMatch(/dpkg-deb -x/);

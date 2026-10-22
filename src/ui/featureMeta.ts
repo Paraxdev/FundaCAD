@@ -104,14 +104,17 @@ export function featureMeta(f: { type: string; operation?: unknown; thin?: unkno
     if (cmd) return { icon: cmd.iconName, label: cmd.label };
   }
   if (f.type === "extrude" && f.thin === true) return { icon: "extrude", label: "Thin extrude" };
-  return (
-    FEATURE_META[f.type as FeatureType] ??
-    contributedFeature(f.type)?.meta ??
-    { icon: "dot", label: f.type }
-  );
+  return FEATURE_META[f.type as FeatureType] ?? contributedFeature(f.type)?.meta ?? { icon: "dot", label: f.type };
 }
 
-type Nameable = { type: string; name?: string; source?: string; nodes?: readonly { name: string; parent: number | null }[]; operation?: unknown; thin?: unknown };
+type Nameable = {
+  type: string;
+  name?: string;
+  source?: string;
+  nodes?: readonly { name: string; parent: number | null }[];
+  operation?: unknown;
+  thin?: unknown;
+};
 
 /** The one root of an import's assembly tree, the folder name Items shows. */
 export function assemblyName(f: Nameable): string | null {

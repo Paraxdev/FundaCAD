@@ -19,10 +19,20 @@ describe("undo and redo from a tool's value box", () => {
 
   it("Ctrl+Z cancels the tool and undoes the document, and Ctrl+Y then redoes", () => {
     const actions: string[] = [];
-    installKeymap((a) => actions.push(a), () => "model");
+    installKeymap(
+      (a) => actions.push(a),
+      () => "model",
+    );
     const dim = new DimInput();
     let cancelled = 0;
-    dim.show(FIELDS, () => {}, () => { cancelled++; dim.hide(); });
+    dim.show(
+      FIELDS,
+      () => {},
+      () => {
+        cancelled++;
+        dim.hide();
+      },
+    );
     const input = document.querySelector<HTMLInputElement>(".dim-input input")!;
     expect(document.activeElement).toBe(input);
 
@@ -37,7 +47,10 @@ describe("undo and redo from a tool's value box", () => {
 
   it("reaches the document from a box with no cancel of its own", () => {
     const actions: string[] = [];
-    installKeymap((a) => actions.push(a), () => "model");
+    installKeymap(
+      (a) => actions.push(a),
+      () => "model",
+    );
     const dim = new DimInput();
     dim.show(FIELDS, () => {});
     const input = document.querySelector<HTMLInputElement>(".dim-input input")!;
@@ -49,7 +62,10 @@ describe("undo and redo from a tool's value box", () => {
 
   it("still keeps ordinary typing for the box", () => {
     const actions: string[] = [];
-    installKeymap((a) => actions.push(a), () => "model");
+    installKeymap(
+      (a) => actions.push(a),
+      () => "model",
+    );
     const dim = new DimInput();
     dim.show(FIELDS, () => {});
     const input = document.querySelector<HTMLInputElement>(".dim-input input")!;

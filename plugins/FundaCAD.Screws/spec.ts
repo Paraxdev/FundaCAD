@@ -41,16 +41,29 @@ export interface FastenerSpec {
   info?: Record<string, string | number>;
 }
 
-interface FieldDef { label: string; fields: [string, string][] }
-interface KindDef { label: string; parts: PartName[]; fields: [string, string][] }
+interface FieldDef {
+  label: string;
+  fields: [string, string][];
+}
+interface KindDef {
+  label: string;
+  parts: PartName[];
+  fields: [string, string][];
+}
 
 export const KINDS = FIELDS.kinds as unknown as Record<Kind, KindDef>;
 export const PARTS = FIELDS.parts as unknown as Record<PartName, Record<string, FieldDef>>;
 export const HANDS = FIELDS.hands as ("right" | "left")[];
 
 export const PART_LABELS: Record<PartName, string> = {
-  head: "Head", drive: "Drive", point: "Point", shoulder: "Shoulder", thread: "Thread",
-  nut: "Nut", washer: "Washer", insert: "Insert",
+  head: "Head",
+  drive: "Drive",
+  point: "Point",
+  shoulder: "Shoulder",
+  thread: "Thread",
+  nut: "Nut",
+  washer: "Washer",
+  insert: "Insert",
 };
 
 export function getPath(obj: unknown, path: string): unknown {
@@ -116,7 +129,7 @@ export function sanityProblems(spec: FastenerSpec): string[] {
   const head = spec.head;
   const drive = spec.drive;
   if (t) {
-    if (n(t.pitch) * 0.6134 >= d / 2 * 0.8) out.push("the pitch is too coarse for the thread diameter");
+    if (n(t.pitch) * 0.6134 >= (d / 2) * 0.8) out.push("the pitch is too coarse for the thread diameter");
   }
   if (spec.kind === "screw" || spec.kind === "shoulderScrew") {
     const L = n(spec.length);
@@ -141,9 +154,12 @@ export function sanityProblems(spec: FastenerSpec): string[] {
     if (spec.kind === "screw" && n(t?.length) > L - sunk + 1e-9) out.push("the thread cannot be longer than the shank");
     if (drive && drive.type !== "none") {
       const size = n(drive.size);
-      const room = head && head.type !== "none"
-        ? (head.type === "hex" || head.type === "hexFlange" ? n(head.acrossFlats) : n(head.diameter))
-        : d;
+      const room =
+        head && head.type !== "none"
+          ? head.type === "hex" || head.type === "hexFlange"
+            ? n(head.acrossFlats)
+            : n(head.diameter)
+          : d;
       const reach = drive.type === "hex" ? size * 1.1547 : drive.type === "square" ? size * 1.4142 : size;
       if (drive.type === "slot" ? !(size < room / 2) : !(reach < room)) out.push("the drive does not fit in the head");
       const allowed = head && head.type !== "none" ? n(head.height) + d / 2 : n(spec.length) * 0.6;
@@ -157,7 +173,8 @@ export function sanityProblems(spec: FastenerSpec): string[] {
   if (spec.kind === "nut" && spec.nut) {
     const nut = spec.nut;
     if (!(n(nut.acrossFlats) > d * 1.05)) out.push("the nut must be wider than its thread");
-    if (nut.type === "nyloc" && !(n(nut.hexHeight) < n(nut.height))) out.push("the hex must be lower than the whole nut");
+    if (nut.type === "nyloc" && !(n(nut.hexHeight) < n(nut.height)))
+      out.push("the hex must be lower than the whole nut");
     if (nut.type === "flange") {
       if (!(n(nut.flangeDiameter) > n(nut.acrossFlats))) out.push("the flange must be wider than the hex");
       if (!(n(nut.flangeThickness) < n(nut.height))) out.push("the flange must be thinner than the nut");

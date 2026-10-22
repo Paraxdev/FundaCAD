@@ -18,7 +18,12 @@ describe("flightSeconds", () => {
   });
 
   it("stays inside the bounds however extreme the move", () => {
-    for (const [turn, ratio] of [[0, 1], [Math.PI, 1000], [Math.PI, 1e-6], [4, 8]] as const) {
+    for (const [turn, ratio] of [
+      [0, 1],
+      [Math.PI, 1000],
+      [Math.PI, 1e-6],
+      [4, 8],
+    ] as const) {
       const s = flightSeconds(turn, ratio);
       expect(s).toBeGreaterThanOrEqual(MIN_FLIGHT_S);
       expect(s).toBeLessThanOrEqual(MAX_FLIGHT_S);

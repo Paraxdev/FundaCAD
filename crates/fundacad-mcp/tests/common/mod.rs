@@ -48,9 +48,7 @@ pub struct FakeEngine {
 impl FakeEngine {
     /// Serve `answer` on a free loopback port. The handler gets the op and the
     /// payload and returns the reply body; `id` is filled in here.
-    pub fn start(
-        answer: impl Fn(&str, &Map<String, Value>) -> Value + Send + Sync + 'static,
-    ) -> FakeEngine {
+    pub fn start(answer: impl Fn(&str, &Map<String, Value>) -> Value + Send + Sync + 'static) -> FakeEngine {
         // Bound here, before returning, so a client that connects straight
         // away never races the listener into existence.
         let std_listener = TcpListener::bind(("127.0.0.1", 0)).expect("a loopback port");
@@ -66,8 +64,7 @@ impl FakeEngine {
         let calls = engine.calls.clone();
         let dead = engine.dead.clone();
         tokio::spawn(async move {
-            let listener = tokio::net::TcpListener::from_std(std_listener)
-                .expect("the listener joins the runtime");
+            let listener = tokio::net::TcpListener::from_std(std_listener).expect("the listener joins the runtime");
             loop {
                 let Ok((stream, _)) = listener.accept().await else {
                     continue;
@@ -90,34 +87,13 @@ impl FakeEngine {
                         let Ok(Value::Object(req)) = serde_json::from_str::<Value>(&text) else {
                             continue;
                         };
-                        let op = req
-                            .get("op")
-                            .and_then(Value::as_str)
-                            .unwrap_or_default()
-                            .to_string();
-                        let saw = req
-                            .get("path")
-                            .and_then(Value::as_str)
-                            .map(|p| std::fs::read(p).ok())
-                            .unwrap_or(None);
-                        calls.lock().expect("no panics here").push(Call {
-                            op: op.clone(),
-                            payload: req.clone(),
-                            saw,
-                        });
-                        let mut reply = answer(&op, &req)
-                            .as_object()
-                            .cloned()
-                            .unwrap_or_default();
-                        reply.insert(
-                            "id".into(),
-                            req.get("id").cloned().unwrap_or(Value::Null),
-                        );
-                        if ws
-                            .send(Message::Text(Value::Object(reply).to_string().into()))
-                            .await
-                            .is_err()
-                        {
+                        let op = req.get("op").and_then(Value::as_str).unwrap_or_default().to_string();
+                        let saw =
+                            req.get("path").and_then(Value::as_str).map(|p| std::fs::read(p).ok()).unwrap_or(None);
+                        calls.lock().expect("no panics here").push(Call { op: op.clone(), payload: req.clone(), saw });
+                        let mut reply = answer(&op, &req).as_object().cloned().unwrap_or_default();
+                        reply.insert("id".into(), req.get("id").cloned().unwrap_or(Value::Null));
+                        if ws.send(Message::Text(Value::Object(reply).to_string().into())).await.is_err() {
                             return;
                         }
                     }
@@ -178,28 +154,14 @@ pub fn is_error(result: &rmcp::model::CallToolResult) -> bool {
 /// The built `fundacad-mcp` binary, beside the test binary.
 pub fn mcp_binary() -> PathBuf {
     let exe = std::env::current_exe().expect("a test binary has a path");
-    let profile = exe
-        .parent()
-        .and_then(Path::parent)
-        .expect("target/<profile>/deps");
-    profile.join(if cfg!(windows) {
-        "fundacad-mcp.exe"
-    } else {
-        "fundacad-mcp"
-    })
+    let profile = exe.parent().and_then(Path::parent).expect("target/<profile>/deps");
+    profile.join(if cfg!(windows) { "fundacad-mcp.exe" } else { "fundacad-mcp" })
 }
 
 pub fn engine_binary() -> PathBuf {
     let exe = std::env::current_exe().expect("a test binary has a path");
-    let profile = exe
-        .parent()
-        .and_then(Path::parent)
-        .expect("target/<profile>/deps");
-    profile.join(if cfg!(windows) {
-        "fundacad-engine.exe"
-    } else {
-        "fundacad-engine"
-    })
+    let profile = exe.parent().and_then(Path::parent).expect("target/<profile>/deps");
+    profile.join(if cfg!(windows) { "fundacad-engine.exe" } else { "fundacad-engine" })
 }
 
 /// A session file nothing can find, so a test on a machine with FundaCAD open
@@ -238,23 +200,14 @@ impl Mcp {
         ));
         let log = std::fs::File::create(&stderr_path).expect("a log file");
         let mut cmd = Command::new(mcp_binary());
-        cmd.args(args)
-            .current_dir(cwd)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::from(log));
+        cmd.args(args).current_dir(cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::from(log));
         cmd.env("FUNDACAD_SESSION_FILE", no_app());
         for (k, v) in env {
             cmd.env(k, v);
         }
         let mut child = cmd.spawn().expect("the MCP binary is built");
         let stdout = child.stdout.take().expect("piped");
-        let mut mcp = Mcp {
-            child,
-            reader: BufReader::new(stdout),
-            next_id: 0,
-            stderr: stderr_path,
-        };
+        let mut mcp = Mcp { child, reader: BufReader::new(stdout), next_id: 0, stderr: stderr_path };
         mcp.rpc(
             "initialize",
             json!({"protocolVersion": "2025-06-18", "capabilities": {},
@@ -277,9 +230,7 @@ impl Mcp {
     pub fn rpc(&mut self, method: &str, params: Value) -> Value {
         self.next_id += 1;
         let id = self.next_id;
-        self.send(
-            &json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}).to_string(),
-        );
+        self.send(&json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}).to_string());
         loop {
             let mut line = String::new();
             let read = self.reader.read_line(&mut line).expect("the server is alive");
@@ -295,28 +246,17 @@ impl Mcp {
 
     /// One tool call, as {text, images, isError}.
     pub fn call(&mut self, name: &str, args: Value) -> ToolReply {
-        let msg = self.rpc(
-            "tools/call",
-            json!({"name": name, "arguments": args}),
-        );
+        let msg = self.rpc("tools/call", json!({"name": name, "arguments": args}));
         let result = msg.get("result").cloned().unwrap_or_else(|| json!({}));
         let mut text = String::new();
         let mut images: Vec<Vec<u8>> = Vec::new();
-        for c in result
-            .get("content")
-            .and_then(Value::as_array)
-            .map_or(&[][..], Vec::as_slice)
-        {
+        for c in result.get("content").and_then(Value::as_array).map_or(&[][..], Vec::as_slice) {
             match c.get("type").and_then(Value::as_str) {
                 Some("text") => text.push_str(c.get("text").and_then(Value::as_str).unwrap_or("")),
                 Some("image") => {
                     use base64::Engine as _;
                     let data = c.get("data").and_then(Value::as_str).unwrap_or("");
-                    images.push(
-                        base64::engine::general_purpose::STANDARD
-                            .decode(data)
-                            .unwrap_or_default(),
-                    );
+                    images.push(base64::engine::general_purpose::STANDARD.decode(data).unwrap_or_default());
                 }
                 _ => {}
             }
@@ -324,19 +264,13 @@ impl Mcp {
         ToolReply {
             text,
             images,
-            is_error: result
-                .get("isError")
-                .and_then(Value::as_bool)
-                .unwrap_or(false),
+            is_error: result.get("isError").and_then(Value::as_bool).unwrap_or(false),
             error: msg.get("error").cloned(),
         }
     }
 
     pub fn tools(&mut self) -> Vec<Value> {
-        self.rpc("tools/list", json!({}))["result"]["tools"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default()
+        self.rpc("tools/list", json!({}))["result"]["tools"].as_array().cloned().unwrap_or_default()
     }
 
     pub fn log(&self) -> String {
@@ -371,10 +305,7 @@ pub struct ToolReply {
 }
 
 pub fn env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-    pairs
-        .iter()
-        .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
-        .collect()
+    pairs.iter().map(|(k, v)| ((*k).to_string(), (*v).to_string())).collect()
 }
 
 // --- a real engine, and the window's half of a live session -------------------
@@ -408,19 +339,10 @@ impl RealEngine {
         let mut child = cmd.spawn().expect("the engine binary is built");
         let stdout = child.stdout.take().expect("piped");
         let mut lines = BufReader::new(stdout).lines();
-        let listening = lines
-            .by_ref()
-            .take(200)
-            .any(|l| l.map(|l| l.starts_with("LISTENING")).unwrap_or(false));
+        let listening = lines.by_ref().take(200).any(|l| l.map(|l| l.starts_with("LISTENING")).unwrap_or(false));
         assert!(listening, "the engine never said it was listening");
         let session = dir.join("session.json");
-        let engine = RealEngine {
-            port,
-            token,
-            session,
-            dir,
-            child,
-        };
+        let engine = RealEngine { port, token, session, dir, child };
         engine.advertise();
         engine
     }
@@ -446,24 +368,15 @@ impl RealEngine {
     /// which would attach without exercising discovery at all, the thing these
     /// tests exist to check.
     pub fn mcp_env(&self, mode: &str, advertised: bool) -> BTreeMap<String, String> {
-        let session = if advertised {
-            self.session.clone()
-        } else {
-            self.dir.join("nothing-here.json")
-        };
+        let session = if advertised { self.session.clone() } else { self.dir.join("nothing-here.json") };
         let mut env = BTreeMap::new();
         env.insert("FUNDACAD_MCP_MODE".into(), mode.into());
-        env.insert(
-            "FUNDACAD_SESSION_FILE".into(),
-            session.to_string_lossy().into_owned(),
-        );
+        env.insert("FUNDACAD_SESSION_FILE".into(), session.to_string_lossy().into_owned());
         env
     }
 
     pub async fn socket(&self) -> fundacad_mcp::link::Socket {
-        fundacad_mcp::link::Socket::connect(self.port, &self.token)
-            .await
-            .expect("the engine is listening")
+        fundacad_mcp::link::Socket::connect(self.port, &self.token).await.expect("the engine is listening")
     }
 }
 
@@ -515,10 +428,7 @@ impl Host {
         let id = format!("h{}", self.next);
         let mut req = payload.as_object().cloned().unwrap_or_default();
         req.insert("op".into(), json!(op));
-        self.socket
-            .request(&id, &Value::Object(req))
-            .await
-            .expect("the engine is listening")
+        self.socket.request(&id, &Value::Object(req)).await.expect("the engine is listening")
     }
 
     pub async fn tick(&mut self) -> Value {
@@ -531,19 +441,13 @@ impl Host {
             )
             .await;
         let res = reply.get("result").cloned().unwrap_or_else(|| json!({}));
-        for p in res
-            .get("proposals")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default()
-        {
+        for p in res.get("proposals").and_then(Value::as_array).cloned().unwrap_or_default() {
             if !self.can_edit {
                 continue;
             }
             self.doc = p.get("document").cloned().unwrap_or(Value::Null);
             self.rev += 1; // what loadDocument then onDocChange does in the app
-            self.applied
-                .push(p.get("id").and_then(Value::as_str).unwrap_or("").to_string());
+            self.applied.push(p.get("id").and_then(Value::as_str).unwrap_or("").to_string());
             if self.applied.len() > 16 {
                 self.applied.remove(0);
             }
@@ -563,16 +467,7 @@ impl Host {
         self.doc
             .get("features")
             .and_then(Value::as_array)
-            .map(|fs| {
-                fs.iter()
-                    .map(|f| {
-                        f.get("name")
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_string()
-                    })
-                    .collect()
-            })
+            .map(|fs| fs.iter().map(|f| f.get("name").and_then(Value::as_str).unwrap_or("").to_string()).collect())
             .unwrap_or_default()
     }
 }

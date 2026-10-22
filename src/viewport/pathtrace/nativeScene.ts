@@ -117,7 +117,10 @@ export function meshFrame(key: string, m: THREE.Mesh): Uint8Array {
     colors: !!colors,
     groups,
   };
-  return frame(header, [pos, normals, index, colors].filter((p): p is Float32Array => !!p));
+  return frame(
+    header,
+    [pos, normals, index, colors].filter((p): p is Float32Array => !!p),
+  );
 }
 
 /** The most lights the native tracer takes, MAX_LIGHTS in tracer/src/gpu/mod.rs. */
@@ -178,7 +181,10 @@ export function envFrame(look: TraceLook): { key: string; bytes(): Uint8Array } 
     const { width, height } = held.light;
     return {
       key: hdr.key,
-      bytes: () => frame({ key: hdr.key, width, height, up: "z" }, [hdrEnvironment(held.light, hdr.rotation, hdr.exposure, hdr.hemi)]),
+      bytes: () =>
+        frame({ key: hdr.key, width, height, up: "z" }, [
+          hdrEnvironment(held.light, hdr.rotation, hdr.exposure, hdr.hemi),
+        ]),
     };
   }
   const tex = look.environment as THREE.DataTexture;
@@ -227,7 +233,10 @@ export class NativeScene {
   private pendingCamera: ReturnType<typeof nativeCamera> | null = null;
   private cameraJob: Promise<unknown> = Promise.resolve();
 
-  constructor(private call: Call, private onError: (e: unknown) => void) {}
+  constructor(
+    private call: Call,
+    private onError: (e: unknown) => void,
+  ) {}
 
   /** Calls run one after another in the order they were made. */
   private queue(f: () => Promise<unknown>): Promise<unknown> {

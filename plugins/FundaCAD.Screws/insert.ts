@@ -34,7 +34,11 @@ export function placementAt(e: Engine, clientX: number, clientY: number): ShapeP
 }
 
 /** The feature id the fastener became, or null when it could not be made (and the person was told). */
-export async function insertFastener(e: Engine, spec: FastenerSpec, placement: ShapePlacement | null): Promise<string | null> {
+export async function insertFastener(
+  e: Engine,
+  spec: FastenerSpec,
+  placement: ShapePlacement | null,
+): Promise<string | null> {
   const generate = e.geometry.generateShape?.bind(e.geometry);
   if (!generate) {
     toast("Fasteners need the geometry engine, which this build does not run", { kind: "error" });
@@ -70,8 +74,7 @@ export function specOfBody(e: Engine, bodyId: string): FastenerSpec | null {
   if (!body?.faceOwners?.length) return null;
   for (const owner of new Set(body.faceOwners)) {
     const f = e.store.document.features.find((x) => x.id === owner) as
-      | { type?: string; generatedBy?: { plugin?: string; spec?: unknown } }
-      | undefined;
+      { type?: string; generatedBy?: { plugin?: string; spec?: unknown } } | undefined;
     if (f?.type === "import" && f.generatedBy?.plugin === PLUGIN_ID && f.generatedBy.spec) {
       return f.generatedBy.spec as FastenerSpec;
     }

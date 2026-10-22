@@ -60,30 +60,45 @@ export function hdrHashOf(env: EnvironmentChoice): string | null {
  *  that in twenty bytes. It is a compile-time constant like everything else that
  *  reaches the DOM as markup. */
 export const ENVIRONMENTS_LIST: readonly {
-  id: Environment; label: string; note: string; swatch: string;
+  id: Environment;
+  label: string;
+  note: string;
+  swatch: string;
 }[] = [
   {
-    id: "studio", label: "Studio", note: "Neutral room, even light",
+    id: "studio",
+    label: "Studio",
+    note: "Neutral room, even light",
     swatch: "radial-gradient(circle at 35% 28%, #f4f6f8 0%, #9aa3ad 45%, #3d4249 100%)",
   },
   {
-    id: "softbox", label: "Soft box", note: "One big light, product shot",
+    id: "softbox",
+    label: "Soft box",
+    note: "One big light, product shot",
     swatch: "radial-gradient(circle at 28% 22%, #ffffff 0%, #7d858e 38%, #14171b 100%)",
   },
   {
-    id: "warm", label: "Warm key", note: "Warm light, cool shade",
+    id: "warm",
+    label: "Warm key",
+    note: "Warm light, cool shade",
     swatch: "radial-gradient(circle at 68% 26%, #ffd9a0 0%, #b98a55 42%, #2b3550 100%)",
   },
   {
-    id: "dusk", label: "Dusk", note: "Dark, with a bright rim",
+    id: "dusk",
+    label: "Dusk",
+    note: "Dark, with a bright rim",
     swatch: "radial-gradient(circle at 50% 86%, #d8e8ff 0%, #2a3550 26%, #0a0c12 70%)",
   },
   {
-    id: "bright", label: "Bright room", note: "High key, white walls",
+    id: "bright",
+    label: "Bright room",
+    note: "High key, white walls",
     swatch: "radial-gradient(circle at 45% 30%, #ffffff 0%, #e6eaef 55%, #b9c0c8 100%)",
   },
   {
-    id: "none", label: "Flat", note: "No reflections, easiest to read",
+    id: "none",
+    label: "Flat",
+    note: "No reflections, easiest to read",
     swatch: "linear-gradient(160deg, #6a727b 0%, #4a5058 100%)",
   },
 ];
@@ -430,7 +445,8 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     denoise: asDenoise(o["denoise"]) ?? DEFAULT_RENDER.denoise,
     tracer: asTracerPref(o["tracer"]) ?? DEFAULT_RENDER.tracer,
     realtimeQuality: asRealtimeQuality(o["realtimeQuality"]) ?? DEFAULT_RENDER.realtimeQuality,
-    realtimeWhileMoving: typeof o["realtimeWhileMoving"] === "boolean" ? o["realtimeWhileMoving"] : DEFAULT_RENDER.realtimeWhileMoving,
+    realtimeWhileMoving:
+      typeof o["realtimeWhileMoving"] === "boolean" ? o["realtimeWhileMoving"] : DEFAULT_RENDER.realtimeWhileMoving,
   };
 }
 
@@ -456,28 +472,55 @@ export function renderPrefs(): Readonly<RenderPrefs> {
 
 export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: RenderPrefs[K]): void {
   const ok =
-    key === "environment" ? asEnvironment(value)
-      : key === "background" ? asBackground(value)
-        : key === "bloom" ? asBloom(value)
-          : key === "fov" ? asFov(value)
-            : key === "aperture" ? asAperture(value)
-              : key === "focusBlur" ? asFocusBlur(value)
-                : key === "performanceMode" || key === "potatoMode" || key === "envBackground" ? (typeof value === "boolean" ? value : null)
-                : key === "envRotation" ? asAzimuth(value)
-                : key === "envExposure" ? asExposure(value)
-                  : key === "shadows" ? (typeof value === "boolean" ? value : null)
-                    : key === "tangentEdges" ? asTangentEdges(value)
-                      : key === "keyAzimuth" ? asAzimuth(value)
-                        : key === "keyElevation" ? asElevation(value)
-                          : key === "viewModeModel" || key === "viewModeRender" ? asViewMode(value)
-                          : key === "overlaysModel" || key === "overlaysRender" ? asOverlays(value)
-                          : key === "groundModel" || key === "groundRender" ? asGround(value)
-                            : key === "matcapStyle" ? asMatcapStyle(value)
-                              : key === "matcapTint" || key === "realtimeWhileMoving" ? (typeof value === "boolean" ? value : null)
-                                : key === "denoise" ? asDenoise(value)
-                                  : key === "tracer" ? asTracerPref(value)
-                                    : key === "realtimeQuality" ? asRealtimeQuality(value)
-                                    : asBrightness(value);
+    key === "environment"
+      ? asEnvironment(value)
+      : key === "background"
+        ? asBackground(value)
+        : key === "bloom"
+          ? asBloom(value)
+          : key === "fov"
+            ? asFov(value)
+            : key === "aperture"
+              ? asAperture(value)
+              : key === "focusBlur"
+                ? asFocusBlur(value)
+                : key === "performanceMode" || key === "potatoMode" || key === "envBackground"
+                  ? typeof value === "boolean"
+                    ? value
+                    : null
+                  : key === "envRotation"
+                    ? asAzimuth(value)
+                    : key === "envExposure"
+                      ? asExposure(value)
+                      : key === "shadows"
+                        ? typeof value === "boolean"
+                          ? value
+                          : null
+                        : key === "tangentEdges"
+                          ? asTangentEdges(value)
+                          : key === "keyAzimuth"
+                            ? asAzimuth(value)
+                            : key === "keyElevation"
+                              ? asElevation(value)
+                              : key === "viewModeModel" || key === "viewModeRender"
+                                ? asViewMode(value)
+                                : key === "overlaysModel" || key === "overlaysRender"
+                                  ? asOverlays(value)
+                                  : key === "groundModel" || key === "groundRender"
+                                    ? asGround(value)
+                                    : key === "matcapStyle"
+                                      ? asMatcapStyle(value)
+                                      : key === "matcapTint" || key === "realtimeWhileMoving"
+                                        ? typeof value === "boolean"
+                                          ? value
+                                          : null
+                                        : key === "denoise"
+                                          ? asDenoise(value)
+                                          : key === "tracer"
+                                            ? asTracerPref(value)
+                                            : key === "realtimeQuality"
+                                              ? asRealtimeQuality(value)
+                                              : asBrightness(value);
   if (ok === null || current[key] === ok) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result
   // of renderPrefs() and compare identity to decide it must redraw.
@@ -492,8 +535,16 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
 
 /** The settings a saved environment carries, the Environment tab's look. */
 export const ENV_SETTING_KEYS = [
-  "environment", "envRotation", "envExposure", "envBackground", "background",
-  "brightness", "keyAzimuth", "keyElevation", "bloom", "shadows",
+  "environment",
+  "envRotation",
+  "envExposure",
+  "envBackground",
+  "background",
+  "brightness",
+  "keyAzimuth",
+  "keyElevation",
+  "bloom",
+  "shadows",
 ] as const satisfies readonly (keyof RenderPrefs)[];
 export type EnvSettings = Pick<RenderPrefs, (typeof ENV_SETTING_KEYS)[number]>;
 

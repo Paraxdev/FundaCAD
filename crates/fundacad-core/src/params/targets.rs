@@ -56,19 +56,9 @@ pub const FEATURE_NUM_FIELDS: &[(&str, &[(&str, FieldKind)])] = &[
             ("shiftY", Length),
         ],
     ),
-    (
-        "box",
-        &[("length", Length), ("width", Length), ("height", Length)],
-    ),
+    ("box", &[("length", Length), ("width", Length), ("height", Length)]),
     ("cylinder", &[("radius", Length), ("height", Length)]),
-    (
-        "cone",
-        &[
-            ("bottomRadius", Length),
-            ("topRadius", Length),
-            ("height", Length),
-        ],
-    ),
+    ("cone", &[("bottomRadius", Length), ("topRadius", Length), ("height", Length)]),
     ("sphere", &[("radius", Length)]),
     ("torus", &[("majorRadius", Length), ("minorRadius", Length)]),
     ("shell", &[("thickness", Length)]),
@@ -88,62 +78,17 @@ pub const FEATURE_NUM_FIELDS: &[(&str, &[(&str, FieldKind)])] = &[
         ],
     ),
     ("textOnFace", &[("height", Length), ("depth", Length), ("angle", Angle)]),
-    (
-        "thread",
-        &[
-            ("pitch", Length),
-            ("starts", Count),
-            ("offset", Length),
-            ("length", Length),
-            ("clearance", Length),
-        ],
-    ),
-    (
-        "patternRect",
-        &[
-            ("countX", Count),
-            ("countY", Count),
-            ("spacingX", Length),
-            ("spacingY", Length),
-        ],
-    ),
+    ("thread", &[("pitch", Length), ("starts", Count), ("offset", Length), ("length", Length), ("clearance", Length)]),
+    ("patternRect", &[("countX", Count), ("countY", Count), ("spacingX", Length), ("spacingY", Length)]),
     ("patternLinear", &[("count", Count), ("spacing", Length)]),
     ("patternCircular", &[("count", Count), ("angle", Angle)]),
     ("simplifyMesh", &[("tolerance", Angle)]),
     ("cleanUp", &[("tolerance", Length)]),
-    (
-        "scale",
-        &[
-            ("factor", Count),
-            ("sx", Count),
-            ("sy", Count),
-            ("sz", Count),
-        ],
-    ),
-    (
-        "move",
-        &[
-            ("dx", Length),
-            ("dy", Length),
-            ("dz", Length),
-            ("rx", Angle),
-            ("ry", Angle),
-            ("rz", Angle),
-        ],
-    ),
+    ("scale", &[("factor", Count), ("sx", Count), ("sy", Count), ("sz", Count)]),
+    ("move", &[("dx", Length), ("dy", Length), ("dz", Length), ("rx", Angle), ("ry", Angle), ("rz", Angle)]),
     ("joint", &[("offset", Length), ("angle", Angle)]),
     ("mechanism", &[("offset", Length), ("angle", Angle)]),
-    (
-        "duplicate",
-        &[
-            ("dx", Length),
-            ("dy", Length),
-            ("dz", Length),
-            ("rx", Angle),
-            ("ry", Angle),
-            ("rz", Angle),
-        ],
-    ),
+    ("duplicate", &[("dx", Length), ("dy", Length), ("dz", Length), ("rx", Angle), ("ry", Angle), ("rz", Angle)]),
 ];
 
 /// `COMMON_NUM_FIELDS`: rows any feature may carry, listed only on a feature
@@ -165,11 +110,10 @@ pub const INT_FIELDS: &[(&str, f64)] = &[
 /// type the app does not describe lists its own numbers, as the app does for a
 /// plugin that is not loaded, which is always the case here.
 pub fn feature_num_fields(kind: &str, values: &Map<String, Value>) -> Vec<(String, FieldKind)> {
-    let mut rows: Vec<(String, FieldKind)> =
-        match FEATURE_NUM_FIELDS.iter().find(|(k, _)| *k == kind) {
-            Some((_, own)) => own.iter().map(|(f, k)| ((*f).to_owned(), *k)).collect(),
-            None => raw_num_fields(values),
-        };
+    let mut rows: Vec<(String, FieldKind)> = match FEATURE_NUM_FIELDS.iter().find(|(k, _)| *k == kind) {
+        Some((_, own)) => own.iter().map(|(f, k)| ((*f).to_owned(), *k)).collect(),
+        None => raw_num_fields(values),
+    };
     for (field, k) in COMMON_NUM_FIELDS {
         if values.contains_key(*field) {
             rows.push(((*field).to_owned(), *k));
@@ -190,11 +134,7 @@ fn raw_num_fields(values: &Map<String, Value>) -> Vec<(String, FieldKind)> {
             out.push((k.clone(), Count));
         }
         let Some(list) = v.as_array() else { continue };
-        if list.is_empty()
-            || !list
-                .iter()
-                .all(|e| e.get("id").is_some_and(Value::is_string))
-        {
+        if list.is_empty() || !list.iter().all(|e| e.get("id").is_some_and(Value::is_string)) {
             continue;
         }
         for e in list.iter().filter_map(Value::as_object) {
@@ -212,10 +152,7 @@ fn raw_num_fields(values: &Map<String, Value>) -> Vec<(String, FieldKind)> {
 /// `fieldHolder`: the object a field path lands in and the key within it. A
 /// segment after a list names the list's entry by its `id`, so `nodes.n3.sx`
 /// stays the same node however the list is reordered.
-pub fn field_holder<'a, 'p>(
-    root: &'a Map<String, Value>,
-    path: &'p str,
-) -> Option<(&'a Map<String, Value>, &'p str)> {
+pub fn field_holder<'a, 'p>(root: &'a Map<String, Value>, path: &'p str) -> Option<(&'a Map<String, Value>, &'p str)> {
     let parts: Vec<&str> = path.split('.').collect();
     let n = parts.len();
     let mut holder = root;
@@ -225,9 +162,7 @@ pub fn field_holder<'a, 'p>(
             Value::Array(list) => {
                 i += 1;
                 let id = parts[i];
-                list.iter()
-                    .filter_map(Value::as_object)
-                    .find(|e| e.get("id").and_then(Value::as_str) == Some(id))?
+                list.iter().filter_map(Value::as_object).find(|e| e.get("id").and_then(Value::as_str) == Some(id))?
             }
             Value::Object(next) => next,
             _ => return None,
@@ -279,18 +214,13 @@ pub fn read_field<'a>(root: &'a Map<String, Value>, path: &str) -> Option<&'a Va
 /// there, its type lists `field`, and the path lands. A parameter whose target
 /// stops resolving has lost its dimension, and `recompute` drops it.
 pub fn feature_target_resolves(features: &[Value], feature: &str, field: &str) -> bool {
-    let Some(f) = features
-        .iter()
-        .find(|f| f.get("id").and_then(Value::as_str) == Some(feature))
-        .and_then(Value::as_object)
+    let Some(f) =
+        features.iter().find(|f| f.get("id").and_then(Value::as_str) == Some(feature)).and_then(Value::as_object)
     else {
         return false;
     };
     let kind = f.get("type").and_then(Value::as_str).unwrap_or_default();
-    feature_num_fields(kind, f)
-        .iter()
-        .any(|(path, _)| path == field)
-        && field_holder(f, field).is_some()
+    feature_num_fields(kind, f).iter().any(|(path, _)| path == field) && field_holder(f, field).is_some()
 }
 
 /// `coerceForField`: integer fields round (halves up, as `Math.round`) and
@@ -305,12 +235,7 @@ pub fn coerce_for_field(field: &str, value: f64) -> f64 {
 /// `writeTarget` for `{kind: "feature", feature, field}`. False when the
 /// target does not resolve, the value is not finite, or the field already
 /// holds it.
-pub fn write_feature_target(
-    features: &mut [Value],
-    feature: &str,
-    field: &str,
-    value: f64,
-) -> bool {
+pub fn write_feature_target(features: &mut [Value], feature: &str, field: &str, value: f64) -> bool {
     if !value.is_finite() || !feature_target_resolves(features, feature, field) {
         return false;
     }
@@ -352,11 +277,7 @@ pub fn write_targets(doc: &mut Map<String, Value>) {
         .flatten()
         .filter_map(|(_, d)| {
             let (feature, field) = feature_target(d)?;
-            Some((
-                feature.to_owned(),
-                field.to_owned(),
-                d.get("value")?.as_f64()?,
-            ))
+            Some((feature.to_owned(), field.to_owned(), d.get("value")?.as_f64()?))
         })
         .collect();
     let Some(features) = doc.get_mut("features").and_then(Value::as_array_mut) else {

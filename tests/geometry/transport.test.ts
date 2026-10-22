@@ -32,12 +32,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   },
 }));
 
-import {
-  EngineTransport,
-  IpcTransport,
-  engineUrl,
-  type TransportSink,
-} from "../../src/geometry/transport";
+import { EngineTransport, IpcTransport, engineUrl, type TransportSink } from "../../src/geometry/transport";
 
 function sink() {
   const log: (string | ArrayBuffer | "open" | "closed")[] = [];

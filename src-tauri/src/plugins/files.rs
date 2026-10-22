@@ -138,9 +138,7 @@ pub async fn plugin_file_pick(
     let Some(picked) = dialog.blocking_pick_file() else {
         return Ok(None);
     };
-    let path = picked
-        .into_path()
-        .map_err(|e| format!("that file has no readable path: {e}"))?;
+    let path = picked.into_path().map_err(|e| format!("that file has no readable path: {e}"))?;
 
     let meta = std::fs::metadata(&path).map_err(|e| format!("{}: {e}", name_of(&path)))?;
     if !meta.is_file() {
@@ -150,11 +148,7 @@ pub async fn plugin_file_pick(
     let handle = token()?;
     let name = name_of(&path);
     let len = meta.len();
-    handles
-        .0
-        .lock()
-        .map_err(|_| POISONED.to_string())?
-        .remember(handle.clone(), plugin, path, now_secs());
+    handles.0.lock().map_err(|_| POISONED.to_string())?.remember(handle.clone(), plugin, path, now_secs());
     Ok(Some(Picked { handle, name, len }))
 }
 
@@ -164,11 +158,7 @@ pub async fn plugin_file_pick(
 /// can reach is exactly the set somebody chose, and the plugin named on the
 /// handle has to be the plugin asking.
 #[tauri::command]
-pub fn plugin_file_read(
-    handles: State<'_, Handles>,
-    plugin: String,
-    handle: String,
-) -> Result<FileBody, String> {
+pub fn plugin_file_read(handles: State<'_, Handles>, plugin: String, handle: String) -> Result<FileBody, String> {
     let plugin = safe_id(&plugin)?;
     let path = handles
         .0
@@ -189,12 +179,7 @@ pub fn plugin_file_read(
     let name = name_of(&path);
 
     match String::from_utf8(bytes) {
-        Ok(text) => Ok(FileBody {
-            name,
-            len,
-            text: Some(text),
-            base64: None,
-        }),
+        Ok(text) => Ok(FileBody { name, len, text: Some(text), base64: None }),
         Err(e) => Ok(FileBody {
             name,
             len,
@@ -243,15 +228,10 @@ pub async fn plugin_file_write(
     let Some(target) = dialog.blocking_save_file() else {
         return Ok(None);
     };
-    let path = target
-        .into_path()
-        .map_err(|e| format!("that location has no writable path: {e}"))?;
+    let path = target.into_path().map_err(|e| format!("that location has no writable path: {e}"))?;
 
     std::fs::write(&path, &bytes).map_err(|e| format!("{}: {e}", name_of(&path)))?;
-    Ok(Some(Wrote {
-        name: name_of(&path),
-        len: bytes.len() as u64,
-    }))
+    Ok(Some(Wrote { name: name_of(&path), len: bytes.len() as u64 }))
 }
 
 /// What build of what app, on what machine.

@@ -24,11 +24,7 @@ defineProps<{
   <div class="param-row" :title="rowTitle">
     <label>{{ label }}</label>
     <div class="param-value">
-      <select
-        class="param-select"
-        :value="value"
-        @change="commit(($event.target as HTMLSelectElement).value)"
-      >
+      <select class="param-select" :value="value" @change="commit(($event.target as HTMLSelectElement).value)">
         <option v-for="o in options" :key="o.value" :value="o.value">{{ o.label }}</option>
       </select>
     </div>

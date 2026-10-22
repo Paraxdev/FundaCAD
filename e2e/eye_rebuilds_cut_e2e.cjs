@@ -13,7 +13,10 @@ const { chromium } = require("playwright-core");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -23,11 +26,17 @@ const check = (name, ok, detail) => {
 (async () => {
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
   const settle = async () => {
     await page.waitForTimeout(700);
@@ -36,11 +45,15 @@ const check = (name, ok, detail) => {
   };
   // From the view's mesh, which keeps a hidden body. A drilled block is told
   // from a whole one by a wide margin, the hole's facets do not matter.
-  const volumes = () => page.evaluate(() =>
-    Object.fromEntries((window.store.buildState.result?.bodies ?? []).map((b) => {
-      const v = window.viewport.bodyProperties([b.id])?.volume ?? NaN;
-      return [b.id, v > 7900 ? "whole" : v > 7300 && v < 7600 ? "drilled" : String(v)];
-    })));
+  const volumes = () =>
+    page.evaluate(() =>
+      Object.fromEntries(
+        (window.store.buildState.result?.bodies ?? []).map((b) => {
+          const v = window.viewport.bodyProperties([b.id])?.volume ?? NaN;
+          return [b.id, v > 7900 ? "whole" : v > 7300 && v < 7600 ? "drilled" : String(v)];
+        }),
+      ),
+    );
   const WHOLE = "whole";
   const DRILLED = "drilled";
 
@@ -59,7 +72,11 @@ const check = (name, ok, detail) => {
   await page.evaluate(() => window.store.setBodyVisibility("body2", false));
   await settle();
   const hidden = await volumes();
-  check("hiding a block rebuilds, and it is whole again", hidden.body1 === DRILLED && hidden.body2 === WHOLE, JSON.stringify(hidden));
+  check(
+    "hiding a block rebuilds, and it is whole again",
+    hidden.body1 === DRILLED && hidden.body2 === WHOLE,
+    JSON.stringify(hidden),
+  );
 
   await page.evaluate(() => window.store.setBodyVisibility("body2", true));
   await settle();
@@ -83,4 +100,7 @@ const check = (name, ok, detail) => {
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");
   process.exit(failures ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

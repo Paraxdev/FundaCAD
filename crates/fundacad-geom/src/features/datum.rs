@@ -14,17 +14,13 @@ use glam::{DMat3, DQuat, DVec3};
 
 use crate::select::{entity::EdgeEnt, Resolver};
 
-use crate::builder::plane::{plane_of, PlaneRecord, PlaneRef};
-use crate::kernel::Frame;
 use super::face_anchor::face_anchor_plane;
+use crate::builder::plane::{plane_of, PlaneRecord, PlaneRef};
 use crate::builder::{Ctx, FResult};
+use crate::kernel::Frame;
 
 pub fn datum_plane(ctx: &mut Ctx, f: &DatumPlane) -> FResult {
-    let parent = f
-        .plane_id
-        .as_deref()
-        .filter(|p| !p.is_empty() && *p != f.id)
-        .and_then(|p| ctx.datums.get(p).copied());
+    let parent = f.plane_id.as_deref().filter(|p| !p.is_empty() && *p != f.id).and_then(|p| ctx.datums.get(p).copied());
     let followed = match &f.through {
         Some(t) => super::datum_refs::plane_through(ctx, f, t)?,
         None => None,
@@ -75,11 +71,7 @@ pub fn place(base: &Frame, pose: &Pose) -> PlaneRecord {
         * DQuat::from_rotation_y(pose.tilt_y.to_radians())
         * DQuat::from_rotation_z(pose.spin.to_radians());
     let world = DMat3::from_cols(x, y, z) * DMat3::from_quat(local);
-    PlaneRecord {
-        origin: o.to_array(),
-        xdir: clean(world.x_axis).to_array(),
-        normal: clean(world.z_axis).to_array(),
-    }
+    PlaneRecord { origin: o.to_array(), xdir: clean(world.x_axis).to_array(), normal: clean(world.z_axis).to_array() }
 }
 
 /// Snaps components within a rounding error of 0 or 1 so a 90 degree turn
@@ -87,7 +79,11 @@ pub fn place(base: &Frame, pose: &Pose) -> PlaneRecord {
 fn clean(v: DVec3) -> DVec3 {
     let c = |a: f64| {
         let r = a.round();
-        if (a - r).abs() < 1e-12 { r } else { a }
+        if (a - r).abs() < 1e-12 {
+            r
+        } else {
+            a
+        }
     };
     DVec3::new(c(v.x), c(v.y), c(v.z)) + DVec3::ZERO
 }
@@ -108,8 +104,7 @@ pub fn datum_axis(ctx: &mut Ctx, f: &DatumAxis) -> FResult {
     let shapes: Vec<Shape> = ctx.shapes().into_iter().cloned().collect();
     for shape in &shapes {
         let mut diag = std::mem::take(&mut ctx.diagnostics);
-        let found = Resolver::new(Some(&mut diag), Some(&f.id))
-            .edge_selectors(shape, &OneOrMany::One(sel.clone()));
+        let found = Resolver::new(Some(&mut diag), Some(&f.id)).edge_selectors(shape, &OneOrMany::One(sel.clone()));
         ctx.diagnostics = diag;
         let Ok(edges) = found else { continue };
         for e in edges {
@@ -199,10 +194,12 @@ mod tests {
 
     #[test]
     fn a_child_plane_follows_its_parent_datum() {
-        let doc = |parent_off: f64| json!({"features": [
-            {"id": "a", "type": "datumPlane", "plane": "XY", "offset": parent_off},
-            {"id": "b", "type": "datumPlane", "plane": "XY", "planeId": "a", "offset": 5, "tiltX": 90},
-        ]});
+        let doc = |parent_off: f64| {
+            json!({"features": [
+                {"id": "a", "type": "datumPlane", "plane": "XY", "offset": parent_off},
+                {"id": "b", "type": "datumPlane", "plane": "XY", "planeId": "a", "offset": 5, "tiltX": 90},
+            ]})
+        };
         let before = build(doc(10.0)).datum_planes["b"];
         let after = build(doc(30.0)).datum_planes["b"];
         assert!(near(before.origin, [0.0, 0.0, 15.0]), "{before:?}");
@@ -236,12 +233,14 @@ mod tests {
 
     #[test]
     fn a_parameter_bound_tilt_rebuilds_with_the_parameter() {
-        let doc = |t: f64| json!({"parameters": {"lean": t}, "features": [
-            {"id": "p", "type": "datumPlane", "plane": "XY", "offset": 20, "tiltX": "lean"},
-            {"id": "sk", "type": "sketch", "plane": "XY", "planeId": "p",
-             "entities": [{"type": "rectangle", "x": 0, "y": 0, "width": 10, "height": 10}]},
-            {"id": "e", "type": "extrude", "sketch": "sk", "distance": 2},
-        ]});
+        let doc = |t: f64| {
+            json!({"parameters": {"lean": t}, "features": [
+                {"id": "p", "type": "datumPlane", "plane": "XY", "offset": 20, "tiltX": "lean"},
+                {"id": "sk", "type": "sketch", "plane": "XY", "planeId": "p",
+                 "entities": [{"type": "rectangle", "x": 0, "y": 0, "width": 10, "height": 10}]},
+                {"id": "e", "type": "extrude", "sketch": "sk", "distance": 2},
+            ]})
+        };
         let r = build(json!({"parameters": {"up": 12}, "features": [
             {"id": "p", "type": "datumPlane", "plane": "XY", "offset": "up"},
         ]}));

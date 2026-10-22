@@ -2,7 +2,26 @@
 // One request/response per message, matched by `id`. Calls made before the
 // transport opens are queued and flushed on open; the transport reconnects.
 
-import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, MeshExportOptions, Feature, PlaneDef, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, Selector, SketchEntity, U32Wire, Vec3 } from "../types";
+import type {
+  CadDocument,
+  EdgeFingerprint,
+  ExportFormat,
+  F32Wire,
+  MeshExportOptions,
+  Feature,
+  PlaneDef,
+  ImportFormat,
+  ImportReply,
+  PlaneSpec,
+  ProjectedCurve,
+  ProjectedSource,
+  RebuildReply,
+  RebuildResult,
+  Selector,
+  SketchEntity,
+  U32Wire,
+  Vec3,
+} from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import { EngineTransport, type GeometryTransport } from "./transport";
@@ -22,9 +41,7 @@ function base64ToBytes(b64: string): Uint8Array {
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
-import type {
-  WireBody, WireBodyFull, WireEdgeList, WireManifestEntry, WireRebuildResult,
-} from "./assembly";
+import type { WireBody, WireBodyFull, WireEdgeList, WireManifestEntry, WireRebuildResult } from "./assembly";
 
 // The engine's wire-level reply envelope (see the Python engine's `server.py`'s _ok/_err):
 // every call resolves to one of these two shapes; `result`'s type is per-op,
@@ -126,8 +143,7 @@ export type GeneratedShapeReply = { ok: true; shape: GeneratedShape } | { ok: fa
 
 /** The `patternAxis` op: the line a circular pattern's `axisRef` names. */
 export type PatternAxisReply =
-  | { axis: { origin: [number, number, number]; dir: [number, number, number] } }
-  | { reason: string };
+  { axis: { origin: [number, number, number]; dir: [number, number, number] } } | { reason: string };
 
 /** The `faceAxis` op: `dir` points out of the material, `hole` marks the round
  *  end of a bore on the bore's own axis, `sameAsNormal` a flat face square to
@@ -236,9 +252,7 @@ export interface StressReply {
   errors?: { feature_id?: string; message: string }[];
 }
 
-export type StressResult =
-  | { ok: true; result: StressReply }
-  | { ok: false; message: string; cancelled?: boolean };
+export type StressResult = { ok: true; result: StressReply } | { ok: false; message: string; cancelled?: boolean };
 
 export type PrintabilityCheck = "overhang" | "wall" | "gap" | "bridge" | "open";
 export type PrintabilityUp = "+X" | "-X" | "+Y" | "-Y" | "+Z" | "-Z";
@@ -290,15 +304,32 @@ export interface PrintabilityFinding {
 export interface PrintabilityReply {
   header: string;
   report: string;
-  settings: { nozzle: number; layer: number; overhang: number; minGap: number; maxBridge: number; up: string | null; layFlat: boolean };
-  bodies: { id: string; name: string; up: Vec3; bed: number; bedFace: number | null; openEdges: number; solids: number; insideOut: boolean; fault?: string | null }[];
+  settings: {
+    nozzle: number;
+    layer: number;
+    overhang: number;
+    minGap: number;
+    maxBridge: number;
+    up: string | null;
+    layFlat: boolean;
+  };
+  bodies: {
+    id: string;
+    name: string;
+    up: Vec3;
+    bed: number;
+    bedFace: number | null;
+    openEdges: number;
+    solids: number;
+    insideOut: boolean;
+    fault?: string | null;
+  }[];
   findings: PrintabilityFinding[];
   errors?: { feature_id?: string; message: string }[];
 }
 
 export type PrintabilityResult =
-  | { ok: true; result: PrintabilityReply }
-  | { ok: false; message: string; cancelled?: boolean };
+  { ok: true; result: PrintabilityReply } | { ok: false; message: string; cancelled?: boolean };
 
 // The surface the rest of the app depends on. `Geometry` implements it over
 // either engine's transport, and tests stub it by hand.
@@ -362,10 +393,21 @@ export interface GeometryBackend {
   // `import` feature). Path-based: the engine reads the file directly.
   // `onStarted` receives the request id, so a caller that may later cancel
   // can target THIS op rather than whatever ran most recently.
-  importGeometry(path: string, format: ImportFormat, onStarted?: (id: string) => void, unit?: string): Promise<ImportReply>;
+  importGeometry(
+    path: string,
+    format: ImportFormat,
+    onStarted?: (id: string) => void,
+    unit?: string,
+  ): Promise<ImportReply>;
   /** The same import from the file's bytes, base64, for a caller with no path
    *  (a file dropped on a browser tab). Optional, a test backend may lack it. */
-  importBytes?(name: string, format: ImportFormat, data: string, onStarted?: (id: string) => void, unit?: string): Promise<ImportReply>;
+  importBytes?(
+    name: string,
+    format: ImportFormat,
+    data: string,
+    onStarted?: (id: string) => void,
+    unit?: string,
+  ): Promise<ImportReply>;
   /** A solid from a shape generator a plugin's geometry component registered with
    *  the engine (docs/PLUGINS.md). "mesh" is for a preview;
    *  "store" writes the solid to the blob store, and an `import` feature carrying the
@@ -381,10 +423,7 @@ export interface GeometryBackend {
   // overlapping come back in `clearances`. `truncated` marks a candidate-pair
   // cap hit on a dense assembly, `message` explains it. `unchecked` lists the
   // bodies that are not closed solids: their pairs are in neither list.
-  interference(
-    doc: CadDocument,
-    clearance?: number,
-  ): Promise<InterferenceReply>;
+  interference(doc: CadDocument, clearance?: number): Promise<InterferenceReply>;
   /** The axis a press/pull with `direction: "axis"` would move this face along,
    *  or why it has none. Null when the engine could not be asked. Optional, a
    *  test backend may not answer it. */
@@ -399,7 +438,11 @@ export interface GeometryBackend {
   /** What would go wrong making the document's bodies layer by layer: overhangs,
    *  thin walls, gaps, bridges and open shells. `onStarted` as for `stress`.
    *  Optional, a test backend may not check. */
-  printability?(doc: CadDocument, opts: PrintabilityOptions, onStarted?: (id: string) => void): Promise<PrintabilityResult>;
+  printability?(
+    doc: CadDocument,
+    opts: PrintabilityOptions,
+    onStarted?: (id: string) => void,
+  ): Promise<PrintabilityResult>;
   patternAxis?(doc: CadDocument, ref: Selector): Promise<PatternAxisReply | null>;
   /** The lines the built model cuts a sketch's areas along on one plane, as
    *  world polylines, the ones every consuming feature cuts with. Null when the
@@ -515,7 +558,6 @@ export function expandPackedEdges(
   return list;
 }
 
-
 /** The framing envelope a chunked reply adds. Non-final frames carry
  *  `status: "chunk"` and no `ok`, so a peer that does not understand them
  *  treats them as informational rather than as the reply. */
@@ -584,17 +626,11 @@ const STREAM_IDLE_MS = 30_000;
 export function decodeBinaryFrame(buf: ArrayBuffer): BinaryHeader {
   const dv = new DataView(buf);
   const headerLen = dv.getUint32(0, true);
-  const header = JSON.parse(
-    new TextDecoder().decode(new Uint8Array(buf, 4, headerLen)),
-  ) as BinaryHeader;
+  const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, headerLen))) as BinaryHeader;
   let offset = 4 + headerLen + ((4 - (headerLen % 4)) % 4);
   const views: (Float32Array | Uint32Array)[] = [];
   for (const meta of header.result.$buffers ?? []) {
-    views.push(
-      meta.dtype === "f32"
-        ? new Float32Array(buf, offset, meta.len)
-        : new Uint32Array(buf, offset, meta.len),
-    );
+    views.push(meta.dtype === "f32" ? new Float32Array(buf, offset, meta.len) : new Uint32Array(buf, offset, meta.len));
     offset += meta.len * 4;
   }
   const resolveBuf = (v: unknown) => views[(v as { $buf: number }).$buf]!;
@@ -623,8 +659,6 @@ export function decodeBinaryFrame(buf: ArrayBuffer): BinaryHeader {
   delete header.result.$buffers;
   return header;
 }
-
-
 
 // Delta wire protocol's request payload (see rebuild()'s comment below) vs a
 // full-document send.
@@ -717,14 +751,17 @@ export class Geometry implements GeometryBackend {
    *  flag forever. In practice there is at most one: both sides serialize
    *  rebuilds, and the map is keyed by id so a stale one cannot be mistaken for
    *  the live one. */
-  private streams = new Map<string, {
-    sid: string;
-    nextSeq: number;
-    manifest: WireManifestEntry[];
-    assembly: RebuildAssembly;
-    ids: string[];
-    timer: number;
-  }>();
+  private streams = new Map<
+    string,
+    {
+      sid: string;
+      nextSeq: number;
+      manifest: WireManifestEntry[];
+      assembly: RebuildAssembly;
+      ids: string[];
+      timer: number;
+    }
+  >();
   private chunkListeners = new Set<(c: RebuildChunk) => void>();
   /** The last RebuildResult assemble() produced, plus the reply signature that
    *  produced it. A rebuild whose bodies all arrive as unchanged stubs with the
@@ -855,8 +892,8 @@ export class Geometry implements GeometryBackend {
     // limit have drifted apart, say so rather than blaming the connection,
     // which is what sent GH #4's reporter looking in the wrong place.
     const message = tooBig
-      ? "That model is too large for the geometry engine to accept. "
-        + "Remove or simplify the imported body, then try again."
+      ? "That model is too large for the geometry engine to accept. " +
+        "Remove or simplify the imported body, then try again."
       : "geometry engine connection lost";
     // Settle every in-flight call with a synthetic error reply shaped like a
     // real engine error, matching the `msg.ok === false` contract every
@@ -938,28 +975,37 @@ export class Geometry implements GeometryBackend {
       // for the rest. This is also where an unbacked stub is caught, before any
       // allocation and before any partial display, so a resync costs one round
       // trip and no visual damage.
-      const begun = RebuildAssembly.begin(
-        result, manifest, this.bodyMesh, this.lastAssembled, this.lastAssembledSig,
-      );
+      const begun = RebuildAssembly.begin(result, manifest, this.bodyMesh, this.lastAssembled, this.lastAssembledSig);
       if (begun.kind === "resync") {
         this.settleStream(id, { id, ok: true, result: { resync: true } } as RawReply<unknown>);
         return;
       }
       if (begun.kind === "noop") {
         this.settleStream(id, {
-          id, ok: true, result: { protocol: 2, assembled: begun.result },
+          id,
+          ok: true,
+          result: { protocol: 2, assembled: begun.result },
         } as RawReply<unknown>);
         return;
       }
       this.streams.set(id, {
-        sid: st.sid, nextSeq: 1, manifest, assembly: begun.assembly, ids: [], timer: 0,
+        sid: st.sid,
+        nextSeq: 1,
+        manifest,
+        assembly: begun.assembly,
+        ids: [],
+        timer: 0,
       });
       this.emitChunk({
-        phase: "begin", result: begun.assembly.result,
-        manifest: begun.assembly.result.bodies ?? [], bodies: [],
-        edgesByBody: new Map(), triRange: { triStart: 0, triEnd: 0 },
+        phase: "begin",
+        result: begun.assembly.result,
+        manifest: begun.assembly.result.bodies ?? [],
+        bodies: [],
+        edgesByBody: new Map(),
+        triRange: { triStart: 0, triEnd: 0 },
         bbox: begun.assembly.result.bbox,
-        done: 0, total: manifest.length,
+        done: 0,
+        total: manifest.length,
       });
     } else {
       const s = this.streams.get(id);
@@ -975,15 +1021,20 @@ export class Geometry implements GeometryBackend {
       s.nextSeq++;
       const arrived: string[] = [];
       for (const b of header.result.bodies ?? []) {
-        if (b.unchanged) { arrived.push(b.id); continue; }
+        if (b.unchanged) {
+          arrived.push(b.id);
+          continue;
+        }
         this.bodyMesh.set(b.id, b);
         if (!s.assembly.writeBody(b)) {
           // The payload disagrees with what the manifest promised. Writing it
           // would run past this body's slice and corrupt the NEXT body's
           // triangles, producing a wrong-but-believable model.
-          pipeFault(`body ${b.id} did not match its manifest entry, stream aborted `
-            + `(declared verts3=${b.positions?.length ?? "?"} idx=${b.indices?.length ?? "?"} `
-            + `tris=${b.faceIds?.length ?? "?"})`);
+          pipeFault(
+            `body ${b.id} did not match its manifest entry, stream aborted ` +
+              `(declared verts3=${b.positions?.length ?? "?"} idx=${b.indices?.length ?? "?"} ` +
+              `tris=${b.faceIds?.length ?? "?"})`,
+          );
           this.abortStream(id, "the geometry engine sent a body that did not match its manifest");
           return;
         }
@@ -999,11 +1050,15 @@ export class Geometry implements GeometryBackend {
           edgesByBody.set(bid, s.assembly.edgesOf(bid));
         }
         this.emitChunk({
-          phase: "bodies", result: s.assembly.result,
-          manifest: s.assembly.result.bodies ?? [], bodies: metas, edgesByBody,
+          phase: "bodies",
+          result: s.assembly.result,
+          manifest: s.assembly.result.bodies ?? [],
+          bodies: metas,
+          edgesByBody,
           triRange: s.assembly.triRange(arrived),
           bbox: s.assembly.result.bbox,
-          done: s.ids.length, total: s.manifest.length,
+          done: s.ids.length,
+          total: s.manifest.length,
         });
       }
     }
@@ -1027,13 +1082,18 @@ export class Geometry implements GeometryBackend {
     // bad stream, with nothing on screen to show for it. complete() enforces the
     // same thing from the other side, and returns null rather than hand on a
     // zero-filled slice.
-    const out = this.finishAssembly(s.assembly, s.manifest.map((m) => m.id));
+    const out = this.finishAssembly(
+      s.assembly,
+      s.manifest.map((m) => m.id),
+    );
     if (out === null) {
       this.abortStream(id, "the geometry engine's reply was incomplete");
       return;
     }
     this.settleStream(id, {
-      id, ok: true, result: { protocol: 2, assembled: out },
+      id,
+      ok: true,
+      result: { protocol: 2, assembled: out },
     } as RawReply<unknown>);
   }
 
@@ -1048,7 +1108,11 @@ export class Geometry implements GeometryBackend {
 
   private emitChunk(c: RebuildChunk) {
     for (const fn of this.chunkListeners) {
-      try { fn(c); } catch (err) { console.error("[geometry] chunk listener threw:", err); }
+      try {
+        fn(c);
+      } catch (err) {
+        console.error("[geometry] chunk listener threw:", err);
+      }
     }
   }
 
@@ -1162,8 +1226,10 @@ export class Geometry implements GeometryBackend {
     let msg = await this.rebuildCall("rebuild", { ...payload, tolerance, known }, onId);
     if (msg.ok && msg.result?.resync) {
       // worker respawned or lost sync, one full resend recovers everything
-      pipe(`RESYNC asked by the engine, resending the whole document `
-        + `(${doc.features.length} features, ${Object.keys(known).length} known etags)`);
+      pipe(
+        `RESYNC asked by the engine, resending the whole document ` +
+          `(${doc.features.length} features, ${Object.keys(known).length} known etags)`,
+      );
       this.lastSent = null;
       this.bodyMesh.clear();
       payload = { document: doc, revision: this.revision + 1 };
@@ -1178,8 +1244,7 @@ export class Geometry implements GeometryBackend {
       if (assembled === null) {
         // we claimed an etag the cache no longer backs (e.g. page kept state
         // across a worker respawn race), resync with a full request
-        pipe("RESYNC: a stub named an etag this client no longer holds, "
-          + "re-requesting every body in full");
+        pipe("RESYNC: a stub named an etag this client no longer holds, " + "re-requesting every body in full");
         this.bodyMesh.clear();
         // the assemble cache is keyed on payloads that just went away
         this.lastAssembled = null;
@@ -1228,7 +1293,11 @@ export class Geometry implements GeometryBackend {
     if (r.assembled) return r.assembled;
     const bodies: WireBody[] = r.bodies ?? [];
     const begun = RebuildAssembly.begin(
-      r, manifestFromBodies(bodies), this.bodyMesh, this.lastAssembled, this.lastAssembledSig,
+      r,
+      manifestFromBodies(bodies),
+      this.bodyMesh,
+      this.lastAssembled,
+      this.lastAssembledSig,
     );
     if (begun.kind === "resync") return null;
     if (begun.kind === "noop") return begun.result;
@@ -1236,12 +1305,17 @@ export class Geometry implements GeometryBackend {
       if (nb.unchanged) continue;
       this.bodyMesh.set(nb.id, nb);
       if (!begun.assembly.writeBody(nb)) {
-        pipeFault(`body ${nb.id} did not match its manifest entry in a single-frame `
-          + "reply, re-requesting the whole document");
+        pipeFault(
+          `body ${nb.id} did not match its manifest entry in a single-frame ` +
+            "reply, re-requesting the whole document",
+        );
         return null;
       }
     }
-    return this.finishAssembly(begun.assembly, bodies.map((b) => b.id));
+    return this.finishAssembly(
+      begun.assembly,
+      bodies.map((b) => b.id),
+    );
   }
 
   /** Common tail of both assembly paths: prune the per-body cache to the bodies
@@ -1258,7 +1332,6 @@ export class Geometry implements GeometryBackend {
     this.lastAssembled = out;
     return out;
   }
-
 
   /** Build the legacy single-mesh RebuildResult from a protocol-v1 reply (no
    *  per-body payload, mesh/edges inline). Returns null if the reply carries no
@@ -1304,15 +1377,36 @@ export class Geometry implements GeometryBackend {
       tolerance?: number;
     } = {},
     onStarted?: (id: string) => void,
-  ): Promise<{ ok: boolean; path?: string; paths?: string[]; message?: string; cancelled?: boolean; warnings?: { message: string; feature_id?: string }[] }> {
-    const msg = await this.call<{ path?: string; paths?: string[]; warnings?: { message: string; feature_id?: string }[] }>(
+  ): Promise<{
+    ok: boolean;
+    path?: string;
+    paths?: string[];
+    message?: string;
+    cancelled?: boolean;
+    warnings?: { message: string; feature_id?: string }[];
+  }> {
+    const msg = await this.call<{
+      path?: string;
+      paths?: string[];
+      warnings?: { message: string; feature_id?: string }[];
+    }>(
       "export",
       {
-        document: doc, format, path, body: opts.body, bodies: opts.bodies, separate: opts.separate,
+        document: doc,
+        format,
+        path,
+        body: opts.body,
+        bodies: opts.bodies,
+        separate: opts.separate,
         // GLB writes one material per body from these; the engine defaults both
         // to empty, so other formats are unaffected by sending them.
-        palette: opts.palette, bodyColors: opts.bodyColors, mesh: opts.mesh,
-        sketch: opts.sketch, face: opts.face, plane: opts.plane, tolerance: opts.tolerance,
+        palette: opts.palette,
+        bodyColors: opts.bodyColors,
+        mesh: opts.mesh,
+        sketch: opts.sketch,
+        face: opts.face,
+        plane: opts.plane,
+        tolerance: opts.tolerance,
       },
       onStarted,
     );
@@ -1361,26 +1455,43 @@ export class Geometry implements GeometryBackend {
     return { ok: false, message: msg.error?.message };
   }
 
-  importGeometry(path: string, format: ImportFormat, onStarted?: (id: string) => void, unit?: string): Promise<ImportReply> {
+  importGeometry(
+    path: string,
+    format: ImportFormat,
+    onStarted?: (id: string) => void,
+    unit?: string,
+  ): Promise<ImportReply> {
     return this.importRequest({ path, format, ...(unit ? { unit } : {}) }, onStarted);
   }
 
-  importBytes(name: string, format: ImportFormat, data: string, onStarted?: (id: string) => void, unit?: string): Promise<ImportReply> {
+  importBytes(
+    name: string,
+    format: ImportFormat,
+    data: string,
+    onStarted?: (id: string) => void,
+    unit?: string,
+  ): Promise<ImportReply> {
     return this.importRequest({ name, format, data, ...(unit ? { unit } : {}) }, onStarted);
   }
 
   private async importRequest(req: object, onStarted?: (id: string) => void): Promise<ImportReply> {
     const msg = await this.call<{
-      geom?: string; name: string; solid?: boolean; faces?: number; color?: string;
+      geom?: string;
+      name: string;
+      solid?: boolean;
+      faces?: number;
+      color?: string;
       nodes?: { name: string; parent: number | null; color?: string }[];
       parts?: { node: number; faces: number }[];
-      notes?: string[]; unit?: string;
+      notes?: string[];
+      unit?: string;
       sketches?: { name: string; entities: SketchEntity[]; fillRule?: "evenodd" }[];
     }>("import", req, onStarted);
     if (msg.ok) {
       const r = msg.result;
       return {
-        ok: true, name: r.name,
+        ok: true,
+        name: r.name,
         ...(r.geom !== undefined ? { geom: r.geom } : {}),
         ...(r.solid !== undefined ? { solid: r.solid } : {}),
         ...(r.faces !== undefined ? { faces: r.faces } : {}),
@@ -1433,10 +1544,10 @@ export class Geometry implements GeometryBackend {
   }
 
   async interference(doc: CadDocument, clearance?: number): Promise<InterferenceReply> {
-    const msg = await this.call<Omit<InterferenceReply, "ok">>(
-      "interference",
-      { document: doc, ...(clearance ? { clearance } : {}) },
-    );
+    const msg = await this.call<Omit<InterferenceReply, "ok">>("interference", {
+      document: doc,
+      ...(clearance ? { clearance } : {}),
+    });
     if (msg.ok) {
       const r = msg.result;
       return {
@@ -1450,14 +1561,23 @@ export class Geometry implements GeometryBackend {
     return { ok: false, message: msg.error?.message };
   }
 
-  async stress(doc: CadDocument, body: string, opts: StressOptions, onStarted?: (id: string) => void): Promise<StressResult> {
+  async stress(
+    doc: CadDocument,
+    body: string,
+    opts: StressOptions,
+    onStarted?: (id: string) => void,
+  ): Promise<StressResult> {
     const msg = await this.call<StressReply>("stress", { document: doc, body, ...opts }, onStarted);
     if (msg.ok) return { ok: true, result: msg.result };
     if (msg.cancelled) return { ok: false, cancelled: true, message: "stress analysis cancelled" };
     return { ok: false, message: msg.error?.message ?? "stress analysis failed" };
   }
 
-  async printability(doc: CadDocument, opts: PrintabilityOptions, onStarted?: (id: string) => void): Promise<PrintabilityResult> {
+  async printability(
+    doc: CadDocument,
+    opts: PrintabilityOptions,
+    onStarted?: (id: string) => void,
+  ): Promise<PrintabilityResult> {
     const msg = await this.call<PrintabilityReply>("printability", { document: doc, ...opts }, onStarted);
     if (msg.ok) return { ok: true, result: msg.result };
     if (msg.cancelled) return { ok: false, cancelled: true, message: "printability check cancelled" };
@@ -1470,7 +1590,12 @@ export class Geometry implements GeometryBackend {
     let offset = 0;
     do {
       const piece = bytes.subarray(offset, offset + BLOB_PUT_CHUNK);
-      const msg = await this.call<{ stored: boolean; received?: number }>("blobWrite", { hash, offset, total, data: bytesToBase64(piece) });
+      const msg = await this.call<{ stored: boolean; received?: number }>("blobWrite", {
+        hash,
+        offset,
+        total,
+        data: bytesToBase64(piece),
+      });
       if (!msg.ok) throw new Error(msg.error?.message ?? "the engine refused the bytes");
       if (msg.result.stored) return hash;
       offset += piece.length;
@@ -1493,7 +1618,10 @@ export class Geometry implements GeometryBackend {
     } while (offset < size);
     const out = new Uint8Array(size);
     let at = 0;
-    for (const p of parts) { out.set(p, at); at += p.length; }
+    for (const p of parts) {
+      out.set(p, at);
+      at += p.length;
+    }
     return out;
   }
 
@@ -1502,14 +1630,29 @@ export class Geometry implements GeometryBackend {
     return msg.ok ? msg.result : null;
   }
 
-  async faceAnchor(doc: CadDocument, face: Selector, body: string | null, point: Vec3): Promise<FaceAnchorReply | null> {
-    const msg = await this.call<FaceAnchorReply>("faceAnchor", { document: doc, face, point, ...(body ? { body } : {}) });
+  async faceAnchor(
+    doc: CadDocument,
+    face: Selector,
+    body: string | null,
+    point: Vec3,
+  ): Promise<FaceAnchorReply | null> {
+    const msg = await this.call<FaceAnchorReply>("faceAnchor", {
+      document: doc,
+      face,
+      point,
+      ...(body ? { body } : {}),
+    });
     return msg.ok ? msg.result : null;
   }
 
   async profileCuts(doc: CadDocument, origin: Vec3, normal: Vec3, reach?: Vec3[]): Promise<Vec3[][] | null> {
-    const msg = await this.call<{ cuts: Vec3[][] | null }>("profileCuts", { document: doc, origin, normal, ...(reach ? { reach } : {}) });
-    return msg.ok ? msg.result.cuts ?? null : null;
+    const msg = await this.call<{ cuts: Vec3[][] | null }>("profileCuts", {
+      document: doc,
+      origin,
+      normal,
+      ...(reach ? { reach } : {}),
+    });
+    return msg.ok ? (msg.result.cuts ?? null) : null;
   }
 
   async patternAxis(doc: CadDocument, ref: Selector): Promise<PatternAxisReply | null> {
@@ -1539,9 +1682,7 @@ export class Geometry implements GeometryBackend {
     return msg.ok ? (msg.result.families ?? []) : [];
   }
 
-  async migrateGeometry(
-    items: { id: string; brep: string }[],
-  ): Promise<{ id: string; geom: string }[]> {
+  async migrateGeometry(items: { id: string; brep: string }[]): Promise<{ id: string; geom: string }[]> {
     if (!items.length) return [];
     const msg = await this.call<{
       items: { id: string; geom: string }[];

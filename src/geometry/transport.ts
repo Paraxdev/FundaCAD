@@ -51,9 +51,7 @@ export class WebSocketTransport implements GeometryTransport {
     this.url ??= engineUrl(location.search, import.meta.env.DEV);
     // DEV builds take the token from the URL (`?token=`), so the app can be
     // driven against a hand-started engine; a production bundle keeps "".
-    this.token = import.meta.env.DEV
-      ? (new URLSearchParams(location.search).get("token") ?? "")
-      : "";
+    this.token = import.meta.env.DEV ? (new URLSearchParams(location.search).get("token") ?? "") : "";
     this.connect();
   }
 

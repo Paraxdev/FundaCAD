@@ -28,11 +28,13 @@ export interface IsolateCameraView {
 export function sameCameraState(a: CameraState, b: CameraState): boolean {
   const near = (x: number, y: number, tol: number) => Math.abs(x - y) <= tol;
   const len = Math.max(1e-6, a.scale) * 1e-4;
-  return a.mode === b.mode
-    && near(a.scale, b.scale, len)
-    && near(a.fov, b.fov, 1e-6)
-    && a.target.every((v, i) => near(v, b.target[i]!, len))
-    && Math.abs(a.quaternion.reduce((s, v, i) => s + v * b.quaternion[i]!, 0)) >= 1 - 1e-6;
+  return (
+    a.mode === b.mode &&
+    near(a.scale, b.scale, len) &&
+    near(a.fov, b.fov, 1e-6) &&
+    a.target.every((v, i) => near(v, b.target[i]!, len)) &&
+    Math.abs(a.quaternion.reduce((s, v, i) => s + v * b.quaternion[i]!, 0)) >= 1 - 1e-6
+  );
 }
 
 export function installIsolateCamera(

@@ -133,23 +133,15 @@ pub fn fill_defaults(doc: &mut Doc) {
 }
 
 pub fn features(doc: &Doc) -> &[Value] {
-    doc.get("features")
-        .and_then(Value::as_array)
-        .map_or(&[][..], Vec::as_slice)
+    doc.get("features").and_then(Value::as_array).map_or(&[][..], Vec::as_slice)
 }
 
 fn features_mut(doc: &mut Doc) -> &mut Vec<Value> {
-    doc.entry("features")
-        .or_insert_with(|| json!([]))
-        .as_array_mut()
-        .expect("features is a list")
+    doc.entry("features").or_insert_with(|| json!([])).as_array_mut().expect("features is a list")
 }
 
 pub fn feature_ids(doc: &Doc) -> Vec<String> {
-    features(doc)
-        .iter()
-        .map(|f| str_field(f, "id").unwrap_or_default().to_string())
-        .collect()
+    features(doc).iter().map(|f| str_field(f, "id").unwrap_or_default().to_string()).collect()
 }
 
 fn str_field<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
@@ -157,10 +149,7 @@ fn str_field<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
 }
 
 pub fn find_feature<'a>(doc: &'a Doc, fid: &str) -> Option<(usize, &'a Value)> {
-    features(doc)
-        .iter()
-        .enumerate()
-        .find(|(_, f)| str_field(f, "id") == Some(fid))
+    features(doc).iter().enumerate().find(|(_, f)| str_field(f, "id") == Some(fid))
 }
 
 /// `prefix` plus the lowest free number. Ids are the ONLY way a later feature
@@ -208,10 +197,7 @@ const PREFIXES: &[(&str, &str)] = &[
 ];
 
 fn prefix_for(kind: &str) -> &'static str {
-    PREFIXES
-        .iter()
-        .find(|(k, _)| *k == kind)
-        .map_or("f", |(_, p)| *p)
+    PREFIXES.iter().find(|(k, _)| *k == kind).map_or("f", |(_, p)| *p)
 }
 
 pub(crate) fn is_id(s: &str) -> bool {
@@ -224,11 +210,7 @@ pub(crate) fn is_id(s: &str) -> bool {
 /// Append (or insert at `at`) one feature, returning its id. Order is the
 /// timeline: a feature can only reference what is ABOVE it, so an insert in the
 /// middle is a real operation and not a convenience.
-pub fn add_feature(
-    doc: &mut Doc,
-    feature: &Value,
-    at: Option<i64>,
-) -> Result<String, DocumentError> {
+pub fn add_feature(doc: &mut Doc, feature: &Value, at: Option<i64>) -> Result<String, DocumentError> {
     add_feature_noted(doc, feature, at).map(|(fid, _)| fid)
 }
 
@@ -260,10 +242,7 @@ pub fn add_feature_noted(
         Some(v) => {
             let text = v.as_str().map_or_else(|| v.to_string(), str::to_string);
             if !is_id(&text) {
-                return err(format!(
-                    "bad feature id {}: letters, digits and _ only",
-                    py_repr(v)
-                ));
+                return err(format!("bad feature id {}: letters, digits and _ only", py_repr(v)));
             }
             if feature_ids(doc).iter().any(|k| k == &text) {
                 return err(format!("feature id '{text}' is already used"));
@@ -315,10 +294,7 @@ fn forget_stale_join(doc: &mut Doc, before: Option<&Value>, after: &Value) {
 /// record of a revolve built as a new body (`body3`) outlived its becoming a
 /// join into body1, so the merged body came out as body3.
 pub fn forget_stale_joins(before: &Doc, after: &mut Doc) {
-    let was: BTreeMap<&str, &Value> = features(before)
-        .iter()
-        .filter_map(|f| Some((str_field(f, "id")?, f)))
-        .collect();
+    let was: BTreeMap<&str, &Value> = features(before).iter().filter_map(|f| Some((str_field(f, "id")?, f))).collect();
     let now: Vec<Value> = features(after).to_vec();
     for f in &now {
         if let Some(prior) = str_field(f, "id").and_then(|id| was.get(id).copied()) {
@@ -333,12 +309,7 @@ pub fn forget_stale_joins(before: &Doc, after: &mut Doc) {
 /// `axisEdge` on a revolve are both fields whose PRESENCE changes what the
 /// feature means. `replace` is how they come off, and a null in a merge patch
 /// deletes that key for the same reason.
-pub fn update_feature(
-    doc: &mut Doc,
-    fid: &str,
-    patch: &Value,
-    replace: bool,
-) -> Result<Value, DocumentError> {
+pub fn update_feature(doc: &mut Doc, fid: &str, patch: &Value, replace: bool) -> Result<Value, DocumentError> {
     update_feature_noted(doc, fid, patch, replace).map(|(v, _)| v)
 }
 
@@ -496,11 +467,8 @@ fn same_value(a: Option<&Value>, b: Option<&Value>) -> bool {
 /// A feature whose type changes is checked as the new type straight away, since
 /// a field the new type needs and does not have only fails at the next build.
 fn check_new_type(fid: &str, was: &str, now: &str, f: &Map<String, Value>) -> Result<(), DocumentError> {
-    let (missing, other) = if Feature::is_core_type(now) {
-        core_missing_fields(f)
-    } else {
-        (documented_missing_fields(now, f), None)
-    };
+    let (missing, other) =
+        if Feature::is_core_type(now) { core_missing_fields(f) } else { (documented_missing_fields(now, f), None) };
     if !missing.is_empty() {
         let list: Vec<String> = missing.iter().map(|k| format!("`{k}`")).collect();
         return err(format!(
@@ -522,11 +490,8 @@ fn check_new_type(fid: &str, was: &str, now: &str, f: &Map<String, Value>) -> Re
 /// the same way a dangling `sketch` reference already does, rather than one
 /// unrelated `build` later.
 fn missing_fields_message(kind: &str, f: &Map<String, Value>) -> Option<String> {
-    let (missing, other) = if Feature::is_core_type(kind) {
-        core_missing_fields(f)
-    } else {
-        (documented_missing_fields(kind, f), None)
-    };
+    let (missing, other) =
+        if Feature::is_core_type(kind) { core_missing_fields(f) } else { (documented_missing_fields(kind, f), None) };
     let label = f.get("name").and_then(Value::as_str).filter(|s| !s.is_empty()).unwrap_or(kind);
     match missing.as_slice() {
         [] => other.map(|why| format!("{label} is malformed: {why}")),
@@ -560,12 +525,8 @@ fn unread_fields_message(kind: &str, f: &Map<String, Value>, pick: impl Fn(&str)
         return None;
     }
     let feature = serde_json::from_value::<Feature>(Value::Object(f.clone())).ok()?;
-    let unread: Vec<String> = feature
-        .unread_fields()
-        .into_iter()
-        .filter(|k| pick(k))
-        .map(|k| format!("\"{k}\""))
-        .collect();
+    let unread: Vec<String> =
+        feature.unread_fields().into_iter().filter(|k| pick(k)).map(|k| format!("\"{k}\"")).collect();
     if unread.is_empty() {
         return None;
     }
@@ -587,15 +548,11 @@ fn unread_fields_message(kind: &str, f: &Map<String, Value>, pick: impl Fn(&str)
 /// Every field serde says a core feature is missing, found by filling each in
 /// with a stand-in until the next complaint is about something else.
 fn core_missing_fields(f: &Map<String, Value>) -> (Vec<String>, Option<String>) {
-    let stand_ins = || {
-        [json!(0), json!(""), json!([]), json!({}), json!([0, 0, 0]), json!("XY"), json!(false)]
-    };
-    let complaint = |probe: &Map<String, Value>| {
-        match serde_json::from_value::<Feature>(Value::Object(probe.clone())) {
-            Ok(Feature::Invalid(inv)) => Some(inv.error),
-            Ok(_) => None,
-            Err(e) => Some(e.to_string()),
-        }
+    let stand_ins = || [json!(0), json!(""), json!([]), json!({}), json!([0, 0, 0]), json!("XY"), json!(false)];
+    let complaint = |probe: &Map<String, Value>| match serde_json::from_value::<Feature>(Value::Object(probe.clone())) {
+        Ok(Feature::Invalid(inv)) => Some(inv.error),
+        Ok(_) => None,
+        Err(e) => Some(e.to_string()),
     };
     let mut probe = f.clone();
     let mut missing: Vec<String> = Vec::new();
@@ -631,10 +588,7 @@ fn missing_field(error: &str) -> Option<String> {
 
 /// A plugin feature's fields the schema documents without `optional`.
 fn documented_missing_fields(kind: &str, f: &Map<String, Value>) -> Vec<String> {
-    let Some(fields) = crate::schema::features()
-        .get(kind)
-        .and_then(|t| t.get("fields"))
-        .and_then(Value::as_object)
+    let Some(fields) = crate::schema::features().get(kind).and_then(|t| t.get("fields")).and_then(Value::as_object)
     else {
         return Vec::new();
     };
@@ -655,12 +609,8 @@ fn documented_missing_fields(kind: &str, f: &Map<String, Value>) -> Vec<String> 
 /// the completed document is the same model.
 pub fn write_tracked_faces(doc: &mut Doc, tracked: &Map<String, Value>) {
     for f in features_mut(doc) {
-        let extent = f
-            .get("id")
-            .and_then(Value::as_str)
-            .and_then(|id| tracked.get(id))
-            .and_then(|t| t.get("extent"))
-            .cloned();
+        let extent =
+            f.get("id").and_then(Value::as_str).and_then(|id| tracked.get(id)).and_then(|t| t.get("extent")).cloned();
         let Some(extent) = extent else {
             continue;
         };
@@ -718,10 +668,7 @@ fn py_repr(v: &Value) -> String {
 const PANEL_KEYS: &[&str] = &["control", "group", "hidden"];
 
 fn param_defs_mut(doc: &mut Doc) -> &mut Map<String, Value> {
-    doc.entry("paramDefs")
-        .or_insert_with(|| json!({}))
-        .as_object_mut()
-        .expect("paramDefs is an object")
+    doc.entry("paramDefs").or_insert_with(|| json!({})).as_object_mut().expect("paramDefs is an object")
 }
 
 /// Put `f` back at timeline position `i`.
@@ -737,10 +684,7 @@ pub(crate) fn unbind_parameter(doc: &mut Doc, name: &str) {
 }
 
 pub fn param_defs(doc: &Doc) -> Map<String, Value> {
-    doc.get("paramDefs")
-        .and_then(Value::as_object)
-        .cloned()
-        .unwrap_or_default()
+    doc.get("paramDefs").and_then(Value::as_object).cloned().unwrap_or_default()
 }
 
 /// Define or redefine one parameter and recompute the whole table.
@@ -759,9 +703,7 @@ pub fn set_parameter(
         return err(format!("bad parameter name '{name}'"));
     }
     if is_reserved_name(name) {
-        return err(format!(
-            "'{name}' is a reserved name (a function, unit or constant)"
-        ));
+        return err(format!("'{name}' is a reserved name (a function, unit or constant)"));
     }
     let text = expr_text(expr);
     let before = param_defs(doc).get(name).cloned();
@@ -828,9 +770,7 @@ pub fn remove_parameter(doc: &mut Doc, name: &str) -> Result<(), DocumentError> 
     }
     let mut users: Vec<String> = defs
         .iter()
-        .filter(|(n, d)| {
-            n.as_str() != name && safe_refs(d.get("expr")).contains(&name.to_string())
-        })
+        .filter(|(n, d)| n.as_str() != name && safe_refs(d.get("expr")).contains(&name.to_string()))
         .map(|(n, _)| n.clone())
         .collect();
     for u in feature_users_of_param(doc, name) {
@@ -839,25 +779,12 @@ pub fn remove_parameter(doc: &mut Doc, name: &str) -> Result<(), DocumentError> 
     let extras = doc.get("paramExtras").cloned().unwrap_or(Value::Null);
     for c in extras.get("checks").and_then(Value::as_array).into_iter().flatten() {
         if safe_refs(c.get("expr")).contains(&name.to_string()) {
-            users.push(format!(
-                "check \"{}\"",
-                c.get("message").and_then(Value::as_str).unwrap_or("None")
-            ));
+            users.push(format!("check \"{}\"", c.get("message").and_then(Value::as_str).unwrap_or("None")));
         }
     }
-    for cfg in extras
-        .get("configurations")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-    {
+    for cfg in extras.get("configurations").and_then(Value::as_array).into_iter().flatten() {
         let cfg_name = cfg.get("name").and_then(Value::as_str).unwrap_or("None");
-        for (p, e) in cfg
-            .get("values")
-            .and_then(Value::as_object)
-            .into_iter()
-            .flatten()
-        {
+        for (p, e) in cfg.get("values").and_then(Value::as_object).into_iter().flatten() {
             if p != name && safe_refs(Some(e)).contains(&name.to_string()) {
                 users.push(format!("configuration {cfg_name} . {p}"));
             }
@@ -868,10 +795,8 @@ pub fn remove_parameter(doc: &mut Doc, name: &str) -> Result<(), DocumentError> 
         return err(format!("{name} is used by {}", users.join(", ")));
     }
     param_defs_mut(doc).remove(name);
-    if let Some(cfgs) = doc
-        .get_mut("paramExtras")
-        .and_then(|e| e.get_mut("configurations"))
-        .and_then(Value::as_array_mut)
+    if let Some(cfgs) =
+        doc.get_mut("paramExtras").and_then(|e| e.get_mut("configurations")).and_then(Value::as_array_mut)
     {
         for cfg in cfgs {
             if let Some(vals) = cfg.get_mut("values").and_then(Value::as_object_mut) {
@@ -926,11 +851,8 @@ pub const DANGLING: &str = "its dimension or feature no longer exists";
 /// sketches this server does not solve, and are left to the app.
 fn forget_dangling_bindings(doc: &mut Doc) -> Vec<String> {
     let defs = param_defs(doc);
-    let used: BTreeSet<String> = defs
-        .values()
-        .flat_map(|d| safe_refs(d.get("expr")))
-        .filter(|r| defs.contains_key(r))
-        .collect();
+    let used: BTreeSet<String> =
+        defs.values().flat_map(|d| safe_refs(d.get("expr"))).filter(|r| defs.contains_key(r)).collect();
     let mut kept = Vec::new();
     for (name, d) in &defs {
         let Some((feature, field)) = fundacad_core::params::targets::feature_target(d) else {
@@ -988,11 +910,7 @@ pub fn recompute_parameters(doc: &mut Doc) -> BTreeMap<String, String> {
 
     let mut cache = Table(BTreeMap::new());
     let mut values: BTreeMap<String, f64> = BTreeMap::new();
-    let mut pending: BTreeSet<String> = nodes
-        .iter()
-        .filter(|(_, n)| n.is_some())
-        .map(|(k, _)| k.clone())
-        .collect();
+    let mut pending: BTreeSet<String> = nodes.iter().filter(|(_, n)| n.is_some()).map(|(k, _)| k.clone()).collect();
 
     while !pending.is_empty() {
         let mut progressed = false;
@@ -1025,20 +943,14 @@ pub fn recompute_parameters(doc: &mut Doc) -> BTreeMap<String, String> {
                 let node = nodes[name].as_ref().expect("pending nodes parsed");
                 let unknown: BTreeSet<String> = refs_of(node)
                     .into_iter()
-                    .filter(|r| {
-                        !defs.contains_key(r)
-                            && fundacad_core::params::parse::constant(r).is_none()
-                    })
+                    .filter(|r| !defs.contains_key(r) && fundacad_core::params::parse::constant(r).is_none())
                     .collect();
                 issues.insert(
                     name.clone(),
                     if unknown.is_empty() {
                         "is part of a reference cycle".into()
                     } else {
-                        format!(
-                            "unknown parameter {}",
-                            unknown.into_iter().collect::<Vec<_>>().join(", ")
-                        )
+                        format!("unknown parameter {}", unknown.into_iter().collect::<Vec<_>>().join(", "))
                     },
                 );
             }
@@ -1050,9 +962,7 @@ pub fn recompute_parameters(doc: &mut Doc) -> BTreeMap<String, String> {
     // is always complete.
     let mut cached: BTreeMap<String, f64> = cache.0;
     for (name, d) in &defs {
-        cached
-            .entry(name.clone())
-            .or_insert_with(|| d.get("value").and_then(Value::as_f64).unwrap_or(0.0));
+        cached.entry(name.clone()).or_insert_with(|| d.get("value").and_then(Value::as_f64).unwrap_or(0.0));
     }
 
     {
@@ -1093,10 +1003,39 @@ const REFERENCE_FIELDS: &[(&str, &[(&str, &str)])] = &[
 
 /// Fields that hold a string which is never a number: an id, a mode, a hash.
 const NOT_NUMERIC: &[&str] = &[
-    "id", "type", "name", "operation", "sketch", "profile", "path", "body", "target", "keep",
-    "axis", "text", "planeId", "plane", "format", "geom", "source", "moving", "mode", "color",
-    "continuity", "sizeType", "chamferType", "datum", "brep", "plugin", "stamp", "holeType",
-    "standard", "size", "fit", "extent", "direction",
+    "id",
+    "type",
+    "name",
+    "operation",
+    "sketch",
+    "profile",
+    "path",
+    "body",
+    "target",
+    "keep",
+    "axis",
+    "text",
+    "planeId",
+    "plane",
+    "format",
+    "geom",
+    "source",
+    "moving",
+    "mode",
+    "color",
+    "continuity",
+    "sizeType",
+    "chamferType",
+    "datum",
+    "brep",
+    "plugin",
+    "stamp",
+    "holeType",
+    "standard",
+    "size",
+    "fit",
+    "extent",
+    "direction",
 ];
 
 /// Whether `field` of `kind` holds text that is never a parameter name: an id,
@@ -1136,10 +1075,7 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
     for (i, f) in feats.iter().enumerate() {
         let fid = str_field(f, "id").unwrap_or_default();
         if fid.is_empty() {
-            problems.push(format!(
-                "feature #{i} ({}) has no id",
-                json_or_none(f.get("type"))
-            ));
+            problems.push(format!("feature #{i} ({}) has no id", json_or_none(f.get("type"))));
             continue;
         }
         if seen.contains(fid) {
@@ -1174,9 +1110,7 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
                 let Some(name) = name else { continue };
                 let fid = str_field(f, "id").unwrap_or_default();
                 match by_id.get(name) {
-                    None => problems.push(format!(
-                        "{fid}: {field} names '{name}', which is not in the document"
-                    )),
+                    None => problems.push(format!("{fid}: {field} names '{name}', which is not in the document")),
                     Some(&j) if j > i => problems.push(format!(
                         "{fid}: {field} names '{name}', which comes AFTER it in the timeline \
                          (a feature can only use what is above it)"
@@ -1184,9 +1118,7 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
                     Some(&j) => {
                         let got = str_field(&feats[j], "type").unwrap_or_default();
                         if !want.is_empty() && got != *want {
-                            problems.push(format!(
-                                "{fid}: {field} names '{name}', which is a {got} and not a {want}"
-                            ));
+                            problems.push(format!("{fid}: {field} names '{name}', which is a {got} and not a {want}"));
                         }
                     }
                 }
@@ -1255,11 +1187,8 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
     // A string in a numeric field must name a parameter: the engine resolves
     // names against `parameters` and refuses anything else, which arrives as a
     // red feature with no clue which field caused it.
-    let params: BTreeSet<String> = doc
-        .get("parameters")
-        .and_then(Value::as_object)
-        .map(|p| p.keys().cloned().collect())
-        .unwrap_or_default();
+    let params: BTreeSet<String> =
+        doc.get("parameters").and_then(Value::as_object).map(|p| p.keys().cloned().collect()).unwrap_or_default();
     for f in &feats {
         let fid = str_field(f, "id").unwrap_or_default();
         let Some(obj) = f.as_object() else { continue };
@@ -1278,10 +1207,8 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
             // separately, because it looks like it ought to work. The app
             // evaluates expressions in the parameter table and writes plain
             // numbers into fields, so the engine only ever resolves a bare NAME.
-            let refs: BTreeSet<String> = parse_expr(text)
-                .ok()
-                .map(|n| refs_of(&n).into_iter().collect())
-                .unwrap_or_default();
+            let refs: BTreeSet<String> =
+                parse_expr(text).ok().map(|n| refs_of(&n).into_iter().collect()).unwrap_or_default();
             if !refs.is_empty() && refs.iter().all(|r| params.contains(r)) {
                 problems.push(format!(
                     "{fid}: {k} is the expression '{text}'. A field takes a number or a \
@@ -1292,14 +1219,7 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
                 let known = if params.is_empty() {
                     "none".to_string()
                 } else {
-                    format!(
-                        "[{}]",
-                        params
-                            .iter()
-                            .map(|p| format!("'{p}'"))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
+                    format!("[{}]", params.iter().map(|p| format!("'{p}'")).collect::<Vec<_>>().join(", "))
                 };
                 problems.push(format!(
                     "{fid}: {k} is the string '{text}', which is not a parameter, known \

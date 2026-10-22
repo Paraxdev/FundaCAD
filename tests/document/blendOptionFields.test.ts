@@ -59,12 +59,13 @@ describe("extrude start and end values", () => {
 
   it("shows the datum plane or point an extrude holds, never a stand in", () => {
     const ex = (v: Record<string, unknown>) => ({ id: "ex", type: "extrude", sketch: "sk", distance: 2, ...v });
-    const docOf = (e: Record<string, unknown>) => [
-      { id: "dp1", type: "datumPlane", plane: "XY" },
-      { id: "pt1", type: "datumPoint", point: [0, 0, 1] },
-      e,
-      { id: "dp2", type: "datumPlane", plane: "XZ" },
-    ] as unknown as Feature[];
+    const docOf = (e: Record<string, unknown>) =>
+      [
+        { id: "dp1", type: "datumPlane", plane: "XY" },
+        { id: "pt1", type: "datumPoint", point: [0, 0, 1] },
+        e,
+        { id: "dp2", type: "datumPlane", plane: "XZ" },
+      ] as unknown as Feature[];
     const row = (v: Record<string, unknown>, field: string) => {
       const e = ex(v);
       return datumChoiceRow(e as unknown as Feature, field, docOf(e));
@@ -73,8 +74,12 @@ describe("extrude start and end values", () => {
     expect(row({ endType: "upToPoint", upToPoint: "pt1" }, "upToPoint")?.current).toBe("pt1");
     expect(row({ endType: "upToPlane" }, "upToPlane")?.current).toBe("");
     expect(row({ startType: "point" }, "startPoint")?.current).toBe("");
-    expect(row({ startType: "plane", startPlane: "dp1" }, "startPlane")?.options.map((o) => o.value))
-      .toEqual(["XY", "XZ", "YZ", "dp1"]);
+    expect(row({ startType: "plane", startPlane: "dp1" }, "startPlane")?.options.map((o) => o.value)).toEqual([
+      "XY",
+      "XZ",
+      "YZ",
+      "dp1",
+    ]);
     const picked = row({ endType: "upToPoint", upToPoint: { point: [1, 2, 3], body: "body1" } }, "upToPoint");
     expect(picked?.current).toBe(PICKED_POINT);
     expect(picked?.options.some((o) => o.value === PICKED_POINT)).toBe(true);

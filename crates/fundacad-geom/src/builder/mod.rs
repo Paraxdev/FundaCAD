@@ -36,20 +36,14 @@ pub const MISSING_FEATURE: &str = "missingFeature";
 /// A refusal naming a feature that is not above this one. Written from what is
 /// above only, `forward_references` says so when it is below instead.
 pub fn missing_reference(message: impl Into<String>) -> Fail {
-    Fail::Value {
-        message: message.into(),
-        code: Some(MISSING_FEATURE),
-    }
+    Fail::Value { message: message.into(), code: Some(MISSING_FEATURE) }
 }
 
 /// Why a feature did nothing: the arms of the Python rebuild loop's `except`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Fail {
     /// A refusal written for the user (`ValueError`, `GeomError`).
-    Value {
-        message: String,
-        code: Option<&'static str>,
-    },
+    Value { message: String, code: Option<&'static str> },
     /// The feature lacks a field its handler reads (`KeyError`).
     Missing(String),
     /// Anything else, named by its exception class.
@@ -58,10 +52,7 @@ pub enum Fail {
 
 impl Fail {
     pub fn msg(message: impl Into<String>) -> Fail {
-        Fail::Value {
-            message: message.into(),
-            code: None,
-        }
+        Fail::Value { message: message.into(), code: None }
     }
 }
 
@@ -128,10 +119,7 @@ impl FeatureError {
     pub fn wire(&self) -> Value {
         let mut m = Map::new();
         m.insert("message".into(), Value::String(self.message.clone()));
-        m.insert(
-            "feature_id".into(),
-            self.feature_id.clone().map_or(Value::Null, Value::String),
-        );
+        m.insert("feature_id".into(), self.feature_id.clone().map_or(Value::Null, Value::String));
         if let Some(code) = &self.code {
             m.insert("code".into(), Value::String(code.clone()));
         }
@@ -435,10 +423,7 @@ impl Ctx {
     /// The refusal for a reference scan named as an operand of `what`.
     pub fn scan_refusal(&self, index: usize, what: &str) -> Fail {
         let b = &self.bodies[index];
-        Fail::msg(format!(
-            "{} ({}) is a reference scan, {what} cannot use it. Make it solid first.",
-            b.name, b.id
-        ))
+        Fail::msg(format!("{} ({}) is a reference scan, {what} cannot use it. Make it solid first.", b.name, b.id))
     }
 
     /// `index` back unless it is a reference scan, which has no faces or edges to edit.
@@ -461,10 +446,7 @@ impl Ctx {
         if !self.patterned.contains(feature_id) {
             return;
         }
-        self.tools
-            .entry(feature_id.to_owned())
-            .or_default()
-            .push(ToolRecord { kind, bodies, tool });
+        self.tools.entry(feature_id.to_owned()).or_default().push(ToolRecord { kind, bodies, tool });
     }
 
     /// The signed volume a feature measured for this body's current shape.
@@ -540,9 +522,7 @@ fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]
     };
     let mut notes = Vec::new();
     for b in &ctx.bodies {
-        let Some((_, _, old)) = pre
-            .iter()
-            .find(|(uid, generation, _)| *uid == b.uid && *generation != b.generation)
+        let Some((_, _, old)) = pre.iter().find(|(uid, generation, _)| *uid == b.uid && *generation != b.generation)
         else {
             continue;
         };
@@ -551,11 +531,7 @@ fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]
         }
         let now = pieces(&b.shape);
         if now > pieces(old) && kernel::volume(&b.shape).abs() < kernel::volume(old).abs() {
-            notes.push(advisory(
-                fid,
-                "bodySplit",
-                format!("{noun} split {} into {now} pieces", b.name),
-            ));
+            notes.push(advisory(fid, "bodySplit", format!("{noun} split {} into {now} pieces", b.name)));
         }
     }
     // First, since a chip shows one note and a lost piece matters most.
@@ -572,7 +548,11 @@ fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]
 /// judged on its own below.
 fn unsoundness(s: &Soundness) -> usize {
     let k = &s.skin;
-    if k.solids == 0 { 0 } else { k.open_edges + k.crowded_edges + k.flipped_edges + s.inward }
+    if k.solids == 0 {
+        0
+    } else {
+        k.open_edges + k.crowded_edges + k.flipped_edges + s.inward
+    }
 }
 
 /// Features that bring in or copy a surface on purpose: an import that does
@@ -641,9 +621,8 @@ fn note_unsound(ctx: &mut Ctx, fid: &str, kind: Option<&str>, pre: &[(u64, u64, 
         for (b, _) in changed.iter().filter(|(b, s)| surface(b, s)) {
             // A body that was there before came from itself and what the
             // feature used up, a new one from everything the feature touched.
-            let mut from = gone
-                .iter()
-                .filter(|(uid, _, _)| !known.contains(&b.uid) || *uid == b.uid || !alive.contains(uid));
+            let mut from =
+                gone.iter().filter(|(uid, _, _)| !known.contains(&b.uid) || *uid == b.uid || !alive.contains(uid));
             if from.all(|(_, _, s)| is_sound_solid(s)) {
                 notes.push(advisory(fid, "notSolid", format!("{} {}", b.name, NOT_SOLID)));
             }
@@ -690,7 +669,11 @@ fn note_fallbacks(ctx: &mut Ctx, fid: &str, fallbacks: &[kernel::Fallback]) {
 fn tolerance_mm(f: f64) -> String {
     let places = (1 - f.log10().floor() as i32).max(0) as usize;
     let s = format!("{f:.places$}");
-    if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s }
+    if s.contains('.') {
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
+    } else {
+        s
+    }
 }
 
 /// Says which fields a built-in feature carries without reading them, so a
@@ -898,8 +881,7 @@ fn with_python_defaults(raw: &Value) -> Option<Value> {
 
 /// The typed feature, and the raw object it came from.
 fn typed(raw: &Value) -> Feature {
-    let parsed: Feature =
-        serde_json::from_value(raw.clone()).unwrap_or_else(|_| Feature::Unknown(raw.clone()));
+    let parsed: Feature = serde_json::from_value(raw.clone()).unwrap_or_else(|_| Feature::Unknown(raw.clone()));
     if parsed.is_invalid() {
         if let Some(patched) = with_python_defaults(raw) {
             if let Ok(f) = serde_json::from_value::<Feature>(patched) {
@@ -924,11 +906,7 @@ fn failure_detail(ctx: &Ctx, index: usize, type_name: Option<&str>, took: Durati
         .collect();
     let mut params: Vec<(&String, &f64)> = ctx.params.iter().collect();
     params.sort_by(|a, b| a.0.cmp(b.0));
-    let params: Map<String, Value> = params
-        .into_iter()
-        .take(64)
-        .map(|(k, v)| (k.clone(), json!(v)))
-        .collect();
+    let params: Map<String, Value> = params.into_iter().take(64).map(|(k, v)| (k.clone(), json!(v))).collect();
     json!({
         "index": index,
         "type": type_name,
@@ -966,7 +944,13 @@ fn forward_references(errors: &mut [FeatureError], raw: &[Value], timeline: &[St
         } else {
             ("", this.kind.clone())
         };
-        let named = |s: &Step| if s.label == s.kind { format!("{} {}", s.kind, s.id) } else { format!("{} ({})", s.label, s.id) };
+        let named = |s: &Step| {
+            if s.label == s.kind {
+                format!("{} {}", s.kind, s.id)
+            } else {
+                format!("{} ({})", s.label, s.id)
+            }
+        };
         e.message = format!(
             "{prefix}{} comes after this {what} in the timeline, and a feature can only use what is above it. Move {} above {}, or move {} below it.",
             named(step),
@@ -1025,10 +1009,7 @@ fn name_new_bodies(ctx: &mut Ctx, before: &HashSet<String>, mark: usize, name: &
 
 fn label_of(raw: &Value) -> String {
     let s = |k: &str| raw.get(k).and_then(Value::as_str).filter(|s| !s.is_empty());
-    s("name")
-        .or_else(|| s("type"))
-        .unwrap_or("feature")
-        .to_owned()
+    s("name").or_else(|| s("type")).unwrap_or("feature").to_owned()
 }
 
 /// A serde complaint about a feature, as the Python handler would have failed.
@@ -1060,21 +1041,14 @@ fn is_inactive(ctx: &Ctx, cond: Option<Num>) -> FResult<bool> {
 fn references_any<'a>(node: &Value, ids: &'a [String]) -> Option<&'a str> {
     match node {
         Value::String(s) => ids.iter().find(|i| *i == s).map(String::as_str),
-        Value::Object(m) => m
-            .iter()
-            .filter(|(k, _)| k.as_str() != "id")
-            .find_map(|(_, v)| references_any(v, ids)),
+        Value::Object(m) => m.iter().filter(|(k, _)| k.as_str() != "id").find_map(|(_, v)| references_any(v, ids)),
         Value::Array(a) => a.iter().find_map(|v| references_any(v, ids)),
         _ => None,
     }
 }
 
 /// `_switched_off_owner`: the switched off feature whose body a message names.
-fn switched_off_owner(
-    message: &str,
-    recorded: &IndexMap<String, String>,
-    inactive: &[String],
-) -> Option<String> {
+fn switched_off_owner(message: &str, recorded: &IndexMap<String, String>, inactive: &[String]) -> Option<String> {
     for bid in body_tokens(message) {
         for (key, got) in recorded {
             if *got == bid {
@@ -1126,11 +1100,7 @@ fn strip_key_suffix(key: &str) -> &str {
 }
 
 fn params_of(doc: &CadDocument) -> HashMap<String, f64> {
-    doc.parameters
-        .iter()
-        .flatten()
-        .map(|(k, v)| (k.clone(), v.get()))
-        .collect()
+    doc.parameters.iter().flatten().map(|(k, v)| (k.clone(), v.get())).collect()
 }
 
 /// A snapshot at `at` can be resumed only when it still holds the tool of
@@ -1162,19 +1132,9 @@ pub fn rebuild_from(
     tap: &mut dyn Tap,
 ) -> Result<Rebuild, Cancelled> {
     crate::par::configure_occt();
-    let params: HashMap<String, f64> = doc
-        .parameters
-        .iter()
-        .flatten()
-        .map(|(k, v)| (k.clone(), v.get()))
-        .collect();
-    let hidden_bodies = doc
-        .body_visibility
-        .iter()
-        .flatten()
-        .filter(|(_, vis)| !**vis)
-        .map(|(k, _)| k.clone())
-        .collect();
+    let params: HashMap<String, f64> = doc.parameters.iter().flatten().map(|(k, v)| (k.clone(), v.get())).collect();
+    let hidden_bodies =
+        doc.body_visibility.iter().flatten().filter(|(_, vis)| !**vis).map(|(k, _)| k.clone()).collect();
     let recorded = doc.body_ids.clone();
     let mut ctx = Ctx {
         params,
@@ -1196,18 +1156,9 @@ pub fn rebuild_from(
         face_fps: owners::FaceFps::default(),
         volumes: HashMap::new(),
     };
-    let raw_features: Vec<Value> = raw
-        .get("features")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let raw_features: Vec<Value> = raw.get("features").and_then(Value::as_array).cloned().unwrap_or_default();
     let features: Vec<Feature> = raw_features.iter().map(typed).collect();
-    ctx.patterned = features
-        .iter()
-        .filter_map(features::pattern_sources)
-        .flatten()
-        .cloned()
-        .collect();
+    ctx.patterned = features.iter().filter_map(features::pattern_sources).flatten().cloned().collect();
     ctx.points = features
         .iter()
         .filter_map(|f| match f {
@@ -1228,10 +1179,7 @@ pub fn rebuild_from(
 
     let mut start = 0;
     if let Some((at, snap)) = resume {
-        if at <= features.len()
-            && tools_kept(&features, at, &snap.tools)
-            && ctx.ids.restore(&snap.id_events)
-        {
+        if at <= features.len() && tools_kept(&features, at, &snap.tools) && ctx.ids.restore(&snap.id_events) {
             start = at;
             ctx.tools = snap.tools;
             ctx.bodies = snap.bodies;
@@ -1275,27 +1223,12 @@ pub fn rebuild_from(
         let type_name = rawf.get("type").and_then(Value::as_str);
         let prov = !type_name.is_some_and(|t| NOT_PROVENANCE.contains(&t))
             && !inactive.iter().any(|x| Some(x.as_str()) == fid);
-        let pre: Vec<(u64, u64)> = if prov {
-            ctx.bodies.iter().map(|b| (b.uid, b.generation)).collect()
-        } else {
-            Vec::new()
-        };
-        let pre_owners: Vec<(u64, Owners)> = if prov {
-            ctx.bodies
-                .iter()
-                .map(|b| (b.uid, b.owners.clone()))
-                .collect()
-        } else {
-            Vec::new()
-        };
-        let pre_shapes: Vec<(u64, u64, Shape)> = if prov {
-            ctx.bodies
-                .iter()
-                .map(|b| (b.uid, b.generation, b.shape.clone()))
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let pre: Vec<(u64, u64)> =
+            if prov { ctx.bodies.iter().map(|b| (b.uid, b.generation)).collect() } else { Vec::new() };
+        let pre_owners: Vec<(u64, Owners)> =
+            if prov { ctx.bodies.iter().map(|b| (b.uid, b.owners.clone())).collect() } else { Vec::new() };
+        let pre_shapes: Vec<(u64, u64, Shape)> =
+            if prov { ctx.bodies.iter().map(|b| (b.uid, b.generation, b.shape.clone())).collect() } else { Vec::new() };
 
         // A feature's `name` names the bodies it makes, so a part is "Slider"
         // in the build, the STEP tree and the part list rather than
@@ -1373,14 +1306,7 @@ pub fn rebuild_from(
             note_unread(&mut ctx, f, fid.unwrap_or(""), type_name.unwrap_or(""));
         }
         crate::bench::phase("after_feature", || {
-            tap.after_feature(
-                i,
-                &State {
-                    ctx: &ctx,
-                    errors: &errors,
-                },
-                began.elapsed(),
-            );
+            tap.after_feature(i, &State { ctx: &ctx, errors: &errors }, began.elapsed());
         });
         watch.feature(i);
     }
@@ -1391,19 +1317,16 @@ pub fn rebuild_from(
             if e.message.contains("switched off") {
                 continue;
             }
-            let index = raw_features
-                .iter()
-                .position(|r| r.get("id").and_then(Value::as_str) == e.feature_id.as_deref());
+            let index =
+                raw_features.iter().position(|r| r.get("id").and_then(Value::as_str) == e.feature_id.as_deref());
             let by_id = index.map(|k| &raw_features[k]);
             if let Some(off) = by_id.and_then(|node| references_any(node, &inactive)) {
-                e.message
-                    .push_str(&format!(" ({off} is switched off by its activeWhen)"));
+                e.message.push_str(&format!(" ({off} is switched off by its activeWhen)"));
                 continue;
             }
             if recorded.is_some() {
                 if let Some(owner) = switched_off_owner(&e.message, &resulting, &inactive) {
-                    e.message
-                        .push_str(&format!(" ({owner} is switched off by its activeWhen)"));
+                    e.message.push_str(&format!(" ({owner} is switched off by its activeWhen)"));
                 }
                 continue;
             }
@@ -1434,11 +1357,7 @@ pub fn rebuild_from(
         .into_iter()
         .map(|b| BuiltBody {
             identity: (b.uid, b.generation),
-            shape: if b.intact {
-                b.shape
-            } else {
-                kernel::drop_debris(&b.shape)
-            },
+            shape: if b.intact { b.shape } else { kernel::drop_debris(&b.shape) },
             id: b.id,
             name: b.name,
             owners: b.owners,
@@ -1487,10 +1406,7 @@ fn skipped_features(
             let Some(t) = f.type_name() else { return true };
             !*declared.entry(t).or_insert_with(|| plugin_declares(t))
         })
-        .map(|(_, f)| Skipped {
-            feature_id: f.id().to_owned(),
-            type_name: f.type_name().unwrap_or("").to_owned(),
-        })
+        .map(|(_, f)| Skipped { feature_id: f.id().to_owned(), type_name: f.type_name().unwrap_or("").to_owned() })
         .collect()
 }
 
@@ -1522,9 +1438,7 @@ fn name_skipped_causes(
     let bodies: Vec<String> = owned.iter().map(|(b, _)| b.clone()).collect();
     let owner_of = |body: &str| owned.iter().find(|(b, _)| b == body).map(|(_, f)| f.clone());
     for e in errors.iter_mut() {
-        let node = raw_features
-            .iter()
-            .find(|r| r.get("id").and_then(Value::as_str) == e.feature_id.as_deref());
+        let node = raw_features.iter().find(|r| r.get("id").and_then(Value::as_str) == e.feature_id.as_deref());
         let cause = node
             .and_then(|n| references_any(n, &ids).map(str::to_owned))
             .or_else(|| node.and_then(|n| references_any(n, &bodies)).and_then(owner_of))
@@ -1543,9 +1457,7 @@ fn name_skipped_causes(
                     e.message.replace_range(at..at + advice.len(), with);
                 }
             }
-            e.message.push_str(&format!(
-                " ({label} is from a newer version of FundaCAD and is not built here)"
-            ));
+            e.message.push_str(&format!(" ({label} is from a newer version of FundaCAD and is not built here)"));
         }
     }
 }
@@ -1557,12 +1469,7 @@ enum Ran {
     Skipped,
 }
 
-fn run_feature(
-    ctx: &mut Ctx,
-    f: &Feature,
-    type_name: Option<&str>,
-    watch: &dyn Watch,
-) -> FResult<Ran> {
+fn run_feature(ctx: &mut Ctx, f: &Feature, type_name: Option<&str>, watch: &dyn Watch) -> FResult<Ran> {
     let Some(t) = type_name else {
         return Err(Fail::Missing("type".into()));
     };
@@ -1630,10 +1537,7 @@ pub fn result_fields(doc: &CadDocument, r: &Rebuild) -> Map<String, Value> {
     if !r.bodies.is_empty() || !r.skipped.is_empty() {
         if let Some(last) = r.errors.last() {
             m.insert("featureError".into(), last.wire());
-            m.insert(
-                "featureErrors".into(),
-                Value::Array(r.errors.iter().map(FeatureError::wire_full).collect()),
-            );
+            m.insert("featureErrors".into(), Value::Array(r.errors.iter().map(FeatureError::wire_full).collect()));
         }
     }
     m
@@ -1654,10 +1558,7 @@ mod tests {
 
     #[test]
     fn body_tokens_need_word_boundaries() {
-        assert_eq!(
-            body_tokens("no such body body3, body5 x"),
-            vec!["body3", "body5"]
-        );
+        assert_eq!(body_tokens("no such body body3, body5 x"), vec!["body3", "body5"]);
         assert!(body_tokens("somebody12 body").is_empty());
     }
 

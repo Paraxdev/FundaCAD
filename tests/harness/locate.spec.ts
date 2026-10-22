@@ -55,24 +55,32 @@ describe("findControl", () => {
   });
 
   it("leaves out hints that only share a few letters or the middle of a word", () => {
-    document.body.insertAdjacentHTML("beforeend",
-      '<nav id="toolrail"><button data-action="isolate">Isolate Off</button><button data-group="print">3D Printing Toolbox</button></nav>');
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<nav id="toolrail"><button data-action="isolate">Isolate Off</button><button data-group="print">3D Printing Toolbox</button></nav>',
+    );
     expect(fail("isometric").message).toBe('no visible control "isometric"');
     expect(fail("Box").message).toBe('no visible control "Box"');
     expect(fail("Tool").message).toContain('group:print "3D Printing Toolbox"');
   });
 
   it("says when History shows only what relates to the selection", () => {
-    document.body.insertAdjacentHTML("beforeend",
-      '<button class="timeline-related on" data-testid="history-related">Related to Selection · 1</button>');
-    expect(fail("feature:f9").message).toBe('no visible control "feature:f9", History shows only what relates to'
-      + " the selection, press Escape to clear the selection or click testid:history-related");
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<button class="timeline-related on" data-testid="history-related">Related to Selection · 1</button>',
+    );
+    expect(fail("feature:f9").message).toBe(
+      'no visible control "feature:f9", History shows only what relates to' +
+        " the selection, press Escape to clear the selection or click testid:history-related",
+    );
   });
 
   it("hints a missing value field with the fields on screen, or says no value box is open", () => {
     expect(fail("field:size").message).toContain('did you mean field:angle "Angle"');
     document.querySelectorAll(".dim-input").forEach((e) => e.remove());
-    expect(fail("field:angle").message).toBe('no visible control "field:angle", no value box is open, the tool may still be waiting for a pick');
+    expect(fail("field:angle").message).toBe(
+      'no visible control "field:angle", no value box is open, the tool may still be waiting for a pick',
+    );
   });
 
   it("hints a missing menu item with the items of that menu", () => {
@@ -100,11 +108,19 @@ describe("toolPath", () => {
   const rail: RailEntry[] = [
     { kind: "tool", action: "sketch", label: "Sketch", icon: "sketch" },
     {
-      kind: "family", id: "cat:CREATE", label: "Create", icon: "extrude", style: "category",
+      kind: "family",
+      id: "cat:CREATE",
+      label: "Create",
+      icon: "extrude",
+      style: "category",
       items: [{ kind: "tool", action: "extrude", label: "Extrude", icon: "extrude" }],
     },
     {
-      kind: "family", id: "fam:circle", label: "Circle", icon: "circle", style: "variants",
+      kind: "family",
+      id: "fam:circle",
+      label: "Circle",
+      icon: "circle",
+      style: "variants",
       items: [{ kind: "tool", action: "circle3", label: "3 point circle", icon: "circle" }],
     },
   ];
@@ -126,8 +142,8 @@ describe("toolPath", () => {
 
   it("says where tools live when no family has it", () => {
     expect(() => toolPath(walk(), "Loft", "model", rail)).toThrow(
-      'no tool "Loft" in the rail: click a family to list its tools (family:cat:CREATE "Create",'
-      + ` family:cat:MODIFY "Modify"), a tool's own choices, such as the shapes of Primitive, show once it starts`,
+      'no tool "Loft" in the rail: click a family to list its tools (family:cat:CREATE "Create",' +
+        ` family:cat:MODIFY "Modify"), a tool's own choices, such as the shapes of Primitive, show once it starts`,
     );
   });
 });

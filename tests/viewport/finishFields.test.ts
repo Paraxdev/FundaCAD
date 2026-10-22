@@ -5,7 +5,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { BodyFinishLayer, type FinishOverlays, finishKey } from "../../src/viewport/bodyFinish";
-import { applyFinishFields, applyGlassLook, setRenderLowPower, type BodyMesh, type ModelView } from "../../src/viewport/render";
+import {
+  applyFinishFields,
+  applyGlassLook,
+  setRenderLowPower,
+  type BodyMesh,
+  type ModelView,
+} from "../../src/viewport/render";
 import { dressPreview, previewKey } from "../../src/viewport/materialPreview";
 import { getPatch } from "../../src/viewport/shaderPatches";
 import { type BodyFinish, FINISH } from "../../src/document/materials";
@@ -26,7 +32,16 @@ function body(id: string): BodyMesh {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
   const mesh = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial());
-  return { id, name: id, faceStart: 0, faceCount: 1, mesh, faceIds: [0], baseColors: new Float32Array(9), faceTriangles: new Map() } as unknown as BodyMesh;
+  return {
+    id,
+    name: id,
+    faceStart: 0,
+    faceCount: 1,
+    mesh,
+    faceIds: [0],
+    baseColors: new Float32Array(9),
+    faceTriangles: new Map(),
+  } as unknown as BodyMesh;
 }
 
 function layer(b: BodyMesh) {
@@ -44,7 +59,8 @@ function layer(b: BodyMesh) {
 const base: FinishOverlays = { xray: false, stale: false, wireframe: false };
 const ZUP = new THREE.Vector3(0, 0, 1);
 const silk: BodyFinish = { ...FINISH, sheen: 0.4, anisotropy: 0.6 };
-const axisOf = (m: THREE.Material) => (getPatch(m, "anisotropy")!.uniforms!["uAnisoAxis"]!.value as THREE.Vector3).toArray();
+const axisOf = (m: THREE.Material) =>
+  (getPatch(m, "anisotropy")!.uniforms!["uAnisoAxis"]!.value as THREE.Vector3).toArray();
 
 afterEach(() => setRenderLowPower(false));
 
@@ -81,7 +97,10 @@ describe("applyFinishFields", () => {
   });
 
   it("drops sheen and anisotropy on a ghost and on the low tier", () => {
-    for (const [ghost, low] of [[true, false], [false, true]] as const) {
+    for (const [ghost, low] of [
+      [true, false],
+      [false, true],
+    ] as const) {
       setRenderLowPower(false);
       const m = new THREE.MeshPhysicalMaterial();
       applyFinishFields(m, silk, false, "#808080", ZUP);
@@ -151,7 +170,11 @@ describe("finish fields reach the keys", () => {
   it("counts each field in finishKey and the swatch key", () => {
     const m = { id: "a", name: "A", color: "#808080" };
     for (const d of [
-      { sheen: 0.4 }, { anisotropy: 0.6 }, { flakes: 0.2 }, { flakeSize: 0.3 }, { scatterDistance: 2 },
+      { sheen: 0.4 },
+      { anisotropy: 0.6 },
+      { flakes: 0.2 },
+      { flakeSize: 0.3 },
+      { scatterDistance: 2 },
       { castsLight: false },
     ]) {
       expect(finishKey({ ...FINISH, ...d }), JSON.stringify(d)).not.toBe(finishKey({ ...FINISH }));

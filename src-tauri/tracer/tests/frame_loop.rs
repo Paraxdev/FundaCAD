@@ -168,7 +168,8 @@ mod t {
             t.frame(32, 24, Duration::from_millis(12));
             assert_eq!(t.fault(), None);
             t.lose_device_for_test();
-            let px = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| t.frame(32, 24, Duration::from_millis(12))));
+            let px =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| t.frame(32, 24, Duration::from_millis(12))));
             let px = px.expect("a lost device panicked");
             assert_eq!(px.len(), 32 * 24 * 4);
             let fault = t.fault().expect("no fault after the loss");

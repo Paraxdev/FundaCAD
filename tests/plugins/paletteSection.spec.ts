@@ -46,11 +46,22 @@ function fakeEngine(bodies: { id: string }[]) {
 }
 
 const slot = (over: Partial<FilamentSlot> = {}): FilamentSlot => ({
-  index: 0, present: true, vendor: "Polymaker", material: "PLA", color: "#d23b30", ...over,
+  index: 0,
+  present: true,
+  vendor: "Polymaker",
+  material: "PLA",
+  color: "#d23b30",
+  ...over,
 });
 
 /** A stand-in for whatever can talk to a machine. */
-function filaments(over: Partial<{ probe: () => Promise<boolean>; read: () => Promise<FilamentSlot[]>; sync: () => Promise<boolean> }> = {}) {
+function filaments(
+  over: Partial<{
+    probe: () => Promise<boolean>;
+    read: () => Promise<FilamentSlot[]>;
+    sync: () => Promise<boolean>;
+  }> = {},
+) {
   return {
     probe: () => Promise.resolve(true),
     read: () => Promise.resolve([slot()]),
@@ -115,7 +126,12 @@ describe("the filament palette", () => {
     let probes = 0;
     contribute("Some.Printer", {
       provides: {
-        [FILAMENTS]: filaments({ probe: () => { probes++; return Promise.resolve(true); } }),
+        [FILAMENTS]: filaments({
+          probe: () => {
+            probes++;
+            return Promise.resolve(true);
+          },
+        }),
       },
     });
     const { w } = await render([]);

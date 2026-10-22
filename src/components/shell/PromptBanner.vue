@@ -54,21 +54,38 @@ function place() {
 
 let frame = 0;
 const schedule = () => {
-  if (!frame) frame = requestAnimationFrame(() => { frame = 0; place(); });
+  if (!frame)
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      place();
+    });
 };
 let ro: ResizeObserver | null = null;
 onMounted(() => {
   ro = new ResizeObserver(schedule);
   const watchAll = () => {
     ro!.disconnect();
-    for (const n of [el.value, el.value?.parentElement, ...document.querySelectorAll("#float-layer .float-left, #float-layer .float-left-stack, #float-layer .tool-rail, #float-layer .float-right")]) {
+    for (const n of [
+      el.value,
+      el.value?.parentElement,
+      ...document.querySelectorAll(
+        "#float-layer .float-left, #float-layer .float-left-stack, #float-layer .tool-rail, #float-layer .float-right",
+      ),
+    ]) {
       if (n) ro!.observe(n);
     }
   };
   watchAll();
   // The columns' contents come and go (Items closed, History opened), and a
   // card swapped for another of the same size fires no resize.
-  watch(() => [prompt.text, title.value], () => nextTick(() => { watchAll(); place(); }));
+  watch(
+    () => [prompt.text, title.value],
+    () =>
+      nextTick(() => {
+        watchAll();
+        place();
+      }),
+  );
   schedule();
 });
 onUnmounted(() => {

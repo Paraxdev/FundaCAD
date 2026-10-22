@@ -41,7 +41,9 @@ describe("native tracer probe", () => {
     expect((await probeNative()).available).toBe(false);
     const stuck = await probeNative(() => new Promise(() => {}), 10);
     expect(stuck).toEqual({ available: false, reason: "the probe did not answer" });
-    const refused = await probeNative(async () => { throw new Error("no adapter"); });
+    const refused = await probeNative(async () => {
+      throw new Error("no adapter");
+    });
     expect(refused.available).toBe(false);
     expect(await probeNative(async () => software)).toEqual(software);
   });

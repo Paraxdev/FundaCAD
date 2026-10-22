@@ -43,10 +43,7 @@ impl Clocks {
                 .filter(|s| s.is_finite() && *s > 0.0)
                 .map_or(default, Duration::from_secs_f64)
         };
-        Clocks {
-            stall: secs("FUNDACAD_STALL_TIMEOUT", STALL_TIMEOUT),
-            job: secs("FUNDACAD_JOB_TIMEOUT", JOB_TIMEOUT),
-        }
+        Clocks { stall: secs("FUNDACAD_STALL_TIMEOUT", STALL_TIMEOUT), job: secs("FUNDACAD_JOB_TIMEOUT", JOB_TIMEOUT) }
     }
 
     /// server.py `_dispatch`'s choice of `_run` or `_run_stall` for `op`.
@@ -64,16 +61,13 @@ impl Clocks {
     /// `_export_stall_budget`: the write is one silent kernel call, so the
     /// budget scales with the bodies it writes.
     fn export_budget(&self, doc: Option<&Value>) -> Duration {
-        let n: usize = doc
-            .and_then(|d| d.get("features"))
-            .and_then(Value::as_array)
-            .map_or(0, |feats| {
-                feats
-                    .iter()
-                    .filter(|f| f.is_object())
-                    .map(|f| f.get("parts").and_then(Value::as_array).map_or(0, Vec::len).max(1))
-                    .sum()
-            });
+        let n: usize = doc.and_then(|d| d.get("features")).and_then(Value::as_array).map_or(0, |feats| {
+            feats
+                .iter()
+                .filter(|f| f.is_object())
+                .map(|f| f.get("parts").and_then(Value::as_array).map_or(0, Vec::len).max(1))
+                .sum()
+        });
         self.stall.max(Duration::from_secs_f64(EXPORT_SEC_PER_BODY * n as f64))
     }
 
@@ -89,10 +83,7 @@ impl Clocks {
 
 impl Default for Clocks {
     fn default() -> Clocks {
-        Clocks {
-            stall: STALL_TIMEOUT,
-            job: JOB_TIMEOUT,
-        }
+        Clocks { stall: STALL_TIMEOUT, job: JOB_TIMEOUT }
     }
 }
 
@@ -157,14 +148,7 @@ pub struct Watchdog {
 impl Watchdog {
     pub fn new(budget: Budget, cancel_grace: Option<Duration>) -> Watchdog {
         let now = Instant::now();
-        Watchdog {
-            budget,
-            cancel_grace,
-            started: now,
-            last_beat: 0,
-            last_beat_at: now,
-            cancelled_at: None,
-        }
+        Watchdog { budget, cancel_grace, started: now, last_beat: 0, last_beat_at: now, cancelled_at: None }
     }
 
     pub fn poll(&mut self, beats: u64, cancelled: bool, now: Instant) -> Option<Breach> {

@@ -156,8 +156,7 @@ pub fn allowed_bundle_url(url: &str) -> bool {
     if host.is_empty() || host.starts_with('.') || host.ends_with('.') || host.contains("..") {
         return false;
     }
-    host.chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+    host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
 }
 
 /// The path an archive entry may be written to, relative to the plugin
@@ -213,10 +212,7 @@ pub fn safe_entry(name: &str) -> Option<PathBuf> {
 /// has to be argued about every time it fires.
 pub fn grants_match(expect: &Consented, found: &Consented) -> Result<(), String> {
     if expect.kind != found.kind {
-        return Err(format!(
-            "the bundle is a {} plugin, the one described was {}",
-            found.kind, expect.kind
-        ));
+        return Err(format!("the bundle is a {} plugin, the one described was {}", found.kind, expect.kind));
     }
     let mut a = expect.grants.clone();
     let mut b = found.grants.clone();
@@ -225,10 +221,7 @@ pub fn grants_match(expect: &Consented, found: &Consented) -> Result<(), String>
     b.sort();
     b.dedup();
     if a != b {
-        return Err(format!(
-            "the bundle asks for different permissions than the ones shown: {}",
-            b.join(", ")
-        ));
+        return Err(format!("the bundle asks for different permissions than the ones shown: {}", b.join(", ")));
     }
     let mut ha = expect.hosts.clone();
     let mut hb = found.hosts.clone();
@@ -237,10 +230,7 @@ pub fn grants_match(expect: &Consented, found: &Consented) -> Result<(), String>
     hb.sort();
     hb.dedup();
     if ha != hb {
-        return Err(format!(
-            "the bundle names different hosts than the ones shown: {}",
-            hb.join(", ")
-        ));
+        return Err(format!("the bundle names different hosts than the ones shown: {}", hb.join(", ")));
     }
     Ok(())
 }
@@ -284,19 +274,14 @@ pub fn extract_into(bytes: &[u8], dest: &Path) -> Result<(), String> {
             std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
         }
         let mut buf = Vec::with_capacity(entry.size() as usize);
-        entry
-            .read_to_end(&mut buf)
-            .map_err(|e| format!("{raw}: {e}"))?;
+        entry.read_to_end(&mut buf).map_err(|e| format!("{raw}: {e}"))?;
         std::fs::write(&target, &buf).map_err(|e| format!("{}: {e}", target.display()))?;
     }
     Ok(())
 }
 
 pub fn now_secs() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 /// An id from the webview names a directory, so it gets the same treatment as
@@ -316,9 +301,7 @@ pub fn safe_id(id: &str) -> Result<&str, String> {
         !part.is_empty()
             && part.len() <= 31
             && part.starts_with(|c: char| c.is_ascii_alphabetic())
-            && part
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-')
+            && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
     }
 
     let mut parts = id.split('.');
@@ -355,25 +338,22 @@ mod tests {
             ".inspect-x",
             "a/b",
             "a\\b",
-            "a.b.c",       // two dots is two chances to be a path
-            "a..b",        // and this one is `..` in the middle
+            "a.b.c", // two dots is two chances to be a path
+            "a..b",  // and this one is `..` in the middle
             "a.",
             ".a",
-            "-leading",    // must start with a letter, not a dash
-            "1st",         // nor a digit
+            "-leading", // must start with a letter, not a dash
+            "1st",      // nor a digit
             "with space",
             "with:colon",
             "with\u{0000}nul",
             "with\nnewline",
             "Uni\u{00e7}ode",
-            "\u{0430}dmin",  // Cyrillic a: reads as ASCII, is not
+            "\u{0430}dmin",                     // Cyrillic a: reads as ASCII, is not
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", // 32 in one segment, cap is 31
             "Ok.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         ] {
-            assert!(
-                safe_id(bad).is_err(),
-                "should not be a usable plugin id: {bad:?}"
-            );
+            assert!(safe_id(bad).is_err(), "should not be a usable plugin id: {bad:?}");
         }
 
         // The controls. Without these the test passes just as well against a
@@ -419,14 +399,8 @@ mod tests {
     fn a_digest_is_the_one_sha256sum_would_print() {
         // Not a self-consistency check: the release job computes this with
         // `sha256sum`, and a digest only we can reproduce is worth nothing.
-        assert_eq!(
-            sha256_hex(b"abc"),
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-        );
-        assert_eq!(
-            sha256_hex(b""),
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        );
+        assert_eq!(sha256_hex(b"abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        assert_eq!(sha256_hex(b""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     }
 
     #[test]
@@ -441,19 +415,13 @@ mod tests {
             "sub\\evil.py",
             "",
         ] {
-            assert!(
-                safe_entry(hostile).is_none(),
-                "an escaping entry was allowed: {hostile:?}"
-            );
+            assert!(safe_entry(hostile).is_none(), "an escaping entry was allowed: {hostile:?}");
         }
         // The control. If the guard refused everything it would pass the loop
         // above while making the feature impossible, and nothing else here
         // would notice.
         assert_eq!(safe_entry("manifest.json"), Some(PathBuf::from("manifest.json")));
-        assert_eq!(
-            safe_entry("pkg/sub/mod.py"),
-            Some(PathBuf::from("pkg").join("sub").join("mod.py"))
-        );
+        assert_eq!(safe_entry("pkg/sub/mod.py"), Some(PathBuf::from("pkg").join("sub").join("mod.py")));
         assert_eq!(safe_entry("./a.py"), Some(PathBuf::from("a.py")));
     }
 
@@ -505,9 +473,7 @@ mod tests {
 
     #[test]
     fn official_is_a_label_and_not_a_permission() {
-        assert!(is_official_url(
-            "https://github.com/Paraxdev/fundacad/releases/download/beta/plugin-mcp.zip"
-        ));
+        assert!(is_official_url("https://github.com/Paraxdev/fundacad/releases/download/beta/plugin-mcp.zip"));
         for not_ours in [
             "https://github.com/someone/else/releases/download/beta/x.zip",
             "https://plugins.example.com/x.zip",
@@ -529,20 +495,10 @@ mod tests {
     #[test]
     fn a_zip_unpacks_into_the_plugin_directory() {
         let dir = tmpdir("extract");
-        let bytes = zip_of(&[
-            ("manifest.json", b"{}" as &[u8]),
-            ("server.py", b"print(1)"),
-            ("pkg/mod.py", b"x = 2"),
-        ]);
+        let bytes = zip_of(&[("manifest.json", b"{}" as &[u8]), ("server.py", b"print(1)"), ("pkg/mod.py", b"x = 2")]);
         extract_into(&bytes, &dir).expect("a plain bundle must unpack");
-        assert_eq!(
-            std::fs::read_to_string(dir.join("server.py")).unwrap(),
-            "print(1)"
-        );
-        assert_eq!(
-            std::fs::read_to_string(dir.join("pkg").join("mod.py")).unwrap(),
-            "x = 2"
-        );
+        assert_eq!(std::fs::read_to_string(dir.join("server.py")).unwrap(), "print(1)");
+        assert_eq!(std::fs::read_to_string(dir.join("pkg").join("mod.py")).unwrap(), "x = 2");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -550,17 +506,10 @@ mod tests {
     fn a_zip_that_writes_outside_the_plugin_directory_is_refused() {
         let dir = tmpdir("slip");
         let outside = dir.join("outside.py");
-        let bytes = zip_of(&[
-            ("manifest.json", b"{}" as &[u8]),
-            ("../outside.py", b"owned"),
-        ]);
+        let bytes = zip_of(&[("manifest.json", b"{}" as &[u8]), ("../outside.py", b"owned")]);
         let err = extract_into(&bytes, &dir.join("plug")).expect_err("zip slip must be refused");
         assert!(err.contains("unsafe path"), "refused for the wrong reason: {err}");
-        assert!(
-            !outside.exists(),
-            "the escaping entry was written to {}",
-            outside.display()
-        );
+        assert!(!outside.exists(), "the escaping entry was written to {}", outside.display());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -573,18 +522,11 @@ mod tests {
             hosts: vec![],
         };
         // Order is not a difference.
-        let reordered = Consented {
-            grants: vec!["document.write".into(), "document.read".into()],
-            ..shown.clone()
-        };
+        let reordered = Consented { grants: vec!["document.write".into(), "document.read".into()], ..shown.clone() };
         assert!(grants_match(&shown, &reordered).is_ok(), "order counted as a change");
 
         let greedier = Consented {
-            grants: vec![
-                "document.read".into(),
-                "document.write".into(),
-                "process.spawn".into(),
-            ],
+            grants: vec!["document.read".into(), "document.write".into(), "process.spawn".into()],
             ..shown.clone()
         };
         let err = grants_match(&shown, &greedier).expect_err("a greedier bundle must be refused");

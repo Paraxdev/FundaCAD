@@ -12,12 +12,28 @@ import { useContextMenuStore } from "../../stores/contextMenu";
 import { choose } from "../../ui/choice";
 import { contextMenu } from "../../ui/menu";
 import { escapeClaimed } from "../../ui/escapeClaim";
-import { buildEntries, filterEntries, folderEntries, folderName, folderSort, matchesQuery, sortEntries, type HomeEntry, type SortMode } from "../../ui/homeList";
+import {
+  buildEntries,
+  filterEntries,
+  folderEntries,
+  folderName,
+  folderSort,
+  matchesQuery,
+  sortEntries,
+  type HomeEntry,
+  type SortMode,
+} from "../../ui/homeList";
 import { TEMPLATES } from "../../templates";
 import { readSetting } from "../../ui/storedSetting";
 import { thumbQueueFor } from "../../ui/thumbQueue";
 import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
-import { getHomeBackground, homeBackgroundClass, homeBackgroundStyle, loadHomeImage, onHomeBackgroundChange } from "../../ui/homeBackground";
+import {
+  getHomeBackground,
+  homeBackgroundClass,
+  homeBackgroundStyle,
+  loadHomeImage,
+  onHomeBackgroundChange,
+} from "../../ui/homeBackground";
 import Icon from "../shell/Icon.vue";
 import DocCard from "./DocCard.vue";
 import ExampleCard from "./ExampleCard.vue";
@@ -35,7 +51,9 @@ const ctx = useContextMenuStore();
 const lib = library();
 const thumbs = lib ? thumbQueueFor(lib) : null;
 
-const close = () => { home.visible = false; };
+const close = () => {
+  home.visible = false;
+};
 
 useModalGate();
 let ownDepth = 0;
@@ -86,7 +104,11 @@ const SORTS: { value: SortMode; label: string }[] = [
 const stored = readSetting(SORT_KEY);
 const sort = ref<SortMode>(SORTS.some((s) => s.value === stored) ? (stored as SortMode) : "opened");
 watch(sort, (v) => {
-  try { localStorage.setItem(SORT_KEY, v); } catch { /* blocked storage keeps the default */ }
+  try {
+    localStorage.setItem(SORT_KEY, v);
+  } catch {
+    /* blocked storage keeps the default */
+  }
 });
 const searchField = ref<HTMLInputElement | null>(null);
 
@@ -96,12 +118,14 @@ const view = ref("recent");
 const listings = ref(new Map<string, FolderListing | Error>());
 const loading = ref<string | null>(null);
 const inFolder = computed(() => view.value !== "recent");
-const listing = computed(() => (inFolder.value ? listings.value.get(view.value) ?? null : null));
+const listing = computed(() => (inFolder.value ? (listings.value.get(view.value) ?? null) : null));
 
 const sorts = computed(() => (inFolder.value ? SORTS.filter((s) => s.value !== "opened") : SORTS));
 const shownSort = computed<SortMode>({
   get: () => (inFolder.value ? folderSort(sort.value) : sort.value),
-  set: (v) => { sort.value = v; },
+  set: (v) => {
+    sort.value = v;
+  },
 });
 
 const all = computed(() => {
@@ -203,7 +227,16 @@ async function versionAction(act: Promise<boolean>): Promise<void> {
 function entryMenu(entry: HomeEntry, ev: MouseEvent): void {
   contextMenu(ev.clientX, ev.clientY, [
     { label: "Open", onClick: () => void openEntry(entry) },
-    ...(entry.missing ? [] : [{ label: "Versions", onClick: () => { drawer.value = entry; } }]),
+    ...(entry.missing
+      ? []
+      : [
+          {
+            label: "Versions",
+            onClick: () => {
+              drawer.value = entry;
+            },
+          },
+        ]),
     ...(inFolder.value ? [] : [{ label: "Remove from list", onClick: () => forget(entry.path) }]),
     { separator: true, label: "" },
     { label: "Copy path", onClick: () => void navigator.clipboard?.writeText(entry.path).catch(() => {}) },

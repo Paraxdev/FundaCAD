@@ -52,23 +52,17 @@ fn posix_paths(text: &str, args: &Value, cwd: &Path) -> String {
 fn the_parity_script_answers_as_the_python_server_did() {
     let root = repo();
     let golden: Value = serde_json::from_slice(
-        &std::fs::read(root.join("tests/golden/mcp_parity.golden.json"))
-            .expect("the golden transcript"),
+        &std::fs::read(root.join("tests/golden/mcp_parity.golden.json")).expect("the golden transcript"),
     )
     .expect("JSON");
-    let script = std::fs::read_to_string(root.join("crates/fundacad-mcp/tools/parity.jsonl"))
-        .expect("the script");
+    let script = std::fs::read_to_string(root.join("crates/fundacad-mcp/tools/parity.jsonl")).expect("the script");
     let steps: Vec<Value> = script
         .lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| serde_json::from_str(l).expect("one call per line"))
         .collect();
     let cases = golden["cases"].as_array().expect("cases");
-    assert_eq!(
-        steps.len(),
-        cases.len(),
-        "the script and the transcript have different lengths"
-    );
+    assert_eq!(steps.len(), cases.len(), "the script and the transcript have different lengths");
 
     let cwd = std::env::temp_dir().join(format!("fundacad-mcp-parity-{}", std::process::id()));
     std::fs::create_dir_all(&cwd).expect("a working directory");
@@ -77,10 +71,7 @@ fn the_parity_script_answers_as_the_python_server_did() {
     for (i, (step, want)) in steps.iter().zip(cases).enumerate() {
         let tool = step["tool"].as_str().expect("a tool");
         let args = step.get("args").cloned().unwrap_or_else(|| json!({}));
-        assert!(
-            want["tool"] == tool && want["args"] == args,
-            "call {i} is not the one the transcript recorded"
-        );
+        assert!(want["tool"] == tool && want["args"] == args, "call {i} is not the one the transcript recorded");
         let msg = mcp.rpc("tools/call", json!({"name": tool, "arguments": args}));
         let result = &msg["result"];
         let text: Vec<&str> = result["content"]
@@ -93,15 +84,22 @@ fn the_parity_script_answers_as_the_python_server_did() {
         let text = posix_paths(&text.join("\n"), &args, &cwd);
         // The transcript was recorded when the document version was 9; a new
         // document is stamped with the current one, which the app writes too.
-        let text = text.replace(
-            &format!("\"version\": {}", fundacad_core::schema::DOCUMENT_VERSION),
-            "\"version\": 9",
-        );
+        let text = text.replace(&format!("\"version\": {}", fundacad_core::schema::DOCUMENT_VERSION), "\"version\": 9");
         // The Python server had no ui, guide or measure tools, so its list of tools lacks them.
         let text = if text.starts_with("No tool '") {
-            ["guide_clear", "guide_highlight", "guide_wait", "measure", "ui_close", "ui_do", "ui_open", "ui_read", "ui_shot"]
-                .iter()
-                .fold(text, |t, n| t.replace(&format!(", {n}"), ""))
+            [
+                "guide_clear",
+                "guide_highlight",
+                "guide_wait",
+                "measure",
+                "ui_close",
+                "ui_do",
+                "ui_open",
+                "ui_read",
+                "ui_shot",
+            ]
+            .iter()
+            .fold(text, |t, n| t.replace(&format!(", {n}"), ""))
         } else {
             text
         };
@@ -111,16 +109,10 @@ fn the_parity_script_answers_as_the_python_server_did() {
             "",
         );
         let is_error = result["isError"].as_bool().unwrap_or(false);
-        if text != want["text"].as_str().unwrap_or("")
-            || Some(is_error) != want["isError"].as_bool()
-        {
+        if text != want["text"].as_str().unwrap_or("") || Some(is_error) != want["isError"].as_bool() {
             differences.push(format!(
                 "call {i} {tool}{}:\n  python: {:?}\n  rust:   {text:?}",
-                if Some(is_error) != want["isError"].as_bool() {
-                    " (isError differs)"
-                } else {
-                    ""
-                },
+                if Some(is_error) != want["isError"].as_bool() { " (isError differs)" } else { "" },
                 want["text"].as_str().unwrap_or("")
             ));
         }

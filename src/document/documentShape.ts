@@ -7,7 +7,10 @@
  *  file is not a FundaCAD document, or it is damaged: ...". `message` keeps the
  *  technical detail. */
 export class UnreadableDocumentError extends Error {
-  constructor(readonly reason: string, detail: string) {
+  constructor(
+    readonly reason: string,
+    detail: string,
+  ) {
     super(detail);
     this.name = "UnreadableDocumentError";
   }
@@ -19,8 +22,7 @@ function kindOf(v: unknown): string {
   return `a ${typeof v}`;
 }
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  v !== null && typeof v === "object" && !Array.isArray(v);
+const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /** Null when `parsed` has the shape of a document, else what is wrong with it. */
 export function documentShapeProblem(parsed: unknown): { reason: string; detail: string } | null {
@@ -32,7 +34,10 @@ export function documentShapeProblem(parsed: unknown): { reason: string; detail:
     return { reason: "it has no modelling steps in it", detail: `"features" is missing` };
   }
   if (!Array.isArray(features)) {
-    return { reason: "its list of modelling steps is damaged", detail: `"features" is ${kindOf(features)}, expected an array` };
+    return {
+      reason: "its list of modelling steps is damaged",
+      detail: `"features" is ${kindOf(features)}, expected an array`,
+    };
   }
   for (let i = 0; i < features.length; i++) {
     const f: unknown = features[i];

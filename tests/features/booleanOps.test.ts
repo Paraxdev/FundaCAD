@@ -71,8 +71,11 @@ describe("every surface carries all three", () => {
     // question there instead.
     const bar = toolbarOffers({ body: 2 }).map((o) => o.tool);
     for (const a of ACTIONS) expect(bar, a).toContain(a);
-    expect(selectionOffers({ body: 1 }).filter((o) => ACTIONS.includes(o.tool)).every((o) => !o.enabled))
-      .toBe(true);
+    expect(
+      selectionOffers({ body: 1 })
+        .filter((o) => ACTIONS.includes(o.tool))
+        .every((o) => !o.enabled),
+    ).toBe(true);
   });
 
   it("the ribbon, on one split button", () => {

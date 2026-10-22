@@ -35,30 +35,15 @@ fn frame_params() -> Value {
 fn frame_steps() -> Vec<Vec<Value>> {
     vec![
         vec![
-            rect(
-                "f1",
-                "XY",
-                (json!(0), json!(0)),
-                (json!("base_w"), json!("base_h")),
-            ),
+            rect("f1", "XY", (json!(0), json!(0)), (json!("base_w"), json!("base_h"))),
             extrude("f3", "f1", json!("frame_depth"), [10.0, 20.0, 0.0]),
         ],
         vec![
-            rect(
-                "f2",
-                "XY",
-                (json!(0), json!(0)),
-                (json!("upright_size"), json!("upright_size")),
-            ),
+            rect("f2", "XY", (json!(0), json!(0)), (json!("upright_size"), json!("upright_size"))),
             extrude("f4", "f2", json!("upright_len"), [10.0, 10.0, 0.0]),
         ],
         vec![
-            rect(
-                "f9",
-                "XY",
-                (json!(0), json!(0)),
-                (json!("base_w"), json!("base_h")),
-            ),
+            rect("f9", "XY", (json!(0), json!(0)), (json!("base_w"), json!("base_h"))),
             extrude("f10", "f9", json!("frame_width"), [10.0, 20.0, 0.0]),
         ],
     ]
@@ -66,18 +51,9 @@ fn frame_steps() -> Vec<Vec<Value>> {
 
 fn revolve_steps() -> Vec<Vec<Value>> {
     vec![
-        vec![
-            rect("f1", "XZ", (json!(10), json!(0)), (json!(30), json!(40))),
-            revolve("f3", "f1", [20.0, 0.0, 20.0]),
-        ],
-        vec![
-            rect("f2", "XZ", (json!(10), json!(0)), (json!(30), json!(20))),
-            revolve("f4", "f2", [20.0, 0.0, 10.0]),
-        ],
-        vec![
-            rect("f9", "XZ", (json!(10), json!(0)), (json!(30), json!(40))),
-            revolve("f10", "f9", [20.0, 0.0, 20.0]),
-        ],
+        vec![rect("f1", "XZ", (json!(10), json!(0)), (json!(30), json!(40))), revolve("f3", "f1", [20.0, 0.0, 20.0])],
+        vec![rect("f2", "XZ", (json!(10), json!(0)), (json!(30), json!(20))), revolve("f4", "f2", [20.0, 0.0, 10.0])],
+        vec![rect("f9", "XZ", (json!(10), json!(0)), (json!(30), json!(40))), revolve("f10", "f9", [20.0, 0.0, 20.0])],
     ]
 }
 
@@ -86,19 +62,12 @@ fn doc(params: &Value, steps: &[Vec<Value>]) -> Value {
 }
 
 fn sizes(r: &Rebuild) -> Vec<(String, [i64; 3])> {
-    assert!(
-        r.errors.is_empty(),
-        "{:?}",
-        r.errors.iter().map(|e| e.wire()).collect::<Vec<_>>()
-    );
+    assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| e.wire()).collect::<Vec<_>>());
     r.bodies
         .iter()
         .map(|b| {
             let bb = kernel::bbox(&b.shape).expect("a body has a box");
-            (
-                b.id.clone(),
-                [0, 1, 2].map(|k| (bb[k + 3] - bb[k]).round() as i64),
-            )
+            (b.id.clone(), [0, 1, 2].map(|k| (bb[k + 3] - bb[k]).round() as i64))
         })
         .collect()
 }
@@ -111,16 +80,10 @@ fn build_incrementally(params: Value, steps: Vec<Vec<Value>>) -> Vec<(String, [i
     for n in 1..=steps.len() {
         let raw = doc(&params, &steps[..n]);
         let typed: CadDocument = serde_json::from_value(raw.clone()).unwrap();
-        let warm = cache
-            .rebuild(&typed, &raw, &NoWatch)
-            .unwrap_or_else(|_| panic!("cancelled"));
+        let warm = cache.rebuild(&typed, &raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
         let cold = builder::rebuild(&typed, &raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
         last = sizes(&warm);
-        assert_eq!(
-            last,
-            sizes(&cold),
-            "a warm build of {n} steps differs from a cold one"
-        );
+        assert_eq!(last, sizes(&cold), "a warm build of {n} steps differs from a cold one");
     }
     last
 }
@@ -130,11 +93,7 @@ fn a_repeated_frame_profile_extrudes_its_own_sketch() {
     let got = build_incrementally(frame_params(), frame_steps());
     assert_eq!(
         got,
-        [
-            ("body1".to_owned(), [20, 40, 460]),
-            ("body2".to_owned(), [20, 20, 440]),
-            ("body3".to_owned(), [20, 40, 480])
-        ]
+        [("body1".to_owned(), [20, 40, 460]), ("body2".to_owned(), [20, 20, 440]), ("body3".to_owned(), [20, 40, 480])]
     );
 }
 
@@ -142,10 +101,7 @@ fn a_repeated_frame_profile_extrudes_its_own_sketch() {
 fn a_repeated_revolve_profile_revolves_its_own_sketch() {
     let got = build_incrementally(json!({}), revolve_steps());
     assert_eq!(got[2].0, "body3");
-    assert_eq!(
-        got[2].1[2], 40,
-        "the third revolve lost part of its profile: {got:?}"
-    );
+    assert_eq!(got[2].1[2], 40, "the third revolve lost part of its profile: {got:?}");
     assert_eq!(got[0].1, got[2].1);
 }
 
@@ -277,11 +233,14 @@ fn bounded_cut_lines_are_the_ones_reaching_the_box() {
     let all = kernel::profile_cuts(&shapes, [0.0; 3], [0.0, 0.0, 1.0], 600.0, 0.1, &[]).unwrap();
     let near = kernel::profile_cuts(&shapes, [0.0; 3], [0.0, 0.0, 1.0], 600.0, 0.1, &reach).unwrap();
     let reaches = |l: &Vec<[f64; 3]>| {
-        let (x0, x1) = (l.iter().map(|p| p[0]).fold(f64::MAX, f64::min), l.iter().map(|p| p[0]).fold(f64::MIN, f64::max));
-        let (y0, y1) = (l.iter().map(|p| p[1]).fold(f64::MAX, f64::min), l.iter().map(|p| p[1]).fold(f64::MIN, f64::max));
+        let (x0, x1) =
+            (l.iter().map(|p| p[0]).fold(f64::MAX, f64::min), l.iter().map(|p| p[0]).fold(f64::MIN, f64::max));
+        let (y0, y1) =
+            (l.iter().map(|p| p[1]).fold(f64::MAX, f64::min), l.iter().map(|p| p[1]).fold(f64::MIN, f64::max));
         x1 >= -10.5 && x0 <= 50.5 && y1 >= -10.5 && y0 <= 50.5
     };
-    let key = |l: &Vec<[f64; 3]>| format!("{:?}", l.iter().map(|p| p.map(|v| (v * 1e3).round() as i64)).collect::<Vec<_>>());
+    let key =
+        |l: &Vec<[f64; 3]>| format!("{:?}", l.iter().map(|p| p.map(|v| (v * 1e3).round() as i64)).collect::<Vec<_>>());
     let mut want: Vec<String> = all.iter().filter(|l| reaches(l)).map(key).collect();
     let mut got: Vec<String> = near.iter().map(key).collect();
     want.sort();

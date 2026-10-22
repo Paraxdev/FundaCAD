@@ -26,11 +26,17 @@ const canEdit = ref(liveEditsAllowed());
 const stops: (() => void)[] = [];
 onMounted(() => {
   stops.push(
-    engine.live.subscribe((s) => { state.value = s; }),
-    onLiveEditingChange(() => { canEdit.value = liveEditsAllowed(); }),
+    engine.live.subscribe((s) => {
+      state.value = s;
+    }),
+    onLiveEditingChange(() => {
+      canEdit.value = liveEditsAllowed();
+    }),
   );
 });
-onUnmounted(() => { for (const stop of stops) stop(); });
+onUnmounted(() => {
+  for (const stop of stops) stop();
+});
 
 const attached = computed(() => state.value.sharing && state.value.guests.length > 0);
 
@@ -51,7 +57,9 @@ onMounted(() => {
     recent.value = at > 0 && Date.now() - at < RECENT_MS;
   }, 1000);
 });
-onUnmounted(() => { if (timer !== null) clearInterval(timer); });
+onUnmounted(() => {
+  if (timer !== null) clearInterval(timer);
+});
 
 const title = computed(() =>
   canEdit.value

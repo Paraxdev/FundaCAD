@@ -64,7 +64,14 @@ describe("a glow drawn by a pass that overrides every material", () => {
     camera.updateMatrixWorld();
     const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
     const call = (mat: THREE.Material) =>
-      glow.onBeforeRender({} as THREE.WebGLRenderer, new THREE.Scene(), camera, geometry, mat, null as unknown as THREE.Group);
+      glow.onBeforeRender(
+        {} as THREE.WebGLRenderer,
+        new THREE.Scene(),
+        camera,
+        geometry,
+        mat,
+        null as unknown as THREE.Group,
+      );
     expect(() => call(depth)).not.toThrow();
     const own = glow.material as THREE.ShaderMaterial;
     own.uniforms.uFade!.value = -1;
@@ -81,7 +88,10 @@ describe("a section cut clips the glow and the face hover", () => {
   };
   const cut = new THREE.Plane(new THREE.Vector3(3, -4, 12).divideScalar(13), -40);
   const geometry = new THREE.BoxGeometry(30, 20, 12);
-  const clipOf = (m: THREE.Material) => ({ clipping: (m as THREE.ShaderMaterial).clipping ?? null, planes: m.clippingPlanes });
+  const clipOf = (m: THREE.Material) => ({
+    clipping: (m as THREE.ShaderMaterial).clipping ?? null,
+    planes: m.clippingPlanes,
+  });
   const hoverColor = new THREE.Color(0.2, 0.7, 0.5);
 
   it("reaches materials made before the cut and after it", async () => {

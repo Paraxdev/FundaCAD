@@ -21,11 +21,7 @@ pub fn ok(id: &Value, result: &Value) -> String {
 /// An error reply. An empty message is replaced, a blank banner helps nobody.
 pub fn err(id: &Value, message: &str, feature_id: Option<&Value>) -> String {
     let mut error = Map::new();
-    let message = if message.is_empty() {
-        "internal error (no message)"
-    } else {
-        message
-    };
+    let message = if message.is_empty() { "internal error (no message)" } else { message };
     error.insert("message".into(), Value::from(message));
     if let Some(fid) = feature_id {
         error.insert("feature_id".into(), fid.clone());
@@ -105,10 +101,7 @@ mod tests {
     #[test]
     fn shapes() {
         let id = json!("r1");
-        assert_eq!(
-            ok(&id, &json!({"pong": true})),
-            r#"{"id": "r1", "ok": true, "result": {"pong": true}}"#
-        );
+        assert_eq!(ok(&id, &json!({"pong": true})), r#"{"id": "r1", "ok": true, "result": {"pong": true}}"#);
         assert_eq!(
             err(&id, "", Some(&json!("f1"))),
             r#"{"id": "r1", "ok": false, "error": {"message": "internal error (no message)", "feature_id": "f1"}}"#
@@ -126,20 +119,14 @@ mod tests {
             r#"{"id": "r1", "status": "queued", "behind": {"op": "import", "who": "session"}}"#
         );
         assert_eq!(started(&id), r#"{"id": "r1", "status": "started"}"#);
-        assert_eq!(
-            bad_json("x"),
-            r#"{"id": null, "ok": false, "error": {"message": "bad JSON: x"}}"#
-        );
+        assert_eq!(bad_json("x"), r#"{"id": null, "ok": false, "error": {"message": "bad JSON: x"}}"#);
     }
 
     #[test]
     fn reply_for_dispatches() {
         let id = json!(7);
         let c = cancelled_result();
-        assert_eq!(
-            reply_for(&id, c.as_object().unwrap_or(&Map::new())),
-            cancelled(&id)
-        );
+        assert_eq!(reply_for(&id, c.as_object().unwrap_or(&Map::new())), cancelled(&id));
         let e = json!({"error": {"message": "boom", "feature_id": null}});
         assert_eq!(
             reply_for(&id, e.as_object().unwrap_or(&Map::new())),

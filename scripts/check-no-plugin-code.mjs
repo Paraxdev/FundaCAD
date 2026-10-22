@@ -83,8 +83,8 @@ for (const [id, marker] of MARKERS) {
 if (found.length) {
   console.error(
     `\n${found.length} plugin marker(s) in the shipped bundle. A plugin's code is ` +
-    "compiled into the app, which is what the dev branch in src/plugins/activate.ts " +
-    "exists to prevent.",
+      "compiled into the app, which is what the dev branch in src/plugins/activate.ts " +
+      "exists to prevent.",
   );
   process.exit(1);
 }

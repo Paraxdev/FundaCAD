@@ -16,10 +16,7 @@ const DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/select");
 fn close(a: &Value, b: &Value, path: &str, bad: &mut Vec<String>) {
     match (a, b) {
         (Value::Number(x), Value::Number(y)) => {
-            let (x, y) = (
-                x.as_f64().unwrap_or(f64::NAN),
-                y.as_f64().unwrap_or(f64::NAN),
-            );
+            let (x, y) = (x.as_f64().unwrap_or(f64::NAN), y.as_f64().unwrap_or(f64::NAN));
             if (x - y).abs() > 1e-6 + 1e-9 * x.abs().max(y.abs()) {
                 bad.push(format!("{path}: {x} != {y}"));
             }
@@ -72,12 +69,8 @@ fn run_case(case: &Value, part: &Shape) -> Value {
     let mut r = Resolver::new(Some(&mut diag), Some("f1"));
     let index = case["index"].as_u64().unwrap_or(0) as usize;
     let res: Result<Option<Value>, Fail> = match case["fn"].as_str().unwrap_or("") {
-        "edges" => r
-            .edges(part, sel)
-            .map(|v| Some(Value::Array(v.iter().map(edge_summary).collect()))),
-        "faces" => r
-            .faces(part, sel)
-            .map(|v| Some(Value::Array(v.iter().map(face_summary).collect()))),
+        "edges" => r.edges(part, sel).map(|v| Some(Value::Array(v.iter().map(edge_summary).collect()))),
+        "faces" => r.faces(part, sel).map(|v| Some(Value::Array(v.iter().map(face_summary).collect()))),
         "plane" => {
             let n = &case["normal"];
             let normal = [0, 1, 2].map(|i| n[i].as_f64().unwrap_or(0.0));
@@ -133,8 +126,7 @@ fn every_selector_kind_resolves_as_the_python_engine_does() {
         let name = case["name"].as_str().unwrap_or("?");
         let part_name = case["part"].as_str().unwrap_or("?").to_owned();
         let part = parts.entry(part_name.clone()).or_insert_with(|| {
-            let brep =
-                std::fs::read_to_string(format!("{DIR}/{part_name}.brep")).expect("part BREP");
+            let brep = std::fs::read_to_string(format!("{DIR}/{part_name}.brep")).expect("part BREP");
             mesh_access::read_brep_str(&brep).expect("part BREP reads")
         });
         let got = run_case(case, part);
@@ -148,10 +140,5 @@ fn every_selector_kind_resolves_as_the_python_engine_does() {
         close(&got, &Value::Object(want), name, &mut diffs);
         bad.extend(diffs);
     }
-    assert!(
-        bad.is_empty(),
-        "{} mismatches:\n{}",
-        bad.len(),
-        bad.join("\n")
-    );
+    assert!(bad.is_empty(), "{} mismatches:\n{}", bad.len(), bad.join("\n"));
 }

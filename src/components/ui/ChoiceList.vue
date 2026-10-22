@@ -1,6 +1,13 @@
 <script setup lang="ts" generic="T extends string">
 defineProps<{
-  options: readonly { value: T; label: string; hint?: string; disabled?: boolean; /** Greyed but still answers a click. */ clickable?: boolean; title?: string | undefined }[];
+  options: readonly {
+    value: T;
+    label: string;
+    hint?: string;
+    disabled?: boolean;
+    /** Greyed but still answers a click. */ clickable?: boolean;
+    title?: string | undefined;
+  }[];
   modelValue: T | null;
 }>();
 const emit = defineEmits<{ "update:modelValue": [T] }>();

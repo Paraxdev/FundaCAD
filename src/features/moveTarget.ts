@@ -10,11 +10,7 @@ import type { MoveValues } from "./transformGizmo";
 
 export type Frame = readonly [THREE.Vector3, THREE.Vector3, THREE.Vector3];
 
-export const WORLD_FRAME: Frame = [
-  new THREE.Vector3(1, 0, 0),
-  new THREE.Vector3(0, 1, 0),
-  new THREE.Vector3(0, 0, 1),
-];
+export const WORLD_FRAME: Frame = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)];
 
 /** Which handles to build, by frame axis index. A plane handle and a ring are
  *  indexed by their normal. */

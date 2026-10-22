@@ -16,7 +16,8 @@ const at = (c: Cylinder, angles: number[]): Vec3[] => {
   const out: Vec3[] = [];
   for (const h of [0, 5]) {
     for (const a of angles) {
-      const ca = Math.cos(a) * c.radius, sa = Math.sin(a) * c.radius;
+      const ca = Math.cos(a) * c.radius,
+        sa = Math.sin(a) * c.radius;
       out.push([
         c.point[0] + e1[0] * ca + e2[0] * sa + ax * h,
         c.point[1] + e1[1] * ca + e2[1] * sa + ay * h,

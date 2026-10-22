@@ -75,9 +75,7 @@ fn in_slices(solid: &Shape, n: usize) -> Vec<Shape> {
         return Vec::new();
     };
     let span = [bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2]];
-    let axis = (0..3)
-        .max_by(|&a, &b| span[a].total_cmp(&span[b]))
-        .unwrap_or(0);
+    let axis = (0..3).max_by(|&a, &b| span[a].total_cmp(&span[b])).unwrap_or(0);
     let mut normal = DVec3::ZERO;
     normal[axis] = 1.0;
     let xdir = if axis == 0 { DVec3::Y } else { DVec3::X };
@@ -127,9 +125,10 @@ fn retried_in_slices(
     accept: Option<&dyn Fn(&Shape) -> bool>,
 ) -> KResult<Option<Shape>> {
     let changed = |s: &Shape| (vol(s) - vol(shape)).abs() > noop_eps(vol(shape));
-    let got = sliced(shape, [2usize, 4].into_iter().map(|n| in_slices(tool, n)), accept.unwrap_or(&changed), &|a, b| {
-        kernel::serial_bool(a, &[b], kind)
-    })?;
+    let got =
+        sliced(shape, [2usize, 4].into_iter().map(|n| in_slices(tool, n)), accept.unwrap_or(&changed), &|a, b| {
+            kernel::serial_bool(a, &[b], kind)
+        })?;
     Ok(got.map(|(out, pieces)| {
         kernel::note_fallback(kind, kernel::Rung::Slices(pieces));
         out
@@ -221,11 +220,7 @@ pub fn combine(
     let mut candidates: Vec<usize> = (0..ctx.bodies.len()).collect();
     if let Some(targets) = targets {
         let have: HashSet<&str> = ctx.bodies.iter().map(|b| b.id.as_str()).collect();
-        let mut missing: Vec<&str> = targets
-            .iter()
-            .map(String::as_str)
-            .filter(|t| !have.contains(t))
-            .collect();
+        let mut missing: Vec<&str> = targets.iter().map(String::as_str).filter(|t| !have.contains(t)).collect();
         missing.sort_unstable();
         missing.dedup();
         if !missing.is_empty() {
@@ -244,10 +239,7 @@ pub fn combine(
         candidates.into_iter().partition(|&i| hidden.contains(&ctx.bodies[i].id));
     let hits: Vec<usize> = crate::bench::phase("combine_bbox", || {
         let solid_box = kernel::bbox(&solid);
-        candidates
-            .into_iter()
-            .filter(|&i| overlap(kernel::bbox(ctx.bodies[i].shape()), solid_box))
-            .collect()
+        candidates.into_iter().filter(|&i| overlap(kernel::bbox(ctx.bodies[i].shape()), solid_box)).collect()
     });
     let prism_signed = signed_vol(&solid);
     let prism_vol = prism_signed.abs();
@@ -295,8 +287,7 @@ pub fn combine(
             let repair = |ctx: &Ctx| -> Option<Shape> {
                 let mut base = ctx.bodies[hits[0]].shape().clone();
                 for &i in &hits[1..] {
-                    base = kernel::serial_bool(&base, &[ctx.bodies[i].shape()], BoolKind::Fuse)
-                        .ok()?;
+                    base = kernel::serial_bool(&base, &[ctx.bodies[i].shape()], BoolKind::Fuse).ok()?;
                 }
                 retried_in_slices(&base, &solid, BoolKind::Fuse, Some(&merged_properly)).ok().flatten()
             };
@@ -331,19 +322,14 @@ pub fn combine(
             }
             let first_name = ctx.bodies[hits[0]].name.clone();
             let first_id = ctx.bodies[hits[0]].id.clone();
-            let consumed: HashSet<String> =
-                hits.iter().map(|&i| ctx.bodies[i].id.clone()).collect();
+            let consumed: HashSet<String> = hits.iter().map(|&i| ctx.bodies[i].id.clone()).collect();
             ctx.remove_bodies(&consumed);
             let unified = crate::bench::phase("unify_body", || match merged_signed {
                 Some(v) => kernel::unify_body_known(&merged, v),
                 None => kernel::unify_body(&merged),
             });
             let kept = merged_signed.filter(|_| kernel::is_equal(&unified, &merged));
-            let index = ctx.new_body(
-                unified,
-                Some(first_name),
-                Some(&first_id),
-            );
+            let index = ctx.new_body(unified, Some(first_name), Some(&first_id));
             if let Some(v) = kept {
                 ctx.note_volume(index, v);
             }
@@ -361,23 +347,15 @@ pub fn combine(
                 let before_signed = body_vol(ctx, i);
                 let before = before_signed.abs();
                 let voids_before = kernel::void_count(b.shape());
-                let (newshape, after_signed) = kernel::serial_bool_known(
-                    b.shape(),
-                    &[&solid],
-                    BoolKind::Cut,
-                    &[before_signed, prism_signed],
-                )?;
+                let (newshape, after_signed) =
+                    kernel::serial_bool_known(b.shape(), &[&solid], BoolKind::Cut, &[before_signed, prism_signed])?;
                 let after_signed = after_signed.unwrap_or_else(|| signed_vol(&newshape));
                 let after = after_signed.abs();
                 if kernel::void_count(&newshape) > voids_before {
                     sealed = true;
                 }
                 if after < noop_eps(before) {
-                    let label = if b.name.is_empty() {
-                        "this body"
-                    } else {
-                        b.name.as_str()
-                    };
+                    let label = if b.name.is_empty() { "this body" } else { b.name.as_str() };
                     return Err(Fail::msg(format!(
                         "Cut would remove all of {label}. Shorten it, or select a smaller area."
                     )));
@@ -463,26 +441,18 @@ pub fn combine(
         }
         "intersect" => {
             if hits.is_empty() {
-                return Err(Fail::msg(
-                    "Intersect left nothing, the profile doesn't overlap any body.",
-                ));
+                return Err(Fail::msg("Intersect left nothing, the profile doesn't overlap any body."));
             }
             let mut results: Vec<(usize, Shape, f64)> = Vec::new();
             for &i in &hits {
                 let b = &ctx.bodies[i];
                 let before_signed = body_vol(ctx, i);
-                let (newshape, after_signed) = kernel::serial_bool_known(
-                    b.shape(),
-                    &[&solid],
-                    BoolKind::Common,
-                    &[before_signed, prism_signed],
-                )?;
+                let (newshape, after_signed) =
+                    kernel::serial_bool_known(b.shape(), &[&solid], BoolKind::Common, &[before_signed, prism_signed])?;
                 let after_signed = after_signed.unwrap_or_else(|| signed_vol(&newshape));
                 let after = after_signed.abs();
                 if after < noop_eps(before_signed.abs()) {
-                    return Err(Fail::msg(
-                        "Intersect would leave the body empty, the profile doesn't overlap it.",
-                    ));
+                    return Err(Fail::msg("Intersect would leave the body empty, the profile doesn't overlap it."));
                 }
                 results.push((i, newshape, after_signed));
             }
@@ -519,17 +489,10 @@ pub fn do_boolean(ctx: &mut Ctx, f: &BooleanFeature) -> FResult {
     let target_id = ctx.bodies[target].id.clone();
     let tool_ids: Vec<String> = match f.tools.as_ref().filter(|t| !t.is_empty()) {
         Some(t) => t.clone(),
-        None => ctx
-            .bodies
-            .iter()
-            .filter(|b| b.id != target_id && !b.scan)
-            .map(|b| b.id.clone())
-            .collect(),
+        None => ctx.bodies.iter().filter(|b| b.id != target_id && !b.scan).map(|b| b.id.clone()).collect(),
     };
     if tool_ids.iter().all(|id| id == &target_id) {
-        return Err(Fail::msg(
-            "Boolean: a body cannot be both the target and the tool.",
-        ));
+        return Err(Fail::msg("Boolean: a body cannot be both the target and the tool."));
     }
     let mut missing: Vec<&str> = Vec::new();
     let tools: Vec<usize> = tool_ids
@@ -577,25 +540,15 @@ pub fn do_boolean(ctx: &mut Ctx, f: &BooleanFeature) -> FResult {
     let after = shape_signed.abs();
     let eps = noop_eps(before);
     if kind == BoolKind::Cut && after >= before - noop_eps(tool_vol.min(before)) {
-        return Err(Fail::msg(format!(
-            "{label} removed nothing, no tool body overlaps the one being kept."
-        )));
+        return Err(Fail::msg(format!("{label} removed nothing, no tool body overlaps the one being kept.")));
     }
     if kind == BoolKind::Cut && after < eps {
-        return Err(Fail::msg(format!(
-            "{label} would remove the whole body, the tools cover all of it."
-        )));
+        return Err(Fail::msg(format!("{label} would remove the whole body, the tools cover all of it.")));
     }
     if kind == BoolKind::Common && after < eps {
-        return Err(Fail::msg(format!(
-            "{label} would leave nothing, the tools don't overlap the body."
-        )));
+        return Err(Fail::msg(format!("{label} would leave nothing, the tools don't overlap the body.")));
     }
-    let result = if kind == BoolKind::Fuse {
-        kernel::unify_body_known(&shape, shape_signed)
-    } else {
-        shape.clone()
-    };
+    let result = if kind == BoolKind::Fuse { kernel::unify_body_known(&shape, shape_signed) } else { shape.clone() };
     let kept = kernel::is_equal(&result, &shape);
     ctx.set_shape(target, result);
     if kept {
@@ -638,7 +591,11 @@ mod tests {
         let asked = std::cell::Cell::new(0);
         let refused_once = |a: &Shape, b: &Shape| {
             asked.set(asked.get() + 1);
-            if asked.get() == 1 { refuse(a, b) } else { untouched(a, b) }
+            if asked.get() == 1 {
+                refuse(a, b)
+            } else {
+                untouched(a, b)
+            }
         };
         assert!(matches!(sliced(&body, [halves(), halves()], &|_| false, &refused_once), Ok(None)));
         assert!(matches!(sliced(&body, [halves(), halves()], &|_| true, &untouched), Ok(Some(_))));

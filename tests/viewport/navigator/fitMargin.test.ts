@@ -53,7 +53,11 @@ function fitted(model: THREE.Box3, eye: THREE.Vector3, mode: "persp" | "ortho", 
   const xs: number[] = [];
   const ys: number[] = [];
   for (let i = 0; i < 8; i++) {
-    const c = new THREE.Vector3(i & 1 ? model.max.x : model.min.x, i & 2 ? model.max.y : model.min.y, i & 4 ? model.max.z : model.min.z);
+    const c = new THREE.Vector3(
+      i & 1 ? model.max.x : model.min.x,
+      i & 2 ? model.max.y : model.min.y,
+      i & 4 ? model.max.z : model.min.z,
+    );
     const s = project(nav.pose, nav.frame, c);
     xs.push(s.x);
     ys.push(s.y);

@@ -32,10 +32,7 @@ const EPS = 1e-9;
  *  WHICH end moves, and guessing would put geometry somewhere the user never
  *  asked for. Those stay unapplied rather than applied wrongly, see
  *  waitsForSolver. */
-export function applyDrivingDimsDirect(
-  entities: ResolvedEntity[],
-  constraints: SketchConstraint[],
-): boolean {
+export function applyDrivingDimsDirect(entities: ResolvedEntity[], constraints: SketchConstraint[]): boolean {
   let changed = false;
   for (const c of constraints) {
     if (c.type === "diameter") {
@@ -67,10 +64,13 @@ export function applyDrivingDimsDirect(
       const e = entities.find((x) => x.id === c.e1);
       if (e?.type !== "line" || c.p1 > 1 || c.p2 > 1) continue;
       const k = c.type === "hDistance" ? "x" : "y";
-      const at = (p: number) => (p === 0 ? (k === "x" ? e.x1 : e.y1) : (k === "x" ? e.x2 : e.y2));
+      const at = (p: number) => (p === 0 ? (k === "x" ? e.x1 : e.y1) : k === "x" ? e.x2 : e.y2);
       const set = (p: number, val: number) => {
-        if (p === 0) { if (k === "x") e.x1 = val; else e.y1 = val; }
-        else if (k === "x") e.x2 = val; else e.y2 = val;
+        if (p === 0) {
+          if (k === "x") e.x1 = val;
+          else e.y1 = val;
+        } else if (k === "x") e.x2 = val;
+        else e.y2 = val;
       };
       if (Math.abs(at(c.p2) - at(c.p1) - c.value) <= EPS) continue;
       // the end a solve would hold stays, the other moves along the axis only
@@ -104,9 +104,9 @@ export function applyDrivingDimsDirect(
  *  so the user is told they wait for the solver instead of seeing nothing happen. */
 export function waitsForSolver(entities: ResolvedEntity[], constraints: SketchConstraint[]): number {
   const lines = new Set(entities.filter((e) => e.type === "line").map((e) => e.id));
-  return constraints.filter((c) =>
-    (c.type === "hDistance" || c.type === "vDistance") && !c.driven &&
-    (c.e1 !== c.e2 || !lines.has(c.e1))).length;
+  return constraints.filter(
+    (c) => (c.type === "hDistance" || c.type === "vDistance") && !c.driven && (c.e1 !== c.e2 || !lines.has(c.e1)),
+  ).length;
 }
 
 /** The rectangle corner a no-solver resize keeps in place: one that is pinned
@@ -130,10 +130,12 @@ function heldCorner(
   const pinned = (i: number): boolean => {
     const q = corners[i]!;
     if (fixedAt.some((f) => Math.hypot(f.x - q.x, f.y - q.y) <= 1e-6)) return true;
-    return constraints.some((k) =>
-      (k.type === "fix" && k.e === e.id && k.p === i) ||
-      (k.type === "coincident" &&
-        ((k.e1 === e.id && k.p1 === i && fixedPts.has(k.e2)) || (k.e2 === e.id && k.p2 === i && fixedPts.has(k.e1)))));
+    return constraints.some(
+      (k) =>
+        (k.type === "fix" && k.e === e.id && k.p === i) ||
+        (k.type === "coincident" &&
+          ((k.e1 === e.id && k.p1 === i && fixedPts.has(k.e2)) || (k.e2 === e.id && k.p2 === i && fixedPts.has(k.e1)))),
+    );
   };
   const found = [0, 1, 2, 3].find(pinned);
   return found ?? c.p2;
@@ -144,7 +146,8 @@ function heldCorner(
  *  height. The caller checks that `e1` really is a rectangle. */
 export function rectSideField(c: SketchConstraint): "width" | "height" | null {
   if (c.type !== "p2pDistance" || c.e1 !== c.e2) return null;
-  const lo = Math.min(c.p1, c.p2), hi = Math.max(c.p1, c.p2);
+  const lo = Math.min(c.p1, c.p2),
+    hi = Math.max(c.p1, c.p2);
   if ((lo === 0 && hi === 1) || (lo === 2 && hi === 3)) return "width";
   if ((lo === 1 && hi === 2) || (lo === 0 && hi === 3)) return "height";
   return null;
@@ -165,7 +168,15 @@ export function drivingDimFor(entity: ResolvedEntity, field: DimField, mm: numbe
   if (entity.type === "rectangle" && !entity.angle && (field === "width" || field === "height")) {
     const [p1, p2] = field === "width" ? [1, 0] : [0, 3];
     const place = dimPlaceOf(entity)?.[field];
-    return { type: "p2pDistance", e1: entity.id, p1, e2: entity.id, p2, value: mm, ...(place ? { place: { ...place } } : {}) };
+    return {
+      type: "p2pDistance",
+      e1: entity.id,
+      p1,
+      e2: entity.id,
+      p2,
+      value: mm,
+      ...(place ? { place: { ...place } } : {}),
+    };
   }
   return null;
 }
@@ -191,15 +202,19 @@ export function lineHeldEnd(
   entities: ResolvedEntity[],
   constraints: SketchConstraint[],
 ): 0 | 1 {
-  const a = { x: e.x1, y: e.y1 }, b = { x: e.x2, y: e.y2 };
+  const a = { x: e.x1, y: e.y1 },
+    b = { x: e.x2, y: e.y2 };
   const fixed = fixedPositions(entities, constraints);
   const onFixed = (q: { x: number; y: number }, end: number) =>
     fixed.some((f) => Math.hypot(f.x - q.x, f.y - q.y) <= 1e-6) ||
-    constraints.some((k) =>
-      k.type === "coincident" &&
-      ((k.e1 === e.id && k.p1 === end && isFixedOperand(k.e2, k.p2, entities, constraints)) ||
-        (k.e2 === e.id && k.p2 === end && isFixedOperand(k.e1, k.p1, entities, constraints))));
-  const fa = onFixed(a, 0), fb = onFixed(b, 1);
+    constraints.some(
+      (k) =>
+        k.type === "coincident" &&
+        ((k.e1 === e.id && k.p1 === end && isFixedOperand(k.e2, k.p2, entities, constraints)) ||
+          (k.e2 === e.id && k.p2 === end && isFixedOperand(k.e1, k.p1, entities, constraints))),
+    );
+  const fa = onFixed(a, 0),
+    fb = onFixed(b, 1);
   if (fa !== fb) return fa ? 0 : 1;
   if (Math.abs(a.x - b.x) > EPS) return a.x < b.x ? 0 : 1;
   return a.y <= b.y ? 0 : 1;
@@ -211,7 +226,10 @@ function fixedPositions(entities: ResolvedEntity[], constraints: SketchConstrain
   const out: { x: number; y: number }[] = [{ x: 0, y: 0 }];
   for (const k of constraints) {
     if (k.type !== "fix") continue;
-    const q = entityPoint(entities.find((x) => x.id === k.e), k.p);
+    const q = entityPoint(
+      entities.find((x) => x.id === k.e),
+      k.p,
+    );
     if (q) out.push(q);
   }
   for (const e of entities) {
@@ -227,20 +245,33 @@ function fixedPositions(entities: ResolvedEntity[], constraints: SketchConstrain
 
 function isFixedOperand(id: string, p: number, entities: ResolvedEntity[], constraints: SketchConstraint[]): boolean {
   const e = entities.find((x) => x.id === id);
-  return e?.type === "projected" || constraints.some((k) => k.type === "fix" && k.e === id && (e?.type === "point" || e?.type === "circle" || k.p === p));
+  return (
+    e?.type === "projected" ||
+    constraints.some(
+      (k) => k.type === "fix" && k.e === id && (e?.type === "point" || e?.type === "circle" || k.p === p),
+    )
+  );
 }
 
 /** An entity point by the `fix` constraint's index semantics (see types.ts). */
 function entityPoint(e: ResolvedEntity | undefined, p: number): { x: number; y: number } | null {
   if (!e) return null;
   switch (e.type) {
-    case "point": case "circle": case "polygon": case "text": return { x: e.x, y: e.y };
-    case "rectangle": return rectCorners(e.x, e.y, e.width, e.height, e.angle)[p] ?? null;
-    case "line": case "slot": return p === 0 ? { x: e.x1, y: e.y1 } : { x: e.x2, y: e.y2 };
+    case "point":
+    case "circle":
+    case "polygon":
+    case "text":
+      return { x: e.x, y: e.y };
+    case "rectangle":
+      return rectCorners(e.x, e.y, e.width, e.height, e.angle)[p] ?? null;
+    case "line":
+    case "slot":
+      return p === 0 ? { x: e.x1, y: e.y1 } : { x: e.x2, y: e.y2 };
     case "arc":
       if (p !== 2) return p === 0 ? { x: e.x1, y: e.y1 } : { x: e.x2, y: e.y2 };
       return circumcenter({ x: e.x1, y: e.y1 }, { x: e.x2, y: e.y2 }, { x: e.mx, y: e.my });
-    default: return null;
+    default:
+      return null;
   }
 }
 
@@ -250,10 +281,14 @@ export function findDrivingDim(
   entity: ResolvedEntity,
   field: DimField,
 ): SketchConstraint | undefined {
-  if (entity.type === "line" && field === "length") return constraints.find((k) => k.type === "distance" && k.line === entity.id);
-  if (entity.type === "circle" && field === "diameter") return constraints.find((k) => k.type === "diameter" && k.circle === entity.id);
+  if (entity.type === "line" && field === "length")
+    return constraints.find((k) => k.type === "distance" && k.line === entity.id);
+  if (entity.type === "circle" && field === "diameter")
+    return constraints.find((k) => k.type === "diameter" && k.circle === entity.id);
   if (entity.type === "rectangle") {
-    return constraints.find((k) => k.type === "p2pDistance" && !k.driven && k.e1 === entity.id && rectSideField(k) === field);
+    return constraints.find(
+      (k) => k.type === "p2pDistance" && !k.driven && k.e1 === entity.id && rectSideField(k) === field,
+    );
   }
   return undefined;
 }

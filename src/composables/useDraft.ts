@@ -30,5 +30,10 @@ export function useDraft(
     draft.value = v;
   });
 
-  return { draft, resync: () => { draft.value = source(); } };
+  return {
+    draft,
+    resync: () => {
+      draft.value = source();
+    },
+  };
 }

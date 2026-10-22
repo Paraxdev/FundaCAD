@@ -56,9 +56,7 @@ export function describeDropLeftovers<T>(plan: DropPlan<T>, nameOf: (item: T) =>
   const names = (list: T[]) => list.map((i) => baseName(nameOf(i))).join(", ");
   if (plan.rejected.length) {
     const nothing = plan.open === null && plan.imports.length === 0 && plan.environments.length === 0;
-    parts.push(
-      `${nothing ? "Nothing was imported" : "Not imported"}, FundaCAD cannot read ${names(plan.rejected)}.`,
-    );
+    parts.push(`${nothing ? "Nothing was imported" : "Not imported"}, FundaCAD cannot read ${names(plan.rejected)}.`);
   }
   if (plan.skipped.length) {
     parts.push(`Only one document opens at a time, so ${names(plan.skipped)} stayed closed.`);

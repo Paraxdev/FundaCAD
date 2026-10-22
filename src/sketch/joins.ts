@@ -15,11 +15,16 @@ export function dropSeparatedJoins(
 ): SketchConstraint[] {
   const was = new Map(before.map((e) => [e.id, e]));
   const now = new Map(after.map((e) => [e.id, e]));
-  const at = (m: Map<string, ResolvedEntity>, id: string, p: number) => { const e = m.get(id); return e ? refPoint(e, p) : null; };
+  const at = (m: Map<string, ResolvedEntity>, id: string, p: number) => {
+    const e = m.get(id);
+    return e ? refPoint(e, p) : null;
+  };
   return constraints.filter((c) => {
     if (c.type !== "coincident" || !c.snap) return true;
-    const a0 = at(was, c.e1, c.p1), b0 = at(was, c.e2, c.p2);
-    const a1 = at(now, c.e1, c.p1), b1 = at(now, c.e2, c.p2);
+    const a0 = at(was, c.e1, c.p1),
+      b0 = at(was, c.e2, c.p2);
+    const a1 = at(now, c.e1, c.p1),
+      b1 = at(now, c.e2, c.p2);
     if (!a0 || !b0 || !a1 || !b1) return true;
     return !(a0.distanceTo(b0) <= APART && a1.distanceTo(b1) > APART);
   });

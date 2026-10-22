@@ -1,25 +1,33 @@
 import { describe, expect, it } from "vitest";
 import { atrousCpu, atrousSigma, filterMix, type AtrousImage } from "../../src/viewport/pathtrace/atrous";
 
-function image(w: number, h: number, at: (x: number, y: number) => { c: number; n: [number, number, number]; z: number; a?: number }): AtrousImage {
+function image(
+  w: number,
+  h: number,
+  at: (x: number, y: number) => { c: number; n: [number, number, number]; z: number; a?: number },
+): AtrousImage {
   const img: AtrousImage = {
-    width: w, height: h,
-    color: new Float32Array(w * h * 3), albedo: new Float32Array(w * h * 3),
-    normal: new Float32Array(w * h * 3), depth: new Float32Array(w * h),
+    width: w,
+    height: h,
+    color: new Float32Array(w * h * 3),
+    albedo: new Float32Array(w * h * 3),
+    normal: new Float32Array(w * h * 3),
+    depth: new Float32Array(w * h),
   };
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const p = y * w + x;
-    const v = at(x, y);
-    img.color.fill(v.c, p * 3, p * 3 + 3);
-    img.albedo.fill(v.a ?? 0.5, p * 3, p * 3 + 3);
-    img.normal.set(v.n, p * 3);
-    img.depth[p] = v.z;
-  }
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const p = y * w + x;
+      const v = at(x, y);
+      img.color.fill(v.c, p * 3, p * 3 + 3);
+      img.albedo.fill(v.a ?? 0.5, p * 3, p * 3 + 3);
+      img.normal.set(v.n, p * 3);
+      img.depth[p] = v.z;
+    }
   return img;
 }
 
 let seed = 7;
-const noise = () => ((seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5);
+const noise = () => (seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5;
 
 function spread(out: Float32Array, pick: (p: number) => boolean): number {
   const v: number[] = [];
@@ -56,7 +64,9 @@ describe("a-trous filter", () => {
 
   it("keeps the traced mix on a silhouette instead of growing the body over it", () => {
     // The raster guide says body from x = 16, the trace covered half of that column.
-    const img = image(32, 16, (x) => (x < 16 ? { c: 0, n: [0, 0, 1], z: 0, a: 0 } : { c: x === 16 ? 0.25 : 0.5 + 0.1 * noise(), n: [0, 0, 1], z: 10 }));
+    const img = image(32, 16, (x) =>
+      x < 16 ? { c: 0, n: [0, 0, 1], z: 0, a: 0 } : { c: x === 16 ? 0.25 : 0.5 + 0.1 * noise(), n: [0, 0, 1], z: 10 },
+    );
     const out = atrousCpu(img, 4);
     expect(out[(8 * 32 + 16) * 3]).toBeCloseTo(0.25, 3);
     expect(out[(8 * 32 + 15) * 3]).toBe(0);

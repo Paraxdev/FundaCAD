@@ -42,10 +42,8 @@ fn a_heal_past_its_budget_keeps_the_solid_as_read_and_a_heal_beats_while_it_work
     let (late, beats_late) = imported("heal_edge_off");
     let notes = said(&late);
     assert_eq!(late["solid"], json!(true), "{notes:?}");
-    let note = notes
-        .iter()
-        .find(|n| n.contains("1 edge is drawn up to 3 mm away"))
-        .unwrap_or_else(|| panic!("{notes:?}"));
+    let note =
+        notes.iter().find(|n| n.contains("1 edge is drawn up to 3 mm away")).unwrap_or_else(|| panic!("{notes:?}"));
     assert!(note.contains("not redrawn because redrawing them took too long"), "{note}");
 
     opencascade::xcaf::set_heal_budget(10.0);
@@ -53,8 +51,5 @@ fn a_heal_past_its_budget_keeps_the_solid_as_read_and_a_heal_beats_while_it_work
     let notes = said(&healed);
     assert!(notes.iter().any(|n| n.contains("was redrawn where they meet")), "{notes:?}");
     // The late heal stopped at its first poll, everything after it is the heal polling.
-    assert!(
-        beats_healed > beats_late + 10,
-        "{beats_healed} beats healed, {beats_late} stopped at once"
-    );
+    assert!(beats_healed > beats_late + 10, "{beats_healed} beats healed, {beats_late} stopped at once");
 }

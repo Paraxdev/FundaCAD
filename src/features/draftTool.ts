@@ -139,7 +139,11 @@ export class DraftTool {
       e.preventDefault();
       e.stopImmediatePropagation(); // don't orbit while dragging the handle
       // Captured so the release still lands here when it happens over the value box.
-      try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
+      try {
+        this.viewport.domElement.setPointerCapture(e.pointerId);
+      } catch {
+        /* capture optional */
+      }
       this.grabbing = true;
       this.grabAngle = this.angle;
       this.grabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);
@@ -152,19 +156,20 @@ export class DraftTool {
     if (this.grabbing) {
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
-      const moved =
-        Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+      const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
       if (moved && Math.abs(this.angle) >= 1e-3) this.commit();
       return;
     }
-    const moved =
-      Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.downOnGizmo || moved) return;
     this.commit();
   }
 
   private onKey(e: KeyboardEvent) {
-    if (e.key === "Escape") { this.cancel(); return; }
+    if (e.key === "Escape") {
+      this.cancel();
+      return;
+    }
     // The pull axis is a guess from the face's own normal, and on a face at 45°
     // to two of them it is a coin toss. X cycles it rather than making the user
     // commit and then correct the value row.
@@ -196,8 +201,11 @@ export class DraftTool {
   }
 
   private beginDrag(
-    faces: Selector[], faceIds: number[], anchor: THREE.Vector3,
-    normal: THREE.Vector3, bodyId: string | null = null,
+    faces: Selector[],
+    faceIds: number[],
+    anchor: THREE.Vector3,
+    normal: THREE.Vector3,
+    bodyId: string | null = null,
   ) {
     this.faces = faces;
     this.faceIds = faceIds;
@@ -211,7 +219,11 @@ export class DraftTool {
     this.previewId = this.store.nextId();
     this.viewport.clearHover();
     this.buildGizmo();
-    this.dim.show([{ name: "angle", label: "Angle", icon: "angle", kind: "angle" }], () => this.commit(true), () => this.cancel());
+    this.dim.show(
+      [{ name: "angle", label: "Angle", icon: "angle", kind: "angle" }],
+      () => this.commit(true),
+      () => this.cancel(),
+    );
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ angle: 0 });
@@ -242,7 +254,10 @@ export class DraftTool {
       if (this.commitPending && !this.store.buildState.building) {
         this.commitPending = false;
         this.refusalShown = refusal;
-        if (!refusal) { this.commit(); return; }
+        if (!refusal) {
+          this.commit();
+          return;
+        }
         setPrompt(`Draft refused: ${refusal} · drag back or Esc`);
       } else if (refusal !== this.refusalShown) {
         this.refusalShown = refusal;
@@ -304,7 +319,11 @@ export class DraftTool {
     let sentNow = false;
     if (v != null && this.dim.isUserDriven("angle")) {
       const value = Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, v));
-      if (value !== this.angle) { this.angle = value; this.pushPreview(); sentNow = true; }
+      if (value !== this.angle) {
+        this.angle = value;
+        this.pushPreview();
+        sentNow = true;
+      }
     }
     if (Math.abs(this.angle) < 1e-3) {
       // keep the tool alive: silently cancelling reads as "nothing happened"

@@ -115,7 +115,8 @@ pub fn handle(ctx: &mut Ctx, f: &Thread) -> FResult {
     }
     let deepest = prof.iter().map(|p| p.0.abs()).fold(0.0, f64::max).max(1e-3);
 
-    let (z0, z1) = kernel::axial_extent(&face, arr(o), arr(d)).ok_or_else(|| bad("Thread: the face has no length along its axis"))?;
+    let (z0, z1) = kernel::axial_extent(&face, arr(o), arr(d))
+        .ok_or_else(|| bad("Thread: the face has no length along its axis"))?;
     let zm = (z0 + z1) / 2.0;
     let e = (0.05 * r).clamp(1e-3, 0.05);
     let at = |z: f64, rad: f64, x: DVec3| arr(o + d * z + x * rad);
@@ -140,7 +141,9 @@ pub fn handle(ctx: &mut Ctx, f: &Thread) -> FResult {
     // last turn is whole; an end against material (a shoulder, a blind bottom)
     // stops the thread at the face.
     let gap = (0.02 * pitch).max(0.01);
-    let open = |z: f64| probe.iter().step_by(2).all(|&x| !kernel::point_inside(&shape, at(z, r + into * deepest * 0.5, x), 1e-7));
+    let open = |z: f64| {
+        probe.iter().step_by(2).all(|&x| !kernel::point_inside(&shape, at(z, r + into * deepest * 0.5, x), 1e-7))
+    };
     let offset = ctx.val_or(f.offset.as_ref(), 0.0)?;
     let a = z0 + offset;
     let b = match &f.length {
@@ -206,7 +209,11 @@ pub fn handle(ctx: &mut Ctx, f: &Thread) -> FResult {
                 let pts: Vec<[f64; 3]> = prof.iter().map(|&(i, s)| at(z + s, r + into * (i + clearance), x)).collect();
                 let face = kernel::polygon_face(&pts)?;
                 let (angle, signed_lead) = if left { (-360.0 * turns, -lead) } else { (360.0 * turns, lead) };
-                let face = if left { kernel::rotated_about(&face, arr(o), arr(d), -360.0 * done)? } else { kernel::rotated_about(&face, arr(o), arr(d), 360.0 * done)? };
+                let face = if left {
+                    kernel::rotated_about(&face, arr(o), arr(d), -360.0 * done)?
+                } else {
+                    kernel::rotated_about(&face, arr(o), arr(d), 360.0 * done)?
+                };
                 tools.push(screw_revolve(&face, arr(o), arr(d), angle, signed_lead)?);
                 done += turns;
             }
@@ -234,7 +241,9 @@ pub fn handle(ctx: &mut Ctx, f: &Thread) -> FResult {
         ctx.record_tool(&f.id, kind, vec![body_id], kernel::compound(&tools));
         return Ok(());
     }
-    Err(last_err.unwrap_or_else(|| bad("Thread: the kernel could not sweep the thread into the body, try a shorter length or a coarser pitch")))
+    Err(last_err.unwrap_or_else(|| {
+        bad("Thread: the kernel could not sweep the thread into the body, try a shorter length or a coarser pitch")
+    }))
 }
 
 /// The area of the profile on one side of the face (`side` 1 for into the

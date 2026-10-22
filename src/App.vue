@@ -54,9 +54,11 @@ const ui = useUiStore();
 const engine = useEngine();
 // Unmounted while the overlay is off, so their reprojection loops stop with it.
 const sketchLabelsShown = ref(engine.viewport.overlayDrawn("sketchLabels"));
-onUnmounted(engine.viewport.watchOverlays(() => {
-  sketchLabelsShown.value = engine.viewport.overlayDrawn("sketchLabels");
-}));
+onUnmounted(
+  engine.viewport.watchOverlays(() => {
+    sketchLabelsShown.value = engine.viewport.overlayDrawn("sketchLabels");
+  }),
+);
 
 // The overlays the running plugins add, mounted at the end of the stack.
 //
@@ -77,7 +79,9 @@ onUnmounted(engine.viewport.watchOverlays(() => {
 const overlays = shallowRef(contributedOverlays());
 let offContrib: (() => void) | null = null;
 onMounted(() => {
-  offContrib = onContribChange(() => { overlays.value = contributedOverlays(); });
+  offContrib = onContribChange(() => {
+    overlays.value = contributedOverlays();
+  });
 });
 onUnmounted(() => offContrib?.());
 
@@ -92,7 +96,10 @@ onMounted(() => {
 });
 onUnmounted(() => stageRo?.disconnect());
 // A drawer left open over the rail would hide the tools the new mode brings.
-watch(() => ui.sketchActive, () => shell.closeDrawer());
+watch(
+  () => ui.sketchActive,
+  () => shell.closeDrawer(),
+);
 </script>
 
 <template>

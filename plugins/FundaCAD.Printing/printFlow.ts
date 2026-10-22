@@ -155,7 +155,9 @@ async function startMonitoring(id: string) {
   const offStatus = onPrinterStatus((s) => {
     if (s.id !== id) return;
     if (s.state === "printing" || s.state === "paused") {
-      setPrinterStatusText(`${s.state === "paused" ? "Paused" : "Printing"} ${s.filename}, ${Math.round(s.progress * 100)}%`);
+      setPrinterStatusText(
+        `${s.state === "paused" ? "Paused" : "Printing"} ${s.filename}, ${Math.round(s.progress * 100)}%`,
+      );
     } else {
       setPrinterStatusText(null);
       if (s.state === "complete") toast(`Print complete: ${s.filename}`, { kind: "info" });

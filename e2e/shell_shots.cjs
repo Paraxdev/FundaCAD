@@ -14,14 +14,20 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "shell_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   let failures = 0;
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -36,11 +42,19 @@ if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
   await page.evaluate(async () => {
     const s = window.store;
-    s.addFeature({ id: "s1", type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 24 }] });
+    s.addFeature({
+      id: "s1",
+      type: "sketch",
+      plane: "XY",
+      entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 24 }],
+    });
     s.addFeature({ id: "e1", type: "extrude", sketch: "s1", distance: 12, operation: "new", regions: [[0, 0, 0]] });
     s.addFeature({ id: "b1", type: "box", length: 10, width: 10, height: 30 });
     await s.rebuildNow();
@@ -85,7 +99,10 @@ if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
   await page.keyboard.press("Control+Alt+S");
   await page.keyboard.press("Control+Alt+H");
   await page.waitForTimeout(600);
-  const closed = await page.evaluate(() => ({ items: !!document.querySelector("#browser"), history: !!document.querySelector("#timeline") }));
+  const closed = await page.evaluate(() => ({
+    items: !!document.querySelector("#browser"),
+    history: !!document.querySelector("#timeline"),
+  }));
   console.log(`  after Ctrl+Alt+S and Ctrl+Alt+H: ${JSON.stringify(closed)}`);
   if (closed.items || closed.history) failures++;
   await shot("07-cards-closed");

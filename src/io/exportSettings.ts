@@ -67,9 +67,7 @@ export interface ExportSettings {
 
 /** What a DXF or SVG export draws: one sketch, or one flat face in the plane a
  *  sketch on that face would take, so the two drawings line up. */
-export type FlatSource =
-  | { sketch: string; label: string }
-  | { face: unknown; plane: PlaneDef; label: string };
+export type FlatSource = { sketch: string; label: string } | { face: unknown; plane: PlaneDef; label: string };
 
 /** `exts` are what the save dialog offers, the first is the default name's. A
  *  typed name is kept as typed, the engine writes the path it is given. */
@@ -117,16 +115,19 @@ export const takesUnit = (f: ExportFormat) => f === "stl" || f === "3mf";
 /** The preset these values match, or custom. */
 export function refinementOf(f: Faceting): Refinement {
   for (const [name, p] of Object.entries(REFINEMENTS)) {
-    if (p.surfaceDeviation === f.surfaceDeviation && p.normalDeviation === f.normalDeviation
-      && p.maxEdgeLength === f.maxEdgeLength) return name as Refinement;
+    if (
+      p.surfaceDeviation === f.surfaceDeviation &&
+      p.normalDeviation === f.normalDeviation &&
+      p.maxEdgeLength === f.maxEdgeLength
+    )
+      return name as Refinement;
   }
   return "custom";
 }
 
 /** Clamped to what the engine accepts, so the dialog never sends a value it would replace. */
 export function clampFaceting(f: Faceting): Faceting {
-  const n = (v: number, lo: number, hi: number, d: number) =>
-    Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
+  const n = (v: number, lo: number, hi: number, d: number) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
   return {
     surfaceDeviation: n(f.surfaceDeviation, 0.0001, 10, REFINEMENTS.medium.surfaceDeviation),
     normalDeviation: n(f.normalDeviation, 0.5, 90, REFINEMENTS.medium.normalDeviation),
@@ -183,7 +184,11 @@ const LAST_DIR_KEY = "fundacad.exportDir";
  *  local date and time to the second, `bracket_20261016114207.stl`. */
 export function exportFileName(base: string, ext: string, now: Date = new Date()): string {
   // Windows refuses these in a file name, and a trailing dot or space.
-  const safe = base.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "").trim() || "part";
+  const safe =
+    base
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")
+      .replace(/[. ]+$/, "")
+      .trim() || "part";
   const p = (n: number) => String(n).padStart(2, "0");
   const stamp = `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
   return `${safe}_${stamp}.${ext}`;

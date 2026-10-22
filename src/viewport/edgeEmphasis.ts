@@ -46,8 +46,12 @@ export function segmentPositions(points: readonly (readonly number[])[]): Float3
     const a = points[k]!;
     const b = points[k + 1]!;
     const o = k * 6;
-    out[o] = a[0] ?? 0; out[o + 1] = a[1] ?? 0; out[o + 2] = a[2] ?? 0;
-    out[o + 3] = b[0] ?? 0; out[o + 4] = b[1] ?? 0; out[o + 5] = b[2] ?? 0;
+    out[o] = a[0] ?? 0;
+    out[o + 1] = a[1] ?? 0;
+    out[o + 2] = a[2] ?? 0;
+    out[o + 3] = b[0] ?? 0;
+    out[o + 4] = b[1] ?? 0;
+    out[o + 5] = b[2] ?? 0;
   }
   return out;
 }
@@ -105,7 +109,10 @@ export class EdgeEmphasis {
     }
     const flat = new Float32Array(parts.reduce((n, p) => n + p.length, 0));
     let o = 0;
-    for (const p of parts) { flat.set(p, o); o += p.length; }
+    for (const p of parts) {
+      flat.set(p, o);
+      o += p.length;
+    }
     const geo = new LineSegmentsGeometry();
     geo.setPositions(flat);
     this.object.geometry.dispose();

@@ -29,7 +29,11 @@ import { contextMenu, type CtxItem } from "../../../src/ui/menu";
 import { useBrowserStore } from "../../../src/stores/browser";
 import { awaitTreePick, resetTreePicks, treePickWaiting, type TreePick } from "../../../src/ui/treePick";
 import {
-  descendantsOf, type ElementDef, freshElementName, reparented, withElementRemoved,
+  descendantsOf,
+  type ElementDef,
+  freshElementName,
+  reparented,
+  withElementRemoved,
 } from "../../../src/document/elements";
 import type { MaterialDef } from "../../../src/document/materials";
 import type { Engine } from "../../../src/app/engine";
@@ -66,14 +70,20 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
   let materials: MaterialDef[] = [];
   const bodyMaterial = new Map<string, string>();
   const store = {
-    get materialLibrary() { return materials; },
+    get materialLibrary() {
+      return materials;
+    },
     bodyMaterialId: (id: string) => bodyMaterial.get(id),
     bodyMaterialOf: (id: string) => {
       const held = bodyMaterial.get(id);
       return held ? materials.find((m) => m.id === held) : undefined;
     },
     addMaterial(m: Partial<MaterialDef>) {
-      const def: MaterialDef = { id: m.id ?? `m${materials.length + 1}`, name: m.name ?? "M", color: m.color ?? "#808080" };
+      const def: MaterialDef = {
+        id: m.id ?? `m${materials.length + 1}`,
+        name: m.name ?? "M",
+        color: m.color ?? "#808080",
+      };
       materials = [...materials, def];
       buildVersion.value++;
       return def.id;
@@ -87,16 +97,15 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
     },
     importColorSource: (_id: string) => "bodies" as const,
     setImportColorSource() {},
-    get bodyElements() { return elements; },
+    get bodyElements() {
+      return elements;
+    },
     bodyElementOf: (id: string) => bodyElement.get(id),
     bodyElementMap: () => bodyElement,
     elementSubtree: (id: string) => descendantsOf(elements, id),
     addElement(name?: string, parent: string | null = null) {
       const id = `e${elements.length + 1}`;
-      elements = [
-        ...elements,
-        { id, name: name ?? freshElementName(elements, parent), ...(parent ? { parent } : {}) },
-      ];
+      elements = [...elements, { id, name: name ?? freshElementName(elements, parent), ...(parent ? { parent } : {}) }];
       buildVersion.value++;
       return id;
     },
@@ -125,7 +134,9 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
       }
       buildVersion.value++;
     },
-    get document() { return doc; },
+    get document() {
+      return doc;
+    },
     buildState: {
       building: false,
       errorFeatureId: null as string | null,
@@ -139,7 +150,9 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
       for (const [id, v] of vis) v ? hidden.delete(id) : hidden.add(id);
       buildVersion.value++;
     },
-    setSketchVisibility: (id: string, v: boolean) => { v ? hiddenSketches.delete(id) : hiddenSketches.add(id); },
+    setSketchVisibility: (id: string, v: boolean) => {
+      v ? hiddenSketches.delete(id) : hiddenSketches.add(id);
+    },
     bodyName: () => undefined,
     bodyColorSlot: (id: string) => slots.get(id),
     setBodyColorSlot: (id: string, slot: number | null) => {
@@ -155,7 +168,10 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
     bodyWrites,
     isSketchVisible: (id: string) => !hiddenSketches.has(id),
     /** Edit in place, identity is preserved on purpose. */
-    edit(fn: (d: CadDocument) => void) { fn(doc); docVersion.value++; },
+    edit(fn: (d: CadDocument) => void) {
+      fn(doc);
+      docVersion.value++;
+    },
     engine: {
       store,
       bridge: { docVersion, buildVersion },
@@ -167,7 +183,9 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
       overlay: { update: () => {} },
       viewport: {
         getSelectedBodies: () => [...selectedBodies],
-        setSelectedBodies: (ids: string[]) => { selectedBodies = [...ids]; },
+        setSelectedBodies: (ids: string[]) => {
+          selectedBodies = [...ids];
+        },
       },
       selectFeature: () => {},
       editFeature: () => {},
@@ -230,8 +248,7 @@ function folderNamed(w: VueWrapper, label: string) {
  *  an <svg> has no text content at all, so the assertion moves to the
  *  `data-icon` name Icon.vue stamps on every mark it draws, which is both
  *  readable in a failure message and independent of which icon pack is active. */
-const iconIn = (el: ReturnType<typeof folderNamed>, sel: string) =>
-  el?.find(`${sel} svg`).attributes("data-icon");
+const iconIn = (el: ReturnType<typeof folderNamed>, sel: string) => el?.find(`${sel} svg`).attributes("data-icon");
 const caretName = (el: ReturnType<typeof folderNamed>) => iconIn(el, ".tree-caret");
 const eyeName = (el: ReturnType<typeof folderNamed>) => iconIn(el, ".tree-eye");
 
@@ -268,7 +285,9 @@ const IMPORT = (nodes: { name: string; parent: number | null }[]): Feature =>
   ({ id: "imp1", type: "import", format: "step", geom: "", nodes }) as unknown as Feature;
 
 describe("BrowserPane", () => {
-  beforeEach(() => { setActivePinia(createPinia()); });
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
 
   // --- elements: the user's own folders over the bodies --------------------
 
@@ -279,8 +298,11 @@ describe("BrowserPane", () => {
     ]);
     const w = render(fake);
     // the control: with no element, both bodies are top-level rows
-    expect(panel(w).filter((r) => r.kind === "row").map((r) => r.text))
-      .toEqual(expect.arrayContaining(["Bracket", "Plate"]));
+    expect(
+      panel(w)
+        .filter((r) => r.kind === "row")
+        .map((r) => r.text),
+    ).toEqual(expect.arrayContaining(["Bracket", "Plate"]));
     expect(folderNamed(w, "Rig")).toBeUndefined();
 
     const rig = fake.store.addElement("Rig");
@@ -425,8 +447,19 @@ describe("BrowserPane", () => {
     // Two levels, so "Robot" is a genuine folder: a product owning ONE body and
     // no children is drawn as that body's row instead of a head wrapping it.
     const fake = makeEngine(
-      { parameters: {}, features: [IMPORT([{ name: "Robot", parent: null }, { name: "MCU", parent: 0 }])] },
-      [{ id: "body1", name: "MCU", nodeRef: "imp1/1" }, { id: "body2", name: "Loose" }],
+      {
+        parameters: {},
+        features: [
+          IMPORT([
+            { name: "Robot", parent: null },
+            { name: "MCU", parent: 0 },
+          ]),
+        ],
+      },
+      [
+        { id: "body1", name: "MCU", nodeRef: "imp1/1" },
+        { id: "body2", name: "Loose" },
+      ],
     );
     const w = render(fake);
     fake.store.addElement("Rig");
@@ -444,9 +477,7 @@ describe("BrowserPane", () => {
 
     // Bodies is always emitted, even empty, it carries the "No bodies yet"
     // state, exactly as before.
-    expect(rows.filter((r) => r.kind === "folder").map((r) => r.text)).toEqual([
-      "Origin", "Bodies", "Sketches",
-    ]);
+    expect(rows.filter((r) => r.kind === "folder").map((r) => r.text)).toEqual(["Origin", "Bodies", "Sketches"]);
     expect(rows.some((r) => r.kind === "row" && r.text === "Sketch1")).toBe(true);
     // three base planes, click one to start a sketch on it
     expect(rows.filter((r) => r.kind === "row" && r.text.endsWith(" plane"))).toHaveLength(3);
@@ -459,7 +490,9 @@ describe("BrowserPane", () => {
 
     // The regression: the panel keeps painting "Sketch1" forever because the
     // document object it derived from is === the one it saw last time.
-    fake.edit((d) => { d.features.push(sketch("s2", "Base")); });
+    fake.edit((d) => {
+      d.features.push(sketch("s2", "Base"));
+    });
     await nextTick();
 
     expect(panel(w).some((r) => r.text === "Base")).toBe(true);
@@ -470,7 +503,9 @@ describe("BrowserPane", () => {
     const w = render(fake);
     expect(panel(w).some((r) => r.text === "Old")).toBe(true);
 
-    fake.edit((d) => { (d.features[0] as { name?: string }).name = "New"; });
+    fake.edit((d) => {
+      (d.features[0] as { name?: string }).name = "New";
+    });
     await nextTick();
 
     expect(panel(w).map((r) => r.text)).toContain("New");
@@ -479,8 +514,20 @@ describe("BrowserPane", () => {
 
   it("starts assembly nodes COLLAPSED and expands them on click", async () => {
     const fake = makeEngine(
-      { parameters: {}, features: [IMPORT([{ name: "Robot", parent: null }, { name: "MCU", parent: 0 }, { name: "Board", parent: 0 }])] },
-      [{ id: "b1", name: "MCU", nodeRef: "imp1/1" }, { id: "b2", name: "Board", nodeRef: "imp1/2" }],
+      {
+        parameters: {},
+        features: [
+          IMPORT([
+            { name: "Robot", parent: null },
+            { name: "MCU", parent: 0 },
+            { name: "Board", parent: 0 },
+          ]),
+        ],
+      },
+      [
+        { id: "b1", name: "MCU", nodeRef: "imp1/1" },
+        { id: "b2", name: "Board", nodeRef: "imp1/2" },
+      ],
     );
     const w = render(fake);
 
@@ -498,11 +545,21 @@ describe("BrowserPane", () => {
 
   it("indents nested assembly rows and caps the step", async () => {
     const fake = makeEngine(
-      { parameters: {}, features: [IMPORT([
-        { name: "Robot", parent: null }, { name: "Electronics", parent: 0 },
-        { name: "MCU", parent: 1 }, { name: "Header", parent: 1 },
-      ])] },
-      [{ id: "b1", name: "MCU", nodeRef: "imp1/2" }, { id: "b2", name: "Header", nodeRef: "imp1/3" }],
+      {
+        parameters: {},
+        features: [
+          IMPORT([
+            { name: "Robot", parent: null },
+            { name: "Electronics", parent: 0 },
+            { name: "MCU", parent: 1 },
+            { name: "Header", parent: 1 },
+          ]),
+        ],
+      },
+      [
+        { id: "b1", name: "MCU", nodeRef: "imp1/2" },
+        { id: "b2", name: "Header", nodeRef: "imp1/3" },
+      ],
     );
     const w = render(fake);
     for (const want of ["Robot", "Electronics"]) {
@@ -519,12 +576,21 @@ describe("BrowserPane", () => {
 
   it("clicking an assembly folder selects every body under it, subfolders included", async () => {
     const fake = makeEngine(
-      { parameters: {}, features: [IMPORT([
-        { name: "Robot", parent: null }, { name: "Electronics", parent: 0 },
-        { name: "MCU", parent: 1 }, { name: "Header", parent: 1 }, { name: "Frame", parent: 0 },
-      ])] },
+      {
+        parameters: {},
+        features: [
+          IMPORT([
+            { name: "Robot", parent: null },
+            { name: "Electronics", parent: 0 },
+            { name: "MCU", parent: 1 },
+            { name: "Header", parent: 1 },
+            { name: "Frame", parent: 0 },
+          ]),
+        ],
+      },
       [
-        { id: "b1", name: "MCU", nodeRef: "imp1/2" }, { id: "b2", name: "Header", nodeRef: "imp1/3" },
+        { id: "b1", name: "MCU", nodeRef: "imp1/2" },
+        { id: "b2", name: "Header", nodeRef: "imp1/3" },
         { id: "b3", name: "Frame", nodeRef: "imp1/4" },
       ],
     );
@@ -541,8 +607,20 @@ describe("BrowserPane", () => {
   it("renders a product name containing markup as literal text, escaped exactly once", () => {
     const evil = "<img src=x onerror=alert(1)> Bracket & Plate";
     const fake = makeEngine(
-      { parameters: {}, features: [IMPORT([{ name: evil, parent: null }, { name: "a", parent: 0 }, { name: "b", parent: 0 }])] },
-      [{ id: "b1", name: "a", nodeRef: "imp1/1" }, { id: "b2", name: "b", nodeRef: "imp1/2" }],
+      {
+        parameters: {},
+        features: [
+          IMPORT([
+            { name: evil, parent: null },
+            { name: "a", parent: 0 },
+            { name: "b", parent: 0 },
+          ]),
+        ],
+      },
+      [
+        { id: "b1", name: "a", nodeRef: "imp1/1" },
+        { id: "b2", name: "b", nodeRef: "imp1/2" },
+      ],
     );
     const w = render(fake);
 
@@ -559,7 +637,10 @@ describe("BrowserPane", () => {
     );
     const w = render(fake);
     await nextTick();
-    const heads = () => panel(w).filter((r) => r.kind === "folder").map((r) => r.text);
+    const heads = () =>
+      panel(w)
+        .filter((r) => r.kind === "folder")
+        .map((r) => r.text);
     expect(heads()).toEqual(["Origin", "Planes", "Bodies", "Sketches"]);
 
     const select = w.get("#browser-filter");
@@ -583,7 +664,9 @@ describe("BrowserPane", () => {
     });
     const w = render(fake);
     await nextTick();
-    const heads = panel(w).filter((r) => r.kind === "folder").map((r) => r.text);
+    const heads = panel(w)
+      .filter((r) => r.kind === "folder")
+      .map((r) => r.text);
     expect(heads).toEqual(["Origin", "Contributed", "Bodies", "Sketches"]);
   });
 
@@ -652,8 +735,20 @@ describe("BrowserPane", () => {
 
   it("hides every body under an assembly node from its eye", async () => {
     const fake = makeEngine(
-      { parameters: {}, features: [IMPORT([{ name: "Robot", parent: null }, { name: "a", parent: 0 }, { name: "b", parent: 0 }])] },
-      [{ id: "b1", name: "a", nodeRef: "imp1/1" }, { id: "b2", name: "b", nodeRef: "imp1/2" }],
+      {
+        parameters: {},
+        features: [
+          IMPORT([
+            { name: "Robot", parent: null },
+            { name: "a", parent: 0 },
+            { name: "b", parent: 0 },
+          ]),
+        ],
+      },
+      [
+        { id: "b1", name: "a", nodeRef: "imp1/1" },
+        { id: "b2", name: "b", nodeRef: "imp1/2" },
+      ],
     );
     const w = render(fake);
     expect(eyeName(folderNamed(w, "Robot"))).toBe("visible");
@@ -670,7 +765,10 @@ describe("BrowserPane", () => {
   // --- showing and hiding many rows at once ----------------------------------
 
   it("paints a press on one sketch eye across every sketch the drag crosses, skipped rows too", async () => {
-    const fake = makeEngine({ parameters: {}, features: ["a", "b", "c", "d", "e"].map((n) => sketch(n, n.toUpperCase())) });
+    const fake = makeEngine({
+      parameters: {},
+      features: ["a", "b", "c", "d", "e"].map((n) => sketch(n, n.toUpperCase())),
+    });
     const w = render(fake);
     await pressEye(rowNamed(w, "A"));
     // one frame of a fast drag: straight from A into D, never entering B or C
@@ -693,7 +791,9 @@ describe("BrowserPane", () => {
   });
 
   it("leaves the bodies alone when a sketch drag runs on into them", async () => {
-    const fake = makeEngine({ parameters: {}, features: [sketch("a", "A"), sketch("b", "B")] }, [{ id: "body1", name: "Bracket" }]);
+    const fake = makeEngine({ parameters: {}, features: [sketch("a", "A"), sketch("b", "B")] }, [
+      { id: "body1", name: "Bracket" },
+    ]);
     const w = render(fake);
     await pressEye(rowNamed(w, "A"));
     await rowNamed(w, "Bracket").trigger("pointerenter");
@@ -704,7 +804,10 @@ describe("BrowserPane", () => {
 
   it("paints across bodies in one batched write per step, however many rows a step crossed", async () => {
     const names = ["A", "B", "C", "D", "E"];
-    const fake = makeEngine({ parameters: {}, features: [] }, names.map((n, i) => ({ id: `b${i + 1}`, name: n })));
+    const fake = makeEngine(
+      { parameters: {}, features: [] },
+      names.map((n, i) => ({ id: `b${i + 1}`, name: n })),
+    );
     const w = render(fake);
     await pressEye(rowNamed(w, "A"));
     await rowNamed(w, "E").trigger("pointerenter");
@@ -767,7 +870,10 @@ describe("BrowserPane", () => {
   });
 
   it("takes a Shift-click run of bodies into the viewport's selection", async () => {
-    const fake = makeEngine({ parameters: {}, features: [] }, ["A", "B", "C", "D"].map((n, i) => ({ id: `b${i + 1}`, name: n })));
+    const fake = makeEngine(
+      { parameters: {}, features: [] },
+      ["A", "B", "C", "D"].map((n, i) => ({ id: `b${i + 1}`, name: n })),
+    );
     const w = render(fake);
     await rowNamed(w, "A").trigger("click");
     await rowNamed(w, "C").trigger("click", { shiftKey: true });
@@ -779,7 +885,9 @@ describe("BrowserPane", () => {
 // MO-3: Offset Plane waiting for "a plane or face", the YZ row clicked. The row
 // used to run its own "sketch on it" and abandon the tool.
 describe("a row click while a tool waits for a pick", () => {
-  beforeEach(() => { setActivePinia(createPinia()); });
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
 
   const docWithDatums = (): CadDocument => ({
     parameters: {},
@@ -790,7 +898,11 @@ describe("a row click while a tool waits for a pick", () => {
     ],
   });
   const eng = (fake: ReturnType<typeof makeEngine>) =>
-    fake.engine as unknown as { sketch: { enter: ReturnType<typeof vi.fn> }; setStatus: ReturnType<typeof vi.fn>; toolOwnsScreen: () => boolean };
+    fake.engine as unknown as {
+      sketch: { enter: ReturnType<typeof vi.fn> };
+      setStatus: ReturnType<typeof vi.fn>;
+      toolOwnsScreen: () => boolean;
+    };
 
   it("with no tool waiting, an Origin plane row still starts a sketch on it", async () => {
     const fake = makeEngine(docWithDatums());
@@ -805,7 +917,13 @@ describe("a row click while a tool waits for a pick", () => {
     const w = render(fake);
     await nextTick();
     const got: TreePick[] = [];
-    awaitTreePick((p) => { got.push(p); return true; }, () => {});
+    awaitTreePick(
+      (p) => {
+        got.push(p);
+        return true;
+      },
+      () => {},
+    );
     await rowNamed(w, "YZ plane").trigger("click");
     expect(got).toEqual([{ kind: "basePlane", plane: "YZ" }]);
     expect(eng(fake).sketch.enter).not.toHaveBeenCalled();
@@ -816,7 +934,13 @@ describe("a row click while a tool waits for a pick", () => {
     const w = render(fake);
     await nextTick();
     const got: TreePick[] = [];
-    awaitTreePick((p) => { got.push(p); return true; }, () => {});
+    awaitTreePick(
+      (p) => {
+        got.push(p);
+        return true;
+      },
+      () => {},
+    );
     await rowNamed(w, "Plane1").trigger("click");
     await rowNamed(w, "Axis1").trigger("click");
     expect(got).toEqual([
@@ -829,7 +953,10 @@ describe("a row click while a tool waits for a pick", () => {
     const fake = makeEngine(docWithDatums(), [{ id: "b1", name: "Body1" }]);
     const w = render(fake);
     await nextTick();
-    awaitTreePick(() => "That row is a base plane, this step needs one body", () => {});
+    awaitTreePick(
+      () => "That row is a base plane, this step needs one body",
+      () => {},
+    );
     await rowNamed(w, "YZ plane").trigger("click");
     await rowNamed(w, "Body1").trigger("click");
     expect(eng(fake).sketch.enter).not.toHaveBeenCalled();
@@ -854,23 +981,50 @@ describe("a row click while a tool waits for a pick", () => {
     (fake.engine as unknown as { editFeature: () => void }).editFeature = edit;
     const w = render(fake);
     await nextTick();
-    awaitTreePick(() => "no", () => {});
+    awaitTreePick(
+      () => "no",
+      () => {},
+    );
     await rowNamed(w, "Sketch1").trigger("dblclick");
     expect(edit).not.toHaveBeenCalled();
   });
 });
 
 describe("a row double click while another edit is open", () => {
-  beforeEach(() => { setActivePinia(createPinia()); });
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
 
   function withOpenEdit(fake: ReturnType<typeof makeEngine>) {
     const log: string[] = [];
     const tools: Record<string, unknown> = {};
     for (const n of [
-      "edgeFeature", "targetEdit", "pressPull", "faceOffset", "draft", "thread", "textOnFace", "hole", "loft",
-      "pattern", "planeOffset", "datumPose", "lightAim", "extrude", "joint", "mechanism", "move",
-    ]) tools[n] = { active: false, cancel: () => {} };
-    const revolve = { active: true, cancel: () => { revolve.active = false; log.push("cancel:revolvePitch"); } };
+      "edgeFeature",
+      "targetEdit",
+      "pressPull",
+      "faceOffset",
+      "draft",
+      "thread",
+      "textOnFace",
+      "hole",
+      "loft",
+      "pattern",
+      "planeOffset",
+      "datumPose",
+      "lightAim",
+      "extrude",
+      "joint",
+      "mechanism",
+      "move",
+    ])
+      tools[n] = { active: false, cancel: () => {} };
+    const revolve = {
+      active: true,
+      cancel: () => {
+        revolve.active = false;
+        log.push("cancel:revolvePitch");
+      },
+    };
     tools.revolvePitch = revolve;
     tools.measure = { active: false, stop: () => {} };
     tools.section = { active: false, picking: false, stop: () => {} };
@@ -880,13 +1034,18 @@ describe("a row double click while another edit is open", () => {
       selectedFeature: "rv",
       toolOwnsScreen: () => revolve.active,
       toolAtWork: () => revolve.active,
-      editFeature: (id: string) => { log.push(`edit:${id}`); },
+      editFeature: (id: string) => {
+        log.push(`edit:${id}`);
+      },
     });
     return log;
   }
 
   it("closes an untouched revolve edit and edits the row's feature", async () => {
-    const fake = makeEngine({ parameters: {}, features: [sketch("s1"), { id: "rv", type: "revolve", sketch: "s1" } as Feature] });
+    const fake = makeEngine({
+      parameters: {},
+      features: [sketch("s1"), { id: "rv", type: "revolve", sketch: "s1" } as Feature],
+    });
     const log = withOpenEdit(fake);
     const w = render(fake);
     await nextTick();

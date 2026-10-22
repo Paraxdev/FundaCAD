@@ -27,10 +27,7 @@ use serde_json::{json, Map, Value};
 /// makes at the tip of the timeline.
 fn nudge_last(doc: &Value) -> Value {
     let mut d = doc.clone();
-    let nudged = d["features"]
-        .as_array_mut()
-        .and_then(|a| a.last_mut())
-        .is_some_and(nudge);
+    let nudged = d["features"].as_array_mut().and_then(|a| a.last_mut()).is_some_and(nudge);
     assert!(nudged, "the last feature has no number to edit");
     d
 }
@@ -152,12 +149,8 @@ fn main() {
         eprintln!("       bench_rebuild --synth <holes> [--runs N]");
         std::process::exit(2);
     };
-    let runs: usize = args
-        .iter()
-        .position(|a| a == "--runs")
-        .and_then(|i| args.get(i + 1))
-        .and_then(|n| n.parse().ok())
-        .unwrap_or(5);
+    let runs: usize =
+        args.iter().position(|a| a == "--runs").and_then(|i| args.get(i + 1)).and_then(|n| n.parse().ok()).unwrap_or(5);
     if corpus == "--synth" {
         let holes: usize = name.parse().expect("--synth takes a hole count");
         bench(&synthetic(holes), &format!("synthetic-{holes}-holes"), runs);

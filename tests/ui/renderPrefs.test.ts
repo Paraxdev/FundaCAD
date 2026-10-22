@@ -52,10 +52,15 @@ describe("the field gates", () => {
 
 describe("asRenderPrefs", () => {
   it("sanitises PER FIELD, so one bad value costs only itself", () => {
-    expect(asRenderPrefs({
-      environment: "nonsense", background: "grey", brightness: 1.4, bloom: 0.7,
-      performanceMode: true,
-    })).toEqual({
+    expect(
+      asRenderPrefs({
+        environment: "nonsense",
+        background: "grey",
+        brightness: 1.4,
+        bloom: 0.7,
+        performanceMode: true,
+      }),
+    ).toEqual({
       environment: DEFAULT_RENDER.environment,
       envRotation: DEFAULT_RENDER.envRotation,
       envExposure: DEFAULT_RENDER.envExposure,
@@ -98,8 +103,7 @@ describe("asRenderPrefs", () => {
     // Every user who has ever changed a render setting has a stored object
     // written before this field existed, and it must read as the default rather
     // than as undefined, which would reach the renderer as "no such level".
-    expect(asRenderPrefs({ environment: "none", background: "dark", brightness: 1 }).bloom)
-      .toBe(DEFAULT_RENDER.bloom);
+    expect(asRenderPrefs({ environment: "none", background: "dark", brightness: 1 }).bloom).toBe(DEFAULT_RENDER.bloom);
   });
 
   it("falls back whole for anything that is not an object", () => {
@@ -195,7 +199,9 @@ describe("potato mode", () => {
 
   it("tells the viewport on every flip and refuses a non-boolean", () => {
     let calls = 0;
-    const off = onRenderPrefsChange(() => { calls++; });
+    const off = onRenderPrefsChange(() => {
+      calls++;
+    });
     setRenderPref("potatoMode", true);
     setRenderPref("potatoMode", true);
     setRenderPref("potatoMode", "on" as unknown as boolean);
@@ -216,7 +222,10 @@ describe("potato mode", () => {
 
 describe("matcap look", () => {
   it("keeps a known style and a real boolean, and falls back otherwise", () => {
-    expect(asRenderPrefs({ matcapStyle: "wax", matcapTint: false })).toMatchObject({ matcapStyle: "wax", matcapTint: false });
+    expect(asRenderPrefs({ matcapStyle: "wax", matcapTint: false })).toMatchObject({
+      matcapStyle: "wax",
+      matcapTint: false,
+    });
     const bad = asRenderPrefs({ matcapStyle: "chrome", matcapTint: "no" });
     expect(bad.matcapStyle).toBe(DEFAULT_RENDER.matcapStyle);
     expect(bad.matcapTint).toBe(DEFAULT_RENDER.matcapTint);
@@ -283,7 +292,8 @@ describe("realtime quality", () => {
     expect(asRealtimeQuality("high")).toBe("high");
     expect(asRealtimeQuality("standard")).toBe("standard");
     expect(asRealtimeQuality("auto")).toBe("auto");
-    for (const v of ["ultra", "High", "", 1, true, null, undefined, {}, ["high"]]) expect(asRealtimeQuality(v)).toBeNull();
+    for (const v of ["ultra", "High", "", 1, true, null, undefined, {}, ["high"]])
+      expect(asRealtimeQuality(v)).toBeNull();
   });
 
   it("falls back to Auto for a saved object without it or with a wrong type", () => {
@@ -311,9 +321,15 @@ describe("ground", () => {
   });
 
   it("keeps only none or shadow per field", () => {
-    expect(asRenderPrefs({ groundModel: "shadow", groundRender: 7 })).toMatchObject({ groundModel: "shadow", groundRender: "none" });
+    expect(asRenderPrefs({ groundModel: "shadow", groundRender: 7 })).toMatchObject({
+      groundModel: "shadow",
+      groundRender: "none",
+    });
     for (const bad of ["Shadow", null, {}, true, "reflection"]) {
-      expect(asRenderPrefs({ groundModel: bad, groundRender: bad })).toMatchObject({ groundModel: "none", groundRender: "none" });
+      expect(asRenderPrefs({ groundModel: bad, groundRender: bad })).toMatchObject({
+        groundModel: "none",
+        groundRender: "none",
+      });
     }
   });
 

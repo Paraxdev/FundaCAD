@@ -82,7 +82,11 @@ type Side = [[u64; 3]; 2];
 
 fn side(positions: &[f64], a: u32, b: u32) -> Side {
     let (a, b) = (position_key(&positions[3 * a as usize..]), position_key(&positions[3 * b as usize..]));
-    if a <= b { [a, b] } else { [b, a] }
+    if a <= b {
+        [a, b]
+    } else {
+        [b, a]
+    }
 }
 
 /// A flat triangle that only joins two of its corners needs a few rounds at
@@ -178,7 +182,10 @@ fn divide_across_long_sides(
         .filter_map(|&t| {
             let lengths = sides(&corners(&out.positions, &out.indices[3 * t..3 * t + 3]));
             let k = (0..3).max_by(|a, b| lengths[*a].total_cmp(&lengths[*b]))?;
-            lengths.iter().all(|s| *s >= limit * limit).then(|| (t, [0, 1, 2].map(|j| out.indices[3 * t + (k + j) % 3])))
+            lengths
+                .iter()
+                .all(|s| *s >= limit * limit)
+                .then(|| (t, [0, 1, 2].map(|j| out.indices[3 * t + (k + j) % 3])))
         })
         .collect();
     if apart.is_empty() {
@@ -340,7 +347,8 @@ mod tests {
         // lies between.
         let m = [0.75, 0.25, 0.0];
         let mut t = mesh(&[A, B, C, D, m], &[0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 4, 3, 4, 2, 3, 1, 2, 4]);
-        t.normals = Some([[0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0]].concat());
+        t.normals =
+            Some([[0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0]].concat());
         assert_eq!(faults(&t), (0, 1));
         remove(&mut t);
         // The half of the divided triangle that was added sits beside it.
@@ -369,10 +377,8 @@ mod tests {
         // B, M1, M2, C on one line. The fan from C runs it in three steps on
         // one face, the triangle A B C runs it whole on the other.
         let (m1, m2) = ([0.75, 0.25, 0.0], [0.5, 0.5, 0.0]);
-        let mut t = mesh(
-            &[A, B, C, D, m1, m2],
-            &[0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 4, 3, 4, 5, 3, 5, 2, 3, 1, 2, 5, 1, 5, 4],
-        );
+        let mut t =
+            mesh(&[A, B, C, D, m1, m2], &[0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 4, 3, 4, 5, 3, 5, 2, 3, 1, 2, 5, 1, 5, 4]);
         assert_eq!(faults(&t), (0, 2));
         remove(&mut t);
         assert_eq!(t.face_ids, vec![0, 0, 0, 1, 2, 3, 4, 5]);
@@ -407,10 +413,8 @@ mod tests {
         // One face runs the side from B to C by way of M1, the other by way
         // of M2, and the two flat triangles between them share that side.
         let (m1, m2) = ([0.75, 0.25, 0.0], [0.25, 0.75, 0.0]);
-        let mut t = mesh(
-            &[A, B, C, D, m1, m2],
-            &[0, 2, 4, 0, 4, 1, 0, 1, 3, 0, 3, 2, 1, 5, 3, 5, 2, 3, 1, 4, 2, 2, 5, 1],
-        );
+        let mut t =
+            mesh(&[A, B, C, D, m1, m2], &[0, 2, 4, 0, 4, 1, 0, 1, 3, 0, 3, 2, 1, 5, 3, 5, 2, 3, 1, 4, 2, 2, 5, 1]);
         assert_eq!(faults(&t), (0, 2));
         remove(&mut t);
         assert_eq!(t.face_ids, vec![0, 0, 1, 2, 3, 4, 4, 5]);

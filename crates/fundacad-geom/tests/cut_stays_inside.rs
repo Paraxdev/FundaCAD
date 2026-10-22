@@ -15,7 +15,10 @@ fn a_cut_result_that_reaches_outside_its_body_is_not_taken() {
     assert_eq!(kernel::count(&got, Kind::Solid), 1, "the loose solid came through");
     let (inner, outer) = (kernel::bbox(&got).unwrap(), kernel::bbox(&body).unwrap());
     for k in 0..3 {
-        assert!(inner[k] >= outer[k] - 1e-6 && inner[k + 3] <= outer[k + 3] + 1e-6, "{inner:?} reaches outside {outer:?}");
+        assert!(
+            inner[k] >= outer[k] - 1e-6 && inner[k + 3] <= outer[k + 3] + 1e-6,
+            "{inner:?} reaches outside {outer:?}"
+        );
     }
     assert!((kernel::volume_precise(&got) - 3500.0).abs() < 1e-6);
 }

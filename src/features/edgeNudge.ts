@@ -47,12 +47,15 @@ export function edgeNudgePlacement(
 export function pointOnEdge(points: Vec3[], at: Vec3): { anchor: Vec3; tangent: Vec3 | null } | null {
   let best: { anchor: Vec3; tangent: Vec3 | null; d: number } | null = null;
   for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1]!, b = points[i]!;
+    const a = points[i - 1]!,
+      b = points[i]!;
     const ab: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     const len2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
     if (len2 < 1e-18) continue;
-    const t = Math.max(0, Math.min(1,
-      ((at[0] - a[0]) * ab[0] + (at[1] - a[1]) * ab[1] + (at[2] - a[2]) * ab[2]) / len2));
+    const t = Math.max(
+      0,
+      Math.min(1, ((at[0] - a[0]) * ab[0] + (at[1] - a[1]) * ab[1] + (at[2] - a[2]) * ab[2]) / len2),
+    );
     const p: Vec3 = [a[0] + ab[0] * t, a[1] + ab[1] * t, a[2] + ab[2] * t];
     const d = Math.hypot(p[0] - at[0], p[1] - at[1], p[2] - at[2]);
     if (!best || d < best.d) {
@@ -78,9 +81,7 @@ export function pointOnEdge(points: Vec3[], at: Vec3): { anchor: Vec3; tangent: 
  *  lies across a real member reads better than the camera-right fallback.
  *  A null tangent means "no usable direction" and leaves that fallback to the
  *  caller, which is the only party that knows where the camera is. */
-export function handlePlacement(
-  polylines: Vec3[][],
-): { anchor: Vec3; tangent: Vec3 | null } | null {
+export function handlePlacement(polylines: Vec3[][]): { anchor: Vec3; tangent: Vec3 | null } | null {
   const mids: Vec3[] = [];
   let tangent: Vec3 | null = null;
   for (const pts of polylines) {

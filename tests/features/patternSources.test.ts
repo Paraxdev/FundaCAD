@@ -2,23 +2,33 @@
 // rest can't, mirroring the engine's own refusal so the tool can decide before
 // ever reaching it.
 import { describe, expect, it } from "vitest";
-import { facesOwnedByFeatures, featureOwnersOfFaces, patternSources, spansBody } from "../../src/features/patternSources";
+import {
+  facesOwnedByFeatures,
+  featureOwnersOfFaces,
+  patternSources,
+  spansBody,
+} from "../../src/features/patternSources";
 import type { Feature, RebuildResult } from "../../src/types";
 
-const hole = (id: string): Feature =>
-  ({ id, type: "hole", points: [] }) as unknown as Feature;
+const hole = (id: string): Feature => ({ id, type: "hole", points: [] }) as unknown as Feature;
 
 const extrude = (id: string, operation: "new" | "join" | "cut" | "intersect"): Feature =>
   ({ id, type: "extrude", sketch: "s1", distance: 5, operation }) as unknown as Feature;
 
-const fillet = (id: string): Feature =>
-  ({ id, type: "fillet", edges: [], radius: 2 }) as unknown as Feature;
+const fillet = (id: string): Feature => ({ id, type: "fillet", edges: [], radius: 2 }) as unknown as Feature;
 
 const pressPull = (id: string, operation: "join" | "cut", mode?: string): Feature =>
   ({ id, type: "press-pull", face: [], distance: 3, operation, ...(mode ? { mode } : {}) }) as unknown as Feature;
 
 const circularPattern = (id: string, features?: string[]): Feature =>
-  ({ id, type: "patternCircular", count: 4, angle: 360, axis: "Z", ...(features ? { features } : {}) }) as unknown as Feature;
+  ({
+    id,
+    type: "patternCircular",
+    count: 4,
+    angle: 360,
+    axis: "Z",
+    ...(features ? { features } : {}),
+  }) as unknown as Feature;
 
 describe("patternSources", () => {
   it("takes a hole", () => {

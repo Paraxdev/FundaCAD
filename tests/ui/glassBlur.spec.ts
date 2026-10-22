@@ -19,10 +19,18 @@ afterEach(() => {
 
 describe("isSoftwareRendererName", () => {
   it("knows the software rasterisers and passes real GPUs", () => {
-    expect(isSoftwareRendererName("ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)")).toBe(true);
+    expect(
+      isSoftwareRendererName(
+        "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      ),
+    ).toBe(true);
     expect(isSoftwareRendererName("llvmpipe (LLVM 15.0.7, 256 bits)")).toBe(true);
-    expect(isSoftwareRendererName("ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11 vs_5_0 ps_5_0)")).toBe(true);
-    expect(isSoftwareRendererName("ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)")).toBe(false);
+    expect(isSoftwareRendererName("ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11 vs_5_0 ps_5_0)")).toBe(
+      true,
+    );
+    expect(isSoftwareRendererName("ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)")).toBe(
+      false,
+    );
     expect(isSoftwareRendererName("")).toBe(false);
   });
 });

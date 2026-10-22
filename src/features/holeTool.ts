@@ -21,7 +21,14 @@ import { previewVerdict } from "./previewVerdict";
 import { featureNumFields } from "../document/numFields";
 import { planeXDir } from "./planeMath";
 import {
-  CLEARANCE, HOLE_TYPES, INSERT, badHoleSizeText, isHoleSize, newHoleFields, parseHoleSize, type HoleSize,
+  CLEARANCE,
+  HOLE_TYPES,
+  INSERT,
+  badHoleSizeText,
+  isHoleSize,
+  newHoleFields,
+  parseHoleSize,
+  type HoleSize,
 } from "./holeStandards";
 import { rebaseHole, trackedFace, upgradeFace, withExtent } from "./holeFace";
 
@@ -30,7 +37,10 @@ type HoleFeature = Extract<Feature, { type: "hole" }>;
 const SETTLE_MS = 120;
 const FREE_GAP = 12; // --float-gap
 const TYPE_LABEL: Record<HoleType, string> = {
-  simple: "Simple", counterbore: "Counterbore", countersink: "Countersink", insert: "Insert",
+  simple: "Simple",
+  counterbore: "Counterbore",
+  countersink: "Countersink",
+  insert: "Insert",
 };
 const THROUGH = /^\s*(thr(u|ough)?|all)\s*$/i;
 
@@ -87,7 +97,9 @@ export class HoleTool {
       move: (e) => this.onMove(e),
       down: (e) => this.onDown(e),
       up: (e) => this.onUp(e),
-      key: (e) => { if (e.key === "Escape") this.cancel(); },
+      key: (e) => {
+        if (e.key === "Escape") this.cancel();
+      },
       frame: () => this.tick(),
     });
   }
@@ -117,11 +129,15 @@ export class HoleTool {
    *  edit surface then. */
   startEdit(id: string, onDone: (id: string | null) => void): boolean {
     if (this.active) return false;
-    const f = asFeature(this.store.document.features.find((x) => x.id === id), "hole");
+    const f = asFeature(
+      this.store.document.features.find((x) => x.id === id),
+      "hole",
+    );
     if (!f || !f.face || f.sketch || !f.points.length) return false;
     const values = f as unknown as Record<string, unknown>;
     for (const [field] of featureNumFields("hole", values)) {
-      if (typeof values[field] === "string" || this.store.isParamBound({ kind: "feature", feature: id, field })) return false;
+      if (typeof values[field] === "string" || this.store.isParamBound({ kind: "feature", feature: id, field }))
+        return false;
     }
     const placed = rebaseHole(f.face, f.points, this.store.buildState.result?.trackedFaces?.[id]);
     const first = placed.points[0]!;
@@ -169,8 +185,12 @@ export class HoleTool {
   }
 
   private pointOnPlane(clientX: number, clientY: number): THREE.Vector3 | null {
-    return this.viewport.rayFrom(clientX, clientY).ray.intersectPlane(
-      new THREE.Plane().setFromNormalAndCoplanarPoint(this.normal, this.origin), new THREE.Vector3());
+    return this.viewport
+      .rayFrom(clientX, clientY)
+      .ray.intersectPlane(
+        new THREE.Plane().setFromNormalAndCoplanarPoint(this.normal, this.origin),
+        new THREE.Vector3(),
+      );
   }
 
   /** The index of the placed hole nearest `p`, within its own pick radius, or -1. */
@@ -243,8 +263,13 @@ export class HoleTool {
   }
 
   private begin(
-    at: THREE.Vector3, normal: THREE.Vector3, origin: THREE.Vector3, bodyId: string | null,
-    faceId: number | null, face?: Selector, points?: Vec3[],
+    at: THREE.Vector3,
+    normal: THREE.Vector3,
+    origin: THREE.Vector3,
+    bodyId: string | null,
+    faceId: number | null,
+    face?: Selector,
+    points?: Vec3[],
   ) {
     this.phase = "place";
     this.armed = false;
@@ -379,8 +404,13 @@ export class HoleTool {
 
   private defaults() {
     const b = this.base;
-    return newHoleFields(this.holeType, this.size, this.blind() ? "blind" : "through",
-      b?.standard === "tap" ? "tap" : "clearance", b?.fit ?? "normal");
+    return newHoleFields(
+      this.holeType,
+      this.size,
+      this.blind() ? "blind" : "through",
+      b?.standard === "tap" ? "tap" : "clearance",
+      b?.fit ?? "normal",
+    );
   }
 
   private currentDiameter(): number {
@@ -415,7 +445,10 @@ export class HoleTool {
     if (depthText !== this.lastDepthText) {
       this.lastDepthText = depthText;
       if (THROUGH.test(depthText) && this.holeType !== "insert") {
-        if (!this.through) { this.through = true; changed = true; }
+        if (!this.through) {
+          this.through = true;
+          changed = true;
+        }
       } else {
         const v = this.dim.getValue("depth");
         if (v != null && v > 0 && (this.through || v !== this.depth)) {
@@ -444,13 +477,15 @@ export class HoleTool {
     const box = this.viewport.modelBox();
     if (!box) return this.dim.position(s.x + 24, s.y + 24);
     const model = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
-    for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
-      const c = this.viewport.projectToScreen(new THREE.Vector3(x, y, z));
-      model.left = Math.min(model.left, c.x);
-      model.right = Math.max(model.right, c.x);
-      model.top = Math.min(model.top, c.y);
-      model.bottom = Math.max(model.bottom, c.y);
-    }
+    for (const x of [box.min.x, box.max.x])
+      for (const y of [box.min.y, box.max.y])
+        for (const z of [box.min.z, box.max.z]) {
+          const c = this.viewport.projectToScreen(new THREE.Vector3(x, y, z));
+          model.left = Math.min(model.left, c.x);
+          model.right = Math.max(model.right, c.x);
+          model.top = Math.min(model.top, c.y);
+          model.bottom = Math.max(model.bottom, c.y);
+        }
     const area = this.viewport.domElement.getBoundingClientRect();
     const free = clearOfCards(area, { top: s.y - 24, bottom: s.y + 24 }, FREE_GAP, this.dim.naturalSize().w);
     this.dim.positionBeside(model, s, free);
@@ -462,7 +497,7 @@ export class HoleTool {
     const what = this.diameter != null ? `⌀${this.diameter}` : this.size;
     setPrompt(
       `${TYPE_LABEL[this.holeType]} ${what} · ${n} hole${n === 1 ? "" : "s"} · click the face to add, ` +
-      "click a hole to remove · depth or \"through\" · Enter to commit · Esc",
+        'click a hole to remove · depth or "through" · Enter to commit · Esc',
     );
     if (this.previewTimer) clearTimeout(this.previewTimer);
     this.previewTimer = window.setTimeout(() => {
@@ -484,7 +519,9 @@ export class HoleTool {
     const keep = this.base && !this.resized ? this.base : null;
     const f: HoleFeature = {
       ...(keep ?? fresh),
-      ...(this.base && !keep ? { drillPoint: this.base.drillPoint, flip: this.base.flip, tapped: this.base.tapped } : {}),
+      ...(this.base && !keep
+        ? { drillPoint: this.base.drillPoint, flip: this.base.flip, tapped: this.base.tapped }
+        : {}),
       id: this.previewId,
       type: "hole",
       holeType: this.holeType,

@@ -43,12 +43,7 @@ import { useDialogStore } from "../stores/dialogs";
 import { pluginFocus } from "./settingsFocus";
 
 // --- the contribution table: the only way onto the app's surfaces -----------
-export {
-  contribute,
-  contributedPalette,
-  onContribChange,
-  service,
-} from "./contrib";
+export { contribute, contributedPalette, onContribChange, service } from "./contrib";
 export type {
   BrowserSection,
   Contribution,
@@ -107,9 +102,22 @@ export type { CtxItem, MenuDef, MenuItem } from "../ui/menu";
 export { openMenuAt, dismissRadialMenu, radialMenuOpen } from "../ui/menu";
 export type { MenuAtOptions } from "../ui/menu";
 export type { RadialTrigger } from "../ui/radialMenu";
-export { DEFAULT_BINDINGS, bindingKeys, bindingRows, pointerBindings, validateBindings } from "../viewport/navigator/bindings";
+export {
+  DEFAULT_BINDINGS,
+  bindingKeys,
+  bindingRows,
+  pointerBindings,
+  validateBindings,
+} from "../viewport/navigator/bindings";
 export type { PointerBinding, PointerButton, PointerDrag, PointerGesture } from "../viewport/navigator/bindings";
-export { SHORTCUTS, activeShortcuts, checkShortcut, describeShortcutProblem, formatShortcut, keyHint } from "../input/shortcuts";
+export {
+  SHORTCUTS,
+  activeShortcuts,
+  checkShortcut,
+  describeShortcutProblem,
+  formatShortcut,
+  keyHint,
+} from "../input/shortcuts";
 export type { Shortcut, ShortcutOverride, ShortcutProblem } from "../input/shortcuts";
 export type { CadDocument, Feature, Num, PlaneSpec, RebuildResult, Selector } from "../types";
 
@@ -233,9 +241,7 @@ export async function saveDialog(opts: {
 
 /** The native open dialog, or null when dismissed. Single selection only: a
  *  plugin that wanted many would be describing a different gesture. */
-export async function openDialog(opts: {
-  filters?: { name: string; extensions: string[] }[];
-}): Promise<string | null> {
+export async function openDialog(opts: { filters?: { name: string; extensions: string[] }[] }): Promise<string | null> {
   const { open } = await import("@tauri-apps/plugin-dialog");
   const picked = await open({ ...opts, multiple: false });
   return typeof picked === "string" ? picked : null;

@@ -1,8 +1,22 @@
 import { describe, it, expect } from "vitest";
 import type { CadDocument, ParamDef } from "../../src/types";
 import {
-  bareParamRef, boundParam, classifyExprInput, commitDeleteParam, commitFieldExpr, commitNamedFieldExpr, commitRenameParam,
-  deleteBlockers, defsOf, isBound, nextDName, recompute, referencesTo, splitNameValue, validateExpr, validateName,
+  bareParamRef,
+  boundParam,
+  classifyExprInput,
+  commitDeleteParam,
+  commitFieldExpr,
+  commitNamedFieldExpr,
+  commitRenameParam,
+  deleteBlockers,
+  defsOf,
+  isBound,
+  nextDName,
+  recompute,
+  referencesTo,
+  splitNameValue,
+  validateExpr,
+  validateName,
 } from "../../src/params/engine";
 
 /** doc with one sketch (polygon e1 + a radius dim c1) and one extrude f2 */
@@ -12,7 +26,9 @@ function fixture(defs: Record<string, ParamDef> = {}): CadDocument {
     paramDefs: defs,
     features: [
       {
-        id: "f1", type: "sketch", plane: "XY",
+        id: "f1",
+        type: "sketch",
+        plane: "XY",
         entities: [{ type: "polygon", id: "e1", x: 0, y: 0, radius: 10, sides: 6, angle: 0 }],
         constraints: [{ type: "radius", id: "c1", e: "e9", value: 4 }],
       },
@@ -47,7 +63,12 @@ describe("params engine", () => {
 
   it("coerces integer fields (polygon sides rounds and clamps to 3)", () => {
     const doc = fixture({
-      n: { expr: "10 / 3", value: 0, unit: "count", target: { kind: "entity", sketch: "f1", entity: "e1", field: "sides" } },
+      n: {
+        expr: "10 / 3",
+        value: 0,
+        unit: "count",
+        target: { kind: "entity", sketch: "f1", entity: "e1", field: "sides" },
+      },
     });
     recompute(doc);
     expect((doc.features[0] as { entities: { sides: number }[] }).entities[0]!.sides).toBe(3);
@@ -76,10 +97,19 @@ describe("params engine", () => {
       a: { expr: "10", value: 10, unit: "mm" },
       b: { expr: "a * 2", value: 20, unit: "mm" },
     });
-    expect(validateExpr(doc, null, "a + missing")).toMatchObject({ ok: false, error: expect.stringMatching(/unknown parameter "missing"/) });
+    expect(validateExpr(doc, null, "a + missing")).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/unknown parameter "missing"/),
+    });
     expect(validateExpr(doc, "a", "a + 1")).toMatchObject({ ok: false, error: expect.stringMatching(/itself/) });
-    expect(validateExpr(doc, "a", "b / 2")).toMatchObject({ ok: false, error: expect.stringMatching(/circular reference: a → b → a/) });
-    expect(validateExpr(doc, null, "3 mm", "count")).toMatchObject({ ok: false, error: expect.stringMatching(/unitless/) });
+    expect(validateExpr(doc, "a", "b / 2")).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/circular reference: a → b → a/),
+    });
+    expect(validateExpr(doc, null, "3 mm", "count")).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/unitless/),
+    });
     expect(validateExpr(doc, null, "1 / 0")).toMatchObject({ ok: false, error: expect.stringMatching(/finite/) });
     expect(validateExpr(doc, null, "a + b")).toMatchObject({ ok: true, value: 30 });
   });
@@ -213,10 +243,18 @@ describe("params engine", () => {
   it("classifyExprInput: plain expr, new name, and no-op rename to the current name", () => {
     const doc = fixture({ width: { expr: "40", value: 40, unit: "mm" } });
     expect(classifyExprInput(doc, "width / 2", "length", null)).toEqual({ ok: true, value: 20, expr: "width / 2" });
-    expect(classifyExprInput(doc, "depth = width / 2", "length", null)).toEqual({ ok: true, value: 20, expr: "width / 2", name: "depth" });
+    expect(classifyExprInput(doc, "depth = width / 2", "length", null)).toEqual({
+      ok: true,
+      value: 20,
+      expr: "width / 2",
+      name: "depth",
+    });
     // an existing OTHER name is rejected; the target's own bound/pending name
     // is a no-op rename → treated as a plain re-expression (no `name`)
-    expect(classifyExprInput(doc, "width = 30", "length", null)).toMatchObject({ ok: false, error: expect.stringMatching(/already exists/) });
+    expect(classifyExprInput(doc, "width = 30", "length", null)).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/already exists/),
+    });
     expect(classifyExprInput(doc, "width = 30", "length", "width")).toEqual({ ok: true, value: 30, expr: "30" });
     expect(classifyExprInput(doc, "width = 30", "length", null, "width")).toEqual({ ok: true, value: 30, expr: "30" });
     expect(classifyExprInput(doc, "1 +", "length", null)).toMatchObject({ ok: false });

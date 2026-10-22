@@ -1,6 +1,12 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { bloomSide, TraceBloom, traceBloom, type FadeMaterial, type TraceBloomDeps } from "../../src/viewport/pathtrace/tracePost";
+import {
+  bloomSide,
+  TraceBloom,
+  traceBloom,
+  type FadeMaterial,
+  type TraceBloomDeps,
+} from "../../src/viewport/pathtrace/tracePost";
 
 describe("traced bloom settings", () => {
   const dark = new THREE.Color(0.01, 0.01, 0.02);
@@ -36,27 +42,47 @@ class Mat implements FadeMaterial {
   _toneMapping = { faded: true };
   needsUpdate = false;
   disposed = false;
-  dispose() { this.disposed = true; }
+  dispose() {
+    this.disposed = true;
+  }
 }
 
 class Quad {
   renders = 0;
   constructor(public material: Mat) {}
-  render() { this.renders++; }
+  render() {
+    this.renders++;
+  }
   dispose() {}
 }
 
 function rig(drawW = 1200, drawH = 800) {
-  const nodes: { scale: number; disposed: boolean; input: unknown; strength: { value: number }; radius: { value: number }; threshold: { value: number } }[] = [];
+  const nodes: {
+    scale: number;
+    disposed: boolean;
+    input: unknown;
+    strength: { value: number };
+    radius: { value: number };
+    threshold: { value: number };
+  }[] = [];
   const blit = new Quad(new Mat());
   const deps: TraceBloomDeps = {
     renderer: { autoClear: false, setRenderTarget() {}, getDrawingBufferSize: (v) => v.set(drawW, drawH) },
     blitQuad: blit,
     bloom: (input, s, r, t) => {
       const n = {
-        scale: 0.5, disposed: false, input, strength: { value: s }, radius: { value: r }, threshold: { value: t },
-        setResolutionScale(x: number) { n.scale = x; },
-        dispose() { n.disposed = true; },
+        scale: 0.5,
+        disposed: false,
+        input,
+        strength: { value: s },
+        radius: { value: r },
+        threshold: { value: t },
+        setResolutionScale(x: number) {
+          n.scale = x;
+        },
+        dispose() {
+          n.disposed = true;
+        },
       };
       nodes.push(n);
       return n;

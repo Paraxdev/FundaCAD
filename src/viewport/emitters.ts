@@ -61,13 +61,20 @@ export interface AreaEmitter {
 
 /** The dominant axis of a normal, 0..5 for +x, -x, +y, -y, +z, -z. */
 function facing(nx: number, ny: number, nz: number): number {
-  const ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
+  const ax = Math.abs(nx),
+    ay = Math.abs(ny),
+    az = Math.abs(nz);
   if (ax >= ay && ax >= az) return nx >= 0 ? 0 : 1;
   if (ay >= az) return ny >= 0 ? 2 : 3;
   return nz >= 0 ? 4 : 5;
 }
 
-interface Tri { fid: number; t: number; area: number; n: Vec3 }
+interface Tri {
+  fid: number;
+  t: number;
+  area: number;
+  n: Vec3;
+}
 
 /** Area lights for the glowing triangles of one body mesh.
  *
@@ -85,10 +92,18 @@ export function areaEmitters(
   for (let t = 0; t < faceIds.length; t++) {
     const fid = faceIds[t]!;
     if (!glowing(fid)) continue;
-    const i0 = corner(t, 0), i1 = corner(t, 1), i2 = corner(t, 2);
-    const ux = positions[i1]! - positions[i0]!, uy = positions[i1 + 1]! - positions[i0 + 1]!, uz = positions[i1 + 2]! - positions[i0 + 2]!;
-    const vx = positions[i2]! - positions[i0]!, vy = positions[i2 + 1]! - positions[i0 + 1]!, vz = positions[i2 + 2]! - positions[i0 + 2]!;
-    const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+    const i0 = corner(t, 0),
+      i1 = corner(t, 1),
+      i2 = corner(t, 2);
+    const ux = positions[i1]! - positions[i0]!,
+      uy = positions[i1 + 1]! - positions[i0 + 1]!,
+      uz = positions[i1 + 2]! - positions[i0 + 2]!;
+    const vx = positions[i2]! - positions[i0]!,
+      vy = positions[i2 + 1]! - positions[i0 + 1]!,
+      vz = positions[i2 + 2]! - positions[i0 + 2]!;
+    const cx = uy * vz - uz * vy,
+      cy = uz * vx - ux * vz,
+      cz = ux * vy - uy * vx;
     const len = Math.hypot(cx, cy, cz);
     if (len <= 0) continue;
     let list = byFace.get(fid);
@@ -129,8 +144,14 @@ function push<K, V>(m: Map<K, V[]>, k: K, v: V) {
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 function meanNormal(tris: Tri[]): Vec3 | null {
-  let x = 0, y = 0, z = 0;
-  for (const tr of tris) { x += tr.n[0] * tr.area; y += tr.n[1] * tr.area; z += tr.n[2] * tr.area; }
+  let x = 0,
+    y = 0,
+    z = 0;
+  for (const tr of tris) {
+    x += tr.n[0] * tr.area;
+    y += tr.n[1] * tr.area;
+    z += tr.n[2] * tr.area;
+  }
   const l = Math.hypot(x, y, z);
   return l > 0 ? [x / l, y / l, z / l] : null;
 }
@@ -159,8 +180,10 @@ function fitRectangle(
 
   const pts: [number, number][] = [];
   const faces = new Map<number, number>();
-  let area = 0, far = -Infinity;
-  const min: Vec3 = [Infinity, Infinity, Infinity], max: Vec3 = [-Infinity, -Infinity, -Infinity];
+  let area = 0,
+    far = -Infinity;
+  const min: Vec3 = [Infinity, Infinity, Infinity],
+    max: Vec3 = [-Infinity, -Infinity, -Infinity];
   for (const tr of tris) {
     area += tr.area;
     faces.set(tr.fid, (faces.get(tr.fid) ?? 0) + tr.area);
@@ -169,13 +192,17 @@ function fitRectangle(
       const p: Vec3 = [positions[i]!, positions[i + 1]!, positions[i + 2]!];
       pts.push([dot(p, u), dot(p, v)]);
       far = Math.max(far, dot(p, n));
-      for (let a = 0; a < 3; a++) { min[a] = Math.min(min[a]!, p[a]!); max[a] = Math.max(max[a]!, p[a]!); }
+      for (let a = 0; a < 3; a++) {
+        min[a] = Math.min(min[a]!, p[a]!);
+        max[a] = Math.max(max[a]!, p[a]!);
+      }
     }
   }
   const rect = minAreaRect(pts);
   if (!rect) return null;
   const [cu, cv] = rect.center;
-  const ca = Math.cos(rect.angle), sa = Math.sin(rect.angle);
+  const ca = Math.cos(rect.angle),
+    sa = Math.sin(rect.angle);
   return {
     key,
     center: [0, 1, 2].map((a) => u[a]! * cu + v[a]! * cv + n[a]! * far) as Vec3,
@@ -191,7 +218,9 @@ function fitRectangle(
 
 /** Minimum area bounding rectangle of 2D points: centre, the angle of its width
  *  side from the +u axis, and its two side lengths. */
-export function minAreaRect(pts: [number, number][]): { center: [number, number]; angle: number; w: number; h: number } | null {
+export function minAreaRect(
+  pts: [number, number][],
+): { center: [number, number]; angle: number; w: number; h: number } | null {
   const hull = convexHull(pts);
   if (hull.length === 0) return null;
   if (hull.length < 3) {
@@ -201,17 +230,28 @@ export function minAreaRect(pts: [number, number][]): { center: [number, number]
   }
   let best: { center: [number, number]; angle: number; w: number; h: number } | null = null;
   for (let i = 0; i < hull.length; i++) {
-    const p = hull[i]!, q = hull[(i + 1) % hull.length]!;
+    const p = hull[i]!,
+      q = hull[(i + 1) % hull.length]!;
     const angle = Math.atan2(q[1] - p[1], q[0] - p[0]);
-    const c = Math.cos(angle), s = Math.sin(angle);
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    const c = Math.cos(angle),
+      s = Math.sin(angle);
+    let x0 = Infinity,
+      x1 = -Infinity,
+      y0 = Infinity,
+      y1 = -Infinity;
     for (const [x, y] of hull) {
-      const rx = x * c + y * s, ry = -x * s + y * c;
-      x0 = Math.min(x0, rx); x1 = Math.max(x1, rx); y0 = Math.min(y0, ry); y1 = Math.max(y1, ry);
+      const rx = x * c + y * s,
+        ry = -x * s + y * c;
+      x0 = Math.min(x0, rx);
+      x1 = Math.max(x1, rx);
+      y0 = Math.min(y0, ry);
+      y1 = Math.max(y1, ry);
     }
-    const w = x1 - x0, h = y1 - y0;
+    const w = x1 - x0,
+      h = y1 - y0;
     if (!best || w * h < best.w * best.h - 1e-9) {
-      const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+      const mx = (x0 + x1) / 2,
+        my = (y0 + y1) / 2;
       best = { center: [mx * c - my * s, mx * s + my * c], angle, w, h };
     }
   }
@@ -261,8 +301,13 @@ export function emitterPower(glow: number, e: Pick<AreaEmitter, "area" | "width"
  *  the projected hull (true of any convex set), and the hull lies inside the
  *  box's projection, which is at most half the box's surface. The 1e-3 floor on
  *  each side of the rectangle is the last term. */
-export function emitterPowerBound(glow: number, box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } }): number {
-  const a = box.max.x - box.min.x, b = box.max.y - box.min.y, c = box.max.z - box.min.z;
+export function emitterPowerBound(
+  glow: number,
+  box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } },
+): number {
+  const a = box.max.x - box.min.x,
+    b = box.max.y - box.min.y,
+    c = box.max.z - box.min.z;
   const surface = 2 * (a * b + b * c + c * a);
   const d = Math.hypot(a, b, c);
   return glow * EMITTER_LUMINANCE * (surface + 2e-3 * d + 1e-6) * (1 + 1e-9);

@@ -16,7 +16,9 @@ function fakeEngine(dirty = false) {
 }
 
 describe("newFromTemplate", () => {
-  beforeEach(() => { choice.pick = "discard"; });
+  beforeEach(() => {
+    choice.pick = "discard";
+  });
 
   it("loads the template as an untitled document named after it", async () => {
     const { e, store } = fakeEngine();

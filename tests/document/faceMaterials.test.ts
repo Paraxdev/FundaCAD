@@ -8,8 +8,13 @@
 // throws on a document somebody edited yesterday.
 import { describe, it, expect } from "vitest";
 import {
-  faceKey, parseFaceKey, resolveFaceMaterials, faceMaterialPaint, faceMaterialFinishes,
-  staleFaceKeys, type BodyFaceSpan,
+  faceKey,
+  parseFaceKey,
+  resolveFaceMaterials,
+  faceMaterialPaint,
+  faceMaterialFinishes,
+  staleFaceKeys,
+  type BodyFaceSpan,
 } from "../../src/document/faceMaterials";
 import { FINISH, type MaterialDef } from "../../src/document/materials";
 
@@ -70,7 +75,11 @@ describe("resolveFaceMaterials", () => {
 
   it("keeps the good ones when a neighbour is bad (control)", () => {
     const got = resolveFaceMaterials(
-      [["ghost#0", "m-red"], ["body1#2", "m-chrome"], ["body1#99", "m-red"]],
+      [
+        ["ghost#0", "m-red"],
+        ["body1#2", "m-chrome"],
+        ["body1#99", "m-red"],
+      ],
       BODIES,
       LIBRARY,
     );
@@ -85,7 +94,10 @@ describe("resolveFaceMaterials", () => {
 
 describe("the two maps the renderer wants", () => {
   const resolved = resolveFaceMaterials(
-    [["body1#0", "m-chrome"], ["body2#3", "m-glass"]],
+    [
+      ["body1#0", "m-chrome"],
+      ["body2#3", "m-glass"],
+    ],
     BODIES,
     LIBRARY,
   );
@@ -105,14 +117,28 @@ describe("the two maps the renderer wants", () => {
 
 describe("staleFaceKeys", () => {
   it("names assignments to bodies that no longer exist", () => {
-    expect(staleFaceKeys(
-      [["body1#0", "m-red"], ["gone#2", "m-red"], ["also-gone#0", "m-red"]],
-      BODIES,
-    )).toEqual(["gone#2", "also-gone#0"]);
+    expect(
+      staleFaceKeys(
+        [
+          ["body1#0", "m-red"],
+          ["gone#2", "m-red"],
+          ["also-gone#0", "m-red"],
+        ],
+        BODIES,
+      ),
+    ).toEqual(["gone#2", "also-gone#0"]);
   });
 
   it("names nothing when every body is still there (control)", () => {
-    expect(staleFaceKeys([["body1#0", "m-red"], ["body2#3", "m-red"]], BODIES)).toEqual([]);
+    expect(
+      staleFaceKeys(
+        [
+          ["body1#0", "m-red"],
+          ["body2#3", "m-red"],
+        ],
+        BODIES,
+      ),
+    ).toEqual([]);
   });
 
   it("names nothing rather than everything when there is no model to compare to", () => {

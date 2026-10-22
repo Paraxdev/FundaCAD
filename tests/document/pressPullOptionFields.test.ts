@@ -41,13 +41,15 @@ describe("tangent faces follow option row", () => {
   it("shows the stored value on an auto, along normal press-pull", () => {
     const row = { field: "followTangent", label: "Tangent faces follow" };
     expect(shownRows(pressPull({ followTangent: false }))).toEqual([{ ...row, current: false }]);
-    expect(shownRows(pressPull({ followTangent: true, mode: "auto", direction: "normal" })))
-      .toEqual([{ ...row, current: true }]);
+    expect(shownRows(pressPull({ followTangent: true, mode: "auto", direction: "normal" }))).toEqual([
+      { ...row, current: true },
+    ]);
   });
 
   it("shows the stored value on an offset face", () => {
-    expect(shownRows(offsetFace({ followTangent: false })))
-      .toEqual([{ field: "followTangent", label: "Tangent faces follow", current: false }]);
+    expect(shownRows(offsetFace({ followTangent: false }))).toEqual([
+      { field: "followTangent", label: "Tangent faces follow", current: false },
+    ]);
   });
 
   it("falls back to true for a value that is not a boolean", () => {

@@ -69,7 +69,10 @@ describe("standard views while zoomed in deep", () => {
     const { nav } = setup({ tau: 0 });
     nav.setProjectionMode("auto");
     nav.moveTo(DETAIL);
-    for (let i = 0; i < 40; i++) { nav.wheel(W / 2, H / 2, -100); nav.update(1 / 60); }
+    for (let i = 0; i < 40; i++) {
+      nav.wheel(W / 2, H / 2, -100);
+      nav.update(1 / 60);
+    }
     settle(nav);
     const s = nav.pose.scale;
     for (const q of [TOP, FRONT, ISO]) {
@@ -98,7 +101,11 @@ describe("standard views while zoomed in deep", () => {
     expect(nav.pose.target.distanceTo(sphere.center)).toBeLessThan(1e-9);
     // every corner inside the frame
     for (let i = 0; i < 8; i++) {
-      const c = new THREE.Vector3(i & 1 ? UNIT_BOX.max.x : UNIT_BOX.min.x, i & 2 ? UNIT_BOX.max.y : UNIT_BOX.min.y, i & 4 ? UNIT_BOX.max.z : UNIT_BOX.min.z);
+      const c = new THREE.Vector3(
+        i & 1 ? UNIT_BOX.max.x : UNIT_BOX.min.x,
+        i & 2 ? UNIT_BOX.max.y : UNIT_BOX.min.y,
+        i & 4 ? UNIT_BOX.max.z : UNIT_BOX.min.z,
+      );
       const p = pixel(nav, c);
       expect(p.x).toBeGreaterThan(0);
       expect(p.x).toBeLessThan(W);
@@ -114,7 +121,8 @@ describe("boxOffScreen", () => {
     setOrientation(p, FRONT);
     p.scale = 10;
     const frame = { width: W, height: H };
-    const box = (x: number, y: number) => new THREE.Box3(new THREE.Vector3(x - 1, y - 1, -1), new THREE.Vector3(x + 1, y + 1, 1));
+    const box = (x: number, y: number) =>
+      new THREE.Box3(new THREE.Vector3(x - 1, y - 1, -1), new THREE.Vector3(x + 1, y + 1, 1));
     expect(boxOffScreen(p, frame, box(0, 0))).toBe(false);
     expect(boxOffScreen(p, frame, box(40, 0))).toBe(true);
     expect(boxOffScreen(p, frame, box(0, -200))).toBe(true);

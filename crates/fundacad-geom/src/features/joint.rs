@@ -49,11 +49,7 @@ fn frame(who: &str, origin: [f64; 3], zdir: [f64; 3], xdir: Option<[f64; 3]>) ->
             code: Some(BAD_REQUEST),
         });
     }
-    Ok(Frame {
-        origin,
-        zdir,
-        xdir: xdir.filter(|x| length(*x) > 1e-9).unwrap_or([0.0; 3]),
-    })
+    Ok(Frame { origin, zdir, xdir: xdir.filter(|x| length(*x) > 1e-9).unwrap_or([0.0; 3]) })
 }
 
 /// `_joint_body_shape`.
@@ -62,13 +58,7 @@ fn body_shape<'a>(ctx: &'a Ctx, id: Option<&String>) -> Option<&'a Shape> {
     Some(ctx.bodies[i].shape())
 }
 
-fn resolve_one(
-    ctx: &mut Ctx,
-    shape: &Shape,
-    sel: &Selector,
-    fid: &str,
-    faces: bool,
-) -> FResult<Option<Shape>> {
+fn resolve_one(ctx: &mut Ctx, shape: &Shape, sel: &Selector, fid: &str, faces: bool) -> FResult<Option<Shape>> {
     let mut diag = std::mem::take(&mut ctx.diagnostics);
     let mut r = Resolver::new(Some(&mut diag), Some(fid));
     let one = if faces {
@@ -161,21 +151,13 @@ pub(crate) fn connector(ctx: &mut Ctx, spec: &MateConnector, fid: &str, who: &st
 
 pub fn handle(ctx: &mut Ctx, f: &Joint) -> FResult {
     let Some(moving) = ctx.find_body(&f.moving) else {
-        ctx.skip_feature(
-            &f.id,
-            "joint",
-            "the body to position is missing or was consumed",
-        );
+        ctx.skip_feature(&f.id, "joint", "the body to position is missing or was consumed");
         return Ok(());
     };
     let mate = connector(ctx, &f.mate, &f.id, "joint")?;
     let fixed = connector(ctx, &f.to, &f.id, "joint")?;
     let (Some(mate), Some(fixed)) = (mate, fixed) else {
-        ctx.skip_feature(
-            &f.id,
-            "joint",
-            "a mate reference no longer resolves, the body was left in place",
-        );
+        ctx.skip_feature(&f.id, "joint", "a mate reference no longer resolves, the body was left in place");
         return Ok(());
     };
 
@@ -183,24 +165,14 @@ pub fn handle(ctx: &mut Ctx, f: &Joint) -> FResult {
     // offset and angle handles on the line the joint turns about.
     let n = length(fixed.zdir);
     let dir = fixed.zdir.map(|c| c / n);
-    ctx.datum_marks.insert(
-        f.id.clone(),
-        json!({"kind": "axis", "origin": fixed.origin, "dir": dir}),
-    );
+    ctx.datum_marks.insert(f.id.clone(), json!({"kind": "axis", "origin": fixed.origin, "dir": dir}));
 
     let val = |n: &Option<Num>| ctx.val_or(n.as_ref(), 0.0);
     let offset = val(&f.offset)?;
     let angle = val(&f.angle)?;
     let shape = ctx.bodies[moving].shape().clone();
-    let moved = ffi::jt_mated(
-        shape.raw(),
-        &fixed.wire(),
-        &mate.wire(),
-        offset,
-        angle,
-        f.flush.unwrap_or(false),
-    )
-    .map_err(|e| Fail::Internal(e.what().to_owned()))?;
+    let moved = ffi::jt_mated(shape.raw(), &fixed.wire(), &mate.wire(), offset, angle, f.flush.unwrap_or(false))
+        .map_err(|e| Fail::Internal(e.what().to_owned()))?;
     ctx.set_shape(moving, Shape::from_raw(moved));
     Ok(())
 }
@@ -223,10 +195,7 @@ mod tests {
         let typed = serde_json::from_value(doc.clone()).expect("the document parses");
         let r = builder::rebuild(&typed, &doc, &NoWatch).expect("not cancelled");
         assert!(r.errors.is_empty(), "{:?}", r.errors);
-        assert_eq!(
-            r.datum_marks["j"],
-            json!({"kind": "axis", "origin": [0.0, 0.0, 10.0], "dir": [0.0, 0.0, 1.0]})
-        );
+        assert_eq!(r.datum_marks["j"], json!({"kind": "axis", "origin": [0.0, 0.0, 10.0], "dir": [0.0, 0.0, 1.0]}));
         // The moving cube rests on the top face it was mated to.
         let bb = crate::kernel::bbox(&r.bodies[1].shape).expect("a box");
         assert!((bb[2] - 10.0).abs() < 1e-6, "{bb:?}");

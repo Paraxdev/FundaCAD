@@ -66,11 +66,7 @@ impl FaceAdjacency {
     /// The face indices an edge belongs to, in map order: one for a free
     /// boundary, the same index twice for a seam.
     pub fn faces_of_edge(&self, edge: &Shape) -> Vec<usize> {
-        self.edges
-            .ancestors(edge)
-            .iter()
-            .map(|f| self.faces.index_of(f))
-            .collect()
+        self.edges.ancestors(edge).iter().map(|f| self.faces.index_of(f)).collect()
     }
 
     /// The edge lies inside its one face as a drawn line, not along its side.

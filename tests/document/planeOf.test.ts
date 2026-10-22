@@ -7,10 +7,8 @@ import type { PlaneDef, PlaneSpec } from "../../src/types";
  *  the cache written when it was last closed, and the rebuild reports where it
  *  actually put it. */
 
-const spec = (z: number): PlaneSpec =>
-  ({ origin: [0, 0, z], normal: [0, 0, 1], xdir: [1, 0, 0] });
-const def = (z: number): PlaneDef =>
-  ({ origin: [0, 0, z], normal: [0, 0, 1], xdir: [1, 0, 0] });
+const spec = (z: number): PlaneSpec => ({ origin: [0, 0, z], normal: [0, 0, 1], xdir: [1, 0, 0] });
+const def = (z: number): PlaneDef => ({ origin: [0, 0, z], normal: [0, 0, 1], xdir: [1, 0, 0] });
 
 describe("where a plane-carrying feature actually sits", () => {
   it("falls back to the feature's own plane when nothing was reported", () => {

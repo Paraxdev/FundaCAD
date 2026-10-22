@@ -65,7 +65,12 @@ describe("the Section command", () => {
     aiming.act("section");
     const on = rig({ atWork: true, active: true });
     on.act("section");
-    expect([aiming.calls, on.calls, aiming.setStatus.mock.calls, on.setStatus.mock.calls]).toEqual([["stop"], ["stop"], [], []]);
+    expect([aiming.calls, on.calls, aiming.setStatus.mock.calls, on.setStatus.mock.calls]).toEqual([
+      ["stop"],
+      ["stop"],
+      [],
+      [],
+    ]);
   });
 
   it("asks for a body first when there is none, whatever is at work", () => {

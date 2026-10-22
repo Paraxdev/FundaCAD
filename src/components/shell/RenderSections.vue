@@ -5,7 +5,9 @@ import { contributedRenderSections, onContribChange, type RenderTab } from "../.
 
 const props = defineProps<{ tab: RenderTab }>();
 const sections = shallowRef(contributedRenderSections(props.tab));
-const stop = onContribChange(() => { sections.value = contributedRenderSections(props.tab); });
+const stop = onContribChange(() => {
+  sections.value = contributedRenderSections(props.tab);
+});
 onUnmounted(stop);
 </script>
 

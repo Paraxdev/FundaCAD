@@ -4,9 +4,23 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { Picker } from "../../src/viewport/picking";
-import { boxReply as reply, boxView, placed, replyView, STEP, STEP_CUT as halfCut, STEP_FRAME as M, stepCamera, stepPoint as local, STEP_FACES, withSheet, type Lump } from "./boxBodies";
+import {
+  boxReply as reply,
+  boxView,
+  placed,
+  replyView,
+  STEP,
+  STEP_CUT as halfCut,
+  STEP_FRAME as M,
+  stepCamera,
+  stepPoint as local,
+  STEP_FACES,
+  withSheet,
+  type Lump,
+} from "./boxBodies";
 
-const W = 800, H = 600;
+const W = 800,
+  H = 600;
 const RECT = { left: 0, top: 0, width: W, height: H, right: W, bottom: H, x: 0, y: 0 } as DOMRect;
 
 const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 5000);
@@ -30,7 +44,10 @@ const screenOf = (p: THREE.Vector3) => {
 };
 // Between the two bodies, slanted to the line of sight, keeping the far side.
 const cut = new THREE.Plane().setFromNormalAndCoplanarPoint(
-  sight.clone().add(new THREE.Vector3(0.25, -0.15, 0.3)).normalize(),
+  sight
+    .clone()
+    .add(new THREE.Vector3(0.25, -0.15, 0.3))
+    .normalize(),
   along(250),
 );
 
@@ -40,7 +57,7 @@ describe("the Picker under a section cut", () => {
     const picker = new Picker();
     const hitBody = () => {
       const h = picker.pick(W / 2, H / 2, RECT, camera, v);
-      return h?.kind === "face" ? bodyOf(h.faceId) : h?.kind ?? null;
+      return h?.kind === "face" ? bodyOf(h.faceId) : (h?.kind ?? null);
     };
     expect(hitBody()).toBe("near");
     picker.setClip(cut);
@@ -77,7 +94,10 @@ describe("the Picker under a section cut", () => {
     const visible = () => picker.pickEdge(at.x, at.y, RECT, camera, v, { visibleOnly: true })?.edge.id ?? null;
     expect(visible()).toBe("near-e1");
     picker.setClip(cut);
-    expect([visible(), picker.pickEdgeCandidates(at.x, at.y, RECT, camera, v).map((c) => c.edge.id)]).toEqual(["far-e6", ["far-e6"]]);
+    expect([visible(), picker.pickEdgeCandidates(at.x, at.y, RECT, camera, v).map((c) => c.edge.id)]).toEqual([
+      "far-e6",
+      ["far-e6"],
+    ]);
   });
 });
 
@@ -86,7 +106,8 @@ const seen = (p: THREE.Vector3) => {
   const s = p.clone().project(above);
   return { x: (s.x * 0.5 + 0.5) * W, y: (-s.y * 0.5 + 0.5) * H };
 };
-const faceOf = (h: ReturnType<Picker["pick"]>) => (h?.kind === "face" ? h.faceId : h?.kind === "edge" ? h.edge.id : null);
+const faceOf = (h: ReturnType<Picker["pick"]>) =>
+  h?.kind === "face" ? h.faceId : h?.kind === "edge" ? h.edge.id : null;
 
 describe("the Picker on a section's cap", () => {
   const cap = seen(local(-6, 4, 20));
@@ -96,7 +117,8 @@ describe("the Picker on a section's cap", () => {
     e.points.every((p) => {
       const q = new THREE.Vector3(...p).applyMatrix4(M.clone().invert());
       return Math.abs(q.z) < 1e-3 && Math.abs(q.y + 15) < 1e-3 && Math.abs(q.x) < 21;
-    }))!;
+    }),
+  )!;
   const bottomAt = seen(local(0, -15, 0));
 
   it("a pick on the cap takes no face, past it the floor is still picked", () => {
@@ -118,16 +140,22 @@ describe("the Picker on a section's cap", () => {
       const hit = picker.pick(at.x, at.y, RECT, above, v);
       return [faceOf(hit), v.bodies.map((b) => b.id)];
     });
-    expect(picks).toEqual([[12, ["step", "sheet"]], [12, ["step", "sheet"]]]);
+    expect(picks).toEqual([
+      [12, ["step", "sheet"]],
+      [12, ["step", "sheet"]],
+    ]);
   });
 
   it("an edge behind the cap is hidden by it, as the top face hid it before the cut", () => {
     const v = boxView(STEP, W, H);
     const picker = new Picker();
-    const visible = () => picker.pickEdge(bottomAt.x, bottomAt.y, RECT, above, v, { visibleOnly: true })?.edge.id ?? null;
+    const visible = () =>
+      picker.pickEdge(bottomAt.x, bottomAt.y, RECT, above, v, { visibleOnly: true })?.edge.id ?? null;
     expect([bottom.id, visible()]).toEqual(["tall-e10", null]);
     picker.setClip(halfCut);
-    expect([picker.pickEdgeCandidates(bottomAt.x, bottomAt.y, RECT, above, v).map((c) => c.edge.id), visible()])
-      .toEqual([[bottom.id], null]);
+    expect([
+      picker.pickEdgeCandidates(bottomAt.x, bottomAt.y, RECT, above, v).map((c) => c.edge.id),
+      visible(),
+    ]).toEqual([[bottom.id], null]);
   });
 });

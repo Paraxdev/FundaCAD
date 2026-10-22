@@ -113,10 +113,7 @@ pub fn str_of(v: &Value) -> String {
         Value::Array(a) => format!("[{}]", a.iter().map(repr).collect::<Vec<_>>().join(", ")),
         Value::Object(o) => format!(
             "{{{}}}",
-            o.iter()
-                .map(|(k, v)| format!("{}: {}", repr_str(k), repr(v)))
-                .collect::<Vec<_>>()
-                .join(", ")
+            o.iter().map(|(k, v)| format!("{}: {}", repr_str(k), repr(v))).collect::<Vec<_>>().join(", ")
         ),
     }
 }
@@ -136,9 +133,7 @@ pub fn truthy(v: Option<&Value>) -> bool {
 pub fn int_of(v: &Value) -> Option<i64> {
     match v {
         Value::Bool(b) => Some(i64::from(*b)),
-        Value::Number(n) => n
-            .as_i64()
-            .or_else(|| n.as_f64().filter(|x| x.is_finite()).map(|x| x.trunc() as i64)),
+        Value::Number(n) => n.as_i64().or_else(|| n.as_f64().filter(|x| x.is_finite()).map(|x| x.trunc() as i64)),
         Value::String(s) => {
             let t = s.trim();
             let (sign, digits) = match t.strip_prefix('-') {

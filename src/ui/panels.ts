@@ -17,11 +17,34 @@ import type { StressGlyphHandlers, StressGlyphModel } from "../viewport/stressGl
 import { getUnit, toDisplay, displayRound } from "./units";
 import { usePanelsStore, type PanelRow, type ClashRow, type ClearanceRow, type StressProbePin } from "../stores/panels";
 import {
-  AXES, LOAD_MARK_COLOR, SUPPORT_COLORS, SUPPORT_KINDS,
-  areaCentre, autoDeformScale, buildStressRequest, defaultSpotRadius, deformSliderMax, emptyFaceSet, forceDirection,
-  formatStressResult, intoDirection, newSetup, panelMessage, pinAxisSegment, pressureSites, probeLabel, probeValues,
-  sameTarget, setupFromStudy, studyFromSetup, swingScale,
-  type ForceDirection, type StressFaceSet, type StressLoadSetup, type StressTarget, type Tri,
+  AXES,
+  LOAD_MARK_COLOR,
+  SUPPORT_COLORS,
+  SUPPORT_KINDS,
+  areaCentre,
+  autoDeformScale,
+  buildStressRequest,
+  defaultSpotRadius,
+  deformSliderMax,
+  emptyFaceSet,
+  forceDirection,
+  formatStressResult,
+  intoDirection,
+  newSetup,
+  panelMessage,
+  pinAxisSegment,
+  pressureSites,
+  probeLabel,
+  probeValues,
+  sameTarget,
+  setupFromStudy,
+  studyFromSetup,
+  swingScale,
+  type ForceDirection,
+  type StressFaceSet,
+  type StressLoadSetup,
+  type StressTarget,
+  type Tri,
 } from "./stress";
 import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } from "../types";
 import { isVec3 } from "../document/stressStudy";
@@ -78,10 +101,12 @@ export function createPanels(deps: PanelsDeps) {
       ...(solid ? [{ k: "Volume", v: `${displayRound(p.volume * f * f * f)} ${unit}³` }] : []),
       { k: "Surface area", v: `${displayRound(p.area * f * f)} ${unit}²` },
       ...(solid
-        ? [{
-          k: "Center of mass",
-          v: `${displayRound(toDisplay(p.com.x))}, ${displayRound(toDisplay(p.com.y))}, ${displayRound(toDisplay(p.com.z))}`,
-        }]
+        ? [
+            {
+              k: "Center of mass",
+              v: `${displayRound(toDisplay(p.com.x))}, ${displayRound(toDisplay(p.com.y))}, ${displayRound(toDisplay(p.com.z))}`,
+            },
+          ]
         : []),
       {
         k: "Bounding box",
@@ -154,9 +179,7 @@ export function createPanels(deps: PanelsDeps) {
       b: c.b,
     }));
     panels.showInterference({
-      title: pairs.length
-        ? `Interference, ${pairs.length} clash${pairs.length > 1 ? "es" : ""}`
-        : "Interference",
+      title: pairs.length ? `Interference, ${pairs.length} clash${pairs.length > 1 ? "es" : ""}` : "Interference",
       clashes,
       clearances: clearanceRows,
       unchecked,
@@ -216,15 +239,21 @@ export function createPanels(deps: PanelsDeps) {
 
   // Another document took this one's place: the setup's body id and face
   // points mean nothing in it.
-  store.onOpen(() => { if (panels.stress) closeStress(); });
+  store.onOpen(() => {
+    if (panels.stress) closeStress();
+  });
 
   // Every edit in the panel lands in the setup, from its inputs or from here;
   // whichever it was, the document saves it and the view follows. Synchronous,
   // so a save never trails the edit that caused it.
-  watch(() => panels.stress?.setup, () => {
-    persist();
-    scheduleGlyphs();
-  }, { deep: true, flush: "sync" });
+  watch(
+    () => panels.stress?.setup,
+    () => {
+      persist();
+      scheduleGlyphs();
+    },
+    { deep: true, flush: "sync" },
+  );
 
   function persist() {
     const d = panels.stress;
@@ -254,8 +283,11 @@ export function createPanels(deps: PanelsDeps) {
     }
     const bodies = stressBodies();
     const picked = viewport.getSelectedBodies();
-    const faceBody = viewport.getSelectedFaceIds().map((f) => viewport.faceIdToBodyId(f)).find((b) => b);
-    const seed = picked.length === 1 ? picked[0]! : faceBody ?? (bodies.length === 1 ? bodies[0]!.id : null);
+    const faceBody = viewport
+      .getSelectedFaceIds()
+      .map((f) => viewport.faceIdToBodyId(f))
+      .find((b) => b);
+    const seed = picked.length === 1 ? picked[0]! : (faceBody ?? (bodies.length === 1 ? bodies[0]!.id : null));
     if (panels.stress) panels.showStress(seed ?? null);
     else loadStudy(store.stressStudy, seed ?? null);
     glyphs ??= deps.stressGlyphs?.(glyphHandlers) ?? null;
@@ -396,9 +428,15 @@ export function createPanels(deps: PanelsDeps) {
     }
     const missing = relocateStressFaces();
     if (missing && !bodyOnModel()) {
-      setStatus("Stress: the body analysed is not on the current model; its setup is kept for when it is back, or pick another body", "");
+      setStatus(
+        "Stress: the body analysed is not on the current model; its setup is kept for when it is back, or pick another body",
+        "",
+      );
     } else if (missing) {
-      setStatus(`Stress: ${missing} face${missing === 1 ? " is" : "s are"} not found on the current model, set the faces again`, "");
+      setStatus(
+        `Stress: ${missing} face${missing === 1 ? " is" : "s are"} not found on the current model, set the faces again`,
+        "",
+      );
     }
     drawGlyphs();
     const s = d.setup;
@@ -446,7 +484,11 @@ export function createPanels(deps: PanelsDeps) {
     const n = new THREE.Vector3();
     for (const f of faceIds) {
       for (const t of viewport.faceTriangles(f)) {
-        tris.push([[t.a.x, t.a.y, t.a.z], [t.b.x, t.b.y, t.b.z], [t.c.x, t.c.y, t.c.z]]);
+        tris.push([
+          [t.a.x, t.a.y, t.a.z],
+          [t.b.x, t.b.y, t.b.z],
+          [t.c.x, t.c.y, t.c.z],
+        ]);
         t.getNormal(n);
         normals.push([n.x, n.y, n.z]);
       }
@@ -470,13 +512,21 @@ export function createPanels(deps: PanelsDeps) {
     if (!s || !s.body || !bodyOnModel() || !store.isBodyVisible(s.body)) return m;
     for (const x of s.supports) {
       for (const [index, spot] of (x.spots ?? []).entries()) {
-        if (drawable(spot.radius)) m.spots!.push({ target: { support: x.id }, index, at: spot.at, radius: spot.radius, color: SUPPORT_COLORS[x.type] });
+        if (drawable(spot.radius))
+          m.spots!.push({
+            target: { support: x.id },
+            index,
+            at: spot.at,
+            radius: spot.radius,
+            color: SUPPORT_COLORS[x.type],
+          });
       }
     }
     for (const l of s.loads) {
       const spots = l.spots ?? [];
       for (const [index, spot] of spots.entries()) {
-        if (drawable(spot.radius)) m.spots!.push({ target: { load: l.id }, index, at: spot.at, radius: spot.radius, color: LOAD_MARK_COLOR });
+        if (drawable(spot.radius))
+          m.spots!.push({ target: { load: l.id }, index, at: spot.at, radius: spot.radius, color: LOAD_MARK_COLOR });
       }
       if (!l.faces.faceIds.length && !spots.length) continue;
       const { tris, normals } = trianglesOf(l.faces.faceIds);
@@ -500,8 +550,12 @@ export function createPanels(deps: PanelsDeps) {
       const force = Number(l.force) || 0;
       const flip = force < 0;
       m.forces.push({
-        loadId: l.id, anchor, dir: flip ? negate(dir) : dir, force: Math.abs(force),
-        direction: flip ? oppositeDirection(l.direction) : l.direction, into: intoDirection(l.faces, l.spots),
+        loadId: l.id,
+        anchor,
+        dir: flip ? negate(dir) : dir,
+        force: Math.abs(force),
+        direction: flip ? oppositeDirection(l.direction) : l.direction,
+        into: intoDirection(l.faces, l.spots),
       });
     }
     if (s.gravity.on) {
@@ -546,7 +600,8 @@ export function createPanels(deps: PanelsDeps) {
     forceDrag(loadId, patch) {
       const l = panels.stress?.setup.loads.find((x) => x.id === loadId);
       if (!l) return;
-      if (!dragOrigin.has(loadId)) dragOrigin.set(loadId, { direction: l.direction, custom: [...l.custom], force: l.force });
+      if (!dragOrigin.has(loadId))
+        dragOrigin.set(loadId, { direction: l.direction, custom: [...l.custom], force: l.force });
       l.direction = patch.direction;
       if (patch.custom) l.custom = patch.custom;
       l.force = patch.force;
@@ -651,7 +706,10 @@ export function createPanels(deps: PanelsDeps) {
     const color = "support" in target ? SUPPORT_COLORS[(row as { type: StressSupportType }).type] : LOAD_MARK_COLOR;
     const radius = body ? spotRadiusFor(body) : defaultSpotRadius(NaN);
     glyphs?.setPlacing?.({ color, radius });
-    setStatus(`Stress: click the body where ${rowName(target)} ${"support" in target ? "holds it" : "pushes"}, Shift click to place several, Esc to stop`, "");
+    setStatus(
+      `Stress: click the body where ${rowName(target)} ${"support" in target ? "holds it" : "pushes"}, Shift click to place several, Esc to stop`,
+      "",
+    );
   }
 
   function stopPlacing() {
@@ -678,7 +736,13 @@ export function createPanels(deps: PanelsDeps) {
         ? "the selected faces are on another body than the one analysed"
         : "the body analysed is not on the current model, pick another body first";
     }
-    return { faces: faceSet(sel.selectors.map((x) => ({ ...x, body })), sel.faceIds), body };
+    return {
+      faces: faceSet(
+        sel.selectors.map((x) => ({ ...x, body })),
+        sel.faceIds,
+      ),
+      body,
+    };
   }
 
   /** Set one support's faces or one load's faces from the current face
@@ -872,7 +936,8 @@ export function createPanels(deps: PanelsDeps) {
     }
     relocateStressFaces();
     if (d.setup.body && !bodyOnModel()) {
-      const message = "the body analysed is not on the current model, pick another body or bring the model back to where it has it";
+      const message =
+        "the body analysed is not on the current model, pick another body or bring the model back to where it has it";
       panels.stressFinished({ error: message });
       setStatus(`Stress: ${message}`, "");
       return;
@@ -898,11 +963,18 @@ export function createPanels(deps: PanelsDeps) {
     if (!res.ok) {
       const message = panelMessage(res.message);
       panels.stressFinished(res.cancelled ? {} : { error: message });
-      setStatus(res.cancelled ? "Stress analysis cancelled" : `Stress analysis failed: ${message}`, res.cancelled ? "" : "error");
+      setStatus(
+        res.cancelled ? "Stress analysis cancelled" : `Stress analysis failed: ${message}`,
+        res.cancelled ? "" : "error",
+      );
       return;
     }
     const r = res.result;
-    const view = formatStressResult(r, getUnit(), (req.options.supports ?? []).map((x) => x.type));
+    const view = formatStressResult(
+      r,
+      getUnit(),
+      (req.options.supports ?? []).map((x) => x.type),
+    );
     panels.stressFinished({ result: view });
     const sf = r.safetyFactor;
     setStatus(
@@ -970,13 +1042,32 @@ export function createPanels(deps: PanelsDeps) {
   }
 
   return {
-    showProperties, closeProperties, showInterference, closeInterference,
-    showOverhangSettings, closeOverhangSettings,
-    showStress, closeStress, runStress, cancelStress, stressBodies, setStressBody,
-    setStressFacesFromSelection, placeStressSpot, removeStressSpot, addStressSupport, removeStressSupport,
+    showProperties,
+    closeProperties,
+    showInterference,
+    closeInterference,
+    showOverhangSettings,
+    closeOverhangSettings,
+    showStress,
+    closeStress,
+    runStress,
+    cancelStress,
+    stressBodies,
+    setStressBody,
+    setStressFacesFromSelection,
+    placeStressSpot,
+    removeStressSpot,
+    addStressSupport,
+    removeStressSupport,
     setStressSupportType,
-    addStressLoad, removeStressLoad, setStressColours, refreshStressMarks,
-    setStressDeformation, setStressAnimate, setStressProbe, removeStressProbe,
+    addStressLoad,
+    removeStressLoad,
+    setStressColours,
+    refreshStressMarks,
+    setStressDeformation,
+    setStressAnimate,
+    setStressProbe,
+    removeStressProbe,
   };
 }
 

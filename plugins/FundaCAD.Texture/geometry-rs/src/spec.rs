@@ -6,8 +6,8 @@ use crate::height::Gray;
 use crate::py;
 
 pub const KINDS: [&str; 16] = [
-    "knurl", "hex", "waves", "ribs", "voronoi", "noise", "image", "stripes", "grid", "dots", "brick",
-    "basket", "carbon", "isogrid", "grip", "leather",
+    "knurl", "hex", "waves", "ribs", "voronoi", "noise", "image", "stripes", "grid", "dots", "brick", "basket",
+    "carbon", "isogrid", "grip", "leather",
 ];
 
 pub const PASS: &str = "texture";
@@ -54,9 +54,8 @@ pub fn validate(f: &Map<String, Value>, image_ok: &dyn Fn(&str) -> Result<(), St
     let depth = field(f, "depth", &d_depth);
     let depth_v = number(depth).filter(|&d| d > 0.0).ok_or("texture depth must be a positive number")?;
     let d_scale = json!(2.0);
-    let scale_v = number(field(f, "scale", &d_scale))
-        .filter(|&s| s > 0.0)
-        .ok_or("texture scale must be a positive number")?;
+    let scale_v =
+        number(field(f, "scale", &d_scale)).filter(|&s| s > 0.0).ok_or("texture scale must be a positive number")?;
     let d_dir = json!("out");
     let direction = field(f, "direction", &d_dir);
     if !member(direction, &["out", "in", "both"]) {
@@ -65,10 +64,7 @@ pub fn validate(f: &Map<String, Value>, image_ok: &dyn Fn(&str) -> Result<(), St
     let d_prof = json!("facet");
     let profile = field(f, "profile", &d_prof);
     if !member(profile, &["facet", "round"]) {
-        return Err(format!(
-            "unknown texture profile: {} (expected facet or round)",
-            py::repr(profile)
-        ));
+        return Err(format!("unknown texture profile: {} (expected facet or round)", py::repr(profile)));
     }
     let zero = json!(0.0);
     let inset = number(field(f, "boundaryInset", &zero))
@@ -83,10 +79,7 @@ pub fn validate(f: &Map<String, Value>, image_ok: &dyn Fn(&str) -> Result<(), St
     let d_proj = json!("triplanar");
     let projection = field(f, "projection", &d_proj);
     if !member(projection, &["auto", "triplanar", "box"]) {
-        return Err(format!(
-            "unknown texture projection: {} (expected auto, triplanar or box)",
-            py::repr(projection)
-        ));
+        return Err(format!("unknown texture projection: {} (expected auto, triplanar or box)", py::repr(projection)));
     }
     let half = json!(0.5);
     for seam in ["seamBlend", "seamBand"] {
@@ -121,10 +114,7 @@ pub fn validate(f: &Map<String, Value>, image_ok: &dyn Fn(&str) -> Result<(), St
     spec.insert("pass".into(), PASS.into());
     spec.insert("feature_id".into(), f.get("id").cloned().unwrap_or(Value::Null));
     spec.insert("kind".into(), kind.clone().into());
-    spec.insert(
-        "faces".into(),
-        f.get("faces").filter(|v| py::truthy(v)).cloned().unwrap_or(json!({"by": "all"})),
-    );
+    spec.insert("faces".into(), f.get("faces").filter(|v| py::truthy(v)).cloned().unwrap_or(json!({"by": "all"})));
     spec.insert("body".into(), f.get("body").cloned().unwrap_or(Value::Null));
     spec.insert("depth".into(), json!(depth_v));
     spec.insert("scale".into(), json!(scale_v));

@@ -131,8 +131,7 @@ export function runInSandbox(opts: RunOptions): Promise<RunOutcome> {
       resolve(outcome);
     };
 
-    const overLimit = (why: string) =>
-      finish({ ok: false, why, reason: "over-limit", calls, log });
+    const overLimit = (why: string) => finish({ ok: false, why, reason: "over-limit", calls, log });
 
     const onMessage = (ev: { data: unknown }) => {
       if (settled) return;
@@ -177,14 +176,18 @@ export function runInSandbox(opts: RunOptions): Promise<RunOutcome> {
             // while an op is running, and answering a run that is over would
             // post to a port whose Worker has already been terminated.
             if (settled) return;
-            send(r.ok ? { t: "reply", id: msg.id, ok: true, value: r.value } : {
-              t: "reply",
-              id: msg.id,
-              ok: false,
-              code: r.code,
-              why: r.why,
-              ...(r.missing ? { missing: r.missing } : {}),
-            });
+            send(
+              r.ok
+                ? { t: "reply", id: msg.id, ok: true, value: r.value }
+                : {
+                    t: "reply",
+                    id: msg.id,
+                    ok: false,
+                    code: r.code,
+                    why: r.why,
+                    ...(r.missing ? { missing: r.missing } : {}),
+                  },
+            );
           });
           return;
         }

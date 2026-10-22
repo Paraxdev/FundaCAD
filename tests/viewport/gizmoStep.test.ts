@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  MOVE_STEPS_PER_CELL,
-  gizmoMoveStep,
-  gizmoRotateStep,
-  snapScaleFactor,
-} from "../../src/viewport/gizmoStep";
+import { MOVE_STEPS_PER_CELL, gizmoMoveStep, gizmoRotateStep, snapScaleFactor } from "../../src/viewport/gizmoStep";
 import { gridStep } from "../../src/sketch/planeGrid";
 import { FINE_DIVISOR, MIN_STEP } from "../../src/viewport/dragStep";
 

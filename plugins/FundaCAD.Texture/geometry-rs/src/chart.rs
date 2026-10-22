@@ -29,10 +29,7 @@ fn t3(v: (f64, f64, f64)) -> V {
 
 impl<'a> Surf<'a> {
     pub fn new(face: &'a Shape) -> Option<Surf<'a>> {
-        Some(Surf {
-            face,
-            frame: face.surface_frame()?,
-        })
+        Some(Surf { face, frame: face.surface_frame()? })
     }
 
     /// `_surface_kind`: the surfaces the chart is exact on.
@@ -48,12 +45,7 @@ impl<'a> Surf<'a> {
         self.face
             .surface_samples(&flat, 1e-6)
             .into_iter()
-            .map(|s| Sample {
-                point: t3(s.point),
-                du: t3(s.du),
-                dv: t3(s.dv),
-                normal: s.normal.map(t3),
-            })
+            .map(|s| Sample { point: t3(s.point), du: t3(s.du), dv: t3(s.dv), normal: s.normal.map(t3) })
             .collect()
     }
 
@@ -113,13 +105,8 @@ pub fn uv_to_mm(s: &Surf, uv: &[[f64; 2]], period: f64) -> (Vec<f64>, Vec<f64>) 
             let u0 = mean(uv.iter().map(|p| p[0]));
             let v0 = mean(uv.iter().map(|p| p[1]));
             let at = s.samples(&[[u0, v0]]);
-            let (su, sv) = at
-                .first()
-                .map_or((1e-9, 1e-9), |a| (v3::norm(a.du).max(1e-9), v3::norm(a.dv).max(1e-9)));
-            (
-                uv.iter().map(|p| (p[0] - u0) * su).collect(),
-                uv.iter().map(|p| (p[1] - v0) * sv).collect(),
-            )
+            let (su, sv) = at.first().map_or((1e-9, 1e-9), |a| (v3::norm(a.du).max(1e-9), v3::norm(a.dv).max(1e-9)));
+            (uv.iter().map(|p| (p[0] - u0) * su).collect(), uv.iter().map(|p| (p[1] - v0) * sv).collect())
         }
     }
 }
@@ -203,10 +190,7 @@ pub fn slope_mask(normals: &[V], spec: &Spec) -> Option<Vec<f64>> {
         return None;
     }
     let b: f64 = 15.0f64.max(1e-3);
-    let nz: Vec<f64> = normals
-        .iter()
-        .map(|n| (n[2] / v3::norm(*n).max(1e-12)).clamp(-1.0, 1.0))
-        .collect();
+    let nz: Vec<f64> = normals.iter().map(|n| (n[2] / v3::norm(*n).max(1e-12)).clamp(-1.0, 1.0)).collect();
     Some(
         mathx::acos(&nz)
             .into_iter()
@@ -297,11 +281,7 @@ pub fn uncharter<'a>(s: &'a Surf, period: f64) -> Option<impl Fn(&[[f64; 2]]) ->
     if kind == "plane" {
         return None;
     }
-    let (radius, half) = if kind == "cylinder" {
-        (s.frame.radius, 0.0)
-    } else {
-        (s.frame.radius, s.frame.semi_angle)
-    };
+    let (radius, half) = if kind == "cylinder" { (s.frame.radius, 0.0) } else { (s.frame.radius, s.frame.semi_angle) };
     let (loc, xd, yd, zd) = (s.origin(), s.x_dir(), s.y_dir(), s.z_dir());
     let (sin_a, cos_a) = (mathx::sin1(half), mathx::cos1(half));
     let per_turn = turn_mm(s, period);

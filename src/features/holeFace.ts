@@ -15,7 +15,9 @@ const round6 = (x: number) => Math.round(x * 1e6) / 1e6;
 export function trackedFace(point: Vec3, normal: Vec3, body: string | null): Selector {
   const n = Math.hypot(normal[0], normal[1], normal[2]) || 1;
   return {
-    kind: "face", by: "tracked", point: [...point] as Vec3,
+    kind: "face",
+    by: "tracked",
+    point: [...point] as Vec3,
     normal: normal.map((c) => round6(c / n)) as Vec3,
     ...(body ? { body } : {}),
   } as Selector;
@@ -37,7 +39,11 @@ export function withExtent(face: Selector, rec: TrackedFaceRecord | undefined): 
  *  edit starts from the holes on screen and writes an extent that is current.
  *  A build that measured no extent leaves a face with a centre or an extent as
  *  it was: its positions carried against that stale form would move twice. */
-export function rebaseHole(face: Selector, points: Vec3[], rec: TrackedFaceRecord | undefined): { face: Selector; points: Vec3[] } {
+export function rebaseHole(
+  face: Selector,
+  points: Vec3[],
+  rec: TrackedFaceRecord | undefined,
+): { face: Selector; points: Vec3[] } {
   if (face.by !== "tracked" || !rec || rec.points.length !== points.length) return { face, points };
   if (!rec.extent && (face.center || face.extent)) return { face, points };
   const { center: _was, extent: _then, ...rest } = face;

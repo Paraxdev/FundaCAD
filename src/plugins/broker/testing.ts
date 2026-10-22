@@ -129,9 +129,7 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
   const findIndex = (id: string): number => {
     const i = features().findIndex((f) => f.id === id);
     if (i < 0) {
-      throw new TestHostError(
-        `no feature ${JSON.stringify(id)}, have ${ids().join(", ") || "none"}`,
-      );
+      throw new TestHostError(`no feature ${JSON.stringify(id)}, have ${ids().join(", ") || "none"}`);
     }
     return i;
   };
@@ -145,18 +143,14 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
           `Pass answers: { ${op}: ... } to say what it should reply.`,
       );
     }
-    return typeof answer === "function"
-      ? (answer as (a: Record<string, unknown>) => unknown)(args)
-      : answer;
+    return typeof answer === "function" ? (answer as (a: Record<string, unknown>) => unknown)(args) : answer;
   };
 
   /** What the test said the person did, or undefined for "decide it yourself". */
   const said = (op: Op, args: Record<string, unknown>): unknown => {
     const answer = opts.answers?.[op];
     if (answer === undefined) return undefined;
-    return typeof answer === "function"
-      ? (answer as (a: Record<string, unknown>) => unknown)(args)
-      : answer;
+    return typeof answer === "function" ? (answer as (a: Record<string, unknown>) => unknown)(args) : answer;
   };
 
   /** Which file a person would plausibly pick, given the filter.
@@ -218,9 +212,7 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
           throw new TestHostError(`${op}: ${UNSERVED[op]}`);
 
         case "app_info":
-          return (
-            opts.appInfo ?? { version: "0.0.0-test", platform: "test", arch: "test" }
-          );
+          return opts.appInfo ?? { version: "0.0.0-test", platform: "test", arch: "test" };
 
         case "settings_get":
           return structuredClone(opts.settings ?? {});
@@ -229,13 +221,10 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
           // `null` means the person dismissed the dialog. Distinguished from
           // "the test said nothing" so that dismissal is reachable at all.
           const answer = said(op, args);
-          const name =
-            answer === undefined ? wouldPick(args.extensions) : answer === null ? null : String(answer);
+          const name = answer === undefined ? wouldPick(args.extensions) : answer === null ? null : String(answer);
           if (name === null) return null;
           if (!(name in files)) {
-            throw new TestHostError(
-              `answers.file_pick chose ${JSON.stringify(name)}, which is not in files`,
-            );
+            throw new TestHostError(`answers.file_pick chose ${JSON.stringify(name)}, which is not in files`);
           }
           const handle = `f${nextHandle++}`;
           handed.set(handle, name);
@@ -266,10 +255,7 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
           if (typeof text === "string" && typeof b64 === "string") {
             throw new TestHostError("pass `text` or `base64`, not both");
           }
-          const name =
-            answer === undefined
-              ? str(args.suggested, "suggested")
-              : String(answer);
+          const name = answer === undefined ? str(args.suggested, "suggested") : String(answer);
           // base64 is kept as it arrived. The pretend disk holds text, and a
           // double that decoded it would be claiming to know an encoding the
           // real one hands straight to the filesystem.
@@ -289,9 +275,7 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
           // expression language for plugin authors to learn the quirks of.
           const value = typeof expr === "number" ? expr : Number(expr);
           if (!Number.isFinite(value)) {
-            throw new TestHostError(
-              `the test double takes numbers, not expressions like ${JSON.stringify(expr)}`,
-            );
+            throw new TestHostError(`the test double takes numbers, not expressions like ${JSON.stringify(expr)}`);
           }
           const unit = args.unit === "deg" || args.unit === "count" ? args.unit : "mm";
           (doc.paramDefs ??= {})[name] = { expr: String(expr), value, unit };
@@ -393,9 +377,7 @@ export interface TestBroker extends Broker {
 /** A broker over a test host. Grants default to everything the op table asks
  *  for, so a plugin's own tests are about the plugin; a test ABOUT permissions
  *  passes the narrower set it wants to prove is enough. */
-export function testBroker(
-  opts: TestHostOptions & { grants?: readonly Grant[]; plugin?: string } = {},
-): TestBroker {
+export function testBroker(opts: TestHostOptions & { grants?: readonly Grant[]; plugin?: string } = {}): TestBroker {
   const host = testHost(opts);
   const broker = createBroker({
     plugin: opts.plugin ?? "test-plugin",

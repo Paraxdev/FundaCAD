@@ -83,8 +83,7 @@ pub fn host_allowed(host: &str, list: &[String]) -> bool {
     list.iter().any(|entry| {
         let entry = entry.to_ascii_lowercase();
         if entry.starts_with('.') {
-            host.strip_suffix(entry.as_str())
-                .is_some_and(|label| !label.is_empty() && !label.contains('.'))
+            host.strip_suffix(entry.as_str()).is_some_and(|label| !label.is_empty() && !label.contains('.'))
         } else {
             host == entry
         }
@@ -97,9 +96,14 @@ fn is_public(ip: IpAddr) -> bool {
         IpAddr::V6(v6) => v6.to_ipv4_mapped(),
     };
     let special = match (ip, v4) {
-        (_, Some(v4)) => v4.is_loopback() || v4.is_unspecified() || v4.is_broadcast() || v4.is_documentation()
-            || v4.octets()[0] == 0
-            || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64),
+        (_, Some(v4)) => {
+            v4.is_loopback()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+                || v4.octets()[0] == 0
+                || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64)
+        }
         (IpAddr::V6(v6), None) => v6.is_loopback() || v6.is_unspecified(),
         _ => false,
     };
@@ -122,10 +126,8 @@ pub fn check_target(url: &reqwest::Url, hosts: &[String]) -> Result<(String, u16
 }
 
 fn resolve_public(host: &str, port: u16) -> Result<Vec<SocketAddr>, String> {
-    let addrs: Vec<SocketAddr> = (host, port)
-        .to_socket_addrs()
-        .map_err(|e| format!("{host} could not be resolved: {e}"))?
-        .collect();
+    let addrs: Vec<SocketAddr> =
+        (host, port).to_socket_addrs().map_err(|e| format!("{host} could not be resolved: {e}"))?.collect();
     if addrs.is_empty() {
         return Err(format!("{host} resolved to no address"));
     }
@@ -192,15 +194,12 @@ pub async fn plugin_web_request(app: AppHandle, plugin: String, request: WebRequ
     };
 
     let h = host.clone();
-    let addrs = tauri::async_runtime::spawn_blocking(move || resolve_public(&h, port))
-        .await
-        .map_err(|e| e.to_string())??;
+    let addrs =
+        tauri::async_runtime::spawn_blocking(move || resolve_public(&h, port)).await.map_err(|e| e.to_string())??;
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .resolve_to_addrs(&host, &addrs)
-        .timeout(Duration::from_millis(
-            request.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS).clamp(1, MAX_TIMEOUT_MS),
-        ))
+        .timeout(Duration::from_millis(request.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS).clamp(1, MAX_TIMEOUT_MS)))
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -250,7 +249,9 @@ pub async fn plugin_web_request(app: AppHandle, plugin: String, request: WebRequ
         }
         .await;
         drop(file);
-        if let Err(e) = result.and_then(|_| std::fs::rename(&tmp, &path).map_err(|e| format!("{}: {e}", path.display()))) {
+        if let Err(e) =
+            result.and_then(|_| std::fs::rename(&tmp, &path).map_err(|e| format!("{}: {e}", path.display())))
+        {
             let _ = std::fs::remove_file(&tmp);
             return Err(e);
         }
@@ -329,7 +330,18 @@ mod tests {
 
     #[test]
     fn private_and_loopback_addresses_are_not_public() {
-        for bad in ["127.0.0.1", "10.0.0.1", "192.168.1.2", "169.254.1.1", "0.0.0.0", "100.64.0.1", "::1", "fe80::1", "fd00::1", "::ffff:127.0.0.1"] {
+        for bad in [
+            "127.0.0.1",
+            "10.0.0.1",
+            "192.168.1.2",
+            "169.254.1.1",
+            "0.0.0.0",
+            "100.64.0.1",
+            "::1",
+            "fe80::1",
+            "fd00::1",
+            "::ffff:127.0.0.1",
+        ] {
             assert!(!is_public(bad.parse().unwrap()), "{bad}");
         }
         for ok in ["8.8.8.8", "52.1.2.3", "2606:4700::1111"] {
@@ -355,7 +367,10 @@ mod tests {
             }
         }
         for id in &want {
-            assert!(SHIPPED.iter().any(|m| hosts_in_manifest(m, id).is_some()), "{id} holds network but is not in SHIPPED");
+            assert!(
+                SHIPPED.iter().any(|m| hosts_in_manifest(m, id).is_some()),
+                "{id} holds network but is not in SHIPPED"
+            );
         }
         assert_eq!(
             SHIPPED.iter().find_map(|m| hosts_in_manifest(m, "FundaCAD.Onshape")),

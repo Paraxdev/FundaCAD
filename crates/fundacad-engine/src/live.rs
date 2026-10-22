@@ -104,7 +104,9 @@ impl LiveSession {
     }
 
     fn drop_guide_of(&mut self, guest_id: &str) {
-        let mine = |c: &Option<Map<String, Value>>| c.as_ref().and_then(|c| c.get("guest")).and_then(Value::as_str) == Some(guest_id);
+        let mine = |c: &Option<Map<String, Value>>| {
+            c.as_ref().and_then(|c| c.get("guest")).and_then(Value::as_str) == Some(guest_id)
+        };
         if mine(&self.guide_step) {
             self.guide_step = None;
         }
@@ -170,10 +172,10 @@ impl LiveSession {
         }
         if base_revision != self.revision {
             return json!({"ok": false, "reason": "stale", "revision": self.revision,
-                "message": format!(
-                    "the document moved on while that edit was being written (revision {base_revision} -> {}); read it again and re-apply",
-                    self.revision
-                )});
+            "message": format!(
+                "the document moved on while that edit was being written (revision {base_revision} -> {}); read it again and re-apply",
+                self.revision
+            )});
         }
         if self.pending.len() >= MAX_PENDING {
             return json!({"ok": false, "reason": "backlog",
@@ -212,7 +214,8 @@ impl LiveSession {
         }
         self.guest_names();
         self.guide_state = state;
-        let mut commands: Vec<Map<String, Value>> = self.guide_step.take().into_iter().chain(self.guide_wait.take()).collect();
+        let mut commands: Vec<Map<String, Value>> =
+            self.guide_step.take().into_iter().chain(self.guide_wait.take()).collect();
         commands.sort_by_key(|c| c.get("seq").and_then(Value::as_i64).unwrap_or(0));
         json!({"ok": true, "commands": commands})
     }
@@ -247,12 +250,8 @@ impl LiveSession {
     /// Who is attached right now, expired guests dropped with their proposals.
     pub fn guest_names(&mut self) -> Vec<String> {
         let now = (self.clock)();
-        let expired: Vec<String> = self
-            .guests
-            .iter()
-            .filter(|(_, (_, seen))| now - seen > GUEST_TTL)
-            .map(|(g, _)| g.clone())
-            .collect();
+        let expired: Vec<String> =
+            self.guests.iter().filter(|(_, (_, seen))| now - seen > GUEST_TTL).map(|(g, _)| g.clone()).collect();
         for g in expired {
             self.guests.remove(&g);
             self.pending.retain(|p| p.get("guest").and_then(Value::as_str) != Some(g.as_str()));
@@ -318,7 +317,10 @@ pub fn session_reply(live: &mut LiveSession, who: &str, op: &str, req: &Map<Stri
 }
 
 pub fn is_session_op(op: &str) -> bool {
-    matches!(op, "session_host" | "session_release" | "session_state" | "session_propose" | "session_leave" | "session_guide")
+    matches!(
+        op,
+        "session_host" | "session_release" | "session_state" | "session_propose" | "session_leave" | "session_guide"
+    )
 }
 
 #[cfg(test)]
@@ -406,7 +408,10 @@ mod tests {
         publish(&mut s, APP, doc(3), 7);
         publish(&mut s, APP, doc(5), 8);
         let r = s.propose(AGENT, doc(4), 7, None, None);
-        assert_eq!((r["ok"].clone(), r["reason"].clone(), r["revision"].clone()), (json!(false), json!("stale"), json!(8)));
+        assert_eq!(
+            (r["ok"].clone(), r["reason"].clone(), r["revision"].clone()),
+            (json!(false), json!("stale"), json!(8))
+        );
         assert!(r["message"].as_str().unwrap().contains("8"));
         assert_eq!(s.propose(AGENT, doc(4), 8, None, None)["ok"], true);
     }
@@ -498,9 +503,16 @@ mod tests {
     fn the_wire_ops_read_revisions_like_python() {
         let (mut s, _) = session();
         let req = |v: Value| v.as_object().unwrap().clone();
-        let r = session_reply(&mut s, "c1", "session_host", &req(json!({"document": doc(1), "revision": 3.0, "title": "t"}))).unwrap();
+        let r = session_reply(
+            &mut s,
+            "c1",
+            "session_host",
+            &req(json!({"document": doc(1), "revision": 3.0, "title": "t"})),
+        )
+        .unwrap();
         assert_eq!(r, json!({"ok": true, "guests": [], "proposals": []}));
-        let r = session_reply(&mut s, "c2", "session_propose", &req(json!({"document": doc(2), "baseRevision": 3}))).unwrap();
+        let r = session_reply(&mut s, "c2", "session_propose", &req(json!({"document": doc(2), "baseRevision": 3})))
+            .unwrap();
         assert_eq!(r, json!({"ok": true, "proposal": "p1", "revision": 3}));
         let st = session_reply(&mut s, "c2", "session_state", &req(json!({}))).unwrap();
         assert_eq!(st["guests"], json!(["c2"]));
@@ -550,9 +562,11 @@ mod tests {
         wire(&mut s, AGENT, "session_guide", highlight("a"));
         wire(&mut s, AGENT, "session_guide", json!({"command": {"kind": "wait", "until": "next"}}));
         wire(&mut s, AGENT, "session_guide", highlight("b"));
-        let w = wire(&mut s, AGENT, "session_guide", json!({"command": {"kind": "wait", "until": "tool"}}))["seq"].clone();
+        let w =
+            wire(&mut s, AGENT, "session_guide", json!({"command": {"kind": "wait", "until": "tool"}}))["seq"].clone();
         let cmds = wire(&mut s, APP, "session_guide", json!({"state": {}}))["commands"].clone();
-        let got: Vec<(Value, Value)> = cmds.as_array().unwrap().iter().map(|c| (c["kind"].clone(), c["seq"].clone())).collect();
+        let got: Vec<(Value, Value)> =
+            cmds.as_array().unwrap().iter().map(|c| (c["kind"].clone(), c["seq"].clone())).collect();
         assert_eq!(got, [(json!("highlight"), json!(3)), (json!("wait"), w)]);
         assert_eq!(cmds[0]["target"]["ui"], "b");
     }
@@ -595,7 +609,8 @@ mod tests {
         let (mut s, _) = session();
         publish(&mut s, APP, doc(1), 1);
         wire(&mut s, AGENT, "session_guide", json!({"command": {"kind": "highlight", "caption": "x".repeat(5000)}}));
-        let c = wire(&mut s, APP, "session_guide", json!({"state": {}}))["commands"][0]["caption"].as_str().unwrap().len();
+        let c =
+            wire(&mut s, APP, "session_guide", json!({"state": {}}))["commands"][0]["caption"].as_str().unwrap().len();
         assert_eq!(c, MAX_CAPTION);
     }
 }

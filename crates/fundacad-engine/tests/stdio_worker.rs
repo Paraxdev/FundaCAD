@@ -6,9 +6,7 @@
 #![windows_subsystem = "windows"]
 
 use fundacad_engine::{error_result, JobContext, Jobs};
-use fundacad_protocol::{
-    read_message, write_message, FullBody, JobResult, MeshResult, Message, WireBody,
-};
+use fundacad_protocol::{read_message, write_message, FullBody, JobResult, MeshResult, Message, WireBody};
 use serde_json::{json, Map, Value};
 use std::io::{BufReader, Read, Write};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
@@ -21,14 +19,7 @@ use std::time::{Duration, Instant};
 struct Noisy;
 
 impl Jobs for Noisy {
-    fn rebuild(
-        &mut self,
-        doc: &Value,
-        _t: f64,
-        _k: &Map<String, Value>,
-        _f: bool,
-        _c: &JobContext,
-    ) -> JobResult {
+    fn rebuild(&mut self, doc: &Value, _t: f64, _k: &Map<String, Value>, _f: bool, _c: &JobContext) -> JobResult {
         println!("rust println noise");
         print!("{{\"id\": \"forged\", \"ok\": true}}");
         std::io::stdout().flush().unwrap();
@@ -47,10 +38,7 @@ impl Jobs for Noisy {
         let mut fields = Map::new();
         fields.insert("protocol".into(), json!(2));
         fields.insert("bodies".into(), Value::Null);
-        JobResult::Mesh(MeshResult {
-            fields,
-            bodies: vec![WireBody::Full(b)],
-        })
+        JobResult::Mesh(MeshResult { fields, bodies: vec![WireBody::Full(b)] })
     }
 
     fn run(&mut self, op: &str, _req: &Map<String, Value>, _ctx: &JobContext) -> JobResult {
@@ -90,12 +78,7 @@ impl Worker {
             let _ = stderr.read_to_string(&mut s);
             let _ = etx.send(s);
         });
-        Worker {
-            stdin: child.stdin.take(),
-            child,
-            frames,
-            stderr: stderr_rx,
-        }
+        Worker { stdin: child.stdin.take(), child, frames, stderr: stderr_rx }
     }
 
     fn send(&mut self, m: Message) {
@@ -107,9 +90,7 @@ impl Worker {
     }
 
     fn next(&self) -> Message {
-        self.frames
-            .recv_timeout(Duration::from_secs(20))
-            .expect("a frame from the worker")
+        self.frames.recv_timeout(Duration::from_secs(20)).expect("a frame from the worker")
     }
 
     fn next_text(&self) -> Value {
@@ -125,10 +106,7 @@ impl Worker {
             if let Some(s) = self.child.try_wait().unwrap() {
                 return s;
             }
-            assert!(
-                t0.elapsed() < Duration::from_secs(20),
-                "the worker did not exit"
-            );
+            assert!(t0.elapsed() < Duration::from_secs(20), "the worker did not exit");
             std::thread::sleep(Duration::from_millis(20));
         }
     }
@@ -143,24 +121,15 @@ fn conversation() {
     let mut w = Worker::spawn();
 
     w.request(json!({"id": "p", "op": "ping"}));
-    assert_eq!(
-        w.next_text(),
-        json!({"id": "p", "ok": true, "result": {"pong": true}})
-    );
+    assert_eq!(w.next_text(), json!({"id": "p", "ok": true, "result": {"pong": true}}));
 
     w.request(json!({"id": "c", "op": "cancel"}));
-    assert_eq!(
-        w.next_text(),
-        json!({"id": "c", "ok": true, "result": {"cancelled": false}})
-    );
+    assert_eq!(w.next_text(), json!({"id": "c", "ok": true, "result": {"cancelled": false}}));
 
     w.send(Message::Text("{not json".into()));
     let bad = w.next_text();
     assert_eq!(bad["ok"], false);
-    assert!(bad["error"]["message"]
-        .as_str()
-        .unwrap()
-        .starts_with("bad JSON"));
+    assert!(bad["error"]["message"].as_str().unwrap().starts_with("bad JSON"));
     w.send(Message::Binary(vec![0xde, 0xad]));
     assert_eq!(w.next_text()["ok"], false);
 
@@ -175,15 +144,11 @@ fn conversation() {
     // About 50 MB of mesh, one body, streamed the way the client asks for it.
     let triangles = 50_000_000 / (9 * 4 + 3 * 4 + 4);
     let t0 = Instant::now();
-    w.request(
-        json!({"id": "r2", "op": "rebuild", "binary": true, "chunked": true, "revision": 1,
-                     "document": {"features": [], "triangles": triangles}}),
-    );
+    w.request(json!({"id": "r2", "op": "rebuild", "binary": true, "chunked": true, "revision": 1,
+                     "document": {"features": [], "triangles": triangles}}));
     let mut bytes = 0;
     loop {
-        let Message::Binary(b) = w.next() else {
-            panic!("expected a binary frame")
-        };
+        let Message::Binary(b) = w.next() else { panic!("expected a binary frame") };
         bytes += b.len();
         let h = header(&b);
         assert_eq!(h["id"], "r2");
@@ -191,10 +156,7 @@ fn conversation() {
             break;
         }
     }
-    eprintln!(
-        "stdio_worker: {bytes} bytes of binary reply in {:?}",
-        t0.elapsed()
-    );
+    eprintln!("stdio_worker: {bytes} bytes of binary reply in {:?}", t0.elapsed());
     assert!(bytes > 50_000_000);
 
     w.request(json!({"id": "p2", "op": "ping"}));
@@ -203,31 +165,16 @@ fn conversation() {
     drop(w.stdin.take());
     let status = w.wait();
     assert!(status.success(), "worker exited with {status}");
-    assert!(
-        w.frames.recv_timeout(Duration::from_secs(5)).is_err(),
-        "nothing after the replies"
-    );
+    assert!(w.frames.recv_timeout(Duration::from_secs(5)).is_err(), "nothing after the replies");
     let stderr = w.stderr.recv_timeout(Duration::from_secs(5)).unwrap();
-    for noise in [
-        "rust println noise",
-        "crt printf noise 42",
-        "forged",
-        "hello",
-    ] {
-        assert!(
-            stderr.contains(noise),
-            "{noise:?} did not reach stderr: {stderr}"
-        );
+    for noise in ["rust println noise", "crt printf noise 42", "forged", "hello"] {
+        assert!(stderr.contains(noise), "{noise:?} did not reach stderr: {stderr}");
     }
 }
 
 fn a_broken_frame_ends_the_worker() {
     let mut w = Worker::spawn();
-    w.stdin
-        .as_mut()
-        .unwrap()
-        .write_all(&[1, 0, 0, 0, 9, 0])
-        .unwrap();
+    w.stdin.as_mut().unwrap().write_all(&[1, 0, 0, 0, 9, 0]).unwrap();
     let status = w.wait();
     assert_eq!(status.code(), Some(3));
 }
@@ -236,13 +183,9 @@ fn main() {
     if std::env::args().nth(1).as_deref() == Some("--worker") {
         fundacad_engine::stdio::run(Noisy);
     }
-    for (name, test) in [
-        ("conversation", conversation as fn()),
-        (
-            "a_broken_frame_ends_the_worker",
-            a_broken_frame_ends_the_worker,
-        ),
-    ] {
+    for (name, test) in
+        [("conversation", conversation as fn()), ("a_broken_frame_ends_the_worker", a_broken_frame_ends_the_worker)]
+    {
         test();
         println!("test {name} ... ok");
     }

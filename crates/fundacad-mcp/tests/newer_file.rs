@@ -15,10 +15,7 @@ async fn open(doc: Value) -> String {
     std::fs::write(&path, doc.to_string()).unwrap();
     let engine = FakeEngine::start(|_, _| json!({"ok": true, "result": {}}));
     let srv = FundaCad::with_link(engine.link());
-    let r = srv
-        .t_doc_open(json!({"path": path.to_string_lossy()}).as_object().cloned().unwrap())
-        .await
-        .unwrap();
+    let r = srv.t_doc_open(json!({"path": path.to_string_lossy()}).as_object().cloned().unwrap()).await.unwrap();
     assert!(!is_error(&r), "{}", text_of(&r));
     text_of(&r)
 }
@@ -83,7 +80,9 @@ async fn an_older_file_with_an_old_type_says_to_update_it_in_the_app() {
 
 #[tokio::test]
 async fn a_current_file_with_a_type_nothing_here_knows_points_at_a_plugin() {
-    let reply = open(json!({"version": FORMAT_VERSION, "parameters": {}, "features": [{"id": "w1", "type": "futureWidget"}]})).await;
+    let reply =
+        open(json!({"version": FORMAT_VERSION, "parameters": {}, "features": [{"id": "w1", "type": "futureWidget"}]}))
+            .await;
     assert_eq!(
         note_of(&reply),
         Some("1 feature needs a plugin that is not running here: futureWidget. It is kept and saved with the file. Bodies after it may differ."),

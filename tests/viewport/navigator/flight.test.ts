@@ -11,7 +11,11 @@ import { lookQuatUp } from "../../../src/viewport/navigator/navigator";
 describe("flights", () => {
   it("land exactly and keep the horizon level between level ends", () => {
     const { nav } = setup();
-    const to = nav.poseWith(lookQuatUp(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0)), new THREE.Vector3(5, 5, 5), 12);
+    const to = nav.poseWith(
+      lookQuatUp(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0)),
+      new THREE.Vector3(5, 5, 5),
+      12,
+    );
     nav.flyTo(to, { animate: true });
     let frames = 0;
     while (nav.isFlying()) {
@@ -36,7 +40,13 @@ describe("flights", () => {
     expect(nav.isFlying()).toBe(false);
     nav.update(1 / 60);
     expect(nav.pose.q.angleTo(mid.q)).toBeLessThan(1e-12);
-    expect(eye(nav).distanceTo(new THREE.Vector3().copy(mid.target).addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(mid.q), -distanceOf(mid)))).toBeLessThan(1e-9);
+    expect(
+      eye(nav).distanceTo(
+        new THREE.Vector3()
+          .copy(mid.target)
+          .addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(mid.q), -distanceOf(mid)),
+      ),
+    ).toBeLessThan(1e-9);
   });
 
   it("a hard flight ignores input and lands where it was going", () => {
@@ -58,7 +68,13 @@ describe("flights", () => {
   it("restoreUp abandons a sketch entry still in the air, its arrival never runs", () => {
     const { nav } = setup({ tau: 0 });
     let arrived = 0;
-    nav.lookAtPlane(new THREE.Vector3(0, 0, 20), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0), true, () => arrived++);
+    nav.lookAtPlane(
+      new THREE.Vector3(0, 0, 20),
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(0, 1, 0),
+      true,
+      () => arrived++,
+    );
     nav.update(1 / 60);
     nav.restoreUp(false);
     settle(nav);

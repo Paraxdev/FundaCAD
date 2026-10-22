@@ -2,8 +2,17 @@
 // opened again, restored, branched from, and a restore taken back with undo.
 import { describe, expect, it, vi } from "vitest";
 import {
-  commit, createBranch, diffTrees, emptyRepo, headOf, isEmptyDiff, log, normalizeRepo, referencedGeometry,
-  type Snapshot, type Version,
+  commit,
+  createBranch,
+  diffTrees,
+  emptyRepo,
+  headOf,
+  isEmptyDiff,
+  log,
+  normalizeRepo,
+  referencedGeometry,
+  type Snapshot,
+  type Version,
 } from "../../src/document/versions";
 import type { Feature } from "../../src/types";
 import { box, env, opened, saved, study } from "./storeKit";
@@ -147,7 +156,10 @@ describe("versions in a repo", () => {
     const repo = emptyRepo();
     const v = commit(repo, snap(box("f1", 10.5)), "a", 1)!;
     const raw = JSON.parse(JSON.stringify(repo));
-    raw.versions = [{ ...v, message: "first" }, { ...v, message: "second" }];
+    raw.versions = [
+      { ...v, message: "first" },
+      { ...v, message: "second" },
+    ];
     expect(headOf(normalizeRepo(raw)!)!.message).toBe("first");
   });
 
@@ -160,21 +172,31 @@ describe("versions in a repo", () => {
 
   it("lists the geometry of imports only", () => {
     const repo = emptyRepo();
-    commit(repo, snap(
-      { id: "x", type: "box", geom: "h-box" } as unknown as Feature,
-      { id: "i1", type: "import", geom: "h-import" } as unknown as Feature,
-      { id: "i2", type: "import", geom: 7 } as unknown as Feature,
-    ), "a", 1);
+    commit(
+      repo,
+      snap(
+        { id: "x", type: "box", geom: "h-box" } as unknown as Feature,
+        { id: "i1", type: "import", geom: "h-import" } as unknown as Feature,
+        { id: "i2", type: "import", geom: 7 } as unknown as Feature,
+      ),
+      "a",
+      1,
+    );
     expect(referencedGeometry(repo)).toEqual(["h-import"]);
     expect(referencedGeometry(emptyRepo())).toEqual([]);
   });
 
   it("lists a history whose parents form a cycle once, without walking it forever", () => {
     const tree = { features: [], rest: "r" };
-    const repo = normalizeRepo({ objects: {}, branches: { main: "a" }, current: "main", versions: [
-      { id: "a", parent: "b", branch: "main", message: "a", time: 1, tree },
-      { id: "b", parent: "a", branch: "main", message: "b", time: 2, tree },
-    ] })!;
+    const repo = normalizeRepo({
+      objects: {},
+      branches: { main: "a" },
+      current: "main",
+      versions: [
+        { id: "a", parent: "b", branch: "main", message: "a", time: 1, tree },
+        { id: "b", parent: "a", branch: "main", message: "b", time: 2, tree },
+      ],
+    })!;
     // A read counter turns an endless walk into a throw before it eats the memory.
     let reads = 0;
     const guarded = {

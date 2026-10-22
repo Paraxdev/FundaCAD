@@ -89,7 +89,10 @@ export class WebGpuTracer implements TracerBackend {
 
   async init() {
     const [gpu, tracerMod, oidnWeb, tsl, bloomMod] = await Promise.all([
-      import("three/webgpu"), import("three-gpu-pathtracer/webgpu"), import("oidn-web"), import("three/tsl"),
+      import("three/webgpu"),
+      import("three-gpu-pathtracer/webgpu"),
+      import("oidn-web"),
+      import("three/tsl"),
       import("three/examples/jsm/tsl/display/BloomNode.js"),
     ]);
     this.tracerMod = tracerMod;
@@ -98,13 +101,17 @@ export class WebGpuTracer implements TracerBackend {
     this.initUNetFromURL = oidnWeb.initUNetFromURL;
     // Above the 128 MiB floor when the adapter offers more, so a model of a few
     // million triangles fits its attribute buffer.
-    const nav = globalThis.navigator as unknown as { gpu?: { requestAdapter(): Promise<{ limits: Record<string, number> } | null> } };
+    const nav = globalThis.navigator as unknown as {
+      gpu?: { requestAdapter(): Promise<{ limits: Record<string, number> } | null> };
+    };
     const adapter = await nav.gpu?.requestAdapter();
     const offered = adapter?.limits;
     const requiredLimits = offered
       ? { maxStorageBufferBindingSize: offered.maxStorageBufferBindingSize, maxBufferSize: offered.maxBufferSize }
       : undefined;
-    const r = new gpu.WebGPURenderer({ canvas: this.canvas, antialias: false, requiredLimits } as ConstructorParameters<typeof gpu.WebGPURenderer>[0]);
+    const r = new gpu.WebGPURenderer({ canvas: this.canvas, antialias: false, requiredLimits } as ConstructorParameters<
+      typeof gpu.WebGPURenderer
+    >[0]);
     r.setPixelRatio(1);
     await r.init();
     const backend = r.backend as unknown as { isWebGPUBackend?: boolean };
@@ -202,7 +209,10 @@ export class WebGpuTracer implements TracerBackend {
     if (!tsl || !this.camera) return null;
     if (!this.guides) {
       this.guides = new THREE.RenderTarget(w, h, {
-        count: 2, type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+        count: 2,
+        type: THREE.HalfFloatType,
+        minFilter: THREE.NearestFilter,
+        magFilter: THREE.NearestFilter,
       });
       // The MRT keys are matched against these names.
       this.guides.textures[0]!.name = "output";
@@ -211,16 +221,30 @@ export class WebGpuTracer implements TracerBackend {
     const g = this.guides;
     g.setSize(w, h);
     const r = this.renderer as unknown as {
-      toneMapping: THREE.ToneMapping; autoClear: boolean;
-      getRenderTarget(): unknown; setRenderTarget(t: unknown): void; getMRT(): unknown; setMRT(m: unknown): void;
+      toneMapping: THREE.ToneMapping;
+      autoClear: boolean;
+      getRenderTarget(): unknown;
+      setRenderTarget(t: unknown): void;
+      getMRT(): unknown;
+      setMRT(m: unknown): void;
       render(s: THREE.Scene, c: THREE.Camera): void;
     };
     const meshes: THREE.Mesh[] = [];
-    this.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
-    const glassy = (m: THREE.Mesh) => ([] as THREE.Material[]).concat(m.material).some((x) =>
-      x.transparent || x.opacity < 1 || ((x as THREE.MeshPhysicalMaterial).transmission ?? 0) > 0);
+    this.scene.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh);
+    });
+    const glassy = (m: THREE.Mesh) =>
+      ([] as THREE.Material[])
+        .concat(m.material)
+        .some((x) => x.transparent || x.opacity < 1 || ((x as THREE.MeshPhysicalMaterial).transmission ?? 0) > 0);
     const glass = new Set(meshes.filter(glassy));
-    const was = { target: r.getRenderTarget(), mrt: r.getMRT(), tone: r.toneMapping, auto: r.autoClear, background: this.scene.background };
+    const was = {
+      target: r.getRenderTarget(),
+      mrt: r.getMRT(),
+      tone: r.toneMapping,
+      auto: r.autoClear,
+      background: this.scene.background,
+    };
     const surfaces = tsl.mrt({
       output: tsl.diffuseColor,
       normal: tsl.vec4(tsl.normalView.mul(0.5).add(0.5), tsl.positionView.z.negate()),
@@ -389,7 +413,11 @@ export class WebGpuTracer implements TracerBackend {
   /** Before every renderSample: the preview's size follows the frame budget. */
   private fitPreview() {
     if (!this.tracer || !this.renderer) return;
-    fitPreview(this.tracer as unknown as PreviewTracer, this.renderer.getDrawingBufferSize(new THREE.Vector2()), PREVIEW_SCALE);
+    fitPreview(
+      this.tracer as unknown as PreviewTracer,
+      this.renderer.getDrawingBufferSize(new THREE.Vector2()),
+      PREVIEW_SCALE,
+    );
   }
 
   private trace(samples: number) {
@@ -423,7 +451,13 @@ export class WebGpuTracer implements TracerBackend {
     const r = this.renderer;
     const t = this.tracer;
     if (!r || !t || !this.camera) throw new Error("Path tracing is not running");
-    const was = { ratio: r.getPixelRatio(), size: r.getSize(new THREE.Vector2()), scale: t.renderScale, budget: t.frameBudget, level: this.level };
+    const was = {
+      ratio: r.getPixelRatio(),
+      size: r.getSize(new THREE.Vector2()),
+      scale: t.renderScale,
+      budget: t.frameBudget,
+      level: this.level,
+    };
     const cancelled = () => new DOMException("The picture was cancelled", "AbortError");
     r.setPixelRatio(1);
     r.setSize(o.width, o.height, false);

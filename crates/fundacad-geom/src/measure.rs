@@ -42,10 +42,7 @@ pub fn bbox(shape: &Shape) -> Option<Bbox> {
         return None;
     }
     let (min, max) = (bb.min(), bb.max());
-    Some(Bbox {
-        min: [min.x, min.y, min.z],
-        max: [max.x, max.y, max.z],
-    })
+    Some(Bbox { min: [min.x, min.y, min.z], max: [max.x, max.y, max.z] })
 }
 
 /// The `measure` op: one entity's size, radius and axis, or two entities'
@@ -134,14 +131,10 @@ fn arr(v: DVec3) -> Value {
 }
 
 fn find_body<'a>(at: &str, wanted: &str, bodies: &'a [BuiltBody]) -> Result<&'a BuiltBody, String> {
-    bodies
-        .iter()
-        .find(|b| b.id == wanted)
-        .or_else(|| bodies.iter().find(|b| b.name == wanted))
-        .ok_or_else(|| {
-            let have: Vec<String> = bodies.iter().map(|b| format!("{} ({})", b.id, b.name)).collect();
-            format!("{at}: there is no body '{wanted}', the bodies are {}", have.join(", "))
-        })
+    bodies.iter().find(|b| b.id == wanted).or_else(|| bodies.iter().find(|b| b.name == wanted)).ok_or_else(|| {
+        let have: Vec<String> = bodies.iter().map(|b| format!("{} ({})", b.id, b.name)).collect();
+        format!("{at}: there is no body '{wanted}', the bodies are {}", have.join(", "))
+    })
 }
 
 fn not_a_selector(at: &str) -> String {
@@ -167,12 +160,9 @@ fn by_index<'a>(at: &str, o: &Map<String, Value>, body: &'a BuiltBody, face: boo
             Ok(Item { geo: if face { Geo::Face(s) } else { Geo::Edge(s) }, body: Some(body), index: Some(n) })
         }
         _ if all.is_empty() => Err(format!("{at}: {} has no {key}s", body.id)),
-        _ => Err(format!(
-            "{at}: {} has {} {key}s, {label}0 to {label}{}, got {raw}",
-            body.id,
-            all.len(),
-            all.len() - 1
-        )),
+        _ => {
+            Err(format!("{at}: {} has {} {key}s, {label}0 to {label}{}, got {raw}", body.id, all.len(), all.len() - 1))
+        }
     })
 }
 
@@ -492,9 +482,7 @@ fn distance(a: &Item, b: &Item) -> Result<Map<String, Value>, String> {
     let mut inside = false;
     for first in a.shapes() {
         for second in b.shapes() {
-            let d = first
-                .distance(&second, 0.0)
-                .map_err(|e| format!("the distance could not be computed, {e:?}"))?;
+            let d = first.distance(&second, 0.0).map_err(|e| format!("the distance could not be computed, {e:?}"))?;
             inside |= d.inner_solution;
             if best.as_ref().map_or(true, |b| d.value < b.value) {
                 best = Some(d);

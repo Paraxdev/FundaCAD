@@ -36,13 +36,7 @@ export interface SketchEscapeState {
  *  accidentally perform two of them (which is the bug: cancelling the tool AND
  *  closing the sketch on the same key). */
 export type SketchEscapeAction =
-  | "none"
-  | "cancel-offset"
-  | "cancel-drag"
-  | "cancel-geometry"
-  | "clear-selection"
-  | "arm-select"
-  | "close";
+  "none" | "cancel-offset" | "cancel-drag" | "cancel-geometry" | "clear-selection" | "arm-select" | "close";
 
 /** The rung this press lands on.
  *

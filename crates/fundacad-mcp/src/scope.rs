@@ -44,11 +44,8 @@ impl PathScope {
     /// The app's folders, `--allow-path` from `args` and the env list. The
     /// second half is one line per folder that was refused, for the log.
     pub fn for_server(args: impl IntoIterator<Item = OsString>) -> (PathScope, Vec<String>) {
-        let app = vec![
-            std::env::temp_dir(),
-            crate::app_session::app_data_dir().join("recovery"),
-            crate::docfile::blob_dir(),
-        ];
+        let app =
+            vec![std::env::temp_dir(), crate::app_session::app_data_dir().join("recovery"), crate::docfile::blob_dir()];
         let env = crate::link::appenv("MCP_ALLOW_PATHS").map(OsString::from);
         let home = std::env::var_os("USERPROFILE")
             .or_else(|| std::env::var_os("HOME"))
@@ -78,7 +75,12 @@ impl PathScope {
         self.strict
     }
 
-    fn build(app: Vec<PathBuf>, allowed: Vec<PathBuf>, home: Option<PathBuf>, strict: bool) -> (PathScope, Vec<String>) {
+    fn build(
+        app: Vec<PathBuf>,
+        allowed: Vec<PathBuf>,
+        home: Option<PathBuf>,
+        strict: bool,
+    ) -> (PathScope, Vec<String>) {
         let mut scope = PathScope { roots: Vec::new(), home, strict, dropped: Vec::new() };
         let mut refused = Vec::new();
         let picked = app.into_iter().map(|p| (p, Reach::Full)).chain(allowed.into_iter().map(|p| (p, Reach::Visible)));
@@ -115,10 +117,7 @@ impl PathScope {
         }
         let lexical = abspath(raw);
         let Some(target) = canonical(&lexical) else {
-            return Err(format!(
-                "{} is refused: it is a link whose target does not exist.",
-                lexical.display()
-            ));
+            return Err(format!("{} is refused: it is a link whose target does not exist.", lexical.display()));
         };
         if !self.strict {
             return self.check_open(lexical, &target);
@@ -196,10 +195,9 @@ impl PathScope {
                 folder.display()
             ),
             None => format!("Allowing {} would let it through.", folder.display()),
-            Some(why) => format!(
-                "Its folder {} cannot be allowed, it is {why}; pick a folder inside it.",
-                folder.display()
-            ),
+            Some(why) => {
+                format!("Its folder {} cannot be allowed, it is {why}; pick a folder inside it.", folder.display())
+            }
         };
         format!(
             "{} is outside the folders this server may use: {}. It was started with a folder list, so it \

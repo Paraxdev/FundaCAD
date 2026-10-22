@@ -1,9 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { findSelectorAt, replaceSelectorAt, repairableDiagFor, repickedExtent, repickedSelector } from "../../src/features/repickReference";
+import {
+  findSelectorAt,
+  replaceSelectorAt,
+  repairableDiagFor,
+  repickedExtent,
+  repickedSelector,
+} from "../../src/features/repickReference";
 import type { Feature, Selector } from "../../src/types";
 
-const near = (p: [number, number, number]): Selector =>
-  ({ kind: "face", by: "nearest", point: p }) as Selector;
+const near = (p: [number, number, number]): Selector => ({ kind: "face", by: "nearest", point: p }) as Selector;
 
 const pressPull = (face: Selector | Selector[]): Feature =>
   ({ id: "f73", type: "press-pull", face, distance: 1, operation: "join" }) as Feature;
@@ -39,7 +44,13 @@ describe("findSelectorAt", () => {
   });
 
   it("ignores non-nearest selectors", () => {
-    const f = { id: "f1", type: "draft", angle: 3, axis: "Z", faces: [{ kind: "face", by: "normal", dir: [0, 0, 1] }] } as unknown as Feature;
+    const f = {
+      id: "f1",
+      type: "draft",
+      angle: 3,
+      axis: "Z",
+      faces: [{ kind: "face", by: "normal", dir: [0, 0, 1] }],
+    } as unknown as Feature;
     expect(findSelectorAt(f, [0, 0, 1])).toBeNull();
   });
 });
@@ -72,12 +83,24 @@ describe("repairableDiagFor", () => {
 });
 
 describe("re-picking a hole's face", () => {
-  const split = { kind: "face", by: "tracked", point: [20, 2, 5], normal: [0, 0, 1], center: [0, 0, 5], body: "body1" } as Selector;
-  const hole = (face: Selector): Feature => ({ id: "ho", type: "hole", face, points: [[20, 2, 5]] }) as unknown as Feature;
+  const split = {
+    kind: "face",
+    by: "tracked",
+    point: [20, 2, 5],
+    normal: [0, 0, 1],
+    center: [0, 0, 5],
+    body: "body1",
+  } as Selector;
+  const hole = (face: Selector): Feature =>
+    ({ id: "ho", type: "hole", face, points: [[20, 2, 5]] }) as unknown as Feature;
   const site = { field: "face", index: null } as const;
   const picked = { kind: "face", by: "nearest", point: [22, 3, 5], body: "body1" } as Selector;
   const written = { kind: "face", by: "tracked", point: [22, 3, 5], normal: [0, 0, 1], body: "body1" } as Selector;
-  const rec = (point: [number, number, number]) => ({ extent: [15, 30, -10, 10] as [number, number, number, number], point, points: [[20, 2, 5]] as [number, number, number][] });
+  const rec = (point: [number, number, number]) => ({
+    extent: [15, 30, -10, 10] as [number, number, number, number],
+    point,
+    points: [[20, 2, 5]] as [number, number, number][],
+  });
 
   it("writes a tracked face on the face picked, which a hole follows from then on", () => {
     expect(repickedSelector(hole(split), site, picked, [0, 0, 2])).toEqual(written);
@@ -91,7 +114,9 @@ describe("re-picking a hole's face", () => {
   });
 
   it("takes the extent from the first build of the face it wrote", () => {
-    expect(repickedExtent(hole(written), written, rec([22, 3, 5]))).toEqual({ face: { ...written, extent: [15, 30, -10, 10] } });
+    expect(repickedExtent(hole(written), written, rec([22, 3, 5]))).toEqual({
+      face: { ...written, extent: [15, 30, -10, 10] },
+    });
   });
 
   it("waits out a build of the face picked before, and gives up on a face edited since", () => {
@@ -105,24 +130,46 @@ describe("re-picking a hole's face", () => {
 });
 
 describe("re-picking a datum reference", () => {
-  const matchEdge = { kind: "edge", by: "match", fp: { mid: [20, 10, 0], dir: [0, 0, 1], length: 20, curve: "line" }, body: "body1" } as unknown as Selector;
-  const face = { kind: "face", by: "tracked", point: [20, 0, 0], normal: [1, 0, 0], body: "body1" } as unknown as Selector;
+  const matchEdge = {
+    kind: "edge",
+    by: "match",
+    fp: { mid: [20, 10, 0], dir: [0, 0, 1], length: 20, curve: "line" },
+    body: "body1",
+  } as unknown as Selector;
+  const face = {
+    kind: "face",
+    by: "tracked",
+    point: [20, 0, 0],
+    normal: [1, 0, 0],
+    body: "body1",
+  } as unknown as Selector;
   const plane = {
-    id: "p3", type: "datumPlane", plane: { origin: [0, 0, 0], normal: [1, 0, 0], xdir: [0, 1, 0] },
+    id: "p3",
+    type: "datumPlane",
+    plane: { origin: [0, 0, 0], normal: [1, 0, 0], xdir: [0, 1, 0] },
     through: { kind: "points", points: [{ face }, { edge: matchEdge, end: "end" }, { datum: "pt" }] },
   } as unknown as Feature;
 
   it("finds a nested edge by its fingerprint's middle and a face by its point", () => {
     expect(findSelectorAt(plane, [20, 10, 0])).toEqual({ field: "through", index: null, path: ["points", 1, "edge"] });
     expect(findSelectorAt(plane, [20, 0, 0])).toEqual({ field: "through", index: null, path: ["points", 0, "face"] });
-    const axis = { id: "a", type: "datumAxis", origin: [0, 0, 0], dir: [0, 0, 1], axisEdge: near([1, 2, 3]) } as unknown as Feature;
+    const axis = {
+      id: "a",
+      type: "datumAxis",
+      origin: [0, 0, 0],
+      dir: [0, 0, 1],
+      axisEdge: near([1, 2, 3]),
+    } as unknown as Feature;
     expect(findSelectorAt(axis, [1, 2, 3])).toEqual({ field: "axisEdge", index: null });
   });
 
   it("swaps only that selector, written as a fingerprint that keeps following", () => {
     const site = findSelectorAt(plane, [20, 10, 0])!;
     const picked = { kind: "edge", by: "nearest", point: [40, 10, 0], body: "body1" } as Selector;
-    const next = repickedSelector(plane, site, picked, null, [[40, 10, -10], [40, 10, 10]]);
+    const next = repickedSelector(plane, site, picked, null, [
+      [40, 10, -10],
+      [40, 10, 10],
+    ]);
     expect(next).toMatchObject({ by: "match", body: "body1", fp: { mid: [40, 10, 0], length: 20, curve: "line" } });
     const patch = replaceSelectorAt(plane, site, next) as { through: { points: unknown[] } };
     expect(patch.through.points[1]).toEqual({ edge: next, end: "end" });

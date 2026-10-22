@@ -67,8 +67,7 @@ fn rank(vendor_id: u16, usage_page: u16, usage: u16) -> Option<i32> {
     let vendor = VENDORS.contains(&vendor_id);
     // A usage that positively says "mouse"/"keyboard" is a definitive NO even
     // under a matching vendor id, that is exactly the Logitech collision.
-    let decoy = usage_page == USAGE_PAGE_GENERIC_DESKTOP
-        && matches!(usage, USAGE_MOUSE | USAGE_KEYBOARD);
+    let decoy = usage_page == USAGE_PAGE_GENERIC_DESKTOP && matches!(usage, USAGE_MOUSE | USAGE_KEYBOARD);
     if decoy {
         return None;
     }
@@ -134,11 +133,7 @@ fn declares_multi_axis(desc: &[u8]) -> bool {
             ITEM_USAGE => {
                 // A 4-byte usage is "extended": it carries its own page in the
                 // high half and ignores the current one.
-                let (p, u) = if size == 4 {
-                    ((value >> 16) as u16, value as u16)
-                } else {
-                    (page, value as u16)
-                };
+                let (p, u) = if size == 4 { ((value >> 16) as u16, value as u16) } else { (page, value as u16) };
                 if p == USAGE_PAGE_GENERIC_DESKTOP && u == USAGE_MULTI_AXIS {
                     return true;
                 }
@@ -238,7 +233,7 @@ fn start(app: AppHandle) {
             match through_daemon(&app, &mut last_inventory) {
                 Ok(()) => warned = false,
                 Err(hint) => match stream(&app, &mut last_inventory) {
-                    Ok(()) => warned = false, // clean disconnect: a later failure is news again
+                    Ok(()) => warned = false,    // clean disconnect: a later failure is news again
                     Err(Blocked::NoDevice) => {} // nothing plugged in, normal, stay quiet
                     Err(Blocked::Unreadable { name, detail }) => {
                         eprintln!("[spacemouse] found \"{name}\" but could not open it: {detail}");
@@ -389,10 +384,8 @@ fn open_best(api: &HidApi) -> (DeviceInventory, Result<Opened, Blocked>) {
     // NOT fall through to a lower-ranked device when the best one won't open: on
     // Linux "won't open" means the udev rule is missing, and quietly opening some
     // other Logitech device instead is precisely the bug being fixed here.
-    let mut ranked: Vec<(i32, &DeviceInfo)> = api
-        .device_list()
-        .filter_map(|d| rank_device(d).map(|s| (s, d)))
-        .collect();
+    let mut ranked: Vec<(i32, &DeviceInfo)> =
+        api.device_list().filter_map(|d| rank_device(d).map(|s| (s, d))).collect();
     ranked.sort_by(|a, b| b.0.cmp(&a.0));
 
     // Open and VERIFY before publishing the inventory, so it records what
@@ -463,12 +456,7 @@ fn publish_on_change(app: &AppHandle, last: &mut Option<String>, inventory: Devi
     // Publish on CHANGE, not once per run: a device plugged in later, or newly
     // rejected, is news, while the no-device case retries every 3s forever and
     // must not spam the log or the event channel.
-    let fingerprint = format!(
-        "{:?}|{:?}|{}",
-        inventory.picked,
-        inventory.note,
-        inventory.seen.len()
-    );
+    let fingerprint = format!("{:?}|{:?}|{}", inventory.picked, inventory.note, inventory.seen.len());
     if last.as_deref() != Some(fingerprint.as_str()) {
         *last = Some(fingerprint);
         if let Some(n) = &inventory.note {
@@ -480,8 +468,8 @@ fn publish_on_change(app: &AppHandle, last: &mut Option<String>, inventory: Devi
 
 /// Streams the device's reports to the page, `first` before any it reads.
 fn read_device(app: &AppHandle, opened: Opened, first: Option<Vec<u8>>) -> Result<(), Blocked> {
-    let debug = std::env::var("FUNDACAD_SPACEMOUSE_DEBUG").is_ok()
-        || std::env::var("SINDRICAD_SPACEMOUSE_DEBUG").is_ok();
+    let debug =
+        std::env::var("FUNDACAD_SPACEMOUSE_DEBUG").is_ok() || std::env::var("SINDRICAD_SPACEMOUSE_DEBUG").is_ok();
     let Opened { dev, vid, pid, name, .. } = opened;
     eprintln!("[spacemouse] connected {vid:04x}:{pid:04x} \"{name}\"");
 
@@ -504,9 +492,7 @@ fn read_device(app: &AppHandle, opened: Opened, first: Option<Vec<u8>>) -> Resul
             }
             // A read failure after a successful open is an unplug or a transport
             // hiccup, not a permissions problem, reconnect quietly.
-            None => dev
-                .read_timeout(&mut buf, 1000)
-                .map_err(|e| Blocked::Other(e.to_string()))?,
+            None => dev.read_timeout(&mut buf, 1000).map_err(|e| Blocked::Other(e.to_string()))?,
         };
         if n == 0 {
             continue; // timeout, device idle, loop and read again
@@ -547,10 +533,7 @@ fn read_device(app: &AppHandle, opened: Opened, first: Option<Vec<u8>>) -> Resul
 }
 
 fn emit_motion(app: &AppHandle, t: [f32; 3], r: [f32; 3]) {
-    let _ = app.emit(
-        "spacemouse:motion",
-        Motion { tx: t[0], ty: t[1], tz: t[2], rx: r[0], ry: r[1], rz: r[2] },
-    );
+    let _ = app.emit("spacemouse:motion", Motion { tx: t[0], ty: t[1], tz: t[2], rx: r[0], ry: r[1], rz: r[2] });
 }
 
 #[cfg(test)]
@@ -690,4 +673,3 @@ mod tests {
         assert!(declares_multi_axis(desc));
     }
 }
-

@@ -280,18 +280,11 @@ pub fn face_axis_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResul
     let Some(sel) = req.get("face") else {
         return error_result("'face'");
     };
-    let wanted = req
-        .get("body")
-        .and_then(Value::as_str)
-        .or_else(|| sel.get("body").and_then(Value::as_str));
-    let found = built
-        .bodies
-        .iter()
-        .filter(|b| wanted.map_or(true, |id| b.id == id))
-        .find_map(|b| {
-            let face = Resolver::new(None, None).faces(&b.shape, sel).ok()?.into_iter().next()?;
-            Some((b, face))
-        });
+    let wanted = req.get("body").and_then(Value::as_str).or_else(|| sel.get("body").and_then(Value::as_str));
+    let found = built.bodies.iter().filter(|b| wanted.map_or(true, |id| b.id == id)).find_map(|b| {
+        let face = Resolver::new(None, None).faces(&b.shape, sel).ok()?.into_iter().next()?;
+        Some((b, face))
+    });
     let reply = match found {
         None => json!({"reason": "the face was not found"}),
         Some((body, face)) => {

@@ -22,11 +22,15 @@ const PORT = process.env.SC_ENGINE_PORT || "8765";
 const NATIVE = process.env.SC_TRACER === "native-dev";
 const [VW, VH] = (process.env.SC_VIEWPORT || "2560x1440").split("x").map(Number);
 const target = process.env.CARGO_TARGET_DIR || path.join(__dirname, "..", "src-tauri", "target");
-const SERVE = process.env.SC_TRACER_SERVE
-  || path.join(target, "release", "examples", process.platform === "win32" ? "tracer_serve.exe" : "tracer_serve");
+const SERVE =
+  process.env.SC_TRACER_SERVE ||
+  path.join(target, "release", "examples", process.platform === "win32" ? "tracer_serve.exe" : "tracer_serve");
 const ORBIT_MS = 2000;
 
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -52,13 +56,20 @@ function startTracerServe() {
 // Runs in the page: the box of the pixels unlike the corner, in pixels.
 function bodyBox(d, w, h) {
   const bg = [d[0], d[1], d[2]];
-  let x0 = w, y0 = h, x1 = -1, y1 = -1;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const i = (y * w + x) * 4;
-    if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 60) {
-      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  let x0 = w,
+    y0 = h,
+    x1 = -1,
+    y1 = -1;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 60) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
     }
-  }
   return { x0: x0 / w, y0: y0 / h, x1: (x1 + 1) / w, y1: (y1 + 1) / h };
 }
 
@@ -67,7 +78,8 @@ let serve = null;
   let url = URL;
   if (NATIVE) {
     serve = startTracerServe();
-    url += (url.includes("?") ? "&" : "?") + `token=${encodeURIComponent(TOKEN)}&tracer=native-dev&port=${await serve.port}`;
+    url +=
+      (url.includes("?") ? "&" : "?") + `token=${encodeURIComponent(TOKEN)}&tracer=native-dev&port=${await serve.port}`;
   }
   const browser = await chromium.launch({
     ...(EXE ? { executablePath: EXE } : { channel: "chrome" }),
@@ -75,25 +87,38 @@ let serve = null;
   });
   try {
     const page = await browser.newPage({ viewport: { width: VW, height: VH } });
-    page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-    await page.addInitScript(([port, t, box]) => {
-      window.__bodyBox = (0, eval)(`(${box})`);
-      const N = window.WebSocket;
-      window.WebSocket = class extends N {
-        constructor(u, p) {
-          if (!String(u).includes(":8765/") && !String(u).endsWith(":8765")) { super(u, p); return; }
-          let s = String(u).replace(":8765", ":" + port);
-          s = s.replace(/([?&])token=[^&]*/, `$1token=${t}`);
-          super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
-        }
-      };
-    }, [PORT, TOKEN, bodyBox.toString()]);
+    page.on("pageerror", (e) => {
+      console.error("PAGE ERROR:", e.message);
+      failures++;
+    });
+    await page.addInitScript(
+      ([port, t, box]) => {
+        window.__bodyBox = (0, eval)(`(${box})`);
+        const N = window.WebSocket;
+        window.WebSocket = class extends N {
+          constructor(u, p) {
+            if (!String(u).includes(":8765/") && !String(u).endsWith(":8765")) {
+              super(u, p);
+              return;
+            }
+            let s = String(u).replace(":8765", ":" + port);
+            s = s.replace(/([?&])token=[^&]*/, `$1token=${t}`);
+            super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+          }
+        };
+      },
+      [PORT, TOKEN, bodyBox.toString()],
+    );
     await page.goto(url);
     await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
     await page.waitForTimeout(1500);
     const modal = await page.$(".modal-close");
-    if (modal) { await modal.click(); await page.waitForTimeout(300); }
-    const setPref = (k, v) => page.evaluate(async ([k, v]) => (await import("/src/ui/renderPrefs.ts")).setRenderPref(k, v), [k, v]);
+    if (modal) {
+      await modal.click();
+      await page.waitForTimeout(300);
+    }
+    const setPref = (k, v) =>
+      page.evaluate(async ([k, v]) => (await import("/src/ui/renderPrefs.ts")).setRenderPref(k, v), [k, v]);
     await setPref("bloom", 0);
     await setPref("denoise", "off");
     await setPref("realtimeWhileMoving", false);
@@ -109,62 +134,108 @@ let serve = null;
         await new Promise((r) => setTimeout(r, 100));
       }
     });
-    await page.evaluate(() => { window.__fundacad.handleAction("iso"); window.__fundacad.handleAction("fit"); });
+    await page.evaluate(() => {
+      window.__fundacad.handleAction("iso");
+      window.__fundacad.handleAction("fit");
+    });
     await page.waitForTimeout(600);
     await page.mouse.move(5, 5);
     // No cap, so frames still come when the traced box is read at rest.
-    await page.evaluate(() => { window.viewport.trace.cap = 1e6; });
+    await page.evaluate(() => {
+      window.viewport.trace.cap = 1e6;
+    });
     await page.click('[data-view-mode="pathtraced"]');
-    const settled = () => page.waitForFunction(() => {
-      const s = window.viewport.traceStatus;
-      return s.shown && s.samples >= 16 ? s : null;
-    }, null, { timeout: 240000, polling: 250 }).then((h) => h.jsonValue());
+    const settled = () =>
+      page
+        .waitForFunction(
+          () => {
+            const s = window.viewport.traceStatus;
+            return s.shown && s.samples >= 16 ? s : null;
+          },
+          null,
+          { timeout: 240000, polling: 250 },
+        )
+        .then((h) => h.jsonValue());
     const st = await settled();
-    check("traces on the backend asked for", NATIVE ? /^native/.test(st.backend) : /WebGPU/.test(st.backend), st.backend);
+    check(
+      "traces on the backend asked for",
+      NATIVE ? /^native/.test(st.backend) : /WebGPU/.test(st.backend),
+      st.backend,
+    );
 
-    const log = await page.evaluate((ms) => new Promise((done) => {
-      const host = window.viewport.trace;
-      const b = host.backend;
-      const log = { cams: [], ups: [], ticks: [], frames: [] };
-      const now = () => performance.now();
-      const native = typeof b.scene?.camera === "function";
-      if (native) {
-        const cam = b.scene.camera.bind(b.scene);
-        b.scene.camera = (c, lens) => {
-          const e = { enq: now(), after: null };
-          log.cams.push(e);
-          const p = cam(c, lens);
-          p.then((v) => { e.after = v; }, () => {});
-          return p;
-        };
-        const up = b.blit.upload.bind(b.blit);
-        b.blit.upload = (f) => { log.ups.push({ t: now(), seq: f.seq }); up(f); };
-        const next = b.link.next.bind(b.link);
-        b.link.next = () => { const t0 = now(); const p = next(); p.then(() => log.frames.push(now() - t0), () => {}); return p; };
-      } else {
-        const uc = b.updateCamera.bind(b);
-        b.updateCamera = (c, l) => { log.cams.push({ enq: now() }); uc(c, l); };
-        const rs = b.renderSample.bind(b);
-        b.renderSample = (n) => {
-          const k = log.cams.length - 1, t0 = now();
-          const p = rs(n);
-          p.then(() => { log.ups.push({ t: now(), k }); log.frames.push(now() - t0); }, () => {});
-          return p;
-        };
-      }
-      const t0 = now();
-      const step = () => {
-        const moving = now() - t0 < ms;
-        if (moving) {
-          window.viewport.rig.orbitBy(0.004, 0.001);
-          window.viewport.requestRender();
-        }
-        log.ticks.push({ t: now(), view: native ? !!host.frameView : true, moving });
-        if (now() - t0 < ms + 1500) requestAnimationFrame(step);
-        else done(log);
-      };
-      requestAnimationFrame(step);
-    }), ORBIT_MS);
+    const log = await page.evaluate(
+      (ms) =>
+        new Promise((done) => {
+          const host = window.viewport.trace;
+          const b = host.backend;
+          const log = { cams: [], ups: [], ticks: [], frames: [] };
+          const now = () => performance.now();
+          const native = typeof b.scene?.camera === "function";
+          if (native) {
+            const cam = b.scene.camera.bind(b.scene);
+            b.scene.camera = (c, lens) => {
+              const e = { enq: now(), after: null };
+              log.cams.push(e);
+              const p = cam(c, lens);
+              p.then(
+                (v) => {
+                  e.after = v;
+                },
+                () => {},
+              );
+              return p;
+            };
+            const up = b.blit.upload.bind(b.blit);
+            b.blit.upload = (f) => {
+              log.ups.push({ t: now(), seq: f.seq });
+              up(f);
+            };
+            const next = b.link.next.bind(b.link);
+            b.link.next = () => {
+              const t0 = now();
+              const p = next();
+              p.then(
+                () => log.frames.push(now() - t0),
+                () => {},
+              );
+              return p;
+            };
+          } else {
+            const uc = b.updateCamera.bind(b);
+            b.updateCamera = (c, l) => {
+              log.cams.push({ enq: now() });
+              uc(c, l);
+            };
+            const rs = b.renderSample.bind(b);
+            b.renderSample = (n) => {
+              const k = log.cams.length - 1,
+                t0 = now();
+              const p = rs(n);
+              p.then(
+                () => {
+                  log.ups.push({ t: now(), k });
+                  log.frames.push(now() - t0);
+                },
+                () => {},
+              );
+              return p;
+            };
+          }
+          const t0 = now();
+          const step = () => {
+            const moving = now() - t0 < ms;
+            if (moving) {
+              window.viewport.rig.orbitBy(0.004, 0.001);
+              window.viewport.requestRender();
+            }
+            log.ticks.push({ t: now(), view: native ? !!host.frameView : true, moving });
+            if (now() - t0 < ms + 1500) requestAnimationFrame(step);
+            else done(log);
+          };
+          requestAnimationFrame(step);
+        }),
+      ORBIT_MS,
+    );
 
     const cams = log.cams;
     const tracedAt = (u) => {
@@ -182,16 +253,33 @@ let serve = null;
     const age = during.map((u) => u.t - cams[u.k].enq);
     const oldest = age.length ? Math.max(...age) : Infinity;
     const limit = 3 * frame + 2 * tick;
-    console.log(`  ${cams.length} cameras, ${ups.length} frames, frame p50 ${frame.toFixed(1)} ms, display frame ${tick.toFixed(1)} ms`);
-    check("the orbit sent cameras and drew frames", cams.length > 30 && during.length > 10, `${cams.length} cameras, ${during.length} frames`);
-    check("every frame on screen is traced at a camera at most three frames old", oldest <= limit,
-      `oldest ${oldest.toFixed(0)} ms, limit ${limit.toFixed(0)} ms`);
+    console.log(
+      `  ${cams.length} cameras, ${ups.length} frames, frame p50 ${frame.toFixed(1)} ms, display frame ${tick.toFixed(1)} ms`,
+    );
+    check(
+      "the orbit sent cameras and drew frames",
+      cams.length > 30 && during.length > 10,
+      `${cams.length} cameras, ${during.length} frames`,
+    );
+    check(
+      "every frame on screen is traced at a camera at most three frames old",
+      oldest <= limit,
+      `oldest ${oldest.toFixed(0)} ms, limit ${limit.toFixed(0)} ms`,
+    );
     const first = ups[0]?.t ?? Infinity;
     const lost = log.ticks.filter((t) => t.moving && t.t > first + 2 * tick && !t.view).length;
-    check("the edges draw with the camera of the frame on screen on every display frame", lost === 0, `${lost} without it`);
+    check(
+      "the edges draw with the camera of the frame on screen on every display frame",
+      lost === 0,
+      `${lost} without it`,
+    );
     const landed = ups.find((u) => u.k === cams.length - 1 && u.t >= stop);
     const after = landed ? landed.t - stop : Infinity;
-    check("the last camera is on screen within three frames of the stop", after <= limit, `${after.toFixed(0)} ms, limit ${limit.toFixed(0)} ms`);
+    check(
+      "the last camera is on screen within three frames of the stop",
+      after <= limit,
+      `${after.toFixed(0)} ms, limit ${limit.toFixed(0)} ms`,
+    );
 
     await settled();
     // Copied in the task that drew it: a WebGPU canvas is blank once presented,
@@ -215,23 +303,33 @@ let serve = null;
           return r;
         };
       });
-      const bm = await createImageBitmap(await (await fetch(window.viewport.renderStill(1, { realtime: true }))).blob());
+      const bm = await createImageBitmap(
+        await (await fetch(window.viewport.renderStill(1, { realtime: true }))).blob(),
+      );
       const r = new OffscreenCanvas(bm.width, bm.height).getContext("2d");
       r.drawImage(bm, 0, 0);
       const realtime = window.__bodyBox(r.getImageData(0, 0, bm.width, bm.height).data, bm.width, bm.height);
       const v = window.viewport.canvas.getBoundingClientRect();
       return { traced, realtime, w: v.width, h: v.height };
     });
-    const off = Math.max(...["x0", "x1"].map((k) => Math.abs(boxes.traced[k] - boxes.realtime[k]) * boxes.w),
-      ...["y0", "y1"].map((k) => Math.abs(boxes.traced[k] - boxes.realtime[k]) * boxes.h));
+    const off = Math.max(
+      ...["x0", "x1"].map((k) => Math.abs(boxes.traced[k] - boxes.realtime[k]) * boxes.w),
+      ...["y0", "y1"].map((k) => Math.abs(boxes.traced[k] - boxes.realtime[k]) * boxes.h),
+    );
     check("at rest the traced box sits within 2 px of the Realtime box", off <= 2, `${off.toFixed(1)} px apart`);
   } finally {
     await browser.close();
   }
 })()
-  .catch((e) => { console.error(e); failures++; })
+  .catch((e) => {
+    console.error(e);
+    failures++;
+  })
   .finally(() => {
-    if (serve) { serve.srv.stdin.end(); serve.srv.kill(); }
+    if (serve) {
+      serve.srv.stdin.end();
+      serve.srv.kill();
+    }
     console.log(failures ? `FAIL ${failures}` : "PASS");
     process.exitCode = failures ? 1 : 0;
   });

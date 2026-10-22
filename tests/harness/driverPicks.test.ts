@@ -4,7 +4,8 @@ import { createMethods, type HarnessHost } from "../../src/harness/driver";
 import { overHandle } from "../../src/harness/handles";
 import { resolveFace, type PickHost } from "../../src/harness/picks";
 
-const W = 800, H = 600;
+const W = 800,
+  H = 600;
 
 const tri = (a: number[], b: number[], c: number[]) =>
   new THREE.Triangle(new THREE.Vector3(...a), new THREE.Vector3(...b), new THREE.Vector3(...c));
@@ -21,7 +22,11 @@ function rig(faces: THREE.Triangle[][]) {
     return { x: (v.x * 0.5 + 0.5) * W, y: (-v.y * 0.5 + 0.5) * H };
   };
   const h = {
-    store: { buildState: { result: { bodies: [{ id: "body1", name: "Plate", faceStart: 0, faceCount: faces.length }], edges: [] } } },
+    store: {
+      buildState: {
+        result: { bodies: [{ id: "body1", name: "Plate", faceStart: 0, faceCount: faces.length }], edges: [] },
+      },
+    },
     viewport: {
       scene: { scene },
       domElement: {} as HTMLCanvasElement,

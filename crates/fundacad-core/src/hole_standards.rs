@@ -110,12 +110,7 @@ pub struct HoleDims {
 
 /// `standard_dims` as the engine reads it: an unknown fit is the normal one,
 /// where the app's picker falls back to close.
-pub fn standard_dims(
-    hole_type: &str,
-    standard: Option<&str>,
-    size: Option<&str>,
-    fit: Option<&str>,
-) -> HoleDims {
+pub fn standard_dims(hole_type: &str, standard: Option<&str>, size: Option<&str>, fit: Option<&str>) -> HoleDims {
     let mut out = HoleDims::default();
     let size = size.unwrap_or("");
     if hole_type == "insert" {

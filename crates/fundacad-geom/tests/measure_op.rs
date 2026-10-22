@@ -74,13 +74,7 @@ fn face_by_surface(ins: &Value, body: usize, surface: &str, z: Option<f64>) -> V
 }
 
 fn edge_where(ins: &Value, body: usize, ok: impl Fn(&Value) -> bool) -> Value {
-    ins["bodies"][body]["edges"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|e| ok(e))
-        .expect("no such edge")["selector"]
-        .clone()
+    ins["bodies"][body]["edges"].as_array().unwrap().iter().find(|e| ok(e)).expect("no such edge")["selector"].clone()
 }
 
 fn box_doc() -> Value {
@@ -219,10 +213,7 @@ fn a_sphere_gives_its_radius_centre_area_and_volume() {
 }
 
 fn error_of(m: &Value) -> String {
-    m["error"]["message"]
-        .as_str()
-        .unwrap_or_else(|| panic!("no error: {m}"))
-        .to_string()
+    m["error"]["message"].as_str().unwrap_or_else(|| panic!("no error: {m}")).to_string()
 }
 
 #[test]

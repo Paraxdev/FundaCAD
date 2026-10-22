@@ -21,7 +21,11 @@ import type { SurfaceGraph, SurfaceNode, SurfaceSpec } from "../document/materia
 import { copyPatches, removePatch, setPatch, type ShaderPatch } from "./shaderPatches";
 
 const SURF_KIND: Record<SurfaceSpec["kind"], number> = {
-  noise: 0, scratches: 1, brushed: 2, voronoi: 3, wave: 4,
+  noise: 0,
+  scratches: 1,
+  brushed: 2,
+  voronoi: 3,
+  wave: 4,
 };
 
 export function surfaceKey(s: SurfaceSpec | undefined): string {
@@ -39,7 +43,7 @@ export function graphKey(g: SurfaceGraph | undefined): string {
 
 // --- shared GLSL: the generator functions, parameterised so the picker (via
 // uniforms) and the graph (via baked literals) both call the same code. -------
-const SURF_FUNCS = /* glsl */`
+const SURF_FUNCS = /* glsl */ `
 float sHash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float sNoise(vec3 x){
   vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -108,7 +112,7 @@ type Physical = THREE.MeshStandardMaterial & {
   userData: { surfKey?: string; surfUniforms?: Record<string, THREE.IUniform> };
 };
 
-const PICK_UNIFORMS = /* glsl */`
+const PICK_UNIFORMS = /* glsl */ `
 uniform int uSurfKind; uniform float uSurfScale; uniform float uSurfAmount; uniform float uSurfAngle;
 uniform float uSurfBump; uniform vec3 uSurfColor; uniform float uSurfColorAmt;
 float sPickHeight(vec3 wp, vec3 wn){ return sGen(wp, wn, uSurfKind, uSurfScale, uSurfAngle); }
@@ -120,8 +124,10 @@ const PICK_PATCH = {
   varyings: ["surfWorld"],
   after: {
     common: SURF_FUNCS + PICK_UNIFORMS,
-    color_fragment: "  float sH = sPickHeight(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uSurfColor, uSurfColorAmt * sH);",
-    roughnessmap_fragment: "  roughnessFactor = clamp(roughnessFactor + uSurfAmount * (sPickHeight(vSurfWPos, vSurfWNorm) - 0.5), 0.04, 1.0);",
+    color_fragment:
+      "  float sH = sPickHeight(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uSurfColor, uSurfColorAmt * sH);",
+    roughnessmap_fragment:
+      "  roughnessFactor = clamp(roughnessFactor + uSurfAmount * (sPickHeight(vSurfWPos, vSurfWNorm) - 0.5), 0.04, 1.0);",
     normal_fragment_begin: bumpGLSL("sPickHeight(P, wn)", "uSurfBump"),
   },
 } satisfies ShaderPatch;
@@ -133,7 +139,8 @@ function graphPatch(key: string, compiled: string): ShaderPatch {
     varyings: ["surfWorld"],
     after: {
       common: SURF_FUNCS + STRUCT_GLSL + compiled,
-      color_fragment: "  SurfOut sO = sGraph(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, sO.tint, sO.tintAmt);",
+      color_fragment:
+        "  SurfOut sO = sGraph(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, sO.tint, sO.tintAmt);",
       roughnessmap_fragment: "  roughnessFactor = clamp(roughnessFactor + sO.roughAmt * (sO.rough - 0.5), 0.04, 1.0);",
       normal_fragment_begin: bumpGLSL("sGraph(P, wn).bump", "sO.bumpAmt"),
     },
@@ -167,9 +174,12 @@ export function applySurface(mat: THREE.Material, spec: SurfaceSpec | undefined)
     return;
   }
   const uniforms: Record<string, THREE.IUniform> = {
-    uSurfKind: { value: SURF_KIND[spec.kind] }, uSurfScale: { value: spec.scale },
-    uSurfAmount: { value: spec.amount }, uSurfAngle: { value: spec.angle ?? 0 },
-    uSurfBump: { value: spec.bump ?? 0 }, uSurfColor: { value: new THREE.Color(spec.color ?? "#000000") },
+    uSurfKind: { value: SURF_KIND[spec.kind] },
+    uSurfScale: { value: spec.scale },
+    uSurfAmount: { value: spec.amount },
+    uSurfAngle: { value: spec.angle ?? 0 },
+    uSurfBump: { value: spec.bump ?? 0 },
+    uSurfColor: { value: new THREE.Color(spec.color ?? "#000000") },
     uSurfColorAmt: { value: spec.colorAmount ?? 0 },
   };
   writeUniforms(uniforms, spec);
@@ -211,7 +221,11 @@ export function surfaceBakeShader(mat: THREE.Material): SurfaceBakeShader | null
     const graph = JSON.parse(key.slice(2)) as SurfaceGraph;
     return {
       key,
-      glsl: SURF_FUNCS + STRUCT_GLSL + compileGraph(graph) + "SurfOut surfBake(vec3 wp, vec3 wn){ return sGraph(wp, wn); }\n",
+      glsl:
+        SURF_FUNCS +
+        STRUCT_GLSL +
+        compileGraph(graph) +
+        "SurfOut surfBake(vec3 wp, vec3 wn){ return sGraph(wp, wn); }\n",
       uniforms: {},
     };
   }
@@ -219,7 +233,10 @@ export function surfaceBakeShader(mat: THREE.Material): SurfaceBakeShader | null
   if (!u) return null;
   return {
     key,
-    glsl: SURF_FUNCS + STRUCT_GLSL + /* glsl */`
+    glsl:
+      SURF_FUNCS +
+      STRUCT_GLSL +
+      /* glsl */ `
 uniform int uSurfKind; uniform float uSurfScale; uniform float uSurfAmount; uniform float uSurfAngle;
 uniform vec3 uSurfColor; uniform float uSurfColorAmt;
 SurfOut surfBake(vec3 wp, vec3 wn){
@@ -234,7 +251,7 @@ SurfOut surfBake(vec3 wp, vec3 wn){
   };
 }
 
-const STRUCT_GLSL = /* glsl */`
+const STRUCT_GLSL = /* glsl */ `
 struct SurfOut { float rough; float roughAmt; float bump; float bumpAmt; vec3 tint; float tintAmt; };
 `;
 
@@ -242,7 +259,7 @@ struct SurfOut { float rough; float roughAmt; float bump; float bumpAmt; vec3 ti
 // the height at world point `P`; `amtExpr` is the strength. Shared shape, two
 // callers (the picker's single generator, the graph's bump port).
 function bumpGLSL(heightExpr: string, amtExpr: string): string {
-  return /* glsl */`
+  return /* glsl */ `
   {
     float bAmt = ${amtExpr};
     if (bAmt > 0.0001) {
@@ -286,7 +303,8 @@ function colorRampGLSL(raw: unknown, tExpr: string): string {
   const t = `clamp(${tExpr}, 0.0, 1.0)`;
   let expr = glslCol(stops[0]!.hex);
   for (let i = 1; i < stops.length; i++) {
-    const p0 = stops[i - 1]!.pos, p1 = stops[i]!.pos;
+    const p0 = stops[i - 1]!.pos,
+      p1 = stops[i]!.pos;
     const span = Math.max(p1 - p0, 1e-4);
     expr = `mix(${expr}, ${glslCol(stops[i]!.hex)}, clamp((${t} - ${p0.toFixed(4)}) / ${span.toFixed(4)}, 0.0, 1.0))`;
   }
@@ -305,7 +323,11 @@ export function parseStops(raw: unknown): { pos: number; hex: string }[] {
       if (Number.isFinite(pos) && /^#[0-9a-fA-F]{6}$/.test(hex)) out.push({ pos: Math.min(Math.max(pos, 0), 1), hex });
     }
   }
-  if (out.length < 2) return [{ pos: 0, hex: "#000000" }, { pos: 1, hex: "#ffffff" }];
+  if (out.length < 2)
+    return [
+      { pos: 0, hex: "#000000" },
+      { pos: 1, hex: "#ffffff" },
+    ];
   return out.sort((a, b) => a.pos - b.pos);
 }
 
@@ -347,15 +369,23 @@ export function compileGraph(graph: SurfaceGraph): string {
       // and distortion, over the shared parameterised fBm. Sampled in world space
       // and scaled the same way sGen does, so it lines up with the other
       // generators. lacunarity is fixed at 2 (the usual doubling).
-      lines.push(`float ${varOf(n.id)} = sFbmP(wp / max(${flt(p["scale"], 6)}, 0.001), ${int(p["detail"], 4, 1, 8)}, ${flt(p["roughness"], 0.5)}, 2.0, ${flt(p["distortion"], 0)});`);
+      lines.push(
+        `float ${varOf(n.id)} = sFbmP(wp / max(${flt(p["scale"], 6)}, 0.001), ${int(p["detail"], 4, 1, 8)}, ${flt(p["roughness"], 0.5)}, 2.0, ${flt(p["distortion"], 0)});`,
+      );
     } else if (n.type in GEN_KIND) {
-      lines.push(`float ${varOf(n.id)} = sGen(wp, wn, ${GEN_KIND[n.type]}, ${flt(p["scale"], 6)}, ${flt(p["angle"], 0)});`);
+      lines.push(
+        `float ${varOf(n.id)} = sGen(wp, wn, ${GEN_KIND[n.type]}, ${flt(p["scale"], 6)}, ${flt(p["angle"], 0)});`,
+      );
     } else if (n.type === "fresnel") {
       // rises toward 1 at grazing angles: 1 - (N . V), raised to a power. cameraPosition
       // is a built-in fragment uniform, wp/wn are the surface point and normal.
-      lines.push(`float ${varOf(n.id)} = pow(1.0 - clamp(dot(normalize(wn), normalize(cameraPosition - wp)), 0.0, 1.0), ${flt(p["power"], 3)});`);
+      lines.push(
+        `float ${varOf(n.id)} = pow(1.0 - clamp(dot(normalize(wn), normalize(cameraPosition - wp)), 0.0, 1.0), ${flt(p["power"], 3)});`,
+      );
     } else if (n.type === "ramp") {
-      lines.push(`vec3 ${varOf(n.id)} = mix(${vec(p["colorA"], "#000000")}, ${vec(p["colorB"], "#ffffff")}, clamp(${inFloat(n, "t", "0.0")}, 0.0, 1.0));`);
+      lines.push(
+        `vec3 ${varOf(n.id)} = mix(${vec(p["colorA"], "#000000")}, ${vec(p["colorB"], "#ffffff")}, clamp(${inFloat(n, "t", "0.0")}, 0.0, 1.0));`,
+      );
     } else if (n.type === "colorramp") {
       lines.push(`vec3 ${varOf(n.id)} = ${colorRampGLSL(p["stops"], inFloat(n, "t", "0.0"))};`);
     } else if (n.type === "mix") {
@@ -368,12 +398,17 @@ export function compileGraph(graph: SurfaceGraph): string {
       const b = n.in?.["b"] ? varOf(n.in["b"]!) : flt(p["b"], 0.5);
       const op = typeof p["op"] === "string" ? p["op"] : "multiply";
       const expr =
-        op === "add" ? `${a} + ${b}` :
-        op === "subtract" ? `${a} - ${b}` :
-        op === "min" ? `min(${a}, ${b})` :
-        op === "max" ? `max(${a}, ${b})` :
-        op === "pow" ? `pow(max(${a}, 0.0), ${b})` :
-        `${a} * ${b}`;
+        op === "add"
+          ? `${a} + ${b}`
+          : op === "subtract"
+            ? `${a} - ${b}`
+            : op === "min"
+              ? `min(${a}, ${b})`
+              : op === "max"
+                ? `max(${a}, ${b})`
+                : op === "pow"
+                  ? `pow(max(${a}, 0.0), ${b})`
+                  : `${a} * ${b}`;
       lines.push(`float ${varOf(n.id)} = clamp(${expr}, 0.0, 1.0);`);
     } else if (n.type === "output") {
       out = n;

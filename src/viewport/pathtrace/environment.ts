@@ -21,7 +21,7 @@ const CUBE = 256;
 
 // The direction for a texel is the tracer's own equirectUvToDirection, so the
 // readback rows land where it samples them.
-const FRAGMENT = /* glsl */`
+const FRAGMENT = /* glsl */ `
 uniform samplerCube uCube;
 uniform float uHasCube;
 uniform vec3 uSky;
@@ -38,7 +38,7 @@ void main() {
   gl_FragColor = vec4(room + mix(uGround, uSky, t), 1.0);
 }`;
 
-const VERTEX = /* glsl */`
+const VERTEX = /* glsl */ `
 varying vec2 vUv;
 void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
@@ -46,7 +46,15 @@ let held: { key: string; tex: THREE.DataTexture } | null = null;
 
 export function hemiKey(h: TraceHemi | null): string {
   if (!h) return "";
-  return [h.sky.getHex(), h.ground.getHex(), h.intensity.toFixed(4), h.up.toArray().map((v) => v.toFixed(3)).join(",")].join(":");
+  return [
+    h.sky.getHex(),
+    h.ground.getHex(),
+    h.intensity.toFixed(4),
+    h.up
+      .toArray()
+      .map((v) => v.toFixed(3))
+      .join(","),
+  ].join(":");
 }
 
 /** A hemisphere light of irradiance I * colour equals an environment of
@@ -67,19 +75,22 @@ export function traceEnvironment(
   if (held?.key === full) return held.tex;
   const cubeTarget = new THREE.WebGLCubeRenderTarget(CUBE, { type: THREE.HalfFloatType });
   const flat = new THREE.WebGLRenderTarget(WIDTH, HEIGHT, { type: THREE.FloatType, depthBuffer: false });
-  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
-    vertexShader: VERTEX,
-    fragmentShader: FRAGMENT,
-    uniforms: {
-      uCube: { value: cubeTarget.texture },
-      uHasCube: { value: room ? 1 : 0 },
-      uSky: { value: hemiRadiance(hemi?.sky ?? new THREE.Color(), hemi) },
-      uGround: { value: hemiRadiance(hemi?.ground ?? new THREE.Color(), hemi) },
-      uUp: { value: (hemi?.up ?? new THREE.Vector3(0, 0, 1)).clone().normalize() },
-    },
-    depthTest: false,
-    depthWrite: false,
-  }));
+  const quad = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 2),
+    new THREE.ShaderMaterial({
+      vertexShader: VERTEX,
+      fragmentShader: FRAGMENT,
+      uniforms: {
+        uCube: { value: cubeTarget.texture },
+        uHasCube: { value: room ? 1 : 0 },
+        uSky: { value: hemiRadiance(hemi?.sky ?? new THREE.Color(), hemi) },
+        uGround: { value: hemiRadiance(hemi?.ground ?? new THREE.Color(), hemi) },
+        uUp: { value: (hemi?.up ?? new THREE.Vector3(0, 0, 1)).clone().normalize() },
+      },
+      depthTest: false,
+      depthWrite: false,
+    }),
+  );
   const was = {
     target: renderer.getRenderTarget(),
     toneMapping: renderer.toneMapping,
@@ -187,10 +198,15 @@ export function hemiAt(dir: readonly number[], h: TraceHemi | null): [number, nu
 /** An imported panorama in the "z" layout, half float RGBA top row first:
  *  turned by `rotationDeg` as a column shift, times 2^exposure as hdrRoom
  *  bakes it, with the hemisphere added as FRAGMENT adds it to a room. */
-export function hdrEnvironment(img: HdrImage, rotationDeg: number, exposure: number, hemi: TraceHemi | null): Uint16Array {
+export function hdrEnvironment(
+  img: HdrImage,
+  rotationDeg: number,
+  exposure: number,
+  hemi: TraceHemi | null,
+): Uint16Array {
   const { width: w, height: h, data } = img;
   const gain = 2 ** exposure;
-  const shift = (((rotationDeg / 360) * w) % w + w) % w;
+  const shift = ((((rotationDeg / 360) * w) % w) + w) % w;
   const c0 = Math.floor(shift);
   const f = shift - c0;
   const out = new Uint16Array(w * h * 4);

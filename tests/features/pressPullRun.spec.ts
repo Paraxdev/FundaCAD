@@ -22,7 +22,12 @@ const flushFrame = () => {
 const PX = 10;
 // The c1 upper slot along X: ends about y 7.125 and -7.125 at z 20, r 2,
 // walls at z 18 and 22. Face 1 is the +Y end, the one picked first.
-const RUN: Vec3[] = [[0, 9.125, 20], [0, 0, 22], [0, -9.125, 20], [0, 0, 18]];
+const RUN: Vec3[] = [
+  [0, 9.125, 20],
+  [0, 0, 22],
+  [0, -9.125, 20],
+  [0, 0, 18],
+];
 const IDS = [1, 2, 3, 4];
 const face = (p: Vec3): Selector => ({ kind: "face", by: "nearest", point: p });
 
@@ -41,7 +46,11 @@ function fakeViewport(selected: number[]) {
   const scene = new THREE.Scene();
   const canvas = document.createElement("canvas");
   const camera = new THREE.PerspectiveCamera();
-  const tri = new THREE.Triangle(new THREE.Vector3(-25, 9.125, 20), new THREE.Vector3(25, 9.125, 20), new THREE.Vector3(0, 8.5, 21.9));
+  const tri = new THREE.Triangle(
+    new THREE.Vector3(-25, 9.125, 20),
+    new THREE.Vector3(25, 9.125, 20),
+    new THREE.Vector3(0, 8.5, 21.9),
+  );
   const vp = {
     suspendPicking: false,
     domElement: canvas,
@@ -103,7 +112,10 @@ function fakeStore(reply: FaceAxisReply) {
 const slotEnd = (run: Vec3[]): FaceAxisReply => ({
   reason: "a slot end has no hole axis",
   resize: {
-    kind: "cylinder", size: 2, full: false, concave: true,
+    kind: "cylinder",
+    size: 2,
+    full: false,
+    concave: true,
     axis: { origin: [0, 7.125, 20], dir: [1, 0, 0] },
     contact: 2,
     tangent: { faces: 2, lostWhen: "shrink", run, closed: true, followable: true },
@@ -159,7 +171,10 @@ describe("press/pull on a slot picked face by face", () => {
     setActivePinia(createPinia());
     frames = [];
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => { frames.push(fn); return frames.length; });
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+      frames.push(fn);
+      return frames.length;
+    });
     vi.stubGlobal("cancelAnimationFrame", () => {});
   });
   afterEach(() => {

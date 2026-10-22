@@ -42,7 +42,8 @@ export function autoMatch(slot: LogicalSlot, toolheads: ToolheadFilament[]): num
   let best = pool[0]?.index ?? slot.index;
   let bestScore = Infinity;
   for (const t of pool) {
-    const materialMiss = slot.material && t.material && slot.material.toLowerCase() !== t.material.toLowerCase() ? 1e9 : 0;
+    const materialMiss =
+      slot.material && t.material && slot.material.toLowerCase() !== t.material.toLowerCase() ? 1e9 : 0;
     const score = materialMiss + colorDist(slot.color, t.color);
     if (score < bestScore) {
       bestScore = score;

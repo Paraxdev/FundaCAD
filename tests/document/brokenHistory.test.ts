@@ -1,7 +1,14 @@
 // A file whose saved versions are damaged still opens: what can be trusted is
 // kept, the rest is dropped, and the document itself is never lost to it.
 import { describe, expect, it, vi } from "vitest";
-import { commit, emptyRepo, normalizeRepo, referencedGeometry, snapshotOf, type VersionRepo } from "../../src/document/versions";
+import {
+  commit,
+  emptyRepo,
+  normalizeRepo,
+  referencedGeometry,
+  snapshotOf,
+  type VersionRepo,
+} from "../../src/document/versions";
 import type { SectionView } from "../../src/types";
 import { box, opened, saved } from "./storeKit";
 
@@ -30,7 +37,10 @@ const cases: [string, (raw: Raw) => void, (good: VersionRepo) => VersionRepo][] 
   ["current that is not a name", (r) => (r.current = 3), (g) => g],
   [
     "current on a missing branch with main gone",
-    (r) => { delete r.branches.main; r.current = "gone"; },
+    (r) => {
+      delete r.branches.main;
+      r.current = "gone";
+    },
     (g) => ({ ...g, branches: { lean: g.branches.lean! }, current: "lean" }),
   ],
   ["no branches at all", (r) => delete r.branches, (g) => ({ ...g, branches: {}, current: "main" })],
@@ -88,7 +98,9 @@ describe("a file with a damaged history", () => {
     delete file.versions.objects[b.tree.features[1]!];
     const s = opened(file);
     expect(s.changesSinceVersion()).toEqual({ added: [], removed: [], changed: [], settings: false });
-    s.load(JSON.stringify({ parameters: { w: 7.5 }, features: [box("f1", 11), box("f2", 4.25), box("f3", 2.5)] }), { replace: true });
+    s.load(JSON.stringify({ parameters: { w: 7.5 }, features: [box("f1", 11), box("f2", 4.25), box("f3", 2.5)] }), {
+      replace: true,
+    });
     expect(s.changesSinceVersion()).toEqual({ added: ["f3"], removed: [], changed: ["f1"], settings: true });
     const cut: SectionView = { origin: [12.5, -4, 3], normal: [0.6, 0, 0.8], offset: -2.5, side: 1, ghost: "faint" };
     s.setSectionView(structuredClone(cut));

@@ -164,12 +164,7 @@ export function clampDragAngle(deg: number, pitch: number, minPitch: number): nu
  *  Capped, because a small radius or a far zoom would otherwise wrap the arrow
  *  round the axis and back, which reads as a ring, a thing you turn to no
  *  particular end, rather than as a direction the sweep is already going. */
-export function arcSpanDeg(
-  radius: number,
-  mmPerPx: number,
-  px: number,
-  maxDeg = MAX_ARC_DEG,
-): number {
+export function arcSpanDeg(radius: number, mmPerPx: number, px: number, maxDeg = MAX_ARC_DEG): number {
   if (!(radius > 1e-9) || !(mmPerPx > 0) || !Number.isFinite(px)) return maxDeg;
   return Math.min(maxDeg, (Math.abs(px * mmPerPx) / radius) * (180 / Math.PI));
 }

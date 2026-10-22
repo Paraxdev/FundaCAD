@@ -252,10 +252,7 @@ export interface FeatureTypeContribution {
   fieldApplies?: (field: string, values: Record<string, unknown>) => boolean;
   /** A row label that depends on the feature's own values, for the rare field
    *  whose name is not a constant. Null for "use the inventory's label". */
-  fieldLabel?: (
-    field: string,
-    values: Record<string, unknown>,
-  ) => { text: string; title?: string } | null;
+  fieldLabel?: (field: string, values: Record<string, unknown>) => { text: string; title?: string } | null;
   /** Re-open a committed feature in the tool that made it. False means "not
    *  tool-editable", a parameter-bound value, say, and the app falls back to
    *  the value rows, exactly as it does for its own tools. */

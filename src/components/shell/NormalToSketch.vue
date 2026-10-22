@@ -11,7 +11,8 @@ const palette = useSketchPaletteStore();
     data-testid="normal-to-sketch"
     title="Square the view to the sketch plane"
     @click="palette.lookAt()"
-  >Normal to Sketch</button>
+    >Normal to Sketch</button
+  >
 </template>
 
 <style scoped>

@@ -14,7 +14,12 @@ pub struct Candidate {
 impl Candidate {
     pub fn of(a: &wgpu::Adapter) -> Candidate {
         let i = a.get_info();
-        Candidate { name: i.name, backend: i.backend, device_type: i.device_type, storage_buffers: a.limits().max_storage_buffers_per_shader_stage }
+        Candidate {
+            name: i.name,
+            backend: i.backend,
+            device_type: i.device_type,
+            storage_buffers: a.limits().max_storage_buffers_per_shader_stage,
+        }
     }
     fn cpu(&self) -> bool {
         self.device_type == wgpu::DeviceType::Cpu
@@ -35,8 +40,13 @@ impl Candidate {
 pub enum Refusal {
     NoAdapter,
     /// Only software rasterisers, refused unless FUNDACAD_TRACER_ALLOW_CPU=1.
-    Cpu { name: String },
-    Limits { name: String, storage: u32 },
+    Cpu {
+        name: String,
+    },
+    Limits {
+        name: String,
+        storage: u32,
+    },
     SelfCheck(String),
     /// The adapter passed but would not give a device.
     Device(String),
@@ -65,7 +75,9 @@ impl std::fmt::Display for Refusal {
         match self {
             Refusal::NoAdapter => write!(f, "no graphics adapter"),
             Refusal::Cpu { name } => write!(f, "{name} is a software renderer"),
-            Refusal::Limits { name, storage } => write!(f, "{name} binds {storage} storage buffers, the tracer needs {STORAGE_FLOOR}"),
+            Refusal::Limits { name, storage } => {
+                write!(f, "{name} binds {storage} storage buffers, the tracer needs {STORAGE_FLOOR}")
+            }
             Refusal::SelfCheck(why) | Refusal::Device(why) => f.write_str(why),
         }
     }
@@ -126,7 +138,10 @@ mod tests {
         assert_eq!(choose(&[warp.clone(), igpu.clone()], false), Ok(1));
         assert_eq!(choose(&[warp.clone(), igpu.clone()], true), Ok(1));
         assert_eq!(choose(&[gl.clone()], false), Err(Refusal::Limits { name: gl.name.clone(), storage: 8 }));
-        assert_eq!(choose(&[warp.clone(), gl.clone()], false), Err(Refusal::Limits { name: gl.name.clone(), storage: 8 }));
+        assert_eq!(
+            choose(&[warp.clone(), gl.clone()], false),
+            Err(Refusal::Limits { name: gl.name.clone(), storage: 8 })
+        );
         assert_eq!(choose(&[dx.clone(), vk.clone()], false), Ok(1));
         assert_eq!(choose(&[vk, dx], false), Ok(0));
         assert_eq!(Refusal::Limits { name: "ANGLE".into(), storage: 8 }.class(), Some("limits"));
@@ -137,7 +152,10 @@ mod tests {
 
     #[test]
     fn an_adapter_is_named_with_its_backend_and_kind() {
-        assert_eq!(adapter_label("Apple Paravirtual device", Backend::Metal, DeviceType::IntegratedGpu), "Apple Paravirtual device (Metal, integrated GPU)");
+        assert_eq!(
+            adapter_label("Apple Paravirtual device", Backend::Metal, DeviceType::IntegratedGpu),
+            "Apple Paravirtual device (Metal, integrated GPU)"
+        );
         assert_eq!(adapter_label("llvmpipe", Backend::Vulkan, DeviceType::Cpu), "llvmpipe (Vulkan, software)");
     }
 }

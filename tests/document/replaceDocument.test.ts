@@ -37,9 +37,16 @@ function backend() {
       return new Promise<never>(() => {}); // never settles
     },
     async init() {},
-    onStatus() { return () => {}; },
-    onProgress() { return () => {}; },
-    async cancel() { cancels++; return true; },
+    onStatus() {
+      return () => {};
+    },
+    onProgress() {
+      return () => {};
+    },
+    async cancel() {
+      cancels++;
+      return true;
+    },
   } as unknown as GeometryBackend;
   return { be, calls: () => calls, cancels: () => cancels };
 }
@@ -164,19 +171,38 @@ function lateReplyBackend() {
     async rebuild() {
       calls++;
       if (calls === 1) return { ok: true as const, result: RESULT };
-      if (calls === 2) return new Promise((r) => { release = r; });
+      if (calls === 2)
+        return new Promise((r) => {
+          release = r;
+        });
       return new Promise(() => {});
     },
     async init() {},
-    onStatus() { return () => {}; },
-    onProgress() { return () => {}; },
-    onRebuildChunk(fn: (c: RebuildChunk) => void) { chunkFns.push(fn); return () => {}; },
-    async cancel() { return true; },
+    onStatus() {
+      return () => {};
+    },
+    onProgress() {
+      return () => {};
+    },
+    onRebuildChunk(fn: (c: RebuildChunk) => void) {
+      chunkFns.push(fn);
+      return () => {};
+    },
+    async cancel() {
+      return true;
+    },
   } as unknown as GeometryBackend;
   const chunk = (done: number) => {
     const c = {
-      phase: "bodies", result: RESULT, manifest: [], bodies: [], edgesByBody: new Map(),
-      triRange: { triStart: 0, triEnd: 0 }, bbox: RESULT.bbox, done, total: 3,
+      phase: "bodies",
+      result: RESULT,
+      manifest: [],
+      bodies: [],
+      edgesByBody: new Map(),
+      triRange: { triStart: 0, triEnd: 0 },
+      bbox: RESULT.bbox,
+      done,
+      total: 3,
     } as RebuildChunk;
     chunkFns.forEach((fn) => fn(c));
   };

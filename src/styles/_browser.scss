@@ -103,7 +103,11 @@
   padding-left: calc(var(--s-1) + 2 * (12px + var(--s-2)));
 }
 .tree-folder.selected {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 6%, transparent));
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 22%, transparent),
+    color-mix(in srgb, var(--accent) 6%, transparent)
+  );
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
   color: var(--accent-hot);
 }
@@ -125,7 +129,9 @@
   opacity: 0.35;
   padding: 0 var(--s-2);
   cursor: pointer;
-  transition: color var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
+  transition:
+    color var(--t-fast) var(--ease),
+    opacity var(--t-fast) var(--ease);
 }
 .feature-row:hover .tree-eye {
   opacity: 0.9;
@@ -172,9 +178,13 @@
   fill: var(--accent);
   opacity: 0.9;
 }
-.sketch-dim-leaders .driven line { stroke: var(--text-dim, #8a90a0); }
+.sketch-dim-leaders .driven line {
+  stroke: var(--text-dim, #8a90a0);
+}
 .sketch-dim-leaders .driven circle,
-.sketch-dim-leaders .driven polygon { fill: var(--text-dim, #8a90a0); }
+.sketch-dim-leaders .driven polygon {
+  fill: var(--text-dim, #8a90a0);
+}
 .sketch-dim {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -186,7 +196,9 @@
   white-space: nowrap;
   cursor: pointer;
   pointer-events: auto;
-  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
 }
 .sketch-dim:not(.sketch-dim-driven):hover {
   background: linear-gradient(var(--accent-tint), var(--accent-tint)), var(--float-bg);
@@ -201,10 +213,19 @@
   cursor: default;
 }
 /* solver-flagged dimensions: red = conflicting, amber = redundant/over-defined */
-.sketch-dim.conflict { border-color: var(--error); color: color-mix(in srgb, var(--error) 60%, var(--text)); }
-.sketch-dim.over { border-color: var(--warn); color: color-mix(in srgb, var(--warn) 60%, var(--text)); }
+.sketch-dim.conflict {
+  border-color: var(--error);
+  color: color-mix(in srgb, var(--error) 60%, var(--text));
+}
+.sketch-dim.over {
+  border-color: var(--warn);
+  color: color-mix(in srgb, var(--warn) 60%, var(--text));
+}
 /* the dimension the Delete key will remove (set by a click or a right-click) */
-.sketch-dim.is-selected { outline: 2px solid var(--accent, #4a9eff); outline-offset: 1px; }
+.sketch-dim.is-selected {
+  outline: 2px solid var(--accent, #4a9eff);
+  outline-offset: 1px;
+}
 /* non-select tools: labels visible but click-through (a label floating over a
    circle center must not swallow the dimension/draw pick underneath) */
 .sketch-dims.dims-passive .sketch-dim {
@@ -212,7 +233,12 @@
   cursor: default;
 }
 /* constraint glyphs: small square badges showing a relationship's type */
-.sketch-glyphs { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.sketch-glyphs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
 .sketch-glyph {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -229,10 +255,22 @@
   cursor: pointer;
   pointer-events: auto;
 }
-.sketch-glyph:hover { border-color: var(--accent-hot); color: var(--accent-hot); }
-.sketch-glyph.conflict { border-color: var(--error); color: color-mix(in srgb, var(--error) 60%, var(--text)); }
-.sketch-glyph.over { border-color: var(--warn); color: color-mix(in srgb, var(--warn) 60%, var(--text)); }
-.sketch-glyphs.glyphs-passive .sketch-glyph { pointer-events: none; cursor: default; }
+.sketch-glyph:hover {
+  border-color: var(--accent-hot);
+  color: var(--accent-hot);
+}
+.sketch-glyph.conflict {
+  border-color: var(--error);
+  color: color-mix(in srgb, var(--error) 60%, var(--text));
+}
+.sketch-glyph.over {
+  border-color: var(--warn);
+  color: color-mix(in srgb, var(--warn) 60%, var(--text));
+}
+.sketch-glyphs.glyphs-passive .sketch-glyph {
+  pointer-events: none;
+  cursor: default;
+}
 .sketch-dim input {
   width: 52px;
   border: 1px solid var(--line-strong);
@@ -247,4 +285,9 @@
   outline: none;
   border-color: var(--accent-hot);
 }
-.sketch-glyph.pattern { height: 20px; min-width: 20px; border-radius: 5px; margin: -20px 0 0 20px; }
+.sketch-glyph.pattern {
+  height: 20px;
+  min-width: 20px;
+  border-radius: 5px;
+  margin: -20px 0 0 20px;
+}

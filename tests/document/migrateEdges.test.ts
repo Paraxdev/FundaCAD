@@ -41,9 +41,15 @@ describe("paramDefs rows for user parameters", () => {
 
   it("rebinds the first of two rows that target one field", () => {
     const target = { kind: "feature", feature: "bx", field: "length" };
-    const d = doc({ version: 10, parameters: { b: 20.5 }, paramDefs: {
-      d1: { expr: "a", value: 1, unit: "mm", target }, d2: { expr: "a", value: 1, unit: "mm", target } },
-      features: [{ id: "bx", type: "box", length: "b", width: 5, height: 5 }] }) as Raw;
+    const d = doc({
+      version: 10,
+      parameters: { b: 20.5 },
+      paramDefs: {
+        d1: { expr: "a", value: 1, unit: "mm", target },
+        d2: { expr: "a", value: 1, unit: "mm", target },
+      },
+      features: [{ id: "bx", type: "box", length: "b", width: 5, height: 5 }],
+    }) as Raw;
     migrateDocument(d as CadDocument);
     expect(d.paramDefs.d1).toEqual({ expr: "b", value: 20.5, unit: "mm", target });
     expect(d.paramDefs.d2).toEqual({ expr: "a", value: 1, unit: "mm", target });
@@ -52,11 +58,20 @@ describe("paramDefs rows for user parameters", () => {
 });
 
 describe("the v8 combine rewrite", () => {
-  const combine = () => ({ id: "c", type: "combine", operation: "cut", target: "body1", tools: ["body2"], keepTools: true });
+  const combine = () => ({
+    id: "c",
+    type: "combine",
+    operation: "cut",
+    target: "body1",
+    tools: ["body2"],
+    keepTools: true,
+  });
   it("runs on a version 8 file and stops at version 9", () => {
     const v8 = doc({ version: 8, features: [combine()] }) as Raw;
     migrateDocument(v8 as CadDocument);
-    expect(v8.features).toEqual([{ id: "c", type: "boolean", operation: "subtract", target: "body1", tools: ["body2"], keepOriginals: true }]);
+    expect(v8.features).toEqual([
+      { id: "c", type: "boolean", operation: "subtract", target: "body1", tools: ["body2"], keepOriginals: true },
+    ]);
     for (const version of [9, 10]) {
       const later = doc({ version, features: [combine()] }) as Raw;
       migrateDocument(later as CadDocument);
@@ -68,8 +83,11 @@ describe("the v8 combine rewrite", () => {
 describe("the v1 polygon angle", () => {
   const polygon = (angle: unknown) => ({ type: "polygon", id: "e1", x: 3.5, y: -1.25, radius: 5, sides: 6, angle });
   const sketch = (angle: unknown, version?: unknown) =>
-    doc({ ...(version === undefined ? {} : { version }), parameters: { tw: Math.PI / 2 },
-      features: [{ id: "s", type: "sketch", plane: "XY", entities: [polygon(angle)] }] }) as Raw;
+    doc({
+      ...(version === undefined ? {} : { version }),
+      parameters: { tw: Math.PI / 2 },
+      features: [{ id: "s", type: "sketch", plane: "XY", entities: [polygon(angle)] }],
+    }) as Raw;
 
   it("turns radians into degrees in an unstamped, a null-stamped and a v1 file, not in a v2 one", () => {
     for (const version of [undefined, null, 1]) {
@@ -97,12 +115,23 @@ describe("the v1 polygon angle", () => {
 
 describe("dimension constraint ids", () => {
   it("stamps ids above the highest loaded one, never repeating one", () => {
-    const d = doc({ version: 10, features: [{ id: "s", type: "sketch", plane: "XY", entities: [], constraints: [
-      { type: "distance", id: "c900", line: "e1", value: 1.5 },
-      { type: "radius", e: "e2", value: 2.25 },
-      { type: "distance", id: "c12", line: "e3", value: 4 },
-      { type: "radius", e: "e4", value: 0.75 },
-    ] }] }) as Raw;
+    const d = doc({
+      version: 10,
+      features: [
+        {
+          id: "s",
+          type: "sketch",
+          plane: "XY",
+          entities: [],
+          constraints: [
+            { type: "distance", id: "c900", line: "e1", value: 1.5 },
+            { type: "radius", e: "e2", value: 2.25 },
+            { type: "distance", id: "c12", line: "e3", value: 4 },
+            { type: "radius", e: "e4", value: 0.75 },
+          ],
+        },
+      ],
+    }) as Raw;
     migrateDocument(d as CadDocument);
     const got: string[] = d.features[0].constraints.map((c: Raw) => c.id);
     expect([got[0], got[2]]).toEqual(["c900", "c12"]);

@@ -69,8 +69,7 @@ function makeSketch(tool: string) {
 
 const press = (s: Internals) =>
   s.onPointerDown({ button: 0, clientX: 100, clientY: 100, ctrlKey: false, preventDefault() {} });
-const escape = (s: Internals) =>
-  s.onKey({ key: "Escape", target: null, preventDefault() {}, stopPropagation() {} });
+const escape = (s: Internals) => s.onKey({ key: "Escape", target: null, preventDefault() {}, stopPropagation() {} });
 const rect = (): ResolvedEntity => ({ type: "rectangle", id: "r1", x: 10, y: 5, width: 20, height: 10 });
 
 describe("SK-10: an origin pin waits for its shape", () => {

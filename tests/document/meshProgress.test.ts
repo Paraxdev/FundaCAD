@@ -20,9 +20,16 @@ function backend(onRebuild?: () => void) {
       return { ok: false, error: { message: "stub" } };
     },
     async init() {},
-    onStatus() { return () => {}; },
-    onProgress(fn: ProgressFn) { listeners.push(fn); return () => {}; },
-    async cancel() { return true; },
+    onStatus() {
+      return () => {};
+    },
+    onProgress(fn: ProgressFn) {
+      listeners.push(fn);
+      return () => {};
+    },
+    async cancel() {
+      return true;
+    },
     connected: true,
   } as unknown as GeometryBackend;
   return { be, emit: (f: number, m: number, t: number) => listeners.forEach((fn) => fn(f, m, t)) };
@@ -76,7 +83,9 @@ describe("a long rebuild is cancellable", () => {
     let busyDuring = false;
     const { be } = backend();
     const store = new DocumentStore(be, emptyDoc());
-    store.onBusy((b) => { if (b.active) busyDuring = true; });
+    store.onBusy((b) => {
+      if (b.active) busyDuring = true;
+    });
     await store.rebuildNow();
     // busy.active must have been true at some point (that is what gates the
     // Cancel button in timeline.ts) and must be cleared afterwards

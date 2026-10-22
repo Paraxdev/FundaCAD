@@ -17,27 +17,34 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "funda_insert_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
   if (!ok) failures++;
 };
 
-const source = (size) => JSON.stringify({
-  parameters: {},
-  features: [
-    { id: "f1", type: "box", length: size, width: 20, height: 10 },
-    { id: "f2", type: "cylinder", radius: 4, height: 30 },
-  ],
-});
+const source = (size) =>
+  JSON.stringify({
+    parameters: {},
+    features: [
+      { id: "f1", type: "box", length: size, width: 20, height: 10 },
+      { id: "f2", type: "cylinder", radius: 4, height: 30 },
+    ],
+  });
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "funda-insert-"));
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -51,9 +58,15 @@ const source = (size) => JSON.stringify({
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
-  const settle = () => page.waitForFunction(() => !window.store.buildState.building && !window.store.busy?.active, null, { timeout: 120000 });
+  const settle = () =>
+    page.waitForFunction(() => !window.store.buildState.building && !window.store.busy?.active, null, {
+      timeout: 120000,
+    });
 
   await page.evaluate(async () => {
     window.store.addFeature({ id: "h1", type: "sphere", radius: 6 });
@@ -62,49 +75,95 @@ const source = (size) => JSON.stringify({
   await settle();
 
   console.log("\n  1. append");
-  const appended = await page.evaluate(async ({ text, tempPath }) => {
-    const m = await import("/src/io/fundaInsert.ts");
-    const res = await m.insertFundaDocument(window.store, window.geometry, { path: "C:/parts/Plate.funda", text }, "append", tempPath);
-    await window.store.rebuildNow();
-    const f = window.store.document.features.at(-1);
-    return { res, type: f.type, name: f.name, link: f.link ?? null, bodies: window.store.buildState.result?.bodies.length ?? 0 };
-  }, { text: source(40), tempPath: path.join(tmp, "append.step") });
+  const appended = await page.evaluate(
+    async ({ text, tempPath }) => {
+      const m = await import("/src/io/fundaInsert.ts");
+      const res = await m.insertFundaDocument(
+        window.store,
+        window.geometry,
+        { path: "C:/parts/Plate.funda", text },
+        "append",
+        tempPath,
+      );
+      await window.store.rebuildNow();
+      const f = window.store.document.features.at(-1);
+      return {
+        res,
+        type: f.type,
+        name: f.name,
+        link: f.link ?? null,
+        bodies: window.store.buildState.result?.bodies.length ?? 0,
+      };
+    },
+    { text: source(40), tempPath: path.join(tmp, "append.step") },
+  );
   await settle();
   check("the insert succeeded", appended.res.ok, JSON.stringify(appended.res));
-  check("it is an import step named after the file", appended.type === "import" && appended.name === "Plate", JSON.stringify(appended));
+  check(
+    "it is an import step named after the file",
+    appended.type === "import" && appended.name === "Plate",
+    JSON.stringify(appended),
+  );
   check("with no link", appended.link === null);
   const bodiesAfterAppend = await page.evaluate(() => window.store.buildState.result?.bodies.length ?? 0);
   check("the host sphere plus the source's two bodies", bodiesAfterAppend === 3, String(bodiesAfterAppend));
 
   console.log("\n  2. link");
-  const linked = await page.evaluate(async ({ text, tempPath }) => {
-    const m = await import("/src/io/fundaInsert.ts");
-    const res = await m.insertFundaDocument(window.store, window.geometry, { path: "C:/parts/Peg.funda", text }, "link", tempPath);
-    await window.store.rebuildNow();
-    const f = window.store.document.features.at(-1);
-    return { res, link: f.link ?? null };
-  }, { text: source(10), tempPath: path.join(tmp, "link.step") });
+  const linked = await page.evaluate(
+    async ({ text, tempPath }) => {
+      const m = await import("/src/io/fundaInsert.ts");
+      const res = await m.insertFundaDocument(
+        window.store,
+        window.geometry,
+        { path: "C:/parts/Peg.funda", text },
+        "link",
+        tempPath,
+      );
+      await window.store.rebuildNow();
+      const f = window.store.document.features.at(-1);
+      return { res, link: f.link ?? null };
+    },
+    { text: source(10), tempPath: path.join(tmp, "link.step") },
+  );
   await settle();
-  check("linked with a path and a stamp", linked.res.ok && linked.link?.path === "C:/parts/Peg.funda" && !!linked.link?.stamp, JSON.stringify(linked.link));
-  const widthOf = () => page.evaluate(() => {
-    const bodies = window.store.buildState.result.bodies;
-    const ids = bodies.slice(-2).map((b) => b.id);
-    const box = window.viewport.bodiesBox(ids);
-    return box ? +(box.max.x - box.min.x).toFixed(2) : null;
-  });
+  check(
+    "linked with a path and a stamp",
+    linked.res.ok && linked.link?.path === "C:/parts/Peg.funda" && !!linked.link?.stamp,
+    JSON.stringify(linked.link),
+  );
+  const widthOf = () =>
+    page.evaluate(() => {
+      const bodies = window.store.buildState.result.bodies;
+      const ids = bodies.slice(-2).map((b) => b.id);
+      const box = window.viewport.bodiesBox(ids);
+      return box ? +(box.max.x - box.min.x).toFixed(2) : null;
+    });
   const before = await widthOf();
-  const updated = await page.evaluate(async ({ id, text, tempPath }) => {
-    const m = await import("/src/io/fundaInsert.ts");
-    const n = window.store.document.features.length;
-    const res = await m.updateFundaLink(window.store, window.geometry, id, { path: "C:/parts/Peg.funda", text }, tempPath);
-    await window.store.rebuildNow();
-    return { res, sameLength: window.store.document.features.length === n };
-  }, { id: linked.res.id, text: source(60), tempPath: path.join(tmp, "link2.step") });
+  const updated = await page.evaluate(
+    async ({ id, text, tempPath }) => {
+      const m = await import("/src/io/fundaInsert.ts");
+      const n = window.store.document.features.length;
+      const res = await m.updateFundaLink(
+        window.store,
+        window.geometry,
+        id,
+        { path: "C:/parts/Peg.funda", text },
+        tempPath,
+      );
+      await window.store.rebuildNow();
+      return { res, sameLength: window.store.document.features.length === n };
+    },
+    { id: linked.res.id, text: source(60), tempPath: path.join(tmp, "link2.step") },
+  );
   await settle();
   await page.waitForTimeout(800);
   const after = await widthOf();
   check("the update replaced the geometry in place", updated.res.ok && updated.sameLength, JSON.stringify(updated));
-  check("and the linked body is now the changed size", after !== null && before !== null && after > before, JSON.stringify({ before, after }));
+  check(
+    "and the linked body is now the changed size",
+    after !== null && before !== null && after > before,
+    JSON.stringify({ before, after }),
+  );
 
   console.log("\n  3. rename");
   await page.evaluate(async () => {

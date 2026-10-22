@@ -55,16 +55,25 @@ function isVec3(v: unknown): v is Vec3 {
 
 function parseOld(raw: string): BedFitSetting {
   const o = JSON.parse(raw) as Partial<BedFitSetting>;
-  const presetId = typeof o.presetId === "string" && BED_PRESETS.some((p) => p.id === o.presetId)
-    ? o.presetId : DEFAULT_SETTING.presetId;
+  const presetId =
+    typeof o.presetId === "string" && BED_PRESETS.some((p) => p.id === o.presetId)
+      ? o.presetId
+      : DEFAULT_SETTING.presetId;
   const customSize = isVec3(o.customSize) ? o.customSize : DEFAULT_SETTING.customSize;
   return { presetId, customSize };
 }
 
 const custom = (key: string, label: string, i: number) =>
   ({
-    key, type: "number", label, unit: "length", group: "Bed fit check", min: 1, max: 5000,
-    default: DEFAULT_SETTING.customSize[i]!, visibleWhen: (v: Record<string, unknown>) => v.presetId === "custom",
+    key,
+    type: "number",
+    label,
+    unit: "length",
+    group: "Bed fit check",
+    min: 1,
+    max: 5000,
+    default: DEFAULT_SETTING.customSize[i]!,
+    visibleWhen: (v: Record<string, unknown>) => v.presetId === "custom",
   }) as const;
 
 export const BED_SETTINGS: SettingsSchema = {
@@ -96,7 +105,10 @@ export const bedSettings = definePluginSettings("FundaCAD.PrintToolbox", BED_SET
 
 export function loadBedFitSetting(): BedFitSetting {
   const v = bedSettings.all();
-  return { presetId: v.presetId as string, customSize: [v.customX as number, v.customY as number, v.customZ as number] };
+  return {
+    presetId: v.presetId as string,
+    customSize: [v.customX as number, v.customY as number, v.customZ as number],
+  };
 }
 
 export function saveBedFitSetting(setting: BedFitSetting): void {
@@ -114,9 +126,7 @@ export function bedSizeOf(setting: BedFitSetting): Vec3 {
   return preset?.size ?? setting.customSize;
 }
 
-export type CustomBedParse =
-  | { ok: true; size: Vec3 }
-  | { ok: false; message: string };
+export type CustomBedParse = { ok: true; size: Vec3 } | { ok: false; message: string };
 
 /** Pure: three typed numbers into a custom bed size, or the message to show
  *  beside the field that is wrong. Positive and finite is the whole rule, a

@@ -28,10 +28,7 @@ fn tables() -> &'static Value {
 
 fn table(key: &str) -> &'static serde_json::Map<String, Value> {
     static EMPTY: OnceLock<serde_json::Map<String, Value>> = OnceLock::new();
-    tables()
-        .get(key)
-        .and_then(Value::as_object)
-        .unwrap_or_else(|| EMPTY.get_or_init(serde_json::Map::new))
+    tables().get(key).and_then(Value::as_object).unwrap_or_else(|| EMPTY.get_or_init(serde_json::Map::new))
 }
 
 /// type -> {summary, fields, example, notes}. `fields` is ordered and the
@@ -50,18 +47,12 @@ pub fn sketch_entities() -> &'static serde_json::Map<String, Value> {
 }
 
 pub fn sketch_notes() -> &'static str {
-    tables()
-        .get("sketchNotes")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
+    tables().get("sketchNotes").and_then(Value::as_str).unwrap_or_default()
 }
 
 /// The working order the host puts in front of the model.
 pub fn how_to() -> &'static str {
-    tables()
-        .get("howTo")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
+    tables().get("howTo").and_then(Value::as_str).unwrap_or_default()
 }
 
 /// The reference entry for one type, or None.
@@ -80,18 +71,12 @@ fn text_of(v: Option<&Value>) -> String {
 pub fn schema_text(kind: Option<&str>) -> String {
     if let Some(kind) = kind.filter(|k| !k.is_empty()) {
         if let Some(e) = features().get(kind) {
-            let mut out = vec![
-                format!("## {kind}\n{}\n", text_of(e.get("summary"))),
-                "Fields:".to_string(),
-            ];
+            let mut out = vec![format!("## {kind}\n{}\n", text_of(e.get("summary"))), "Fields:".to_string()];
             for (k, v) in e.get("fields").and_then(Value::as_object).into_iter().flatten() {
                 out.push(format!("  {k}: {}", text_of(Some(v))));
             }
             if let Some(example) = e.get("example").filter(|v| !v.is_null()) {
-                out.push(format!(
-                    "\nExample:\n{}",
-                    serde_json::to_string_pretty(example).unwrap_or_default()
-                ));
+                out.push(format!("\nExample:\n{}", serde_json::to_string_pretty(example).unwrap_or_default()));
             }
             let notes = text_of(e.get("notes"));
             if !notes.is_empty() {
@@ -103,19 +88,12 @@ pub fn schema_text(kind: Option<&str>) -> String {
         known.sort();
         return format!(
             "No feature type '{kind}'. Known types: {}",
-            known
-                .iter()
-                .map(|k| k.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
+            known.iter().map(|k| k.as_str()).collect::<Vec<_>>().join(", ")
         );
     }
 
-    let mut out = vec![
-        "# FundaCAD document schema\n".to_string(),
-        how_to().to_string(),
-        "\n## Shared types\n".to_string(),
-    ];
+    let mut out =
+        vec!["# FundaCAD document schema\n".to_string(), how_to().to_string(), "\n## Shared types\n".to_string()];
     for (k, v) in common() {
         out.push(format!("{k}: {}\n", text_of(Some(v))));
     }
@@ -123,20 +101,13 @@ pub fn schema_text(kind: Option<&str>) -> String {
     let mut kinds: Vec<&String> = features().keys().collect();
     kinds.sort();
     for k in kinds {
-        out.push(format!(
-            "- {k}: {}",
-            text_of(features()[k].get("summary"))
-        ));
+        out.push(format!("- {k}: {}", text_of(features()[k].get("summary"))));
     }
     out.push("\nCall schema(type) for the fields, an example and the notes of one type.\n".into());
     out.push("\n## Sketch entities\n".into());
     for (k, v) in sketch_entities() {
-        let fields: Vec<String> = v
-            .as_object()
-            .into_iter()
-            .flatten()
-            .map(|(a, b)| format!("{a} ({})", text_of(Some(b))))
-            .collect();
+        let fields: Vec<String> =
+            v.as_object().into_iter().flatten().map(|(a, b)| format!("{a} ({})", text_of(Some(b)))).collect();
         out.push(format!("- {k}: {}", fields.join(", ")));
     }
     out.push(format!("\n{}", sketch_notes()));

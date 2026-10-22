@@ -52,31 +52,49 @@ export interface UnitDef {
 }
 
 export const UNITS: UnitDef[] = [
-  { id: "mm", label: "mm", dim: "length", factor: 1, common: true,
-    aliases: ["mm", "millimeter", "millimeters", "millimetre", "millimetres"] },
-  { id: "cm", label: "cm", dim: "length", factor: 10, common: true,
-    aliases: ["cm", "centimeter", "centimeters", "centimetre", "centimetres"] },
-  { id: "m", label: "m", dim: "length", factor: 1000, common: true,
-    aliases: ["m", "meter", "meters", "metre", "metres"] },
-  { id: "in", label: "in", dim: "length", factor: 25.4, common: true,
-    aliases: ["in", "inch", "inches", '"', "″"] },
-  { id: "ft", label: "ft", dim: "length", factor: 304.8, common: true,
-    aliases: ["ft", "foot", "feet", "'", "′"] },
-  { id: "um", label: "µm", dim: "length", factor: 0.001,
-    aliases: ["um", "µm", "micron", "microns", "micrometer", "micrometers"] },
-  { id: "thou", label: "thou", dim: "length", factor: 0.0254,
-    aliases: ["thou", "mil", "mils"] },
-  { id: "deg", label: "°", dim: "angle", factor: 1, common: true,
-    aliases: ["deg", "degree", "degrees", "°"] },
-  { id: "rad", label: "rad", dim: "angle", factor: 180 / Math.PI, common: true,
-    aliases: ["rad", "radian", "radians"] },
+  {
+    id: "mm",
+    label: "mm",
+    dim: "length",
+    factor: 1,
+    common: true,
+    aliases: ["mm", "millimeter", "millimeters", "millimetre", "millimetres"],
+  },
+  {
+    id: "cm",
+    label: "cm",
+    dim: "length",
+    factor: 10,
+    common: true,
+    aliases: ["cm", "centimeter", "centimeters", "centimetre", "centimetres"],
+  },
+  {
+    id: "m",
+    label: "m",
+    dim: "length",
+    factor: 1000,
+    common: true,
+    aliases: ["m", "meter", "meters", "metre", "metres"],
+  },
+  { id: "in", label: "in", dim: "length", factor: 25.4, common: true, aliases: ["in", "inch", "inches", '"', "″"] },
+  { id: "ft", label: "ft", dim: "length", factor: 304.8, common: true, aliases: ["ft", "foot", "feet", "'", "′"] },
+  {
+    id: "um",
+    label: "µm",
+    dim: "length",
+    factor: 0.001,
+    aliases: ["um", "µm", "micron", "microns", "micrometer", "micrometers"],
+  },
+  { id: "thou", label: "thou", dim: "length", factor: 0.0254, aliases: ["thou", "mil", "mils"] },
+  { id: "deg", label: "°", dim: "angle", factor: 1, common: true, aliases: ["deg", "degree", "degrees", "°"] },
+  { id: "rad", label: "rad", dim: "angle", factor: 180 / Math.PI, common: true, aliases: ["rad", "radian", "radians"] },
 ];
 
 const BY_ID = new Map(UNITS.map((u) => [u.id, u]));
 /** Longest alias first, so "mm" is matched before "m" and "inches" before "in". */
-const ALIASES: { text: string; unit: UnitDef }[] = UNITS
-  .flatMap((unit) => unit.aliases.map((text) => ({ text, unit })))
-  .sort((a, b) => b.text.length - a.text.length);
+const ALIASES: { text: string; unit: UnitDef }[] = UNITS.flatMap((unit) =>
+  unit.aliases.map((text) => ({ text, unit })),
+).sort((a, b) => b.text.length - a.text.length);
 
 export function unitById(id: string | null | undefined): UnitDef | null {
   return (id && BY_ID.get(id)) || null;
@@ -105,7 +123,7 @@ export interface Measured {
 const DIGIT = /[0-9]/;
 /** Symbols that are units on their own. Kept out of the identifier scanner
  *  because none of them is a letter. */
-const SYMBOLIC = new Set(["\"", "'", "″", "′", "°", "µ"]);
+const SYMBOLIC = new Set(['"', "'", "″", "′", "°", "µ"]);
 
 /** `1/2 in` and `1 1/2 in`, a fraction is a way of writing ONE value, not a
  *  term inside a formula, so it is only recognised when it is the whole input.
@@ -130,7 +148,10 @@ function matchUnitAt(src: string, i: number): { unit: UnitDef; end: number } | n
 function matchNumberAt(src: string, i: number): { value: number; end: number } | null {
   let j = i;
   while (j < src.length && DIGIT.test(src[j]!)) j++;
-  if (src[j] === ".") { j++; while (j < src.length && DIGIT.test(src[j]!)) j++; }
+  if (src[j] === ".") {
+    j++;
+    while (j < src.length && DIGIT.test(src[j]!)) j++;
+  }
   if (j === i) return null;
   const value = Number(src.slice(i, j));
   return Number.isFinite(value) ? { value, end: j } : null;
@@ -199,7 +220,10 @@ export function normalise(raw: string): Normalised {
 
   while (i < src.length) {
     const ch = src[i]!;
-    if (ch === " " || ch === "\t") { i++; continue; }
+    if (ch === " " || ch === "\t") {
+      i++;
+      continue;
+    }
 
     // `10x20`, x is multiply on every drawing ever printed. Only between two
     // numbers, so a parameter called `x` is untouched.
@@ -227,7 +251,10 @@ export function normalise(raw: string): Normalised {
       if (!u && pendingJoin) throw new ExprError(`put an operator between "${out}" and "${src.slice(i)}"`);
       if (u) {
         // Two unit groups with nothing between them is a compound: 2'5", 1m 20cm.
-        if (pendingJoin) { out += "+"; derived = true; }
+        if (pendingJoin) {
+          out += "+";
+          derived = true;
+        }
         out += String(num.value * u.unit.factor);
         if (!unit) unit = u.unit;
         else if (u.unit !== unit) derived = true;
@@ -284,11 +311,7 @@ export function normalise(raw: string): Normalised {
  *  Throws ExprError with a message worth showing when the text is not a value.
  *  Returning null instead would put the caller in the position of inventing the
  *  reason, and "that is not a number" is never the interesting part. */
-export function parseMeasure(
-  raw: string,
-  displayUnit: UnitDef | null,
-  params: Record<string, number> = {},
-): Measured {
+export function parseMeasure(raw: string, displayUnit: UnitDef | null, params: Record<string, number> = {}): Measured {
   const n = normalise(raw);
   const value = evalNode(parseExpr(n.expr), params);
   if (!Number.isFinite(value)) throw new ExprError("that works out to nothing finite");
@@ -314,7 +337,11 @@ export function tryParseMeasure(
 }
 
 /** The message to show for text that will not parse. */
-export function measureError(raw: string, displayUnit: UnitDef | null, params: Record<string, number> = {}): string | null {
+export function measureError(
+  raw: string,
+  displayUnit: UnitDef | null,
+  params: Record<string, number> = {},
+): string | null {
   try {
     parseMeasure(raw, displayUnit, params);
     return null;

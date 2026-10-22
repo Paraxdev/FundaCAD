@@ -30,9 +30,20 @@ export type Binding = string;
 export const CURSOR = "cursor";
 
 export const BUTTON_LABELS: Record<number, string> = {
-  0: "A", 1: "B", 2: "X", 3: "Y", 4: "LB", 5: "RB",
-  8: "View / Back", 9: "Menu / Start", 10: "Left stick click", 11: "Right stick click",
-  12: "D-pad up", 13: "D-pad down", 14: "D-pad left", 15: "D-pad right",
+  0: "A",
+  1: "B",
+  2: "X",
+  3: "Y",
+  4: "LB",
+  5: "RB",
+  8: "View / Back",
+  9: "Menu / Start",
+  10: "Left stick click",
+  11: "Right stick click",
+  12: "D-pad up",
+  13: "D-pad down",
+  14: "D-pad left",
+  15: "D-pad right",
 };
 /** The buttons a binding can be set for, in the order the settings list them. */
 export const BINDABLE = [0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15];
@@ -134,7 +145,17 @@ function safeRead(): string | null {
 }
 
 const speed = (key: string, label: string, description: string) =>
-  ({ key, type: "number", label, description, default: DEFAULTS[key as "panSens"], min: 0, max: 20, step: 0.1, group: "Sticks" }) as const;
+  ({
+    key,
+    type: "number",
+    label,
+    description,
+    default: DEFAULTS[key as "panSens"],
+    min: 0,
+    max: 20,
+    step: 0.1,
+    group: "Sticks",
+  }) as const;
 
 export const SETTINGS: SettingsSchema = {
   version: 1,
@@ -143,18 +164,36 @@ export const SETTINGS: SettingsSchema = {
     speed("orbitSens", "Rotate speed", "How fast the right stick turns the view."),
     speed("zoomSens", "Zoom speed", "How fast the triggers zoom."),
     {
-      key: "cursorSpeed", type: "number", label: "Cursor speed", group: "Sticks", unit: "px/s",
+      key: "cursorSpeed",
+      type: "number",
+      label: "Cursor speed",
+      group: "Sticks",
+      unit: "px/s",
       description: "How fast the left stick moves the cursor while the cursor is on.",
-      default: DEFAULTS.cursorSpeed, min: 50, max: 5000, step: 50,
+      default: DEFAULTS.cursorSpeed,
+      min: 50,
+      max: 5000,
+      step: 50,
     },
     {
-      key: "deadzone", type: "number", label: "Stick deadzone", group: "Sticks",
+      key: "deadzone",
+      type: "number",
+      label: "Stick deadzone",
+      group: "Sticks",
       description: "How far a stick has to move before anything happens, as a share of its travel.",
-      default: DEFAULTS.deadzone, min: 0, max: 0.9, step: 0.01,
+      default: DEFAULTS.deadzone,
+      min: 0,
+      max: 0.9,
+      step: 0.01,
     },
     { key: "invertOrbitX", type: "boolean", label: "Invert rotate left and right", group: "Sticks", default: false },
     { key: "invertOrbitY", type: "boolean", label: "Invert rotate up and down", group: "Sticks", default: false },
-    { key: "buttons", type: "data", default: DEFAULTS.buttons, parse: (v) => parseConfig(JSON.stringify({ buttons: v })).buttons },
+    {
+      key: "buttons",
+      type: "data",
+      default: DEFAULTS.buttons,
+      parse: (v) => parseConfig(JSON.stringify({ buttons: v })).buttons,
+    },
   ],
   legacy: () => {
     const raw = safeRead();

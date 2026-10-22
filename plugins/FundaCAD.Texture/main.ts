@@ -97,21 +97,23 @@ export async function activate(e: Engine): Promise<() => void> {
   }
 
   const off = contribute(ID, {
-    tools: [{
-      id: "texture",
-      label: "Texture",
-      iconName: "texture",
-      // Faces first, then the whole body. The order is the tool's own preference
-      // when a selection holds both, and it matches the panel: Faces is the mode
-      // it opens in unless you were already browsing bodies.
-      consumes: ["face", "body"],
-      source: "selection",
-      // Read at event time by app/toolBusy.ts. `active` covers the whole
-      // lifetime including the rollback before the panel exists, which is the
-      // window a narrower answer would leave open.
-      busy: () => tool.active,
-      cancel: () => tool.cancel(),
-    }],
+    tools: [
+      {
+        id: "texture",
+        label: "Texture",
+        iconName: "texture",
+        // Faces first, then the whole body. The order is the tool's own preference
+        // when a selection holds both, and it matches the panel: Faces is the mode
+        // it opens in unless you were already browsing bodies.
+        consumes: ["face", "body"],
+        source: "selection",
+        // Read at event time by app/toolBusy.ts. `active` covers the whole
+        // lifetime including the rollback before the panel exists, which is the
+        // window a narrower answer would leave open.
+        busy: () => tool.active,
+        cancel: () => tool.cancel(),
+      },
+    ],
 
     actions: { texture: start },
 
@@ -124,29 +126,30 @@ export async function activate(e: Engine): Promise<() => void> {
 
     overlays: [TextureToolPanel],
 
-    features: [{
-      type: "texture",
-      meta: { icon: "texture", label: "Texture" },
-      choiceFields: TEXTURE_CHOICE_FIELDS,
-      fileFields: TEXTURE_FILE_FIELDS,
-      toggleFields: TEXTURE_TOGGLE_FIELDS,
-      // The numeric rows and the Faces row, which the application used to hold
-      // in two tables of its own beside extrude's Distance and fillet's Edges.
-      // They are here because the feature type is here: nothing in the app
-      // knows a texture has a Depth, so nothing in the app can label one.
-      numFields: TEXTURE_NUM_FIELDS,
-      targets: TEXTURE_TARGETS,
-      // Which of those rows a given pattern actually reads. Separate from the
-      // inventory above because every row is always parameter-drivable and only
-      // some are ever drawn: a voronoi has a Seed, a knurl does not.
-      fieldApplies: textureFieldApplies,
-      fieldLabel: (field, values) =>
-        field === "sharpness" ? sharpnessLabel(values["profile"]) : null,
-      // Double-clicking a committed texture rolls the model back and re-opens
-      // the panel on it. False means a parameter drives one of the values, and
-      // the application says so in the same words it uses for its own tools.
-      edit: (featureId, done) => tool.startEdit(featureId, done),
-    }],
+    features: [
+      {
+        type: "texture",
+        meta: { icon: "texture", label: "Texture" },
+        choiceFields: TEXTURE_CHOICE_FIELDS,
+        fileFields: TEXTURE_FILE_FIELDS,
+        toggleFields: TEXTURE_TOGGLE_FIELDS,
+        // The numeric rows and the Faces row, which the application used to hold
+        // in two tables of its own beside extrude's Distance and fillet's Edges.
+        // They are here because the feature type is here: nothing in the app
+        // knows a texture has a Depth, so nothing in the app can label one.
+        numFields: TEXTURE_NUM_FIELDS,
+        targets: TEXTURE_TARGETS,
+        // Which of those rows a given pattern actually reads. Separate from the
+        // inventory above because every row is always parameter-drivable and only
+        // some are ever drawn: a voronoi has a Seed, a knurl does not.
+        fieldApplies: textureFieldApplies,
+        fieldLabel: (field, values) => (field === "sharpness" ? sharpnessLabel(values["profile"]) : null),
+        // Double-clicking a committed texture rolls the model back and re-opens
+        // the panel on it. False means a parameter drives one of the values, and
+        // the application says so in the same words it uses for its own tools.
+        edit: (featureId, done) => tool.startEdit(featureId, done),
+      },
+    ],
   });
 
   return () => {

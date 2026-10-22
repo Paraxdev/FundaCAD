@@ -24,9 +24,7 @@ import { toast } from "../ui/toast";
 import { snap } from "../ui/units";
 import { axisDragDistance } from "./manipulator";
 import { screwPath } from "./screwMath";
-import {
-  MIN_THREAD_TURNS, coarsePitchFor, grooveProfile, threadAngleDeg, threadTurns,
-} from "./threadMath";
+import { MIN_THREAD_TURNS, coarsePitchFor, grooveProfile, threadAngleDeg, threadTurns } from "./threadMath";
 import { CanvasGesture } from "./canvasGesture";
 
 /** How long the value has to stand still before the kernel is asked to cut it.
@@ -93,8 +91,15 @@ export class ThreadTool {
 
     const pre = this.viewport.selectedFacesForPressPull();
     if (pre && pre.round && pre.faceIds.length === 1 && pre.faceIds[0] != null) {
-      this.beginSize(withBody(pre.selectors[0]!, pre.bodyId), pre.faceIds[0], pre.round.radius, pre.round.solidInside,
-        pre.round.cylinder.axis, pre.round.cylinder.point, pre.round.radial);
+      this.beginSize(
+        withBody(pre.selectors[0]!, pre.bodyId),
+        pre.faceIds[0],
+        pre.round.radius,
+        pre.round.solidInside,
+        pre.round.cylinder.axis,
+        pre.round.cylinder.point,
+        pre.round.radial,
+      );
       return;
     }
     setPrompt("Click a round face, a shank or a bore, to thread · Esc");
@@ -134,8 +139,15 @@ export class ThreadTool {
       }
       e.preventDefault();
       e.stopImmediatePropagation();
-      this.beginSize(withBody(hit.selector, hit.bodyId), hit.faceId, round.radius, round.solidInside,
-        round.cylinder.axis, round.cylinder.point, round.radial);
+      this.beginSize(
+        withBody(hit.selector, hit.bodyId),
+        hit.faceId,
+        round.radius,
+        round.solidInside,
+        round.cylinder.axis,
+        round.cylinder.point,
+        round.radial,
+      );
       return;
     }
     // In sizing: a drag anywhere pulls the length, a click commits.
@@ -161,7 +173,7 @@ export class ThreadTool {
     const turns = threadTurns(this.length, this.pitch);
     setPrompt(
       `${this.external ? "External" : "Internal"} thread · ⌀${(2 * this.radius).toFixed(2)} × ` +
-      `${this.pitch}mm pitch · ${turns.toFixed(1)} turns · drag or type · click to commit · Esc`,
+        `${this.pitch}mm pitch · ${turns.toFixed(1)} turns · drag or type · click to commit · Esc`,
     );
   }
 
@@ -169,8 +181,12 @@ export class ThreadTool {
    *  cylinder it lies on, which end of it the thread starts at, and which way the
    *  material is. */
   private beginSize(
-    face: Selector, faceId: number, radius: number, solidInside: boolean,
-    axis: readonly [number, number, number], point: readonly [number, number, number],
+    face: Selector,
+    faceId: number,
+    radius: number,
+    solidInside: boolean,
+    axis: readonly [number, number, number],
+    point: readonly [number, number, number],
     radial: THREE.Vector3,
   ) {
     const d = new THREE.Vector3(axis[0], axis[1], axis[2]).normalize();
@@ -242,17 +258,18 @@ export class ThreadTool {
   private drawHelix() {
     const angle = threadAngleDeg(this.length, this.pitch);
     const at = this.origin.clone().addScaledVector(this.radial, this.radius);
-    const pts = angle > 0
-      ? screwPath(
-          [at.x, at.y, at.z],
-          {
-            origin: [this.origin.x, this.origin.y, this.origin.z],
-            dir: [this.axis.x, this.axis.y, this.axis.z],
-          },
-          angle,
-          this.pitch,
-        )
-      : [];
+    const pts =
+      angle > 0
+        ? screwPath(
+            [at.x, at.y, at.z],
+            {
+              origin: [this.origin.x, this.origin.y, this.origin.z],
+              dir: [this.axis.x, this.axis.y, this.axis.z],
+            },
+            angle,
+            this.pitch,
+          )
+        : [];
     if (!this.helix) {
       const mat = new THREE.LineDashedMaterial({
         color: 0xffd24a,
@@ -267,9 +284,7 @@ export class ThreadTool {
       this.viewport.addToScene(this.helix);
     }
     this.helix.geometry.dispose();
-    this.helix.geometry = new THREE.BufferGeometry().setFromPoints(
-      pts.map((q) => new THREE.Vector3(q[0], q[1], q[2])),
-    );
+    this.helix.geometry = new THREE.BufferGeometry().setFromPoints(pts.map((q) => new THREE.Vector3(q[0], q[1], q[2])));
     this.helix.computeLineDistances();
     this.viewport.requestRender();
   }
@@ -299,8 +314,14 @@ export class ThreadTool {
         const p = this.dim.isUserDriven("pitch") ? this.dim.getValue("pitch") : null;
         const l = this.dim.isUserDriven("length") ? this.dim.getValue("length") : null;
         let moved = false;
-        if (p != null && p > 0 && Math.abs(p - this.pitch) > 1e-9) { this.pitch = p; moved = true; }
-        if (l != null && l > 0 && Math.abs(l - this.length) > 1e-9) { this.length = l; moved = true; }
+        if (p != null && p > 0 && Math.abs(p - this.pitch) > 1e-9) {
+          this.pitch = p;
+          moved = true;
+        }
+        if (l != null && l > 0 && Math.abs(l - this.length) > 1e-9) {
+          this.length = l;
+          moved = true;
+        }
         if (moved) this.valueChanged();
       }
       this.gesture.frame();
@@ -311,8 +332,14 @@ export class ThreadTool {
     const profile = grooveProfile(this.radius, this.pitch, this.external);
     if (!profile || !this.face) return null;
     const thread = {
-      id: this.store.nextId(), type: "thread", face: this.face, profile, pitch: this.pitch,
-      starts: 1, hand: "right", operation: "cut",
+      id: this.store.nextId(),
+      type: "thread",
+      face: this.face,
+      profile,
+      pitch: this.pitch,
+      starts: 1,
+      hand: "right",
+      operation: "cut",
       axis: [this.axis.x, this.axis.y, this.axis.z],
       ...(this.length < this.maxLength - 1e-6 ? { length: Math.round(this.length * 1e4) / 1e4 } : {}),
     } as Feature;

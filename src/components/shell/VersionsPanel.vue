@@ -19,11 +19,31 @@ const docTick = useDocValue(() => ({}));
 
 // The repo is mutated in place, so each view reads the ticks itself rather than
 // through a computed that would keep returning the same object.
-const branch = computed(() => { tick.value; docTick.value; return store.versionRepo?.current ?? "main"; });
-const branches = computed(() => { tick.value; docTick.value; return Object.keys(store.versionRepo?.branches ?? {}); });
-const history = computed(() => { tick.value; docTick.value; return store.versionRepo ? log(store.versionRepo) : []; });
-const unreadVersions = computed(() => { tick.value; docTick.value; return store.hasUnreadVersions(); });
-const pending = computed<VersionDiff | null>(() => { docTick.value; tick.value; return store.changesSinceVersion(); });
+const branch = computed(() => {
+  tick.value;
+  docTick.value;
+  return store.versionRepo?.current ?? "main";
+});
+const branches = computed(() => {
+  tick.value;
+  docTick.value;
+  return Object.keys(store.versionRepo?.branches ?? {});
+});
+const history = computed(() => {
+  tick.value;
+  docTick.value;
+  return store.versionRepo ? log(store.versionRepo) : [];
+});
+const unreadVersions = computed(() => {
+  tick.value;
+  docTick.value;
+  return store.hasUnreadVersions();
+});
+const pending = computed<VersionDiff | null>(() => {
+  docTick.value;
+  tick.value;
+  return store.changesSinceVersion();
+});
 const changeCount = computed(() => {
   const d = pending.value;
   return d ? d.added.length + d.removed.length + d.changed.length + (d.settings ? 1 : 0) : 0;
@@ -131,13 +151,20 @@ function changedNames(v: Version): { kind: string; name: string }[] {
       >
         <option v-for="b in branches" :key="b" :value="b">{{ b }}</option>
       </select>
-      <span v-else-if="branches.length" class="versions-branch-name"><Icon name="versions" :size="12" />{{ branch }}</span>
+      <span v-else-if="branches.length" class="versions-branch-name"
+        ><Icon name="versions" :size="12" />{{ branch }}</span
+      >
     </div>
 
     <p class="pop-note">
-      <template v-if="unreadVersions">This file has versions from a newer FundaCAD that this version cannot show. Saving the file keeps them, saving a version here replaces them.</template>
+      <template v-if="unreadVersions"
+        >This file has versions from a newer FundaCAD that this version cannot show. Saving the file keeps them, saving
+        a version here replaces them.</template
+      >
       <template v-else-if="!history.length">No versions yet. Save one to be able to come back to this point.</template>
-      <template v-else-if="changeCount">{{ changeCount }} change{{ changeCount === 1 ? "" : "s" }} since "{{ history[0]!.message }}"</template>
+      <template v-else-if="changeCount"
+        >{{ changeCount }} change{{ changeCount === 1 ? "" : "s" }} since "{{ history[0]!.message }}"</template
+      >
       <template v-else>Nothing changed since "{{ history[0]!.message }}"</template>
     </p>
 
@@ -151,7 +178,12 @@ function changedNames(v: Version): { kind: string; name: string }[] {
     <div v-if="history.length" class="pop-rule"></div>
 
     <ol class="versions-list">
-      <li v-for="(v, i) in history" :key="v.id" class="versions-row" :class="{ open: expanded === v.id, head: i === 0 }">
+      <li
+        v-for="(v, i) in history"
+        :key="v.id"
+        class="versions-row"
+        :class="{ open: expanded === v.id, head: i === 0 }"
+      >
         <button type="button" class="versions-main" @click="expanded = expanded === v.id ? null : v.id">
           <span class="versions-dot"></span>
           <span class="versions-text">
@@ -168,7 +200,13 @@ function changedNames(v: Version): { kind: string; name: string }[] {
             <button type="button" class="pop-wide ghost" @click="startBranch(v)">Branch from here</button>
           </div>
           <form v-if="branching === v.id" class="versions-save" @submit.prevent="makeBranch()">
-            <input v-model="branchName" class="versions-input" placeholder="Branch name" spellcheck="false" @keydown.stop />
+            <input
+              v-model="branchName"
+              class="versions-input"
+              placeholder="Branch name"
+              spellcheck="false"
+              @keydown.stop
+            />
             <button type="submit" class="pop-wide" :disabled="!branchName.trim()">Create</button>
           </form>
         </div>

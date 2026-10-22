@@ -1,0 +1,7 @@
+# Commits that only reformat, skipped by git blame (GitHub reads this file on its own,
+# locally: git config blame.ignoreRevsFile .git-blame-ignore-revs)
+
+# rustfmt at width 120 with the Max heuristics
+ecacac7219a147bfeda031467a95df89c6f47614
+# Prettier at width 120
+f4c1331d2d54fef362d528e3a4201e26f61a2afb

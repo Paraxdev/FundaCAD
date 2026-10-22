@@ -164,18 +164,12 @@ impl Tracking {
                     Step::Anchored { was: *was, now }
                 }
             }
-            Written::Center(c) => Step::Shift(
-                kernel::outline_center(&face.shape).map_or(face.centroid(), DVec3::from_array) - *c,
-            ),
+            Written::Center(c) => {
+                Step::Shift(kernel::outline_center(&face.shape).map_or(face.centroid(), DVec3::from_array) - *c)
+            }
             Written::Normal => Step::Normal,
         };
-        Some(Onto {
-            n: self.n,
-            plane_point: face.centroid(),
-            plane_normal: face.normal(),
-            extent,
-            step,
-        })
+        Some(Onto { n: self.n, plane_point: face.centroid(), plane_normal: face.normal(), extent, step })
     }
 }
 
@@ -213,9 +207,7 @@ fn covers(outline: &Shape, q: DVec3) -> bool {
 }
 
 fn filled(face: &FaceEnt) -> Shape {
-    kernel::outer_wire(&face.shape)
-        .and_then(|w| kernel::face_from_wire(&w).ok())
-        .unwrap_or_else(|| face.shape.clone())
+    kernel::outer_wire(&face.shape).and_then(|w| kernel::face_from_wire(&w).ok()).unwrap_or_else(|| face.shape.clone())
 }
 
 pub(super) fn resolve(r: &mut Resolver, part: &Shape, m: &Map<String, Value>) -> FResult<Vec<FaceEnt>> {
@@ -250,10 +242,7 @@ pub(super) fn resolve(r: &mut Resolver, part: &Shape, m: &Map<String, Value>) ->
     }
     if pool.is_empty() {
         r.push("face", 0, 0.0, true, Some(REASON_SPLIT.into()), m.get("point"), None, Some(REFERENCE_NOT_FOUND));
-        return Err(Fail::Value {
-            message: REASON_SPLIT.into(),
-            code: Some(REFERENCE_NOT_FOUND),
-        });
+        return Err(Fail::Value { message: REASON_SPLIT.into(), code: Some(REFERENCE_NOT_FOUND) });
     }
     if pool.iter().any(|c| c.2) {
         pool.retain(|c| c.2);

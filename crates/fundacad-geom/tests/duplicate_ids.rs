@@ -46,8 +46,9 @@ fn recorded() -> IndexMap<String, String> {
 fn assert_third_copy_keeps_its_id(r: &Rebuild) {
     assert!(r.bodies.iter().all(|b| b.id != "body5"), "{:?}", r.bodies.iter().map(|b| &b.id).collect::<Vec<_>>());
     assert!(
-        r.diagnostics.iter().any(|d| d["feature_id"] == "mv"
-            && d["reason"] == "target body already consumed or missing"),
+        r.diagnostics
+            .iter()
+            .any(|d| d["feature_id"] == "mv" && d["reason"] == "target body already consumed or missing"),
         "{:?}",
         r.diagnostics
     );

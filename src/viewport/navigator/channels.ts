@@ -96,8 +96,14 @@ export class OrbitChannel {
   }
 
   settled(): boolean {
-    return this.yaw.x === this.goalYaw && this.elev.x === this.goalElev && this.roll.x === this.goalRoll
-      && this.yaw.v === 0 && this.elev.v === 0 && this.roll.v === 0;
+    return (
+      this.yaw.x === this.goalYaw &&
+      this.elev.x === this.goalElev &&
+      this.roll.x === this.goalRoll &&
+      this.yaw.v === 0 &&
+      this.elev.v === 0 &&
+      this.roll.v === 0
+    );
   }
 
   /** The eased angles are what is on screen; make them the goal too. */
@@ -135,8 +141,12 @@ export class PanChannel {
     this.sy.step(0, tau, dt);
     let mx = ex + this.sx.x;
     let my = ey + this.sy.x;
-    if (Math.abs(this.sx.x) < EPS_PX && Math.abs(this.sy.x) < EPS_PX
-      && Math.abs(this.sx.v) < EPS_PX * 100 && Math.abs(this.sy.v) < EPS_PX * 100) {
+    if (
+      Math.abs(this.sx.x) < EPS_PX &&
+      Math.abs(this.sy.x) < EPS_PX &&
+      Math.abs(this.sx.v) < EPS_PX * 100 &&
+      Math.abs(this.sy.v) < EPS_PX * 100
+    ) {
       mx = ex;
       my = ey;
       this.sx.reset();

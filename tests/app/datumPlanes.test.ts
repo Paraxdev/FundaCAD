@@ -69,8 +69,12 @@ describe("datum planes as the app draws them", () => {
   it("backs a face datum's pose out of where the engine put it", () => {
     const face: PlaneDef = { origin: [0, 0, 7], normal: [0, 0, 1], xdir: [1, 0, 0] };
     const f = {
-      id: "F", type: "datumPlane", plane: { origin: [0, 0, 5], normal: [0, 0, 1], xdir: [1, 0, 0] },
-      face: { kind: "face", by: "nearest", point: [0, 0, 5] }, offset: 3, tiltY: 30,
+      id: "F",
+      type: "datumPlane",
+      plane: { origin: [0, 0, 5], normal: [0, 0, 1], xdir: [1, 0, 0] },
+      face: { kind: "face", by: "nearest", point: [0, 0, 5] },
+      offset: 3,
+      tiltY: 30,
     } as unknown as Datum;
     const pose = { ...ZERO_POSE, offset: 3, tiltY: 30 };
     const { api } = engine([f], { F: placeDatum(face, pose) });

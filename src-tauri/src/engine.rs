@@ -87,11 +87,7 @@ fn exit_meaning(code: Option<i32>) -> Option<&'static str> {
 /// The crash, pasteable into an issue: how it ended, what it was doing, and
 /// the last it said.
 fn crash_report(inner: &Inner, how: &str, code: Option<i32>, unanswered: &[String]) -> String {
-    let mut out = vec![
-        "### Geometry engine crashed".to_owned(),
-        String::new(),
-        format!("**Exit:** {how}"),
-    ];
+    let mut out = vec!["### Geometry engine crashed".to_owned(), String::new(), format!("**Exit:** {how}")];
     if let Some(m) = exit_meaning(code) {
         out.push(format!("**Meaning:** {m}"));
     }
@@ -99,7 +95,13 @@ fn crash_report(inner: &Inner, how: &str, code: Option<i32>, unanswered: &[Strin
         "**Build:** FundaCAD {}, {} {}, {} profile",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
-        if cfg!(target_env = "msvc") { "MSVC" } else if cfg!(target_env = "gnu") { "GNU" } else { "" },
+        if cfg!(target_env = "msvc") {
+            "MSVC"
+        } else if cfg!(target_env = "gnu") {
+            "GNU"
+        } else {
+            ""
+        },
         if cfg!(debug_assertions) { "debug" } else { "release" },
     ));
     if !unanswered.is_empty() {
@@ -154,9 +156,7 @@ fn live_door(engine: &Arc<fundacad_engine::Engine>) {
     match fundacad_engine::ws::Server::for_engine(engine.clone(), addr, gate) {
         Ok(server) => {
             eprintln!("LISTENING {}", server.port());
-            let _ = std::thread::Builder::new()
-                .name("live-door".into())
-                .spawn(move || server.serve());
+            let _ = std::thread::Builder::new().name("live-door".into()).spawn(move || server.serve());
         }
         Err(e) => eprintln!("no live session port: {e}"),
     }
@@ -216,14 +216,11 @@ fn supervise(inner: Arc<Inner>) {
                 let generation = inner.generation.load(Ordering::SeqCst);
                 let cause = relay(&inner, stdout);
                 let unanswered: Vec<String> = lock(&inner.in_flight).iter().cloned().collect();
-                let status = lock(&inner.worker)
-                    .as_mut()
-                    .filter(|w| w.generation == generation)
-                    .and_then(|w| {
-                        // Its output closed, so a worker still alive is wedged.
-                        let _ = w.child.kill();
-                        w.child.wait().ok()
-                    });
+                let status = lock(&inner.worker).as_mut().filter(|w| w.generation == generation).and_then(|w| {
+                    // Its output closed, so a worker still alive is wedged.
+                    let _ = w.child.kill();
+                    w.child.wait().ok()
+                });
                 set_up(&inner, false);
                 if let Some(dir) = &inner.session_dir {
                     crate::session_file::remove_from(dir);
@@ -241,10 +238,9 @@ fn supervise(inner: Arc<Inner>) {
                     delay = Duration::ZERO;
                 } else {
                     let detail = crash_report(&inner, &how, code, &unanswered);
-                    let _ = inner.app.emit(
-                        DIED_EVENT,
-                        serde_json::json!({ "kind": "restarted", "cause": how, "detail": detail }),
-                    );
+                    let _ = inner
+                        .app
+                        .emit(DIED_EVENT, serde_json::json!({ "kind": "restarted", "cause": how, "detail": detail }));
                 }
                 if started.elapsed() > HEALTHY_AFTER {
                     delay = RESTART_FLOOR;
@@ -255,10 +251,9 @@ fn supervise(inner: Arc<Inner>) {
                 eprintln!("[engine] cannot start the worker: {e}");
                 if !start_failed {
                     start_failed = true;
-                    let _ = inner.app.emit(
-                        DIED_EVENT,
-                        serde_json::json!({ "kind": "start_failed", "cause": e.to_string() }),
-                    );
+                    let _ = inner
+                        .app
+                        .emit(DIED_EVENT, serde_json::json!({ "kind": "start_failed", "cause": e.to_string() }));
                 }
             }
         }
@@ -294,10 +289,7 @@ pub fn configure_env(cmd: &mut Command, blobs: Option<&Path>, plugins: Option<&P
 fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     let exe = std::env::current_exe()?;
     let mut cmd = Command::new(exe);
-    cmd.arg("--engine")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.arg("--engine").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let token = random_token();
     let safe = crate::safe_mode_active(&inner.app);
     if safe {
@@ -327,12 +319,10 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
                 // Written once the port answers, so the file never names a port
                 // nobody is listening on yet.
-                if let (Some(dir), Some(port)) = (&session_dir, line.strip_prefix("LISTENING ").and_then(|p| p.trim().parse::<u16>().ok())) {
-                    let info = crate::session_file::SessionInfo {
-                        port,
-                        token: token.clone(),
-                        pid: std::process::id(),
-                    };
+                if let (Some(dir), Some(port)) =
+                    (&session_dir, line.strip_prefix("LISTENING ").and_then(|p| p.trim().parse::<u16>().ok()))
+                {
+                    let info = crate::session_file::SessionInfo { port, token: token.clone(), pid: std::process::id() };
                     if let Err(e) = crate::session_file::write_into(dir, &info) {
                         eprintln!("[engine] no session file: {e}");
                     }
@@ -346,11 +336,7 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         });
     }
     let generation = inner.generation.fetch_add(1, Ordering::SeqCst) + 1;
-    *lock(&inner.worker) = Some(Worker {
-        child,
-        stdin: BufWriter::new(stdin),
-        generation,
-    });
+    *lock(&inner.worker) = Some(Worker { child, stdin: BufWriter::new(stdin), generation });
     Ok(stdout)
 }
 
@@ -458,9 +444,7 @@ fn escalate_cancel(inner: Arc<Inner>, target: String, grace: Duration) {
 /// Preferences.
 #[tauri::command]
 pub fn mcp_server() -> Result<String, String> {
-    std::env::current_exe()
-        .map(|path| path.to_string_lossy().into_owned())
-        .map_err(|e| e.to_string())
+    std::env::current_exe().map(|path| path.to_string_lossy().into_owned()).map_err(|e| e.to_string())
 }
 
 /// The webview's one channel for engine messages. Returns whether the engine is up.
@@ -515,9 +499,7 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
 
 /// Seconds since the Unix epoch with milliseconds, no date crate needed.
 fn clock_now() -> String {
-    let t = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default();
+    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
     format!("t={}.{:03}", t.as_secs(), t.subsec_millis())
 }
 
@@ -573,10 +555,7 @@ mod tests {
         };
         let big = format!(r#"{{"id":"a","op":"rebuild","document":{{"x":"{}"}}}}"#, "y".repeat(10_000));
         assert_eq!(head(&big), h(Some("a"), Some("rebuild"), None, false));
-        assert_eq!(
-            head(r#"{"id":"c","op":"cancel","target":"a"}"#),
-            h(Some("c"), Some("cancel"), Some("a"), false)
-        );
+        assert_eq!(head(r#"{"id":"c","op":"cancel","target":"a"}"#), h(Some("c"), Some("cancel"), Some("a"), false));
         assert_eq!(
             head(r#"{"id":"c","op":"cancel","target":"a","soft":true}"#),
             h(Some("c"), Some("cancel"), Some("a"), true)

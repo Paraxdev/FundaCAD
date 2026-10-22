@@ -6,8 +6,20 @@ import * as THREE from "three";
 import type { SketchConstraint } from "../types";
 import type { ResolvedEntity } from "./snap";
 import {
-  BSPLINE_DEGREES, bsplineDegree, bsplineFit, bsplineGreville, bsplineInsertKnot, bsplineMaxDegree,
-  bsplineNearestParam, bsplinePoint, bsplineRange, bsplineRemovePole, bsplineValid, poleOfRef, poleRef, type Pt,
+  BSPLINE_DEGREES,
+  bsplineDegree,
+  bsplineFit,
+  bsplineGreville,
+  bsplineInsertKnot,
+  bsplineMaxDegree,
+  bsplineNearestParam,
+  bsplinePoint,
+  bsplineRange,
+  bsplineRemovePole,
+  bsplineValid,
+  poleOfRef,
+  poleRef,
+  type Pt,
 } from "./bspline";
 import { splinePolyline } from "./spline";
 import { distToSeg } from "./geom2d";
@@ -32,10 +44,25 @@ export function remapPoleRefs(
   };
   const out: SketchConstraint[] = [];
   for (const c of constraints) {
-    if (c.type === "coincident" || c.type === "p2pDistance" || c.type === "hDistance" || c.type === "vDistance" || c.type === "symmetric" || c.type === "horizontalPoints" || c.type === "verticalPoints") {
-      const p1 = ref(c.e1, c.p1), p2 = ref(c.e2, c.p2);
+    if (
+      c.type === "coincident" ||
+      c.type === "p2pDistance" ||
+      c.type === "hDistance" ||
+      c.type === "vDistance" ||
+      c.type === "symmetric" ||
+      c.type === "horizontalPoints" ||
+      c.type === "verticalPoints"
+    ) {
+      const p1 = ref(c.e1, c.p1),
+        p2 = ref(c.e2, c.p2);
       if (p1 !== null && p2 !== null) out.push({ ...c, p1, p2 });
-    } else if (c.type === "midpoint" || c.type === "pointOnCurve" || c.type === "p2lDistance" || c.type === "p2cDistance" || c.type === "fix") {
+    } else if (
+      c.type === "midpoint" ||
+      c.type === "pointOnCurve" ||
+      c.type === "p2lDistance" ||
+      c.type === "p2cDistance" ||
+      c.type === "fix"
+    ) {
       const p = ref(c.e, c.p);
       if (p !== null) out.push({ ...c, p });
     } else {
@@ -55,10 +82,24 @@ export function constrainedPoles(constraints: SketchConstraint[], id: string, n:
     if (k >= 0) out.add(k);
   };
   for (const c of constraints) {
-    if (c.type === "coincident" || c.type === "p2pDistance" || c.type === "hDistance" || c.type === "vDistance" || c.type === "symmetric" || c.type === "horizontalPoints" || c.type === "verticalPoints") {
+    if (
+      c.type === "coincident" ||
+      c.type === "p2pDistance" ||
+      c.type === "hDistance" ||
+      c.type === "vDistance" ||
+      c.type === "symmetric" ||
+      c.type === "horizontalPoints" ||
+      c.type === "verticalPoints"
+    ) {
       take(c.e1, c.p1);
       take(c.e2, c.p2);
-    } else if (c.type === "midpoint" || c.type === "pointOnCurve" || c.type === "p2lDistance" || c.type === "p2cDistance" || c.type === "fix") {
+    } else if (
+      c.type === "midpoint" ||
+      c.type === "pointOnCurve" ||
+      c.type === "p2lDistance" ||
+      c.type === "p2cDistance" ||
+      c.type === "fix"
+    ) {
       take(c.e, c.p);
     }
   }
@@ -73,7 +114,11 @@ function copiedPoles(before: Pt[], after: Pt[]): (k: number) => number {
   let j = 0;
   before.forEach((q, i) => {
     for (let s = j; s < after.length; s++) {
-      if (same(q, after[s]!)) { to.set(i, s); j = s + 1; return; }
+      if (same(q, after[s]!)) {
+        to.set(i, s);
+        j = s + 1;
+        return;
+      }
     }
   });
   return (k) => to.get(k) ?? -1;
@@ -85,13 +130,16 @@ export function polygonParam(e: BsplineEntity, click: Pt, tol: number): number |
   const g = bsplineGreville(e);
   const [a, b] = bsplineRange(e);
   const n = e.poles.length;
-  let best: number | null = null, bestD = tol;
+  let best: number | null = null,
+    bestD = tol;
   const legs = e.closed ? n : n - 1;
   for (let i = 0; i < legs; i++) {
-    const P = e.poles[i]!, Q = e.poles[(i + 1) % n]!;
+    const P = e.poles[i]!,
+      Q = e.poles[(i + 1) % n]!;
     const d = distToSeg(new THREE.Vector2(P.x, P.y), new THREE.Vector2(Q.x, Q.y), new THREE.Vector2(click.x, click.y));
     if (d >= bestD) continue;
-    const dx = Q.x - P.x, dy = Q.y - P.y;
+    const dx = Q.x - P.x,
+      dy = Q.y - P.y;
     const s = Math.max(0, Math.min(1, ((click.x - P.x) * dx + (click.y - P.y) * dy) / (dx * dx + dy * dy || 1)));
     const g0 = g[i]!;
     let g1 = g[(i + 1) % n]!;
@@ -125,12 +173,19 @@ export function insertPole(
   const next = bsplineInsertKnot(e, t);
   if (!next) return null;
   const entity: BsplineEntity = {
-    ...e, poles: next.poles, ...(next.knots ? { knots: next.knots } : {}), ...(next.degree !== undefined ? { degree: next.degree } : {}),
+    ...e,
+    poles: next.poles,
+    ...(next.knots ? { knots: next.knots } : {}),
+    ...(next.degree !== undefined ? { degree: next.degree } : {}),
   };
-  let pole = 0, pd = Infinity;
+  let pole = 0,
+    pd = Infinity;
   entity.poles.forEach((q, k) => {
     const d = Math.hypot(q.x - click.x, q.y - click.y);
-    if (d < pd) { pd = d; pole = k; }
+    if (d < pd) {
+      pd = d;
+      pole = k;
+    }
   });
   const map = copiedPoles(e.poles, entity.poles);
   return { entity, constraints: remapPoleRefs(constraints, e.id, e.poles.length, entity.poles.length, map), pole };
@@ -139,7 +194,9 @@ export function insertPole(
 /** The Degree entries of the splines' menu: the degree one spline is built with
  *  checked, and those a spline's pole count cannot carry disabled, saying how
  *  many poles they need. */
-export function degreeChoices(es: BsplineEntity[]): { degree: number; label: string; checked: boolean; disabled: boolean }[] {
+export function degreeChoices(
+  es: BsplineEntity[],
+): { degree: number; label: string; checked: boolean; disabled: boolean }[] {
   const now = es.length === 1 ? bsplineDegree(es[0]!) : null;
   const carried = Math.min(...es.map(bsplineMaxDegree));
   return BSPLINE_DEGREES.map((d) => ({
@@ -176,7 +233,8 @@ export function splineToBspline(
 ): { entity: BsplineEntity; constraints: SketchConstraint[] } | null {
   const pts = e.points;
   if (pts.length < 2) return null;
-  const a = pts[0]!, z = pts[pts.length - 1]!;
+  const a = pts[0]!,
+    z = pts[pts.length - 1]!;
   const closed = pts.length > 3 && Math.hypot(a.x - z.x, a.y - z.y) < 1e-9;
   const c = e.construction ? { construction: true } : {};
   if (pts.length === 2) {
@@ -184,7 +242,8 @@ export function splineToBspline(
   }
   const samples = splinePolyline(pts, 24).map((q) => ({ x: q.x, y: q.y }));
   if (closed) samples.pop();
-  const xs = samples.map((q) => q.x), ys = samples.map((q) => q.y);
+  const xs = samples.map((q) => q.x),
+    ys = samples.map((q) => q.y);
   const size = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) || 1;
   const fitPts = closed ? pts.length - 1 : pts.length;
   let fit: ReturnType<typeof bsplineFit> = null;
@@ -200,7 +259,13 @@ export function splineToBspline(
     if (worst <= size * 0.002) break;
   }
   if (!fit) return null;
-  const entity: BsplineEntity = { type: "bspline", id: e.id, poles: fit.poles, ...(closed ? { closed: true } : {}), ...c };
+  const entity: BsplineEntity = {
+    type: "bspline",
+    id: e.id,
+    poles: fit.poles,
+    ...(closed ? { closed: true } : {}),
+    ...c,
+  };
   if (!closed) return { entity, constraints };
   return { entity, constraints: remapPoleRefs(constraints, e.id, 0, entity.poles.length, () => -1) };
 }

@@ -52,8 +52,12 @@ describe("Disposer", () => {
     parent.add(group);
     let geometryFreed = false;
     let materialFreed = false;
-    mesh.geometry.addEventListener("dispose", () => { geometryFreed = true; });
-    shared.addEventListener("dispose", () => { materialFreed = true; });
+    mesh.geometry.addEventListener("dispose", () => {
+      geometryFreed = true;
+    });
+    shared.addEventListener("dispose", () => {
+      materialFreed = true;
+    });
     disposeObject3D(group);
     expect(parent.children).toHaveLength(0);
     expect(geometryFreed).toBe(true);

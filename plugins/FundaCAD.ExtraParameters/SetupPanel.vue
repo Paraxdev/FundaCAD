@@ -5,9 +5,7 @@
 // undoes like any edit, and survives the plugin being switched off.
 
 import { computed, ref } from "vue";
-import {
-  captureConfiguration, checkResults, evalExpr, toast, useDocValue, useEngine,
-} from "fundacad";
+import { captureConfiguration, checkResults, evalExpr, toast, useDocValue, useEngine } from "fundacad";
 import type { ParamCheck, ParamControl } from "fundacad";
 import { FloatingPanel, Icon } from "fundacad/ui";
 import { setupOpen } from "./state";
@@ -52,7 +50,8 @@ function setBound(name: string, control: ParamControl, key: "min" | "max" | "ste
     delete next[key];
   } else {
     const v = Number(raw);
-    if (!Number.isFinite(v) || (key === "step" && v <= 0)) return toast(`${key} must be a ${key === "step" ? "positive " : ""}number`, { kind: "warning" });
+    if (!Number.isFinite(v) || (key === "step" && v <= 0))
+      return toast(`${key} must be a ${key === "step" ? "positive " : ""}number`, { kind: "warning" });
     next[key] = v;
   }
   const lo = next["min"] as number | undefined;
@@ -75,7 +74,13 @@ function addGroup() {
   if (!name) return;
   store.updateParamExtras((x) => {
     const list = (x.groups ??= []);
-    list.push({ id: nextId("g", list.map((g) => g.id)), name });
+    list.push({
+      id: nextId(
+        "g",
+        list.map((g) => g.id),
+      ),
+      name,
+    });
   });
   newGroup.value = "";
 }
@@ -96,7 +101,10 @@ const newConfig = ref("");
 function saveConfig() {
   const name = newConfig.value.trim();
   if (!name) return;
-  const id = nextId("c", configs.value.map((c) => c.id));
+  const id = nextId(
+    "c",
+    configs.value.map((c) => c.id),
+  );
   const cfg = captureConfiguration(store.document, id, name);
   store.updateParamExtras((x) => {
     (x.configurations ??= []).push(cfg);
@@ -152,7 +160,15 @@ function addCheck() {
   if (err) return toast(`${expr}: ${err}`, { kind: "warning" });
   store.updateParamExtras((x) => {
     const list = (x.checks ??= []);
-    list.push({ id: nextId("k", list.map((c) => c.id)), expr: expr.trim(), message: message.trim(), level });
+    list.push({
+      id: nextId(
+        "k",
+        list.map((c) => c.id),
+      ),
+      expr: expr.trim(),
+      message: message.trim(),
+      level,
+    });
   });
   newCheck.value = { expr: "", message: "", level: "warning" };
 }
@@ -192,7 +208,9 @@ const iconBtn = { background: "none", border: "none", color: "inherit", cursor: 
           <span style="opacity: 0.6">Range or choices</span><span style="opacity: 0.6">Group</span>
           <span style="opacity: 0.6" title="Hidden from the Parameters section">Hide</span>
           <template v-for="p in params" :key="p.name">
-            <span :title="`${p.def.expr} = ${p.def.value}`" :style="{ opacity: p.def.hidden ? 0.5 : 1 }">{{ p.name }}</span>
+            <span :title="`${p.def.expr} = ${p.def.value}`" :style="{ opacity: p.def.hidden ? 0.5 : 1 }">{{
+              p.name
+            }}</span>
             <select
               class="xp-kind"
               :data-param="p.name"
@@ -211,9 +229,24 @@ const iconBtn = { background: "none", border: "none", color: "inherit", cursor: 
               />
             </span>
             <span v-else-if="p.def.control && p.def.control.kind !== 'toggle'" :style="grid('1fr 1fr 1fr')">
-              <input :style="input" :value="p.def.control.min ?? ''" placeholder="min" @change="setBound(p.name, p.def.control, 'min', val($event))" />
-              <input :style="input" :value="p.def.control.max ?? ''" placeholder="max" @change="setBound(p.name, p.def.control, 'max', val($event))" />
-              <input :style="input" :value="p.def.control.step ?? ''" placeholder="step" @change="setBound(p.name, p.def.control, 'step', val($event))" />
+              <input
+                :style="input"
+                :value="p.def.control.min ?? ''"
+                placeholder="min"
+                @change="setBound(p.name, p.def.control, 'min', val($event))"
+              />
+              <input
+                :style="input"
+                :value="p.def.control.max ?? ''"
+                placeholder="max"
+                @change="setBound(p.name, p.def.control, 'max', val($event))"
+              />
+              <input
+                :style="input"
+                :value="p.def.control.step ?? ''"
+                placeholder="step"
+                @change="setBound(p.name, p.def.control, 'step', val($event))"
+              />
             </span>
             <span v-else style="opacity: 0.5">{{ p.def.control?.kind === "toggle" ? "0 or 1" : "any value" }}</span>
             <select
@@ -236,7 +269,11 @@ const iconBtn = { background: "none", border: "none", color: "inherit", cursor: 
         <div :style="grid('1fr auto')">
           <template v-for="g in groups" :key="g.id">
             <input :style="input" :value="g.name" @change="renameGroup(g.id, val($event))" />
-            <button :style="iconBtn" :title="`Delete ${g.name}, its parameters become ungrouped`" @click="removeGroup(g.id)">
+            <button
+              :style="iconBtn"
+              :title="`Delete ${g.name}, its parameters become ungrouped`"
+              @click="removeGroup(g.id)"
+            >
               <Icon name="close" :size="13" />
             </button>
           </template>
@@ -250,19 +287,34 @@ const iconBtn = { background: "none", border: "none", color: "inherit", cursor: 
             <input
               :style="input"
               :value="c.name"
-              :title="Object.entries(c.values).map(([n, e]) => `${n} = ${e}`).join('\n')"
+              :title="
+                Object.entries(c.values)
+                  .map(([n, e]) => `${n} = ${e}`)
+                  .join('\n')
+              "
               @change="renameConfig(c.id, val($event))"
             />
             <button class="xp-apply" @click="applyConfig(c.id)">Apply</button>
-            <button title="Overwrite with the values the parameters have now" @click="updateConfig(c.id, c.name)">Update</button>
-            <button :style="iconBtn" :title="`Delete ${c.name}`" @click="removeConfig(c.id)"><Icon name="close" :size="13" /></button>
+            <button title="Overwrite with the values the parameters have now" @click="updateConfig(c.id, c.name)"
+              >Update</button
+            >
+            <button :style="iconBtn" :title="`Delete ${c.name}`" @click="removeConfig(c.id)"
+              ><Icon name="close" :size="13"
+            /></button>
           </template>
-          <input v-model="newConfig" :style="input" placeholder="save the current values as…" @keydown.enter="saveConfig()" />
+          <input
+            v-model="newConfig"
+            :style="input"
+            placeholder="save the current values as…"
+            @keydown.enter="saveConfig()"
+          />
           <button style="grid-column: span 3; justify-self: start" @click="saveConfig()">Save</button>
         </div>
 
         <div :style="section">Checks</div>
-        <div class="measure-hint" style="margin-bottom: 4px">A rule that must hold, like gap &gt;= 0.3. When it does not, the Parameters section shows its message.</div>
+        <div class="measure-hint" style="margin-bottom: 4px"
+          >A rule that must hold, like gap &gt;= 0.3. When it does not, the Parameters section shows its message.</div
+        >
         <div :style="grid('auto 1.2fr 1.6fr 0.8fr auto')">
           <template v-for="c in checks" :key="c.check.id">
             <Icon
@@ -272,16 +324,31 @@ const iconBtn = { background: "none", border: "none", color: "inherit", cursor: 
               :title="c.result?.error ?? (c.result?.ok ? 'holds' : 'does not hold')"
             />
             <input :style="input" :value="c.check.expr" @change="editCheck(c.check.id, { expr: val($event).trim() })" />
-            <input :style="input" :value="c.check.message" @change="editCheck(c.check.id, { message: val($event).trim() })" />
-            <select :style="input" :value="c.check.level" @change="editCheck(c.check.id, { level: val($event) as ParamCheck['level'] })">
+            <input
+              :style="input"
+              :value="c.check.message"
+              @change="editCheck(c.check.id, { message: val($event).trim() })"
+            />
+            <select
+              :style="input"
+              :value="c.check.level"
+              @change="editCheck(c.check.id, { level: val($event) as ParamCheck['level'] })"
+            >
               <option value="warning">Warning</option>
               <option value="error">Error</option>
             </select>
-            <button :style="iconBtn" title="Delete check" @click="removeCheck(c.check.id)"><Icon name="close" :size="13" /></button>
+            <button :style="iconBtn" title="Delete check" @click="removeCheck(c.check.id)"
+              ><Icon name="close" :size="13"
+            /></button>
           </template>
           <span></span>
           <input v-model="newCheck.expr" class="xp-new-check-expr" :style="input" placeholder="gap >= 0.3" />
-          <input v-model="newCheck.message" :style="input" placeholder="gap below 0.3 mm fuses" @keydown.enter="addCheck()" />
+          <input
+            v-model="newCheck.message"
+            :style="input"
+            placeholder="gap below 0.3 mm fuses"
+            @keydown.enter="addCheck()"
+          />
           <select v-model="newCheck.level" :style="input">
             <option value="warning">Warning</option>
             <option value="error">Error</option>
@@ -289,7 +356,9 @@ const iconBtn = { background: "none", border: "none", color: "inherit", cursor: 
           <button :style="iconBtn" title="Add check" @click="addCheck()"><Icon name="plus" :size="13" /></button>
         </div>
       </template>
-      <div class="measure-hint" style="margin-top: 10px">Saved with the document · Ctrl Z undoes any change here · Esc to close</div>
+      <div class="measure-hint" style="margin-top: 10px"
+        >Saved with the document · Ctrl Z undoes any change here · Esc to close</div
+      >
     </div>
   </FloatingPanel>
 </template>

@@ -31,7 +31,16 @@ export function gpuProbeResult(): GpuProbe | null {
 }
 
 export function judgeAdapter(a: AdapterLike | null, ms: number): GpuProbe {
-  if (!a) return { webgpu: false, vendor: "", architecture: "", isFallbackAdapter: false, maxStorageBufferBindingSize: 0, ms, error: "no adapter" };
+  if (!a)
+    return {
+      webgpu: false,
+      vendor: "",
+      architecture: "",
+      isFallbackAdapter: false,
+      maxStorageBufferBindingSize: 0,
+      ms,
+      error: "no adapter",
+    };
   const fallback = a.info?.isFallbackAdapter ?? a.isFallbackAdapter ?? false;
   return {
     webgpu: !fallback,
@@ -43,7 +52,9 @@ export function judgeAdapter(a: AdapterLike | null, ms: number): GpuProbe {
   };
 }
 
-export function probeWebGpu(gpu: GpuLike | undefined = (globalThis.navigator as unknown as { gpu?: GpuLike } | undefined)?.gpu): Promise<GpuProbe> {
+export function probeWebGpu(
+  gpu: GpuLike | undefined = (globalThis.navigator as unknown as { gpu?: GpuLike } | undefined)?.gpu,
+): Promise<GpuProbe> {
   if (pending) return pending;
   const t0 = performance.now();
   const done = (p: GpuProbe) => (result = p);
@@ -60,7 +71,8 @@ export function probeWebGpu(gpu: GpuLike | undefined = (globalThis.navigator as 
 
 export function describeProbe(p: GpuProbe | null): string {
   if (!p) return "WebGPU: checking";
-  if (!p.webgpu) return `WebGPU: none (${p.isFallbackAdapter ? "software fallback adapter" : p.error ?? "no adapter"})`;
+  if (!p.webgpu)
+    return `WebGPU: none (${p.isFallbackAdapter ? "software fallback adapter" : (p.error ?? "no adapter")})`;
   const mib = Math.round(p.maxStorageBufferBindingSize / 1048576);
   return `WebGPU: ${p.vendor || "unknown"} ${p.architecture}, storage binding ${mib} MiB, probe ${Math.round(p.ms)} ms`;
 }
@@ -73,7 +85,8 @@ export function probeNative(
   call?: (cmd: string) => Promise<unknown>,
   timeoutMs = NATIVE_PROBE_TIMEOUT_MS,
 ): Promise<NativeProbe> {
-  if (!call && !("__TAURI_INTERNALS__" in globalThis)) return Promise.resolve({ available: false, reason: "not in the app" });
+  if (!call && !("__TAURI_INTERNALS__" in globalThis))
+    return Promise.resolve({ available: false, reason: "not in the app" });
   const ask = call ?? (async (cmd: string) => (await import("@tauri-apps/api/core")).invoke(cmd));
   let timer: ReturnType<typeof setTimeout> | undefined;
   const late = new Promise<NativeProbe>((resolve) => {

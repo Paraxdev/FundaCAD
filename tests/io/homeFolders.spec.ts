@@ -26,17 +26,29 @@ describe("Home folders", () => {
   });
 
   it("drops rows it cannot read and duplicates", () => {
-    localStorage.setItem("fundacad.home.folders", JSON.stringify([
-      { path: "D:/a", addedAt: 1 }, { path: "D:/a", addedAt: 2 }, { path: 5 }, null, { path: "", addedAt: 1 },
+    localStorage.setItem(
+      "fundacad.home.folders",
+      JSON.stringify([
+        { path: "D:/a", addedAt: 1 },
+        { path: "D:/a", addedAt: 2 },
+        { path: 5 },
+        null,
+        { path: "", addedAt: 1 },
+        { path: "D:/b", addedAt: 3 },
+      ]),
+    );
+    expect(getFolders()).toEqual([
+      { path: "D:/a", addedAt: 1 },
       { path: "D:/b", addedAt: 3 },
-    ]));
-    expect(getFolders()).toEqual([{ path: "D:/a", addedAt: 1 }, { path: "D:/b", addedAt: 3 }]);
+    ]);
     localStorage.setItem("fundacad.home.folders", "{not json");
     expect(getFolders()).toEqual([]);
   });
 
   it("survives storage that refuses writes", () => {
-    vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
+    vi.spyOn(localStorage, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
     expect(addFolder("D:/a")).toBe(false);
     expect(() => removeFolder("D:/a")).not.toThrow();
   });

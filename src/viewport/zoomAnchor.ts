@@ -150,16 +150,8 @@ export interface OrthoZoom {
  *
  *  `factor` > 1 zooms out. `minZoom`/`maxZoom` are the controls' own limits.
  */
-export function orthoZoomStep(
-  current: number,
-  factor: number,
-  minZoom: number,
-  maxZoom: number,
-): OrthoZoom {
-  const lo = Math.max(
-    ORTHO_ZOOM_FLOOR,
-    Number.isFinite(minZoom) && minZoom > 0 ? minZoom : ORTHO_ZOOM_FLOOR,
-  );
+export function orthoZoomStep(current: number, factor: number, minZoom: number, maxZoom: number): OrthoZoom {
+  const lo = Math.max(ORTHO_ZOOM_FLOOR, Number.isFinite(minZoom) && minZoom > 0 ? minZoom : ORTHO_ZOOM_FLOOR);
   const hi = Number.isFinite(maxZoom) && maxZoom > lo ? maxZoom : Infinity;
   if (!Number.isFinite(current) || current <= 0 || !Number.isFinite(factor) || factor <= 0) {
     return { zoom: Math.min(hi, Math.max(lo, 1)), truck: 0 };

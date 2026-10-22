@@ -170,18 +170,12 @@ impl EdgeEnt {
 
     pub fn describe(&self) -> String {
         let c = self.mid;
-        format!(
-            "an edge at ({:.2},{:.2},{:.2}) length {:.1}",
-            c.x, c.y, c.z, self.length
-        )
+        format!("an edge at ({:.2},{:.2},{:.2}) length {:.1}", c.x, c.y, c.z, self.length)
     }
 }
 
 pub fn edges_of(shape: &Shape) -> FResult<Vec<EdgeEnt>> {
-    sa::items(shape, ItemKind::Edge)
-        .into_iter()
-        .map(EdgeEnt::new)
-        .collect()
+    sa::items(shape, ItemKind::Edge).into_iter().map(EdgeEnt::new).collect()
 }
 
 pub struct FaceEnt {
@@ -232,10 +226,7 @@ impl FaceEnt {
 
     pub fn describe(&self) -> FResult<String> {
         let c = self.centre.ok_or_else(internal)?;
-        Ok(format!(
-            "a face at ({:.2},{:.2},{:.2}) area {:.1}",
-            c.x, c.y, c.z, self.area
-        ))
+        Ok(format!("a face at ({:.2},{:.2},{:.2}) area {:.1}", c.x, c.y, c.z, self.area))
     }
 
     /// `f.distance_to_with_closest_points(p)`, `None` where it raises.
@@ -249,10 +240,7 @@ impl FaceEnt {
 }
 
 pub fn faces_of(shape: &Shape) -> FResult<Vec<FaceEnt>> {
-    sa::items(shape, ItemKind::Face)
-        .into_iter()
-        .map(FaceEnt::new)
-        .collect()
+    sa::items(shape, ItemKind::Face).into_iter().map(FaceEnt::new).collect()
 }
 
 /// `_circle_center_groups`: (rank, group size) per edge, circles only.
@@ -265,11 +253,7 @@ pub fn circle_groups(edges: &[EdgeEnt], tol: f64) -> Vec<Option<(usize, usize)>>
         .collect();
     let mut out = vec![None; edges.len()];
     for &(i, c, r) in &circles {
-        let sibs: Vec<f64> = circles
-            .iter()
-            .filter(|(_, cc, _)| (*cc - c).length() < tol)
-            .map(|s| s.2)
-            .collect();
+        let sibs: Vec<f64> = circles.iter().filter(|(_, cc, _)| (*cc - c).length() < tol).map(|s| s.2).collect();
         let rank = sibs.iter().filter(|&&rr| rr < r - 1e-9).count();
         out[i] = Some((rank, sibs.len()));
     }
@@ -281,9 +265,7 @@ fn fp_vec(fp: &Map<String, Value>, key: &str) -> FResult<Option<DVec3>> {
 }
 
 fn fp_num(fp: &Map<String, Value>, key: &str) -> FResult<Option<f64>> {
-    fp.get(key)
-        .map(|x| num(x).ok_or_else(|| Fail::Internal("TypeError".into())))
-        .transpose()
+    fp.get(key).map(|x| num(x).ok_or_else(|| Fail::Internal("TypeError".into()))).transpose()
 }
 
 /// `fp.get(key) and entity_type != fp[key]`.
@@ -376,10 +358,7 @@ mod tests {
         assert_eq!(py_round(2.675, 2), 2.67);
         assert_eq!(py_round(0.0625, 3), 0.062);
         assert_eq!(py_round(0.375, 2), 0.38);
-        assert_eq!(
-            key_bits(&[py_round(-0.0001, 3), 0.0, 0.0, 0.0]),
-            key_bits(&[0.0; 4])
-        );
+        assert_eq!(key_bits(&[py_round(-0.0001, 3), 0.0, 0.0, 0.0]), key_bits(&[0.0; 4]));
         assert_eq!(format!("{:.2}", 0.125), "0.12");
     }
 }

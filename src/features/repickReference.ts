@@ -88,13 +88,12 @@ export function findSelectorAt(feature: Feature, at: readonly number[]): Selecto
  * stays scalar, array stays an array of the same length) so nothing downstream
  * has to cope with a field changing arity.
  */
-export function replaceSelectorAt(
-  feature: Feature,
-  site: SelectorSite,
-  next: Selector,
-): Partial<Feature> {
+export function replaceSelectorAt(feature: Feature, site: SelectorSite, next: Selector): Partial<Feature> {
   if (site.path) {
-    const root = structuredClone((feature as unknown as Record<string, unknown>)[site.field]) as Record<string | number, unknown>;
+    const root = structuredClone((feature as unknown as Record<string, unknown>)[site.field]) as Record<
+      string | number,
+      unknown
+    >;
     let node = root;
     for (const k of site.path.slice(0, -1)) node = node[k] as Record<string | number, unknown>;
     node[site.path[site.path.length - 1]!] = next;
@@ -119,9 +118,13 @@ export function repickedSelector(
   edgePoints?: readonly Vec3[],
 ): Selector {
   if (site.path) {
-    if (picked.kind === "face" && picked.by === "nearest" && normal) return trackedFace(picked.point, normal, picked.body ?? null);
+    if (picked.kind === "face" && picked.by === "nearest" && normal)
+      return trackedFace(picked.point, normal, picked.body ?? null);
     if (picked.kind === "edge" && edgePoints) {
-      return (edgeMatchSelectorFrom({ points: [...edgePoints], body: picked.body ?? undefined }) as Selector | undefined) ?? picked;
+      return (
+        (edgeMatchSelectorFrom({ points: [...edgePoints], body: picked.body ?? undefined }) as Selector | undefined) ??
+        picked
+      );
     }
     return picked;
   }
@@ -134,7 +137,11 @@ export function repickedSelector(
  *  while the build is not of that face: the feature's face must still be the
  *  one written, and the build must have put the pick point where it was
  *  written, which a build of the face picked before the re-pick does not. */
-export function repickedExtent(feature: Feature | undefined, written: Selector, rec: TrackedFaceRecord | undefined): Partial<Feature> | null {
+export function repickedExtent(
+  feature: Feature | undefined,
+  written: Selector,
+  rec: TrackedFaceRecord | undefined,
+): Partial<Feature> | null {
   if (!feature || feature.type !== "hole" || written.by !== "tracked" || !rec) return null;
   const face = (feature as { face?: Selector }).face;
   if (!face || JSON.stringify(face) !== JSON.stringify(written)) return null;
@@ -174,14 +181,22 @@ const REPAIRABLE_CODES = new Set(["ambiguousReference", "referenceNotFound"]);
  *  from another checkout, which is a routine workflow here, would otherwise
  *  lose the Re-pick affordance with nothing to explain it. */
 export function repairableDiagFor(
-  diagnostics: { feature_id?: string; reason?: string; code?: string; at?: [number, number, number]; kind?: string; candidates?: string[] }[] | undefined,
+  diagnostics:
+    | {
+        feature_id?: string;
+        reason?: string;
+        code?: string;
+        at?: [number, number, number];
+        kind?: string;
+        candidates?: string[];
+      }[]
+    | undefined,
   featureId: string,
 ) {
   return (diagnostics ?? []).find(
     (d) =>
       d.feature_id === featureId &&
-      ((d.code !== undefined && REPAIRABLE_CODES.has(d.code)) ||
-        d.reason === "ambiguous nearest pick") &&
+      ((d.code !== undefined && REPAIRABLE_CODES.has(d.code)) || d.reason === "ambiguous nearest pick") &&
       Array.isArray(d.at),
   );
 }

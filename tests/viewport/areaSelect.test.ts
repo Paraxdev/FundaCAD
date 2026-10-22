@@ -152,7 +152,10 @@ describe("faceInBox", () => {
     // import walks the whole face otherwise.
     let seen = 0;
     function* tris() {
-      for (const t of [clipping, outside, outside, outside]) { seen++; yield t; }
+      for (const t of [clipping, outside, outside, outside]) {
+        seen++;
+        yield t;
+      }
     }
     expect(faceInBox(tris(), R, "crossing")).toBe(true);
     expect(seen).toBe(1);

@@ -47,16 +47,10 @@ impl ViewportProfile {
 pub fn viewport_profile(n_bodies: usize) -> ViewportProfile {
     for (threshold, scale, angular) in VIEWPORT_SIZE_TIERS {
         if n_bodies >= threshold {
-            return ViewportProfile {
-                size_scale: scale,
-                angular,
-            };
+            return ViewportProfile { size_scale: scale, angular };
         }
     }
-    ViewportProfile {
-        size_scale: 1.0,
-        angular: VIEWPORT_ANG_TOL,
-    }
+    ViewportProfile { size_scale: 1.0, angular: VIEWPORT_ANG_TOL }
 }
 
 /// The relative deflection BRepMesh gets for a requested wire tolerance.

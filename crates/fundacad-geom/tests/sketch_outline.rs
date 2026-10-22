@@ -70,7 +70,11 @@ fn two_overlapping_rectangles_become_one_l() {
 
 #[test]
 fn rectangles_sharing_a_side_lose_it() {
-    let f = faces(&ask("XY", json!([rect("a", (0.0, 0.0), (10.0, 10.0)), rect("b", (10.0, 0.0), (20.0, 10.0))]), &["a", "b"]));
+    let f = faces(&ask(
+        "XY",
+        json!([rect("a", (0.0, 0.0), (10.0, 10.0)), rect("b", (10.0, 0.0), (20.0, 10.0))]),
+        &["a", "b"],
+    ));
     assert_eq!(kinds(&f[0]), vec![vec!["line"; 4]]);
     assert!((area(&f[0]) - 200.0).abs() < 1e-6);
 }
@@ -106,7 +110,10 @@ fn a_slot_and_a_line_loop_merge_into_lines_and_arcs() {
     assert_eq!(f.len(), 1);
     let k = kinds(&f[0]);
     assert_eq!(k.len(), 1);
-    assert!(k[0].iter().filter(|t| *t == "arc").count() == 1 && k[0].iter().all(|t| t == "line" || t == "arc"), "{k:?}");
+    assert!(
+        k[0].iter().filter(|t| *t == "arc").count() == 1 && k[0].iter().all(|t| t == "line" || t == "arc"),
+        "{k:?}"
+    );
     assert_welded(&f[0]);
     let slot = 10.0 * 6.0 + std::f64::consts::PI * 9.0;
     // The slot's left end cap is inside the block.
@@ -116,13 +123,15 @@ fn a_slot_and_a_line_loop_merge_into_lines_and_arcs() {
 
 #[test]
 fn a_circle_overlapping_a_rectangle_leaves_an_arc_and_apart_they_stay_two() {
-    let ents = json!([rect("r", (0.0, 0.0), (20.0, 10.0)), {"id": "c", "type": "circle", "radius": 5, "x": 20, "y": 5}]);
+    let ents =
+        json!([rect("r", (0.0, 0.0), (20.0, 10.0)), {"id": "c", "type": "circle", "radius": 5, "x": 20, "y": 5}]);
     let f = faces(&ask("XY", ents.clone(), &["r", "c"]));
     assert_eq!(f.len(), 1);
     assert!(kinds(&f[0])[0].contains(&"arc".to_string()), "{:?}", kinds(&f[0]));
     assert_welded(&f[0]);
 
-    let ents = json!([rect("r", (0.0, 0.0), (20.0, 10.0)), {"id": "c", "type": "circle", "radius": 5, "x": 40, "y": 5}]);
+    let ents =
+        json!([rect("r", (0.0, 0.0), (20.0, 10.0)), {"id": "c", "type": "circle", "radius": 5, "x": 40, "y": 5}]);
     let f = faces(&ask("XY", ents, &["r", "c"]));
     assert_eq!(f.len(), 2);
     assert!(f.iter().any(|x| kinds(x) == vec![vec!["circle"]]), "{f:?}");
@@ -130,7 +139,11 @@ fn a_circle_overlapping_a_rectangle_leaves_an_arc_and_apart_they_stay_two() {
 
 #[test]
 fn a_seed_on_xz_is_in_world_coordinates() {
-    let f = faces(&ask("XZ", json!([rect("a", (0.0, 0.0), (20.0, 10.0)), rect("b", (5.0, 5.0), (15.0, 20.0))]), &["a", "b"]));
+    let f = faces(&ask(
+        "XZ",
+        json!([rect("a", (0.0, 0.0), (20.0, 10.0)), rect("b", (5.0, 5.0), (15.0, 20.0))]),
+        &["a", "b"],
+    ));
     let (p, s) = (&f[0]["inside"], &f[0]["seed"]);
     assert_eq!(s[0], p[0]);
     assert_eq!(s[1], json!(0.0));
@@ -139,7 +152,11 @@ fn a_seed_on_xz_is_in_world_coordinates() {
 
 #[test]
 fn what_does_not_merge_is_refused_by_name() {
-    let m = ask("XY", json!([rect("a", (0.0, 0.0), (20.0, 10.0)), {"id": "e", "type": "ellipse", "rx": 4, "ry": 2}]), &["a", "e"]);
+    let m = ask(
+        "XY",
+        json!([rect("a", (0.0, 0.0), (20.0, 10.0)), {"id": "e", "type": "ellipse", "rx": 4, "ry": 2}]),
+        &["a", "e"],
+    );
     assert!(m["error"]["message"].as_str().unwrap().starts_with("e is an ellipse, and only lines, arcs"), "{m:?}");
 
     let ents = json!([
@@ -161,9 +178,13 @@ fn line(id: &str, a: (f64, f64), b: (f64, f64)) -> Value {
 #[test]
 fn loops_that_share_an_edge_or_branch_are_all_merged() {
     let ents = json!([
-        line("a1", (0.0, 0.0), (10.0, 0.0)), line("a2", (10.0, 0.0), (10.0, 10.0)),
-        line("a3", (10.0, 10.0), (0.0, 10.0)), line("a4", (0.0, 10.0), (0.0, 0.0)),
-        line("c1", (10.0, 0.0), (20.0, 0.0)), line("c2", (20.0, 0.0), (20.0, 10.0)), line("c3", (20.0, 10.0), (10.0, 10.0)),
+        line("a1", (0.0, 0.0), (10.0, 0.0)),
+        line("a2", (10.0, 0.0), (10.0, 10.0)),
+        line("a3", (10.0, 10.0), (0.0, 10.0)),
+        line("a4", (0.0, 10.0), (0.0, 0.0)),
+        line("c1", (10.0, 0.0), (20.0, 0.0)),
+        line("c2", (20.0, 0.0), (20.0, 10.0)),
+        line("c3", (20.0, 10.0), (10.0, 10.0)),
     ]);
     let f = faces(&ask("XY", ents, &["a1", "a2", "a3", "a4", "c1", "c2", "c3"]));
     assert_eq!(f.len(), 1);
