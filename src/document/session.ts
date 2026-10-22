@@ -10,6 +10,16 @@ export class SessionEnded extends Error {
 
 export const isSessionEnded = (e: unknown): boolean => e instanceof Error && e.name === "SessionEnded";
 
+// Thrown from an op's onStarted when the op was cancelled before its request went out, so it never goes out.
+export class OpCancelled extends Error {
+  override readonly name = "OpCancelled";
+  constructor() {
+    super("the op was cancelled before its request was sent");
+  }
+}
+
+export const isOpCancelled = (e: unknown): boolean => e instanceof Error && e.name === "OpCancelled";
+
 export type SessionEndReason = "new" | "open" | "discard" | "close" | "reload";
 
 let seq = 0;

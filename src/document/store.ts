@@ -91,8 +91,8 @@ import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
 import { featureMeta } from "../ui/featureMeta";
-import { SessionHost, isSessionEnded, type DocumentSession } from "./session";
-import { SessionState } from "./sessionState";
+import { OpCancelled, SessionHost, isSessionEnded, type DocumentSession } from "./session";
+import { SessionState, type BusyOp } from "./sessionState";
 
 /** A section of a `.fundab` this version does not read (docs/FUNDA-FORMAT.md). */
 export interface CarriedSection {
@@ -599,8 +599,9 @@ export class DocumentStore {
       this.emitBusy();
     });
     migrateDocument(this.doc); // the seed doc skips load(); normalize it the same way
-    geometry.onProgress?.((feature, meshed, meshTotal) => {
-      if (!this.build.building) return;
+    geometry.onProgress?.((feature, meshed, meshTotal, id) => {
+      // A status of any other request, an import or an ended document's rebuild, is not this build's progress.
+      if (!this.build.building || (id !== undefined && id !== this.st.inflight?.id)) return;
       // -1/-1 means not meshing; null lets the chip tell "no denominator" from "0 of N".
       this.build = {
         ...this.build,
@@ -691,9 +692,10 @@ export class DocumentStore {
     fn: (onStarted: (id: string) => void) => Promise<T>,
     opts: { rebuild?: boolean; abort?: AbortController; holdHistory?: boolean } = {},
   ): Promise<T> {
-    const op = {
+    const op: BusyOp = {
       state: { ...IDLE_BUSY, active: true, label, rebuild: opts.rebuild === true },
-      abort: opts.abort ?? null,
+      abort: opts.abort ?? new AbortController(),
+      external: opts.abort !== undefined,
     };
     const st = this.st;
     if (opts.holdHistory) {
@@ -704,6 +706,7 @@ export class DocumentStore {
     this.setBusy(op.state);
     try {
       return await fn((id) => {
+        if (op.abort.signal.aborted) throw new OpCancelled();
         op.state = { ...op.state, id, waiting: null };
         if (st === this.st && st.busyOps.at(-1) === op) this.setBusy(op.state);
       });
@@ -733,17 +736,7 @@ export class DocumentStore {
     st.rebuildQueued = false;
     st.restoreArmed = false;
     st.provisional = null;
-    let unnamed = false;
-    for (const op of st.busyOps) {
-      if (op.abort) op.abort.abort();
-      else if (op.state.id) void this.geometry.cancel?.(op.state.id);
-      else unnamed = true;
-    }
-    // No id yet means the request is still on its way out; the client then cancels the last one it sent.
-    if (unnamed) void this.geometry.cancel?.();
-  }
-  private get busyAbort(): AbortController | null {
-    return this.st.busyOps.at(-1)?.abort ?? null;
+    for (const op of st.busyOps) void this.cancelOp(op);
   }
 
   private setBusy(next: BusyState) {
@@ -757,12 +750,17 @@ export class DocumentStore {
   async cancelBusy(): Promise<boolean> {
     if (!this.busy.active) return false;
     if (this.busy.rebuild && this.st.inflight) this.st.inflight.byUser = true;
-    if (this.busyAbort) {
-      this.busyAbort.abort();
-      return true;
-    }
-    // No id yet means the request has not gone out; undefined falls back to the client's lastHeavyId.
-    return (await this.geometry.cancel?.(this.busy.id ?? undefined)) ?? false;
+    const top = this.st.busyOps.at(-1);
+    return top ? this.cancelOp(top) : false;
+  }
+
+  // Stops this op and no other: before its request is sent the abort keeps it off the wire, after it the engine is
+  // told its own id. An op with an abort of its own handles the stop itself.
+  private async cancelOp(op: BusyOp): Promise<boolean> {
+    op.abort.abort();
+    const id = op.state.id;
+    if (op.external || !id) return true;
+    return (await this.geometry.cancel?.(id)) ?? false;
   }
 
   onBuild(fn: BuildListener): () => void {
