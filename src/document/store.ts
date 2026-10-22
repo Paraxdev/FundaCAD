@@ -2511,10 +2511,7 @@ export class DocumentStore {
   restoreVersion(id: string) {
     const repo = this.repo;
     if (!repo) return;
-    const snapshot = versionSnapshot(repo, id);
-    const carried = this.carriedSections;
-    this.load(JSON.stringify(snapshot), { replace: true });
-    this.carriedSections = carried;
+    this.loadAs(JSON.stringify(versionSnapshot(repo, id)), "version");
     this.emitMeta();
   }
 
@@ -2549,6 +2546,11 @@ export class DocumentStore {
    *  another state of the SAME document in place (a version, an assistant's or a
    *  plugin's edit), which stays one undoable step and leaves the versions alone. */
   load(json: string, opts: { replace?: boolean } = {}) {
+    this.loadAs(json, opts.replace ? "edit" : "open");
+  }
+  /** A version is always the open document, even one sharing no feature with what is on screen now. */
+  private loadAs(json: string, as: "open" | "edit" | "version") {
+    const replace = as !== "open";
     let raw: unknown;
     try {
       raw = JSON.parse(json);
@@ -2562,28 +2564,28 @@ export class DocumentStore {
     if (problem) throw new UnreadableDocumentError(problem.reason, problem.detail);
     const parsed = raw as CadDocument;
     for (const w of migrateDocument(parsed)) this.onWarning?.(w);
-    if (!opts.replace) this.emitOpen();
+    if (!replace) this.emitOpen();
     this.emitRewind();
-    const replaced = opts.replace ? { entry: this.pushUndo(), before: this.stateSections(true) } : null;
+    const replaced = replace ? { entry: this.pushUndo(), before: this.stateSections(true) } : null;
     if (!replaced) this.undoStack = [];
     this.redoStack = [];
     this.rearmProjectionValve(); // valve state must never cross documents
     // The versions are the open file's history, which a replacing load's copy may lack or hold stale or foreign.
-    if (!opts.replace) {
+    if (!replace) {
       this.repo = normalizeRepo(parsed.versions);
       this.unreadSections = parsed.versions != null && !this.repo ? { versions: structuredClone(parsed.versions) } : {};
     }
     this.openedVersion = typeof parsed.version === "number" ? parsed.version : 1;
     // A replacing load sharing no feature with this one is a different document after all, and the
     // .fundab sections it did not come with must not be saved into it.
-    const sameDoc = !!opts.replace && sharesAFeature(this.doc.features, parsed.features ?? []);
+    const sameDoc = as === "version" || (as === "edit" && sharesAFeature(this.doc.features, parsed.features ?? []));
     if (!sameDoc) this.carriedSections = [];
     this.readProjectState(parsed);
-    // An assistant's edit or a version of the same document brings no cut of its own, and keeps the one on screen.
-    if (!sameDoc || parsed.sectionView !== undefined) {
+    // The cut is the user's view: a replacing load keeps it whatever cut its copy holds, unless that is another document.
+    if (!replace || !sameDoc) {
       delete this.unreadSections.sectionView;
-      this.cut = readSectionView(parsed.sectionView);
-      if (parsed.sectionView != null && !this.cut) this.unreadSections.sectionView = structuredClone(parsed.sectionView);
+      this.cut = replace ? null : readSectionView(parsed.sectionView);
+      if (!replace && parsed.sectionView != null && !this.cut) this.unreadSections.sectionView = structuredClone(parsed.sectionView);
     }
     this.doc = {
       parameters: parsed.parameters ?? {},
@@ -2605,7 +2607,7 @@ export class DocumentStore {
     this.discardModelForReplacement();
     if (replaced) replaced.entry.state = stateSwap(replaced.before, this.stateSections());
     this.markDirty(); // openDocument clears this via markSaved() once the path is known
-    if (!opts.replace) this.dropToolPreview();
+    if (!replace) this.dropToolPreview();
     this.emitDoc();
     this.emitSectionView();
     this.scheduleRebuild(true);

@@ -210,8 +210,6 @@ export function appHost(opts: AppHostOptions): BrokerHost {
 
         case "doc_set": {
           const next = clone(obj(args.document, "document")) as unknown as CadDocument;
-          // The section cut is the user's view, and the plugin's copy may be from before they moved it.
-          delete (next as { sectionView?: unknown }).sectionView;
           next.parameters ??= {};
           next.features ??= [];
           ensureBodyIds(next);
