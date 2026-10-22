@@ -1,5 +1,5 @@
-// The camera rig contract, and the factory that picks an implementation.
-// Mouse map: right = orbit, middle = pan, wheel = zoom, Shift+right = pan.
+// The camera rig contract and its factory. Mouse map: right = orbit, middle = pan, wheel = zoom, Shift+right = pan.
+// Right orbits because the button held all session should be the one the hand rests on; middle-drag shoves the drawing.
 
 import type * as THREE from "three";
 import { createLegacyRig } from "./legacyRig";

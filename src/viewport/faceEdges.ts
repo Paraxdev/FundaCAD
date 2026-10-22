@@ -1,5 +1,5 @@
-// Which drawn edges lie on a B-rep face, for "select a face, then fillet it". The rebuild reply has no edge to face
-// map, so an edge belongs to a face when every sample of its polyline sits on the face's surface.
+// Which drawn edges lie on a B-rep face, for "select a face, then fillet it". The engine's edge to face map
+// (tessellate.edge_polylines_by_body) never crosses the wire, so an edge is on a face when every sample lies on it.
 
 export type Vec3 = [number, number, number];
 /** One world-space triangle of a face's tessellation. */
@@ -26,8 +26,9 @@ export function faceSurface(tris: readonly Tri[]): FaceSurface {
   return { tris, min, max };
 }
 
-/** Set by tessellation: a round edge bulges outside its face's chords by the surface deflection (0.05-0.15mm measured),
- *  so a tighter tolerance rejects a cylinder's own rim. Errs toward including an edge, one click to untoggle. */
+/** Edges sample to 0.01mm (tessellate._EDGE_DEFLECTION), surfaces to 0.05-0.15mm (_VIEWPORT_RELATIVE in the engine's
+ *  server.py), so a round edge bulges outside its face's chords and a tighter tolerance rejects a cylinder's own rim.
+ *  The floor holds on small parts, the relative term spares a neighbour on a 400mm plate. Errs toward including. */
 export function faceEdgeTol(bboxDiag: number): number {
   if (!Number.isFinite(bboxDiag) || bboxDiag <= 0) return 0.25;
   return Math.max(0.25, 0.004 * bboxDiag);

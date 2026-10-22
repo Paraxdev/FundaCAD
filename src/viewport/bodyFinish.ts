@@ -711,7 +711,8 @@ export class BodyFinishLayer {
   }
 
   /** Face materials are geometry groups over the body's one mesh: a second mesh would double vertices, break the hover
-   *  and selection colour buffer and give the picker two objects per face. */
+   *  and selection colour buffer and give the picker two objects per face. Groups rely on the tessellator emitting a
+   *  face's triangles together, so nothing is reordered, which would invalidate `faceTriangles`. */
   private syncFaceMaterials(b: BodyMesh, base: THREE.MeshStandardMaterial, fids: number[] | undefined) {
     const held = this.faceMatState.get(b.id);
     if (!fids?.length) {

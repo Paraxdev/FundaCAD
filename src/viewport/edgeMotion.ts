@@ -6,7 +6,8 @@ export type EdgeMode = "full" | "merged" | "thin";
 /** Visible edge draws at which a gesture draws merged, and under which it stops. */
 export const MERGE_ON_DRAWS = 384;
 export const MERGE_OFF_DRAWS = 256;
-/** A median moving frame above this, under 30 fps, draws the edges thin. */
+/** A median moving frame above this, under 30 fps, draws the edges thin. Under a software renderer the fat lines' quads
+ *  are the frame (1px lines measured 1/47 of their cost); at rest EdgeBlend fades the fat lines back in over them. */
 export const THIN_BUDGET_MS = 33;
 /** Thin only pays where edges are this share of what is drawn, a fat segment counting as 6 triangles (measured 0.63 on
  *  holed plates, 0.3 on a 1310 body assembly). */

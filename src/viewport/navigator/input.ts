@@ -63,8 +63,8 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
   const clock = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
   const now = () => clock() / 1000;
 
-  // Buttons follow the binding table (bindings.ts). A modifier+left binding swallows its press before any tool sees it,
-  // unless a tool owns the left button.
+  // Buttons follow the binding table (bindings.ts), by default right orbits (pans with Shift or a locked orbit), middle
+  // pans. A modifier+left binding swallows its press before any tool sees it, unless a tool owns the left button.
   let mouse: {
     id: number;
     mask: number;

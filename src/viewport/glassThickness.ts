@@ -1,5 +1,5 @@
 // Auto thickness glass reads its body's nearest back face per pixel from a pre pass and refracts at both surfaces,
-// falling back to the mean thickness 2V/A where that data is missing. The exit bend is carried for one thickness.
+// falling back to the mean thickness 2V/A where that data is missing.
 import * as THREE from "three";
 import { getPatch, removePatch, setPatch, type ShaderPatch } from "./shaderPatches";
 
@@ -45,6 +45,8 @@ const shared = {
   fcActive: { value: 0 },
 };
 
+// The exit bend is carried for one thickness, as three keeps no depth of the opaque scene behind the exit point.
+// Total internal reflection at the exit keeps the inside ray.
 const PARS = /* glsl */ `
 #ifdef USE_TRANSMISSION
 uniform sampler2D fcBackMap;
@@ -107,6 +109,8 @@ vec4 fcVolumeRefraction( const in vec3 n, const in vec3 v, const in float roughn
 #endif
 `;
 
+// No back face data on a back facing fragment, a silhouette pixel, another glass body in front, the swatch or a frame
+// drawn outside SceneView.render. Glass in glass: the outer body sees the inner back face, so it takes its own mean.
 const FRAGMENT = /* glsl */ `
 #ifdef USE_TRANSMISSION
 	material.transmission = transmission;
