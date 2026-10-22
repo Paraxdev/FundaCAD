@@ -1,6 +1,4 @@
-//! Which faces of a shape touch which, the Python engine's `topo_adj.py`.
-//!
-//! "Share an edge" means the same TShape through the kernel's own ancestor
+//! Which faces of a shape touch which. A shared edge is the same TShape in the kernel's ancestor
 //! map, so two bodies pressed face to face are not adjacent.
 
 use std::collections::BTreeSet;
@@ -8,12 +6,12 @@ use std::collections::BTreeSet;
 use opencascade::primitives::{Shape, ShapeType};
 use opencascade::topology::{AncestorMap, ShapeMap};
 
-/// `face_wraps`: the face closes on itself in u or v.
+/// The face closes on itself in u or v.
 pub fn face_wraps(face: &Shape) -> bool {
     face.as_face().is_some_and(|f| f.wraps())
 }
 
-/// `FaceAdjacency`: OCCT's 1-based face indices, dense over `extent`.
+/// OCCT's 1-based face indices, dense over `extent`.
 pub struct FaceAdjacency {
     faces: ShapeMap,
     edges: AncestorMap,
