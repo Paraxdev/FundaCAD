@@ -1,13 +1,5 @@
-// Facade for the floating "measure-panel" popups: Properties, Interference,
-// Stress and the Overhang (Draft Analysis) settings. The DOM lives in
-// components/overlays/*Panel.vue; what stays here is the part that is genuinely
-// this layer's job, preconditions, status-line messages, the geometry call,
-// and unit formatting of the numbers those produce.
-//
-// The app's own panels only. A capability that wants a floating panel brings its
-// own component and its own state; a plugin's camera view used to be a fifth
-// field on the store below and a fifth function here, which put "which device
-// is being watched" in the same object as "which bodies are overlapping".
+// Preconditions, status messages, geometry calls and unit formatting for the floating measure panels (Properties,
+// Interference, Stress, Overhang); the DOM is in components/overlays/*Panel.vue.
 
 import { watch } from "vue";
 import type { DocumentStore } from "../document/store";
@@ -78,9 +70,7 @@ export function createPanels(deps: PanelsDeps) {
   const { store, viewport, geometry, hasBody, setStatus } = deps;
   const panels = usePanelsStore();
 
-  // --- Inspect: Properties readout (volume / area / center / bbox). Mass and
-  // the filament estimate are computed live in the panel component itself,
-  // from `raw` below, so changing material/infill needs no new geometry call. ---
+  // Mass and filament are computed live in the panel from `raw`, so a material change needs no geometry call.
   function showProperties() {
     if (!hasBody()) {
       setStatus("Properties: create or import a body first", "");
@@ -125,16 +115,13 @@ export function createPanels(deps: PanelsDeps) {
     viewport.setComMarker(solid ? p.com : null);
   }
 
-  /** Close Properties and drop its center-of-mass marker. The panel component
-   *  calls this instead of nulling the store ref directly, so the overlay
-   *  never outlives the panel that asked for it. */
+  /** So the center-of-mass overlay never outlives the panel that asked for it. */
   function closeProperties() {
     panels.properties = null;
     viewport.setComMarker(null);
   }
 
-  // --- Inspect: Interference (clash) check between bodies, optionally with a
-  // clearance threshold (mm) for the near-miss pass. ---
+  // The optional clearance (mm) adds a near-miss pass.
   async function showInterference(clearanceMm?: number) {
     if (!hasBody()) {
       setStatus("Interference: create or import a body first", "");
@@ -191,31 +178,20 @@ export function createPanels(deps: PanelsDeps) {
     );
   }
 
-  /** Close Interference and drop its overlap/clearance overlay. */
   function closeInterference() {
     panels.interference = null;
     viewport.setInterferenceOverlay(null, null);
   }
 
-  // --- Inspect: Stress, a linear static analysis of one body. The setup is
-  // edited in the panel and saved with the document; this side turns
-  // selections into face sets, draws the supports and loads, runs the engine
-  // op with a Cancel, and draws the result, deformed and probed if asked. ---
+  // Stress: a linear static analysis of one body, its setup edited in the panel and saved with the document.
 
-  // Bumped on every document change, so a result for a model the user has
-  // edited since is not painted over the new one. A rebuild clears the overlay
-  // anyway; this covers the reply that lands after it.
+  // Bumped on every document change, so a reply landing after a rebuild is not painted over an edited model.
   let docEpoch = 0;
-  // Bumped per Run, on close and on a body change, so a reply for an earlier
-  // Run is dropped.
+  // Bumped per Run, on close and on a body change, so a reply for an earlier Run is dropped.
   let runSeq = 0;
-  // The build the face sets' display ids were taken on. They belong to one
-  // tessellation, so on another build they are looked up again from their
-  // selectors' points before anything marks or reads them.
+  // The build the face sets' display ids came from; on another build they are found again from their selector points.
   let facesFor: unknown = null;
-  // The last result's colours and the document they were for, so "Show
-  // colours" can put them back without a new Run while the model is the same,
-  // with the surface the probe reads its values from.
+  // The last result's colours, its document and probe surface, so "Show colours" restores them without a new Run.
   let colours: { overlay: StressOverlay; epoch: number; surface: ProbeSurface } | null = null;
   // The study as last written to (or read from) the document, so an edit is
   // saved once and a study the document gained some other way (a version put
@@ -243,9 +219,7 @@ export function createPanels(deps: PanelsDeps) {
     if (panels.stress) closeStress();
   });
 
-  // Every edit in the panel lands in the setup, from its inputs or from here;
-  // whichever it was, the document saves it and the view follows. Synchronous,
-  // so a save never trails the edit that caused it.
+  // Every panel edit lands in the setup and the document saves it synchronously, so a save never trails its edit.
   watch(
     () => panels.stress?.setup,
     () => {
@@ -296,11 +270,8 @@ export function createPanels(deps: PanelsDeps) {
     refreshStressMarks();
   }
 
-  /** Put a saved study in the panel, or a fresh setup seeded with `seed` for
-   *  none. Its faces are found on the build by the next relocation, which also
-   *  says which ones are not on the body any more. Reading it back is not an
-   *  edit, so the document is not marked changed by it: a saved study with no
-   *  body stays so until the user picks one. */
+  /** Faces are found on the build by the next relocation. Reading it back is not an edit, so the document stays
+   *  unchanged, and a saved study with no body stays so until the user picks one. */
   function loadStudy(study: Readonly<StressStudy> | null, seed: string | null) {
     facesFor = null;
     const setup = study ? setupFromStudy(study, (sel) => ({ ...emptyFaceSet(), selectors: sel })) : newSetup(seed);
@@ -343,14 +314,8 @@ export function createPanels(deps: PanelsDeps) {
     return { selectors, faceIds: [...faceIds], normalSum: [normal.x, normal.y, normal.z], area };
   }
 
-  /** The display face a stored selector names on this build: by its point, as
-   *  the engine resolves a picked face, or by a flat fingerprint's centroid.
-   *  Undefined for a selector the view cannot place, which is kept for the
-   *  engine and left untinted rather than reported lost. A centroid is only a
-   *  guess at the face (an L-shaped face's lies off it), so a fingerprint the
-   *  guess misses on `body` is one the view cannot place, not one that is gone.
-   *  A selector of a shape it cannot read is one it cannot place either, never
-   *  an error: this runs inside every rebuild while the panel is open. */
+  /** By its point, as the engine resolves a picked face, or by a flat fingerprint's centroid. Undefined when the view
+   *  cannot place it (a centroid can miss an L-shaped face); never an error, since it runs on every rebuild. */
   function faceIdOf(sel: Selector, body: string | null): number | null | undefined {
     try {
       if ("point" in sel) return isVec3(sel.point) ? viewport.faceIdNear(sel.point) : undefined;
@@ -364,14 +329,8 @@ export function createPanels(deps: PanelsDeps) {
     return undefined;
   }
 
-  /** Bring the face sets onto the current build: each selector's point to the
-   *  face nearest it on the analysed body, as the engine resolves it. Nothing
-   *  is dropped: the face sets are what the document saves, and a model that
-   *  lacks a face now (an edit, the timeline rolled back, a failed build) may
-   *  have it again on the next build. A selector not on this one is counted
-   *  missing in its set, left untinted, and keeps a Run from going; the body
-   *  stays the analysed one even on a build without it. Returns how many
-   *  faces are missing, or 0 when the sets were already on this build. */
+  /** Moves each selector to the nearest face on the analysed body. Nothing is dropped, a missing face may return next
+   *  build; it counts as missing, stays untinted and blocks a Run. Returns the missing count, 0 if already current. */
   function relocateStressFaces(): number {
     const s = panels.stress?.setup;
     const cur = store.buildState.result ?? null;
@@ -408,11 +367,8 @@ export function createPanels(deps: PanelsDeps) {
     return body && stressBodies().some((b) => b.id === body) ? body : null;
   }
 
-  /** Tint each support's faces in its kind's colour and every load's faces,
-   *  while the panel is open, and after a build first find them again on it.
-   *  Not over the result's colours, which a tint would misread, nor on a body
-   *  the user has hidden. Called by the rebuild bridge after every model it
-   *  draws. */
+  /** Tints support and load faces after finding them on the new build, but not over the result's colours or on a hidden
+   *  body. Called by the rebuild bridge after every model it draws. */
   function refreshStressMarks() {
     const d = panels.stress;
     if (!d) {
@@ -464,8 +420,6 @@ export function createPanels(deps: PanelsDeps) {
     glyphs?.setProbe(false);
     glyphs?.setProbePins([]);
   }
-
-  // --- the arrows and axes in the view ---
 
   let glyphsPending = false;
   /** Coalesce a burst of setup edits (a drag, a relocation) into one redraw. */
@@ -544,9 +498,7 @@ export function createPanels(deps: PanelsDeps) {
       const anchor = areaCentre(tris) ?? spots[0]?.at ?? null;
       const dir = forceDirection(l);
       if (!anchor || typeof dir === "string") continue;
-      // The sign of the force is part of its direction: the arrow points the
-      // way the load is applied, under that way's name, so a drag along it
-      // writes the same load back with a positive force.
+      // The force sign is part of the direction, so dragging along the arrow writes a positive force back.
       const force = Number(l.force) || 0;
       const flip = force < 0;
       m.forces.push({
@@ -687,9 +639,8 @@ export function createPanels(deps: PanelsDeps) {
     return defaultSpotRadius(box && !box.isEmpty() ? box.min.distanceTo(box.max) : NaN);
   }
 
-  /** Arm one row: the next click on the body puts a spot there. Pressing the
-   *  same row's Place again, or Esc, disarms it. The result's colours come off
-   *  first, as the click is on the body and not on them. */
+  /** The next click on the body puts a spot there; Place again or Esc disarms. The result's colours come off first, as
+   *  the click is on the body. */
   function placeStressSpot(target: StressTarget) {
     const d = panels.stress;
     if (!d) return;
