@@ -294,6 +294,11 @@ export function createActions(e: Engine): (action: string) => void {
           e.setStatus("Section: create or import a body first", "");
           break;
         }
+        // Its handle, box and keys would stay live beside the other tool's until that ends.
+        if (e.toolAtWork()) {
+          e.setStatus("Section: finish the active tool first (Esc cancels it)", "");
+          break;
+        }
         // The world axes need no aiming, for a part with no face turned the way you want to look.
         void (async () => {
           const src = await choose<"pick" | "X" | "Y" | "Z">("Section, cut along what?", [
