@@ -30,7 +30,14 @@ struct State {
     /// A traced picture is running; the viewport's frames wait for it.
     picture: Option<PictureStatus>,
     cancel: bool,
-    /// The seq of the last frame drawn, which pt_camera answers so the page
+}
+
+/// pt_camera leaves its camera here for the next frame instead of waiting on
+/// the UI thread for the frame in progress, which held it 20 ms per camera.
+#[derive(Default)]
+struct Aim {
+    camera: Option<Camera>,
+    /// The seq of the last frame started, which pt_camera answers so the page
     /// can tell which camera a frame was traced with.
     drawn: u32,
 }
@@ -56,7 +63,10 @@ impl State {
     }
 }
 
-pub struct TracerSource(Mutex<State>);
+pub struct TracerSource {
+    state: Mutex<State>,
+    aim: Mutex<Aim>,
+}
 
 static TRACER: Reopen<TracerSource> = Reopen::new();
 
@@ -77,7 +87,10 @@ pub fn tracer() -> Result<Arc<TracerSource>, String> {
         let opts = TracerOptions { software: mode == "software", ..Default::default() };
         within(CREATE_LIMIT, move || Tracer::new(opts))
             .unwrap_or_else(Err)
-            .map(|tracer| TracerSource(Mutex::new(State { tracer, fault: None, picture: None, cancel: false, drawn: 0 })))
+            .map(|tracer| TracerSource {
+                state: Mutex::new(State { tracer, fault: None, picture: None, cancel: false }),
+                aim: Mutex::default(),
+            })
             .map_err(|e| {
                 eprintln!("[frames] no native tracer: {e}");
                 let text = e.to_string();
@@ -132,20 +145,49 @@ impl TracerSource {
 
     /// A new transport counts its frames from 1.
     pub fn opened(&self) {
-        self.lock().drawn = 0;
+        self.aim().drawn = 0;
     }
 
-    /// A panic in wgpu poisons nothing for the next caller; the fault is
-    /// reported through pt_status instead.
+    /// Answers the seq of the last frame started; every later frame is traced
+    /// with this camera or a newer one.
+    fn aim_at(&self, camera: Camera) -> u32 {
+        let mut a = self.aim();
+        a.camera = Some(camera);
+        a.drawn
+    }
+
+    /// Whoever takes the tracer takes the camera left for it, so a status or a
+    /// picture never sees the one before.
     fn lock(&self) -> MutexGuard<'_, State> {
-        self.0.lock().unwrap_or_else(|p| p.into_inner())
+        self.lock_for(None)
+    }
+
+    /// A frame marks itself started under the camera's lock, so pt_camera's
+    /// answer and the frames that see its camera agree.
+    fn lock_for(&self, frame: Option<u32>) -> MutexGuard<'_, State> {
+        // A panic in wgpu poisons nothing for the next caller; pt_status reports the fault.
+        let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        let camera = {
+            let mut a = self.aim();
+            if let Some(seq) = frame {
+                a.drawn = seq;
+            }
+            a.camera.take()
+        };
+        if let Some(c) = camera {
+            s.tracer.set_camera(c);
+        }
+        s
+    }
+
+    fn aim(&self) -> MutexGuard<'_, Aim> {
+        self.aim.lock().unwrap_or_else(|p| p.into_inner())
     }
 }
 
 impl FrameSource for TracerSource {
     fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32) {
-        let mut s = self.lock();
-        s.drawn = seq;
+        let mut s = self.lock_for(Some(seq));
         s.take_fault();
         if s.fault.is_some() {
             out.fill(0);
@@ -229,13 +271,10 @@ pub fn pt_colors(request: Request<'_>) -> Result<bool, String> {
     with(|t| t.set_colors(&key, colors))
 }
 
-/// Answers the seq of the last frame drawn before the camera was taken.
+/// Answers the seq of the last frame started before the camera was left for the next one.
 #[tauri::command]
 pub fn pt_camera(camera: Camera) -> Result<u32, String> {
-    with_state(|s| {
-        s.tracer.set_camera(camera);
-        s.drawn
-    })
+    Ok(open()?.aim_at(camera))
 }
 
 /// Answers the environment key held, so the page sends pt_env when it is not its own.
@@ -494,78 +533,5 @@ pub async fn pt_probe() -> Probe {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn frame(t: &TracerSource) -> u32 {
-        let mut out = vec![0; 32 * 24 * 4];
-        t.render(&mut out, 32, 24, 0);
-        with(|t| t.samples()).unwrap()
-    }
-
-    /// The tracer is one per process, so its tests take turns.
-    fn one_at_a_time() -> MutexGuard<'static, ()> {
-        static TURN: Mutex<()> = Mutex::new(());
-        TURN.lock().unwrap_or_else(|p| p.into_inner())
-    }
-
-    #[test]
-    fn a_tracer_start_the_driver_never_answers_is_refused_with_the_reason() {
-        let start = std::time::Instant::now();
-        let slow = within(Duration::from_millis(100), || std::thread::sleep(Duration::from_secs(5)));
-        assert!(start.elapsed() < Duration::from_secs(2), "the start waited {:?}", start.elapsed());
-        let Err(Refusal::Device(why)) = slow else { panic!("a stuck start was not refused") };
-        assert!(why.contains("did not make a device within 0 s"), "{why}");
-        assert!(matches!(within(Duration::from_secs(5), || 7), Ok(7)));
-    }
-
-    #[test]
-    fn a_frame_the_gpu_does_not_finish_in_time_greys_path_traced_with_the_reason() {
-        let _turn = one_at_a_time();
-        let Ok(t) = tracer() else {
-            eprintln!("skipped: no native tracer");
-            return;
-        };
-        t.lock().tracer.set_wait_limit_for_test(Duration::ZERO);
-        let mut out = vec![1; 256 * 192 * 4];
-        t.render(&mut out, 256, 192, 0);
-        let fault = pt_status().unwrap().fault.expect("a frame past the wait limit left no fault");
-        assert!(fault.contains("did not finish a frame within 0 s"), "{fault}");
-        t.render(&mut out, 256, 192, 1);
-        assert!(out.iter().all(|&b| b == 0), "a faulted tracer drew a frame");
-        drop(t);
-        release();
-        let t = tracer().expect("the tracer did not come back after a release");
-        assert_eq!(pt_status().unwrap().fault, None, "a reopened tracer kept the old fault");
-        drop(t);
-        release();
-    }
-
-    #[test]
-    fn a_cancelled_picture_leaves_the_viewport_tracing_and_the_next_one_saves() {
-        let _turn = one_at_a_time();
-        let Ok(t) = tracer() else {
-            eprintln!("skipped: no native tracer");
-            return;
-        };
-        with(|t| t.set_cap(4096)).unwrap();
-        let before = frame(&t);
-        let run = std::thread::spawn(|| picture(1024, 1024, 1_000_000));
-        while pt_status().unwrap().picture.is_none() {
-            assert!(!run.is_finished(), "{:?}", run.join().unwrap());
-            std::thread::yield_now();
-        }
-        assert_eq!(frame(&t), before, "the viewport traced while the picture held the tracer");
-        pt_picture_cancel().unwrap();
-        assert_eq!(run.join().unwrap(), Err(PICTURE_CANCELLED.to_string()));
-        assert!(pt_status().unwrap().picture.is_none());
-        assert!(frame(&t) > before, "the viewport stopped tracing after a cancelled picture");
-
-        let png = picture(64, 48, 4).expect("the picture after a cancel failed");
-        assert_eq!(&png[1..4], b"PNG");
-        assert!(frame(&t) > before);
-        assert_eq!(pt_status().unwrap().fault, None);
-        drop(t);
-        release();
-    }
-}
+#[path = "tracer_tests.rs"]
+mod tests;
