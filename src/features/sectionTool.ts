@@ -435,14 +435,19 @@ export class SectionTool {
   }
 
   private onKey(e: KeyboardEvent) {
-    // A text field keeps its keys, except Esc in our own box, which holds focus from the moment editing starts.
-    const escInOwnDim = e.key === "Escape" && this.dim.isActive && this.dim.ownsTarget(e.target);
-    if (!escInOwnDim && isEditableTarget(e.target)) return;
+    const letter = e.ctrlKey || e.metaKey || e.altKey ? "" : e.key.toLowerCase();
+    // Our box holds focus from the moment editing starts, so Esc there is ours, and F and G are too until something
+    // is typed: no offset starts with either letter.
+    const ownDim = this.dim.isActive && this.dim.ownsTarget(e.target);
+    const ours = e.key === "Escape" || ((letter === "f" || letter === "g") && !this.dim.isUserDriven("offset"));
+    if (isEditableTarget(e.target) && !(ownDim && ours)) return;
     if (e.key === "Escape") this.confirm();
-    else if (e.key === "f" || e.key === "F") {
+    else if (letter === "f") {
+      e.preventDefault();
       e.stopImmediatePropagation(); // F is also Fillet
       this.flip();
-    } else if (e.key === "g" || e.key === "G") {
+    } else if (letter === "g") {
+      e.preventDefault();
       e.stopImmediatePropagation();
       this.ghost = nextGhostLevel(this.ghost);
       this.pushPlane();

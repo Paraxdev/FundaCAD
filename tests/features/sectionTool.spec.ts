@@ -201,10 +201,32 @@ describe("section phases", () => {
     window.removeEventListener("keydown", later);
   });
 
-  it("F typed into the box is text, not a flip", () => {
+  it("F and G in the box flip and step the ghost until something is typed, then they are text", () => {
     const { tool, sent } = setup();
+    const later = vi.fn();
+    window.addEventListener("keydown", later);
     tool.start("Z");
-    key(input()!, "f");
+    const pressed = [key(input()!, "f"), key(input()!, "G"), key(input()!, "F")];
+    expect(pressed.map((e) => e.defaultPrevented)).toEqual([true, true, true]);
+    expect(sent).toEqual([plane(0, 1, 0.14), plane(0, -1, 0.14), plane(0, -1, 0.3), plane(0, 1, 0.3)]);
+    expect(later).not.toHaveBeenCalled();
+    expect(input()!.value).toBe("0");
+
+    type("4");
+    const typed = [key(input()!, "f"), key(input()!, "g")];
+    expect(typed.map((e) => e.defaultPrevented)).toEqual([false, false]);
+    expect(sent).toHaveLength(4);
+    expect(tool.phase).toBe("editing");
+    window.removeEventListener("keydown", later);
+  });
+
+  it("Ctrl+F and Alt+G are left to the app while editing, on the canvas and in the box", () => {
+    const { tool, canvas, sent } = setup();
+    tool.start("Z");
+    for (const target of [canvas, input()!]) {
+      target.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, bubbles: true, cancelable: true }));
+      target.dispatchEvent(new KeyboardEvent("keydown", { key: "g", altKey: true, bubbles: true, cancelable: true }));
+    }
     expect(sent).toEqual([plane(0, 1, 0.14)]);
   });
 
