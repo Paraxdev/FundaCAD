@@ -1,6 +1,5 @@
-// Client of the geometry engine, over a transport (./transport.ts).
-// One request/response per message, matched by `id`. Calls made before the
-// transport opens are queued and flushed on open; the transport reconnects.
+// Client of the geometry engine over ./transport.ts: one request and reply per message, matched by `id`.
+// Calls made before the transport opens are queued and flushed on open.
 
 import type {
   CadDocument,
@@ -43,19 +42,14 @@ function base64ToBytes(b64: string): Uint8Array {
 }
 import type { WireBody, WireBodyFull, WireEdgeList, WireManifestEntry, WireRebuildResult } from "./assembly";
 
-// The engine's wire-level reply envelope (see the Python engine's `server.py`'s _ok/_err):
-// every call resolves to one of these two shapes; `result`'s type is per-op,
-// supplied as call<T>()'s generic parameter at each call site.
+// The engine's reply envelope (server.py _ok/_err); `result`'s type is per op, given as call<T>()'s parameter.
 interface WireError {
   message: string;
   feature_id?: string;
 }
 type RawReply<T> =
   | { id: string; ok: true; result: T }
-  // `cancelled` marks a failure the USER caused by pressing Cancel. It stays
-  // ok:false so nothing that only checks `ok` can mistake it for a result, but
-  // callers can tell "you stopped it" apart from "it broke", the difference
-  // between a quiet dismissal and an error banner.
+  // `cancelled` marks a failure the user caused with Cancel: still ok:false, but callers can skip the error banner.
   | { id: string; ok: false; cancelled?: boolean; error: WireError };
 
 type Pending = (msg: RawReply<unknown>) => void;
@@ -65,11 +59,8 @@ type StatusListener = (connected: boolean) => void;
  *  counters in o/a/e), each a closed 2D polyline in final sketch coordinates. */
 export type TextFace = { outer: [number, number][]; holes: [number, number][][] };
 
-/** Per-source outcome of a projectGeometry call. `curves` carries one entry per
- *  resolved edge (a face boundary yields several); `fp` is the engine-authored
- *  edge fingerprint for body-edge sources, the caller wraps it into a
- *  by:"match" selector, and absent for sketch-curve sources (stable ids).
- *  `ok: false` + `error` = strict resolution refused (missing/ambiguous source). */
+/** Per-source outcome of projectGeometry, one curve per resolved edge. `fp` is the engine's fingerprint for a
+ *  body edge, which the caller wraps in a by:"match" selector, absent for sketch curves; ok:false is a refusal. */
 export interface ProjectionResult {
   source_index: number;
   ok: boolean;
@@ -77,10 +68,7 @@ export interface ProjectionResult {
   error?: string;
 }
 
-// One overlapping body pair from an interference check. `positions`/`indices`
-// are a coarse triangulation of the OVERLAP SOLID itself (display only, never
-// written to the document), for drawing it as a highlighted overlay; absent if
-// the engine couldn't tessellate that particular intersection.
+// `positions`/`indices` coarsely triangulate the overlap solid for a display overlay only, absent if that failed.
 export interface ClashPair {
   a: string;
   b: string;
@@ -92,8 +80,7 @@ export interface ClashPair {
   indices?: number[];
 }
 
-// One near-miss pair from clearance mode: closer than the threshold but not
-// overlapping, with the two nearest points for drawing a short marker line.
+// A clearance near miss: closer than the threshold, not overlapping, with the two nearest points for a marker.
 export interface ClearancePair {
   a: string;
   b: string;
@@ -212,11 +199,9 @@ export interface StressLoadArea {
   spots?: StressSpotArea[];
 }
 
-/** The `stress` op's options past the document and the body (docs/PROTOCOL.md).
- *  Selectors carry their body. Units are mm, N and MPa; a force is the total
- *  over its faces, a pressure pushes into them. `fixed` is the older spelling
- *  of a fixed support; at least one of it and `supports` is needed. Gravity is
- *  in m/s2, and `true` means 9.81 down Z. */
+/** `stress` options (docs/PROTOCOL.md). Selectors carry their body. Units mm, N and MPa; a force is the total
+ *  over its faces, a pressure pushes into them. `fixed` is the older spelling of a fixed support, and one of it
+ *  or `supports` is required. Gravity is in m/s2, `true` meaning 9.81 down Z. */
 export interface StressOptions {
   fixed?: Selector[];
   supports?: StressSupport[];
@@ -227,12 +212,9 @@ export interface StressOptions {
   maxElements?: number;
 }
 
-/** A linear static analysis of one body. `surface` is the boundary of the
- *  analysis mesh with a value per vertex, for drawing; `displacement` holds
- *  three numbers per vertex. Display only, nothing here reaches the document.
- *  `weight` is the gravity force on the body (null without gravity), and
- *  `reactions` one force per support, `fixed` first and then `supports` in
- *  order; engines from before either leave them out. */
+/** A linear static analysis of one body, display only. `surface` is the analysis mesh boundary with a value per
+ *  vertex, `displacement` three numbers per vertex, `weight` the gravity force (null without gravity), and
+ *  `reactions` one force per support, `fixed` first; older engines omit the last two. */
 export interface StressReply {
   body: string;
   name: string;
@@ -257,10 +239,8 @@ export type StressResult = { ok: true; result: StressReply } | { ok: false; mess
 export type PrintabilityCheck = "overhang" | "wall" | "gap" | "bridge" | "open";
 export type PrintabilityUp = "+X" | "-X" | "+Y" | "-Y" | "+Z" | "-Z";
 
-/** The `printability` op's options past the document (docs/PROTOCOL.md).
- *  Lengths in mm, the overhang in degrees past vertical. `up` and `layFlat`
- *  are two answers to how the part sits, so never both; without either it
- *  prints +Z up as modelled. Leaving `checks` out runs every check. */
+/** `printability` options (docs/PROTOCOL.md). Lengths in mm, overhang in degrees past vertical. `up` and
+ *  `layFlat` are exclusive, and without either it prints +Z up. Leaving `checks` out runs every check. */
 export interface PrintabilityOptions {
   bodies?: string[];
   nozzle?: number;
@@ -276,10 +256,8 @@ export interface PrintabilityOptions {
 
 export type PrintabilityKind = "overhang" | "bridge" | "wall" | "floor" | "gap" | "fused" | "meshHole" | "flatTriangle";
 
-/** One thing the check found. `face` is the body's own face index, the `i` of
- *  `inspect` and of a body's faceIds on the wire, which the viewport numbers
- *  on from the body's faceStart. `other` is the facing face of a wall, floor,
- *  gap or fused pair, on another body for `fused`. */
+/** One finding. `face` is the body's own face index (inspect's `i`), which the viewport offsets by faceStart.
+ *  `other` is the facing face of a wall, floor, gap or fused pair, on another body for `fused`. */
 export interface PrintabilityFinding {
   kind: PrintabilityKind;
   body: string;
@@ -331,35 +309,25 @@ export interface PrintabilityReply {
 export type PrintabilityResult =
   { ok: true; result: PrintabilityReply } | { ok: false; message: string; cancelled?: boolean };
 
-// The surface the rest of the app depends on. `Geometry` implements it over
-// either engine's transport, and tests stub it by hand.
+// The surface the rest of the app depends on: `Geometry` implements it over either engine's transport, tests stub it.
 export interface GeometryBackend {
   /** `onId` receives the request id, again if a resync sends it a second time. */
   rebuild(doc: CadDocument, tolerance?: number, onId?: (id: string) => void): Promise<RebuildReply>;
-  /** Per-glyph 2D outlines for a sketch text entity (the engine owns fonts, so
-   *  preview outlines come from it and match the extruded solid exactly). */
+  /** Per-glyph 2D outlines for a sketch text entity; the engine owns fonts, so previews match the extruded solid. */
   tessellateText(entity: object, pathEntity?: object): Promise<TextFace[]>;
-  /** Project 3D sources (body edges / face boundaries / cross-sketch curves)
-   *  onto a sketch plane. `doc` is the timeline PREFIX for that sketch (the
-   *  caller truncates). Sources are the persisted ProjectedSource shapes:
-   *  pick-time edge/face sources use a by:"nearest" selector, refresh-time
-   *  ones the stored by:"match" fingerprint selector, and silhouette sources
-   *  carry just the body id (the whole-body HLR outline needs no selector).
-   *  Strict per-source resolution; whole-call transport failure returns []. */
+  /** Project body edges, face boundaries or sketch curves onto a sketch plane. `doc` is the timeline prefix for
+   *  that sketch. Pick-time sources use by:"nearest", refresh-time ones the stored by:"match" fingerprint, and a
+   *  silhouette carries only the body id. Strict per source; a transport failure returns []. */
   projectGeometry(doc: CadDocument, plane: PlaneSpec, sources: ProjectedSource[]): Promise<ProjectionResult[]>;
-  /** System font family names for the text tool's font picker. */
   listFonts(): Promise<string[]>;
-  /** One-way v4 -> v5: turn a pre-container document's inline base64 BREP into
-   *  blobs in the durable store, returning the content hash for each feature.
-   *  Best-effort by design, the document keeps its inline copy, so a failure
-   *  (or a dead engine) costs nothing. */
+  /** One-way v4 to v5: move a document's inline base64 BREP into the blob store, returning each feature's hash.
+   *  Best effort, the document keeps its inline copy, so a failure costs nothing. */
   migrateGeometry(items: { id: string; brep: string }[]): Promise<{ id: string; geom: string }[]>;
   export(
     doc: CadDocument,
     format: ExportFormat,
     path: string,
-    // palette/bodyColors are only read by formats that can carry colour (GLB);
-    // the others ignore them.
+    // palette/bodyColors are read only by formats that carry colour (GLB).
     opts?: {
       body?: string;
       bodies?: string[];
@@ -373,26 +341,21 @@ export interface GeometryBackend {
       plane?: PlaneDef;
       tolerance?: number;
     },
-    // Same contract as importGeometry's: hands back the request id so a Cancel
-    // targets THIS export rather than whatever ran most recently. The document
-    // stays editable while an export runs, so "most recent" is not this one.
+    // Hands back the request id so a Cancel targets this export, not whatever ran most recently
+    // (the document stays editable while an export runs).
     onStarted?: (id: string) => void,
   ): Promise<{
     ok: boolean;
     path?: string;
     paths?: string[];
     message?: string;
-    // the user stopped it, distinct from a failure, so the caller can stay
-    // silent instead of reporting their own action back to them as an error
+    // The user stopped it, so the caller stays silent rather than reporting it as an error.
     cancelled?: boolean;
-    // features that FAILED during the export rebuild: their bodies are absent
-    // from the written files (export-what-built, never silently)
+    // Features that failed during the export rebuild; their bodies are absent from the written files.
     warnings?: { message: string; feature_id?: string }[];
   }>;
-  // Read an external geometry file into an embeddable BREP payload (for an
-  // `import` feature). Path-based: the engine reads the file directly.
-  // `onStarted` receives the request id, so a caller that may later cancel
-  // can target THIS op rather than whatever ran most recently.
+  // Read an external file into an embeddable BREP for an `import` feature; the engine reads the path itself.
+  // `onStarted` gets the request id so a Cancel targets this op.
   importGeometry(
     path: string,
     format: ImportFormat,
@@ -408,50 +371,36 @@ export interface GeometryBackend {
     onStarted?: (id: string) => void,
     unit?: string,
   ): Promise<ImportReply>;
-  /** A solid from a shape generator a plugin's geometry component registered with
-   *  the engine (docs/PLUGINS.md). "mesh" is for a preview;
-   *  "store" writes the solid to the blob store, and an `import` feature carrying the
-   *  returned `geom` rebuilds with neither the generator nor its plugin present.
-   *  Optional, a test backend may have no plugin host. */
+  /** A solid from a shape generator a plugin registered with the engine (docs/PLUGINS.md). "mesh" previews;
+   *  "store" writes the blob store, and an `import` carrying the returned `geom` rebuilds without the plugin. */
   generateShape?(
     generator: string,
     params: object,
     opts?: { output?: "mesh" | "store"; placement?: ShapePlacement },
   ): Promise<GeneratedShapeReply>;
-  // Pairwise interference (clash) check among the document's bodies. `clearance`
-  // (mm) turns on the near-miss pass: pairs closer than that but not
-  // overlapping come back in `clearances`. `truncated` marks a candidate-pair
-  // cap hit on a dense assembly, `message` explains it. `unchecked` lists the
-  // bodies that are not closed solids: their pairs are in neither list.
+  // Pairwise clash check. `clearance` (mm) adds near misses in `clearances`, `truncated` marks a candidate pair
+  // cap on a dense assembly, and `unchecked` lists bodies that are not closed solids, whose pairs are in neither list.
   interference(doc: CadDocument, clearance?: number): Promise<InterferenceReply>;
-  /** The axis a press/pull with `direction: "axis"` would move this face along,
-   *  or why it has none. Null when the engine could not be asked. Optional, a
-   *  test backend may not answer it. */
+  /** The axis a press/pull with `direction: "axis"` would move this face along, or why it has none.
+   *  Null when the engine could not be asked. */
   faceAxis?(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null>;
-  /** Where `point` sits on `face`, as a fingerprint and (u, v) fractions.
-   *  Optional, a test backend may not answer it. */
+  /** Where `point` sits on `face`, as a fingerprint and (u, v) fractions. */
   faceAnchor?(doc: CadDocument, face: Selector, body: string | null, point: Vec3): Promise<FaceAnchorReply | null>;
-  /** Linear static stress in one body (`body` is its id or name). `onStarted`
-   *  hands back the request id for a Cancel through `cancel(id)`. Optional, a
-   *  test backend may have no solver. */
+  /** Linear static stress in one body (id or name). `onStarted` hands back the request id for `cancel(id)`. */
   stress?(doc: CadDocument, body: string, opts: StressOptions, onStarted?: (id: string) => void): Promise<StressResult>;
-  /** What would go wrong making the document's bodies layer by layer: overhangs,
-   *  thin walls, gaps, bridges and open shells. `onStarted` as for `stress`.
-   *  Optional, a test backend may not check. */
+  /** What would go wrong printing the bodies layer by layer: overhangs, thin walls, gaps, bridges and open
+   *  shells. `onStarted` as for `stress`. */
   printability?(
     doc: CadDocument,
     opts: PrintabilityOptions,
     onStarted?: (id: string) => void,
   ): Promise<PrintabilityResult>;
   patternAxis?(doc: CadDocument, ref: Selector): Promise<PatternAxisReply | null>;
-  /** The lines the built model cuts a sketch's areas along on one plane, as
-   *  world polylines, the ones every consuming feature cuts with. Null when the
-   *  engine holds no build of `doc` yet or could not be asked. */
+  /** World polylines the built model cuts a sketch's areas along on one plane, the ones every consuming feature
+   *  cuts with. Null when the engine holds no build of `doc` or could not be asked. */
   profileCuts?(doc: CadDocument, origin: Vec3, normal: Vec3, reach?: Vec3[]): Promise<Vec3[][] | null>;
-  /** Export through a format a plugin's geometry component registered with the
-   *  engine. The engine rebuilds and meshes; `options` reach the plugin's
-   *  exporter untouched, and `info` is whatever it reports back. Optional, a
-   *  test backend may have no plugin host. */
+  /** Export through a format a plugin registered with the engine. `options` reach the plugin's exporter
+   *  untouched and `info` is whatever it reports back. */
   exportWith?(
     doc: CadDocument,
     path: string,
@@ -466,48 +415,29 @@ export interface GeometryBackend {
     cancelled?: boolean;
     warnings?: { message: string; feature_id?: string }[];
   }>;
-  // Open the transport to the engine. Must be called once before any backend
-  // op; the store queues into the outbox until it opens, so ordering is
-  // non-critical.
+  // Call once before any op. Earlier ops queue in the outbox until it opens, so ordering is not critical.
   init(): Promise<void>;
   onStatus(fn: StatusListener): () => void;
-  /** Interim build progress: fires with the feature index the engine is
-   *  currently building (-1 = tessellating) roughly once a second during a
-   *  long rebuild. Optional, the in-process backend doesn't stream.
-   *
-   *  `meshed`/`meshTotal` are -1 except during the payload (meshing) phase,
-   *  where they carry its real per-body denominator. Without them the phase
-   *  reported only feature=-1, which the timeline rendered as a bar pinned at
-   *  0% for its whole duration, 136 s of it on the reference assembly. */
+  /** Build progress about once a second: the feature index (-1 while tessellating), and while meshing the
+   *  per-body `meshed`/`meshTotal` (else -1), which keeps the bar moving through 136 s of meshing on big assemblies. */
   onProgress?(fn: (feature: number, meshed: number, meshTotal: number) => void): () => void;
-  /** Installments of a chunked rebuild reply, for progressive display. Optional:
-   *  the in-process backend answers in one piece and never streams. */
+  /** Installments of a chunked rebuild reply for progressive display; the in-process backend never streams. */
   onRebuildChunk?(fn: (c: RebuildChunk) => void): () => void;
   /** MCAD-style "Compute All": rebuild bypassing every cache layer. Optional. */
   computeAll?(doc: CadDocument, tolerance?: number): Promise<RebuildReply>;
-  /** Stop an op in flight. `target` is the request id to cancel, pass the id
-   *  the busy state owns, NOT the most recent one. Optional (the in-process
-   *  backend has nothing to cancel). Resolves to whether anything stopped. */
+  /** Stop an op in flight. Pass the id the busy state owns, not the most recent one.
+   *  Resolves to whether anything stopped. */
   cancel?(target?: string, opts?: { soft?: boolean }): Promise<boolean>;
   /** A soft cancel stops a job at its next checkpoint and never restarts the
    *  engine to do it. Without it a superseded rebuild is left to finish. */
   readonly softCancel?: boolean;
-  /** Stage progress for a long op (import): `pct` is null while the stage has
-   *  no fraction. Optional. */
+  /** Stage progress for a long op (import), `pct` null while a stage has no fraction. */
   onOpProgress?(fn: OpProgressListener): () => void;
-  /** A request of ours that waits behind another client's job on the same
-   *  engine: `behind` says whose and what, null once ours has started. Optional,
-   *  a backend with one client never queues behind anyone. */
+  /** Our request waits behind another client's job on the same engine: `behind` says whose, null once ours starts. */
   onQueue?(fn: (id: string, behind: EngineWait | null) => void): () => void;
-  /** One live-session op (see the Python engine's `live_session.py`): publish what this window
-   *  has open, collect what an attached assistant has asked for.
-   *
-   *  Deliberately one untyped passthrough rather than five methods. The session
-   *  is a conversation between this window and the engine's own state machine,
-   *  not part of the geometry surface every other method here belongs to, and
-   *  the in-process backend has nothing to say about it at all, hence optional.
-   *  Resolves to null when the backend cannot speak it or the call failed, so
-   *  the caller's "no session" path and its "no backend" path are the same one. */
+  /** One live-session op (live_session.py): publish what this window has open, collect what an assistant asked
+   *  for. One untyped passthrough on purpose, since it is not geometry. Null when unsupported or failed, so
+   *  "no session" and "no backend" share one path. */
   session?(op: string, payload?: object): Promise<Record<string, unknown> | null>;
   /** Put bytes in the engine's content addressed blob store, resolving to the
    *  hash a document names them by. Rejects with the engine's message. */
@@ -519,9 +449,8 @@ export interface GeometryBackend {
   readonly inFlight?: number;
 }
 
-/** Edge polylines packed into binary buffers (see server.py's _pack_edges):
- *  every point triple flattened, plus a per-edge POINT count to re-split them.
- *  Exists only between reading a binary frame and expanding it. */
+/** Edge polylines packed into binary buffers (server.py _pack_edges): flattened point triples plus a per-edge
+ *  point count. Exists only between reading a binary frame and expanding it. */
 interface WireEdgesPacked {
   $pts: F32Wire;
   $counts: U32Wire;
@@ -530,13 +459,8 @@ interface WireEdgesPacked {
   smooth?: number[];
 }
 
-/** Re-split a packed edge buffer into the per-edge point triples every consumer
- *  expects. `counts` holds each edge's POINT count; `pts` is every triple of
- *  every edge, flattened, in the same order.
- *
- *  Exported for its own test: this is the client half of the wire change that
- *  keeps a large assembly's reply under the frame cap, and the engine-side
- *  test can only prove the encoder. */
+/** Re-split packed edges (`counts` points per edge) into per-edge triples. Exported for its own test, since the
+ *  engine side test only proves the encoder. */
 export function expandPackedEdges(
   pts: Float32Array,
   counts: Uint32Array,
@@ -558,9 +482,8 @@ export function expandPackedEdges(
   return list;
 }
 
-/** The framing envelope a chunked reply adds. Non-final frames carry
- *  `status: "chunk"` and no `ok`, so a peer that does not understand them
- *  treats them as informational rather than as the reply. */
+/** A chunked reply's framing. Non-final frames carry `status: "chunk"` and no `ok`, so a peer that does not
+ *  understand them treats them as informational. */
 interface WireStreamEnvelope {
   sid: string;
   seq: number;
@@ -577,24 +500,12 @@ interface BinaryHeader {
   result: WireRebuildResult & { $buffers?: { dtype: string; len: number }[] };
 }
 
-/** Longest gap tolerated between two frames of one chunked reply before the
- *  client gives up on it. Chunks are sent back to back off a result the engine
- *  already holds in full, so any real gap is an engine bug, this exists so
- *  that bug surfaces as one failed rebuild instead of a permanently wedged UI. */
 type RebuildBodyMeta = NonNullable<RebuildResult["bodies"]>[number];
 
-/** One installment of a chunked rebuild reply, for RENDERERS ONLY.
- *
- *  `result` is the IN-PROGRESS RebuildResult: its arrays are allocated at full
- *  size but only the bodies delivered so far hold real data, the rest is still
- *  zeros. Never retain it, and never read it as document truth. Anything that
- *  needs the finished, authoritative model waits for the ordinary completed
- *  build (store.onBuild), which is why store.build.result keeps pointing at the
- *  PREVIOUS document for the whole stream.
- *
- *  `triRange` is the half-open triangle span this installment filled; pass it to
- *  partitionMesh so the scan cannot wander into unwritten (zeroed) triangles,
- *  which would otherwise read as faceId 0. */
+/** One installment of a chunked rebuild reply, for renderers only. `result` is in progress: full-size arrays
+ *  where undelivered bodies are still zeros, so never retain it or read it as document truth (store.build.result
+ *  keeps the previous document until the build completes). Pass `triRange` to partitionMesh so the scan skips
+ *  zeroed triangles, which would read as faceId 0. */
 export interface RebuildChunk {
   phase: "begin" | "bodies";
   result: RebuildResult;
@@ -604,25 +515,18 @@ export interface RebuildChunk {
   bodies: RebuildBodyMeta[];
   edgesByBody: Map<string, RebuildResult["edges"]>;
   triRange: { triStart: number; triEnd: number };
-  /** final for the whole reply, known from frame 0, so the camera can settle
-   *  once, before any geometry arrives, and never move again */
+  /** Final for the whole reply from frame 0, so the camera settles once before any geometry arrives. */
   bbox: RebuildResult["bbox"];
   done: number;
   total: number;
 }
 
+// Longest gap between two frames of a chunked reply. Chunks go back to back, so a gap is an engine bug,
+// and this makes it one failed rebuild instead of a wedged UI.
 const STREAM_IDLE_MS = 30_000;
 
-/** Decode ONE binary frame: [u32 LE header_len][JSON header][pad to 4][bufs...].
- *  Mesh arrays become zero-copy TypedArray views over `buf`, and packed edges
- *  are expanded to the list every consumer expects.
- *
- *  Buffer indices are FRAME-local, which is what lets a chunked reply reuse this
- *  unchanged: each chunk carries its own header, pad and $buffers table and is
- *  independently decodable.
- *
- *  Exported for its own test, like expandPackedEdges, the engine-side test can
- *  only prove the encoder. */
+/** Decode one binary frame: [u32 LE header_len][JSON header][pad to 4][bufs...]. Mesh arrays become zero-copy
+ *  views over `buf`. Buffer indices are frame-local, so each chunk decodes alone. Exported for its own test. */
 export function decodeBinaryFrame(buf: ArrayBuffer): BinaryHeader {
   const dv = new DataView(buf);
   const headerLen = dv.getUint32(0, true);
@@ -679,18 +583,12 @@ interface RebuildFullPayload {
 }
 type RebuildPayload = RebuildDeltaPayload | RebuildFullPayload;
 
-/** Largest message the engine will accept, mirroring `MAX_FRAME` in
- *  crates/fundacad-protocol. Keep the two in step: anything past
- *  it is answered with a 1009 close rather than an error reply, so the client
- *  has to catch it BEFORE sending. */
+/** Largest message the engine accepts, mirroring `MAX_FRAME` in crates/fundacad-protocol; keep them in step.
+ *  Anything larger gets a 1009 close, not an error reply, so the client must catch it before sending. */
 export const MAX_MESSAGE_BYTES = 128 * 1024 * 1024;
 
-/** The user-facing message for an over-cap payload, or null when it fits.
- *  Pure and exported so the boundary can be tested without allocating a 128 MiB
- *  string. `len` is `raw.length` (UTF-16 units), which slightly UNDER-counts a
- *  document carrying non-ASCII text, acceptable because the payload is
- *  overwhelmingly base64 and ASCII JSON, and measuring UTF-8 exactly would mean
- *  copying a 100+ MiB string on every single call. */
+/** The user-facing message for an over-cap payload, or null. Exported to test without a 128 MiB string. `len` is
+ *  in UTF-16 units, slightly under-counting non-ASCII, since measuring UTF-8 would copy 100+ MiB per call. */
 export function tooLargeToSend(len: number): string | null {
   if (len <= MAX_MESSAGE_BYTES) return null;
   const mib = (n: number) => `${Math.round(n / (1024 * 1024))} MiB`;
@@ -730,27 +628,18 @@ export class Geometry implements GeometryBackend {
   get inFlight(): number {
     return this.pending.size;
   }
-  // The heavy op most recently sent, for cancel() to target. The engine
-  // serializes heavy ops, so at most one is actually running; targeting by id
-  // keeps a late Cancel click from killing the NEXT op instead.
+  // The heavy op most recently sent, for cancel(). Targeting by id keeps a late Cancel from killing the next op.
   private lastHeavyId: string | null = null;
   private outbox: string[] = [];
   private statusListeners = new Set<StatusListener>();
   private opProgressListeners = new Set<OpProgressListener>();
   private progressListeners = new Set<(feature: number, meshed: number, meshTotal: number) => void>();
   private queueListeners = new Set<(id: string, behind: EngineWait | null) => void>();
-  // Protocol-v2 per-body mesh cache: the engine answers unchanged bodies with
-  // an etag stub instead of re-sending their (multi-MB) mesh; we keep the last
-  // full payload per body and reassemble the merged RebuildResult locally, so
-  // everything downstream (render/picking/store) sees the same shape as before.
+  // Last full payload per body: the engine answers unchanged bodies with an etag stub instead of the multi-MB mesh,
+  // and assemble() rebuilds the merged result from this cache.
   private bodyMesh = new Map<string, WireBodyFull>();
-  /** Chunked replies in flight, by request id (see server.py's
-   *  _stream_binary_reply). INVARIANT: an entry here implies a live entry in
-   *  `pending` for the same id, every teardown clears both or neither, which
-   *  is what keeps a broken stream from wedging rebuildNow()'s `rebuilding`
-   *  flag forever. In practice there is at most one: both sides serialize
-   *  rebuilds, and the map is keyed by id so a stale one cannot be mistaken for
-   *  the live one. */
+  /** Chunked replies in flight by id (server.py _stream_binary_reply). Invariant: each has a live `pending` entry
+   *  and every teardown clears both, or a broken stream wedges rebuildNow()'s `rebuilding` flag forever. */
   private streams = new Map<
     string,
     {
@@ -763,24 +652,17 @@ export class Geometry implements GeometryBackend {
     }
   >();
   private chunkListeners = new Set<(c: RebuildChunk) => void>();
-  /** The last RebuildResult assemble() produced, plus the reply signature that
-   *  produced it. A rebuild whose bodies all arrive as unchanged stubs with the
-   *  same signature returns this object by reference instead of rebuilding
-   *  ~98 MiB of typed arrays, see the fast path in assemble(). */
+  /** The last assembled result and its reply signature, for assemble()'s no-op fast path. */
   private lastAssembled: RebuildResult | null = null;
   private lastAssembledSig: string | null = null;
-  // Delta wire protocol: the engine worker holds the last document; we send
-  // {baseRevision, revision, ops} with only the CHANGED features (reference
-  // inequality against the last sent feature list, effectiveDoc() reuses
-  // feature objects, so an untouched feature is the same object). Any doubt
-  // (worker respawn, missed reply, too many changes) falls back to a full send.
+  // Delta protocol: the engine worker holds the last document, so only features changed by reference are sent
+  // (effectiveDoc() reuses unchanged objects). Any doubt (respawn, missed reply, many changes) sends it whole.
   private lastSent: { features: Feature[]; parameters: string; bodyVisibility: string; bodyIds: string } | null = null;
   private revision = 0;
 
   constructor(transport: GeometryTransport = new EngineTransport()) {
     this.transport = transport;
-    // Does NOT connect, call init() once so the transport can pick IPC or the
-    // WebSocket before its first open.
+    // Does not connect: init() lets the transport pick IPC or the WebSocket before its first open.
   }
 
   async init(): Promise<void> {
@@ -802,10 +684,8 @@ export class Geometry implements GeometryBackend {
     return () => this.opProgressListeners.delete(fn);
   }
 
-  /** Installments of a chunked rebuild reply, so the viewport can draw bodies as
-   *  they arrive instead of showing the previous document until the whole reply
-   *  lands. The ONLY legitimate subscriber is the viewport bridge in main.ts;
-   *  anything reading document truth uses store.onBuild. */
+  /** Chunked rebuild installments, so the viewport draws bodies as they arrive. Only the viewport bridge in main.ts
+   *  subscribes; anything reading document truth uses store.onBuild. */
   onRebuildChunk(fn: (c: RebuildChunk) => void): () => void {
     this.chunkListeners.add(fn);
     return () => this.chunkListeners.delete(fn);
@@ -848,15 +728,8 @@ export class Geometry implements GeometryBackend {
       return;
     }
     if (msg && typeof msg.status === "string") {
-      // ANY interim status frame is informational and must NEVER resolve the
-      // pending call, the real reply follows. Guarding on "building" alone
-      // was a trap for the next frame type: an unrecognised status fell
-      // through to the pending map and resolved the caller's promise with a
-      // frame carrying no `ok`, so the caller reported failure while the
-      // engine happily kept working for another minute.
-      //
-      // Only frames for a request of ours still in flight count: a frame for
-      // anything else describes a job this window is not waiting on.
+      // Every interim status frame is informational and must never resolve the pending call, or the caller reports
+      // failure while the engine keeps working. Frames for requests we are not waiting on are ignored.
       if (typeof msg.id !== "string" || !this.pending.has(msg.id)) return;
       if (msg.status === "queued") {
         const behind = engineWait(msg.behind);
@@ -878,9 +751,7 @@ export class Geometry implements GeometryBackend {
     const resolve = this.pending.get(msg.id);
     if (resolve) {
       this.pending.delete(msg.id);
-      // A terminal TEXT reply for an id with a stream in flight is how the
-      // engine aborts one mid-send (cancel, or a single body over the frame
-      // cap). Drop the partial stream, this reply supersedes it.
+      // A terminal text reply for a streaming id is how the engine aborts mid-send (cancel, or a body over the cap).
       this.dropStream(msg.id);
       resolve(msg);
     }
@@ -888,44 +759,25 @@ export class Geometry implements GeometryBackend {
 
   private onClosed(tooBig: boolean) {
     this.emitStatus();
-    // A refused size means the pre-flight guard in call() and the engine's
-    // limit have drifted apart, say so rather than blaming the connection,
-    // which is what sent GH #4's reporter looking in the wrong place.
+    // A refused size means call()'s pre-flight guard and the engine limit have drifted. Saying so avoids blaming
+    // the connection, which misled GH #4's reporter.
     const message = tooBig
       ? "That model is too large for the geometry engine to accept. " +
         "Remove or simplify the imported body, then try again."
       : "geometry engine connection lost";
-    // Settle every in-flight call with a synthetic error reply shaped like a
-    // real engine error, matching the `msg.ok === false` contract every
-    // caller already checks (rebuild/export/etc). Without this, a call made
-    // before the drop just hangs forever, e.g. DocumentStore.rebuildNow()'s
-    // `await this.geometry.rebuild(...)` never returns, so its finally-block
-    // never clears `rebuilding`, so the reconnect-triggered rebuild in
-    // main.ts's onStatus() silently no-ops (rebuildNow sees rebuilding===true
-    // and just sets rebuildQueued, forever).
+    // Settle every in-flight call with an engine-shaped error. Otherwise a call made before the drop hangs, rebuildNow()
+    // never clears `rebuilding`, and the reconnect rebuild in main.ts's onStatus() silently no-ops forever.
     for (const [id, resolve] of this.pending) {
       resolve({ id, ok: false, error: { message } });
     }
     this.pending.clear();
-    // Every pending call has just been settled, so no stream can still have
-    // its partner entry, clear them (and their watchdogs) to keep the
-    // streams/pending invariant true rather than merely usually true.
+    // Every pending call is settled, so clear all streams and their watchdogs to keep the invariant exact.
     for (const s of this.streams.values()) clearTimeout(s.timer);
     this.streams.clear();
   }
 
-  /** Decode ONE binary frame (see server.py's _encode_binary_reply / _frame_bytes
-   *  for the layout: [u32 LE header_len][JSON header][pad to 4][buf0][buf1]...).
-   *  The header is the normal {id, ok, result} envelope with each big mesh array
-   *  replaced by {"$buf": i} into result.$buffers ({dtype, len} in wire order);
-   *  buffers become TypedArray VIEWS over this frame's ArrayBuffer, zero copy,
-   *  no JSON number parsing.
-   *
-   *  Buffer indices are FRAME-local, which is what lets a chunked reply reuse
-   *  this unchanged: every chunk carries its own header, pad and $buffers table
-   *  and is independently decodable.
-   *
-   *  Exported for its own test, like expandPackedEdges. */
+  /** Decode one binary frame (server.py _encode_binary_reply / _frame_bytes). Each big mesh array in the header is
+   *  replaced by {"$buf": i}, and buffers become zero-copy views over this frame's ArrayBuffer. */
   private handleBinaryReply(buf: ArrayBuffer) {
     let header: BinaryHeader | null = null;
     try {
@@ -942,39 +794,29 @@ export class Geometry implements GeometryBackend {
         resolve(header as RawReply<unknown>);
       }
     } catch (err) {
-      // A frame we cannot read is as unrecoverable as bad JSON. If we got far
-      // enough to know the id, settle the caller: leaving it pending is worse
-      // than an error, because rebuildNow()'s `rebuilding` flag never clears
-      // and every later rebuild silently no-ops (see the onclose comment).
+      // An unreadable frame is as fatal as bad JSON. Settle the caller if the id is known, or rebuildNow()'s
+      // `rebuilding` flag never clears (see the onclose comment).
       console.error("[geometry] bad binary frame from the engine:", err);
       const id = header?.id;
       if (id !== undefined) this.abortStream(id, "the geometry engine sent an unreadable reply");
     }
   }
 
-  /** Accumulate one frame of a chunked reply, and resolve the caller on the
-   *  final one. See server.py's _stream_binary_reply for the framing.
-   *
-   *  Every exit that drops a stream also settles its pending call, INVARIANT:
-   *  an entry in `streams` implies a live entry in `pending` for the same id.
-   *  That pairing is the whole leak surface. */
+  /** Accumulate one frame of a chunked reply and resolve the caller on the last (server.py _stream_binary_reply).
+   *  Every exit that drops a stream also settles its pending call; that pairing is the whole leak surface. */
   private routeStreamFrame(header: BinaryHeader) {
     const st = header.stream!;
     const id = header.id;
     if (st.seq === 0) {
-      // A head frame always starts a fresh stream, replacing any half-received
-      // one for the same id. Cannot happen (rebuilds are serialized on both
-      // sides), but a silent body splice is a far worse failure than a reset.
+      // A head frame replaces any half-received stream for its id. Rebuilds are serialized so this cannot happen,
+      // but a reset beats a silent body splice.
       const prev = this.streams.get(id);
       if (prev) clearTimeout(prev.timer);
       const result = header.result as WireRebuildResult & { manifest?: WireManifestEntry[] };
       const manifest = result.manifest ?? [];
       delete result.manifest;
-      // Plan the whole reply NOW, from the manifest, so each body can be written
-      // the moment its chunk lands and the viewport can draw it without waiting
-      // for the rest. This is also where an unbacked stub is caught, before any
-      // allocation and before any partial display, so a resync costs one round
-      // trip and no visual damage.
+      // Plan the whole reply from the manifest now, so each body draws as soon as its chunk lands, and an unbacked
+      // stub forces a resync before any allocation or partial display.
       const begun = RebuildAssembly.begin(result, manifest, this.bodyMesh, this.lastAssembled, this.lastAssembledSig);
       if (begun.kind === "resync") {
         this.settleStream(id, { id, ok: true, result: { resync: true } } as RawReply<unknown>);
@@ -1027,9 +869,7 @@ export class Geometry implements GeometryBackend {
         }
         this.bodyMesh.set(b.id, b);
         if (!s.assembly.writeBody(b)) {
-          // The payload disagrees with what the manifest promised. Writing it
-          // would run past this body's slice and corrupt the NEXT body's
-          // triangles, producing a wrong-but-believable model.
+          // Writing a payload that disagrees with the manifest would corrupt the next body's triangles believably.
           pipeFault(
             `body ${b.id} did not match its manifest entry, stream aborted ` +
               `(declared verts3=${b.positions?.length ?? "?"} idx=${b.indices?.length ?? "?"} ` +
@@ -1065,9 +905,7 @@ export class Geometry implements GeometryBackend {
     const s = this.streams.get(id)!;
     clearTimeout(s.timer);
     if (!st.final) {
-      // Chunks are sent back to back with no worker involvement, so this can
-      // only fire on an engine bug, but without it that bug wedges the UI
-      // permanently, since nothing else will ever settle the pending call.
+      // Chunks go back to back, so this fires only on an engine bug, which would otherwise never settle the call.
       s.timer = setTimeout(
         () => this.abortStream(id, "the geometry engine stopped part-way through its reply"),
         STREAM_IDLE_MS,
@@ -1075,13 +913,8 @@ export class Geometry implements GeometryBackend {
       return;
     }
     this.streams.delete(id);
-    // Every body the manifest named must have arrived. Checking is not belt and
-    // braces: finishAssembly PRUNES bodyMesh to the ids this reply named, so a
-    // stream that ended one body short would evict that body from the cache and
-    // corrupt the NEXT rebuild's `known` map too, a failure that outlives the
-    // bad stream, with nothing on screen to show for it. complete() enforces the
-    // same thing from the other side, and returns null rather than hand on a
-    // zero-filled slice.
+    // Every manifest body must have arrived: finishAssembly prunes bodyMesh to this reply's ids, so a short stream
+    // would evict a body from the cache and corrupt the next rebuild's `known` map too.
     const out = this.finishAssembly(
       s.assembly,
       s.manifest.map((m) => m.id),
@@ -1097,7 +930,6 @@ export class Geometry implements GeometryBackend {
     } as RawReply<unknown>);
   }
 
-  /** Resolve a stream's pending call and drop any state it left behind. */
   private settleStream(id: string, reply: RawReply<unknown>) {
     this.dropStream(id);
     const resolve = this.pending.get(id);
@@ -1116,8 +948,7 @@ export class Geometry implements GeometryBackend {
     }
   }
 
-  /** Drop a stream WITHOUT settling its call, only safe when the caller is
-   *  about to settle it another way (a terminal single-frame reply). */
+  /** Drop a stream without settling its call, safe only when a terminal single-frame reply settles it. */
   private dropStream(id: string) {
     const s = this.streams.get(id);
     if (!s) return;
@@ -1125,8 +956,7 @@ export class Geometry implements GeometryBackend {
     this.streams.delete(id);
   }
 
-  /** The single teardown path for a stream that cannot finish: drop it AND
-   *  settle its pending call with an error shaped like a real engine one. */
+  /** The one teardown for a stream that cannot finish: drop it and settle its call with an engine-shaped error. */
   private abortStream(id: string, message: string) {
     this.dropStream(id);
     const resolve = this.pending.get(id);
@@ -1136,9 +966,8 @@ export class Geometry implements GeometryBackend {
     }
   }
 
-  /** See GeometryBackend.session. Answered on the engine's READ path, so it
-   *  never queues behind a rebuild, which is the whole reason the host can keep
-   *  publishing while its own build is running. */
+  /** See GeometryBackend.session. Answered on the engine's read path, so it never queues behind a rebuild
+   *  and the host keeps publishing during its own build. */
   async session(op: string, payload: object = {}): Promise<Record<string, unknown> | null> {
     const msg = await this.call<Record<string, unknown>>(op, payload);
     return msg.ok ? msg.result : null;
@@ -1148,31 +977,18 @@ export class Geometry implements GeometryBackend {
     const id = crypto.randomUUID();
     const raw = JSON.stringify({ id, op, ...extra });
     return new Promise((resolve) => {
-      // Refuse an over-cap message rather than let the engine close the socket
-      // on it. websockets answers anything past `max_size` with a 1009 close,
-      // which took the WHOLE session down: the oversized body stays in the
-      // document, so every following rebuild re-sent it and re-killed the
-      // connection, and all the user got was "connection lost" (GH #4, reported
-      // as "cannot open files larger than 245 MB").
+      // Refuse an over-cap message: the engine answers it with a 1009 close, and since the body stays in the document
+      // every rebuild re-sent it and killed the session again (GH #4, "cannot open files larger than 245 MB").
       const tooLarge = tooLargeToSend(raw.length);
       if (tooLarge) {
         resolve({ id, ok: false, error: { message: tooLarge } } as RawReply<T>);
         return;
       }
-      // the pending map is heterogeneous across calls with different T, so
-      // storing this call's typed resolver erases to Pending here, the one
-      // type-erasing cast the generic requires.
-      // Recorded only once the call is actually going out: an id set before
-      // the refusal above would name a request the engine never saw, and
-      // cancelling it would silently no-op.
-      //
-      // The exclusions are every op that is NOT a job someone could want to
-      // stop. The live-session ops matter most: they run on a timer, so one
-      // would land between a rebuild starting and the user reaching for Cancel,
-      // and Cancel would then stop a poll and report that it had stopped
-      // something while the build carried on.
+      // Set only once the call goes out, or Cancel would target a request the engine never saw. Ops nobody would stop
+      // are excluded, above all the timed session polls, or Cancel would stop a poll while the build ran on.
       if (op !== "cancel" && op !== "ping" && !op.startsWith("session_")) this.lastHeavyId = id;
       onId?.(id);
+      // The one type-erasing cast: the pending map holds resolvers for every T.
       this.pending.set(id, resolve as Pending);
       if (this.connected) {
         this.transport.send(raw);
@@ -1182,12 +998,8 @@ export class Geometry implements GeometryBackend {
     });
   }
 
-  /** Every rebuild/computeAll request goes through here, so the wire opt-in
-   *  flags are set in exactly one place. They were easy to get wrong scattered:
-   *  of the four call sites, the two that matter most are the RESYNC paths,
-   *  which re-request the whole document with no `known` map, i.e. the largest
-   *  reply the engine can produce, and precisely the one that must not fall
-   *  back to a single frame. */
+  /** Every rebuild and computeAll goes through here so the wire opt-in flags are set once; the resync paths, the
+   *  largest replies, are the ones that must never fall back to a single frame. */
   private rebuildCall(op: "rebuild" | "computeAll", extra: object, onId?: (id: string) => void) {
     return this.call<WireRebuildResult>(op, { ...extra, binary: true, chunked: true }, onId);
   }
@@ -1210,8 +1022,7 @@ export class Geometry implements GeometryBackend {
         const f = doc.features[i];
         if (f !== undefined && this.lastSent.features[i] !== f) set.push([i, f]);
       }
-      // delta only when it's actually small, a reordered/rewritten timeline
-      // ships fewer bytes as a full document
+      // Delta only when small; a reordered or rewritten timeline ships fewer bytes as a full document.
       if (set.length <= Math.max(8, doc.features.length / 2)) {
         const ops: RebuildDeltaPayload["ops"] = { length: doc.features.length, set };
         if (pJson !== this.lastSent.parameters) ops.parameters = doc.parameters;
@@ -1242,8 +1053,7 @@ export class Geometry implements GeometryBackend {
     if (msg.ok && msg.result?.protocol === 2) {
       let assembled = this.assemble(msg.result);
       if (assembled === null) {
-        // we claimed an etag the cache no longer backs (e.g. page kept state
-        // across a worker respawn race), resync with a full request
+        // We claimed an etag the cache no longer backs (say a worker respawn race), so resync in full.
         pipe("RESYNC: a stub named an etag this client no longer holds, " + "re-requesting every body in full");
         this.bodyMesh.clear();
         // the assemble cache is keyed on payloads that just went away
@@ -1280,16 +1090,10 @@ export class Geometry implements GeometryBackend {
     return { ok: false, error: msg.error };
   }
 
-  /** Merge protocol-v2 per-body payloads into the legacy RebuildResult shape.
-   *  Returns null if an "unchanged" stub references a body we don't hold.
-   *
-   *  A thin wrapper over RebuildAssembly, which is the same logic in a form
-   *  that can also be driven incrementally by a chunked reply. The single-frame
-   *  path derives the manifest from the bodies it already has, so both paths
-   *  run identical code and assemble.test.ts / assembleNoop.test.ts cover both. */
+  /** Merge protocol v2 per-body payloads into a RebuildResult, null if a stub names a body we do not hold. A thin
+   *  wrapper over RebuildAssembly, so the single-frame and chunked paths run the same tested code. */
   private assemble(r: WireRebuildResult): RebuildResult | null {
-    // A chunked reply was assembled as its frames arrived (routeStreamFrame),
-    // including the cache prune and the no-op baseline. Nothing left to do.
+    // A chunked reply was assembled as its frames arrived (routeStreamFrame), cache prune and no-op baseline included.
     if (r.assembled) return r.assembled;
     const bodies: WireBody[] = r.bodies ?? [];
     const begun = RebuildAssembly.begin(
@@ -1318,11 +1122,8 @@ export class Geometry implements GeometryBackend {
     );
   }
 
-  /** Common tail of both assembly paths: prune the per-body cache to the bodies
-   *  this reply actually named, then publish the result as the no-op fast
-   *  path's new baseline. Returns null on an incomplete assembly, a
-   *  partially-filled result would hand on zeroed slices, which render as
-   *  plausible-looking degenerate geometry rather than as an error. */
+  /** Common tail of both assembly paths: prune the body cache to this reply's ids and make the result the no-op
+   *  baseline. Null on an incomplete assembly (see RebuildAssembly.complete). */
   private finishAssembly(assembly: RebuildAssembly, live: string[]): RebuildResult | null {
     const out = assembly.complete();
     if (out === null) return null;
@@ -1333,17 +1134,14 @@ export class Geometry implements GeometryBackend {
     return out;
   }
 
-  /** Build the legacy single-mesh RebuildResult from a protocol-v1 reply (no
-   *  per-body payload, mesh/edges inline). Returns null if the reply carries no
-   *  direct mesh, so the caller can route it to its error path rather than
-   *  fabricating an empty result. */
+  /** The legacy single-mesh result from a protocol v1 reply, or null without a direct mesh, so the caller takes
+   *  its error path instead of fabricating an empty result. */
   private legacyResult(r: WireRebuildResult): RebuildResult | null {
     if (!r.mesh || !r.edges) return null;
     const out: RebuildResult = {
       mesh: r.mesh,
       edges: r.edges,
-      // the wire can supply `bbox: null` when nothing has built yet (no bodies);
-      // preserved as-is, RebuildResult models bbox as always-present.
+      // The wire sends bbox null before anything has built; RebuildResult types it as always present.
       bbox: r.bbox as RebuildResult["bbox"],
     };
     if (r.diagnostics) out.diagnostics = r.diagnostics;
@@ -1398,8 +1196,7 @@ export class Geometry implements GeometryBackend {
         body: opts.body,
         bodies: opts.bodies,
         separate: opts.separate,
-        // GLB writes one material per body from these; the engine defaults both
-        // to empty, so other formats are unaffected by sending them.
+        // GLB writes one material per body from these; other formats ignore them.
         palette: opts.palette,
         bodyColors: opts.bodyColors,
         mesh: opts.mesh,
@@ -1507,20 +1304,11 @@ export class Geometry implements GeometryBackend {
     return { ok: false, message: msg.error?.message ?? "import failed" };
   }
 
-  /** Stop the geometry op in flight. Answered on the engine's READ path, so it
-   *  is heard DURING a long job rather than queued behind it, that is the whole
-   *  reason it exists. Resolves to whether anything was actually stopped; the
-   *  cancelled op settles separately, with `cancelled: true` on its own reply.
-   *
-   *  A pool job cannot be interrupted, so the engine kills the worker and
-   *  brings up a fresh one. Geometry keeps working; the next call pays a pool
-   *  respawn. */
+  /** Stop the geometry op in flight. Answered on the engine's read path so it is heard during a long job; the
+   *  cancelled op settles separately with `cancelled: true`. A pool job's worker is killed and respawned. */
   async cancel(target?: string, opts?: { soft?: boolean }): Promise<boolean> {
-    // ALWAYS prefer an explicit target. The document stays editable during a
-    // long import, so any rebuild the user triggers meanwhile overwrites
-    // lastHeavyId, and the engine, which matches the running id against the
-    // target, would then refuse to cancel the very import the user is waiting
-    // on. lastHeavyId is only a fallback for callers that never learned an id.
+    // Prefer an explicit target: a rebuild during a long import overwrites lastHeavyId, and the engine would then
+    // refuse to cancel the import. lastHeavyId is a fallback for callers that never learned an id.
     const id = target ?? this.lastHeavyId;
     if (!id) return false;
     const soft = opts?.soft && this.softCancel ? { soft: true } : {};
