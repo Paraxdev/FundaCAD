@@ -1,7 +1,5 @@
-// Import from an Onshape link. Everything that knows Onshape is in this
-// directory: the link format, the request signing, the STEP translation and its
-// polling. The app lends it three generic things, an https request to the hosts
-// in manifest.json, the system's credential store, and the ordinary import.
+// Everything that knows Onshape is in this directory. The app lends it three generic things: an https request to
+// the hosts in manifest.json, the system's credential store, and the ordinary import.
 
 import { contribute } from "fundacad";
 import type { Engine } from "fundacad";

@@ -1,6 +1,4 @@
-// The app's generic native commands, typed for this plugin. None of them knows
-// Onshape: an https request to a host the manifest names, and a secret in the
-// operating system's credential store.
+// The app's generic native commands, typed for this plugin. None of them knows Onshape.
 
 import { invoke } from "fundacad";
 import type { Keys, WebRequest, WebResponse } from "./client";
