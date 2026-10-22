@@ -1,7 +1,5 @@
 //! Where a running FundaCAD says how to reach its live engine, so `fundacad-mcp` can join the session on screen. The
-//! token file is user only, readable only by processes that could read the user's documents anyway, and joining the
-//! open document is gated in the frontend. A file left by a crash is a hint: a reader dials and treats a refusal as no
-//! app.
+//! token can rebuild, import and export, so the file is user only; joining the open document is gated in the frontend.
 
 use std::path::{Path, PathBuf};
 
@@ -9,7 +7,7 @@ use std::path::{Path, PathBuf};
 pub const FILE_NAME: &str = "session.json";
 
 /// Serialised by hand, four fields are not worth a serde_json dependency. `pid` is for a human telling two windows
-/// apart.
+/// apart; no liveness is stored, as a pid can be recycled and the reader's handshake answers that anyway.
 #[derive(Debug, PartialEq, Eq)]
 pub struct SessionInfo {
     pub port: u16,
@@ -53,8 +51,8 @@ pub fn write_into(dir: &Path, info: &SessionInfo) -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
-/// Owner-only permissions. Unix has no default worth relying on, a permissive
-/// umask would otherwise publish the token to every account on the machine.
+/// Owner only, so a reader runs as this user and could read the documents anyway. Unix has no default worth relying
+/// on, a permissive umask would otherwise publish the token to every account on the machine.
 #[cfg(unix)]
 fn restrict(path: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
@@ -68,7 +66,7 @@ fn restrict(_path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Best effort: this runs on the way out, and a leftover is handled by the reader.
+/// Best effort, and a kill skips it, so a leftover is ordinary: a reader dials and treats a refusal as no app.
 pub fn remove_from(dir: &Path) {
     let _ = std::fs::remove_file(dir.join(FILE_NAME));
 }

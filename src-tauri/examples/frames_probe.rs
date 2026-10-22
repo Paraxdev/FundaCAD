@@ -1,7 +1,5 @@
 //! Measures the frame transport and the native tracer in a real webview, under its own identifier so it shares no app
-//! data. Run `npx vite --port 5174 --strictPort`, then `cargo run --example frames_probe`. Prints one line, PROBE
-//! {json}. PROBE_PAGE=e2e/tracer_switch_page.html tries each tracer backend, e2e/native_bloom_page.html the native
-//! bloom at the cap.
+//! data. Run `npx vite --port 5174 --strictPort`, then `cargo run --example frames_probe`; it prints `PROBE {json}`.
 
 #[tauri::command]
 fn probe_report(app: tauri::AppHandle, json: String) {
@@ -37,6 +35,8 @@ fn main() {
         ])
         .setup(|app| {
             use tauri::Manager;
+            // PROBE_PAGE=e2e/tracer_switch_page.html tries each tracer backend, e2e/native_bloom_page.html the native
+            // bloom at the cap.
             if let (Ok(page), Some(w)) = (std::env::var("PROBE_PAGE"), app.get_webview_window("main")) {
                 w.eval(format!("location.replace('/{page}')"))?;
             }

@@ -6,8 +6,9 @@ use std::path::PathBuf;
 
 pub use fundacad_format::container::*;
 
-/// Not under the cache dir, where Compute All's purge would delete it. Flat, one blob per import feature. The app and
-/// the engine worker both write here without locks: the path is the content hash and writes publish by rename.
+/// Not under the cache dir, where Compute All's purge would delete it. App and engine share it lock free, as the path
+/// is the content hash and writes publish by rename (tests/container_seam.rs). Flat: one blob per import feature, not
+/// per body like geomstore, which holds 3,060 for the reference assembly.
 pub fn blob_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("blobs");
@@ -107,7 +108,8 @@ pub fn save_document(
 // would reopen the post XSS persistence channel.
 
 /// Writes the document and its geometry to `path` atomically, without asking the engine, so a save never waits on a
-/// crashed worker. `optional_hashes` are other hash shaped strings in the document, embedded when the store has them.
+/// crashed worker. The frontend collects `hashes` from the import features since it owns the document;
+/// `optional_hashes` are other hash shaped strings in it, embedded when the store has them.
 #[tauri::command]
 pub async fn container_save(
     app: tauri::AppHandle,

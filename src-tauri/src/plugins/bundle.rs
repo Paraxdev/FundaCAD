@@ -100,8 +100,9 @@ pub fn allowed_bundle_url(url: &str) -> bool {
     host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
 }
 
-/// Where an archive entry may be written, relative to the plugin dir. Entry names are attacker text, so the extractor
-/// stands on this; hand written to be stricter than zip's `enclosed_name()`: no backslash at all, no empty name.
+/// Where an archive entry may be written, relative to the plugin dir. Entry names are attacker text, so this is
+/// stricter than zip's `enclosed_name()`: no empty name, no backslash at all, a separator only on Windows, where it
+/// would ship a hole to one platform.
 pub fn safe_entry(name: &str) -> Option<PathBuf> {
     if name.is_empty() || name.len() > 512 {
         return None;

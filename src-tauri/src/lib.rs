@@ -425,6 +425,7 @@ pub fn run() {
             if reason.is_none() {
                 frames::denoiser::load_installed(app.handle());
             }
+            // The 3D mouse reader is not started here: the frontend starts it with `spacemouse_start`, see there.
             // Started here rather than before the builder, so the clock runs from the window existing and the work
             // above, which the frontend waits for anyway, does not eat into the timeout.
             app.manage(FrontendReady(std::sync::atomic::AtomicBool::new(false)));

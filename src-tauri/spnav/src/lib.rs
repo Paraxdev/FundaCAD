@@ -1,5 +1,5 @@
-//! Reads a 3D mouse through `spacenavd` on Linux, so no udev rule is needed and `spnavcfg` settings carry over. An idle
-//! puck sends nothing, so while neither has sent, the device is also read directly and the first to send is kept.
+//! Reads a 3D mouse through `spacenavd` on Linux, so no udev rule is needed and `spnavcfg` settings carry over. A
+//! daemon can run without supporting the device, so until either sends the device is read too and the first is kept.
 
 use std::io::{self, Read};
 use std::time::{Duration, Instant};
@@ -37,7 +37,8 @@ fn unit(value: i32) -> f32 {
 }
 
 /// A record is eight native endian i32: kind (0 motion, 1 press, 2 release), then x y z rx ry rz and ms, or the button.
-/// The daemon swaps y and z (and ry, rz) and negates them; the HID frame has x right, y towards the user, z down.
+/// The daemon swaps y and z (and ry, rz) and negates them, so its y is the lift and z the push or pull; the HID frame
+/// has x right, y towards the user, z down.
 pub fn decode(record: &[u8; RECORD_BYTES]) -> Option<Event> {
     let mut data = [0i32; 8];
     for (slot, bytes) in data.iter_mut().zip(record.as_chunks::<4>().0) {
@@ -146,8 +147,9 @@ pub enum Served<D> {
     Device(D, Vec<u8>),
 }
 
-/// Streams daemon events however long it stays silent. Until either sends, the device from `open_device` is read in
-/// turns with the socket, daemon first so `spnavcfg` applies; the first to send is kept, so no motion arrives twice.
+/// Streams daemon events however long it stays silent, as an idle puck sends nothing. Until either sends, the device
+/// from `open_device` is read in turns with the socket, daemon first so `spnavcfg` applies; the first to send is kept,
+/// so no motion arrives twice.
 pub fn serve<S: Read + Wait, D: Device>(
     mut daemon: S,
     mut open_device: impl FnMut() -> Option<D>,
