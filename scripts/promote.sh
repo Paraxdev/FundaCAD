@@ -8,6 +8,8 @@
 # jobs are all green, merges it into main with --no-ff, and prints the push.
 # dev itself may be red, a promotion may not. With --push it pushes main, and
 # the main build publishes the beta once its own gating jobs are green.
+# The beta page opens with docs/release-notes/beta.md, which is written by hand
+# on dev before a promotion, and the script says when it did not change.
 # --stable also tags the merge v1.<minor>.<patch>, pushed atomically with main,
 # and the tag's build publishes a stable release.
 #
@@ -94,6 +96,10 @@ for id in $runs; do
 done
 [ -n "$run" ] || die "no green build of ${sha:0:7} on dev yet ($why). dev may publish a red build, main may not. See: gh run list -R $REPO --branch dev"
 echo "green: $run"
+
+if [ -z "$tag" ] && git diff --quiet "$REMOTE/main" "$sha" -- docs/release-notes/beta.md; then
+  echo "note: docs/release-notes/beta.md is the same on ${sha:0:7} as on main. The beta page shows it above the generated part, so update it on dev first if this promotion changes what users see or need to do (docs/ENGINE.md section 7.1)."
+fi
 
 tmp=$(mktemp -d)
 cleanup() { git worktree remove --force "$tmp" 2>/dev/null || { rm -rf "$tmp"; git worktree prune; }; }
