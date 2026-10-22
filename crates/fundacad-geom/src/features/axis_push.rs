@@ -1,7 +1,5 @@
-//! Press/pull along an axis: the face swept along the line its walls run
-//! along, so a hole's wall lengthens and its end keeps its shape. Offsetting a
-//! drilled hole's cone ceiling along its normal widens the cone instead, until
-//! it breaks out of a thin wall.
+//! Press/pull along an axis: the face swept along the line its walls run along, so a hole's wall lengthens and
+//! its end keeps its shape, where offsetting a cone ceiling along its normal widens it through a thin wall.
 
 use fundacad_engine::error_result;
 use fundacad_protocol::JobResult;
@@ -26,7 +24,6 @@ const ON_AXIS: f64 = 1e-4;
 pub struct HoleAxis {
     /// Unit, on the side the face's outward normal points to.
     pub dir: DVec3,
-    /// A point on the axis.
     pub origin: DVec3,
     /// A round face on the same axis as round walls with material outside
     /// them: the cone, cap or dome at the end of a drilled hole.
@@ -128,11 +125,9 @@ fn bore(wall: &Shape, origin: DVec3, dir: DVec3) -> bool {
     (r - dir * r.dot(dir)).dot(n) < 0.0
 }
 
-/// The axis `face` moves along, or why it has none. Every face sharing an
-/// edge with it has to be a wall that runs along one line, a cylinder parallel
-/// to it or a plane containing it, so sweeping the face keeps each wall on its
-/// own surface. The line is a round wall's axis, else the face's own axis (a
-/// cone, torus or surface of revolution), else where two flat walls meet.
+/// The axis `face` moves along, or why it has none. Every edge neighbour must be a wall that runs along one line,
+/// a parallel cylinder or a plane containing it, so sweeping keeps each wall on its own surface. The line is a
+/// round wall's axis, else the face's own axis, else where two flat walls meet.
 pub fn hole_axis(body: &Shape, face: &Shape) -> Result<HoleAxis, &'static str> {
     let adj = FaceAdjacency::new(body);
     let i = adj.index_of(face);

@@ -1,12 +1,6 @@
-//! The closed-loop joint solver behind `mechanism`, plain Rust with no kernel:
-//! rigid poses for the moving bodies that meet every joint, found by damped
-//! least squares from the pose they were modelled in, with the drive moved in
-//! small steps so the linkage stays on the branch it was modelled on.
-//!
-//! Each moving body's pose turns it about its own centre `c` and shifts it,
-//! `p -> rot (p - c) + c + shift`. A step changes the turn by `exp(w / scale)`
-//! and the shift by `v`, so all six unknowns of a body are millimetres and the
-//! residuals of turns are scaled by the model's size to weigh alike.
+//! The closed-loop joint solver behind `mechanism`, no kernel: damped least squares from the modelled pose, the
+//! drive moved in small steps. A pose maps `p -> rot (p - c) + c + shift` and a step turns by `exp(w / scale)`,
+//! so all six unknowns of a body are millimetres and turn residuals weigh alike at the model's size.
 
 use glam::{DMat3, DQuat, DVec3};
 
@@ -26,9 +20,8 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// The given x made square to z, else the x OpenCASCADE's `gp_Ax3(p, z)`
-    /// picks, so a mechanism and a joint measure angles from the same zero.
-    /// `None` for a zero z or an x along it.
+    /// The given x made square to z, else the x of OpenCASCADE's `gp_Ax3(p, z)`, so a mechanism and a joint measure
+    /// angles from the same zero. `None` for a zero z or an x along it.
     pub fn new(p: DVec3, z: DVec3, x: Option<DVec3>) -> Option<Frame> {
         let z = z.try_normalize()?;
         let x = match x.filter(|x| x.length() > 1e-9) {
@@ -40,9 +33,8 @@ impl Frame {
         Some(Frame { p, z, x: (x - z * x.dot(z)).try_normalize()? })
     }
 
-    /// This frame with `other`'s x laid square to its z, for two connectors
-    /// that both leave x to the kernel: they then read 0 as modelled whatever
-    /// rounding their axes carry. Kept as it is when `other`'s x runs along z.
+    /// This frame with `other`'s x laid square to its z, for two connectors that both leave x to the kernel, so they
+    /// read 0 as modelled whatever rounding their axes carry. Unchanged when `other`'s x runs along z.
     pub fn x_from(self, other: &Frame) -> Frame {
         let x = other.x - self.z * other.x.dot(self.z);
         Frame { x: if x.length() > 1e-6 { x.normalize() } else { self.x }, ..self }
@@ -115,7 +107,6 @@ pub struct Drive {
     pub target: f64,
 }
 
-/// The job was cancelled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cancelled;
 
@@ -204,7 +195,6 @@ impl Problem {
         Frame { p: q * (f.p - c) + c + pose.shift[i], z: q * f.z, x: q * f.x }
     }
 
-    /// Joint `j`'s two frames at `pose`.
     pub fn frames(&self, pose: &Pose, j: usize) -> (Frame, Frame) {
         let jt = &self.joints[j];
         (self.place(pose, jt.a, &jt.fa), self.place(pose, jt.b, &jt.fb))
@@ -305,9 +295,8 @@ impl Problem {
         next
     }
 
-    /// The residuals' derivatives by central differences, one column per
-    /// unknown. A joint only reads its own two bodies, so only those columns
-    /// are measured.
+    /// The residuals' derivatives by central differences, one column per unknown. A joint only reads its own two
+    /// bodies, so only those columns are measured.
     fn jacobian(&self, pose: &Pose, drive: Option<&Drive>) -> Vec<Vec<f64>> {
         let n = self.size();
         let m = self.joints.iter().map(Joint::rows).sum::<usize>() + usize::from(drive.is_some());
@@ -413,12 +402,9 @@ impl Problem {
         Ok(met(&r))
     }
 
-    /// Moves the drive from `from` to `to` in steps of at most `most`,
-    /// settling the linkage after each. A step that fails is halved; once a
-    /// step ten halvings short of `most` fails, the drive is locked. Every
-    /// step taken is at least that long, so the walk always ends. `to` must
-    /// be on the branch of `from`: a revolute drive reads within a half turn
-    /// of its target, so a walk that ends further than that would stop early.
+    /// Moves the drive from `from` to `to` in steps of at most `most`, settling after each. A failed step is halved,
+    /// and once a step ten halvings short of `most` fails the drive locks, so the walk always ends. `to` must be on
+    /// `from`'s branch: a revolute reads within a half turn of its target, so a longer walk would stop early.
     pub fn sweep(
         &self,
         pose: &mut Pose,
@@ -444,10 +430,8 @@ impl Problem {
             } else if step > least {
                 step = (step / 2.0).max(least);
             } else {
-                // Pushed to the value asked for, the worst joint says what
-                // gives and by how much. At a dead point the solve can stall
-                // with every joint met, so then the step that failed says it,
-                // and when that too is noise no joint is named.
+                // Pushed to the asked value, the worst joint says what gives. At a dead point the solve can stall with every
+                // joint met, so the failed step says it, and when that too is noise no joint is named.
                 let mut pushed = pose.clone();
                 self.settle(&mut pushed, Some(&Drive { joint, target: to }), tick)?;
                 let tol = self.tolerance();

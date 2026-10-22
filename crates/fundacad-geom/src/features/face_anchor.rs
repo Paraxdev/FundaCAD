@@ -16,9 +16,8 @@ use crate::select::Resolver;
 const EPS: f64 = 1e-9;
 const Z_REF_LIMIT: f64 = 0.9;
 
-/// Note: off to match the Python engine, whose cylinder arm calls a build123d
-/// `Face._geom_adaptor` that no longer exists, so a tangent datum always falls
-/// back to its cache there. Turn on together with that fix.
+/// Off to match the Python engine, whose cylinder arm calls a build123d `Face._geom_adaptor` that no longer
+/// exists, so a tangent datum always falls back to its cache there. Turn on together with that fix.
 const CYLINDER_ARM: bool = false;
 
 /// The `{origin, normal, xdir}` a followed plane resolves to.
@@ -121,9 +120,8 @@ pub(crate) fn cylinder_axis(face: &Shape) -> Option<(DVec3, DVec3, f64)> {
     }
 }
 
-/// The plane of the face `face` names, re-resolved against the bodies now, or
-/// `None` to keep the cached `plane`. A face that stopped resolving is never an
-/// error, only a diagnostic.
+/// The plane of the face `face` names, re-resolved against the bodies now, or `None` to keep the cached `plane`.
+/// A face that stopped resolving is only a diagnostic, never an error.
 pub fn face_anchor_plane(
     ctx: &mut Ctx,
     id: &str,

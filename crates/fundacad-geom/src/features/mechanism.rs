@@ -1,12 +1,6 @@
-//! Mechanisms: bodies joined by revolute, slider and rigid joints into one
-//! linkage, closed loops included, posed together. `ground` stays where it is;
-//! every other body in a joint is moved rigidly so all the joints meet, with
-//! the `drive` joint at `offset` (a slider) or `angle` (a revolute).
-//!
-//! Connectors resolve once, on the bodies as the features above left them,
-//! and then ride on their bodies. The solve starts from that modelled pose and
-//! walks the drive to its value in small steps, so the linkage stays on the
-//! branch it was modelled on and the result depends on the document alone.
+//! Mechanisms: bodies linked by revolute, slider and rigid joints, loops included, posed so all joints meet with
+//! `ground` fixed and the `drive` at its value. Connectors resolve once and ride their bodies, and the drive walks
+//! from the modelled pose in small steps, so the linkage keeps its modelled branch and depends on the document alone.
 
 mod solve;
 

@@ -1,11 +1,5 @@
-//! Body patterns, the Python engine's `builder.py` `_handle_pattern_rect`,
-//! `_handle_pattern_linear`, `_handle_pattern_circular` and `_pattern_targets`
-//! over the Python engine's `solid_ops.py` `_pattern_*` and `_fuse_pattern_cells`. A pattern
-//! rewrites its target body in place, so it mints no body ids.
-//!
-//! With `features` a pattern repeats what those features did instead: the cut
-//! or join each one recorded is copied to every other place and applied to the
-//! same body again.
+//! Body patterns, the rect, linear and circular handlers of builder.py over `_pattern_*` of solid_ops.py. A pattern
+//! rewrites its target in place, minting no ids, and with `features` repeats those features' cuts and joins instead.
 
 use fundacad_core::schema::{
     Axis3, AxisLine, Feature, OneOrMany, PatternAxis, PatternCircular, PatternLinear, PatternRect, Real, Selector,
@@ -161,9 +155,8 @@ fn line(origin: DVec3, dir: DVec3) -> Option<Turn> {
     (d != DVec3::ZERO && origin.is_finite()).then(|| Turn::Line { origin: origin.to_array(), dir: d.to_array() })
 }
 
-/// The direction of a line found on the model points the way its largest
-/// component is positive, so the same edge or face always turns the same way
-/// (src/features/patternAxis.ts `canonicalDir` is the same rule).
+/// A line found on the model points where its largest component is positive, so the same edge or face always
+/// turns the same way, the rule of `canonicalDir` in src/features/patternAxis.ts.
 pub(crate) fn canonical(d: DVec3) -> DVec3 {
     let a = d.abs();
     let big = if a.x >= a.y && a.x >= a.z {
@@ -184,10 +177,8 @@ fn found_line(origin: DVec3, dir: DVec3) -> Option<Turn> {
     line(origin, canonical(dir.normalize_or_zero()))
 }
 
-/// The axis `axisRef` names now: a straight edge's line, a round edge's
-/// centre line, a round face's axis, or a flat face's normal through the
-/// middle of its box. A body the selector names that is gone is a lost
-/// reference, never a search of whatever bodies are left.
+/// The axis `axisRef` names now: an edge's line or centre line, a round face's axis, or a flat face's normal
+/// through its box middle. A body the selector names that is gone is a lost reference, never a search of the rest.
 fn referenced_axis(ctx: &Ctx, id: &str, sel: &Selector) -> Option<Turn> {
     let pool: Vec<&Shape> = match sel.body() {
         Some(b) => vec![ctx.bodies[ctx.find_body(b)?].shape()],
@@ -504,9 +495,8 @@ fn recorded(ctx: &Ctx, own: &str, src: &str) -> FResult<Vec<ToolRecord>> {
     Err(Fail::msg(format!("{why} {PATTERNABLE}")))
 }
 
-/// Copies of each listed feature's tool at every place, applied to the body it
-/// changed in one boolean. A copy whose box misses that body is left out, and
-/// saying how many were is the note this returns.
+/// Copies of each listed feature's tool at every place, applied to the body it changed in one boolean. A copy
+/// whose box misses that body is left out, and the returned note says how many were.
 fn pattern_features(
     ctx: &mut Ctx,
     id: &str,
@@ -565,9 +555,8 @@ fn apply(body: &Shape, tools: &[Shape], kind: BoolKind) -> FResult<Shape> {
     let out = kernel::boolean_op(body, &refs, kind)?;
     match kind {
         BoolKind::Fuse if kernel::count(&out, Kind::Solid) > solids => {
-            // A copy whose box overlaps the body without touching it comes out
-            // as a separate lump, so each copy stays only when fusing it
-            // leaves the solid count alone.
+            // A copy whose box overlaps the body without touching it comes out as a separate lump, so each copy stays only
+            // when fusing it leaves the solid count alone.
             let mut out = body.clone();
             for tool in tools {
                 let next = kernel::boolean_op(&out, &[tool], kind)?;

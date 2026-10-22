@@ -371,10 +371,8 @@ fn a_datum_point_on_an_edge_end_keeps_that_end_when_the_edge_moves_past_half_its
     }
 }
 
-/// The plane as the app makes it, at the middle of a cylinder's top circle
-/// with the path's tangent there as its cached normal, then its `t` edited.
-/// The circle runs clockwise seen from above; a cached normal against that
-/// means the path was drawn the other way, so `t` counts from the other end.
+/// The plane as the app makes it, mid top circle of a cylinder with the path's tangent as cached normal. The
+/// circle runs clockwise from above, so a cached normal against it means `t` counts from the other end.
 #[test]
 fn a_plane_normal_to_a_circle_sits_at_an_edited_fraction() {
     let circle = json!({"kind": "edge", "by": "match", "body": "body1",

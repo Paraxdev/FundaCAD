@@ -1,8 +1,5 @@
-//! the Python engine's `eval_fillet_corpus.py` on this engine: every case rebuilt, the
-//! blend feature failed on an error (not a selector miss), on a result that is
-//! not one valid solid, on too few faces, or on removed volume more than 2% off
-//! the reference. The corpus self hash is left to the Python tool, whose float
-//! formatting it depends on.
+//! eval_fillet_corpus.py on this engine: a case fails on an error, a result that is not one valid solid, too
+//! few faces or removed volume over 2% off. The corpus self hash depends on Python float text, so it stays there.
 
 use std::collections::BTreeMap;
 
