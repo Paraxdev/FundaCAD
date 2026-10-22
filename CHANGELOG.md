@@ -25,6 +25,15 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **The section is saved with the document.** A cut that is on is saved in the
+  file and is back when you open it. New and Open no longer carry a cut over
+  from the document before, undo leaves the cut alone, and an older version
+  keeps the cut in the file when it saves.
+
+- **Clicks and hovers reach only what a section keeps.** With a cut on,
+  selecting, hovering, measuring, fillet edge picks and face picks skip the cut
+  half, and a selected body's glow stops at the cut.
+
 - **Filament materials get sheen, anisotropy, flakes and scatter.** A material's
   Advanced section in the Render workspace has Sheen for a soft velvet rim,
   Anisotropy for highlights that streak along the layer lines, Flakes and Flake
@@ -396,6 +405,13 @@ This file starts on 2026-08-03. For anything before that, see the
 - **An AI assistant can now work on the document you have open, instead of on a copy.** Connected through MCP, its edits appear in the window as it makes them, each one a single undo, and a badge next to the document name says who is connected and what they last did. Before this, an assistant started a geometry engine of its own and handed its work back as a file you had to open, so nothing it did was visible while it did it. Preferences has an Assistants section with three settings: don't share, share read-only, or share and allow edits. It can only ever *offer* an edit, the window decides whether to take it, and refuses one written against a model that has since changed, so an assistant cannot overwrite what you did while it was thinking.
 
 ### Changed
+
+- **Confirming a section keeps the cut on.** Enter, the check and Esc end
+  editing a section and leave the cut on, where Esc and the cross used to remove
+  it. The handle and the offset box go away, F is Fillet again, and orbit,
+  select, measure and other tools work with the cut on. A Section on chip at the
+  top of the view has Edit to bring the handle back, Flip to keep the other half
+  and Off to remove the cut.
 
 - **The origin planes are three small tiles that no longer cross.** While Sketch
   or another tool asks for a plane, XY, XZ and YZ show as small rounded tiles
