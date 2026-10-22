@@ -255,6 +255,12 @@
   background: color-mix(in srgb, var(--warn) 8%, transparent);
   color: color-mix(in srgb, var(--warn) 60%, var(--text));
 }
+// A reading from before the last change stays readable but stops looking current.
+.stress-results.stale .stress-verdict,
+.stress-results.stale .stress-ran-with,
+.stress-results.stale .stress-key-row {
+  opacity: 0.55;
+}
 .stress-view-row {
   display: flex;
   align-items: center;

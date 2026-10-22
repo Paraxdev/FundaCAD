@@ -89,8 +89,10 @@ function close() {
       </div>
       <Tabs v-model="step" :tabs="tabs" />
 
-      <StressResultsStep v-if="step === 'results' && result" :result="result" />
-      <StressSetupStep v-else :setup="setup" :bodies="bodies" />
+      <KeepAlive>
+        <StressResultsStep v-if="step === 'results' && result" :result="result" />
+        <StressSetupStep v-else :setup="setup" :bodies="bodies" />
+      </KeepAlive>
 
       <div class="measure-hint">
         <template v-if="panels.stress.probe">Hover the body to read it, click to pin, Esc to stop.</template>

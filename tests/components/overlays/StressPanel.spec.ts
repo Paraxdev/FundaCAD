@@ -224,7 +224,7 @@ describe("StressPanel", () => {
     expect(tab("results").getAttribute("aria-selected")).toBe("true");
     expect(q(".stress-set-support")).toBeNull();
     expect(q(".stress-run")).toBeNull();
-    expect(q(".stress-legend")).not.toBeNull();
+    expect(q(".stress-verdict")).not.toBeNull();
   });
 
   it("lets the user go back to the setup and to the results again", async () => {
@@ -310,6 +310,49 @@ describe("StressPanel", () => {
     expect(q(".stress-deform")).toBeNull();
     q(".stress-rerun")!.click();
     expect(panels.runStress).toHaveBeenCalledOnce();
+  });
+
+  it("puts the stale line above the verdict and dims the old reading under it", async () => {
+    const { p } = await withResult();
+    const step = q(".stress-results")!;
+    expect([...step.classList]).toEqual(["stress-step", "stress-results"]);
+    expect(step.firstElementChild?.classList.contains("stress-verdict")).toBe(true);
+    p.setStressColours("none");
+    await flushPromises();
+    expect([...step.classList]).toEqual(["stress-step", "stress-results", "stale"]);
+    expect(step.firstElementChild?.classList.contains("stress-stale")).toBe(true);
+  });
+
+  it("shows the legend only with the colours, titled Stress, with a minimum too small to tell from 0 as 0", async () => {
+    const { p } = await withResult({ legend: { min: 0.000656, max: 51.11 } });
+    const ends = () => [...document.body.querySelectorAll(".stress-legend-labels > span")].map((e) => e.textContent);
+    expect(ends()).toEqual(["0 MPa", "Stress", "51.11 MPa"]);
+    p.setStressColours("hidden");
+    await flushPromises();
+    expect(q(".stress-legend")).toBeNull();
+    expect(ends()).toEqual([]);
+  });
+
+  it("lets the exaggeration slider rest on any value, so True size sits at 1", async () => {
+    const { p } = await withResult();
+    p.setStressDeform({ scale: 1, auto: 12.5, max: 50, animate: false });
+    await flushPromises();
+    const slider = q(".stress-deform") as HTMLInputElement;
+    expect([slider.step, slider.value]).toEqual(["any", "1"]);
+  });
+
+  it("keeps Details and More options open across a switch of tabs", async () => {
+    await withResult();
+    q(".stress-details")!.click();
+    tab("setup").click();
+    await flushPromises();
+    q(".stress-more")!.click();
+    tab("results").click();
+    await flushPromises();
+    expect(shown(q(".stress-details-body"))).toBe(true);
+    tab("setup").click();
+    await flushPromises();
+    expect(shown(q(".stress-more-body"))).toBe(true);
   });
 
   it("says when the setup changed since the Run, and not when it is back as it ran", async () => {

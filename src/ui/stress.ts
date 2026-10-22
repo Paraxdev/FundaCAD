@@ -563,6 +563,12 @@ export function formatStressResult(
   };
 }
 
+/** The legend's end labels, MPa. A minimum under a thousandth of the peak is no colour of its own, so it reads 0. */
+export function legendEnds(legend: { min: number; max: number }): [string, string] {
+  const min = Math.abs(legend.min) < Math.abs(legend.max) / 1000 ? 0 : legend.min;
+  return [String(displayRound(min)), String(displayRound(legend.max))];
+}
+
 /** The setup a result ran with, in one line: what holds it, what pushes, its own weight and the material. */
 export function setupSummary(s: StressSetup): string {
   const n = (k: number, what: string) => `${k} ${what}${k === 1 ? "" : "s"}`;
