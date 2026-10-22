@@ -243,8 +243,13 @@ document has moved on, so an agent cannot overwrite what a person did while it
 was thinking. A proposal also names the document session it read (`doc`):
 when the window opens, creates or discards a document before taking the edit,
 the engine drops it and the tool fails with "the document in the app changed,
-nothing was applied", so an edit never lands in the next document. The window's
-side is `src/live/liveSession.ts`.
+nothing was applied", so an edit never lands in the next document. `doc_new`,
+`doc_open` and `doc_set` propose a whole other document (`replaces`), which the
+window refuses while an import is still being read into its open document, since
+the import would land in the one the agent put there; the tool fails with the
+window's reason (it lists refusals by proposal id in its status) rather than
+timing out. An ordinary edit is taken as usual. The window's side is
+`src/live/liveSession.ts`.
 
 On Windows the engine a private session spawns is put in a job object with
 `KILL_ON_JOB_CLOSE`, so it dies with this process however this process dies.

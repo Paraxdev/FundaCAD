@@ -187,6 +187,28 @@ impl LiveSession {
         self.propose_doc(guest_id, document, base_revision, None, note, name)
     }
 
+    /// [`Self::propose_doc`] for a whole other document (a guest's `doc_new`, `doc_open` or `doc_set`), marked so
+    /// the app can refuse it while an import it would swallow is still being read.
+    #[allow(clippy::too_many_arguments)]
+    pub fn propose_replacing(
+        &mut self,
+        guest_id: &str,
+        document: Value,
+        base_revision: i64,
+        doc: Option<&Value>,
+        note: Option<&Value>,
+        name: Option<&Value>,
+        replaces: bool,
+    ) -> Value {
+        let out = self.propose_doc(guest_id, document, base_revision, doc, note, name);
+        if replaces && out.get("ok") == Some(&json!(true)) {
+            if let Some(p) = self.pending.last_mut() {
+                p.insert("replaces".into(), json!(true));
+            }
+        }
+        out
+    }
+
     /// [`Self::propose`] for the document session `doc` the guest read, refused once the host has another open.
     pub fn propose_doc(
         &mut self,
@@ -340,7 +362,16 @@ pub fn session_reply(live: &mut LiveSession, who: &str, op: &str, req: &Map<Stri
         "session_state" => live.state(Some(who), req.get("name")),
         "session_propose" => {
             let base = revision("baseRevision")?;
-            live.propose_doc(who, get("document"), base, req.get("doc"), req.get("note"), req.get("name"))
+            let replaces = truthy(req.get("replaces"));
+            live.propose_replacing(
+                who,
+                get("document"),
+                base,
+                req.get("doc"),
+                req.get("note"),
+                req.get("name"),
+                replaces,
+            )
         }
         "session_leave" => live.leave(who),
         "session_guide" => {

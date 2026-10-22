@@ -933,10 +933,13 @@ losing the socket gives it up.
 // the window, on its loop: publish what is open, collect what has been asked for
 { "op": "session_host", "id": "...", "document": { /* CadDocument */ },
   "revision": 12, "title": "spool.funda",
-  "status": { "canEdit": true, "applied": ["p3"], "building": false } }
+  "status": { "canEdit": true, "applied": ["p3"], "building": false,
+              "refused": [ { "id": "p2", "message": "..." } ] } }
 // -> { "ok": true, "guests": ["an assistant"], "proposals": [ { "id": "p4",
 //      "name": "an assistant", "note": "feature_add: cylinder",
 //      "baseRevision": 12, "document": { ... } } ] }
+// A proposal of a whole other document carries "replaces": true. The window may
+// refuse it (an import is still read into its document) and lists it in "refused".
 
 // the window, on the way out. Takes the document with it: a document with no
 // host is not one anyone may act on.
@@ -949,7 +952,7 @@ losing the socket gives it up.
 
 // a guest offering an edit
 { "op": "session_propose", "id": "...", "document": { ... }, "baseRevision": 12,
-  "note": "feature_add: cylinder", "name": "an assistant" }
+  "note": "feature_add: cylinder", "name": "an assistant", "replaces": false }
 // -> { "ok": true, "proposal": "p4", "revision": 12 }
 // -> { "ok": false, "reason": "stale" | "no-host" | "backlog",
 //      "revision": 14, "message": "..." }

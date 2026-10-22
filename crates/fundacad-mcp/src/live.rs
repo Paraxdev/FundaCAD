@@ -110,8 +110,15 @@ impl LiveLink {
         Ok(st.get("document").and_then(Value::as_object).cloned())
     }
 
-    /// Waits for the app to take `document` and returns the revision it landed on.
-    pub async fn push(&mut self, link: &EngineLink, document: &Doc, note: &str) -> Result<i64, LiveError> {
+    /// Waits for the app to take `document` and returns the revision it landed on. `replaces` says it is a whole
+    /// other document, not an edit of the open one, which the app refuses while an import is read into its own.
+    pub async fn push(
+        &mut self,
+        link: &EngineLink,
+        document: &Doc,
+        note: &str,
+        replaces: bool,
+    ) -> Result<i64, LiveError> {
         if self.base.is_none() {
             self.pull(link).await?;
         }
@@ -132,6 +139,9 @@ impl LiveLink {
         ]);
         if let (Some(doc), Value::Object(m)) = (&self.doc, &mut request) {
             m.insert("doc".into(), doc.clone());
+        }
+        if let (true, Value::Object(m)) = (replaces, &mut request) {
+            m.insert("replaces".into(), json!(true));
         }
         let reply = link.call("session_propose", request).await.map_err(lost)?;
         if reply.get("ok") != Some(&json!(true)) {
@@ -182,6 +192,14 @@ impl LiveLink {
                 return Err(LiveError::Refused(DOC_CHANGED.into()));
             }
             let status = st.get("status").cloned().unwrap_or_else(|| json!({}));
+            let refused = status
+                .get("refused")
+                .and_then(Value::as_array)
+                .and_then(|r| r.iter().find(|v| v.get("id").and_then(Value::as_str) == Some(proposal)));
+            if let Some(r) = refused {
+                let why = r.get("message").and_then(Value::as_str).unwrap_or("the app refused the edit");
+                return Err(LiveError::Refused(why.into()));
+            }
             let applied = status
                 .get("applied")
                 .and_then(Value::as_array)

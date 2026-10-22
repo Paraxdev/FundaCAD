@@ -48,7 +48,12 @@ interface Proposal {
   document: CadDocument;
   /** The document session the assistant read, set by an engine that knows sessions. */
   doc?: string;
+  /** A whole other document (the assistant's doc_new, doc_open or doc_set), not an edit of the open one. */
+  replaces?: boolean;
 }
+
+export const REFUSED_WHILE_IMPORTING =
+  "an import is still being read into the open document, so it was not replaced, nothing was applied; wait for the import or cancel it in History";
 
 export class LiveSessionHost {
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -60,6 +65,8 @@ export class LiveSessionHost {
   /** Ids of the proposals this window took, most recent last: the acknowledgement an assistant waits on. Not the
    *  revision (a person's edits move it) and not the document, which is migrated and normalised on the way in. */
   private applied: string[] = [];
+  /** Proposals this window turned down, with why, so the assistant reports the reason instead of timing out. */
+  private refused: { id: string; message: string }[] = [];
   private state: LiveState = { sharing: false, guests: [], lastEdit: null };
   private listeners = new Set<Listener>();
   private guide: GuideSession | null = null;
@@ -234,6 +241,12 @@ export class LiveSessionHost {
       this.lastGuestSeen = this.now();
       return;
     }
+    // The import lands in whatever document is open when its read ends, so it would land in the assistant's.
+    if (p.replaces && this.store.importRunning) {
+      this.refused = [...this.refused, { id: p.id, message: REFUSED_WHILE_IMPORTING }].slice(-APPLIED_MEMORY);
+      this.lastGuestSeen = this.now();
+      return;
+    }
     this.store.loadDocument(p.document, { replace: true });
     this.applied = [...this.applied, p.id].slice(-APPLIED_MEMORY);
     this.lastGuestSeen = this.now();
@@ -247,6 +260,7 @@ export class LiveSessionHost {
       // Lets an assistant refuse an edit up front, naming the setting, instead of waiting out a silent drop.
       canEdit: this.allowEdits(),
       applied: this.applied,
+      refused: this.refused,
       building: b.building,
       errorFeatureId: b.errorFeatureId ?? null,
       errorMessage: b.errorMessage ?? null,
