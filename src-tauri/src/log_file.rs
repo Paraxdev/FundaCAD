@@ -1,21 +1,41 @@
-//! A Finder launched app's stdout and stderr go nowhere, so on macOS the app
-//! writes them to fundacad.log in its log dir (~/Library/Logs/dev.fundacad.app).
-//! Each start appends, so a crash loop keeps every run, and a log over
-//! `CAP` bytes is moved to fundacad.old.log first.
+//! A released app's stdout and stderr reach no one: a Finder or launcher start
+//! has nowhere to show them, and a Windows GUI subsystem process has no std
+//! handles at all, so Rust drops its writes without an error. The app sends
+//! them to fundacad.log in its log dir instead. Each start appends, so a crash
+//! loop keeps every run, and a log that reached `CAP` moves to fundacad.1.log,
+//! the one before to fundacad.2.log, so at most `KEEP` files remain.
 
 use std::fs::{self, File, OpenOptions};
+use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 pub const NAME: &str = "fundacad.log";
+pub const CAP: u64 = 4 << 20;
+const KEEP: usize = 3;
+// The one older log macOS builds kept before the rotation.
 const OLD: &str = "fundacad.old.log";
-const CAP: u64 = 4 << 20;
+// A run that writes past CAP rotates within this long, so one chatty run stays bounded too.
+const WATCH: Duration = Duration::from_secs(60);
 
-/// The log in `dir` to append to, moved aside first once it reached `cap`.
-pub fn open(dir: &Path, cap: u64) -> std::io::Result<(PathBuf, File)> {
+fn generation(dir: &Path, n: usize) -> PathBuf {
+    match n {
+        0 => dir.join(NAME),
+        n => dir.join(format!("fundacad.{n}.log")),
+    }
+}
+
+/// The log in `dir` to append to, after moving it and the older ones down once it reached `cap`.
+pub fn open(dir: &Path, cap: u64) -> io::Result<(PathBuf, File)> {
     fs::create_dir_all(dir)?;
-    let path = dir.join(NAME);
+    if !generation(dir, 1).exists() {
+        let _ = fs::rename(dir.join(OLD), generation(dir, 1));
+    }
+    let path = generation(dir, 0);
     if fs::metadata(&path).is_ok_and(|m| m.len() >= cap) {
-        let _ = fs::rename(&path, dir.join(OLD));
+        for n in (1..KEEP).rev() {
+            let _ = fs::rename(generation(dir, n - 1), generation(dir, n));
+        }
     }
     let file = OpenOptions::new().create(true).append(true).open(&path)?;
     Ok((path, file))
@@ -24,89 +44,109 @@ pub fn open(dir: &Path, cap: u64) -> std::io::Result<(PathBuf, File)> {
 /// Points stdout and stderr at the log, unless stderr is a terminal: then
 /// whoever started the app from it reads them there. The engine relay and
 /// the [frames] lines are stderr.
-#[cfg(target_os = "macos")]
-pub fn redirect(dir: &Path) -> std::io::Result<Option<PathBuf>> {
-    use std::io::{IsTerminal, Write};
+pub fn redirect(dir: &Path) -> io::Result<Option<PathBuf>> {
+    if io::stderr().is_terminal() {
+        return Ok(None);
+    }
+    let path = start(dir, CAP)?;
+    let dir = dir.to_path_buf();
+    let _ = std::thread::Builder::new().name("log-rotate".into()).spawn(move || loop {
+        std::thread::sleep(WATCH);
+        if let Err(e) = rotate_if_over(&dir, CAP) {
+            eprintln!("[log] could not start a fresh log in {}: {e}", dir.display());
+        }
+    });
+    Ok(Some(path))
+}
+
+pub fn start(dir: &Path, cap: u64) -> io::Result<PathBuf> {
+    let (path, file) = open(dir, cap)?;
+    point_std_at(&path, file)?;
+    Ok(path)
+}
+
+pub fn rotate_if_over(dir: &Path, cap: u64) -> io::Result<bool> {
+    if !fs::metadata(generation(dir, 0)).is_ok_and(|m| m.len() >= cap) {
+        return Ok(false);
+    }
+    start(dir, cap).map(|_| true)
+}
+
+#[cfg(unix)]
+fn point_std_at(_path: &Path, file: File) -> io::Result<()> {
     use std::os::fd::AsRawFd;
-    // libSystem's own, so this file builds alone with rustc for the macOS CI job.
+    // libc's own, so this file builds alone with rustc for the CI step.
     extern "C" {
         fn dup2(src: i32, dst: i32) -> i32;
     }
-    if std::io::stderr().is_terminal() {
-        return Ok(None);
-    }
-    let (path, file) = open(dir, CAP)?;
-    let _ = std::io::stdout().flush();
+    let _ = io::stdout().flush();
     let fd = file.as_raw_fd();
     // SAFETY: dup2 on the process's own standard descriptors, which keep the
     // file open once `file` drops.
     if unsafe { dup2(fd, 1) } < 0 || unsafe { dup2(fd, 2) } < 0 {
-        return Err(std::io::Error::last_os_error());
+        return Err(io::Error::last_os_error());
     }
-    Ok(Some(path))
+    Ok(())
+}
+
+/// Rust reads the std handles on every write, the C runtime keeps its own
+/// streams and descriptors, so both are pointed at the log.
+#[cfg(windows)]
+fn point_std_at(path: &Path, file: File) -> io::Result<()> {
+    use std::ffi::c_void;
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::io::IntoRawHandle;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn SetStdHandle(id: u32, handle: *mut c_void) -> i32;
+    }
+    extern "C" {
+        fn __acrt_iob_func(index: u32) -> *mut c_void;
+        fn _wfreopen(path: *const u16, mode: *const u16, stream: *mut c_void) -> *mut c_void;
+        fn setvbuf(stream: *mut c_void, buf: *mut u8, mode: i32, size: usize) -> i32;
+        fn _fileno(stream: *mut c_void) -> i32;
+        fn _open_osfhandle(handle: isize, flags: i32) -> i32;
+        fn _dup2(src: i32, dst: i32) -> i32;
+        fn _close(fd: i32) -> i32;
+    }
+    const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
+    const STD_ERROR_HANDLE: u32 = -12i32 as u32;
+    const O_APPEND_BINARY: i32 = 0x0008 | 0x8000;
+    const IONBF: i32 = 4;
+    let _ = io::stdout().flush();
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+    let mode: Vec<u16> = "ab".encode_utf16().chain([0]).collect();
+    let crt = OpenOptions::new().append(true).open(path)?.into_raw_handle();
+    // SAFETY: the CRT's own standard streams and descriptors. The Rust side
+    // handle is leaked on purpose: a writer may still hold it from
+    // GetStdHandle when the next rotation replaces it.
+    unsafe {
+        let fd = _open_osfhandle(crt as isize, O_APPEND_BINARY);
+        if fd < 0 {
+            return Err(io::Error::other("the C runtime took no descriptor for the log"));
+        }
+        for index in [1, 2] {
+            let stream = __acrt_iob_func(index);
+            // Measured in a GUI subsystem build: these streams start on descriptor -2, which
+            // no _dup2 reaches, so they are reopened once to get a real one.
+            if _fileno(stream) < 0 && _wfreopen(wide.as_ptr(), mode.as_ptr(), stream).is_null() {
+                return Err(io::Error::last_os_error());
+            }
+            setvbuf(stream, std::ptr::null_mut(), IONBF, 0);
+            // _wfreopen's own handle denies the rename a rotation needs, so it is replaced too.
+            if _dup2(fd, _fileno(stream)) < 0 || _dup2(fd, index as i32) < 0 {
+                return Err(io::Error::last_os_error());
+            }
+        }
+        _close(fd);
+        let handle = file.into_raw_handle();
+        if SetStdHandle(STD_OUTPUT_HANDLE, handle) == 0 || SetStdHandle(STD_ERROR_HANDLE, handle) == 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Write;
-
-    #[test]
-    fn each_start_appends_so_a_crash_loop_keeps_every_run() {
-        let dir = std::env::temp_dir().join(format!("fundacad-log-{}", std::process::id())).join("Logs");
-        let _ = fs::remove_dir_all(&dir);
-        for run in ["first", "second", "third"] {
-            let (path, mut f) = open(&dir, CAP).unwrap();
-            assert_eq!(path.file_name().unwrap(), NAME);
-            writeln!(f, "{run} run").unwrap();
-        }
-        assert_eq!(fs::read_to_string(dir.join(NAME)).unwrap(), "first run
-second run
-third run
-");
-        assert!(!dir.join(OLD).exists());
-        fs::remove_dir_all(dir.parent().unwrap()).unwrap();
-    }
-
-    #[test]
-    fn a_log_over_the_cap_is_kept_as_the_old_one() {
-        let dir = std::env::temp_dir().join(format!("fundacad-log-cap-{}", std::process::id())).join("Logs");
-        let _ = fs::remove_dir_all(&dir);
-        let (_, mut f) = open(&dir, 16).unwrap();
-        writeln!(f, "a long first run, past the cap").unwrap();
-        drop(f);
-        let (_, mut f) = open(&dir, 16).unwrap();
-        writeln!(f, "second run").unwrap();
-        assert_eq!(fs::read_to_string(dir.join(NAME)).unwrap(), "second run
-");
-        assert_eq!(fs::read_to_string(dir.join(OLD)).unwrap(), "a long first run, past the cap
-");
-        fs::remove_dir_all(dir.parent().unwrap()).unwrap();
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn redirect_sends_stdout_and_stderr_to_the_log() {
-        const CHILD: &str = "FUNDACAD_LOG_FILE_CHILD";
-        if let Some(dir) = std::env::var_os(CHILD) {
-            redirect(Path::new(&dir)).unwrap().expect("a piped stderr is not a terminal");
-            println!("to stdout");
-            eprintln!("to stderr");
-            return;
-        }
-        let dir = std::env::temp_dir().join(format!("fundacad-log-redirect-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        // --nocapture, or the harness keeps println from reaching descriptor 1.
-        let out = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "tests::redirect_sends_stdout_and_stderr_to_the_log", "--nocapture"])
-            .env(CHILD, &dir)
-            .output()
-            .unwrap();
-        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-        let log = fs::read_to_string(dir.join(NAME)).unwrap();
-        assert!(log.contains("to stdout
-") && log.contains("to stderr
-"), "{log}");
-        fs::remove_dir_all(&dir).unwrap();
-    }
-}
+#[path = "log_file_tests.rs"]
+mod tests;

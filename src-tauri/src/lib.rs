@@ -19,7 +19,6 @@ pub mod launch_args;
 pub mod frames;
 pub mod safe_mode;
 pub mod settings_files;
-#[cfg(any(target_os = "macos", test))]
 mod log_file;
 // WebKitGTK only exists on Linux; macOS and Windows use WKWebView and WebView2.
 #[cfg(target_os = "linux")]
@@ -434,8 +433,9 @@ pub fn run() {
         .manage(plugins::files::Handles::default())
         .manage(safe)
         .setup(|app| {
-            #[cfg(target_os = "macos")]
-            if let Ok(dir) = app.path().app_log_dir() {
+            // A Windows or Linux debug build runs in a dev's terminal, which `tauri dev` may pipe.
+            let to_file = cfg!(target_os = "macos") || !cfg!(debug_assertions);
+            if let Some(dir) = app.path().app_log_dir().ok().filter(|_| to_file) {
                 match log_file::redirect(&dir) {
                     Ok(Some(path)) => {
                         println!("[log] FundaCAD {} started, logs to {}", env!("CARGO_PKG_VERSION"), path.display());
