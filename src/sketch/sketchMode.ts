@@ -77,7 +77,9 @@ import {
   findDrivingDim,
   type DrivingDim,
 } from "./directDims";
-import { expandPattern, reflectedRect, translated } from "./pattern";
+import { expandPattern, translated } from "./pattern";
+import { MirrorFlow, type MirrorHost } from "./mirrorFlow";
+import { showMirrorPanel } from "../features/mirrorPanel";
 import {
   candidatesFromEntities,
   curvesFromEntities,
@@ -417,6 +419,7 @@ export class SketchMode {
   // Collaborators work on a live accessor into this SketchMode (their Host interfaces), never a copy of its state.
   private constraintTools: ConstraintTools;
   private patternFlow: PatternFlow;
+  private mirrorFlow: MirrorFlow;
   private dimFlow: DimFlow;
   private projectFlow: ProjectFlow;
   private modifyFlow: ModifyFlow;
@@ -495,6 +498,32 @@ export class SketchMode {
       onState: () => this.onState?.(),
     };
     this.patternFlow = new PatternFlow(patternHost);
+    const mirrorHost: MirrorHost = {
+      entities: () => this.entities,
+      selected: () => this.selected,
+      pickTol: () => this.pickTol(),
+      textAt: (p) => this.textEntityAt(p),
+      loopIdsAt: (p) => {
+        const wr = this.overlay.activeRegionAt(p);
+        return wr ? this.entitiesAlongLoop(wr.region.loop) : [];
+      },
+      showPreview: (copies, line, hover) => {
+        this.overlay.setPreview([
+          ...curveObjects(copies, this.plane, PREVIEW_COLOR, true),
+          ...(line ? curveObjects([line], this.plane, 0x33aaff, true) : []),
+          ...(hover ? curveObjects([hover], this.plane, 0xff5555, true) : []),
+        ]);
+        this.viewport.requestRender();
+      },
+      showPanel: (view) => showMirrorPanel(view),
+      prompt: (text) => setPrompt(text),
+      warn: (msg) => toast(msg),
+      refreshActive: () => this.refreshActive(),
+      afterModify: () => this.afterModify(),
+      armSelect: () => this.setTool("select"),
+      newId: () => newEntityId(),
+    };
+    this.mirrorFlow = new MirrorFlow(mirrorHost);
     const dimHost: DimHost = {
       entities: () => this.entities,
       constraints: () => this.constraints,
@@ -751,6 +780,7 @@ export class SketchMode {
     setPrompt(null);
     this.viewport.hoverEntity(null); // drop any Project-tool 3D hover highlight
     this.modifyFlow.reset();
+    this.mirrorFlow.reset();
     this.overlay.setPreview([]);
     this.overlay.setSnap(null);
     this.snapTag.hide();
@@ -795,7 +825,9 @@ export class SketchMode {
     if (this.gizmo?.active) this.gizmo.cancel();
     // With something selected, move, rotate and scale are one gizmo on it; the
     // click flows below are what they fall back to with nothing selected.
-    if ((t === "move" || t === "rotate" || t === "scale") && this.active && this.gizmo) this.adoptSelectedText();
+    if ((t === "move" || t === "rotate" || t === "scale" || t === "mirror") && this.active && this.gizmo) {
+      this.adoptSelectedText();
+    }
     if ((t === "move" || t === "rotate" || t === "scale") && this.active && this.gizmo && this.selected.size) {
       const target = sketchEntityTarget(this.gizmoHost());
       if (target) {
@@ -821,6 +853,7 @@ export class SketchMode {
     this.cancelBox();
     this.dimFlow.resetDimPicks();
     this.modifyFlow.reset(); // an in-progress fillet/move/offset dies with its tool
+    this.mirrorFlow.reset();
     this.dim.hide();
     this.textPanel.hide();
     // Project tool: chips only while it's active; leaving it drops any 3D hover
@@ -844,6 +877,8 @@ export class SketchMode {
       this.patternFlow.begin();
     } else if (ENTITY_PATTERNS.has(t) && this.active) {
       setPrompt(this.patternPickPrompt());
+    } else if (t === "mirror" && this.active) {
+      this.mirrorFlow.begin();
     }
     // Live in `dimension` too: that tool re-arms after each commit, so users stayed in
     // it and could not edit what they had just dimensioned.
@@ -1843,7 +1878,8 @@ export class SketchMode {
     if (this.tool === "circle3") return this.circle3Click(p);
     if (this.tool === "centerRectangle") return this.centerRectClick(p);
     if (this.tool === "rectangle3") return this.rect3Click(p);
-    if (this.tool === "mirror") return this.mirrorClick(p);
+    if (this.tool === "mirror")
+      return this.mirrorFlow.click(this.planePoint(e) ?? p, e.shiftKey || e.ctrlKey || e.metaKey);
     if (this.tool === "trim") return this.modifyFlow.trimClick(p);
     if (this.tool === "fillet") return this.modifyFlow.filletClick(p);
     if (this.tool === "chamfer") return this.modifyFlow.chamferClick(p);
@@ -2658,73 +2694,6 @@ export class SketchMode {
     this.lockTypedDims(ent, typed);
   }
 
-  // Click a line, the selection is reflected across it.
-  private mirrorClick(p: THREE.Vector2) {
-    const idx = pickEntity(this.entities, p, this.pickTol());
-    const axis = idx >= 0 ? this.entities[idx] : undefined;
-    if (!axis || axis.type !== "line") return;
-    const selectedSources = this.entities.filter((e) => this.selected.has(e.id) && e.id !== axis.id);
-    // Projected geometry is a fixed reference, so mirror the rest (the commit clears the whole selection anyway).
-    const projected = this.modifyFlow.warnSelectedProjected();
-    const chosen = selectedSources.filter((e) => !projected.has(e.id));
-    if (!chosen.length) return; // nothing selected to mirror
-    const a = new THREE.Vector2(axis.x1, axis.y1);
-    const b = new THREE.Vector2(axis.x2, axis.y2);
-    for (const e of chosen) this.entities.push(this.reflectEntity(e, a, b));
-    this.selected.clear();
-    this.afterModify();
-  }
-  private reflectPoint(x: number, y: number, a: THREE.Vector2, b: THREE.Vector2): { x: number; y: number } {
-    const dx = b.x - a.x,
-      dy = b.y - a.y;
-    const len2 = dx * dx + dy * dy || 1;
-    const t = ((x - a.x) * dx + (y - a.y) * dy) / len2;
-    const px = a.x + t * dx,
-      py = a.y + t * dy; // foot of perpendicular
-    return { x: 2 * px - x, y: 2 * py - y };
-  }
-  /** A reflected copy with a fresh id. */
-  private reflectEntity(e: ResolvedEntity, a: THREE.Vector2, b: THREE.Vector2): ResolvedEntity {
-    const rp = (x: number, y: number) => this.reflectPoint(x, y, a, b);
-    const id = newEntityId();
-    const c = e.construction ? { construction: true } : {};
-    if (e.type === "line") {
-      const p1 = rp(e.x1, e.y1),
-        p2 = rp(e.x2, e.y2);
-      return { type: "line", id, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, ...c };
-    }
-    if (e.type === "circle") {
-      const ctr = rp(e.x, e.y);
-      return { type: "circle", id, radius: e.radius, x: ctr.x, y: ctr.y, ...c };
-    }
-    if (e.type === "rectangle") {
-      const ctr = rp(e.x, e.y);
-      return { type: "rectangle", id, ...reflectedRect(e, b.x - a.x, b.y - a.y), x: ctr.x, y: ctr.y, ...c };
-    }
-    if (e.type === "arc") {
-      // reflection flips orientation, so the through-point reflects too
-      const p1 = rp(e.x1, e.y1),
-        p2 = rp(e.x2, e.y2),
-        m = rp(e.mx, e.my);
-      return { type: "arc", id, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, mx: m.x, my: m.y, ...c };
-    }
-    if (e.type === "spline") {
-      return { type: "spline", id, points: e.points.map((q) => rp(q.x, q.y)), ...c };
-    }
-    if (e.type === "bspline") {
-      return { ...e, id, poles: e.poles.map((q) => rp(q.x, q.y)) };
-    }
-    if (e.type === "text") {
-      const at = rp(e.x, e.y); // reflect the anchor; keep the string/style (glyphs aren't mirrored)
-      return { ...e, id, x: at.x, y: at.y };
-    }
-    const q = rp(
-      (e as Extract<ResolvedEntity, { type: "point" }>).x,
-      (e as Extract<ResolvedEntity, { type: "point" }>).y,
-    );
-    return { type: "point", id, x: q.x, y: q.y, ...c };
-  }
-
   private onPointerMove(e: PointerEvent) {
     // A right-drag is camera pan (viewport TRUCK), the same 5 px rule as the viewport's context-click guard.
     if (
@@ -2740,6 +2709,10 @@ export class SketchMode {
     }
     if (this.active && this.tool === "dimension") {
       this.dimFlow.dimensionHover(e);
+      return;
+    }
+    if (this.active && this.tool === "mirror") {
+      this.mirrorFlow.hover(this.planePoint(e));
       return;
     }
     if (this.active && MODIFY_TOOLS.has(this.tool)) {
@@ -2922,6 +2895,14 @@ export class SketchMode {
         return;
       }
     }
+    if (this.mirrorFlow.running && (e.key === "Enter" || e.key === "Tab")) {
+      // A panel button reached by Tab keeps its own Enter.
+      if (e.target instanceof Element && e.target.closest(".mirror-panel")) return;
+      e.preventDefault();
+      if (e.key === "Enter") this.mirrorFlow.commit();
+      else this.mirrorFlow.switchField();
+      return;
+    }
     if (e.key === "Delete" || e.key === "Backspace") {
       // A selected dimension is more specific than the entity selection.
       if (this.dims.deleteSelected()) {
@@ -2954,6 +2935,7 @@ export class SketchMode {
           this.dimFlow.picking ||
           !!this.dimFlow.plan ||
           this.constraintTools.hasPending(),
+        mirror: this.mirrorFlow.running,
         selection: this.selected.size > 0,
         tool: this.tool,
         overlay: escapeClaimed(),
@@ -2961,6 +2943,10 @@ export class SketchMode {
       if (action === "none") return;
       if (action === "cancel-offset") {
         this.modifyFlow.cancelOffset();
+        return;
+      }
+      if (action === "cancel-mirror") {
+        this.mirrorFlow.cancel();
         return;
       }
       if (action === "cancel-drag") {
@@ -3833,6 +3819,7 @@ export class SketchMode {
     this.splinePts = [];
     this.clickPts = [];
     this.modifyFlow.reset();
+    if (this.mirrorFlow.running) this.setTool("select");
     this.dim.hide();
     this.overlay.setPreview([]);
     this.refreshActive();

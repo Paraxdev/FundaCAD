@@ -39,6 +39,7 @@ const NAMES = [
   "hole",
   "loft",
   "pattern",
+  "mirror",
   "planeOffset",
   "datumPose",
   "lightAim",

@@ -49,6 +49,7 @@ function makeSketch(tool: string) {
     dim: { isActive: false, ownsTarget: () => false, hide() {} },
     patternFlow: { hasPending: () => false, flushPending() {} },
     modifyFlow: { offsetting: false, filletArmed: false, setFilletFirst() {}, reset() {} },
+    mirrorFlow: { running: false, reset() {} },
     dimFlow: { picking: false, plan: null, resetDimPicks() {} },
     constraintTools: { hasPending: () => false, resetPending() {} },
     overlay: { setPreview() {} },

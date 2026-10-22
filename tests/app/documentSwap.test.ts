@@ -145,6 +145,7 @@ describe("New and Open stand every tool down", () => {
       "hole",
       "loft",
       "pattern",
+      "mirror",
       "planeOffset",
       "datumPose",
       "lightAim",
@@ -152,7 +153,7 @@ describe("New and Open stand every tool down", () => {
       "joint",
       "mechanism",
     ])
-      t[n] = tool(n, n === "extrude" || n === "pressPull");
+      t[n] = tool(n, n === "extrude" || n === "pressPull" || n === "mirror");
     t.move = tool("move", false);
     t.measure = { active: true, stop: () => calls.push("measure.stop") };
     t.section = { picking: false, editing: false, endEdit: () => calls.push("section.endEdit") };
@@ -162,7 +163,13 @@ describe("New and Open stand every tool down", () => {
   it("cancels the armed tools and leaves idle ones alone", () => {
     const calls: string[] = [];
     cancelActiveTools(tools(calls));
-    expect(calls.sort()).toEqual(["extrude.cancel", "measure.stop", "move.cancel", "pressPull.cancel"]);
+    expect(calls.sort()).toEqual([
+      "extrude.cancel",
+      "measure.stop",
+      "mirror.cancel",
+      "move.cancel",
+      "pressPull.cancel",
+    ]);
   });
 
   // A cut that is on, or none, is the store's to replace with the next document's own.

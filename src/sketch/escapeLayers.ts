@@ -8,6 +8,8 @@ export interface SketchEscapeState {
   dragging: boolean;
   /** a half-finished entity, dimension pick or constraint pick is on screen */
   pendingGeometry: boolean;
+  /** the Mirror panel is open; one press drops its picks and preview */
+  mirror?: boolean;
   selection: boolean;
   /** the armed tool; "select" is the resting state a sketch idles in */
   tool: string;
@@ -17,7 +19,14 @@ export interface SketchEscapeState {
 
 /** One rung per value, so the caller cannot do two at once (cancel the tool AND close the sketch on one key). */
 export type SketchEscapeAction =
-  "none" | "cancel-offset" | "cancel-drag" | "cancel-geometry" | "clear-selection" | "arm-select" | "close";
+  | "none"
+  | "cancel-offset"
+  | "cancel-drag"
+  | "cancel-geometry"
+  | "cancel-mirror"
+  | "clear-selection"
+  | "arm-select"
+  | "close";
 
 /** "close" is reached only from a sketch idle in every sense, which is one Escape away from any other state,
  *  so leaving costs at most two presses. */
@@ -26,6 +35,7 @@ export function sketchEscapeAction(s: SketchEscapeState): SketchEscapeAction {
   if (s.offsetPick) return "cancel-offset";
   if (s.dragging) return "cancel-drag";
   if (s.pendingGeometry) return "cancel-geometry";
+  if (s.mirror) return "cancel-mirror";
   if (s.selection) return "clear-selection";
   if (s.tool !== "select") return "arm-select";
   return "close";

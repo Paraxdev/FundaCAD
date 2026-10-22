@@ -114,10 +114,13 @@ export function datumChoiceRow(
   field: string,
   features: readonly Feature[],
 ): { options: ChoiceOption[]; current: string } | null {
-  if (!DATUM_FIELD.test(field)) return null;
+  const mirror = feature.type === "mirror" && field === "plane";
+  if (!mirror && !DATUM_FIELD.test(field)) return null;
   const at = features.findIndex((x) => x.id === feature.id);
-  const options = datumChoices(field, at < 0 ? features : features.slice(0, at)) ?? [];
-  const v = (feature as unknown as Record<string, unknown>)[field];
+  const options = datumChoices(mirror ? "startPlane" : field, at < 0 ? features : features.slice(0, at)) ?? [];
+  const v = mirror
+    ? mirrorPlaneName((feature as Extract<Feature, { type: "mirror" }>).plane)
+    : (feature as unknown as Record<string, unknown>)[field];
   if (v && typeof v === "object") {
     return { options: [...options, { value: PICKED_POINT, label: "Picked point" }], current: PICKED_POINT };
   }
