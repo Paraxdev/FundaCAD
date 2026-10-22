@@ -69,6 +69,6 @@ defineProps<{ view: MirrorPanelView }>();
         Mirror
       </button>
     </div>
-    <div class="measure-hint">Enter to apply · Tab switches field · Esc to cancel</div>
+    <div class="measure-hint">Enter to apply · Shift adds more · Tab switches field · Esc to cancel</div>
   </FloatingPanel>
 </template>
