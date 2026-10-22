@@ -1,13 +1,5 @@
-//! System font discovery and family lookup, replacing OCCT's `Font_FontMgr`
-//! as build123d drives it (build123d/text.py `FontManager`).
-//!
-//! Faces come from fontdb. Each one is registered under the names both
-//! registrations of the Python engine give it: the kernel's own scan (the
-//! typographic family plus any style words that are not an aspect) first, then
-//! build123d's (the first name records in table order, variable font instances
-//! included), which only fills aspects the first left empty. A lookup is by
-//! lowercase name, then a few aliases, then Arial, then whatever sans serif
-//! fontdb knows.
+//! System font discovery and family lookup over fontdb, each face registered under the kernel scan's and
+//! build123d's names. A lookup tries the lowercase name, a few aliases, Arial, then any sans serif.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -130,7 +122,7 @@ impl Library {
         }
     }
 
-    /// `GetAvailableFontsNames`, sorted and deduplicated.
+    /// Sorted and deduplicated.
     pub fn families(&self) -> Vec<String> {
         let mut names: Vec<String> = self.fonts.values().map(|f| f.name.clone()).collect();
         names.sort();
@@ -179,8 +171,7 @@ impl Library {
         self.reach(&name.to_lowercase()).is_some()
     }
 
-    /// `FindFont` then `FontPathAny`: the aspect asked for, else regular with
-    /// italic made up where one was asked for, else any aspect there is.
+    /// The aspect asked for, else regular with italic made up where asked, else any aspect there is.
     pub fn resolve(&self, name: &str, aspect: Aspect) -> Option<Resolved<'_>> {
         let font = self.find(name)?;
         if let Some(face) = &font.aspects[aspect as usize] {
@@ -278,7 +269,7 @@ fn instances(face: &Face<'_>) -> Vec<Instance> {
 
 const ASPECT_WORDS: [&str; 4] = ["Regular", "Bold", "Italic", "Oblique"];
 
-/// build123d `_get_font_faces`: a subfamily's aspect and the name it leaves.
+/// A subfamily's aspect and the name it leaves, as build123d splits it.
 fn split_subfamily(family: &str, subfamily: &str) -> (String, Aspect) {
     let labels: Vec<&str> = subfamily.split_whitespace().collect();
     let has = |w: &str| labels.contains(&w);
