@@ -32,8 +32,9 @@ This file starts on 2026-08-03. For anything before that, see the
 
 - **Clicks and hovers reach only what a section keeps.** With a cut on, a
   click to select, hovering, measuring, fillet edge picks and face picks skip
-  the cut half, and a selected body's glow stops at the cut. Box select still
-  takes both halves.
+  the cut half, and a selected body's glow stops at the cut. A click on the
+  hatched cut surface selects its body and never a face hidden behind it. Box
+  select still takes both halves.
 
 - **Filament materials get sheen, anisotropy, flakes and scatter.** A material's
   Advanced section in the Render workspace has Sheen for a soft velvet rim,
