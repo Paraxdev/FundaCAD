@@ -1,8 +1,4 @@
-//! Face triangulations into one body mesh, replaces `tessellate`,
-//! `_display_face` and `mesh_bbox` of the Python engine's `tessellate.py`.
-//!
-//! Mesh passes (plugin displacement) are not here, they wait for the plugin
-//! host.
+//! Face triangulations joined into one body mesh.
 
 use opencascade::mesh_access::{self, EdgeSplits, MeshAccess};
 use opencascade::primitives::Shape;
@@ -24,19 +20,16 @@ pub struct MeshParams {
     pub linear: f64,
     pub angular: f64,
     pub relative: bool,
-    /// True surface normals and the seam weld, the viewport payload. Export
-    /// leaves them off, an exported mesh is the kernel's with its split edges
-    /// joined.
+    /// True surface normals and the seam weld, for the viewport payload. Export leaves them off, its mesh
+    /// is the kernel's with split edges joined.
     pub display: bool,
     /// Drop a stored triangulation first. BRepMesh keeps a finer stored mesh
     /// for a coarser request, so a tolerance backoff needs this to coarsen.
     pub force_remesh: bool,
 }
 
-/// Mesh `shape` in parallel and read every face back, skipping a face with no
-/// triangulation. A reversed face has its winding flipped so facet normals
-/// point outward, faces the mesher left apart along an edge are joined, and
-/// no triangle without area is left (mesh::flat).
+/// A reversed face gets its winding flipped so facet normals point out, faces the mesher left apart
+/// along an edge are joined, and no triangle without area is left (mesh::flat).
 pub fn tessellate(shape: &Shape, access: &MeshAccess, params: MeshParams) -> Tessellation {
     tessellate_with(shape, access, params, None)
 }
@@ -60,10 +53,8 @@ pub fn tessellate_with(
     let kept = !params.force_remesh && access.has_mesh();
     let mut edges = mesh(params.force_remesh);
     let mut reach = split_reach(shape, &edges);
-    // BRepMesh keeps a stored face mesh that is fine enough, face by face. A
-    // face this body shares with another one (a kept original) may have been
-    // meshed again for that body since, and no longer meets its neighbours
-    // here. Only a mesh of the whole body made in one run is sure to.
+    // BRepMesh keeps a stored face mesh that is fine enough, but a face shared with another body may have
+    // been remeshed for it since. Only a whole body meshed in one run surely meets its neighbours.
     if kept && outdated(&edges, reach) {
         edges = mesh(true);
         reach = split_reach(shape, &edges);
@@ -136,27 +127,14 @@ fn split_reach(shape: &Shape, found: &EdgeSplits) -> Option<f64> {
     Some(SPLIT_REACH * norm(sub(max, min)))
 }
 
-/// Whether the faces of a mesh disagree along an edge the way faces meshed
-/// in different runs do: another number of points, or one step of the edge
-/// further apart than a fold leaves it.
+/// Faces disagree along an edge the way faces meshed in different runs do: another number of points,
+/// or one step further apart than a fold leaves.
 fn outdated(found: &EdgeSplits, reach: Option<f64>) -> bool {
     found.uneven > 0 || reach.is_some_and(|r| found.pairs.iter().any(|p| !(norm(sub(p[0], p[1])) <= r)))
 }
 
-/// The points at which the kernel's mesher left the faces along an edge
-/// apart, each with the one point its group takes.
-///
-/// BRepMesh gives every face its own copy of an edge's points, then folds the
-/// boundary nodes of a face that are within its UV tolerance of each other
-/// into one. Next to an edge shorter than that tolerance (a cut corner a few
-/// 1e-5 mm beside a seam) one face folds and its neighbour does not, and the
-/// two no longer meet. Each group of points joined this way moves to the one
-/// met first, on every face that has a node there, and a triangle that loses
-/// its area to the move goes with the others that have none (mesh::flat).
-///
-/// A face that small on every side (the sliver between a seam, a rim and a cut
-/// corner beside both) gets no triangles, or one where its outline needs five.
-/// It is one point of the mesh then, the points held around it form one group.
+/// BRepMesh folds a face's boundary nodes within its UV tolerance, so beside a shorter edge one face folds
+/// and its neighbour does not. Each group of split points moves to the one met first, on every face.
 pub(super) struct SplitJoin(HashMap<[u64; 3], [f64; 3]>);
 
 impl SplitJoin {
@@ -209,11 +187,8 @@ impl SplitJoin {
     }
 }
 
-/// How far apart two points of one edge step may be and still be joined, and
-/// how large a face the mesher did not fill may be and still count as a
-/// point, as a share of the body's diagonal. The folds measured stay under
-/// 2e-6 of it, a much wider gap is some other fault, and joining it would drag
-/// the mesh.
+/// As a share of the body's diagonal: how far apart split edge points may be joined, and how large an
+/// unfilled face still counts as a point. Measured folds stay under 2e-6, a wider gap is another fault.
 const SPLIT_REACH: f64 = 1e-4;
 
 struct DisplayFace {
@@ -238,15 +213,8 @@ fn norm(a: [f64; 3]) -> f64 {
     dot(a, a).sqrt()
 }
 
-/// One face of the display tessellation with true surface normals and its
-/// seam duplicates welded.
-///
-/// OCCT's computed normals follow the surface and ignore a REVERSED face, so
-/// they are flipped with the winding and then checked against the winding's own
-/// area weighted facet normals; a node whose normal is unsound keeps that facet
-/// average, which is what the client would draw. Coincident nodes (a closed
-/// face's seam copies) merge only when their normals agree, so a cone apex
-/// keeps its copies, and the weld never crosses a face.
+/// OCCT's normals ignore a REVERSED face, so they are flipped with the winding and checked against area
+/// weighted facet normals. Seam copies merge only when normals agree, so a cone apex keeps its copies.
 fn display_face(nodes: Vec<f64>, tris: Vec<u32>, surface_normals: &[f64], flip: bool, is_plane: bool) -> DisplayFace {
     let n = nodes.len() / 3;
     let p = |i: u32| {

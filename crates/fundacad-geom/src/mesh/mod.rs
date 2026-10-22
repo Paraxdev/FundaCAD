@@ -1,11 +1,4 @@
-//! The viewport mesh of a body in the protocol v2 payload shape, replaces
-//! the Python engine's `tessellate.py` and the payload half of the Python engine's `viewport_mesh.py`
-//! (`_compute_payload`, `_body_payload`, `_union_bbox`), plus the body loop of
-//! `server._rebuild_job`.
-//!
-//! Not here yet: mesh passes and `faceColorSlots` (the plugin host),
-//! instance payloads and helper processes. The
-//! RAM and disk payload caches plug in through `PayloadCache` (crate::cache).
+//! The viewport mesh of a body in the protocol v2 payload shape, with payload caches behind `PayloadCache`.
 
 pub mod edges;
 pub mod flat;
@@ -24,11 +17,9 @@ use opencascade::mesh_access::MeshAccess;
 use opencascade::primitives::Shape;
 use serde_json::{json, Map, Value};
 
-/// Bumped with the Python engine's `tessellate.py`'s CODE_VERSION whenever the payload
-/// changes for the same input, it keys the mesh artifact cache.
+/// Bump whenever the payload changes for the same input, it keys the mesh artifact cache.
 pub const CODE_VERSION: u32 = 11;
 
-/// A body as the payload loop sees it.
 #[derive(Default)]
 pub struct MeshBody<'a> {
     pub id: String,
@@ -43,8 +34,7 @@ pub struct MeshBody<'a> {
     pub part_color: Option<Value>,
     /// `Body::identity`, what the in-memory payload cache matches on.
     pub identity: Option<(u64, u64)>,
-    /// The mesh pass specs a plugin stashed on the body, displaced at
-    /// tessellation time (`plugin_geometry.specs`).
+    /// Mesh pass specs a plugin stashed on the body, displaced at tessellation time.
     pub mesh_passes: Vec<Value>,
     /// The content key of the checkpoint blob this shape was stored under.
     pub mesh_key: Option<String>,
@@ -192,8 +182,7 @@ fn body_payload_for(body: &MeshBody<'_>, shape: &Shape, tolerance: f64, profile:
 /// up to `mesh_result_full`, which lifts them off the bodies to the reply.
 pub const PASS_ERRORS: &str = "passErrors";
 
-/// `viewport_mesh.VIEWPORT_DENSITY_CAP`, a displaced face's triangle budget on
-/// screen; an export gets `export::EXPORT_DENSITY_CAP_PER_FACE`.
+/// A displaced face's triangle budget on screen, an export gets `export::EXPORT_DENSITY_CAP_PER_FACE`.
 pub const VIEWPORT_DENSITY_CAP: u32 = 80_000;
 
 /// The faces of a body its mesh passes claim, resolved against the final
@@ -343,17 +332,14 @@ fn bbox_value(bb: Option<([f64; 3], [f64; 3])>) -> Value {
     }
 }
 
-/// The body's etag: blake2b-128 of everything the payload carries, as 32 hex
-/// digits. The Python engine hands out a random one per cache entry; a content hash
-/// is the same promise without the cache, and survives a worker restart.
+/// blake2b-128 of everything the payload carries as 32 hex digits, so it survives a worker restart.
 /// Envelope keys (`id`, `name`, `nodeRef`, colours) are not part of it.
 pub fn etag(body: &FullBody) -> String {
     etag_with(body, None)
 }
 
-/// The mesh pass cache key of a body, the specs and the code version of each
-/// pass that will displace it, so a plugin that changes its algorithm cannot
-/// be served the previous version's mesh out of a cache.
+/// The specs and code version of each pass that will displace the body, so a plugin that changes its
+/// algorithm is never served the previous version's mesh.
 pub fn pass_key(body: &MeshBody<'_>) -> Option<String> {
     #[cfg(feature = "plugins")]
     {
@@ -432,10 +418,8 @@ pub fn union_bbox<'a>(boxes: impl IntoIterator<Item = &'a Value>) -> Value {
     }
 }
 
-/// The body loop of `_rebuild_job`: one profile for the whole reply, a body
-/// without a shape left out, a stub for a body whose etag the client holds,
-/// and the document bbox as the union of the body boxes. The builder's own
-/// keys (`bodyIds`, `datumPlanes`, errors, ...) are the caller's to add.
+/// One profile for the whole reply, shapeless bodies left out, a stub where the client holds the etag.
+/// The builder's own keys (`bodyIds`, `datumPlanes`, errors) are the caller's to add.
 pub fn mesh_result(bodies: &[MeshBody<'_>], tolerance: f64, known: &Map<String, Value>) -> MeshResult {
     mesh_result_full(bodies, tolerance, known, &mut NoPayloadCache, &mut |_, _| {})
 }
@@ -461,15 +445,8 @@ pub fn mesh_result_cached(
     mesh_result_full(bodies, tolerance, known, cache, &mut |_, _| {})
 }
 
-/// Every body's payload, in body order, `None` where the body has no shape.
-///
-/// The cache is read and written on this thread, in body order, so a cached
-/// run and a fresh one agree; only the bodies that miss are meshed, and those
-/// go to other threads when they own their faces outright (crate::par).
-///
-/// Every body still ticks progress once, whichever tier answered it and
-/// whether or not it has a shape, and the counts still run 0, 1, ... n-1: the
-/// stall watchdog is promised one beat per body, not a particular order.
+/// The cache is read and written here in body order so cached and fresh runs agree, misses mesh on other
+/// threads. Every body ticks progress once, the stall watchdog is promised one beat per body, not an order.
 fn built_payloads(
     bodies: &[MeshBody<'_>],
     tolerance: f64,

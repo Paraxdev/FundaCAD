@@ -1,11 +1,5 @@
-//! Plugin mesh passes at tessellation time, the engine half of
-//! `plugin_geometry.resolve` and `displace`.
-//!
-//! A pass owns whole faces of the FINAL shape: it reads one face's stored
-//! triangulation and hands back its own, which takes that face's place in the
-//! body mesh, in face order, as `tessellate.py` appends it. The replacement
-//! triangles keep the face id they replace, so picking, face colours and face
-//! bands go on meaning the same thing.
+//! Plugin mesh passes at tessellation time. A pass replaces whole faces of the final shape in face order,
+//! keeping each face id so picking, face colours and face bands mean the same thing.
 
 use serde_json::Value;
 
@@ -35,8 +29,7 @@ pub fn append(out: &mut Tessellation, fid: u32, m: &FaceMesh, display: bool) {
     out.face_ids.extend(std::iter::repeat(fid).take(m.indices.len() / 3));
 }
 
-/// `faceColorSlots`: the `colorSlot` of the spec that claimed each face, in
-/// face order, `None` when no claimed face carries one.
+/// The `colorSlot` of the spec that claimed each face, `None` when no claimed face carries one.
 pub fn face_color_slots<'a>(face_count: usize, spec_of: impl Fn(usize) -> Option<&'a Value>) -> Option<Vec<Value>> {
     let slots: Vec<Value> =
         (0..face_count).map(|k| spec_of(k).and_then(|s| s.get("colorSlot")).cloned().unwrap_or(Value::Null)).collect();
