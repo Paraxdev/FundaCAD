@@ -1,6 +1,4 @@
-// Where a popover goes beside the element that opened it: on the requested side
-// when it fits, on the opposite side when it does not, and always inside the
-// window.
+// Places a popover beside its opener: on the asked side when it fits, else the opposite one, always inside the window.
 
 export type Side = "right" | "left" | "bottom" | "top";
 

@@ -1,10 +1,4 @@
-// The Browser panel's pure helpers.
-//
-// The panel itself is components/shell/BrowserPane.vue (+ TreeFolder.vue and
-// TreeRow.vue); what is left here is the part with real logic and no DOM:
-// shaping an imported STEP assembly into the tree the panel paints, and the
-// shared body-colour menu. Both are unit-tested directly, see browserTree.test.ts,
-// which is a node-environment *.test.ts with no DOM at all.
+// Pure helpers for the Browser panel (components/shell/BrowserPane.vue), unit-tested without a DOM.
 
 import type { CtxItem } from "./menu";
 import { contributedBodyMenu } from "../plugins/contrib";
@@ -12,31 +6,13 @@ import { ancestryOf, childrenByParent, type ElementDef } from "../document/eleme
 import type { MaterialDef } from "../document/materials";
 import type { CadDocument, ImportColorSource } from "../types";
 
-/** The rows a plugin adds to a body's right-click menu.
- *
- *  A list to be spread rather than an item to be placed, because the two states
- *  are "some entries" and "no entry at all". Shared by the browser-tree row menu
- *  and the viewport's body menu so the two surfaces cannot drift.
- *
- *  A "Color" submenu built from the document's palette used to be written out
- *  here, behind a check on the capability that owns palettes. Both are gone: the
- *  submenu is contributed by that capability, and this file no longer knows that
- *  a body can have a colour.
- *
- *  Kept as a named function rather than calling the registry at both sites,
- *  because those two are also where a THIRD surface would come looking, and one
- *  name is easier to find than two call sites. */
+/** Shared by the tree row menu and the viewport body menu so the two cannot drift. */
 export function bodyExtraMenu(bodyId: string): CtxItem[] {
   return contributedBodyMenu(bodyId);
 }
 
-/** One nesting level is a caret plus the head's gap (12px + 8px), so a child's
- *  caret sits under its parent's icon. A leaf has no caret and takes one more
- *  step, which puts its icon under its sibling folders' icons. Capped because
- *  the panel has no horizontal scroll and imported assemblies nest 12 deep.
- *
- *  Section heads are depth 0 and their contents start at 1. e2e/assembly_tree_e2e.cjs
- *  reads the computed paddingLeft back to assert that nesting is visibly indented. */
+/** A caret plus the head gap (12px + 8px), so a child caret sits under its parent icon; a leaf takes one more step.
+ *  Capped as the panel has no horizontal scroll. e2e/assembly_tree_e2e.cjs reads paddingLeft back. */
 const INDENT_STEP = 20;
 const INDENT_BASE = 4;
 
@@ -48,7 +24,6 @@ export function rowIndent(depth: number): number {
   return folderIndent(depth) + INDENT_STEP;
 }
 
-/** One node of an imported assembly tree, as the browser renders it. */
 export interface AsmGroup {
   key: string; // namespaced collapse key, "n:<featureId>/<nodeIndex>"
   label: string;
@@ -57,24 +32,14 @@ export interface AsmGroup {
   total: number; // bodies at or below this node, what the count badge shows
 }
 
-/** Every body id at or below `g`. */
 export function collectBodyIds(g: AsmGroup, out: string[] = []): string[] {
   for (const b of g.bodies) out.push(b.id);
   for (const c of g.children) collectBodyIds(c, out);
   return out;
 }
 
-/** Shape imported-assembly bodies into the tree the browser renders.
- *
- *  Pure on purpose, this is the part with real logic (chain walking, sibling
- *  identity, malformed manifests), so it is unit-tested directly rather than
- *  through the DOM. Returns null when no body belongs to an assembly, which is
- *  every document without one; the caller then renders the flat list unchanged.
- *
- *  A body whose `nodeRef` does not resolve goes to `loose` rather than being
- *  dropped: a body missing from the browser is invisible AND unselectable, which
- *  is far worse than one shown at the top level.
- */
+/** Null when no body belongs to an assembly. A body whose `nodeRef` does not resolve goes to `loose`, since a dropped
+ *  body would be invisible and unselectable. */
 export function buildAssemblyGroups(
   bodies: readonly { id: string; name: string; nodeRef?: string }[],
   trees: ReadonlyMap<string, readonly { name: string; parent: number | null }[]>,
@@ -138,25 +103,16 @@ export function buildAssemblyGroups(
   return { roots, loose, ancestors };
 }
 
-// --- the whole body tree: the user's elements over the imports' own -----------
-
-/** A body as the tree carries it. */
 export interface BodyRef {
   id: string;
   name: string;
 }
 
-/** One folder in the Browser's body tree, from either source.
- *
- *  ONE shape for both kinds rather than two, because everything the panel does
- *  with a folder, indent it, count it, collapse it, toggle every body under it,
- *  is the same for both, and `kind` is consulted only where they genuinely
- *  differ: an element can be renamed, deleted and dropped onto, an assembly node
- *  is a fact about a file and can be none of those. */
+/** One shape for elements and assembly nodes; `kind` matters only where they differ: an element can be renamed,
+ *  deleted and dropped onto, an assembly node cannot. */
 export interface TreeGroup {
   kind: "element" | "assembly";
-  /** The element's id. Absent on an assembly node, which has no id of its own,
-   *  only a position in a manifest. */
+  /** Absent on an assembly node, which has only a position in a manifest. */
   id?: string;
   key: string; // collapse key: "e:<elementId>" or "n:<featureId>/<nodeIndex>"
   label: string;
@@ -165,7 +121,6 @@ export interface TreeGroup {
   total: number; // bodies at or below here, what the count badge shows
 }
 
-/** Every body id at or below `g`. */
 export function collectGroupBodyIds(g: TreeGroup, out: string[] = []): string[] {
   for (const b of g.bodies) out.push(b.id);
   for (const c of g.children) collectGroupBodyIds(c, out);
@@ -193,24 +148,8 @@ export function importTrees(doc: CadDocument): Map<string, { name: string; paren
   return trees;
 }
 
-/** The Browser's whole body tree: the user's elements first, then whatever
- *  assembly structure the imports brought with them, then the rest.
- *
- *  AN ELEMENT ASSIGNMENT IS PREFERRED. A body the user has filed shows in that folder
- *  and nowhere else, including when the file it came from had an opinion about
- *  where it belonged. That is the entire point of the feature: an imported tree
- *  is a record of how somebody else's CAD system organised the part, and it is
- *  frequently not how this document wants it. Bodies left alone keep the
- *  imported structure exactly as they had it, so opening an assembly and
- *  changing nothing looks the way it always did.
- *
- *  Empty elements are kept. A folder made and not yet filled is the first half
- *  of every organising gesture there is, and one that vanished until something
- *  was dropped in it could never be dropped into.
- *
- *  Always returns a tree, never null: a document with no elements and no
- *  imported assembly comes back as `groups: []` plus every body in `loose`,
- *  which is the flat list the panel has always drawn. */
+/** Elements first, then the imported assembly structure, then the rest. A body the user filed shows only in its
+ *  element, whatever its file said. Empty elements are kept so they can be dropped into. Never null. */
 export function buildBodyTree(
   bodies: readonly { id: string; name: string; nodeRef?: string }[],
   trees: ReadonlyMap<string, readonly { name: string; parent: number | null }[]>,
@@ -259,9 +198,7 @@ export function buildBodyTree(
   return { groups, loose: asm ? asm.loose : rest.map((b) => ({ id: b.id, name: b.name })), ancestors };
 }
 
-/** "Chassis / Frame": the path that tells two folders of the same name apart in
- *  a flat menu. The context menu opens one level of flyout and elements nest
- *  without limit, so the nesting has to go in the label. */
+/** "Chassis / Frame": the menu opens one flyout level and elements nest without limit, so the label holds the path. */
 export function elementPath(elements: readonly ElementDef[], id: string): string {
   const names = new Map(elements.map((e) => [e.id, e.name]));
   return ancestryOf(elements, id)
@@ -270,13 +207,8 @@ export function elementPath(elements: readonly ElementDef[], id: string): string
     .join(" / ");
 }
 
-/** The "Move to" submenu for a set of bodies, shared by the Browser row menu and
- *  the viewport's body menu so the two cannot drift.
- *
- *  `from` is the element they are in now, undefined for orphans, and only
- *  greys out the row that would be a no-op. It is taken from ONE of the bodies:
- *  a mixed selection is the ordinary case when several folders are being merged,
- *  and every destination is legal for it. */
+/** Shared by the Browser row menu and the viewport body menu. `from` only greys out the no-op row, and comes from one
+ *  body since a mixed selection is ordinary when merging folders. */
 export function elementMoveMenu(
   elements: readonly ElementDef[],
   ids: readonly string[],
@@ -298,24 +230,14 @@ export function elementMoveMenu(
   return { label: ids.length > 1 ? `Move ${ids.length} bodies to` : "Move to", children: rows };
 }
 
-/** The "Material" submenu for a set of bodies, shared by the Browser row menu
- *  and the viewport's body menu, exactly as elementMoveMenu above is.
- *
- *  A flat list of the library with a swatch on each row, and "None" at the
- *  bottom for going back to the default grey. No "New material…" here: making
- *  one is dialling in a colour and three sliders, which is the dialog's job, and
- *  a context menu that opened a modal over the model the user was pointing at
- *  would be a menu that took the thing they were aiming at away. */
+/** Shared like elementMoveMenu. No "New material…" row: a modal would cover the model the user pointed at. */
 export function materialMenu(
   materials: readonly MaterialDef[],
   ids: readonly string[],
   current: string | undefined,
   apply: (material: string | null) => void,
-  /** How many of this body's own faces wear a material of their own, and how to
-   *  take them off. Offered only when there ARE some: an entry that is always
-   *  present and almost always does nothing is an entry read past every time.
-   *  It matters because a body assignment does NOT clear them, deliberately, so
-   *  without this a face dressed by a drag has no way back from the tree. */
+  /** Offered only when some faces have their own material. A body assignment deliberately leaves them, so this is the
+   *  only way back from the tree. */
   faces?: { count: number; clear: () => void },
 ): CtxItem {
   const rows: CtxItem[] = materials.map((m) => ({

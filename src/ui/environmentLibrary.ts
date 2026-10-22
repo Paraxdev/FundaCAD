@@ -1,8 +1,5 @@
-// The user's saved environments, and the imported panoramas they light with.
-//
-// IndexedDB rather than the fundacad.* localStorage keys: one 2k panorama is
-// about 8 MB, past what localStorage holds for the whole origin. Panoramas are
-// kept by hash in their own table, so two saved looks share one file.
+// The user's saved environments and their panoramas, in IndexedDB: one 2k panorama is about 8 MB, past what
+// localStorage holds. Panoramas are kept by hash, so two saved looks share one file.
 
 import type { EnvSettings } from "./renderPrefs";
 
