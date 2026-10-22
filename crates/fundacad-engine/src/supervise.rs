@@ -1,11 +1,5 @@
-//! How long a job may run, and what ends one that overstays.
-//!
-//! Replaces the supervision half of the Python engine's `server.py`: `_run` (a wall clock,
-//! `JOB_TIMEOUT`), `_run_stall` (a progress clock, `STALL_TIMEOUT`),
-//! `_export_stall_budget` and the import budget. A Python worker that overstays
-//! is killed with its pool; a Rust job thread cannot be killed, so it is
-//! abandoned instead: the request is answered, the thread is left to finish on
-//! its own with nowhere to send, and a fresh job thread takes the queue.
+//! How long a job may run, and what ends one that overstays. A job thread cannot be killed, so it is abandoned: the
+//! request is answered, the thread finishes with nowhere to send, and a fresh job thread takes the queue.
 
 use crate::JobContext;
 use fundacad_protocol::JobResult;
@@ -25,9 +19,8 @@ pub enum Budget {
     Wall(Duration),
 }
 
-/// The two base clocks, `FUNDACAD_STALL_TIMEOUT` and `FUNDACAD_JOB_TIMEOUT` in
-/// seconds when set, so a protocol test can watch a reap without waiting a
-/// minute for one.
+/// The base clocks, `FUNDACAD_STALL_TIMEOUT` and `FUNDACAD_JOB_TIMEOUT` in seconds when set, so a protocol test can
+/// watch a reap without waiting a minute.
 #[derive(Debug, Clone, Copy)]
 pub struct Clocks {
     pub stall: Duration,
@@ -46,7 +39,7 @@ impl Clocks {
         Clocks { stall: secs("FUNDACAD_STALL_TIMEOUT", STALL_TIMEOUT), job: secs("FUNDACAD_JOB_TIMEOUT", JOB_TIMEOUT) }
     }
 
-    /// server.py `_dispatch`'s choice of `_run` or `_run_stall` for `op`.
+    /// Which clock, stall or wall, `op` runs under, and for how long.
     pub fn budget(&self, op: &str, req: &Map<String, Value>) -> Budget {
         match op {
             "listFonts" | "tessellateText" | "migrateGeometry" => Budget::Wall(self.job),
@@ -58,8 +51,7 @@ impl Clocks {
         }
     }
 
-    /// `_export_stall_budget`: the write is one silent kernel call, so the
-    /// budget scales with the bodies it writes.
+    /// The write is one silent kernel call, so the budget scales with the bodies it writes.
     fn export_budget(&self, doc: Option<&Value>) -> Duration {
         let n: usize = doc.and_then(|d| d.get("features")).and_then(Value::as_array).map_or(0, |feats| {
             feats
@@ -170,9 +162,8 @@ impl Watchdog {
     }
 }
 
-/// A job that only waits, for the protocol suites: they need something long to
-/// cancel and something silent to reap, without a 356 MiB STEP file. Answered
-/// only when `FUNDACAD_ENGINE_TEST_OPS=1` is set when the engine starts.
+/// A job that only waits, so the protocol suites have something long to cancel and silent to reap without a 356 MiB
+/// STEP file. Answered only when `FUNDACAD_ENGINE_TEST_OPS=1` is set when the engine starts.
 pub const TEST_SLEEP_OP: &str = "testSleep";
 
 pub fn test_ops_enabled() -> bool {

@@ -1,9 +1,5 @@
-//! The document the worker holds between rebuilds, patched by deltas.
-//!
-//! Replaces `_apply_doc_ops` in the Python engine's `server.py`. The client sends only the
-//! features that changed, `{baseRevision, revision, ops}`; anything the held
-//! document cannot answer (a respawned worker, a missed revision, a gap the ops
-//! leave) asks for the whole document once with `{"resync": true}`.
+//! The document the worker holds between rebuilds, patched by `{baseRevision, revision, ops}` deltas. Anything the
+//! held document cannot answer (a respawned worker, a missed revision) asks for the whole one with `{"resync": true}`.
 
 use serde_json::{Map, Value};
 
