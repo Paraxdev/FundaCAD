@@ -1,25 +1,8 @@
-//! The document container: a ZIP holding the document JSON plus the geometry it
-//! references by content hash.
-//!
-//! Geometry used to live inside the document as base64 BREP. On the reference
-//! 356 MiB STEP assembly that is 541.8 MiB of JSON, 4.2x over the websocket frame
-//! cap. Binary BinTools is 224.1 MiB, deflates to 83.5 MiB, and reloads in 1.9 s
-//! against 189.0 s to re-import from STEP.
-//!
-//! THE APP OWNS IT, not the engine worker: a save routed through a worker that is
-//! restarting would leave the user unable to save with unsaved work in front of
-//! them. Saving needs no geometry, the document comes from the
-//! frontend and the blobs are already bytes on disk. Nothing here interprets a
-//! shape, so "only the engine touches geometry" still holds.
-//!
-//! TWO LOAD-BEARING RULES:
-//!
-//! 1. **Hash the STORED bytes once, at write time.** `write(read(x)) != x` for BREP
-//!    (reading rebuilds the shape graph in an equivalent but different order), so a
-//!    re-derived hash changes every generation and every lookup would miss.
-//! 2. **Never use a name from inside the archive as a path.** Extracted blobs are
-//!    published under the hash we computed over the inflated bytes, so zip-slip is
-//!    structurally impossible rather than filtered.
+//! The ZIP document container, format 1: the document JSON plus the geometry it references by content hash. On the 356
+//! MiB STEP reference, base64 BREP in JSON is 541.8 MiB; BinTools is 224.1 MiB, 83.5 deflated, and reloads in 1.9 s.
+//! The app owns it, not the engine worker, so a save never depends on a restarting worker. Two rules: hash the STORED
+//! bytes once at write time, since `write(read(x)) != x` for BREP, and never use an archive name as a path: blobs
+//! publish under the verified hash, so zip-slip is impossible.
 //!
 //! ```text
 //! manifest.json        STORED, first, readable without a decompressor
@@ -38,9 +21,8 @@ use blake2::{Blake2b, Digest};
 use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 
-/// Bumped only when the ZIP LAYOUT changes. Distinct from the document's own
-/// `version` (src/document/migrate.ts FORMAT_VERSION), which moves for different
-/// reasons: a document migration does not reshape the archive, and vice versa.
+/// Bumped only when the ZIP layout changes, apart from the document's own `version` (migrate.ts FORMAT_VERSION): a
+/// document migration does not reshape the archive, and vice versa.
 pub const CONTAINER_VERSION: u32 = 1;
 
 pub const HASH_ALG: &str = "blake2b-128";
@@ -48,15 +30,8 @@ pub const HASH_ALG: &str = "blake2b-128";
 const MANIFEST_NAME: &str = "manifest.json";
 const DOCUMENT_NAME: &str = "document.json";
 
-/// Zip-bomb guard: the DECLARED uncompressed sizes live in the central
-/// directory, so we can refuse before inflating a single byte.
-///
-/// The cap is ABSOLUTE, not a compression ratio. A ratio test was tried in the
-/// Python prototype and removed: it fires on legitimate data (a sparse or highly
-/// repetitive blob deflates ~1000x, as does pretty-printed JSON) while adding
-/// nothing, because what makes a bomb dangerous is the expanded SIZE and that is
-/// already bounded here. Extraction also streams to disk rather than memory, so
-/// the worst case is bounded disk use on a file the user chose to open.
+/// Zip-bomb guard on the declared sizes in the central directory, refused before inflating a byte. Absolute, not a
+/// ratio: sparse blobs and pretty JSON deflate ~1000x legitimately, and the expanded size is what makes a bomb harmful.
 const MAX_TOTAL_UNCOMPRESSED: u64 = 8 << 30; // 8 GiB
 
 type Blake2b128 = Blake2b<U16>;
@@ -88,13 +63,8 @@ pub struct Manifest {
     pub meshes: Vec<MeshRow>,
 }
 
-/// The content hash of a blob. See rule 1 in the module docs: call this once, on
-/// the bytes as they are first produced.
-///
-/// Not called on any production path, Rust only ever VERIFIES a hash, and does
-/// that while streaming, so it hashes incrementally rather than over a slice.
-/// This is kept as the executable statement of which digest the format uses, and
-/// is what `hash_matches_python` pins against the Python engine's copy.
+/// The content hash of a blob, taken once on the bytes as first produced. Production code only verifies hashes while
+/// streaming; this pins the digest the format uses, checked by `hash_matches_python`.
 #[allow(dead_code)]
 pub fn hash_bytes(data: &[u8]) -> String {
     let mut h = Blake2b128::new();
@@ -220,17 +190,9 @@ fn manifest_of(entries: &[crate::fnda::Entry], app: &str) -> Manifest {
     }
 }
 
-/// Publish a ZIP container (format 1) at `dest`, atomically. No longer written by
-/// the app; kept so the reader of old files stays tested against real ones.
-///
-/// `blob_paths` maps content hash -> a readable path holding EXACTLY the bytes
-/// that hash was computed over. `mesh_paths` maps a mesh key -> path and is
-/// optional: meshes are a reopen-speed cache, and a container without them is
-/// fully valid.
-///
-/// The archive is built at a sibling temp path, fsynced, then renamed over the
-/// target. A crash leaves either the old file or the new one, never a torn one,
-/// which matters because this file IS the user's geometry.
+/// Publish a ZIP container (format 1) at `dest`, atomically. The app no longer writes it; kept so the old file reader
+/// stays tested against real ones. `blob_paths` maps hash to a path with exactly the hashed bytes; `mesh_paths` is an
+/// optional reopen cache. Built at a sibling temp path, fsynced, then renamed, so a crash never leaves a torn file.
 pub fn write_zip_container(
     dest: &Path,
     document_json: &str,
@@ -345,7 +307,6 @@ pub fn open_document_checked(
     crate::json_doc::read_json_document(path, blob_dir).map(|doc| (doc, crate::fnda::RepairReport::default()))
 }
 
-/// What `open_document_full` read.
 pub struct OpenedFile {
     pub document: String,
     pub report: crate::fnda::RepairReport,
@@ -368,7 +329,6 @@ pub fn open_document_full(
     Ok(OpenedFile { document, report, carried: Vec::new() })
 }
 
-/// What `open_document_bytes` read.
 pub struct OpenedBytes {
     pub document: String,
     pub report: crate::fnda::RepairReport,
@@ -376,9 +336,8 @@ pub struct OpenedBytes {
     pub was_container: bool,
 }
 
-/// `open_document_checked` for a document the caller holds as bytes with no
-/// path, like a file dropped on a webview that does not name its paths. The
-/// readers need a seekable file, so the bytes are staged in a temp file first.
+/// `open_document_checked` for a document held as bytes with no path, like a file dropped on a webview that does not
+/// name its paths. The readers need a seekable file, so the bytes are staged in a temp file first.
 pub fn open_document_bytes(
     bytes: &[u8],
     blob_dir: &Path,
@@ -445,15 +404,9 @@ pub fn read_manifest(path: &Path) -> Result<Manifest, String> {
     Ok(manifest)
 }
 
-/// Open a container: extract its geometry into `blob_dir` and return
-/// `(document_json, manifest)`.
-///
-/// Every blob is streamed to a temp file while being hashed, and is published
-/// only once the hash MATCHES the one the manifest declared. The published
-/// filename is derived from that verified hash, never from the zip entry name.
-///
-/// A hash mismatch is a HARD error: it means truncation or tampering, and
-/// silently accepting the bytes would put wrong geometry in front of the user.
+/// Open a container: extract its geometry into `blob_dir` and return `(document_json, manifest)`. Each blob streams to
+/// a temp file while hashed and publishes under that hash only when it matches the manifest; a mismatch means
+/// truncation or tampering and is a hard error.
 pub fn read_container(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>) -> Result<(String, Manifest), String> {
     read_container_checked(path, blob_dir, mesh_dir).map(|(doc, manifest, _)| (doc, manifest))
 }
@@ -497,9 +450,8 @@ fn read_zip_container(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>) -> 
 
     if let Some(dir) = mesh_dir {
         for row in &manifest.meshes {
-            // Keys are ours, but they land in a filename, so validate rather
-            // than trust the file. Meshes are derived data: a bad row costs a
-            // re-tessellation and must never fail an open.
+            // Keys land in a filename, so validate rather than trust the file. Meshes are derived data: a bad row costs
+            // a re-tessellation and must never fail an open.
             if !is_safe_key(&row.key) {
                 continue;
             }
@@ -573,12 +525,8 @@ mod tests {
         p
     }
 
-    /// The blob store is written by BOTH Rust (extracting a container) and the
-    /// Python engine (importing geometry), and addressed purely by content
-    /// hash. If the two languages ever disagree about that hash, every container
-    /// reference dangles and it looks to the user like the geometry vanished.
-    /// These vectors are duplicated verbatim in the Python engine's `test_blobstore.py` so
-    /// both sides are pinned to the same constants.
+    /// The blob store is addressed by content hash, so if Rust and the Python engine ever disagree every reference
+    /// dangles. The Python engine's `test_blobstore.py` pins the same vectors.
     #[test]
     fn hash_matches_python() {
         assert_eq!(hash_bytes(b""), "cae66941d9efbd404e4d88758ea67670");
@@ -645,9 +593,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// The one that must never silently pass: a valid zip with a valid manifest
-    /// but wrong bytes. Nothing else in the stack would notice, and the user
-    /// would be shown the wrong shape.
+    /// The case that must never pass silently: a valid zip and manifest with wrong bytes, which nothing else in the
+    /// stack would notice before showing the wrong shape.
     #[test]
     fn tampered_geometry_is_refused_and_nothing_is_published() {
         let dir = tmpdir("tamper");

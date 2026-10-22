@@ -1,13 +1,7 @@
-//! The FundaCAD document file, format 2: binary, self-checking and self-repairing.
-//! docs/FUNDA-FORMAT.md is the specification; this is the reference writer and
-//! reader.
-//!
-//! Every section (the document, each geometry blob, each cached mesh) is
-//! compressed, cut into fixed-size shards, and grouped; each group carries
-//! Reed-Solomon parity shards and every shard carries a CRC-32. A reader finds
-//! damaged shards by their CRC and rebuilds them from the parity, then proves the
-//! result by the section's BLAKE2b hash. The header and the section table are
-//! each stored twice, so losing the start or the end of the file is survivable.
+//! The FundaCAD document file, format 2: binary, self-checking and self-repairing (docs/FUNDA-FORMAT.md). Each section
+//! is compressed, cut into shards and grouped, each group with Reed-Solomon parity and each shard with a CRC-32. A
+//! reader rebuilds damaged shards from parity and proves the section by its BLAKE2b hash. The header and the section
+//! table are each stored twice, so losing the start or the end of the file is survivable.
 
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -121,8 +115,6 @@ pub fn looks_like_fnda(path: &Path) -> bool {
         && f.read_exact(&mut tail).is_ok()
         && parse_header(&tail, TAIL_MAGIC).is_some()
 }
-
-// --- writing ------------------------------------------------------------------
 
 /// A section to write: where its raw bytes come from.
 pub enum Source<'a> {
@@ -405,8 +397,6 @@ fn encode_table(entries: &[Entry]) -> Vec<u8> {
     }
     t
 }
-
-// --- reading ------------------------------------------------------------------
 
 struct Header {
     table_a: u64,
@@ -727,9 +717,8 @@ impl Default for ReadOptions {
     }
 }
 
-/// Open a file: the document as JSON, with every geometry blob and cached mesh
-/// extracted into its store, each verified before it is published under its hash.
-/// With `carry_dir`, sections of a kind this version does not read land there too.
+/// Open a file: the document as JSON, each geometry blob and cached mesh verified and published into its store, and
+/// with `carry_dir` the sections of a kind this version does not read.
 pub fn read_file(
     path: &Path,
     blob_dir: &Path,
@@ -902,10 +891,8 @@ fn is_extract_tmp(name: &str) -> bool {
         && matches!(parts.next(), Some("bbrep" | "bin"))
 }
 
-/// Decode one section into `dest`, through a temporary name of its own so two
-/// opens of the same file never write into each other. Every thread reads
-/// through the one handle the open started with: a save that renames a new file
-/// over the path meanwhile must not mix its sections into this read.
+/// Decode one section into `dest` through its own temporary name, so two opens never write into each other. Every
+/// thread reads through the open's one handle, so a save renaming a new file over the path cannot mix into this read.
 fn extract(
     file: &File,
     e: &Entry,
@@ -967,12 +954,9 @@ fn extract_to(
     Ok(report)
 }
 
-/// Decode a section by the segments its index row names: groups are read and
-/// repaired a window at a time on all threads, the segments that end inside
-/// the window are inflated on all threads, then hashed and written in order.
-/// None when a segment or the whole does not come out as the row promised, so
-/// the caller reads the section as one stream instead. Damage beyond the
-/// parity is an error either way.
+/// Decode a section by its index row: groups are read and repaired a window at a time on all threads, the segments
+/// ending in the window inflate on all threads, then are hashed and written in order. None when a segment or the whole
+/// does not match the row, so the caller reads one stream instead; damage beyond the parity is an error either way.
 fn read_segmented<W: Write>(
     file: &File,
     e: &Entry,
