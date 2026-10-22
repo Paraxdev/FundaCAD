@@ -1,6 +1,6 @@
 // Client side ghost of a fillet or chamfer while its size is dragged, instead of an OCCT round trip per pixel.
 // Sections come from the wedge the two faces make across the edge, not from normals, whose sign the mesh does not
-// carry and which cannot tell convex from concave. One sample with no solution voids the whole edge's ghost.
+// carry and which cannot tell convex from concave.
 
 export type Pt3 = readonly [number, number, number];
 type Vec3 = [number, number, number];
@@ -388,7 +388,8 @@ function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind, budge
   const to3 = (p: V2): Vec3 => add(P, add(scale(d1, p[0]), scale(e2, p[1])));
   const room = roomOf(sample);
   const outline = budget ? (sample.outline ?? null) : null;
-  // A small ball tucked into the corner is in the material on a convex edge and in the air on a concave one.
+  // A small ball tucked into the corner is in the material on a convex edge and in the air on a concave one. Like the
+  // kernel's fallback, a convex round is a cut trimmed where it leaves the body, a concave a fill held to the faces.
   const convex = outline?.refInside ?? false;
   const size = convex ? wanted : Math.min(wanted, kind === "chamfer" ? room : room * Math.tan(alpha / 2));
   if (size < EPS) return null;

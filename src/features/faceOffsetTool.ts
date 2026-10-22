@@ -1,6 +1,5 @@
-// Offset Face, Thicken and Shell share one gesture, scrubbing an arrow along the picked faces' normal, by `mode`:
-// offsetFace moves the faces with the body closed (a lone round face is resized), thicken adds a wall, shell opens
-// them and hollows the body to a wall. A real surface offset needs OCCT, so the preview is engine driven.
+// Offset Face (a lone round face is resized), Thicken and Shell share one gesture by `mode`, an arrow scrubbed along
+// the picked faces' normal. A real surface offset needs OCCT, so the preview is engine driven.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";

@@ -1,6 +1,5 @@
-// Reads a face drag as a draft angle. The pull axis is the world axis the face is most parallel to, and the face
-// pivots where it meets the neutral plane (the body's near end along that axis, builder._draft), so a drag of
-// d mm along the face normal at lever L means atan(d / L).
+// Reads a face drag as a draft angle: the face pivots on the neutral plane (the body's near end along the world axis
+// it is most parallel to, builder._draft), so a drag of d mm along its normal at lever L is atan(d / L).
 
 export type Axis3 = "X" | "Y" | "Z";
 

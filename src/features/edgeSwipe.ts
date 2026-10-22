@@ -1,6 +1,5 @@
-// How far a fillet or chamfer drag has gone: the cursor's screen distance from the edge, its side picking the
-// treatment. Not axis travel (manipulator.axisDragDistance), whose edge-on fallback reads the cursor's height in the
-// window. Pixels in and out, the caller scales by pixelWorldSize at the anchor.
+// How far a fillet or chamfer drag has gone, in screen pixels the caller scales by pixelWorldSize at the anchor. Not
+// axis travel (manipulator.axisDragDistance), whose edge-on fallback reads the cursor's height in the window.
 
 export interface Pt {
   x: number;

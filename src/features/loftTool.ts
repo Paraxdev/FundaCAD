@@ -1,6 +1,5 @@
-// Interactive Loft: pick two or more profile areas in order, previewed from the second. Holes are kept, so concentric
-// rings loft into a tube (builder._handle_loft). Profiles are stored as {sketch, anchor}, since a preview rebuild
-// re-detects regions and a held WorldRegion would go stale.
+// Interactive Loft over two or more profile areas in order; holes are kept, so rings loft into a tube. Profiles are
+// stored as {sketch, anchor}, since a preview rebuild re-detects regions and a held WorldRegion would go stale.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";

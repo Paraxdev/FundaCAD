@@ -1,5 +1,5 @@
-// How large a blend the geometry around an edge can hold. A blend fails when it runs out of face near this edge, so
-// it is local; edge to edge rather than the engine's BRepExtrema face check, which is a round trip and reads larger.
+// How large a blend the geometry around an edge can hold. It is local, as a 100x100x2 plate has a 141 mm diagonal
+// but a 2 mm rim, and a blend fails when it runs out of nearby face. No THREE or DOM, so vitest runs it headless.
 
 export type Pt3 = readonly [number, number, number];
 
@@ -154,8 +154,8 @@ export interface ClearanceRequest {
   modelScale: number;
 }
 
-/** mm, or null when nothing qualifies and the caller falls back to its global bound. Null rather than Infinity,
- *  since "could not measure" must not pass as a measurement. */
+/** mm, or null rather than Infinity when nothing qualifies, so "could not measure" never passes as a measurement.
+ *  Edge to edge, live; the engine's face check (tools/gen_fillet_corpus.py) is a round trip and reads larger. */
 export function localClearance(req: ClearanceRequest): number | null {
   const { selected, all, modelScale } = req;
   if (selected.length === 0 || all.length === 0) return null;
@@ -195,8 +195,8 @@ export function localClearance(req: ClearanceRequest): number | null {
   return Number.isFinite(bestSq) ? Math.sqrt(bestSq) : null;
 }
 
-/** Not a promise that this builds: OCCT's limit also depends on curvature and the chain's ends. It keeps the drag
- *  where success is plausible. */
+/** Not a promise that this builds: OCCT's limit also depends on curvature and the chain's ends. It only sizes the
+ *  opening value (seedValue) and must never bound the drag. */
 export function clearanceLimit(clearance: number | null): number | null {
   if (clearance == null || !Number.isFinite(clearance) || clearance <= 0) return null;
   return clearance * CLEARANCE_SHARE;
