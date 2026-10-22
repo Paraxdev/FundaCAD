@@ -7,7 +7,7 @@ use std::f64::consts::PI;
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
-use fundacad_geom::kernel;
+use fundacad_geom::kernel::{self, Kind};
 use serde_json::{json, Value};
 
 fn build(raw: &Value) -> Rebuild {
@@ -245,6 +245,93 @@ fn prism_chamfer(corners: &[(f64, f64)], height: f64, d: f64, d2: f64, edges: Va
     prism_with(corners, height, vec![two_distance("c", d, d2, edges, extra)])
 }
 
+fn rect(x: f64, y: f64, l: f64, w: f64) -> [(f64, f64); 4] {
+    [(x, y), (x + l, y), (x + l, y + w), (x, y + w)]
+}
+
+/// A convex prism less a d x d2 triangle at every corner, whichever wall takes d.
+fn clean_cut(corners: &[(f64, f64)], height: f64, d: f64, d2: f64) -> f64 {
+    let n = corners.len();
+    let (mut area, mut cut) = (0.0, 0.0);
+    for i in 0..n {
+        let (p, a, b) = (corners[(i + n - 1) % n], corners[i], corners[(i + 1) % n]);
+        area += a.0 * b.1 - b.0 * a.1;
+        let (u, v) = ((p.0 - a.0, p.1 - a.1), (b.0 - a.0, b.1 - a.1));
+        cut += d * d2 / 2.0 * (u.0 * v.1 - u.1 * v.0).abs() / (u.0.hypot(u.1) * v.0.hypot(v.1));
+    }
+    (area.abs() / 2.0 - cut) * height
+}
+
+/// Errors, warnings, faces and volume of a chamfer that should cut every
+/// vertical corner of a convex prism cleanly, against what that cut gives.
+fn check_clean(corners: &[(f64, f64)], d: f64, d2: f64, extra: Value) {
+    check_cut(corners, d, d2, extra, 2 * corners.len() + 2);
+}
+
+fn check_cut(corners: &[(f64, f64)], d: f64, d2: f64, extra: Value, faces: usize) {
+    let r = prism_chamfer(corners, 10.0, d, d2, z_edges(), extra.clone());
+    let face_count = r.bodies.first().map(|b| kernel::count(&b.shape, Kind::Face));
+    let got = (messages(&r), warnings(&r, "c"), face_count, (volume(&r) * 100.0).round() / 100.0);
+    let want_volume = (clean_cut(corners, 10.0, d, d2) * 100.0).round() / 100.0;
+    let want = (Vec::<&str>::new(), Vec::<&str>::new(), Some(faces), want_volume);
+    assert_eq!(got, want, "{corners:?} at {d}/{d2} {extra}");
+}
+
+const PARALLELOGRAM: [(f64, f64); 4] = [(5.0, 2.0), (27.0, 2.0), (35.0, 18.0), (13.0, 18.0)];
+const TRIANGLE: [(f64, f64); 3] = [(4.0, 1.0), (14.0, 1.0), (9.0, 9.660254)];
+
+/// 3 + 12 fits each 20 mm wall only with the 12 at one corner and the 3 at the
+/// other. Every Z edge took d on the face the kernel's map lists first, which
+/// put 12 + 12 on two walls: 3/12 was refused, 1/12 built 3746.71 for 3760.
+#[test]
+fn a_two_distance_chamfer_that_fits_with_one_size_at_each_end_of_a_face_builds() {
+    for (d, d2) in [(3.0, 12.0), (12.0, 3.0), (3.0, 16.0)] {
+        check_clean(&rect(7.0, -3.0, 20.0, 20.0), d, d2, json!({}));
+    }
+    for (d, d2) in [(3.0, 12.0), (12.0, 3.0)] {
+        check_clean(&PARALLELOGRAM, d, d2, json!({}));
+    }
+    check_clean(&TRIANGLE, 2.0, 7.0, json!({}));
+    for ((l, w), d, d2) in [((20.0, 20.0), 1.0, 12.0), ((40.0, 40.0), 3.0, 30.0), ((40.0, 40.0), 3.0, 36.0), ((25.0, 15.0), 12.0, 1.0)] {
+        check_clean(&rect(-6.0, 11.0, l, w), d, d2, json!({}));
+    }
+}
+
+/// On a 30 x 10 prism the 12 fits only on the 30 mm walls, whichever distance
+/// it is given as; 12/3 ran past a 10 mm wall and came back warned at 2525.
+/// tangentEdges false goes straight to the section build.
+#[test]
+fn a_two_distance_chamfer_takes_the_faces_it_fits_on_in_either_order() {
+    for extra in [json!({}), json!({"tangentEdges": false})] {
+        check_clean(&rect(-12.0, 4.0, 30.0, 10.0), 3.0, 12.0, extra.clone());
+        check_clean(&rect(-12.0, 4.0, 30.0, 10.0), 12.0, 3.0, extra.clone());
+    }
+    check_clean(&rect(3.0, -21.0, 40.0, 20.0), 18.0, 3.0, json!({"tangentEdges": false}));
+    check_clean(&rect(7.0, -3.0, 20.0, 20.0), 3.0, 12.0, json!({"tangentEdges": false}));
+}
+
+/// Setbacks that just meet use up each wall, and the section build cuts them;
+/// a hair before they keep the walls, a hair past they cross.
+#[test]
+fn two_distance_setbacks_that_just_meet_on_a_wall_build() {
+    check_clean(&rect(7.0, -3.0, 20.0, 20.0), 3.0, 16.9, json!({}));
+    for (d, d2) in [(3.0, 17.0), (9.0, 11.0)] {
+        check_cut(&rect(7.0, -3.0, 20.0, 20.0), d, d2, json!({}), 6);
+    }
+    let r = prism_chamfer(&rect(7.0, -3.0, 20.0, 20.0), 10.0, 3.0, 17.5, z_edges(), json!({}));
+    assert!(!r.errors.is_empty() || !warnings(&r, "c").is_empty(), "3/17.5 built {} with no word", volume(&r));
+}
+
+/// None of these fits either way round, the long setback always runs past a
+/// wall: one edge at a time 40 x 20 at 3/30 came back 6002.65 with both 40 mm
+/// walls carved and no word said.
+#[test]
+fn a_two_distance_chamfer_that_runs_past_a_face_is_never_silent() {
+    for ((l, w), d, d2) in [((40.0, 20.0), 3.0, 30.0), ((40.0, 20.0), 30.0, 3.0), ((30.0, 10.0), 1.0, 20.0), ((40.0, 40.0), 38.0, 3.0)] {
+        let r = prism_chamfer(&rect(-6.0, 11.0, l, w), 10.0, d, d2, z_edges(), json!({}));
+        assert!(!r.errors.is_empty() || !warnings(&r, "c").is_empty(), "{l} x {w} at {d}/{d2}: built {} with no word", volume(&r));
+    }
+}
 
 /// On a ledge whose 1.5 mm wall takes a convex chamfer at one end and a concave
 /// fill at the other, 1 + 1 already runs past it. The section build never
@@ -285,5 +372,17 @@ fn a_concave_fill_longer_than_both_its_faces_is_refused() {
     for (d, d2) in [(1.0, 17.0), (17.0, 1.0), (3.0, 21.0)] {
         let r = prism_with(&U_PRISM, 10.0, vec![two_distance("c", d, d2, u_alternate_corners(), json!({}))]);
         assert_eq!(messages(&r).len(), 1, "{d}/{d2}: built {} with {:?}", volume(&r), warnings(&r, "c"));
+    }
+}
+
+/// The U's inner corner takes its 12 along the 12 mm wall, just reaching the
+/// corner above, and 1 along the floor: 3840 less three 1 x 12 / 2 x 10 cuts
+/// plus one fill. Given 1/12 it put the 12 on the 8 mm floor, warned at 3713.33.
+#[test]
+fn a_concave_fill_that_just_reaches_the_next_corner_builds() {
+    for (d, d2) in [(1.0, 12.0), (12.0, 1.0)] {
+        let r = prism_with(&U_PRISM, 10.0, vec![two_distance("c", d, d2, u_alternate_corners(), json!({}))]);
+        let got = (messages(&r), warnings(&r, "c"), (volume(&r) * 100.0).round() / 100.0);
+        assert_eq!(got, (Vec::<&str>::new(), Vec::<&str>::new(), 3840.0 - 2.0 * 60.0), "{d}/{d2}");
     }
 }

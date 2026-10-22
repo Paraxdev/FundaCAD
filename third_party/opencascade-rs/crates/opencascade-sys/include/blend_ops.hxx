@@ -442,7 +442,8 @@ inline BlSides bl_chamfer_sides(const TopoDS_Shape &shape, const std::vector<Top
   }
 }
 
-// d1 along the first face the ancestor map lists for each edge, d2 along the other.
+// A two distance chamfer that fits no way round is not handed to the kernel:
+// built one edge at a time it came back carved with no word said.
 inline BlShape blend_chamfer(const TopoDS_Shape &shape, const TopoDS_Shape &edges,
                              rust::Slice<const double> d1, rust::Slice<const double> d2,
                              int32_t &status) {
@@ -450,9 +451,18 @@ inline BlShape blend_chamfer(const TopoDS_Shape &shape, const TopoDS_Shape &edge
   TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, map);
   BRepFilletAPI_MakeChamfer mk(shape);
   std::vector<TopoDS_Shape> es = bl_children(edges);
-  for (size_t i = 0; i < es.size() && i < d1.size() && i < d2.size(); ++i) {
+  size_t n = std::min(es.size(), std::min(d1.size(), d2.size()));
+  es.resize(n);
+  BlSides sides = bl_chamfer_sides(shape, es, std::vector<double>(d1.begin(), d1.begin() + n),
+                                   std::vector<double>(d2.begin(), d2.begin() + n));
+  if (sides.kind == BL_SIDES_NONE || sides.kind == BL_SIDES_TOUCH) {
+    status = 1;
+    return BlShape(new TopoDS_Shape());
+  }
+  for (size_t i = 0; i < n; ++i) {
     const TopoDS_Edge &e = TopoDS::Edge(es[i]);
-    mk.Add(d1[i], d2[i], e, TopoDS::Face(map.FindFromKey(e).First()));
+    const TopTools_ListOfShape &faces = map.FindFromKey(e);
+    mk.Add(d1[i], d2[i], e, TopoDS::Face(sides.second[i] ? faces.Last() : faces.First()));
   }
   mk.Build();
   if (!mk.IsDone()) {
