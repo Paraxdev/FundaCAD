@@ -242,19 +242,16 @@ export class GhostLayer {
   // selected bodies' mesh and edge objects; raycasts read matrixWorld, refreshed
   // on every frame. On commit the pose stays until the rebuilt body (new etag,
   // new mesh at identity) arrives, so a drag begun before that, as on a big
-  // import, starts from the pose the object wears and not from identity.
-  private moveGhost: { obj: THREE.Object3D; base: THREE.Matrix4 }[] | null = null;
+  // import, composes onto the pose the old mesh wears, and a rebuilt mesh that
+  // lands mid-drag takes over from it.
+  private moveGhost: { model: ModelView; drag: THREE.Matrix4; bodies: MovePose[] } | null = null;
   beginBodyMoveGhost(bodyIds: string[]) {
     this.endBodyMoveGhost(true);
     const model = this.host.model();
     if (!model) return;
     const sel = new Set(bodyIds);
-    const objs = model.bodies.filter((b) => sel.has(b.id)).flatMap((b) => [b.mesh, b.edges.object]);
-    if (!objs.length) return;
-    this.moveGhost = objs.map((obj) => {
-      obj.updateWorldMatrix(true, false);
-      return { obj, base: obj.matrixWorld.clone() };
-    });
+    const bodies = model.bodies.filter((b) => sel.has(b.id)).map(movePose);
+    if (bodies.length) this.moveGhost = { model, drag: new THREE.Matrix4(), bodies };
   }
   setBodyMoveOffset(offset: THREE.Vector3) {
     this.setBodyMoveTransform(new THREE.Matrix4().makeTranslation(offset.x, offset.y, offset.z));
@@ -263,8 +260,27 @@ export class GhostLayer {
   /** `m` is the drag's world transform since it began, scale included. */
   setBodyMoveTransform(m: THREE.Matrix4) {
     if (!this.moveGhost || !this.host.model()) return;
+    this.moveGhost.drag.copy(m);
+    this.poseMoveGhost(m);
+  }
+
+  /** A body the stream still holds off its view keeps its old mesh. */
+  private poseMoveGhost(m: THREE.Matrix4) {
+    const g = this.moveGhost!;
+    const model = this.host.model()!;
+    if (model !== g.model) {
+      const byId = new Map(model.bodies.map((b) => [b.id, b]));
+      g.model = model;
+      g.bodies = g.bodies.map((p) => {
+        const now = byId.get(p.body.id);
+        return now && now !== p.body ? movePose(now) : p;
+      });
+    }
     const world = new THREE.Matrix4();
-    for (const g of this.moveGhost) placeWorld(g.obj, world.multiplyMatrices(m, g.base));
+    for (const p of g.bodies) {
+      placeWorld(p.body.mesh, world.multiplyMatrices(m, p.mesh));
+      placeWorld(p.body.edges.object, world.multiplyMatrices(m, p.edges));
+    }
     this.host.requestRender();
   }
   // --- Pattern ghosts: translucent copies of a body, one per pattern cell -----
@@ -393,21 +409,29 @@ export class GhostLayer {
   }
 
   endBodyMoveGhost(restore: boolean) {
-    if (!this.moveGhost || !this.host.model()) {
-      this.moveGhost = null;
-      return;
-    }
-    if (restore) {
-      for (const g of this.moveGhost) placeWorld(g.obj, g.base);
-      this.host.requestRender();
-    }
+    if (this.moveGhost && this.host.model()) this.poseMoveGhost(restore ? new THREE.Matrix4() : this.moveGhost.drag);
     this.moveGhost = null;
   }
 }
 
+interface MovePose {
+  body: BodyMesh;
+  mesh: THREE.Matrix4;
+  edges: THREE.Matrix4;
+}
+
+function movePose(body: BodyMesh): MovePose {
+  const world = (o: THREE.Object3D) => {
+    o.updateWorldMatrix(true, false);
+    return o.matrixWorld.clone();
+  };
+  return { body, mesh: world(body.mesh), edges: world(body.edges.object) };
+}
+
+const _local = new THREE.Matrix4();
 /** Decomposed rather than assigned: the objects keep matrixAutoUpdate on and would overwrite a matrix. */
 function placeWorld(obj: THREE.Object3D, world: THREE.Matrix4) {
-  const local = obj.parent ? new THREE.Matrix4().copy(obj.parent.matrixWorld).invert().multiply(world) : world;
+  const local = obj.parent ? _local.copy(obj.parent.matrixWorld).invert().multiply(world) : world;
   local.decompose(obj.position, obj.quaternion, obj.scale);
   obj.updateMatrixWorld();
 }
