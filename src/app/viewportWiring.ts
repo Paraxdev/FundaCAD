@@ -240,7 +240,7 @@ export function installViewportWiring(e: Engine): void {
     return !!wr;
   };
   // The section's handle lights on hover and is not a tool, so it keeps the per-move frame.
-  e.viewport.quietPointer = () => !e.toolBusy() && !e.tools.section.active;
+  e.viewport.quietPointer = () => !e.toolBusy() && !e.tools.section.editing;
   e.viewport.regionPickAt = (x, y, additive) => {
     if (e.sketch.active || e.toolBusy()) return false;
     const wr = regionAt(x, y);

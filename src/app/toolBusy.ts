@@ -12,14 +12,13 @@ function modalTools(t: EngineTools) {
 }
 
 /** Stand down every tool busy() counts, for a document that is going away. A
- *  standing section view is a mode the next document keeps, so only its pick
- *  ends. A plane or point pick ends through the store's rewind. */
+ *  section ends its aim or keeps its edited cut on. A plane or point pick ends through the store's rewind. */
 export function cancelActiveTools(t: EngineTools) {
   for (const tool of modalTools(t)) if (tool.active) standDown(() => tool.cancel());
   // Also when idle: it drops a reopen still pending from the last commit.
   standDown(() => t.move.cancel());
   if (t.measure.active) standDown(() => t.measure.stop());
-  if (t.section.picking) standDown(() => t.section.stop());
+  if (t.section.picking || t.section.editing) standDown(() => t.section.endEdit());
   cancelContributedTools(standDown);
 }
 
@@ -40,12 +39,8 @@ function standDown(cancel: () => void) {
  *  would mean polling eleven `.active` fields every frame or bolting
  *  change-notification onto ten tool classes for no present gain.
  *
- *  Cross-section is the one entry that is NOT `.active`. It became a MODE you keep
- *  working inside, so counting it as busy made every command in the app return
- *  silently for as long as the section was up, the same invisible dead-app symptom
- *  the stale `planePick` flag used to cause. Its modal half, `picking`, genuinely
- *  does own the gesture. The section stands its own handle down while another tool
- *  runs by reading this predicate back. */
+ *  A section counts only while aiming: a cut that is on, or being edited, leaves every command free, and
+ *  another tool starting confirms the edit by reading this predicate back. */
 export function createToolBusy(
   e: Engine,
 ): Pick<Engine, "toolBusy" | "toolOwnsScreen" | "toolAtWork" | "dropBodyGizmo" | "raiseBodyGizmo" | "restoreBodyGizmo" | "hasBody" | "altLeftOwned"> {

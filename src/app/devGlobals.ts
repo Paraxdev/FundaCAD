@@ -32,6 +32,7 @@ export function installDevGlobals(e: Engine): void {
   w.extrude = e.tools.extrude;
   w.edgeFeature = e.tools.edgeFeature;
   w.pressPull = e.tools.pressPull;
+  w.section = e.tools.section;
   w.solveSketch = solveSketch;
   // The browser tree is components/shell/BrowserPane.vue now, so this is a
   // handle onto its store rather than onto a class. refresh() is ASYNC: "render
@@ -123,7 +124,7 @@ export function installDevGlobals(e: Engine): void {
       move: e.tools.move.active,
       pattern: e.tools.pattern.active,
       measure: e.tools.measure.active,
-      section: e.tools.section.active,
+      section: e.tools.section.picking,
       targetEdit: e.tools.targetEdit.active,
       revolvePitch: e.tools.revolvePitch.active,
       planePick: e.planePick,
