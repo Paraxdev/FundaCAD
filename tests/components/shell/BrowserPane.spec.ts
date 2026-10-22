@@ -1009,6 +1009,7 @@ describe("a row double click while another edit is open", () => {
       "hole",
       "loft",
       "pattern",
+      "mirror",
       "planeOffset",
       "datumPose",
       "lightAim",

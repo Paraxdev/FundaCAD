@@ -334,7 +334,7 @@ needs a larger radius to look the same size. Always pair a float radius with
 | `.float-group` | `ViewportControls.vue` | A column or row of `.icon-btn` |
 | `.float-popover` | `components/ui/Popover.vue` | Anything that opens from a button: options, pickers, `Select.vue`'s list |
 | `.context-menu` | `ContextMenuHost.vue` | Right click menus |
-| `.measure-panel` | `components/overlays/FloatingPanel.vue` | A small tool or readout panel. Worn by `MeasureReadout.vue`, `PropertiesPanel.vue`, `InterferencePanel.vue`, `OverhangPanel.vue`, `StressPanel.vue` and `ParamsDialog.vue`; check these before you build a new one. Contents and API in [7.13](#713-tool-and-readout-panels-measure-panel) |
+| `.measure-panel` | `components/overlays/FloatingPanel.vue` | A small tool or readout panel. Worn by `MeasureReadout.vue`, `PropertiesPanel.vue`, `InterferencePanel.vue`, `OverhangPanel.vue`, `StressPanel.vue`, `MirrorToolPanel.vue` and `ParamsDialog.vue`; check these before you build a new one. Contents and API in [7.13](#713-tool-and-readout-panels-measure-panel) |
 | `.modal-panel` | `components/overlays/ModalFrame.vue` | A dialog, on `.modal-overlay` |
 | `.choice-card` | `ModalHost.vue` chooser | A short question with a few answers |
 | `.cmdk-card` | `CommandPalette.vue` | The command palette |
@@ -541,7 +541,7 @@ one; a name that is not there renders nothing. The common actions:
 | Add, remove | `plus`, `minus` |
 | Search | `search` |
 | Show, hide | `visible`, `hidden` |
-| Expand, collapse | `caretRight`, `caretDown`, `caretUp` |
+| Expand, collapse | `caretRight`, `caretDown` |
 | Undo, redo | `undo`, `redo` |
 | Warning | `warning` |
 | Save, open, export, import | `save`, `open`, `export`, `import` |
@@ -704,6 +704,10 @@ and the whole row flips the switch.
 | `.rd-tab` (Render dock) | 11.5px, `--text-mute`, 2px transparent bottom border | `--raised`, `--text-dim` | `.active`: `--accent-hot` and an `--accent` bottom border (a bar, not a fill) | the shared ring |
 | `.prefs-nav-btn` | 14px | `--raised` | `.active`: `--accent-tint`, border `--accent-tint-2`, `--accent-hot`, 600 | `0 0 0 2px var(--accent)` |
 
+A tab that cannot be chosen yet (the Stress panel's Results before a Run) passes `disabled` and a `title` saying why
+to `Tabs.vue`: opacity 0.45, `cursor: default`, no hover. Keep it in the bar rather than hiding it, a bar of one tab
+reads as a title.
+
 ### 7.8 Chips and key caps
 
 | Class | Recipe |
@@ -817,6 +821,22 @@ second padded head doubles it. A minimal readout:
 </FloatingPanel>
 ```
 
+#### Pick fields
+
+A tool that collects more than one selection gives each its own row, as
+`MirrorToolPanel.vue` does (`.mirror-panel`, `.mirror-field` in `_modals.scss`):
+
+- a 28px `IconButton` toggle first, `active` on the field that takes the next
+  clicks, and the field name and value after it ("Nothing picked", "3 bodies",
+  "XY plane");
+- a `.float-card-close` clear button last, disabled while the field is empty;
+- `.mirror-field.active` wears the selected row look, so the live field reads
+  at a glance in both themes;
+- buttons take `@pointerdown.prevent`, so Enter after a click still goes to the
+  tool, and the tool leaves Tab and Enter alone while focus is in the panel;
+- no `closeOnEsc`: the tool owns Escape, and the prompt banner says why a pick
+  was refused.
+
 ### 7.14 Feedback: copy, toasts and errors
 
 `toast(message, opts)` (`src/ui/toast.ts`) takes
@@ -850,9 +870,10 @@ guard test cannot see them; hold them to these rules by hand.
 - Neutral parts read tokens through `themeColor` and are read again on a theme
   change.
 - Sizes are screen pixels, held through `gizmoScale.ts` at every zoom.
-- The tiles are 40px, 6px off the axes, one per quadrant facing the home view,
-  with an 11px corner whose profile is a conic of rho 0.25
-  (`TILE_CORNER_RADIUS_PX` and `TILE_CORNER_RHO` in `src/viewport/originTiles.ts`).
+- The tiles are 68px, 10px off the axes, one per quadrant facing the home view,
+  never below about 41px. Their 29px corner is the same squircle as `corner-shape:
+  squircle`, a rail tile's 17px on 40px scaled up (`TILE_CORNER_RADIUS_PX` and
+  `SQUIRCLE_EXPONENT` in `src/viewport/originTiles.ts` and `cornerProfile.ts`).
 - What a body hides draws faint, not gone.
 - A name in the scene is a camera facing sprite, `--ui` 700 at 11px, inked in
   `--text` or `--viewport-bg`, whichever reads on the ground. It fades out when

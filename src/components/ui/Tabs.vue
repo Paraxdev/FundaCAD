@@ -1,5 +1,8 @@
 <script setup lang="ts" generic="T extends string">
-defineProps<{ tabs: readonly { value: T; label: string }[]; modelValue: T }>();
+defineProps<{
+  tabs: readonly { value: T; label: string; disabled?: boolean; title?: string | undefined }[];
+  modelValue: T;
+}>();
 const emit = defineEmits<{ "update:modelValue": [T] }>();
 </script>
 
@@ -14,6 +17,8 @@ const emit = defineEmits<{ "update:modelValue": [T] }>();
       class="float-tab"
       :class="{ active: t.value === modelValue }"
       :aria-selected="t.value === modelValue"
+      :disabled="t.disabled"
+      :title="t.title"
       @click="emit('update:modelValue', t.value)"
       >{{ t.label }}</button
     >

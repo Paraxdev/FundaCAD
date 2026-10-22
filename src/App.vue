@@ -32,6 +32,7 @@ import BugReportDialog from "./components/overlays/BugReportDialog.vue";
 import SketchDimLayer from "./components/overlays/SketchDimLayer.vue";
 import SketchGlyphLayer from "./components/overlays/SketchGlyphLayer.vue";
 import TextToolPanel from "./components/overlays/TextToolPanel.vue";
+import MirrorToolPanel from "./components/overlays/MirrorToolPanel.vue";
 import FilletMembers from "./components/overlays/FilletMembers.vue";
 import ProjectFilterBar from "./components/overlays/ProjectFilterBar.vue";
 import MeasureReadout from "./components/overlays/MeasureReadout.vue";
@@ -143,6 +144,7 @@ watch(
   <SketchDimLayer v-if="sketchLabelsShown" />
   <SketchGlyphLayer v-if="sketchLabelsShown" />
   <TextToolPanel v-if="toolPanels.text" :key="toolPanels.text.id" :req="toolPanels.text" />
+  <MirrorToolPanel v-if="toolPanels.mirror" :key="toolPanels.mirror.id" :view="toolPanels.mirror" />
   <ProjectFilterBar v-if="toolPanels.projectAnchor" />
 
   <!-- v-if, not an open prop: mount is open, so useModalGate.ts can count modal depth in mount hooks without leaks. -->

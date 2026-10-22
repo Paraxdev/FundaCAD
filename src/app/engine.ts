@@ -27,6 +27,7 @@ import { FaceOffsetTool } from "../features/faceOffsetTool";
 import { LoftTool } from "../features/loftTool";
 import { MoveTool } from "../features/moveTool";
 import { PatternTool } from "../features/patternTool";
+import { MirrorTool } from "../features/mirrorTool";
 import { MeasureTool } from "../features/measureTool";
 import { SectionTool } from "../features/sectionTool";
 import { PlaneOffsetTool } from "../features/planeOffsetTool";
@@ -108,6 +109,7 @@ export interface EngineTools {
   loft: LoftTool;
   move: MoveTool;
   pattern: PatternTool;
+  mirror: MirrorTool;
   measure: MeasureTool;
   section: SectionTool;
   planeOffset: PlaneOffsetTool;
@@ -339,6 +341,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     loft: new LoftTool(e.viewport, e.overlay, e.store),
     move: new MoveTool(e.viewport, e.store),
     pattern: new PatternTool(e.viewport, e.store),
+    mirror: new MirrorTool(e.viewport, e.store),
     measure: new MeasureTool(e.viewport),
     // Without `toolBusy` the handle and its F and G keys stay live under every other tool, without `datumDef` a
     // click on a construction plane while aiming falls through to the body behind it.
@@ -464,6 +467,7 @@ export function mountUi(e: Engine): void {
     loftTool: e.tools.loft,
     moveTool: e.tools.move,
     patternTool: e.tools.pattern,
+    mirrorTool: e.tools.mirror,
     planeOffset: e.tools.planeOffset,
     datumPose: e.tools.datumPose,
     datumMoveTarget: (id) =>

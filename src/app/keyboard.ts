@@ -24,6 +24,7 @@ export function installKeyboard(e: Engine): void {
           !t.edgeFeature.active &&
           !t.pressPull.active &&
           !t.loft.active &&
+          !t.mirror.active &&
           !t.planeOffset.active &&
           !t.datumPose.active
         ) {

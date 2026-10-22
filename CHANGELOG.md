@@ -25,6 +25,43 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Stress results open with a plain verdict.** The first line says whether the
+  part holds and with how much margin, or where it is likely to fail, and a pin
+  marks the weakest spot on the part. A line under it says how far it bends and
+  how much larger it is drawn. When the weakest spot is a sharp inside corner or
+  the edge of a support, the verdict says it is a rough reading.
+
+- **The stress preview bends smoothly.** The coloured part is drawn from a finer
+  copy of the analysed surface, so curved faces and the bend look smooth and the
+  colours blend instead of jumping. Sharp edges and flat faces stay as they are,
+  and every number and reading still comes from the analysis itself.
+
+- **Stress results play and pause the bend.** A Play button right under the
+  result swings the part between still and bent, and Pause holds it where it is,
+  so you can stop on any pose without leaving the tool. Going back to Set up or
+  turning the colours off pauses it too.
+
+- **The Stress panel has Set up and Results tabs.** Set up holds the body,
+  supports, loads, own weight and material, with Run in a bar at the bottom and
+  Cancel only while it runs. Results opens by itself when a Run finishes and
+  shows the safety factor, peak stress and deflection, with the rest under
+  Details. When the model or the setup changes after a Run, Results says so and
+  offers Run again. Closing the panel keeps the last result, so opening it again
+  shows the colours and readings without another Run. The panel wears the app's
+  own selects, switches and buttons, its buttons say what they do (Click on body,
+  Use selected faces), directions read Down, Up, Left and so on, and the hint
+  says Ready once the setup can run.
+
+- **Mirror asks for what to mirror and the line or plane in a panel.** In a
+  sketch and on the model, Mirror opens a small panel with two fields, Objects
+  and Mirror line (Mirror plane on the model). The icon beside a field makes it
+  the one your clicks fill, and Objects moves on to the line or plane by itself.
+  What you selected before starting is already in Objects. A preview shows the
+  result, Enter or the check applies it as one undo step, and Esc cancels. On
+  the model the plane can be an origin plane, a datum plane or a flat face; a
+  flat face adds a Mirror plane datum that follows it. Selected bodies offer
+  Mirror in the selection toolbar.
+
 - **The section is saved with the document.** A cut that is on is saved in the
   file and is back when you open it. New and Open no longer carry a cut over
   from the document before, undo leaves the cut alone, and an older version
@@ -408,6 +445,9 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **Sketch Mirror applies on Enter, not on the line click.** Pick the line,
+  check the preview, then press Enter or the check.
+
 - **Confirming a section keeps the cut on.** Enter, the check and Esc end
   editing a section and leave the cut on, where Esc and the cross used to remove
   it. The handle and the offset box go away, F is Fillet again, and orbit,
@@ -463,6 +503,12 @@ This file starts on 2026-08-03. For anything before that, see the
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
+
+- **Sketch Mirror copies polygons and slots as themselves.** A mirrored polygon
+  or slot came out as a stray point.
+
+- **A mirror across a datum plane shows that plane.** Its Plane row read XY;
+  it now names the datum, and lists the datum planes above the mirror.
 
 - **Restoring a version that cannot be read says so.** A saved version with a
   modelling step missing from the file made its row in the Versions panel fail
