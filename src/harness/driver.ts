@@ -94,7 +94,7 @@ export function createMethods(
       return a.fresh === true ? { ...out, lines: out.lines.filter((l) => l[3] && !marked.has(l[3])) } : out;
     },
     locate: (a) => {
-      const c = findControl(walk(), str(a, "target"), { disabled: a.disabled === true });
+      const c = findControl(walk(), str(a, "target"), { disabled: a.disabled === true, folder: a.folder === true });
       return {
         marker: stamp(c.el),
         ref: c.ref,
