@@ -290,6 +290,36 @@ fn user_names_in_paths_are_hidden() {
 }
 
 #[test]
+fn a_run_writing_to_its_log_gets_the_tail_and_any_other_run_says_it_has_none() {
+    let dir = scratch("log-tail-run");
+    // The case that misled: an old run's log sits in the folder while this run writes to a terminal.
+    generations(&dir, "", "", "an older run\n[engine] ready\n");
+    let line = |run: &RunLog| tail_for_run(run, 64);
+    assert_eq!(line(&RunLog::ToFile(dir.join(NAME))).as_deref(), Some("an older run\n[engine] ready\n"));
+    assert_eq!(
+        line(&RunLog::Terminal).as_deref(),
+        Some("No log file for this run, it writes to the terminal it was started from.")
+    );
+    assert_eq!(line(&RunLog::Off).as_deref(), Some("No log file for this run, this build does not keep one."));
+    let failed = RunLog::Failed("Access is denied. (os error 5) at /home/user/.local/share".to_string());
+    assert_eq!(
+        line(&failed).as_deref(),
+        Some("No log file for this run, it could not be opened: Access is denied. (os error 5) at /home/[REDACTED]/.local/share")
+    );
+    fs::remove_dir_all(dir.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn a_run_writing_to_a_log_that_is_still_empty_gives_none() {
+    let dir = scratch("log-tail-run-empty");
+    fs::create_dir_all(&dir).unwrap();
+    assert_eq!(tail_for_run(&RunLog::ToFile(dir.join(NAME)), 64), None);
+    fs::write(dir.join(NAME), "first line\n").unwrap();
+    assert_eq!(tail_for_run(&RunLog::ToFile(dir.join(NAME)), 64).as_deref(), Some("first line\n"));
+    fs::remove_dir_all(dir.parent().unwrap()).unwrap();
+}
+
+#[test]
 fn user_names_are_hidden_the_way_the_shared_cases_say() {
     let cases: Vec<(String, String)> =
         serde_json::from_str(include_str!("../../tests/fixtures/redact_cases.json")).unwrap();
