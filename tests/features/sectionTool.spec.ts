@@ -257,6 +257,17 @@ describe("section phases", () => {
     expect(afterEdit).not.toHaveBeenCalled();
   });
 
+  it("a chooser or dialog turning busy without a prompt of its own takes the editing prompt away", () => {
+    let busy = false;
+    const { tool } = setup({ toolBusy: () => busy });
+    tool.start("Z");
+    flushFrames();
+    expect(prompt()).toContain("F flips");
+    busy = true;
+    flushFrames();
+    expect([tool.phase, prompt()]).toEqual(["on", null]);
+  });
+
   it("a tool already busy when editing starts does not confirm it until it drops and rises again", () => {
     let busy = true;
     const { tool } = setup({ toolBusy: () => busy });
