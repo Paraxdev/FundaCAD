@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { toast } from "../ui/toast";
+import { openReportDialog } from "../ui/bugReporter";
 
 interface Death {
   kind: string;
@@ -30,6 +31,7 @@ export function installEngineDiedToast(): void {
       timeout: 60000,
       source: "engine",
       detail: e.payload.detail,
+      action: { label: "Report", onClick: openReportDialog },
     });
   });
 }

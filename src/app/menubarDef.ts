@@ -4,11 +4,13 @@ import { toggleShortcutHUD } from "../input/shortcuts";
 import { checkForUpdates, showAbout } from "../ui/updates";
 import { useDialogStore } from "../stores/dialogs";
 import { setWorkspace } from "../ui/workspace";
-import { openExternal } from "../ui/welcome";
+import { MANUAL_URL, openExternal } from "../ui/welcome";
+import { openReportDialog } from "../ui/bugReporter";
+import { ideaUrl, REPO_URL } from "../ui/reportText";
 import type { MenuDef } from "../ui/menu";
 import type { Engine } from "./engine";
 
-const ISSUES_URL = "https://github.com/Paraxdev/fundacad/issues";
+const ISSUES_URL = `${REPO_URL}/issues`;
 
 /** A contribution naming an existing menu appends to it, otherwise it creates one before `before`. Copies the item
  *  arrays, which are the plugin's own and would grow once per render if pushed into. */
@@ -97,6 +99,10 @@ export function buildMenubar(e: Engine): MenuDef[] {
       label: "Help",
       items: [
         { label: "Keyboard Shortcuts", shortcut: "?", onClick: () => toggleShortcutHUD() },
+        { label: "Manual", onClick: () => void openExternal(MANUAL_URL) },
+        { separator: true, label: "" },
+        { label: "Report a Problem…", onClick: () => openReportDialog() },
+        { label: "Suggest an Idea", onClick: () => void openExternal(ideaUrl()) },
         { label: "Issue Tracker", onClick: () => void openExternal(ISSUES_URL) },
         { separator: true, label: "" },
         { label: "Check for Updates…", onClick: () => void checkForUpdates(true) },

@@ -62,7 +62,7 @@ and takes about twenty minutes. The technical notes are in `docs/`.
 
 ## Reporting problems
 
-New issue offers two forms: a Problem report and an Idea. The Problem report asks what happened, the steps and your system, and has a box for the report the app copies for you. A security problem goes to the private reporting in [SECURITY.md](SECURITY.md).
+In the app, Help > Report a Problem… copies a full report and opens a prefilled issue on GitHub. New issue offers two forms: a Problem report and an Idea. The Problem report asks what happened, the steps and your system, and has a box for the report the app copies for you. A security problem goes to the private reporting in [SECURITY.md](SECURITY.md).
 
 ## About the code / AI Disclosure
 

@@ -36,6 +36,9 @@ const GLOBAL: Command[] = [
   { id: "viewmode-cycle", label: "Next View Mode", group: "View", context: "global", key: "Z" },
   { id: "show-all-bodies", label: "Show All Bodies", group: "View", context: "global", key: "Shift+H" },
   { id: "shortcut-help", label: "Keyboard Shortcuts…", group: "Help", context: "global", key: "?" },
+  { id: "manual", label: "Manual", group: "Help", context: "global" },
+  { id: "report-problem", label: "Report a Problem…", group: "Help", context: "global" },
+  { id: "suggest-idea", label: "Suggest an Idea", group: "Help", context: "global" },
   // Pinned ribbon groups (FINISH, PALETTE) live outside SKETCH, so the palette lists them explicitly.
   { id: "finish", label: "Finish Sketch", group: "SKETCH", context: "sketch" },
   { id: "palette", label: "Sketch Palette", group: "SKETCH", context: "sketch" },
