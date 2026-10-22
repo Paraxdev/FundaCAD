@@ -1092,16 +1092,20 @@ describe("suppress and unsuppress are undo steps", () => {
     expect(store.document.features.length).toBe(4);
   });
 
-  it("undoing a suppress after the feature was removed and restored leaves it unsuppressed", () => {
+  it("undoing the removal of a suppressed feature brings it back suppressed, then the suppress undoes", () => {
     store.toggleSuppress("f1");
     store.removeFeature("f1");
+    const seen: [boolean, boolean][] = [];
+    const look = () => seen.push([store.document.features.map((f) => f.id).includes("f1"), store.isSuppressed("f1")]);
     store.undo();
-    expect(store.isSuppressed("f1")).toBe(false);
+    look();
     store.undo();
-    expect(store.isSuppressed("f1")).toBe(false);
-    expect(store.document.features.map((f) => f.id)).toContain("f1");
+    look();
     store.redo();
-    expect(store.isSuppressed("f1")).toBe(true);
+    look();
+    store.redo();
+    look();
+    expect(seen).toEqual([[true, true], [true, false], [true, true], [false, false]]);
   });
 
   it("undo rebuilds without the suppression", async () => {

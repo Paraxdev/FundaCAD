@@ -145,3 +145,97 @@ describe("undo of a replacing load", () => {
     expect(top.state).toEqual(new Map());
   });
 });
+
+type Built = { build: { result: unknown } };
+const bodies = (s: DocumentStore) => {
+  (s as unknown as Built).build.result = { bodies: [{ id: "body1" }, { id: "body2" }, { id: "body3" }] };
+};
+// The suppress set is a set, so its order is left out of the comparison.
+const state = (s: DocumentStore) => {
+  const o = snap(s);
+  if (Array.isArray(o["suppressed"])) o["suppressed"] = [...(o["suppressed"] as string[])].sort();
+  return { ...o, isolate: s.isolateActive };
+};
+
+const steps: [string, object, CadDocument, (s: DocumentStore) => void][] = [
+  [
+    "a suppressed step removed",
+    { features: [box("f1", 10.5), box("f2", 4.25, 2)], suppressed: ["f2"] },
+    { parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5)], suppressed: ["f9"] },
+    (s) => s.removeFeature("f9"),
+  ],
+  [
+    "a step removed above the rollback marker",
+    { features: [box("f1", 10.5), box("f2", 4.25, 2), box("f3", 6.5)], rollback: 2 },
+    { parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5), box("f4", 5.5)], rollback: 2 },
+    (s) => s.removeFeature("f1"),
+  ],
+  [
+    "a step added at the rollback marker",
+    { features: [box("f1", 10.5), box("f2", 4.25, 2), box("f3", 6.5)], rollback: 2 },
+    { parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5), box("f4", 5.5)], rollback: 1 },
+    (s) => s.addFeature(box("f5", 2.75, 1.5)),
+  ],
+  [
+    "two steps added at the rollback marker",
+    { features: [box("f1", 10.5), box("f2", 4.25, 2), box("f3", 6.5)], rollback: 2 },
+    { parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5), box("f4", 5.5)], rollback: 1 },
+    (s) => s.addFeatures([box("f5", 2.75, 1.5), box("f6", 1.25)]),
+  ],
+  [
+    "an edit with a step added at the rollback marker",
+    { features: [box("f1", 10.5), box("f2", 4.25, 2), box("f3", 6.5)], rollback: 2 },
+    { parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5), box("f4", 5.5)], rollback: 1 },
+    (s) => s.editAndAdd((d) => void ((d.features[0] as unknown as { length: number }).length = 8.25), [box("f5", 2.75)]),
+  ],
+];
+
+describe("undo of a step taken after a replacing load", () => {
+  it.each(steps)("puts back what the load left after %s, then what came before it", (_, first, next, step) => {
+    const s = opened(first);
+    bodies(s);
+    const before = state(s);
+    s.loadDocument(next, { replace: true });
+    bodies(s);
+    const loaded = state(s);
+    step(s);
+    const stepped = state(s);
+    expect(stepped).not.toEqual(loaded);
+    expect(loaded).not.toEqual(before);
+    const seen = [];
+    s.undo();
+    seen.push(state(s));
+    s.undo();
+    seen.push(state(s));
+    s.redo();
+    seen.push(state(s));
+    s.redo();
+    seen.push(state(s));
+    expect(seen).toEqual([loaded, before, loaded, stepped]);
+  });
+
+  it.each([
+    ["one step", 2, (s: DocumentStore) => s.addFeature(box("f5", 2.75, 1.5))],
+    ["two steps", 3, (s: DocumentStore) => s.addFeatures([box("f5", 2.75, 1.5), box("f6", 1.25)])],
+    ["an edit and a step", 2, (s: DocumentStore) => s.editAndAdd((d) => d.features.reverse(), [box("f5", 2.75)])],
+  ] as const)("moves the rollback marker past %s added at it, and back on undo", (_, marker, add) => {
+    const s = opened({ features: [box("f1", 10.5), box("f2", 4.25, 2), box("f3", 6.5)], rollback: 1 });
+    const seen = [];
+    for (const step of [add, (t: DocumentStore) => t.undo(), (t: DocumentStore) => t.redo()]) {
+      step(s);
+      seen.push(s.rollbackIndex);
+    }
+    expect(seen).toEqual([marker, 1, marker]);
+  });
+
+  it("brings back the suppress set the load replaced after a removal of its suppressed step", () => {
+    const s = opened({ features: [box("f1", 10.5), box("f2", 4.25, 2)], suppressed: ["f2"] });
+    s.loadDocument({ parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5)], suppressed: ["f9"] }, { replace: true });
+    s.removeFeature("f9");
+    s.undo();
+    s.undo();
+    expect([s.document.features.map((f) => f.id), s.isSuppressed("f2"), s.isSuppressed("f9"), s.rollbackIndex]).toEqual([
+      ["f1", "f2"], true, false, 2,
+    ]);
+  });
+});
