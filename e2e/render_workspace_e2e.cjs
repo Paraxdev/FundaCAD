@@ -103,9 +103,16 @@ async function dragMaterialTo(page, materialId, x, y, opts = {}) {
   check("with three tabs", await page.locator(".rd-tab").count() === 3,
     (await page.locator(".rd-tab").allTextContents()).join(" | "));
   const viewportAfter = await page.locator("#viewport").boundingBox();
+  // The dock floats clear of the window edge, so what the viewport gives up is
+  // its box plus its margins.
+  const dockSpan = await page.evaluate(() => {
+    const el = document.getElementById("renderdock");
+    const cs = getComputedStyle(el);
+    return el.getBoundingClientRect().width + parseFloat(cs.marginLeft) + parseFloat(cs.marginRight);
+  });
   check("and the viewport gives up exactly the dock's width",
-    Math.abs((viewportBefore.width - viewportAfter.width) - 301) <= 2,
-    `${Math.round(viewportBefore.width)} -> ${Math.round(viewportAfter.width)}`);
+    dockSpan > 300 && Math.abs((viewportBefore.width - viewportAfter.width) - dockSpan) <= 1,
+    `${Math.round(viewportBefore.width)} -> ${Math.round(viewportAfter.width)}, dock ${dockSpan}`);
 
   // ---- 2. the previews are RENDERS ----------------------------------------
   console.log("\n2. the swatches");
