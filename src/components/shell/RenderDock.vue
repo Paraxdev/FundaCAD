@@ -2,12 +2,13 @@
 // A dock, not a floating panel: it stays up with the workspace, and a window over the model would cover what every
 // control here is judged against.
 
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import Icon from "./Icon.vue";
 import RenderMaterials from "./RenderMaterials.vue";
 import RenderEnvironment from "./RenderEnvironment.vue";
 import RenderCamera from "./RenderCamera.vue";
 import { onWorkspaceChange, workspace } from "../../ui/workspace";
+import { useHomeStore } from "../../stores/home";
 
 type Tab = "material" | "environment" | "camera";
 
@@ -20,11 +21,14 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 // Kept across a trip through Model and back: coming back to the tab you were on is what the workspace you left means.
 const tab = ref<Tab>("material");
 
-const open = ref(workspace() === "render");
+const rendering = ref(workspace() === "render");
+// Home covers only #stage, and the dock has its own grid track beside it, so Home has to put the dock away itself.
+const home = useHomeStore();
+const open = computed(() => rendering.value && !home.shown);
 let off: (() => void) | null = null;
 onMounted(() => {
   off = onWorkspaceChange((w) => {
-    open.value = w === "render";
+    rendering.value = w === "render";
   });
 });
 onUnmounted(() => off?.());
