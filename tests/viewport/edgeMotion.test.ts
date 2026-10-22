@@ -58,11 +58,13 @@ describe("the edge level rule", () => {
 
   it("brings the fat lines back for good when thin ones did not make the frames faster", () => {
     const r = new EdgeMotionRule();
-    const modes = gesture(r, PLATES, [...Array(8).fill(470), ...Array(6).fill(400)], 0);
-    expect(modes[8]).toBe("thin");
-    expect(modes.at(-1)).toBe("full");
+    const modes = gesture(r, PLATES, [...Array(8).fill(470), ...Array(7).fill(400)], 0);
+    // Three frames left out, then a window of four.
+    expect(modes.slice(8)).toEqual([...Array(7).fill("thin"), "full"]);
     expect(gesture(r, PLATES, Array(16).fill(470), 9000).includes("thin")).toBe(false);
-    expect(gesture(r, { ...PLATES, segments: 10_000 }, Array(8).fill(470), 18_000).at(-1)).toBe("thin");
+    // A new model judges its own short ticks, not against the old model's fat frame.
+    expect(gesture(r, { ...PLATES, segments: 10_000 }, [10, 10, 10, 10, ...Array(8).fill(470)], 18_000))
+      .toEqual([...Array(12).fill("full"), "thin"]);
   });
 
   it("goes back to full when the model's segments change by more than half", () => {
@@ -144,6 +146,72 @@ describe("the edge level rule", () => {
     r.skipNext();
     expect([900, 10, 10, 10].map((p, i) => r.sample(p, i * 10)).at(-1)).toBe("full");
     expect(r.sample(10, 50)).toBe("full");
+  });
+});
+
+// CI's SwiftShader frames: fat lines 1050 ms, thin ones 474 ms. A gesture's first
+// rAF ticks can come back in a few ms from a free slot in the GPU queue, and the fat
+// period lasts three ticks after the lines turn thin (big_model_orbit, 4 cores).
+const FAT = 1050;
+const THIN = 474;
+
+/** After the gesture's recorded `start`, a period pays for the lines asked four samples before it. */
+function lagged(rule: EdgeMotionRule, start: number[], n: number, now: number): string {
+  const modes = [rule.gestureStart(PLATES, now)];
+  for (let k = 1; k <= n; k++) {
+    const p = k <= start.length ? start[k - 1]! : modes[Math.max(0, k - 4)] === "thin" ? THIN : FAT;
+    now += p;
+    modes.push(rule.sample(p, now));
+  }
+  return modes.map((m) => m[0]).join("");
+}
+
+function learnThin(): EdgeMotionRule {
+  const r = new EdgeMotionRule();
+  expect(lagged(r, [], 36, 0)).toBe("f".repeat(8) + "t".repeat(29));
+  return r;
+}
+
+describe("the edge level rule under a GPU queue a few frames deep", () => {
+  it("keeps the second gesture thin when its first ticks came back from free queue slots", () => {
+    // CI's failure: the probe read [5, 6, 1050, 1050] with the double period over MAX_SAMPLE_MS,
+    // so the thin frames had to beat half a fat frame and the fat lines came back.
+    expect(lagged(learnThin(), [5, 2100, 6, 1050, 1050], 36, 60_000)).toBe("f".repeat(7) + "t".repeat(30));
+  });
+
+  it("draws the second gesture thin after one window of fat frames, however many free slots came first", () => {
+    for (const start of [[5, 2, 3, 985, 4], [7, 2150, 5, 1020, 6]]) {
+      expect(lagged(learnThin(), start, 36, 60_000), String(start)).toBe("f".repeat(8) + "t".repeat(29));
+    }
+  });
+
+  it("checks the thin frames after the fade frame and two frames in flight, so one slow frame among them keeps thin", () => {
+    const r = new EdgeMotionRule();
+    const modes = gesture(r, PLATES, [...Array(11).fill(FAT), THIN, THIN, FAT, ...Array(20).fill(THIN)], 0);
+    expect(modes).toEqual([...Array(8).fill("full"), ...Array(27).fill("thin")]);
+  });
+
+  it("counts a tick of an eighth of the fat frame, and leaves out a shorter one", () => {
+    expect(gesture(learnThin(), PLATES, [FAT / 8, FAT, FAT, FAT], 60_000)).toEqual([...Array(4).fill("full"), "thin"]);
+    expect(gesture(learnThin(), PLATES, [FAT / 8 - 0.5, FAT, FAT, FAT, FAT], 60_000))
+      .toEqual([...Array(5).fill("full"), "thin"]);
+  });
+
+  it("leaves out three short ticks in a row at most, so a renderer that got fast ends the probe", () => {
+    const open = learnThin();
+    gesture(open, PLATES, Array(6).fill(12), 60_000);
+    expect(gesture(open, PLATES, Array(4).fill(FAT), 70_000)).toEqual([...Array(4).fill("full"), "thin"]);
+    const done = learnThin();
+    gesture(done, PLATES, Array(7).fill(12), 60_000);
+    // Found fast, so its short ticks count again and two slow windows turn thin on.
+    expect(gesture(done, PLATES, [12, 12, 12, 12, ...Array(8).fill(FAT)], 70_000))
+      .toEqual([...Array(12).fill("full"), "thin"]);
+  });
+
+  it("forgets the fat frame with the model", () => {
+    const r = learnThin();
+    expect(gesture(r, { ...PLATES, segments: 20_000 }, [12, 12, 12, 12, ...Array(8).fill(FAT)], 60_000))
+      .toEqual([...Array(12).fill("full"), "thin"]);
   });
 });
 

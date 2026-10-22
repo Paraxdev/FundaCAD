@@ -42,8 +42,13 @@ const MIN_GAIN = 0.3;
 /** Slow windows in a row before the edges draw thin, so a stall of a few frames
  *  on a fast GPU is not taken for the edges. */
 const SLOW_WINDOWS = 2;
-/** Thin frames left out of the check, the fade from the fat lines still drawing them. */
-const VERIFY_SKIP = 2;
+/** Thin frames left out of the check: the fade frame and two fat frames still in the GPU queue. */
+const VERIFY_SKIP = 3;
+/** A tick back in under this share of the model's fat frame came from a free slot in the
+ *  GPU queue, not a frame: 2 to 8 ms against fat frames of 550 to 1050 ms under SwiftShader. */
+const SLOT_SHARE = 1 / 8;
+/** The most free slots measured in a row, so more such ticks are frames that got fast. */
+const SLOT_RUN = 3;
 
 /** How long the camera has to be still before the fat lines come back, so an
  *  orbit in short bursts does not pulse. */
@@ -82,6 +87,9 @@ export class EdgeMotionRule {
   private skip = 0;
   /** The median that turned thin on, until thin frames have shown they pay. */
   private verify = 0;
+  /** The median that turned thin on, while that verdict stands. */
+  private fatMs = 0;
+  private slots = 0;
   private slowRun = 0;
   /** A first thin verdict: a long stall makes thin look like a gain, so the next
    *  gesture measures one window of fat lines before thin is remembered. */
@@ -100,6 +108,7 @@ export class EdgeMotionRule {
   gestureStart(load: EdgeLoad, now: number): EdgeMode {
     this.load = load;
     this.window.length = 0;
+    this.slots = 0;
     this.merged = load.draws >= (this.merged ? MERGE_OFF_DRAWS : MERGE_ON_DRAWS);
     const changed = (n: number) => n > 0 && Math.abs(load.segments - n) > n * SEGMENT_CHANGE;
     if (changed(this.notEdgeBound)) this.notEdgeBound = 0;
@@ -128,6 +137,9 @@ export class EdgeMotionRule {
       }
     }
     if ((this.thin && this.verify === 0) || ms > MAX_SAMPLE_MS) return this.mode;
+    const slot = ms < this.fatMs * SLOT_SHARE;
+    this.slots = slot ? this.slots + 1 : 0;
+    if (slot && this.slots <= SLOT_RUN) return this.mode;
     if (this.skip > 0) {
       this.skip--;
       return this.mode;
@@ -139,7 +151,7 @@ export class EdgeMotionRule {
     if (this.thin) {
       if (m > this.verify * (1 - MIN_GAIN)) {
         this.thin = false;
-        this.thinSegments = 0;
+        this.thinSegments = this.fatMs = 0;
         this.notEdgeBound = this.load.segments;
       }
       this.verify = 0;
@@ -152,14 +164,14 @@ export class EdgeMotionRule {
       this.slowRun = 0;
       if (this.probing && !this.provisional) this.fails = Math.min(this.fails + 1, MAX_BACKOFF);
       this.provisional = !this.probing;
-      this.verify = m;
+      this.verify = this.fatMs = m;
       this.thin = true;
       this.thinSegments = this.load.segments;
       this.thinUntil = this.provisional ? 0 : now + REMEMBER_SLOW_MS * 2 ** this.fails;
       this.skip = VERIFY_SKIP;
     } else if (this.probing) {
       this.fails = 0;
-      this.thinSegments = 0;
+      this.thinSegments = this.fatMs = 0;
       this.provisional = false;
     }
     this.probing = false;
@@ -180,7 +192,8 @@ export class EdgeMotionRule {
     this.fails = 0;
     this.window.length = 0;
     this.skip = 0;
-    this.verify = 0;
+    this.verify = this.fatMs = 0;
+    this.slots = 0;
     this.slowRun = 0;
     this.provisional = false;
     this.notEdgeBound = 0;
