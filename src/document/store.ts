@@ -490,6 +490,11 @@ function restText({ features: _, sectionView: _cut, ...rest }: Partial<Snapshot>
   return JSON.stringify(rest);
 }
 
+// A fire and forget rebuild of a document that has since been closed has nobody left to tell.
+const quietWhenEnded = (e: unknown) => {
+  if (!isSessionEnded(e)) throw e;
+};
+
 export class DocumentStore {
   readonly sessions = new SessionHost();
   private doc: CadDocument;
@@ -2671,7 +2676,7 @@ export class DocumentStore {
     }
     const run = () => {
       this.st.rebuildTimer = null;
-      void this.rebuildNow();
+      this.rebuildNow().catch(quietWhenEnded);
     };
     if (immediate) run();
     else this.st.rebuildTimer = window.setTimeout(run, 120);

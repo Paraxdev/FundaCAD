@@ -3,6 +3,7 @@
 import { setLeftButtonOwner } from "../viewport/navigator/bindings";
 import { Viewport } from "../viewport/viewport";
 import { asFeature } from "../types";
+import { isSessionEnded } from "../document/session";
 import { Geometry, type GeometryBackend } from "../geometry/client";
 import { DocumentStore, EMPTY_DOCUMENT } from "../document/store";
 import { SketchOverlay } from "../sketch/overlay";
@@ -247,6 +248,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   installEngineDiedToast();
 
   e.store = new DocumentStore(e.geometry, EMPTY_DOCUMENT);
+  e.geometry.bindSessions?.(e.store.sessions);
   e.store.onWarning = (msg) => toast(msg);
   e.viewport.attachStore(e.store);
   // Once, before any component exists; components read version refs instead of subscribing.
@@ -546,6 +548,9 @@ export function mountUi(e: Engine): void {
 
   e.geometry.onStatus((connected) => {
     if (!connected) e.setStatus("connecting to the geometry engine…", "error");
-    else void e.store.rebuildNow();
+    else
+      e.store.rebuildNow().catch((err: unknown) => {
+        if (!isSessionEnded(err)) throw err;
+      });
   });
 }

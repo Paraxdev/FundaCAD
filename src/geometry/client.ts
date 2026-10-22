@@ -24,6 +24,7 @@ import type {
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import { EngineTransport, type GeometryTransport } from "./transport";
+import { SessionEnded, type DocumentSession, type SessionHost } from "../document/session";
 import { blake2b128Hex } from "../document/blake2b";
 
 const BLOB_PUT_CHUNK = 4 * 1024 * 1024;
@@ -433,6 +434,8 @@ export interface GeometryBackend {
   readonly softCancel?: boolean;
   /** Stage progress for a long op (import), `pct` null while a stage has no fraction. */
   onOpProgress?(fn: OpProgressListener): () => void;
+  /** Ties every later request to the document session current when it is made. */
+  bindSessions?(host: SessionHost): void;
   /** Our request waits behind another client's job on the same engine: `behind` says whose, null once ours starts. */
   onQueue?(fn: (id: string, behind: EngineWait | null) => void): () => void;
   /** One live-session op (live_session.py): publish what this window has open, collect what an assistant asked
@@ -623,9 +626,20 @@ function engineWait(v: unknown): EngineWait | null {
   };
 }
 
+// Ops that serve the app, not one document, so ending a document never rejects them.
+const appScoped = (op: string) =>
+  op === "ping" ||
+  op === "cancel" ||
+  op === "doc_end" ||
+  op === "listFonts" ||
+  op === "tessellateText" ||
+  op.startsWith("session_");
+
 export class Geometry implements GeometryBackend {
   private readonly transport: GeometryTransport;
   private pending = new Map<string, Pending>();
+  private sessions: SessionHost | null = null;
+  private owned = new Map<DocumentSession, Map<string, { raw: string; reject: (e: unknown) => void }>>();
   /** Requests sent and not yet answered, tool previews included. */
   get inFlight(): number {
     return this.pending.size;
@@ -665,6 +679,30 @@ export class Geometry implements GeometryBackend {
   constructor(transport: GeometryTransport = new EngineTransport()) {
     this.transport = transport;
     // Does not connect: init() lets the transport pick IPC or the WebSocket before its first open.
+  }
+
+  /** Every request then belongs to the document session current when it was made, and ends with it. */
+  bindSessions(host: SessionHost) {
+    this.sessions = host;
+    const watch = (s: DocumentSession) => s.own(() => this.endScope(s));
+    watch(host.current);
+    host.onBegin(watch);
+  }
+
+  // Its calls reject with SessionEnded, unsent ones never go out, and any late frame finds no pending id.
+  private endScope(s: DocumentSession) {
+    const mine = this.owned.get(s);
+    this.owned.delete(s);
+    if (!mine?.size) return;
+    const raws = new Set<string>();
+    for (const [id, { raw, reject }] of mine) {
+      this.pending.delete(id);
+      this.dropStream(id);
+      raws.add(raw);
+      if (this.lastHeavyId === id) this.lastHeavyId = null;
+      reject(new SessionEnded());
+    }
+    this.outbox = this.outbox.filter((r) => !raws.has(r));
   }
 
   async init(): Promise<void> {
@@ -809,6 +847,8 @@ export class Geometry implements GeometryBackend {
   private routeStreamFrame(header: BinaryHeader) {
     const st = header.stream!;
     const id = header.id;
+    // A stream nobody waits on, such as one of an ended document, must never open or draw.
+    if (!this.pending.has(id)) return;
     if (st.seq === 0) {
       // A head frame replaces any half-received stream for its id. Rebuilds are serialized so this cannot happen,
       // but a reset beats a silent body splice.
@@ -980,7 +1020,8 @@ export class Geometry implements GeometryBackend {
   private call<T>(op: string, extra: object, onId?: (id: string) => void): Promise<RawReply<T>> {
     const id = crypto.randomUUID();
     const raw = JSON.stringify({ id, op, ...extra });
-    return new Promise((resolve) => {
+    const session = appScoped(op) ? null : (this.sessions?.current ?? null);
+    return new Promise((resolve, reject) => {
       // Refuse an over-cap message: the engine answers it with a 1009 close, and since the body stays in the document
       // every rebuild re-sent it and killed the session again (GH #4, "cannot open files larger than 245 MB").
       const tooLarge = tooLargeToSend(raw.length);
@@ -992,8 +1033,19 @@ export class Geometry implements GeometryBackend {
       // are excluded, above all the timed session polls, or Cancel would stop a poll while the build ran on.
       if (op !== "cancel" && op !== "ping" && !op.startsWith("session_")) this.lastHeavyId = id;
       onId?.(id);
+      let settle = resolve as Pending;
+      if (session) {
+        let mine = this.owned.get(session);
+        if (!mine) this.owned.set(session, (mine = new Map()));
+        const own = mine;
+        own.set(id, { raw, reject });
+        settle = (r) => {
+          own.delete(id);
+          resolve(r as RawReply<T>);
+        };
+      }
       // The one type-erasing cast: the pending map holds resolvers for every T.
-      this.pending.set(id, resolve as Pending);
+      this.pending.set(id, settle);
       if (this.connected) {
         this.transport.send(raw);
       } else {
