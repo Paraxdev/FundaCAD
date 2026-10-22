@@ -1,6 +1,5 @@
-//! The `stress` op on documents: a cantilever against beam theory, a pressure load, the
-//! refusals, the warnings, then over the protocol. Meshes stay coarse (2.5 to 3 mm) so the
-//! debug build is quick.
+//! The `stress` op on documents: a cantilever against beam theory, a pressure load, the refusals, the warnings, then
+//! over the protocol. Meshes stay coarse (2.5 to 3 mm) so the debug build is quick.
 
 use base64::Engine;
 use fundacad_geom::builder::NoWatch;
@@ -696,9 +695,8 @@ fn time_the_default_cantilever() {
 
 #[test]
 fn a_peak_where_a_slider_face_ends_is_warned_about() {
-    // The lever pushed sideways at its tip against a stop along the arm's side: the peak is
-    // at the tip's corner, where the stop's face ends, and draws the same caution as the
-    // edge of a fixed face.
+    // The lever pushed sideways at its tip against a stop along the arm's side: the peak is at the tip's corner where
+    // the stop's face ends, drawing the same caution as the edge of a fixed face.
     let r = run(json!({
         "document": lever(), "body": "body1",
         "supports": [

@@ -1,12 +1,5 @@
-//! Sketch text against the Python engine (tests/text/gen_fixtures.py on the legacy branch writes
-//! tests/text/fixtures.json).
-//!
-//! The two engines draw the same outlines through different machinery, OCCT's
-//! FreeType-backed text builder there and ttf-parser here, so the oracle is a
-//! tolerance one: the same number of glyph regions with the same number of
-//! counters, each within a few percent of its area and its box. The fonts are
-//! the ones Windows ships, so the whole file is skipped where they are not
-//! installed.
+//! Sketch text against the Python engine's tests/text/fixtures.json (FreeType through OCCT there, ttf-parser here):
+//! the same glyph regions and counters, each within a few percent of its area and box. Needs the Windows fonts.
 
 use fundacad_geom::kernel;
 use fundacad_geom::text::fonts::{Aspect, Library};

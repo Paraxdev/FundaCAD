@@ -1,7 +1,5 @@
-//! A warm disk cache answers a plugin feature exactly as a cold build does,
-//! and never with what an earlier copy of the plugin's component made. Needs
-//! `python scripts/build-plugin-wasm.py` first; without the components every
-//! case is skipped with a note.
+//! A warm disk cache answers a plugin feature exactly as a cold build does, never with an earlier component's output.
+//! Needs `python scripts/build-plugin-wasm.py` first, else every case is skipped with a note.
 #![cfg(feature = "plugins")]
 
 use std::path::{Path, PathBuf};

@@ -1,6 +1,5 @@
-//! The `thread` feature: each profile family and hand on a shaft and in a bore,
-//! multi-start, print clearance, a ridge in a nominal bore, and a thread that
-//! follows its hole when the hole changes size.
+//! The `thread` feature: each profile family and hand on a shaft and in a bore, multi-start, print clearance, a ridge
+//! in a nominal bore, and a thread that follows its hole when the hole changes size.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
