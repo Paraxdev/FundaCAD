@@ -1,30 +1,7 @@
-//! The line to the geometry engine, and the engine's own lifetime. A port of
-//! the Python MCP server's engine link and Windows job object, on the Rust engine.
-//!
-//! Everything the MCP server can say about a model, it learns by asking the
-//! same engine the app asks. That is deliberate: a gap an agent hits here is a
-//! gap a user hits in the viewport, which is the only reason driving the engine
-//! is worth more than computing geometry in this process.
-//!
-//! There are two ways to have an engine, and which one is in force decides what
-//! an agent can reach:
-//!
-//!   * PRIVATE, spawn one (`fundacad-engine --ws`) on a free port with a token
-//!     minted here. It never competes with a running app for the worker and it
-//!     cannot see the document the user has open.
-//!   * ATTACHED, join the engine a running FundaCAD already has, by reading the
-//!     port and token it publishes (`app_session`). The agent then shares the
-//!     user's engine AND, through the session ops, the document on their screen.
-//!
-//! A spawned engine is a CHILD PROCESS rather than this process linking
-//! fundacad-geom: OpenCASCADE aborts and segfaults on bad input, and in this
-//! process that would take the MCP session with it, mid conversation, with no
-//! reply. It is also what keeps the two modes one code path, because a live
-//! session has to be a socket to somebody else's engine whatever this one does.
-//!
-//! One connection, reopened on demand. The engine serialises heavy ops anyway,
-//! so there is nothing to gain from more, and a single socket makes cancelling
-//! and shutting down one thing each.
+//! The line to the geometry engine. PRIVATE spawns `fundacad-engine --ws` on a free port with a token minted
+//! here; ATTACHED joins a running app's engine and, through the session ops, the document on screen.
+//! A child process, not linked fundacad-geom, since OpenCASCADE aborts on bad input and would end the session.
+//! One connection, reopened on demand: the engine serialises heavy ops anyway.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -44,9 +21,8 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 /// How long to wait for the spawned engine to print LISTENING.
 pub const START_TIMEOUT: Duration = Duration::from_secs(120);
 
-/// Ceiling on one request. A rebuild of a heavy document is minutes in the
-/// worst case and the engine has its own stall supervision underneath this, so
-/// this exists only so a lost reply cannot wedge the agent forever.
+/// A heavy rebuild is minutes at worst and the engine supervises stalls itself,
+/// so this only keeps a lost reply from wedging the agent.
 pub const CALL_TIMEOUT: Duration = Duration::from_secs(600);
 
 const PREFIX: &str = "FUNDACAD_";
@@ -59,8 +35,7 @@ pub fn appenv(suffix: &str) -> Option<String> {
         .find_map(|p| std::env::var(format!("{p}{suffix}")).ok())
 }
 
-/// `FUNDACAD_ENGINE_<suffix>`, else the retired `FUNDACAD_SIDECAR_<suffix>`
-/// from the Python engine.
+/// `FUNDACAD_ENGINE_<suffix>`, else the retired `FUNDACAD_SIDECAR_<suffix>` of the Python engine.
 pub fn engine_env(suffix: &str) -> Option<String> {
     appenv(&format!("ENGINE_{suffix}")).or_else(|| appenv(&format!("SIDECAR_{suffix}")))
 }
@@ -70,17 +45,14 @@ pub fn engine_env(suffix: &str) -> Option<String> {
 pub enum Mode {
     /// Attach to a running FundaCAD if there is one, else spawn.
     Auto,
-    /// Attach, or refuse to start. For a host configured to work on the open
-    /// document and nothing else, where quietly falling back to a private copy
-    /// would look like the edits are being ignored.
+    /// Attach, or refuse to start: for a host meant for the open document,
+    /// a private copy would look like the edits are being ignored.
     Attach,
     /// Never attach, even with an app open.
     Standalone,
 }
 
-/// Deliberately forgiving about spelling: this is read at start-up inside an
-/// MCP host, where a refusal reaches the user as "the server exited" with the
-/// reason in a log they may never open.
+/// Forgiving about spelling: inside an MCP host a refusal reads as "the server exited", its reason in an unread log.
 pub fn mode_from_env() -> Mode {
     match std::env::var("FUNDACAD_MCP_MODE").unwrap_or_default().trim().to_ascii_lowercase().as_str() {
         "attach" => Mode::Attach,
@@ -88,8 +60,6 @@ pub fn mode_from_env() -> Mode {
         _ => Mode::Auto,
     }
 }
-
-// --- where the engine is -----------------------------------------------------
 
 fn exe_name() -> &'static str {
     if cfg!(windows) {
@@ -107,28 +77,15 @@ fn app_name() -> &'static str {
     }
 }
 
-/// Whether `path` is an app built with the Rust engine, which answers
-/// `--engine --ws`. A Python engine build ignores `--engine` and opens a
-/// window, so it is recognised by the IPC command only the Rust build
-/// registers, the same test the beta CI job applies to its bundle.
+/// A Python engine build ignores `--engine` and opens a window, so the Rust one is told by the IPC command
+/// only it registers, the test the beta CI job applies to its bundle.
 pub fn is_rust_engine_app(path: &Path) -> bool {
     const MARKER: &[u8] = b"engine_attach";
     std::fs::read(path).is_ok_and(|bytes| bytes.windows(MARKER.len()).any(|w| w == MARKER))
 }
 
-/// The command that starts a private engine: the program and its arguments
-/// before `--ws`.
-///
-/// `FUNDACAD_ENGINE_CMD` is the override, the same variable the protocol suites
-/// drive both engines with. It is checked for existence rather than trusted:
-/// an override naming a binary that is not there would otherwise turn "no
-/// engine" into a spawn failure naming a path nobody set.
-///
-/// Without one, the binary next to this one, then the app next to this one
-/// (`fundacad --engine`, how a packaged app ships it, one copy of the kernel),
-/// then the workspace target directories, found by walking UP until one turns
-/// up rather than by counting directories, because counting encodes where a
-/// file happens to live today.
+/// The program and arguments before `--ws`. `FUNDACAD_ENGINE_CMD` overrides it when that binary exists; else the
+/// binary beside this one, then the app beside it (`fundacad --engine`), then target dirs found by walking UP.
 pub fn engine_command() -> Vec<String> {
     if let Some(cmd) = appenv("ENGINE_CMD").filter(|c| !c.trim().is_empty()) {
         let parts = split_command(&cmd);
@@ -171,8 +128,7 @@ fn looks_runnable(program: &str) -> bool {
     !p.is_absolute() && p.parent().is_none_or(|d| d.as_os_str().is_empty()) || p.is_file()
 }
 
-/// A command line split the way a shell would, quotes included, so
-/// `FUNDACAD_ENGINE_CMD` can name a path with a space in it.
+/// Split as a shell would, quotes included, so `FUNDACAD_ENGINE_CMD` can name a path with a space.
 pub fn split_command(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
@@ -202,9 +158,7 @@ pub fn split_command(text: &str) -> Vec<String> {
 }
 
 fn free_port() -> io::Result<u16> {
-    // Inherently a race, something else can take it between this close and the
-    // engine's bind, but the engine reports a bind failure by name, so the race
-    // is loud rather than silent.
+    // A race, something may take the port before the engine binds, but the engine names a bind failure.
     let listener = std::net::TcpListener::bind(("127.0.0.1", 0))?;
     Ok(listener.local_addr()?.port())
 }
@@ -221,8 +175,6 @@ fn mint_token() -> String {
     bytes.iter().map(|b| ALPHABET[(*b % 64) as usize] as char).collect()
 }
 
-// --- the socket --------------------------------------------------------------
-
 /// One WebSocket to an engine, and the request/reply pairing on it.
 pub struct Socket {
     ws: WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
@@ -230,13 +182,10 @@ pub struct Socket {
 
 impl Socket {
     pub async fn connect(port: u16, token: &str) -> io::Result<Socket> {
-        // The slash is not decoration. Without a path the request line comes
-        // out as `GET ?token=... HTTP/1.1`, which is not a request-URI: the
-        // engine's header parser refuses it, drops the connection, and the
-        // client reports an unfinished handshake with nothing to point at.
+        // The slash matters: without a path the request line is `GET ?token=... HTTP/1.1`, which the engine's
+        // parser refuses, and the client reports an unfinished handshake with nothing to point at.
         let url = format!("ws://127.0.0.1:{port}/?token={token}");
-        // A rebuild reply of a large assembly is tens of MB, far past
-        // tungstenite's 16 MiB default. The Python server sets max_size=None.
+        // A rebuild reply of a large assembly is tens of MB, far past tungstenite's 16 MiB default.
         let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
             .max_message_size(None)
             .max_frame_size(None);
@@ -246,10 +195,8 @@ impl Socket {
         Ok(Socket { ws })
     }
 
-    /// One request, one reply. Progress frames are dropped: they carry a
-    /// percentage for a progress bar nobody here is drawing. A mesh reply is
-    /// asked for as the app gets it, streamed in binary chunks, since as one
-    /// JSON message a large assembly is refused at the frame cap.
+    /// Progress frames are dropped. A mesh reply comes in binary chunks, as the app gets it,
+    /// since as one JSON message a large assembly breaks the frame cap.
     pub async fn request(&mut self, id: &str, request: &Value) -> io::Result<Value> {
         self.request_meshed(id, request).await.map(|(v, _)| v)
     }
@@ -331,9 +278,6 @@ fn closed(e: tokio_tungstenite::tungstenite::Error) -> io::Error {
     io::Error::new(io::ErrorKind::BrokenPipe, e.to_string())
 }
 
-// --- the link ----------------------------------------------------------------
-
-/// Spawn (or attach to) one engine, and speak to it.
 pub struct EngineLink {
     pub port: u16,
     pub token: String,
@@ -355,8 +299,7 @@ struct LinkState {
 }
 
 impl EngineLink {
-    /// A private engine: a free port and a token minted here. Nothing is
-    /// spawned until the first call.
+    /// Nothing is spawned until the first call.
     pub fn private() -> EngineLink {
         EngineLink {
             port: free_port().unwrap_or(0),
@@ -368,7 +311,6 @@ impl EngineLink {
         }
     }
 
-    /// A link to an engine somebody else is running.
     pub fn attach(port: u16, token: impl Into<String>) -> EngineLink {
         EngineLink {
             port,
@@ -380,8 +322,7 @@ impl EngineLink {
         }
     }
 
-    /// A link configured by environment variables alone: the explicit
-    /// override, which knows nothing about a running app.
+    /// The explicit environment override, which knows nothing about a running app.
     pub fn from_env() -> EngineLink {
         match engine_env("TOKEN").filter(|t| !t.is_empty()) {
             Some(token) => {
@@ -392,15 +333,9 @@ impl EngineLink {
         }
     }
 
-    /// The link this mode asks for, and what it found. `app` is the running
-    /// app's session when attached and None when not, so the caller can say
-    /// which of the two worlds it is in without inferring it from `attached`,
-    /// which the environment override also sets.
-    ///
-    /// An explicit token in the environment is preferred over everything here. Someone
-    /// who set it is pointing this at a specific engine on purpose, and a
-    /// discovery step that overrode them would make a debugging session
-    /// unexplainable.
+    /// `app` is the running app's session when attached, so the caller need not infer it from `attached`,
+    /// which the env override also sets. An explicit env token wins over discovery, since whoever set it
+    /// points this at a specific engine on purpose.
     pub async fn for_mode(
         mode: Mode,
         log: impl Fn(&str),
@@ -421,9 +356,7 @@ impl EngineLink {
                 return Ok((link, Some(app)));
             }
             if mode == Mode::Attach {
-                // Loud, and by request: this mode exists for a host meant to
-                // work on the open document, where silently working on a
-                // private copy would look like the edits are being ignored.
+                // Loud by request: for a host meant for the open document, a private copy would look like ignored edits.
                 return Err("FUNDACAD_MCP_MODE=attach, but no FundaCAD window is running (no live \
                      session file, or the engine it names is gone). Open FundaCAD, or use \
                      FUNDACAD_MCP_MODE=auto to work on a private copy when it is closed."
@@ -453,10 +386,8 @@ impl EngineLink {
         let argv = engine_command();
         let mut cmd = Command::new(&argv[0]);
         cmd.args(&argv[1..]).arg("--ws");
-        // Written under the current names only, and the retired spellings
-        // cleared with them: a child handed two names that disagree would pick
-        // whichever its own lookup order preferred, which is not a thing to
-        // leave to chance when one of them is the auth token.
+        // Current names only and the retired ones cleared, since a child handed two disagreeing
+        // auth tokens would pick one by its own lookup order.
         for prefix in std::iter::once(PREFIX).chain(LEGACY_PREFIXES.iter().copied()) {
             for retired in ["SIDECAR_PORT", "SIDECAR_TOKEN"] {
                 cmd.env_remove(format!("{prefix}{retired}"));
@@ -469,13 +400,8 @@ impl EngineLink {
         }
         cmd.env("FUNDACAD_ENGINE_PORT", self.port.to_string());
         cmd.env("FUNDACAD_ENGINE_TOKEN", &self.token);
-        // The durable blob store, which the app's shell normally sets. Without
-        // it the store falls back to a default this process chose, and an
-        // `import` feature's `geom` is a content hash INTO that store: the
-        // document would save cleanly, name a blob the app has never held, and
-        // fail to open, which is the worst of the three outcomes because it
-        // looks like it worked. Not forced: an explicit FUNDACAD_BLOB_DIR is
-        // someone pointing this at a store on purpose.
+        // The durable blob store, which the app's shell normally sets. An `import`'s `geom` is a hash INTO it, so a
+        // default chosen here would save a document naming a blob the app never held. An explicit FUNDACAD_BLOB_DIR wins.
         if appenv("BLOB_DIR").is_none() {
             cmd.env("FUNDACAD_BLOB_DIR", crate::app_session::app_data_dir().join("blobs"));
         }
@@ -491,9 +417,8 @@ impl EngineLink {
         cmd.kill_on_drop(true);
         let mut child = cmd.spawn()?;
         state.build = None;
-        // Drained for the life of the engine: a pipe nobody reads fills, and
-        // the engine then blocks on its next log line. Our stdout is the MCP
-        // protocol, so what it says goes to stderr, the host's log.
+        // Drained for the engine's life, or a full pipe blocks its next log line.
+        // Our stdout is the MCP protocol, so its output goes to stderr, the host's log.
         if let Some(stderr) = child.stderr.take() {
             tokio::spawn(async move {
                 let mut lines = BufReader::new(stderr).lines();
@@ -502,18 +427,15 @@ impl EngineLink {
                 }
             });
         }
-        // Adopted BEFORE the readiness wait, so anything it spawns during
-        // start-up is inside the job too. An MCP host kills its servers with
-        // TerminateProcess, which runs no cleanup at all.
+        // Adopted BEFORE the readiness wait, so anything it spawns while starting is in the job too.
+        // An MCP host kills its servers with TerminateProcess, which runs no cleanup at all.
         #[cfg(windows)]
         if let Some(pid) = child.id() {
             self.job.adopt(pid);
         }
         let stdout = child.stdout.take().expect("piped");
         let mut lines = BufReader::new(stdout).lines();
-        // Wait for the readiness line rather than polling the port: the engine
-        // prints LISTENING only once it is serving, and a port that is merely
-        // bound would let the first request race the accept loop.
+        // The engine prints LISTENING only once it serves; a merely bound port would let the first request race the accept loop.
         let ready = tokio::time::timeout(START_TIMEOUT, async {
             while let Ok(Some(line)) = lines.next_line().await {
                 if line.starts_with("LISTENING") {
@@ -544,10 +466,8 @@ impl EngineLink {
         }
     }
 
-    /// One request, one reply, serialised on the link's own lock because ids
-    /// are unique per connection and replies are matched by this simple client
-    /// rather than routed. One agent asking one question at a time is the whole
-    /// traffic pattern.
+    /// Serialised on the link's lock: ids are unique per connection, and this simple client matches replies
+    /// rather than routing them.
     pub async fn call(&self, op: &str, payload: Value) -> io::Result<Value> {
         self.call_meshed(op, payload).await.map(|(v, _)| v)
     }
@@ -571,9 +491,8 @@ impl EngineLink {
             match sent {
                 Ok(Ok(reply)) => return Ok(reply),
                 Ok(Err(e)) => {
-                    // The worker can be killed out from under a socket (a stall
-                    // reap, an OCCT crash). One silent reconnect, then the error
-                    // is the caller's to see.
+                    // The worker can be killed under a socket (a stall reap, an OCCT crash): one silent reconnect,
+                    // then the caller sees the error.
                     state.socket = None;
                     if attempt == 1 {
                         return Err(e);
@@ -602,7 +521,6 @@ impl EngineLink {
         Some(build)
     }
 
-    /// The process id of the engine this link spawned, when it spawned one.
     pub async fn engine_pid(&self) -> Option<u32> {
         self.state.lock().await.child.as_ref().and_then(Child::id)
     }
@@ -621,7 +539,6 @@ impl EngineLink {
     }
 }
 
-/// A call's payload, built from pairs so a tool reads like the Python did.
 pub fn args(pairs: impl IntoIterator<Item = (&'static str, Value)>) -> Value {
     let mut m = Map::new();
     for (k, v) in pairs {
@@ -630,9 +547,8 @@ pub fn args(pairs: impl IntoIterator<Item = (&'static str, Value)>) -> Value {
     Value::Object(m)
 }
 
-/// What to tell a person when the engine this server started is not the build
-/// FundaCAD's engine is, from the `build` each answered `ping` with. None when
-/// they are the same build, or when either cannot say.
+/// What to tell a person when this server's engine is not the build FundaCAD's is, by their `ping` builds.
+/// None when they match or either cannot say.
 pub fn build_mismatch(app: &Value, private: &Value) -> Option<String> {
     fn commit(b: &Value) -> Option<&str> {
         b.get("commit").and_then(Value::as_str).filter(|c| !c.is_empty())
@@ -663,13 +579,8 @@ pub fn build_mismatch(app: &Value, private: &Value) -> Option<String> {
 
 #[cfg(windows)]
 pub mod job {
-    //! The Windows job object that makes the engine die with this process,
-    //! a port of the Python MCP server's `winjob.py`.
-    //!
-    //! Not housekeeping: an MCP host kills its servers with TerminateProcess,
-    //! which runs no cleanup, and the engine's own die-with-parent covers Linux
-    //! and macOS only. Measured on the Python engine without it: 46 orphaned
-    //! worker processes, after which a fresh engine could no longer start one.
+    //! Makes the engine die with this process: hosts kill servers with TerminateProcess, and die-with-parent covers
+    //! only Linux and macOS. Without it the Python engine once left 46 orphaned workers and could start no more.
 
     use std::sync::Mutex;
 
@@ -689,8 +600,8 @@ pub mod job {
             ProcessJob(Mutex::new(0))
         }
 
-        /// Put `pid` in a job that kills its members when this process's last
-        /// handle to it closes, which a TerminateProcess does.
+        /// Puts `pid` in a job that kills its members when this process's last handle to it closes,
+        /// which a TerminateProcess does.
         pub fn adopt(&self, pid: u32) {
             let mut held = self.0.lock().unwrap_or_else(|p| p.into_inner());
             if *held == 0 {
