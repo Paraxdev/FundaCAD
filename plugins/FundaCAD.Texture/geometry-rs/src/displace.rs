@@ -1,6 +1,5 @@
-//! texture.py `_displacement_geometry` and `displace_face`: one face's
-//! triangulation refined in the pattern's frame, then pushed along its normals
-//! by the height field, with analytic displaced normals for shading.
+//! texture.py `_displacement_geometry` and `displace_face`: a face's triangulation refined in the pattern's frame and
+//! pushed along its normals by the height field.
 
 use crate::chart::{self, Surf};
 use crate::height::{self, triplanar_field};
