@@ -3,7 +3,8 @@ import { choose } from "../ui/choice";
 import type { Engine } from "./engine";
 import { TEMPLATES, templateText } from "../templates";
 import { copyName } from "../ui/homeVersions";
-import { closeHome } from "../ui/home";
+import { closeHome, homeIsOpen } from "../ui/home";
+import { displayName } from "../ui/homeList";
 
 /** An open sketch's edits reach the store only when the sketch is finished, so
  *  `store.dirty` alone misses them. */
@@ -27,6 +28,64 @@ export async function openPathGuarded(
   const name = path.split(/[\\/]/).pop() ?? path;
   if (!(await mayDiscard(e, `Discard unsaved changes and open ${name}?`))) return "cancelled";
   return openDocumentAtPath(e.store, path, e.geometry);
+}
+
+/** "frame" from frame.stp.gz: the name a document takes from the file imported into it. */
+export function importedName(file: string): string {
+  return displayName(file.replace(/\.(gz|zip)$/i, ""));
+}
+
+/** The document every first start shows behind Home. */
+export function isBlankDocument(e: Pick<Engine, "store" | "sketch">): boolean {
+  return !e.store.filePath && !e.store.document.features.length && !e.store.dirty && !e.sketch.active;
+}
+
+type HomeImportEngine = Pick<Engine, "store" | "sketch" | "viewport">;
+
+async function importNamed(e: HomeImportEngine, name: string, run: () => Promise<void>): Promise<void> {
+  e.store.markOpenedWithoutPath(name);
+  closeHome();
+  await run();
+  const landed = e.store.document.features.some((f) => f.type === "import");
+  if (!landed && !e.store.document.features.length && !e.store.dirty) e.store.newDocument();
+}
+
+/** A blank document takes the files, anything else asks whether they join it or start a new one. `run` is the
+ *  caller's own import loop. False when the maker cancelled and nothing ran. */
+export async function importFromHome(e: HomeImportEngine, names: string[], run: () => Promise<void>): Promise<boolean> {
+  const first = names[0];
+  if (first === undefined) return false;
+  if (isBlankDocument(e)) {
+    await importNamed(e, importedName(first), run);
+    return true;
+  }
+  const doc = displayName(e.store.fileName);
+  const what = names.length > 1 ? `${first} and ${names.length - 1} more` : first;
+  const pick = await choose(
+    `Add ${what} to ${doc}, or start a new document with ${names.length > 1 ? "them" : "it"}?`,
+    [
+      { value: "add", label: `Add to ${doc}` },
+      { value: "new", label: "New document" },
+      { value: "cancel", label: "Cancel" },
+    ],
+  );
+  if (pick === "add") {
+    closeHome();
+    await run();
+    return true;
+  }
+  if (pick !== "new" || !(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return false;
+  e.store.newDocument();
+  e.viewport.resetCamera(false);
+  await importNamed(e, importedName(first), run);
+  return true;
+}
+
+/** Imports go into the open document, as assemblies are built, unless Home is up. */
+export async function placeImport(e: HomeImportEngine, names: string[], run: () => Promise<void>): Promise<boolean> {
+  if (homeIsOpen()) return importFromHome(e, names, run);
+  await run();
+  return true;
 }
 
 /** Save then asks where to keep it, so the template itself is never written. */
@@ -89,8 +148,11 @@ export function createDocumentActions(e: Engine): Pick<Engine, "newDocument" | "
     },
 
     async openDoc() {
-      await openDocument(e.store, e.geometry, () =>
-        mayDiscard(e, "Discard unsaved changes and open another document?"),
+      await openDocument(
+        e.store,
+        e.geometry,
+        () => mayDiscard(e, "Discard unsaved changes and open another document?"),
+        (names, run) => placeImport(e, names, run),
       );
     },
 

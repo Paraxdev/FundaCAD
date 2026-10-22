@@ -1,5 +1,5 @@
 import type { Engine } from "../app/engine";
-import { mayDiscard } from "../app/documentActions";
+import { mayDiscard, placeImport } from "../app/documentActions";
 import {
   importFileBytes,
   importPath,
@@ -19,7 +19,7 @@ export interface DroppedFile {
   file?: File;
 }
 
-type DropEngine = Pick<Engine, "store" | "sketch" | "geometry">;
+type DropEngine = Pick<Engine, "store" | "sketch" | "geometry" | "viewport">;
 
 /** Open the dropped document, if any, then import the rest in drop order. */
 export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFile[]): Promise<void> {
@@ -37,16 +37,31 @@ export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFil
     // user just chose to discard.
     if (outcome !== "ok") return;
   }
-  if (plan.imports.length || plan.environments.length) closeHome();
-  for (const item of plan.imports) {
-    if (item.path) await importPath(e.store, e.geometry, item.path);
-    else if (item.file) await importFileBytes(e.store, e.geometry, item.file);
-  }
-  const env = plan.environments[plan.environments.length - 1];
-  if (env?.file) {
-    const { importEnvironmentFile } = await import("../ui/environmentImport");
-    const refused = await importEnvironmentFile(e.store, env.file);
-    if (refused) await reportError(refused);
+  const run = async () => {
+    for (const item of plan.imports) {
+      if (item.path) await importPath(e.store, e.geometry, item.path);
+      else if (item.file) await importFileBytes(e.store, e.geometry, item.file);
+    }
+    const env = plan.environments[plan.environments.length - 1];
+    if (env?.file) {
+      const { importEnvironmentFile } = await import("../ui/environmentImport");
+      const refused = await importEnvironmentFile(e.store, env.file);
+      if (refused) await reportError(refused);
+    }
+  };
+  // Parts dropped over Home may be meant for a new document. An environment alone is not a part.
+  if (!doc && plan.imports.length) {
+    if (
+      !(await placeImport(
+        e,
+        plan.imports.map((i) => i.name),
+        run,
+      ))
+    )
+      return;
+  } else {
+    if (plan.imports.length || plan.environments.length) closeHome();
+    await run();
   }
   if (leftovers) await reportError(leftovers);
 }
