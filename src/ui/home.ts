@@ -45,3 +45,7 @@ export class Home {
 export function closeHome(): void {
   shown?.close();
 }
+
+export function homeIsOpen(): boolean {
+  return shown?.isOpen() ?? false;
+}

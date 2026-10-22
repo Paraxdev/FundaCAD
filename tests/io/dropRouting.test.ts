@@ -11,6 +11,11 @@ vi.mock("../../src/app/documentActions", () => ({
     calls.push("ask");
     return discard;
   }),
+  // Home is closed here, tests/io/dropOverHome.test.ts drops over it.
+  placeImport: async (_e: unknown, _names: string[], run: () => Promise<void>) => {
+    await run();
+    return true;
+  },
 }));
 vi.mock("../../src/io/files", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../src/io/files")>();

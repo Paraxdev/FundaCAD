@@ -235,6 +235,10 @@ export async function openDocument(
   store: DocumentStore,
   geometry: GeometryBackend,
   mayReplace: () => Promise<boolean> = async () => true,
+  placeImport: (names: string[], run: () => Promise<void>) => Promise<unknown> = async (_names, run) => {
+    closeHome();
+    await run();
+  },
 ) {
   if (isTauri()) {
     const { open } = await import("@tauri-apps/plugin-dialog");
@@ -257,8 +261,7 @@ export async function openDocument(
       if (!(await mayReplace())) return;
       await openDocumentAtPath(store, path, geometry);
     } else {
-      closeHome();
-      await importPath(store, geometry, path); // a mesh / CAD file → import as a body
+      await placeImport([path.split(/[\\/]/).pop() ?? path], () => importPath(store, geometry, path));
     }
   } else {
     const picked = await uploadText();
