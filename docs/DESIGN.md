@@ -1032,7 +1032,8 @@ Escape depends on what the surface is:
 | A menu, popover, the command palette (`MenuBar.vue`, `ui/menu.ts`, `ContextMenuHost.vue`, `Popover.vue`, `CommandPalette.vue`) | Closes the topmost one only. It calls `claimEscape()` (`ui/escapeClaim.ts`) while open, and tools check `escapeClaimed()` so the same key does not also cancel them |
 | A dialog (`ModalFrame.vue`, the chooser) | Closes it through its own handler and the modal gate (`composables/useModalGate.ts`) |
 | A non modal tool panel with nothing of its own to cancel (Properties, Interference, Parameters) | `close-on-esc` on `FloatingPanel`. It does not claim Escape, so the key also reaches the global handler; the hint says "Esc to close" |
-| A panel that belongs to a running tool or mode (Measure, Overhang, Stress) | No `close-on-esc`. Whatever owns the panel closes it: `MeasureTool` owns Escape for its whole run and drops the panel with its highlight ("Esc to exit"), Overhang goes with the Draft toggle ("toggle Draft to close"), Stress has a Close button |
+| A panel that belongs to a running tool or mode (Measure, Overhang) | No `close-on-esc`. Whatever owns the panel closes it: `MeasureTool` owns Escape for its whole run and drops the panel with its highlight ("Esc to exit"), Overhang goes with the Draft toggle ("toggle Draft to close") |
+| A tool panel with layers of its own to back out of (Stress) | No `close-on-esc`, its own bubble phase `keydown` in `StressPanel.vue`. One layer per press: a drag, placing a spot or Read a point first (`viewport/stressGlyphs.ts` takes them in capture and stops the key), then a focused field gives up focus, and only then the panel closes, keeping the setup and the last result as the Close button does |
 
 Never call `claimEscape()` from a tool panel: the tool would stop hearing its
 own Escape.
