@@ -293,8 +293,8 @@ describe("planes and free points", () => {
     const tiles = new OriginTiles(new THREE.Scene());
     tiles.setShown(true);
     tiles.group.scale.setScalar(0.375);
-    // Tile centres (26, -26, 0), (26, 0, 26) and (0, -26, 26) px, through the rig's projection.
-    const centres = { XY: [168.25, 539], XZ: [197.5, 402.5], YZ: [70.75, 441.5] } as const;
+    // Tile centres (44, -44, 0), (44, 0, 44) and (0, -44, 44) px, through the rig's projection.
+    const centres = { XY: [215.5, 566], XZ: [265, 335], YZ: [50.5, 401] } as const;
     const vp = h.viewport as unknown as Record<string, unknown>;
     vp.scene = { scene: new THREE.Scene(), planes: tiles.planes };
     vp.pickConstructionAt = (x: number, y: number) => {
@@ -304,9 +304,9 @@ describe("planes and free points", () => {
       return null;
     };
     expect(["XY", "XZ", "YZ"].map((k) => planePoint(h, k, all))).toEqual([
-      { x: 168.25, y: 539, what: "plane XY" },
-      { x: 197.5, y: 402.5, what: "plane XZ" },
-      { x: 70.75, y: 441.5, what: "plane YZ" },
+      { x: 215.5, y: 566, what: "plane XY" },
+      { x: 265, y: 335, what: "plane XZ" },
+      { x: 50.5, y: 401, what: "plane YZ" },
     ]);
     tiles.setShown(false);
     expect(err(() => planePoint(h, "XZ", all)).kind).toBe("Occluded");
