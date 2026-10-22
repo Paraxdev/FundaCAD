@@ -91,7 +91,8 @@ import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
 import { featureMeta } from "../ui/featureMeta";
-import { SessionHost, type DocumentSession } from "./session";
+import { SessionHost, isSessionEnded, type DocumentSession } from "./session";
+import { SessionState } from "./sessionState";
 
 /** A section of a `.fundab` this version does not read (docs/FUNDA-FORMAT.md). */
 export interface CarriedSection {
@@ -554,9 +555,6 @@ export class DocumentStore {
   ];
   /** Un-committed features shown live, never in undo. A list: a thread is a sketch plus a revolve. */
   private preview: Feature[] | null = null;
-  private rebuildTimer: number | null = null;
-  private rebuilding = false; // a rebuild round-trip is in flight
-  private rebuildQueued = false; // a newer rebuild was requested while one was in flight
   // Chunk installments carry it so a late one from an abandoned reply is dropped.
   private buildEpoch = 0;
   private chunkListeners = new Set<(c: BuildChunk) => void>();
@@ -574,22 +572,10 @@ export class DocumentStore {
   };
 
   private busy: BusyState = IDLE_BUSY;
-  /** Every runBusy op still running, newest last; the chip shows the newest. */
-  private busyOps: { state: BusyState; abort: AbortController | null }[] = [];
-  private historyHeld = 0;
-
-  // The last preview-free build and its key: leaving a tool or undoing a refused commit shows it again without a rebuild.
-  private committedShown: { key: string; state: RebuildState } | null = null;
-  /** The rebuild on the wire, and the id a supersede cancels. */
-  private inflight: { gen: number; id: string | null; cancelled: boolean; byUser?: boolean } | null = null;
+  private st!: SessionState;
   private sendGen = 0;
   /** Replies to rebuilds sent at or before this are stale and never published. */
   private staleThrough = 0;
-  /** A commit the kernel had not answered for yet, see verifyCommit. */
-  private provisional: { id: string; what: string; key: string } | null = null;
-  /** Set when a preview is dropped or a refused commit undone, the only times
-   *  the committed model may be shown again without asking the engine. */
-  private restoreArmed = false;
 
   // Non-fatal news for the user (a newer file, a dropped sketch binding, a failed param cascade); a toast in main.ts.
   onWarning?: (msg: string) => void;
@@ -599,6 +585,12 @@ export class DocumentStore {
     initial: CadDocument,
   ) {
     this.doc = clone(initial);
+    this.st = this.stateFor(this.sessions.current);
+    this.sessions.onBegin((s) => {
+      this.st = this.stateFor(s);
+      this.busy = IDLE_BUSY;
+      this.emitBusy();
+    });
     migrateDocument(this.doc); // the seed doc skips load(); normalize it the same way
     geometry.onProgress?.((feature, meshed, meshTotal) => {
       if (!this.build.building) return;
@@ -613,7 +605,8 @@ export class DocumentStore {
     });
     // installments of a chunked reply -> the viewport, and ONLY the viewport
     geometry.onRebuildChunk?.((c) => {
-      if (!this.build.building) return;
+      // Only the rebuild this document has on the wire: a late installment of an ended one never draws.
+      if (!this.build.building || c.id !== this.st.inflight?.id) return;
       this.build = { ...this.build, streamed: c.done, streamTotal: c.total };
       this.emitBuild();
       const chunk: BuildChunk = { ...c, epoch: this.buildEpoch };
@@ -671,7 +664,7 @@ export class DocumentStore {
 
   /** An edit is waiting out the rebuild debounce. */
   get rebuildPending(): boolean {
-    return this.rebuildTimer != null;
+    return this.st.rebuildTimer != null;
   }
 
   onBusy(fn: BusyListener): () => void {
@@ -691,28 +684,54 @@ export class DocumentStore {
       state: { ...IDLE_BUSY, active: true, label, rebuild: opts.rebuild === true },
       abort: opts.abort ?? null,
     };
-    if (opts.holdHistory) this.historyHeld++;
-    this.busyOps.push(op);
+    const st = this.st;
+    if (opts.holdHistory) st.historyHeld++;
+    st.busyOps.push(op);
     this.setBusy(op.state);
     try {
       return await fn((id) => {
         op.state = { ...op.state, id, waiting: null };
-        if (this.busyOps.at(-1) === op) this.setBusy(op.state);
+        if (st === this.st && st.busyOps.at(-1) === op) this.setBusy(op.state);
       });
     } finally {
-      if (opts.holdHistory) this.historyHeld--;
-      this.busyOps.splice(this.busyOps.indexOf(op), 1);
-      this.busy = this.busyOps.at(-1)?.state ?? IDLE_BUSY;
-      this.emitBusy();
+      if (opts.holdHistory) st.historyHeld--;
+      st.busyOps.splice(st.busyOps.indexOf(op), 1);
+      if (st === this.st) {
+        this.busy = st.busyOps.at(-1)?.state ?? IDLE_BUSY;
+        this.emitBusy();
+      }
     }
   }
+
+  private stateFor(session: DocumentSession): SessionState {
+    const st = new SessionState(session);
+    session.own(() => this.endState(st));
+    return st;
+  }
+
+  // Every op of the ended document is cancelled by its own id, not only the newest one.
+  private endState(st: SessionState) {
+    if (st.rebuildTimer != null) clearTimeout(st.rebuildTimer);
+    st.rebuildTimer = null;
+    st.rebuildQueued = false;
+    st.restoreArmed = false;
+    st.provisional = null;
+    let unnamed = false;
+    for (const op of st.busyOps) {
+      if (op.abort) op.abort.abort();
+      else if (op.state.id) void this.geometry.cancel?.(op.state.id);
+      else unnamed = true;
+    }
+    // No id yet means the request is still on its way out; the client then cancels the last one it sent.
+    if (unnamed) void this.geometry.cancel?.();
+  }
   private get busyAbort(): AbortController | null {
-    return this.busyOps.at(-1)?.abort ?? null;
+    return this.st.busyOps.at(-1)?.abort ?? null;
   }
 
   private setBusy(next: BusyState) {
     this.busy = next;
-    const top = this.busyOps.at(-1);
+    const top = this.st.busyOps.at(-1);
     if (top) top.state = next;
     this.emitBusy();
   }
@@ -720,7 +739,7 @@ export class DocumentStore {
   // False covers both "nothing running" and "the engine had already finished".
   async cancelBusy(): Promise<boolean> {
     if (!this.busy.active) return false;
-    if (this.busy.rebuild && this.inflight) this.inflight.byUser = true;
+    if (this.busy.rebuild && this.st.inflight) this.st.inflight.byUser = true;
     if (this.busyAbort) {
       this.busyAbort.abort();
       return true;
@@ -811,9 +830,9 @@ export class DocumentStore {
       cancelled: false,
     };
     this.emitBuild();
-    this.committedShown = null;
-    this.provisional = null;
-    this.restoreArmed = false;
+    this.st.committedShown = null;
+    this.st.provisional = null;
+    this.st.restoreArmed = false;
     // Cancel kills the pool worker, the only way to interrupt an OCCT call already under way.
     void this.cancelBusy();
   }
@@ -981,15 +1000,15 @@ export class DocumentStore {
   onProjectionsApplied?: (updates: ProjectionUpdate[]) => void;
 
   // In series: recompute a draft, re-solve affected sketches, land it as one undo step and one rebuild.
-  private paramChain: Promise<void> = Promise.resolve();
-  private paramPending = 0;
   private queueParamCommit(fn: (d: CadDocument) => void) {
-    this.paramPending++;
-    this.paramChain = this.paramChain
+    const st = this.st;
+    st.paramPending++;
+    st.paramChain = st.paramChain
       // Only the last of a burst rebuilds at once, the rest keep the debounce, so
       // a plugin setting ten parameters does not start and supersede nine builds.
-      .then(() => this.commitWithCascade(fn, --this.paramPending === 0))
+      .then(() => (st.session.alive ? st.session.step(this.commitWithCascade(fn, --st.paramPending === 0)) : undefined))
       .catch((e) => {
+        if (isSessionEnded(e)) return;
         console.error("param commit failed:", e);
         this.onWarning?.("Parameter change failed to apply, see the console for details.");
       });
@@ -1057,9 +1076,11 @@ export class DocumentStore {
 
   // Serialised with param commits: both headless-solve sketches and replace whole features.
   private queueProjectionRefresh(updates: ProjectionUpdate[]) {
-    this.paramChain = this.paramChain
-      .then(() => this.commitProjectionRefresh(updates))
+    const st = this.st;
+    st.paramChain = st.paramChain
+      .then(() => (st.session.alive ? st.session.step(this.commitProjectionRefresh(updates)) : undefined))
       .catch((e) => {
+        if (isSessionEnded(e)) return;
         console.error("projection refresh failed:", e);
         this.onWarning?.("Projected geometry failed to refresh, see the console for details.");
       });
@@ -1133,7 +1154,7 @@ export class DocumentStore {
     parameters: CadDocument["parameters"],
   ): Promise<Extract<Feature, { type: "sketch" }>["entities"] | null> {
     if (!(f.constraints ?? []).length || !this.headlessSolve) return null;
-    const solved = await this.headlessSolve(f, parameters);
+    const solved = await this.session.step(this.headlessSolve(f, parameters));
     if (!solved) {
       this.onParamSolveIssue?.(f.id);
       return null;
@@ -1488,9 +1509,9 @@ export class DocumentStore {
   // A microtask later: a commit drops its preview and adds the feature in one go, and only a drop nothing follows may
   // show the committed model again (restoreCommitted).
   private leavePreview() {
-    this.restoreArmed = true;
+    this.st.restoreArmed = true;
     queueMicrotask(() => {
-      if (this.restoreArmed) this.scheduleRebuild(true);
+      if (this.st.restoreArmed) this.scheduleRebuild(true);
     });
   }
   private previewHold = false;
@@ -1575,7 +1596,7 @@ export class DocumentStore {
   }
 
   undo() {
-    if (!this.historyHeld) this.undoStep();
+    if (!this.st.historyHeld) this.undoStep();
   }
   // An import's history hold does not stop this.
   private undoStep() {
@@ -1585,7 +1606,7 @@ export class DocumentStore {
     this.redoStack.push(this.applyUndoEntry(prev, "undo"));
   }
   redo() {
-    if (this.historyHeld) return;
+    if (this.st.historyHeld) return;
     const next = this.redoStack.pop();
     if (!next) return;
     this.emitRewind();
@@ -1635,10 +1656,10 @@ export class DocumentStore {
     return false;
   }
   get canUndo() {
-    return !this.historyHeld && this.undoStack.length > 0;
+    return !this.st.historyHeld && this.undoStack.length > 0;
   }
   get canRedo() {
-    return !this.historyHeld && this.redoStack.length > 0;
+    return !this.st.historyHeld && this.redoStack.length > 0;
   }
 
   // Live object on the document; treat as read-only. Overrides do not affect geometry, so no rebuild.
@@ -2644,16 +2665,16 @@ export class DocumentStore {
   }
 
   private scheduleRebuild(immediate: boolean) {
-    if (this.rebuildTimer != null) {
-      clearTimeout(this.rebuildTimer);
-      this.rebuildTimer = null;
+    if (this.st.rebuildTimer != null) {
+      clearTimeout(this.st.rebuildTimer);
+      this.st.rebuildTimer = null;
     }
     const run = () => {
-      this.rebuildTimer = null;
+      this.st.rebuildTimer = null;
       void this.rebuildNow();
     };
     if (immediate) run();
-    else this.rebuildTimer = window.setTimeout(run, 120);
+    else this.st.rebuildTimer = window.setTimeout(run, 120);
   }
 
   // For an analysis whose answer names that model's faces.
@@ -2826,47 +2847,46 @@ export class DocumentStore {
     };
   }
 
-  // A caller arriving mid-rebuild awaits the same finish rather than a promise of its own.
-  private rebuildDrain: Promise<void> | null = null;
-
   // Resolves once the latest document's result is published, even when another rebuild was running (callers need the
   // new body ids).
   async rebuildNow(): Promise<void> {
+    const st = this.st;
     if (this.restoreCommitted()) return;
-    if (this.rebuilding) {
-      this.rebuildQueued = true;
+    if (st.rebuilding) {
+      st.rebuildQueued = true;
       this.supersede();
-      await this.rebuildDrain;
+      await st.rebuildDrain;
       return;
     }
-    this.rebuilding = true;
+    st.rebuilding = true;
     const drain = (async () => {
       await this.runBusy(
         "Rebuilding",
         async (onStarted) => {
           try {
             do {
-              this.rebuildQueued = false;
+              st.rebuildQueued = false;
               this.emitBuildStarted();
               const sent = this.doc;
               const previewing = !!(this.preview || this.editPreview);
               const sentPreview = this.previewSnapshot();
               const effective = this.effectiveDoc();
               const key = previewing ? null : buildKey(effective);
-              const flight: NonNullable<typeof this.inflight> = { gen: ++this.sendGen, id: null, cancelled: false };
-              this.inflight = flight;
+              const flight: NonNullable<SessionState["inflight"]> = { gen: ++this.sendGen, id: null, cancelled: false };
+              st.inflight = flight;
               markSent();
               const reply = await this.geometry.rebuild(effective, undefined, (id) => {
                 flight.id = id;
                 onStarted(id);
               });
               markReceived();
-              this.inflight = null;
+              st.inflight = null;
+              if (!st.session.alive) break;
               if (flight.gen <= this.staleThrough) continue;
               // Superseded and stopped: the newer queued request is what the user waits for. A user Cancel stops the
               // queue too.
-              if (!reply.ok && reply.cancelled && flight.byUser) this.rebuildQueued = false;
-              if (!reply.ok && reply.cancelled && this.rebuildQueued) continue;
+              if (!reply.ok && reply.cancelled && flight.byUser) this.st.rebuildQueued = false;
+              if (!reply.ok && reply.cancelled && this.st.rebuildQueued) continue;
               if (key !== null && this.refusedProvisional(reply, key)) continue;
               if (!previewing) this.keepBodyIds(sent, reply);
               const settled = this.settledBuild(reply, sentPreview);
@@ -2874,40 +2894,40 @@ export class DocumentStore {
               // previous document) renders over it.
               if (this.build.streamed !== null && (!reply.ok || settled.heldRefusal)) this.emitBuildAbort();
               this.build = settled;
-              if (key !== null && reply.ok) this.committedShown = { key, state: settled };
+              if (key !== null && reply.ok) this.st.committedShown = { key, state: settled };
               this.emitBuild();
               // After publishing; a failed rebuild says nothing about projections.
               if (reply.ok) this.maybeQueueProjectionRefresh(reply.result.projectionUpdates);
-            } while (this.rebuildQueued);
+            } while (st.rebuildQueued);
           } finally {
             // Here, not in the outer finally: runBusy's teardown awaits, and a refresh queued in that window would be dropped.
-            this.rebuilding = false;
-            this.inflight = null;
+            st.rebuilding = false;
+            st.inflight = null;
           }
         },
         { rebuild: true },
       );
     })();
-    this.rebuildDrain = drain;
+    st.rebuildDrain = drain;
     try {
       await drain;
     } finally {
-      this.rebuilding = false; // belt and braces if runBusy throws before the callback
-      this.rebuildDrain = null;
+      st.rebuilding = false; // belt and braces if runBusy throws before the callback
+      st.rebuildDrain = null;
     }
   }
 
   // Covers a build in flight or one an edit is waiting to start. Unlike rebuildNow it never re-sends the same document.
   async whenBuilt(): Promise<void> {
-    if (this.rebuildTimer != null) {
-      clearTimeout(this.rebuildTimer);
-      this.rebuildTimer = null;
+    if (this.st.rebuildTimer != null) {
+      clearTimeout(this.st.rebuildTimer);
+      this.st.rebuildTimer = null;
       await this.rebuildNow();
       return;
     }
-    for (let d = this.rebuildDrain; d;) {
+    for (let d = this.st.rebuildDrain; d;) {
       await d;
-      d = this.rebuildDrain === d ? null : this.rebuildDrain;
+      d = this.st.rebuildDrain === d ? null : this.st.rebuildDrain;
     }
   }
 
@@ -2915,7 +2935,7 @@ export class DocumentStore {
   undoIfTop(added: (before: CadDocument) => boolean): boolean {
     const top = this.undoStack.at(-1);
     if (top?.kind !== "doc" || !added(top.doc)) return false;
-    this.restoreArmed = true;
+    this.st.restoreArmed = true;
     this.undoStep();
     return true;
   }
@@ -2923,7 +2943,7 @@ export class DocumentStore {
   // Only where the engine can stop it without a restart: killing the worker for a draft preview would throw away every
   // cached feature before it.
   private supersede() {
-    const f = this.inflight;
+    const f = this.st.inflight;
     if (!f || f.cancelled || !f.id || !this.geometry.softCancel) return;
     f.cancelled = true;
     void this.geometry.cancel?.(f.id, { soft: true });
@@ -2931,14 +2951,14 @@ export class DocumentStore {
 
   // When the document to build is the one it was built from, the state a cancelled tool returns to.
   private restoreCommitted(): boolean {
-    if (!this.restoreArmed) return false;
-    this.restoreArmed = false;
-    const c = this.committedShown;
+    if (!this.st.restoreArmed) return false;
+    this.st.restoreArmed = false;
+    const c = this.st.committedShown;
     if (!c || this.preview || this.editPreview) return false;
     if (buildKey(this.effectiveDoc()) !== c.key) return false;
-    if (!this.build.building && this.build.result === c.state.result && !this.inflight) return true;
+    if (!this.build.building && this.build.result === c.state.result && !this.st.inflight) return true;
     this.staleThrough = this.sendGen;
-    this.rebuildQueued = false;
+    this.st.rebuildQueued = false;
     this.supersede();
     if (this.build.streamed !== null) this.emitBuildAbort();
     this.build = { ...c.state };
@@ -2949,13 +2969,13 @@ export class DocumentStore {
   // Lets the tool close at once. If the rebuild of this exact document refuses the feature, the commit is undone and
   // `what` is named in the warning: a refused value is never left in the history.
   verifyCommit(featureId: string, what: string) {
-    this.provisional = { id: featureId, what, key: buildKey(this.effectiveDoc()) };
+    this.st.provisional = { id: featureId, what, key: buildKey(this.effectiveDoc()) };
   }
 
   private refusedProvisional(reply: RebuildReply, key: string): boolean {
-    const p = this.provisional;
+    const p = this.st.provisional;
     if (!p) return false;
-    this.provisional = null;
+    this.st.provisional = null;
     if (p.key !== key || (!reply.ok && reply.cancelled)) return false;
     const errs = reply.ok
       ? (reply.result.featureErrors ?? (reply.result.featureError ? [reply.result.featureError] : []))
@@ -2963,7 +2983,7 @@ export class DocumentStore {
     const err = errs.find((e) => e.feature_id === p.id);
     if (!err) return false;
     this.onWarning?.(`${p.what} was refused, nothing changed: ${err.message}`);
-    this.restoreArmed = true;
+    this.st.restoreArmed = true;
     this.undoStep();
     return true;
   }
@@ -2972,17 +2992,19 @@ export class DocumentStore {
   async computeAllNow() {
     const ca = this.geometry.computeAll?.bind(this.geometry);
     if (!ca) return this.scheduleRebuild(true);
-    if (this.rebuilding) {
-      this.rebuildQueued = true;
+    const st = this.st;
+    if (st.rebuilding) {
+      st.rebuildQueued = true;
       return;
     }
-    this.rebuilding = true;
+    st.rebuilding = true;
     try {
       this.emitBuildStarted();
       const sent = this.doc;
       const previewing = !!(this.preview || this.editPreview);
       const sentPreview = this.previewSnapshot();
       const reply = await ca(this.effectiveDoc());
+      if (!st.session.alive) return;
       if (!previewing) this.keepBodyIds(sent, reply);
       const settled = this.settledBuild(reply, sentPreview);
       if (this.build.streamed !== null && (!reply.ok || settled.heldRefusal)) this.emitBuildAbort();
@@ -2995,7 +3017,7 @@ export class DocumentStore {
         this.maybeQueueProjectionRefresh(reply.result.projectionUpdates);
       }
     } finally {
-      this.rebuilding = false;
+      st.rebuilding = false;
     }
   }
 }
