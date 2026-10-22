@@ -1,7 +1,5 @@
-// A lollipop on a stalk you drag like a joystick to aim a direction: the ball
-// sits at the end of the stalk, and dragging it carries the direction over a
-// sphere round the stalk's foot. Drawn in pixels and scaled by pixelWorldSize
-// like every other handle; the caller owns what the direction means.
+// A ball on a stalk dragged like a joystick to aim a direction, sized in pixels by pixelWorldSize.
+// The caller owns what the direction means.
 
 import * as THREE from "three";
 import { HANDLE_HOT, HANDLE_IDLE } from "./manipulator";
@@ -11,9 +9,7 @@ export const STALK_PX = 88;
 const BALL_R = 8;
 const UP = new THREE.Vector3(0, 1, 0);
 
-/** Where the cursor ray meets a sphere of `r` about `centre`, on the side facing
- *  the camera; a ray that misses lands on the sphere's outline under it, so an
- *  aim dragged off the ball keeps following the hand instead of stopping. */
+/** A ray that misses lands on the sphere's outline under it, so an aim dragged off the ball keeps following. */
 export function aimPoint(ray: THREE.Ray, centre: THREE.Vector3, r: number): THREE.Vector3 {
   const hit = ray.intersectSphere(new THREE.Sphere(centre, r), new THREE.Vector3());
   if (hit) return hit;
@@ -22,26 +18,23 @@ export function aimPoint(ray: THREE.Ray, centre: THREE.Vector3, r: number): THRE
   return near.setLength(r).add(centre);
 }
 
-/** `dir` turned the way the cursor has moved over the sphere since the press,
- *  from unit `from` to unit `now`, so grabbing the ball off-centre does not make
- *  the direction jump to wherever the cursor is. */
+/** Turns `dir` by the cursor's move over the sphere since the press, so grabbing the ball off centre does not jump. */
 export function aimFollow(dir: THREE.Vector3, from: THREE.Vector3, now: THREE.Vector3): THREE.Vector3 {
   return dir.clone().applyQuaternion(new THREE.Quaternion().setFromUnitVectors(from, now)).normalize();
 }
 
 export interface AimStalk {
   readonly group: THREE.Group;
-  /** Stand the stalk at `foot` pointing along unit `dir`, `k` world units per pixel. */
+  /** `k` is world units per pixel. */
   place(foot: THREE.Vector3, dir: THREE.Vector3, k: number, camera: THREE.Camera, hot: boolean): void;
   hit(ray: THREE.Raycaster): boolean;
-  /** the ball's centre, in the world */
   tip(): THREE.Vector3;
-  /** the drawn parts, for measuring what the handle covers */
+  /** For measuring what the handle covers. */
   drawn(): THREE.Object3D[];
   dispose(): void;
 }
 
-/** `rays` draws short spokes round the ball, a sun, for a stalk that aims a light. */
+/** `rays` draws sun spokes round the ball, for a stalk that aims a light. */
 export function createAimStalk(opts: { rays?: boolean; color?: number } = {}): AimStalk {
   const group = new THREE.Group();
   const stalk = new THREE.Group();
@@ -69,8 +62,7 @@ export function createAimStalk(opts: { rays?: boolean; color?: number } = {}): A
   stalk.add(stem, rim, head, hitBall, hitStem);
   group.add(stalk);
 
-  // Screen-facing parts round the ball: the spokes, and the dashed outline of
-  // the sphere the ball moves over, shown while the hand is on it.
+  // Screen facing: the spokes, and the dashed outline of the sphere the ball moves over while the hand is on it.
   const face = new THREE.Group();
   const lines: THREE.Line[] = [];
   if (opts.rays) {
