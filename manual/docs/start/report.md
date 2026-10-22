@@ -22,7 +22,7 @@ What will be sent shows the exact text before anything is copied. It holds:
 - the end of the app log, unless you untick it;
 - the current document, only when you tick it.
 
-User names in file paths are hidden in the log and in the errors. The document and the picture contain your design, so both are off until you choose them. A document too big for an issue is left out, and the report says so: put the `.funda` file in a `.zip` and drag it into the issue yourself.
+User names in file paths are hidden in the log and in the errors. The document and the picture contain your design, so both are off until you choose them. A document too big for an issue is left out, and the report window says so: put the `.funda` file in a `.zip` and drag it into the issue yourself.
 
 ## What leaves your computer
 
