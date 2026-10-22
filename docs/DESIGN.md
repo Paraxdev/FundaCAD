@@ -541,7 +541,7 @@ one; a name that is not there renders nothing. The common actions:
 | Add, remove | `plus`, `minus` |
 | Search | `search` |
 | Show, hide | `visible`, `hidden` |
-| Expand, collapse | `caretRight`, `caretDown`, `caretUp` |
+| Expand, collapse | `caretRight`, `caretDown` |
 | Undo, redo | `undo`, `redo` |
 | Warning | `warning` |
 | Save, open, export, import | `save`, `open`, `export`, `import` |
@@ -850,9 +850,10 @@ guard test cannot see them; hold them to these rules by hand.
 - Neutral parts read tokens through `themeColor` and are read again on a theme
   change.
 - Sizes are screen pixels, held through `gizmoScale.ts` at every zoom.
-- The tiles are 40px, 6px off the axes, one per quadrant facing the home view,
-  with an 11px corner whose profile is a conic of rho 0.25
-  (`TILE_CORNER_RADIUS_PX` and `TILE_CORNER_RHO` in `src/viewport/originTiles.ts`).
+- The tiles are 68px, 10px off the axes, one per quadrant facing the home view,
+  never below about 41px. Their 29px corner is the same squircle as `corner-shape:
+  squircle`, a rail tile's 17px on 40px scaled up (`TILE_CORNER_RADIUS_PX` and
+  `SQUIRCLE_EXPONENT` in `src/viewport/originTiles.ts` and `cornerProfile.ts`).
 - What a body hides draws faint, not gone.
 - A name in the scene is a camera facing sprite, `--ui` 700 at 11px, inked in
   `--text` or `--viewport-bg`, whichever reads on the ground. It fades out when

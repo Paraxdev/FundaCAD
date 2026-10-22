@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import {
   createDragHandle,
+  createRotationArc,
   HANDLE_CUT,
   HANDLE_HOT,
   HANDLE_IDLE,
@@ -252,11 +253,14 @@ describe("arrow handle grab volume", () => {
 
 describe("arrow handle paint", () => {
   const bodyOf = (g: THREE.Group) =>
-    g.children.find((c) => (c as THREE.Mesh).material instanceof THREE.MeshLambertMaterial) as THREE.Mesh;
+    g.children.find((c) => {
+      const m = (c as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined;
+      return m?.visible && m.side === THREE.FrontSide;
+    }) as THREE.Mesh;
 
   it("brightens on hover and returns to its tone", () => {
     const h = createDragHandle();
-    const m = bodyOf(h.group).material as THREE.MeshLambertMaterial;
+    const m = bodyOf(h.group).material as THREE.MeshBasicMaterial;
     expect(m.color.getHex()).toBe(HANDLE_IDLE);
     h.paint({ hot: true });
     expect(m.color.getHex()).toBe(HANDLE_HOT);
@@ -269,7 +273,7 @@ describe("arrow handle paint", () => {
     // press/pull flips this with the drag's sign; the colour is the only thing
     // that says which of the two things the same gesture is about to do.
     const h = createDragHandle();
-    const m = bodyOf(h.group).material as THREE.MeshLambertMaterial;
+    const m = bodyOf(h.group).material as THREE.MeshBasicMaterial;
     h.paint({ tone: "cut" });
     expect(m.color.getHex()).toBe(HANDLE_CUT);
     h.paint({ hot: true });
@@ -283,7 +287,7 @@ describe("arrow handle paint", () => {
     // The fillet drag holds the handle the whole time it is past the limit, so
     // hover cannot be allowed to paint over the refusal.
     const h = createDragHandle();
-    const m = bodyOf(h.group).material as THREE.MeshLambertMaterial;
+    const m = bodyOf(h.group).material as THREE.MeshBasicMaterial;
     h.paint({ hot: true, refused: true });
     expect(m.color.getHex()).toBe(HANDLE_CUT);
     h.paint({ refused: false });
@@ -291,14 +295,18 @@ describe("arrow handle paint", () => {
     h.dispose();
   });
 
-  it("keeps the emissive floor in step with the colour", () => {
-    // Unlit-from-behind is the common case for a handle standing off a face; if
-    // emissive lagged the colour the blob would read as the wrong tone there.
-    const h = createDragHandle();
-    const m = bodyOf(h.group).material as THREE.MeshLambertMaterial;
-    h.paint({ tone: "cut" });
-    expect(m.emissive.getHex()).toBe(m.color.getHex());
-    h.dispose();
+  it("draws every part unlit and untoned, so no light or tone curve can take its colour", () => {
+    // A lit blob went missing under the user's lights while its outline still drew, leaving a black arrow.
+    for (const make of [() => createDragHandle("cut"), () => createRotationArc("cut")]) {
+      const h = make();
+      const drawn = h.group.children.filter((c) => ((c as THREE.Mesh).material as THREE.Material).visible);
+      expect(drawn.length).toBeGreaterThan(0);
+      for (const c of drawn) {
+        const m = (c as THREE.Mesh).material as THREE.MeshBasicMaterial;
+        expect([m.isMeshBasicMaterial, m.toneMapped, "emissive" in m]).toEqual([true, false, false]);
+      }
+      h.dispose();
+    }
   });
 
   it("fades the outline faster than the body", () => {

@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import { glyphScale, glyphWorldScale } from "./gizmoScale";
 import { AXIS_COLOR } from "./originTriad";
-import { roundedSquare, type Vec2 } from "./cornerProfile";
+import { SQUIRCLE_EXPONENT, roundedSquare, type Vec2 } from "./cornerProfile";
 import { themeColor } from "./themeColors";
 import type { Plane3 } from "../types";
 
@@ -19,9 +19,9 @@ export interface Octant {
 export interface TileShape {
   sizePx: number;
   gapPx: number;
-  /** The corner's leg from the vertex, which is its radius when `rho` is `CIRCLE_RHO`. */
+  /** The corner's leg from the vertex, as a CSS `border-radius`. */
   radiusPx: number;
-  rho: number;
+  exponent: number;
   octant: Octant;
 }
 export type TileState = "idle" | "dim" | "hot";
@@ -32,18 +32,17 @@ export interface TilePose {
   normal: Vec3;
 }
 
-export const TILE_SIZE_PX = 40;
-export const TILE_GAP_PX = 6;
-export const TILE_CORNER_RADIUS_PX = 11;
-/** `CIRCLE_RHO` gives plain circular corners. */
-export const TILE_CORNER_RHO = 0.25;
+// The app's own squircle tiles scaled up from a 40 px rail tile with its 17 px corner and 6 px gap.
+export const TILE_SIZE_PX = 68;
+export const TILE_GAP_PX = 10;
+export const TILE_CORNER_RADIUS_PX = 29;
 /** The octant the home view looks into, so no tile hides another from there.
  *  { x: -1, y: 1, z: -1 } is the same corner seen from outside. */
 export const TILE_OCTANT: Octant = { x: 1, y: -1, z: 1 };
 export const TILE_EXTENT_PX = TILE_GAP_PX + TILE_SIZE_PX;
-/** The tiles are click targets, so they stop shrinking at 24 px. */
+/** The tiles are click targets, so they stop shrinking at 41 px, about a rail tile. */
 export const MIN_TILE_SCALE = 0.6;
-export const CORNER_SEGMENTS = 10;
+export const CORNER_SEGMENTS = 24;
 export const RIM_PX = 1.5;
 export const RIM_INK_MIX = 0.4;
 export const TILE_LOOK: Record<TileState, { fill: number; rim: number; label: number }> = {
@@ -66,7 +65,7 @@ export const TILE_SHAPE: TileShape = {
   sizePx: TILE_SIZE_PX,
   gapPx: TILE_GAP_PX,
   radiusPx: TILE_CORNER_RADIUS_PX,
-  rho: TILE_CORNER_RHO,
+  exponent: SQUIRCLE_EXPONENT,
   octant: TILE_OCTANT,
 };
 
@@ -141,7 +140,7 @@ function shapeOf(pts: Vec2[]): THREE.Shape {
 }
 
 function outline(shape: TileShape, inset = 0): Vec2[] {
-  return roundedSquare(shape.sizePx - 2 * inset, shape.radiusPx - inset, shape.rho, CORNER_SEGMENTS);
+  return roundedSquare(shape.sizePx - 2 * inset, shape.radiusPx - inset, shape.exponent, CORNER_SEGMENTS);
 }
 
 function fillGeometry(shape: TileShape): THREE.BufferGeometry {

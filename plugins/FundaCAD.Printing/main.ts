@@ -4,6 +4,7 @@
 import { activePrinterId, printerProbe, printerFilaments, asPrinterError } from "./printerClient";
 import { setPrinterPillClick } from "./printStatusLine";
 import { exportPrintProject } from "./exportProject";
+import { ICONS } from "./icons";
 import { showCamera } from "./state";
 import PrintStatusPill from "./PrintStatusPill.vue";
 import CameraPanel from "./CameraPanel.vue";
@@ -12,15 +13,6 @@ import { choose, contribute, toast } from "fundacad";
 import type { DocumentStore, Engine } from "fundacad";
 
 const ID = "FundaCAD.Printing";
-
-const ICONS: Record<string, string> = {
-  print:
-    '<path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="1.5"/><rect x="7" y="14" width="10" height="6"/><circle cx="17" cy="12" r="0.9" fill="currentColor"/>',
-  slicer:
-    '<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><path d="M11 14h5m0 0l-2-2m2 2l-2 2"/>',
-  printerSend:
-    '<path d="M6 8V3h9l3 3v2"/><rect x="4" y="8" width="16" height="7" rx="1.5"/><path d="M8 15h5v6H8z"/><path d="M15 19h6m0 0l-2-2m2 2l-2 2"/>',
-};
 
 export async function activate(e: Engine): Promise<() => void> {
   // The pill is one of the overlays contributed below, so with this capability off there is nothing to click.
