@@ -137,7 +137,7 @@ export function sameFinishMap(a: Record<string, BodyFinish>, b: Record<string, B
 
 /** Keep a face pickable and depth-free but draw nothing of it. */
 function applyWireframe(mat: THREE.Material, on: boolean) {
-  if (mat.colorWrite === !on) return;
+  // No early return on a matching colorWrite: the opacity block just reset depthWrite, so wireframe must set it again.
   mat.colorWrite = !on;
   if (on) mat.depthWrite = false;
 }
@@ -231,10 +231,10 @@ export class BodyFinishLayer {
 
   /** Opacity takes the faintest that applies, stale over x-ray because stale is a warning. Runs again after every rebuild,
    *  which hands back materials in the default finish. */
-  apply(o: FinishOverlays) {
+  apply(o: FinishOverlays, only?: ReadonlySet<BodyMesh>) {
     const model = this.host.model();
     if (!model) return;
-    this.last = o;
+    if (!only) this.last = o;
     const cold: { b: BodyMesh; u: ReliefUniforms }[] = [];
     const anyGhost = o.xray || o.stale;
     const baseOpacity = o.stale ? STALE_OPACITY : XRAY_OPACITY;
@@ -251,6 +251,7 @@ export class BodyFinishLayer {
     let shiny = false;
     let glows = false;
     for (const b of model.bodies) {
+      if (only && !only.has(b)) continue;
       const own = this.host.savedMats().get(b.id) ?? b.mesh.material;
       const mat = Array.isArray(own) ? own[0] : own;
       if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
@@ -326,6 +327,8 @@ export class BodyFinishLayer {
       registerGlass(b.mesh, extra ? extra.mats.map(isGlassAuto) : [isGlassAuto(mat)]);
       if (light > 0 || faceGlow) glowing.push({ b, glow: light, fids: byBody.get(b.id), bound: 0 });
     }
+    // The lights and the bloom flag are whole model passes, the commit runs them once.
+    if (only) return;
     this.startEmitters(model, glowing);
     this.bloomable = shiny || glowing.length > 0;
     this.glows = glows;
