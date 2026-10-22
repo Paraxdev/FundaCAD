@@ -380,9 +380,8 @@ const onBloom = (e: Event) =>
         />
       </label>
       <div class="sm-hint">
-        Light spilling off the brightest parts of the image. The lower half only
-        reaches a material with Emission up and a hard specular highlight, so an
-        ordinary part looks the same; turn it up to catch everyday highlights too.
+        Light spilling off faces with Emission turned up. In the path traced view
+        bright highlights spill too.
       </div>
     </section>
 
