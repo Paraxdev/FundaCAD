@@ -9,6 +9,18 @@ use serde_json::Value;
 /// From src-tauri/tauri.conf.json: Tauri derives the app data directory from it, so the two must agree.
 pub const APP_IDENTIFIER: &str = "dev.fundacad.app";
 
+static IDENTIFIER: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// The app sets the identifier its build config carries, since the development build has its own
+/// (src-tauri/tauri.dev-product.conf.json). Before any directory is resolved; a later call is ignored.
+pub fn set_app_identifier(id: &str) {
+    let _ = IDENTIFIER.set(id.to_string());
+}
+
+pub fn app_identifier() -> &'static str {
+    IDENTIFIER.get().map_or(APP_IDENTIFIER, String::as_str)
+}
+
 /// Written by session_file.rs. Named there too; change one, change both.
 pub const SESSION_FILE: &str = "session.json";
 
@@ -38,7 +50,7 @@ pub fn app_data_dir() -> PathBuf {
     } else {
         std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home().join(".local").join("share"))
     };
-    base.join(APP_IDENTIFIER)
+    base.join(app_identifier())
 }
 
 fn home() -> PathBuf {

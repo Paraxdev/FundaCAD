@@ -5,6 +5,8 @@
      painted over the timeline. min-height on #main bounds #main, not the track. */
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
+  /* The Render dock's track, margin included, shows this beside the canvas, and --bg there drew a dark frame. */
+  background: var(--viewport-bg);
 }
 
 #viewport {

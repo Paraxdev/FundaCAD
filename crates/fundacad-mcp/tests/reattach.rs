@@ -350,5 +350,5 @@ fn the_app_data_directory_is_the_one_tauri_derives() {
     // getting it wrong means silently never finding a running app.
     let _serial = serial();
     let dir = fundacad_mcp::app_session::app_data_dir();
-    assert!(dir.ends_with(fundacad_mcp::app_session::APP_IDENTIFIER), "{}", dir.display());
+    assert!(dir.ends_with(fundacad_mcp::app_session::app_identifier()), "{}", dir.display());
 }

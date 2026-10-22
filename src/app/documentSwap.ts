@@ -1,5 +1,6 @@
 import type { DocumentStore } from "../document/store";
 import type { DocumentSession } from "../document/session";
+import { setWorkspace } from "../ui/workspace";
 
 export interface DocumentSwapTarget {
   /** Every armed tool, with its preview, handles and panel, and its listeners
@@ -34,6 +35,8 @@ export function wireDocumentSwap(store: Pick<DocumentStore, "sessions">, e: Docu
     // Last, the handlers above may still read the old model.
     e.viewport.endDocument();
     e.browser.forgetDocumentFolders();
+    // The workspace belongs to the sitting with a document, so the next one starts in Model like the first did.
+    setWorkspace("model");
   };
   const own = (s: DocumentSession) => {
     s.own(swap);

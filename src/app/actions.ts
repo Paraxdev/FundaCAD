@@ -100,6 +100,10 @@ export function createActions(e: Engine): (action: string) => void {
       else e.setStatus("Enter a sketch to tie its loose ends", "");
       return;
     }
+    if (action === "construction") {
+      if (!e.sketch.toggleSelectedConstruction()) palette.set("construction", !palette.state.construction);
+      return;
+    }
     if (action === "palette") return void (palette.visible = true);
     // Before the sketch finish below, so a sketch open when the problem showed is reported open.
     if (action === "report-problem") return openReportDialog();
