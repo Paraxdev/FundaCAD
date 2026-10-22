@@ -7,7 +7,14 @@ import type { Viewport } from "../viewport/viewport";
 import type { GeometryBackend } from "../geometry/client";
 import type { StressGlyphHandlers, StressGlyphModel } from "../viewport/stressGlyphs";
 import { getUnit, toDisplay, displayRound } from "./units";
-import { usePanelsStore, type PanelRow, type ClashRow, type ClearanceRow, type StressProbePin } from "../stores/panels";
+import {
+  usePanelsStore,
+  type PanelRow,
+  type ClashRow,
+  type ClearanceRow,
+  type StressData,
+  type StressProbePin,
+} from "../stores/panels";
 import { drawnCorner, engineHit, nearestVertex, refineLevel, refineSurface, type DrawnSurface } from "./stressSurface";
 import { aboutFactor } from "./stressVerdict";
 import {
@@ -197,13 +204,25 @@ export function createPanels(deps: PanelsDeps) {
   // The build the face sets' display ids came from; on another build they are found again from their selector points.
   let facesFor: unknown = null;
   // The last result's colours, its document and probe surface, so "Show colours" restores them without a new Run.
-  let colours: { overlay: StressOverlay; epoch: number; surface: ProbeSurface; drawn: DrawnSurface } | null = null;
+  type Colours = { overlay: StressOverlay; epoch: number; surface: ProbeSurface; drawn: DrawnSurface };
+  let colours: Colours | null = null;
   // The drawn corner nearest the engine's peak stress, pinned in the view while the colours show.
-  let weakSpot: Pick<StressProbePin, "tri" | "weights" | "label"> | null = null;
+  type WeakSpot = Pick<StressProbePin, "tri" | "weights" | "label">;
+  let weakSpot: WeakSpot | null = null;
   // The study as last written to (or read from) the document, so an edit is
   // saved once and a study the document gained some other way (a version put
   // back, an assistant's edit) is told apart from the panel's own.
   let persisted: string | null = null;
+  // The last result outlives a Close, so reopening shows it again without a Run. `same` when the setup at the close
+  // was the one it ran with, `study` that setup as saved, to tell an edit made while closed.
+  let kept: {
+    data: Pick<StressData, "result" | "deform" | "pins" | "colours" | "ranSetup">;
+    colours: Colours | null;
+    weakSpot: WeakSpot | null;
+    body: string | null;
+    same: boolean;
+    study: string;
+  } | null = null;
   // The arrows, axes and probe markers in the view, while the panel is open.
   let glyphs: StressGlyphsApi | null = null;
   // A load's force and direction from before a drag of its arrow, for Esc.
@@ -229,6 +248,7 @@ export function createPanels(deps: PanelsDeps) {
   // points mean nothing in it.
   store.onOpen(() => {
     if (panels.stress) closeStress();
+    kept = null;
   });
 
   // Every panel edit lands in the setup and the document saves it synchronously, so a save never trails its edit.
@@ -280,6 +300,26 @@ export function createPanels(deps: PanelsDeps) {
     // Before the marks, so a saved face that is gone has the last word.
     setStatus("Stress: press Place on a support or a load and click the body, or select faces and set them", "");
     refreshStressMarks();
+    restoreKept();
+  }
+
+  function restoreKept() {
+    const k = kept;
+    kept = null;
+    const d = panels.stress;
+    if (!k?.data.result || !d || d.result || d.setup.body !== k.body) return;
+    panels.stressFinished({ result: k.data.result });
+    const study = JSON.stringify(store.stressStudy);
+    d.ranSetup = k.same && study === k.study ? JSON.stringify(d.setup) : k.data.ranSetup;
+    if (!k.colours || k.colours.epoch !== docEpoch || k.data.colours === "none") return;
+    colours = k.colours;
+    weakSpot = k.weakSpot;
+    if (k.data.deform) panels.setStressDeform({ ...k.data.deform, animate: false });
+    d.pins = k.data.pins;
+    glyphs?.setProbePins(d.pins);
+    panels.setStressColours("hidden");
+    if (k.data.colours === "shown") setStressColours(true);
+    else refreshStressMarks();
   }
 
   /** Faces are found on the build by the next relocation. Reading it back is not an edit, so the document stays
@@ -1033,8 +1073,20 @@ export function createPanels(deps: PanelsDeps) {
   /** Close Stress, stopping a Run in flight, and drop its colours, marks and
    *  glyphs. The study stays in the document for the next time. */
   function closeStress() {
-    if (panels.stress?.running) void cancelStress();
+    const d = panels.stress;
+    if (d?.running) void cancelStress();
     stopAnimation();
+    kept =
+      d?.result && !d.running
+        ? {
+            data: { result: d.result, deform: d.deform, pins: d.pins, colours: d.colours, ranSetup: d.ranSetup },
+            colours,
+            weakSpot,
+            body: d.setup.body,
+            same: d.ranSetup === JSON.stringify(d.setup),
+            study: JSON.stringify(store.stressStudy),
+          }
+        : null;
     runSeq++;
     panels.stress = null;
     colours = null;
