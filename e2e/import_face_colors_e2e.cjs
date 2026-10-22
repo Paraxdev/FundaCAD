@@ -67,6 +67,12 @@ const check = (name, ok, detail) => {
     const mod = await import("/src/io/files.ts");
     await mod.importPath(window.store, window.geometry, file);
     await window.store.rebuildNow();
+    // The default reads a solid's own style over its faces', this file is about the faces.
+    // The same two steps as the tree's "Imported colors > From faces".
+    const first = window.store.document.features.find((x) => x.type === "import");
+    window.store.setImportColorSource(first.id, "faces");
+    await mod.adoptImportedColors(window.store, first.id, first);
+    await window.store.rebuildNow();
     const f = window.store.document.features.find((x) => x.type === "import");
     return {
       parts: f?.parts?.length ?? 0,
