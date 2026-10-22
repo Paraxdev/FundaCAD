@@ -53,9 +53,10 @@ import {
   clearOverlayObjects,
 } from "./overlays";
 import { barycentric, displacedPositions, stressColors } from "../ui/stress";
-import { Picker, type EdgeCandidate, type Hit, type PickMods } from "./picking";
+import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { flushRaycastIndex } from "./raycastIndex";
+import { applyKeptSpan, SECTION_PICK_SLACK } from "./sectionPick";
 import { GhostLayer, type BlendGhostEdge } from "./ghosts";
 import type { BlendKind } from "../features/blendGhost";
 import { hideFlushSeams } from "./flushSeams";
@@ -362,6 +363,7 @@ export class Viewport {
         if (!this.model) return null;
         if (!this.streaming) flushRaycastIndex();
         this.surfaceRaycaster.ray.set(origin, dir);
+        if (!this.keepSpan(this.surfaceRaycaster)) return null;
         const hit = this.surfaceRaycaster.intersectObjects(visibleBodyMeshes(this.model), false)[0];
         return hit ? hit.distance : null;
       },
@@ -1509,7 +1511,7 @@ export class Viewport {
    *  menu agrees with a left-click at the same pixel. */
   bodyIdAt(clientX: number, clientY: number): string | null {
     if (!this.model) return null;
-    const fh = this.rayFrom(clientX, clientY).intersectObjects(visibleBodyMeshes(this.model), false)[0];
+    const fh = this.bodyRay(clientX, clientY)?.intersectObjects(visibleBodyMeshes(this.model), false)[0];
     return fh ? this.faceIdToBodyId(faceIdOfHit(fh)) : null;
   }
 
@@ -1715,11 +1717,11 @@ export class Viewport {
     // Faces only, nearest hit only. The general pick also raycasts every body's
     // edge lines, which have no BVH and which a drop would throw away anyway.
     flushRaycastIndex();
-    const ray = this.rayFrom(clientX, clientY);
-    const hitOnly = ray as THREE.Raycaster & { firstHitOnly?: boolean };
-    hitOnly.firstHitOnly = true;
-    const fh = ray.intersectObjects(visibleBodyMeshes(this.model), false)[0];
-    hitOnly.firstHitOnly = false;
+    const ray = this.bodyRay(clientX, clientY);
+    const hitOnly = ray as (THREE.Raycaster & { firstHitOnly?: boolean }) | null;
+    if (hitOnly) hitOnly.firstHitOnly = true;
+    const fh = ray?.intersectObjects(visibleBodyMeshes(this.model), false)[0];
+    if (hitOnly) hitOnly.firstHitOnly = false;
     const faceId = fh ? faceIdOfHit(fh) : null;
     const body = faceId === null ? null : bodyOfFace(this.model, faceId);
     if (faceId === null || !body) {
@@ -3401,6 +3403,7 @@ export class Viewport {
     const on = !!this.section;
     this.scene.renderer.localClippingEnabled = on;
     const planes = on ? [this.sectionPlane] : null;
+    this.picker.setClip(on ? this.sectionPlane : null);
     if (this.model) {
       for (const b of this.model.bodies) {
         for (const mat of bodyMaterials(b)) mat.clippingPlanes = planes;
@@ -3488,8 +3491,7 @@ export class Viewport {
     clientY: number,
   ): { selector: Selector; faceId: number; normal: THREE.Vector3; anchor: THREE.Vector3; bodyId: string | null } | null {
     if (!this.model) return null;
-    const ray = this.rayFrom(clientX, clientY);
-    const hit = ray.intersectObjects(visibleBodyMeshes(this.model), false)[0];
+    const hit = this.bodyRay(clientX, clientY)?.intersectObjects(visibleBodyMeshes(this.model), false)[0];
     if (!hit || !hit.face) return null;
     const mesh = hit.object as THREE.Mesh;
     const pos = mesh.geometry.getAttribute("position");
@@ -3559,6 +3561,7 @@ export class Viewport {
     if (!this.model) return null;
     flushRaycastIndex();
     this.surfaceRaycaster.ray.copy(this.rayFrom(clientX, clientY).ray);
+    if (!this.keepSpan(this.surfaceRaycaster)) return null;
     const hit = this.surfaceRaycaster.intersectObjects(visibleBodyMeshes(this.model), false)[0];
     return hit ? { distance: hit.distance, faceId: faceIdOfHit(hit) } : null;
   }
@@ -3566,8 +3569,7 @@ export class Viewport {
   /** The faceId under (x, y), without touching the hover highlight. */
   faceIdAt(clientX: number, clientY: number): number | null {
     if (!this.model) return null;
-    const ray = this.rayFrom(clientX, clientY);
-    const hit = ray.intersectObjects(visibleBodyMeshes(this.model), false)[0];
+    const hit = this.bodyRay(clientX, clientY)?.intersectObjects(visibleBodyMeshes(this.model), false)[0];
     return hit ? faceIdOfHit(hit) : null;
   }
 
@@ -3575,8 +3577,7 @@ export class Viewport {
     this.highlighter?.clearHover();
     this.requestRender();
     if (!this.model) return null;
-    const ray = this.rayFrom(clientX, clientY);
-    const hit = ray.intersectObjects(visibleBodyMeshes(this.model), false)[0];
+    const hit = this.bodyRay(clientX, clientY)?.intersectObjects(visibleBodyMeshes(this.model), false)[0];
     if (!hit) return null;
     const faceId = faceIdOfHit(hit);
     this.highlighter?.hoverFace(faceId);
@@ -3703,7 +3704,19 @@ export class Viewport {
       -((clientY - rect.top) / rect.height) * 2 + 1,
     );
     this.sharedRaycaster.setFromCamera(this.ndc, this.rig.active);
+    applyKeptSpan(this.sharedRaycaster, null, 0);
     return pickLayers(this.sharedRaycaster);
+  }
+
+  /** rayFrom limited to what the section cut keeps, null when it keeps nothing along the ray. */
+  private bodyRay(clientX: number, clientY: number): THREE.Raycaster | null {
+    const ray = this.rayFrom(clientX, clientY);
+    return this.keepSpan(ray) ? ray : null;
+  }
+
+  private keepSpan(raycaster: THREE.Raycaster): boolean {
+    const slack = this.model ? SECTION_PICK_SLACK * modelScale(this.model) : 0;
+    return applyKeptSpan(raycaster, this.section ? this.sectionPlane : null, slack);
   }
 
   cycleProjection(): ProjectionMode {
