@@ -21,10 +21,13 @@ export class SessionState {
   rebuildTimer: number | null = null;
   rebuilding = false;
   rebuildQueued = false;
+  // The next pass of the rebuild loop is a Compute All, past every cache.
+  computeAllQueued = false;
   // A caller arriving mid-rebuild awaits the same finish rather than a promise of its own.
   rebuildDrain: Promise<void> | null = null;
-  /** The rebuild on the wire, and the id a supersede cancels. */
-  inflight: { gen: number; id: string | null; cancelled: boolean; byUser?: boolean } | null = null;
+  /** The rebuild on the wire, and the id a supersede cancels. `dropped` keeps one whose document was replaced off the
+   *  wire if its request has not gone out yet. */
+  inflight: { gen: number; id: string | null; cancelled: boolean; byUser?: boolean; dropped?: boolean } | null = null;
   // The last preview-free build and its key: leaving a tool or undoing a refused commit shows it again without a rebuild.
   committedShown: { key: string; state: RebuildState } | null = null;
   /** A commit the kernel had not answered for yet, see verifyCommit. */

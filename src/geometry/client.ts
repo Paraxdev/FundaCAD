@@ -426,7 +426,7 @@ export interface GeometryBackend {
   /** Installments of a chunked rebuild reply for progressive display; the in-process backend never streams. */
   onRebuildChunk?(fn: (c: RebuildChunk) => void): () => void;
   /** MCAD-style "Compute All": rebuild bypassing every cache layer. Optional. */
-  computeAll?(doc: CadDocument, tolerance?: number): Promise<RebuildReply>;
+  computeAll?(doc: CadDocument, tolerance?: number, onId?: (id: string) => void): Promise<RebuildReply>;
   /** Stop an op in flight. Pass the id the busy state owns, not the most recent one.
    *  Resolves to whether anything stopped. */
   cancel?(target?: string, opts?: { soft?: boolean }): Promise<boolean>;
@@ -1184,13 +1184,14 @@ export class Geometry implements GeometryBackend {
 
   /** MCAD-style "Compute All": bypass and rebuild every cache layer (RAM,
    *  mesh, disk checkpoints) server-side, and drop our own mesh cache. */
-  async computeAll(doc: CadDocument, tolerance = 0.1): Promise<RebuildReply> {
+  async computeAll(doc: CadDocument, tolerance = 0.1, onId?: (id: string) => void): Promise<RebuildReply> {
     this.wire.bodyMesh.clear();
     this.wire.lastSent = null;
     const msg = await this.rebuildCall(
       "computeAll",
       { document: doc, revision: ++this.revision, tolerance },
       this.scope(),
+      onId,
     );
     if (msg.ok && msg.result?.protocol === 2) {
       const assembled = this.assemble(msg.result);
@@ -1201,7 +1202,7 @@ export class Geometry implements GeometryBackend {
       if (legacy) return { ok: true, result: legacy };
       return { ok: false, error: { message: "geometry engine returned no mesh" } };
     }
-    return { ok: false, error: msg.error };
+    return msg.cancelled ? { ok: false, error: msg.error, cancelled: true } : { ok: false, error: msg.error };
   }
 
   /** Merge protocol v2 per-body payloads into a RebuildResult, null if a stub names a body we do not hold. A thin
