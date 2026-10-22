@@ -4,10 +4,8 @@ import { refPoint } from "./entityDims";
 
 const APART = 1e-4;
 
-/** Snap joins a modify step pulled apart, dropped. A fillet, trim or move that
- *  separates the two ends of a join means to, exactly as it always separated an
- *  implied join, so its record must not snap them back together. A Coincident
- *  the user applied stays and pulls the ends back. */
+/** A fillet, trim or move that separates a snap join's ends means to, so the join record is dropped rather than
+ *  snapping them back. A Coincident the user applied stays and pulls the ends back. */
 export function dropSeparatedJoins(
   before: readonly ResolvedEntity[],
   after: readonly ResolvedEntity[],

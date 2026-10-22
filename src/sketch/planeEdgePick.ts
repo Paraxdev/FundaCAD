@@ -1,9 +1,5 @@
-// Model edges lying in the sketch plane, picked as if they were sketch curves.
-//
-// The offset tool takes a face's own boundary without the user projecting it
-// first. This is the 2D half of that: which in-plane edge is under the cursor,
-// which edges chain with it into one loop, and which edges are exact enough to
-// offer at all.
+// Model edges in the sketch plane picked like sketch curves, so the offset tool can take a face boundary without
+// projecting it first: the edge under the cursor, its loop, and which edges are exact enough to offer.
 
 import * as THREE from "three";
 import { distToSeg } from "./geom2d";
@@ -30,10 +26,8 @@ export function pickPlaneEdge(polys: readonly (readonly THREE.Vector2[])[], p: T
 const isClosed = (poly: readonly THREE.Vector2[], tol: number) =>
   poly.length > 2 && poly[0]!.distanceTo(poly[poly.length - 1]!) <= tol;
 
-/** The edges that chain end to end with edge `index` into one simple path or
- *  loop, `index` first. A closed edge (a whole circle) is its own chain, and a
- *  vertex where three or more edges meet makes the pick ambiguous, so that
- *  answers with the clicked edge alone, the same rule offsetChain uses. */
+/** `index` first. A closed edge is its own chain, and a vertex shared by three or more edges answers with the
+ *  clicked edge alone, the same rule offsetChain uses. */
 export function planeEdgeChain(polys: readonly (readonly THREE.Vector2[])[], index: number, tol: number): number[] {
   const start = polys[index];
   if (!start || start.length < 2) return [];
@@ -61,9 +55,8 @@ export function planeEdgeChain(polys: readonly (readonly THREE.Vector2[])[], ind
   return chain;
 }
 
-/** A point on the edge that re-finds exactly it by nearest distance: the middle
- *  segment's midpoint. Not the middle vertex, which on a two-point straight edge
- *  is an endpoint, a corner shared with the neighbouring edges. */
+/** The middle segment's midpoint, which re-finds exactly this edge; the middle vertex of a two-point edge is a
+ *  corner shared with its neighbours. */
 export function edgeProbePoint(points: readonly Vec3[]): [number, number, number] | null {
   if (!points.length) return null;
   const k = Math.max(0, Math.ceil(points.length / 2) - 1);
@@ -89,12 +82,8 @@ export function meshBodyIds(bodies: RebuildResult["bodies"], features: readonly 
   return out;
 }
 
-/** Whether an in-plane edge is an exact curve worth offering as a sketch curve.
- *
- *  A mesh import arrives as planar facets, so every edge it contributes is a
- *  straight two-point segment, a facet side rather than a designed boundary. A
- *  curved edge on the same body can only have come from real modelling (a cut
- *  through it), so that one stays offered. */
+/** A mesh import's edges are straight facet sides, not designed boundaries; a curved edge on such a body came from
+ *  real modelling, so it stays offered. */
 export function isExactPlaneEdge(
   edge: { readonly body: string | undefined; readonly points: readonly Vec3[] },
   meshBodies: ReadonlySet<string>,

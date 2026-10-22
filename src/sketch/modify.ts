@@ -28,20 +28,12 @@ import {
 
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
 
-/** The one guard toast for projected (linked, fixed) reference geometry, every
- *  modify/transform/constraint seam that refuses to touch it shows this. */
+/** The one guard toast every seam that refuses to touch projected (linked, fixed) geometry shows. */
 export const PROJECTED_FIXED_MSG = "Projected geometry is fixed, Break Link to edit it";
 
-/** Break Link (Fusion): convert the given projected entities to native
- *  geometry KEEPING their ids, so attached constraints/dims stay valid, and
- *  since they go fixed→free, the sketch can never become over-constrained by
- *  the conversion. The source/stale link fields are dropped; construction
- *  carries over. A closed poly (first sample == last, the projEndSamples
- *  closure rule) becomes a C0-closed spline: the duplicate closing point is
- *  kept, so endpoint index 0, the one addressable point a closed poly
- *  exposed, still resolves (index 1 lands on the coincident closing point,
- *  which the solver merges back into it). Non-projected / unlisted entities
- *  pass through untouched. */
+/** Break Link (Fusion): projected entities become native KEEPING their ids, so constraints stay valid, and going
+ *  fixed to free can never over-constrain. A closed poly becomes a C0-closed spline that keeps its duplicate closing
+ *  point, so endpoint index 0 still resolves. */
 export function breakLink(ents: ResolvedEntity[], ids: ReadonlySet<string>): ResolvedEntity[] {
   return ents.map((e): ResolvedEntity => {
     if (e.type !== "projected" || !ids.has(e.id)) return e;
@@ -87,9 +79,8 @@ function arcFromSpan(
   };
 }
 
-/** An arc's center, radius, CCW start angle and CCW sweep (delta>0), from its 3
- *  stored points, oriented so the through-point lies inside the sweep (matches
- *  the reconstruction in sketchSolve). Null for a degenerate/collinear arc. */
+/** Center, radius, CCW start and CCW sweep (delta > 0), oriented so the through-point lies inside the sweep as in
+ *  sketchSolve. Null for a degenerate arc. */
 function arcGeom(e: {
   x1: number;
   y1: number;
@@ -148,11 +139,8 @@ function distToEntity(e: ResolvedEntity, p: THREE.Vector2): number {
   return d;
 }
 
-/**
- * Trim: remove the clicked portion of a curve up to its nearest intersections.
- * Lines split into the outer segments; arcs into the outer sub-arcs; a circle
- * becomes the complementary arc. A curve with no usable crossing is deleted whole.
- */
+/** Removes the clicked portion up to its nearest intersections: a line or arc keeps its outer pieces, a circle
+ *  becomes the complementary arc, a curve with no crossing is deleted whole. */
 export function trimEntity(ents: ResolvedEntity[], index: number, click: THREE.Vector2): ResolvedEntity[] {
   const e = ents[index];
   if (!e) return ents;
@@ -274,10 +262,7 @@ function shortenTo(
   return keepStart ? { ...l, x2: to.x, y2: to.y } : { ...l, x1: to.x, y1: to.y };
 }
 
-/**
- * Fillet the corner where two line entities meet: shorten both to the tangent
- * points and insert a tangent arc of the given radius. Returns null if it can't.
- */
+/** Shortens both lines to the tangent points and inserts a tangent arc; null if it cannot. */
 export function filletCorner(ents: ResolvedEntity[], iA: number, iB: number, radius: number): ResolvedEntity[] | null {
   const A = ents[iA],
     B = ents[iB];
@@ -345,16 +330,8 @@ export function filletTangents(
   ];
 }
 
-/** Signed offset of a cursor position from an entity, in exactly the terms
- *  offsetEntity/offsetChain take as `dist`: magnitude = distance to the curve,
- *  sign = which side. Positive means OUTWARD for a closed shape
- *  (circle/arc/rectangle/polygon/slot) and to the LEFT of the stored direction
- *  (x1,y1)→(x2,y2) for a line or spline.
- *
- *  This is what lets the offset tool put the preview under the cursor: the tool
- *  measures with this, and both offset functions consume the same convention
- *  (offsetChain normalizes its arbitrary walk direction to match). Null for
- *  entities that can't be offset. */
+/** In offsetEntity and offsetChain `dist` terms: magnitude is distance, positive is OUTWARD for a closed shape and
+ *  LEFT of the stored direction for a line or spline. Keeps the offset preview under the cursor. */
 export function signedOffsetAt(e: ResolvedEntity, p: THREE.Vector2): number | null {
   const leftOf = (a: THREE.Vector2, b: THREE.Vector2) => {
     const dx = b.x - a.x,
@@ -406,24 +383,16 @@ export function signedOffsetAt(e: ResolvedEntity, p: THREE.Vector2): number | nu
   return null;
 }
 
-/** What an offset produced.
- *
- *  `pairs` are the source→copy operands the associative `offset` constraint will
- *  govern (rect operands are EDGES, "<rectId>~<k>", see types.ts). `linked:
- *  false` means the geometry is correct but free-floating: the solver models
- *  polygon / slot / spline as RIGID, so there is no constraint that could tie
- *  the copy to its source, and the caller says so once rather than implying a
- *  link that doesn't exist. */
+/** `pairs` are the source and copy operands the `offset` constraint governs (rect operands are edges). `linked:
+ *  false` means correct but free floating: the solver models polygon, slot and spline as RIGID, nothing ties them. */
 export type OffsetResult = {
   entities: ResolvedEntity[];
   pairs: OffsetPair[];
   linked: boolean;
 };
 
-/** Offset a SINGLE entity by `dist` (closed shapes grow with positive dist;
- *  lines shift to their left normal). Returns null only for entity types that
- *  cannot be offset at all (text, point), the caller toasts a refusal, because
- *  a silent no-op after the user has typed a distance reads as a broken tool. */
+/** Closed shapes grow with positive dist, lines shift to their left normal. Null only for types that cannot be
+ *  offset (text, point), so the caller can refuse out loud. */
 export function offsetEntity(ents: ResolvedEntity[], index: number, dist: number): OffsetResult | null {
   const e = ents[index];
   if (!e) return null;
@@ -445,10 +414,7 @@ export function offsetEntity(ents: ResolvedEntity[], index: number, dist: number
         ...(e.angle ? { angle: e.angle } : {}),
         ...constr(e),
       };
-      // Both rectangles share a centre and an angle, so edge k of the
-      // copy IS edge k of the source (rectCorners' CCW order), the pairing is
-      // positional. Four edge pairs, one distance each, is exactly a
-      // rectangle's 4 DOF.
+      // Same centre and angle, so copy edge k IS source edge k (rectCorners CCW order): four distances for 4 DOF.
       pairs = [0, 1, 2, 3].map((k) => ({ src: `${e.id}~${k}`, cpy: `${id}~${k}` }));
       // A rotated rectangle is rigid in the solver, the same as a polygon.
       if (e.angle) {
@@ -475,9 +441,8 @@ export function offsetEntity(ents: ResolvedEntity[], index: number, dist: number
       pairs = [{ src: e.id, cpy: copy.id }];
     }
   } else if (e.type === "spline") {
-    // push each point along its local normal, the perpendicular to the chord
-    // through its neighbours, so an interior corner offsets to the miter
-    // direction and the ends use their own single segment.
+    // Each point moves along the perpendicular to the chord through its neighbours, so an interior corner offsets to
+    // the miter direction and the ends use their own segment.
     const pts = e.points;
     if (pts.length >= 2) {
       // a closed spline's seam point is an interior point too, or the two ends
@@ -575,15 +540,11 @@ type Off =
       flip: boolean;
     };
 
-/** How far a miter may travel from the original corner, as a multiple of |dist|.
- *  Two nearly-collinear offset lines intersect arbitrarily far away, which used
- *  to fling a spike across the sketch; past this limit the corner is left butted
- *  instead. 4 is the common CAD/stroke default (~29° between segments). */
+/** Nearly collinear offset lines meet arbitrarily far away; past this multiple of |dist| the corner is left butted.
+ *  4 is the common CAD and stroke default (about 29 deg between segments). */
 const MITER_LIMIT = 4;
 
-/** Build an arc entity from its centre, radius, two endpoints and sweep
- *  direction. A CW sweep is emitted as the equivalent CCW arc from the other
- *  end, an arc entity is three points, so it carries no direction of its own. */
+/** A CW sweep is emitted as the equivalent CCW arc from the other end: an arc entity carries no direction. */
 function arcFromEnds(
   C: THREE.Vector2,
   R: number,
@@ -599,20 +560,8 @@ function arcFromEnds(
   return ccw ? arcFromSpan(C, R, aS, delta, src) : arcFromSpan(C, R, aE, delta, src);
 }
 
-/**
- * Offset a connected chain of LINE and ARC entities as a unit, joining the
- * corners, the common "offset this profile in/out" case (polylines, a
- * rectangle drawn as 4 lines, and now filleted profiles, which are the shape
- * most real parts actually have).
- *
- * Returns null when the clicked entity isn't part of a simple chain (a lone
- * curve or a junction); the caller then falls back to single-entity offset.
- * `dist` sign picks the side: every member shifts to its LEFT relative to the
- * traversal direction, so on a CCW loop a positive dist moves inward.
- *
- * Arcs used to be skipped entirely here (only `line` entities entered the
- * adjacency map), so a filleted profile offset as loose, unjoined pieces.
- */
+/** Offsets a connected chain of lines and arcs as one, joining corners. Null for a lone curve or a junction, where
+ *  the caller falls back to offsetEntity. Members shift LEFT of the traversal, so a CCW loop moves inward. */
 export function offsetChain(ents: ResolvedEntity[], index: number, dist: number): OffsetResult | null {
   const isChain = (e: ResolvedEntity | undefined): e is ChainE => e?.type === "line" || e?.type === "arc";
   if (!isChain(ents[index])) return null;
@@ -671,7 +620,6 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
     startKey = coincKey(s.x1, s.y1);
   }
 
-  // walk the chain into an ordered, directed path
   const path: Member[] = [];
   const used = new Set<number>();
   let cur = start,
@@ -701,13 +649,8 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
   }
   if (path.length < 2) return null;
 
-  // Normalize the sign so that for the CHAIN it means exactly what it means for
-  // the PICKED entity alone (offsetEntity's convention: left of a line's stored
-  // direction, outward for an arc). The walk direction is arbitrary, it starts
-  // from whichever free end it found, so without this the same cursor position
-  // could offset the chain to either side depending on how the walk happened to
-  // run. signedOffsetAt measures the cursor in offsetEntity's terms, and this is
-  // what keeps the preview under the cursor.
+  // The walk direction is arbitrary, so normalize the sign to mean what it means for the picked entity alone
+  // (offsetEntity's convention); this keeps the preview under the cursor.
   const value = dist;
   const picked = path.find((m) => m.i === index);
   if (picked) {
@@ -715,10 +658,8 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
     if (picked.e.type === "line" ? backwards : picked.ccw) dist = -dist;
   }
 
-  /** Offset one member to its left by `dist`. For an arc the left normal points
-   *  at the centre when travelling CCW, so a CCW arc SHRINKS by dist and a CW
-   *  arc grows, that is what keeps an arc coherent with the lines beside it.
-   *  Null when the arc's radius would collapse. */
+  /** For an arc the left normal points at the centre when travelling CCW, so a CCW arc shrinks and a CW arc grows,
+   *  keeping arcs coherent with the lines beside them. Null when the radius would collapse. */
   const offsetOne = (m: Member): Off | null => {
     if (m.e.type === "line") {
       const dir = m.to.clone().sub(m.from).normalize();
@@ -737,11 +678,8 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
     return { kind: "arc", src: m.e.id, a: at(m.from), b: at(m.to), C: g.C, R, ccw: m.ccw, flip: dR !== value };
   };
 
-  /** Move the shared corner of two adjacent offset members onto their
-   *  intersection. Picks the root nearest the ORIGINAL corner, which is what
-   *  keeps a line-arc join on the right branch. Returns false when there is no
-   *  usable intersection (parallel lines, separated circles) or the miter would
-   *  travel further than MITER_LIMIT, the corner is then left butted. */
+  /** Picks the intersection root nearest the ORIGINAL corner, which keeps a line-arc join on the right branch.
+   *  False when there is none or the miter exceeds MITER_LIMIT, leaving the corner butted. */
   const joinAt = (s0: Off, s1: Off, corner: THREE.Vector2): boolean => {
     let cands: THREE.Vector2[] = [];
     if (s0.kind === "line" && s1.kind === "line") {
@@ -762,11 +700,8 @@ export function offsetChain(ents: ResolvedEntity[], index: number, dist: number)
     return true;
   };
 
-  // Offset, join, and prune anything that collapsed. An inward offset larger
-  // than the smallest feature makes a member run BACKWARDS relative to its
-  // source; keeping it produces the classic self-intersecting bow-tie. Drop the
-  // reversed members and re-join across the gap, repeating because removing one
-  // can expose the next. Bounded by the member count, so it always terminates.
+  // An inward offset larger than the smallest feature makes members run BACKWARDS (the bow-tie): drop them and re-join
+  // across the gap, repeating since removing one can expose the next. Bounded by the member count.
   let live = path;
   let offs: Off[] = [];
   for (let pass = 0; pass <= path.length; pass++) {
@@ -916,11 +851,7 @@ function extendArc(
   return ents.map((o, i) => (i === index ? kept : o));
 }
 
-/**
- * Chamfer the corner where two line entities meet: shorten both to the setback
- * points and insert a straight bevel line. `dist` is the equal setback along
- * each line. Returns null if it can't (parallel/collinear/too-big).
- */
+/** Shortens both lines by the equal setback `dist` and inserts a bevel line; null if parallel, collinear or too big. */
 export function chamferCorner(ents: ResolvedEntity[], iA: number, iB: number, dist: number): ResolvedEntity[] | null {
   const A = ents[iA],
     B = ents[iB];

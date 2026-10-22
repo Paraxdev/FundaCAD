@@ -1,10 +1,5 @@
-// Stable per-entity identity for the sketcher. Constraints reference entities by
-// id (never array index), so modify operations that reorder/split/remove
-// entities can't silently repoint a constraint at the wrong geometry.
-//
-// Ids are a monotonic per-session counter shared by all families (`e0`, `p1`,
-// `c2`, …). When a sketch is loaded, each family's note() bumps the counter past
-// any saved ids so freshly created objects never collide with persisted ones.
+// Stable entity ids, so constraints never point by array index at geometry a modify op reordered or split.
+// One per-session counter for all families; note() bumps it past loaded ids so new ones never collide.
 
 import type { SketchConstraint } from "../types";
 
@@ -14,7 +9,6 @@ function idFamily(prefix: string) {
   const re = new RegExp(`^${prefix}(\\d+)$`);
   return {
     next: (): string => `${prefix}${counter++}`,
-    /** Reserve a loaded id so future next() calls won't reuse it. */
     note: (id: string | undefined): void => {
       if (!id) return;
       const m = re.exec(id);
@@ -39,9 +33,7 @@ const constraint = idFamily("c");
 export const newConstraintId = constraint.next;
 export const noteConstraintId = constraint.note;
 
-/** A dimension (value-bearing) constraint, the ones that carry a stable c-id.
- *  The single definition of the concept; the load migration and the editor both
- *  stamp through this predicate. */
+/** Value-bearing constraints carry a stable c-id; the load migration and the editor both stamp through this. */
 export function isDimConstraint(c: SketchConstraint): c is SketchConstraint & { id?: string; value: number } {
   return "value" in c;
 }
