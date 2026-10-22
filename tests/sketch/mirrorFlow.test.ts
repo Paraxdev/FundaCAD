@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { MirrorFlow, LINE_REFUSED, type MirrorHost } from "../../src/sketch/mirrorFlow";
+import { MirrorFlow, LINE_LEFT_OBJECTS, LINE_REFUSED, type MirrorHost } from "../../src/sketch/mirrorFlow";
 import { PROJECTED_FIXED_MSG } from "../../src/sketch/modify";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { MirrorPanelView } from "../../src/stores/toolPanels";
@@ -164,6 +164,16 @@ describe("MirrorFlow picking", () => {
     r.flow.click(ON.ax, false);
     expect([...r.selected]).toEqual(["c1"]);
     expect(r.panel()!.fields[0]!.value).toBe("1 entity");
+    expect(r.log.prompts.at(-1)).toBe(LINE_LEFT_OBJECTS);
+  });
+
+  it("says nothing extra for a line that was not in Objects", () => {
+    const r = rig(["c1"]);
+    r.flow.begin();
+    r.flow.click(ON.ax, false);
+    expect(r.panel()!.fields[0]!.value).toBe("1 entity");
+    expect(r.log.prompts.at(-1)).not.toBe(LINE_LEFT_OBJECTS);
+    expect(r.log.prompts.at(-1)).toContain("Mirror line");
   });
 
   it("lights only lines on hover in the line field, anything in Objects", () => {
