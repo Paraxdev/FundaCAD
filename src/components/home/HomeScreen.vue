@@ -43,6 +43,7 @@ import VersionsDrawer from "./VersionsDrawer.vue";
 import { liveSummary } from "../../ui/homeVersions";
 import NewStrip from "./NewStrip.vue";
 import WhatsNewCard from "./WhatsNewCard.vue";
+import WelcomeBlock from "./WelcomeBlock.vue";
 import logoDarkUrl from "../../../assets/brand/fundacad-lockup-app.svg";
 import logoLightUrl from "../../../assets/brand/fundacad-lockup-app-light.svg";
 
@@ -137,6 +138,7 @@ const all = computed(() => {
 });
 const entries = computed(() => sortEntries(filterEntries(all.value, query.value), shownSort.value));
 const examples = computed(() => TEMPLATES.filter((t) => matchesQuery(t.name, query.value)));
+const fresh = computed(() => !inFolder.value && !recents.value.length);
 const unreadable = ref(new Set<string>());
 
 async function refreshStats(): Promise<void> {
@@ -354,6 +356,18 @@ onUnmounted(() => {
       </p>
       <div class="home-scroll">
         <WhatsNewCard />
+        <WelcomeBlock v-if="fresh && !query" />
+        <template v-if="fresh && examples.length">
+          <h2 class="home-section">Start here</h2>
+          <div class="home-grid home-examples">
+            <ExampleCard
+              v-for="t in examples"
+              :key="t.id"
+              :example="t"
+              @open="startNew(() => cb.newFromTemplate(t.id))"
+            />
+          </div>
+        </template>
         <div v-if="lib && entries.length" class="home-grid">
           <DocCard
             v-for="e in entries"
@@ -375,7 +389,7 @@ onUnmounted(() => {
         <p v-else-if="lib" class="home-empty">Documents you open or save appear here.</p>
         <p v-else class="home-empty">Recent documents appear here in the desktop app.</p>
 
-        <template v-if="examples.length">
+        <template v-if="!fresh && examples.length">
           <h2 class="home-section">Examples</h2>
           <div class="home-grid home-examples">
             <ExampleCard

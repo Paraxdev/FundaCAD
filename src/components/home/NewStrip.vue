@@ -13,6 +13,7 @@ const emit = defineEmits<{ blank: []; open: [] }>();
     <button class="home-new-card home-open" @click="emit('open')">
       <span class="home-new-pic"><Icon name="open" :size="24" /></span>
       <span class="home-new-name">Open…</span>
+      <span class="home-new-line">Documents, STEP, STL, 3MF</span>
     </button>
   </div>
 </template>
