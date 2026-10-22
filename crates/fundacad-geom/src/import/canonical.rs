@@ -1,6 +1,4 @@
-//! Canonical recognition at import, replaces `_canonicalize`,
-//! `_canonicalize_roots`, `_canonical_ok` and `_realign_face_colors` of
-//! the Python engine's `mesh_import.py`.
+//! Canonical recognition at import, `_canonicalize` and its helpers of mesh_import.py.
 
 use std::collections::HashMap;
 

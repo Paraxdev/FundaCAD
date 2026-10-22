@@ -1,7 +1,5 @@
-//! Turns filled 2D outlines (lines, circular arcs, quadratic and cubic Beziers)
-//! into the boundary of the area they fill: ends joined, small gaps closed,
-//! crossings split, duplicates and everything inside the area dropped. The
-//! result never crosses itself, so the sketch's even-odd fill reproduces it.
+//! Turns filled 2D outlines into the boundary of the area they fill: ends joined, small gaps closed, crossings
+//! split, inner pieces dropped. The result never crosses itself, so the sketch's even-odd fill reproduces it.
 
 use std::collections::{HashMap, HashSet};
 use std::f64::consts::{PI, TAU};
@@ -315,9 +313,8 @@ fn degenerate(s: &Seg, tol: f64) -> bool {
     }
 }
 
-/// Drops zero length pieces and closes a subpath: a gap within `gap` by
-/// moving the last end, a wider one with a line when `fill` asks for it.
-/// Returns (snapped a real gap, added a line).
+/// Drops zero length pieces and closes a subpath, a gap within `gap` by moving the last end, a wider one with a
+/// line when `fill` asks. Returns (snapped a real gap, added a line).
 pub fn close_sub(sub: &mut Sub, tol: &Tol, fill: bool) -> (bool, bool) {
     sub.segs.retain(|s| !degenerate(s, tol.join));
     let (Some(first), Some(last)) = (sub.segs.first().copied(), sub.segs.last().copied()) else {
