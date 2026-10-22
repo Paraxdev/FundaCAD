@@ -337,6 +337,91 @@ describe("Capsule holder", () => {
     ]);
   });
 
+  describe("keeps the thread inside what the kernel cuts whole", () => {
+    const turns = (doc: CadDocument) =>
+      revolves(doc).flatMap(([id, , angle]) =>
+        id === "groove" || id === "capThread" ? [(angle as number) / 360] : [],
+      );
+    const shoulder = (doc: CadDocument) => corners(doc, "tubeProfile")[3]![1];
+
+    it("turns the thread at least three times, a two turn sweep cuts nothing from the tube", async () => {
+      const seen: [string, number[], number][] = [];
+      for (const [threadLength, pitch] of [
+        ["3", "2"],
+        ["4", "2"],
+        ["4.99", "2"],
+        ["6", "3"],
+        ["5", "2"],
+        ["5.01", "2"],
+      ] as const) {
+        const doc = await load("capsule-holder");
+        setAll(doc, { threadLength, pitch });
+        seen.push([`${threadLength}/${pitch}`, turns(doc), round(shoulder(doc), 2)]);
+      }
+      expect(seen).toEqual([
+        ["3/2", [3, 4], 37.4],
+        ["4/2", [3, 4], 37.4],
+        ["4.99/2", [3, 4], 37.4],
+        ["6/3", [3, 4], 34.9],
+        ["5/2", [3, 4], 37.4],
+        ["5.01/2", [3, 4], 37.39],
+      ]);
+    });
+
+    it("stops the thread at nine pitches and at the tube's length, longer sweeps cut only part of it", async () => {
+      const seen: [string, number[], number][] = [];
+      for (const [threadLength, innerLength] of [
+        ["16", "40"],
+        ["18", "40"],
+        ["18.3", "40"],
+        ["30", "40"],
+        ["12", "7"],
+        ["12", "3"],
+      ] as const) {
+        const doc = await load("capsule-holder");
+        setAll(doc, { threadLength, innerLength });
+        seen.push([`${threadLength}/${innerLength}`, turns(doc), round(shoulder(doc), 2)]);
+      }
+      expect(seen).toEqual([
+        ["16/40", [8, 10], 26.4],
+        ["18/40", [9, 11], 24.4],
+        ["18.3/40", [9, 11], 24.4],
+        ["30/40", [9, 11], 24.4],
+        ["12/7", [4, 5], 2.4],
+        ["12/3", [3, 4], 0.4],
+      ]);
+    });
+
+    it("draws the same fit for a clearance below 0.05 as for 0.05, at 0 the cap's thread would graze the tube's", async () => {
+      const at = async (clearance: string) => {
+        const doc = await load("capsule-holder");
+        setAll(doc, { clearance });
+        return [corners(doc, "capProfile"), corners(doc, "voidProfile"), corners(doc, "grooveProfile")];
+      };
+      const floor = await at("0.05");
+      expect(await at("0")).toEqual(floor);
+      expect(await at("0.032")).toEqual(floor);
+      expect(await at("0.051")).not.toEqual(floor);
+      const [cap, root] = [floor[0]!, floor[1]!];
+      expect(round(cap[4]![0]! - root[2]![0]!, 6)).toBe(0.025);
+    });
+
+    it("keeps at least 0.4 mm of wall under the thread groove", async () => {
+      const left = async (wall: string, pitch: string) => {
+        const doc = await load("capsule-holder");
+        setAll(doc, { wall, pitch });
+        const apex = corners(doc, "grooveProfile")[2]![0]!;
+        return round(apex - num(doc, "innerRadius"), 3);
+      };
+      expect(await left("1.2", "2")).toEqual(0.4);
+      expect(await left("2.4", "4")).toEqual(0.4);
+      expect(await left("1.7", "3.1")).toEqual(0.4);
+      expect(await left("1.62", "2")).toEqual(0.4);
+      expect(await left("1.63", "2")).toEqual(0.403);
+      expect(await left("2.4", "2")).toEqual(1.173);
+    });
+  });
+
   it("finds a cap whose thread does not belong to the tube", async () => {
     const wide = await load("capsule-holder");
     setAll(wide, { innerDiameter: "22" });

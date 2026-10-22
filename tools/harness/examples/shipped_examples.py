@@ -124,6 +124,14 @@ def capsule(s):
     clash = s.page.evaluate(CLASHES)
     assert (clash["ok"], clash.get("pairs", []), clash.get("clearances", [])) == (True, [], []), clash
 
+    # A short thread, no clearance, a thin wall and a big pitch must still give a thread the cap clears.
+    base = {"innerDiameter": "20", "pitch": "2", "clearance": "0.25", "wall": "2.4", "threadLength": "12"}
+    for change in ({"threadLength": "4"}, {"clearance": "0"}, {"wall": "1.2"}, {"pitch": "4"}):
+        set_params(s, {**base, **change})
+        assert s.last_error() == "none", (change, s.last_error())
+        clash = s.page.evaluate(CLASHES)
+        assert (clash["ok"], clash.get("pairs", []), clash.get("clearances", [])) == (True, [], []), (change, clash)
+
     # A cap turned a third of a turn from where its thread meets the tube's must be reported.
     set_params(s, {"seatAngle": "300"})
     clash = s.page.evaluate(CLASHES)

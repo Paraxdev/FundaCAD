@@ -9,6 +9,8 @@
     "chamfer": 1,
     "spacing": 8,
     "screwedOn": 0,
+    "fit": 0.25,
+    "threadSpan": 12,
     "innerRadius": 10.0,
     "neckRadius": 12.4,
     "bodyRadius": 15.05,
@@ -104,6 +106,16 @@
       "value": 0,
       "unit": "count"
     },
+    "fit": {
+      "expr": "max(clearance; 0.05)",
+      "value": 0.25,
+      "unit": "mm"
+    },
+    "threadSpan": {
+      "expr": "max(2.5 * pitch; min(threadLength; 9 * pitch; innerLength))",
+      "value": 12,
+      "unit": "mm"
+    },
     "innerRadius": {
       "expr": "innerDiameter / 2",
       "value": 10.0,
@@ -115,7 +127,7 @@
       "unit": "mm"
     },
     "bodyRadius": {
-      "expr": "neckRadius + clearance + wall",
+      "expr": "neckRadius + fit + wall",
       "value": 15.05,
       "unit": "mm"
     },
@@ -125,7 +137,7 @@
       "unit": "mm"
     },
     "shoulderHeight": {
-      "expr": "rimHeight - threadLength",
+      "expr": "rimHeight - threadSpan",
       "value": 30.4,
       "unit": "mm"
     },
@@ -135,7 +147,7 @@
       "unit": "mm"
     },
     "capDepth": {
-      "expr": "threadLength + pitch + clearance",
+      "expr": "threadSpan + pitch + fit",
       "value": 14.25,
       "unit": "mm"
     },
@@ -145,12 +157,12 @@
       "unit": "mm"
     },
     "ledgeHeight": {
-      "expr": "capHeight - pitch - clearance",
+      "expr": "capHeight - pitch - fit",
       "value": 14.399999999999999,
       "unit": "mm"
     },
     "grooveDepth": {
-      "expr": "0.6134 * pitch",
+      "expr": "min(0.6134 * pitch; wall - 0.4)",
       "value": 1.2268,
       "unit": "mm"
     },
@@ -175,7 +187,7 @@
       "unit": "mm"
     },
     "grooveStart": {
-      "expr": "shoulderHeight + grooveHalf + clearance / 2",
+      "expr": "shoulderHeight + grooveHalf + fit / 2",
       "value": 31.34876336407976,
       "unit": "mm"
     },
@@ -190,7 +202,7 @@
       "unit": "mm"
     },
     "grooveTurns": {
-      "expr": "ceil(threadLength / pitch)",
+      "expr": "ceil(threadSpan / pitch)",
       "value": 6,
       "unit": "count"
     },
@@ -200,37 +212,37 @@
       "unit": "deg"
     },
     "flankPlay": {
-      "expr": "clearance / cos(30)",
+      "expr": "fit / cos(30)",
       "value": 0.28867513459481287,
       "unit": "mm"
     },
     "crestRadius": {
-      "expr": "grooveBottom + 3 * clearance",
+      "expr": "grooveBottom + 3 * fit",
       "value": 11.923200000000001,
       "unit": "mm"
     },
     "crestHalf": {
-      "expr": "pitch / 2 - tan(30) * 3 * clearance + flankPlay",
+      "expr": "pitch / 2 - tan(30) * 3 * fit + flankPlay",
       "value": 0.8556624327025936,
       "unit": "mm"
     },
     "rootRadius": {
-      "expr": "neckRadius + clearance",
+      "expr": "neckRadius + fit",
       "value": 12.65,
       "unit": "mm"
     },
     "reliefRadius": {
-      "expr": "rootRadius + clearance / 2",
+      "expr": "rootRadius + fit / 2",
       "value": 12.775,
       "unit": "mm"
     },
     "rootHalf": {
-      "expr": "pitch / 2 - tan(30) * (grooveDepth + clearance) + flankPlay",
+      "expr": "pitch / 2 - tan(30) * (grooveDepth + fit) + flankPlay",
       "value": 0.4360442570555737,
       "unit": "mm"
     },
     "mouthRadius": {
-      "expr": "crestRadius - clearance / 2",
+      "expr": "crestRadius - fit / 2",
       "value": 11.798200000000001,
       "unit": "mm"
     },
@@ -240,7 +252,7 @@
       "unit": "mm"
     },
     "capStart": {
-      "expr": "wall + mouthHalf + clearance / 2",
+      "expr": "wall + mouthHalf + fit / 2",
       "value": 3.4528312163512966,
       "unit": "mm"
     },
@@ -285,7 +297,7 @@
       "unit": "count"
     },
     "seatHeight": {
-      "expr": "capHeight + shoulderHeight + clearance / 2",
+      "expr": "capHeight + shoulderHeight + fit / 2",
       "value": 47.175,
       "unit": "mm"
     },
