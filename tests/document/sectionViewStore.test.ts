@@ -84,6 +84,18 @@ describe("the section cut in the document", () => {
     expect(store.dirty).toBe(true);
   });
 
+  it("hands back a cut with a long normal read as unit length, to its listener too, and the next document has its own", () => {
+    const store = fresh();
+    const seen: (SectionView | null)[] = [];
+    store.onSectionViewChange((v) => seen.push(v && structuredClone(v)));
+    store.setSectionView({ ...CUT, normal: [1.5, 0, 2] });
+    expect([store.sectionView, saved(store).sectionView]).toEqual([CUT, CUT]);
+    store.load(doc([box("b1", 1)], { sectionView: { ...CUT_C, normal: [0, -2, 1.5] } }));
+    expect(store.sectionView).toEqual(CUT_C);
+    store.load(doc([box("b2", 2)]));
+    expect([store.sectionView, seen]).toEqual([null, [null, CUT, CUT_C, null]]);
+  });
+
   it("refuses a cut it cannot read and keeps the one it has", () => {
     const store = fresh();
     store.setSectionView(structuredClone(CUT));

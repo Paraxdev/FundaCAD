@@ -580,6 +580,19 @@ describe("the section and its saved cut", () => {
     expect(b.writes).toEqual([]);
   });
 
+  it("keeps an edit on a long normal when the store's unit length reading of that cut comes back from outside", () => {
+    const store = fakeSaved();
+    const { tool } = setup({ saved: store.saved });
+    const def: PlaneDef = { origin: [41.25, -17.5, 9], normal: [1.5, -2, 6], xdir: [1, 0, 0] };
+    tool.start({ kind: "plane", def });
+    const read = store.saved.get()!;
+    expect(read.normal).toEqual([1.5 / 6.5, -2 / 6.5, 6 / 6.5]);
+    store.outside(structuredClone(read));
+    expect(tool.phase).toBe("editing");
+    store.outside({ ...read, normal: [-2 / 6.5, 1.5 / 6.5, 6 / 6.5] });
+    expect(tool.phase).toBe("on");
+  });
+
   it("leaves an edit alone when the same cut comes back from outside", () => {
     const store = fakeSaved();
     const { tool } = setup({ saved: store.saved });
