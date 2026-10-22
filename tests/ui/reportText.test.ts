@@ -224,6 +224,15 @@ describe("the issue URL", () => {
     expect(what(issueUrl({ ...fields, description: "half \uD83D of a face" }))).toBe("half \uFFFD of a face");
   });
 
+  it.each([
+    ["a low half alone", "lid \uDE00 cracked", "lid \uFFFD cracked"],
+    ["a high half at the end", "lid cracked \uD83D", "lid cracked \uFFFD"],
+    ["two high halves before a low one", "\uD83D\uD83D\uDE00 lid", "\uFFFD\uD83D\uDE00 lid"],
+    ["two whole pairs", "lid \uD83D\uDE00\uD83D\uDD27 ok", "lid \uD83D\uDE00\uD83D\uDD27 ok"],
+  ])("replaces only the halves that have no partner: %s", (_case, description, expected) => {
+    expect(what(issueUrl({ ...fields, description }))).toBe(expected);
+  });
+
   it("titles the issue with the first line that has text, cut to 70 code points", () => {
     expect(issueTitle("\n  \nFillet fails on the lid\nmore")).toBe("Problem: Fillet fails on the lid");
     expect(issueTitle("😀".repeat(80))).toBe(`Problem: ${"😀".repeat(70)}`);

@@ -45,8 +45,21 @@ export function cutCodePoints(text: string, max: number): string {
   return Array.from(text).slice(0, max).join("");
 }
 
-const wellFormed = (text: string) =>
-  text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "�");
+const isHigh = (c: number) => c >= 0xd800 && c <= 0xdbff;
+const isLow = (c: number) => c >= 0xdc00 && c <= 0xdfff;
+
+// A loop, not a regex lookbehind: WebKit before 16.4 refuses one at parse time and the app would not load.
+function wellFormed(text: string): string {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (isHigh(c) && isLow(text.charCodeAt(i + 1))) {
+      out += text.slice(i, i + 2);
+      i++;
+    } else out += isHigh(c) || isLow(c) ? "�" : text[i];
+  }
+  return out;
+}
 
 function redactAfter(text: string, needle: string, ends: (c: string) => boolean): string {
   // ASCII only lowering, as Rust's to_ascii_lowercase: a full lowering can change the length ("İ" becomes two units).
