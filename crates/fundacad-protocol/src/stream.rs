@@ -107,6 +107,16 @@ impl Iterator for Reply {
     }
 }
 
+impl Reply {
+    /// True as soon as the last message has been yielded, before `next` says None.
+    pub fn is_done(&self) -> bool {
+        match &self.state {
+            State::One(m) => m.is_none(),
+            State::Stream(s) => s.done,
+        }
+    }
+}
+
 impl Stream {
     fn next_message(&mut self) -> Option<Message> {
         if self.done {
