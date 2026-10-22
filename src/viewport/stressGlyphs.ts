@@ -166,6 +166,8 @@ export class StressGlyphs {
   private forceArrows = new Map<number, Arrow>();
   private lines: THREE.Line[] = [];
   private probes: { mesh: THREE.Mesh; tri: number; weights: Vec3; label: HTMLElement }[] = [];
+  private pinned: { tri: number; weights: Vec3; label: string }[] = [];
+  private weak: { tri: number; weights: Vec3; label: string } | null = null;
   private orbs: Orb[] = [];
   /** The orb under the cursor in place mode, where a click would put a spot. */
   private preview: Orb | null = null;
@@ -240,6 +242,17 @@ export class StressGlyphs {
 
   /** The pinned probes, each where its triangle is drawn now. */
   setProbePins(pins: { tri: number; weights: Vec3; label: string }[]) {
+    this.pinned = pins;
+    this.drawPins();
+  }
+
+  /** The result's weakest spot, pinned like a probe; null removes it. */
+  setWeakSpot(p: { tri: number; weights: Vec3; label: string } | null) {
+    this.weak = p;
+    this.drawPins();
+  }
+
+  private drawPins() {
     for (const p of this.probes) {
       // The ball and its material are shared, so only the mesh goes.
       this.host.removeFromScene(p.mesh);
@@ -247,12 +260,13 @@ export class StressGlyphs {
     }
     this.probes = [];
     const shared = this.geometries();
-    for (const p of pins) {
+    const all = this.weak ? [...this.pinned, this.weak] : this.pinned;
+    for (const p of all) {
       const mesh = new THREE.Mesh(shared.ball, this.material(0xffffff));
       mesh.renderOrder = 1000;
       mesh.raycast = () => {};
       this.host.addToScene(mesh, "stress");
-      const label = this.makeLabel("stress-probe-pin");
+      const label = this.makeLabel(p === this.weak ? "stress-probe-pin stress-weak-pin" : "stress-probe-pin");
       label.textContent = p.label;
       this.probes.push({ mesh, tri: p.tri, weights: p.weights, label });
     }
@@ -270,7 +284,9 @@ export class StressGlyphs {
     this.placing = null;
     this.dropPreview();
     this.clearDrawn();
-    this.setProbePins([]);
+    this.pinned = [];
+    this.weak = null;
+    this.drawPins();
     this.showLabel(null);
     this.label?.remove();
     this.label = null;

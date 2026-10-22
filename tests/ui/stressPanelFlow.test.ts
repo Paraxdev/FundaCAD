@@ -63,6 +63,7 @@ function rig() {
   let study: StressStudy | null = null;
   const saved: (StressStudy | null)[] = [];
   const deformations: number[] = [];
+  const weakSpots: ({ tri: number; weights: Vec3; label: string } | null)[] = [];
   const glyphModels: StressGlyphModel[] = [];
   const glyphCalls: string[] = [];
   let handlers: StressGlyphHandlers | null = null;
@@ -155,6 +156,7 @@ function rig() {
         setModel: (m: StressGlyphModel) => glyphModels.push(m),
         setProbe: (on: boolean) => glyphCalls.push(`probe ${on}`),
         setProbePins: (p: unknown[]) => glyphCalls.push(`pins ${p.length}`),
+        setWeakSpot: (w: { tri: number; weights: Vec3; label: string } | null) => weakSpots.push(w),
         dispose: () => glyphCalls.push("dispose"),
       };
     },
@@ -170,6 +172,7 @@ function rig() {
     cancels,
     saved,
     deformations,
+    weakSpots,
     glyphModels,
     glyphCalls,
     handlers: () => handlers!,
@@ -1188,5 +1191,52 @@ describe("playing and pausing the deformation", () => {
     r.ui.setStressAnimate(true);
     frame(4000);
     expect(r.deformations.at(-1)).toBe(scale);
+  });
+});
+
+describe("the weakest spot", () => {
+  const bent: StressReply = {
+    ...reply,
+    safetyFactor: 3.32,
+    maxVonMises: { value: 4, at: [100.2, 0.1, -0.05], face: 2 },
+    surface: {
+      ...reply.surface!,
+      positions: [13.5, -7.25, 4.1, 100, 0, 0, 2, 10, 0.5],
+      displacement: [0, 0, 0, 0.25, 0, -2, 0, 0.5, -1],
+    },
+  };
+
+  async function ran(r: ReturnType<typeof rig>, result: StressReply) {
+    const run = r.ui.runStress();
+    r.settle({ ok: true, result });
+    await run;
+  }
+
+  it("is pinned at the drawn corner of the vertex nearest the peak, with the safety factor", async () => {
+    const r = rig();
+    setUp(r);
+    await ran(r, bent);
+    const corner = drawnCorner(refineSurface(bent.surface!, 2), 1)!;
+    expect(r.weakSpots.at(-1)).toEqual({ ...corner, label: "Weakest, 3.3x" });
+  });
+
+  it("goes with the colours, on a new Run and when the model changes, and moves with a new peak", async () => {
+    const r = rig();
+    setUp(r);
+    await ran(r, bent);
+    r.ui.setStressColours(false);
+    expect(r.weakSpots.at(-1)).toBeNull();
+    r.ui.setStressColours(true);
+    expect(r.weakSpots.at(-1)).not.toBeNull();
+    const run = r.ui.runStress();
+    expect(r.weakSpots.at(-1)).toBeNull();
+    const moved = { ...bent, safetyFactor: null, maxVonMises: { value: 4, at: [2.5, 9.5, 0.5] as Vec3, face: 2 } };
+    r.settle({ ok: true, result: moved });
+    await run;
+    const corner = drawnCorner(refineSurface(bent.surface!, 2), 2)!;
+    expect(r.weakSpots.at(-1)).toEqual({ ...corner, label: "Weakest" });
+    r.editDoc();
+    r.rebuild(FIRST);
+    expect(r.weakSpots.at(-1)).toBeNull();
   });
 });

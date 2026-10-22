@@ -8,7 +8,8 @@ import type { GeometryBackend } from "../geometry/client";
 import type { StressGlyphHandlers, StressGlyphModel } from "../viewport/stressGlyphs";
 import { getUnit, toDisplay, displayRound } from "./units";
 import { usePanelsStore, type PanelRow, type ClashRow, type ClearanceRow, type StressProbePin } from "../stores/panels";
-import { engineHit, refineLevel, refineSurface, type DrawnSurface } from "./stressSurface";
+import { drawnCorner, engineHit, nearestVertex, refineLevel, refineSurface, type DrawnSurface } from "./stressSurface";
+import { aboutFactor } from "./stressVerdict";
 import {
   AXES,
   LOAD_MARK_COLOR,
@@ -52,6 +53,8 @@ export interface StressGlyphsApi {
   setModel(m: StressGlyphModel): void;
   setProbe(on: boolean): void;
   setProbePins(pins: Pick<StressProbePin, "tri" | "weights" | "label">[]): void;
+  /** The result's weakest spot as a pin; optional so a test rig can leave it out. */
+  setWeakSpot?(p: Pick<StressProbePin, "tri" | "weights" | "label"> | null): void;
   /** Place mode with the orb a click would put down, or null to end it. */
   setPlacing?(p: { color: number; radius: number } | null): void;
   dispose(): void;
@@ -195,6 +198,8 @@ export function createPanels(deps: PanelsDeps) {
   let facesFor: unknown = null;
   // The last result's colours, its document and probe surface, so "Show colours" restores them without a new Run.
   let colours: { overlay: StressOverlay; epoch: number; surface: ProbeSurface; drawn: DrawnSurface } | null = null;
+  // The drawn corner nearest the engine's peak stress, pinned in the view while the colours show.
+  let weakSpot: Pick<StressProbePin, "tri" | "weights" | "label"> | null = null;
   // The study as last written to (or read from) the document, so an edit is
   // saved once and a study the document gained some other way (a version put
   // back, an assistant's edit) is told apart from the panel's own.
@@ -288,6 +293,8 @@ export function createPanels(deps: PanelsDeps) {
     viewport.setStressOverlay(null);
     panels.replaceStressSetup(setup);
     glyphs?.setProbePins([]);
+    weakSpot = null;
+    showWeakSpot();
   }
 
   /** The document's study changed under an open panel (a version put back, an
@@ -388,6 +395,7 @@ export function createPanels(deps: PanelsDeps) {
     else if (d.colours === "shown" && !viewport.hasStressOverlay()) {
       stopAnimation();
       panels.setStressColours("hidden");
+      showWeakSpot();
     }
     const missing = relocateStressFaces();
     if (missing && !bodyOnModel()) {
@@ -426,6 +434,13 @@ export function createPanels(deps: PanelsDeps) {
     if (panels.stress) panels.stress.pins = [];
     glyphs?.setProbe(false);
     glyphs?.setProbePins([]);
+    weakSpot = null;
+    showWeakSpot();
+  }
+
+  /** The weakest spot's pin, shown while the colours are. */
+  function showWeakSpot() {
+    glyphs?.setWeakSpot?.(panels.stress?.colours === "shown" ? weakSpot : null);
   }
 
   let glyphsPending = false;
@@ -754,6 +769,8 @@ export function createPanels(deps: PanelsDeps) {
     viewport.setStressOverlay(null);
     glyphs?.setProbe(false);
     glyphs?.setProbePins([]);
+    weakSpot = null;
+    showWeakSpot();
   }
 
   function addStressSupport(type: StressSupportType = "fixed") {
@@ -807,6 +824,7 @@ export function createPanels(deps: PanelsDeps) {
     viewport.setStressOverlay(on ? overlayNow() : null);
     panels.setStressColours(on ? "shown" : "hidden");
     refreshStressMarks();
+    showWeakSpot();
     if (on && d.deform?.animate) startAnimation();
   }
 
@@ -988,6 +1006,13 @@ export function createPanels(deps: PanelsDeps) {
         epoch,
         surface: r.surface,
         drawn,
+      };
+      const peak = nearestVertex(r.surface.positions, r.maxVonMises.at);
+      const corner = peak < 0 ? null : drawnCorner(drawn, peak);
+      const sf = r.safetyFactor;
+      weakSpot = corner && {
+        ...corner,
+        label: sf !== null && Number.isFinite(sf) ? `Weakest, ${aboutFactor(sf, "down")}x` : "Weakest",
       };
       if (moves) {
         const auto = autoDeformScale(r.surface.positions, disp!);

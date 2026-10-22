@@ -83,6 +83,9 @@ function view(over: Partial<StressResultView> = {}): StressResultView {
     warnings: [],
     legend: { min: 0.5, max: 15 },
     yields: false,
+    verdict: { level: "holds", headline: "Holds, about 3.3x safe.", detail: "Weakest at the marked spot." },
+    peakAt: [13.5, -7.25, 4.1],
+    maxDeflection: 0.47,
     ...over,
   };
 }
@@ -395,6 +398,26 @@ describe("StressPanel", () => {
     expect(q(".stress-pin")?.textContent).toContain("12 MPa, 0.4 mm");
     q(".stress-remove-pin")!.click();
     expect(panels.removeStressProbe).toHaveBeenCalledWith(1);
+  });
+
+  it("opens Results with the verdict, marked by how it went, and the bend at the drawn scale", async () => {
+    const { p } = await withResult({
+      yields: true,
+      verdict: { level: "fails", headline: "Likely to fail at the marked spot.", detail: "The load is about 1.7x." },
+    });
+    p.setStressDeform({ scale: 12.5, auto: 12.5, max: 50, animate: false });
+    await flushPromises();
+    const step = q(".stress-results")!;
+    const verdict = step.firstElementChild as HTMLElement;
+    expect([...verdict.classList]).toEqual(["stress-verdict", "fails"]);
+    expect(verdict.textContent).toContain("Likely to fail");
+    expect(q(".stress-verdict-bend")?.textContent).toContain("0.47 mm, drawn 13x larger");
+    p.stressFinished({ result: view() });
+    p.clearStressResult();
+    p.stressFinished({ result: view() });
+    await flushPromises();
+    expect([...q(".stress-verdict")!.classList]).toEqual(["stress-verdict", "holds"]);
+    expect(q(".stress-verdict-bend")).toBeNull();
   });
 
   it("plays and pauses the deformation from one button that says which it will do", async () => {

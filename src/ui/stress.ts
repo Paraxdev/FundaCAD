@@ -7,6 +7,7 @@ import type { PanelRow } from "../stores/panels";
 import { STUDY_DEFAULTS } from "../document/stressStudy";
 import { cylinderFromFace } from "../features/planeMath";
 import { displayRound, toDisplay, type Unit } from "./units";
+import { verdictView, type StressVerdictView } from "./stressVerdict";
 
 /** E and yield in MPa, density in g/cm3. Mirrors the engine's presets: a preset goes over the wire by name, so these
  *  numbers are only what the panel shows. */
@@ -488,6 +489,11 @@ export interface StressResultView {
   legend: { min: number; max: number };
   /** Below 1, or no yield at all, the part is expected to yield. */
   yields: boolean;
+  verdict: StressVerdictView;
+  /** Where the peak stress is, for the weakest spot's pin. */
+  peakAt: Vec3 | null;
+  /** The largest deflection, mm. */
+  maxDeflection: number | null;
 }
 
 function fmtPoint(p: Vec3, unit: Unit): string {
@@ -544,7 +550,16 @@ export function formatStressResult(
   for (const e of r.errors ?? []) warnings.push(e.feature_id ? `${e.feature_id}: ${e.message}` : e.message);
   const values = r.surface?.vonMises ?? [];
   const legend = values.length ? valueRange(values) : { min: 0, max: r.maxVonMises.value };
-  return { rows, details, warnings, legend, yields: sf !== null && sf < 1 };
+  return {
+    rows,
+    details,
+    warnings,
+    legend,
+    yields: sf !== null && sf < 1,
+    verdict: verdictView(r),
+    peakAt: r.maxVonMises.at,
+    maxDeflection: r.maxDisplacement.value,
+  };
 }
 
 /** The setup a result ran with, in one line: what holds it, what pushes, its own weight and the material. */
