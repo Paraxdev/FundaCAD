@@ -1,10 +1,5 @@
-//! Timeline replay, replacing the Python engine's `builder.py` `rebuild` and the helpers of
-//! the Python engine's `handler_util.py`.
-//!
-//! The document's features run in order against an ordered list of bodies. A
-//! feature that fails is a no-op with an error naming it, and the build goes
-//! on. Bodies get their ids from `BodyIds` exactly as the Python engine assigns
-//! them, so a document keeps its ids whichever engine built it.
+//! Timeline replay, `rebuild` of builder.py: features run in order against an ordered list of bodies, a failed
+//! feature is a no-op with an error, and `BodyIds` hands out ids exactly as the Python engine does.
 
 mod fmt;
 pub mod owners;
@@ -68,12 +63,8 @@ impl From<KernelError> for Fail {
     }
 }
 
-/// The handful of raw OCCT exception names worth turning into a sentence a
-/// caller can act on, the same way `require_positive` already reads for a
-/// negative dimension. Everything else stays `Internal`, named by its
-/// exception class rather than guessed at, because a name not on this list
-/// has not been checked to mean the same thing in every feature that can
-/// raise it.
+/// Turns the few raw OCCT exception names checked to mean one thing in every feature into an actionable
+/// sentence. Anything else stays `Internal` under its exception class rather than guessed at.
 fn translate_kernel_error(name: String) -> Fail {
     match name.as_str() {
         "Standard_DomainError" => Fail::msg(
@@ -108,9 +99,8 @@ pub struct FeatureError {
     pub feature_id: Option<String>,
     pub message: String,
     pub code: Option<String>,
-    /// For the error report: the kernel calls, the bodies and the parameter
-    /// values at the moment it failed. `None` for errors restored from a
-    /// checkpoint written before this existed.
+    /// The kernel calls, bodies and parameter values when it failed, for the error report.
+    /// `None` for errors restored from an older checkpoint.
     pub detail: Option<Value>,
 }
 
@@ -171,17 +161,15 @@ impl Body {
         (self.uid, self.generation)
     }
 
-    /// The same body over a copy of its shape. OCCT algorithms write p-curves
-    /// and tolerances into the shapes they are handed, and a body the rebuild
-    /// cache keeps is handed to every rebuild that resumes from it.
+    /// The same body over a copy of its shape. OCCT writes p-curves and tolerances into the shapes it is handed,
+    /// and a cached body is handed to every rebuild that resumes from it.
     pub fn detached(&self) -> Body {
         let shape = kernel::copy_topology(&self.shape).unwrap_or_else(|_| self.shape.clone());
         Body { shape, ..self.clone() }
     }
 
-    /// The owner of each face in face order, when the owners were last worked
-    /// out for the shape the body holds now. A face's place in that order is
-    /// the one thing about it a blob gives back exactly.
+    /// The owner of each face in face order, when worked out for the shape the body holds now.
+    /// Face order is the one thing about a face a blob gives back exactly.
     pub fn face_owners(&self) -> Option<&[Option<String>]> {
         self.face_owners
             .as_ref()
@@ -260,9 +248,8 @@ pub struct Ctx {
     pub tracked_faces: IndexMap<String, Value>,
     /// Projected sketch entity refresh entries, the Python engine's `projection_refresh.py`.
     pub projections: Vec<Value>,
-    /// The cut or join each feature applied so far, by feature id, which is
-    /// what a feature pattern repeats. Kept only for the features in
-    /// `patterned`, so a document without feature patterns holds no tools.
+    /// The cut or join each feature applied so far, by feature id, which a feature pattern repeats.
+    /// Kept only for the features in `patterned`.
     pub tools: HashMap<String, Vec<ToolRecord>>,
     pub patterned: HashSet<String>,
     /// Each datum point by id, read from the document before the build.
@@ -280,7 +267,6 @@ pub struct Ctx {
 /// A body moved as a whole, each point `p` going to `rot * p + shift`.
 #[derive(Debug, Clone)]
 pub struct RigidMove {
-    /// The body's id.
     pub body: String,
     pub rot: glam::DMat3,
     pub shift: glam::DVec3,
@@ -509,9 +495,8 @@ fn pieces(shape: &Shape) -> usize {
     kernel::count(&kernel::drop_debris(shape), kernel::Kind::Solid)
 }
 
-/// Says so when a feature that removed material left a body in more pieces
-/// than it found it. The pieces stay in the body, and without this nothing
-/// would tell the user a tip fell off. Split exists to do this, so it is quiet.
+/// Notes when a feature that removed material left a body in more pieces, which nothing else would tell
+/// the user (a tip fell off). Split exists to do this, so it is quiet.
 fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]) {
     if rawf.get("type").and_then(Value::as_str) == Some("split") {
         return;
@@ -543,9 +528,8 @@ fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]
     ctx.diagnostics.splice(at..at, notes);
 }
 
-/// How much is wrong with a solid body, to tell a feature that made it worse
-/// from one that passed it on. A surface body counts nothing here, it is
-/// judged on its own below.
+/// How much is wrong with a solid body, to tell a feature that made it worse from one that passed it on.
+/// A surface body counts nothing here, it is judged on its own below.
 fn unsoundness(s: &Soundness) -> usize {
     let k = &s.skin;
     if k.solids == 0 {
@@ -555,9 +539,8 @@ fn unsoundness(s: &Soundness) -> usize {
     }
 }
 
-/// Features that bring in or copy a surface on purpose: an import that does
-/// not close, and a copy of a body that already was one, made from a body the
-/// copy leaves as it was.
+/// Features that bring in or copy a surface on purpose: an import that does not close, and a duplicate
+/// of a body that already was one.
 const KEEPS_SURFACES: [&str; 2] = ["import", "duplicate"];
 
 fn is_sound_solid(shape: &Shape) -> bool {
@@ -565,20 +548,9 @@ fn is_sound_solid(shape: &Shape) -> bool {
     s.fault().is_none() && s.inward == 0
 }
 
-/// Says so when a feature left a solid body that is not closed and facing
-/// outward: holes in its skin (edges that bound only one face), an edge on
-/// more than two faces, faces that disagree about which side is inside, or the
-/// whole of it inside out. Its volume can still come out right, so no other
-/// check sees it, and every cut, join and measurement after it can be wrong.
-/// Judged over all the bodies the feature changed, made or consumed, since a
-/// join or split gives its result a new body: a body that was already at fault
-/// is not called out again for every later feature. Which way a body faces is
-/// only asked of one the feature made, a feature does not turn one over.
-///
-/// A body left with no solid in it is said so only when the feature was meant
-/// to give a solid and what it worked on was sound: a surface an import brings
-/// in, or one a feature was handed and passed on (what thicken starts from),
-/// is a state to model in.
+/// Notes a solid left open or inside out, which a right looking volume hides from every other check. Judged
+/// over the bodies the feature changed, made or consumed, so an inherited fault is not blamed again, and
+/// orientation only on bodies it made. A lost solid counts only when the feature's input was sound.
 fn note_unsound(ctx: &mut Ctx, fid: &str, kind: Option<&str>, pre: &[(u64, u64, Shape)]) {
     let now: HashSet<(u64, u64)> = ctx.bodies.iter().map(Body::identity).collect();
     let was: HashSet<(u64, u64)> = pre.iter().map(|(uid, generation, _)| (*uid, *generation)).collect();
@@ -742,7 +714,6 @@ pub struct Cancelled;
 /// Hooks the engine hands a rebuild: progress per feature, cancel between them.
 pub trait Watch {
     fn feature(&self, _index: usize) {}
-    /// Meshing `done` of `total` bodies.
     fn meshing(&self, _done: usize, _total: usize) {}
     fn cancelled(&self) -> bool {
         false
@@ -919,10 +890,8 @@ fn failure_detail(ctx: &Ctx, index: usize, type_name: Option<&str>, took: Durati
     })
 }
 
-/// A missing reference that names a feature further down the timeline says
-/// that, rather than that the feature does not exist. Done after the rebuild
-/// because a checkpoint keeps each feature's error while later ones change.
-/// The code is internal to this pass and is not sent.
+/// A missing reference to a feature further down says so instead of claiming it does not exist. Runs after
+/// the rebuild because a checkpoint keeps each feature's error while later ones change.
 fn forward_references(errors: &mut [FeatureError], raw: &[Value], timeline: &[Step]) {
     for e in errors.iter_mut().filter(|e| e.code.as_deref() == Some(MISSING_FEATURE)) {
         e.code = None;
@@ -972,13 +941,8 @@ fn datum_line(raw: &Value) -> Option<[[f64; 3]; 2]> {
     Some([v("origin")?, v("dir")?])
 }
 
-/// The bodies whose ids were not there before take the feature's name, one
-/// alone as it is, several as "name 1", "name 2", the way an import names the
-/// parts of an assembly. A body merged into one that was there before (its
-/// id assigned since `mark` inheriting, maybe through other merges in this
-/// feature, from an id in `before`) is that body still, whatever id the
-/// recorded map gave it, and keeps its name. One this feature made and then
-/// joined into is still new.
+/// New body ids take the feature's name, several as "name 1", "name 2" like assembly parts. A body merged into
+/// one that existed before `mark` keeps that name, one this feature made and then joined into is still new.
 fn name_new_bodies(ctx: &mut Ctx, before: &HashSet<String>, mark: usize, name: &str) {
     let events = &ctx.ids.events()[mark..];
     let parent: HashMap<&str, &str> =
@@ -1103,9 +1067,8 @@ fn params_of(doc: &CadDocument) -> HashMap<String, f64> {
     doc.parameters.iter().flatten().map(|(k, v)| (k.clone(), v.get())).collect()
 }
 
-/// A snapshot at `at` can be resumed only when it still holds the tool of
-/// every feature before `at` that a feature pattern after it repeats. A disk
-/// checkpoint keeps none, so that document replays from the start.
+/// A snapshot at `at` resumes only when it holds the tool of every feature before `at` that a later
+/// feature pattern repeats. A disk checkpoint keeps none, so that document replays from the start.
 fn tools_kept(features: &[Feature], at: usize, tools: &HashMap<String, Vec<ToolRecord>>) -> bool {
     let before: HashSet<&str> = features[..at].iter().map(Feature::id).collect();
     features[at..]
@@ -1121,8 +1084,7 @@ pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebu
     rebuild_from(doc, raw, watch, None, &mut NoTap)
 }
 
-/// `rebuild` resuming at `resume.0` from the state after the feature before
-/// it, reporting every replayed feature to `tap`. A snapshot the document
+/// `rebuild` resuming at `resume.0`, reporting every replayed feature to `tap`. A snapshot the document
 /// numbers differently is ignored and the whole timeline replays.
 pub fn rebuild_from(
     doc: &CadDocument,
@@ -1230,10 +1192,8 @@ pub fn rebuild_from(
         let pre_shapes: Vec<(u64, u64, Shape)> =
             if prov { ctx.bodies.iter().map(|b| (b.uid, b.generation, b.shape.clone())).collect() } else { Vec::new() };
 
-        // A feature's `name` names the bodies it makes, so a part is "Slider"
-        // in the build, the STEP tree and the part list rather than
-        // "Cylinder". Only bodies with an id this feature brought in: a join
-        // or a cut keeps the name of the body it worked on.
+        // A feature's `name` names the bodies it brings in, so a part reads "Slider" rather than "Cylinder"
+        // everywhere. A join or a cut keeps the name of the body it worked on.
         let naming = rawf
             .get("name")
             .and_then(Value::as_str)
