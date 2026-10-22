@@ -685,9 +685,20 @@ export class DocumentStore {
   get busyState(): BusyState {
     return this.busy;
   }
-  /** Only an import's read holds history, so this is true while one is still read into this document. */
+  /** True while an import still lands in this document, from its start to its return. */
   get importRunning(): boolean {
-    return this.st.reads > 0;
+    return this.st.reads > 0 || this.st.imports > 0;
+  }
+
+  /** Counts `fn` as an import into this document until it settles. */
+  async importing<T>(fn: () => Promise<T>): Promise<T> {
+    const st = this.st;
+    st.imports++;
+    try {
+      return await fn();
+    } finally {
+      st.imports--;
+    }
   }
 
   /** An edit is waiting out the rebuild debounce. */

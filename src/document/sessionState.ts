@@ -18,6 +18,8 @@ export class SessionState {
   historyHeld = 0;
   // Import reads running for this document; one begun for an earlier document is counted in that one's state.
   reads = 0;
+  // Imports between their start and their return: the unit question, a batch between files, a fetch or bake first.
+  imports = 0;
   rebuildTimer: number | null = null;
   rebuilding = false;
   rebuildQueued = false;
