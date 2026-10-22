@@ -81,11 +81,21 @@ async function writeContainer(store: DocumentStore, path: string): Promise<strin
   }
 }
 
+// The file holds the document as it was at `edits`: a change since is not in it, so it stays unsaved and its snapshot
+// stays the one that has it.
+function savedAs(store: DocumentStore, path: string, edits: number) {
+  const whole = store.editCount === edits;
+  store.markSaved(path, whole);
+  noteRecent(path);
+  if (whole) void clearRecovery(path);
+}
+
 /** Save: write to the current path if known, else behave like Save As. */
 export async function saveDocument(store: DocumentStore) {
   if (isTauri() && store.filePath) {
     const session = store.session;
     const path = store.filePath;
+    const edits = store.editCount;
     const err = await writeContainer(store, path);
     if (err) {
       await reportError(`Couldn't save ${path}: ${err}`);
@@ -93,9 +103,7 @@ export async function saveDocument(store: DocumentStore) {
     }
     // The file holds the document as it was when the save began, so another document opened meanwhile is not saved.
     if (!session.alive) return;
-    store.markSaved(path);
-    noteRecent(path);
-    void clearRecovery(path); // the on-disk file is now the truth
+    savedAs(store, path, edits);
   } else {
     await saveDocumentAs(store);
   }
@@ -118,15 +126,14 @@ export async function saveDocumentAs(store: DocumentStore) {
     });
     // A path picked for a document that was closed meanwhile is not where the next one goes.
     if (path && session.alive) {
+      const edits = store.editCount;
       const err = await writeContainer(store, path);
       if (err) {
         await reportError(`Couldn't save ${path}: ${err}`);
         return;
       }
       if (!session.alive) return;
-      store.markSaved(path);
-      noteRecent(path);
-      void clearRecovery(path);
+      savedAs(store, path, edits);
     }
   } else {
     // Reuse the settled name so a second Save As downloads "Untitled.funda" again, not "Untitled.funda.funda".

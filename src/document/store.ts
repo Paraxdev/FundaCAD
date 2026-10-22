@@ -884,10 +884,11 @@ export class DocumentStore {
     if (!this.path) return this.pathlessName ?? "Untitled";
     return this.path.split(/[\\/]/).pop() || this.path;
   }
-  markSaved(path: string) {
+  /** `clean` false: the file lacks a change made while it was written, so the document stays unsaved. */
+  markSaved(path: string, clean = true) {
     this.path = path;
     this.pathlessName = null;
-    this.isDirty = false;
+    if (clean) this.isDirty = false;
     this.emitMeta();
   }
   // Bytes the desktop app could not place on disk: Save asks where, instead of writing beside the app's working dir.
