@@ -446,6 +446,12 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **Restoring a version that cannot be read says so.** A saved version with a
+  modelling step missing from the file made its row in the Versions panel fail
+  to open, and Restore did nothing and said nothing. The row now opens with the
+  step names it has, and Restore tells you why the version cannot be restored
+  and leaves the document as it was.
+
 - **A damaged file opens with what can be read in it.** A palette slot that was
   not a colour came back as a slot with no name or colour, a materials list
   with no readable row left the document with an empty library instead of the
