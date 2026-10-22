@@ -57,15 +57,17 @@ function lineMat(color: number): THREE.LineBasicMaterial {
   }
   return m;
 }
-// construction geometry: dashed orange (referenceable, not a profile)
-const CONSTRUCTION_MAT = overlayMaterial(
-  new THREE.LineDashedMaterial({
-    color: 0xffa64d,
-    dashSize: 1.6,
-    gapSize: 1.0,
-    depthTest: true,
-  }),
-);
+const CONSTRUCTION_COLOR = 0xffa64d;
+const dashMats = new Map<number, THREE.LineDashedMaterial>();
+// Construction geometry is dashed, orange on a plain pass and the pass colour on a highlight pass.
+function dashMat(color: number): THREE.LineDashedMaterial {
+  let m = dashMats.get(color);
+  if (!m) {
+    m = overlayMaterial(new THREE.LineDashedMaterial({ color, dashSize: 1.6, gapSize: 1.0, depthTest: true }));
+    dashMats.set(color, m);
+  }
+  return m;
+}
 // Alignment guides: the snap marker's amber, dashed and dimmed, with a short dash and long gap so a guide reads as
 // an aid rather than a drawn line.
 const GUIDE_DASH_PX = 5;
@@ -613,12 +615,12 @@ export function curveObjects(
       out.push(o);
     };
     if (e.type === "point") {
-      add(pointMarker(plane, e.x, e.y, e.construction ? 0xffa64d : color));
+      add(pointMarker(plane, e.x, e.y, e.construction && !highlight ? CONSTRUCTION_COLOR : color));
       continue;
     }
     if (e.type === "text") {
       const faces = getCachedText(e);
-      if (faces && faces.length) add(textObjects(faces, plane, color, !!e.construction));
+      if (faces && faces.length) add(textObjects(faces, plane, color, !!e.construction, highlight));
       continue;
     }
     const pts = entityPolyline(e).map((p) => plane.to3D(p.x, p.y));
@@ -627,13 +629,16 @@ export function curveObjects(
     const projected = e.type === "projected" ? e : null;
     const drawColor =
       projected && !highlight ? (projected.stale === true ? PROJECTED_STALE_COLOR : PROJECTED_COLOR) : color;
-    const curve = !projected && e.construction ? constructionLine(pts) : polyline(pts, drawColor);
+    const curve =
+      !projected && e.construction
+        ? constructionLine(pts, highlight ? color : CONSTRUCTION_COLOR)
+        : polyline(pts, drawColor);
     // Circles and arcs get a visible centre +: it is a snap target and the dimension tool's handle. Grouped to keep
     // one object per entity; asRound is the one centre rule.
     const center = asRound(e);
     if (center) {
       const g = new THREE.Group();
-      const markerColor = projected ? drawColor : e.construction ? 0xffa64d : color;
+      const markerColor = projected ? drawColor : e.construction && !highlight ? CONSTRUCTION_COLOR : color;
       g.add(curve, pointMarker(plane, center.x, center.y, markerColor));
       g.renderOrder = 12;
       add(g);
@@ -716,12 +721,18 @@ function poleSquares(poles: { x: number; y: number }[], plane: SketchPlane, px: 
 
 /** One Group per text entity, glyph outlines plus a fill mesh (not for construction), so the one object per entity
  *  contract holds (see sketchMode preview). */
-function textObjects(faces: TextFace[], plane: SketchPlane, color: number, construction: boolean): THREE.Group {
+function textObjects(
+  faces: TextFace[],
+  plane: SketchPlane,
+  color: number,
+  construction: boolean,
+  highlight: boolean,
+): THREE.Group {
   const g = new THREE.Group();
   for (const f of faces) {
     for (const loop of [f.outer, ...f.holes]) {
       const pts = loop.map(([x, y]) => plane.to3D(x, y));
-      g.add(construction ? constructionLine(pts) : polyline(pts, color));
+      g.add(construction ? constructionLine(pts, highlight ? color : CONSTRUCTION_COLOR) : polyline(pts, color));
     }
     // The solid glyph fill is drawn by the region layer (fillMesh) so it can show
     // hover/selection state and be picked for extrude, see glyphWorldRegions.
@@ -835,9 +846,9 @@ export function dimensionLineObjects(
   return [line];
 }
 
-function constructionLine(points: THREE.Vector3[]): THREE.Line {
+function constructionLine(points: THREE.Vector3[], color: number): THREE.Line {
   const g = new THREE.BufferGeometry().setFromPoints(points);
-  const line = new THREE.Line(g, CONSTRUCTION_MAT);
+  const line = new THREE.Line(g, dashMat(color));
   line.computeLineDistances(); // required for dashing
   line.renderOrder = 12;
   return line;
@@ -853,4 +864,33 @@ function fillMesh(region: Region, plane: SketchPlane, material: THREE.Material):
   const mesh = new THREE.Mesh(geo, material);
   mesh.renderOrder = 11;
   return mesh;
+}
+
+/** The double arrow drawings put across a symmetry line, at the middle of the segment, `size` long each way. */
+export function mirrorMarkObjects(
+  seg: { x1: number; y1: number; x2: number; y2: number },
+  plane: SketchPlane,
+  color: number,
+  size: number,
+): THREE.Object3D[] {
+  const len = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1);
+  if (!(len > 0) || !(size > 0)) return [];
+  const dx = (seg.x2 - seg.x1) / len;
+  const dy = (seg.y2 - seg.y1) / len;
+  const cx = (seg.x1 + seg.x2) / 2;
+  const cy = (seg.y1 + seg.y2) / 2;
+  const pts: THREE.Vector3[] = [];
+  const add = (x1: number, y1: number, x2: number, y2: number) => pts.push(plane.to3D(x1, y1), plane.to3D(x2, y2));
+  add(cx + dy * size, cy - dx * size, cx - dy * size, cy + dx * size);
+  for (const s of [1, -1]) {
+    const tx = cx + dy * size * s;
+    const ty = cy - dx * size * s;
+    const bx = tx - dy * size * 0.4 * s;
+    const by = ty + dx * size * 0.4 * s;
+    add(tx, ty, bx + dx * size * 0.3, by + dy * size * 0.3);
+    add(tx, ty, bx - dx * size * 0.3, by - dy * size * 0.3);
+  }
+  const mark = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), lineMat(color));
+  mark.renderOrder = 13;
+  return [mark];
 }
