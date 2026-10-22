@@ -117,14 +117,27 @@ describe("what the harness relies on outside src/harness", () => {
     expect(main).not.toMatch(/^import .*harness\/driver/m);
   });
 
+  const idle = Object.getOwnPropertyDescriptor(Viewport.prototype, "renderIdle")!.get!;
+  const idleWith = (state: object) =>
+    idle.call({ needsRender: false, lingerFrames: 0, frameMoved: false, edgeBlend: { pending: false }, edgeFrameNow: null, ...state });
+
   it("the picture is not idle on a frame the camera moved", () => {
-    const idle = Object.getOwnPropertyDescriptor(Viewport.prototype, "renderIdle")!.get!;
-    const still = { pending: false };
-    expect(idle.call({ needsRender: false, lingerFrames: 0, frameMoved: false, edgeBlend: still })).toBe(true);
-    expect(idle.call({ needsRender: false, lingerFrames: 0, frameMoved: true, edgeBlend: still })).toBe(false);
+    expect(idleWith({})).toBe(true);
+    expect(idleWith({ frameMoved: true })).toBe(false);
+    expect(idleWith({ lingerFrames: 2 })).toBe(false);
     // The full edges are still fading back in after a move.
-    expect(idle.call({ needsRender: false, lingerFrames: 0, frameMoved: false, edgeBlend: { pending: true } })).toBe(false);
+    expect(idleWith({ edgeBlend: { pending: true } })).toBe(false);
     const src = source("src/viewport/viewport.ts");
     expect(src).toMatch(/const moved = this\.rig\.update\(dt\);\s*this\.frameMoved = moved;/);
+  });
+
+  it("the picture is not idle while the last frame drew the moving edges, until the full set is back", () => {
+    // The camera stopped, nothing is queued and no fade runs: the merged or thin
+    // edges stay drawn until motion settles, MOTION_SETTLE_MS after the last move.
+    const merged = { members: [{}, {}, {}], thin: false, weight: 1 };
+    const thin = { members: [{}, {}], thin: true, weight: 1 };
+    expect(idleWith({ edgeFrameNow: merged })).toBe(false);
+    expect(idleWith({ edgeFrameNow: thin })).toBe(false);
+    expect(idleWith({ edgeFrameNow: null })).toBe(true);
   });
 });
