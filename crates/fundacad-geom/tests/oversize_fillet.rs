@@ -497,3 +497,21 @@ fn two_distance_setbacks_short_of_an_inside_corner_or_meeting_on_a_bar_build() {
         assert_eq!(outcome(&r), (0, vec![], want), "{corners:?} at {d}/{d2}: {:?}", messages(&r));
     }
 }
+
+const SLANT_TOP: [(f64, f64); 6] = [(0.0, 0.0), (30.0, 0.0), (30.0, 10.0), (20.0, 10.0), (10.0, 20.0), (0.0, 20.0)];
+
+/// The inside corner turns 225 degrees. Each size fits one way round and OCCT
+/// fails it there anyway, so the section build ended both chamfers square at the
+/// corner: 2/8 came back 3819.2 where OCP cuts at most 3797.5, with no word.
+#[test]
+fn two_distance_chamfers_the_kernel_fails_past_a_slanted_inside_corner_are_refused() {
+    for (d, d2) in [(2.0, 8.0), (3.0, 8.0), (4.0, 8.0), (3.0, 5.0)] {
+        let r = top_ring(&SLANT_TOP, d, d2);
+        let got = (outcome(&r), messages(&r).first().and_then(|m| offered(m)));
+        assert_eq!(got, ((1, vec![], 4500.0), None), "at {d}/{d2}: {:?}", messages(&r));
+    }
+    for (d, d2, want) in [(4.0, 3.0, 3983.15), (5.0, 2.0, 4055.96)] {
+        let r = top_ring(&SLANT_TOP, d, d2);
+        assert_eq!(outcome(&r), (0, vec![], want), "at {d}/{d2}: {:?}", messages(&r));
+    }
+}
