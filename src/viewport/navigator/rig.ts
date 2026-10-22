@@ -1,6 +1,5 @@
-// The navigator as a CameraRig: it owns the three.js cameras and writes the
-// pose into them the moment it changes, so every raycast and projection is
-// taken from the pose on screen.
+// Writes the pose into the three.js cameras the moment it changes, so every raycast
+// and projection is taken from the pose on screen.
 
 import * as THREE from "three";
 import type { CameraRig, CameraState, FitOptions, NavLimits, ProjectionMode, StandardView } from "../cameras";
@@ -60,10 +59,8 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
       cam.quaternion.copy(p.q);
       cam.up.copy(upV);
     }
-    // The union box of a big assembly reaches the eye plane long before any part
-    // does (the SV08 seen from above at 600mm: union corner 39mm behind the eye,
-    // nearest part on screen 19mm in front), which held near at 0.1mm and made
-    // sheets 0.4mm apart z-fight. Near goes by the parts that can be on screen.
+    // A big assembly's union box reaches the eye plane long before any part does (SV08 from above
+    // at 600mm: corner 39mm behind the eye, nearest part 19mm in front), so near goes by the parts.
     const seen = parts.length ? visibleNearDepth(p, a, parts) : NaN;
     const pc = perspClip(distanceOf(p), Number.isFinite(seen) ? seen : zmin, zmax);
     persp.fov = p.fov;

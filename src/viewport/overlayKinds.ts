@@ -1,9 +1,5 @@
-// What the view draws on top of the model, sorted into kinds the Display
-// popover switches one by one. A kind is a three.js layer, and the camera's
-// layer mask decides what is drawn: an object on a masked out layer costs no
-// draw call, and its owner keeps writing `.visible` the way it always has.
-// Layer 0 is the model and its lights. A saved picture reads the same list
-// (pictureMask) and the allowlist in pictureScene.ts is its safety net.
+// Each kind is a three.js layer and the camera's layer mask decides what is drawn, so a masked kind costs no
+// draw call and owners keep writing `.visible`. Layer 0 is the model and its lights.
 
 import * as THREE from "three";
 import { markNotInPicture } from "./pictureScene";
@@ -91,9 +87,8 @@ export function overlayKindOf(o: THREE.Object3D): OverlayKind | undefined {
   return o.userData[KIND] as OverlayKind | undefined;
 }
 
-/** Put `o` and everything under it on `kind`'s layer, except a descendant with
- *  a kind of its own. Layers are not inherited, so a child added later has to
- *  be covered again (syncOverlayLayers). */
+/** Layers are not inherited, so a child added later has to be covered again (syncOverlayLayers).
+ *  A descendant with a kind of its own keeps it. */
 export function markOverlay<T extends THREE.Object3D>(o: T, kind: OverlayKind): T {
   o.userData[KIND] = kind;
   // The edges' place in a picture is pictureMask's call, an export may ask for them.
@@ -115,9 +110,8 @@ function applyKind(root: THREE.Object3D, kind: OverlayKind) {
   walk(root);
 }
 
-/** Re-cover the tagged top level objects, for children their owners added
- *  since. Only the scene's direct children are walked into, so the model's
- *  bodies are not visited; what lives under the model is tagged where it is made. */
+/** Only the scene's direct children are walked into, so the model's bodies are not visited;
+ *  what lives under the model is tagged where it is made. */
 export function syncOverlayLayers(scene: THREE.Object3D): void {
   for (const c of scene.children) {
     const kind = overlayKindOf(c);
@@ -125,7 +119,6 @@ export function syncOverlayLayers(scene: THREE.Object3D): void {
   }
 }
 
-/** The layers the view draws. */
 export function drawMask(s: Readonly<OverlayState>, active: Readonly<ActiveWork> = NO_WORK): number {
   let m = MODEL_BIT;
   if (s.on) for (const k of OVERLAY_KINDS) if (s.kinds[k]) m |= overlayBit(k);
@@ -135,9 +128,8 @@ export function drawMask(s: Readonly<OverlayState>, active: Readonly<ActiveWork>
   return m;
 }
 
-/** The layers a click can land on: what is drawn, plus the edges and the
- *  highlight, so a hidden outline still selects its edge. A hidden gizmo cannot
- *  be grabbed. */
+/** What is drawn, plus the edges and the highlight, so a hidden outline still selects its edge.
+ *  A hidden gizmo cannot be grabbed. */
 export function pickMask(draw: number): number {
   return draw | overlayBit("edges") | overlayBit("highlight");
 }
