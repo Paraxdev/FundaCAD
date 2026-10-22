@@ -113,7 +113,7 @@ export function planePoint(h: PickHost, name: string, onCanvas: CanvasTest = can
     throw new HarnessError(
       h.sketch.active
         ? `plane ${name} is hidden, a sketch is open and already on its plane, finish it to start one on another`
-        : `plane ${name} is hidden, a plane shows while a tool asks for one, or with Origin and planes in the Display panel`,
+        : `plane ${name} is hidden, the origin planes show only while a tool asks for a plane, such as Sketch`,
       "Occluded",
     );
   }

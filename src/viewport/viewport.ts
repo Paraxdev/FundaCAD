@@ -441,6 +441,7 @@ export class Viewport {
       this.scene.grid.applyTheme();
       this.scene.triad.applyTheme();
       this.scene.applyRenderPrefs();
+      this.scene.originTiles.applyTheme(this.groundHex());
       this.cube.applyTheme();
       this.requestRender();
     });
@@ -1881,8 +1882,7 @@ export class Viewport {
     | { kind: "datum"; id: string; def: PlaneDef }
     | null {
     this.rayFrom(clientX, clientY);
-    const base = (["XY", "XZ", "YZ"] as Plane3[]).map((k) => this.scene.planes[k]);
-    const hit = this.sharedRaycaster.intersectObjects([...base, ...this.datumQuads], false)[0];
+    const hit = this.sharedRaycaster.intersectObjects([...this.shownTiles(), ...this.datumQuads], false)[0];
     if (!hit) return null;
     const id = hit.object.userData.datumId as string | undefined;
     if (id) return { kind: "datum", id, def: hit.object.userData.datumDef as PlaneDef };
@@ -2921,11 +2921,13 @@ export class Viewport {
 
   showAllPlanes(on: boolean) {
     this.planesOnTop = on;
-    for (const k of ["XY", "XZ", "YZ"] as Plane3[]) {
-      const m = this.scene.planes[k];
-      m.visible = on;
-      (m.material as THREE.MeshBasicMaterial).opacity = on ? 0.18 : 0.08;
-      this.drawPlaneOnTop(m, on);
+    const tiles = this.scene.originTiles;
+    if (on) tiles.applyTheme(this.groundHex());
+    tiles.setShown(on);
+    // A press before the next frame must hit the tiles where they will be drawn.
+    if (on) {
+      this.syncOriginTiles();
+      tiles.group.updateMatrixWorld(true);
     }
     for (const q of this.datumQuads) this.drawPlaneOnTop(q, on);
     this.requestRender();
@@ -2936,10 +2938,24 @@ export class Viewport {
       o.renderOrder = on ? 950 : -1;
       const mat = (o as THREE.Mesh).material as THREE.Material | undefined;
       if (mat && !Array.isArray(mat)) {
-        mat.depthTest = !on && !(o instanceof THREE.Sprite);
+        mat.depthTest = !on;
         mat.needsUpdate = true;
       }
     });
+  }
+
+  private syncOriginTiles() {
+    this.scene.originTiles.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal(), this.rig.active);
+  }
+
+  /** The colour drawn behind the scene, which a fixed render ground keeps apart from the theme. */
+  private groundHex(): number {
+    return this.scene.renderer.getClearColor(new THREE.Color()).getHex();
+  }
+
+  // The raycaster ignores `visible`, and hidden tiles keep a stale scale.
+  private shownTiles(): THREE.Mesh[] {
+    return (["XY", "XZ", "YZ"] as Plane3[]).map((k) => this.scene.planes[k]).filter((m) => m.visible);
   }
 
   /** True while the construction quads are drawn over the model. */
@@ -2949,11 +2965,7 @@ export class Viewport {
 
   /** Brighten the plane under the cursor during plane-pick (null = none). */
   hoverPlane(kind: Plane3 | null) {
-    for (const k of ["XY", "XZ", "YZ"] as Plane3[]) {
-      const m = this.scene.planes[k];
-      if (!m.visible) continue;
-      (m.material as THREE.MeshBasicMaterial).opacity = k === kind ? 0.36 : 0.14;
-    }
+    this.scene.originTiles.hover(kind);
     this.requestRender();
   }
 
@@ -2964,8 +2976,7 @@ export class Viewport {
    */
   pickPlane(clientX: number, clientY: number): Plane3 | null {
     this.rayFrom(clientX, clientY);
-    const meshes = (["XY", "XZ", "YZ"] as Plane3[]).map((k) => this.scene.planes[k]);
-    const hits = this.sharedRaycaster.intersectObjects(meshes, false);
+    const hits = this.sharedRaycaster.intersectObjects(this.shownTiles(), false);
     const hit = hits[0];
     if (!hit) return null;
     return (hit.object.userData.plane as Plane3) ?? null;
@@ -4534,6 +4545,7 @@ export class Viewport {
         // ORIGIN rather than at the camera target, because that is where they
         // are drawn and a perspective pixel is a different size at each depth.
         if (this.overlayDrawn("origin")) this.scene.triad.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal());
+        if (this.planesOnTop) this.syncOriginTiles();
         // What stays sharp when the lens is open: whatever the view is centred
         // on. Written every frame because the orbit distance changes every frame
         // a wheel is turned, and it costs one subtraction.
