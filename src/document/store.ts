@@ -2489,10 +2489,11 @@ export class DocumentStore {
       }
     }
     canonicalMirrorPlanes(this.doc);
+    // Before the sections are read, or the old build would seed the new face materials' track.
+    this.discardModelForReplacement();
     if (replaced) replaced.entry.state = stateSwap(replaced.before, this.stateSections());
     this.markDirty(); // openDocument clears this via markSaved() once the path is known
     if (!opts.replace) this.dropToolPreview();
-    this.discardModelForReplacement();
     this.emitDoc();
     this.scheduleRebuild(true);
   }
