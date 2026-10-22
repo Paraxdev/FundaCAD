@@ -1,17 +1,7 @@
-// What a drag around a circular pattern's centre means for its total sweep.
-//
-// The measurement is one atan2 difference, what earns it a file of its own is
-// that the cursor alone cannot answer the question. An angle read straight off
-// the cursor lives in (-180,180], so the moment the drag passes half a turn it
-// flips sign and the sweep collapses back toward zero, when the user dragging
-// the long way round is reaching for the one value this gesture exists to
-// reach: a full 360. The reading therefore has to be unwrapped against the last
-// one, which makes the history an INPUT here rather than state hidden in
-// PatternFlow, and that is also what lets vitest pin the rules down without a
-// canvas, a pointer or a sketch (see escapeLayers.ts for the same idiom).
+// What a drag around a circular pattern's centre means for its total sweep. A cursor angle flips sign past half a
+// turn, so each reading is unwrapped against the previous one, passed in so vitest can pin the rules down.
 
-/** One cursor sample, in sketch mm and degrees. Plain numbers, not vectors: the
- *  caller owns the geometry types, this file only owns the rule. */
+/** One cursor sample in sketch mm and degrees; plain numbers, as the caller owns the geometry types. */
 export interface PatternSweepInput {
   /** the pattern centre, where the user clicked */
   cx: number;
@@ -19,7 +9,6 @@ export interface PatternSweepInput {
   /** the first source entity's representative point, what 0 degrees means */
   sx: number;
   sy: number;
-  /** the cursor */
   px: number;
   py: number;
   /** the sweep last reported for this drag, null on its first sample */
@@ -48,9 +37,7 @@ export function snapAngleDeg(deg: number, free?: boolean): number {
   return v === 0 ? 0 : v; // a snapped -0 would be written into the document as one
 }
 
-/** The new total sweep in degrees, or null when there is no angle to read
- *  (source or cursor sitting on the centre), which leaves the caller on its
- *  current value rather than jumping it somewhere arbitrary. */
+/** Null when the source or cursor sits on the centre, leaving the caller on its current value. */
 export function patternSweepDeg(i: PatternSweepInput): number | null {
   const sdx = i.sx - i.cx,
     sdy = i.sy - i.cy;
@@ -72,8 +59,7 @@ export function patternSweepDeg(i: PatternSweepInput): number | null {
 /** How far from the centre dot, in screen pixels, a press still grabs it. */
 export const CENTRE_GRAB_PX = 12;
 
-/** Whether a press at `pointer` grabs the centre dot drawn at `dot`, both in
- *  client pixels. A dot that did not project (null) cannot be grabbed. */
+/** Both in client pixels; a dot that did not project (null) cannot be grabbed. */
 export function nearCentreDot(
   dot: { x: number; y: number } | null,
   pointer: { x: number; y: number },
@@ -83,9 +69,7 @@ export function nearCentreDot(
   return Math.hypot(pointer.x - dot.x, pointer.y - dot.y) <= radiusPx;
 }
 
-/** Where a circular pattern starts centred: the mean of the selected sources'
- *  representative points. Sources that no longer resolve are skipped, and with
- *  none left there is no centre to offer. */
+/** The mean of the selected sources' points; unresolved sources are skipped, and with none left there is no centre. */
 export function selectionCentre(points: readonly ({ x: number; y: number } | null)[]): { x: number; y: number } | null {
   let sx = 0,
     sy = 0,

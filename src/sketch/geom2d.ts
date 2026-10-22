@@ -18,7 +18,6 @@ export function lineIntersect(p1: V, p2: V, p3: V, p4: V): V | null {
   return v(p1.x + d1x * t, p1.y + d1y * t);
 }
 
-/** intersection point of two SEGMENTS, or null if they don't cross */
 export function segIntersect(p1: V, p2: V, p3: V, p4: V): V | null {
   const d1x = p2.x - p1.x,
     d1y = p2.y - p1.y;
@@ -51,10 +50,7 @@ export function segCircleIntersect(p1: V, p2: V, c: V, r: number): V[] {
   return out;
 }
 
-/** intersection points of the INFINITE line through p1p2 with the circle
- *  (c, r). The unclamped twin of segCircleIntersect: a corner miter lands beyond
- *  the offset segment's ends more often than not, so clamping to [0,1] would
- *  discard exactly the join we're looking for. */
+/** Unclamped twin of segCircleIntersect: a corner miter usually lands beyond the offset segment's ends. */
 export function circleLineIntersect(p1: V, p2: V, c: V, r: number): V[] {
   const dx = p2.x - p1.x,
     dy = p2.y - p1.y;
@@ -71,10 +67,7 @@ export function circleLineIntersect(p1: V, p2: V, c: V, r: number): V[] {
   return ts.map((t) => v(p1.x + dx * t, p1.y + dy * t));
 }
 
-/** intersection points of the two full circles (c1,r1) and (c2,r2), 0, 1 or 2.
- *  Concentric or non-touching circles give none. The arc-to-arc companion to
- *  lineIntersect (line-line) and segCircleIntersect (line-arc), used to miter a
- *  corner where two offset arcs meet. */
+/** 0, 1 or 2 points; concentric or non-touching circles give none. Used to miter where two offset arcs meet. */
 export function circleCircleIntersect(c1: V, r1: number, c2: V, r2: number): V[] {
   const dx = c2.x - c1.x,
     dy = c2.y - c1.y;
@@ -99,15 +92,12 @@ export function paramOnSeg(p1: Pt, p2: Pt, q: Pt): number {
   return ((q.x - p1.x) * dx + (q.y - p1.y) * dy) / len2;
 }
 
-/** distance from point q to segment p1p2 */
 export function distToSeg(p1: Pt, p2: Pt, q: Pt): number {
   const t = Math.max(0, Math.min(1, paramOnSeg(p1, p2, q)));
   return Math.hypot(q.x - (p1.x + (p2.x - p1.x) * t), q.y - (p1.y + (p2.y - p1.y) * t));
 }
 
-/** Signed included angle (degrees, in (-180,180]) from line l1's direction to
- *  line l2's. Matches planegcs's l2l_angle sense, so seeding an angle dimension
- *  with it is a solve no-op. Used for the driving angle seed and the driven readout. */
+/** Degrees in (-180,180] from l1's direction to l2's, planegcs l2l_angle sense, so seeding an angle dim is a no-op. */
 export function signedAngleDeg(
   l1: { x1: number; y1: number; x2: number; y2: number },
   l2: { x1: number; y1: number; x2: number; y2: number },

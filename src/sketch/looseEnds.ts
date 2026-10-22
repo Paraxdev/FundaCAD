@@ -1,7 +1,5 @@
-// Loose ends of a sketch profile: curve ends that meet nothing (open, drawn red)
-// and ends that meet another curve only by position, with no coincident or
-// point on curve constraint holding them (untied, drawn amber). Pure, shared
-// by the sketch overlay, the Tie Loose Ends command and the tests.
+// Loose ends of a sketch profile: ends meeting nothing (open, red) and ends meeting a curve only by position with
+// no constraint holding them (untied, amber). Shared by the overlay, Tie Loose Ends and the tests.
 import type { SketchConstraint } from "../types";
 import { refPoint } from "./entityDims";
 import { entityPolyline } from "./region";
@@ -96,9 +94,8 @@ function curveDist(c: Curve, x: number, y: number): number {
   return best;
 }
 
-/** A uniform grid over the curves, so an end only measures the curves near it.
- *  Cells hold curve indices, a hashed cell key may collide, which only adds a
- *  candidate the distance test then drops. */
+/** A uniform grid over the curves, so an end only measures curves near it. A hashed cell key may collide, which
+ *  only adds a candidate the distance test drops. */
 class CurveIndex {
   private cells = new Map<number, number[]>();
   private big: number[] = [];
@@ -204,11 +201,8 @@ class Joins {
   }
 }
 
-/** Which profile ends a constraint holds. Coincidents are joined into classes, so a
- *  chain through a construction end still ties the curve ends on it. An end is tied
- *  when its class holds another profile end, or is put on a profile curve by a
- *  pointOnCurve or midpoint. Construction geometry, points and arc centres alone
- *  hold nothing the profile can close through. */
+/** Coincidents join into classes, so a chain through a construction end still ties the ends on it. An end is tied
+ *  when its class holds another profile end, or a pointOnCurve or midpoint puts it on a profile curve. */
 function tiedEnds(profile: readonly ResolvedEntity[], constraints: readonly SketchConstraint[]): Set<string> {
   const joins = new Joins();
   for (const c of constraints) if (c.type === "coincident") joins.union(key(c.e1, c.p1), key(c.e2, c.p2));
@@ -347,10 +341,8 @@ export function looseEnds(
   return { open, untied };
 }
 
-/** One constraint per tieable untied end: a coincident to the end it touches or a
- *  pointOnCurve onto the curve. A pair seen from both ends, or a ring of ends at one
- *  corner, gets only the constraints that join something new, a redundant one would
- *  over define the solve. */
+/** One coincident or pointOnCurve per tieable untied end, only where it joins something new: a redundant one
+ *  would over define the solve. */
 export function tieConstraints(le: LooseEnds, constraints: readonly SketchConstraint[] = []): SketchConstraint[] {
   const joins = new Joins();
   for (const c of constraints) if (c.type === "coincident") joins.union(key(c.e1, c.p1), key(c.e2, c.p2));
@@ -385,16 +377,14 @@ function profileDiag(entities: readonly ResolvedEntity[]): number {
   return Number.isFinite(minX) ? Math.hypot(maxX - minX, maxY - minY) : 0;
 }
 
-/** The reach used where there is no view to measure a snap in (a closed sketch,
- *  the MCP server): 1% of the profile's size, about 10 px when the sketch fills
- *  the view, never under a micron. */
+/** The reach where no view measures a snap (a closed sketch, the MCP server): 1% of the profile's size, about 10 px
+ *  when the sketch fills the view, never under a micron. */
 export function defaultReach(entities: readonly ResolvedEntity[]): number {
   return Math.max(1e-3, 0.01 * profileDiag(entities));
 }
 
-/** Open ends this close, relative to the profile and at most 10 mm, are a profile
- *  drawn with a gap rather than a sketch meant to stay open. An L or a U has its
- *  ends a whole side apart. */
+/** Open ends this close, relative to the profile and at most 10 mm, are a gap rather than a sketch meant to stay
+ *  open; an L or a U has its ends a whole side apart. */
 const GAP_FRACTION = 0.1;
 const GAP_MAX_MM = 10;
 

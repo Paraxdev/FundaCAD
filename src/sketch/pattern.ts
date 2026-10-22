@@ -1,7 +1,5 @@
-// Expand a sketch pattern DEFINITION into its derived entities (the copies). Kept
-// deliberately tiny and mirrored 1:1 by the Python port in builder.py (_expand_pattern)
-// so the frontend preview and the engine build agree. Derived ids are
-// "<pattern.id>#<n>", render/build-only, never targeted by constraints.
+// Expands a sketch pattern definition into its derived copies, mirrored 1:1 by builder.py _expand_pattern so the
+// preview and the build agree. Derived ids are `<pattern.id>#<n>`, render and build only, never constraint targets.
 
 import type { Num, Params, SketchPattern } from "../types";
 import { dimPlaceOf } from "../types";
@@ -12,8 +10,7 @@ import { rectCorners } from "./region";
 
 const rectAngle = (angle: number | undefined) => (angle ? { angle } : {});
 
-/** an entity translated by (dx,dy) as a fresh object, shared by pattern
- *  expansion (derived copies) and the select tool's whole-entity body drag */
+/** Shared by pattern expansion and the select tool's whole-entity body drag. */
 export function translated(e: ResolvedEntity, dx: number, dy: number, id: string): ResolvedEntity {
   const c = e.construction ? { construction: true as const } : {};
   // badge label placement is an offset from the dim's own anchor, so a pure
@@ -101,8 +98,7 @@ function rotPt(x: number, y: number, cx: number, cy: number, ang: number): [numb
   return [cx + dx * co - dy * si, cy + dx * si + dy * co];
 }
 
-/** Uniformly scale an entity about (cx,cy) by factor `f`. Unlike rotation, a
- *  uniform scale keeps every type (a rectangle stays a rectangle). */
+/** Unlike rotation, a uniform scale keeps every type (a rectangle stays a rectangle). */
 export function scaled(e: ResolvedEntity, cx: number, cy: number, f: number, id: string): ResolvedEntity {
   const c = e.construction ? { construction: true as const } : {};
   const a = Math.abs(f); // radii/sizes stay positive
@@ -170,9 +166,7 @@ export function scaled(e: ResolvedEntity, cx: number, cy: number, f: number, id:
   }
 }
 
-/** Size and angle of a rectangle reflected across a line along (dx,dy). A
- *  result that lands square to the axes carries no angle, so it stays a plain,
- *  dimensionable rectangle. */
+/** A result square to the axes carries no angle, so it stays a plain, dimensionable rectangle. */
 export function reflectedRect(
   e: { width: number; height: number; angle?: number },
   dx: number,
@@ -186,8 +180,7 @@ export function reflectedRect(
   return { width: e.width, height: e.height, angle: a };
 }
 
-/** Rotate an entity about (cx,cy) by `ang` radians. A rectangle becomes a
- *  4-line loop. */
+/** `ang` in radians; a rectangle becomes a 4-line loop. */
 export function rotated(e: ResolvedEntity, cx: number, cy: number, ang: number, id: string): ResolvedEntity[] {
   const c = e.construction ? { construction: true as const } : {};
   const R = (x: number, y: number) => rotPt(x, y, cx, cy, ang);
@@ -269,9 +262,8 @@ export function expandPattern(pat: SketchPattern, byId: Map<string, ResolvedEnti
   const out: ResolvedEntity[] = [];
   let n = 0;
   const did = () => `${pat.id}#${n++}`;
-  // pattern sources: skip missing ids AND projected reference geometry, it is
-  // fixed/linked, never replicated (the UI strips it before the pattern flow;
-  // hand-authored docs degrade the same way instead of emitting duplicate ids)
+  // Skip missing ids and projected geometry, which is fixed and never replicated; hand-authored docs degrade the
+  // same way instead of emitting duplicate ids.
   const sources = (ids: string[]) =>
     ids.flatMap((id) => {
       const e = byId.get(id);
