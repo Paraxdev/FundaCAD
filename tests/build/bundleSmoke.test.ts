@@ -53,7 +53,7 @@ describe("the bundle job", () => {
     expect(text).toMatch(/\.AppImage/);
     expect(text).toMatch(/--appimage-extract-and-run/);
     expect(text).toMatch(/dpkg-deb -x/);
-    expect(text).toMatch(/fundacad\.exe/);
+    expect(text).toMatch(/\$FUNDACAD_BIN\.exe/);
     expect(text).toMatch(/--mcp/);
   });
 

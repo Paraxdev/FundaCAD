@@ -444,11 +444,36 @@ the page loaded; it does not gate anything yet.
 
 The two never touch each other's release. Each has its own tag, its own
 concurrency group (`release-development`, `release-beta`) and its own feed,
-baked into the binary. They are the same app with the same identifier, so
-switching channel is installing the other channel's installer. A
-development install only updates to the next development build and a beta
-install to the next beta. Both count up the same run number, so moving to a
-build with a lower version can need an uninstall first.
+baked into the binary. A development install only updates to the next
+development build and a beta install to the next beta.
+
+**On Windows and macOS the development build is FundaCAD Dev**, its own
+product (`src-tauri/tauri.dev-product.conf.json`, added to the build by
+`build.yml` for `dev` only): identifier `dev.fundacad.app.dev`, binary
+`fundacad-dev`, its own Start menu entry, install folder and `.app`, so it
+installs beside the beta. A separate identifier is a separate data folder, so
+its preferences, recovery files, document cache, plugins and MCP session are
+its own and a broken development build cannot touch the beta's. It registers
+no file types, `.funda` and `.fundab` stay with the beta. The binary is
+renamed because the NSIS installer closes running copies of its binary by
+name, and an update of one channel must not close the other. On Linux it
+keeps the beta's names, since the `.deb`, Flatpak and container checks are
+keyed on them, so there switching channel is installing the other channel's
+package, and as both count up the same run number, moving to a lower version
+can need an uninstall first. On every platform the window title says FundaCAD Dev, and
+About, the update prompts and a problem report show the version as
+`dev-<run number>`; the real version stays `1.0.<run number>`, which the
+updater compares. An install of a development build from before the rename
+is a separate "FundaCAD" install: its next update installs FundaCAD Dev
+beside it, and the old one can be uninstalled.
+
+An update started from the portable exe is the first install of that
+channel. The updater always runs the setup as `/P /R /UPDATE`, and the Tauri
+NSIS template skips the shortcuts in update mode, so
+`src-tauri/windows/installer-hooks.nsh` drops update mode when the binary is
+not installed yet; that install then makes the Start menu and desktop
+shortcuts a passive install makes. The Windows bundle leg checks both cases
+on the built setup.
 
 The tag is `development` rather than `dev`: a tag and a branch with the same
 name make `git push origin dev` fail as ambiguous for anyone who fetched
