@@ -1,7 +1,5 @@
-// The pt_* and frames_* commands over the command socket of tracer_serve
-// (src-tauri/tracer/examples/tracer_serve.rs), for ?tracer=native-dev in a
-// browser outside the app. A Uint8Array argument is a raw body, sent as one
-// binary message: [u32 LE id][u16 LE command length][command][body].
+// For ?tracer=native-dev outside the app, over tracer_serve's socket (src-tauri/tracer/examples/tracer_serve.rs).
+// A Uint8Array argument goes as one binary message: [u32 LE id][u16 LE command length][command][body].
 
 import type { Call } from "./nativeScene";
 
@@ -27,9 +25,8 @@ function binary(id: number, cmd: string, body: Uint8Array): Uint8Array {
   return out;
 }
 
-/** Opens the socket on the first call and again after it closed. Calls made
- *  before it opens wait for it. Errors reject with the plain message, as
- *  Tauri's invoke does. */
+/** Opens the socket on the first call and again after it closed; calls made before it opens wait.
+ *  Errors reject with the plain message, as Tauri's invoke does. */
 export function wsCall(url: string): DevCall {
   let ws: WebSocket | null = null;
   let id = 0;

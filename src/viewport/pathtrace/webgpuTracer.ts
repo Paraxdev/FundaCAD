@@ -1,6 +1,5 @@
-// The WebGPU path tracer (three-gpu-pathtracer, pinned) behind TracerBackend.
-// Both modules are imported inside init, so the 330 kB chunk only loads the
-// first time Path traced is picked.
+// three-gpu-pathtracer (pinned) is imported inside init, so its 330 kB chunk only loads the first time
+// Path traced is picked.
 
 import * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
@@ -201,9 +200,8 @@ export class WebGpuTracer implements TracerBackend {
     return step.more;
   }
 
-  /** Albedo, and the view normal with view depth in alpha, for the a-trous
-   *  stops. Drawn once per restart, the scene is still while it traces. Glass
-   *  is drawn over it as no surface, so it stays as traced. */
+  /** Albedo, and view normal with view depth in alpha, for the a-trous stops. Drawn once per restart since
+   *  the scene is still while it traces; glass is drawn as no surface, so it stays as traced. */
   private renderGuides(w: number, h: number): THREE.RenderTarget | null {
     const tsl = this.tsl;
     if (!tsl || !this.camera) return null;
@@ -382,8 +380,7 @@ export class WebGpuTracer implements TracerBackend {
     if (this.tracer) this.tracer.renderScale = scale;
   }
 
-  /** The library's own preview: a restart's first frame traced small with
-   *  several bounces, shown until every pixel has a sample, then faded out.
+  /** A restart's first frame traced small with several bounces, shown until every pixel has a sample.
    *  Without it a restart shows black, a bounce traced per frame. */
   setMotionPreview(on: boolean) {
     this.preview = on;

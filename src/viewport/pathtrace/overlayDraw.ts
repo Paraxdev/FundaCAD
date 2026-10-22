@@ -1,6 +1,5 @@
-// The WebGL frame drawn over a traced image: bodies fill depth only, so edges,
-// the grid and everything else rasterised are hidden behind them exactly as in
-// Realtime, and the canvas is cleared to alpha 0 so the trace shows through.
+// Bodies fill depth only, so everything rasterised is hidden behind them as in Realtime, and the canvas
+// is cleared to alpha 0 so the trace shows through.
 
 import * as THREE from "three";
 import { isCostlyLight } from "../potato";

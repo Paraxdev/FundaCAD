@@ -1,7 +1,5 @@
-// The edge aware a-trous filter that cleans the image while samples are still
-// coming in. Five passes of a 5x5 B3 spline kernel at steps 1 to 16, on the
-// colour divided by albedo, weighted by normal, depth and luminance. The pure
-// half below is the spec the WGSL follows, and what the tests run.
+// Five passes of a 5x5 B3 spline kernel at steps 1 to 16 on colour over albedo, weighted by normal, depth
+// and luminance. The pure half below is the spec the WGSL follows, and what the tests run.
 
 import type * as THREE from "three";
 
@@ -56,11 +54,8 @@ function albedoAt(a: Float32Array, i: number): [number, number, number] {
   return [Math.max(r, MIN_ALBEDO), Math.max(g, MIN_ALBEDO), Math.max(b, MIN_ALBEDO)];
 }
 
-/** A pixel is filtered only when it and its eight neighbours are surface at
- *  about the same depth. A silhouette pixel holds the traced mix of the body
- *  and what is behind it while the raster guide says all body, so it and
- *  anything the guide marks as not a surface (background, glass) stay as
- *  traced and lend nothing to their neighbours. */
+/** A silhouette pixel holds the traced mix of body and background while the raster guide says all body,
+ *  so it and non surface pixels (background, glass) stay as traced and lend nothing to neighbours. */
 export function atrousTrust(img: AtrousImage): Uint8Array {
   const { width: w, height: h, depth } = img;
   const trust = new Uint8Array(w * h);

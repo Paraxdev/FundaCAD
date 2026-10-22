@@ -1,6 +1,4 @@
-// What cleans the native tracer's cap, and the optional one-time download of
-// Open Image Denoise. One state for the panel and Preferences, so both show
-// the same answer while a download runs.
+// One state for the panel and Preferences, so both show the same answer while a download runs.
 
 import { reactive } from "vue";
 
