@@ -1,27 +1,6 @@
-// Painting visibility down a list of eyes.
-//
-// Press on a row's eye and drag across the rows below or above it, and every row
-// the pointer passes gets the SAME state the first click gave: start on a shown
-// row and the drag hides, start on a hidden one and it shows, however each row
-// was set before. Only rows of the category the drag started in are touched, so
-// a sketch drag running on into the bodies leaves the bodies alone. Alt-clicking
-// an eye shows only that row in its category, and Alt-clicking it again puts the
-// category back the way it was.
-//
-// Two things a naive version gets wrong, and why this is its own module:
-//
-//   * A fast drag SKIPS rows. The browser reports the pointer about once a frame,
-//     so a flick from the first row to the thirtieth enters the thirtieth and
-//     never the twenty-eight between. Every row between the last one painted and
-//     the one entered is painted with it, in the order they are drawn.
-//   * A row that is already in the target state is still in the run, but must not
-//     flip. The target is decided once, at the press, and applied as a value
-//     rather than as a toggle.
-//
-// Holds no document and no Vue: `apply` is the caller's batched setter, called
-// ONCE per gesture step with every row that step changes, so a flick across a
-// hundred bodies, or a solo over all of them, is one write rather than a hundred
-// re-renders.
+// Painting visibility down a list of eyes: a drag gives every row it crosses the state its first click chose, within
+// the starting category. A fast drag skips rows, so the gap between painted rows is filled; the target is a value, not
+// a toggle, fixed at the press. `apply` is called once per step, so a flick over a hundred bodies is one write.
 
 /** Set each row of `category` in `changes` to its state, as one write. */
 export type ApplyVisibility = (category: string, changes: ReadonlyMap<string, boolean>) => void;
@@ -49,7 +28,6 @@ export class VisibilityPaint {
 
   constructor(private readonly apply: ApplyVisibility) {}
 
-  /** A drag is in progress. */
   get active(): boolean {
     return this.stroke !== null;
   }

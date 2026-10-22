@@ -52,9 +52,8 @@ export interface RoundSize {
   full: boolean;
 }
 
-/** The engine's exact size and wrap of the lone selected round face, once it
- *  has answered, so every readout of it agrees with the press/pull field
- *  rather than with the mesh's guess. */
+/** The engine's exact size of the lone selected round face once it answers, so every readout agrees with the
+ *  press/pull field rather than the mesh's guess. */
 export const exactRound = shallowRef<(RoundSize & { faceId: number }) | null>(null);
 
 /** A diameter all the way round, a radius on a partial arc. */

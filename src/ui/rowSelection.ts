@@ -1,19 +1,6 @@
-// Click-to-select over a list of rows, the way every file manager does it.
-//
-// A plain click selects one row, Ctrl (Cmd) adds or removes one, Shift takes the
-// run from the last plainly or Ctrl-clicked row (the anchor) to this one, and
-// Ctrl+Shift adds that run to what is already selected. The Browser's bodies
-// and sketches both select this way, and before this each list that wanted more
-// than one row wrote its own copy of the rules.
-//
-// Deliberately only the RULES. What a selection is FOR differs by list: a body
-// selection lives in the viewport and lights up in 3D, a sketch selection drives
-// the timeline and the inspector. So this holds no state and draws nothing, the
-// caller keeps the state wherever that list already keeps it and renders its own
-// rows. Generic over the key so it serves an id string or anything else, and
-// Vue-free so the headless suite reaches it.
+// File manager style row selection: click, Ctrl to toggle, Shift for a run from the anchor, Ctrl+Shift to add a run.
+// Only the rules, no state: each list keeps its selection where it already does.
 
-/** What was held during the click. */
 export interface SelectMods {
   /** Ctrl or Cmd: add or remove this one row. */
   toggle: boolean;
@@ -35,14 +22,8 @@ export function modsOf(e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolea
   return { toggle: e.ctrlKey || e.metaKey, range: e.shiftKey };
 }
 
-/** The selection after clicking `key`. `order` is the rows as they are drawn
- *  right now, which is what a run means: rows inside a collapsed folder are not
- *  on screen, so a Shift-click does not reach into it.
- *
- *  A Shift-click with no usable anchor (none yet, or its row is no longer drawn)
- *  selects just the clicked row and makes it the anchor, rather than guessing
- *  where a run should start. A Shift-click never moves the anchor, which is what
- *  lets a second Shift-click grow or shrink the same run. */
+/** `order` is the rows as drawn now, so a run never reaches into a collapsed folder. A Shift-click with no usable
+ *  anchor selects just this row and anchors it; a Shift-click never moves the anchor, so a run can grow or shrink. */
 export function selectRow<K>(sel: RowSelection<K>, order: readonly K[], key: K, mods: SelectMods): RowSelection<K> {
   if (mods.range) {
     const from = sel.anchor === null ? -1 : order.indexOf(sel.anchor);
@@ -76,9 +57,7 @@ export function selectGroup<K>(selected: readonly K[], members: readonly K[], mo
   return out;
 }
 
-/** The rows one gesture on `key` acts on: the whole selection when the row that
- *  was grabbed is part of it, otherwise just that row. A menu that silently acted
- *  on one row of a selection of two hundred would be worse than no menu. */
+/** The whole selection when the grabbed row is in it, else just that row. */
 export function actOn<K>(selected: readonly K[], key: K): K[] {
   return selected.includes(key) ? [...selected] : [key];
 }

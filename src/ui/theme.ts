@@ -1,10 +1,5 @@
-// The active theme: the built-in palette on :root in styles/_tokens.scss, or a
-// JSON palette of colour tokens the user uploaded. Only colour tokens are read,
-// so a theme is a repaint and never a relayout.
-//
-// An uploaded palette is written as inline custom properties on the document
-// element, which takes precedence over any stylesheet rule regardless of source order. The
-// built-in theme is the absence of those, so a failure here still looks right.
+// The active theme: the built-in palette in styles/_tokens.scss or an uploaded JSON palette, colour tokens only so a
+// theme never relayouts. Uploads are inline custom properties on <html>, so the built-in theme is just their absence.
 
 import { readSetting } from "./storedSetting";
 
@@ -34,9 +29,7 @@ export const BUILTIN_THEME: Theme = { id: "fundacad", label: "FundaCAD Noir", mo
 
 export const DEFAULT_THEME_ID = BUILTIN_THEME.id;
 
-/** FundaCAD Noir's surfaces, shared by the Noir <Color> variants below: only
- *  the accent changes, for someone who wants the same dark shell without the
- *  default mint-green (or Dracula's purple). */
+/** Noir's surfaces, shared by the Noir variants below, which change only the accent. */
 const NOIR_SURFACE = {
   "--bg": "#050409",
   "--panel": "#1b1826",
@@ -147,16 +140,9 @@ const SHIPPED_THEMES: ShippedTheme[] = [
     },
   },
   {
-    // A theme that stays legible for every kind of colour blindness. Its four
-    // signal colours were chosen and simulation-checked so no two collapse under
-    // protanopia, deuteranopia or tritanopia (the closest pair holds a CIE ΔE of
-    // ~29), and their lightness also steps apart so the ok/warn/error trio still
-    // separates under monochromacy, where hue carries nothing. The accent is
-    // violet rather than a second blue: a blue accent merged with the teal ok
-    // under tritanopia. ok leans teal, not pure green, to keep a blue axis under
-    // red-green blindness; warn is amber, error a bright red that still clears
-    // ~6:1 contrast on the dark surface, since --error is drawn as text.
-    // Surfaces are near-neutral so those signals are what the eye lands on.
+    // Simulation checked so no two signal colours collapse under protanopia, deuteranopia or tritanopia (closest pair
+    // ΔE ~29), with lightness steps for monochromacy. Violet accent, as blue merged with the teal ok in tritanopia;
+    // error clears ~6:1 contrast as it is drawn as text.
     id: "colorblind-safe",
     label: "Colour-Blind Safe",
     mode: "dark",
@@ -353,8 +339,6 @@ export function onThemeChange(fn: () => void): () => void {
 export function initTheme() {
   apply(activeId);
 }
-
-// --- uploading and removing palettes ----------------------------------------
 
 function slug(label: string): string {
   const base = label
