@@ -388,7 +388,7 @@ function areaOf(
 ): { faces?: Selector[]; spots?: StressSpotArea[] } | string {
   const placed = spots ?? [];
   if (!faces.selectors.length && !placed.length) {
-    return `place ${which} on the body, or set its faces from a face selection`;
+    return `${which} has no faces yet, place it on the body or use selected faces`;
   }
   const missing = missingFaces(faces, which);
   if (missing) return missing;
@@ -418,7 +418,7 @@ export function buildStressRequest(s: StressSetup): StressRequest {
     if (area.spots && x.type !== "fixed") {
       return {
         ok: false,
-        message: `${which} is ${x.type} and has a spot, a spot is held every way, make it fixed or remove the spot`,
+        message: `${which} is ${x.type} but has a spot, and a spot holds every way, so make it fixed or remove the spot`,
       };
     }
     supports.push({ type: x.type, ...area });
@@ -426,7 +426,7 @@ export function buildStressRequest(s: StressSetup): StressRequest {
   // Its own weight is a load, so a body under gravity alone is a study, and
   // the blank row a fresh panel starts with is no load at all then.
   const rows = s.gravity.on ? s.loads.filter((l) => !untouchedLoad(l)) : s.loads;
-  if (!rows.length && !s.gravity.on) return { ok: false, message: "add a load, or turn on gravity" };
+  if (!rows.length && !s.gravity.on) return { ok: false, message: "add a load, or turn on Own weight" };
   const loads: StressOptions["loads"] = [];
   for (const l of rows) {
     const i = s.loads.indexOf(l);
@@ -452,7 +452,7 @@ export function buildStressRequest(s: StressSetup): StressRequest {
       return { ok: false, message: "Poisson's ratio must be from 0 to below 0.5" };
     if (!isNum(y) || !(y > 0)) return { ok: false, message: "the custom material needs a yield strength above 0" };
     const hasDensity = isNum(density) && density > 0;
-    if (s.gravity.on && !hasDensity) return { ok: false, message: "gravity needs the material's density in g/cm3" };
+    if (s.gravity.on && !hasDensity) return { ok: false, message: "own weight needs the material's density in g/cm3" };
     material = { E, nu, yield: y, ...(hasDensity ? { density } : {}), name: CUSTOM_MATERIAL };
   } else {
     if (!STRESS_MATERIALS.some((m) => m.name === s.material))
@@ -463,7 +463,7 @@ export function buildStressRequest(s: StressSetup): StressRequest {
   if (s.gravity.on) options.gravity = gravityVector(s.gravity.direction);
   if (s.size !== null) {
     if (!isNum(s.size) || !(s.size > 0))
-      return { ok: false, message: "the element size must be above 0, or blank for automatic" };
+      return { ok: false, message: "the mesh size must be above 0, or blank for automatic" };
     options.size = s.size;
   }
   return { ok: true, body: s.body, options };

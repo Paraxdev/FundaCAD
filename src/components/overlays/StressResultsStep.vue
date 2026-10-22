@@ -4,6 +4,7 @@ import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
 import Icon from "../shell/Icon.vue";
 import StressVerdict from "./StressVerdict.vue";
+import { plainWarning } from "../../ui/stressWarnings";
 import { deformLabel, legendGradient, setupSummary, type StressResultView } from "../../ui/stress";
 import { displayRound, getUnit } from "../../ui/units";
 
@@ -162,6 +163,8 @@ function onDeform(e: Event) {
       </div>
     </div>
 
-    <div v-for="(w, i) in result.warnings" :key="'w' + i" class="measure-hint stress-warning">{{ w }}</div>
+    <div v-for="(w, i) in result.warnings" :key="'w' + i" class="measure-hint stress-warning">{{
+      plainWarning(w)
+    }}</div>
   </div>
 </template>

@@ -251,9 +251,10 @@ describe("stress panel flow", () => {
     r.select([1]);
     r.ui.setStressFacesFromSelection({ support: 1 });
     const d = usePanelsStore().stress!;
+    const toasts = r.statuses.length;
     r.ui.placeStressSpot({ load: 1 });
     expect(d.placing).toEqual({ load: 1 });
-    expect(r.statuses.at(-1)).toMatch(/click the body where Load 1 pushes/);
+    expect(r.statuses.slice(toasts), "the panel's own hint says it, no toast over it").toEqual([]);
     // A click on another body is told so and places nothing.
     r.handlers().placeSpot!({ at: [1, 1, 0], normal: [0, 0, 1], body: "b2" }, false);
     expect(r.statuses.at(-1)).toMatch(/another body/);
@@ -434,7 +435,7 @@ describe("stress panel across changes", () => {
     await r.ui.runStress();
     expect(r.calls).toEqual([]);
     expect(usePanelsStore().stress!.error).toBe(
-      "a face of the load is not found on the current model, set the faces again",
+      "A face of the load is not found on the current model, set the faces again.",
     );
     // The saved study never lost it: the next build that has the face finds it.
     expect(r.study()).toEqual(saved);
@@ -460,7 +461,7 @@ describe("stress panel across changes", () => {
     expect(r.study()).toEqual(saved);
     void r.ui.runStress();
     expect(r.calls).toEqual([]);
-    expect(usePanelsStore().stress!.error).toMatch(/the body analysed is not on the current model/);
+    expect(usePanelsStore().stress!.error).toMatch(/^The body analysed is not on the current model\./);
     r.editDoc();
     r.rebuild(FIRST);
     expect(s.supports[0]!.faces.faceIds).toEqual([1]);

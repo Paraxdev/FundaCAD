@@ -146,10 +146,10 @@ describe("buildStressRequest", () => {
       return r.ok ? "ok" : r.message;
     };
     expect(msg(newSetup(null))).toMatch(/body/);
-    expect(msg(newSetup("b1"))).toBe("place the support on the body, or set its faces from a face selection");
+    expect(msg(newSetup("b1"))).toMatch(/^the support has no faces yet/);
     const s = ready();
     s.loads.push(newLoad(2));
-    expect(msg(s)).toBe("place load 2 on the body, or set its faces from a face selection");
+    expect(msg(s)).toMatch(/^load 2 has no faces yet/);
     s.loads.pop();
     s.loads[0]!.force = 0;
     expect(msg(s)).toMatch(/needs a force/);
@@ -159,9 +159,9 @@ describe("buildStressRequest", () => {
     expect(msg(s)).toMatch(/Poisson/);
     s.custom.nu = 0.3;
     s.size = -1;
-    expect(msg(s)).toMatch(/element size/);
+    expect(msg(s)).toMatch(/mesh size/);
     s.loads = [];
-    expect(msg(s)).toBe("add a load, or turn on gravity");
+    expect(msg(s)).toMatch(/^add a load, or turn on Own weight/);
   });
 
   it('refuses "into the face" on faces that point every way', () => {
@@ -375,9 +375,7 @@ describe("spots", () => {
     s.supports[0]!.type = "slider";
     s.supports[0]!.spots = [spot];
     const slider = buildStressRequest(s);
-    expect(!slider.ok && slider.message).toBe(
-      "the support is slider and has a spot, a spot is held every way, make it fixed or remove the spot",
-    );
+    expect(!slider.ok && slider.message).toMatch(/^the support is slider but has a spot.*make it fixed/);
     s.supports[0]!.type = "fixed";
     s.supports[0]!.spots = [{ ...spot, radius: "" as unknown as number }];
     const blank = buildStressRequest(s);

@@ -17,6 +17,7 @@ import {
 } from "../stores/panels";
 import { drawnCorner, engineHit, nearestVertex, refineLevel, refineSurface, type DrawnSurface } from "./stressSurface";
 import { weakSpotLabel } from "./stressVerdict";
+import { sentence } from "./stressWarnings";
 import {
   AXES,
   LOAD_MARK_COLOR,
@@ -297,8 +298,6 @@ export function createPanels(deps: PanelsDeps) {
     if (panels.stress) panels.showStress(seed ?? null);
     else loadStudy(store.stressStudy, seed ?? null);
     glyphs ??= deps.stressGlyphs?.(glyphHandlers) ?? null;
-    // Before the marks, so a saved face that is gone has the last word.
-    setStatus("Stress: press Place on a support or a load and click the body, or select faces and set them", "");
     refreshStressMarks();
     restoreKept();
   }
@@ -660,7 +659,6 @@ export function createPanels(deps: PanelsDeps) {
       if (!d.setup.body) panels.setStressBody(hit.body);
       const radius = spotRadiusFor(hit.body);
       panels.addStressSpot(target, { at: hit.at.map(round4) as Vec3, radius, normal: hit.normal.map(round4) as Vec3 });
-      setStatus(`Stress: ${rowName(target)}: a spot of radius ${radius} mm, drag its rim to size it`, "");
       if (!more) stopPlacing();
     },
     leavePlacing() {
@@ -682,13 +680,6 @@ export function createPanels(deps: PanelsDeps) {
 
   function round4(v: number): number {
     return Math.round(v * 1e4) / 1e4 + 0;
-  }
-
-  /** A row as the panel names it, "Support 2" or "Load 1". */
-  function rowName(target: StressTarget): string {
-    const s = panels.stress?.setup;
-    if ("support" in target) return `Support ${(s?.supports.findIndex((x) => x.id === target.support) ?? 0) + 1}`;
-    return `Load ${(s?.loads.findIndex((l) => l.id === target.load) ?? 0) + 1}`;
   }
 
   /** The radius a new spot gets: the last one placed in this setup, as the
@@ -720,10 +711,6 @@ export function createPanels(deps: PanelsDeps) {
     const color = "support" in target ? SUPPORT_COLORS[(row as { type: StressSupportType }).type] : LOAD_MARK_COLOR;
     const radius = body ? spotRadiusFor(body) : defaultSpotRadius(NaN);
     glyphs?.setPlacing?.({ color, radius });
-    setStatus(
-      `Stress: click the body where ${rowName(target)} ${"support" in target ? "holds it" : "pushes"}, Shift click to place several, Esc to stop`,
-      "",
-    );
   }
 
   function stopPlacing() {
@@ -962,7 +949,6 @@ export function createPanels(deps: PanelsDeps) {
     }
     panels.setStressProbe(on);
     glyphs?.setProbe(on);
-    if (on) setStatus("Stress: hover the body to read it, click to pin a probe, Esc to stop", "");
   }
 
   function removeStressProbe(id: number) {
@@ -979,17 +965,16 @@ export function createPanels(deps: PanelsDeps) {
     }
     relocateStressFaces();
     if (d.setup.body && !bodyOnModel()) {
-      const message =
-        "the body analysed is not on the current model, pick another body or bring the model back to where it has it";
-      panels.stressFinished({ error: message });
-      setStatus(`Stress: ${message}`, "");
+      panels.stressFinished({
+        error:
+          "The body analysed is not on the current model. Pick another body, or bring the model back to where it has it.",
+      });
       return;
     }
     // Faces the model lacks are refused here, by the support or load they are in.
     const req = buildStressRequest(d.setup);
     if (!req.ok) {
-      panels.stressFinished({ error: req.message });
-      setStatus(`Stress: ${req.message}`, "");
+      panels.stressFinished({ error: sentence(req.message) });
       return;
     }
     const seq = ++runSeq;
@@ -998,14 +983,13 @@ export function createPanels(deps: PanelsDeps) {
     panels.stressStarted();
     clearResult();
     refreshStressMarks();
-    setStatus("Analysing stress…", "");
     const res = await geometry.stress(store.builtDocument(), req.body, req.options, (id) => {
       if (seq === runSeq) panels.stressSent(id);
     });
     if (seq !== runSeq || !panels.stress) return;
     if (!res.ok) {
       const message = panelMessage(res.message);
-      panels.stressFinished(res.cancelled ? {} : { error: message });
+      panels.stressFinished(res.cancelled ? {} : { error: sentence(message) });
       setStatus(
         res.cancelled ? "Stress analysis cancelled" : `Stress analysis failed: ${message}`,
         res.cancelled ? "" : "error",

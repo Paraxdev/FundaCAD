@@ -82,7 +82,7 @@ describe("supports and gravity in the request", () => {
     const s = ready();
     s.supports.push(newSupport(2, "pinned"));
     const r = buildStressRequest(s);
-    expect(!r.ok && r.message).toBe("place support 2 on the body, or set its faces from a face selection");
+    expect(!r.ok && r.message).toMatch(/^support 2 has no faces yet/);
     s.supports = [];
     const none = buildStressRequest(s);
     expect(!none.ok && none.message).toBe("add a support");
@@ -111,14 +111,14 @@ describe("supports and gravity in the request", () => {
     const s = ready();
     s.loads[0]!.faces = { selectors: [], faceIds: [], normalSum: [0, 0, 0], area: 0 };
     const off = buildStressRequest(s);
-    expect(!off.ok && off.message).toBe("place the load on the body, or set its faces from a face selection");
+    expect(!off.ok && off.message).toMatch(/^the load has no faces yet/);
     s.gravity.on = true;
     const r = buildStressRequest(s);
     expect(r.ok && r.options.loads).toEqual([]);
     expect(r.ok && r.options.gravity).toEqual([0, 0, -9.81]);
     s.loads[0]!.force = 40;
     const edited = buildStressRequest(s);
-    expect(!edited.ok && edited.message).toBe("place the load on the body, or set its faces from a face selection");
+    expect(!edited.ok && edited.message).toMatch(/^the load has no faces yet/);
   });
 
   it("refuses faces the current model lacks, naming their row", () => {
@@ -134,7 +134,7 @@ describe("supports and gravity in the request", () => {
     s.gravity.on = true;
     s.custom.density = "" as unknown as number;
     const r = buildStressRequest(s);
-    expect(!r.ok && r.message).toBe("gravity needs the material's density in g/cm3");
+    expect(!r.ok && r.message).toMatch(/^own weight needs the material's density/);
     s.custom.density = 1.4;
     const ok = buildStressRequest(s);
     expect(ok.ok && ok.options.material).toEqual({ E: 2000, nu: 0.35, yield: 40, density: 1.4, name: "Custom" });
@@ -195,7 +195,7 @@ describe("the study the document saves", () => {
     expect(!r.ok && r.message).toBe("the load needs a force");
     s.loads[0]!.force = 35;
     const d = buildStressRequest(s);
-    expect(!d.ok && d.message).toBe("gravity needs the material's density in g/cm3");
+    expect(!d.ok && d.message).toMatch(/^own weight needs the material's density/);
   });
 
   it("reads back through the face lookup it is given, and round-trips", () => {
