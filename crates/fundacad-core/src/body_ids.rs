@@ -1,5 +1,5 @@
 //! Stable body ids. The document's `bodyIds` map remembers each id against the feature and index that made it, so
-//! disabling, failing or reordering a feature leaves the other ids alone. A document without the map numbers by position.
+//! disabling, failing or reordering a feature leaves other ids alone. Without the map, bodies number by position.
 
 use std::collections::HashSet;
 

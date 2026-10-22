@@ -168,8 +168,8 @@ pub struct EngineOptions {
     pub clocks: Clocks,
     /// Answer `testSleep`, see [`supervise::test_sleep`].
     pub test_ops: bool,
-    /// End the process with [`EXIT_BREACH`] after answering a stalled or overstaying job, instead of abandoning its thread:
-    /// a kernel call that never returns keeps OpenCASCADE's shared thread pool, and every later job stalls too.
+    /// End the process with [`EXIT_BREACH`] after answering a stalled or overstaying job, instead of abandoning its
+    /// thread: a kernel call that never returns keeps OpenCASCADE's shared thread pool, and every later job stalls too.
     pub exit_on_breach: bool,
 }
 
@@ -314,8 +314,8 @@ impl Engine {
         }
     }
 
-    /// A client whose replies go to `out`. Its cancel reaches only its own jobs, and dropping it drops its queued jobs and
-    /// cancels its running one, as closing a connection does.
+    /// A client whose replies go to `out`. Its cancel reaches only its own jobs, and dropping it drops its queued jobs
+    /// and cancels its running one, as closing a connection does.
     pub fn client(self: &Arc<Self>, out: Arc<dyn Outbox>) -> Client {
         Client {
             engine: self.clone(),
@@ -411,8 +411,8 @@ impl Engine {
         Some(who)
     }
 
-    /// Cancels `client`'s running job (only if it is `target`, when given), or withdraws its queued request `target` and
-    /// answers it cancelled. Another client's job is never touched.
+    /// Cancels `client`'s running job (only if it is `target`, when given), or withdraws its queued request `target`
+    /// and answers it cancelled. Another client's job is never touched.
     fn cancel(&self, client: u64, target: Option<&Value>) -> bool {
         let target = target.filter(|t| !t.is_null());
         let mut waiting = lock(&self.waiting);
@@ -597,7 +597,7 @@ struct WatchedJob {
     watchdog: supervise::Watchdog,
 }
 
-/// Streams a rebuild's progress and ends a job that stalls, overstays its wall clock or ignores a cancel past its grace.
+/// Streams a rebuild's progress and ends a job that stalls, overruns its wall clock or ignores a cancel past grace.
 fn spawn_watchdog(
     mut job: WatchedJob,
     on_breach: impl FnOnce(Message) + Send + 'static,
