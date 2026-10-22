@@ -433,8 +433,12 @@ engine inside the package and checks the volume is 6000 mm3. On `dev` a red
 smoke is an annotation and the build still ships. On `main` it fails the leg,
 which holds the beta, or for the Flatpak leaves the Flatpak out of it. The
 bundle runner has every library `linux-deps` installs, so a `.deb` or
-AppImage with a wrong dependency still starts there; only the Flatpak's clean
-runtime catches that today. A second Linux step opens the AppImage window
+AppImage with a wrong dependency still starts there, so the `deb-install` job
+installs the `.deb` in clean Ubuntu 22.04, Ubuntu 24.04 and Debian 12
+containers and runs the AppImage on a Fedora 40 that has only python3 (it must
+name the missing WebKitGTK, then start once that is installed), each ending
+in the same smoke. It is not in the release job's `needs`, so for now a
+broken `Depends` shows red without holding the beta. A second Linux step opens the AppImage window
 under Xvfb and builds the box through a server attached to it, which proves
 the page loaded; it does not gate anything yet.
 
