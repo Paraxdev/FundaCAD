@@ -16,7 +16,9 @@ import {
   rimNesting,
 } from "../../src/sketch/entityDims";
 import type { ResolvedEntity } from "../../src/sketch/snap";
-import type { SketchConstraint } from "../../src/types";
+import { rectCorners } from "../../src/sketch/region";
+import { SketchPlane } from "../../src/sketch/plane";
+import type { DimPlace, SketchConstraint } from "../../src/types";
 
 describe("entityDims", () => {
   it("gives width + height for a rectangle, writable in place", () => {
@@ -650,5 +652,122 @@ describe("dimension furniture at a scale", () => {
     expect(d.standOff).toBeGreaterThan(0);
     expect(d.arrow).toBeGreaterThan(0);
     expect(d.arrow * 2).toBeLessThan(d.dimLine);
+  });
+});
+
+describe("a rotated rectangle's width and height dims", () => {
+  const cx = 30,
+    cy = -12,
+    W = 79.33,
+    H = 65.95;
+  const rect = (angle: number, dimPlace?: DimPlace): ResolvedEntity => ({
+    type: "rectangle",
+    id: "r",
+    width: W,
+    height: H,
+    x: cx,
+    y: cy,
+    ...(angle ? { angle } : {}),
+    ...(dimPlace ? { dimPlace } : {}),
+  });
+  // edge c0->c1 is the width, c0->c3 the height, as rectCorners orders them
+  const edges = (angle: number) => {
+    const c = rectCorners(cx, cy, W, H, angle);
+    return [
+      [c[0]!, c[1]!],
+      [c[0]!, c[3]!],
+    ] as const;
+  };
+
+  it.each([0, 30, 37, 90, 135, -60, 179])("sit along their edges with square witness lines at %d deg", (angle) => {
+    const dims = entityDims(rect(angle));
+    expect(dims.map((d) => d.field)).toEqual(["width", "height"]);
+    edges(angle).forEach(([p, q], k) => {
+      const d = dims[k]!;
+      const [wa, wb, dl] = d.lines;
+      const edge = q.clone().sub(p).normalize();
+      expect(wa![0].distanceTo(p)).toBeLessThan(1e-9);
+      expect(wb![0].distanceTo(q)).toBeLessThan(1e-9);
+      const offA = wa![1].clone().sub(p);
+      const offB = wb![1].clone().sub(q);
+      expect(offA.distanceTo(offB)).toBeLessThan(1e-9);
+      expect(Math.abs(offA.clone().normalize().dot(edge))).toBeLessThan(1e-9);
+      expect(offA.dot(p.clone().add(q).multiplyScalar(0.5).sub(new THREE.Vector2(cx, cy)))).toBeGreaterThan(0);
+      expect([dl![0].distanceTo(wa![1]), dl![1].distanceTo(wb![1])]).toEqual([0, 0]);
+      const run = dl![1].clone().sub(dl![0]);
+      expect(Math.abs(run.clone().normalize().cross(edge))).toBeLessThan(1e-9);
+      expect(run.length()).toBeCloseTo(p.distanceTo(q), 9);
+      const tips = d.lines.slice(3).map(([tip]) => tip);
+      expect(tips.map((t) => Math.min(t.distanceTo(dl![0]), t.distanceTo(dl![1])))).toEqual([0, 0, 0, 0]);
+      const mid = dl![0].clone().add(dl![1]).multiplyScalar(0.5);
+      expect(d.labelPos.distanceTo(mid)).toBeLessThan(1e-9);
+    });
+  });
+
+  it("keep an unrotated rectangle's dims on the sketch axes", () => {
+    const [w, h] = entityDims(rect(0));
+    expect(w!.lines[0]).toEqual([new THREE.Vector2(cx - W / 2, cy - H / 2), w!.lines[0]![1]]);
+    expect(w!.lines[2]![0].x).toBe(cx - W / 2);
+    expect(w!.lines[2]![0].y).toBe(w!.lines[2]![1].y);
+    expect(h!.lines[2]![0].y).toBe(cy - H / 2);
+    expect(h!.lines[2]![0].x).toBe(h!.lines[2]![1].x);
+  });
+
+  it("stay parallel and square to the edge on a slanted sketch plane", () => {
+    const plane = new SketchPlane({ origin: [10, -4, 7], normal: [1, 1, 1], xdir: [1, -1, 0] });
+    const to3 = (p: THREE.Vector2) => plane.to3D(p.x, p.y);
+    const angle = 37;
+    const dims = entityDims(rect(angle));
+    edges(angle).forEach(([p, q], k) => {
+      const [wa, , dl] = dims[k]!.lines;
+      const edge = to3(q).sub(to3(p)).normalize();
+      const run = to3(dl![1]).sub(to3(dl![0])).normalize();
+      const wit = to3(wa![1]).sub(to3(wa![0])).normalize();
+      expect(run.clone().cross(edge).length()).toBeLessThan(1e-9);
+      expect(Math.abs(wit.dot(edge))).toBeLessThan(1e-9);
+      expect(Math.abs(wit.dot(plane.n))).toBeLessThan(1e-9);
+      expect(to3(wa![0]).distanceTo(to3(p))).toBeLessThan(1e-9);
+    });
+  });
+
+  it("take a dragged placement along the rotated edge normal", () => {
+    const angle = -60;
+    const t = (angle * Math.PI) / 180;
+    const nW = new THREE.Vector2(Math.sin(t), -Math.cos(t));
+    const nH = new THREE.Vector2(-Math.cos(t), -Math.sin(t));
+    const place = {
+      width: { ox: nW.x * 17.5, oy: nW.y * 17.5 },
+      height: { ox: -nH.x * 9.25, oy: -nH.y * 9.25 },
+    };
+    const [w, h] = entityDims(rect(angle, place));
+    const [[p, q], [r, s]] = edges(angle);
+    const wMid = p.clone().add(q).multiplyScalar(0.5);
+    const hMid = r.clone().add(s).multiplyScalar(0.5);
+    expect(
+      w!.labelPos
+        .clone()
+        .sub(wMid)
+        .toArray()
+        .map((n) => +n.toFixed(9)),
+    ).toEqual(
+      nW
+        .clone()
+        .multiplyScalar(17.5)
+        .toArray()
+        .map((n) => +n.toFixed(9)),
+    );
+    expect(
+      h!.labelPos
+        .clone()
+        .sub(hMid)
+        .toArray()
+        .map((n) => +n.toFixed(9)),
+    ).toEqual(
+      nH
+        .clone()
+        .multiplyScalar(-9.25)
+        .toArray()
+        .map((n) => +n.toFixed(9)),
+    );
   });
 });

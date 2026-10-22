@@ -228,21 +228,24 @@ function lathe(profile: [number, number][]): THREE.LatheGeometry {
   );
 }
 
-export function createDragHandle(tone: HandleTone = "idle"): DragHandle {
-  const group = new THREE.Group();
-  group.renderOrder = 999;
-
-  // Lit, not flat, so the scene lights make it read as a rounded body; the emissive floor keeps it
-  // legible when the lights are behind it.
-  const body = new THREE.MeshLambertMaterial({
+/** Unlit and untoned, like its outline: the handle must show its token colour whatever lights, exposure or tone
+ *  curve the scene draws with (a lit blob went missing while its outline still showed). */
+function handleMaterial(): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
     color: idleColor(),
-    emissive: idleColor(),
-    emissiveIntensity: 0.5,
+    toneMapped: false,
     depthTest: false,
     depthWrite: false,
     transparent: true,
     opacity: 1,
   });
+}
+
+export function createDragHandle(tone: HandleTone = "idle"): DragHandle {
+  const group = new THREE.Group();
+  group.renderOrder = 999;
+
+  const body = handleMaterial();
   const geo = lathe(PROFILE);
   const blob = new THREE.Mesh(geo, body);
   blob.renderOrder = 999;
@@ -252,6 +255,7 @@ export function createDragHandle(tone: HandleTone = "idle"): DragHandle {
   const outlineMat = new THREE.MeshBasicMaterial({
     color: themeColor("--bg", HANDLE_OUTLINE),
     side: THREE.BackSide,
+    toneMapped: false,
     depthTest: false,
     depthWrite: false,
     transparent: true,
@@ -278,7 +282,6 @@ export function createDragHandle(tone: HandleTone = "idle"): DragHandle {
     const base = currentTone === "cut" ? cutColor() : idleColor();
     const c = refused ? cutColor() : hot ? hotColor() : base;
     body.color.set(c);
-    body.emissive.set(c);
     outlineMat.color.set(themeColor("--bg", HANDLE_OUTLINE));
   };
   apply();
@@ -337,15 +340,7 @@ export function createRotationArc(
   // TorusGeometry sweeps from local +X; rotate so the sweep centres on local +Y, the axis a caller aims.
   const start = Math.PI / 2 - sweep / 2;
 
-  const body = new THREE.MeshLambertMaterial({
-    color: idleColor(),
-    emissive: idleColor(),
-    emissiveIntensity: 0.5,
-    depthTest: false,
-    depthWrite: false,
-    transparent: true,
-    opacity: 1,
-  });
+  const body = handleMaterial();
   const arcGeo = new THREE.TorusGeometry(r, ARC_TUBE, 10, 40, sweep);
   const arc = new THREE.Mesh(arcGeo, body);
   arc.rotation.z = start;
@@ -380,7 +375,6 @@ export function createRotationArc(
     const base = currentTone === "cut" ? cutColor() : idleColor();
     const c = refused ? cutColor() : hot ? hotColor() : base;
     body.color.set(c);
-    body.emissive.set(c);
   };
   apply();
 

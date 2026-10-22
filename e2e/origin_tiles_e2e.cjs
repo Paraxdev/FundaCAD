@@ -1,7 +1,7 @@
 // The origin planes as three small tiles beside the origin: shown only while a
 // tool asks for a plane, a constant size on screen, each picking its own plane,
 // in Noir and Solarized Light. SC_VARIANTS=1 also writes the corner comparison
-// renders (circular corners against the rho 0.25 profile, close and far).
+// renders (circular corners against the squircle, close and far).
 //
 // Usage (vite + engine running):
 //   SC_TOKEN=<t> SC_CHROME=<exe> SC_URL=http://localhost:5952/ SC_ENGINE_PORT=8952 \
@@ -10,6 +10,11 @@ const { chromium } = require("playwright-core");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+
+// TILE_SIZE_PX, TILE_GAP_PX + TILE_SIZE_PX and the MIN_TILE_SCALE floor in src/viewport/originTiles.ts.
+const SIZE = 68;
+const EXTENT = 78;
+const FLOOR = 0.6 * SIZE;
 
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
@@ -123,18 +128,21 @@ const PLANES = ["XY", "XZ", "YZ"];
     }, PLANES);
   // On screen length of the XY tile's side, and what the size rule says it should be.
   const xySide = () =>
-    page.evaluate(() => {
-      const v = window.viewport;
-      const m = v.scene.planes.XY;
-      m.updateWorldMatrix(true, false);
-      const V = m.position.constructor;
-      const a = v.projectToScreen(new V(-20, 0, 0).applyMatrix4(m.matrixWorld));
-      const b = v.projectToScreen(new V(20, 0, 0).applyMatrix4(m.matrixWorld));
-      const pws = v.pixelWorldSize(new V(0, 0, 0));
-      const diag = v.modelDiagonal();
-      const k = diag == null ? 1 : Math.max(0.6, Math.min(1, ((diag / pws) * 0.45) / 46));
-      return { px: Math.hypot(b.x - a.x, b.y - a.y), want: 40 * k };
-    });
+    page.evaluate(
+      ({ size, extent, floor }) => {
+        const v = window.viewport;
+        const m = v.scene.planes.XY;
+        m.updateWorldMatrix(true, false);
+        const V = m.position.constructor;
+        const a = v.projectToScreen(new V(-size / 2, 0, 0).applyMatrix4(m.matrixWorld));
+        const b = v.projectToScreen(new V(size / 2, 0, 0).applyMatrix4(m.matrixWorld));
+        const pws = v.pixelWorldSize(new V(0, 0, 0));
+        const diag = v.modelDiagonal();
+        const k = diag == null ? 1 : Math.max(floor / size, Math.min(1, ((diag / pws) * 0.45) / extent));
+        return { px: Math.hypot(b.x - a.x, b.y - a.y), want: size * k };
+      },
+      { size: SIZE, extent: EXTENT, floor: FLOOR },
+    );
 
   await boot();
 
@@ -197,7 +205,7 @@ const PLANES = ["XY", "XZ", "YZ"];
   for (const scale of [40, 3000]) {
     await top([0, 0, 0], scale);
     const s = await xySide();
-    check(`top view at scale ${scale}: the XY tile is 40 px`, Math.abs(s.px - 40) <= 1, JSON.stringify(s));
+    check(`top view at scale ${scale}: the XY tile is ${SIZE} px`, Math.abs(s.px - SIZE) <= 1, JSON.stringify(s));
   }
   const names = await page.evaluate(
     (planes) =>
@@ -240,7 +248,7 @@ const PLANES = ["XY", "XZ", "YZ"];
     JSON.stringify({ xyAt, shownPick, hiddenPick }),
   );
 
-  console.log("\n[a small part shrinks them, never below 24 px]");
+  console.log(`\n[a small part shrinks them, never below ${FLOOR} px]`);
   await page.evaluate(async () => {
     window.store.addFeature({ id: "TB", type: "box", length: 4, width: 4, height: 4 });
     window.store.addFeature({ id: "TM", type: "move", dx: 37, dy: 23, dz: 2, rx: 0, ry: 0, rz: 0 });
@@ -249,9 +257,10 @@ const PLANES = ["XY", "XZ", "YZ"];
   await settle();
   await askPlane();
   const sizes = [];
-  for (const scale of [30, 40, 120]) {
+  for (const scale of [12, 20, 120]) {
     await top([18, 11, 0], scale);
     sizes.push({ scale, ...(await xySide()) });
+    await shot(`small-part-scale-${scale}-noir`, around(await origin(), 170));
   }
   check(
     "each size follows the rule",
@@ -259,18 +268,18 @@ const PLANES = ["XY", "XZ", "YZ"];
     JSON.stringify(sizes),
   );
   check(
-    "all between 24 and 40 px",
-    sizes.every((s) => s.px >= 23 && s.px <= 41),
+    `all between ${FLOOR} and ${SIZE} px`,
+    sizes.every((s) => s.px >= FLOOR - 1 && s.px <= SIZE + 1),
     JSON.stringify(sizes),
   );
   check(
-    "one shrunk below 40 px and above the floor",
-    sizes.some((s) => s.want < 39 && s.want > 25),
+    `one shrunk below ${SIZE} px and above the floor`,
+    sizes.some((s) => s.want < SIZE - 1 && s.want > FLOOR + 1),
     JSON.stringify(sizes),
   );
   check(
-    "one held at the 24 px floor",
-    sizes.some((s) => Math.abs(s.want - 24) < 1e-6),
+    `one held at the ${FLOOR} px floor`,
+    sizes.some((s) => Math.abs(s.want - FLOOR) < 1e-6),
     JSON.stringify(sizes),
   );
   await escape();
@@ -285,7 +294,8 @@ const PLANES = ["XY", "XZ", "YZ"];
   await home([0, 0, 0], 60);
   // A cube a little larger than the tiles, so part of each tile is inside it and part outside.
   const cube = await page.evaluate(
-    () => 1.2 * 46 * window.viewport.pixelWorldSize(new window.viewport.camera.position.constructor(0, 0, 0)),
+    (extent) => 1.2 * extent * window.viewport.pixelWorldSize(new window.viewport.camera.position.constructor(0, 0, 0)),
+    EXTENT,
   );
   await page.evaluate(
     async (s) => {
@@ -404,9 +414,8 @@ const PLANES = ["XY", "XZ", "YZ"];
         window.viewport.scene.originTiles.reshape(s);
         window.viewport.requestRender();
       }, shape);
-    const DEFAULT = { sizePx: 40, gapPx: 6, radiusPx: 11, rho: 0.25, octant: { x: 1, y: -1, z: 1 } };
-    const CIRCLE = Math.SQRT2 - 1;
-    const BIG = { sizePx: 240, radiusPx: 66, gapPx: 36 };
+    const DEFAULT = { sizePx: SIZE, gapPx: EXTENT - SIZE, radiusPx: 29, exponent: 4, octant: { x: 1, y: -1, z: 1 } };
+    const BIG = { sizePx: 240, radiusPx: 102, gapPx: 36 };
     for (const theme of ["noir", "solarized"]) {
       await page.evaluate((th) => {
         if (th === "solarized") localStorage.setItem("fundacad.theme", "solarized-light");
@@ -421,11 +430,11 @@ const PLANES = ["XY", "XZ", "YZ"];
       await settle();
       await home([0, 0, 0], 60);
       await askPlane();
-      for (const [name, rho] of [
-        ["circle", CIRCLE],
-        ["rho025", 0.25],
+      for (const [name, exponent] of [
+        ["circle", 2],
+        ["squircle", 4],
       ]) {
-        await reshape({ ...DEFAULT, rho });
+        await reshape({ ...DEFAULT, exponent });
         await home([0, 0, 0], 60);
         await shot(`corner-${name}-${theme}-close`, around(await origin(), 170));
         await home([0, 0, 0], 1500);
@@ -433,14 +442,14 @@ const PLANES = ["XY", "XZ", "YZ"];
       }
       await reshape(DEFAULT);
       await home([0, 0, 0], 60);
-      await shot(`full-rho025-${theme}`);
+      await shot(`full-squircle-${theme}`);
       if (theme === "noir") {
         await page.evaluate(() => {
           document.documentElement.classList.add("no-glass-blur");
           window.viewport.requestRender();
         });
         await frame();
-        await shot("bluroff-rho025-noir-close", around(await origin(), 170));
+        await shot("bluroff-squircle-noir-close", around(await origin(), 170));
         await page.evaluate(() => {
           document.documentElement.classList.remove("no-glass-blur");
           window.viewport.requestRender();
@@ -457,12 +466,11 @@ const PLANES = ["XY", "XZ", "YZ"];
       await reshape({ ...DEFAULT, octant: { x: -1, y: 1, z: -1 } });
       await home([0, 0, 0], 60);
       await shot(`octant-outside-${theme}-close`, around(await origin(), 170));
-      for (const [name, rho] of [
-        ["circle", CIRCLE],
-        ["rho025", 0.25],
-        ["rho060", 0.6],
+      for (const [name, exponent] of [
+        ["circle", 2],
+        ["squircle", 4],
       ]) {
-        await reshape({ ...DEFAULT, ...BIG, rho });
+        await reshape({ ...DEFAULT, ...BIG, exponent });
         await top([0, 0, 0], 20);
         const c = await page.evaluate(() => {
           const m = window.viewport.scene.planes.XY;
@@ -480,7 +488,9 @@ const PLANES = ["XY", "XZ", "YZ"];
       await settle();
       await home([0, 0, 0], 60);
       const side = await page.evaluate(
-        () => 1.2 * 46 * window.viewport.pixelWorldSize(new window.viewport.camera.position.constructor(0, 0, 0)),
+        (extent) =>
+          1.2 * extent * window.viewport.pixelWorldSize(new window.viewport.camera.position.constructor(0, 0, 0)),
+        EXTENT,
       );
       await page.evaluate(
         async (s) => {
