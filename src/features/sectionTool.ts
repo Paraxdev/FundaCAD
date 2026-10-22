@@ -351,7 +351,7 @@ export class SectionTool {
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo, "section");
     this.dim.show([{ name: "offset", label: "Offset", kind: "length" }], () => this.confirm());
-    this.dim.updateFromCursor({ offset: Math.abs(this.offset) });
+    this.dim.updateFromCursor({ offset: this.offset });
     this.place();
     this.prompt();
     this.setPhase("editing");
@@ -401,7 +401,7 @@ export class SectionTool {
       this.offset = stepped;
       this.pushPlane();
       this.save();
-      this.dim.updateFromCursor({ offset: Math.abs(this.offset) });
+      this.dim.updateFromCursor({ offset: this.offset });
       return;
     }
     this.hovering = this.hitGizmo(e.clientX, e.clientY);

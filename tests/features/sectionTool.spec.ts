@@ -312,7 +312,7 @@ describe("section phases", () => {
     tool.edit();
     expect(tool.phase).toBe("editing");
     expect(handles(scene)).toHaveLength(1);
-    expect(Number(input()!.value)).toBe(9.5);
+    expect(Number(input()!.value)).toBe(-9.5);
     expect(sent).toHaveLength(count);
     expect(sent.at(-1)).toEqual(plane(-9.5, -1, 0.14));
 
@@ -323,6 +323,31 @@ describe("section phases", () => {
     function canvas() {
       return document.querySelector("canvas")!;
     }
+  });
+
+  it("Edit shows a cut below its plane signed, so Tab and Enter, or a new number, keep it on that side", () => {
+    const { tool, sent } = setup();
+    tool.start("Z");
+    key(type("-9.5"), "Enter");
+    tool.edit();
+    expect(input()!.value).toBe("-9.5");
+    key(input()!, "Tab");
+    key(input()!, "Enter");
+    expect([tool.phase, sent.at(-1)]).toEqual(["on", plane(-9.5, 1, 0.14)]);
+    tool.edit();
+    key(type("-12.25"), "Enter");
+    expect(sent.at(-1)).toEqual(plane(-12.25, 1, 0.14));
+  });
+
+  it("a drag below the plane shows the signed offset", () => {
+    const { tool, canvas, state, sent } = setup();
+    tool.start("Z");
+    flushFrames();
+    state.hit = true;
+    pointer(canvas, "pointerdown", 30);
+    pointer(canvas, "pointermove", 23.5);
+    pointer(canvas, "pointerup", 23.5);
+    expect([sent.at(-1), Number(input()!.value)]).toEqual([plane(-6.5, 1, 0.14), -6.5]);
   });
 
   it("flip() keeps the other half while on, and does nothing while off", () => {
