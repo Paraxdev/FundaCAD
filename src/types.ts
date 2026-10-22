@@ -238,7 +238,11 @@ export type SketchConstraint =
   // Pairs expand to parallel plus one p2l_distance (lines), one p2l_distance (rect edges),
   // or coincident centres plus a radius difference (rounds). `value` is signed by side;
   // p2l_distance is not, so sketchSolve's rimBranch holds the side.
-  | { type: "offset"; id?: string; pairs: { src: string; cpy: string }[]; value: number; driven?: boolean; place?: PlaceOffset };
+  | { type: "offset"; id?: string; pairs: OffsetPair[]; value: number; driven?: boolean; place?: PlaceOffset };
+
+/** `flip`: this round copy's radius moves by -value. A chain's value carries the picked
+ *  curve's sign, which says nothing about whether each arc in the chain grows or shrinks. */
+export type OffsetPair = { src: string; cpy: string; flip?: boolean };
 
 /** A driven dimension only measures; the solver skips it. */
 export function isDriven(c: SketchConstraint): boolean {
