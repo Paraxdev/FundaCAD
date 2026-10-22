@@ -1,6 +1,5 @@
-// One reference image as the document stores it. The app keeps each entry
-// whole, so writing one back starts from what was read: a field a newer
-// version of this plugin added survives an older one.
+// The app keeps each entry whole, so writing one back starts from what was read and a field a newer version of this
+// plugin added survives an older one.
 
 import type { PlaneSpec } from "fundacad";
 import type { Placement, V2 } from "./calibrate";
