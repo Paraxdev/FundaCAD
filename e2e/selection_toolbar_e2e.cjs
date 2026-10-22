@@ -228,10 +228,12 @@ const check = (name, ok, detail) => {
     window.viewport.setSelectedBodies([]);
   });
   await page.waitForTimeout(300);
+  // The middle box's top face: the first box's centre is under the tool rail's labels.
   const bodyAt = await page.evaluate((id) => {
-    const p = window.viewport.projectToScreen(window.viewport.bodiesCentroid([id]));
+    const c = window.viewport.bodiesCentroid([id]);
+    const p = window.viewport.projectToScreen({ x: c.x, y: c.y, z: c.z + 4 });
     return { x: p.x, y: p.y };
-  }, ids[0]);
+  }, ids[1]);
   await select([ids[0], ids[1]]);
   await page.mouse.click(bodyAt.x, bodyAt.y, { button: "right" });
   await page.waitForTimeout(500);
