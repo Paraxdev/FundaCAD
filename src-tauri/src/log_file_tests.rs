@@ -42,7 +42,14 @@ fn in_child(test: &str, dir: &Path) {
         .env(CHILD, dir)
         .output()
         .unwrap();
-    assert!(out.status.success(), "{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    // A failing child panics into the log it redirected to, so the logs go into the message.
+    let logs: String = fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| format!("--- {}\n{}", e.file_name().to_string_lossy(), fs::read_to_string(e.path()).unwrap_or_default()))
+        .collect();
+    assert!(out.status.success(), "{}{}{logs}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
 }
 
 /// The lines this test wrote, without the harness's own lines that followed the redirect.
@@ -170,16 +177,19 @@ fn a_run_past_the_cap_moves_on_to_a_fresh_log_and_keeps_the_last_three() {
     if let Some(dir) = std::env::var_os(CHILD) {
         let dir = Path::new(&dir);
         start(dir, CAP_T).unwrap();
-        println!("[t] first {}", "x".repeat(150));
-        assert!(!rotate_if_over(dir, CAP_T).unwrap());
-        println!("[t] first again");
+        println!("[t] first {}", "x".repeat(50));
         crt_lines("first");
+        // The C runtime lines are Windows only, so the pad to one byte under the cap is measured.
+        let under = CAP_T - 1 - fs::metadata(dir.join(NAME)).unwrap().len();
+        println!("[t] first again {}", "x".repeat(under as usize - "[t] first again \n".len()));
+        assert!(!rotate_if_over(dir, CAP_T).unwrap());
+        println!();
         assert!(rotate_if_over(dir, CAP_T).unwrap());
         assert!(!rotate_if_over(dir, CAP_T).unwrap());
         println!("[t] second {}", "y".repeat(200));
         assert!(rotate_if_over(dir, CAP_T).unwrap());
         eprintln!("[t] third {}", "z".repeat(200));
-        // The first log is still open through the leaked handle, and is dropped now.
+        // On Windows the first log is still open through the leaked handle, and is dropped now.
         assert!(rotate_if_over(dir, CAP_T).unwrap());
         eprintln!("[t] fourth");
         crt_lines("fourth");
