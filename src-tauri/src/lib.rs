@@ -18,6 +18,7 @@ pub mod safe_mode;
 pub mod session_file;
 pub mod settings_files;
 mod spacemouse;
+mod system_info;
 pub mod thumbs;
 #[cfg(target_os = "linux")]
 mod webkit;
@@ -314,6 +315,7 @@ pub fn run() {
         frontend_ready,
         log_tail,
         log_line,
+        system_info::system_info,
         safe_mode_exit,
         launch::take_launch_paths,
         drop_paths::drop_paths_take,
