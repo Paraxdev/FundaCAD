@@ -48,9 +48,9 @@ export function unitChoices(last: ImportUnit) {
   return [...(first ? [{ ...first, hint: "last used" }] : []), ...rest];
 }
 
-/** Ask which unit the file is in, null when the dialog is dismissed. */
-export async function askImportUnit(fmt: ImportFormat): Promise<ImportUnit | null> {
-  const pick = await choose(`What unit is this ${fmt.toUpperCase()} file in?`, unitChoices(lastImportUnit()));
+/** Ask which unit the file is in, null when the dialog is dismissed or `signal` aborts. */
+export async function askImportUnit(fmt: ImportFormat, signal?: AbortSignal): Promise<ImportUnit | null> {
+  const pick = await choose(`What unit is this ${fmt.toUpperCase()} file in?`, unitChoices(lastImportUnit()), signal);
   const unit = asImportUnit(pick);
   if (unit) rememberImportUnit(unit);
   return unit;
