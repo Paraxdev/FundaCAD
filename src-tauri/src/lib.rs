@@ -273,8 +273,19 @@ fn watch_frontend_load(app: tauri::AppHandle) {
     });
 }
 
+fn context() -> tauri::Context<tauri::Wry> {
+    tauri::generate_context!()
+}
+
+/// Read from the build config, which the development build overrides, so the MCP server finds the session and data
+/// directory of the app it ships in.
+pub fn share_app_identifier() {
+    fundacad_mcp::app_session::set_app_identifier(&context().config().identifier);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    share_app_identifier();
     // First, before any GTK or WebKit type is touched: the web process inherits this environment when WebKit spawns it.
     // webkit.rs says what it changes and why (issue #6).
     let safe = safe_mode_decide();
@@ -443,7 +454,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context())
         .expect("error while building FundaCAD");
 
     app.run(|app_handle, event| {

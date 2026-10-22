@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "FundaCAD Dev",
+  "mainBinaryName": "fundacad-dev",
+  "identifier": "dev.fundacad.app.dev",
+  "app": {
+    "windows": [
+      {
+        "title": "FundaCAD Dev",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "dragDropEnabled": false
+      }
+    ]
+  },
+  "bundle": {
+    "fileAssociations": []
+  }
+}
