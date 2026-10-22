@@ -305,7 +305,7 @@ async function screenshot() {
       />
     </div>
     <div v-if="dialogs.bugDeps" class="float-group">
-      <IconButton icon="bug" title="Report a bug" @click="dialogs.bugReport = true" />
+      <IconButton icon="bug" title="Report a problem" @click="dialogs.bugReport = true" />
     </div>
 
     <Popover

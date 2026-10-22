@@ -48,6 +48,7 @@ import { Home } from "../ui/home";
 import { wireHomeOnOpen } from "./homeWiring";
 import { setThumbnailSource } from "../io/thumbnails";
 import { scheduleStartupUpdateCheck } from "../ui/updates";
+import { startWhatsNew } from "../ui/whatsNew";
 
 import { installEngineDiedToast } from "./engineWatch";
 import { activatePlugins } from "../plugins/activate";
@@ -75,7 +76,7 @@ import { installSketchStateBridge } from "./sketchStateBridge";
 import { createActions } from "./actions";
 import { installKeyboard } from "./keyboard";
 import { installTitlebar } from "./titlebar";
-import { installUnsavedGuard } from "./unsavedGuard";
+import { beforeUpdate, installUnsavedGuard } from "./unsavedGuard";
 import { installContextMenuGuard } from "../ui/contextMenuGuard";
 import { installPointerKind } from "../input/pointerKind";
 import { installLongPress } from "../ui/longPress";
@@ -169,6 +170,7 @@ export interface Engine {
   featureForFace(faceId: number): string | null;
   deleteSelectedFace(): boolean;
   noteCommitted(id: string | null): void;
+  frameNextModel(): void;
 
   isSketchConsumed(id: string): boolean;
   isSketchVisible(id: string): boolean;
@@ -521,8 +523,9 @@ export function mountUi(e: Engine): void {
   e.handleAction = createActions(e);
 
   if (welcomeOnStartup()) e.ui.home.open();
+  void startWhatsNew(e.ui.home);
   installLaunchPaths(e, recoveryAsked);
-  scheduleStartupUpdateCheck();
+  scheduleStartupUpdateCheck(beforeUpdate(e));
 
   installTitlebar(e);
   installUnsavedGuard(e);

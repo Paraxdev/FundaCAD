@@ -80,7 +80,9 @@ describe("a file dropped from a Linux file manager", () => {
 
   function install() {
     const shown: boolean[] = [];
-    uninstall = installDesktopDrop({ store: {}, sketch: {}, geometry: {} } as never, (s) => shown.push(s));
+    uninstall = installDesktopDrop({ store: { onOpen: () => () => {} }, sketch: {}, geometry: {} } as never, (s) =>
+      shown.push(s),
+    );
     return shown;
   }
 

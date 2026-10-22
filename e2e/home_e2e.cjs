@@ -276,7 +276,8 @@ function check(name, ok, detail = "") {
     await page.selectOption(".home-sort", "opened");
 
     console.log("8. templates");
-    for (const name of ["Plate", "Wall bracket", "Pinned lever"]) {
+    const bodyCounts = { Plate: 1, "Wall bracket": 1, "Pinned lever": 1, "Box with a lid": 2 };
+    for (const [name, count] of Object.entries(bodyCounts)) {
       if (!(await homeUp())) await menu("File", "Home");
       await page.click(`.home-example:has-text("${name}")`);
       const discard = await page.waitForSelector("button:has-text('Discard')", { timeout: 1500 }).catch(() => null);
@@ -295,7 +296,7 @@ function check(name, ok, detail = "") {
         got.name === name && got.path === null && !got.dirty,
         JSON.stringify(got),
       );
-      check(`${name} builds`, !got.error && got.bodies === 1, JSON.stringify(got));
+      check(`${name} builds`, !got.error && got.bodies === count, JSON.stringify(got));
       // A plain block is 12 triangles, each hole adds a wall.
       if (name === "Plate") check("Plate has its holes", got.triangles > 100, `${got.triangles} triangles`);
       check(`${name} closes Home`, !(await homeUp()));

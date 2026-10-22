@@ -1,0 +1,42 @@
+[
+  {
+    "id": "wall-bracket",
+    "name": "Wall bracket",
+    "caption": "Find where it bends",
+    "hint": "An L bracket on a wall. Open the Stress panel and run it to see where it bends most",
+    "icon": "stress",
+    "source": "document"
+  },
+  {
+    "id": "box-with-lid",
+    "name": "Box with a lid",
+    "caption": "A lid that fits, ready to print",
+    "hint": "A box and a lid laid out for printing. Change innerWidth in Parameters and both parts follow",
+    "icon": "shell",
+    "source": "document"
+  },
+  {
+    "id": "printer",
+    "name": "3D printer",
+    "caption": "100 parts from a STEP file",
+    "hint": "A printer frame imported from a STEP file. Hide or isolate its groups in Items, or turn on a section to look inside",
+    "icon": "assembly",
+    "source": "step"
+  },
+  {
+    "id": "plate",
+    "name": "Plate",
+    "caption": "Change a size, the holes follow",
+    "hint": "A plate with four holes. Change width or depth in Parameters and the holes stay in their corners",
+    "icon": "box",
+    "source": "document"
+  },
+  {
+    "id": "pinned-lever",
+    "name": "Pinned lever",
+    "caption": "See the load on a pin",
+    "hint": "A lever on a pin. Open the Stress panel and run it to see the load around the pin",
+    "icon": "rotate",
+    "source": "document"
+  }
+]

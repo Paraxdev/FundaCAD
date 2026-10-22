@@ -481,7 +481,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
     <div ref="scroller" class="timeline-scroll" @dragover="onDragOverScroller">
       <div ref="track" class="timeline-track">
         <div v-if="showEmpty" class="timeline-empty">
-          Your modeling history will appear here. Start with a Sketch.
+          Your modeling history will appear here. Start with a Sketch, or drop a STEP, STL or 3MF file.
         </div>
         <template v-else>
           <template v-for="(f, i) in features" :key="f.id">

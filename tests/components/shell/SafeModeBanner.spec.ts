@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
 
 const invoke = vi.fn(async (..._a: unknown[]) => undefined);
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...a: unknown[]) => invoke(...a) }));
 
 import SafeModeBanner from "../../../src/components/shell/SafeModeBanner.vue";
 import { slotFor } from "../../../src/io/recovery";
+import { useDialogStore } from "../../../src/stores/dialogs";
+import type { BugReportDeps } from "../../../src/ui/bugReporter";
 
 enableAutoUnmount(afterEach);
 afterEach(() => {
@@ -54,6 +57,16 @@ describe("the safe mode banner", () => {
     await flushPromises();
     expect(w.text()).toContain("Could not restart: no executable");
     expect(w.get("button").attributes("disabled")).toBeUndefined();
+  });
+
+  it("opens the problem report from its second button", async () => {
+    setActivePinia(createPinia());
+    window.__FUNDACAD_SAFE_MODE__ = { reason: "failedStarts", failedStarts: 3 };
+    useDialogStore().bindBugReporter({} as BugReportDeps);
+    const w = mount(SafeModeBanner);
+    expect(w.findAll("button").map((b) => b.text())).toEqual(["Restart normally", "Report a problem"]);
+    await w.get(".safe-report").trigger("click");
+    expect([useDialogStore().bugReport, invoke.mock.calls]).toEqual([true, []]);
   });
 
   it("keeps its recovery snapshots apart from the ones it did not offer", () => {

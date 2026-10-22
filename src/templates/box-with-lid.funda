@@ -1,0 +1,488 @@
+{
+  "parameters": {
+    "innerWidth": 60,
+    "innerDepth": 40,
+    "innerHeight": 25,
+    "wall": 2,
+    "floor": 2,
+    "clearance": 0.2,
+    "lipHeight": 5,
+    "spacing": 10,
+    "outerWidth": 64,
+    "outerDepth": 44,
+    "boxHeight": 27,
+    "boxRight": -5,
+    "boxLeft": -69,
+    "front": -22,
+    "back": 22,
+    "cavityLeft": -67,
+    "cavityRight": -7,
+    "cavityFront": -20,
+    "cavityBack": 20,
+    "lidLeft": 5,
+    "lidRight": 69,
+    "lipLeft": 7.2,
+    "lipRight": 66.8,
+    "lipFront": -19.8,
+    "lipBack": 19.8,
+    "lipInnerLeft": 9.2,
+    "lipInnerRight": 64.8,
+    "lipInnerFront": -17.8,
+    "lipInnerBack": 17.8
+  },
+  "paramDefs": {
+    "innerWidth": {
+      "expr": "60",
+      "value": 60,
+      "unit": "mm"
+    },
+    "innerDepth": {
+      "expr": "40",
+      "value": 40,
+      "unit": "mm"
+    },
+    "innerHeight": {
+      "expr": "25",
+      "value": 25,
+      "unit": "mm"
+    },
+    "wall": {
+      "expr": "2",
+      "value": 2,
+      "unit": "mm"
+    },
+    "floor": {
+      "expr": "2",
+      "value": 2,
+      "unit": "mm"
+    },
+    "clearance": {
+      "expr": "0.2",
+      "value": 0.2,
+      "unit": "mm"
+    },
+    "lipHeight": {
+      "expr": "5",
+      "value": 5,
+      "unit": "mm"
+    },
+    "spacing": {
+      "expr": "10",
+      "value": 10,
+      "unit": "mm"
+    },
+    "outerWidth": {
+      "expr": "innerWidth + 2 * wall",
+      "value": 64,
+      "unit": "mm"
+    },
+    "outerDepth": {
+      "expr": "innerDepth + 2 * wall",
+      "value": 44,
+      "unit": "mm"
+    },
+    "boxHeight": {
+      "expr": "floor + innerHeight",
+      "value": 27,
+      "unit": "mm"
+    },
+    "boxRight": {
+      "expr": "-spacing / 2",
+      "value": -5,
+      "unit": "mm"
+    },
+    "boxLeft": {
+      "expr": "-(spacing / 2 + outerWidth)",
+      "value": -69,
+      "unit": "mm"
+    },
+    "front": {
+      "expr": "-outerDepth / 2",
+      "value": -22,
+      "unit": "mm"
+    },
+    "back": {
+      "expr": "outerDepth / 2",
+      "value": 22,
+      "unit": "mm"
+    },
+    "cavityLeft": {
+      "expr": "boxLeft + wall",
+      "value": -67,
+      "unit": "mm"
+    },
+    "cavityRight": {
+      "expr": "boxRight - wall",
+      "value": -7,
+      "unit": "mm"
+    },
+    "cavityFront": {
+      "expr": "front + wall",
+      "value": -20,
+      "unit": "mm"
+    },
+    "cavityBack": {
+      "expr": "back - wall",
+      "value": 20,
+      "unit": "mm"
+    },
+    "lidLeft": {
+      "expr": "spacing / 2",
+      "value": 5,
+      "unit": "mm"
+    },
+    "lidRight": {
+      "expr": "spacing / 2 + outerWidth",
+      "value": 69,
+      "unit": "mm"
+    },
+    "lipLeft": {
+      "expr": "lidLeft + wall + clearance",
+      "value": 7.2,
+      "unit": "mm"
+    },
+    "lipRight": {
+      "expr": "lidRight - wall - clearance",
+      "value": 66.8,
+      "unit": "mm"
+    },
+    "lipFront": {
+      "expr": "cavityFront + clearance",
+      "value": -19.8,
+      "unit": "mm"
+    },
+    "lipBack": {
+      "expr": "cavityBack - clearance",
+      "value": 19.8,
+      "unit": "mm"
+    },
+    "lipInnerLeft": {
+      "expr": "lipLeft + wall",
+      "value": 9.2,
+      "unit": "mm"
+    },
+    "lipInnerRight": {
+      "expr": "lipRight - wall",
+      "value": 64.8,
+      "unit": "mm"
+    },
+    "lipInnerFront": {
+      "expr": "lipFront + wall",
+      "value": -17.8,
+      "unit": "mm"
+    },
+    "lipInnerBack": {
+      "expr": "lipBack - wall",
+      "value": 17.8,
+      "unit": "mm"
+    },
+    "d1": {
+      "expr": "boxHeight",
+      "value": 27,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "box",
+        "field": "distance"
+      }
+    },
+    "d2": {
+      "expr": "floor",
+      "value": 2,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "cavity",
+        "field": "startOffset"
+      }
+    },
+    "d3": {
+      "expr": "floor",
+      "value": 2,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "lid",
+        "field": "distance"
+      }
+    },
+    "d4": {
+      "expr": "floor",
+      "value": 2,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "lip",
+        "field": "startOffset"
+      }
+    },
+    "d5": {
+      "expr": "lipHeight",
+      "value": 5,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "lip",
+        "field": "distance"
+      }
+    },
+    "d6": {
+      "expr": "innerHeight",
+      "value": 25,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "cavity",
+        "field": "distance"
+      }
+    }
+  },
+  "features": [
+    {
+      "id": "boxOutline",
+      "type": "sketch",
+      "name": "Box outline",
+      "plane": "XY",
+      "entities": [
+        {
+          "type": "line",
+          "id": "box_1",
+          "x1": "boxLeft",
+          "y1": "front",
+          "x2": "boxRight",
+          "y2": "front"
+        },
+        {
+          "type": "line",
+          "id": "box_2",
+          "x1": "boxRight",
+          "y1": "front",
+          "x2": "boxRight",
+          "y2": "back"
+        },
+        {
+          "type": "line",
+          "id": "box_3",
+          "x1": "boxRight",
+          "y1": "back",
+          "x2": "boxLeft",
+          "y2": "back"
+        },
+        {
+          "type": "line",
+          "id": "box_4",
+          "x1": "boxLeft",
+          "y1": "back",
+          "x2": "boxLeft",
+          "y2": "front"
+        }
+      ]
+    },
+    {
+      "id": "box",
+      "type": "extrude",
+      "name": "Box",
+      "sketch": "boxOutline",
+      "distance": 27,
+      "operation": "new",
+      "hiddenBodies": []
+    },
+    {
+      "id": "cavityOutline",
+      "type": "sketch",
+      "name": "Cavity outline",
+      "plane": "XY",
+      "entities": [
+        {
+          "type": "line",
+          "id": "cavity_1",
+          "x1": "cavityLeft",
+          "y1": "cavityFront",
+          "x2": "cavityRight",
+          "y2": "cavityFront"
+        },
+        {
+          "type": "line",
+          "id": "cavity_2",
+          "x1": "cavityRight",
+          "y1": "cavityFront",
+          "x2": "cavityRight",
+          "y2": "cavityBack"
+        },
+        {
+          "type": "line",
+          "id": "cavity_3",
+          "x1": "cavityRight",
+          "y1": "cavityBack",
+          "x2": "cavityLeft",
+          "y2": "cavityBack"
+        },
+        {
+          "type": "line",
+          "id": "cavity_4",
+          "x1": "cavityLeft",
+          "y1": "cavityBack",
+          "x2": "cavityLeft",
+          "y2": "cavityFront"
+        }
+      ]
+    },
+    {
+      "id": "cavity",
+      "type": "extrude",
+      "name": "Cavity",
+      "sketch": "cavityOutline",
+      "distance": 25,
+      "operation": "cut",
+      "startType": "offset",
+      "startOffset": 2,
+      "endType": "throughAll",
+      "targets": [
+        "body1"
+      ],
+      "hiddenBodies": []
+    },
+    {
+      "id": "lidOutline",
+      "type": "sketch",
+      "name": "Lid outline",
+      "plane": "XY",
+      "entities": [
+        {
+          "type": "line",
+          "id": "lid_1",
+          "x1": "lidLeft",
+          "y1": "front",
+          "x2": "lidRight",
+          "y2": "front"
+        },
+        {
+          "type": "line",
+          "id": "lid_2",
+          "x1": "lidRight",
+          "y1": "front",
+          "x2": "lidRight",
+          "y2": "back"
+        },
+        {
+          "type": "line",
+          "id": "lid_3",
+          "x1": "lidRight",
+          "y1": "back",
+          "x2": "lidLeft",
+          "y2": "back"
+        },
+        {
+          "type": "line",
+          "id": "lid_4",
+          "x1": "lidLeft",
+          "y1": "back",
+          "x2": "lidLeft",
+          "y2": "front"
+        }
+      ]
+    },
+    {
+      "id": "lid",
+      "type": "extrude",
+      "name": "Lid",
+      "sketch": "lidOutline",
+      "distance": 2,
+      "operation": "new",
+      "hiddenBodies": []
+    },
+    {
+      "id": "lipOutline",
+      "type": "sketch",
+      "name": "Lip outline",
+      "plane": "XY",
+      "entities": [
+        {
+          "type": "line",
+          "id": "lipOut_1",
+          "x1": "lipLeft",
+          "y1": "lipFront",
+          "x2": "lipRight",
+          "y2": "lipFront"
+        },
+        {
+          "type": "line",
+          "id": "lipOut_2",
+          "x1": "lipRight",
+          "y1": "lipFront",
+          "x2": "lipRight",
+          "y2": "lipBack"
+        },
+        {
+          "type": "line",
+          "id": "lipOut_3",
+          "x1": "lipRight",
+          "y1": "lipBack",
+          "x2": "lipLeft",
+          "y2": "lipBack"
+        },
+        {
+          "type": "line",
+          "id": "lipOut_4",
+          "x1": "lipLeft",
+          "y1": "lipBack",
+          "x2": "lipLeft",
+          "y2": "lipFront"
+        },
+        {
+          "type": "line",
+          "id": "lipIn_1",
+          "x1": "lipInnerLeft",
+          "y1": "lipInnerFront",
+          "x2": "lipInnerRight",
+          "y2": "lipInnerFront"
+        },
+        {
+          "type": "line",
+          "id": "lipIn_2",
+          "x1": "lipInnerRight",
+          "y1": "lipInnerFront",
+          "x2": "lipInnerRight",
+          "y2": "lipInnerBack"
+        },
+        {
+          "type": "line",
+          "id": "lipIn_3",
+          "x1": "lipInnerRight",
+          "y1": "lipInnerBack",
+          "x2": "lipInnerLeft",
+          "y2": "lipInnerBack"
+        },
+        {
+          "type": "line",
+          "id": "lipIn_4",
+          "x1": "lipInnerLeft",
+          "y1": "lipInnerBack",
+          "x2": "lipInnerLeft",
+          "y2": "lipInnerFront"
+        }
+      ],
+      "fillRule": "evenodd"
+    },
+    {
+      "id": "lip",
+      "type": "extrude",
+      "name": "Lip",
+      "sketch": "lipOutline",
+      "distance": 5,
+      "operation": "join",
+      "startType": "offset",
+      "startOffset": 2,
+      "targets": [
+        "body2"
+      ],
+      "hiddenBodies": []
+    }
+  ],
+  "bodyIds": {
+    "box:0": "body1",
+    "lid:0": "body2",
+    "lip:0": "body2"
+  },
+  "version": 10
+}

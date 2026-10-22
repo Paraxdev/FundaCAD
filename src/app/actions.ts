@@ -13,6 +13,9 @@ import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
 import type { SketchTool } from "../sketch/sketchMode";
 import { isChoiceOpen } from "../ui/choice";
+import { openReportDialog } from "../ui/bugReporter";
+import { ideaUrl } from "../ui/reportText";
+import { MANUAL_URL, openExternal } from "../ui/welcome";
 import type { StandardView } from "../viewport/cameras";
 import type { FaceOffsetMode } from "../features/faceOffsetTool";
 
@@ -98,6 +101,10 @@ export function createActions(e: Engine): (action: string) => void {
       return;
     }
     if (action === "palette") return void (palette.visible = true);
+    // Before the sketch finish below, so a sketch open when the problem showed is reported open.
+    if (action === "report-problem") return openReportDialog();
+    if (action === "suggest-idea") return void openExternal(ideaUrl());
+    if (action === "manual") return void openExternal(MANUAL_URL);
     // The arrow keys turn the view and nothing else: they leave a sketch open,
     // and a tool that reads the arrows itself (the pattern count) keeps them.
     const step = /^view-step-(left|right|up|down)(-fine)?$/.exec(action);

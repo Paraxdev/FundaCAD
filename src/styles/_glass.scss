@@ -330,6 +330,8 @@
 .ne-overlay,
 .areachip,
 .home-drawer,
+.home-news,
+.home-welcome,
 .guide-bubble,
 #safe-mode-banner {
   corner-shape: squircle;
@@ -349,6 +351,8 @@
 .ne-overlay,
 .areachip,
 .home-drawer,
+.home-news,
+.home-welcome,
 .guide-bubble,
 #safe-mode-banner {
   box-shadow: var(--glass-inset), var(--float-shadow);
@@ -367,6 +371,8 @@
 #renderdock,
 .ne-overlay,
 .home-drawer,
+.home-news,
+.home-welcome,
 .guide-bubble {
   border-radius: var(--float-radius);
 }
@@ -385,7 +391,9 @@
 .tgt-panel,
 .shortcut-hud-card,
 .toast,
-#renderdock {
+#renderdock,
+.home-news,
+.home-welcome {
   position: relative;
 }
 .modal-panel::after,
@@ -399,6 +407,8 @@
 #renderdock::after,
 .ne-overlay::after,
 .home-drawer::after,
+.home-news::after,
+.home-welcome::after,
 .guide-bubble::after,
 #safe-mode-banner::after {
   content: "";
