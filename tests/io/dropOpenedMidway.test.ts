@@ -16,6 +16,8 @@ const h = vi.hoisted(() => ({
   // What the maker does while the named file is read, and which files fail to read.
   reading: {} as Record<string, (store: DocumentStore) => void>,
   unreadable: [] as string[],
+  // The engine stops a read when an open cancels it, unless the read had already finished.
+  stopsOnCancel: false,
   store: null as null | DocumentStore,
 }));
 vi.mock("../../src/ui/choice", () => ({
@@ -39,10 +41,15 @@ const SAVED: Feature[] = [
   { id: "ex1", type: "extrude", sketch: "sk1", distance: 7.3, operation: "new" },
 ] as unknown as Feature[];
 
+let reading: { cancelled: boolean } | null = null;
+
 async function read(name: string) {
   h.read.push(name);
+  const pending = (reading = { cancelled: false });
   h.reading[name]?.(h.store!);
+  reading = null;
   if (h.unreadable.includes(name)) return { ok: false as const, message: "the file has no solids" };
+  if (pending.cancelled && h.stopsOnCancel) return { ok: false as const, cancelled: true, message: "cancelled" };
   return { ok: true as const, name, geom: "brep", solid: true };
 }
 
@@ -62,6 +69,7 @@ const geometry = {
   onStatus: () => () => {},
   onProgress: () => () => {},
   async cancel() {
+    if (reading) reading.cancelled = true;
     return true;
   },
 } as unknown as GeometryBackend;
@@ -104,7 +112,16 @@ const bytes = (name: string): DroppedFile => ({ name, path: null, file: new File
 const hdri = (name: string): DroppedFile => ({ name, path: null, file: new File(["x"], name) });
 
 beforeEach(() => {
-  Object.assign(h, { answers: [], read: [], reported: [], told: [], reading: {}, unreadable: [], store: null });
+  Object.assign(h, {
+    answers: [],
+    read: [],
+    reported: [],
+    told: [],
+    reading: {},
+    unreadable: [],
+    stopsOnCancel: false,
+    store: null,
+  });
 });
 
 // The maker reaches the drop with Home closed, or over Home answering Add to or New document.
@@ -116,7 +133,30 @@ const ways = [
 
 const gear = { features: ["sketch", "extrude"], name: "Gear.funda", dirty: false, home: false, reported: [] };
 
+const replies = [
+  ["cancelled", true],
+  ["finished", false],
+] as const;
+
 describe("a drop of several files when another document is opened while the first is read", () => {
+  it.each(
+    ways.flatMap(([way, homeUp, answers]) => replies.map(([r, stops]) => [way, r, homeUp, answers, stops] as const)),
+  )(
+    "leaves the rest and the environment after them out of it %s, its read %s",
+    async (_way, _r, homeUp, answers, stops) => {
+      const { e, store } = rig(homeUp);
+      h.answers = [...answers];
+      h.stopsOnCancel = stops;
+      h.reading["a.step"] = opensGear;
+      await takeDroppedFiles(e, [step("a.step"), bytes("b.stl"), hdri("studio.hdr")]);
+      expect(seen(store)).toEqual({
+        ...gear,
+        read: ["a.step"],
+        told: ["a.step, b.stl and studio.hdr were not imported, another document was opened while they were read."],
+      });
+    },
+  );
+
   it.each(ways)("leaves the rest out of it %s, named in one warning", async (_way, homeUp, answers) => {
     const { e, store } = rig(homeUp);
     h.answers = [...answers];

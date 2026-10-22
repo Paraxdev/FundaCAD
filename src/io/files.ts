@@ -824,7 +824,8 @@ async function importWith(
     return store.runBusy(`Importing ${fileName(path)}`, (onStarted) => read(onStarted, unit), { holdHistory: true });
   })().finally(offOpen);
   if (!res) return;
-  if (opened && res.ok) {
+  // An open cancels the read, so a cancelled reply after one is a drop too, a failed read keeps its error.
+  if (opened && (res.ok || res.cancelled)) {
     // A batch names every file it left out in one warning.
     if (!opts.batched) await importDropped([fileName(path)]);
     return "dropped";

@@ -5,7 +5,7 @@ import type { GeometryBackend } from "../../src/geometry/client";
 import type { CadDocument, Feature, RebuildResult } from "../../src/types";
 import type { Engine } from "../../src/app/engine";
 import { Home, homeIsOpen, type HomeCallbacks } from "../../src/ui/home";
-import { importFileBytes, importPath } from "../../src/io/files";
+import { cancelledImportPath, importFileBytes, importPath } from "../../src/io/files";
 
 vi.stubGlobal("window", globalThis);
 
@@ -20,6 +20,9 @@ const h = vi.hoisted(() => ({
   building: null as null | ((store: DocumentStore) => void),
   land: true,
   cancel: false,
+  // The engine stops a read when cancelled, as an open does, unless the read had already finished.
+  stopsOnCancel: true,
+  hold: {} as Record<string, Promise<void>>,
   file: null as null | (() => Promise<File>),
   store: null as null | DocumentStore,
 }));
@@ -47,9 +50,16 @@ const SAVED: Feature[] = [
 
 const importOf = (doc: CadDocument) => doc.features.find((f) => f.type === "import");
 
+const reads: { cancelled: boolean }[] = [];
+
 async function read(name: string) {
   h.imported.push(name);
+  const pending = { cancelled: false };
+  reads.push(pending);
   h.reading?.(h.store!);
+  await h.hold[name];
+  reads.splice(reads.indexOf(pending), 1);
+  if (pending.cancelled && h.stopsOnCancel) return { ok: false as const, cancelled: true, message: "cancelled" };
   if (!h.land) return { ok: false as const, message: "the file has no solids" };
   return { ok: true as const, name: "printer", geom: "brep", solid: true, color: "#c0392b" };
 }
@@ -83,6 +93,8 @@ const geometry = {
   onStatus: () => () => {},
   onProgress: () => () => {},
   async cancel() {
+    const top = reads.at(-1);
+    if (top) top.cancelled = true;
     return true;
   },
 } as unknown as GeometryBackend;
@@ -131,6 +143,7 @@ const sketch = (s: DocumentStore) =>
   s.addFeature({ id: "sk3", type: "sketch", plane: "YZ", entities: [] } as unknown as Feature);
 
 beforeEach(() => {
+  reads.length = 0;
   Object.assign(h, {
     answers: [],
     asked: [],
@@ -141,6 +154,8 @@ beforeEach(() => {
     building: null,
     land: true,
     cancel: false,
+    stopsOnCancel: true,
+    hold: {},
     file: null,
     store: null,
   });
@@ -289,16 +304,32 @@ const dropped = (name: string) => `${name} was not imported, another document wa
 describe("a document opened while an import reads", () => {
   const gear = { name: "Gear.funda", path: "D:/jigs/Gear.funda", home: false, reported: [] };
 
-  it.each([
+  // The open cancels the read, and the engine says cancelled, unless the read had finished before the cancel landed.
+  const replies = [
+    ["cancelled", true],
+    ["finished", false],
+  ] as const;
+
+  const opened = [
     ["clean", false, ["sketch", "extrude"]],
     ["with unsaved work", true, ["sketch", "extrude", "sketch"]],
-  ])("keeps the 3D printer example out of an opened document %s", async (_what, dirty, features) => {
-    const { e, store } = rig();
-    h.reading = opens("D:/jigs/Gear.funda", { dirty });
-    await newFromTemplate(e, "printer");
-    expect(seen(store)).toEqual({ ...gear, features, dirty, imported: ["printer.stpz"] });
-    expect(h.told).toEqual([dropped("printer.stpz")]);
-  });
+  ] as const;
+
+  it.each(
+    opened.flatMap(([what, dirty, features]) =>
+      replies.map(([r, stops]) => [what, r, dirty, features, stops] as const),
+    ),
+  )(
+    "keeps the 3D printer example out of an opened document %s, its read %s",
+    async (_what, _r, dirty, features, stops) => {
+      const { e, store } = rig();
+      h.stopsOnCancel = stops;
+      h.reading = opens("D:/jigs/Gear.funda", { dirty });
+      await newFromTemplate(e, "printer");
+      expect(seen(store)).toEqual({ ...gear, features, dirty, imported: ["printer.stpz"] });
+      expect(h.told).toEqual([dropped("printer.stpz")]);
+    },
+  );
 
   it("keeps the 3D printer example out of a document opened while its file is fetched", async () => {
     const { e, store } = rig();
@@ -329,27 +360,32 @@ describe("a document opened while an import reads", () => {
     expect(h.told).toEqual([dropped("printer.stpz")]);
   });
 
-  it.each([
+  const steps = [
     ["a dropped STEP", () => importFileBytes(h.store!, geometry, motor())],
     ["a STEP opened by path", () => importPath(h.store!, geometry, "D:/parts/motor.step")],
-  ])("keeps %s out of it", async (_how, run) => {
-    const { store } = rig();
-    h.reading = opens("D:/jigs/Gear.funda");
-    await run();
-    expect(seen(store)).toEqual({
-      ...gear,
-      features: ["sketch", "extrude"],
-      dirty: false,
-      home: true,
-      imported: ["motor.step"],
-    });
-    expect(h.told).toEqual([dropped("motor.step")]);
-  });
+  ] as const;
 
-  it.each([
-    ["a dropped STEP", () => importFileBytes(h.store!, geometry, motor())],
-    ["a STEP opened by path", () => importPath(h.store!, geometry, "D:/parts/motor.step")],
-  ])("still lands %s when nothing else was opened", async (_how, run) => {
+  it.each(steps.flatMap(([how, run]) => replies.map(([reply, stops]) => [how, reply, run, stops] as const)))(
+    "keeps %s out of it, its read %s",
+    async (_how, _reply, run, stops) => {
+      const { store } = rig();
+      const retry = cancelledImportPath();
+      h.stopsOnCancel = stops;
+      h.reading = opens("D:/jigs/Gear.funda");
+      await run();
+      expect(seen(store)).toEqual({
+        ...gear,
+        features: ["sketch", "extrude"],
+        dirty: false,
+        home: true,
+        imported: ["motor.step"],
+      });
+      expect(h.told).toEqual([dropped("motor.step")]);
+      expect(cancelledImportPath()).toBe(retry);
+    },
+  );
+
+  it.each(steps)("still lands %s when nothing else was opened", async (_how, run) => {
     const { store } = rig();
     await run();
     expect(seen(store)).toEqual({
