@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { Picker } from "../../src/viewport/picking";
-import { boxReply as reply, boxView, placed, STEP, STEP_CUT as halfCut, STEP_FRAME as M, stepCamera, stepPoint as local, STEP_FACES, type Lump } from "./boxBodies";
+import { boxReply as reply, boxView, placed, replyView, STEP, STEP_CUT as halfCut, STEP_FRAME as M, stepCamera, stepPoint as local, STEP_FACES, withSheet, type Lump } from "./boxBodies";
 
 const W = 800, H = 600;
 const RECT = { left: 0, top: 0, width: W, height: H, right: W, bottom: H, x: 0, y: 0 } as DOMRect;
@@ -106,6 +106,19 @@ describe("the Picker on a section's cap", () => {
     expect(picks()).toEqual([STEP_FACES.tallTop, STEP_FACES.lowTop, STEP_FACES.tallTop]);
     picker.setClip(halfCut);
     expect(picks()).toEqual([null, STEP_FACES.lowTop, null]);
+  });
+
+  it("an open sheet in the kept half, beside the cut body, is picked from above whichever way it faces", () => {
+    const corners = [local(-58, -24, 6), local(-26, -21, 9), local(-29, 14, 11), local(-61, 10, 8)];
+    const at = seen(local(-43, -5, 8.5));
+    const picks = [false, true].map((down) => {
+      const v = replyView(withSheet(reply(STEP), "sheet", down ? [...corners].reverse() : corners), W, H);
+      const picker = new Picker();
+      picker.setClip(halfCut);
+      const hit = picker.pick(at.x, at.y, RECT, above, v);
+      return [faceOf(hit), v.bodies.map((b) => b.id)];
+    });
+    expect(picks).toEqual([[12, ["step", "sheet"]], [12, ["step", "sheet"]]]);
   });
 
   it("an edge behind the cap is hidden by it, as the top face hid it before the cut", () => {
