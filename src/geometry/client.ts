@@ -507,6 +507,8 @@ type RebuildBodyMeta = NonNullable<RebuildResult["bodies"]>[number];
  *  keeps the previous document until the build completes). Pass `triRange` to partitionMesh so the scan skips
  *  zeroed triangles, which would read as faceId 0. */
 export interface RebuildChunk {
+  /** The rebuild request this installment belongs to. */
+  id: string;
   phase: "begin" | "bodies";
   result: RebuildResult;
   /** metadata for EVERY body of the reply, in final order, known from frame 0 */
@@ -839,6 +841,7 @@ export class Geometry implements GeometryBackend {
         timer: 0,
       });
       this.emitChunk({
+        id,
         phase: "begin",
         result: begun.assembly.result,
         manifest: begun.assembly.result.bodies ?? [],
@@ -890,6 +893,7 @@ export class Geometry implements GeometryBackend {
           edgesByBody.set(bid, s.assembly.edgesOf(bid));
         }
         this.emitChunk({
+          id,
           phase: "bodies",
           result: s.assembly.result,
           manifest: s.assembly.result.bodies ?? [],
