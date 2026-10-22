@@ -762,18 +762,18 @@ describe("Home on a first run", () => {
         c.querySelector("svg")!.getAttribute("data-icon"),
       ]),
     ).toEqual([
-      ["Wall bracket", "Stress study ready", "stress"],
-      ["Box with a lid", "Two parts, 0.2 mm fit", "shell"],
-      ["3D printer", "Imported STEP, 100 parts", "assembly"],
-      ["Plate", "Sized by parameters", "box"],
-      ["Pinned lever", "Stress study ready", "rotate"],
+      ["Wall bracket", "Find where it bends", "stress"],
+      ["Box with a lid", "A lid that fits, ready to print", "shell"],
+      ["3D printer", "100 parts from a STEP file", "assembly"],
+      ["Plate", "Change a size, the holes follow", "box"],
+      ["Pinned lever", "See the load on a pin", "rotate"],
     ]);
     expect($$(".home-example").map((c) => c.getAttribute("title"))).toEqual([
-      "An L bracket with a stress study ready to run",
-      "A box and a lid that fits it, sized by parameters, laid out for printing",
-      "A printer frame imported from a STEP file. Hide, isolate and section its parts",
-      "A plate with four holes, sized by parameters",
-      "A lever on a pin with a stress study ready to run",
+      "An L bracket on a wall. Open the Stress panel and run it to see where it bends most",
+      "A box and a lid laid out for printing. Change innerWidth in Parameters and both parts follow",
+      "A printer frame imported from a STEP file. Hide or isolate its groups in Items, or turn on a section to look inside",
+      "A plate with four holes. Change width or depth in Parameters and the holes stay in their corners",
+      "A lever on a pin. Open the Stress panel and run it to see the load around the pin",
     ]);
   });
 
