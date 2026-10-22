@@ -1073,6 +1073,15 @@ plugin than they have over MCP, where the server is a process on the machine and
 can open a file by naming it. One vocabulary that means two things is worse than
 one vocabulary with a gap in it.
 
+`doc_get` hands back the document as a save writes it: the geometry, its format
+`version`, the versions, and the project state beside them (stress study,
+environment, palette, materials, elements, body and face colours). So `doc_set`
+of what `doc_get` gave loses nothing, and `doc_get` then `file_write` is a whole
+save. `doc_set` is one undoable step that never changes the version history,
+which belongs to the file that is open: a document sent without versions, or
+with another file's, leaves them as they were, and a file brought in with
+`file_read` then `doc_set` keeps its own history on disk.
+
 ### What is enforced where
 
 | | |

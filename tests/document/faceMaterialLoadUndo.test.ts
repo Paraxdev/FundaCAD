@@ -1,7 +1,10 @@
-// Face materials through a replacing load (a version restore, an assistant's edit) and its undo, on two bodies,
-// while a fillet, a dimension edit or a Separate renumbers the faces under them (numbers in faceRefs.test.ts).
+// Face materials through a replacing load (a version restore, an assistant's or a plugin's edit) and its undo, on two
+// bodies, while a fillet, a dimension edit or a Separate renumbers the faces under them (numbers in faceRefs.test.ts).
 import { describe, expect, it, vi } from "vitest";
 import { DocumentStore } from "../../src/document/store";
+import { appHost } from "../../src/plugins/broker/appHost";
+import { createBroker } from "../../src/plugins/broker/broker";
+import { allOpGrants } from "../../src/plugins/broker/ops";
 import type { CadDocument, Feature, RebuildResult } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 import { reply, runs, separated, type Scenario } from "./faceRefsFixture";
@@ -165,6 +168,34 @@ describe("undo of an assistant's edit with face materials", () => {
     await built("base");
     const { "body1#0": _, ...rest } = BASE;
     expect(entries(store)).toEqual(rest);
+  });
+});
+
+describe("undo of a plugin's doc_get then doc_set with face materials", () => {
+  it("puts each material back on its face, and the paint undo below it still takes the last paint off", async () => {
+    const { store, box, built } = await painted();
+    const v1 = store.saveVersion("painted")!;
+    const plugin = createBroker({ plugin: "under-test", grants: allOpGrants(), host: appHost({ store }) });
+    const got = await plugin.callOrThrow<CadDocument>("doc_get");
+    got.features.push(structuredClone(FILLET));
+    box.result = reply("fillet");
+    await plugin.callOrThrow("doc_set", { document: got });
+    await built("fillet");
+    expect(entries(store)).toEqual(FILLETED);
+
+    store.undo();
+    await built("base");
+    expect(entries(store)).toEqual(BASE);
+    store.redo();
+    await built("fillet");
+    expect(entries(store)).toEqual(FILLETED);
+    store.undo();
+    await built("base");
+    expect(entries(store)).toEqual(BASE);
+    store.undo();
+    const { "body1#5": _glass1, "body2#4": _glass2, ...unglazed } = BASE;
+    expect(entries(store)).toEqual(unglazed);
+    expect(store.versionRepo!.versions.map((v) => v.id)).toEqual([v1.id]);
   });
 });
 
