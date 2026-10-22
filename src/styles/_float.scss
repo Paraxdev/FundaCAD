@@ -305,8 +305,8 @@
   gap: 6px;
   min-height: 0;
   overflow-y: auto;
-  /* overflow-y: auto clips on all sides even when not scrolling, cutting the ~26px shadow.
-     The padding moves the clip past it, the negative margin cancels the padding. */
+  /* overflow-y: auto turns overflow-x auto too, so it clips all four sides even when not scrolling, cutting
+     the ~26px shadow. The padding moves the clip past it, the negative margin cancels the padding. */
   padding: 32px;
   margin: -32px;
   scrollbar-width: none;

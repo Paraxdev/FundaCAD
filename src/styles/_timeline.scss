@@ -265,8 +265,8 @@
   color: var(--error);
   background: var(--error-tint);
 }
-/* Built, with a warning: amber and not tinted, so it reads quieter than the red, the
-   build succeeded. */
+/* Built with a warning (a cut that sealed a void, a shaky reference): amber and not tinted, so
+   it reads quieter than the red, the build succeeded. */
 .timeline-node.warn {
   border-color: var(--warn);
   color: var(--warn);

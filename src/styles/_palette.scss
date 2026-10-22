@@ -97,7 +97,8 @@
   padding: 0;
   /* Same bleed as .palette-row. */
   margin: 0 calc(-1 * var(--s-3));
-  /* About eight rows, fewer on a short viewport: the only part of the card that shrinks. */
+  /* About eight rows, fewer on a short viewport: the only part of the card that shrinks, and
+     min-height 0 is what lets a flex item shrink below its content at all. */
   flex: 1 1 auto;
   min-height: 0;
   max-height: 216px;

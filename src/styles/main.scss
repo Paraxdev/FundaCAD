@@ -1,5 +1,6 @@
 // The load order is the cascade, later rules win (.hidden in _utilities must beat display rules).
-// No SFC <style scoped>, it raises specificity, and no SCSS variables, the theme is custom properties.
+// No SFC <style scoped>: it raises the specificity of ~336 class selectors and silently shifts the cascade,
+// and the e2e suite selects on these class names. No SCSS variables, the theme is custom properties.
 
 @use "tokens";
 @use "base";

@@ -1,5 +1,5 @@
-/* #stage.narrow is a STAGE width (STAGE_NARROW_PX in ui/layoutBreakpoints.ts, set by
-   App.vue), where Items and History become drawers; the media queries are window widths. */
+/* #stage.narrow is a STAGE width (STAGE_NARROW_PX in ui/layoutBreakpoints.ts, set by App.vue), where Items
+   and History become drawers, one at a time (stores/shell.ts); the media queries are window widths. */
 
 #stage.narrow {
   // Over the rail, not beside it, so opening Items never shoves the rail across the model.
@@ -59,6 +59,8 @@
   }
 }
 
+/* Phone: the rail drops its label pills, each tile keeps its tooltip, and the Render dock stacks under
+   the model. */
 @media (max-width: 560px) {
   #titlebar .brand,
   #titlebar .context-tab,
