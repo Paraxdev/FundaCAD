@@ -153,3 +153,39 @@ describe("resolveFaceRefs on curved faces", () => {
     expect(resolved(list, reply("holeRim"), null)).toEqual(want);
   });
 });
+
+/** A tube of radius 1.5 on a slanted axis through (12, -7, 4): 24 faces round,
+ *  each about 0.39 wide, so narrower than the position tolerance, by 2 rings,
+ *  every face a 2 x 2 grid of quads, face numbers given by `perm`. */
+function tube(perm: (f: number) => number, etag: string): RebuildResult {
+  const P: number[] = [], I: number[] = [], F: number[] = [];
+  const U = 48, V = 4, axis = [0.36, 0.48, 0.8], u = [0.8, -0.6, 0], w = [0.48, 0.64, -0.6];
+  for (let j = 0; j <= V; j++) for (let i = 0; i <= U; i++) {
+    const t = (i / U) * 2 * Math.PI, h = j * 1.5;
+    P.push(...[0, 1, 2].map((a) => [12, -7, 4][a]! + h * axis[a]! + 1.5 * (Math.cos(t) * u[a]! + Math.sin(t) * w[a]!)));
+  }
+  for (let j = 0; j < V; j++) for (let i = 0; i < U; i++) {
+    const a = j * (U + 1) + i, c = a + U + 1, f = perm(Math.floor(j / 2) * 24 + Math.floor(i / 2));
+    I.push(a, c, a + 1, a + 1, c, c + 1);
+    F.push(f, f);
+  }
+  return { mesh: { positions: P, indices: I, faceIds: F }, edges: [], bbox: { min: [0, 0, 0], max: [1, 1, 1] },
+    bodies: [{ id: "body1", name: "body1", faceStart: 0, faceCount: 48, etag }] };
+}
+
+describe("resolveFaceRefs on curved faces narrower than the tolerance", () => {
+  const before = tube((f) => f, "a");
+  const perm = (f: number) => (f * 5 + 7) % 48;
+
+  it("keeps each material on its own face when the faces are renumbered", () => {
+    const list = refs(before, { first: ["body1", 0], mid: ["body1", 5], top: ["body1", 30] });
+    const want = { first: [7], mid: [32], top: [13] };
+    expect(resolved(list, tube(perm, "b"), trackOf(before, list))).toEqual(want);
+    expect(resolved(list, tube(perm, "b"), null)).toEqual(want);
+  });
+
+  it("keeps one face's material to that face", () => {
+    const list = refs(before, { one: ["body1", 23] });
+    expect(resolved(list, tube(perm, "b"), trackOf(before, list))).toEqual({ one: [26] });
+  });
+});

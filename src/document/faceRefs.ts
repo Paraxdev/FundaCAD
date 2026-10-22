@@ -5,8 +5,8 @@
 // tolerances (select/tuning.rs) where they apply.
 //
 // The rules, per body: an unchanged etag keeps every face. Otherwise an old face
-// stays on every new face its sample points still lie on, so a split face keeps
-// its material on each part; with the face count unchanged, an unmatched face
+// stays on every new face that is the nearest one to some of its sample points,
+// so a split face keeps its material on each part; with the face count unchanged, an unmatched face
 // keeps its index if the face there looks like it; a face still unmatched takes
 // the nearest new face nobody stayed on with the same kind and normal. A new face
 // nothing maps to (a fillet, a slot floor) stays uncoloured, a face with no
@@ -53,6 +53,15 @@ interface FaceGeom {
 interface BodyGeom {
   faces: FaceGeom[];
   diag: number;
+  grid?: FaceGrid;
+}
+
+/** Faces by the cells of a uniform grid their boxes, padded by the position tolerance, touch. */
+interface FaceGrid {
+  lo: number[];
+  cell: number;
+  n: number;
+  cells: Map<number, number[]>;
 }
 
 export interface FaceTrack {
@@ -73,6 +82,8 @@ const PLANE_ANG = 1e-4;
 const ANG_TOL = 0.02;
 const AREA_REL = 0.05;
 const MAX_CANDIDATE_TRIS = 512;
+// Prints keep points to 1e-4, so a point within 1e-3 of a face is on it.
+const ON2 = 1e-6;
 
 interface ResultGeom {
   /** Triangle indices grouped by global face id, face f at start[f]..start[f + 1]. */
@@ -231,17 +242,12 @@ function triDist2(p: Vec3, t: Float64Array, o: number): number {
   return at([a[0]! + ab[0] * v + ac[0] * w, a[1]! + ab[1] * v + ac[1] * w, a[2]! + ab[2] * v + ac[2] * w]);
 }
 
-function hits(points: number[], g: FaceGeom, tol: number): number {
-  let n = 0;
-  const t2 = tol * tol;
-  for (let i = 0; i + 2 < points.length; i += 3) {
-    const p: Vec3 = [points[i]!, points[i + 1]!, points[i + 2]!];
-    if (p.some((v, a) => v < g.lo[a]! - tol || v > g.hi[a]! + tol)) continue;
-    for (let o = 0; o < g.tris.length; o += 9) {
-      if (triDist2(p, g.tris, o) <= t2) { n++; break; }
-    }
-  }
-  return n;
+/** Squared distance from `p` to face `g`, Infinity past `tol` of its box. */
+function dist2(p: Vec3, g: FaceGeom, tol: number): number {
+  if (p.some((v, a) => v < g.lo[a]! - tol || v > g.hi[a]! + tol)) return Infinity;
+  let best = Infinity;
+  for (let o = 0; o < g.tris.length && best > ON2; o += 9) best = Math.min(best, triDist2(p, g.tris, o));
+  return best;
 }
 
 interface Claim {
@@ -258,25 +264,71 @@ interface Tol {
 
 const tolOf = (g: BodyGeom): Tol => ({ plane: 1e-3 + 1e-5 * g.diag, pos: 0.5 + 1e-3 * g.diag });
 
-function stayPut(o: FacePrint, g: BodyGeom, tol: Tol): Claim[] {
-  const out: Claim[] = [];
+function gridOf(g: BodyGeom): FaceGrid {
+  const pad = tolOf(g).pos;
+  const lo = [0, 1, 2].map((a) => g.faces.reduce((m, f) => Math.min(m, f.lo[a]! - pad), Infinity));
+  const hi = [0, 1, 2].map((a) => g.faces.reduce((m, f) => Math.max(m, f.hi[a]! + pad), -Infinity));
+  const n = Math.max(1, Math.min(64, Math.round(2 * Math.cbrt(g.faces.length))));
+  const cell = Math.max(1e-9, ...[0, 1, 2].map((a) => (hi[a]! - lo[a]!) / n));
+  const grid: FaceGrid = { lo, cell, n, cells: new Map() };
   g.faces.forEach((f, face) => {
-    const n = f.print;
-    if (n.surface !== o.surface) return;
-    let h: number;
-    if (o.surface === "plane") {
-      if (1 - dot(o.normal, n.normal) > PLANE_ANG) return;
-      if (Math.abs(dot(n.normal, sub(o.centroid, n.centroid))) > tol.plane) return;
-      h = hits(o.points, f, tol.plane);
-    } else {
-      h = hits(o.points, f, tol.pos);
-    }
-    if (h > 0) out.push({ face, rank: 0, hits: h });
+    eachCell(grid, f.lo.map((v) => v - pad), f.hi.map((v) => v + pad), (key) => {
+      const list = grid.cells.get(key);
+      if (list) list.push(face); else grid.cells.set(key, [face]);
+    });
   });
-  // A curved face's points near its edge also lie within tolerance of the face
-  // next to it, so only the faces holding a fair share of them count.
-  const best = Math.max(0, ...out.map((c) => c.hits));
-  return o.surface === "curved" ? out.filter((c) => 3 * c.hits >= best) : out;
+  return grid;
+}
+
+function eachCell(grid: FaceGrid, lo: number[], hi: number[], visit: (key: number) => void) {
+  const at = (v: number, a: number) => Math.min(grid.n - 1, Math.max(0, Math.floor((v - grid.lo[a]!) / grid.cell)));
+  for (let x = at(lo[0]!, 0); x <= at(hi[0]!, 0); x++) {
+    for (let y = at(lo[1]!, 1); y <= at(hi[1]!, 1); y++) {
+      for (let z = at(lo[2]!, 2); z <= at(hi[2]!, 2); z++) visit(x + grid.n * (y + grid.n * z));
+    }
+  }
+}
+
+/** The faces whose padded boxes share a grid cell with the box `lo`..`hi`, in face order. */
+function nearby(g: BodyGeom, lo: number[], hi: number[]): number[] {
+  if (!g.faces.length || !lo.every(Number.isFinite)) return [];
+  const grid = (g.grid ??= gridOf(g));
+  const out = new Set<number>();
+  eachCell(grid, lo, hi, (key) => { for (const f of grid.cells.get(key) ?? []) out.add(f); });
+  return [...out].sort((a, b) => a - b);
+}
+
+function stayPut(o: FacePrint, g: BodyGeom, tol: Tol): Claim[] {
+  const near = o.surface === "plane" ? tol.plane : tol.pos;
+  const lo = [0, 1, 2].map((a) => Math.min(...o.points.filter((_, i) => i % 3 === a)));
+  const hi = [0, 1, 2].map((a) => Math.max(...o.points.filter((_, i) => i % 3 === a)));
+  const cands: number[] = [];
+  for (const face of nearby(g, lo, hi)) {
+    const f = g.faces[face]!;
+    const n = f.print;
+    if (n.surface !== o.surface || [0, 1, 2].some((a) => hi[a]! < f.lo[a]! - near || lo[a]! > f.hi[a]! + near)) continue;
+    if (o.surface === "plane" && (1 - dot(o.normal, n.normal) > PLANE_ANG || Math.abs(dot(n.normal, sub(o.centroid, n.centroid))) > tol.plane)) continue;
+    cands.push(face);
+  }
+  // Each point counts for the nearest face only: a face narrower than the
+  // tolerance would otherwise hand its material to its neighbours.
+  const hits = new Map<number, number>();
+  for (let i = 0; i + 2 < o.points.length; i += 3) {
+    const p: Vec3 = [o.points[i]!, o.points[i + 1]!, o.points[i + 2]!];
+    let best = -1;
+    let bestD = near * near;
+    for (const face of cands) {
+      const d = dist2(p, g.faces[face]!, near);
+      if (d <= bestD) { bestD = d; best = face; }
+      if (bestD <= ON2) break;
+    }
+    if (best >= 0) hits.set(best, (hits.get(best) ?? 0) + 1);
+  }
+  const out = [...hits].sort((a, b) => a[0] - b[0]).map(([face, h]): Claim => ({ face, rank: 0, hits: h }));
+  // A curved face's points near its edge can lie nearer a round cut next to it,
+  // so only the faces holding a fair share of them count.
+  const most = Math.max(0, ...out.map((c) => c.hits));
+  return o.surface === "curved" ? out.filter((c) => 3 * c.hits >= most) : out;
 }
 
 function looksLike(o: FacePrint, n: FacePrint): boolean {
