@@ -152,7 +152,7 @@ describe("a save and the document it began with", () => {
       vi.useRealTimers();
     }
   });
-  it("a document given up by New or Open drops its recovery slot, a clean one and a reload keep theirs", async () => {
+  it("a document given up by Discard before New or Open drops its recovery slot, a clean one and a reload keep theirs", async () => {
     const store = edited("D:/parts/a.funda");
     installAutosave(store);
     const clears = async (act: () => void) => {
@@ -161,11 +161,20 @@ describe("a save and the document it began with", () => {
       await flush();
       return host.invoked.filter((c) => c.cmd === "recovery_clear").map((c) => c.args.slot);
     };
-    const discarded = await clears(() => store.newDocument());
+    const discarded = await clears(() => {
+      store.markGivenUp();
+      store.newDocument();
+    });
     const clean = await clears(() => store.newDocument());
     store.addFeature(box("b-plate", 20));
-    const reloaded = await clears(() => store.sessions.begin("reload"));
-    const opened = await clears(() => store.load(JSON.stringify({ parameters: {}, features: [box("c-plate", 9)] })));
+    const reloaded = await clears(() => {
+      store.markGivenUp();
+      store.sessions.begin("reload");
+    });
+    const opened = await clears(() => {
+      store.markGivenUp();
+      store.load(JSON.stringify({ parameters: {}, features: [box("c-plate", 9)] }));
+    });
     store.markSaved("D:/parts/c.funda");
     const reopened = await clears(() => store.load(JSON.stringify({ parameters: {}, features: [] })));
     expect({ discarded, clean, reloaded, opened, reopened }).toEqual({

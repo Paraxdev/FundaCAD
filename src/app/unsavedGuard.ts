@@ -19,7 +19,10 @@ export async function saveFirst(e: Pick<Engine, "store">, question: string, disc
     { value: "discard", label: "Don't save", hint: discardHint },
     { value: "cancel", label: "Cancel" },
   ]);
-  if (pick === "discard") return true;
+  if (pick === "discard") {
+    e.store.markGivenUp();
+    return true;
+  }
   if (pick !== "save") return false;
   await saveDocument(e.store);
   return !e.store.dirty;
