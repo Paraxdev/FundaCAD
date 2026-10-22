@@ -72,6 +72,12 @@ const check = (name, ok, detail) => {
     await page.waitForTimeout(300);
     await page.evaluate(() => window.__fundacad.handleAction("fit"));
     await page.waitForTimeout(1000);
+    // A fitted model reaches under the floating panels and the rail, which end
+    // the bare canvas about 330px right of the model's middle; back off one step.
+    await page.mouse.move(740, 450);
+    await page.mouse.wheel(0, 300);
+    await page.mouse.move(740, 90);
+    await page.waitForTimeout(700);
   };
   const screenOf = (x, y, z) => page.evaluate(([x, y, z]) => {
     const T = window.viewport.rayFrom(0, 0).ray.origin.constructor;
@@ -146,7 +152,7 @@ const check = (name, ok, detail) => {
   console.log("\n3. a profile behind the body");
   await setSketch([
     { type: "circle", id: "c1", x: cxW, y: cyW, radius: 6 },
-    { type: "circle", id: "c2", x: maxX + 30, y: cyW, radius: 6 },
+    { type: "circle", id: "c2", x: maxX + 7, y: cyW, radius: 6 },
   ]);
   await view("top");
   await reset();
@@ -162,7 +168,7 @@ const check = (name, ok, detail) => {
     check("clicking over the hidden circle takes the body, not the area", s.regions === 0 && s.bodies + s.faces === 1, JSON.stringify(s));
     await page.screenshot({ path: path.join(OUT, "3_hidden_circle.png") });
     await reset();
-    const q = await screenOf(maxX + 30, cyW, planeZ);
+    const q = await screenOf(maxX + 7, cyW, planeZ);
     await page.mouse.move(q.x, q.y);
     await page.waitForTimeout(200);
     await page.mouse.click(q.x, q.y);
