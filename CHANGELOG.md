@@ -446,6 +446,14 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A plugin's edit of the whole document keeps its versions and project state.**
+  A plugin that read the document and set it back wiped the saved versions for
+  good, and with them the stress study, environment, palette, materials,
+  elements and body and face colours until an Undo, and multiplied every sketch
+  polygon's angle by about 57 each time. The plugin now gets the whole document, and no
+  plugin or assistant edit changes the versions, so one saved while an
+  assistant's edit was on its way stays too.
+
 - **One Undo takes back an import and the colours its file carried.** Each
   colour used to be an undo step of its own, so a coloured assembly took many
   Undos, and one with more than 49 colours could not be undone at all. An

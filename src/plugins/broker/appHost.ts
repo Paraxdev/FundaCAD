@@ -200,11 +200,9 @@ export function appHost(opts: AppHostOptions): BrokerHost {
           return { types: (opts.featureTypes?.() ?? []).sort() };
 
         case "doc_get":
-          // A copy. The store's document is live and shared with the viewport;
-          // handing the real one out would let a plugin edit it behind the
-          // store's back, which is the one thing this whole file exists to
-          // prevent.
-          return clone(store.document);
+          // The document as a save writes it, so doc_set of it loses nothing. A deep copy,
+          // since toObject shares the live features and versions a plugin must not edit in place.
+          return clone(store.toObject());
 
         case "doc_new":
           store.newDocument();
