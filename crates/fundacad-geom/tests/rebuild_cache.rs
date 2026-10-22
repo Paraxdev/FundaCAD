@@ -1,6 +1,5 @@
-//! The rebuild caches, the oracles of the Python engine's `test_checkpoint.py` and
-//! the disk resume cases of test_assembly.py: a warm rebuild replays only
-//! what changed and answers exactly what a cold one does.
+//! The rebuild caches against the Python engine's test_checkpoint.py and the disk resume cases of test_assembly.py:
+//! a warm rebuild replays only what changed and answers exactly what a cold one does.
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -124,9 +123,8 @@ fn editing_the_last_feature_replays_only_it_and_matches_a_cold_build() {
     assert_eq!(cache.stats.meshed, 0);
 }
 
-/// `tests/faces/split_wall.brep`: one body whose side is two faces of the same
-/// surface, which is what puts `faceBands` in its payload. faces_parity covers
-/// the memory tier; what this adds is the artifact written to a real store.
+/// `tests/faces/split_wall.brep`: one body whose side is two faces of one surface, which puts `faceBands` in its
+/// payload. faces_parity covers the memory tier, this covers the artifact written to a real store.
 fn split_wall() -> opencascade::primitives::Shape {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/faces/split_wall.brep");
     let text = std::fs::read_to_string(path).unwrap();
@@ -546,10 +544,8 @@ fn built(raw: &Value) -> Rebuild {
     builder::rebuild(&typed(raw), raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"))
 }
 
-/// A ring of tiles, each placed by a rotation, with their tops at z 0.25 where
-/// a face fingerprint rounds either way, then a slot through the first one. A
-/// rotation read back from a blob is not the one written to the last bit, so
-/// a restored tile measures a hair off the tile that was saved.
+/// A ring of rotated tiles with tops at z 0.25, where a face fingerprint rounds either way, then a slot through the
+/// first. A rotation read back from a blob is off in the last bit, so a restored tile measures a hair off.
 fn tile_ring(slot: f64) -> Value {
     json!({"parameters": {}, "features": [
         {"id": "tile", "type": "box", "length": 4, "width": 1, "height": 0.5, "operation": "new"},

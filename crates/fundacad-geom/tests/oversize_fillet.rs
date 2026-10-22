@@ -1,7 +1,5 @@
-//! A fillet too large for its edge's neighbours used to build anyway: on the
-//! four Z edges of a 60 x 40 x 20 box, r = 21 carved both 40 mm end faces into
-//! pointed arches (59.95 long, volume 40429.5) and r = 50 left a 40 x 31.65
-//! lens, each round cutting away the line its neighbour rests on.
+//! A fillet too large for its edge's neighbours is refused. Unchecked, on the four Z edges of a 60 x 40 x 20 box,
+//! r = 21 carves the 40 mm end faces into pointed arches (volume 40429.5) and r = 50 leaves a 40 x 31.65 lens.
 
 use std::f64::consts::PI;
 
@@ -88,10 +86,8 @@ fn cube_fillet(side: f64, radius: f64) -> Rebuild {
     ]}))
 }
 
-/// Rounds on opposite edges of a face meet tangent to it, so one that reaches
-/// a hair past the other's contact sat inside its tool by only d^2 / 2r and
-/// built: a 30 cube at r = 15.005 came out 15787 mm^3 with open seams, where
-/// r = 15 is the 14137 mm^3 ball, and r = 16 was offered 15.01, inside that window.
+/// Rounds on opposite edges meet tangent, so one a hair past the other's contact sits in its tool by only d^2 / 2r:
+/// a 30 cube at r = 15.005 built 15787 mm^3 with open seams (r = 15 is the 14137 mm^3 ball), so offers skip it.
 #[test]
 fn rounds_a_hair_past_meeting_are_refused_and_the_offered_size_builds_the_ball() {
     for (side, radius) in [(30.0, 15.005), (30.0, 15.02), (20.0, 10.01)] {

@@ -1,13 +1,5 @@
-//! A cut that severs a body keeps every piece and says so, and a round face
-//! resize that would sever one is refused instead.
-//!
-//! The round face case is a thin spike on a wide base with a pin channel up
-//! its axis, the channel capped by a 45 degree cone. A round face keeps its
-//! axis as it is resized and the channel wall keeps its own surface, so
-//! pushing the cone up deepens the channel, and only a push that carries the
-//! channel out through the tip, or a channel grown out through the flank,
-//! would cut the tip off. That is refused with the reason, and the spike is
-//! left as it was.
+//! A cut that severs a body keeps every piece and says so, and a round face resize that would sever one is refused.
+//! Pushing the spike's 45 degree capping cone deepens its pin channel, only a push out through tip or flank severs it.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
@@ -94,10 +86,8 @@ fn builds_whole(at: [f64; 3], distance: f64) {
     assert_eq!(kernel::count(&r.bodies[0].shape, Kind::Solid), 1);
 }
 
-/// The cone rises by 5.85 along its normal, so its apex rises by 5.85√2 and
-/// the channel's r 1 wall runs up to meet it: what is removed is that much
-/// more channel, measured with booleans since the volume integral of the
-/// spline flank is only good to a couple of mm3.
+/// The cone rises 5.85 along its normal, its apex 5.85√2, and the r 1 channel follows. The removed volume is measured
+/// with booleans since the volume integral of the spline flank is only good to a couple of mm3.
 #[test]
 fn pushing_the_cone_up_deepens_the_channel() {
     let before = build(&spike());
@@ -140,9 +130,8 @@ fn a_press_pull_that_stays_inside_says_nothing() {
     assert!(reasons(&r, "push").is_empty(), "{:?}", reasons(&r, "push"));
 }
 
-/// A groove 0.1 short of a plate's end, its floor 1 above the bottom, pushed
-/// down by 2: the 0.05% strip past it falls off, stays in the body, and the
-/// build says the push split it.
+/// A groove 0.1 short of a plate's end, floor 1 above the bottom, pushed down by 2: the 0.05% strip past it falls
+/// off, stays in the body, and the build says the push split it.
 #[test]
 fn a_press_pull_that_severs_a_strip_keeps_it_and_says_so() {
     let raw = json!({"parameters": {}, "features": [
