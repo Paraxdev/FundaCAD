@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  setupSummary,
   CUSTOM_MATERIAL,
   STRESS_MATERIALS,
   buildStressRequest,
@@ -8,6 +9,7 @@ import {
   intoDirection,
   defaultSpotRadius,
   faceCountLabel,
+  legendEnds,
   legendGradient,
   newLoad,
   newSetup,
@@ -145,10 +147,10 @@ describe("buildStressRequest", () => {
       return r.ok ? "ok" : r.message;
     };
     expect(msg(newSetup(null))).toMatch(/body/);
-    expect(msg(newSetup("b1"))).toBe("place the support on the body, or set its faces from a face selection");
+    expect(msg(newSetup("b1"))).toMatch(/^the support has no faces yet/);
     const s = ready();
     s.loads.push(newLoad(2));
-    expect(msg(s)).toBe("place load 2 on the body, or set its faces from a face selection");
+    expect(msg(s)).toMatch(/^load 2 has no faces yet/);
     s.loads.pop();
     s.loads[0]!.force = 0;
     expect(msg(s)).toMatch(/needs a force/);
@@ -158,9 +160,9 @@ describe("buildStressRequest", () => {
     expect(msg(s)).toMatch(/Poisson/);
     s.custom.nu = 0.3;
     s.size = -1;
-    expect(msg(s)).toMatch(/element size/);
+    expect(msg(s)).toMatch(/mesh size/);
     s.loads = [];
-    expect(msg(s)).toBe("add a load, or turn on gravity");
+    expect(msg(s)).toMatch(/^add a load, or turn on Own weight/);
   });
 
   it('refuses "into the face" on faces that point every way', () => {
@@ -198,23 +200,90 @@ const reply: StressReply = {
 };
 
 describe("formatStressResult", () => {
-  it("shows lengths in the user's unit and stresses in MPa", () => {
+  it("shows lengths in the user's unit and stresses in MPa, the key rows apart from the details", () => {
     setUnit("in");
     const v = formatStressResult(reply, "in");
-    const row = (k: string) => v.rows.find((r) => r.k === k)?.v;
-    expect(row("Peak von Mises")).toBe("31.25 MPa");
-    expect(row("Peak at")).toBe("1, 0, 2 in");
-    expect(row("Max deflection")).toBe("0.05 in");
-    expect(row("Deflection at")).toBe("10, 0, 0 in");
-    expect(row("Safety factor")).toBe("1.6");
-    expect(row("Mesh")).toBe("4800 elements, 2.54 mm");
-    expect(row("Reaction")).toBe("0, 0, 20 N");
-    expect(v.yields).toBe(false);
+    expect({ rows: v.rows, details: v.details, yields: v.yields }).toEqual({
+      rows: [
+        { k: "Safety factor", v: "1.6" },
+        { k: "Peak stress", v: "31.25 MPa" },
+        { k: "Max deflection", v: "0.05 in" },
+      ],
+      details: [
+        { k: "Material", v: "PLA" },
+        { k: "Peak at", v: "1, 0, 2 in" },
+        { k: "Deflection at", v: "10, 0, 0 in" },
+        { k: "Yield", v: "50 MPa" },
+        { k: "Applied", v: "0, 0, -20 N" },
+        { k: "Reaction", v: "0, 0, 20 N" },
+        { k: "Mesh", v: "4800 elements, 2.54 mm" },
+      ],
+      yields: false,
+    });
+  });
+
+  it("lists each of three supports' reactions and the weight in the details, none of them in the key rows", () => {
+    const v = formatStressResult(
+      {
+        ...reply,
+        weight: [0, 0, -0.35],
+        reactions: [
+          [1.5, 0, 7],
+          [0, -2.25, 8],
+          [-1.5, 2.25, 5.35],
+        ],
+      },
+      "mm",
+      ["fixed", "pinned", "slider"],
+    );
+    expect(v.rows.map((r) => r.k)).toEqual(["Safety factor", "Peak stress", "Max deflection"]);
+    expect(v.details.slice(4)).toEqual([
+      { k: "Weight", v: "0, 0, -0.35 N" },
+      { k: "Applied", v: "0, 0, -20 N" },
+      { k: "Reaction", v: "0, 0, 20 N" },
+      { k: "Support 1, fixed", v: "1.5, 0, 7 N" },
+      { k: "Support 2, pinned", v: "0, -2.25, 8 N" },
+      { k: "Support 3, slider", v: "-1.5, 2.25, 5.35 N" },
+      { k: "Mesh", v: "4800 elements, 2.54 mm" },
+    ]);
+  });
+
+  it("opens with a verdict and carries the peak and the deflection, for a part that holds and one that fails", () => {
+    expect(formatStressResult(reply, "mm")).toEqual({
+      rows: [
+        { k: "Safety factor", v: "1.6" },
+        { k: "Peak stress", v: "31.25 MPa" },
+        { k: "Max deflection", v: "1.27 mm" },
+      ],
+      details: [
+        { k: "Material", v: "PLA" },
+        { k: "Peak at", v: "25.4, 0, 50.8 mm" },
+        { k: "Deflection at", v: "254, 0, 0 mm" },
+        { k: "Yield", v: "50 MPa" },
+        { k: "Applied", v: "0, 0, -20 N" },
+        { k: "Reaction", v: "0, 0, 20 N" },
+        { k: "Mesh", v: "4800 elements, 2.54 mm" },
+      ],
+      warnings: ["printed parts are weaker across layers", "f3: fillet failed"],
+      legend: { min: 2, max: 31.25 },
+      yields: false,
+      verdict: { safetyFactor: 1.6, peakPlace: null },
+      peakAt: [25.4, 0, 50.8],
+      maxDeflection: 1.27,
+    });
+    const corner =
+      "the peak stress is at a sharp inside corner, stress at a sharp inside corner or where a support ends grows as the mesh is refined, look at the colour away from it";
+    const fails = formatStressResult({ ...reply, safetyFactor: 0.62, warnings: [corner] }, "mm");
+    expect({ verdict: fails.verdict, yields: fails.yields, peakAt: fails.peakAt }).toEqual({
+      verdict: { safetyFactor: 0.62, peakPlace: "corner" },
+      yields: true,
+      peakAt: [25.4, 0, 50.8],
+    });
   });
 
   it("reads a peak inside the body, with a null face", () => {
     const v = formatStressResult({ ...reply, maxVonMises: { value: 3, at: [0, 0, 0], face: null } }, "mm");
-    expect(v.rows.find((r) => r.k === "Peak at")?.v).toBe("0, 0, 0 mm");
+    expect(v.details.find((r) => r.k === "Peak at")?.v).toBe("0, 0, 0 mm");
   });
 
   it("collects warnings and feature errors, and takes the legend from the field", () => {
@@ -228,6 +297,21 @@ describe("formatStressResult", () => {
     const none = formatStressResult({ ...reply, safetyFactor: null }, "mm");
     expect(none.yields).toBe(false);
     expect(none.rows.find((r) => r.k === "Safety factor")?.v).toBe("none, no stress");
+  });
+});
+
+describe("setupSummary", () => {
+  it("counts supports and loads, adds the own weight when it is on, and ends with the material", () => {
+    const s = newSetup("b1");
+    expect(setupSummary(s)).toBe("1 support, 1 load, PLA");
+    s.loads = [];
+    s.gravity = { on: true, direction: "+Y" };
+    s.material = "PETG";
+    expect(setupSummary(s)).toBe("1 support, 0 loads, own weight +Y, PETG");
+    s.supports = [s.supports[0]!, { ...s.supports[0]!, id: 2 }, { ...s.supports[0]!, id: 3 }];
+    s.loads = [newSetup("b1").loads[0]!, { ...newSetup("b1").loads[0]!, id: 2 }];
+    s.gravity.on = false;
+    expect(setupSummary(s)).toBe("3 supports, 2 loads, PETG");
   });
 });
 
@@ -255,6 +339,24 @@ describe("colour map", () => {
   it("ranges over finite values only", () => {
     expect(valueRange([3, NaN, -1, 8])).toEqual({ min: -1, max: 8 });
     expect(valueRange([])).toEqual({ min: 0, max: 0 });
+  });
+
+  it("labels the legend's ends, a minimum under a thousandth of the peak as 0", () => {
+    expect(
+      [
+        { min: 0.000656, max: 51.11 },
+        { min: 0.0509, max: 51 },
+        { min: 0.051, max: 51 },
+        { min: 2, max: 31.25 },
+        { min: 0, max: 0 },
+      ].map(legendEnds),
+    ).toEqual([
+      ["0", "51.11"],
+      ["0", "51"],
+      ["0.051", "51"],
+      ["2", "31.25"],
+      ["0", "0"],
+    ]);
   });
 
   it("draws the legend from the same stops", () => {
@@ -292,9 +394,7 @@ describe("spots", () => {
     s.supports[0]!.type = "slider";
     s.supports[0]!.spots = [spot];
     const slider = buildStressRequest(s);
-    expect(!slider.ok && slider.message).toBe(
-      "the support is slider and has a spot, a spot is held every way, make it fixed or remove the spot",
-    );
+    expect(!slider.ok && slider.message).toMatch(/^the support is slider but has a spot.*make it fixed/);
     s.supports[0]!.type = "fixed";
     s.supports[0]!.spots = [{ ...spot, radius: "" as unknown as number }];
     const blank = buildStressRequest(s);

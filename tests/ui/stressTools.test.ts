@@ -82,7 +82,7 @@ describe("supports and gravity in the request", () => {
     const s = ready();
     s.supports.push(newSupport(2, "pinned"));
     const r = buildStressRequest(s);
-    expect(!r.ok && r.message).toBe("place support 2 on the body, or set its faces from a face selection");
+    expect(!r.ok && r.message).toMatch(/^support 2 has no faces yet/);
     s.supports = [];
     const none = buildStressRequest(s);
     expect(!none.ok && none.message).toBe("add a support");
@@ -111,14 +111,14 @@ describe("supports and gravity in the request", () => {
     const s = ready();
     s.loads[0]!.faces = { selectors: [], faceIds: [], normalSum: [0, 0, 0], area: 0 };
     const off = buildStressRequest(s);
-    expect(!off.ok && off.message).toBe("place the load on the body, or set its faces from a face selection");
+    expect(!off.ok && off.message).toMatch(/^the load has no faces yet/);
     s.gravity.on = true;
     const r = buildStressRequest(s);
     expect(r.ok && r.options.loads).toEqual([]);
     expect(r.ok && r.options.gravity).toEqual([0, 0, -9.81]);
     s.loads[0]!.force = 40;
     const edited = buildStressRequest(s);
-    expect(!edited.ok && edited.message).toBe("place the load on the body, or set its faces from a face selection");
+    expect(!edited.ok && edited.message).toMatch(/^the load has no faces yet/);
   });
 
   it("refuses faces the current model lacks, naming their row", () => {
@@ -134,7 +134,7 @@ describe("supports and gravity in the request", () => {
     s.gravity.on = true;
     s.custom.density = "" as unknown as number;
     const r = buildStressRequest(s);
-    expect(!r.ok && r.message).toBe("gravity needs the material's density in g/cm3");
+    expect(!r.ok && r.message).toMatch(/^own weight needs the material's density/);
     s.custom.density = 1.4;
     const ok = buildStressRequest(s);
     expect(ok.ok && ok.options.material).toEqual({ E: 2000, nu: 0.35, yield: 40, density: 1.4, name: "Custom" });
@@ -195,7 +195,7 @@ describe("the study the document saves", () => {
     expect(!r.ok && r.message).toBe("the load needs a force");
     s.loads[0]!.force = 35;
     const d = buildStressRequest(s);
-    expect(!d.ok && d.message).toBe("gravity needs the material's density in g/cm3");
+    expect(!d.ok && d.message).toMatch(/^own weight needs the material's density/);
   });
 
   it("reads back through the face lookup it is given, and round-trips", () => {
@@ -322,7 +322,7 @@ describe("the force arrow", () => {
     const start = forceDragStart(30, forceToArrowPx(30));
     const named = forceDragPatch({ key: "-Z", dir: [0, 0, -1], length: 50 }, 0.5, start);
     expect(named).toEqual({ direction: "-Z", custom: null, force: arrowPxToForce(100) });
-    expect(forceDragLabel(named)).toBe(`${named.force} N, -z`);
+    expect(forceDragLabel(named)).toBe(`${named.force} N, down (-Z)`);
     const free = forceDragPatch({ key: "custom", dir: [0.70710678, 0, -0.70710678], length: 20 }, 1, start);
     expect(free.custom).toEqual([0.707, 0, -0.707]);
     expect(forceDragLabel(free)).toBe(`${free.force} N`);
@@ -361,7 +361,7 @@ describe("where the glyphs stand", () => {
     const three = { selectors: [top, bottom, hole], faceIds: [1], normalSum: [0, 0, 1] as Vec3, area: 1 };
     expect(faceCountLabel({ ...three, missing: 1, unshown: 1 })).toBe("3 faces, 1 not found on the current model");
     expect(faceCountLabel({ ...three, missing: 0, unshown: 2 })).toBe("3 faces (2 not shown in the view)");
-    expect(faceCountLabel({ selectors: [], faceIds: [], normalSum: [0, 0, 0], area: 0 })).toBe("none");
+    expect(faceCountLabel({ selectors: [], faceIds: [], normalSum: [0, 0, 0], area: 0 })).toBe("No faces yet");
   });
 
   it("spreads pressure arrows over the faces, pointing in", () => {
@@ -527,7 +527,7 @@ describe("weight and reactions in the result", () => {
 
   it("shows the weight and each support's reaction, named by its kind", () => {
     const v = formatStressResult(reply, "mm", ["pinned", "slider"]);
-    const row = (k: string) => v.rows.find((r) => r.k === k)?.v;
+    const row = (k: string) => v.details.find((r) => r.k === k)?.v;
     expect(row("Weight")).toBe("0, 0, -0.5 N");
     expect(row("Support 1, pinned")).toBe("0, 0, 60 N");
     expect(row("Support 2, slider")).toBe("0, 0, 40.5 N");
@@ -535,9 +535,9 @@ describe("weight and reactions in the result", () => {
 
   it("leaves out a weight without gravity and a per-support row for one support", () => {
     const v = formatStressResult({ ...reply, weight: null, reactions: [[0, 0, 100.5]] }, "mm", ["fixed"]);
-    expect(v.rows.some((r) => r.k === "Weight")).toBe(false);
-    expect(v.rows.some((r) => r.k.startsWith("Support"))).toBe(false);
-    expect(v.rows.find((r) => r.k === "Reaction")?.v).toBe("0, 0, 100.5 N");
+    expect(v.details.some((r) => r.k === "Weight")).toBe(false);
+    expect(v.details.some((r) => r.k.startsWith("Support"))).toBe(false);
+    expect(v.details.find((r) => r.k === "Reaction")?.v).toBe("0, 0, 100.5 N");
   });
 });
 

@@ -1,0 +1,308 @@
+// The Stress tool panel. Its glass comes from .measure-panel, these rules only lay out its rows.
+
+// A fixed narrow column, clear of the model and arrows it analyses. Only the step scrolls, so the head, the tabs and
+// the Run bar stay put however long the setup grows.
+.stress-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 160px);
+  overflow-wrap: anywhere;
+}
+.stress-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.stress-head .float-card-close {
+  margin: -4px -4px 0 0;
+}
+.stress-step {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  // Room for the focus rings of the controls at the edges.
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.stress-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--float-line);
+}
+.stress-foot .stress-run {
+  flex: 1 1 auto;
+}
+.stress-busy {
+  flex: 1 1 auto;
+  color: var(--text-dim);
+}
+.stress-caption {
+  margin: var(--s-3) 0 var(--s-1);
+}
+.stress-item + .stress-item {
+  margin-top: var(--s-1);
+  padding-top: var(--s-1);
+  border-top: 1px solid var(--float-line);
+}
+// A disclosure: a caret and a word that fold what most studies leave alone.
+.stress-more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin-top: var(--s-3);
+  padding: var(--s-1) 0;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+}
+.stress-more:hover {
+  background: none;
+  color: var(--text);
+}
+.stress-more:focus-visible {
+  outline: none;
+  border-radius: var(--r-xs);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.stress-fold {
+  padding-left: var(--s-4);
+}
+.stress-panel .btn {
+  min-height: 28px;
+  padding: var(--s-1) var(--s-3);
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+.stress-panel .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+// Pressed or armed (Place while placing, Read a point while reading): the accent mixed into an opaque dark, as the
+// section chip's buttons do, so it reads over a pale model too.
+.stress-panel .btn.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
+  color: var(--text);
+}
+.stress-foot .btn {
+  min-height: 32px;
+}
+.stress-panel .sm-select,
+.stress-panel .sm-input {
+  height: 28px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 12px;
+}
+.stress-panel .sm-input {
+  width: 72px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.stress-panel .float-card-close {
+  width: 24px;
+  height: 24px;
+}
+
+// A label at the left and its control or controls filling the rest of the line.
+.stress-field {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 32px;
+}
+.stress-field > .measure-k:first-child {
+  flex: 0 0 auto;
+  min-width: 72px;
+}
+.stress-field .select-trigger {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.stress-number {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  color: var(--text-mute);
+}
+
+.stress-item-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 32px;
+}
+.stress-item-name {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+.stress-item-head .select-trigger {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.stress-swatch {
+  flex: none;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-xs);
+}
+
+// A face set's count on the left, wrapping when it says what the view cannot show, its buttons on the right.
+.stress-faces {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-1) var(--s-2);
+  padding: var(--s-1) 0;
+}
+.stress-count {
+  min-width: 0;
+}
+.stress-face-actions {
+  display: flex;
+  flex: none;
+  gap: var(--s-1);
+}
+.stress-spot .stress-number {
+  flex: 1 1 auto;
+}
+.stress-xyz-row {
+  display: flex;
+  gap: var(--s-1);
+}
+// Wide enough for what a drag writes, a sign and three decimals.
+.stress-panel .stress-xyz {
+  width: 64px;
+}
+.stress-add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin-top: var(--s-1);
+}
+.stress-gravity {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--s-2);
+  cursor: pointer;
+}
+.stress-material-line {
+  padding: var(--s-1) 0;
+}
+.stress-weight {
+  margin-top: var(--s-3);
+}
+
+// The verdict a result opens with: a rule in the colour of how it went, the headline in the text ink, or the warn and
+// error inks mixed for small text on glass.
+.stress-verdict {
+  margin: var(--s-1) 0 var(--s-2);
+  padding: var(--s-1) 0 var(--s-1) var(--s-3);
+  border-left: 3px solid var(--line);
+}
+.stress-verdict.holds {
+  border-left-color: var(--ok);
+}
+.stress-verdict.marginal {
+  border-left-color: var(--warn);
+}
+.stress-verdict.fails {
+  border-left-color: var(--error);
+}
+.stress-verdict-head {
+  font-weight: 600;
+  color: var(--text);
+}
+.stress-verdict.marginal .stress-verdict-head {
+  color: color-mix(in srgb, var(--warn) 60%, var(--text));
+}
+.stress-verdict.fails .stress-verdict-head {
+  color: color-mix(in srgb, var(--error) 60%, var(--text));
+}
+.stress-verdict-line {
+  margin-top: 2px;
+  color: var(--text-dim);
+}
+.stress-weak-pin {
+  font-weight: 600;
+}
+.stress-ran-with {
+  margin-bottom: var(--s-2);
+}
+.stress-stale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+  color: color-mix(in srgb, var(--warn) 60%, var(--text));
+}
+// A reading from before the last change stays readable but stops looking current.
+.stress-results.stale .stress-verdict,
+.stress-results.stale .stress-ran-with,
+.stress-results.stale .stress-key-row {
+  opacity: 0.55;
+}
+.stress-view-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  min-height: 32px;
+  margin-top: var(--s-1);
+}
+.stress-deform-row {
+  align-items: center;
+  gap: var(--s-2);
+}
+.stress-animate {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  // Wide enough for Pause, so the slider does not shift when the word changes.
+  min-width: 76px;
+  justify-content: center;
+}
+.stress-deform {
+  flex: 1;
+  min-width: 0;
+}
+.stress-pin {
+  align-items: center;
+}
+.stress-pin .measure-v {
+  flex: 1 1 auto;
+  text-align: right;
+}
+.stress-legend {
+  height: 10px;
+  margin-top: var(--s-2);
+  border-radius: var(--r-xs);
+}
+// The app's error and warning inks for small text on glass: the accent is a green, which would read a failing safety
+// factor as a good one, and the bare tokens fall under AA in the light theme.
+.stress-error,
+.stress-yields {
+  color: color-mix(in srgb, var(--error) 60%, var(--text));
+}
+.stress-warning {
+  color: color-mix(in srgb, var(--warn) 60%, var(--text));
+}
