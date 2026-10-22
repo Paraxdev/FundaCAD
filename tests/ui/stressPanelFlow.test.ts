@@ -6,6 +6,7 @@ import { usePanelsStore } from "../../src/stores/panels";
 import type { StressOptions, StressReply, StressResult } from "../../src/geometry/client";
 import type { CadDocument, StressStudy, Vec3 } from "../../src/types";
 import type { StressGlyphHandlers, StressGlyphModel } from "../../src/viewport/stressGlyphs";
+import { swingScale } from "../../src/ui/stress";
 
 // The Stress panel's facade against a hand-made viewport, store and engine:
 // faces come from the selection stamped with their body, Run sends what the
@@ -959,3 +960,180 @@ function studyOf(r: ReturnType<typeof rig>): StressStudy {
   r.ui.closeStress();
   return s;
 }
+
+describe("playing and pausing the deformation", () => {
+  const bending: StressReply = {
+    ...reply,
+    surface: {
+      ...reply.surface!,
+      positions: [13.5, -7.25, 4.1, 113.5, -2.25, 4.1, 13.5, 2.75, 6.1],
+      displacement: [0, 0, 0, 0.25, 0, -2, 0, 0.5, -1],
+    },
+  };
+  let clock = 0;
+  let frames: Map<number, FrameRequestCallback>;
+  let cancelled: number[];
+  let nextId = 0;
+
+  beforeEach(() => {
+    clock = 1000;
+    frames = new Map();
+    cancelled = [];
+    vi.stubGlobal("requestAnimationFrame", (f: FrameRequestCallback) => {
+      frames.set(++nextId, f);
+      return nextId;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+      cancelled.push(id);
+      frames.delete(id);
+    });
+    vi.spyOn(performance, "now").mockImplementation(() => clock);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  /** Runs the pending frame at `at` ms on the stubbed clock. */
+  function frame(at: number) {
+    clock = at;
+    const [id, f] = [...frames.entries()][0]!;
+    frames.delete(id);
+    f(at);
+  }
+
+  async function played() {
+    const r = rig();
+    setUp(r);
+    const run = r.ui.runStress();
+    r.settle({ ok: true, result: bending });
+    await run;
+    const scale = usePanelsStore().stress!.deform!.scale;
+    return { r, scale };
+  }
+
+  const REST = 800;
+
+  it("starts Play at the full pose the still shape shows, so it never jumps", async () => {
+    const { r, scale } = await played();
+    expect(r.overlays.at(-1)).toMatchObject({ scale });
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    expect(r.deformations.at(-1)).toBe(scale);
+    frame(1200);
+    expect(r.deformations.at(-1)).toBeCloseTo(swingScale(REST + 200, scale), 12);
+  });
+
+  it("pauses where the swing is, cancels the frame, and plays on from that pose", async () => {
+    const { r, scale } = await played();
+    const p = usePanelsStore();
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    frame(1250);
+    clock = 1400;
+    r.ui.setStressAnimate(false);
+    const held = swingScale(REST + 400, scale);
+    expect({ animate: p.stress!.deform!.animate, drawn: r.deformations.at(-1), pending: frames.size }).toEqual({
+      animate: false,
+      drawn: held,
+      pending: 0,
+    });
+    expect(cancelled).toHaveLength(1);
+    clock = 9000;
+    r.ui.setStressAnimate(true);
+    frame(9000);
+    expect(r.deformations.at(-1)).toBeCloseTo(held, 12);
+    frame(9100);
+    expect(r.deformations.at(-1)).toBeCloseTo(swingScale(REST + 500, scale), 12);
+  });
+
+  it("draws the full pose at a slider value set while paused, and plays on from it", async () => {
+    const { r } = await played();
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    clock = 1300;
+    r.ui.setStressAnimate(false);
+    r.ui.setStressDeformation(37.5);
+    expect(r.deformations.at(-1)).toBe(37.5);
+    clock = 2000;
+    r.ui.setStressAnimate(true);
+    frame(2000);
+    expect(r.deformations.at(-1)).toBe(37.5);
+  });
+
+  it("swings to the true size on the next frame after True size while playing", async () => {
+    const { r, scale } = await played();
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    frame(1100);
+    const drawn = r.deformations.length;
+    r.ui.setStressDeformation(1);
+    expect(r.deformations.length).toBe(drawn);
+    frame(1300);
+    expect(r.deformations.at(-1)).toBeCloseTo(swingScale(REST + 300, 1), 12);
+    expect(scale).not.toBe(1);
+  });
+
+  it("pauses when the tab asks, and when the colours go, coming back at the held pose", async () => {
+    const { r, scale } = await played();
+    const p = usePanelsStore();
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    clock = 1200;
+    r.ui.pauseStressAnimation();
+    const held = swingScale(REST + 200, scale);
+    expect({ animate: p.stress!.deform!.animate, drawn: r.deformations.at(-1) }).toEqual({ animate: false, drawn: held });
+    clock = 5000;
+    r.ui.setStressAnimate(true);
+    frame(5000);
+    clock = 5300;
+    r.ui.setStressColours(false);
+    expect(p.stress!.deform!.animate).toBe(false);
+    expect(frames.size).toBe(0);
+    r.ui.setStressColours(true);
+    expect(r.overlays.at(-1)).toMatchObject({ scale: swingScale(REST + 500, scale) });
+  });
+
+  it("resets to the full pose and cancels on Close, and a new Run starts still at full", async () => {
+    const { r } = await played();
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    clock = 1500;
+    r.ui.setStressAnimate(false);
+    void r.ui.runStress();
+    expect(usePanelsStore().stress!.deform).toBeNull();
+    r.settle({ ok: true, result: bending });
+    await Promise.resolve();
+    await Promise.resolve();
+    const again = usePanelsStore().stress!.deform!;
+    expect(r.overlays.at(-1)).toMatchObject({ scale: again.scale });
+    clock = 3000;
+    r.ui.setStressAnimate(true);
+    frame(3000);
+    expect(r.deformations.at(-1)).toBe(again.scale);
+    const pending = [...frames.keys()];
+    r.ui.closeStress();
+    expect(cancelled.slice(-1)).toEqual(pending);
+    expect(frames.size).toBe(0);
+  });
+
+  it("starts still at full after a body change dropped a paused result", async () => {
+    const { r } = await played();
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    clock = 1500;
+    r.ui.setStressAnimate(false);
+    r.ui.setStressBody("b2");
+    r.ui.setStressBody("b1");
+    setUp(r);
+    const run = r.ui.runStress();
+    r.settle({ ok: true, result: bending });
+    await run;
+    const scale = usePanelsStore().stress!.deform!.scale;
+    expect(r.overlays.at(-1)).toMatchObject({ scale });
+    clock = 4000;
+    r.ui.setStressAnimate(true);
+    frame(4000);
+    expect(r.deformations.at(-1)).toBe(scale);
+  });
+});

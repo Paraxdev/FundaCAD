@@ -32,6 +32,7 @@ import {
   setupFromStudy,
   studyFromSetup,
   swingScale,
+  SWING_PERIOD_MS,
   type ForceDirection,
   type StressFaceSet,
   type StressLoadSetup,
@@ -203,8 +204,13 @@ export function createPanels(deps: PanelsDeps) {
   const dragOrigin = new Map<number, Pick<StressLoadSetup, "direction" | "custom" | "force">>();
   // A spot's radius from before a drag of its rim, for Esc.
   let radiusOrigin: number | null = null;
-  // The Animate toggle's frame loop.
+  // The deformation's frame loop, and where its swing is in ms of a period. Play continues from the phase a pause held;
+  // REST_PHASE is the full pose, the still shape's, so Play from still never jumps.
   let animRaf = 0;
+  const REST_PHASE = SWING_PERIOD_MS / 2;
+  let animPhase = REST_PHASE;
+  let animFrom = REST_PHASE;
+  let animT0 = 0;
   // Where the gravity arrow stands, for the build it was measured on.
   let centre: { build: unknown; body: string; at: Vec3 | null } | null = null;
 
@@ -780,7 +786,7 @@ export function createPanels(deps: PanelsDeps) {
   function overlayNow(): StressOverlay | null {
     if (!colours) return null;
     if (!colours.overlay.displacement) return colours.overlay;
-    return { ...colours.overlay, scale: panels.stress?.deform?.scale ?? 0 };
+    return { ...colours.overlay, scale: poseScale() };
   }
 
   /** Put the last result's colours on the body, or take them off so its faces
@@ -793,7 +799,7 @@ export function createPanels(deps: PanelsDeps) {
       return;
     }
     if (!on) {
-      stopAnimation();
+      pauseAnimation();
       if (d.probe) setStressProbe(false);
     }
     viewport.setStressOverlay(on ? overlayNow() : null);
@@ -808,42 +814,68 @@ export function createPanels(deps: PanelsDeps) {
     if (!def || !Number.isFinite(scale)) return;
     def.scale = Math.max(0, scale);
     if (def.scale > def.max) def.max = def.scale;
-    if (!def.animate) viewport.setStressDeformation(def.scale);
+    if (!def.animate) {
+      animPhase = REST_PHASE;
+      viewport.setStressDeformation(def.scale);
+    }
   }
 
-  /** Swing the deformation between none and the slider's scale, or stop it
-   *  there. */
+  /** Play the deformation's swing from the pose on screen, or pause it there. */
   function setStressAnimate(on: boolean) {
     const def = panels.stress?.deform;
     if (!def) return;
-    def.animate = on;
-    if (on && panels.stress?.colours !== "shown") setStressColours(true);
-    if (on) startAnimation();
-    else stopAnimation();
+    if (!on) {
+      pauseAnimation();
+      return;
+    }
+    def.animate = true;
+    if (panels.stress?.colours !== "shown") setStressColours(true);
+    startAnimation();
+  }
+
+  /** The deformation scale drawn now: the slider's, or the pose a pause holds. */
+  function poseScale(): number {
+    const scale = panels.stress?.deform?.scale ?? 0;
+    return animPhase === REST_PHASE ? scale : swingScale(animPhase, scale);
   }
 
   function startAnimation() {
     if (animRaf || typeof requestAnimationFrame !== "function") return;
-    const t0 = performance.now();
+    animT0 = performance.now();
+    animFrom = animPhase;
     const step = (now: number) => {
       animRaf = 0;
       const d = panels.stress;
-      if (!d?.deform?.animate || d.colours !== "shown") {
-        if (d?.deform) viewport.setStressDeformation(d.deform.scale);
-        return;
-      }
-      viewport.setStressDeformation(swingScale(now - t0, d.deform.scale));
+      if (!d?.deform?.animate || d.colours !== "shown") return;
+      animPhase = animFrom + (now - animT0);
+      viewport.setStressDeformation(swingScale(animPhase, d.deform.scale));
       animRaf = requestAnimationFrame(step);
     };
     animRaf = requestAnimationFrame(step);
   }
 
-  /** Stop the swing and leave the shape at the slider's scale. */
+  /** Hold the swing where it is now. */
+  function pauseAnimation() {
+    if (animRaf) {
+      cancelAnimationFrame(animRaf);
+      animRaf = 0;
+      animPhase = animFrom + (performance.now() - animT0);
+    }
+    const def = panels.stress?.deform;
+    if (def?.animate) {
+      def.animate = false;
+      viewport.setStressDeformation(poseScale());
+    }
+  }
+
+  /** End the swing for good and leave the shape at the slider's scale. */
   function stopAnimation() {
     if (animRaf) cancelAnimationFrame(animRaf);
     animRaf = 0;
+    const held = animPhase !== REST_PHASE;
+    animPhase = REST_PHASE;
     const def = panels.stress?.deform;
-    if (def?.animate) {
+    if (def && (def.animate || held)) {
       def.animate = false;
       viewport.setStressDeformation(def.scale);
     }
@@ -1017,6 +1049,7 @@ export function createPanels(deps: PanelsDeps) {
     refreshStressMarks,
     setStressDeformation,
     setStressAnimate,
+    pauseStressAnimation: pauseAnimation,
     setStressProbe,
     removeStressProbe,
   };

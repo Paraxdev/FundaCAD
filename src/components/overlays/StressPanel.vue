@@ -53,6 +53,10 @@ watch(
   },
 );
 
+watch(step, (now) => {
+  if (now === "setup" && panels.stress?.deform?.animate) engine.ui.panels.pauseStressAnimation();
+});
+
 const tabs = computed(() => [
   { value: "setup" as const, label: "Set up" },
   {

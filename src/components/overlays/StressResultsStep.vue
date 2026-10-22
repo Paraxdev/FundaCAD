@@ -61,9 +61,11 @@ function onDeform(e: Event) {
           class="btn stress-animate"
           :class="{ active: deform.animate }"
           :aria-pressed="deform.animate"
+          :title="deform.animate ? 'Hold the shape where it is' : 'Swing the shape between still and bent'"
           @click="engine.ui.panels.setStressAnimate(!deform.animate)"
-          >{{ deform.animate ? "Stop" : "Animate" }}</button
         >
+          <Icon :name="deform.animate ? 'pause' : 'play'" :size="14" />{{ deform.animate ? "Pause" : "Play" }}
+        </button>
         <input
           class="sm-slider stress-deform"
           type="range"

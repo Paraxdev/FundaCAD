@@ -234,6 +234,14 @@
   align-items: center;
   gap: var(--s-2);
 }
+.stress-animate {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  // Wide enough for Pause, so the slider does not shift when the word changes.
+  min-width: 76px;
+  justify-content: center;
+}
 .stress-deform {
   flex: 1;
   min-width: 0;

@@ -25,6 +25,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Stress results play and pause the bend.** A Play button right under the
+  result swings the part between still and bent, and Pause holds it where it is,
+  so you can stop on any pose without leaving the tool. Going back to Set up or
+  turning the colours off pauses it too.
+
 - **The Stress panel has Set up and Results tabs.** Set up holds the body,
   supports, loads, own weight and material, with Run in a bar at the bottom and
   Cancel only while it runs. Results opens by itself when a Run finishes and
