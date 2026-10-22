@@ -509,6 +509,8 @@ export class DocumentStore {
   private path: string | null = null; // current file path (null = unsaved)
   private pathlessName: string | null = null;
   private isDirty = false; // unsaved changes since last save/open/new
+  private edits = 0;
+  private keepClean = 0;
   private rollback: number | null = null; // # of active features (null = all); timeline marker
   private suppressed = new Set<string>(); // feature ids skipped on rebuild (suppress)
   private sketchVis = new Overlay<boolean>("sketchVisibility", isBool); // explicit per-sketch show/hide overrides
@@ -666,6 +668,10 @@ export class DocumentStore {
   get busyState(): BusyState {
     return this.busy;
   }
+  /** Only an import's read holds history, so this is true while one is still read into this document. */
+  get importRunning(): boolean {
+    return this.st.reads > 0;
+  }
 
   /** An edit is waiting out the rebuild debounce. */
   get rebuildPending(): boolean {
@@ -690,7 +696,10 @@ export class DocumentStore {
       abort: opts.abort ?? null,
     };
     const st = this.st;
-    if (opts.holdHistory) st.historyHeld++;
+    if (opts.holdHistory) {
+      st.historyHeld++;
+      st.reads++;
+    }
     st.busyOps.push(op);
     this.setBusy(op.state);
     try {
@@ -699,7 +708,10 @@ export class DocumentStore {
         if (st === this.st && st.busyOps.at(-1) === op) this.setBusy(op.state);
       });
     } finally {
-      if (opts.holdHistory) st.historyHeld--;
+      if (opts.holdHistory) {
+        st.historyHeld--;
+        st.reads--;
+      }
       st.busyOps.splice(st.busyOps.indexOf(op), 1);
       if (st === this.st) {
         this.busy = st.busyOps.at(-1)?.state ?? IDLE_BUSY;
@@ -813,6 +825,12 @@ export class DocumentStore {
     this.isDirty = false;
     this.emitMeta();
   }
+  // Gives up a name taken without a path, so the document is Untitled again, unsaved work and all.
+  dropPathlessName() {
+    if (this.path || this.pathlessName === null) return;
+    this.pathlessName = null;
+    this.emitMeta();
+  }
   // A failed rebuild keeps the last result, and a build in flight would hold up the new document's.
   private discardModelForReplacement() {
     // A reply or chunk for the old document can still arrive before the cancel lands.
@@ -900,8 +918,29 @@ export class DocumentStore {
     for (const fn of this.metaListeners) fn();
   }
   private markDirty() {
-    if (this.isDirty) return;
+    this.edits++;
+    if (this.isDirty || this.keepClean) return;
     this.isDirty = true;
+    this.emitMeta();
+  }
+
+  // Counts every change, saved or not, so a caller can tell nothing else changed between two of its own steps.
+  get editCount(): number {
+    return this.edits;
+  }
+  // For the writes that open a document: a clean one stays clean through them, a dirty one stays dirty.
+  keepingClean<T>(fn: () => T): T {
+    this.keepClean++;
+    try {
+      return fn();
+    } finally {
+      this.keepClean--;
+    }
+  }
+  // Back to what the last save or open left, as when a cancelled import was the only change.
+  markClean() {
+    if (!this.isDirty) return;
+    this.isDirty = false;
     this.emitMeta();
   }
 

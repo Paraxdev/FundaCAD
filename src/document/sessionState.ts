@@ -12,6 +12,8 @@ export class SessionState {
   /** Every runBusy op still running, newest last; the chip shows the newest. */
   busyOps: BusyOp[] = [];
   historyHeld = 0;
+  // Import reads running for this document; one begun for an earlier document is counted in that one's state.
+  reads = 0;
   rebuildTimer: number | null = null;
   rebuilding = false;
   rebuildQueued = false;

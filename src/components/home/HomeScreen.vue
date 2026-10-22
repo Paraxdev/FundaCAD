@@ -4,6 +4,7 @@ import { useHomeStore } from "../../stores/home";
 import { useModalStore } from "../../stores/modals";
 import { useModalGate } from "../../composables/useModalGate";
 import { welcomeOnStartup, setWelcomeOnStartup } from "../../ui/welcome";
+import { openReportDialog } from "../../ui/bugReporter";
 import { forgetRecent, getRecentFiles } from "../../io/recentFiles";
 import { library, type FileStat, type FolderListing } from "../../io/library";
 import { addFolder, getFolders, removeFolder } from "../../io/homeFolders";
@@ -41,6 +42,8 @@ import HomeSidebar from "./HomeSidebar.vue";
 import VersionsDrawer from "./VersionsDrawer.vue";
 import { liveSummary } from "../../ui/homeVersions";
 import NewStrip from "./NewStrip.vue";
+import WhatsNewCard from "./WhatsNewCard.vue";
+import WelcomeBlock from "./WelcomeBlock.vue";
 import logoDarkUrl from "../../../assets/brand/fundacad-lockup-app.svg";
 import logoLightUrl from "../../../assets/brand/fundacad-lockup-app-light.svg";
 
@@ -135,6 +138,7 @@ const all = computed(() => {
 });
 const entries = computed(() => sortEntries(filterEntries(all.value, query.value), shownSort.value));
 const examples = computed(() => TEMPLATES.filter((t) => matchesQuery(t.name, query.value)));
+const fresh = computed(() => !inFolder.value && !recents.value.length);
 const unreadable = ref(new Set<string>());
 
 async function refreshStats(): Promise<void> {
@@ -351,6 +355,19 @@ onUnmounted(() => {
         Showing the first 2000 documents
       </p>
       <div class="home-scroll">
+        <WhatsNewCard />
+        <WelcomeBlock v-if="fresh && !query" />
+        <template v-if="fresh && examples.length">
+          <h2 class="home-section">Start here</h2>
+          <div class="home-grid home-examples">
+            <ExampleCard
+              v-for="t in examples"
+              :key="t.id"
+              :example="t"
+              @open="startNew(() => cb.newFromTemplate(t.id))"
+            />
+          </div>
+        </template>
         <div v-if="lib && entries.length" class="home-grid">
           <DocCard
             v-for="e in entries"
@@ -372,7 +389,7 @@ onUnmounted(() => {
         <p v-else-if="lib" class="home-empty">Documents you open or save appear here.</p>
         <p v-else class="home-empty">Recent documents appear here in the desktop app.</p>
 
-        <template v-if="examples.length">
+        <template v-if="!fresh && examples.length">
           <h2 class="home-section">Examples</h2>
           <div class="home-grid home-examples">
             <ExampleCard
@@ -401,6 +418,7 @@ onUnmounted(() => {
           <input v-model="showOnStartup" type="checkbox" />
           Show Home on startup
         </label>
+        <button type="button" class="home-report" @click="openReportDialog()">Report a problem</button>
       </div>
     </div>
   </div>

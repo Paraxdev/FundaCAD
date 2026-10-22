@@ -23,6 +23,10 @@ export class Home {
     shown = this;
   }
 
+  isOpen(): boolean {
+    return useHomeStore().visible;
+  }
+
   open(): void {
     useHomeStore().visible = true;
   }
@@ -40,4 +44,8 @@ export class Home {
 /** For code that must not depend on the engine graph, such as the window drop. */
 export function closeHome(): void {
   shown?.close();
+}
+
+export function homeIsOpen(): boolean {
+  return shown?.isOpen() ?? false;
 }

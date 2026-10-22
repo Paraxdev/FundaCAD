@@ -14,6 +14,7 @@ export interface DocumentSwapTarget {
     setSelectedBodies(ids: string[]): void;
     clearModel(): void;
   };
+  browser: { forgetDocumentFolders(): void };
 }
 
 /** New and Open take the old document off screen in the same call that replaces
@@ -31,5 +32,6 @@ export function wireDocumentSwap(store: Pick<DocumentStore, "onOpen">, e: Docume
     e.forgetLastCommit();
     // Last, the handlers above may still read the old model.
     e.viewport.clearModel();
+    e.browser.forgetDocumentFolders();
   });
 }

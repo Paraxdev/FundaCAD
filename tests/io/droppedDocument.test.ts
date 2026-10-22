@@ -24,7 +24,13 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ message: async (m: string) => void host.reported.push(m) }));
-vi.mock("../../src/app/documentActions", () => ({ mayDiscard: async () => true }));
+vi.mock("../../src/app/documentActions", () => ({
+  mayDiscard: async () => true,
+  placeImport: async (_e: unknown, _names: string[], run: () => Promise<void>) => {
+    await run();
+    return true;
+  },
+}));
 vi.mock("../../src/ui/toast", () => ({
   toast: (message: string, opts: { kind?: string } = {}) => host.toasts.push({ message, kind: opts.kind }),
   dismissToast: (id: number) => void host.dismissed.push(id),

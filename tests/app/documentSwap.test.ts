@@ -8,6 +8,8 @@ import type { CadDocument, RebuildResult } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 import { cancelActiveTools } from "../../src/app/toolBusy";
 import type { EngineTools } from "../../src/app/engine";
+import { createPinia, setActivePinia } from "pinia";
+import { useBrowserStore } from "../../src/stores/browser";
 
 const RESULT: RebuildResult = {
   mesh: { positions: [0, 0, 0], indices: [0], faceIds: [0] },
@@ -40,7 +42,7 @@ function slowEngine() {
   } as unknown as GeometryBackend;
 }
 
-function harness() {
+function harness(browser?: { forgetDocumentFolders(): void }) {
   const store = new DocumentStore(slowEngine(), DOC);
   const calls: string[] = [];
   const sketch = { active: true, cancel: () => calls.push("sketch.cancel") };
@@ -55,6 +57,7 @@ function harness() {
       setSelectedBodies: () => calls.push("setSelectedBodies"),
       clearModel: () => calls.push("clearModel"),
     },
+    browser: browser ?? { forgetDocumentFolders: () => calls.push("forgetDocumentFolders") },
   });
   store.onBuild((s) => {
     if (!s.building) calls.push(`build:${s.result ? "old" : "none"}`);
@@ -90,6 +93,37 @@ describe("New and Open clear the view at once", () => {
     calls.length = 0;
     store.load(JSON.stringify(DOC), { replace: true });
     expect(calls).not.toContain("clearModel");
+  });
+});
+
+// Every import's top node is "n:f1/0", so the 3D printer example opened with its folders as an earlier document's
+// assembly was left.
+describe("New and Open start the next document's folders from their defaults", () => {
+  const open = (b: ReturnType<typeof useBrowserStore>) =>
+    ["n:f1/0", "e:el1", "f:Origin", "f:Bodies"].filter((k) => !b.isCollapsed(k));
+
+  for (const how of ["New", "Open"] as const) {
+    it(`closes assembly folders and forgets element ones on ${how}, section folders stay as the user left them`, () => {
+      setActivePinia(createPinia());
+      const browser = useBrowserStore();
+      const { store } = harness(browser);
+      browser.expand("n:f1/0");
+      browser.toggle("e:el1");
+      browser.toggle("f:Origin");
+      expect(open(browser)).toEqual(["n:f1/0", "f:Bodies"]);
+      if (how === "New") store.newDocument();
+      else store.load(JSON.stringify({ parameters: {}, features: [] }));
+      expect(open(browser)).toEqual(["e:el1", "f:Bodies"]);
+    });
+  }
+
+  it("keeps every folder through a replace, which is the same document", () => {
+    setActivePinia(createPinia());
+    const browser = useBrowserStore();
+    const { store } = harness(browser);
+    browser.expand("n:f1/0");
+    store.load(JSON.stringify(DOC), { replace: true });
+    expect(browser.isCollapsed("n:f1/0")).toBe(false);
   });
 });
 
