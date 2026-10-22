@@ -138,7 +138,7 @@ export class BodyFinishLayer {
   facePaint: Record<number, string> = {};
   /** global face id → finish, sparse like facePaint. */
   faceFinish: Record<number, BodyFinish> = {};
-  /** Something on the model is shiny or glows, so bloom is worth running. */
+  /** Something on the model is shiny or glows, so bloom takes the composer. */
   bloomable = false;
 
   /** `sig` covers the base material's identity, because a rebuild hands back a
