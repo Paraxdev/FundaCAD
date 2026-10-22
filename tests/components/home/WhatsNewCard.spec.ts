@@ -80,9 +80,11 @@ describe("What's new on Home", () => {
     document.body.innerHTML = "";
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   });
+  afterEach(() => vi.useRealTimers());
 
-  it("shows a returning user the card at the top of Home, and records the notes", async () => {
+  it("shows a returning user the card at the top of Home, and records the notes once it was up 2 seconds", async () => {
     returning();
     mountHome();
     await startWhatsNew(homeHost, false);
@@ -91,24 +93,48 @@ describe("What's new on Home", () => {
     expect($(".home-news-title")!.textContent).toBe("What's new in FundaCAD 1.0.412");
     expect($$(".home-news-group").map((g) => g.textContent)).toEqual(groups.map((g) => g.title));
     expect($$(".home-news-list li")).toHaveLength(groups.reduce((n, g) => n + g.bullets.length, 0));
-    expect(localStorage.getItem(KEY)).toBe(hash);
     expect(useToastStore().items).toEqual([]);
+    vi.advanceTimersByTime(1999);
+    expect(localStorage.getItem(KEY)).toBeNull();
+    vi.advanceTimersByTime(1);
+    expect(localStorage.getItem(KEY)).toBe(hash);
   });
 
   it("shows the same notes only once", async () => {
     returning();
+    const first = mountHome();
     await startWhatsNew(homeHost, false);
+    await nextTick();
+    vi.advanceTimersByTime(2000);
+    first.unmount();
     setActivePinia(createPinia());
     await startWhatsNew(homeHost, false);
     expect(useWhatsNewStore().notes).toEqual([]);
     expect(localStorage.getItem(KEY)).toBe(hash);
   });
 
+  it("shows the notes again on the next start when Home closed before the card was read", async () => {
+    returning();
+    const first = mountHome();
+    await startWhatsNew(homeHost, false);
+    await nextTick();
+    vi.advanceTimersByTime(1500);
+    first.unmount();
+    vi.advanceTimersByTime(5000);
+    expect(localStorage.getItem(KEY)).toBeNull();
+    setActivePinia(createPinia());
+    await startWhatsNew(homeHost, false);
+    expect(useWhatsNewStore().notes).toEqual(groups);
+  });
+
   it("shows notes that changed since the ones a returning user saw", async () => {
     returning();
     localStorage.setItem(KEY, "0badc0de");
+    mountHome();
     await startWhatsNew(homeHost, false);
+    await nextTick();
     expect(useWhatsNewStore().notes).toEqual(groups);
+    vi.advanceTimersByTime(2000);
     expect(localStorage.getItem(KEY)).toBe(hash);
   });
 
@@ -133,14 +159,18 @@ describe("What's new on Home", () => {
     expect(toasts.map((t) => [t.message, t.kind, t.action?.label])).toEqual([
       ["FundaCAD was updated.", "info", "What's new"],
     ]);
+    vi.advanceTimersByTime(10_000);
+    expect(localStorage.getItem(KEY)).toBeNull();
     toasts[0]!.action!.onClick();
     expect(useHomeStore().visible).toBe(true);
     mountHome();
     await nextTick();
     expect($(".home-news-title")!.textContent).toBe("What's new in FundaCAD 1.0.412");
+    vi.advanceTimersByTime(2000);
+    expect(localStorage.getItem(KEY)).toBe(hash);
   });
 
-  it("hides the card on Hide and keeps the notes recorded", async () => {
+  it("records the notes at once when the card is hidden", async () => {
     returning();
     mountHome();
     await startWhatsNew(homeHost, false);
@@ -181,7 +211,10 @@ describe("What's new on Home", () => {
 
   it("still shows the card this session when the notes cannot be recorded", async () => {
     const kept = fakeStorage({ full: true }, { "fundacad.recentFiles": RECENTS });
+    mountHome();
     await startWhatsNew(homeHost, false);
+    await nextTick();
+    vi.advanceTimersByTime(2000);
     expect(useWhatsNewStore().notes).toEqual(groups);
     expect(kept.has(KEY)).toBe(false);
   });
