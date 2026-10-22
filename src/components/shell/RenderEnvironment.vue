@@ -4,7 +4,7 @@ import DenoiserRow from "./DenoiserRow.vue";
 // The same settings are also in Preferences on purpose: here you try six in ten seconds while looking at the part,
 // which a swatch grid suits and a dropdown in a modal does not.
 
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   ENVIRONMENTS_LIST,
   REALTIME_QUALITY_PREFS,
@@ -51,7 +51,7 @@ const ws = ref(workspace());
 const ground = computed(() => prefs.value[groundKey(ws.value)]);
 const GROUND_CHOICES: readonly { id: Ground; label: string }[] = [
   { id: "none", label: "None" },
-  { id: "shadow", label: "Shadow" },
+  { id: "shadow", label: "Shadow catcher" },
 ];
 const QUALITY_LABELS: Record<RealtimeQualityPref, string> = { auto: "Auto", standard: "Standard", high: "High" };
 // Dev builds only until High looks different from Standard.
@@ -193,6 +193,9 @@ const aimKey = () => {
     aiming.value = false;
   });
 };
+watch(hdrHash, (h) => {
+  if (h && engine.tools.lightAim.active) engine.tools.lightAim.cancel();
+});
 const resetKey = () => {
   setRenderPref("keyAzimuth", DEFAULT_KEY.azimuth);
   setRenderPref("keyElevation", DEFAULT_KEY.elevation);
@@ -325,9 +328,10 @@ const onBloom = (e: Event) => setRenderPref("bloom", Number.parseFloat((e.target
             data-env-behind
             :aria-pressed="prefs.envBackground"
             @click="toggleBehind"
-            >{{ prefs.envBackground ? "Shown behind the model" : "Ground colour behind" }}</button
+            >{{ prefs.envBackground ? "Shown behind the model" : "Backdrop colour behind" }}</button
           >
         </div>
+        <div class="sm-hint">Exposure evens out how bright the file itself is, in stops.</div>
       </template>
       <p class="sm-hint">
         Import an .hdr or .exr panorama, or drop one on the window. Save as keeps the whole look under a name. A
@@ -335,34 +339,10 @@ const onBloom = (e: Event) => setRenderPref("bloom", Number.parseFloat((e.target
       </p>
     </section>
 
-    <section class="rd-section">
-      <h3 class="rd-head">Ground</h3>
-      <div class="rd-chips" role="group" aria-label="Background">
-        <button
-          v-for="b in BACKGROUNDS"
-          :key="b.id"
-          class="rd-chip"
-          :class="{ active: prefs.background === b.id }"
-          :data-background="b.id"
-          @click="setRenderPref('background', b.id)"
-          >{{ b.label }}</button
-        >
-      </div>
-      <div class="rd-chips" role="group" aria-label="Ground shadow">
-        <button
-          v-for="g in GROUND_CHOICES"
-          :key="g.id"
-          class="rd-chip"
-          :class="{ active: ground === g.id }"
-          :data-ground="g.id"
-          :aria-pressed="ground === g.id"
-          @click="setRenderPref(groundKey(ws), g.id)"
-          >{{ g.label }}</button
-        >
-      </div>
-      <div class="sm-hint">A soft shadow under the model. Off on the lightweight render.</div>
+    <section class="rd-section" data-env-brightness>
+      <h3 class="rd-head">Environment brightness</h3>
       <label class="prefs-row">
-        <span class="prefs-label">Brightness</span>
+        <span class="prefs-label">Amount</span>
         <input
           id="rd-brightness"
           class="sm-slider"
@@ -373,8 +353,49 @@ const onBloom = (e: Event) => setRenderPref("bloom", Number.parseFloat((e.target
           :value="prefs.brightness"
           @input="onBrightness"
         />
+        <span class="rd-value">{{ prefs.brightness.toFixed(2) }}x</span>
       </label>
-      <div class="sm-hint">Lights and reflections together, so the two stay in step.</div>
+      <div class="sm-hint">
+        How strongly the environment lights the model and shows in its reflections, an imported HDR included.
+      </div>
+    </section>
+
+    <section class="rd-section" data-ground>
+      <h3 class="rd-head">Backdrop and floor</h3>
+      <div class="prefs-row rd-chip-row">
+        <span class="prefs-label">Backdrop</span>
+        <div class="rd-chips" role="group" aria-label="Backdrop colour">
+          <button
+            v-for="b in BACKGROUNDS"
+            :key="b.id"
+            class="rd-chip"
+            :class="{ active: prefs.background === b.id }"
+            :data-background="b.id"
+            :aria-pressed="prefs.background === b.id"
+            @click="setRenderPref('background', b.id)"
+            >{{ b.label }}</button
+          >
+        </div>
+      </div>
+      <div class="prefs-row rd-chip-row">
+        <span class="prefs-label">Floor</span>
+        <div class="rd-chips" role="group" aria-label="Floor under the model">
+          <button
+            v-for="g in GROUND_CHOICES"
+            :key="g.id"
+            class="rd-chip"
+            :class="{ active: ground === g.id }"
+            :data-ground="g.id"
+            :aria-pressed="ground === g.id"
+            @click="setRenderPref(groundKey(ws), g.id)"
+            >{{ g.label }}</button
+          >
+        </div>
+      </div>
+      <div class="sm-hint">
+        The colour behind the model, and an invisible floor under it that shows only the model's shadow. The floor is
+        off on the lightweight render.
+      </div>
     </section>
 
     <section v-if="showQuality" class="rd-section">
@@ -395,18 +416,30 @@ const onBloom = (e: Event) => setRenderPref("bloom", Number.parseFloat((e.target
       </div>
     </section>
 
-    <section class="rd-section">
+    <section class="rd-section" data-key-light-section>
       <h3 class="rd-head">Key light</h3>
-      <div class="rd-chips" role="group" aria-label="Key light">
-        <button class="rd-chip" :class="{ active: aiming }" data-key-light="aim" :aria-pressed="aiming" @click="aimKey"
-          >Aim</button
-        >
-        <button class="rd-chip" data-key-light="reset" @click="resetKey">Reset</button>
-      </div>
-      <div class="sm-hint" data-key-light="angles">
-        From {{ formatTurn(prefs.keyAzimuth) }} round, {{ formatTurn(prefs.keyElevation) }} up. Aim drags a sun on the
-        model to swing the light that casts the shadows.
-      </div>
+      <template v-if="hdrHash">
+        <div class="sm-hint" data-key-light="hdr">
+          An imported HDR lights the scene on its own, with no key light added. Pick a built in room to aim one.
+        </div>
+      </template>
+      <template v-else>
+        <div class="rd-chips" role="group" aria-label="Key light">
+          <button
+            class="rd-chip"
+            :class="{ active: aiming }"
+            data-key-light="aim"
+            :aria-pressed="aiming"
+            @click="aimKey"
+            >Aim</button
+          >
+          <button class="rd-chip" data-key-light="reset" @click="resetKey">Reset</button>
+        </div>
+        <div class="sm-hint" data-key-light="angles">
+          From {{ formatTurn(prefs.keyAzimuth) }} round, {{ formatTurn(prefs.keyElevation) }} up. Aim drags a sun on the
+          model to swing the light that casts the shadows.
+        </div>
+      </template>
     </section>
 
     <section class="rd-section">
@@ -444,7 +477,7 @@ const onBloom = (e: Event) => setRenderPref("bloom", Number.parseFloat((e.target
       </div>
       <div class="sm-hint">
         Ground every part with a real cast shadow from the key light, not just the soft light an emissive part throws.
-        Off on the lightweight render.
+        Off on the lightweight render{{ hdrHash ? ", and with an imported HDR, which has no key light" : "" }}.
       </div>
     </section>
 
