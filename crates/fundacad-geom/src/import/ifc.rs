@@ -1,7 +1,5 @@
-//! IFC building models (IFC2X3, IFC4, IFC4X3): ifc-lite tessellates every
-//! product with its openings cut, each product becomes one named, coloured
-//! body. Openings, spaces, building and storey envelopes, virtual elements,
-//! annotations and grids are left out, they are not material.
+//! IFC building models (IFC2X3, IFC4, IFC4X3): ifc-lite tessellates each product, openings cut, into one named,
+//! coloured body. Openings, spaces, envelopes, virtual elements, annotations and grids are not material, left out.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -196,9 +194,8 @@ fn open_edges(idx: &[u32]) -> usize {
     edges.iter().filter(|&&(a, b)| !edges.contains(&(b, a))).count()
 }
 
-/// The triangles with every edge that has a vertex of an open edge lying
-/// inside it split at that vertex. ifc-lite's opening cuts leave such
-/// T-junctions, and sewing cannot close a shell across one.
+/// The triangles with every edge split at any open edge vertex lying inside it. ifc-lite's opening cuts leave
+/// such T-junctions, and sewing cannot close a shell across one.
 pub fn split_t_junctions(pos: &[f64], idx: &[u32], tol: f64) -> Vec<u32> {
     let at = |i: u32| {
         let i = i as usize * 3;
