@@ -1,5 +1,5 @@
 //! Plugin bundle checks that are arithmetic on bytes and text: entry names, download URLs, digests and grants. Tauri
-//! free so scripts/check-plugin-guards.sh can run these tests on their own. Grants are opaque strings here, their
+//! free so scripts/check-plugin-guards.sh can run its tests on their own. Grants are opaque strings here, their
 //! meaning lives in src/plugins/manifest.ts.
 
 use serde::{Deserialize, Serialize};

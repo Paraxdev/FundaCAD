@@ -1,5 +1,5 @@
 //! What Home learns about documents on disk: names, times and sizes, never contents. Tauri free so
-//! scripts/check-home-disk.sh can run these tests on Windows, where the app's test binary cannot start.
+//! scripts/check-home-disk.sh can run its tests (tests/unit/library.rs) without the webview stack.
 
 use serde::Serialize;
 use std::time::UNIX_EPOCH;

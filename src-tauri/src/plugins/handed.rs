@@ -1,5 +1,5 @@
 //! Which files a plugin was handed and what it may be told about them. A plugin never learns a path: it gets a random
-//! handle, a file name and a length. Tauri free so scripts/check-plugin-guards.sh can run these tests.
+//! handle, a file name and a length. Tauri free so scripts/check-plugin-guards.sh can run its tests.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
