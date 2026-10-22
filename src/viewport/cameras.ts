@@ -124,9 +124,12 @@ export interface CameraRig {
   setLookAt(eye: THREE.Vector3, target: THREE.Vector3, animate?: boolean): void;
   /** The pose `t` of the way from one look-at to another, set at once. */
   lerpLookAt(
-    eyeA: THREE.Vector3, targetA: THREE.Vector3,
-    eyeB: THREE.Vector3, targetB: THREE.Vector3,
-    t: number, animate?: boolean,
+    eyeA: THREE.Vector3,
+    targetA: THREE.Vector3,
+    eyeB: THREE.Vector3,
+    targetB: THREE.Vector3,
+    t: number,
+    animate?: boolean,
   ): void;
   /** Set the half view height at the target (the zoom), in world units. */
   setViewScale(scale: number, animate?: boolean): void;
@@ -167,14 +170,7 @@ export interface CameraRig {
   restoreUp(): void;
 }
 
-export type StandardView =
-  | "front"
-  | "back"
-  | "left"
-  | "right"
-  | "top"
-  | "bottom"
-  | "iso";
+export type StandardView = "front" | "back" | "left" | "right" | "top" | "bottom" | "iso";
 
 export type ProjectionMode = "persp" | "ortho" | "auto";
 

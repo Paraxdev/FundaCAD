@@ -37,6 +37,8 @@ export const useDialogStore = defineStore("dialogs", () => {
     bugReport,
     preferences,
     bugDeps,
-    bindBugReporter: (deps: BugReportDeps) => { bugDeps.value = markRaw(deps); },
+    bindBugReporter: (deps: BugReportDeps) => {
+      bugDeps.value = markRaw(deps);
+    },
   };
 });

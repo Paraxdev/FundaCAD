@@ -31,8 +31,7 @@ export const STUDY_DEFAULTS = {
   radius: 5,
 } as const;
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  v !== null && typeof v === "object" && !Array.isArray(v);
+const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 
 function num(v: unknown, fallback: number): number {
   return typeof v === "number" && Number.isFinite(v) ? v : fallback;
@@ -63,10 +62,13 @@ function isFaceSelector(s: unknown): boolean {
       if (nth !== undefined && !(typeof nth === "number" && Number.isInteger(nth))) return false;
       // The engine scores whichever fingerprint fields are there; the panel
       // needs the centroid to look for the face in the view.
-      return isRecord(fp) && isVec3(fp["centroid"]) &&
+      return (
+        isRecord(fp) &&
+        isVec3(fp["centroid"]) &&
         (fp["normal"] === undefined || isVec3(fp["normal"])) &&
         (fp["area"] === undefined || (typeof fp["area"] === "number" && Number.isFinite(fp["area"]))) &&
-        (fp["surface"] === undefined || typeof fp["surface"] === "string");
+        (fp["surface"] === undefined || typeof fp["surface"] === "string")
+      );
     }
     default:
       return false;
@@ -128,7 +130,12 @@ export function normalizeStressStudy(raw: unknown): StressStudy | null {
     const f = faces(s["faces"]);
     const at = spots(s["spots"]);
     if (!f || !at) return null;
-    supports.push({ id: id(s["id"], i), type: type as StressSupportType, faces: f, ...(at.length ? { spots: at } : {}) });
+    supports.push({
+      id: id(s["id"], i),
+      type: type as StressSupportType,
+      faces: f,
+      ...(at.length ? { spots: at } : {}),
+    });
   }
 
   const loads: StressStudy["loads"] = [];

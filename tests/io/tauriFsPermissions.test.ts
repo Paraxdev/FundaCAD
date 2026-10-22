@@ -14,11 +14,13 @@ const sources = import.meta.glob(["../../src/**/*.ts", "../../src/**/*.vue"], {
   eager: true,
 }) as Record<string, string>;
 
-const capabilityText = Object.values(import.meta.glob("../../src-tauri/capabilities/default.json", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>)[0]!;
+const capabilityText = Object.values(
+  import.meta.glob("../../src-tauri/capabilities/default.json", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>,
+)[0]!;
 
 const kebab = (s: string) => s.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 

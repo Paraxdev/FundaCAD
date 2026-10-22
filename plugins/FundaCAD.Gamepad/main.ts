@@ -12,15 +12,7 @@
 // libmanette. A webview built without it reports no pads at all, and this does
 // nothing, which is the right amount of nothing.
 
-import {
-  CURSOR,
-  getGamepadConfig,
-  motionOf,
-  parseKey,
-  pressed,
-  settings,
-  type Binding,
-} from "./gamepad";
+import { CURSOR, getGamepadConfig, motionOf, parseKey, pressed, settings, type Binding } from "./gamepad";
 import { padState } from "./state";
 import GamepadSection from "./GamepadSection.vue";
 import { contribute, stickyFact } from "fundacad";
@@ -84,12 +76,7 @@ export async function activate(e: Engine): Promise<() => void> {
 
     const cfg = getGamepadConfig();
     const down = pad.buttons.map((b) => b.pressed);
-    const m = motionOf(
-      pad.axes,
-      [pad.buttons[6]?.value ?? 0, pad.buttons[7]?.value ?? 0],
-      cfg,
-      cursor.on(),
-    );
+    const m = motionOf(pad.axes, [pad.buttons[6]?.value ?? 0, pad.buttons[7]?.value ?? 0], cfg, cursor.on());
 
     const rig = e.viewport.rig;
     if (m.panX || m.panY) rig.panScreen(m.panX * dt, m.panY * dt);

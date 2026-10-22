@@ -53,14 +53,27 @@ describe("a document dropped as bytes in the desktop app", () => {
   function setup() {
     const importBytes = vi.fn(async () => ({ ok: false, message: "stub" }));
     const geometry = {
-      async rebuild() { return { ok: false, error: { message: "stub" } }; },
-      async init() {}, onStatus() { return () => {}; }, connected: true,
-      async migrateGeometry() { return []; },
+      async rebuild() {
+        return { ok: false, error: { message: "stub" } };
+      },
+      async init() {},
+      onStatus() {
+        return () => {};
+      },
+      connected: true,
+      async migrateGeometry() {
+        return [];
+      },
       importBytes,
     } as unknown as GeometryBackend;
     const store = new DocumentStore(geometry, { parameters: {}, features: [] });
     store.markSaved("D:/work/previous.funda");
-    return { store, geometry, importBytes, engine: { store, geometry, sketch: { hasUncommittedEdits: false } } as never };
+    return {
+      store,
+      geometry,
+      importBytes,
+      engine: { store, geometry, sketch: { hasUncommittedEdits: false } } as never,
+    };
   }
 
   const binary = () => new Uint8Array([0x46, 0x55, 0x4e, 0x44, 0x41, 0xff, 0xfe, 0x00, 0x80]);
@@ -92,17 +105,22 @@ describe("a document dropped as bytes in the desktop app", () => {
   it("says once what a newer file holds that this version leaves out, stays clean, and takes it down on the next open", async () => {
     host.reply = () => ({
       document: JSON.stringify({ version: 99, parameters: {}, features: [{ id: "w1", type: "futureWidget" }] }),
-      repairedShards: 0, usedBackupIndex: false, wasContainer: true,
+      repairedShards: 0,
+      usedBackupIndex: false,
+      wasContainer: true,
     });
     const { takeDroppedFiles } = await import("../../src/io/desktopDrop");
     const { store, engine } = setup();
     await takeDroppedFiles(engine, [{ name: "newer.funda", path: null, file: new File(["{}"], "newer.funda") }]);
 
     expect(host.reported).toEqual([]);
-    expect(host.toasts).toEqual([{
-      message: "Opened a file from a newer version of FundaCAD. 1 feature was not included because this version does not know it: futureWidget. It is kept and saved with the file. Bodies after it may differ. Update FundaCAD to build it.",
-      kind: "warning",
-    }]);
+    expect(host.toasts).toEqual([
+      {
+        message:
+          "Opened a file from a newer version of FundaCAD. 1 feature was not included because this version does not know it: futureWidget. It is kept and saved with the file. Bodies after it may differ. Update FundaCAD to build it.",
+        kind: "warning",
+      },
+    ]);
     expect(store.dirty).toBe(false);
 
     store.newDocument();
@@ -132,7 +150,8 @@ describe("a document dropped as bytes in the desktop app", () => {
     const blob = "0123456789abcdef0123456789abcdef";
     host.reply = () => ({
       document: JSON.stringify({ version: 99, parameters: {}, features: [{ id: "w1", type: "futureWidget", blob }] }),
-      repairedShards: 0, usedBackupIndex: false,
+      repairedShards: 0,
+      usedBackupIndex: false,
     });
     const { openDocumentAtPath, saveDocument } = await import("../../src/io/files");
     const { store } = setup();
@@ -140,13 +159,18 @@ describe("a document dropped as bytes in the desktop app", () => {
     expect({ outcome, reported: host.reported }).toEqual({ outcome: "ok", reported: [] });
 
     await saveDocument(store);
-    const save = host.invoked.find((c) => c.cmd === "container_save")?.args as { hashes: string[]; optionalHashes: string[] };
+    const save = host.invoked.find((c) => c.cmd === "container_save")?.args as {
+      hashes: string[];
+      optionalHashes: string[];
+    };
     expect(save.hashes).toEqual([]);
     expect(save.optionalHashes).toEqual([blob]);
   });
 
   it("keeps the open document and imports nothing when Rust refuses it", async () => {
-    host.reply = () => { throw "This document is damaged and cannot be opened."; };
+    host.reply = () => {
+      throw "This document is damaged and cannot be opened.";
+    };
     const { takeDroppedFiles } = await import("../../src/io/desktopDrop");
     const { store, engine, importBytes } = setup();
     await takeDroppedFiles(engine, [

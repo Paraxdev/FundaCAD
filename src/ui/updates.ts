@@ -44,7 +44,10 @@ export async function showAbout(): Promise<void> {
  *  "not applicable here", and failures (the quiet startup check stays silent). */
 export async function checkForUpdates(interactive: boolean): Promise<void> {
   if (!(await updatesSupported())) {
-    if (interactive) toast("This install does not update itself. Install the newer file from the releases page over it.", { timeout: 8000 });
+    if (interactive)
+      toast("This install does not update itself. Install the newer file from the releases page over it.", {
+        timeout: 8000,
+      });
     return;
   }
   try {
@@ -76,7 +79,9 @@ export async function checkForUpdates(interactive: boolean): Promise<void> {
       // instead covers both, without guessing which one happened from the text
       // of an error message.
       const why = err instanceof Error ? err.message : String(err);
-      toast(`Could not check for updates. Download the newest build from the releases page. (${why})`, { kind: "error" });
+      toast(`Could not check for updates. Download the newest build from the releases page. (${why})`, {
+        kind: "error",
+      });
     }
   }
 }

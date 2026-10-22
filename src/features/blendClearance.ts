@@ -148,11 +148,7 @@ export function boxDistanceSq(a: Aabb, b: Aabb): number {
  *  difference between a measure that is free and one that stalls the selection,
  *  the overwhelming majority of edges are nowhere near the picked one, and each
  *  is rejected on a single box test. */
-export function polylineDistance(
-  a: readonly Pt3[],
-  b: readonly Pt3[],
-  bestSq = Infinity,
-): number {
+export function polylineDistance(a: readonly Pt3[], b: readonly Pt3[], bestSq = Infinity): number {
   if (a.length < 2 || b.length < 2) return Infinity;
   let best = bestSq;
   for (let i = 0; i + 1 < a.length; i++) {

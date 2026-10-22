@@ -40,10 +40,7 @@ export function bodyColorMenuItems(store: DocumentStore, bodyId: string): CtxIte
  *  four physical slots, not a display palette, so a slot means "print this in
  *  filament N". Auto-adding an imported model's colour would claim a filament
  *  the printer doesn't have loaded. */
-export function nearestPaletteSlot(
-  hex: string,
-  palette: { name: string; color: string }[],
-): number | null {
+export function nearestPaletteSlot(hex: string, palette: { name: string; color: string }[]): number | null {
   const rgb = (s: string): [number, number, number] | null => {
     const t = s.trim().replace(/^#/, "");
     if (!/^[0-9a-f]{6}$/i.test(t)) return null;
@@ -127,10 +124,7 @@ export const FILAMENTS = "filaments";
 
 /** Slots where the machine's loaded filament differs from the palette, the
  *  same name/color criteria the sync confirmation diffs on. */
-export function staleSlots(
-  palette: { name: string; color: string }[],
-  filaments: FilamentSlot[],
-): number[] {
+export function staleSlots(palette: { name: string; color: string }[], filaments: FilamentSlot[]): number[] {
   const out: number[] = [];
   filaments.forEach((f, i) => {
     if (!f.present || i >= palette.length) return;

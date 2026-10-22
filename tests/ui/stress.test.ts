@@ -1,8 +1,24 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  CUSTOM_MATERIAL, STRESS_MATERIALS, buildStressRequest, forceVector, formatStressResult, intoDirection,
-  defaultSpotRadius, faceCountLabel, legendGradient, newLoad, newSetup, panelMessage, setupFromStudy, stressColor, stressColors,
-  studyFromSetup, valueRange, type StressFaceSet, type StressSetup,
+  CUSTOM_MATERIAL,
+  STRESS_MATERIALS,
+  buildStressRequest,
+  forceVector,
+  formatStressResult,
+  intoDirection,
+  defaultSpotRadius,
+  faceCountLabel,
+  legendGradient,
+  newLoad,
+  newSetup,
+  panelMessage,
+  setupFromStudy,
+  stressColor,
+  stressColors,
+  studyFromSetup,
+  valueRange,
+  type StressFaceSet,
+  type StressSetup,
 } from "../../src/ui/stress";
 import { setUnit } from "../../src/ui/units";
 import type { StressReply } from "../../src/geometry/client";
@@ -59,7 +75,11 @@ describe("buildStressRequest", () => {
   it("keeps the body stamped on every selector", () => {
     const r = buildStressRequest(ready());
     if (!r.ok) throw new Error(r.message);
-    for (const s of [...r.options.supports!.flatMap((x) => x.faces ?? []), ...r.options.loads.flatMap((l) => l.faces ?? [])]) expect(s.body).toBe("b1");
+    for (const s of [
+      ...r.options.supports!.flatMap((x) => x.faces ?? []),
+      ...r.options.loads.flatMap((l) => l.faces ?? []),
+    ])
+      expect(s.body).toBe("b1");
   });
 
   it("points a force along an axis or a custom vector, scaled to its magnitude", () => {
@@ -105,7 +125,7 @@ describe("buildStressRequest", () => {
     expect(r.ok && r.options.size).toBe(2);
   });
 
-  it("refuses a cleared custom field, which a number input reads as \"\"", () => {
+  it('refuses a cleared custom field, which a number input reads as ""', () => {
     const blank = "" as unknown as number;
     for (const k of ["E", "nu", "yield"] as const) {
       const s = ready();
@@ -143,7 +163,7 @@ describe("buildStressRequest", () => {
     expect(msg(s)).toBe("add a load, or turn on gravity");
   });
 
-  it("refuses \"into the face\" on faces that point every way", () => {
+  it('refuses "into the face" on faces that point every way', () => {
     const s = ready();
     // A whole cylinder: the outward normals cancel.
     s.loads[0]!.faces = { selectors: [top], faceIds: [3], normalSum: [0.1, 0, 0], area: 60 };
@@ -258,7 +278,7 @@ describe("spots", () => {
     expect(r.options.supports).toEqual([{ type: "fixed", faces: [bottom], spots: [{ at: [0, 0, 0], radius: 3 }] }]);
   });
 
-  it("give \"into the face\" its direction, and say when they cannot", () => {
+  it('give "into the face" its direction, and say when they cannot', () => {
     expect(intoDirection({ selectors: [], faceIds: [], normalSum: [0, 0, 0], area: 0 }, [spot])).toEqual([0, 0, -1]);
     const s = ready();
     s.loads[0]!.faces = { selectors: [], faceIds: [], normalSum: [0, 0, 0], area: 0 };
@@ -272,7 +292,9 @@ describe("spots", () => {
     s.supports[0]!.type = "slider";
     s.supports[0]!.spots = [spot];
     const slider = buildStressRequest(s);
-    expect(!slider.ok && slider.message).toBe("the support is slider and has a spot, a spot is held every way, make it fixed or remove the spot");
+    expect(!slider.ok && slider.message).toBe(
+      "the support is slider and has a spot, a spot is held every way, make it fixed or remove the spot",
+    );
     s.supports[0]!.type = "fixed";
     s.supports[0]!.spots = [{ ...spot, radius: "" as unknown as number }];
     const blank = buildStressRequest(s);
@@ -288,7 +310,9 @@ describe("spots", () => {
     s.loads[0]!.spots = [spot];
     const study = studyFromSetup(s);
     expect(study.loads[0]!.spots).toEqual([spot]);
-    expect(setupFromStudy(study, (sel) => ({ selectors: sel, faceIds: [], normalSum: [0, 0, 0], area: 0 })).loads[0]!.spots).toEqual([spot]);
+    expect(
+      setupFromStudy(study, (sel) => ({ selectors: sel, faceIds: [], normalSum: [0, 0, 0], area: 0 })).loads[0]!.spots,
+    ).toEqual([spot]);
   });
 
   it("start at a size in proportion to the body", () => {
@@ -299,9 +323,11 @@ describe("spots", () => {
   });
 
   it("are named the panel's way in an engine refusal", () => {
-    expect(panelMessage("spot 1 of load 2 (loads[1]) is not on body1, place it on the body again"))
-      .toBe("Spot 1 of Load 2 is not on body1, place it on the body again");
-    expect(panelMessage("the radius of loads[0].spots[1] of load 1 (loads[0]) must be a number above 0 in mm"))
-      .toBe("The radius of spot 2 of Load 1 must be a number above 0 in mm");
+    expect(panelMessage("spot 1 of load 2 (loads[1]) is not on body1, place it on the body again")).toBe(
+      "Spot 1 of Load 2 is not on body1, place it on the body again",
+    );
+    expect(panelMessage("the radius of loads[0].spots[1] of load 1 (loads[0]) must be a number above 0 in mm")).toBe(
+      "The radius of spot 2 of Load 1 must be a number above 0 in mm",
+    );
   });
 });

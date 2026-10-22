@@ -11,8 +11,7 @@ import {
 } from "../../src/document/datumPose";
 import type { PlaneDef } from "../../src/types";
 
-const close = (a: readonly number[], b: readonly number[]) =>
-  a.forEach((x, i) => expect(x).toBeCloseTo(b[i]!, 9));
+const close = (a: readonly number[], b: readonly number[]) => a.forEach((x, i) => expect(x).toBeCloseTo(b[i]!, 9));
 
 const pose = (p: Partial<DatumPose>): DatumPose => ({ ...ZERO_POSE, ...p });
 
@@ -72,7 +71,11 @@ describe("datum pose", () => {
     const q = new THREE.Quaternion().setFromAxisAngle(axis, (10 * Math.PI) / 180);
     const n = new THREE.Vector3(...placed.normal).applyQuaternion(q);
     const x = new THREE.Vector3(...placed.xdir).applyQuaternion(q);
-    const got = poseFromPlaced("XY", { origin: placed.origin, normal: n.toArray() as never, xdir: x.toArray() as never });
+    const got = poseFromPlaced("XY", {
+      origin: placed.origin,
+      normal: n.toArray() as never,
+      xdir: x.toArray() as never,
+    });
     expect(got.tiltX).toBeCloseTo(30, 6);
     expect(got.tiltY).toBeCloseTo(30, 6);
     expect(got.spin).toBeCloseTo(15, 6);

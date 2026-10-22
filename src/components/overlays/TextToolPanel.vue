@@ -53,17 +53,30 @@ onUnmounted(() => document.removeEventListener("keydown", onEsc, true));
 
 // --- inline styles, carried over from the class verbatim ------------------
 const root: CSSProperties = {
-  position: "fixed", zIndex: "50", padding: "8px",
-  background: "#20242c", border: "1px solid #3a4150", borderRadius: "6px",
-  boxShadow: "0 6px 20px rgba(0,0,0,0.4)", font: "12px system-ui, sans-serif",
-  color: "#dce3ee", width: "300px", maxWidth: "calc(100vw, 24px)", boxSizing: "border-box",
+  position: "fixed",
+  zIndex: "50",
+  padding: "8px",
+  background: "#20242c",
+  border: "1px solid #3a4150",
+  borderRadius: "6px",
+  boxShadow: "0 6px 20px rgba(0,0,0,0.4)",
+  font: "12px system-ui, sans-serif",
+  color: "#dce3ee",
+  width: "300px",
+  maxWidth: "calc(100vw, 24px)",
+  boxSizing: "border-box",
   colorScheme: "dark", // native <select> dropdown + number spinners render dark
-  left: `${pos.left}px`, top: `${pos.top}px`,
+  left: `${pos.left}px`,
+  top: `${pos.top}px`,
 };
 const row: CSSProperties = { display: "flex", gap: "6px", alignItems: "center", marginBottom: "6px" };
 const field: CSSProperties = {
-  background: "#161a20", color: "#dce3ee", border: "1px solid #3a4150",
-  borderRadius: "3px", padding: "3px 5px", font: "inherit",
+  background: "#161a20",
+  color: "#dce3ee",
+  border: "1px solid #3a4150",
+  borderRadius: "3px",
+  padding: "3px 5px",
+  font: "inherit",
 };
 const lbl: CSSProperties = { whiteSpace: "nowrap", cursor: "pointer" };
 const textArea: CSSProperties = { ...field, width: "100%", resize: "vertical" };
@@ -73,7 +86,14 @@ const wide: CSSProperties = { ...field, flex: "1", minWidth: "0" };
 const bad: CSSProperties = { borderColor: "var(--error, #f0564a)" };
 const problem: CSSProperties = { color: "var(--error, #f0564a)", fontSize: "11px", marginBottom: "6px" };
 const btnRow: CSSProperties = { ...row, marginBottom: "0", justifyContent: "flex-end" };
-const btn: CSSProperties = { color: "#fff", border: "none", borderRadius: "4px", padding: "4px 10px", cursor: "pointer", font: "inherit" };
+const btn: CSSProperties = {
+  color: "#fff",
+  border: "none",
+  borderRadius: "4px",
+  padding: "4px 10px",
+  cursor: "pointer",
+  font: "inherit",
+};
 const okBtn: CSSProperties = { ...btn, background: "#2b6" };
 const noBtn: CSSProperties = { ...btn, background: "#555" };
 </script>
@@ -103,9 +123,25 @@ const noBtn: CSSProperties = { ...btn, background: "#555" };
 
       <div :style="row">
         <label :style="lbl">Size</label>
-        <input v-model="form.height" type="text" inputmode="decimal" :title="errors.height" :style="[num, errors.height ? bad : {}]" @input="emitChange" @change="emitChange" />
+        <input
+          v-model="form.height"
+          type="text"
+          inputmode="decimal"
+          :title="errors.height"
+          :style="[num, errors.height ? bad : {}]"
+          @input="emitChange"
+          @change="emitChange"
+        />
         <label :style="lbl">Angle°</label>
-        <input v-model="form.angle" type="text" inputmode="decimal" :title="errors.angle" :style="[num, errors.angle ? bad : {}]" @input="emitChange" @change="emitChange" />
+        <input
+          v-model="form.angle"
+          type="text"
+          inputmode="decimal"
+          :title="errors.angle"
+          :style="[num, errors.angle ? bad : {}]"
+          @input="emitChange"
+          @change="emitChange"
+        />
       </div>
 
       <div :style="row">
@@ -123,8 +159,14 @@ const noBtn: CSSProperties = { ...btn, background: "#555" };
       <div :style="row">
         <label :style="lbl">Box width (mm)</label>
         <input
-          v-model="form.boxWidth" type="text" inputmode="decimal" placeholder="0 = no box"
-          :title="errors.boxWidth" :style="[wide, errors.boxWidth ? bad : {}]" @input="emitChange" @change="emitChange"
+          v-model="form.boxWidth"
+          type="text"
+          inputmode="decimal"
+          placeholder="0 = no box"
+          :title="errors.boxWidth"
+          :style="[wide, errors.boxWidth ? bad : {}]"
+          @input="emitChange"
+          @change="emitChange"
         />
       </div>
 

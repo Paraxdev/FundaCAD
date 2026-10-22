@@ -25,12 +25,18 @@ function arcSketch(): [ResolvedEntity[], SketchConstraint[]] {
   const [x1, y1] = at(3.7, -2.1, 0.5, 20);
   const [x2, y2] = at(3.7, -2.1, 0.5, 170);
   const [mx, my] = at(3.7, -2.1, 0.5, 95);
-  return [[{ type: "arc", id: "a", x1, y1, x2, y2, mx, my } as ResolvedEntity], [{ type: "radius", e: "a", value: 0.8 }]];
+  return [
+    [{ type: "arc", id: "a", x1, y1, x2, y2, mx, my } as ResolvedEntity],
+    [{ type: "radius", e: "a", value: 0.8 }],
+  ];
 }
 
 // the centred arc the audit found it on
 function centredArc(): [ResolvedEntity[], SketchConstraint[]] {
-  return [[{ type: "arc", id: "a", x1: 0.5, y1: 0, x2: -0.5, y2: 0, mx: 0, my: 0.5 } as ResolvedEntity], [{ type: "radius", e: "a", value: 0.8 }]];
+  return [
+    [{ type: "arc", id: "a", x1: 0.5, y1: 0, x2: -0.5, y2: 0, mx: 0, my: 0.5 } as ResolvedEntity],
+    [{ type: "radius", e: "a", value: 0.8 }],
+  ];
 }
 
 function lineAndCircle(): [ResolvedEntity[], SketchConstraint[]] {
@@ -39,7 +45,10 @@ function lineAndCircle(): [ResolvedEntity[], SketchConstraint[]] {
       { type: "line", id: "l", x1: 3, y1: 7, x2: 13, y2: 9.5 } as ResolvedEntity,
       { type: "circle", id: "c", x: 40.5, y: 38.2, radius: 5 } as ResolvedEntity,
     ],
-    [{ type: "horizontal", line: "l" }, { type: "radius", e: "c", value: 9 }],
+    [
+      { type: "horizontal", line: "l" },
+      { type: "radius", e: "c", value: 9 },
+    ],
   ];
 }
 
@@ -49,7 +58,10 @@ function chainedLines(): [ResolvedEntity[], SketchConstraint[]] {
       { type: "line", id: "m", x1: -4, y1: 1.5, x2: 6.2, y2: 3 } as ResolvedEntity,
       { type: "line", id: "n", x1: 6.2, y1: 3, x2: 9, y2: 11.4 } as ResolvedEntity,
     ],
-    [{ type: "perpendicular", l1: "m", l2: "n" }, { type: "distance", line: "n", value: 7 }],
+    [
+      { type: "perpendicular", l1: "m", l2: "n" },
+      { type: "distance", line: "n", value: 7 },
+    ],
   ];
 }
 

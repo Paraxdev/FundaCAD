@@ -9,8 +9,13 @@
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import type { Engine } from "../app/engine";
 import {
-  appearanceOffers, primaryCount, primaryKind, toolbarOffers, KIND_LABEL,
-  type AppearanceOffer, type ToolOffer,
+  appearanceOffers,
+  primaryCount,
+  primaryKind,
+  toolbarOffers,
+  KIND_LABEL,
+  type AppearanceOffer,
+  type ToolOffer,
 } from "../ui/selectionTools";
 import { contextMenu } from "../ui/menu";
 import { materialMenu } from "../ui/browserTree";
@@ -35,15 +40,17 @@ function readCounts(engine: Engine): { counts: SelectionCounts; signature: strin
   if (regions.length) c["sketch-region"] = regions.length;
   if (faceIds.length) c.face = faceIds.length;
   if (bodies.length) c.body = bodies.length;
-  const signature =
-    `e${edges.map((e) => e.id).join()}|r${regions.map((r) => r.interior3D.x).join()}|f${faceIds.join()}|b${bodies.join()}`;
+  const signature = `e${edges.map((e) => e.id).join()}|r${regions.map((r) => r.interior3D.x).join()}|f${faceIds.join()}|b${bodies.join()}`;
   return { counts: c, signature };
 }
 
 export function useSelectionOffers(engine: Engine) {
   const counts = shallowRef<SelectionCounts>({});
   const toolOwns = ref(false);
-  const measured = shallowRef<{ edges: Pt3[][]; roundFace: (RoundSize & { faceId: number }) | null }>({ edges: [], roundFace: null });
+  const measured = shallowRef<{ edges: Pt3[][]; roundFace: (RoundSize & { faceId: number }) | null }>({
+    edges: [],
+    roundFace: null,
+  });
   let signature = "";
 
   const kind = computed(() => primaryKind(counts.value));

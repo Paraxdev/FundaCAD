@@ -19,7 +19,10 @@ const OUT = path.resolve(process.argv[2] || process.env.SC_OUT || path.join(os.t
 const VARIANTS = process.env.SC_VARIANTS === "1";
 // A real GPU antialiases the rounded corners the comparison renders are about.
 const GPU = process.env.SC_GPU === "1" || VARIANTS;
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 
 let failures = 0;
 const check = (name, ok, detail) => {
@@ -35,11 +38,16 @@ const PLANES = ["XY", "XZ", "YZ"];
     : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"];
   const browser = await chromium.launch({ executablePath: EXE, args });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((port) => {
     const N = window.WebSocket;
     class P extends N {
-      constructor(u, p) { super(String(u).replace(":8765", `:${port}`), p); }
+      constructor(u, p) {
+        super(String(u).replace(":8765", `:${port}`), p);
+      }
     }
     window.WebSocket = P;
   }, ENGINE_PORT);
@@ -48,8 +56,13 @@ const PLANES = ["XY", "XZ", "YZ"];
     await page.goto(`${URL}?token=${TOKEN}`);
     await page.waitForTimeout(2500);
     const modal = await page.$(".modal-close");
-    if (modal) { await modal.click(); await page.waitForTimeout(400); }
-    await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, { timeout: 60000 });
+    if (modal) {
+      await modal.click();
+      await page.waitForTimeout(400);
+    }
+    await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, {
+      timeout: 60000,
+    });
     await page.mouse.move(1390, 890);
   };
   const settle = async () => {
@@ -70,73 +83,110 @@ const PLANES = ["XY", "XZ", "YZ"];
     await page.waitForTimeout(300);
   };
   const home = async (target, scale) => {
-    await page.evaluate(({ target, scale }) => {
-      const v = window.viewport;
-      v.resetCamera(false);
-      const V = v.camera.position.constructor;
-      v.rig.moveTo(new V(...target), false);
-      v.rig.setViewScale(scale, false);
-      v.requestRender();
-    }, { target, scale });
+    await page.evaluate(
+      ({ target, scale }) => {
+        const v = window.viewport;
+        v.resetCamera(false);
+        const V = v.camera.position.constructor;
+        v.rig.moveTo(new V(...target), false);
+        v.rig.setViewScale(scale, false);
+        v.requestRender();
+      },
+      { target, scale },
+    );
     await frame();
   };
   const top = async (target, scale) => {
-    await page.evaluate(({ target, scale }) => {
-      const v = window.viewport;
-      v.setStandardView("top");
-      const V = v.camera.position.constructor;
-      v.rig.moveTo(new V(...target), false);
-      v.rig.setViewScale(scale, false);
-      v.requestRender();
-    }, { target, scale });
+    await page.evaluate(
+      ({ target, scale }) => {
+        const v = window.viewport;
+        v.setStandardView("top");
+        const V = v.camera.position.constructor;
+        v.rig.moveTo(new V(...target), false);
+        v.rig.setViewScale(scale, false);
+        v.requestRender();
+      },
+      { target, scale },
+    );
     await page.waitForTimeout(900);
   };
-  const tiles = () => page.evaluate((planes) => {
-    const v = window.viewport;
-    return Object.fromEntries(planes.map((k) => {
-      const m = v.scene.planes[k];
-      const c = v.projectToScreen(m.getWorldPosition(m.position.clone()));
-      return [k, { visible: m.visible, x: c.x, y: c.y, fill: m.material.opacity }];
-    }));
-  }, PLANES);
+  const tiles = () =>
+    page.evaluate((planes) => {
+      const v = window.viewport;
+      return Object.fromEntries(
+        planes.map((k) => {
+          const m = v.scene.planes[k];
+          const c = v.projectToScreen(m.getWorldPosition(m.position.clone()));
+          return [k, { visible: m.visible, x: c.x, y: c.y, fill: m.material.opacity }];
+        }),
+      );
+    }, PLANES);
   // On screen length of the XY tile's side, and what the size rule says it should be.
-  const xySide = () => page.evaluate(() => {
-    const v = window.viewport;
-    const m = v.scene.planes.XY;
-    m.updateWorldMatrix(true, false);
-    const V = m.position.constructor;
-    const a = v.projectToScreen(new V(-20, 0, 0).applyMatrix4(m.matrixWorld));
-    const b = v.projectToScreen(new V(20, 0, 0).applyMatrix4(m.matrixWorld));
-    const pws = v.pixelWorldSize(new V(0, 0, 0));
-    const diag = v.modelDiagonal();
-    const k = diag == null ? 1 : Math.max(0.6, Math.min(1, (diag / pws) * 0.45 / 46));
-    return { px: Math.hypot(b.x - a.x, b.y - a.y), want: 40 * k };
-  });
+  const xySide = () =>
+    page.evaluate(() => {
+      const v = window.viewport;
+      const m = v.scene.planes.XY;
+      m.updateWorldMatrix(true, false);
+      const V = m.position.constructor;
+      const a = v.projectToScreen(new V(-20, 0, 0).applyMatrix4(m.matrixWorld));
+      const b = v.projectToScreen(new V(20, 0, 0).applyMatrix4(m.matrixWorld));
+      const pws = v.pixelWorldSize(new V(0, 0, 0));
+      const diag = v.modelDiagonal();
+      const k = diag == null ? 1 : Math.max(0.6, Math.min(1, ((diag / pws) * 0.45) / 46));
+      return { px: Math.hypot(b.x - a.x, b.y - a.y), want: 40 * k };
+    });
 
   await boot();
 
   console.log("\n[shown only while a tool asks for a plane]");
-  check("no tile before a plane pick", Object.values(await tiles()).every((t) => !t.visible));
+  check(
+    "no tile before a plane pick",
+    Object.values(await tiles()).every((t) => !t.visible),
+  );
   await home([0, 0, 0], 60);
   await askPlane();
   let t = await tiles();
-  check("three tiles while Sketch asks for a plane", PLANES.every((k) => t[k].visible), JSON.stringify(t));
-  const picks = await page.evaluate((t) => Object.fromEntries(Object.entries(t).map(([k, p]) => {
-    const c = window.viewport.pickConstructionAt(p.x, p.y);
-    return [k, { construction: c?.kind === "base" ? c.plane : null, plane: window.viewport.pickPlane(p.x, p.y) }];
-  })), t);
-  check("each tile's middle picks its own plane", PLANES.every((k) => picks[k].construction === k && picks[k].plane === k), JSON.stringify(picks));
+  check(
+    "three tiles while Sketch asks for a plane",
+    PLANES.every((k) => t[k].visible),
+    JSON.stringify(t),
+  );
+  const picks = await page.evaluate(
+    (t) =>
+      Object.fromEntries(
+        Object.entries(t).map(([k, p]) => {
+          const c = window.viewport.pickConstructionAt(p.x, p.y);
+          return [k, { construction: c?.kind === "base" ? c.plane : null, plane: window.viewport.pickPlane(p.x, p.y) }];
+        }),
+      ),
+    t,
+  );
+  check(
+    "each tile's middle picks its own plane",
+    PLANES.every((k) => picks[k].construction === k && picks[k].plane === k),
+    JSON.stringify(picks),
+  );
   const o = await origin();
-  check("the tiles sit beside the origin, not on it", PLANES.every((k) => Math.hypot(t[k].x - o.x, t[k].y - o.y) > 15),
-    JSON.stringify({ o, t }));
-  check("the origin itself picks no tile", (await page.evaluate((p) => window.viewport.pickPlane(p.x, p.y), o)) === null);
+  check(
+    "the tiles sit beside the origin, not on it",
+    PLANES.every((k) => Math.hypot(t[k].x - o.x, t[k].y - o.y) > 15),
+    JSON.stringify({ o, t }),
+  );
+  check(
+    "the origin itself picks no tile",
+    (await page.evaluate((p) => window.viewport.pickPlane(p.x, p.y), o)) === null,
+  );
   await shot("tiles-noir", around(o, 170));
 
   console.log("\n[hover]");
   await page.mouse.move(t.XZ.x, t.XZ.y);
   await page.waitForTimeout(250);
   let h = await tiles();
-  check("the hovered tile brightens above the others", h.XZ.fill > h.XY.fill && h.XZ.fill > h.YZ.fill, JSON.stringify(h));
+  check(
+    "the hovered tile brightens above the others",
+    h.XZ.fill > h.XY.fill && h.XZ.fill > h.YZ.fill,
+    JSON.stringify(h),
+  );
   await shot("tiles-hover-xz-noir", around(o, 170));
   await page.mouse.move(1390, 890);
   await page.waitForTimeout(250);
@@ -149,24 +199,46 @@ const PLANES = ["XY", "XZ", "YZ"];
     const s = await xySide();
     check(`top view at scale ${scale}: the XY tile is 40 px`, Math.abs(s.px - 40) <= 1, JSON.stringify(s));
   }
-  const names = await page.evaluate((planes) => Object.fromEntries(planes.map((k) => [
-    k, window.viewport.scene.planes[k].children.find((c) => c.userData.role === "label").material.opacity,
-  ])), PLANES);
-  check("top view names only the XY tile, the two seen edge on hide theirs", names.XY > 0.5 && names.XZ === 0 && names.YZ === 0,
-    JSON.stringify(names));
+  const names = await page.evaluate(
+    (planes) =>
+      Object.fromEntries(
+        planes.map((k) => [
+          k,
+          window.viewport.scene.planes[k].children.find((c) => c.userData.role === "label").material.opacity,
+        ]),
+      ),
+    PLANES,
+  );
+  check(
+    "top view names only the XY tile, the two seen edge on hide theirs",
+    names.XY > 0.5 && names.XZ === 0 && names.YZ === 0,
+    JSON.stringify(names),
+  );
   await shot("tiles-top-noir", around(await origin(), 170));
   const xyAt = (await tiles()).XY;
-  const pickAt = () => page.evaluate((p) => {
-    const c = window.viewport.pickConstructionAt(p.x, p.y);
-    return { construction: c?.kind === "base" ? c.plane : c?.kind ?? null, plane: window.viewport.pickPlane(p.x, p.y) };
-  }, xyAt);
+  const pickAt = () =>
+    page.evaluate((p) => {
+      const c = window.viewport.pickConstructionAt(p.x, p.y);
+      return {
+        construction: c?.kind === "base" ? c.plane : (c?.kind ?? null),
+        plane: window.viewport.pickPlane(p.x, p.y),
+      };
+    }, xyAt);
   const shownPick = await pickAt();
   await escape();
-  check("Escape hides the tiles", Object.values(await tiles()).every((x) => !x.visible));
+  check(
+    "Escape hides the tiles",
+    Object.values(await tiles()).every((x) => !x.visible),
+  );
   const hiddenPick = await pickAt();
-  check("the XY tile's middle picks XY while shown and nothing once hidden",
-    shownPick.construction === "XY" && shownPick.plane === "XY" && hiddenPick.construction === null && hiddenPick.plane === null,
-    JSON.stringify({ xyAt, shownPick, hiddenPick }));
+  check(
+    "the XY tile's middle picks XY while shown and nothing once hidden",
+    shownPick.construction === "XY" &&
+      shownPick.plane === "XY" &&
+      hiddenPick.construction === null &&
+      hiddenPick.plane === null,
+    JSON.stringify({ xyAt, shownPick, hiddenPick }),
+  );
 
   console.log("\n[a small part shrinks them, never below 24 px]");
   await page.evaluate(async () => {
@@ -181,10 +253,26 @@ const PLANES = ["XY", "XZ", "YZ"];
     await top([18, 11, 0], scale);
     sizes.push({ scale, ...(await xySide()) });
   }
-  check("each size follows the rule", sizes.every((s) => Math.abs(s.px - s.want) <= 1), JSON.stringify(sizes));
-  check("all between 24 and 40 px", sizes.every((s) => s.px >= 23 && s.px <= 41), JSON.stringify(sizes));
-  check("one shrunk below 40 px and above the floor", sizes.some((s) => s.want < 39 && s.want > 25), JSON.stringify(sizes));
-  check("one held at the 24 px floor", sizes.some((s) => Math.abs(s.want - 24) < 1e-6), JSON.stringify(sizes));
+  check(
+    "each size follows the rule",
+    sizes.every((s) => Math.abs(s.px - s.want) <= 1),
+    JSON.stringify(sizes),
+  );
+  check(
+    "all between 24 and 40 px",
+    sizes.every((s) => s.px >= 23 && s.px <= 41),
+    JSON.stringify(sizes),
+  );
+  check(
+    "one shrunk below 40 px and above the floor",
+    sizes.some((s) => s.want < 39 && s.want > 25),
+    JSON.stringify(sizes),
+  );
+  check(
+    "one held at the 24 px floor",
+    sizes.some((s) => Math.abs(s.want - 24) < 1e-6),
+    JSON.stringify(sizes),
+  );
   await escape();
   await page.evaluate(async () => {
     window.store.removeFeature("TM");
@@ -196,28 +284,62 @@ const PLANES = ["XY", "XZ", "YZ"];
   console.log("\n[a body around the origin]");
   await home([0, 0, 0], 60);
   // A cube a little larger than the tiles, so part of each tile is inside it and part outside.
-  const cube = await page.evaluate(() => 1.2 * 46 * window.viewport.pixelWorldSize(new (window.viewport.camera.position.constructor)(0, 0, 0)));
-  await page.evaluate(async (s) => {
-    window.store.addFeature({ id: "TC", type: "box", length: s, width: s, height: s });
-    await window.store.rebuildNow();
-  }, Math.round(cube * 100) / 100);
+  const cube = await page.evaluate(
+    () => 1.2 * 46 * window.viewport.pixelWorldSize(new window.viewport.camera.position.constructor(0, 0, 0)),
+  );
+  await page.evaluate(
+    async (s) => {
+      window.store.addFeature({ id: "TC", type: "box", length: s, width: s, height: s });
+      await window.store.rebuildNow();
+    },
+    Math.round(cube * 100) / 100,
+  );
   await settle();
   await home([0, 0, 0], 60);
   await askPlane();
-  const depth = await page.evaluate((planes) => Object.fromEntries(planes.map((k) => {
-    const m = window.viewport.scene.planes[k];
-    const role = (r) => m.children.find((c) => c.userData.role === r);
-    return [k, { fill: m.material.depthTest, ghost: role("ghost").material.depthTest, rim: role("rim").material.depthTest, label: role("label").material.depthTest }];
-  })), PLANES);
-  check("fill and rim are depth tested, the ghost and the name are not",
-    PLANES.every((k) => depth[k].fill && depth[k].rim && !depth[k].ghost && !depth[k].label), JSON.stringify(depth));
+  const depth = await page.evaluate(
+    (planes) =>
+      Object.fromEntries(
+        planes.map((k) => {
+          const m = window.viewport.scene.planes[k];
+          const role = (r) => m.children.find((c) => c.userData.role === r);
+          return [
+            k,
+            {
+              fill: m.material.depthTest,
+              ghost: role("ghost").material.depthTest,
+              rim: role("rim").material.depthTest,
+              label: role("label").material.depthTest,
+            },
+          ];
+        }),
+      ),
+    PLANES,
+  );
+  check(
+    "fill and rim are depth tested, the ghost and the name are not",
+    PLANES.every((k) => depth[k].fill && depth[k].rim && !depth[k].ghost && !depth[k].label),
+    JSON.stringify(depth),
+  );
   t = await tiles();
-  const behind = await page.evaluate((t) => Object.fromEntries(Object.entries(t).map(([k, p]) => {
-    const c = window.viewport.pickConstructionAt(p.x, p.y);
-    return [k, { plane: c?.kind === "base" ? c.plane : null, face: !!window.viewport.pickFaceForPressPull(p.x, p.y) }];
-  })), t);
-  check("a tile inside the body still picks its plane", PLANES.every((k) => behind[k].plane === k) && PLANES.some((k) => behind[k].face),
-    JSON.stringify(behind));
+  const behind = await page.evaluate(
+    (t) =>
+      Object.fromEntries(
+        Object.entries(t).map(([k, p]) => {
+          const c = window.viewport.pickConstructionAt(p.x, p.y);
+          return [
+            k,
+            { plane: c?.kind === "base" ? c.plane : null, face: !!window.viewport.pickFaceForPressPull(p.x, p.y) },
+          ];
+        }),
+      ),
+    t,
+  );
+  check(
+    "a tile inside the body still picks its plane",
+    PLANES.every((k) => behind[k].plane === k) && PLANES.some((k) => behind[k].face),
+    JSON.stringify(behind),
+  );
   await shot("depth-box-noir", around(await origin(), 170));
   await escape();
   await page.evaluate(async () => {
@@ -236,8 +358,15 @@ const PLANES = ["XY", "XZ", "YZ"];
   await page.mouse.up();
   await page.waitForFunction(() => window.sketch.active, null, { timeout: 15000 }).catch(() => {});
   const took = await page.evaluate(() => ({ active: window.sketch.active, plane: window.sketch.plane ?? null }));
-  check("clicking the XY tile opens a sketch on XY", took.active && JSON.stringify(took.plane).includes("XY"), JSON.stringify(took));
-  check("the tiles hide once the sketch is open", Object.values(await tiles()).every((x) => !x.visible));
+  check(
+    "clicking the XY tile opens a sketch on XY",
+    took.active && JSON.stringify(took.plane).includes("XY"),
+    JSON.stringify(took),
+  );
+  check(
+    "the tiles hide once the sketch is open",
+    Object.values(await tiles()).every((x) => !x.visible),
+  );
   await page.evaluate(() => window.sketch.cancel());
   await page.waitForTimeout(300);
 
@@ -270,10 +399,11 @@ const PLANES = ["XY", "XZ", "YZ"];
 
   async function renders() {
     console.log("\n[comparison renders]");
-    const reshape = (shape) => page.evaluate((s) => {
-      window.viewport.scene.originTiles.reshape(s);
-      window.viewport.requestRender();
-    }, shape);
+    const reshape = (shape) =>
+      page.evaluate((s) => {
+        window.viewport.scene.originTiles.reshape(s);
+        window.viewport.requestRender();
+      }, shape);
     const DEFAULT = { sizePx: 40, gapPx: 6, radiusPx: 11, rho: 0.25, octant: { x: 1, y: -1, z: 1 } };
     const CIRCLE = Math.SQRT2 - 1;
     const BIG = { sizePx: 240, radiusPx: 66, gapPx: 36 };
@@ -291,7 +421,10 @@ const PLANES = ["XY", "XZ", "YZ"];
       await settle();
       await home([0, 0, 0], 60);
       await askPlane();
-      for (const [name, rho] of [["circle", CIRCLE], ["rho025", 0.25]]) {
+      for (const [name, rho] of [
+        ["circle", CIRCLE],
+        ["rho025", 0.25],
+      ]) {
         await reshape({ ...DEFAULT, rho });
         await home([0, 0, 0], 60);
         await shot(`corner-${name}-${theme}-close`, around(await origin(), 170));
@@ -302,19 +435,33 @@ const PLANES = ["XY", "XZ", "YZ"];
       await home([0, 0, 0], 60);
       await shot(`full-rho025-${theme}`);
       if (theme === "noir") {
-        await page.evaluate(() => { document.documentElement.classList.add("no-glass-blur"); window.viewport.requestRender(); });
+        await page.evaluate(() => {
+          document.documentElement.classList.add("no-glass-blur");
+          window.viewport.requestRender();
+        });
         await frame();
         await shot("bluroff-rho025-noir-close", around(await origin(), 170));
-        await page.evaluate(() => { document.documentElement.classList.remove("no-glass-blur"); window.viewport.requestRender(); });
+        await page.evaluate(() => {
+          document.documentElement.classList.remove("no-glass-blur");
+          window.viewport.requestRender();
+        });
       }
-      await page.evaluate(() => { window.viewport.hoverPlane("XZ"); });
+      await page.evaluate(() => {
+        window.viewport.hoverPlane("XZ");
+      });
       await frame();
       await shot(`hover-xz-${theme}`, around(await origin(), 170));
-      await page.evaluate(() => { window.viewport.hoverPlane(null); });
+      await page.evaluate(() => {
+        window.viewport.hoverPlane(null);
+      });
       await reshape({ ...DEFAULT, octant: { x: -1, y: 1, z: -1 } });
       await home([0, 0, 0], 60);
       await shot(`octant-outside-${theme}-close`, around(await origin(), 170));
-      for (const [name, rho] of [["circle", CIRCLE], ["rho025", 0.25], ["rho060", 0.6]]) {
+      for (const [name, rho] of [
+        ["circle", CIRCLE],
+        ["rho025", 0.25],
+        ["rho060", 0.6],
+      ]) {
         await reshape({ ...DEFAULT, ...BIG, rho });
         await top([0, 0, 0], 20);
         const c = await page.evaluate(() => {
@@ -332,11 +479,16 @@ const PLANES = ["XY", "XZ", "YZ"];
       });
       await settle();
       await home([0, 0, 0], 60);
-      const side = await page.evaluate(() => 1.2 * 46 * window.viewport.pixelWorldSize(new (window.viewport.camera.position.constructor)(0, 0, 0)));
-      await page.evaluate(async (s) => {
-        window.store.addFeature({ id: "DB", type: "box", length: s, width: s, height: s });
-        await window.store.rebuildNow();
-      }, Math.round(side * 100) / 100);
+      const side = await page.evaluate(
+        () => 1.2 * 46 * window.viewport.pixelWorldSize(new window.viewport.camera.position.constructor(0, 0, 0)),
+      );
+      await page.evaluate(
+        async (s) => {
+          window.store.addFeature({ id: "DB", type: "box", length: s, width: s, height: s });
+          await window.store.rebuildNow();
+        },
+        Math.round(side * 100) / 100,
+      );
       await settle();
       await home([0, 0, 0], 60);
       await askPlane();
@@ -345,4 +497,7 @@ const PLANES = ["XY", "XZ", "YZ"];
     }
     await page.evaluate(() => localStorage.removeItem("fundacad.theme"));
   }
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

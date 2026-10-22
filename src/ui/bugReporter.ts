@@ -63,9 +63,12 @@ export function createBugReporter(deps: BugReportDeps): void {
  *  Scene stats come FIRST: they answer the questions a performance report
  *  always raises (how many triangles, how big the canvas, what frame rate), and
  *  leading the list keeps them inside the server's breadcrumb cap. */
-export function bugContext(
-  deps: BugReportDeps,
-): { connected: boolean; crumbs: string[]; pipeline: string[]; faults: boolean } {
+export function bugContext(deps: BugReportDeps): {
+  connected: boolean;
+  crumbs: string[];
+  pipeline: string[];
+  faults: boolean;
+} {
   return {
     connected: deps.geometry.connected,
     crumbs: [...deps.viewport.sceneStats(), ...breadcrumbs()],
@@ -106,8 +109,10 @@ function openSketchCrumb(store: DocumentStore, live: Feature | null): string | n
   const sketch = asFeature(live, "sketch");
   const ents = sketch ? sketch.entities.length : 0;
   const cons = sketch?.constraints?.length ?? 0;
-  return `sketch OPEN when reported (${isEdit ? `editing ${live.id}` : "new, uncommitted"}): ` +
-    `${ents} entities, ${cons} constraints`;
+  return (
+    `sketch OPEN when reported (${isEdit ? `editing ${live.id}` : "new, uncommitted"}): ` +
+    `${ents} entities, ${cons} constraints`
+  );
 }
 
 /** The report, as pasteable text. */

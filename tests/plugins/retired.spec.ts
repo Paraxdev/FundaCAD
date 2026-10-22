@@ -48,7 +48,11 @@ describe("a plugin whose job moved into the app", () => {
     expect(tauri.removed).toEqual(["FundaCAD.MCP"]);
     expect(list.map((r) => r.id)).toEqual(["FundaCAD.Screws"]);
     expect([...installedIds()]).toEqual(["FundaCAD.Screws"]);
-    expect(useToastStore().items.map((t) => t.message).join(" ")).toContain("part of FundaCAD now");
+    expect(
+      useToastStore()
+        .items.map((t) => t.message)
+        .join(" "),
+    ).toContain("part of FundaCAD now");
 
     // Gone for good: the next listing has nothing left to remove.
     await installedPlugins();

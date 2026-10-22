@@ -144,13 +144,13 @@ type RebuildBody = NonNullable<RebuildResult["bodies"]>[number];
  *  moment it arrives, in any order. */
 interface BodyPlan {
   id: string;
-  vOff: number;      // into positions/normals
+  vOff: number; // into positions/normals
   nVerts3: number;
-  iOff: number;      // into indices
+  iOff: number; // into indices
   nIdx: number;
-  tOff: number;      // into faceIds
+  tOff: number; // into faceIds
   nTris: number;
-  faceBase: number;  // this body's global faceId offset (== meta.faceStart)
+  faceBase: number; // this body's global faceId offset (== meta.faceStart)
   faceCount: number;
   edgeBase: number;
   nEdges: number;
@@ -240,7 +240,10 @@ export class RebuildAssembly {
     // a resync cost one round trip and nothing else.
     const sizes: WireManifestEntry[] = [];
     for (const m of manifest) {
-      if (!m.unchanged) { sizes.push(m); continue; }
+      if (!m.unchanged) {
+        sizes.push(m);
+        continue;
+      }
       const cached = cache.get(m.id);
       if (!cached || cached.etag !== m.etag) return { kind: "resync" };
       sizes.push({
@@ -267,32 +270,35 @@ export class RebuildAssembly {
     // too. The signature includes the non-geometry extras precisely because
     // they CAN change while geometry does not, a new diagnostic or
     // featureError must still produce a fresh object.
-    const sig = manifest.length === 0 ? null : JSON.stringify([
-      sizes.map((m) => [m.id, m.etag, m.name, m.nodeRef, m.faceCount, m.faceColors, m.partColor, m.scan]),
-      head.bbox,
-      head.diagnostics, head.featureError, head.featureErrors, head.projectionUpdates,
-      // Datum planes belong to no body, so nothing about them reaches the etags
-      // above: a datum's own offset can change with every body unchanged, and
-      // without this the cached result would be handed back with the previous
-      // rebuild's planes in it.
-      head.datumPlanes,
-      // Same reasoning as datumPlanes: a face-anchored sketch can move with
-      // every body etag unchanged (the body it follows was not the one that
-      // changed), so without this the cached result would come back carrying
-      // the previous rebuild's sketch placements.
-      head.sketchPlanes,
-      // Same reasoning again: a datum axis following an edge can move with every
-      // body etag unchanged, so it joins the signature so a no-op rebuild does
-      // not hand back the previous rebuild's datum placement.
-      head.datumMarks,
-      head.trackedFaces,
-      head.bodyIds,
-      head.skippedFeatures,
-    ]);
-    if (
-      sig !== null && sig === lastSig && lastAssembled !== null
-      && manifest.every((m) => m.unchanged)
-    ) {
+    const sig =
+      manifest.length === 0
+        ? null
+        : JSON.stringify([
+            sizes.map((m) => [m.id, m.etag, m.name, m.nodeRef, m.faceCount, m.faceColors, m.partColor, m.scan]),
+            head.bbox,
+            head.diagnostics,
+            head.featureError,
+            head.featureErrors,
+            head.projectionUpdates,
+            // Datum planes belong to no body, so nothing about them reaches the etags
+            // above: a datum's own offset can change with every body unchanged, and
+            // without this the cached result would be handed back with the previous
+            // rebuild's planes in it.
+            head.datumPlanes,
+            // Same reasoning as datumPlanes: a face-anchored sketch can move with
+            // every body etag unchanged (the body it follows was not the one that
+            // changed), so without this the cached result would come back carrying
+            // the previous rebuild's sketch placements.
+            head.sketchPlanes,
+            // Same reasoning again: a datum axis following an edge can move with every
+            // body etag unchanged, so it joins the signature so a no-op rebuild does
+            // not hand back the previous rebuild's datum placement.
+            head.datumMarks,
+            head.trackedFaces,
+            head.bodyIds,
+            head.skippedFeatures,
+          ]);
+    if (sig !== null && sig === lastSig && lastAssembled !== null && manifest.every((m) => m.unchanged)) {
       return { kind: "noop", result: lastAssembled };
     }
 
@@ -300,12 +306,23 @@ export class RebuildAssembly {
     // single copy loop did inline, which is what keeps faceStart and the global
     // faceId rebasing byte-identical to the single-shot path.
     const plan: BodyPlan[] = [];
-    let vOff = 0, iOff = 0, tOff = 0, faceBase = 0, edgeBase = 0;
+    let vOff = 0,
+      iOff = 0,
+      tOff = 0,
+      faceBase = 0,
+      edgeBase = 0;
     for (const m of sizes) {
-      const nVerts3 = m.nVerts3 ?? 0, nIdx = m.nIdx ?? 0, nTris = m.nTris ?? 0;
-      const faceCount = m.faceCount ?? 0, nEdges = m.nEdges ?? 0;
+      const nVerts3 = m.nVerts3 ?? 0,
+        nIdx = m.nIdx ?? 0,
+        nTris = m.nTris ?? 0;
+      const faceCount = m.faceCount ?? 0,
+        nEdges = m.nEdges ?? 0;
       plan.push({ id: m.id, vOff, nVerts3, iOff, nIdx, tOff, nTris, faceBase, faceCount, edgeBase, nEdges });
-      vOff += nVerts3; iOff += nIdx; tOff += nTris; faceBase += faceCount; edgeBase += nEdges;
+      vOff += nVerts3;
+      iOff += nIdx;
+      tOff += nTris;
+      faceBase += faceCount;
+      edgeBase += nEdges;
     }
 
     // the engine sends explicit normals at shipping quality and for textured
@@ -325,8 +342,10 @@ export class RebuildAssembly {
       // were when the geometry last changed. `name` was already read from the
       // wrong side once; it only looked right because a rename happens to
       // change the etag and so never arrives as a stub.
-      id: m.id, name: m.name,
-      faceStart: plan[i]!.faceBase, faceCount: m.faceCount ?? 0,
+      id: m.id,
+      name: m.name,
+      faceStart: plan[i]!.faceBase,
+      faceCount: m.faceCount ?? 0,
       ...(m.etag !== undefined ? { etag: m.etag } : {}),
       ...(m.nodeRef !== undefined ? { nodeRef: m.nodeRef } : {}),
       ...(m.faceColors !== undefined ? { faceColors: m.faceColors } : {}),
@@ -373,9 +392,12 @@ export class RebuildAssembly {
     if (i === undefined) return false;
     const q = this.plan[i]!;
     if (
-      p.positions.length !== q.nVerts3 || p.indices.length !== q.nIdx
-      || p.faceIds.length !== q.nTris || (p.edges?.length ?? 0) !== q.nEdges
-    ) return false;
+      p.positions.length !== q.nVerts3 ||
+      p.indices.length !== q.nIdx ||
+      p.faceIds.length !== q.nTris ||
+      (p.edges?.length ?? 0) !== q.nEdges
+    )
+      return false;
 
     const { edges, bodies } = this.result;
     this.positions.set(p.positions as ArrayLike<number>, q.vOff);
@@ -389,14 +411,16 @@ export class RebuildAssembly {
     // end of the triangle range, which renders every body after the first as
     // edges with no surface.
     const vbase = q.vOff / 3;
-    const pi = p.indices, pf = p.faceIds;
+    const pi = p.indices,
+      pf = p.faceIds;
     for (let k = 0; k < pi.length; k++) this.indices[q.iOff + k] = (pi[k] as number) + vbase;
     for (let k = 0; k < pf.length; k++) this.faceIds[q.tOff + k] = (pf[k] as number) + q.faceBase;
     const pe = p.edges ?? [];
     for (let k = 0; k < pe.length; k++) {
       const e = pe[k]!;
       edges[q.edgeBase + k] = {
-        id: `e${q.edgeBase + k}`, points: e.points,
+        id: `e${q.edgeBase + k}`,
+        points: e.points,
         ...(e.body !== undefined ? { body: e.body } : {}),
         ...(e.smooth ? { smooth: true } : {}),
       };
@@ -408,7 +432,10 @@ export class RebuildAssembly {
     if (p.faceColorSlots !== undefined) m.faceColorSlots = p.faceColorSlots;
     if (p.fault !== undefined) m.fault = p.fault;
 
-    if (!this.written[i]) { this.written[i] = true; this.left--; }
+    if (!this.written[i]) {
+      this.written[i] = true;
+      this.left--;
+    }
     return true;
   }
 
@@ -449,7 +476,9 @@ export class RebuildAssembly {
     return i === undefined ? undefined : this.result.bodies![i];
   }
 
-  get remaining(): number { return this.left; }
+  get remaining(): number {
+    return this.left;
+  }
 
   /** The finished result, or null if any body is still missing. Returning a
    *  partially-filled result would hand on zeroed slices, which render as

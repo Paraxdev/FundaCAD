@@ -18,7 +18,10 @@ const URL = process.env.VITE_URL || "http://localhost:5173/";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const FILE = process.env.IMPORT_FILE || "";
 const OUT = path.resolve(process.argv[2] || "import_progress_shots");
-if (!TOKEN || !FILE) { console.error("set SC_TOKEN and IMPORT_FILE"); process.exit(1); }
+if (!TOKEN || !FILE) {
+  console.error("set SC_TOKEN and IMPORT_FILE");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -32,31 +35,45 @@ const check = (name, ok, detail) => {
     args: ["--use-angle=swiftshader", "--no-sandbox"],
   });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-  await page.addInitScript(([t, port]) => {
-    const N = window.WebSocket;
-    class P extends N {
-      constructor(u, p) {
-        let s = String(u).replace(":8765", `:${port}`).replace(/([?&])token=[^&]*/, `$1token=${t}`);
-        if (!s.includes("token=")) s += (s.includes("?") ? "&" : "?") + "token=" + t;
-        super(s, p);
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
+  await page.addInitScript(
+    ([t, port]) => {
+      const N = window.WebSocket;
+      class P extends N {
+        constructor(u, p) {
+          let s = String(u)
+            .replace(":8765", `:${port}`)
+            .replace(/([?&])token=[^&]*/, `$1token=${t}`);
+          if (!s.includes("token=")) s += (s.includes("?") ? "&" : "?") + "token=" + t;
+          super(s, p);
+        }
       }
-    }
-    window.WebSocket = P;
-  }, [TOKEN, PORT]);
+      window.WebSocket = P;
+    },
+    [TOKEN, PORT],
+  );
 
   await page.goto(URL);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.geometry, null, { timeout: 60000 });
 
   // io/files.ts importPath is what a picked or dropped file goes through,
   // runBusy and all, minus the native picker.
   await page.evaluate((file) => {
     window.__importDone = false;
-    import("/src/io/files.ts").then((m) => m.importPath(window.store, window.geometry, file))
-      .finally(() => { window.__importDone = true; });
+    import("/src/io/files.ts")
+      .then((m) => m.importPath(window.store, window.geometry, file))
+      .finally(() => {
+        window.__importDone = true;
+      });
   }, FILE);
 
   const samples = [];
@@ -78,7 +95,10 @@ const check = (name, ok, detail) => {
     samples.push({ t: (Date.now() - t0) / 1000, ...s });
     const stageName = s.stage.replace(/ \d+%$/, "");
     if (stageName && stageName !== lastStage && shots < 6) {
-      await page.screenshot({ path: path.join(OUT, `stage-${++shots}.png`), clip: { x: 0, y: 0, width: 1400, height: 900 } });
+      await page.screenshot({
+        path: path.join(OUT, `stage-${++shots}.png`),
+        clip: { x: 0, y: 0, width: 1400, height: 900 },
+      });
       lastStage = stageName;
     }
     await page.waitForTimeout(500);
@@ -89,8 +109,14 @@ const check = (name, ok, detail) => {
   const widths = new Set(samples.filter((s) => !s.indeterminate && s.width).map((s) => s.width));
   check("the busy line names three or more stages", stages.length >= 3, stages.join(" > "));
   check("the bar takes three or more widths", widths.size >= 3, [...widths].slice(0, 8).join(" "));
-  check("a stage without a fraction draws an indeterminate bar", samples.some((s) => s.indeterminate));
-  check("the label stays the import's", samples.filter((s) => s.stage).every((s) => s.text.startsWith("Importing")));
+  check(
+    "a stage without a fraction draws an indeterminate bar",
+    samples.some((s) => s.indeterminate),
+  );
+  check(
+    "the label stays the import's",
+    samples.filter((s) => s.stage).every((s) => s.text.startsWith("Importing")),
+  );
 
   // importPath resolves after the rebuild that meshes the new part, which the
   // building chip counts

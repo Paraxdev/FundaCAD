@@ -97,8 +97,9 @@ describe("coverage of the document format", () => {
     for (const type of TYPES) {
       const owner = DRAWN_BY[type];
       const inApp = type in FEATURE_META;
-      expect(inApp, `${type} says ${owner} but the application ${inApp ? "does" : "does not"} draw it`)
-        .toBe(owner === "app");
+      expect(inApp, `${type} says ${owner} but the application ${inApp ? "does" : "does not"} draw it`).toBe(
+        owner === "app",
+      );
     }
   });
 
@@ -128,7 +129,8 @@ describe("featureMeta", () => {
   it("falls back to a dot and the raw type when nothing draws it", () => {
     expect(featureMeta({ type: "texture" })).toEqual({ icon: "dot", label: "texture" });
     expect(featureMeta({ type: "from-a-newer-build" })).toEqual({
-      icon: "dot", label: "from-a-newer-build",
+      icon: "dot",
+      label: "from-a-newer-build",
     });
   });
 

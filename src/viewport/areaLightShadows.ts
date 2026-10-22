@@ -25,7 +25,8 @@ import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLigh
 
 /** The stock rectangle light loop, matched loosely on whitespace: the built
  *  three.js strips the blank lines its source has. */
-const STOCK = /#pragma unroll_loop_start\s*for \( int i = 0; i < NUM_RECT_AREA_LIGHTS; i \+\+ \) \{\s*rectAreaLight = rectAreaLights\[ i \];\s*RE_Direct_RectArea\( rectAreaLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight \);\s*\}\s*#pragma unroll_loop_end/;
+const STOCK =
+  /#pragma unroll_loop_start\s*for \( int i = 0; i < NUM_RECT_AREA_LIGHTS; i \+\+ \) \{\s*rectAreaLight = rectAreaLights\[ i \];\s*RE_Direct_RectArea\( rectAreaLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight \);\s*\}\s*#pragma unroll_loop_end/;
 
 // The body is wrapped in its own braces: three unrolls this loop into one copy
 // per light, and the locals would otherwise be declared once per copy in the

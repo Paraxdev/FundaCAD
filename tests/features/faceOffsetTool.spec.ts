@@ -90,9 +90,15 @@ function fakeStore(axisReply: FaceAxisReply | null = null) {
       return () => listeners.delete(fn);
     },
     faceAxis: async () => axisReply,
-    get hasPreview() { return state.hasPreview; },
-    get previewError() { return state.previewError; },
-    get buildState() { return state.buildState; },
+    get hasPreview() {
+      return state.hasPreview;
+    },
+    get previewError() {
+      return state.previewError;
+    },
+    get buildState() {
+      return state.buildState;
+    },
   };
   /** The kernel answers the last preview sent: it built, or it was refused and
    *  the model before it is held on screen. */
@@ -102,7 +108,8 @@ function fakeStore(axisReply: FaceAxisReply | null = null) {
       building: false,
       result: {},
       previewBuilt: sent ? [sent] : null,
-      heldRefusal: refusal && sent ? { featureId: sent.id, message: refusal, code: "resizeInvalid", diagnostics: [] } : null,
+      heldRefusal:
+        refusal && sent ? { featureId: sent.id, message: refusal, code: "resizeInvalid", diagnostics: [] } : null,
       errorFeatureId: refusal && sent ? sent.id : null,
       errorMessage: refusal ?? null,
     } as unknown as RebuildState;
@@ -158,7 +165,10 @@ describe("FaceOffsetTool", () => {
     setActivePinia(createPinia());
     frames = [];
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => { frames.push(fn); return frames.length; });
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+      frames.push(fn);
+      return frames.length;
+    });
     vi.stubGlobal("cancelAnimationFrame", () => {});
   });
   afterEach(() => {
@@ -183,7 +193,9 @@ describe("FaceOffsetTool", () => {
     const s = fakeStore();
     const t = new FaceOffsetTool(vp, s.store);
     let done: string | null | undefined;
-    t.start("offsetFace", (id) => { done = id; });
+    t.start("offsetFace", (id) => {
+      done = id;
+    });
     const up = dragTo(t, canvas, 1, { release: false });
     s.answer();
     up();
@@ -263,9 +275,22 @@ describe("FaceOffsetTool", () => {
     const reply: FaceAxisReply = {
       reason: "not an end",
       resize: {
-        kind: "cylinder", size: 2, full: false, concave: true, contact: 2,
+        kind: "cylinder",
+        size: 2,
+        full: false,
+        concave: true,
+        contact: 2,
         axis: { origin: [0, 0, -2], dir: [1, 0, 0] },
-        tangent: { faces: 2, lostWhen: "shrink", run: [[0, 0, 0], [5, 0, 0]], closed: true, followable: true },
+        tangent: {
+          faces: 2,
+          lostWhen: "shrink",
+          run: [
+            [0, 0, 0],
+            [5, 0, 0],
+          ],
+          closed: true,
+          followable: true,
+        },
       },
     };
 

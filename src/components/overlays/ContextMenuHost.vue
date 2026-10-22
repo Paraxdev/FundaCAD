@@ -199,7 +199,11 @@ onUnmounted(() => {
         <div v-if="it.separator" class="ctx-sep"></div>
         <div
           v-else
-          :ref="(el) => { if (el) rootRows[i] = el as HTMLElement; }"
+          :ref="
+            (el) => {
+              if (el) rootRows[i] = el as HTMLElement;
+            }
+          "
           class="ctx-item"
           :class="{ danger: it.danger, disabled: it.disabled }"
           @pointerenter="it.disabled ? undefined : (setHover(it), it.children ? openSub(i) : scheduleSubClose())"
@@ -232,12 +236,7 @@ onUnmounted(() => {
     >
       <template v-for="(c, j) in s.items[subIndex]?.children ?? []" :key="j">
         <div v-if="c.separator" class="ctx-sep"></div>
-        <div
-          v-else
-          class="ctx-item"
-          :class="{ danger: c.danger, disabled: c.disabled }"
-          @click="activate(c)"
-        >
+        <div v-else class="ctx-item" :class="{ danger: c.danger, disabled: c.disabled }" @click="activate(c)">
           <span v-if="c.swatch" class="ctx-swatch" :style="{ background: c.swatch }"></span>
           <span class="ctx-label">{{ c.label }}</span>
           <span v-if="c.shortcut" class="ctx-key">{{ fmtKeys(c.shortcut) }}</span>

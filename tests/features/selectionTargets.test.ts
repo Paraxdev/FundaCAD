@@ -21,13 +21,10 @@ import {
 import { FEATURE_META } from "../../src/ui/featureMeta";
 import type { Feature, Selector } from "../../src/types";
 
-const at = (x: number, y: number, z: number): Selector =>
-  ({ kind: "edge", by: "nearest", point: [x, y, z] });
-const faceAt = (x: number, y: number, z: number): Selector =>
-  ({ kind: "face", by: "nearest", point: [x, y, z] });
+const at = (x: number, y: number, z: number): Selector => ({ kind: "edge", by: "nearest", point: [x, y, z] });
+const faceAt = (x: number, y: number, z: number): Selector => ({ kind: "face", by: "nearest", point: [x, y, z] });
 
-const field = (type: string, name: string): TargetField =>
-  targetsOf(type).find((t) => t.field === name)!;
+const field = (type: string, name: string): TargetField => targetsOf(type).find((t) => t.field === name)!;
 
 const feat = (f: Record<string, unknown>) => f as unknown as Feature;
 
@@ -88,14 +85,27 @@ describe("targetsFor", () => {
   it("offers the bodies acted on only where the feature joins, cuts or intersects", () => {
     const fields = (f: object) => targetsFor(f as Feature).map((t) => t.field);
     expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new" })).toEqual(["regions"]);
-    expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "cut" })).toEqual(["regions", "targets"]);
+    expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "cut" })).toEqual([
+      "regions",
+      "targets",
+    ]);
     expect(fields({ id: "l", type: "loft", profiles: [] })).toEqual([]);
     expect(fields({ id: "l", type: "loft", profiles: [], operation: "join" })).toEqual(["targets"]);
     // A press/pull in its automatic mode moves the face of its own body.
     expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut" })).toEqual(["face", "upTo"]);
-    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "auto" })).toEqual(["face", "upTo"]);
-    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "new" })).toEqual(["face", "upTo"]);
-    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "cut" })).toEqual(["face", "upTo", "targets"]);
+    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "auto" })).toEqual([
+      "face",
+      "upTo",
+    ]);
+    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "new" })).toEqual([
+      "face",
+      "upTo",
+    ]);
+    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "cut" })).toEqual([
+      "face",
+      "upTo",
+      "targets",
+    ]);
   });
 });
 
@@ -122,16 +132,17 @@ describe("reading a target the document actually contains", () => {
     // Split says its target as `bodies` OR as `body`, and the builder prefers
     // `bodies`. Both are live, so both have to be read.
     const t = field("split", "bodies");
-    expect(readTarget(feat({ id: "s", type: "split", keep: "both", body: "body2" }), t))
-      .toEqual(["body2"]);
-    expect(readTarget(feat({ id: "s", type: "split", keep: "both", bodies: ["body1", "body3"] }), t))
-      .toEqual(["body1", "body3"]);
+    expect(readTarget(feat({ id: "s", type: "split", keep: "both", body: "body2" }), t)).toEqual(["body2"]);
+    expect(readTarget(feat({ id: "s", type: "split", keep: "both", bodies: ["body1", "body3"] }), t)).toEqual([
+      "body1",
+      "body3",
+    ]);
     // CONTROL on the precedence: with both present the plural is preferred, which is
     // what the builder does. Reading the singular here would show a row that
     // disagrees with the model on screen.
-    expect(readTarget(
-      feat({ id: "s", type: "split", keep: "both", body: "body2", bodies: ["body1"] }), t,
-    )).toEqual(["body1"]);
+    expect(readTarget(feat({ id: "s", type: "split", keep: "both", body: "body2", bodies: ["body1"] }), t)).toEqual([
+      "body1",
+    ]);
   });
 
   it("reads an absent target as empty rather than as a hole", () => {
@@ -260,10 +271,25 @@ describe("profile targets", () => {
 
   it("reads the plural field, and falls back to the legacy singular", () => {
     const t = targetsOf("extrude")[0]!;
-    const many = { id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new",
-      regions: [[0, 0, 0], [10, 0, 0]] } as unknown as Feature;
-    const one = { id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new",
-      region: [4, 4, 0] } as unknown as Feature;
+    const many = {
+      id: "e",
+      type: "extrude",
+      sketch: "s",
+      distance: 5,
+      operation: "new",
+      regions: [
+        [0, 0, 0],
+        [10, 0, 0],
+      ],
+    } as unknown as Feature;
+    const one = {
+      id: "e",
+      type: "extrude",
+      sketch: "s",
+      distance: 5,
+      operation: "new",
+      region: [4, 4, 0],
+    } as unknown as Feature;
     expect(readTarget(many, t)).toHaveLength(2);
     expect(readTarget(one, t)).toEqual([[4, 4, 0]]);
   });
@@ -273,8 +299,14 @@ describe("profile targets", () => {
     // spreads the legacy singular into its coordinates and reports "3 areas"
     // over an extrude that uses one.
     const t = targetsOf("extrude")[0]!;
-    const one = { id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new",
-      region: [4, 4, 0] } as unknown as Feature;
+    const one = {
+      id: "e",
+      type: "extrude",
+      sketch: "s",
+      distance: 5,
+      operation: "new",
+      region: [4, 4, 0],
+    } as unknown as Feature;
     expect(readTarget(one, t)).toHaveLength(1);
     expect(describeTarget(t, readTarget(one, t).length)).toBe("1 area");
   });
@@ -300,17 +332,36 @@ describe("profile targets", () => {
 describe("extrude start and end rows", () => {
   const fields = (f: object) => targetsFor(f as Feature).map((t) => t.field);
   it("shows a face row only for the start or end that reads it", () => {
-    expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new", startType: "face" }))
-      .toEqual(["regions", "startFace"]);
-    expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "cut", endType: "upToFace" }))
-      .toEqual(["regions", "upToFace", "targets"]);
-    expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new", endType2: "upToFace" }))
-      .toEqual(["regions"]);
-    expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new", twoSided: true, endType2: "upToFace" }))
-      .toEqual(["regions", "upToFace2"]);
+    expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new", startType: "face" })).toEqual(
+      ["regions", "startFace"],
+    );
+    expect(
+      fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "cut", endType: "upToFace" }),
+    ).toEqual(["regions", "upToFace", "targets"]);
+    expect(
+      fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new", endType2: "upToFace" }),
+    ).toEqual(["regions"]);
+    expect(
+      fields({
+        id: "e",
+        type: "extrude",
+        sketch: "s",
+        distance: 5,
+        operation: "new",
+        twoSided: true,
+        endType2: "upToFace",
+      }),
+    ).toEqual(["regions", "upToFace2"]);
   });
   it("marks the face rows as tracked picks", () => {
-    const rows = targetsFor({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new", endType: "upToFace" } as Feature);
+    const rows = targetsFor({
+      id: "e",
+      type: "extrude",
+      sketch: "s",
+      distance: 5,
+      operation: "new",
+      endType: "upToFace",
+    } as Feature);
     expect(rows.find((t) => t.field === "upToFace")?.tracked).toBe(true);
   });
 });

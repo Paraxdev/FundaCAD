@@ -44,7 +44,12 @@ describe("versions", () => {
     const repo = emptyRepo();
     const a = commit(repo, snap(box("f1", 10), box("f2", 5)), "a", 1)!;
     const b = commit(repo, { parameters: { w: 3 }, features: [box("f1", 12), box("f3", 1)] }, "b", 2)!;
-    expect(diffTrees(repo, a.tree, b.tree)).toEqual({ added: ["f3"], removed: ["f2"], changed: ["f1"], settings: true });
+    expect(diffTrees(repo, a.tree, b.tree)).toEqual({
+      added: ["f3"],
+      removed: ["f2"],
+      changed: ["f1"],
+      settings: true,
+    });
   });
 
   it("branches from any version, and each branch keeps its own newest version", () => {
@@ -62,7 +67,12 @@ describe("versions", () => {
 
   it("keeps the geometry every version needs, and survives a round trip through a file", () => {
     const repo = emptyRepo();
-    commit(repo, snap({ id: "i1", type: "import", format: "step", name: "p", geom: "abc" } as unknown as Feature), "imported", 1);
+    commit(
+      repo,
+      snap({ id: "i1", type: "import", format: "step", name: "p", geom: "abc" } as unknown as Feature),
+      "imported",
+      1,
+    );
     commit(repo, snap(box("f1", 1)), "replaced", 2);
     expect(referencedGeometry(repo)).toEqual(["abc"]);
     const back = normalizeRepo(JSON.parse(JSON.stringify(repo)))!;
@@ -72,13 +82,22 @@ describe("versions", () => {
 });
 
 describe("versions in the store", () => {
-  const backend = () => ({
-    async rebuild() { return new Promise<never>(() => {}); },
-    async init() {},
-    onStatus() { return () => {}; },
-    onProgress() { return () => {}; },
-    async cancel() { return true; },
-  }) as unknown as GeometryBackend;
+  const backend = () =>
+    ({
+      async rebuild() {
+        return new Promise<never>(() => {});
+      },
+      async init() {},
+      onStatus() {
+        return () => {};
+      },
+      onProgress() {
+        return () => {};
+      },
+      async cancel() {
+        return true;
+      },
+    }) as unknown as GeometryBackend;
   const doc = (): CadDocument => ({ parameters: {}, features: [box("f1", 10)] });
 
   it("saves, reports changes since, restores, and carries the versions in the saved file", () => {

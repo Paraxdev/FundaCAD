@@ -112,15 +112,25 @@ export class DatumPoseTool {
     this.viewport.addToScene(this.dialGroup);
     if (opts.ghost) this.buildGhost();
 
-    const fields: DimFieldDef[] = ([
-      { name: "offset", label: "Offset", kind: "length" },
-      { name: "tiltX", label: "Tilt X", kind: "angle" },
-      { name: "tiltY", label: "Tilt Y", kind: "angle" },
-      { name: "spin", label: "Spin", kind: "angle" },
-    ] as const).filter((f) => !this.isLocked(f.name)).map((f) => ({ ...f }));
-    this.dim.show(fields, () => this.finish(), () => this.cancel());
+    const fields: DimFieldDef[] = (
+      [
+        { name: "offset", label: "Offset", kind: "length" },
+        { name: "tiltX", label: "Tilt X", kind: "angle" },
+        { name: "tiltY", label: "Tilt Y", kind: "angle" },
+        { name: "spin", label: "Spin", kind: "angle" },
+      ] as const
+    )
+      .filter((f) => !this.isLocked(f.name))
+      .map((f) => ({ ...f }));
+    this.dim.show(
+      fields,
+      () => this.finish(),
+      () => this.cancel(),
+    );
     this.dim.updateFromCursor({ ...this.pose });
-    setPrompt("Drag the arrow to offset, a ring to tilt or spin · 5° steps, Shift 1°, Alt free · type exact values · Enter · Esc");
+    setPrompt(
+      "Drag the arrow to offset, a ring to tilt or spin · 5° steps, Shift 1°, Alt free · type exact values · Enter · Esc",
+    );
     this.refresh();
     this.gesture.frame();
   }
@@ -218,7 +228,10 @@ export class DatumPoseTool {
     if (this.grabAngle === null) {
       // Edge-on: the handle's circle is a line on screen, so read the drag along it.
       const p = s.pivot.clone().addScaledVector(at, RING_PX * s.k);
-      const tan = this.grabAxis.clone().cross(at).multiplyScalar(RING_PX * s.k);
+      const tan = this.grabAxis
+        .clone()
+        .cross(at)
+        .multiplyScalar(RING_PX * s.k);
       const a = this.viewport.projectToScreen(p);
       const b = this.viewport.projectToScreen(p.clone().add(tan));
       this.tangentPx.set(b.x - a.x, b.y - a.y);

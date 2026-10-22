@@ -64,12 +64,20 @@ function modelBox(s: StepState): Box | null {
   if (s.target.region) {
     const g = s.target.region;
     paths.value = [];
-    return { left: canvas.left + g.x * canvas.width, top: canvas.top + g.y * canvas.height, width: g.w * canvas.width, height: g.h * canvas.height };
+    return {
+      left: canvas.left + g.x * canvas.width,
+      top: canvas.top + g.y * canvas.height,
+      width: g.w * canvas.width,
+      height: g.h * canvas.height,
+    };
   }
   const build = engine.store.buildState;
   // A miss is read again now and then, the mesh can land after the build it belongs to.
-  const stale = !shapeFor || shapeFor.seq !== s.seq || shapeFor.build !== build
-    || (shapeFor.shape instanceof Error && frame % RETRY_FRAMES === 0);
+  const stale =
+    !shapeFor ||
+    shapeFor.seq !== s.seq ||
+    shapeFor.build !== build ||
+    (shapeFor.shape instanceof Error && frame % RETRY_FRAMES === 0);
   if (stale) {
     let shape: ModelShape | Error;
     try {
@@ -86,16 +94,23 @@ function modelBox(s: StepState): Box | null {
     return null;
   }
   ref_.value = shape.name;
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   const out: string[] = [];
   const pose = shape.body ? engine.viewport.bodyPose(shape.body) : null;
   const at = new THREE.Vector3();
   for (const line of shape.lines) {
-    const pts = line.map((v) => engine.viewport.projectToScreen(pose ? at.copy(v).applyMatrix4(pose) : v)).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+    const pts = line
+      .map((v) => engine.viewport.projectToScreen(pose ? at.copy(v).applyMatrix4(pose) : v))
+      .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
     if (pts.length < 2) continue;
     for (const p of pts) {
-      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
-      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
     }
     out.push(pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" "));
   }
@@ -172,7 +187,9 @@ const bubbleStyle = computed(() => {
   const b = bubbleAt.value;
   return b ? { left: `${b.left}px`, top: `${b.top}px` } : { visibility: "hidden" as const };
 });
-const counter = computed(() => (step.value && step.value.of > 1 ? `Step ${step.value.step} of ${step.value.of}` : "Guide"));
+const counter = computed(() =>
+  step.value && step.value.of > 1 ? `Step ${step.value.step} of ${step.value.of}` : "Guide",
+);
 </script>
 
 <template>
@@ -182,7 +199,13 @@ const counter = computed(() => (step.value && step.value.of > 1 ? `Step ${step.v
         <polyline v-for="(p, i) in paths" :key="i" :points="p" />
       </svg>
       <!-- A model area is its own outline; a box around it would ring empty space. -->
-      <div v-if="ring && step.target.model === undefined" class="guide-ring" :class="{ 'guide-region': !!step.target.region }" :style="ringStyle" aria-hidden="true"></div>
+      <div
+        v-if="ring && step.target.model === undefined"
+        class="guide-ring"
+        :class="{ 'guide-region': !!step.target.region }"
+        :style="ringStyle"
+        aria-hidden="true"
+      ></div>
       <div
         ref="bubble"
         class="guide-bubble"

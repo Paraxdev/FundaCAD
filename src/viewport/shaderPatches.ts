@@ -13,12 +13,26 @@ import * as THREE from "three";
 
 /** Fragment includes a patch edits, in the order they are edited. `common` is the
  *  fragment's own, the vertex side is reached only through `varyings`. */
-export type Point = "common" | "color_fragment" | "roughnessmap_fragment" | "normal_fragment_begin"
-  | "lights_physical_fragment" | "transmission_pars_fragment" | "transmission_fragment" | "aomap_fragment"
+export type Point =
+  | "common"
+  | "color_fragment"
+  | "roughnessmap_fragment"
+  | "normal_fragment_begin"
+  | "lights_physical_fragment"
+  | "transmission_pars_fragment"
+  | "transmission_fragment"
+  | "aomap_fragment"
   | "lights_fragment_maps";
 const POINTS: readonly Point[] = [
-  "common", "color_fragment", "roughnessmap_fragment", "normal_fragment_begin", "lights_physical_fragment",
-  "transmission_pars_fragment", "transmission_fragment", "aomap_fragment", "lights_fragment_maps",
+  "common",
+  "color_fragment",
+  "roughnessmap_fragment",
+  "normal_fragment_begin",
+  "lights_physical_fragment",
+  "transmission_pars_fragment",
+  "transmission_fragment",
+  "aomap_fragment",
+  "lights_fragment_maps",
 ];
 
 // Patches not listed here go after these, by name.
@@ -70,7 +84,8 @@ function byRank(a: ShaderPatch, b: ShaderPatch): number {
 function copyValue(into: THREE.IUniform, from: unknown): void {
   const cur = into.value as { copy?: (v: unknown) => unknown; constructor?: unknown } | null;
   const isTex = cur instanceof THREE.Texture || from instanceof THREE.Texture;
-  if (!isTex && cur && typeof cur.copy === "function" && from && (from as object).constructor === cur.constructor) cur.copy(from);
+  if (!isTex && cur && typeof cur.copy === "function" && from && (from as object).constructor === cur.constructor)
+    cur.copy(from);
   else into.value = from;
 }
 
@@ -86,9 +101,20 @@ function compile(st: Stack, shader: THREE.WebGLProgramParametersWithUniforms): v
   const varyings = [...new Set(ps.flatMap((p) => p.varyings ?? []))].map((v) => VARYINGS[v]);
   if (varyings.length) {
     const decl = varyings.flatMap((v) => v.decl);
-    shader.vertexShader = include(shader.vertexShader, "common", "#include <common>" + decl.map((d) => "\n" + d).join(""));
-    shader.vertexShader = include(shader.vertexShader, "worldpos_vertex",
-      "#include <worldpos_vertex>" + varyings.flatMap((v) => v.assign).map((a) => "\n" + a).join(""));
+    shader.vertexShader = include(
+      shader.vertexShader,
+      "common",
+      "#include <common>" + decl.map((d) => "\n" + d).join(""),
+    );
+    shader.vertexShader = include(
+      shader.vertexShader,
+      "worldpos_vertex",
+      "#include <worldpos_vertex>" +
+        varyings
+          .flatMap((v) => v.assign)
+          .map((a) => "\n" + a)
+          .join(""),
+    );
   }
   let fs = shader.fragmentShader;
   for (const pt of POINTS) {
@@ -126,7 +152,10 @@ function rekey(mat: THREE.Material, st: Stack): void {
 
 /** Add `patch`, or replace the one of its name. Returns it as stored, its
  *  uniforms being the material's lasting objects with the new values in them. */
-export function setPatch(mat: THREE.Material, patch: ShaderPatch): ShaderPatch & { uniforms: Record<string, THREE.IUniform> } {
+export function setPatch(
+  mat: THREE.Material,
+  patch: ShaderPatch,
+): ShaderPatch & { uniforms: Record<string, THREE.IUniform> } {
   const st = stackOf(mat);
   for (const pt of Object.keys(patch.replace ?? {}) as Point[]) {
     const other = st.patches.find((p) => p.name !== patch.name && p.replace?.[pt] !== undefined);

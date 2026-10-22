@@ -20,9 +20,10 @@ function weldByString(
     const v = localIndices[t]!;
     const fid = localFaceIds[(t / 3) | 0]!;
     const b = v * 3;
-    const key = `${Math.round(localPositions[b]! * q)},${Math.round(localPositions[b + 1]! * q)},`
-      + `${Math.round(localPositions[b + 2]! * q)}|${Math.round(localNormals[b]! * 1e3)},`
-      + `${Math.round(localNormals[b + 1]! * 1e3)},${Math.round(localNormals[b + 2]! * 1e3)}|${fid}`;
+    const key =
+      `${Math.round(localPositions[b]! * q)},${Math.round(localPositions[b + 1]! * q)},` +
+      `${Math.round(localPositions[b + 2]! * q)}|${Math.round(localNormals[b]! * 1e3)},` +
+      `${Math.round(localNormals[b + 1]! * 1e3)},${Math.round(localNormals[b + 2]! * 1e3)}|${fid}`;
     let nv = seen.get(key);
     if (nv === undefined) {
       nv = wp.length / 3;
@@ -41,11 +42,12 @@ function weldByString(
  *  strip, so coplanar neighbours DO merge; knurl-like bumps everywhere else. */
 function facetedMesh(grid: number, origin = 0) {
   let seed = 12345;
-  const rand = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32);
+  const rand = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32;
   const h = new Float64Array((grid + 1) * (grid + 1));
   for (let j = 0; j <= grid; j++) {
     for (let i = 0; i <= grid; i++) {
-      h[j * (grid + 1) + i] = i < grid / 5 ? 0.3 * i + 0.1 * j : Math.sin(i * 0.9) * Math.cos(j * 0.7) * 0.4 + rand() * 0.05;
+      h[j * (grid + 1) + i] =
+        i < grid / 5 ? 0.3 * i + 0.1 * j : Math.sin(i * 0.9) * Math.cos(j * 0.7) * 0.4 + rand() * 0.05;
     }
   }
   const nTri = grid * grid * 2;
@@ -55,15 +57,27 @@ function facetedMesh(grid: number, origin = 0) {
   const pt = (i: number, j: number) => [origin + i * 0.25, origin + j * 0.25, h[j * (grid + 1) + i]!] as const;
   let t = 0;
   const tri = (a: readonly number[], b: readonly number[], c: readonly number[], fid: number) => {
-    const ux = b[0]! - a[0]!, uy = b[1]! - a[1]!, uz = b[2]! - a[2]!;
-    const vx = c[0]! - a[0]!, vy = c[1]! - a[1]!, vz = c[2]! - a[2]!;
-    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const ux = b[0]! - a[0]!,
+      uy = b[1]! - a[1]!,
+      uz = b[2]! - a[2]!;
+    const vx = c[0]! - a[0]!,
+      vy = c[1]! - a[1]!,
+      vz = c[2]! - a[2]!;
+    let nx = uy * vz - uz * vy,
+      ny = uz * vx - ux * vz,
+      nz = ux * vy - uy * vx;
     const l = Math.hypot(nx, ny, nz) || 1;
-    nx /= l; ny /= l; nz /= l;
+    nx /= l;
+    ny /= l;
+    nz /= l;
     for (const [k, p] of [a, b, c].entries()) {
       const o = t * 9 + k * 3;
-      positions[o] = p[0]!; positions[o + 1] = p[1]!; positions[o + 2] = p[2]!;
-      normals[o] = nx; normals[o + 1] = ny; normals[o + 2] = nz;
+      positions[o] = p[0]!;
+      positions[o + 1] = p[1]!;
+      positions[o + 2] = p[2]!;
+      normals[o] = nx;
+      normals[o + 1] = ny;
+      normals[o + 2] = nz;
     }
     faceIds[t++] = fid;
   };
@@ -117,7 +131,9 @@ describe("weldByFace", () => {
 
     const oldMs = best(() => weldByString(m.positions, m.normals, m.indices.slice(), m.faceIds));
     const newMs = best(() => weldByFace(m.positions, m.normals, m.indices.slice(), m.faceIds));
-    console.log(`weld of ${m.faceIds.length} triangles: string key ${oldMs.toFixed(1)} ms, numeric hash ${newMs.toFixed(1)} ms`);
+    console.log(
+      `weld of ${m.faceIds.length} triangles: string key ${oldMs.toFixed(1)} ms, numeric hash ${newMs.toFixed(1)} ms`,
+    );
   }, 60_000);
 
   it("keeps a face border unwelded and far coordinates distinct", () => {

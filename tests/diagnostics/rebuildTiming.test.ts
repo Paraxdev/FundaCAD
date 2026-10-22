@@ -3,7 +3,13 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  lastRoundTripMs, markDrawn, markReceived, markSent, onRoundTrip, recentRoundTrips, resetRebuildTiming,
+  lastRoundTripMs,
+  markDrawn,
+  markReceived,
+  markSent,
+  onRoundTrip,
+  recentRoundTrips,
+  resetRebuildTiming,
 } from "../../src/diagnostics/rebuildTiming";
 
 beforeEach(() => resetRebuildTiming());

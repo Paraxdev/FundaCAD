@@ -12,7 +12,10 @@ import type { GeometryBackend } from "../../src/geometry/client";
 // import resolves mocks next, so it can land in the middle of another test.
 const ui = vi.hoisted(() => ({ toasts: [] as { message: string; kind: string | undefined }[] }));
 vi.mock("../../src/ui/toast", () => ({
-  toast: (message: string, o?: { kind?: string }) => { ui.toasts.push({ message, kind: o?.kind }); return null; },
+  toast: (message: string, o?: { kind?: string }) => {
+    ui.toasts.push({ message, kind: o?.kind });
+    return null;
+  },
   dismissToast() {},
 }));
 
@@ -48,11 +51,21 @@ describe("a document with an imported body in the browser build", () => {
     let pending: Blob | null = null;
     (globalThis as unknown as Record<string, unknown>).document = {
       createElement: () => {
-        const a = { href: "", download: "", click() { const b = pending!; void b.text().then((text) => downloads.push({ name: a.download, text })); } };
+        const a = {
+          href: "",
+          download: "",
+          click() {
+            const b = pending!;
+            void b.text().then((text) => downloads.push({ name: a.download, text }));
+          },
+        };
         return a;
       },
     };
-    URL.createObjectURL = (b: Blob) => { pending = b; return "blob:x"; };
+    URL.createObjectURL = (b: Blob) => {
+      pending = b;
+      return "blob:x";
+    };
     URL.revokeObjectURL = () => {};
   });
 
@@ -60,13 +73,31 @@ describe("a document with an imported body in the browser build", () => {
     const gets: string[] = [];
     const puts: Uint8Array[] = [];
     const geometry = {
-      async rebuild() { return { ok: false, error: { message: "stub" } }; },
-      async init() {}, onStatus() { return () => {}; }, connected: true,
-      async migrateGeometry() { return []; },
-      ...(withBlobs ? {
-        async blobGet(h: string) { gets.push(h); return blobs.get(h) ?? null; },
-        async blobPut(bytes: Uint8Array) { puts.push(bytes); const h = blake2b128Hex(bytes); blobs.set(h, bytes); return h; },
-      } : {}),
+      async rebuild() {
+        return { ok: false, error: { message: "stub" } };
+      },
+      async init() {},
+      onStatus() {
+        return () => {};
+      },
+      connected: true,
+      async migrateGeometry() {
+        return [];
+      },
+      ...(withBlobs
+        ? {
+            async blobGet(h: string) {
+              gets.push(h);
+              return blobs.get(h) ?? null;
+            },
+            async blobPut(bytes: Uint8Array) {
+              puts.push(bytes);
+              const h = blake2b128Hex(bytes);
+              blobs.set(h, bytes);
+              return h;
+            },
+          }
+        : {}),
     } as unknown as GeometryBackend;
     return { geometry, gets, puts };
   }
@@ -125,14 +156,22 @@ describe("a document with an imported body in the browser build", () => {
 
   it("embeds a picture or an unknown feature's blob the engine has, and skips one it lacks", async () => {
     const { saveDocumentAs } = await import("../../src/io/files");
-    const { geometry } = engine(new Map([[HASH, BREP], [PICTURE_HASH, PICTURE]]));
-    const store = storeWith(importDoc({
-      referenceImages: [{ id: "r1", image: PICTURE_HASH }],
-      features: [
-        { id: "f1", type: "import", format: "step", name: "bracket.step", geom: HASH },
-        { id: "w1", type: "futureWidget", blob: UNKNOWN_HASH },
-      ],
-    }), geometry);
+    const { geometry } = engine(
+      new Map([
+        [HASH, BREP],
+        [PICTURE_HASH, PICTURE],
+      ]),
+    );
+    const store = storeWith(
+      importDoc({
+        referenceImages: [{ id: "r1", image: PICTURE_HASH }],
+        features: [
+          { id: "f1", type: "import", format: "step", name: "bracket.step", geom: HASH },
+          { id: "w1", type: "futureWidget", blob: UNKNOWN_HASH },
+        ],
+      }),
+      geometry,
+    );
     await saveDocumentAs(store);
     await settle();
     const geom = (JSON.parse(downloads[0]!.text) as { geometry: Record<string, string> }).geometry;

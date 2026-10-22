@@ -19,15 +19,26 @@ const unavailable = ref("");
 
 const stops: (() => void)[] = [];
 onMounted(async () => {
-  stops.push(onLiveEditingChange(() => { live.value = liveEditingMode(); }));
-  if (engine) stops.push(engine.live.subscribe((s) => { state.value = s; }));
+  stops.push(
+    onLiveEditingChange(() => {
+      live.value = liveEditingMode();
+    }),
+  );
+  if (engine)
+    stops.push(
+      engine.live.subscribe((s) => {
+        state.value = s;
+      }),
+    );
   try {
     server.value = await mcpServerPath();
   } catch (err) {
     unavailable.value = err instanceof Error ? err.message : String(err);
   }
 });
-onUnmounted(() => { for (const stop of stops) stop(); });
+onUnmounted(() => {
+  for (const stop of stops) stop();
+});
 
 const LIVE_OPTIONS = [
   { value: "off", label: "Do not share" },
@@ -73,8 +84,8 @@ async function copy(text: string) {
     <Select id="prefs-live" :model-value="live" :options="LIVE_OPTIONS" @update:model-value="onLive" />
   </label>
   <div class="sm-hint">
-    An assistant works on the open document rather than on a copy. Each edit is
-    one undo, and the title bar says who is connected.
+    An assistant works on the open document rather than on a copy. Each edit is one undo, and the title bar says who is
+    connected.
   </div>
   <div class="prefs-row">
     <span class="prefs-label">Status</span>
@@ -96,8 +107,8 @@ async function copy(text: string) {
       <button id="prefs-mcp-copy" type="button" class="btn" @click="copy(setup.text)">Copy</button>
     </div>
     <div id="prefs-mcp-scope" class="sm-hint">
-      It reads and writes files in your folders, never in hidden folders, in your home folder itself or at a
-      drive root. To keep it to some folders only, add --allow-path and a folder after --mcp, once per folder.
+      It reads and writes files in your folders, never in hidden folders, in your home folder itself or at a drive root.
+      To keep it to some folders only, add --allow-path and a folder after --mcp, once per folder.
     </div>
   </template>
   <div v-else class="sm-hint">Looking for the MCP server…</div>

@@ -64,32 +64,42 @@ export async function activate(e: Engine): Promise<() => void> {
         thread.start(threadDone);
       },
     },
-    tools: [{
-      id: "standardThread", label: "Standard Thread", iconName: "thread",
-      consumes: ["face"], source: "selection", busy: () => thread.active,
-      cancel: () => thread.cancel(),
-    }],
+    tools: [
+      {
+        id: "standardThread",
+        label: "Standard Thread",
+        iconName: "thread",
+        consumes: ["face"],
+        source: "selection",
+        busy: () => thread.active,
+        cancel: () => thread.cancel(),
+      },
+    ],
     features: [{ type: "thread", edit: (id, done) => thread.edit(id, done) }],
-    ribbon: [{
-      group: "INSERT",
-      items: [
-        { action: "fasteners", label: "Fasteners", iconName: "fasteners" },
-        { action: "standardThread", label: "Standard Thread", iconName: "thread" },
-      ],
-    }],
+    ribbon: [
+      {
+        group: "INSERT",
+        items: [
+          { action: "fasteners", label: "Fasteners", iconName: "fasteners" },
+          { action: "standardThread", label: "Standard Thread", iconName: "thread" },
+        ],
+      },
+    ],
     icons: { fasteners: FASTENER_ICON },
     overlays: [LibraryPanel, ThreadPanel],
     bodyMenu: (bodyId) => {
       const spec = specOfBody(e, bodyId);
       if (!spec) return [];
-      return [{
-        label: "Fastener Specs...",
-        onClick: () => {
-          selection.value = { source: "document", spec };
-          tab.value = "catalogue";
-          open.value = true;
+      return [
+        {
+          label: "Fastener Specs...",
+          onClick: () => {
+            selection.value = { source: "document", spec };
+            tab.value = "catalogue";
+            open.value = true;
+          },
         },
-      }];
+      ];
     },
   });
 

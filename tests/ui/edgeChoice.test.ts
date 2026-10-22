@@ -56,18 +56,14 @@ describe("edgeChoiceLabel", () => {
 
 describe("distinguish", () => {
   it("leaves labels that already differ alone", () => {
-    expect(distinguish(["Edge · Body 1", "Edge · Body 2"])).toEqual([
-      "Edge · Body 1", "Edge · Body 2",
-    ]);
+    expect(distinguish(["Edge · Body 1", "Edge · Body 2"])).toEqual(["Edge · Body 1", "Edge · Body 2"]);
   });
 
   it("numbers only the ones that collide", () => {
     // The last resort. Without it, two edges of one unnamed body would be
     // dropped as "not a real choice" and the user would be back to the
     // arbitrary pick this whole path exists to remove.
-    expect(distinguish(["Edge", "Edge", "Edge · Body 2"])).toEqual([
-      "Edge (1)", "Edge (2)", "Edge · Body 2",
-    ]);
+    expect(distinguish(["Edge", "Edge", "Edge · Body 2"])).toEqual(["Edge (1)", "Edge (2)", "Edge · Body 2"]);
   });
 
   it("keeps the input's order and length", () => {

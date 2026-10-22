@@ -82,7 +82,12 @@ export const FORCE_DIRECTIONS: readonly { value: ForceDirection; label: string }
 export const GRAVITY_DIRECTIONS: readonly AxisDirection[] = ["-Z", "+Z", "+X", "-X", "+Y", "-Y"];
 
 export const AXES: Record<AxisDirection, Vec3> = {
-  "-Z": [0, 0, -1], "+Z": [0, 0, 1], "+X": [1, 0, 0], "-X": [-1, 0, 0], "+Y": [0, 1, 0], "-Y": [0, -1, 0],
+  "-Z": [0, 0, -1],
+  "+Z": [0, 0, 1],
+  "+X": [1, 0, 0],
+  "-X": [-1, 0, 0],
+  "+Y": [0, 1, 0],
+  "-Y": [0, -1, 0],
 };
 
 /** Standard gravity, m/s2, what the gravity checkbox applies. */
@@ -129,9 +134,11 @@ function facesLabel(set: StressFaceSet): string {
   if (!n) return "none";
   const faces = `${n} face${n === 1 ? "" : "s"}`;
   const missing = set.missing ?? 0;
-  if (missing) return `${faces}, ${missing === n ? (n === 1 ? "not" : "none") : `${missing} not`} found on the current model`;
+  if (missing)
+    return `${faces}, ${missing === n ? (n === 1 ? "not" : "none") : `${missing} not`} found on the current model`;
   const unshown = unshownFaces(set);
-  if (unshown > 0) return `${faces} (${unshown === n ? (n === 1 ? "not" : "none") : `${unshown} not`} shown in the view)`;
+  if (unshown > 0)
+    return `${faces} (${unshown === n ? (n === 1 ? "not" : "none") : `${unshown} not`} shown in the view)`;
   return faces;
 }
 
@@ -187,8 +194,13 @@ export function newSupport(id: number, type: StressSupportType = "fixed"): Stres
 
 export function newLoad(id: number): StressLoadSetup {
   return {
-    id, faces: emptyFaceSet(), kind: "force", force: STUDY_DEFAULTS.force, direction: "into",
-    custom: [...STUDY_DEFAULTS.custom], pressure: STUDY_DEFAULTS.pressure,
+    id,
+    faces: emptyFaceSet(),
+    kind: "force",
+    force: STUDY_DEFAULTS.force,
+    direction: "into",
+    custom: [...STUDY_DEFAULTS.custom],
+    pressure: STUDY_DEFAULTS.pressure,
   };
 }
 
@@ -199,7 +211,12 @@ export function newSetup(body: string | null): StressSetup {
     loads: [newLoad(1)],
     gravity: { on: false, direction: "-Z" },
     material: STUDY_DEFAULTS.material,
-    custom: { E: STUDY_DEFAULTS.E, nu: STUDY_DEFAULTS.nu, yield: STUDY_DEFAULTS.yield, density: STUDY_DEFAULTS.density },
+    custom: {
+      E: STUDY_DEFAULTS.E,
+      nu: STUDY_DEFAULTS.nu,
+      yield: STUDY_DEFAULTS.yield,
+      density: STUDY_DEFAULTS.density,
+    },
     size: null,
   };
 }
@@ -231,7 +248,12 @@ export function studyFromSetup(s: StressSetup, prev?: Readonly<StressStudy> | nu
   const pc = prev?.custom;
   return {
     body: s.body,
-    supports: s.supports.map((x) => ({ id: x.id, type: x.type, faces: copy(x.faces.selectors), ...savedSpots(x.spots) })),
+    supports: s.supports.map((x) => ({
+      id: x.id,
+      type: x.type,
+      faces: copy(x.faces.selectors),
+      ...savedSpots(x.spots),
+    })),
     loads: s.loads.map((l) => {
       const was = prev?.loads.find((p) => p.id === l.id);
       const wc = was?.custom ?? d.custom;
@@ -272,7 +294,10 @@ export function setupFromStudy(study: StressStudy, faces: (selectors: Selector[]
   return {
     body: study.body,
     supports: study.supports.map((x) => ({
-      id: x.id, type: x.type, faces: faces(copy(x.faces)), ...(x.spots?.length ? { spots: copy(x.spots) } : {}),
+      id: x.id,
+      type: x.type,
+      faces: faces(copy(x.faces)),
+      ...(x.spots?.length ? { spots: copy(x.spots) } : {}),
     })),
     loads: study.loads.map((l) => ({
       id: l.id,
@@ -322,14 +347,19 @@ export function forceDirection(load: StressLoadSetup): Vec3 | string {
     // have, and none at all would read as faces pointing every way.
     const unplaced = unshownFaces(load.faces) + (load.faces.missing ?? 0);
     if (unplaced > 0) {
-      return `${unplaced === 1 ? "one of its faces is" : `${unplaced} of its faces are`} not shown in the view, so ` +
-        "\"into the face\" cannot be worked out; set the faces again, or pick an axis or a custom vector";
+      return (
+        `${unplaced === 1 ? "one of its faces is" : `${unplaced} of its faces are`} not shown in the view, so ` +
+        '"into the face" cannot be worked out; set the faces again, or pick an axis or a custom vector'
+      );
     }
     if (load.spots?.some((s) => !s.normal)) {
-      return "one of its spots has no direction of its own, so \"into the face\" cannot be worked out; place the spot again, or pick an axis or a custom vector";
+      return 'one of its spots has no direction of its own, so "into the face" cannot be worked out; place the spot again, or pick an axis or a custom vector';
     }
     const d = intoDirection(load.faces, load.spots);
-    return d ?? "its faces point different ways, so \"into the face\" has no single direction; pick an axis, a custom vector or a pressure";
+    return (
+      d ??
+      'its faces point different ways, so "into the face" has no single direction; pick an axis, a custom vector or a pressure'
+    );
   }
   if (load.direction === "custom") {
     const [x, y, z] = load.custom;
@@ -359,8 +389,15 @@ export type StressRequest = { ok: true; body: string; options: StressOptions } |
  *  value its default. */
 function untouchedLoad(l: StressLoadSetup): boolean {
   const d = STUDY_DEFAULTS;
-  return !l.faces.selectors.length && !l.spots?.length && l.kind === "force" && l.force === d.force && l.direction === "into" &&
-    l.pressure === d.pressure && l.custom.every((v, i) => v === d.custom[i]);
+  return (
+    !l.faces.selectors.length &&
+    !l.spots?.length &&
+    l.kind === "force" &&
+    l.force === d.force &&
+    l.direction === "into" &&
+    l.pressure === d.pressure &&
+    l.custom.every((v, i) => v === d.custom[i])
+  );
 }
 
 /** Why a face set cannot be sent as it is: faces the current model lacks. */
@@ -373,7 +410,9 @@ function missingFaces(set: StressFaceSet, which: string): string | null {
 /** What a row holds or pushes on, as the engine takes it: its faces when it
  *  has any, its spots when it has any, or why it cannot be sent. */
 function areaOf(
-  faces: StressFaceSet, spots: readonly StressSpot[] | undefined, which: string,
+  faces: StressFaceSet,
+  spots: readonly StressSpot[] | undefined,
+  which: string,
 ): { faces?: Selector[]; spots?: StressSpotArea[] } | string {
   const placed = spots ?? [];
   if (!faces.selectors.length && !placed.length) {
@@ -407,7 +446,10 @@ export function buildStressRequest(s: StressSetup): StressRequest {
     const area = areaOf(x.faces, x.spots, which);
     if (typeof area === "string") return { ok: false, message: area };
     if (area.spots && x.type !== "fixed") {
-      return { ok: false, message: `${which} is ${x.type} and has a spot, a spot is held every way, make it fixed or remove the spot` };
+      return {
+        ok: false,
+        message: `${which} is ${x.type} and has a spot, a spot is held every way, make it fixed or remove the spot`,
+      };
     }
     supports.push({ type: x.type, ...area });
   }
@@ -436,19 +478,22 @@ export function buildStressRequest(s: StressSetup): StressRequest {
     const { E, nu, yield: y, density } = s.custom;
     // A cleared number input reads as "", which compares as 0, so check the type first.
     if (!isNum(E) || !(E > 0)) return { ok: false, message: "the custom material needs a modulus E above 0" };
-    if (!isNum(nu) || !(nu >= 0 && nu < 0.5)) return { ok: false, message: "Poisson's ratio must be from 0 to below 0.5" };
+    if (!isNum(nu) || !(nu >= 0 && nu < 0.5))
+      return { ok: false, message: "Poisson's ratio must be from 0 to below 0.5" };
     if (!isNum(y) || !(y > 0)) return { ok: false, message: "the custom material needs a yield strength above 0" };
     const hasDensity = isNum(density) && density > 0;
     if (s.gravity.on && !hasDensity) return { ok: false, message: "gravity needs the material's density in g/cm3" };
     material = { E, nu, yield: y, ...(hasDensity ? { density } : {}), name: CUSTOM_MATERIAL };
   } else {
-    if (!STRESS_MATERIALS.some((m) => m.name === s.material)) return { ok: false, message: `unknown material ${s.material}` };
+    if (!STRESS_MATERIALS.some((m) => m.name === s.material))
+      return { ok: false, message: `unknown material ${s.material}` };
     material = s.material;
   }
   const options: StressOptions = { supports, loads, material };
   if (s.gravity.on) options.gravity = gravityVector(s.gravity.direction);
   if (s.size !== null) {
-    if (!isNum(s.size) || !(s.size > 0)) return { ok: false, message: "the element size must be above 0, or blank for automatic" };
+    if (!isNum(s.size) || !(s.size > 0))
+      return { ok: false, message: "the element size must be above 0, or blank for automatic" };
     options.size = s.size;
   }
   return { ok: true, body: s.body, options };
@@ -494,7 +539,11 @@ export function valueRange(values: readonly number[]): { min: number; max: numbe
 
 /** `supports` are the kinds of the supports sent, in order, which is the order
  *  the engine's per-support reactions come back in. */
-export function formatStressResult(r: StressReply, unit: Unit, supports: readonly StressSupportType[] = []): StressResultView {
+export function formatStressResult(
+  r: StressReply,
+  unit: Unit,
+  supports: readonly StressSupportType[] = [],
+): StressResultView {
   const rows: PanelRow[] = [];
   const sf = r.safetyFactor;
   rows.push({ k: "Material", v: r.material.name });
@@ -697,15 +746,17 @@ export function forceDragPatch(
   start: ForceDragStart,
 ): { direction: ForceDirection; custom: Vec3 | null; force: number } {
   const px = worldPerPx > 0 ? snapped.length / worldPerPx + start.offsetPx : start.px;
-  const custom: Vec3 | null = snapped.key === "custom"
-    ? [round3(snapped.dir[0]), round3(snapped.dir[1]), round3(snapped.dir[2])]
-    : null;
+  const custom: Vec3 | null =
+    snapped.key === "custom" ? [round3(snapped.dir[0]), round3(snapped.dir[1]), round3(snapped.dir[2])] : null;
   return { direction: snapped.key, custom, force: dragForce(start, px) };
 }
 
 /** The live label beside a dragged arrow. */
 export function forceDragLabel(patch: { direction: ForceDirection; force: number }): string {
-  const named = patch.direction === "custom" ? "" : `, ${FORCE_DIRECTIONS.find((d) => d.value === patch.direction)?.label.toLowerCase()}`;
+  const named =
+    patch.direction === "custom"
+      ? ""
+      : `, ${FORCE_DIRECTIONS.find((d) => d.value === patch.direction)?.label.toLowerCase()}`;
   return `${patch.force} N${named}`;
 }
 
@@ -772,13 +823,18 @@ export function pinAxisSegment(points: readonly Vec3[], normals: readonly Vec3[]
   let lo = Infinity;
   let hi = -Infinity;
   for (const p of points) {
-    const t = (p[0] - cyl.point[0]) * cyl.axis[0] + (p[1] - cyl.point[1]) * cyl.axis[1] + (p[2] - cyl.point[2]) * cyl.axis[2];
+    const t =
+      (p[0] - cyl.point[0]) * cyl.axis[0] + (p[1] - cyl.point[1]) * cyl.axis[1] + (p[2] - cyl.point[2]) * cyl.axis[2];
     if (t < lo) lo = t;
     if (t > hi) hi = t;
   }
   if (!(hi >= lo)) return null;
   const margin = Math.max(0.25 * (hi - lo), cyl.radius);
-  const at = (t: number): Vec3 => [cyl.point[0] + cyl.axis[0] * t, cyl.point[1] + cyl.axis[1] * t, cyl.point[2] + cyl.axis[2] * t];
+  const at = (t: number): Vec3 => [
+    cyl.point[0] + cyl.axis[0] * t,
+    cyl.point[1] + cyl.axis[1] * t,
+    cyl.point[2] + cyl.axis[2] * t,
+  ];
   return { from: at(lo - margin), to: at(hi + margin) };
 }
 
@@ -889,9 +945,11 @@ export function probeLabel(p: { vonMises: number; deflection: number | null }, u
  *  load for MCP callers too, as "support 1 (supports[0].faces[1])"; the panel
  *  calls the same row "Support 1", so the request path is dropped. */
 export function panelMessage(message: string): string {
-  const named = message.replace(
-    /\b(support|load) (\d+) \((?:supports|loads)\[\d+\][^)]*\)/g,
-    (_, kind: string, n: string) => `${kind === "support" ? "Support" : "Load"} ${n}`,
-  ).replace(/\b(?:supports|loads)\[\d+\]\.spots\[(\d+)\] of /g, (_, i: string) => `spot ${Number(i) + 1} of `);
+  const named = message
+    .replace(
+      /\b(support|load) (\d+) \((?:supports|loads)\[\d+\][^)]*\)/g,
+      (_, kind: string, n: string) => `${kind === "support" ? "Support" : "Load"} ${n}`,
+    )
+    .replace(/\b(?:supports|loads)\[\d+\]\.spots\[(\d+)\] of /g, (_, i: string) => `spot ${Number(i) + 1} of `);
   return named.charAt(0).toUpperCase() + named.slice(1);
 }

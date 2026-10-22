@@ -36,7 +36,9 @@
   font: inherit;
   font-size: 14px;
   cursor: pointer;
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 .prefs-nav-btn:hover {
   background: var(--raised);
@@ -151,7 +153,9 @@ label.pref-head {
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 .pref-seg > button + button {
   border-left: 1px solid var(--line);

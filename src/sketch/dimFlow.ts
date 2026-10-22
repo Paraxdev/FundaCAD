@@ -24,9 +24,18 @@ import { curveObjects, dimensionLineObjects, PREVIEW_COLOR } from "./overlay";
 import type { DimInput } from "./dimInput";
 import { constraintDims, linearDim } from "./entityDims";
 import {
-  clampPlace, isDimError, isRoundTarget, pickDimTarget, rebindTarget, resolveDim,
-  targetIdentity, targetKey, unsupportedMessage,
-  type DimOptions, type DimPlan, type DimTarget,
+  clampPlace,
+  isDimError,
+  isRoundTarget,
+  pickDimTarget,
+  rebindTarget,
+  resolveDim,
+  targetIdentity,
+  targetKey,
+  unsupportedMessage,
+  type DimOptions,
+  type DimPlan,
+  type DimTarget,
 } from "./dimensionTool";
 import { isDimConstraint, newEntityId } from "./id";
 import { existingFixedPoint, originCandidate, pinOriginPoint } from "./snap";
@@ -58,10 +67,12 @@ export interface DimHost {
   textEntityAt(p: THREE.Vector2): Extract<ResolvedEntity, { type: "text" }> | null;
   /** the same evaluator a dimension label's inline editor uses, so `w/2` and
    *  `name=expr` work in the value box too */
-  evalDimInput(raw: string, kind: FieldKind, key: string | null):
-    { value: number; expr: string | null; name?: string } | { error: string };
-  recordBinding(key: string, r: { value: number; expr: string | null; name?: string },
-                kind: FieldKind): void;
+  evalDimInput(
+    raw: string,
+    kind: FieldKind,
+    key: string | null,
+  ): { value: number; expr: string | null; name?: string } | { error: string };
+  recordBinding(key: string, r: { value: number; expr: string | null; name?: string }, kind: FieldKind): void;
   /** the shared placement path: stamps driven from the Reference toggle or the
    *  plan, pushes the constraint and solves */
   placeDim(c: SketchConstraint, forceDriven?: boolean): SketchConstraint;
@@ -188,7 +199,8 @@ export class DimFlow {
   private seedFirstPicked(c: SketchConstraint, firstPicked: string | null) {
     if (c.type !== "radialGap" || !firstPicked) return;
     const byId = new Map(this.host.entities().map((e) => [e.id, e]));
-    const inner = byId.get(c.inner), outer = byId.get(c.outer);
+    const inner = byId.get(c.inner),
+      outer = byId.get(c.outer);
     if (!inner || inner.type !== "circle" || !outer || outer.type !== "circle") return;
     if (firstPicked === c.inner) {
       const r = outer.radius - c.value;
@@ -251,7 +263,11 @@ export class DimFlow {
     // steady state: same picks, same plan → leave the box (and its focus /
     // anything half-typed) alone
     if (!this.dimPlan) {
-      if (this.host.dim().isActive) { this.host.dim().hide(); this.dimFieldKey = ""; this.dimPlanKey = ""; }
+      if (this.host.dim().isActive) {
+        this.host.dim().hide();
+        this.dimFieldKey = "";
+        this.dimPlanKey = "";
+      }
       return;
     }
     if (this.dimIdentity(this.dimPlan) !== this.dimPlanKey) this.syncDimBox();
@@ -292,8 +308,13 @@ export class DimFlow {
   private pickOrigin(p: THREE.Vector2): DimTarget | null {
     const pos = this.originAnchorPos();
     if (!pos || pos.distanceTo(p) > this.host.pickTol()) return null;
-    const e: ResolvedEntity = existingFixedPoint(this.host.entities(), this.host.constraints(), pos)
-      ?? { type: "point", id: "__origin__", x: pos.x, y: pos.y, construction: true };
+    const e: ResolvedEntity = existingFixedPoint(this.host.entities(), this.host.constraints(), pos) ?? {
+      type: "point",
+      id: "__origin__",
+      x: pos.x,
+      y: pos.y,
+      construction: true,
+    };
     return { kind: "point", e, p: 0, pos: pos.clone() };
   }
 
@@ -317,9 +338,7 @@ export class DimFlow {
     const prev = this.dimPicks.slice();
     // Fusion's tangent arm: consumed by the first circle/arc that can use it,
     // and only by that one, a line/point pick leaves it armed for the next.
-    const pick: DimTarget = this.dimTangentArmed && isRoundTarget(t) && t.kind !== "edge"
-      ? { ...t, rim: true }
-      : t;
+    const pick: DimTarget = this.dimTangentArmed && isRoundTarget(t) && t.kind !== "edge" ? { ...t, rim: true } : t;
     if (pick !== t) this.dimTangentArmed = false;
     this.dimPicks.push(pick);
     const r = resolveDim(this.dimPicks, this.dimOptions());
@@ -360,9 +379,7 @@ export class DimFlow {
       return;
     }
     const anchor = this.dimPlan.labelAnchor();
-    this.dimPlace = anchor
-      ? clampPlace(p.x - anchor.x, p.y - anchor.y, this.host.planeMmPerPx())
-      : null; // distance/diameter render through entityDims, no place slot
+    this.dimPlace = anchor ? clampPlace(p.x - anchor.x, p.y - anchor.y, this.host.planeMmPerPx()) : null; // distance/diameter render through entityDims, no place slot
     this.dimPlaced = true; // NOT `dimPlace != null`, that is null for those two
     this.positionDimBox(ev);
     this.host.dim().setClickThrough(false); // confirm / cancel / the field are live from here on
@@ -387,7 +404,11 @@ export class DimFlow {
       const discarded = prevField !== "" && this.host.dim().isUserDriven(prevField);
       this.dimFieldKey = plan.fieldKey;
       this.dimPlanKey = key;
-      this.host.dim().show(plan.fields.map((f) => ({ ...f, free: true })), () => this.commitDim(), () => this.cancelDim());
+      this.host.dim().show(
+        plan.fields.map((f) => ({ ...f, free: true })),
+        () => this.commitDim(),
+        () => this.cancelDim(),
+      );
       if (discarded) toast("This is a different dimension now, retype the value");
     }
     this.host.dim().updateFromCursor({ [plan.field]: plan.measure(this.modeOffset()) });
@@ -406,7 +427,10 @@ export class DimFlow {
    *  measurement. Only a genuinely EMPTY box means "accept the measurement". */
   commitDim() {
     const plan = this.dimPlan;
-    if (!plan) { this.cancelDim(); return; }
+    if (!plan) {
+      this.cancelDim();
+      return;
+    }
     const kind: FieldKind = plan.kind === "angle" ? "angle" : "length";
     const raw = this.host.dim().getRaw(plan.field).trim();
     let value = plan.measure(this.modeOffset());
@@ -454,7 +478,8 @@ export class DimFlow {
   private addParallelPair(l1: string, l2: string) {
     const orient = (id: string): "h" | "v" | null => {
       const t = id.indexOf("~");
-      if (t >= 0) { // rect edge: bottom/top are horizontal, right/left vertical
+      if (t >= 0) {
+        // rect edge: bottom/top are horizontal, right/left vertical
         const k = Number(id.slice(t + 1));
         return k === 0 || k === 2 ? "h" : k === 1 || k === 3 ? "v" : null;
       }
@@ -466,10 +491,13 @@ export class DimFlow {
     };
     const o1 = orient(l1);
     if (o1 !== null && o1 === orient(l2)) return;
-    const already = this.host.constraints().some(
-      (c) => (c.type === "parallel" || c.type === "collinear") &&
-        ((c.l1 === l1 && c.l2 === l2) || (c.l1 === l2 && c.l2 === l1)),
-    );
+    const already = this.host
+      .constraints()
+      .some(
+        (c) =>
+          (c.type === "parallel" || c.type === "collinear") &&
+          ((c.l1 === l1 && c.l2 === l2) || (c.l1 === l2 && c.l2 === l1)),
+      );
     if (!already) this.host.constraints().push({ type: "parallel", l1, l2 });
   }
 
@@ -477,9 +505,9 @@ export class DimFlow {
    *  redundant (an existing concentric on the same pair) so a radial-gap dim
    *  can't turn its own implied constraint into an amber over-constrained chip. */
   private addConcentricPair(c1: string, c2: string) {
-    const already = this.host.constraints().some(
-      (c) => c.type === "concentric" && ((c.c1 === c1 && c.c2 === c2) || (c.c1 === c2 && c.c2 === c1)),
-    );
+    const already = this.host
+      .constraints()
+      .some((c) => c.type === "concentric" && ((c.c1 === c1 && c.c2 === c2) || (c.c1 === c2 && c.c2 === c1)));
     if (!already) this.host.constraints().push({ type: "concentric", c1, c2 });
   }
 
@@ -516,8 +544,12 @@ export class DimFlow {
         : null;
     if (!s) return;
     const rect = this.host.viewport().domElement.getBoundingClientRect();
-    const boxW = 170, boxH = 46, m = 12, gap = 28;
-    const cx = ev?.clientX ?? s.x + 1, cy = ev?.clientY ?? s.y + 1;
+    const boxW = 170,
+      boxH = 46,
+      m = 12,
+      gap = 28;
+    const cx = ev?.clientX ?? s.x + 1,
+      cy = ev?.clientY ?? s.y + 1;
     const left = cx >= s.x ? s.x - gap - boxW : s.x + gap;
     const top = cy >= s.y ? s.y - gap - boxH : s.y + gap;
     const fx = Math.max(rect.left + m, Math.min(left, rect.right - boxW - m));
@@ -543,9 +575,10 @@ export class DimFlow {
     this.host.lastCursor().copy(p);
     const preview: THREE.Object3D[] = [];
     for (const t of this.dimPicks) preview.push(...this.dimTargetObjects(t, 0x33aaff));
-    const cand = this.dimPicks.length < 2
-      ? this.pickOrigin(p) ?? pickDimTarget(this.host.entities(), p, this.host.pickTol())
-      : null;
+    const cand =
+      this.dimPicks.length < 2
+        ? (this.pickOrigin(p) ?? pickDimTarget(this.host.entities(), p, this.host.pickTol()))
+        : null;
     if (cand && !this.dimPicks.some((t) => targetKey(t) === targetKey(cand))) {
       preview.push(...this.dimTargetObjects(cand, 0xff5555));
     }
@@ -568,7 +601,9 @@ export class DimFlow {
     if (t.kind === "edge") {
       return curveObjects(
         [{ type: "line", id: "__dimedge__", x1: t.a.x, y1: t.a.y, x2: t.b.x, y2: t.b.y }],
-        this.host.plane(), color, true,
+        this.host.plane(),
+        color,
+        true,
       );
     }
     const r = this.host.pickTol() * 0.6;
@@ -577,7 +612,9 @@ export class DimFlow {
         { type: "line", id: "__dimptA__", x1: t.pos.x - r, y1: t.pos.y - r, x2: t.pos.x + r, y2: t.pos.y + r },
         { type: "line", id: "__dimptB__", x1: t.pos.x - r, y1: t.pos.y + r, x2: t.pos.x + r, y2: t.pos.y - r },
       ],
-      this.host.plane(), color, true,
+      this.host.plane(),
+      color,
+      true,
     );
   }
 
@@ -589,7 +626,13 @@ export class DimFlow {
     if (own) {
       const off = this.dimPlace ?? { ox: cursor.x - own.x, oy: cursor.y - own.y };
       const c = plan.make(plan.measure(off), off);
-      if (c.type === "hDistance" || c.type === "vDistance" || c.type === "angle" || c.type === "radius" || c.type === "diameter") {
+      if (
+        c.type === "hDistance" ||
+        c.type === "vDistance" ||
+        c.type === "angle" ||
+        c.type === "radius" ||
+        c.type === "diameter"
+      ) {
         const segs = constraintDims(this.host.entities(), [c]).flatMap((d) => d.lines);
         if (segs.length) return segs;
       }
@@ -606,7 +649,9 @@ export class DimFlow {
       ? null
       : this.dimPlace
         ? new THREE.Vector2(this.dimPlace.ox, this.dimPlace.oy)
-        : anchor ? cursor.clone().sub(anchor) : new THREE.Vector2();
+        : anchor
+          ? cursor.clone().sub(anchor)
+          : new THREE.Vector2();
     if (plan.kind === "radius") {
       const d = off && off.lengthSq() > 1e-12 ? off.clone().normalize() : new THREE.Vector2(Math.SQRT1_2, Math.SQRT1_2);
       return [[an.a.clone(), an.a.clone().addScaledVector(d, plan.measure())]];

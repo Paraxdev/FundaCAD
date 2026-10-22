@@ -37,7 +37,7 @@
   corner-shape: squircle;
   background: var(--glass-sheen), var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
   box-shadow: var(--glass-inset), var(--float-shadow);
 }
@@ -117,9 +117,13 @@
   border-radius: inherit;
   corner-shape: inherit;
   background: var(--glass-rim);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-          mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
   pointer-events: none;
 }
 .float-group {
@@ -161,7 +165,11 @@
 .rail-btn.holding .rail-tile,
 .icon-btn.active {
   background:
-    radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--accent) 44%, transparent), color-mix(in srgb, var(--accent) 8%, transparent) 72%),
+    radial-gradient(
+      120% 100% at 50% 0%,
+      color-mix(in srgb, var(--accent) 44%, transparent),
+      color-mix(in srgb, var(--accent) 8%, transparent) 72%
+    ),
     var(--float-bg);
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
   color: var(--accent-hot);
@@ -244,7 +252,11 @@
 .opt-row.selected,
 .home-nav-row.active,
 .home-branch.shown {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 6%, transparent));
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 22%, transparent),
+    color-mix(in srgb, var(--accent) 6%, transparent)
+  );
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
   color: var(--accent-hot);
 }
@@ -262,7 +274,10 @@
 
 .dim-field.typed {
   border-color: color-mix(in srgb, var(--accent) 70%, transparent);
-  box-shadow: var(--glass-inset), 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent), var(--float-shadow);
+  box-shadow:
+    var(--glass-inset),
+    0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent),
+    var(--float-shadow);
 }
 .dim-btn.dim-toggle.on,
 .dim-btn.dim-direction.on,
@@ -297,7 +312,7 @@
 .choice-backdrop {
   background: rgba(5, 4, 9, 0.35);
   -webkit-backdrop-filter: blur(6px) saturate(1.2);
-          backdrop-filter: blur(6px) saturate(1.2);
+  backdrop-filter: blur(6px) saturate(1.2);
 }
 .choice-card {
   padding: 18px;
@@ -333,7 +348,7 @@
   corner-shape: squircle;
   background: var(--glass-sheen), var(--float-bg-solid);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
 }
 .cmdk-card,
@@ -411,9 +426,13 @@
   border-radius: inherit;
   corner-shape: inherit;
   background: var(--glass-rim);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-          mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
   pointer-events: none;
 }
 
@@ -448,7 +467,7 @@
 .home.bg-workspace::before {
   background: rgba(5, 4, 9, 0.35);
   -webkit-backdrop-filter: blur(6px) saturate(1.2);
-          backdrop-filter: blur(6px) saturate(1.2);
+  backdrop-filter: blur(6px) saturate(1.2);
 }
 
 /* Home's paper: opaque, so the workspace stays out of sight, and static. The soft
@@ -458,8 +477,7 @@
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
     radial-gradient(70% 60% at 85% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 70%),
-    radial-gradient(130% 100% at 35% 0%, color-mix(in srgb, var(--raised) 26%, transparent), transparent 80%),
-    var(--bg);
+    radial-gradient(130% 100% at 35% 0%, color-mix(in srgb, var(--raised) 26%, transparent), transparent 80%), var(--bg);
 }
 .home.bg-image::before {
   background:
@@ -527,7 +545,9 @@
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 8px 22px -10px var(--accent-glow);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 8px 22px -10px var(--accent-glow);
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-hot);
@@ -539,7 +559,9 @@
 .pop-wide:focus-visible,
 .palette-btn:focus-visible,
 .section-chip-btn:focus-visible {
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-glow);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent-glow);
 }
 
 .sm-input,
@@ -590,7 +612,7 @@ html.no-glass-blur *,
 html.no-glass-blur *::before,
 html.no-glass-blur *::after {
   -webkit-backdrop-filter: none !important;
-          backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 /* Without the blur the scrim would show the float cards sharp through it. */
 html.no-glass-blur .home.bg-workspace::before {

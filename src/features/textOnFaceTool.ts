@@ -62,7 +62,9 @@ export class TextOnFaceTool {
       move: (e) => this.onMove(e),
       down: (e) => this.onDown(e),
       up: (e) => this.onUp(e),
-      key: (e) => { if (e.key === "Escape") this.cancel(); },
+      key: (e) => {
+        if (e.key === "Escape") this.cancel();
+      },
       frame: () => this.tick(),
     });
   }
@@ -74,7 +76,10 @@ export class TextOnFaceTool {
     this.onDone = onDone;
     this.viewport.suspendPicking = true;
     this.gesture.attach();
-    if (!this.fonts.length) void fetchFonts().then((f) => { this.fonts = f; });
+    if (!this.fonts.length)
+      void fetchFonts().then((f) => {
+        this.fonts = f;
+      });
     setPrompt("Click a flat, round or conical face to put text on · Esc");
   }
 
@@ -116,7 +121,12 @@ export class TextOnFaceTool {
 
   /** Ask the engine where the point sits on the face, and anchor the text
    *  there. `screen` is set for the first pick, which opens the panels. */
-  private async resolve(sel: Selector, bodyId: string | null, point: THREE.Vector3, screen: { x: number; y: number } | null) {
+  private async resolve(
+    sel: Selector,
+    bodyId: string | null,
+    point: THREE.Vector3,
+    screen: { x: number; y: number } | null,
+  ) {
     const ticket = ++this.ticket;
     const p: Vec3 = [point.x, point.y, point.z];
     const reply = await this.store.faceAnchor(sel, bodyId, p);
@@ -160,7 +170,10 @@ export class TextOnFaceTool {
         label: "Engrave",
         title: "Cut the letters into the face instead of standing them up",
         initial: this.engrave,
-        onChange: (on) => { this.engrave = on; this.valueChanged(); },
+        onChange: (on) => {
+          this.engrave = on;
+          this.valueChanged();
+        },
       },
       undefined,
       () => this.readDepth(),
@@ -171,8 +184,14 @@ export class TextOnFaceTool {
     const left = screen.x > window.innerWidth / 2;
     const at = { x: left ? 16 : window.innerWidth - 332, y: screen.y - 120 };
     this.panel.show(at, this.fonts, this.values, {
-      onChange: (v) => { this.values = v; this.valueChanged(); },
-      onCommit: (v) => { this.values = v; this.commit(); },
+      onChange: (v) => {
+        this.values = v;
+        this.valueChanged();
+      },
+      onCommit: (v) => {
+        this.values = v;
+        this.commit();
+      },
       onCancel: () => this.cancel(),
     });
     this.valueChanged();
@@ -190,7 +209,7 @@ export class TextOnFaceTool {
   private prompt() {
     setPrompt(
       `${this.engrave ? "Engrave" : "Emboss"} "${this.values.text.trim()}" · click or drag on the face to move it · ` +
-      "Add or Enter to commit · Esc",
+        "Add or Enter to commit · Esc",
     );
   }
 
@@ -215,7 +234,13 @@ export class TextOnFaceTool {
 
   private placeMarker(at: THREE.Vector3) {
     if (!this.marker) {
-      const mat = new THREE.PointsMaterial({ color: 0xffd24a, size: 12, sizeAttenuation: false, depthTest: false, transparent: true });
+      const mat = new THREE.PointsMaterial({
+        color: 0xffd24a,
+        size: 12,
+        sizeAttenuation: false,
+        depthTest: false,
+        transparent: true,
+      });
       this.marker = new THREE.Points(new THREE.BufferGeometry(), mat);
       this.marker.renderOrder = 999;
       this.viewport.addToScene(this.marker);
@@ -232,8 +257,14 @@ export class TextOnFaceTool {
     if (!a || !v.text.trim()) return null;
     const round4 = (x: number) => Math.round(x * 1e4) / 1e4;
     const feature = {
-      id: this.store.nextId(), type: "textOnFace", face: a.face, body: a.body, text: v.text,
-      height: v.height, depth: this.depth, operation: this.engrave ? "cut" : "join",
+      id: this.store.nextId(),
+      type: "textOnFace",
+      face: a.face,
+      body: a.body,
+      text: v.text,
+      height: v.height,
+      depth: this.depth,
+      operation: this.engrave ? "cut" : "join",
       ...(v.font ? { font: v.font } : {}),
       ...(v.style !== "regular" ? { style: v.style } : {}),
       align: v.align,

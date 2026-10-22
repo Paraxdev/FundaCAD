@@ -5,14 +5,25 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  bsplineDegree, bsplineInsertKnot, bsplineMinPoles, bsplinePoint, bsplineRange, type BsplineDef,
+  bsplineDegree,
+  bsplineInsertKnot,
+  bsplineMinPoles,
+  bsplinePoint,
+  bsplineRange,
+  type BsplineDef,
 } from "../../src/sketch/bspline";
 import { degreeChoices, deletePole, insertPole, type BsplineEntity } from "../../src/sketch/bsplineEdit";
 import { offsetEntity } from "../../src/sketch/modify";
 
 const four: BsplineEntity = {
-  type: "bspline", id: "b",
-  poles: [{ x: 0, y: 0 }, { x: 10, y: 20 }, { x: 25, y: -10 }, { x: 40, y: 15 }],
+  type: "bspline",
+  id: "b",
+  poles: [
+    { x: 0, y: 0 },
+    { x: 10, y: 20 },
+    { x: 25, y: -10 },
+    { x: 40, y: 15 },
+  ],
 };
 const six: BsplineEntity = { ...four, id: "c", poles: [...four.poles, { x: 50, y: 0 }, { x: 60, y: 12 }] };
 
@@ -20,7 +31,8 @@ function expectSameCurve(a: BsplineDef, b: BsplineDef) {
   const [lo, hi] = bsplineRange(a);
   for (let i = 0; i <= 200; i++) {
     const t = lo + ((hi - lo) * i) / 200;
-    const p = bsplinePoint(a, t), q = bsplinePoint(b, t);
+    const p = bsplinePoint(a, t),
+      q = bsplinePoint(b, t);
     expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeLessThan(1e-9);
   }
 }
@@ -35,7 +47,11 @@ describe("the degree a spline is built with", () => {
 
   it("disables a degree the pole count cannot carry, saying how many poles it needs", () => {
     const c = degreeChoices([four]);
-    expect(c.map((x) => [x.degree, x.disabled])).toEqual([[2, false], [3, false], [5, true]]);
+    expect(c.map((x) => [x.degree, x.disabled])).toEqual([
+      [2, false],
+      [3, false],
+      [5, true],
+    ]);
     expect(c.find((x) => x.degree === 5)!.label).toBe("Degree 5, needs 6 control points");
     expect(c.find((x) => x.degree === 3)!.label).toBe("Degree 3");
     expect(degreeChoices([six]).every((x) => !x.disabled)).toBe(true);
@@ -54,7 +70,10 @@ describe("the degree a spline is built with", () => {
   });
 
   it("stays put when a pole is inserted into a curve its pole count lowered", () => {
-    for (const def of [{ ...four, degree: 5 }, { ...four, poles: four.poles.slice(0, 3) }]) {
+    for (const def of [
+      { ...four, degree: 5 },
+      { ...four, poles: four.poles.slice(0, 3) },
+    ]) {
       const was = bsplineDegree(def);
       const [a, b] = bsplineRange(def);
       const next = bsplineInsertKnot(def, a + (b - a) * 0.37)!;

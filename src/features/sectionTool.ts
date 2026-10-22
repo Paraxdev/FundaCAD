@@ -38,9 +38,7 @@ function baseDef(plane: Plane3): PlaneDef {
 
 /** `pick` leaves the plane to the user's next click on a face or a construction plane. */
 export type SectionSource =
-  | { kind: "axis"; axis: "X" | "Y" | "Z" }
-  | { kind: "plane"; def: PlaneDef }
-  | { kind: "pick" };
+  { kind: "axis"; axis: "X" | "Y" | "Z" } | { kind: "plane"; def: PlaneDef } | { kind: "pick" };
 
 export type SectionPhase = "off" | "aiming" | "editing" | "on";
 
@@ -267,13 +265,16 @@ export class SectionTool {
     this.viewport.suspendPicking = true;
     this.viewport.showAllPlanes(true);
     this.pickGesture.attach();
-    this.releaseTree = awaitTreePick((pick) => {
-      const def = pick.kind === "datumPlane" ? pick.def : pick.kind === "basePlane" ? baseDef(pick.plane) : null;
-      if (!def) return treePickRefusal(pick, "a plane, or a face picked in the view");
-      this.endPick();
-      this.armOn(def);
-      return true;
-    }, () => this.stop());
+    this.releaseTree = awaitTreePick(
+      (pick) => {
+        const def = pick.kind === "datumPlane" ? pick.def : pick.kind === "basePlane" ? baseDef(pick.plane) : null;
+        if (!def) return treePickRefusal(pick, "a plane, or a face picked in the view");
+        this.endPick();
+        this.armOn(def);
+        return true;
+      },
+      () => this.stop(),
+    );
     setPrompt("Click a face or plane to cut along · Esc");
     this.setPhase("aiming");
   }
@@ -411,13 +412,7 @@ export class SectionTool {
   private dragProj(x: number, y: number): number {
     const o = this.origin;
     const n = this.normal;
-    return axisDragDistance(
-      this.viewport,
-      x,
-      y,
-      new THREE.Vector3(o[0], o[1], o[2]),
-      this.axisV.set(n[0], n[1], n[2]),
-    );
+    return axisDragDistance(this.viewport, x, y, new THREE.Vector3(o[0], o[1], o[2]), this.axisV.set(n[0], n[1], n[2]));
   }
 
   private onDown(e: PointerEvent) {

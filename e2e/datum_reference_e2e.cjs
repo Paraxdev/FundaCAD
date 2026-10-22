@@ -23,7 +23,10 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "datum_reference_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -34,7 +37,10 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -49,30 +55,35 @@ const check = (name, ok, detail) => {
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   // Scan the canvas for a pixel where pickDatumAt returns `id` (a mark the ray
   // reaches), the way the double-click test scans for a face: where a mark lands
   // on screen depends on the camera, so it is found, not guessed.
-  const findMark = (id) => page.evaluate((wantId) => {
-    const r = window.viewport.domElement.getBoundingClientRect();
-    for (let yy = r.top + 20; yy < r.bottom - 20; yy += 6) {
-      for (let xx = r.left + 20; xx < r.right - 20; xx += 6) {
-        if (window.viewport.pickDatumAt(xx, yy) === wantId) return { x: xx, y: yy };
+  const findMark = (id) =>
+    page.evaluate((wantId) => {
+      const r = window.viewport.domElement.getBoundingClientRect();
+      for (let yy = r.top + 20; yy < r.bottom - 20; yy += 6) {
+        for (let xx = r.left + 20; xx < r.right - 20; xx += 6) {
+          if (window.viewport.pickDatumAt(xx, yy) === wantId) return { x: xx, y: yy };
+        }
       }
-    }
-    return null;
-  }, id);
-  const anyMark = () => page.evaluate(() => {
-    const r = window.viewport.domElement.getBoundingClientRect();
-    for (let yy = r.top + 20; yy < r.bottom - 20; yy += 6) {
-      for (let xx = r.left + 20; xx < r.right - 20; xx += 6) {
-        if (window.viewport.pickDatumAt(xx, yy) != null) return { x: xx, y: yy };
+      return null;
+    }, id);
+  const anyMark = () =>
+    page.evaluate(() => {
+      const r = window.viewport.domElement.getBoundingClientRect();
+      for (let yy = r.top + 20; yy < r.bottom - 20; yy += 6) {
+        for (let xx = r.left + 20; xx < r.right - 20; xx += 6) {
+          if (window.viewport.pickDatumAt(xx, yy) != null) return { x: xx, y: yy };
+        }
       }
-    }
-    return null;
-  });
+      return null;
+    });
   const selected = () => page.evaluate(() => window.__fundacad.selectedFeature());
 
   // --- CONTROL: an empty document draws no reference marks ---------------------
@@ -91,7 +102,11 @@ const check = (name, ok, detail) => {
   const aSpot = await findMark("da");
   check("the datum point renders as a pickable mark", !!pSpot, JSON.stringify(pSpot));
   check("the datum axis renders as a pickable mark", !!aSpot, JSON.stringify(aSpot));
-  if (!pSpot || !aSpot) { await page.screenshot({ path: `${OUT}/datums.png` }); await browser.close(); process.exit(1); }
+  if (!pSpot || !aSpot) {
+    await page.screenshot({ path: `${OUT}/datums.png` });
+    await browser.close();
+    process.exit(1);
+  }
 
   // The two marks are distinct geometry at distinct screen places.
   check("point and axis pick as different spots", pSpot.x !== aSpot.x || pSpot.y !== aSpot.y);

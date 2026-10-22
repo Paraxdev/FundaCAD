@@ -29,7 +29,9 @@ describe("isMac", () => {
   const withNav = (nav: unknown, run: () => void) => {
     const had = Object.getOwnPropertyDescriptor(globalThis, "navigator");
     Object.defineProperty(globalThis, "navigator", { value: nav, configurable: true });
-    try { run(); } finally {
+    try {
+      run();
+    } finally {
       if (had) Object.defineProperty(globalThis, "navigator", had);
       else delete (globalThis as { navigator?: unknown }).navigator;
     }

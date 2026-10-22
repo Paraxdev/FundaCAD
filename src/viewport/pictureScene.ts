@@ -30,7 +30,11 @@ function keepsTopLevel(o: THREE.Object3D, model: THREE.Object3D, references: boo
 
 /** Hide everything in `scene` a picture must not show and return what puts each
  *  flag back as it was. */
-export function hideForPicture(scene: THREE.Scene, model: THREE.Object3D, opts: { references?: boolean } = {}): () => void {
+export function hideForPicture(
+  scene: THREE.Scene,
+  model: THREE.Object3D,
+  opts: { references?: boolean } = {},
+): () => void {
   const hidden: THREE.Object3D[] = [];
   const hide = (o: THREE.Object3D) => {
     if (!o.visible) return;
@@ -38,7 +42,9 @@ export function hideForPicture(scene: THREE.Scene, model: THREE.Object3D, opts: 
     hidden.push(o);
   };
   for (const o of scene.children) if (!keepsTopLevel(o, model, opts.references === true)) hide(o);
-  model.traverse((o) => { if (o.userData[DROP] === true) hide(o); });
+  model.traverse((o) => {
+    if (o.userData[DROP] === true) hide(o);
+  });
   return () => {
     for (const o of hidden) o.visible = true;
     hidden.length = 0;
@@ -50,5 +56,8 @@ export function hideForPicture(scene: THREE.Scene, model: THREE.Object3D, opts: 
 export function widenLines(materials: readonly { linewidth: number }[], k: number): () => void {
   const was = materials.map((m) => m.linewidth);
   for (const m of materials) m.linewidth *= k;
-  return () => materials.forEach((m, i) => { m.linewidth = was[i]!; });
+  return () =>
+    materials.forEach((m, i) => {
+      m.linewidth = was[i]!;
+    });
 }

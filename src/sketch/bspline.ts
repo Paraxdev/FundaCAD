@@ -71,7 +71,8 @@ export function bsplineRange(def: BsplineDef): [number, number] {
 }
 
 function span(t: number[], p: number, nP: number, x: number): number {
-  let lo = p, hi = nP - 1;
+  let lo = p,
+    hi = nP - 1;
   if (x >= t[hi + 1]!) return hi;
   if (x <= t[lo]!) return lo;
   while (hi - lo > 1) {
@@ -95,9 +96,11 @@ export function bsplinePoint(def: BsplineDef, x: number): Pt {
   }
   for (let r = 1; r <= p; r++) {
     for (let j = p; j >= r; j--) {
-      const lo = t[j + m - p]!, hi = t[j + 1 + m - r]!;
+      const lo = t[j + m - p]!,
+        hi = t[j + 1 + m - r]!;
       const a = hi > lo ? (x - lo) / (hi - lo) : 0;
-      const A = d[j - 1]!, B = d[j]!;
+      const A = d[j - 1]!,
+        B = d[j]!;
       d[j] = { x: (1 - a) * A.x + a * B.x, y: (1 - a) * A.y + a * B.y };
     }
   }
@@ -115,7 +118,8 @@ export function bsplinePolyline(def: BsplineDef, segsPerSpan = 16): Pt[] {
   const per = Math.max(segsPerSpan, Math.ceil((segsPerSpan * legs) / spans));
   const out: Pt[] = [];
   for (let k = 0; k + 1 < u.length; k++) {
-    const a = u[k]!, b = u[k + 1]!;
+    const a = u[k]!,
+      b = u[k + 1]!;
     for (let s = 0; s < per; s++) out.push(bsplinePoint(def, a + ((b - a) * s) / per));
   }
   out.push(def.closed ? { ...out[0]! } : bsplinePoint(def, u[u.length - 1]!));
@@ -127,17 +131,26 @@ export function bsplinePolyline(def: BsplineDef, segsPerSpan = 16): Pt[] {
 export function bsplineNearestParam(def: BsplineDef, q: Pt): number {
   const [a, b] = bsplineRange(def);
   const N = Math.max(64, (bsplineKnots(def).length - 1) * 24);
-  const d2 = (x: number) => { const c = bsplinePoint(def, x); return (c.x - q.x) ** 2 + (c.y - q.y) ** 2; };
-  let best = a, bestD = Infinity;
+  const d2 = (x: number) => {
+    const c = bsplinePoint(def, x);
+    return (c.x - q.x) ** 2 + (c.y - q.y) ** 2;
+  };
+  let best = a,
+    bestD = Infinity;
   for (let i = 0; i <= N; i++) {
     const x = a + ((b - a) * i) / N;
     const d = d2(x);
-    if (d < bestD) { bestD = d; best = x; }
+    if (d < bestD) {
+      bestD = d;
+      best = x;
+    }
   }
-  let lo = Math.max(a, best - (b - a) / N), hi = Math.min(b, best + (b - a) / N);
+  let lo = Math.max(a, best - (b - a) / N),
+    hi = Math.min(b, best + (b - a) / N);
   const g = (Math.sqrt(5) - 1) / 2;
   for (let it = 0; it < 60; it++) {
-    const x1 = hi - g * (hi - lo), x2 = lo + g * (hi - lo);
+    const x1 = hi - g * (hi - lo),
+      x2 = lo + g * (hi - lo);
     if (d2(x1) < d2(x2)) hi = x2;
     else lo = x1;
   }
@@ -213,10 +226,14 @@ export function bsplineRemovePole(def: BsplineDef, k: number): BsplineDef | null
   let g = 0;
   for (let j = 1; j <= p; j++) g += t[k + j]!;
   g /= p; // Greville abscissa of pole k
-  let drop = -1, dd = Infinity;
+  let drop = -1,
+    dd = Infinity;
   for (let j = 1; j < u.length - 1; j++) {
     const d = Math.abs(u[j]! - g);
-    if (d < dd) { dd = d; drop = j; }
+    if (d < dd) {
+      dd = d;
+      drop = j;
+    }
   }
   const knots = drop > 0 ? u.filter((_, j) => j !== drop) : u;
   const next: BsplineDef = { ...def, poles, knots };
@@ -274,19 +291,32 @@ function solveLinear(A: number[][], b: number[][]): number[][] | null {
  *  (in order; a closed curve's samples do not repeat the first point). An open
  *  fit keeps both ends exactly. This is an approximation of the sampled shape,
  *  close but not exact, which is what converting a fit-point spline needs. */
-export function bsplineFit(samples: Pt[], nPoles: number, closed: boolean, degree = DEFAULT_BSPLINE_DEGREE): BsplineDef | null {
+export function bsplineFit(
+  samples: Pt[],
+  nPoles: number,
+  closed: boolean,
+  degree = DEFAULT_BSPLINE_DEGREE,
+): BsplineDef | null {
   if (samples.length < 2 || nPoles < (closed ? 3 : 2)) return null;
   // chord-length parameters, mapped onto the uniform knot range
   const cum = [0];
   const pts = closed ? [...samples, samples[0]!] : samples;
-  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1]! + Math.hypot(pts[i]!.x - pts[i - 1]!.x, pts[i]!.y - pts[i - 1]!.y));
+  for (let i = 1; i < pts.length; i++)
+    cum.push(cum[i - 1]! + Math.hypot(pts[i]!.x - pts[i - 1]!.x, pts[i]!.y - pts[i - 1]!.y));
   const L = cum[cum.length - 1]!;
   if (!(L > 0)) return null;
   const shape: BsplineDef = { poles: Array.from({ length: nPoles }, () => ({ x: 0, y: 0 })), degree, closed };
   const [a, b] = bsplineRange(shape);
   let params = cum.slice(0, samples.length).map((c) => a + ((b - a) * c) / L);
   const fixed = closed ? [] : [0, nPoles - 1];
-  const known = new Map<number, Pt>(closed ? [] : [[0, samples[0]!], [nPoles - 1, samples[samples.length - 1]!]]);
+  const known = new Map<number, Pt>(
+    closed
+      ? []
+      : [
+          [0, samples[0]!],
+          [nPoles - 1, samples[samples.length - 1]!],
+        ],
+  );
   const free = Array.from({ length: nPoles }, (_, j) => j).filter((j) => !fixed.includes(j));
   const basis = (x: number): number[] => {
     const row: number[] = [];
@@ -303,10 +333,16 @@ export function bsplineFit(samples: Pt[], nPoles: number, closed: boolean, degre
     const B = free.map(() => [0, 0]);
     params.forEach((x, s) => {
       const row = basis(x);
-      let rx = samples[s]!.x, ry = samples[s]!.y;
-      for (const [j, q] of known) { rx -= row[j]! * q.x; ry -= row[j]! * q.y; }
+      let rx = samples[s]!.x,
+        ry = samples[s]!.y;
+      for (const [j, q] of known) {
+        rx -= row[j]! * q.x;
+        ry -= row[j]! * q.y;
+      }
       free.forEach((j, r) => {
-        free.forEach((l, c) => { A[r]![c]! += row[j]! * row[l]!; });
+        free.forEach((l, c) => {
+          A[r]![c]! += row[j]! * row[l]!;
+        });
         B[r]![0]! += row[j]! * rx;
         B[r]![1]! += row[j]! * ry;
       });
@@ -321,7 +357,9 @@ export function bsplineFit(samples: Pt[], nPoles: number, closed: boolean, degre
     });
     fit = { poles, degree, closed };
     const cur = fit;
-    params = params.map((x, s) => (closed || (s > 0 && s < samples.length - 1) ? bsplineNearestParam(cur, samples[s]!) : x));
+    params = params.map((x, s) =>
+      closed || (s > 0 && s < samples.length - 1) ? bsplineNearestParam(cur, samples[s]!) : x,
+    );
   }
   return fit;
 }
@@ -344,7 +382,11 @@ export function bsplineGreville(def: BsplineDef): number[] {
 }
 
 /** The curve's own settings, only the ones set, for copying onto transformed poles. */
-export function bsplineShape(e: { degree?: number | undefined; closed?: boolean | undefined; knots?: number[] | undefined }): { degree?: number; closed?: boolean; knots?: number[] } {
+export function bsplineShape(e: {
+  degree?: number | undefined;
+  closed?: boolean | undefined;
+  knots?: number[] | undefined;
+}): { degree?: number; closed?: boolean; knots?: number[] } {
   return {
     ...(e.degree !== undefined ? { degree: e.degree } : {}),
     ...(e.closed ? { closed: true } : {}),

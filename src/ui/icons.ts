@@ -98,10 +98,7 @@ export function resolveIconPaths(
   defaultId: string = DEFAULT_PACK_ID,
   extra: Readonly<Record<string, string>> = {},
 ): string {
-  return (
-    packs.get(activeId)?.paths[name] ?? packs.get(defaultId)?.paths[name] ??
-    extra[name] ?? ""
-  );
+  return packs.get(activeId)?.paths[name] ?? packs.get(defaultId)?.paths[name] ?? extra[name] ?? "";
 }
 
 // --- the active pack, as a user setting --------------------------------------

@@ -26,7 +26,8 @@ describe("composerClearColor", () => {
         const shown = neutralToneMap([clear.r * exposure, clear.g * exposure, clear.b * exposure]);
         const want = [bg.r, bg.g, bg.b].map(encode);
         const got = shown.map(encode);
-        for (let i = 0; i < 3; i++) expect(Math.abs(got[i]! - want[i]!), `#${hex.toString(16)} at ${exposure}`).toBeLessThanOrEqual(1);
+        for (let i = 0; i < 3; i++)
+          expect(Math.abs(got[i]! - want[i]!), `#${hex.toString(16)} at ${exposure}`).toBeLessThanOrEqual(1);
       }
     }
   });
@@ -67,17 +68,37 @@ function chain(lowPower: boolean) {
     getPixelRatio: () => ratio,
     getDrawingBufferSize: (v: THREE.Vector2) => v.set(64, 32),
     getRenderTarget: () => target,
-    setRenderTarget: (t: unknown) => { target = t; },
+    setRenderTarget: (t: unknown) => {
+      target = t;
+    },
     getClearColor: (c: THREE.Color) => c.copy(clear),
     getClearAlpha: () => 1,
-    setClearColor: (c: THREE.Color) => { clear.copy(c); clears.push({ target, color: c.clone() }); },
+    setClearColor: (c: THREE.Color) => {
+      clear.copy(c);
+      clears.push({ target, color: c.clone() });
+    },
     clear: () => cleared.push({ target, color: clear.clone() }),
     render: (s: unknown) => direct.push(s),
   } as unknown as THREE.WebGLRenderer;
-  const post = new PostChain(renderer, scene, () => false, () => lowPower);
+  const post = new PostChain(
+    renderer,
+    scene,
+    () => false,
+    () => lowPower,
+  );
   const f = fakeComposer();
   (post as unknown as { composer: unknown }).composer = f.composer;
-  return { post, f, clears, cleared, direct, clear, setRatio: (r: number) => { ratio = r; } };
+  return {
+    post,
+    f,
+    clears,
+    cleared,
+    direct,
+    clear,
+    setRatio: (r: number) => {
+      ratio = r;
+    },
+  };
 }
 
 describe("PostChain composer frames", () => {
@@ -128,7 +149,13 @@ describe("PostChain composer frames", () => {
 
   it("sizes the glow at CSS size when the chain is built at a pixel ratio above 1", async () => {
     const c = chain(false);
-    const r = c.post as unknown as { renderer: Record<string, unknown>; passes: unknown; composer: unknown; build(): void; bloom: { renderTargetBright: { width: number } } };
+    const r = c.post as unknown as {
+      renderer: Record<string, unknown>;
+      passes: unknown;
+      composer: unknown;
+      build(): void;
+      bloom: { renderTargetBright: { width: number } };
+    };
     r.renderer.getSize = (v: THREE.Vector2) => v.set(600, 400);
     const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { BokehPass }, { OutputPass }] = await Promise.all([
       import("three/examples/jsm/postprocessing/EffectComposer.js"),
@@ -177,14 +204,30 @@ describe("PostChain composer frame that redraws the shadow maps", () => {
       getPixelRatio: () => 1,
       getDrawingBufferSize: (v: THREE.Vector2) => v.set(64, 32),
       getRenderTarget: () => target,
-      setRenderTarget: (t: unknown) => { target = t; },
+      setRenderTarget: (t: unknown) => {
+        target = t;
+      },
       getClearColor: (c: THREE.Color) => c.copy(bg),
       getClearAlpha: () => 1,
-      setClearColor: (c: THREE.Color) => { cache.copy(c); },
+      setClearColor: (c: THREE.Color) => {
+        cache.copy(c);
+      },
       clear: () => {},
-      shadowMap: { enabled: true, autoUpdate: true, needsUpdate: false, render: () => { cache.setRGB(1, 1, 1); } },
+      shadowMap: {
+        enabled: true,
+        autoUpdate: true,
+        needsUpdate: false,
+        render: () => {
+          cache.setRGB(1, 1, 1);
+        },
+      },
     } as unknown as THREE.WebGLRenderer;
-    const post = new PostChain(renderer, new THREE.Scene(), () => false, () => false);
+    const post = new PostChain(
+      renderer,
+      new THREE.Scene(),
+      () => false,
+      () => false,
+    );
     const f = fakeComposer();
     f.composer.render = () => {
       renderer.shadowMap.render([], new THREE.Scene(), new THREE.PerspectiveCamera());
@@ -231,7 +274,12 @@ describe("PostChain composer frame that throws inside a pass", () => {
       setClearColor: () => {},
       clear: () => {},
     } as unknown as THREE.WebGLRenderer;
-    const post = new PostChain(renderer, scene, () => false, () => false);
+    const post = new PostChain(
+      renderer,
+      scene,
+      () => false,
+      () => false,
+    );
     const f = fakeComposer();
     // BokehPass sets its depth override, renders, then clears it, with no try/finally.
     f.composer.render = () => {

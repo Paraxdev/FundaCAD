@@ -22,7 +22,10 @@ const matColor = (o: THREE.Object3D): number => {
 describe("curveObjects, projected link colors", () => {
   const plane = new SketchPlane("XY");
   const fresh: ResolvedEntity = {
-    type: "projected", id: "p1", source: SRC, curve: { kind: "line", x1: 0, y1: 0, x2: 10, y2: 0 },
+    type: "projected",
+    id: "p1",
+    source: SRC,
+    curve: { kind: "line", x1: 0, y1: 0, x2: 10, y2: 0 },
   };
   const stale: ResolvedEntity = { ...fresh, id: "p2", stale: true };
 

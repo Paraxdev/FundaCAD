@@ -241,11 +241,7 @@ export function minimumCount(tool: AnyToolId): number {
  *  `source` narrows it to one half of the table: pass "selection" for "what
  *  could I do with what is selected", and leave it off for the honest full
  *  answer to "what acts on faces at all". */
-export function toolsConsumingIn(
-  caps: Capabilities,
-  kind: EntityKind,
-  source?: EntitySource,
-): string[] {
+export function toolsConsumingIn(caps: Capabilities, kind: EntityKind, source?: EntitySource): string[] {
   const out: string[] = [];
   for (const [id, cap] of caps) {
     if (source && cap.source !== source) continue;

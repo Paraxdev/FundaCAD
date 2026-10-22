@@ -34,9 +34,10 @@ import { parseFromHost, MAX_LOG, type Port, type ToHost } from "./protocol";
 export interface PluginApp {
   readonly grants: readonly Grant[];
   can(op: string): boolean;
-  call(op: string, params?: unknown): Promise<
-    { ok: true; value: unknown } | { ok: false; code: RefusalCode; why: string; missing?: Grant[] }
-  >;
+  call(
+    op: string,
+    params?: unknown,
+  ): Promise<{ ok: true; value: unknown } | { ok: false; code: RefusalCode; why: string; missing?: Grant[] }>;
   callOrThrow<T = unknown>(op: string, params?: unknown): Promise<T>;
   log(...parts: unknown[]): void;
 }

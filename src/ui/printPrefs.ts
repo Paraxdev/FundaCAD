@@ -64,10 +64,14 @@ export function printPrefs(): Readonly<PrintPrefs> {
 
 export function setPrintPref<K extends keyof PrintPrefs>(key: K, value: PrintPrefs[K]): void {
   const ok: unknown =
-    key === "materialId" ? asMaterialId(value)
-      : key === "customDensity" ? asPositive(value, 30)
-        : key === "infillPct" ? asPositive(value, 100)
-          : key === "wallThicknessMm" ? asPositive(value, 20)
+    key === "materialId"
+      ? asMaterialId(value)
+      : key === "customDensity"
+        ? asPositive(value, 30)
+        : key === "infillPct"
+          ? asPositive(value, 100)
+          : key === "wallThicknessMm"
+            ? asPositive(value, 20)
             : null;
   if (ok === null || ok === undefined || current[key] === ok) return;
   current = { ...current, [key]: ok };

@@ -50,7 +50,6 @@ export function hideFlushSeams(model: ModelView | null): { ms: number; skipped: 
   return { ms: performance.now() - t0, skipped: false };
 }
 
-
 function hideSeams(model: ModelView) {
   if (!model.edges.length) return;
 
@@ -64,13 +63,19 @@ function hideSeams(model: ModelView) {
   // within one body's own faces.
   interface FInfo {
     planar: boolean;
-    n: THREE.Vector3; p: THREE.Vector3;
-    min: THREE.Vector3; max: THREE.Vector3;
+    n: THREE.Vector3;
+    p: THREE.Vector3;
+    min: THREE.Vector3;
+    max: THREE.Vector3;
     tris: { body: BodyMesh; t: number }[]; // (owning body, LOCAL triangle index)
   }
   const faces = new Map<number, FInfo>();
-  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-  const ab = new THREE.Vector3(), ac = new THREE.Vector3(), n = new THREE.Vector3();
+  const a = new THREE.Vector3(),
+    b = new THREE.Vector3(),
+    c = new THREE.Vector3();
+  const ab = new THREE.Vector3(),
+    ac = new THREE.Vector3(),
+    n = new THREE.Vector3();
   for (const body of model.bodies) {
     const pos = body.mesh.geometry.getAttribute("position");
     const index = body.mesh.geometry.getIndex()!;
@@ -89,7 +94,10 @@ function hideSeams(model: ModelView) {
         f = {
           planar: true,
           n: len > 1e-9 ? n.clone().divideScalar(len) : new THREE.Vector3(),
-          p: a.clone(), min: a.clone(), max: a.clone(), tris: [],
+          p: a.clone(),
+          min: a.clone(),
+          max: a.clone(),
+          tris: [],
         };
         faces.set(id, f);
       } else if (len > 1e-9 && f.n.lengthSq() > 0.5 && n.clone().divideScalar(len).dot(f.n) < 0.9998) {
@@ -98,23 +106,30 @@ function hideSeams(model: ModelView) {
         f.n.copy(n).divideScalar(len);
       }
       f.tris.push({ body, t });
-      for (const v of [a, b, c]) { f.min.min(v); f.max.max(v); }
+      for (const v of [a, b, c]) {
+        f.min.min(v);
+        f.max.max(v);
+      }
     }
   }
 
-  const TOL = 0.02;  // on-plane tolerance (mm), flush contacts are exact
-  const INFL = 0.5;  // bbox slack for candidate gathering
-  const EPS = 0.3;   // side-sample offset from the edge (mm)
+  const TOL = 0.02; // on-plane tolerance (mm), flush contacts are exact
+  const INFL = 0.5; // bbox slack for candidate gathering
+  const EPS = 0.3; // side-sample offset from the edge (mm)
   const planar = [...faces.values()].filter((f) => f.planar && f.n.lengthSq() > 0.5);
 
   const tri = new THREE.Triangle();
   const closest = new THREE.Vector3();
   const contains = (f: FInfo, q: THREE.Vector3) => {
     if (
-      q.x < f.min.x - EPS || q.x > f.max.x + EPS ||
-      q.y < f.min.y - EPS || q.y > f.max.y + EPS ||
-      q.z < f.min.z - EPS || q.z > f.max.z + EPS
-    ) return false;
+      q.x < f.min.x - EPS ||
+      q.x > f.max.x + EPS ||
+      q.y < f.min.y - EPS ||
+      q.y > f.max.y + EPS ||
+      q.z < f.min.z - EPS ||
+      q.z > f.max.z + EPS
+    )
+      return false;
     for (const { body, t } of f.tris) {
       const pos = body.mesh.geometry.getAttribute("position");
       const index = body.mesh.geometry.getIndex()!;
@@ -128,31 +143,45 @@ function hideSeams(model: ModelView) {
     return false;
   };
 
-  const lo = new THREE.Vector3(), hi = new THREE.Vector3();
-  const m = new THREE.Vector3(), d = new THREE.Vector3(), s = new THREE.Vector3();
-  const qPlus = new THREE.Vector3(), qMinus = new THREE.Vector3();
+  const lo = new THREE.Vector3(),
+    hi = new THREE.Vector3();
+  const m = new THREE.Vector3(),
+    d = new THREE.Vector3(),
+    s = new THREE.Vector3();
+  const qPlus = new THREE.Vector3(),
+    qMinus = new THREE.Vector3();
   for (const line of model.edges) {
     const pts = line.points;
     if (!pts || pts.length < 2) continue;
     lo.set(Infinity, Infinity, Infinity);
     hi.set(-Infinity, -Infinity, -Infinity);
     for (const q of pts) {
-      lo.x = Math.min(lo.x, q[0]); lo.y = Math.min(lo.y, q[1]); lo.z = Math.min(lo.z, q[2]);
-      hi.x = Math.max(hi.x, q[0]); hi.y = Math.max(hi.y, q[1]); hi.z = Math.max(hi.z, q[2]);
+      lo.x = Math.min(lo.x, q[0]);
+      lo.y = Math.min(lo.y, q[1]);
+      lo.z = Math.min(lo.z, q[2]);
+      hi.x = Math.max(hi.x, q[0]);
+      hi.y = Math.max(hi.y, q[1]);
+      hi.z = Math.max(hi.z, q[2]);
     }
     // candidate faces: planar, edge lies in their plane, bbox borders the edge
     const cands: FInfo[] = [];
     for (const f of planar) {
       if (
-        f.min.x - INFL > lo.x || f.max.x + INFL < hi.x ||
-        f.min.y - INFL > lo.y || f.max.y + INFL < hi.y ||
-        f.min.z - INFL > lo.z || f.max.z + INFL < hi.z
-      ) continue;
+        f.min.x - INFL > lo.x ||
+        f.max.x + INFL < hi.x ||
+        f.min.y - INFL > lo.y ||
+        f.max.y + INFL < hi.y ||
+        f.min.z - INFL > lo.z ||
+        f.max.z + INFL < hi.z
+      )
+        continue;
       let on = true;
       for (const q of pts) {
-        const dd =
-          (q[0] - f.p.x) * f.n.x + (q[1] - f.p.y) * f.n.y + (q[2] - f.p.z) * f.n.z;
-        if (Math.abs(dd) > TOL) { on = false; break; }
+        const dd = (q[0] - f.p.x) * f.n.x + (q[1] - f.p.y) * f.n.y + (q[2] - f.p.z) * f.n.z;
+        if (Math.abs(dd) > TOL) {
+          on = false;
+          break;
+        }
       }
       if (on) cands.push(f);
     }
@@ -162,18 +191,11 @@ function hideSeams(model: ModelView) {
 
     // side samples at the edge midpoint, perpendicular to the edge IN the plane
     const k = Math.floor((pts.length - 1) / 2);
-    const pk = pts[k], pk1 = pts[k + 1];
+    const pk = pts[k],
+      pk1 = pts[k + 1];
     if (!pk || !pk1) continue;
-    m.set(
-      (pk[0] + pk1[0]) / 2,
-      (pk[1] + pk1[1]) / 2,
-      (pk[2] + pk1[2]) / 2,
-    );
-    d.set(
-      pk1[0] - pk[0],
-      pk1[1] - pk[1],
-      pk1[2] - pk[2],
-    );
+    m.set((pk[0] + pk1[0]) / 2, (pk[1] + pk1[1]) / 2, (pk[2] + pk1[2]) / 2);
+    d.set(pk1[0] - pk[0], pk1[1] - pk[1], pk1[2] - pk[2]);
     if (d.lengthSq() < 1e-12) continue;
     d.normalize();
     s.crossVectors(d, c0.n).normalize();
@@ -184,8 +206,16 @@ function hideSeams(model: ModelView) {
     // the two sides (one face owning both = the edge wraps a slot/hole rim)
     let gPlus: FInfo | null = null;
     let gMinus: FInfo | null = null;
-    for (const f of cands) if (contains(f, qPlus)) { gPlus = f; break; }
-    for (const f of cands) if (contains(f, qMinus)) { gMinus = f; break; }
+    for (const f of cands)
+      if (contains(f, qPlus)) {
+        gPlus = f;
+        break;
+      }
+    for (const f of cands)
+      if (contains(f, qMinus)) {
+        gMinus = f;
+        break;
+      }
     if (gPlus && gMinus && gPlus !== gMinus && gPlus.n.dot(gMinus.n) > 0.999) {
       line.draw.setHidden(line.slot, true);
     }

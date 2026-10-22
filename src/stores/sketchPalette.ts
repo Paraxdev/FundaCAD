@@ -2,8 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 
 export type PaletteToggle =
-  | "lockView" | "construction" | "reference" | "grid"
-  | "snap" | "profile" | "dimensions" | "constraints";
+  "lockView" | "construction" | "reference" | "grid" | "snap" | "profile" | "dimensions" | "constraints";
 
 interface ToggleDef {
   key: PaletteToggle;
@@ -42,10 +41,7 @@ export const useSketchPaletteStore = defineStore("sketchPalette", () => {
   /** Assigned by the engine; the component and emitAll() both fire it. */
   let onToggle: ((key: PaletteToggle, value: boolean) => void) | null = null;
   let onLookAt: (() => void) | null = null;
-  function bind(handlers: {
-    onToggle: (key: PaletteToggle, value: boolean) => void;
-    onLookAt: () => void;
-  }) {
+  function bind(handlers: { onToggle: (key: PaletteToggle, value: boolean) => void; onLookAt: () => void }) {
     onToggle = handlers.onToggle;
     onLookAt = handlers.onLookAt;
   }

@@ -19,9 +19,33 @@ const RES = new THREE.Vector2(800, 600);
 /** Three edges with 1, 2 and 3 segments respectively (points - 1). */
 function threeEdges(): RebuildResult["edges"] {
   return [
-    { id: "e0", body: "b", points: [[0, 0, 0], [1, 0, 0]] },
-    { id: "e1", body: "b", points: [[0, 1, 0], [1, 1, 0], [2, 1, 0]] },
-    { id: "e2", body: "b", points: [[0, 2, 0], [1, 2, 0], [2, 2, 0], [3, 2, 0]] },
+    {
+      id: "e0",
+      body: "b",
+      points: [
+        [0, 0, 0],
+        [1, 0, 0],
+      ],
+    },
+    {
+      id: "e1",
+      body: "b",
+      points: [
+        [0, 1, 0],
+        [1, 1, 0],
+        [2, 1, 0],
+      ],
+    },
+    {
+      id: "e2",
+      body: "b",
+      points: [
+        [0, 2, 0],
+        [1, 2, 0],
+        [2, 2, 0],
+        [3, 2, 0],
+      ],
+    },
   ];
 }
 
@@ -66,7 +90,11 @@ describe("BodyEdges", () => {
 
   it("carries each edge's points and body on the ref", () => {
     const be = new BodyEdges(threeEdges(), RES);
-    expect(be.refs[1]!.points).toEqual([[0, 1, 0], [1, 1, 0], [2, 1, 0]]);
+    expect(be.refs[1]!.points).toEqual([
+      [0, 1, 0],
+      [1, 1, 0],
+      [2, 1, 0],
+    ]);
     expect(be.refs[1]!.body).toBe("b");
   });
 

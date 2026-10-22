@@ -18,17 +18,33 @@ const DOC: CadDocument = {
 const step = (id: string) => ({ id, type: "fillet", edges: [], radius: 1.5 }) as unknown as Feature;
 const FILLET = step("fl1");
 
-const BASE = { "body1#0": "m-steel", "body1#4": "m-brass", "body1#5": "m-glass", "body2#1": "m-brass", "body2#4": "m-glass" };
-const FILLETED = { "body1#5": "m-steel", "body1#4": "m-brass", "body1#8": "m-glass", "body2#1": "m-brass", "body2#4": "m-glass" };
+const BASE = {
+  "body1#0": "m-steel",
+  "body1#4": "m-brass",
+  "body1#5": "m-glass",
+  "body2#1": "m-brass",
+  "body2#4": "m-glass",
+};
+const FILLETED = {
+  "body1#5": "m-steel",
+  "body1#4": "m-brass",
+  "body1#8": "m-glass",
+  "body2#1": "m-brass",
+  "body2#4": "m-glass",
+};
 
 const entries = (s: DocumentStore) => Object.fromEntries(s.faceMaterialEntries());
 
 async function opened(first: Scenario) {
   const box = { result: reply(first) as RebuildResult };
   const be = {
-    async rebuild() { return { ok: true, result: box.result }; },
+    async rebuild() {
+      return { ok: true, result: box.result };
+    },
     async init() {},
-    onStatus() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
     connected: true,
   } as unknown as GeometryBackend;
   const store = new DocumentStore(be, structuredClone(DOC));
@@ -49,8 +65,20 @@ async function painted() {
   const kit = await opened("base");
   const { store, built } = kit;
   store.setFacesMaterial([{ body: "body1", face: 0 }], "m-steel");
-  store.setFacesMaterial([{ body: "body1", face: 4 }, { body: "body2", face: 1 }], "m-brass");
-  store.setFacesMaterial([{ body: "body1", face: 5 }, { body: "body2", face: 4 }], "m-glass");
+  store.setFacesMaterial(
+    [
+      { body: "body1", face: 4 },
+      { body: "body2", face: 1 },
+    ],
+    "m-brass",
+  );
+  store.setFacesMaterial(
+    [
+      { body: "body1", face: 5 },
+      { body: "body2", face: 4 },
+    ],
+    "m-glass",
+  );
   expect(entries(store)).toEqual(BASE);
   const fillet = async () => {
     store.addFeature(structuredClone(FILLET));
@@ -107,7 +135,14 @@ describe("undo of a version restore with face materials", () => {
 
   it("puts the materials back with their prints, read while the restored build is still on screen", async () => {
     const { store, built, fillet } = await painted();
-    store.setFacesMaterial([{ body: "body1", face: 0 }, { body: "body1", face: 5 }, { body: "body2", face: 4 }], null);
+    store.setFacesMaterial(
+      [
+        { body: "body1", face: 0 },
+        { body: "body1", face: 5 },
+        { body: "body2", face: 4 },
+      ],
+      null,
+    );
     const v1 = store.saveVersion("brass")!;
     store.setFacesMaterial([{ body: "body1", face: 0 }], "m-steel");
     await fillet();
@@ -140,11 +175,14 @@ describe("undo of an assistant's edit with face materials", () => {
     const kit = await painted();
     const sent = kit.store.toObject() as CadDocument & { faceMaterials: Record<string, string> };
     kit.box.result = reply("fillet");
-    kit.store.loadDocument({
-      ...sent,
-      features: [...sent.features, structuredClone(FILLET)],
-      faceMaterials: { ...sent.faceMaterials, "body1#0": "m-gold" },
-    } as CadDocument, { replace: true });
+    kit.store.loadDocument(
+      {
+        ...sent,
+        features: [...sent.features, structuredClone(FILLET)],
+        faceMaterials: { ...sent.faceMaterials, "body1#0": "m-gold" },
+      } as CadDocument,
+      { replace: true },
+    );
     await kit.built("fillet");
     const edit = { ...FILLETED, "body1#5": "m-gold" };
     expect(entries(kit.store)).toEqual(edit);
@@ -222,11 +260,14 @@ describe("a replacing load puts face materials where opening its document does",
     const { store, built } = await opened("hole");
     store.setFacesMaterial([{ body: "body1", face: 9 }], "m-glass");
     const sent = store.toObject() as CadDocument;
-    store.loadDocument({
-      ...sent,
-      features: [...sent.features, step("rim")],
-      faceMaterials: { "body1#1": "m-gold", "body2#2": "m-steel" },
-    } as unknown as CadDocument, { replace: true });
+    store.loadDocument(
+      {
+        ...sent,
+        features: [...sent.features, step("rim")],
+        faceMaterials: { "body1#1": "m-gold", "body2#2": "m-steel" },
+      } as unknown as CadDocument,
+      { replace: true },
+    );
     await built("holeRim");
     expect(entries(store)).toEqual({ "body1#1": "m-gold", "body2#2": "m-steel" });
     store.undo();
@@ -242,7 +283,13 @@ describe("undo of a replacing load with face materials a dimension edit moved", 
     const v0 = kit.store.saveVersion("plain")!;
     if (first !== "base") await kit.edit("f0", "base");
     kit.store.setFacesMaterial([{ body: "body1", face: 1 }], "m-steel");
-    kit.store.setFacesMaterial([{ body: "body1", face: 5 }, { body: "body2", face: 2 }], "m-brass");
+    kit.store.setFacesMaterial(
+      [
+        { body: "body1", face: 5 },
+        { body: "body2", face: 2 },
+      ],
+      "m-brass",
+    );
     kit.store.setFacesMaterial([{ body: "body9", face: 2 }], "m-steel");
     await kit.edit("f1", "deep");
     expect(entries(kit.store)).toEqual(moved);
@@ -292,10 +339,19 @@ describe("undo of a replacing load with face materials a dimension edit moved", 
 describe("undo of a version restore over a Separate", () => {
   it("gives each piece its materials back, and the undo of the Separate takes them back to the body", async () => {
     const { store, built, shown } = await opened("base");
-    const [lower, upper] = [[0, 1, 2, 3, 4], [5, 6, 7, 8]];
+    const [lower, upper] = [
+      [0, 1, 2, 3, 4],
+      [5, 6, 7, 8],
+    ];
     store.setFacesMaterial([{ body: "body1", face: 1 }], "m-steel");
     store.setFacesMaterial([{ body: "body1", face: 6 }], "m-brass");
-    store.setFacesMaterial([{ body: "body1", face: 7 }, { body: "body2", face: 4 }], "m-glass");
+    store.setFacesMaterial(
+      [
+        { body: "body1", face: 7 },
+        { body: "body2", face: 4 },
+      ],
+      "m-glass",
+    );
     const whole = { "body1#1": "m-steel", "body1#6": "m-brass", "body1#7": "m-glass", "body2#4": "m-glass" };
     const v1 = store.saveVersion("whole")!;
     store.addFeature(step("sep"));

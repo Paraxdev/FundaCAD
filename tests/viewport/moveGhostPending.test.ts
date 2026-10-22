@@ -9,8 +9,12 @@ import type { BodyEdges, BodyMesh, ModelView } from "../../src/viewport/render";
 
 const deg = Math.PI / 180;
 const about = (c: THREE.Vector3, r: THREE.Matrix4) =>
-  new THREE.Matrix4().makeTranslation(c.x, c.y, c.z).multiply(r).multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
-const euler = (x: number, y: number, z: number) => new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(x * deg, y * deg, z * deg));
+  new THREE.Matrix4()
+    .makeTranslation(c.x, c.y, c.z)
+    .multiply(r)
+    .multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
+const euler = (x: number, y: number, z: number) =>
+  new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(x * deg, y * deg, z * deg));
 const shift = (x: number, y: number, z: number) => new THREE.Matrix4().makeTranslation(x, y, z);
 
 const PIVOT = new THREE.Vector3(23, 150, 140);
@@ -22,7 +26,12 @@ type Id = "shroud" | "fan" | "rail";
 const VERTS: Record<Id, THREE.Vector3[]> = {
   shroud: [new THREE.Vector3(10, 200, 50), new THREE.Vector3(37, -81, 13), new THREE.Vector3(-64, 122, -9)],
   fan: [new THREE.Vector3(-12, 33, 71), new THREE.Vector3(58, 140, -26)],
-  rail: [new THREE.Vector3(211, -47, 5), new THREE.Vector3(-150, 9, 88), new THREE.Vector3(3, 17, -40), new THREE.Vector3(76, -2, 61)],
+  rail: [
+    new THREE.Vector3(211, -47, 5),
+    new THREE.Vector3(-150, 9, 88),
+    new THREE.Vector3(3, 17, -40),
+    new THREE.Vector3(76, -2, 61),
+  ],
 };
 
 /** Local vertices kept in doubles, a baked body holds its pending move in them as a rebuilt one does. */
@@ -30,7 +39,13 @@ const local = new WeakMap<THREE.Object3D, THREE.Vector3[]>();
 function makeBody(id: Id, bake = new THREE.Matrix4(), parent?: THREE.Object3D): BodyMesh {
   const vs = VERTS[id].map((v) => v.clone().applyMatrix4(bake));
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(vs.flatMap((v) => v.toArray()), 3));
+  geo.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(
+      vs.flatMap((v) => v.toArray()),
+      3,
+    ),
+  );
   const mesh = new THREE.Mesh(geo);
   const edges = { object: new THREE.Object3D() } as unknown as BodyEdges;
   local.set(mesh, vs);
@@ -43,11 +58,16 @@ function scene(parent?: THREE.Object3D) {
   const view = (bodies: BodyMesh[]): ModelView => ({ bodies, edges: [], orphanEdges: null, box: new THREE.Box3() });
   let model = view((Object.keys(VERTS) as Id[]).map((id) => makeBody(id, undefined, parent)));
   const ghosts = new GhostLayer({
-    model: () => model, addToScene: () => {}, removeFromScene: () => {},
-    requestRender: () => {}, faceNormalWorld: () => new THREE.Vector3(0, 0, 1),
+    model: () => model,
+    addToScene: () => {},
+    removeFromScene: () => {},
+    requestRender: () => {},
+    faceNormalWorld: () => new THREE.Vector3(0, 0, 1),
   });
   const body = (id: Id) => model.bodies.find((b) => b.id === id)!;
-  const show = (bodies: BodyMesh[]) => { model = view(bodies); };
+  const show = (bodies: BodyMesh[]) => {
+    model = view(bodies);
+  };
   return { ghosts, body, show };
 }
 
@@ -70,7 +90,11 @@ function pend(ghosts: GhostLayer, ids: Id[], moves: THREE.Matrix4[]) {
 function centroid(ids: Id[], pose: Record<Id, THREE.Matrix4>) {
   const c = new THREE.Vector3();
   let n = 0;
-  for (const id of ids) for (const v of VERTS[id]) { c.add(v.clone().applyMatrix4(pose[id])); n++; }
+  for (const id of ids)
+    for (const v of VERTS[id]) {
+      c.add(v.clone().applyMatrix4(pose[id]));
+      n++;
+    }
   return c.divideScalar(n);
 }
 
@@ -80,7 +104,8 @@ function dragFrames(centre: THREE.Vector3): THREE.Matrix4[] {
   const axes = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)];
   const frames: THREE.Matrix4[] = [];
   for (const a of axes) for (const s of steps) frames.push(shift(a.x * s, a.y * s, a.z * s));
-  for (const a of axes) for (const t of [7, 23, -11]) frames.push(about(centre, new THREE.Matrix4().makeRotationAxis(a, t * deg)));
+  for (const a of axes)
+    for (const t of [7, 23, -11]) frames.push(about(centre, new THREE.Matrix4().makeRotationAxis(a, t * deg)));
   return frames;
 }
 
@@ -115,7 +140,11 @@ describe("move ghost over a move whose rebuild has not landed", () => {
     const { ghosts, body } = scene();
     pend(ghosts, ["shroud"], [QUARTER_X]);
     pend(ghosts, ["fan"], [SLANTED, SECOND]);
-    const pose: Record<Id, THREE.Matrix4> = { shroud: QUARTER_X, fan: SECOND.clone().multiply(SLANTED), rail: new THREE.Matrix4() };
+    const pose: Record<Id, THREE.Matrix4> = {
+      shroud: QUARTER_X,
+      fan: SECOND.clone().multiply(SLANTED),
+      rail: new THREE.Matrix4(),
+    };
     const ids: Id[] = ["shroud", "fan", "rail"];
     const frames = dragFrames(centroid(ids, pose));
     ghosts.beginBodyMoveGhost(ids);
@@ -123,10 +152,12 @@ describe("move ghost over a move whose rebuild has not landed", () => {
       ghosts.setBodyMoveTransform(m);
       return ids.flatMap((id) => [drawn(body(id).mesh), drawn(body(id).edges.object)]);
     });
-    const want = frames.map((m) => ids.flatMap((id) => {
-      const w = m.clone().multiply(pose[id]);
-      return [expected(id, w), expected(id, w)];
-    }));
+    const want = frames.map((m) =>
+      ids.flatMap((id) => {
+        const w = m.clone().multiply(pose[id]);
+        return [expected(id, w), expected(id, w)];
+      }),
+    );
     expect(seen).toEqual(want);
   });
 
@@ -204,10 +235,12 @@ describe("move ghost over a move whose rebuild has not landed", () => {
     });
     ghosts.endBodyMoveGhost(true);
     const cancelled = ids.map((id) => drawn(onScreen[id].mesh));
-    const want = frames.map((m) => ids.flatMap((id) => {
-      const w = m.clone().multiply(pose[id]);
-      return [expected(id, w), expected(id, w)];
-    }));
+    const want = frames.map((m) =>
+      ids.flatMap((id) => {
+        const w = m.clone().multiply(pose[id]);
+        return [expected(id, w), expected(id, w)];
+      }),
+    );
     expect({ seen, cancelled }).toEqual({ seen: want, cancelled: ids.map((id) => expected(id, pose[id])) });
   });
 

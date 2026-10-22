@@ -71,10 +71,14 @@ function bracket() {
     // the plate's free corners, and the top of the upstand
     { type: "fillet", edges: [{ kind: "edge", by: "nearest", point: [35, 25, 4] }], radius: 8 },
     { type: "fillet", edges: [{ kind: "edge", by: "nearest", point: [35, -25, 4] }], radius: 8 },
-    { type: "fillet", edges: [
+    {
+      type: "fillet",
+      edges: [
         { kind: "edge", by: "nearest", point: [-35, 0, 58] },
         { kind: "edge", by: "nearest", point: [-27, 0, 58] },
-      ], radius: 3 },
+      ],
+      radius: 3,
+    },
   ];
 }
 
@@ -100,10 +104,14 @@ function knob() {
     { type: "extrude", sketch: 2, distance: 14, operation: "cut" },
     // aimed at the far side of each rim: the revolve's seam line meets the rim
     // circle at angle 0, and a point there is equally near both.
-    { type: "fillet", edges: [
+    {
+      type: "fillet",
+      edges: [
         { kind: "edge", by: "nearest", point: [-17, 0, 14] },
         { kind: "edge", by: "nearest", point: [-11, 0, 18] },
-      ], radius: 1.5 },
+      ],
+      radius: 1.5,
+    },
     // an M3 set screw into the bore, from the side
     {
       type: "sketch",
@@ -131,7 +139,12 @@ function housing() {
     { type: "extrude", sketch: 0, distance: 26, operation: "new" },
   ];
   // round the four uprights before hollowing, so the wall follows them
-  for (const [x, y] of [[38, 26], [38, -26], [-38, 26], [-38, -26]]) {
+  for (const [x, y] of [
+    [38, 26],
+    [38, -26],
+    [-38, 26],
+    [-38, -26],
+  ]) {
     feats.push({ type: "fillet", edges: [{ kind: "edge", by: "nearest", point: [x, y, 13] }], radius: 6 });
   }
   feats.push({
@@ -141,7 +154,12 @@ function housing() {
   });
 
   // screw bosses, pushed into the corners so they merge with the wall
-  const BOSS = [[32.5, 20.5], [32.5, -20.5], [-32.5, 20.5], [-32.5, -20.5]];
+  const BOSS = [
+    [32.5, 20.5],
+    [32.5, -20.5],
+    [-32.5, 20.5],
+    [-32.5, -20.5],
+  ];
   feats.push({
     type: "sketch",
     plane: "XY",
@@ -209,7 +227,6 @@ function scene() {
   return out;
 }
 
-
 // The README's screenshots, taken of a real document in a real browser.
 //
 //   node shots.cjs [outDir]
@@ -220,8 +237,7 @@ const fs = require("fs");
 const path = require("path");
 
 const OUT = path.resolve(process.argv[2] || path.join(__dirname, "..", "assets", "readme"));
-const EXE = process.env.SC_CHROME
-  || "C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe";
+const EXE = process.env.SC_CHROME || "C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe";
 const TOKEN = process.env.SC_TOKEN || "probetoken";
 const URL = `http://localhost:5173/?token=${TOKEN}`;
 
@@ -233,7 +249,9 @@ const ZOOM = Number(process.env.ZOOM || 1);
   const browser = await chromium.launch({ executablePath: EXE, args: ["--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   const errors = [];
-  page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
   page.on("pageerror", (e) => errors.push(String(e)));
 
   const shot = async (name) => {
@@ -275,30 +293,38 @@ const ZOOM = Number(process.env.ZOOM || 1);
   await page.waitForTimeout(1200);
 
   // ---- build the three parts -----------------------------------------------
-  const res = await page.evaluate(async (args) => {
-    const { feats, names } = args;
-    const store = window.store;
-    const ids = [];
-    for (const f of feats) {
-      const id = store.nextId();
-      ids.push(id);
-      const out = { ...f, id };
-      for (const k of ["sketch", "profile", "path"]) {
-        if (typeof out[k] === "number") out[k] = ids[out[k]];
+  const res = await page.evaluate(
+    async (args) => {
+      const { feats, names } = args;
+      const store = window.store;
+      const ids = [];
+      for (const f of feats) {
+        const id = store.nextId();
+        ids.push(id);
+        const out = { ...f, id };
+        for (const k of ["sketch", "profile", "path"]) {
+          if (typeof out[k] === "number") out[k] = ids[out[k]];
+        }
+        store.addFeature(out);
+        const t0 = Date.now();
+        while (Date.now() - t0 < 90000) {
+          if (!store.buildState.building && store.buildState.result) break;
+          await new Promise((r) => setTimeout(r, 60));
+        }
       }
-      store.addFeature(out);
-      const t0 = Date.now();
-      while (Date.now() - t0 < 90000) {
-        if (!store.buildState.building && store.buildState.result) break;
-        await new Promise((r) => setTimeout(r, 60));
-      }
-    }
-    const bodies = store.buildState.result?.bodies ?? [];
-    bodies.forEach((b, i) => { if (names[i]) store.setBodyName(b.id, names[i]); });
-    return { error: store.buildState.errorMessage ?? null, bodies: bodies.map((b) => b.id) };
-  }, { feats: scene(), names: NAMES });
+      const bodies = store.buildState.result?.bodies ?? [];
+      bodies.forEach((b, i) => {
+        if (names[i]) store.setBodyName(b.id, names[i]);
+      });
+      return { error: store.buildState.errorMessage ?? null, bodies: bodies.map((b) => b.id) };
+    },
+    { feats: scene(), names: NAMES },
+  );
   console.log("built:", JSON.stringify(res));
-  if (res.error) { console.error("BUILD FAILED:", res.error); process.exit(1); }
+  if (res.error) {
+    console.error("BUILD FAILED:", res.error);
+    process.exit(1);
+  }
 
   // The canvas runs under the floating cards, so its middle is not the middle
   // of what can be seen. Slide the view until the parts sit between the tool
@@ -325,7 +351,10 @@ const ZOOM = Number(process.env.ZOOM || 1);
     // plate overshoots badly. Close the gap the way a user does.
     const canvas = await page.locator("#canvas").boundingBox();
     await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
-    for (let i = 0; i < ZOOM; i++) { await page.mouse.wheel(0, -240); await page.waitForTimeout(150); }
+    for (let i = 0; i < ZOOM; i++) {
+      await page.mouse.wheel(0, -240);
+      await page.waitForTimeout(150);
+    }
     await page.waitForTimeout(900);
     await centreBetweenCards();
   };
@@ -337,7 +366,18 @@ const ZOOM = Number(process.env.ZOOM || 1);
   // Off-centre on purpose: the origin triad is drawn at (0,0,0), which is
   // exactly where this floor's middle is, and it takes the click.
   let gotFace = false;
-  for (const p of [[-16, -9, 2.4], [-20, 6, 2.4], [8, -12, 2.4], [16, 8, 2.4], [-10, 0, 2.4], [10, 4, 2.4], [-24, -2, 2.4], [20, -6, 2.4], [0, -10, 2.4], [-6, 10, 2.4]]) {
+  for (const p of [
+    [-16, -9, 2.4],
+    [-20, 6, 2.4],
+    [8, -12, 2.4],
+    [16, 8, 2.4],
+    [-10, 0, 2.4],
+    [10, 4, 2.4],
+    [-24, -2, 2.4],
+    [20, -6, 2.4],
+    [0, -10, 2.4],
+    [-6, 10, 2.4],
+  ]) {
     const floor = await at(p);
     // Picking answers from the hover pass, which runs on the next frame.
     await page.mouse.move(floor.x, floor.y);
@@ -348,7 +388,10 @@ const ZOOM = Number(process.env.ZOOM || 1);
     console.log("  floor try", JSON.stringify(p), "at", Math.round(floor.x), Math.round(floor.y), "->", gotFace);
     if (gotFace) break;
   }
-  if (!gotFace) { console.error("the floor pick missed"); process.exit(1); }
+  if (!gotFace) {
+    console.error("the floor pick missed");
+    process.exit(1);
+  }
   await page.keyboard.press("s");
   await page.waitForTimeout(1600);
   // Entering a sketch squares the camera to its plane. Turn back to the

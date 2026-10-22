@@ -3,7 +3,14 @@
 // out by hand rather than against the code that produces it.
 
 import { describe, it, expect } from "vitest";
-import { ARC_SEGMENTS, insideOutline, sectionOutline, sweepBlendGhost, trimToSide, type EdgeSample } from "../../src/features/blendGhost";
+import {
+  ARC_SEGMENTS,
+  insideOutline,
+  sectionOutline,
+  sweepBlendGhost,
+  trimToSide,
+  type EdgeSample,
+} from "../../src/features/blendGhost";
 
 /** A right-angle corner running along Z: face 1 is the x=0 plane running off
  *  toward -y, face 2 the y=0 plane running off toward -x, so the ball of
@@ -49,7 +56,12 @@ describe("sweepBlendGhost / fillet", () => {
     // The same two half planes bound a convex edge and a concave one alike;
     // the ball always sits between them, never across either face.
     const r = 3;
-    const s = (z: number): EdgeSample => ({ point: [0, 0, z], tangent: [0, 0, 1], into1: [0, -1, 0], into2: [1, 0, 0] });
+    const s = (z: number): EdgeSample => ({
+      point: [0, 0, z],
+      tangent: [0, 0, 1],
+      into1: [0, -1, 0],
+      into2: [1, 0, 0],
+    });
     const geo = sweepBlendGhost([s(0), s(5)], r, "fillet")!;
     for (const p of sectionAt(geo.positions, 0)) {
       expect(dist(p, [r, -r, 0])).toBeCloseTo(r, 5);
@@ -61,7 +73,10 @@ describe("sweepBlendGhost / fillet", () => {
   it("touches each face size/tan(α/2) from the edge in an open wedge", () => {
     const a = (2 * Math.PI) / 3;
     const s = (z: number): EdgeSample => ({
-      point: [0, 0, z], tangent: [0, 0, 1], into1: [1, 0, 0], into2: [Math.cos(a), Math.sin(a), 0],
+      point: [0, 0, z],
+      tangent: [0, 0, 1],
+      into1: [1, 0, 0],
+      into2: [Math.cos(a), Math.sin(a), 0],
     });
     const r = 2;
     const geo = sweepBlendGhost([s(0), s(1)], r, "fillet")!;
@@ -71,7 +86,8 @@ describe("sweepBlendGhost / fillet", () => {
   it("rolls against a curved face, not its tangent plane", () => {
     // Face 2 is a cylinder of radius 10 about (0, 10), leaving the edge along
     // -x and curling away from face 1: a D-shaft's flat meeting its round.
-    const R = 10, r = 2;
+    const R = 10,
+      r = 2;
     const s = (z: number) => cornerSample(z, { bend2: -1 / R });
     const geo = sweepBlendGhost([s(0), s(1)], r, "fillet")!;
     const center = [-r, R - Math.sqrt((R + r) ** 2 - r ** 2), 0];
@@ -87,11 +103,13 @@ describe("sweepBlendGhost / fillet", () => {
   });
 
   it("closes a loop back onto its first cross-section", () => {
-    const R = 5, n = 12;
+    const R = 5,
+      n = 12;
     const samples: EdgeSample[] = [];
     for (let i = 0; i < n; i++) {
       const a = (2 * Math.PI * i) / n;
-      const c = Math.cos(a), s = Math.sin(a);
+      const c = Math.cos(a),
+        s = Math.sin(a);
       samples.push({ point: [R * c, R * s, 0], tangent: [-s, c, 0], into1: [-c, -s, 0], into2: [0, 0, -1] });
     }
     const open = sweepBlendGhost(samples, 1, "fillet")!;
@@ -104,7 +122,12 @@ describe("sweepBlendGhost / fillet", () => {
   });
 
   it("returns null when the two faces are nearly flat (no wedge to fit a circle into)", () => {
-    const flat = (z: number): EdgeSample => ({ point: [0, 0, z], tangent: [0, 0, 1], into1: [0, -1, 0], into2: [1e-9, 1, 0] });
+    const flat = (z: number): EdgeSample => ({
+      point: [0, 0, z],
+      tangent: [0, 0, 1],
+      into1: [0, -1, 0],
+      into2: [1e-9, 1, 0],
+    });
     expect(sweepBlendGhost([flat(0), flat(10)], 2, "fillet")).toBeNull();
   });
 
@@ -159,16 +182,31 @@ function segmentsOf(...loops: [number, number][][]): Float64Array {
 function evenOdd(segs: Float64Array, [qx, qy]: [number, number]): boolean {
   let inside = false;
   for (let i = 0; i < segs.length; i += 4) {
-    const ax = segs[i]!, ay = segs[i + 1]!, bx = segs[i + 2]!, by = segs[i + 3]!;
+    const ax = segs[i]!,
+      ay = segs[i + 1]!,
+      bx = segs[i + 2]!,
+      by = segs[i + 3]!;
     if (ay > qy !== by > qy && qx < ax + ((qy - ay) * (bx - ax)) / (by - ay)) inside = !inside;
   }
   return inside;
 }
 
 /** A square corner at the origin, face 1 along +x and face 2 along +y. */
-const squareCorner: EdgeSample = { point: [0, 0, 0], tangent: [0, 0, 1], into1: [1, 0, 0], into2: [0, 1, 0], reach1: 10, reach2: 10 };
+const squareCorner: EdgeSample = {
+  point: [0, 0, 0],
+  tangent: [0, 0, 1],
+  into1: [1, 0, 0],
+  into2: [0, 1, 0],
+  reach1: 10,
+  reach2: 10,
+};
 
-const square = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+const square = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [
+  [x0, y0],
+  [x1, y0],
+  [x1, y1],
+  [x0, y1],
+];
 
 describe("sectionOutline / insideOutline", () => {
   it("judges the corner by the whole section and the rest from there", () => {
@@ -184,7 +222,12 @@ describe("sectionOutline / insideOutline", () => {
     const segs = segmentsOf(square(0, 0, 10, 10), square(20, 0, 30, 10), square(0, 20, 10, 30));
     const o = sectionOutline(squareCorner, segs, segs.length / 4)!;
     const cases: [[number, number], boolean][] = [
-      [[5, 5], true], [[25, 5], true], [[5, 25], true], [[15, 5], false], [[25, 25], false], [[5, 15], false],
+      [[5, 5], true],
+      [[25, 5], true],
+      [[5, 25], true],
+      [[15, 5], false],
+      [[25, 25], false],
+      [[5, 15], false],
     ];
     for (const [q, inside] of cases) expect(insideOutline(o, q)).toBe(inside);
   });
@@ -199,7 +242,15 @@ describe("sectionOutline / insideOutline", () => {
 
   it("agrees with a plain even-odd test where the way from ref runs through the outline's own vertices", () => {
     // A square with a V notch cut down to (5, 5) from its top.
-    const loop: [number, number][] = [[0, 0], [10, 0], [10, 10], [6, 10], [5, 5], [4, 10], [0, 10]];
+    const loop: [number, number][] = [
+      [0, 0],
+      [10, 0],
+      [10, 10],
+      [6, 10],
+      [5, 5],
+      [4, 10],
+      [0, 10],
+    ];
     const segs = segmentsOf(loop, square(7, 2, 8, 3));
     const o = sectionOutline(squareCorner, segs, segs.length / 4)!;
     const [rx, ry] = o.ref;
@@ -224,8 +275,19 @@ describe("sectionOutline / insideOutline", () => {
     // A 3 degree sliver 2mm long: the probe the ball's clearance alone asks
     // for would sit far beyond its tip, in the air.
     const a = (3 * Math.PI) / 180;
-    const sliver: EdgeSample = { point: [0, 0, 0], tangent: [0, 0, 1], into1: [1, 0, 0], into2: [Math.cos(a), Math.sin(a), 0], reach1: 2, reach2: 2 };
-    const tip: [number, number][] = [[0, 0], [2, 0], [2 * Math.cos(a), 2 * Math.sin(a)]];
+    const sliver: EdgeSample = {
+      point: [0, 0, 0],
+      tangent: [0, 0, 1],
+      into1: [1, 0, 0],
+      into2: [Math.cos(a), Math.sin(a), 0],
+      reach1: 2,
+      reach2: 2,
+    };
+    const tip: [number, number][] = [
+      [0, 0],
+      [2, 0],
+      [2 * Math.cos(a), 2 * Math.sin(a)],
+    ];
     const segs = segmentsOf(tip);
     const o = sectionOutline(sliver, segs, segs.length / 4)!;
     expect(Math.hypot(...o.ref)).toBeLessThanOrEqual(1);
@@ -234,7 +296,9 @@ describe("sectionOutline / insideOutline", () => {
 });
 
 describe("trimToSide", () => {
-  const line = (a: [number, number], b: [number, number]) => (s: number): [number, number] => [a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s];
+  const line =
+    (a: [number, number], b: [number, number]) =>
+    (s: number): [number, number] => [a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s];
 
   it("keeps the stretch of the curve inside the body", () => {
     const segs = segmentsOf(square(0, 0, 10, 10));

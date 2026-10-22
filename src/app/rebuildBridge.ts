@@ -71,10 +71,8 @@ export function installRebuildBridge(e: Engine): void {
         ...importedFacePaint(
           e.store.buildState.result?.bodies,
           bodies,
-          importedBodyColors(
-            e.store.buildState.result?.bodies,
-            e.store.document.features,
-            (id) => e.store.importColorSource(id),
+          importedBodyColors(e.store.buildState.result?.bodies, e.store.document.features, (id) =>
+            e.store.importColorSource(id),
           ),
         ),
         // A material somebody dropped on this face is preferred over what the file said it
@@ -147,9 +145,7 @@ export function installRebuildBridge(e: Engine): void {
       if (s.result.mesh.positions.length > 0) {
         // hide the faces AND wireframe of any body the user toggled off (filtered
         // in the render, no engine rebuild, setBodyVisibility re-emits the build).
-        const hidden = (s.result.bodies ?? [])
-          .filter((b) => !e.store.isBodyVisible(b.id))
-          .map((b) => b.id);
+        const hidden = (s.result.bodies ?? []).filter((b) => !e.store.isBodyVisible(b.id)).map((b) => b.id);
         e.viewport.setModel(s.result, fitNow(), hidden);
         pendingFit = viewEmpty = false;
         const p = paint();
@@ -194,12 +190,13 @@ export function installRebuildBridge(e: Engine): void {
       // clears from featureErrors (content-keyed caching guarantees the cached
       // mids stay valid exactly as long as the failing feature is unchanged).
       {
-        const errIds = new Set(
-          (s.result.featureErrors ?? []).map((x) => x.feature_id).filter(Boolean) as string[],
-        );
+        const errIds = new Set((s.result.featureErrors ?? []).map((x) => x.feature_id).filter(Boolean) as string[]);
         for (const d of s.result.diagnostics ?? []) {
           if (d.kind === "edgeOpFailed" && d.feature_id && d.failed?.length) {
-            failedEdgeMids.set(d.feature_id, d.failed.map((x) => x.mid));
+            failedEdgeMids.set(
+              d.feature_id,
+              d.failed.map((x) => x.mid),
+            );
           }
         }
         for (const id of [...failedEdgeMids.keys()]) {
@@ -223,7 +220,10 @@ export function installRebuildBridge(e: Engine): void {
           // the toast is a dead end.
           const amb = repairableDiagFor(s.result?.diagnostics, id);
           const action = amb?.at
-            ? { label: amb.kind === "edge" ? "Re-pick edge" : "Re-pick face", onClick: () => e.starters.repickReference(id, amb.at!, amb.kind) }
+            ? {
+                label: amb.kind === "edge" ? "Re-pick edge" : "Re-pick face",
+                onClick: () => e.starters.repickReference(id, amb.at!, amb.kind),
+              }
             : { label: "Show", onClick: () => e.selectFeature(id) };
           // A kernel refusal is usually about the geometry it was handed, so the
           // console entry carries the whole report, not just the sentence.
@@ -245,9 +245,12 @@ export function installRebuildBridge(e: Engine): void {
         prevHiddenFaces = hidden;
         // A rolled back timeline hides later faces on purpose, so it says nothing.
         if (lost && e.store.rollbackIndex >= e.store.document.features.length) {
-          toast(lost === 1
-            ? "A face material lost its face in this rebuild, it shows again if the face comes back"
-            : `${lost} face materials lost their faces in this rebuild, they show again if the faces come back`, { kind: "warning" });
+          toast(
+            lost === 1
+              ? "A face material lost its face in this rebuild, it shows again if the face comes back"
+              : `${lost} face materials lost their faces in this rebuild, they show again if the faces come back`,
+            { kind: "warning" },
+          );
         }
       }
     }

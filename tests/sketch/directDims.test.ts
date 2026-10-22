@@ -1,12 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { applyDrivingDimsDirect, dimAnchor, drivenBadges, drivingDimFor, upsertDrivingDim } from "../../src/sketch/directDims";
+import {
+  applyDrivingDimsDirect,
+  dimAnchor,
+  drivenBadges,
+  drivingDimFor,
+  upsertDrivingDim,
+} from "../../src/sketch/directDims";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import { rectCorners } from "../../src/sketch/region";
 import type { SketchConstraint } from "../../src/types";
 
 const circle = (id: string, radius: number): ResolvedEntity => ({ type: "circle", id, radius, x: 0, y: 0 });
 const line = (id: string, x2: number, y2: number): ResolvedEntity => ({ type: "line", id, x1: 0, y1: 0, x2, y2 });
-const rect = (id: string, width: number, height: number): ResolvedEntity => ({ type: "rectangle", id, width, height, x: width / 2, y: height / 2 });
+const rect = (id: string, width: number, height: number): ResolvedEntity => ({
+  type: "rectangle",
+  id,
+  width,
+  height,
+  x: width / 2,
+  y: height / 2,
+});
 
 describe("applyDrivingDimsDirect", () => {
   // The reported bug: a circle keeps the size it was drawn at, because its
@@ -150,7 +163,9 @@ describe("upsertDrivingDim", () => {
 
   it("updates a rectangle side already held by a typed-while-drawing dim instead of adding a second one", () => {
     const r = rect("r1", 20, 10);
-    const existing: SketchConstraint[] = [{ type: "p2pDistance", e1: "r1", p1: 1, e2: "r1", p2: 2, value: 10, id: "c4" }];
+    const existing: SketchConstraint[] = [
+      { type: "p2pDistance", e1: "r1", p1: 1, e2: "r1", p2: 2, value: 10, id: "c4" },
+    ];
     const out = upsertDrivingDim(existing, r, "height", 12)!;
     expect(out).toEqual([{ type: "p2pDistance", e1: "r1", p1: 1, e2: "r1", p2: 2, value: 12, id: "c4" }]);
   });
@@ -197,7 +212,12 @@ describe("applyDrivingDimsDirect on a rectangle", () => {
     return rectCorners(r.x, r.y, r.width, r.height).some((q) => Math.hypot(q.x, q.y) < 1e-9);
   };
 
-  for (const [name, sx, sy] of [["up-right", 1, 1], ["down-right", 1, -1], ["up-left", -1, 1], ["down-left", -1, -1]] as const) {
+  for (const [name, sx, sy] of [
+    ["up-right", 1, 1],
+    ["down-right", 1, -1],
+    ["up-left", -1, 1],
+    ["down-left", -1, -1],
+  ] as const) {
     it(`keeps the pinned corner on the origin when drawn ${name}`, () => {
       const ents = fromOrigin(sx, sy);
       const cons: SketchConstraint[] = [
@@ -223,7 +243,14 @@ describe("applyDrivingDimsDirect on a rectangle", () => {
 });
 
 describe("dimAnchor: which end of a line a typed length holds", () => {
-  const seg = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({ type: "line", id, x1, y1, x2, y2 });
+  const seg = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({
+    type: "line",
+    id,
+    x1,
+    y1,
+    x2,
+    y2,
+  });
   // The same 20 x 40 frame at (10,10), drawn counter-clockwise and clockwise.
   const ccw = [seg("a", 10, 10, 30, 10), seg("b", 30, 10, 30, 50), seg("c", 30, 50, 10, 50), seg("d", 10, 50, 10, 10)];
   const cw = [seg("a", 10, 10, 10, 50), seg("b", 10, 50, 30, 50), seg("c", 30, 50, 30, 10), seg("d", 30, 10, 10, 10)];
@@ -260,7 +287,8 @@ describe("dimAnchor: which end of a line a typed length holds", () => {
   it("holds the end on a projected edge", () => {
     const l = seg("l", 5, 5, 25, 5);
     const edge: ResolvedEntity = {
-      type: "projected", id: "pe",
+      type: "projected",
+      id: "pe",
       source: { kind: "sketchCurve", sketch: "s0", entity: "e0" },
       curve: { kind: "line", x1: 25, y1: 5, x2: 25, y2: 40 },
     };
@@ -270,7 +298,11 @@ describe("dimAnchor: which end of a line a typed length holds", () => {
   it("holds the end coincident with a fixed point that has not been solved onto it yet", () => {
     const l = seg("l", 5, 5, 25, 5);
     const pin: ResolvedEntity = { type: "point", id: "p", x: 26, y: 6 };
-    const cs: SketchConstraint[] = [{ type: "fix", e: "p", p: 0 }, { type: "coincident", e1: "l", p1: 1, e2: "p", p2: 0 }, len("l")];
+    const cs: SketchConstraint[] = [
+      { type: "fix", e: "p", p: 0 },
+      { type: "coincident", e1: "l", p1: 1, e2: "p", p2: 0 },
+      len("l"),
+    ];
     expect(dimAnchor([l, pin], cs, len("l"))).toEqual({ x: 25, y: 5 });
   });
 

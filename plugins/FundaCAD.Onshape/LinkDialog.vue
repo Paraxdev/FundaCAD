@@ -55,11 +55,18 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
       <label class="prefs-row" style="grid-template-columns: 90px 1fr">
         <span class="prefs-label">Link</span>
         <input
-          v-model="link" class="sm-input" type="url" spellcheck="false" autofocus
-          placeholder="https://cad.onshape.com/documents/..." data-testid="onshape-link"
+          v-model="link"
+          class="sm-input"
+          type="url"
+          spellcheck="false"
+          autofocus
+          placeholder="https://cad.onshape.com/documents/..."
+          data-testid="onshape-link"
         />
       </label>
-      <div class="sm-hint">A part studio link imports that part studio. A document link imports every part studio in it.</div>
+      <div class="sm-hint"
+        >A part studio link imports that part studio. A document link imports every part studio in it.</div
+      >
 
       <template v-if="askKeys">
         <label class="prefs-row" style="grid-template-columns: 90px 1fr">
@@ -74,11 +81,17 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
           <span class="prefs-label"></span>
           <span><input v-model="remember" type="checkbox" /> Remember in the system's credential store</span>
         </label>
-        <div class="sm-hint">Create a key with read access at dev-portal.onshape.com/keys. The keys never go in the document.</div>
+        <div class="sm-hint"
+          >Create a key with read access at dev-portal.onshape.com/keys. The keys never go in the document.</div
+        >
       </template>
-      <button v-else type="button" class="btn" style="justify-self: start" @click="changeKeys = true">Use other keys</button>
+      <button v-else type="button" class="btn" style="justify-self: start" @click="changeKeys = true"
+        >Use other keys</button
+      >
 
-      <div v-if="error" class="sm-hint" style="color: var(--error, #f0564a)" data-testid="onshape-error">{{ error }}</div>
+      <div v-if="error" class="sm-hint" style="color: var(--error, #f0564a)" data-testid="onshape-error">{{
+        error
+      }}</div>
     </div>
 
     <div class="modal-foot">

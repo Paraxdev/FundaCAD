@@ -12,7 +12,9 @@ const RES = new THREE.Vector2(800, 600);
 /** One triangle per face on its own slanted vertices away from the origin. The
  *  first vertex's x is 100 * body + local face, so a triangle names its face. */
 function reply(counts: number[], etags: string[]): RebuildResult {
-  const positions: number[] = [], indices: number[] = [], faceIds: number[] = [];
+  const positions: number[] = [],
+    indices: number[] = [],
+    faceIds: number[] = [];
   const bodies: NonNullable<RebuildResult["bodies"]> = [];
   let fid = 0;
   counts.forEach((n, b) => {
@@ -45,7 +47,8 @@ function faceMap(bodies: BodyMesh[]) {
   return out;
 }
 
-const view = (bodies: BodyMesh[]) => ({ bodies, edges: [], orphanEdges: null, box: new THREE.Box3() }) as unknown as ModelView;
+const view = (bodies: BodyMesh[]) =>
+  ({ bodies, edges: [], orphanEdges: null, box: new THREE.Box3() }) as unknown as ModelView;
 
 describe("reuseUnchanged", () => {
   const before = reply([6, 6], ["a6", "b"]);
@@ -70,10 +73,24 @@ describe("reuseUnchanged", () => {
     expect(reuseUnchanged(body2, { etag: "b", faceStart: 7 })).toBe(body2);
     expect(body2!.faceStart).toBe(7);
     expect(body2!.faceIds).toEqual([7, 8, 9, 10, 11, 12]);
-    expect([...body2!.faceTriangles]).toEqual([[7, [0]], [8, [1]], [9, [2]], [10, [3]], [11, [4]], [12, [5]]]);
+    expect([...body2!.faceTriangles]).toEqual([
+      [7, [0]],
+      [8, [1]],
+      [9, [2]],
+      [10, [3]],
+      [11, [4]],
+      [12, [5]],
+    ]);
     reuseUnchanged(body2, { etag: "b", faceStart: 5 });
     expect(body2!.faceIds).toEqual([5, 6, 7, 8, 9, 10]);
-    expect(faceMap([body2!])).toEqual({ 5: ["body2", 100], 6: ["body2", 101], 7: ["body2", 102], 8: ["body2", 103], 9: ["body2", 104], 10: ["body2", 105] });
+    expect(faceMap([body2!])).toEqual({
+      5: ["body2", 100],
+      6: ["body2", 101],
+      7: ["body2", 102],
+      8: ["body2", 103],
+      9: ["body2", 104],
+      10: ["body2", 105],
+    });
   });
 });
 
@@ -92,7 +109,11 @@ describe("a fillet on the first of three bodies", () => {
     const m = after.bodies![0]!;
     pm.append(0, after, [m], new Map([["body1", []]]), { triStart: 0, triEnd: 7 }, new Set(), RES);
     const bodies = pm.current!.bodies;
-    expect(bodies.map((b) => [b.id, b.faceStart])).toEqual([["body1", 0], ["body2", 7], ["body3", 13]]);
+    expect(bodies.map((b) => [b.id, b.faceStart])).toEqual([
+      ["body1", 0],
+      ["body2", 7],
+      ["body3", 13],
+    ]);
     expect(bodies[1]).toBe(prev.bodies[1]);
     expect(faceMap(bodies)).toEqual(want);
     const owners = Object.keys(want).map((fid) => bodyOfFace(pm.current!, Number(fid))?.id);

@@ -11,7 +11,15 @@ import type { Feature, Selector } from "../types";
 
 /** Every field the edge tool reads or writes on a fillet or chamfer. */
 const MANAGED = [
-  "type", "radius", "distance", "distance2", "chamferType", "sizeType", "tangentEdges", "profile", "continuity",
+  "type",
+  "radius",
+  "distance",
+  "distance2",
+  "chamferType",
+  "sizeType",
+  "tangentEdges",
+  "profile",
+  "continuity",
 ] as const;
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);

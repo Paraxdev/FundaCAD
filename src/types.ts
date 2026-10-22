@@ -51,7 +51,14 @@ export type Selector = (
   // in the engine's face frame when this was written: a hole's positions keep
   // their offset from the nearest of each axis's min, middle or max. `center`,
   // the older form, moves every position with the outline's centre.
-  | { kind: "face"; by: "tracked"; point: [number, number, number]; normal: [number, number, number]; center?: [number, number, number]; extent?: [number, number, number, number] }
+  | {
+      kind: "face";
+      by: "tracked";
+      point: [number, number, number];
+      normal: [number, number, number];
+      center?: [number, number, number];
+      extent?: [number, number, number, number];
+    }
   // --- v2: discriminating, drift-robust selection ---
   // `match` re-finds ONE entity by scored geometric fingerprint; `nth` breaks a
   // genuine tie (symmetric twins) by a rebuild-stable canonical order.
@@ -73,7 +80,8 @@ export type ProjectedCurve =
 
 /** A poly's first and last points, one entry when closed (engine coordinates are exact). */
 export function projEndSamples(cv: Extract<ProjectedCurve, { kind: "poly" }>): [number, number][] {
-  const first = cv.pts[0], last = cv.pts[cv.pts.length - 1];
+  const first = cv.pts[0],
+    last = cv.pts[cv.pts.length - 1];
   if (!first) return [];
   if (!last || (last[0] === first[0] && last[1] === first[1])) return [first];
   return [first, last];
@@ -95,10 +103,7 @@ export type ProjectionUpdate =
   | { sketch: string; entity: string; stale: true };
 
 /** Shared by the store commit and the open sketch, so the two cannot drift. */
-export function applyProjectionUpdate<E extends { curve: ProjectedCurve; stale?: true }>(
-  e: E,
-  u: ProjectionUpdate,
-): E {
+export function applyProjectionUpdate<E extends { curve: ProjectedCurve; stale?: true }>(e: E, u: ProjectionUpdate): E {
   const next = { ...e };
   if (u.stale) {
     next.stale = true;
@@ -114,26 +119,83 @@ export function applyProjectionUpdate<E extends { curve: ProjectedCurve; stale?:
 export type SketchEntity =
   // `angle` is DEGREES about the rectangle's own centre, absent meaning 0,
   // every rectangle saved before v6 is axis-aligned and stays so untouched.
-  | { type: "rectangle"; id?: string; width: Num; height: Num; x?: Num; y?: Num; angle?: Num; construction?: boolean; dimPlace?: DimPlace }
+  | {
+      type: "rectangle";
+      id?: string;
+      width: Num;
+      height: Num;
+      x?: Num;
+      y?: Num;
+      angle?: Num;
+      construction?: boolean;
+      dimPlace?: DimPlace;
+    }
   | { type: "circle"; id?: string; radius: Num; x?: Num; y?: Num; construction?: boolean; dimPlace?: DimPlace }
   | { type: "line"; id?: string; x1: Num; y1: Num; x2: Num; y2: Num; construction?: boolean; dimPlace?: DimPlace }
   | { type: "arc"; id?: string; x1: Num; y1: Num; x2: Num; y2: Num; mx: Num; my: Num; construction?: boolean }
   // fit-point spline: interpolates a smooth curve through its points (≥2)
   | { type: "spline"; id?: string; points: { x: Num; y: Num }[]; construction?: boolean }
   // control-point B-spline, degree default 3; `knots` see src/sketch/bspline.ts
-  | { type: "bspline"; id?: string; poles: { x: Num; y: Num }[]; degree?: number; closed?: boolean; knots?: number[]; construction?: boolean }
+  | {
+      type: "bspline";
+      id?: string;
+      poles: { x: Num; y: Num }[];
+      degree?: number;
+      closed?: boolean;
+      knots?: number[];
+      construction?: boolean;
+    }
   // a sketch point: reference/snap geometry only, never forms a profile
   | { type: "point"; id?: string; x: Num; y: Num; construction?: boolean }
   // Rigid shapes the solver holds fixed. Polygon `angle` is in degrees.
-  | { type: "polygon"; id?: string; x: Num; y: Num; radius: Num; sides: Num; angle: Num; construction?: boolean; dimPlace?: DimPlace }
-  | { type: "slot"; id?: string; x1: Num; y1: Num; x2: Num; y2: Num; width: Num; construction?: boolean; dimPlace?: DimPlace }
+  | {
+      type: "polygon";
+      id?: string;
+      x: Num;
+      y: Num;
+      radius: Num;
+      sides: Num;
+      angle: Num;
+      construction?: boolean;
+      dimPlace?: DimPlace;
+    }
+  | {
+      type: "slot";
+      id?: string;
+      x1: Num;
+      y1: Num;
+      x2: Num;
+      y2: Num;
+      width: Num;
+      construction?: boolean;
+      dimPlace?: DimPlace;
+    }
   // Fusion-parity text: filled glyph faces from a system font; extrudes like any profile
-  | { type: "text"; id?: string; text: string; x?: Num; y?: Num; height: Num;
-      font?: string; style?: "regular" | "bold" | "italic" | "bolditalic";
-      align?: "left" | "center" | "right"; angle?: Num;
-      pathRef?: string; positionOnPath?: Num; boxWidth?: Num; construction?: boolean }
+  | {
+      type: "text";
+      id?: string;
+      text: string;
+      x?: Num;
+      y?: Num;
+      height: Num;
+      font?: string;
+      style?: "regular" | "bold" | "italic" | "bolditalic";
+      align?: "left" | "center" | "right";
+      angle?: Num;
+      pathRef?: string;
+      positionOnPath?: Num;
+      boxWidth?: Num;
+      construction?: boolean;
+    }
   // Fixed geometry linked to its source; Break Link converts it to native.
-  | { type: "projected"; id?: string; source: ProjectedSource; curve: ProjectedCurve; stale?: true; construction?: boolean };
+  | {
+      type: "projected";
+      id?: string;
+      source: ProjectedSource;
+      curve: ProjectedCurve;
+      stale?: true;
+      construction?: boolean;
+    };
 
 // Sketch constraints, solved by planegcs, referencing entities by stable id.
 //
@@ -153,14 +215,17 @@ export type DimField = "width" | "height" | "diameter" | "length" | "radius";
 export type DimPlace = Partial<Record<DimField, PlaceOffset>>;
 
 /** Use this, not `"dimPlace" in e`: the optional key is absent on a fresh entity. */
-export const dimPlaceOf = (e: { type: string }): DimPlace | undefined =>
-  (e as { dimPlace?: DimPlace }).dimPlace;
+export const dimPlaceOf = (e: { type: string }): DimPlace | undefined => (e as { dimPlace?: DimPlace }).dimPlace;
 
 /** The entity types that CARRY `dimPlace`, exactly the ones entityDims() gives
  *  a badge. The write-side guard (reading is safe on anything, see dimPlaceOf). */
 export function isBadgeEntity<T extends { type: string }>(e: T): e is T & { dimPlace?: DimPlace } {
   switch (e.type) {
-    case "rectangle": case "circle": case "line": case "polygon": case "slot":
+    case "rectangle":
+    case "circle":
+    case "line":
+    case "polygon":
+    case "slot":
       return true;
     default:
       return false;
@@ -179,27 +244,81 @@ export type SketchConstraint =
   | { type: "distance"; id?: string; line: string; value: number }
   | { type: "diameter"; id?: string; circle: string; value: number; place?: PlaceOffset }
   // `p*`: 0/1 start/end, 0..3 rectangle corner, 2 arc centre; a circle is its centre.
-  | { type: "p2pDistance"; id?: string; e1: string; p1: number; e2: string; p2: number; value: number; driven?: boolean; place?: PlaceOffset }
+  | {
+      type: "p2pDistance";
+      id?: string;
+      e1: string;
+      p1: number;
+      e2: string;
+      p2: number;
+      value: number;
+      driven?: boolean;
+      place?: PlaceOffset;
+    }
   // hDistance/vDistance: e2's x (or y) minus e1's x (or y) equals `value`, SIGNED. The dimension
   // tool orders the operands so `value` is positive, which freezes the side like radialGap.
-  | { type: "hDistance" | "vDistance"; id?: string; e1: string; p1: number; e2: string; p2: number; value: number; driven?: boolean; place?: PlaceOffset }
+  | {
+      type: "hDistance" | "vDistance";
+      id?: string;
+      e1: string;
+      p1: number;
+      e2: string;
+      p2: number;
+      value: number;
+      driven?: boolean;
+      place?: PlaceOffset;
+    }
   // p2lDistance: driving perpendicular distance from a picked point to a line
   // operand (same `p` semantics as p2pDistance; `line` may be a rect edge)
-  | { type: "p2lDistance"; id?: string; e: string; p: number; line: string; value: number; driven?: boolean; place?: PlaceOffset }
+  | {
+      type: "p2lDistance";
+      id?: string;
+      e: string;
+      p: number;
+      line: string;
+      value: number;
+      driven?: boolean;
+      place?: PlaceOffset;
+    }
   // --- rim dims: distances to a circle or arc's rim, one planegcs constraint each ---
   // radialGap is signed with inner/outer frozen at creation, so an annulus cannot solve
   // inside-out, and comes with a `concentric` constraint.
-  | { type: "radialGap"; id?: string; inner: string; outer: string; value: number; driven?: boolean; place?: PlaceOffset }
+  | {
+      type: "radialGap";
+      id?: string;
+      inner: string;
+      outer: string;
+      value: number;
+      driven?: boolean;
+      place?: PlaceOffset;
+    }
   // c2cDistance: minimum edge-to-edge clearance between two non-concentric
   // rounds (planegcs `c2cdistance`). See entityDims.rimGap for the exact
   // (two-branch) measure and sketchSolve's solve guard for the branch invariant.
   | { type: "c2cDistance"; id?: string; c1: string; c2: string; value: number; driven?: boolean; place?: PlaceOffset }
   // c2lDistance: distance from a round's rim to a line operand (`line` may be a
   // rect edge), planegcs `c2ldistance`.
-  | { type: "c2lDistance"; id?: string; circle: string; line: string; value: number; driven?: boolean; place?: PlaceOffset }
+  | {
+      type: "c2lDistance";
+      id?: string;
+      circle: string;
+      line: string;
+      value: number;
+      driven?: boolean;
+      place?: PlaceOffset;
+    }
   // p2cDistance: distance from a picked point (same `p` semantics as
   // p2pDistance) to a round's rim, planegcs `p2cdistance`.
-  | { type: "p2cDistance"; id?: string; e: string; p: number; circle: string; value: number; driven?: boolean; place?: PlaceOffset }
+  | {
+      type: "p2cDistance";
+      id?: string;
+      e: string;
+      p: number;
+      circle: string;
+      value: number;
+      driven?: boolean;
+      place?: PlaceOffset;
+    }
   // tangent: a line and a circle/arc touch (line tangent to the circle)
   | { type: "tangent"; line: string; circle: string }
   // coincident: two entity endpoints share a position. `e1`/`e2` are entity ids;
@@ -220,7 +339,16 @@ export type SketchConstraint =
   // Without `rays`, `value` is the signed angle from l1's direction to l2's (older dims).
   // With `rays`, l1's and l2's directions times rays[0] and rays[1] bound the shown wedge,
   // and `value` is the counterclockwise angle from the first ray to the second, 0..360.
-  | { type: "angle"; id?: string; l1: string; l2: string; value: number; rays?: [AngleRay, AngleRay]; driven?: boolean; place?: PlaceOffset }
+  | {
+      type: "angle";
+      id?: string;
+      l1: string;
+      l2: string;
+      value: number;
+      rays?: [AngleRay, AngleRay];
+      driven?: boolean;
+      place?: PlaceOffset;
+    }
   // radius: driving radius (mm) of a circle OR arc entity `e`
   | { type: "radius"; id?: string; e: string; value: number; driven?: boolean; place?: PlaceOffset }
   // fix/lock: pin an entity point in place. `p` uses the dimPoint semantics
@@ -252,12 +380,18 @@ export function isDriven(c: SketchConstraint): boolean {
 /** THE list of dimension types that carry `driven` + `place` (the ones the
  *  dimension tool places and constraintDims renders). One predicate so the
  *  Reference toggle, the label editor and the renderer can't drift apart. */
-export function isPlacedDim(
-  c: SketchConstraint,
-): c is Extract<SketchConstraint, { driven?: boolean }> {
+export function isPlacedDim(c: SketchConstraint): c is Extract<SketchConstraint, { driven?: boolean }> {
   switch (c.type) {
-    case "p2pDistance": case "hDistance": case "vDistance": case "p2lDistance": case "radius": case "angle":
-    case "radialGap": case "c2cDistance": case "c2lDistance": case "p2cDistance":
+    case "p2pDistance":
+    case "hDistance":
+    case "vDistance":
+    case "p2lDistance":
+    case "radius":
+    case "angle":
+    case "radialGap":
+    case "c2cDistance":
+    case "c2lDistance":
+    case "p2cDistance":
     case "offset":
       return true;
     default:
@@ -271,7 +405,16 @@ export type SketchPattern =
   // replicate the `sources` entities on a grid (skips the original instance).
   // `angle` (degrees, absent = 0) turns the grid's own axes, so the copies march
   // along a direction the user chose instead of along X and Y.
-  | { id: string; type: "patternRect"; sources: string[]; countX: Num; countY: Num; spacingX: Num; spacingY: Num; angle?: Num }
+  | {
+      id: string;
+      type: "patternRect";
+      sources: string[];
+      countX: Num;
+      countY: Num;
+      spacingX: Num;
+      spacingY: Num;
+      angle?: Num;
+    }
   // replicate the `sources` entities around a center (cx,cy) over `angle` degrees
   | { id: string; type: "patternCircular"; sources: string[]; cx: Num; cy: Num; count: Num; angle: Num }
   // prebuilt hole generators, self-contained, emit circles at computed positions
@@ -279,7 +422,17 @@ export type SketchPattern =
   // honeycomb: hexagon OUTLINES tiled in a hex grid (each cell is a 6-line hexagon)
   | { id: string; type: "honeycomb"; cx: Num; cy: Num; diameter: Num; spacing: Num; rings: Num }
   | { id: string; type: "boltCircle"; cx: Num; cy: Num; bcd: Num; count: Num; diameter: Num }
-  | { id: string; type: "gridHoles"; cx: Num; cy: Num; diameter: Num; countX: Num; countY: Num; spacingX: Num; spacingY: Num };
+  | {
+      id: string;
+      type: "gridHoles";
+      cx: Num;
+      cy: Num;
+      diameter: Num;
+      countX: Num;
+      countY: Num;
+      spacingX: Num;
+      spacingY: Num;
+    };
 
 export type Plane3 = "XY" | "XZ" | "YZ";
 export type Axis3 = "X" | "Y" | "Z";
@@ -341,7 +494,19 @@ export type HoleFit = "close" | "normal" | "loose";
 export type CoreFeature =
   // `planeId` (a datum) or `face` (a body face, touched at `at`) make the sketch follow;
   // `plane` stays as the resolved cache. An id in `plane` itself would render as XY.
-  | { id: string; type: "sketch"; plane: PlaneSpec; planeId?: string; face?: Selector; at?: Vec3; entities: SketchEntity[]; constraints?: SketchConstraint[]; patterns?: SketchPattern[]; name?: string; fillRule?: "evenodd" }
+  | {
+      id: string;
+      type: "sketch";
+      plane: PlaneSpec;
+      planeId?: string;
+      face?: Selector;
+      at?: Vec3;
+      entities: SketchEntity[];
+      constraints?: SketchConstraint[];
+      patterns?: SketchPattern[];
+      name?: string;
+      fillRule?: "evenodd";
+    }
   | {
       id: string;
       type: "extrude";
@@ -394,8 +559,27 @@ export type CoreFeature =
   // `profile`: -1 chamfer, 0 circular, +1 sharp corner.
   // `sizeType` "chord" reads `radius` as the width across the round. `tangentEdges`
   // false stops at the picked edges instead of running on along tangent ones.
-  | { id: string; type: "fillet"; edges: Selector | Selector[]; radius: Num; profile?: Num; sizeType?: "radius" | "chord"; continuity?: "G1" | "G2"; tangentEdges?: boolean; draft?: boolean }
-  | { id: string; type: "chamfer"; edges: Selector | Selector[]; distance: Num; chamferType?: "equal" | "twoDistance"; distance2?: Num; tangentEdges?: boolean; draft?: boolean }
+  | {
+      id: string;
+      type: "fillet";
+      edges: Selector | Selector[];
+      radius: Num;
+      profile?: Num;
+      sizeType?: "radius" | "chord";
+      continuity?: "G1" | "G2";
+      tangentEdges?: boolean;
+      draft?: boolean;
+    }
+  | {
+      id: string;
+      type: "chamfer";
+      edges: Selector | Selector[];
+      distance: Num;
+      chamferType?: "equal" | "twoDistance";
+      distance2?: Num;
+      tangentEdges?: boolean;
+      draft?: boolean;
+    }
   // Signed `distance` along each face's normal, or `upTo` a face. Curved faces offset
   // the surface. `taper` applies to planar pushes by distance only.
   // `mode` other than auto extrudes the face straight out and combines it like an
@@ -403,16 +587,50 @@ export type CoreFeature =
   // moves the face along the axis its walls run along (a hole's end), absent is "normal".
   // `followTangent` absent is true: when a resized round face would lose the faces running
   // smoothly into it, their closed run moves with it. False refuses instead.
-  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; upToPlane?: string; upToPoint?: PointRef; upToOffset?: Num; taper?: Num; mode?: PressPullMode; direction?: PressPullDirection; targets?: string[]; followTangent?: boolean }
+  | {
+      id: string;
+      type: "press-pull";
+      face: Selector | Selector[];
+      distance: Num;
+      operation: "join" | "cut";
+      body?: string;
+      upTo?: Selector;
+      upToPlane?: string;
+      upToPoint?: PointRef;
+      upToOffset?: Num;
+      taper?: Num;
+      mode?: PressPullMode;
+      direction?: PressPullDirection;
+      targets?: string[];
+      followTangent?: boolean;
+    }
   | { id: string; type: "deleteFace"; face: Selector | Selector[]; body?: string }
   // `plane` is written { name } once `bodies` is set (document/mirrorPlane.ts).
   | { id: string; type: "mirror"; plane: Plane3 | { name: Plane3 }; bodies?: string[] }
   // `operation` defaults to "new". `regions` are the areas to spin, as for extrude.
   // `axisEdge` makes the axis follow a model edge, with `axis` as the cache. `pitch`
   // (mm per turn) climbs the axis for a thread; without it the angle clamps to 360.
-  | { id: string; type: "revolve"; sketch: string; axis: AxisSpec; axisEdge?: Selector; angle: Num; pitch?: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[]; regions?: [number, number, number][] }
+  | {
+      id: string;
+      type: "revolve";
+      sketch: string;
+      axis: AxisSpec;
+      axisEdge?: Selector;
+      angle: Num;
+      pitch?: Num;
+      operation?: "new" | "join" | "cut" | "intersect";
+      targets?: string[];
+      regions?: [number, number, number][];
+    }
   // `profiles` are selected regions in order; `sketches` is the legacy whole-sketch form.
-  | { id: string; type: "loft"; profiles?: { sketch: string; region: [number, number, number] }[]; sketches?: string[]; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
+  | {
+      id: string;
+      type: "loft";
+      profiles?: { sketch: string; region: [number, number, number] }[];
+      sketches?: string[];
+      operation?: "new" | "join" | "cut" | "intersect";
+      targets?: string[];
+    }
   // Sweep a closed profile sketch along an open path sketch (a line/arc/spline).
   | { id: string; type: "sweep"; profile: string; path: string; operation: "new" | "join" | "cut"; targets?: string[] }
   // A datum plane: its reference moved by shiftX/shiftY/offset along the reference's own
@@ -441,13 +659,42 @@ export type CoreFeature =
   // `at` makes the point follow the model, `point` being the cache.
   | { id: string; type: "datumPoint"; point: Vec3; name?: string; at?: PointAt }
   // An infinite line (`dir` need not be unit). `axisEdge` or `through` makes it follow the model.
-  | { id: string; type: "datumAxis"; origin: Vec3; dir: Vec3; name?: string; axisEdge?: Selector; through?: AxisThrough }
+  | {
+      id: string;
+      type: "datumAxis";
+      origin: Vec3;
+      dir: Vec3;
+      name?: string;
+      axisEdge?: Selector;
+      through?: AxisThrough;
+    }
   // An imported body, embedded so the file rebuilds without the original. `solid` is
   // false for a non-watertight mesh.
   | {
       id: string;
       type: "import";
-      format: "stl" | "3mf" | "step" | "obj" | "brep" | "glb" | "gltf" | "iges" | "fcstd" | "ply" | "off" | "amf" | "vrml" | "x3d" | "xbf" | "3dm" | "ifc" | "dxf" | "fbx" | "3ds" | "svg";
+      format:
+        | "stl"
+        | "3mf"
+        | "step"
+        | "obj"
+        | "brep"
+        | "glb"
+        | "gltf"
+        | "iges"
+        | "fcstd"
+        | "ply"
+        | "off"
+        | "amf"
+        | "vrml"
+        | "x3d"
+        | "xbf"
+        | "3dm"
+        | "ifc"
+        | "dxf"
+        | "fbx"
+        | "3ds"
+        | "svg";
       name: string;
       // Content hash in the container's blob store; inline base64 was 541.8 MiB on one assembly.
       geom?: string;
@@ -487,65 +734,185 @@ export type CoreFeature =
     }
   | { id: string; type: "separate"; body?: string; bodies?: string[] }
   // keep=both splits into bodies. `bodies` cuts several; `planeId` names a datum plane.
-  | { id: string; type: "split"; plane?: PlaneSpec; planeId?: string; keep: "top" | "bottom" | "both"; body?: string; bodies?: string[]; groupSides?: boolean }
+  | {
+      id: string;
+      type: "split";
+      plane?: PlaneSpec;
+      planeId?: string;
+      keep: "top" | "bottom" | "both";
+      body?: string;
+      bodies?: string[];
+      groupSides?: boolean;
+    }
   // Divide the face `sketch` sits on by imprinting its curves; no material changes.
   | { id: string; type: "imprint"; sketch: string; body?: string }
   // The target keeps its id and is modified in place; tools are consumed unless keepOriginals.
-  | { id: string; type: "boolean"; operation: "union" | "subtract" | "intersect"; target?: string; tools?: string[]; keepOriginals?: boolean }
+  | {
+      id: string;
+      type: "boolean";
+      operation: "union" | "subtract" | "intersect";
+      target?: string;
+      tools?: string[];
+      keepOriginals?: boolean;
+    }
   // Primitive bodies (centered at the origin). Each creates a new body; edit the
   // dimensions in the inspector. Handy as boolean tool bodies.
-  | { id: string; type: "box"; length: Num; width: Num; height: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
-  | { id: string; type: "cylinder"; radius: Num; height: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
-  | { id: string; type: "cone"; bottomRadius: Num; topRadius: Num; height: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
+  | {
+      id: string;
+      type: "box";
+      length: Num;
+      width: Num;
+      height: Num;
+      operation?: "new" | "join" | "cut" | "intersect";
+      targets?: string[];
+    }
+  | {
+      id: string;
+      type: "cylinder";
+      radius: Num;
+      height: Num;
+      operation?: "new" | "join" | "cut" | "intersect";
+      targets?: string[];
+    }
+  | {
+      id: string;
+      type: "cone";
+      bottomRadius: Num;
+      topRadius: Num;
+      height: Num;
+      operation?: "new" | "join" | "cut" | "intersect";
+      targets?: string[];
+    }
   | { id: string; type: "sphere"; radius: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
-  | { id: string; type: "torus"; majorRadius: Num; minorRadius: Num; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
+  | {
+      id: string;
+      type: "torus";
+      majorRadius: Num;
+      minorRadius: Num;
+      operation?: "new" | "join" | "cut" | "intersect";
+      targets?: string[];
+    }
   // Hollow the active body to a wall thickness, removing the selected faces
   // (none = a fully closed hollow).
   | { id: string; type: "shell"; thickness: Num; faces?: Selector | Selector[] }
   // A true surface offset, flat and cylindrical faces only: BRepOffset is unsafe elsewhere.
-  | { id: string; type: "offsetFace"; faces: Selector | Selector[]; distance: Num; body?: string; followTangent?: boolean }
+  | {
+      id: string;
+      type: "offsetFace";
+      faces: Selector | Selector[];
+      distance: Num;
+      body?: string;
+      followTangent?: boolean;
+    }
   // Thicken: give surface geometry a wall. `faces` absent = the whole body,
   // which is how a non-watertight mesh import (a surface body, `solid: false`)
   // becomes real material. `symmetric` grows it both ways about the surface.
-  | { id: string; type: "thicken"; faces?: Selector | Selector[]; thickness: Num; symmetric?: boolean; operation?: "join" | "new"; targets?: string[]; body?: string }
+  | {
+      id: string;
+      type: "thicken";
+      faces?: Selector | Selector[];
+      thickness: Num;
+      symmetric?: boolean;
+      operation?: "join" | "new";
+      targets?: string[];
+      body?: string;
+    }
   // Taper the selected faces by an angle about a neutral plane (pull axis).
   | { id: string; type: "draft"; faces: Selector | Selector[]; angle: Num; axis: Axis3 }
   // Holes into the flat `face` along its inward normal, at `points` (projected onto
   // the face) and at `sketch`'s points. A dimension left out comes from `size`
   // (features/holeStandards.ts); the tool writes them all so the rows show them.
   | {
-      id: string; type: "hole"; face?: Selector; points: Vec3[]; sketch?: string; body?: string;
-      holeType?: HoleType; standard?: HoleStandard; size?: string; fit?: HoleFit;
-      diameter?: Num; extent?: "blind" | "through"; depth?: Num;
-      cbDiameter?: Num; cbDepth?: Num; csDiameter?: Num; csAngle?: Num; leadIn?: Num;
-      drillPoint?: boolean; flip?: boolean; tapped?: boolean;
+      id: string;
+      type: "hole";
+      face?: Selector;
+      points: Vec3[];
+      sketch?: string;
+      body?: string;
+      holeType?: HoleType;
+      standard?: HoleStandard;
+      size?: string;
+      fit?: HoleFit;
+      diameter?: Num;
+      extent?: "blind" | "through";
+      depth?: Num;
+      cbDiameter?: Num;
+      cbDepth?: Num;
+      csDiameter?: Num;
+      csAngle?: Num;
+      leadIn?: Num;
+      drillPoint?: boolean;
+      flip?: boolean;
+      tapped?: boolean;
     }
   // A helical groove (cut) or ridge (join) along a round face, found again at
   // every build. `profile` points are [into the material, along the axis] mm.
   // `spec` is the Thread tool's own record of the standard size it picked.
   | {
-      id: string; type: "thread"; face: Selector; profile: [number, number][]; pitch: Num;
-      starts?: Num; hand?: "right" | "left"; axis?: Vec3; offset?: Num; length?: Num;
-      clearance?: Num; operation?: "cut" | "join"; body?: string; spec?: Record<string, unknown>; name?: string;
+      id: string;
+      type: "thread";
+      face: Selector;
+      profile: [number, number][];
+      pitch: Num;
+      starts?: Num;
+      hand?: "right" | "left";
+      axis?: Vec3;
+      offset?: Num;
+      length?: Num;
+      clearance?: Num;
+      operation?: "cut" | "join";
+      body?: string;
+      spec?: Record<string, unknown>;
+      name?: string;
     }
   // Text laid on a face and wrapped onto a round one at its true size, found
   // again at every build. join embosses, cut engraves; `at` is the anchor as
   // fractions of the face's (u, v) range and is preferred over `point`.
   | {
-      id: string; type: "textOnFace"; face: Selector; text: string; height: Num; depth: Num;
-      operation?: "join" | "cut"; body?: string; font?: string; style?: "regular" | "bold" | "italic" | "bolditalic"; align?: "left" | "center" | "right";
-      angle?: Num; point?: Vec3; at?: [Num, Num]; name?: string;
+      id: string;
+      type: "textOnFace";
+      face: Selector;
+      text: string;
+      height: Num;
+      depth: Num;
+      operation?: "join" | "cut";
+      body?: string;
+      font?: string;
+      style?: "regular" | "bold" | "italic" | "bolditalic";
+      align?: "left" | "center" | "right";
+      angle?: Num;
+      point?: Vec3;
+      at?: [Num, Num];
+      name?: string;
     }
   // Patterns union their copies. `bodies` absent means the active body.
   // `features` repeats those features' cuts and joins instead of a body
   // (mutually exclusive with `bodies`): each copy of the feature's tool is
   // applied to the body it cut or joined, and a copy that misses it is skipped.
-  | { id: string; type: "patternRect"; countX: Num; countY: Num; spacingX: Num; spacingY: Num; bodies?: string[]; features?: string[] }
+  | {
+      id: string;
+      type: "patternRect";
+      countX: Num;
+      countY: Num;
+      spacingX: Num;
+      spacingY: Num;
+      bodies?: string[];
+      features?: string[];
+    }
   | { id: string; type: "patternLinear"; count: Num; spacing: Num; axis: Axis3; bodies?: string[]; features?: string[] }
   // `axis` is X, Y or Z through the origin, a line, or `{datum}` naming a
   // datumAxis; `axisRef` makes it follow an edge or face, with the line in
   // `axis` as the cache.
-  | { id: string; type: "patternCircular"; count: Num; angle: Num; axis: AxisSpec | { datum: string }; axisRef?: Selector; bodies?: string[]; features?: string[] }
+  | {
+      id: string;
+      type: "patternCircular";
+      count: Num;
+      angle: Num;
+      axis: AxisSpec | { datum: string };
+      axisRef?: Selector;
+      bodies?: string[];
+      features?: string[];
+    }
   // Merge near-coplanar facets of an imported mesh (angular tolerance, degrees):
   // recovers planar faces / reduces facet count. Coarsens curved regions.
   | { id: string; type: "simplifyMesh"; tolerance: Num }
@@ -558,20 +925,37 @@ export type CoreFeature =
   | { id: string; type: "duplicate"; dx: Num; dy: Num; dz: Num; rx: Num; ry: Num; rz: Num; bodies?: string[] }
   // Place `moving` by aligning mate connectors (axes opposed unless `flush`), then slide
   // by `offset` and spin by `angle` about the mate axis (the Python engine's `joints.py`).
-  | { id: string; type: "joint"; moving: string; mate: MateConnector; to: MateConnector;
-      mode?: JointMode; flush?: boolean; offset?: Num; angle?: Num; name?: string }
+  | {
+      id: string;
+      type: "joint";
+      moving: string;
+      mate: MateConnector;
+      to: MateConnector;
+      mode?: JointMode;
+      flush?: boolean;
+      offset?: Num;
+      angle?: Num;
+      name?: string;
+    }
   // A closed-loop linkage: `ground` stays put, the other bodies in `joints` move until
   // every joint is met, with the `drive` joint at `offset` (mm, a slider) or `angle`
   // (deg, a revolute). The value that does not match the drive's mode is ignored.
-  | { id: string; type: "mechanism"; ground: string; joints: MechanismJoint[];
-      drive?: string; offset?: Num; angle?: Num; name?: string }
+  | {
+      id: string;
+      type: "mechanism";
+      ground: string;
+      joints: MechanismJoint[];
+      drive?: string;
+      offset?: Num;
+      angle?: Num;
+      name?: string;
+    }
   // Repair boolean debris; parametric because later booleans make more of it.
   | { id: string; type: "cleanUp"; body?: string; tolerance?: Num }
   // Remove bodies by id (mainstream MCAD "Remove"). Runs at its point in the timeline and
   // drops the listed bodies from the model, the way to delete a body from the
   // browser. Appended at the end, after every feature that made the bodies.
-  | { id: string; type: "removeBody"; bodies: string[] }
-  ;
+  | { id: string; type: "removeBody"; bodies: string[] };
 
 /** A feature a plugin owns. The app carries and saves it losslessly without the plugin,
  *  and reports it unbuildable (document/missingPlugins.ts). */
@@ -584,9 +968,7 @@ export interface PluginFeature {
 /** `f.type === "sketch"` cannot narrow away PluginFeature's string type; use isFeature. */
 export type PlaneOf = { face: Selector } | { plane: string };
 export type PointAt =
-  | { edge: Selector; end?: "start" | "end" | "mid"; t?: Num; point?: Vec3 }
-  | { face: Selector }
-  | { datum: string };
+  { edge: Selector; end?: "start" | "end" | "mid"; t?: Num; point?: Vec3 } | { face: Selector } | { datum: string };
 export type PlaneThrough =
   | { kind: "mid"; a: PlaneOf; b: PlaneOf }
   | { kind: "points"; points: PointAt[] }
@@ -606,13 +988,47 @@ export type FeatureType = CoreFeature["type"];
 /** Every feature type the application builds itself, at runtime. `satisfies`
  *  makes a type added to CoreFeature and missed here a compile error. */
 const CORE_FEATURE_TYPES = {
-  boolean: true, box: true, chamfer: true, cleanUp: true, cone: true, cylinder: true,
-  datumAxis: true, datumPlane: true, datumPoint: true, deleteFace: true, draft: true,
-  duplicate: true, extrude: true, fillet: true, hole: true, import: true, imprint: true, joint: true,
-  loft: true, mechanism: true, mirror: true, move: true, offsetFace: true, patternCircular: true,
-  patternLinear: true, patternRect: true, "press-pull": true, removeBody: true, revolve: true, scale: true, separate: true,
-  shell: true, simplifyMesh: true, sketch: true, sphere: true, split: true, sweep: true,
-  textOnFace: true, thicken: true, thread: true, torus: true,
+  boolean: true,
+  box: true,
+  chamfer: true,
+  cleanUp: true,
+  cone: true,
+  cylinder: true,
+  datumAxis: true,
+  datumPlane: true,
+  datumPoint: true,
+  deleteFace: true,
+  draft: true,
+  duplicate: true,
+  extrude: true,
+  fillet: true,
+  hole: true,
+  import: true,
+  imprint: true,
+  joint: true,
+  loft: true,
+  mechanism: true,
+  mirror: true,
+  move: true,
+  offsetFace: true,
+  patternCircular: true,
+  patternLinear: true,
+  patternRect: true,
+  "press-pull": true,
+  removeBody: true,
+  revolve: true,
+  scale: true,
+  separate: true,
+  shell: true,
+  simplifyMesh: true,
+  sketch: true,
+  sphere: true,
+  split: true,
+  sweep: true,
+  textOnFace: true,
+  thicken: true,
+  thread: true,
+  torus: true,
 } as const satisfies Record<FeatureType, true>;
 
 export function isCoreFeatureType(type: string): type is FeatureType {
@@ -620,10 +1036,7 @@ export function isCoreFeatureType(type: string): type is FeatureType {
 }
 
 /** Narrow to one of the app's own feature types (a plugin may not claim one). */
-export function isFeature<T extends FeatureType>(
-  f: Feature,
-  type: T,
-): f is Extract<CoreFeature, { type: T }> {
+export function isFeature<T extends FeatureType>(f: Feature, type: T): f is Extract<CoreFeature, { type: T }> {
   return f.type === type;
 }
 
@@ -647,13 +1060,7 @@ export function featuresOf<T extends FeatureType>(
 // A redefined ViewCube side: the model face the user mapped to a cube side. The
 // stored face is oriented toward the camera when that side is clicked. `normal`
 // faces out of the model surface; `up` is the in-view up direction (screen +Y).
-export type ViewCubeSide =
-  | "front"
-  | "back"
-  | "left"
-  | "right"
-  | "top"
-  | "bottom";
+export type ViewCubeSide = "front" | "back" | "left" | "right" | "top" | "bottom";
 export type ViewOverride = { normal: [number, number, number]; up: [number, number, number] };
 
 // --- parameters/equations engine (frontend-only; the engine sees numbers) ---
@@ -770,8 +1177,13 @@ export interface CadDocument {
   /** The material library, display only. Absent is the untouched starter set. Not the
    *  filament `palette`, which is what a part is made from. */
   materials?: {
-    id: string; name: string; color: string;
-    metalness?: number; roughness?: number; opacity?: number; emissive?: number;
+    id: string;
+    name: string;
+    color: string;
+    metalness?: number;
+    roughness?: number;
+    opacity?: number;
+    emissive?: number;
   }[];
   /** body id → material id. */
   bodyMaterial?: Record<string, string>;
@@ -893,7 +1305,21 @@ export interface RebuildResult {
   edges: { id: string; points: [number, number, number][]; body?: string; smooth?: boolean }[];
   bbox: { min: Vec3; max: Vec3 };
   // Each body's faceId range. No `etag` means always rebuild the body's mesh.
-  bodies?: { id: string; name: string; faceStart: number; faceCount: number; faceOwners?: (string | null)[]; faceBands?: number[][]; faceColorSlots?: (number | null)[]; fault?: string; etag?: string; nodeRef?: string; faceColors?: FaceColorRuns; partColor?: string; scan?: true }[];
+  bodies?: {
+    id: string;
+    name: string;
+    faceStart: number;
+    faceCount: number;
+    faceOwners?: (string | null)[];
+    faceBands?: number[][];
+    faceColorSlots?: (number | null)[];
+    fault?: string;
+    etag?: string;
+    nodeRef?: string;
+    faceColors?: FaceColorRuns;
+    partColor?: string;
+    scan?: true;
+  }[];
   // selector-resolution diagnostics, when any selector resolved with low confidence.
   diagnostics?: ResolveDiag[];
   // Failed features alongside what did build. featureError is the most downstream one.
@@ -925,9 +1351,7 @@ export interface RebuildResult {
  *  A mechanism's drive axis also carries `value`, the drive coordinate the
  *  linkage solved to (mm for a slider, deg for a revolute), so a drive handle on
  *  a mechanism with no drive value set starts where the parts are, not at 0. */
-export type DatumMark =
-  | { kind: "axis"; origin: Vec3; dir: Vec3; value?: number }
-  | { kind: "point"; position: Vec3 };
+export type DatumMark = { kind: "axis"; origin: Vec3; dir: Vec3; value?: number } | { kind: "point"; position: Vec3 };
 
 export type RebuildReply =
   | { ok: true; result: RebuildResult }
@@ -947,19 +1371,49 @@ export interface MeshExportOptions {
 // Import: the format the user picks, and the engine's reply for an `import` op,
 // the content hash of the stored geometry plus a little metadata for the new
 // `import` feature.
-export type ImportFormat = "stl" | "3mf" | "step" | "obj" | "brep" | "glb" | "gltf" | "iges" | "fcstd" | "ply" | "off" | "amf" | "vrml" | "x3d" | "xbf" | "3dm" | "ifc" | "dxf" | "fbx" | "3ds" | "svg";
+export type ImportFormat =
+  | "stl"
+  | "3mf"
+  | "step"
+  | "obj"
+  | "brep"
+  | "glb"
+  | "gltf"
+  | "iges"
+  | "fcstd"
+  | "ply"
+  | "off"
+  | "amf"
+  | "vrml"
+  | "x3d"
+  | "xbf"
+  | "3dm"
+  | "ifc"
+  | "dxf"
+  | "fbx"
+  | "3ds"
+  | "svg";
 export type ImportReply =
   // A DXF answers its lines and curves as `sketches`, one per layer, and has
   // `geom` only when it also held 3D faces.
-  | { ok: true; geom?: string; name: string; solid?: boolean; faces?: number; color?: string;
+  | {
+      ok: true;
+      geom?: string;
+      name: string;
+      solid?: boolean;
+      faces?: number;
+      color?: string;
       sketches?: { name: string; entities: SketchEntity[]; fillRule?: "evenodd" }[];
       // present only for a STEP that carried a real assembly tree; see the
       // `import` feature above for what they mean
       nodes?: { name: string; parent: number | null; color?: string }[];
       parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[];
-      notes?: string[]; unit?: string;
+      notes?: string[];
+      unit?: string;
       // a mesh past the editable limit, kept as a read-only reference scan
-      scan?: boolean; triangles?: number }
+      scan?: boolean;
+      triangles?: number;
+    }
   // `cancelled` = the user stopped it. Distinct from a failure so the UI can
   // dismiss quietly instead of showing an error the user already knows about.
   | { ok: false; cancelled?: boolean; message: string };

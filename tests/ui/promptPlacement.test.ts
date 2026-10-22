@@ -28,15 +28,16 @@ describe("promptInsets", () => {
   });
 
   it("ignores an empty box, a hidden card", () => {
-    expect(promptInsets(AREA, BAND, { left: [box(400, 700, 400, 700)], right: [] }, 12, 200))
-      .toEqual({ left: 12, right: 12 });
+    expect(promptInsets(AREA, BAND, { left: [box(400, 700, 400, 700)], right: [] }, 12, 200)).toEqual({
+      left: 12,
+      right: 12,
+    });
   });
 
   it("takes the side from the column, even past the middle", () => {
     const narrow = box(0, 0, 688, 800);
     const sectionView = box(288, 702, 427, 742);
-    expect(promptInsets(narrow, BAND, { left: [sectionView], right: [] }, 12, 220))
-      .toEqual({ left: 439, right: 12 });
+    expect(promptInsets(narrow, BAND, { left: [sectionView], right: [] }, 12, 220)).toEqual({ left: 439, right: 12 });
   });
 
   it("gives up the right inset first, then the left, to leave the minimum width", () => {
@@ -50,8 +51,16 @@ describe("promptInsets", () => {
 describe("clearRow", () => {
   // A 1000 by 800 window with Items and History open: the rail's labels and the view controls leave 169px at the top.
   const items = box(12, 50, 275, 790);
-  const labels = [[50, 447], [105, 412], [151, 391], [197, 397], [243, 408], [289, 395], [335, 390], [381, 381]]
-    .map(([top, right]) => box(290, top!, right!, top! + 36));
+  const labels = [
+    [50, 447],
+    [105, 412],
+    [151, 391],
+    [197, 397],
+    [243, 408],
+    [289, 395],
+    [335, 390],
+    [381, 381],
+  ].map(([top, right]) => box(290, top!, right!, top! + 36));
   const lower = box(290, 655, 427, 790);
   const controls = [box(640, 50, 688, 212), box(640, 228, 688, 358), box(640, 372, 688, 603)];
   const history = box(700, 50, 987, 355);
@@ -73,10 +82,18 @@ describe("clearRow", () => {
   it("gives null when no row has room, and when the room is lower than the area", () => {
     expect(clearRow(AREA, { width: 720, height: 36 }, 52, cards, 12)).toBeNull();
     expect(clearRow(box(0, 0, 1000, 476), { width: 257, height: 36 }, 52, cards, 12)).toBeNull();
-    expect(clearRow(box(0, 0, 1000, 477), { width: 257, height: 36 }, 52, cards, 12)).toEqual({ top: 429, left: 287, right: 372 });
+    expect(clearRow(box(0, 0, 1000, 477), { width: 257, height: 36 }, 52, cards, 12)).toEqual({
+      top: 429,
+      left: 287,
+      right: 372,
+    });
   });
 
   it("is the top row with nothing open", () => {
-    expect(clearRow(AREA, { width: 257, height: 36 }, 52, { left: [], right: [] }, 12)).toEqual({ top: 52, left: 12, right: 12 });
+    expect(clearRow(AREA, { width: 257, height: 36 }, 52, { left: [], right: [] }, 12)).toEqual({
+      top: 52,
+      left: 12,
+      right: 12,
+    });
   });
 });

@@ -5,11 +5,12 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { meshesNearRay } from "../../src/viewport/picking";
 
-const W = 800, H = 600;
+const W = 800,
+  H = 600;
 
 function field(seed: number): THREE.Mesh[] {
   let x = seed;
-  const rnd = () => ((x = (x * 16807) % 2147483647) / 2147483647);
+  const rnd = () => (x = (x * 16807) % 2147483647) / 2147483647;
   const out: THREE.Mesh[] = [];
   for (let i = 0; i < 400; i++) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(1 + rnd() * 6, 1 + rnd() * 6, 1 + rnd() * 6));
@@ -45,13 +46,19 @@ describe("meshesNearRay", () => {
     const ray = new THREE.Raycaster();
     let checked = 0;
     for (const cam of cameras()) {
-      for (const [cx, cy] of [[400, 300], [90, 60], [710, 520], [260, 410]] as const) {
+      for (const [cx, cy] of [
+        [400, 300],
+        [90, 60],
+        [710, 520],
+        [260, 410],
+      ] as const) {
         ray.setFromCamera(ndc(cx, cy), cam);
         const near = meshesNearRay(meshes, ray.ray.clone(), cam, H, 27);
         expect(near.length).toBeLessThan(meshes.length / 3);
         const sight = new THREE.Raycaster();
         for (let k = 0; k < 64; k++) {
-          const a = (k / 64) * Math.PI * 2, d = 26 * ((k % 4) + 1) / 4;
+          const a = (k / 64) * Math.PI * 2,
+            d = (26 * ((k % 4) + 1)) / 4;
           sight.setFromCamera(ndc(cx + Math.cos(a) * d, cy + Math.sin(a) * d), cam);
           const all = sight.intersectObjects(meshes, false)[0];
           const some = sight.intersectObjects(near, false)[0];

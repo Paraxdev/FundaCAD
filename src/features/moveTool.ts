@@ -266,7 +266,9 @@ export class MoveTool {
       [
         { name: "move", label: "Move", kind: "length" },
         { name: "turn", label: "Angle", kind: "angle" },
-        ...(target.handles.cubes.length ? [{ name: "size", label: "Scale", kind: "count" as const, ...featureValueRule("scale", "factor") }] : []),
+        ...(target.handles.cubes.length
+          ? [{ name: "size", label: "Scale", kind: "count" as const, ...featureValueRule("scale", "factor") }]
+          : []),
       ],
       () => this.settleTyped(),
       () => this.cancel(),
@@ -394,7 +396,10 @@ export class MoveTool {
       for (const j of [u, v]) {
         const dj = this.frame[j]!;
         const stepped = snap(this.grabT.dot(dj) + delta.dot(dj), step);
-        if (stepped !== this.comp(j)) { this.setComp(j, stepped); changed = true; }
+        if (stepped !== this.comp(j)) {
+          this.setComp(j, stepped);
+          changed = true;
+        }
       }
       if (!changed) return;
       const du = this.comp(u) - this.grabT.dot(this.frame[u]!);
@@ -518,8 +523,7 @@ export class MoveTool {
       this.settleDrag();
       return;
     }
-    const moved =
-      Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     // A clean click off the handles ends the session, and then means whatever
     // it would have meant with no gizmo up. Picking is suspended while the tool
     // owns the pointer, so the click has to be replayed once it does not.
@@ -601,12 +605,17 @@ export class MoveTool {
     // count this one twice.
     let started = false;
     const off = this.store.onBuild((s) => {
-      if (s.building) { started = true; return; }
+      if (s.building) {
+        started = true;
+        return;
+      }
       if (!started) return;
       off();
       reopen();
     });
-    this.pendingReopen = () => { off(); };
+    this.pendingReopen = () => {
+      off();
+    };
   }
 
   private dropPendingReopen() {
@@ -654,8 +663,9 @@ export class MoveTool {
     // leaves the rings behind on the original centroid.
     const pos = this.placeGizmo(this.gizmo);
     const lit = (kind: NonNullable<Grab>["kind"], i: number) =>
-      (this.grab ? this.grab.kind === kind && this.grab.index === i
-        : (this.hover ?? this.last)?.kind === kind && (this.hover ?? this.last)?.index === i);
+      this.grab
+        ? this.grab.kind === kind && this.grab.index === i
+        : (this.hover ?? this.last)?.kind === kind && (this.hover ?? this.last)?.index === i;
     for (const a of this.arrows) {
       const ax = AXES[a.axis];
       if (ax) a.mat.color.set(lit("axis", a.axis) ? HOT : ax.color);
@@ -664,7 +674,11 @@ export class MoveTool {
     const ringAxes = this.rings.map((r) => r.axis);
     for (const r of this.rings) {
       const ax = AXES[r.axis];
-      if (ax) r.ring.paint(ringLook(r.axis, ringAt(this.hover ?? this.last), this.grab ? ringAt(this.grab) ?? -1 : null, ringAxes), ax.color);
+      if (ax)
+        r.ring.paint(
+          ringLook(r.axis, ringAt(this.hover ?? this.last), this.grab ? (ringAt(this.grab) ?? -1) : null, ringAxes),
+          ax.color,
+        );
     }
     for (const c of this.cubes) {
       const ax = AXES[c.axis];
@@ -776,9 +790,10 @@ export class MoveTool {
       const dir = this.frame[i];
       if (!a || !dir || !hs) continue;
       if (hs.axes.includes(i)) {
-        const mat = overlayMaterial(new THREE.MeshBasicMaterial({ color: a.color, depthTest: false, depthWrite: false }));
-        const shaft = new THREE.Mesh(
-          new THREE.CylinderGeometry(ARROW_SHAFT_R, ARROW_SHAFT_R, ARROW_SHAFT, 12), mat);
+        const mat = overlayMaterial(
+          new THREE.MeshBasicMaterial({ color: a.color, depthTest: false, depthWrite: false }),
+        );
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(ARROW_SHAFT_R, ARROW_SHAFT_R, ARROW_SHAFT, 12), mat);
         shaft.position.y = ARROW_SHAFT / 2;
         const head = new THREE.Mesh(new THREE.ConeGeometry(ARROW_HEAD_R, ARROW_HEAD, 18), mat);
         head.position.y = ARROW_SHAFT + ARROW_HEAD / 2;
@@ -815,12 +830,14 @@ export class MoveTool {
       }
 
       if (hs.cubes.includes(i)) {
-        const cmat = overlayMaterial(new THREE.MeshBasicMaterial({
-          color: a.color, depthTest: false, depthWrite: false,
-        }));
-        const cube = new THREE.Mesh(
-          new THREE.BoxGeometry(SCALE_BOX, SCALE_BOX, SCALE_BOX), cmat,
+        const cmat = overlayMaterial(
+          new THREE.MeshBasicMaterial({
+            color: a.color,
+            depthTest: false,
+            depthWrite: false,
+          }),
         );
+        const cube = new THREE.Mesh(new THREE.BoxGeometry(SCALE_BOX, SCALE_BOX, SCALE_BOX), cmat);
         cube.quaternion.setFromUnitVectors(Y_AXIS, dir);
         cube.position.copy(dir).multiplyScalar(SCALE_AT);
         cube.renderOrder = 999;
@@ -836,13 +853,17 @@ export class MoveTool {
       // it never hides a ring behind it, DoubleSide so it reads from either face.
       if (!hs.planes.includes(i)) continue;
       const [u, v] = planeAxes(i);
-      const du = this.frame[u], dv = this.frame[v];
+      const du = this.frame[u],
+        dv = this.frame[v];
       if (!du || !dv) continue;
-      const centre = du.clone().multiplyScalar(PLANE_AT)
-        .add(dv.clone().multiplyScalar(PLANE_AT));
+      const centre = du.clone().multiplyScalar(PLANE_AT).add(dv.clone().multiplyScalar(PLANE_AT));
       const pmat = new THREE.MeshBasicMaterial({
-        color: a.color, depthTest: false, depthWrite: false,
-        side: THREE.DoubleSide, transparent: true, opacity: 0.5,
+        color: a.color,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.5,
       });
       const quad = new THREE.Mesh(new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE), pmat);
       quad.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
@@ -862,9 +883,13 @@ export class MoveTool {
       g.add(quad, phit);
       this.planes.push({ mesh: quad, hit: phit, mat: pmat, axis: i });
     }
-    const omat = overlayMaterial(new THREE.MeshBasicMaterial({
-      color: ORIGIN_IDLE, depthTest: false, depthWrite: false,
-    }));
+    const omat = overlayMaterial(
+      new THREE.MeshBasicMaterial({
+        color: ORIGIN_IDLE,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    );
     const dot = new THREE.Mesh(new THREE.SphereGeometry(ORIGIN_R, 20, 14), omat);
     dot.renderOrder = 1000; // over the arrows' roots, which meet here
     dot.userData.origin = true;

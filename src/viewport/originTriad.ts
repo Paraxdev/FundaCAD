@@ -99,15 +99,26 @@ export class OriginTriad {
     for (const [dir, axisColor, axis] of dirs) {
       const color = mutedAxisColor(axisColor);
       const solid = new THREE.MeshBasicMaterial({
-        color, vertexColors: true, transparent: true, opacity: TRIAD_OPACITY, depthWrite: false,
+        color,
+        vertexColors: true,
+        transparent: true,
+        opacity: TRIAD_OPACITY,
+        depthWrite: false,
       });
       const ghost = new THREE.MeshBasicMaterial({
-        color, vertexColors: true, transparent: true, opacity: TRIAD_OCCLUDED_OPACITY,
-        depthTest: false, depthWrite: false,
+        color,
+        vertexColors: true,
+        transparent: true,
+        opacity: TRIAD_OCCLUDED_OPACITY,
+        depthTest: false,
+        depthWrite: false,
       });
       this.materials.push(solid, ghost);
       const arm = new THREE.Group();
-      for (const [mat, order] of [[ghost, GHOST_ORDER], [solid, SOLID_ORDER]] as const) {
+      for (const [mat, order] of [
+        [ghost, GHOST_ORDER],
+        [solid, SOLID_ORDER],
+      ] as const) {
         const line = new THREE.Mesh(lineGeo, mat);
         line.renderOrder = order;
         arm.add(line);
@@ -155,9 +166,7 @@ export class OriginTriad {
 
   /** `pixelWorldSize` is the world size of one screen pixel AT THE ORIGIN. */
   update(pixelWorldSize: number | null, modelDiagonal: number | null) {
-    this.group.scale.setScalar(
-      glyphWorldScale(TRIAD_LENGTH_PX, modelDiagonal, pixelWorldSize, MIN_TRIAD_SCALE),
-    );
+    this.group.scale.setScalar(glyphWorldScale(TRIAD_LENGTH_PX, modelDiagonal, pixelWorldSize, MIN_TRIAD_SCALE));
   }
 
   dispose() {

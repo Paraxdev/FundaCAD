@@ -6,9 +6,22 @@ import { init_planegcs_module, GcsWrapper, SolveStatus } from "@salusoft89/plane
 import wasmUrl from "@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url";
 
 export type PointId = string;
-export interface SPoint { id: PointId; x: number; y: number; fixed?: boolean }
-export interface SLine { id: string; p1: PointId; p2: PointId }
-export interface SCircle { id: string; center: PointId; radius: number }
+export interface SPoint {
+  id: PointId;
+  x: number;
+  y: number;
+  fixed?: boolean;
+}
+export interface SLine {
+  id: string;
+  p1: PointId;
+  p2: PointId;
+}
+export interface SCircle {
+  id: string;
+  center: PointId;
+  radius: number;
+}
 // An arc references three points (center, start, end) plus radius + sweep
 // angles. arc_rules keeps the endpoints on the circle at those angles, so the
 // endpoints can be shared with lines (coincidence) and the arc stays circular.
@@ -141,10 +154,10 @@ export class SolverUnavailable extends Error {
     const detail = cause instanceof Error ? cause.message : String(cause);
     super(
       /content security policy|unsafe-eval|code generation/i.test(detail)
-        ? "The 2D constraint solver could not start: this build's security policy blocks the "
-          + "code it needs to initialise. That is a bug in FundaCAD, not a problem with your "
-          + "system, so updating your webview or graphics drivers will not help. Sketching "
-          + "still works, but without constraints, dimensions or point dragging."
+        ? "The 2D constraint solver could not start: this build's security policy blocks the " +
+            "code it needs to initialise. That is a bug in FundaCAD, not a problem with your " +
+            "system, so updating your webview or graphics drivers will not help. Sketching " +
+            "still works, but without constraints, dimensions or point dragging."
         : `The 2D constraint solver could not start: ${detail}`,
     );
     this.name = "SolverUnavailable";
@@ -176,24 +189,33 @@ export async function solveSketch(input: SolveInput): Promise<SolveResult> {
   w.clear_data();
 
   const prims: any[] = [];
-  for (const p of input.points)
-    prims.push({ id: p.id, type: "point", x: p.x, y: p.y, fixed: !!p.fixed });
-  for (const l of input.lines)
-    prims.push({ id: l.id, type: "line", p1_id: l.p1, p2_id: l.p2 });
-  for (const c of input.circles)
-    prims.push({ id: c.id, type: "circle", c_id: c.center, radius: c.radius });
+  for (const p of input.points) prims.push({ id: p.id, type: "point", x: p.x, y: p.y, fixed: !!p.fixed });
+  for (const l of input.lines) prims.push({ id: l.id, type: "line", p1_id: l.p1, p2_id: l.p2 });
+  for (const c of input.circles) prims.push({ id: c.id, type: "circle", c_id: c.center, radius: c.radius });
   const fixedIds = new Set(input.points.filter((p) => p.fixed).map((p) => p.id));
   for (const a of input.arcs ?? []) {
     prims.push({
-      id: a.id, type: "arc", c_id: a.center, start_id: a.start, end_id: a.end,
-      radius: a.radius, start_angle: a.startAngle, end_angle: a.endAngle,
+      id: a.id,
+      type: "arc",
+      c_id: a.center,
+      start_id: a.start,
+      end_id: a.end,
+      radius: a.radius,
+      start_angle: a.startAngle,
+      end_angle: a.endAngle,
     });
     // With all three points fixed, arc_rules puts 4 equations on the arc's 3 own params, which planegcs
     // reports as redundant, and as a conflict once user geometry is tied to the arc, so pin the params instead.
     if (fixedIds.has(a.center) && fixedIds.has(a.start) && fixedIds.has(a.end)) {
       const pins = { start_angle: a.startAngle, end_angle: a.endAngle, radius: a.radius };
       for (const [prop, value] of Object.entries(pins))
-        prims.push({ id: `${a.id}~${prop}`, type: "difference", param1: 0, param2: { o_id: a.id, prop }, difference: value });
+        prims.push({
+          id: `${a.id}~${prop}`,
+          type: "difference",
+          param1: 0,
+          param2: { o_id: a.id, prop },
+          difference: value,
+        });
     } else prims.push({ id: `${a.id}_rules`, type: "arc_rules", a_id: a.id });
   }
   for (const c of input.constraints) prims.push(toGcsConstraint(c));
@@ -260,7 +282,8 @@ function toGcsConstraint(c: SConstraint): any {
       return { id: c.id, type: "p2p_distance", p1_id: c.a, p2_id: c.b, distance: c.value };
     case "axisDistance":
       return {
-        id: c.id, type: "difference",
+        id: c.id,
+        type: "difference",
         param1: { o_id: c.a, prop: c.axis },
         param2: { o_id: c.b, prop: c.axis },
         difference: c.value,
@@ -310,7 +333,8 @@ function toGcsConstraint(c: SConstraint): any {
     case "radiusDifference":
       // param2 - param1 = difference (planegcs semantics)
       return {
-        id: c.id, type: "difference",
+        id: c.id,
+        type: "difference",
         param1: { o_id: c.inner, prop: "radius" },
         param2: { o_id: c.outer, prop: "radius" },
         difference: c.value,

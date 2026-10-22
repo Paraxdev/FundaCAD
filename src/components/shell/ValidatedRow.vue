@@ -61,18 +61,10 @@ function onPickUnit(e: MouseEvent) {
         :preview-end="previewEnd"
         :problem="problem"
       />
-      <button
-        v-if="unit && pickUnit"
-        type="button"
-        class="dim-unit"
-        title="Change unit"
-        @click="onPickUnit"
-      >{{ unit }}</button>
-      <span
-        v-else-if="unit"
-        class="dim-unit static"
-        title="Expressions are written in this unit"
-      >{{ unit }}</span>
+      <button v-if="unit && pickUnit" type="button" class="dim-unit" title="Change unit" @click="onPickUnit">{{
+        unit
+      }}</button>
+      <span v-else-if="unit" class="dim-unit static" title="Expressions are written in this unit">{{ unit }}</span>
     </div>
     <p v-if="problem" class="param-problem">{{ problem }}</p>
   </div>

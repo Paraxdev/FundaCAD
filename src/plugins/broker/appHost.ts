@@ -70,10 +70,8 @@ export const UNSERVED: Partial<Record<Op, string>> = {
   // These two name a path, and a plugin has no paths. The refusal names what to
   // do instead, because "not supported" would send somebody looking for a
   // version where it is, and there will not be one.
-  doc_open:
-    "a plugin cannot name a file. Use file_pick, then file_read, then doc_set",
-  doc_import:
-    "a plugin cannot name a file. Use file_pick, then file_read, then doc_set",
+  doc_open: "a plugin cannot name a file. Use file_pick, then file_read, then doc_set",
+  doc_import: "a plugin cannot name a file. Use file_pick, then file_read, then doc_set",
   doc_save: "a plugin cannot name a file. Use doc_get, then file_write",
   export:
     "exporting needs the geometry engine, which a plugin cannot reach yet. Once it can, the file half is doc_get and file_write",
@@ -112,9 +110,7 @@ export function appHost(opts: AppHostOptions): BrokerHost {
   /** The bridge, or a refusal that says which half is missing. */
   const bridge = (op: Op): { native: NativeBridge; plugin: string } => {
     if (!opts.native) {
-      throw new HostRefused(
-        `${op}: files are handled by the desktop app, and this is not running in it`,
-      );
+      throw new HostRefused(`${op}: files are handled by the desktop app, and this is not running in it`);
     }
     if (!opts.plugin) {
       throw new HostRefused(
@@ -138,9 +134,7 @@ export function appHost(opts: AppHostOptions): BrokerHost {
   const need = (id: string) => {
     if (!has(id)) {
       const ids = features().map((f) => f.id);
-      throw new HostRefused(
-        `no feature ${JSON.stringify(id)}, have ${ids.join(", ") || "none"}`,
-      );
+      throw new HostRefused(`no feature ${JSON.stringify(id)}, have ${ids.join(", ") || "none"}`);
     }
   };
 
@@ -154,7 +148,8 @@ export function appHost(opts: AppHostOptions): BrokerHost {
           return await bridge(op).native.info();
 
         case "settings_get":
-          if (!opts.plugin) throw new HostRefused(`${op}: this host was built without a plugin id, so it has no settings to read`);
+          if (!opts.plugin)
+            throw new HostRefused(`${op}: this host was built without a plugin id, so it has no settings to read`);
           return storedSettings(opts.plugin);
 
         case "file_pick": {

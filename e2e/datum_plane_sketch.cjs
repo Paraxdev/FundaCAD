@@ -54,8 +54,10 @@ const DATUM = {
   // to find a quad and the sketch has to be able to name the feature it is on.
   await page.evaluate((d) => {
     window.store.addFeature({
-      id: d.id, type: "datumPlane",
-      plane: { origin: d.origin, normal: d.normal, xdir: d.xdir }, name: "Plane",
+      id: d.id,
+      type: "datumPlane",
+      plane: { origin: d.origin, normal: d.normal, xdir: d.xdir },
+      name: "Plane",
     });
     window.viewport.setDatumPlanes([{ id: d.id, origin: d.origin, normal: d.normal, xdir: d.xdir }]);
     window.viewport.requestRender();
@@ -70,12 +72,13 @@ const DATUM = {
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   });
 
-  const hit = await page.evaluate(
-    (p) => window.viewport.pickConstructionAt(p.x, p.y),
-    box,
-  );
+  const hit = await page.evaluate((p) => window.viewport.pickConstructionAt(p.x, p.y), box);
   check("the ray reaches the datum quad rather than a base plane", hit && hit.kind === "datum", JSON.stringify(hit));
-  check("and the quad knows which plane it stands for", !!(hit && hit.def && hit.def.xdir), hit && JSON.stringify(hit.def));
+  check(
+    "and the quad knows which plane it stands for",
+    !!(hit && hit.def && hit.def.xdir),
+    hit && JSON.stringify(hit.def),
+  );
 
   // Now the gesture. Sketch, then click.
   await page.evaluate(() => window.__fundacad.handleAction("sketch"));

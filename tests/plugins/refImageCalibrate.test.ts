@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-  calibrate, heightOf, imageToPlane, moved, onImage, planeToImage, withWidth, type Placement,
+  calibrate,
+  heightOf,
+  imageToPlane,
+  moved,
+  onImage,
+  planeToImage,
+  withWidth,
+  type Placement,
 } from "../../plugins/FundaCAD.ReferenceImages/calibrate";
 
 const dist = (a: readonly number[], b: readonly number[]) => Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!);
@@ -36,7 +43,11 @@ describe("reference image calibration", () => {
       { at: [3, -4], width: 80, px: [300, 400], angle: 135, flipY: true },
       { at: [-7, 2], width: 12, px: [1000, 10], angle: -20, flipX: true, flipY: true },
     ] as Placement[]) {
-      for (const uv of [[0, 0], [1, 1], [0.25, 0.8]] as const) {
+      for (const uv of [
+        [0, 0],
+        [1, 1],
+        [0.25, 0.8],
+      ] as const) {
         const back = planeToImage(p, imageToPlane(p, uv));
         expect(back[0]).toBeCloseTo(uv[0], 9);
         expect(back[1]).toBeCloseTo(uv[1], 9);

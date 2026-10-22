@@ -9,7 +9,15 @@ import * as THREE from "three";
 import { markNotInPicture } from "./pictureScene";
 
 export const OVERLAY_KINDS = [
-  "edges", "highlight", "grid", "origin", "sketches", "sketchLabels", "handles", "stress", "section",
+  "edges",
+  "highlight",
+  "grid",
+  "origin",
+  "sketches",
+  "sketchLabels",
+  "handles",
+  "stress",
+  "section",
   "references",
 ] as const;
 export type OverlayKind = (typeof OVERLAY_KINDS)[number];
@@ -61,7 +69,10 @@ export function allOverlaysOn(): OverlayKinds {
   return Object.fromEntries(OVERLAY_KINDS.map((k) => [k, true])) as OverlayKinds;
 }
 
-export const DEFAULT_OVERLAYS: Readonly<OverlayState> = Object.freeze({ on: true, kinds: Object.freeze(allOverlaysOn()) });
+export const DEFAULT_OVERLAYS: Readonly<OverlayState> = Object.freeze({
+  on: true,
+  kinds: Object.freeze(allOverlaysOn()),
+});
 
 /** Untrusted JSON to a whole state; a kind it does not name is shown. */
 export function asOverlays(v: unknown): OverlayState {

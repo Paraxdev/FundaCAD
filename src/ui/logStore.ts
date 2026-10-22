@@ -80,11 +80,7 @@ export function describe(value: unknown): string {
   return String(value);
 }
 
-export function log(
-  level: LogLevel,
-  message: unknown,
-  opts: { source?: string; detail?: unknown } = {},
-): LogEntry {
+export function log(level: LogLevel, message: unknown, opts: { source?: string; detail?: unknown } = {}): LogEntry {
   const entry: LogEntry = {
     id: nextId++,
     level,
@@ -93,9 +89,8 @@ export function log(
     ...(opts.source ? { source: opts.source } : {}),
     ...(opts.detail !== undefined ? { detail: describe(opts.detail) } : {}),
   };
-  entries = entries.length >= LOG_LIMIT
-    ? [...entries.slice(entries.length - LOG_LIMIT + 1), entry]
-    : [...entries, entry];
+  entries =
+    entries.length >= LOG_LIMIT ? [...entries.slice(entries.length - LOG_LIMIT + 1), entry] : [...entries, entry];
   emit();
   return entry;
 }

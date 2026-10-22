@@ -172,19 +172,29 @@ export function axisFromNormals(normals: Vec3[]): Vec3 | null {
  *  residual so the caller can tell a circle from something that merely has a
  *  centre. Null when the points are collinear (the normal equations go
  *  singular) or too few to determine one. */
-export function fitCircle2D(
-  pts: [number, number][],
-): { cx: number; cy: number; r: number; rms: number } | null {
+export function fitCircle2D(pts: [number, number][]): { cx: number; cy: number; r: number; rms: number } | null {
   if (pts.length < 3) return null;
   // Kåsa: x²+y² = 2cx·x + 2cy·y + (r²−cx²−cy²) is LINEAR in (cx, cy, k), so the
   // fit is one 3x3 normal-equation solve rather than an iterative one.
-  let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0, sz = 0, sxz = 0, syz = 0;
+  let sx = 0,
+    sy = 0,
+    sxx = 0,
+    syy = 0,
+    sxy = 0,
+    sz = 0,
+    sxz = 0,
+    syz = 0;
   const n = pts.length;
   for (const [x, y] of pts) {
     const z = x * x + y * y;
-    sx += x; sy += y; sz += z;
-    sxx += x * x; syy += y * y; sxy += x * y;
-    sxz += x * z; syz += y * z;
+    sx += x;
+    sy += y;
+    sz += z;
+    sxx += x * x;
+    syy += y * y;
+    sxy += x * y;
+    sxz += x * z;
+    syz += y * z;
   }
   const a11 = 2 * (sxx - (sx * sx) / n);
   const a12 = 2 * (sxy - (sx * sy) / n);
@@ -269,7 +279,12 @@ export function sphereCentreFromFace(points: readonly Vec3[], normals: readonly 
   const p0 = points[0];
   if (!p0 || points.length < 4) return null;
   // |p|² = 2 p·c + k, solved about p0 so large coordinates keep their digits.
-  const m = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+  const m = [
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ];
   const b = [0, 0, 0, 0];
   for (const p of points) {
     const q = sub(p, p0);
@@ -309,7 +324,9 @@ export function sphereCentreFromFace(points: readonly Vec3[], normals: readonly 
   if (Math.sqrt(off / points.length) > SPHERE_TOLERANCE * radius) return null;
   const centre = add(p0, local);
   for (let t = 0; t < normals.length; t++) {
-    const a = points[3 * t], b2 = points[3 * t + 1], c = points[3 * t + 2];
+    const a = points[3 * t],
+      b2 = points[3 * t + 1],
+      c = points[3 * t + 2];
     if (!a || !b2 || !c) break;
     const mid = scale(add(a, add(b2, c)), 1 / 3);
     const out = unit(sub(mid, centre));
@@ -329,7 +346,8 @@ function innerCorners(points: readonly Vec3[]): number {
   for (let i = 0; i + 2 < points.length; i += 3) {
     const k = [key(points[i]!), key(points[i + 1]!), key(points[i + 2]!)];
     for (let e = 0; e < 3; e++) {
-      const a = k[e]!, b = k[(e + 1) % 3]!;
+      const a = k[e]!,
+        b = k[(e + 1) % 3]!;
       if (a === b) continue;
       const id = a < b ? `${a}|${b}` : `${b}|${a}`;
       if (!uses.has(id)) edges.push([a, b]);
@@ -386,7 +404,11 @@ function arcOf(cyl: Cylinder, points: readonly Vec3[]): { u: Vec3; v: Vec3; star
  *  Along the axis it stands level with the click, clamped to the face, or
  *  halfway along without one. `radial` is the outward direction there. */
 export function roundStand(
-  cyl: Cylinder, points: readonly Vec3[], full: boolean, click: Vec3 | null, seed: Vec3,
+  cyl: Cylinder,
+  points: readonly Vec3[],
+  full: boolean,
+  click: Vec3 | null,
+  seed: Vec3,
 ): { point: Vec3; radial: Vec3 } | null {
   const arc = arcOf(cyl, points);
   if (!arc) return null;

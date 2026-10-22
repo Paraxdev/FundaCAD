@@ -69,12 +69,7 @@ export function circularAngles(count: number, totalAngle: number): number[] {
 
 /** What the prompt says about the pattern as it stands. Plain words, because it
  *  is read at a glance in the middle of a drag. */
-export function describePattern(
-  kind: "linear" | "circular",
-  count: number,
-  value: number,
-  axis: Axis3,
-): string {
+export function describePattern(kind: "linear" | "circular", count: number, value: number, axis: Axis3): string {
   const n = clampCount(count);
   const copies = `${n} ${n === 1 ? "copy" : "copies"}`;
   if (kind === "linear") {

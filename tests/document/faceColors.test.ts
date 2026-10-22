@@ -26,23 +26,51 @@ const CASES: [string, FaceColorRuns, (string | null)[]][] = [
   ["uniform", { palette: [RED], runs: [[5, 0]] }, Array(5).fill(RED)],
   [
     "two runs",
-    { palette: [RED, WHITE], runs: [[2, 0], [3, 1]] },
+    {
+      palette: [RED, WHITE],
+      runs: [
+        [2, 0],
+        [3, 1],
+      ],
+    },
     [RED, RED, WHITE, WHITE, WHITE],
   ],
   [
     "holes",
-    { palette: [RED, WHITE], runs: [[1, 0], [2, -1], [1, 1]] },
+    {
+      palette: [RED, WHITE],
+      runs: [
+        [1, 0],
+        [2, -1],
+        [1, 1],
+      ],
+    },
     [RED, null, null, WHITE],
   ],
   [
     "alternating",
-    { palette: [RED, WHITE], runs: [[1, 0], [1, 1], [1, 0], [1, 1]] },
+    {
+      palette: [RED, WHITE],
+      runs: [
+        [1, 0],
+        [1, 1],
+        [1, 0],
+        [1, 1],
+      ],
+    },
     [RED, WHITE, RED, WHITE],
   ],
   ["one face", { palette: [GREY], runs: [[1, 0]] }, [GREY]],
   [
     "board-like",
-    { palette: [WHITE, RED], runs: [[400, 0], [16, 1], [427, 0]] },
+    {
+      palette: [WHITE, RED],
+      runs: [
+        [400, 0],
+        [16, 1],
+        [427, 0],
+      ],
+    },
     [...Array(400).fill(WHITE), ...Array(16).fill(RED), ...Array(427).fill(WHITE)],
   ],
 ];
@@ -98,15 +126,20 @@ describe("dominantFaceColor", () => {
 describe("importedFacePaint", () => {
   // Three white faces and one red: the shape of a real part, mostly one colour
   // with a detail somewhere else.
-  const board: FaceColorRuns = { palette: [WHITE, RED], runs: [[3, 0], [1, 1]] };
+  const board: FaceColorRuns = {
+    palette: [WHITE, RED],
+    runs: [
+      [3, 0],
+      [1, 1],
+    ],
+  };
 
   it("only names the faces that disagree with their body's own dominant", () => {
     // The three white faces are what the body's material already says it is, so
     // they are not in the map at all and only the red one costs anything.
-    const paint = importedFacePaint(
-      [{ id: "body1", faceStart: 10, faceCount: 4, faceColors: board }],
-      { body1: WHITE },
-    );
+    const paint = importedFacePaint([{ id: "body1", faceStart: 10, faceCount: 4, faceColors: board }], {
+      body1: WHITE,
+    });
     expect(paint).toEqual({ 13: RED });
   });
 
@@ -125,10 +158,7 @@ describe("importedFacePaint", () => {
   it("names every coloured face when the body has no colour at all", () => {
     // A body with no material is drawn in the neutral shade, so leaving its
     // dominant faces to that would throw the file's colour away entirely.
-    const paint = importedFacePaint(
-      [{ id: "body1", faceStart: 0, faceCount: 4, faceColors: board }],
-      {},
-    );
+    const paint = importedFacePaint([{ id: "body1", faceStart: 0, faceCount: 4, faceColors: board }], {});
     expect(paint).toEqual({ 0: WHITE, 1: WHITE, 2: WHITE, 3: RED });
   });
 
@@ -164,10 +194,9 @@ describe("importedFacePaint", () => {
     // The ordinary imported part, and the other half of the control above: 42
     // of the reference assembly's 45 solids are a single colour throughout.
     const plain: FaceColorRuns = { palette: [GREY], runs: [[900, 0]] };
-    expect(importedFacePaint(
-      [{ id: "body1", faceStart: 0, faceCount: 900, faceColors: plain }],
-      { body1: "#232323" },
-    )).toEqual({});
+    expect(
+      importedFacePaint([{ id: "body1", faceStart: 0, faceCount: 900, faceColors: plain }], { body1: "#232323" }),
+    ).toEqual({});
   });
 });
 
@@ -187,7 +216,10 @@ describe("pickBodyColor", () => {
 
   it("does not let a default nobody picked beat painted faces", () => {
     // The PN532 board: products in SolidWorks' default lavender, faces painted.
-    expect(pickBodyColor({ ownColor: "#cad1ee", faceColors: stale }, "bodies")).toEqual({ color: RED, bodyWins: false });
+    expect(pickBodyColor({ ownColor: "#cad1ee", faceColors: stale }, "bodies")).toEqual({
+      color: RED,
+      bodyWins: false,
+    });
   });
 
   it("falls back through the part, then the tree, when no face is coloured", () => {
@@ -198,12 +230,21 @@ describe("pickBodyColor", () => {
 });
 
 describe("importedBodyColors", () => {
-  const features = [{
-    id: "im", type: "import",
-    nodes: [{ parent: null, color: WHITE }, { parent: 0 }],
-  }];
+  const features = [
+    {
+      id: "im",
+      type: "import",
+      nodes: [{ parent: null, color: WHITE }, { parent: 0 }],
+    },
+  ];
   const bodies = [
-    { id: "body1", faceCount: 4, nodeRef: "im/1", partColor: GREY, faceColors: { palette: [RED], runs: [[4, 0]] } as FaceColorRuns },
+    {
+      id: "body1",
+      faceCount: 4,
+      nodeRef: "im/1",
+      partColor: GREY,
+      faceColors: { palette: [RED], runs: [[4, 0]] } as FaceColorRuns,
+    },
     { id: "body2", faceCount: 4 },
   ];
 

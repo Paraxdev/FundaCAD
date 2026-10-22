@@ -56,20 +56,24 @@ function rig(bodies: { id: string; name: string }[] = []) {
     noteCommitted: vi.fn(),
     isSketchConsumed: () => false,
     getSelectedFeature: () => null,
-    setPlanePick: (v: boolean) => { planePick = v; },
+    setPlanePick: (v: boolean) => {
+      planePick = v;
+    },
     datumMoveTarget: () => null,
   } as unknown as FeatureStartersDeps;
   const starters = createFeatureStarters(deps);
   const hints: string[] = [];
-  const click = (pick: TreePick) =>
-    routeTreeClick(pick, { busyHint: () => null, hint: (t) => hints.push(t) });
+  const click = (pick: TreePick) => routeTreeClick(pick, { busyHint: () => null, hint: (t) => hints.push(t) });
   return { starters, deps, datumPoseStart, addFeature, viewport, hints, click, planePick: () => planePick };
 }
 
 beforeEach(() => {
   setActivePinia(createPinia());
   frames = [];
-  vi.stubGlobal("requestAnimationFrame", (f: () => void) => { frames.push(f); return frames.length; });
+  vi.stubGlobal("requestAnimationFrame", (f: () => void) => {
+    frames.push(f);
+    return frames.length;
+  });
 });
 afterEach(() => {
   resetTreePicks();
@@ -132,14 +136,22 @@ describe("a tool's pick answered from the Items tree", () => {
   });
 
   it("a boolean takes body rows, and refuses the body it already has", () => {
-    const r = rig([{ id: "b1", name: "A" }, { id: "b2", name: "B" }]);
+    const r = rig([
+      { id: "b1", name: "A" },
+      { id: "b2", name: "B" },
+    ]);
     r.starters.startBoolean("subtract");
     expect(r.click({ kind: "body", id: "b1" })).toBe("taken");
     flushFrame();
     expect(r.click({ kind: "body", id: "b1" })).toBe("refused");
     expect(r.click({ kind: "body", id: "b2" })).toBe("taken");
     flushFrame();
-    expect(r.addFeature.mock.calls[0]![0]).toMatchObject({ type: "boolean", operation: "subtract", target: "b1", tools: ["b2"] });
+    expect(r.addFeature.mock.calls[0]![0]).toMatchObject({
+      type: "boolean",
+      operation: "subtract",
+      target: "b1",
+      tools: ["b2"],
+    });
   });
 });
 
@@ -149,9 +161,13 @@ describe("a tool's pick answered from the Items tree", () => {
 // clicked long after, committed a boolean nobody asked for.
 describe("a pick session cannot outlive its tool", () => {
   const stubBackend = {
-    async rebuild() { return { ok: false, error: { message: "stub" } }; },
+    async rebuild() {
+      return { ok: false, error: { message: "stub" } };
+    },
     async init() {},
-    onStatus() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
     connected: true,
   } as unknown as GeometryBackend;
 
@@ -171,7 +187,10 @@ describe("a pick session cannot outlive its tool", () => {
     r.addFeature.mock.calls.every(([f]) => (f as { type: string }).type !== "boolean");
 
   it("a body pick holds the screen, so a starter called over it does nothing", () => {
-    const r = rig([{ id: "b1", name: "A" }, { id: "b2", name: "B" }]);
+    const r = rig([
+      { id: "b1", name: "A" },
+      { id: "b2", name: "B" },
+    ]);
     r.starters.startBoolean("subtract");
     expect(r.planePick()).toBe(true);
     r.starters.offsetPlane();
@@ -179,7 +198,10 @@ describe("a pick session cannot outlive its tool", () => {
   });
 
   it("a command started over a body pick ends it, and later body rows commit nothing", () => {
-    const r = rig([{ id: "b1", name: "A" }, { id: "b2", name: "B" }]);
+    const r = rig([
+      { id: "b1", name: "A" },
+      { id: "b2", name: "B" },
+    ]);
     const act = actionsOver(r);
     r.starters.startBoolean("subtract");
     act("revolve");
@@ -193,14 +215,24 @@ describe("a pick session cannot outlive its tool", () => {
   });
 
   it("a look around the model keeps the pick", () => {
-    const r = rig([{ id: "b1", name: "A" }, { id: "b2", name: "B" }]);
+    const r = rig([
+      { id: "b1", name: "A" },
+      { id: "b2", name: "B" },
+    ]);
     r.starters.startBoolean("subtract");
-    try { actionsOver(r)("persp"); } catch { /* the fake has no viewport, only the pick matters */ }
+    try {
+      actionsOver(r)("persp");
+    } catch {
+      /* the fake has no viewport, only the pick matters */
+    }
     expect(treePickWaiting()).toBe(true);
   });
 
   it("undo mid pick ends it through its cleanup, and later body rows commit nothing", () => {
-    const r = rig([{ id: "b1", name: "A" }, { id: "b2", name: "B" }]);
+    const r = rig([
+      { id: "b1", name: "A" },
+      { id: "b2", name: "B" },
+    ]);
     const store = new DocumentStore(stubBackend, { parameters: {}, features: [] });
     store.onRewind(endPickSession);
     store.addFeature({ id: "x", type: "box", length: 1, width: 1, height: 1 } as never);
@@ -220,7 +252,11 @@ describe("a pick session cannot outlive its tool", () => {
     store.onRewind(endPickSession);
     store.addFeature({ id: "x", type: "box", length: 1, width: 1, height: 1 } as never);
     store.undo();
-    for (const replace of [() => store.redo(), () => store.load(JSON.stringify({ parameters: {}, features: [] })), () => store.newDocument()]) {
+    for (const replace of [
+      () => store.redo(),
+      () => store.load(JSON.stringify({ parameters: {}, features: [] })),
+      () => store.newDocument(),
+    ]) {
       r.starters.offsetPlane();
       expect(treePickWaiting()).toBe(true);
       replace();

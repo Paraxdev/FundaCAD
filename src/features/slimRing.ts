@@ -48,7 +48,11 @@ export interface SlimRing {
 export function createSlimRing(radius: number, band = RING_BAND): SlimRing {
   const group = new THREE.Group();
   const mat = new THREE.MeshBasicMaterial({
-    transparent: true, opacity: RING_IDLE_OPACITY, depthTest: false, depthWrite: false, side: THREE.DoubleSide,
+    transparent: true,
+    opacity: RING_IDLE_OPACITY,
+    depthTest: false,
+    depthWrite: false,
+    side: THREE.DoubleSide,
   });
   const thin = new THREE.Mesh(new THREE.TorusGeometry(radius, THIN, 6, 160), mat);
   const thick = new THREE.Mesh(new THREE.TorusGeometry(radius, THICK, 8, 160), mat);

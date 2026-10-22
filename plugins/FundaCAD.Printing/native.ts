@@ -11,9 +11,9 @@ export type LocalBody =
   | { kind: "text"; text: string; mime?: string }
   | { kind: "json"; value: unknown }
   | {
-    kind: "form";
-    parts: { name: string; text?: string; file?: string; filename?: string; mime?: string }[];
-  };
+      kind: "form";
+      parts: { name: string; text?: string; file?: string; filename?: string; mime?: string }[];
+    };
 
 export interface LocalRequest {
   method?: string;

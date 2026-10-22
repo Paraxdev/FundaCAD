@@ -27,7 +27,14 @@ import * as THREE from "three";
 import { pushAll } from "../lib/pushAll";
 import { radialAt } from "../features/planeMath";
 import type { RoundFace } from "../features/radialDrag";
-import { TRIM_BUDGET, sectionOutline, sweepBlendGhost, type BlendKind, type EdgeSample, type Pt3 } from "../features/blendGhost";
+import {
+  TRIM_BUDGET,
+  sectionOutline,
+  sweepBlendGhost,
+  type BlendKind,
+  type EdgeSample,
+  type Pt3,
+} from "../features/blendGhost";
 import { bodyOfFace, type BodyMesh, type ModelView } from "./render";
 import { themeColor } from "./themeColors";
 
@@ -135,7 +142,9 @@ export class GhostLayer {
       const facet = new THREE.Vector3();
       for (const [i0, i1, i2] of tris) {
         tri.set(wv(i0), wv(i1), wv(i2)).getNormal(facet);
-        push(moved(i0, facet)); push(moved(i1, facet)); push(moved(i2, facet));
+        push(moved(i0, facet));
+        push(moved(i1, facet));
+        push(moved(i2, facet));
       }
       // A resized or offset curved face keeps its neighbours on their own
       // surfaces, so a wall from its old boundary would draw a step the result
@@ -149,12 +158,22 @@ export class GhostLayer {
         if (edges.has(key)) edges.delete(key);
         else edges.set(key, [a, b]);
       };
-      for (const [i0, i1, i2] of tris) { bump(i0, i1); bump(i1, i2); bump(i2, i0); }
+      for (const [i0, i1, i2] of tris) {
+        bump(i0, i1);
+        bump(i1, i2);
+        bump(i2, i0);
+      }
       for (const [a, b] of edges.values()) {
-        const A = wv(a), B = wv(b);
-        const Ao = moved(a, facet), Bo = moved(b, facet);
-        push(A); push(B); push(Bo);
-        push(A); push(Bo); push(Ao);
+        const A = wv(a),
+          B = wv(b);
+        const Ao = moved(a, facet),
+          Bo = moved(b, facet);
+        push(A);
+        push(B);
+        push(Bo);
+        push(A);
+        push(Bo);
+        push(Ao);
       }
     }
     if (!out.length) return;
@@ -483,7 +502,10 @@ const triGridCache = new WeakMap<BodyMesh, TriGrid>();
 
 /** The attribute's own array when it can be read directly, as plain
  *  `itemSize` tuples. */
-function plainArray(a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | null | undefined, itemSize: number): ArrayLike<number> | null {
+function plainArray(
+  a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | null | undefined,
+  itemSize: number,
+): ArrayLike<number> | null {
   if (!a || (a as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute) return null;
   return a.itemSize === itemSize && !a.normalized && a.array ? a.array : null;
 }
@@ -493,11 +515,17 @@ function buildTriGrid(body: BodyMesh): TriGrid {
   const pos = geo.getAttribute("position");
   const index = geo.getIndex();
   const triCount = pos && index ? index.count / 3 : 0;
-  const P = plainArray(pos, 3), I = plainArray(index, 1);
+  const P = plainArray(pos, 3),
+    I = plainArray(index, 1);
   const corners = new Float64Array(triCount * 9);
   const faceOf = new Int32Array(triCount);
   const verts = new Uint32Array(triCount * 3);
-  let lx = Infinity, ly = Infinity, lz = Infinity, hx = -Infinity, hy = -Infinity, hz = -Infinity;
+  let lx = Infinity,
+    ly = Infinity,
+    lz = Infinity,
+    hx = -Infinity,
+    hy = -Infinity,
+    hz = -Infinity;
   if (I) for (let i = 0; i < triCount * 3; i++) verts[i] = I[i]!;
   else for (let i = 0; i < triCount * 3; i++) verts[i] = index!.getX(i);
   for (let i = 0; i < triCount * 3; i++) {
@@ -506,24 +534,40 @@ function buildTriGrid(body: BodyMesh): TriGrid {
     corners[i * 3 + 1] = P ? P[v * 3 + 1]! : pos!.getY(v);
     corners[i * 3 + 2] = P ? P[v * 3 + 2]! : pos!.getZ(v);
   }
-  let n = 0, edgeLenSum = 0;
+  let n = 0,
+    edgeLenSum = 0;
   for (let t = 0; t < triCount; t++) {
     const fid = body.faceIds[t];
     if (fid === undefined) continue;
-    const s = t * 9, o = n * 9;
-    const ax = corners[s]!, ay = corners[s + 1]!, az = corners[s + 2]!;
-    const abx = corners[s + 3]! - ax, aby = corners[s + 4]! - ay, abz = corners[s + 5]! - az;
-    const acx = corners[s + 6]! - ax, acy = corners[s + 7]! - ay, acz = corners[s + 8]! - az;
-    const nx = aby * acz - abz * acy, ny = abz * acx - abx * acz, nz = abx * acy - aby * acx;
+    const s = t * 9,
+      o = n * 9;
+    const ax = corners[s]!,
+      ay = corners[s + 1]!,
+      az = corners[s + 2]!;
+    const abx = corners[s + 3]! - ax,
+      aby = corners[s + 4]! - ay,
+      abz = corners[s + 5]! - az;
+    const acx = corners[s + 6]! - ax,
+      acy = corners[s + 7]! - ay,
+      acz = corners[s + 8]! - az;
+    const nx = aby * acz - abz * acy,
+      ny = abz * acx - abx * acz,
+      nz = abx * acy - aby * acx;
     if (nx * nx + ny * ny + nz * nz < 1e-24) continue;
     if (o !== s) {
       corners.copyWithin(o, s, s + 9);
       verts.copyWithin(n * 3, t * 3, t * 3 + 3);
     }
-    const bcx = acx - abx, bcy = acy - aby, bcz = acz - abz;
-    edgeLenSum += Math.sqrt(abx * abx + aby * aby + abz * abz) + Math.sqrt(acx * acx + acy * acy + acz * acz)
-      + Math.sqrt(bcx * bcx + bcy * bcy + bcz * bcz);
-    const cx = ax + (abx + acx) / 3, cy = ay + (aby + acy) / 3, cz = az + (abz + acz) / 3;
+    const bcx = acx - abx,
+      bcy = acy - aby,
+      bcz = acz - abz;
+    edgeLenSum +=
+      Math.sqrt(abx * abx + aby * aby + abz * abz) +
+      Math.sqrt(acx * acx + acy * acy + acz * acz) +
+      Math.sqrt(bcx * bcx + bcy * bcy + bcz * bcz);
+    const cx = ax + (abx + acx) / 3,
+      cy = ay + (aby + acy) / 3,
+      cz = az + (abz + acz) / 3;
     if (cx < lx) lx = cx;
     if (cx > hx) hx = cx;
     if (cy < ly) ly = cy;
@@ -543,9 +587,18 @@ function buildTriGrid(body: BodyMesh): TriGrid {
   const cells = new Map<number, number[]>();
   for (let t = 0; t < n; t++) {
     const o = t * 9;
-    const ix = Math.min(dims[0] - 1, Math.floor(((corners[o]! + corners[o + 3]! + corners[o + 6]!) / 3 - lx) / cellSize));
-    const iy = Math.min(dims[1] - 1, Math.floor(((corners[o + 1]! + corners[o + 4]! + corners[o + 7]!) / 3 - ly) / cellSize));
-    const iz = Math.min(dims[2] - 1, Math.floor(((corners[o + 2]! + corners[o + 5]! + corners[o + 8]!) / 3 - lz) / cellSize));
+    const ix = Math.min(
+      dims[0] - 1,
+      Math.floor(((corners[o]! + corners[o + 3]! + corners[o + 6]!) / 3 - lx) / cellSize),
+    );
+    const iy = Math.min(
+      dims[1] - 1,
+      Math.floor(((corners[o + 1]! + corners[o + 4]! + corners[o + 7]!) / 3 - ly) / cellSize),
+    );
+    const iz = Math.min(
+      dims[2] - 1,
+      Math.floor(((corners[o + 2]! + corners[o + 5]! + corners[o + 8]!) / 3 - lz) / cellSize),
+    );
     const key = ix + dims[0] * (iy + dims[1] * iz);
     let list = cells.get(key);
     if (!list) cells.set(key, (list = []));
@@ -557,7 +610,12 @@ function buildTriGrid(body: BodyMesh): TriGrid {
     faceOf: faceOf.subarray(0, n),
     verts: verts.subarray(0, n * 3),
     normals: geo.getAttribute("normal") ?? null,
-    cellSize, tolerance, origin, dims, cells, byFace: new Map(),
+    cellSize,
+    tolerance,
+    origin,
+    dims,
+    cells,
+    byFace: new Map(),
   };
 }
 
@@ -583,7 +641,8 @@ function triGrid(body: BodyMesh): TriGrid {
 }
 
 function triRec(g: TriGrid, t: number): TriRec {
-  const c = g.corners, o = t * 9;
+  const c = g.corners,
+    o = t * 9;
   const a = new THREE.Vector3(c[o], c[o + 1], c[o + 2]);
   const b = new THREE.Vector3(c[o + 3], c[o + 4], c[o + 5]);
   const cc = new THREE.Vector3(c[o + 6], c[o + 7], c[o + 8]);
@@ -606,7 +665,16 @@ const VERTEX_NORMAL_AGREEMENT = Math.cos(Math.PI / 6);
  *  The facet alone is off by half a facet's turn on a curved face. */
 function surfaceNormal(tri: TriRec, at: THREE.Vector3): THREE.Vector3 {
   if (tri.vn) {
-    const n = THREE.Triangle.getInterpolation(at, tri.a, tri.b, tri.c, tri.vn[0], tri.vn[1], tri.vn[2], new THREE.Vector3());
+    const n = THREE.Triangle.getInterpolation(
+      at,
+      tri.a,
+      tri.b,
+      tri.c,
+      tri.vn[0],
+      tri.vn[1],
+      tri.vn[2],
+      new THREE.Vector3(),
+    );
     if (n && n.lengthSq() > 1e-12) {
       n.normalize();
       if (Math.abs(n.dot(tri.normal)) >= VERTEX_NORMAL_AGREEMENT) return n;
@@ -628,7 +696,9 @@ function boxDistanceSq(c: Float64Array, t: number, p: Pt3): number {
   const o = t * 9;
   let dd = 0;
   for (let k = 0; k < 3; k++) {
-    const a = c[o + k]!, b = c[o + 3 + k]!, e = c[o + 6 + k]!;
+    const a = c[o + k]!,
+      b = c[o + 3 + k]!,
+      e = c[o + 6 + k]!;
     const q = p[k as 0 | 1 | 2];
     const g = q < a && q < b && q < e ? Math.min(a, b, e) - q : q > a && q > b && q > e ? q - Math.max(a, b, e) : 0;
     dd += g * g;
@@ -646,7 +716,8 @@ interface FacesAt {
 
 /** The grid cells within tolerance of `p`, as their triangle lists. */
 function cellsNear(grid: TriGrid, p: Pt3): number[][] {
-  const cs = grid.cellSize, [nx, ny, nz] = grid.dims;
+  const cs = grid.cellSize,
+    [nx, ny, nz] = grid.dims;
   const at = (k: 0 | 1 | 2) => Math.floor((p[k] - grid.origin[k]) / cs);
   const reach = Math.max(1, Math.ceil(grid.tolerance / cs)) + 1;
   const [cx, cy, cz] = [at(0), at(1), at(2)];
@@ -666,7 +737,12 @@ function cellsNear(grid: TriGrid, p: Pt3): number[][] {
  *  there and the triangle it came from, or null when fewer than two distinct
  *  faces have a triangle within tolerance. Searched among `among` when given,
  *  else the grid cells around the point, and only `within` of it. */
-function facesAtPoint(body: BodyMesh, p: Pt3, among?: readonly (readonly number[] | Int32Array)[], within = Infinity): FacesAt | null {
+function facesAtPoint(
+  body: BodyMesh,
+  p: Pt3,
+  among?: readonly (readonly number[] | Int32Array)[],
+  within = Infinity,
+): FacesAt | null {
   const grid = triGrid(body);
   if (!grid.cells.size) return null;
   const pv = new THREE.Vector3(p[0], p[1], p[2]);
@@ -690,7 +766,8 @@ function facesAtPoint(body: BodyMesh, p: Pt3, among?: readonly (readonly number[
       if (prev && dist >= prev.dist) continue;
       byFace.set(faceId, { faceId, dist, tri: t, closest: scratchClosest.clone() });
       if (byFace.size >= 2) {
-        let first = Infinity, second = Infinity;
+        let first = Infinity,
+          second = Infinity;
         for (const h of byFace.values()) {
           if (h.dist < first) [first, second] = [h.dist, first];
           else if (h.dist < second) second = h.dist;
@@ -713,7 +790,8 @@ function facesAtPoint(body: BodyMesh, p: Pt3, among?: readonly (readonly number[
 /** The triangles whose boxes come within `within` of the box around `pts`,
  *  every one that can be that close to a point on the polyline. */
 function trianglesNear(grid: TriGrid, pts: readonly Pt3[], within: number): Int32Array {
-  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  const lo = [Infinity, Infinity, Infinity],
+    hi = [-Infinity, -Infinity, -Infinity];
   for (const q of pts) {
     for (let k = 0; k < 3; k++) {
       lo[k] = Math.min(lo[k]!, q[k as 0 | 1 | 2] - within);
@@ -725,7 +803,9 @@ function trianglesNear(grid: TriGrid, pts: readonly Pt3[], within: number): Int3
   outer: for (let t = 0; t < grid.count; t++) {
     const o = t * 9;
     for (let k = 0; k < 3; k++) {
-      const a = c[o + k]!, b = c[o + 3 + k]!, e = c[o + 6 + k]!;
+      const a = c[o + k]!,
+        b = c[o + 3 + k]!,
+        e = c[o + 6 + k]!;
       if ((a < lo[k]! && b < lo[k]! && e < lo[k]!) || (a > hi[k]! && b > hi[k]! && e > hi[k]!)) continue outer;
     }
     out.push(t);
@@ -767,14 +847,20 @@ function faceReach(
   const lateral = tangent.clone().cross(into);
   const c = g.corners;
   let reach = -Infinity;
-  const s = [0, 0, 0], l = [0, 0, 0], d = [0, 0, 0];
+  const s = [0, 0, 0],
+    l = [0, 0, 0],
+    d = [0, 0, 0];
   for (let k = 0; k < tris.length; k++) {
     const t = tris[k]!;
     if (g.faceOf[t] !== face) continue;
     const o = t * 9;
-    let ahead = 0, behind = 0;
+    let ahead = 0,
+      behind = 0;
     for (let i = 0; i < 3; i++) {
-      const di = (c[o + i * 3]! - p.x) * tangent.x + (c[o + i * 3 + 1]! - p.y) * tangent.y + (c[o + i * 3 + 2]! - p.z) * tangent.z;
+      const di =
+        (c[o + i * 3]! - p.x) * tangent.x +
+        (c[o + i * 3 + 1]! - p.y) * tangent.y +
+        (c[o + i * 3 + 2]! - p.z) * tangent.z;
       d[i] = di;
       if (di > 1e-9) ahead++;
       else if (di < -1e-9) behind++;
@@ -782,17 +868,22 @@ function faceReach(
     if (ahead === 3 || behind === 3) continue;
     let far = -Infinity;
     for (let i = 0; i < 3; i++) {
-      const si = (c[o + i * 3]! - p.x) * into.x + (c[o + i * 3 + 1]! - p.y) * into.y + (c[o + i * 3 + 2]! - p.z) * into.z;
+      const si =
+        (c[o + i * 3]! - p.x) * into.x + (c[o + i * 3 + 1]! - p.y) * into.y + (c[o + i * 3 + 2]! - p.z) * into.z;
       s[i] = si;
       if (si > far) far = si;
     }
     if (far <= reach) continue;
     for (let i = 0; i < 3; i++) {
-      l[i] = (c[o + i * 3]! - p.x) * lateral.x + (c[o + i * 3 + 1]! - p.y) * lateral.y + (c[o + i * 3 + 2]! - p.z) * lateral.z;
+      l[i] =
+        (c[o + i * 3]! - p.x) * lateral.x +
+        (c[o + i * 3 + 1]! - p.y) * lateral.y +
+        (c[o + i * 3 + 2]! - p.z) * lateral.z;
     }
     for (let i = 0; i < 3; i++) {
       const j = (i + 1) % 3;
-      const di = d[i]!, dj = d[j]!;
+      const di = d[i]!,
+        dj = d[j]!;
       let ss: number, ll: number;
       if (Math.abs(di) < 1e-9) {
         ss = s[i]!;
@@ -830,13 +921,20 @@ const dotAt = (c: Float64Array, i: number, v: THREE.Vector3) => c[i]! * v.x + c[
 
 /** The triangles each of the parallel planes across `tangent` through
  *  `points` cuts, or null when that is more than `budget` cuts in all. */
-function cutsAlongLine(g: TriGrid, tangent: THREE.Vector3, points: readonly THREE.Vector3[], budget: number): number[][] | null {
+function cutsAlongLine(
+  g: TriGrid,
+  tangent: THREE.Vector3,
+  points: readonly THREE.Vector3[],
+  budget: number,
+): number[][] | null {
   const order = points.map((p, i) => [p.dot(tangent), i] as const).sort((a, b) => a[0] - b[0]);
   const keys = order.map(([k]) => k);
-  const m = keys.length, c = g.corners;
+  const m = keys.length,
+    c = g.corners;
   // The first sorted key above `k`, from a guess that is exact for evenly
   // spaced samples.
-  const k0 = keys[0]!, step = m > 1 ? (keys[m - 1]! - k0) / (m - 1) : 0;
+  const k0 = keys[0]!,
+    step = m > 1 ? (keys[m - 1]! - k0) / (m - 1) : 0;
   const above = (k: number) => {
     let i = step > 0 ? Math.max(0, Math.min(m, Math.ceil((k - k0) / step))) : 0;
     while (i > 0 && keys[i - 1]! > k) i--;
@@ -846,8 +944,11 @@ function cutsAlongLine(g: TriGrid, tangent: THREE.Vector3, points: readonly THRE
   const span = new Int32Array(g.count * 2);
   let total = 0;
   for (let t = 0; t < g.count; t++) {
-    const k0 = dotAt(c, t * 9, tangent), k1 = dotAt(c, t * 9 + 3, tangent), k2 = dotAt(c, t * 9 + 6, tangent);
-    const first = above(Math.min(k0, k1, k2)), last = above(Math.max(k0, k1, k2)) - 1;
+    const k0 = dotAt(c, t * 9, tangent),
+      k1 = dotAt(c, t * 9 + 3, tangent),
+      k2 = dotAt(c, t * 9 + 6, tangent);
+    const first = above(Math.min(k0, k1, k2)),
+      last = above(Math.max(k0, k1, k2)) - 1;
     span[t * 2] = first;
     span[t * 2 + 1] = last;
     if (last >= first) total += last - first + 1;
@@ -876,13 +977,20 @@ function bodyOutline(
 ): Float64Array {
   const g = triGrid(body);
   const c = g.corners;
-  const pT = p.dot(tangent), px = p.dot(x), py = p.dot(y);
-  let out = outlineScratch, n = 0;
-  const d = [0, 0, 0], u = [0, 0, 0], w = [0, 0, 0];
+  const pT = p.dot(tangent),
+    px = p.dot(x),
+    py = p.dot(y);
+  let out = outlineScratch,
+    n = 0;
+  const d = [0, 0, 0],
+    u = [0, 0, 0],
+    w = [0, 0, 0];
   const count = among ? among.length : g.count;
   for (let i = 0; i < count; i++) {
     const o = (among ? among[i]! : i) * 9;
-    const d0 = dotAt(c, o, tangent) - pT, d1 = dotAt(c, o + 3, tangent) - pT, d2 = dotAt(c, o + 6, tangent) - pT;
+    const d0 = dotAt(c, o, tangent) - pT,
+      d1 = dotAt(c, o + 3, tangent) - pT,
+      d2 = dotAt(c, o + 6, tangent) - pT;
     if (d0 >= 0 ? d1 >= 0 && d2 >= 0 : d1 < 0 && d2 < 0) continue;
     d[0] = d0;
     d[1] = d1;
@@ -899,7 +1007,8 @@ function bodyOutline(
     for (let a = 0; a < 3; a++) {
       const b = (a + 1) % 3;
       if (d[a]! >= 0 === d[b]! >= 0) continue;
-      const h = d[a]! >= 0 ? a : b, l = h === a ? b : a;
+      const h = d[a]! >= 0 ? a : b,
+        l = h === a ? b : a;
       const f = d[h]! / (d[h]! - d[l]!);
       out[n++] = u[h]! + (u[l]! - u[h]!) * f;
       out[n++] = w[h]! + (w[l]! - w[h]!) * f;
@@ -920,10 +1029,14 @@ function faceBend(
   side: THREE.Vector3,
 ): number {
   if (!tri.vn) return 0;
-  let far = -1, a = 0;
+  let far = -1,
+    a = 0;
   [tri.a, tri.b, tri.c].forEach((v, i) => {
     const s = v.clone().sub(p).dot(into);
-    if (s > a) { a = s; far = i; }
+    if (s > a) {
+      a = s;
+      far = i;
+    }
   });
   if (far < 0 || a < 1e-6) return 0;
   const nv = tri.vn[far]!.clone();
@@ -942,10 +1055,12 @@ function isClosedPolyline(pts: readonly Pt3[]): boolean {
   if (pts.length < 3) return false;
   let total = 0;
   for (let i = 1; i < pts.length; i++) {
-    const a = pts[i - 1]!, b = pts[i]!;
+    const a = pts[i - 1]!,
+      b = pts[i]!;
     total += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
   }
-  const a = pts[0]!, b = pts[pts.length - 1]!;
+  const a = pts[0]!,
+    b = pts[pts.length - 1]!;
   return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) <= Math.max(total * 1e-4, 1e-6);
 }
 
@@ -957,7 +1072,8 @@ function isClosedPolyline(pts: readonly Pt3[]): boolean {
 function resampleEdge(pts: readonly Pt3[], count: number, closed = false): Pt3[] | null {
   const cum: number[] = [0];
   for (let i = 1; i < pts.length; i++) {
-    const [x0, y0, z0] = pts[i - 1]!, [x1, y1, z1] = pts[i]!;
+    const [x0, y0, z0] = pts[i - 1]!,
+      [x1, y1, z1] = pts[i]!;
     cum.push(cum[i - 1]! + Math.hypot(x1 - x0, y1 - y0, z1 - z0));
   }
   const total = cum[cum.length - 1]!;
@@ -973,7 +1089,8 @@ function resampleEdge(pts: readonly Pt3[], count: number, closed = false): Pt3[]
     while (seg < cum.length - 2 && cum[seg + 1]! < target) seg++;
     const segLen = cum[seg + 1]! - cum[seg]!;
     const t = segLen > 1e-12 ? (target - cum[seg]!) / segLen : 0;
-    const a = pts[seg]!, b = pts[seg + 1]!;
+    const a = pts[seg]!,
+      b = pts[seg + 1]!;
     out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
   }
   return out;
@@ -1041,8 +1158,15 @@ function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSampl
   const near = [trianglesNear(grid, edge.points, within)];
   let primaryFace: number | null = null;
   const wedges: {
-    p: Pt3; pv: THREE.Vector3; tangent: THREE.Vector3; d1: THREE.Vector3; d2: THREE.Vector3; side1: THREE.Vector3;
-    faces: [number, number]; bend1: number; bend2: number;
+    p: Pt3;
+    pv: THREE.Vector3;
+    tangent: THREE.Vector3;
+    d1: THREE.Vector3;
+    d2: THREE.Vector3;
+    side1: THREE.Vector3;
+    faces: [number, number];
+    bend1: number;
+    bend2: number;
   }[] = [];
   for (let i = 0; i < n; i++) {
     const p = resampled[i]!;
@@ -1076,7 +1200,12 @@ function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSampl
     if (side1.lengthSq() < 1e-12 || side2.lengthSq() < 1e-12) continue;
     side1.normalize();
     wedges.push({
-      p, pv, tangent, d1, d2, side1,
+      p,
+      pv,
+      tangent,
+      d1,
+      d2,
+      side1,
       faces: [found.faceIds[k1], found.faceIds[k2]],
       bend1: faceBend(found.tris[k1], found.normals[k1], pv, tangent, d1, side1),
       bend2: faceBend(found.tris[k2], found.normals[k2], pv, tangent, d2, side2.normalize()),
@@ -1086,7 +1215,14 @@ function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSampl
 
   const m = wedges.length;
   const straight = !closed && wedges.every((w) => w.tangent.dot(wedges[0]!.tangent) > 1 - 1e-12);
-  const lineCuts = straight ? cutsAlongLine(grid, wedges[0]!.tangent, wedges.map((w) => w.pv), OUTLINE_CUTS) : null;
+  const lineCuts = straight
+    ? cutsAlongLine(
+        grid,
+        wedges[0]!.tangent,
+        wedges.map((w) => w.pv),
+        OUTLINE_CUTS,
+      )
+    : null;
   const reaches = ([0, 1] as const).map((slot) => {
     const face = (j: number) => wedges[j]!.faces[slot];
     const size = (j: number) => faceTris(grid, face(j)).length;
@@ -1145,7 +1281,11 @@ function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSampl
   if (!closed) {
     const pts = edge.points;
     const head = endSample(pts[0]!, unitTangent(pts[0]!, pts[1]!), samples[0]!);
-    const tail = endSample(pts[pts.length - 1]!, unitTangent(pts[pts.length - 2]!, pts[pts.length - 1]!), samples[samples.length - 1]!);
+    const tail = endSample(
+      pts[pts.length - 1]!,
+      unitTangent(pts[pts.length - 2]!, pts[pts.length - 1]!),
+      samples[samples.length - 1]!,
+    );
     if (head) samples.unshift(head);
     if (tail) samples.push(tail);
   }

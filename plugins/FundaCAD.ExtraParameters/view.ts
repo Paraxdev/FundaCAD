@@ -92,7 +92,11 @@ export function nextId(prefix: string, used: Iterable<string>): string {
 
 /** A control of another kind, carrying over whatever range still applies, so
  *  flipping a slider to a number box and back does not lose its limits. */
-export function convertControl(from: ParamControl | undefined, kind: ParamControl["kind"], value: number): ParamControl {
+export function convertControl(
+  from: ParamControl | undefined,
+  kind: ParamControl["kind"],
+  value: number,
+): ParamControl {
   const range = from && (from.kind === "number" || from.kind === "slider") ? from : undefined;
   switch (kind) {
     case "toggle":

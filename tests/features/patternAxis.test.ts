@@ -77,7 +77,10 @@ describe("the circular pattern's Axis row", () => {
     const line = pc({ axis: { origin: [20, 15, 0], dir: [0, 0, 1] } });
     expect(patternAxisChoice(line, [line])).toMatchObject({ current: PLACED_AXIS });
     expect(patternAxisChoice(line, [line]).options.at(-1)?.label).toBe("Line");
-    const picked = pc({ axis: { origin: [20, 15, 0], dir: [0, 0, 1] }, axisRef: { kind: "edge", by: "nearest", point: [0, 0, 0] } });
+    const picked = pc({
+      axis: { origin: [20, 15, 0], dir: [0, 0, 1] },
+      axisRef: { kind: "edge", by: "nearest", point: [0, 0, 0] },
+    });
     expect(patternAxisChoice(picked, [picked]).options.at(-1)?.label).toBe("Picked");
   });
 });

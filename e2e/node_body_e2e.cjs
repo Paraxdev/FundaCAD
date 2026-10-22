@@ -15,7 +15,10 @@ const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const WS_PORT = process.env.SC_WS_PORT || "";
 const OUT = path.resolve(process.argv[2] || "node_body_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -26,9 +29,16 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-  page.on("console", (m) => { if (m.type() === "error" && !/403/.test(m.text())) console.error("console:", m.text()); });
-  page.on("response", (r) => { if (r.status() === 403) console.error("403:", r.url()); });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
+  page.on("console", (m) => {
+    if (m.type() === "error" && !/403/.test(m.text())) console.error("console:", m.text());
+  });
+  page.on("response", (r) => {
+    if (r.status() === 403) console.error("403:", r.url());
+  });
   if (WS_PORT) {
     await page.addInitScript((port) => {
       const Native = window.WebSocket;
@@ -42,24 +52,30 @@ const check = (name, ok, detail) => {
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
   const idle = async () => {
     await page.waitForTimeout(250);
     await page.waitForFunction(() => !window.store.buildState.building, null, { timeout: 90000 });
   };
   const shot = (name) => page.screenshot({ path: path.join(OUT, name) });
-  const nodeFeature = () => page.evaluate(() => {
-    const f = window.store.document.features.find((x) => x.type === "organic");
-    return f ? JSON.parse(JSON.stringify(f)) : null;
-  });
-  const bodies = () => page.evaluate(() => (window.store.buildState.result?.bodies ?? []).map((b) => ({ id: b.id, bbox: b.bbox })));
-  const toScreen = (p) => page.evaluate((q) => {
-    const v = window.viewport;
-    const c = v.cameraTarget();
-    const world = c.clone().set(q[0], q[1], q[2]);
-    return v.projectToScreen(world);
-  }, p);
+  const nodeFeature = () =>
+    page.evaluate(() => {
+      const f = window.store.document.features.find((x) => x.type === "organic");
+      return f ? JSON.parse(JSON.stringify(f)) : null;
+    });
+  const bodies = () =>
+    page.evaluate(() => (window.store.buildState.result?.bodies ?? []).map((b) => ({ id: b.id, bbox: b.bbox })));
+  const toScreen = (p) =>
+    page.evaluate((q) => {
+      const v = window.viewport;
+      const c = v.cameraTarget();
+      const world = c.clone().set(q[0], q[1], q[2]);
+      return v.projectToScreen(world);
+    }, p);
 
   // What of the move gizmo is in the scene. Its arrows carry a numeric
   // userData.axis, the origin triad's arms a letter, so the two never mix up
@@ -83,12 +99,13 @@ const check = (name, ok, detail) => {
   };
 
   // A view with room: iso, framed on a 60 mm span around the origin.
-  const lookAt = () => page.evaluate(() => {
-    const v = window.viewport;
-    const at = (x, y, z) => v.cameraTarget().clone().set(x, y, z);
-    v.rig.setLookAt(at(110, -150, 120), at(36, 0, 4), false);
-    window.viewport.requestRender();
-  });
+  const lookAt = () =>
+    page.evaluate(() => {
+      const v = window.viewport;
+      const at = (x, y, z) => v.cameraTarget().clone().set(x, y, z);
+      v.rig.setLookAt(at(110, -150, 120), at(36, 0, 4), false);
+      window.viewport.requestRender();
+    });
   await lookAt();
   await page.waitForTimeout(600);
 
@@ -102,7 +119,11 @@ const check = (name, ok, detail) => {
   // chain. Below the last node, clear of the gizmo's value
   // boxes, which sit to its right.
   const origin = await toScreen([0, 0, 0]);
-  const clicks = [[0, 0], [40, 150], [170, 250]];
+  const clicks = [
+    [0, 0],
+    [40, 150],
+    [170, 250],
+  ];
   for (const [dx, dy] of clicks) {
     await page.mouse.click(origin.x + dx, origin.y + dy);
     await idle();
@@ -113,7 +134,11 @@ const check = (name, ok, detail) => {
   await idle();
   let f = null;
   const panelText = await page.$eval('[data-panel="node-body"]', (el) => el.textContent);
-  check("three nodes are listed", /n1/.test(panelText) && /n2/.test(panelText) && /n3/.test(panelText), panelText.slice(0, 120));
+  check(
+    "three nodes are listed",
+    /n1/.test(panelText) && /n2/.test(panelText) && /n3/.test(panelText),
+    panelText.slice(0, 120),
+  );
   check("they form one chain", /n1 → n2 → n3/.test(panelText));
   await shot("01_three_nodes.png");
   await census("with n3 picked");
@@ -194,16 +219,27 @@ const check = (name, ok, detail) => {
   await noStrayGizmo("after Add");
 
   // 6. Bind n1's X radius to a parameter, the way the properties row does.
-  const err = await page.evaluate((id) => window.store.setTargetExpr(
-    { kind: "feature", feature: id, field: "nodes.n1.sx" }, "blob=8", "length"), f.id);
+  const err = await page.evaluate(
+    (id) => window.store.setTargetExpr({ kind: "feature", feature: id, field: "nodes.n1.sx" }, "blob=8", "length"),
+    f.id,
+  );
   await page.waitForTimeout(500);
   await idle();
-  const bound = await page.evaluate((id) => window.store.boundExpr({ kind: "feature", feature: id, field: "nodes.n1.sx" }), f.id);
-  check("n1 Radius X is bound to blob", !err && bound?.name === "blob" && bound?.value === 8, JSON.stringify({ err, bound }));
+  const bound = await page.evaluate(
+    (id) => window.store.boundExpr({ kind: "feature", feature: id, field: "nodes.n1.sx" }),
+    f.id,
+  );
+  check(
+    "n1 Radius X is bound to blob",
+    !err && bound?.name === "blob" && bound?.value === 8,
+    JSON.stringify({ err, bound }),
+  );
   const bbox = () => page.evaluate(() => JSON.stringify(window.store.buildState.result?.bbox));
   const before = await bbox();
-  await page.evaluate((id) => window.store.setTargetExpr(
-    { kind: "feature", feature: id, field: "nodes.n1.sx" }, "16", "length"), f.id);
+  await page.evaluate(
+    (id) => window.store.setTargetExpr({ kind: "feature", feature: id, field: "nodes.n1.sx" }, "16", "length"),
+    f.id,
+  );
   await page.waitForTimeout(500);
   await idle();
   f = await nodeFeature();
@@ -225,12 +261,19 @@ const check = (name, ok, detail) => {
   await lookAt();
   await page.waitForTimeout(600);
   const cutBox = await page.evaluate(() => window.store.buildState.result?.bbox);
-  check("the cut keeps the limb beyond the box", !!cutBox && cutBox.max[0] > 60 && cutBox.min[0] < -8, JSON.stringify(cutBox));
+  check(
+    "the cut keeps the limb beyond the box",
+    !!cutBox && cutBox.max[0] > 60 && cutBox.min[0] < -8,
+    JSON.stringify(cutBox),
+  );
   await shot("06_cut.png");
 
   // 8. Re-open it by editing, the panel comes back on the committed nodes.
   await page.evaluate((id) => window.__fundacad.editFeature(id), f.id);
-  const reopened = await page.waitForSelector('[data-panel="node-body"]', { timeout: 10000 }).then(() => true, () => false);
+  const reopened = await page.waitForSelector('[data-panel="node-body"]', { timeout: 10000 }).then(
+    () => true,
+    () => false,
+  );
   check("editing the feature re-opens the node panel", reopened);
   await shot("07_edit.png");
 
@@ -260,4 +303,7 @@ const check = (name, ok, detail) => {
   await browser.close();
   console.log(failures ? `${failures} FAILED` : "all passed");
   process.exit(failures ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

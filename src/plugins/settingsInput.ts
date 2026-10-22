@@ -56,7 +56,13 @@ const MODIFIER_KEYS = new Set(["Control", "Shift", "Alt", "Meta"]);
 
 /** A key press written the way the shortcut sheet writes one, "Ctrl+Shift+K",
  *  or null while only modifiers are held. */
-export function keyCombo(ev: { key: string; ctrlKey: boolean; shiftKey: boolean; altKey: boolean; metaKey: boolean }): string | null {
+export function keyCombo(ev: {
+  key: string;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+  metaKey: boolean;
+}): string | null {
   if (MODIFIER_KEYS.has(ev.key)) return null;
   const name = ev.key === " " ? "Space" : ev.key.replace(/^Arrow/, "");
   const key = name.length === 1 ? name.toUpperCase() : name;

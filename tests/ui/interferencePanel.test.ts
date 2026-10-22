@@ -36,7 +36,8 @@ describe("the Interference panel", () => {
   });
 
   it("names a body it could not judge, and does not call the check clean", async () => {
-    const reason = "has faces that point the wrong way, at 65 of its edges the two faces disagree about which side is inside";
+    const reason =
+      "has faces that point the wrong way, at 65 of its edges the two faces disagree about which side is inside";
     const { panels, statuses } = rig({
       ok: true,
       pairs: [],

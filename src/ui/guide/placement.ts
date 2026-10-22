@@ -13,7 +13,12 @@ export const GAP = 12;
 export const RING_PAD = 4;
 
 export function ringRect(target: Box, pad = RING_PAD): Box {
-  return { left: target.left - pad, top: target.top - pad, width: target.width + 2 * pad, height: target.height + 2 * pad };
+  return {
+    left: target.left - pad,
+    top: target.top - pad,
+    width: target.width + 2 * pad,
+    height: target.height + 2 * pad,
+  };
 }
 
 export const intersects = (a: Box, b: Box) =>

@@ -70,10 +70,6 @@ function pick(v: T) {
     :min-width="width"
     @close="open = false"
   >
-    <ChoiceList
-      :options="options"
-      :model-value="modelValue"
-      @update:model-value="pick"
-    />
+    <ChoiceList :options="options" :model-value="modelValue" @update:model-value="pick" />
   </Popover>
 </template>

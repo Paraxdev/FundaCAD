@@ -8,8 +8,10 @@ const v = (x: number, y: number) => new THREE.Vector2(x, y);
 
 /** intersection of two INFINITE lines (through p1p2 and p3p4); null if parallel */
 export function lineIntersect(p1: V, p2: V, p3: V, p4: V): V | null {
-  const d1x = p2.x - p1.x, d1y = p2.y - p1.y;
-  const d2x = p4.x - p3.x, d2y = p4.y - p3.y;
+  const d1x = p2.x - p1.x,
+    d1y = p2.y - p1.y;
+  const d2x = p4.x - p3.x,
+    d2y = p4.y - p3.y;
   const den = d1x * d2y - d1y * d2x;
   if (Math.abs(den) < 1e-9) return null;
   const t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / den;
@@ -18,8 +20,10 @@ export function lineIntersect(p1: V, p2: V, p3: V, p4: V): V | null {
 
 /** intersection point of two SEGMENTS, or null if they don't cross */
 export function segIntersect(p1: V, p2: V, p3: V, p4: V): V | null {
-  const d1x = p2.x - p1.x, d1y = p2.y - p1.y;
-  const d2x = p4.x - p3.x, d2y = p4.y - p3.y;
+  const d1x = p2.x - p1.x,
+    d1y = p2.y - p1.y;
+  const d2x = p4.x - p3.x,
+    d2y = p4.y - p3.y;
   const den = d1x * d2y - d1y * d2x;
   if (Math.abs(den) < 1e-9) return null;
   const t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / den;
@@ -30,8 +34,10 @@ export function segIntersect(p1: V, p2: V, p3: V, p4: V): V | null {
 
 /** intersection points of segment p1p2 with the full circle (center c, radius r) */
 export function segCircleIntersect(p1: V, p2: V, c: V, r: number): V[] {
-  const dx = p2.x - p1.x, dy = p2.y - p1.y;
-  const fx = p1.x - c.x, fy = p1.y - c.y;
+  const dx = p2.x - p1.x,
+    dy = p2.y - p1.y;
+  const fx = p1.x - c.x,
+    fy = p1.y - c.y;
   const a = dx * dx + dy * dy;
   const b = 2 * (fx * dx + fy * dy);
   const cc = fx * fx + fy * fy - r * r;
@@ -50,8 +56,10 @@ export function segCircleIntersect(p1: V, p2: V, c: V, r: number): V[] {
  *  the offset segment's ends more often than not, so clamping to [0,1] would
  *  discard exactly the join we're looking for. */
 export function circleLineIntersect(p1: V, p2: V, c: V, r: number): V[] {
-  const dx = p2.x - p1.x, dy = p2.y - p1.y;
-  const fx = p1.x - c.x, fy = p1.y - c.y;
+  const dx = p2.x - p1.x,
+    dy = p2.y - p1.y;
+  const fx = p1.x - c.x,
+    fy = p1.y - c.y;
   const a = dx * dx + dy * dy;
   if (a < 1e-12) return [];
   const b = 2 * (fx * dx + fy * dy);
@@ -68,21 +76,25 @@ export function circleLineIntersect(p1: V, p2: V, c: V, r: number): V[] {
  *  lineIntersect (line-line) and segCircleIntersect (line-arc), used to miter a
  *  corner where two offset arcs meet. */
 export function circleCircleIntersect(c1: V, r1: number, c2: V, r2: number): V[] {
-  const dx = c2.x - c1.x, dy = c2.y - c1.y;
+  const dx = c2.x - c1.x,
+    dy = c2.y - c1.y;
   const d = Math.hypot(dx, dy);
   if (d < 1e-9 || d > r1 + r2 + 1e-9 || d < Math.abs(r1 - r2) - 1e-9) return [];
   const a = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
   const h2 = r1 * r1 - a * a;
   const h = h2 > 0 ? Math.sqrt(h2) : 0;
-  const mx = c1.x + (a * dx) / d, my = c1.y + (a * dy) / d;
+  const mx = c1.x + (a * dx) / d,
+    my = c1.y + (a * dy) / d;
   if (h <= 1e-9) return [v(mx, my)]; // tangent: one point
-  const ox = (-dy * h) / d, oy = (dx * h) / d;
+  const ox = (-dy * h) / d,
+    oy = (dx * h) / d;
   return [v(mx + ox, my + oy), v(mx - ox, my - oy)];
 }
 
 /** parameter t in [0,1] of the closest point on segment p1p2 to q */
 export function paramOnSeg(p1: Pt, p2: Pt, q: Pt): number {
-  const dx = p2.x - p1.x, dy = p2.y - p1.y;
+  const dx = p2.x - p1.x,
+    dy = p2.y - p1.y;
   const len2 = dx * dx + dy * dy || 1;
   return ((q.x - p1.x) * dx + (q.y - p1.y) * dy) / len2;
 }

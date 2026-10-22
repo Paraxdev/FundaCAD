@@ -37,14 +37,21 @@ export function boxReply(lumps: readonly Lump[]): RebuildResult {
     if (last?.id === p.body) last.faceCount += 6;
     else bodies.push({ id: p.body, name: p.body, faceStart: n * 6, faceCount: 6 });
   });
-  return { mesh: { positions, indices, faceIds }, edges, bbox: { min: box.min.toArray(), max: box.max.toArray() }, bodies };
+  return {
+    mesh: { positions, indices, faceIds },
+    edges,
+    bbox: { min: box.min.toArray(), max: box.max.toArray() },
+    bodies,
+  };
 }
 
 // An open sheet of one face, a quad whose corners wind round its front, as a surface body is.
 export function withSheet(r: RebuildResult, body: string, corners: readonly THREE.Vector3[]): RebuildResult {
   const base = r.mesh.positions.length / 3;
   const face = r.mesh.faceIds.length ? Math.max(...r.mesh.faceIds) + 1 : 0;
-  const box = new THREE.Box3(new THREE.Vector3(...r.bbox.min), new THREE.Vector3(...r.bbox.max)).union(new THREE.Box3().setFromPoints([...corners]));
+  const box = new THREE.Box3(new THREE.Vector3(...r.bbox.min), new THREE.Vector3(...r.bbox.max)).union(
+    new THREE.Box3().setFromPoints([...corners]),
+  );
   return {
     ...r,
     mesh: {
@@ -63,7 +70,15 @@ export function boxView(lumps: readonly Lump[], w: number, h: number): ModelView
 
 export function replyView(r: RebuildResult, w: number, h: number): ModelView {
   const res = new THREE.Vector2(w, h);
-  const bodies = r.bodies!.map((b) => buildBodyMesh(r, b, r.edges.filter((e) => e.body === b.id), res, undefined));
+  const bodies = r.bodies!.map((b) =>
+    buildBodyMesh(
+      r,
+      b,
+      r.edges.filter((e) => e.body === b.id),
+      res,
+      undefined,
+    ),
+  );
   return {
     bodies,
     edges: [],
@@ -80,8 +95,18 @@ export const placed = (at: THREE.Vector3, rot: THREE.Euler) =>
 // BoxGeometry's order (+x, -x, +y, -y, +z, -z).
 export const STEP_FRAME = placed(new THREE.Vector3(63, -21, 14), new THREE.Euler(0.15, -0.1, 0.35));
 export const STEP: Lump[] = [
-  { id: "tall", body: "step", size: [40, 30, 36], m: STEP_FRAME.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, 18)) },
-  { id: "low", body: "step", size: [24, 30, 10], m: STEP_FRAME.clone().multiply(new THREE.Matrix4().makeTranslation(36, 0, 5)) },
+  {
+    id: "tall",
+    body: "step",
+    size: [40, 30, 36],
+    m: STEP_FRAME.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, 18)),
+  },
+  {
+    id: "low",
+    body: "step",
+    size: [24, 30, 10],
+    m: STEP_FRAME.clone().multiply(new THREE.Matrix4().makeTranslation(36, 0, 5)),
+  },
 ];
 export const STEP_FACES = { tallTop: 4, tallBottom: 5, lowTop: 10 };
 export const stepPoint = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z).applyMatrix4(STEP_FRAME);

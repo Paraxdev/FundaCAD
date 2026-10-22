@@ -83,7 +83,10 @@ describe("MeasureReadout", () => {
 
   it("renders each row as a key/value pair inside the shared panel shell", async () => {
     mount(MeasureReadout, { attachTo: document.body });
-    useToolPanelStore().measure = [{ k: "Area", v: "50 mm²" }, { k: "At", v: "0, 0, 0" }];
+    useToolPanelStore().measure = [
+      { k: "Area", v: "50 mm²" },
+      { k: "At", v: "0, 0, 0" },
+    ];
     await nextTick();
     expect([...document.querySelectorAll(".measure-k")].map((e) => e.textContent)).toEqual(["Area", "At"]);
     expect([...document.querySelectorAll(".measure-v")].map((e) => e.textContent)).toEqual(["50 mm²", "0, 0, 0"]);

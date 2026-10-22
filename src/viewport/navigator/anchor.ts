@@ -9,8 +9,18 @@
 import * as THREE from "three";
 import type { NavScene } from "../cameras";
 import {
-  distanceOf, forwardOf, halfTan, project, rayAt, rayDepth, rayPointAtDepth, rightOf, upOf,
-  type Frame, type Pose, type Ray,
+  distanceOf,
+  forwardOf,
+  halfTan,
+  project,
+  rayAt,
+  rayDepth,
+  rayPointAtDepth,
+  rightOf,
+  upOf,
+  type Frame,
+  type Pose,
+  type Ray,
 } from "./pose";
 
 export interface AnchorContext {
@@ -91,8 +101,8 @@ export function visibleNearDepth(p: Pose, aspect: number, boxes: readonly THREE.
       const z = dx * fwdV.x + dy * fwdV.y + dz * fwdV.z;
       const x = dx * rightV.x + dy * rightV.y + dz * rightV.z;
       const y = dx * upV.x + dy * upV.y + dz * upV.z;
-      out &= (z <= 0 ? 1 : 0) | (x > z * tx ? 2 : 0) | (-x > z * tx ? 4 : 0)
-        | (y > z * ty ? 8 : 0) | (-y > z * ty ? 16 : 0);
+      out &=
+        (z <= 0 ? 1 : 0) | (x > z * tx ? 2 : 0) | (-x > z * tx ? 4 : 0) | (y > z * ty ? 8 : 0) | (-y > z * ty ? 16 : 0);
       lo = Math.min(lo, z);
     }
     if (out) continue;
@@ -112,7 +122,11 @@ type Half = [number, number, number, number];
  *  boxes reaching behind the eye get here, a tall part beside the camera. */
 function nearestInFrustum(box: THREE.Box3, tx: number, ty: number): number {
   const hs: Half[] = [
-    [1, 0, -tx, 0], [-1, 0, -tx, 0], [0, 1, -ty, 0], [0, -1, -ty, 0], [0, 0, -1, 0],
+    [1, 0, -tx, 0],
+    [-1, 0, -tx, 0],
+    [0, 1, -ty, 0],
+    [0, -1, -ty, 0],
+    [0, 0, -1, 0],
   ];
   for (const k of ["x", "y", "z"] as const) {
     const n: [number, number, number] = [rightV[k], upV[k], fwdV[k]];
@@ -121,18 +135,20 @@ function nearestInFrustum(box: THREE.Box3, tx: number, ty: number): number {
   const eps = 1e-9 * Math.max(1, box.max.distanceTo(box.min), eyeV.length());
   let best = Infinity;
   const m = hs.length;
-  for (let i = 0; i < m; i++) for (let j = i + 1; j < m; j++) for (let k = j + 1; k < m; k++) {
-    const [a1, b1, c1, d1] = hs[i]!;
-    const [a2, b2, c2, d2] = hs[j]!;
-    const [a3, b3, c3, d3] = hs[k]!;
-    const det = a1 * (b2 * c3 - b3 * c2) - b1 * (a2 * c3 - a3 * c2) + c1 * (a2 * b3 - a3 * b2);
-    if (Math.abs(det) < 1e-12) continue;
-    const z = (a1 * (b2 * d3 - b3 * d2) - b1 * (a2 * d3 - a3 * d2) + d1 * (a2 * b3 - a3 * b2)) / det;
-    if (!(z < best)) continue;
-    const x = (d1 * (b2 * c3 - b3 * c2) - b1 * (d2 * c3 - d3 * c2) + c1 * (d2 * b3 - d3 * b2)) / det;
-    const y = (a1 * (d2 * c3 - d3 * c2) - d1 * (a2 * c3 - a3 * c2) + c1 * (a2 * d3 - a3 * d2)) / det;
-    if (hs.every(([a, b, c, d]) => a * x + b * y + c * z <= d + eps)) best = z;
-  }
+  for (let i = 0; i < m; i++)
+    for (let j = i + 1; j < m; j++)
+      for (let k = j + 1; k < m; k++) {
+        const [a1, b1, c1, d1] = hs[i]!;
+        const [a2, b2, c2, d2] = hs[j]!;
+        const [a3, b3, c3, d3] = hs[k]!;
+        const det = a1 * (b2 * c3 - b3 * c2) - b1 * (a2 * c3 - a3 * c2) + c1 * (a2 * b3 - a3 * b2);
+        if (Math.abs(det) < 1e-12) continue;
+        const z = (a1 * (b2 * d3 - b3 * d2) - b1 * (a2 * d3 - a3 * d2) + d1 * (a2 * b3 - a3 * b2)) / det;
+        if (!(z < best)) continue;
+        const x = (d1 * (b2 * c3 - b3 * c2) - b1 * (d2 * c3 - d3 * c2) + c1 * (d2 * b3 - d3 * b2)) / det;
+        const y = (a1 * (d2 * c3 - d3 * c2) - d1 * (a2 * c3 - a3 * c2) + c1 * (a2 * d3 - a3 * d2)) / det;
+        if (hs.every(([a, b, c, d]) => a * x + b * y + c * z <= d + eps)) best = z;
+      }
   return Math.max(0, best);
 }
 
@@ -209,8 +225,7 @@ function boxEntryDepth(p: Pose, ctx: AnchorContext, ray: Ray): number | null {
  *  cursor, then where the ray enters the content box, then the target's depth. */
 export function zoomAnchor(p: Pose, ctx: AnchorContext, x: number, y: number): Anchor {
   const ray = castRay(p, ctx, x, y);
-  const at = (depth: number, kind: AnchorKind): Anchor =>
-    ({ point: rayPointAtDepth(p, ray, depth), kind, depth });
+  const at = (depth: number, kind: AnchorKind): Anchor => ({ point: rayPointAtDepth(p, ray, depth), kind, depth });
   const m = modelDepth(p, ctx, ray);
   if (m !== null) return at(m, "model");
   const pl = planeDepth(p, ctx, ray);

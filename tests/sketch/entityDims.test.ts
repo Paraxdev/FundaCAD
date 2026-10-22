@@ -1,9 +1,19 @@
 import { afterEach, describe, it, expect } from "vitest";
 import * as THREE from "three";
 import {
-  constraintDims, dimensionSegments, diameterDim, entityDims, linearDim, lineOperand, lineRimPoints,
-  setDimPixelScale, staggeredDefaults,
-  pointRimPoints, rimGap, rimGapPoints, rimNesting,
+  constraintDims,
+  dimensionSegments,
+  diameterDim,
+  entityDims,
+  linearDim,
+  lineOperand,
+  lineRimPoints,
+  setDimPixelScale,
+  staggeredDefaults,
+  pointRimPoints,
+  rimGap,
+  rimGapPoints,
+  rimNesting,
 } from "../../src/sketch/entityDims";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { SketchConstraint } from "../../src/types";
@@ -37,7 +47,16 @@ describe("entityDims", () => {
   });
   it("has no editable dimensions for arc/spline/point", () => {
     expect(entityDims({ type: "arc", id: "a", x1: 0, y1: 0, x2: 4, y2: 0, mx: 2, my: 2 })).toEqual([]);
-    expect(entityDims({ type: "spline", id: "s", points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] })).toEqual([]);
+    expect(
+      entityDims({
+        type: "spline",
+        id: "s",
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+      }),
+    ).toEqual([]);
     expect(entityDims({ type: "point", id: "p", x: 1, y: 1 })).toEqual([]);
   });
 });
@@ -95,7 +114,10 @@ describe("constraintDims (radius + angle driving dims)", () => {
     expect(driving[0]!.driven).toBeFalsy();
     expect(driving[0]!.valueMm).toBe(7); // stored driving value
 
-    const driven = constraintDims([l], [{ type: "p2pDistance", e1: "l", p1: 0, e2: "l", p2: 1, value: 999, driven: true }]);
+    const driven = constraintDims(
+      [l],
+      [{ type: "p2pDistance", e1: "l", p1: 0, e2: "l", p2: 1, value: 999, driven: true }],
+    );
     expect(driven[0]!.driven).toBe(true);
     expect(driven[0]!.valueMm).toBeCloseTo(10); // live measurement, not the stale 999
   });
@@ -169,7 +191,10 @@ describe("constraintDims with rect-edge operands + placement", () => {
     const l1: ResolvedEntity = { type: "line", id: "a", x1: 0, y1: 0, x2: 10, y2: 0 };
     const l2: ResolvedEntity = { type: "line", id: "b", x1: 0, y1: 0, x2: 0, y2: 10 };
     const plain = constraintDims([l1, l2], [{ type: "angle", l1: "a", l2: "b", value: 90 }])[0]!;
-    const moved = constraintDims([l1, l2], [{ type: "angle", l1: "a", l2: "b", value: 90, place: { ox: 3, oy: 4 } }])[0]!;
+    const moved = constraintDims(
+      [l1, l2],
+      [{ type: "angle", l1: "a", l2: "b", value: 90, place: { ox: 3, oy: 4 } }],
+    )[0]!;
     expect(moved.labelPos.x - plain.labelPos.x).toBeCloseTo(3);
     expect(moved.labelPos.y - plain.labelPos.y).toBeCloseTo(4);
   });
@@ -246,18 +271,17 @@ describe("constraintDims, rim dims", () => {
   const pt: ResolvedEntity = { type: "point", id: "p", x: 0, y: 40 };
 
   it("renders a radialGap along the placement direction", () => {
-    const [d] = constraintDims([inner, outer], [
-      { type: "radialGap", inner: "i", outer: "o", value: 7, place: { ox: 0, oy: 9 } },
-    ]);
+    const [d] = constraintDims(
+      [inner, outer],
+      [{ type: "radialGap", inner: "i", outer: "o", value: 7, place: { ox: 0, oy: 9 } }],
+    );
     expect(d?.valueMm).toBe(7);
     expect(d?.lines.length).toBeGreaterThan(0);
     expect(d!.labelPos.y).toBeGreaterThan(0); // followed the +Y placement
   });
 
   it("renders a c2cDistance and measures it live when driven", () => {
-    const [d] = constraintDims([outer, far], [
-      { type: "c2cDistance", c1: "o", c2: "q", value: 999, driven: true },
-    ]);
+    const [d] = constraintDims([outer, far], [{ type: "c2cDistance", c1: "o", c2: "q", value: 999, driven: true }]);
     expect(d?.driven).toBe(true);
     expect(d?.valueMm).toBeCloseTo(24); // 40 - 12 - 4, not the stored 999
   });
@@ -319,18 +343,34 @@ describe("badge label placement", () => {
   it("a circle's placement sets BOTH the diameter line's angle and the label distance", () => {
     // straight up: the chord rotates 90° from its default, and the label sits on
     // it at exactly the placed distance
-    const e: ResolvedEntity = { type: "circle", id: "c", radius: 10, x: 0, y: 0, dimPlace: { diameter: { ox: 0, oy: 6 } } };
+    const e: ResolvedEntity = {
+      type: "circle",
+      id: "c",
+      radius: 10,
+      x: 0,
+      y: 0,
+      dimPlace: { diameter: { ox: 0, oy: 6 } },
+    };
     const [d] = entityDims(e);
     expect(at(d!)).toEqual([0, 6]);
     const [a, b] = d!.lines[0]!;
-    expect(a.x).toBeCloseTo(0); expect(a.y).toBeCloseTo(-10);
-    expect(b.x).toBeCloseTo(0); expect(b.y).toBeCloseTo(10);
+    expect(a.x).toBeCloseTo(0);
+    expect(a.y).toBeCloseTo(-10);
+    expect(b.x).toBeCloseTo(0);
+    expect(b.y).toBeCloseTo(10);
     expect(d!.place.x).toBeCloseTo(0);
     expect(d!.place.y).toBeCloseTo(6);
   });
 
   it("a diameter label dragged past the rim pulls a leader out to itself", () => {
-    const e: ResolvedEntity = { type: "circle", id: "c", radius: 10, x: 0, y: 0, dimPlace: { diameter: { ox: 25, oy: 0 } } };
+    const e: ResolvedEntity = {
+      type: "circle",
+      id: "c",
+      radius: 10,
+      x: 0,
+      y: 0,
+      dimPlace: { diameter: { ox: 25, oy: 0 } },
+    };
     const [d] = entityDims(e);
     expect(at(d!)).toEqual([25, 0]);
     expect(d!.lines[0]![1].x).toBeCloseTo(25); // line reaches the label
@@ -369,7 +409,15 @@ describe("badge label placement", () => {
     const base: ResolvedEntity = { type: "line", id: "l", x1: 0, y1: 0, x2: 10, y2: 0 };
     const off = entityDims(base)[0]!.place;
     // the line's normal is +Y (left of a +X segment): only oy can matter
-    const moved: ResolvedEntity = { type: "line", id: "l", x1: 0, y1: 0, x2: 10, y2: 0, dimPlace: { length: { ox: 40, oy: 9 } } };
+    const moved: ResolvedEntity = {
+      type: "line",
+      id: "l",
+      x1: 0,
+      y1: 0,
+      x2: 10,
+      y2: 0,
+      dimPlace: { length: { ox: 40, oy: 9 } },
+    };
     const [d] = entityDims(moved);
     expect(d!.labelPos.x).toBeCloseTo(5); // stayed centred despite ox: 40
     expect(d!.labelPos.y).toBeCloseTo(9);
@@ -377,7 +425,15 @@ describe("badge label placement", () => {
   });
 
   it("a negative perpendicular placement flips the linear dim to the other side", () => {
-    const e: ResolvedEntity = { type: "line", id: "l", x1: 0, y1: 0, x2: 10, y2: 0, dimPlace: { length: { ox: 0, oy: -9 } } };
+    const e: ResolvedEntity = {
+      type: "line",
+      id: "l",
+      x1: 0,
+      y1: 0,
+      x2: 10,
+      y2: 0,
+      dimPlace: { length: { ox: 0, oy: -9 } },
+    };
     const [d] = entityDims(e);
     expect(d!.labelPos.y).toBeCloseTo(-9);
   });
@@ -386,7 +442,12 @@ describe("badge label placement", () => {
     // each one is anchored on the EDGE it measures (bottom / left), not on the
     // rectangle's centre, and its placement offsets it from there
     const e: ResolvedEntity = {
-      type: "rectangle", id: "r", width: 20, height: 10, x: 0, y: 0,
+      type: "rectangle",
+      id: "r",
+      width: 20,
+      height: 10,
+      x: 0,
+      y: 0,
       dimPlace: { width: { ox: 0, oy: -12 }, height: { ox: -14, oy: 0 } },
     };
     const [w, h] = entityDims(e);
@@ -395,13 +456,29 @@ describe("badge label placement", () => {
     expect(h!.labelPos.x).toBeCloseTo(-10 - 14); // 14 left of the left edge
     expect(h!.labelPos.y).toBeCloseTo(0);
     // and moving one leaves the other exactly where an unplaced one sits
-    const plain = entityDims({ type: "rectangle", id: "r2", width: 20, height: 10, x: 0, y: 0, dimPlace: { width: { ox: 0, oy: -12 } } });
-    expect(plain[1]!.labelPos.x).toBeCloseTo(entityDims({ type: "rectangle", id: "r3", width: 20, height: 10, x: 0, y: 0 })[1]!.labelPos.x);
+    const plain = entityDims({
+      type: "rectangle",
+      id: "r2",
+      width: 20,
+      height: 10,
+      x: 0,
+      y: 0,
+      dimPlace: { width: { ox: 0, oy: -12 } },
+    });
+    expect(plain[1]!.labelPos.x).toBeCloseTo(
+      entityDims({ type: "rectangle", id: "r3", width: 20, height: 10, x: 0, y: 0 })[1]!.labelPos.x,
+    );
   });
 
   it("a polygon radius label only slides along its own radial line", () => {
     const e: ResolvedEntity = {
-      type: "polygon", id: "p", x: 0, y: 0, radius: 10, sides: 6, angle: 0,
+      type: "polygon",
+      id: "p",
+      x: 0,
+      y: 0,
+      radius: 10,
+      sides: 6,
+      angle: 0,
       dimPlace: { radius: { ox: 8, oy: 50 } }, // the 50 is across the line, ignored
     };
     const [d] = entityDims(e);
@@ -411,7 +488,13 @@ describe("badge label placement", () => {
 
   it("a slot's length and width placements don't cross-talk", () => {
     const e: ResolvedEntity = {
-      type: "slot", id: "s", x1: 0, y1: 0, x2: 20, y2: 0, width: 6,
+      type: "slot",
+      id: "s",
+      x1: 0,
+      y1: 0,
+      x2: 20,
+      y2: 0,
+      width: 6,
       dimPlace: { length: { ox: 0, oy: 15 } },
     };
     const [len, wid] = entityDims(e);
@@ -430,8 +513,7 @@ describe("badge label placement", () => {
     const defs = staggeredDefaults(ents);
     const segs = dimensionSegments(ents);
     const own = ents.flatMap((e) => entityDims(e, defs.get(e.id)).flatMap((d) => d.lines));
-    expect(segs.map(([a, b]) => [a.x, a.y, b.x, b.y]))
-      .toEqual(own.map(([a, b]) => [a.x, a.y, b.x, b.y]));
+    expect(segs.map(([a, b]) => [a.x, a.y, b.x, b.y])).toEqual(own.map(([a, b]) => [a.x, a.y, b.x, b.y]));
   });
 });
 
@@ -447,7 +529,15 @@ describe("constraint dim placement", () => {
   });
 
   it("honours a stored place, perpendicular-only", () => {
-    const c: SketchConstraint = { type: "p2pDistance", e1: "p1", p1: 0, e2: "p2", p2: 0, value: 10, place: { ox: 30, oy: 9 } };
+    const c: SketchConstraint = {
+      type: "p2pDistance",
+      e1: "p1",
+      p1: 0,
+      e2: "p2",
+      p2: 0,
+      value: 10,
+      place: { ox: 30, oy: 9 },
+    };
     const [d] = constraintDims([p1, p2], [c]);
     expect(d!.labelPos.x).toBeCloseTo(5); // the 30 along the segment is ignored
     expect(d!.labelPos.y).toBeCloseTo(9);
@@ -457,7 +547,10 @@ describe("constraint dim placement", () => {
     const l1: ResolvedEntity = { type: "line", id: "l1", x1: 0, y1: 0, x2: 10, y2: 0 };
     const l2: ResolvedEntity = { type: "line", id: "l2", x1: 0, y1: 0, x2: 0, y2: 10 };
     const base = constraintDims([l1, l2], [{ type: "angle", l1: "l1", l2: "l2", value: 90 }])[0]!;
-    const moved = constraintDims([l1, l2], [{ type: "angle", l1: "l1", l2: "l2", value: 90, place: { ox: 7, oy: -4 } }])[0]!;
+    const moved = constraintDims(
+      [l1, l2],
+      [{ type: "angle", l1: "l1", l2: "l2", value: 90, place: { ox: 7, oy: -4 } }],
+    )[0]!;
     expect(moved.labelPos.x).toBeCloseTo(base.labelPos.x + 7);
     expect(moved.labelPos.y).toBeCloseTo(base.labelPos.y - 4);
     expect(moved.place!.x).toBeCloseTo(7);

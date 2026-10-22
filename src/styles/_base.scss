@@ -37,13 +37,19 @@ body {
      wanted its target lower scrolled the shell up. A clip box cannot scroll. */
   overflow: clip;
 }
-#titlebar { grid-area: title; }
-#main { grid-area: main; }
+#titlebar {
+  grid-area: title;
+}
+#main {
+  grid-area: main;
+}
 
 /* --- shared focus ring (accent) --- */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-glow);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent-glow);
   border-radius: var(--r-sm);
 }
 

@@ -3,12 +3,24 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  decodeHdr, deflateBase64, downscaleEquirect, encodeRgbe, HdrRefusal, inflateBase64, MAX_HDR_FILE_BYTES,
-  radianceSize, type HdrImage,
+  decodeHdr,
+  deflateBase64,
+  downscaleEquirect,
+  encodeRgbe,
+  HdrRefusal,
+  inflateBase64,
+  MAX_HDR_FILE_BYTES,
+  radianceSize,
+  type HdrImage,
 } from "../../src/viewport/hdrImage";
 import { createEnvLibrary, memoryKv } from "../../src/ui/environmentLibrary";
 import {
-  asEnvironment, asEnvSettings, asRenderPrefs, DEFAULT_RENDER, envSettingsOf, type EnvSettings,
+  asEnvironment,
+  asEnvSettings,
+  asRenderPrefs,
+  DEFAULT_RENDER,
+  envSettingsOf,
+  type EnvSettings,
 } from "../../src/ui/renderPrefs";
 import { DocumentStore } from "../../src/document/store";
 import { normalizeDocEnvironment } from "../../src/document/docEnvironment";
@@ -24,7 +36,10 @@ function sky(w: number, h: number): HdrImage {
       const i = (y * w + x) * 4;
       const sun = Math.abs(x - w * 0.3) < w / 512 && Math.abs(y - h * 0.25) < h / 256;
       const v = sun ? 20000 : y < h / 2 ? 0.8 : 0.2;
-      data[i] = v; data[i + 1] = v * 0.95; data[i + 2] = v * 0.9; data[i + 3] = 1;
+      data[i] = v;
+      data[i + 1] = v * 0.95;
+      data[i + 2] = v * 0.9;
+      data[i + 3] = 1;
     }
   }
   return { width: w, height: h, data };
@@ -113,7 +128,8 @@ describe("render settings", () => {
 
 describe("the environment library", () => {
   const make = () => {
-    let id = 0, t = 0;
+    let id = 0,
+      t = 0;
     return createEnvLibrary(memoryKv(), { newId: () => `e${++id}`, now: () => ++t });
   };
 
@@ -151,9 +167,13 @@ describe("the environment library", () => {
 
 function stubBackend(): GeometryBackend {
   return {
-    async rebuild() { return { ok: false, error: { message: "stub" } }; },
+    async rebuild() {
+      return { ok: false, error: { message: "stub" } };
+    },
     async init() {},
-    onStatus() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
     connected: true,
   } as unknown as GeometryBackend;
 }
@@ -184,7 +204,14 @@ describe("the document carries its environment", () => {
     const store = new DocumentStore(stubBackend(), base());
     store.setDocumentEnvironment({
       settings: { environment: "warm" },
-      hdr: { name: "x.hdr", width: 2, height: 1, encoding: "rgbe-deflate-base64", sha256: "b".repeat(64), data: deflateBase64(new Uint8Array(8)) },
+      hdr: {
+        name: "x.hdr",
+        width: 2,
+        height: 1,
+        encoding: "rgbe-deflate-base64",
+        sha256: "b".repeat(64),
+        data: deflateBase64(new Uint8Array(8)),
+      },
     });
     (store as unknown as { pushUndo(): void }).pushUndo();
     const stack = (store as unknown as { undoStack: { doc?: CadDocument }[] }).undoStack;
@@ -195,15 +222,23 @@ describe("the document carries its environment", () => {
   it("writes nothing for a built in room, so old files stay byte identical", async () => {
     const store = new DocumentStore(stubBackend(), base());
     const before = store.toJSON();
-    store.setDocumentEnvironment(await documentEnvironmentFor(settings({ environment: "dusk" }), null, createEnvLibrary(memoryKv())));
+    store.setDocumentEnvironment(
+      await documentEnvironmentFor(settings({ environment: "dusk" }), null, createEnvLibrary(memoryKv())),
+    );
     expect(store.toJSON()).toBe(before);
     expect(store.dirty).toBe(false);
   });
 
   it("names a saved environment, and drops a malformed one on load", () => {
-    expect(normalizeDocEnvironment({ name: " Desk ", settings: { environment: "warm" } })).toEqual({ name: "Desk", settings: { environment: "warm" } });
+    expect(normalizeDocEnvironment({ name: " Desk ", settings: { environment: "warm" } })).toEqual({
+      name: "Desk",
+      settings: { environment: "warm" },
+    });
     expect(normalizeDocEnvironment({ settings: "warm" })).toBeNull();
-    const bad = normalizeDocEnvironment({ settings: {}, hdr: { encoding: "png", width: 1, height: 1, sha256: "x", data: "" } });
+    const bad = normalizeDocEnvironment({
+      settings: {},
+      hdr: { encoding: "png", width: 1, height: 1, sha256: "x", data: "" },
+    });
     expect(bad).toEqual({ settings: {} });
   });
 });

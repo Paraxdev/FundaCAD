@@ -6,7 +6,11 @@ import { importPath } from "../../src/io/files";
 
 vi.stubGlobal("window", globalThis);
 const toasts: string[] = [];
-vi.mock("../../src/ui/toast", () => ({ toast: (m: string) => { toasts.push(m); } }));
+vi.mock("../../src/ui/toast", () => ({
+  toast: (m: string) => {
+    toasts.push(m);
+  },
+}));
 
 const box = (id: string) => ({ id, type: "box", length: 1, width: 1, height: 1 }) as unknown as Feature;
 
@@ -29,27 +33,51 @@ function slowBackend(color?: string) {
         { id: "body1", name: "Box", faceStart: 0, faceCount: 1, faceOwners: ["a"] },
         ...(own ? [{ id: "body9", name: "Part", faceStart: 1, faceCount: 1, faceOwners: [own.id] }] : []),
       ];
-      const result: RebuildResult = { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: { min: [0, 0, 0], max: [0, 0, 0] }, bodies };
+      const result: RebuildResult = {
+        mesh: { positions: [], indices: [], faceIds: [] },
+        edges: [],
+        bbox: { min: [0, 0, 0], max: [0, 0, 0] },
+        bodies,
+      };
       return { ok: true as const, result };
     },
     async importGeometry(_p: string, _f: string, onStarted?: (id: string) => void) {
       onStarted?.("imp-read");
-      if ((await new Promise((r) => (read = r))) === "cancel") return { ok: false, cancelled: true, message: "import cancelled" };
+      if ((await new Promise((r) => (read = r))) === "cancel")
+        return { ok: false, cancelled: true, message: "import cancelled" };
       return { ok: true, geom: "h", name: "part", solid: true, faces: 6, ...(color ? { color } : {}) };
     },
     async cancel(id?: string) {
-      if (id === "imp-read" && read) { read("cancel"); read = null; return true; }
-      if (id?.startsWith("imp-build") && build) { build("cancel"); build = null; return true; }
+      if (id === "imp-read" && read) {
+        read("cancel");
+        read = null;
+        return true;
+      }
+      if (id?.startsWith("imp-build") && build) {
+        build("cancel");
+        build = null;
+        return true;
+      }
       return false;
     },
     async init() {},
-    onStatus() { return () => {}; },
-    onProgress() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
+    onProgress() {
+      return () => {};
+    },
   } as unknown as GeometryBackend;
   return {
     be,
-    finishRead: () => { read?.("ok"); read = null; },
-    finishBuild: () => { build?.("ok"); build = null; },
+    finishRead: () => {
+      read?.("ok");
+      read = null;
+    },
+    finishBuild: () => {
+      build?.("ok");
+      build = null;
+    },
     reading: () => !!read,
     building: () => !!build,
   };
@@ -68,7 +96,9 @@ async function boxThenImport(color?: string) {
   return { f, store, importing };
 }
 
-beforeEach(() => { toasts.length = 0; });
+beforeEach(() => {
+  toasts.length = 0;
+});
 
 for (const color of ["#ff0000", undefined]) {
   describe(`Cancel on an import${color ? " with colours" : ""}`, () => {
@@ -175,8 +205,12 @@ describe("Cancel on a rebuild an edit has superseded", () => {
         return true;
       },
       async init() {},
-      onStatus() { return () => {}; },
-      onProgress() { return () => {}; },
+      onStatus() {
+        return () => {};
+      },
+      onProgress() {
+        return () => {};
+      },
     } as unknown as GeometryBackend;
     const store = new DocumentStore(be, { parameters: {}, features: [] });
     store.addFeature(box("a"));

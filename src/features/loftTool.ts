@@ -78,14 +78,20 @@ export class LoftTool {
     e.preventDefault();
     const prof = this.toProfile(r);
     const i = this.profiles.findIndex((p) => p.key === prof.key);
-    if (i >= 0) this.profiles.splice(i, 1); // click a picked profile again to drop it
+    if (i >= 0)
+      this.profiles.splice(i, 1); // click a picked profile again to drop it
     else this.profiles.push(prof);
     this.refresh();
   }
 
   private onKey(e: KeyboardEvent) {
-    if (e.key === "Escape") { e.preventDefault(); this.cancel(); }
-    else if (e.key === "Enter") { e.preventDefault(); this.commit(); }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      this.cancel();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      this.commit();
+    }
   }
 
   /** re-highlight the picked profiles and refresh the live preview */
@@ -153,7 +159,10 @@ export class LoftTool {
       if (!ray.intersectPlane(wr.plane.plane, this.hitScratch)) continue;
       if (!pointInRegion(wr.plane.to2D(this.hitScratch), wr.region)) continue;
       const d = ray.origin.distanceToSquared(this.hitScratch);
-      if (d < bestDist) { bestDist = d; best = wr; }
+      if (d < bestDist) {
+        bestDist = d;
+        best = wr;
+      }
     }
     return best;
   }

@@ -111,25 +111,84 @@ export function createContextMenus(deps: ContextMenusDeps) {
       { label: "Cut all bodies", onClick: unlessBusy(() => void startCutByPlane(datumId)) },
       // enter BY ID: the def is only the cached placement, so passing the datum
       // id too is what makes the sketch follow later edits to its offset
-      { label: "Sketch on plane", disabled: !f, onClick: unlessBusy(() => { if (f) sketch.enter(datumPlaneDef(f), store, undefined, f.id); }) },
-      { label: "Offset plane", disabled: !f, onClick: unlessBusy(() => { if (f) offsetPlaneFromFace(datumPlaneDef(f), f.id); }) },
+      {
+        label: "Sketch on plane",
+        disabled: !f,
+        onClick: unlessBusy(() => {
+          if (f) sketch.enter(datumPlaneDef(f), store, undefined, f.id);
+        }),
+      },
+      {
+        label: "Offset plane",
+        disabled: !f,
+        onClick: unlessBusy(() => {
+          if (f) offsetPlaneFromFace(datumPlaneDef(f), f.id);
+        }),
+      },
       { separator: true, label: "" },
       // setPlaneVisibility deliberately emits nothing (a plane toggle costs no
       // rebuild), so the browser is told by hand, see stores/browser.ts.
-      { label: "Hide plane", onClick: () => { store.setPlaneVisibility(datumId, false); syncDatumPlanes(); useBrowserStore().bumpView(); } },
-      { label: "Delete plane", danger: true, onClick: unlessBusy(() => { store.removeFeature(datumId); selectFeature(null); }) },
+      {
+        label: "Hide plane",
+        onClick: () => {
+          store.setPlaneVisibility(datumId, false);
+          syncDatumPlanes();
+          useBrowserStore().bumpView();
+        },
+      },
+      {
+        label: "Delete plane",
+        danger: true,
+        onClick: unlessBusy(() => {
+          store.removeFeature(datumId);
+          selectFeature(null);
+        }),
+      },
     ]);
   }
 
   function openEdgeMenu(x: number, y: number, hit: EdgeHit) {
     contextMenu(x, y, [
       // routed through handleAction so "Repeat <command>" records them
-      { label: "Fillet", shortcut: keyHint("fillet"), onClick: unlessBusy(() => { viewport.selectOnlyEdge(hit.edge); handleAction("fillet"); }) },
-      { label: "Chamfer", shortcut: keyHint("chamfer"), onClick: unlessBusy(() => { viewport.selectOnlyEdge(hit.edge); handleAction("chamfer"); }) },
-      { label: "Plane normal to edge", onClick: unlessBusy(() => { viewport.selectOnlyEdge(hit.edge); handleAction("plane-normal-edge"); }) },
-      { label: "Plane at angle", onClick: unlessBusy(() => { viewport.selectOnlyEdge(hit.edge); handleAction("plane-angle"); }) },
+      {
+        label: "Fillet",
+        shortcut: keyHint("fillet"),
+        onClick: unlessBusy(() => {
+          viewport.selectOnlyEdge(hit.edge);
+          handleAction("fillet");
+        }),
+      },
+      {
+        label: "Chamfer",
+        shortcut: keyHint("chamfer"),
+        onClick: unlessBusy(() => {
+          viewport.selectOnlyEdge(hit.edge);
+          handleAction("chamfer");
+        }),
+      },
+      {
+        label: "Plane normal to edge",
+        onClick: unlessBusy(() => {
+          viewport.selectOnlyEdge(hit.edge);
+          handleAction("plane-normal-edge");
+        }),
+      },
+      {
+        label: "Plane at angle",
+        onClick: unlessBusy(() => {
+          viewport.selectOnlyEdge(hit.edge);
+          handleAction("plane-angle");
+        }),
+      },
       { separator: true, label: "" },
-      { label: "Measure from here", shortcut: keyHint("measure"), onClick: unlessBusy(() => { setLastAction("measure"); measure.startWith(hit); }) },
+      {
+        label: "Measure from here",
+        shortcut: keyHint("measure"),
+        onClick: unlessBusy(() => {
+          setLastAction("measure");
+          measure.startWith(hit);
+        }),
+      },
     ]);
   }
 
@@ -140,8 +199,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     // the right-click menu follows its face too. Planar only: a tangent plane on
     // a cylinder is a different plane at every point, so there is nothing for a
     // rebuild to re-derive.
-    const anchor = facePick && facePick.kind === "planar"
-      ? { selector: facePick.selector, at: facePick.at } : null;
+    const anchor = facePick && facePick.kind === "planar" ? { selector: facePick.selector, at: facePick.at } : null;
     const bodyId = viewport.faceIdToBodyId(hit.faceId);
     // The plane a sketch on this face takes, so the drawing lines up with one.
     const flatFace = facePick && facePick.kind === "planar" ? facePick : null;
@@ -154,9 +212,30 @@ export function createContextMenus(deps: ContextMenusDeps) {
     const owner = ownerId ? store.document.features.find((f) => f.id === ownerId) : undefined;
     const ownerLabel = owner ? featureMeta(owner).label : "";
     const items: CtxItem[] = [
-      { label: "Press/Pull face", shortcut: keyHint("presspull"), onClick: unlessBusy(() => { viewport.selectOnlyFace(hit.faceId); handleAction("presspull"); }) },
-      { label: "Sketch on this face", shortcut: keyHint("sketch"), disabled: !plane, onClick: unlessBusy(() => { if (plane) sketch.enter(plane, store, undefined, undefined, anchor); }) },
-      { label: "Measure from here", shortcut: keyHint("measure"), onClick: unlessBusy(() => { setLastAction("measure"); measure.startWith(hit); }) },
+      {
+        label: "Press/Pull face",
+        shortcut: keyHint("presspull"),
+        onClick: unlessBusy(() => {
+          viewport.selectOnlyFace(hit.faceId);
+          handleAction("presspull");
+        }),
+      },
+      {
+        label: "Sketch on this face",
+        shortcut: keyHint("sketch"),
+        disabled: !plane,
+        onClick: unlessBusy(() => {
+          if (plane) sketch.enter(plane, store, undefined, undefined, anchor);
+        }),
+      },
+      {
+        label: "Measure from here",
+        shortcut: keyHint("measure"),
+        onClick: unlessBusy(() => {
+          setLastAction("measure");
+          measure.startWith(hit);
+        }),
+      },
       { separator: true, label: "" },
       {
         label: "Select coplanar faces",
@@ -165,7 +244,14 @@ export function createContextMenus(deps: ContextMenusDeps) {
           setStatus(`Selected ${n} coplanar face${n === 1 ? "" : "s"}`, "");
         }),
       },
-      { label: "Offset plane from face", shortcut: keyHint("offset-plane"), disabled: !plane, onClick: unlessBusy(() => { if (plane) offsetPlaneFromFace(plane); }) },
+      {
+        label: "Offset plane from face",
+        shortcut: keyHint("offset-plane"),
+        disabled: !plane,
+        onClick: unlessBusy(() => {
+          if (plane) offsetPlaneFromFace(plane);
+        }),
+      },
       ...(facePick?.kind === "tangent"
         ? [{ label: "Axis of cylinder", onClick: unlessBusy(() => axisFromRoundFace(facePick)) }]
         : []),
@@ -174,7 +260,12 @@ export function createContextMenus(deps: ContextMenusDeps) {
       { label: "Export face as SVG…", disabled: !flatFace, onClick: unlessBusy(() => exportFace("svg")) },
       { separator: true, label: "" },
       ...(owner
-        ? [{ label: `${isInspectorEditable(owner.type) ? "Edit" : "Select"} ${ownerLabel}`, onClick: unlessBusy(() => editFeature(owner.id)) }]
+        ? [
+            {
+              label: `${isInspectorEditable(owner.type) ? "Edit" : "Select"} ${ownerLabel}`,
+              onClick: unlessBusy(() => editFeature(owner.id)),
+            },
+          ]
         : []),
       ...(bodyId
         ? [
@@ -183,7 +274,14 @@ export function createContextMenus(deps: ContextMenusDeps) {
           ]
         : []),
       { separator: true, label: "" },
-      { label: "Delete face (heal)", danger: true, onClick: unlessBusy(() => { viewport.selectOnlyFace(hit.faceId); deleteSelectedFace(); }) },
+      {
+        label: "Delete face (heal)",
+        danger: true,
+        onClick: unlessBusy(() => {
+          viewport.selectOnlyFace(hit.faceId);
+          deleteSelectedFace();
+        }),
+      },
     ];
     contextMenu(x, y, items);
     if (facePick?.kind !== "planar") offerTangentFaces(hit);
@@ -269,7 +367,11 @@ export function createContextMenus(deps: ContextMenusDeps) {
       { separator: true, label: "" },
       { label: "Hide body", onClick: () => hideBody(bodyId) },
       { label: "Isolate body", onClick: () => isolateBody(bodyId) },
-      { label: "Show all bodies", shortcut: keyHint("show-all-bodies"), onClick: () => handleAction("show-all-bodies") },
+      {
+        label: "Show all bodies",
+        shortcut: keyHint("show-all-bodies"),
+        onClick: () => handleAction("show-all-bodies"),
+      },
       { separator: true, label: "" },
       { label: "Rename…", onClick: () => useBrowserStore().beginRename(bodyId) },
       // The same submenu the Browser row carries, from the same builder. Filing
@@ -278,12 +380,16 @@ export function createContextMenus(deps: ContextMenusDeps) {
       // clicked on in the viewport, and finding its row among three thousand to
       // right-click it is the work this feature exists to remove.
       moveToElementMenu(bodyId),
-      materialMenu(store.materialLibrary, bodiesUnder(bodyId), store.bodyMaterialId(bodyId),
+      materialMenu(
+        store.materialLibrary,
+        bodiesUnder(bodyId),
+        store.bodyMaterialId(bodyId),
         (m) => store.setBodiesMaterial(bodiesUnder(bodyId), m),
         {
           count: bodiesUnder(bodyId).reduce((n, id) => n + store.faceMaterialCount(id), 0),
           clear: () => store.clearFaceMaterials(bodiesUnder(bodyId)),
-        }),
+        },
+      ),
       ...bodyExtraMenu(bodyId),
       { separator: true, label: "" },
       { label: "Duplicate body", onClick: unlessBusy(() => store.duplicateBody(bodyId)) },
@@ -304,7 +410,9 @@ export function createContextMenus(deps: ContextMenusDeps) {
       {
         label: lastAction ? `Repeat ${actionLabel(lastAction)}` : "Repeat last command",
         disabled: !lastAction,
-        onClick: () => { if (lastAction) handleAction(lastAction); },
+        onClick: () => {
+          if (lastAction) handleAction(lastAction);
+        },
       },
       { separator: true, label: "" },
       { label: "Fit view", shortcut: keyHint("fit"), onClick: () => handleAction("fit") },
@@ -317,7 +425,11 @@ export function createContextMenus(deps: ContextMenusDeps) {
           { label: "Right", onClick: () => handleAction("right") },
         ],
       },
-      { label: "Show all bodies", shortcut: keyHint("show-all-bodies"), onClick: () => handleAction("show-all-bodies") },
+      {
+        label: "Show all bodies",
+        shortcut: keyHint("show-all-bodies"),
+        onClick: () => handleAction("show-all-bodies"),
+      },
       { separator: true, label: "" },
       { label: "Undo", shortcut: "Ctrl+Z", disabled: !store.canUndo, onClick: () => store.undo() },
       { label: "Redo", shortcut: "Ctrl+Y", disabled: !store.canRedo, onClick: () => store.redo() },

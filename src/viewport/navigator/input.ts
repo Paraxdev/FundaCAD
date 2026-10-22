@@ -21,10 +21,7 @@
 
 import type { Navigator } from "./navigator";
 import { CLICK_SLOP_PX } from "./navigator";
-import {
-  leftButtonOwned, pointerBindings, resolvePointer, startPointerGesture,
-  type PointerBinding,
-} from "./bindings";
+import { leftButtonOwned, pointerBindings, resolvePointer, startPointerGesture, type PointerBinding } from "./bindings";
 import { WheelClassifier, type WheelKind } from "./wheelKind";
 
 export type WheelDevice = "auto" | WheelKind;
@@ -88,17 +85,31 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
 
   // --- mouse and pen ------------------------------------------------------------
   let mouse: {
-    id: number; mask: number; t: number; b: PointerBinding;
-    x0: number; y0: number; travelled: boolean; claimed: boolean;
+    id: number;
+    mask: number;
+    t: number;
+    b: PointerBinding;
+    x0: number;
+    y0: number;
+    travelled: boolean;
+    claimed: boolean;
   } | null = null;
   /** The last right press, so a native menu can be let through or held back. */
   let rightPress: { menu: boolean; upAt: number } | null = null;
 
   const capture = (id: number) => {
-    try { dom.setPointerCapture?.(id); } catch { /* capture is a nicety */ }
+    try {
+      dom.setPointerCapture?.(id);
+    } catch {
+      /* capture is a nicety */
+    }
   };
   const release = (id: number) => {
-    try { if (dom.hasPointerCapture?.(id)) dom.releasePointerCapture(id); } catch { /* already gone */ }
+    try {
+      if (dom.hasPointerCapture?.(id)) dom.releasePointerCapture(id);
+    } catch {
+      /* already gone */
+    }
   };
 
   const endMouse = () => {
@@ -114,8 +125,12 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
   let pinchDist = 0;
 
   const centroid = (): [number, number] => {
-    let x = 0, y = 0;
-    for (const [px, py] of touches.values()) { x += px; y += py; }
+    let x = 0,
+      y = 0;
+    for (const [px, py] of touches.values()) {
+      x += px;
+      y += py;
+    }
     return [x / touches.size, y / touches.size];
   };
   const spread = (): number => {
@@ -172,12 +187,27 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     const Ctor = typeof PointerEvent === "function" ? PointerEvent : null;
     if (!Ctor || typeof dom.dispatchEvent !== "function") return true;
     const ev = new Ctor("pointerdown", {
-      bubbles: true, cancelable: true, composed: true,
-      pointerId: d.pointerId, pointerType: "touch", isPrimary: true,
-      clientX: p.clientX, clientY: p.clientY, screenX: p.screenX, screenY: p.screenY,
-      button: 0, buttons: 1, pressure: d.pressure || 0.5, width: d.width, height: d.height,
-      shiftKey: d.shiftKey, ctrlKey: d.ctrlKey, altKey: d.altKey, metaKey: d.metaKey,
-      detail, view: typeof window !== "undefined" ? window : null,
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId: d.pointerId,
+      pointerType: "touch",
+      isPrimary: true,
+      clientX: p.clientX,
+      clientY: p.clientY,
+      screenX: p.screenX,
+      screenY: p.screenY,
+      button: 0,
+      buttons: 1,
+      pressure: d.pressure || 0.5,
+      width: d.width,
+      height: d.height,
+      shiftKey: d.shiftKey,
+      ctrlKey: d.ctrlKey,
+      altKey: d.altKey,
+      metaKey: d.metaKey,
+      detail,
+      view: typeof window !== "undefined" ? window : null,
     });
     replayed.set(ev, at ? "tap" : "drag");
     return dom.dispatchEvent(ev);
@@ -187,8 +217,10 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
   let lastTap: { t: number; x: number; y: number; n: number } | null = null;
   const countTap = (e: PointerEvent): number => {
     const t = clock();
-    const near = lastTap && t - lastTap.t < DOUBLE_TAP_MS
-      && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_TAP_PX;
+    const near =
+      lastTap &&
+      t - lastTap.t < DOUBLE_TAP_MS &&
+      Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_TAP_PX;
     const n = near ? lastTap!.n + 1 : 1;
     lastTap = { t, x: e.clientX, y: e.clientY, n };
     return n;
@@ -199,8 +231,14 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     if (!Ctor || typeof dom.dispatchEvent !== "function") return;
     setTimeout(() => {
       const ev = new Ctor("dblclick", {
-        bubbles: true, cancelable: true, composed: true,
-        clientX: x, clientY: y, button: 0, buttons: 0, detail: 2,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        clientX: x,
+        clientY: y,
+        button: 0,
+        buttons: 0,
+        detail: 2,
         view: typeof window !== "undefined" ? window : null,
       });
       replayed.set(ev, "dblclick");
@@ -215,10 +253,16 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     const Ctor = typeof MouseEvent === "function" ? MouseEvent : null;
     if (!Ctor || typeof dom.dispatchEvent !== "function") return;
     const ev = new Ctor("contextmenu", {
-      bubbles: true, cancelable: true, composed: true,
-      clientX: first.down.clientX, clientY: first.down.clientY,
-      screenX: first.down.screenX, screenY: first.down.screenY,
-      button: 2, buttons: 0, view: typeof window !== "undefined" ? window : null,
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clientX: first.down.clientX,
+      clientY: first.down.clientY,
+      screenX: first.down.screenX,
+      screenY: first.down.screenY,
+      button: 2,
+      buttons: 0,
+      view: typeof window !== "undefined" ? window : null,
     });
     replayed.set(ev, "menu");
     dom.dispatchEvent(ev);
@@ -331,8 +375,14 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
   const startMouse = (e: PointerEvent, b: PointerBinding, claimed: boolean) => {
     const [x, y] = local(e);
     mouse = {
-      id: e.pointerId, mask: BUTTON_MASK[e.button]!, t: now(), b,
-      x0: e.clientX, y0: e.clientY, travelled: false, claimed,
+      id: e.pointerId,
+      mask: BUTTON_MASK[e.button]!,
+      t: now(),
+      b,
+      x0: e.clientX,
+      y0: e.clientY,
+      travelled: false,
+      claimed,
     };
     capture(e.pointerId);
     if (b.drag === "orbit") nav.beginOrbit(x, y);
@@ -342,7 +392,8 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
 
   const noteRight = (e: PointerEvent) => {
     if (e.button !== 2) return;
-    if (e.type === "pointerdown") rightPress = { menu: resolvePointer(pointerBindings(), e)?.click === "menu", upAt: Infinity };
+    if (e.type === "pointerdown")
+      rightPress = { menu: resolvePointer(pointerBindings(), e)?.click === "menu", upAt: Infinity };
     else if (e.type === "pointerup" && rightPress) rightPress.upAt = clock();
   };
 
@@ -378,8 +429,13 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     const Ctor = typeof MouseEvent === "function" ? MouseEvent : null;
     if (!Ctor || typeof dom.dispatchEvent !== "function") return;
     const ev = new Ctor("contextmenu", {
-      bubbles: true, cancelable: true, composed: true,
-      clientX: x, clientY: y, button: 2, buttons: 0,
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clientX: x,
+      clientY: y,
+      button: 2,
+      buttons: 0,
       view: typeof window !== "undefined" ? window : null,
     });
     replayed.set(ev, "menu");
@@ -422,7 +478,8 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     endMouse();
     // The browser opens a right button's menu itself; any other menu button
     // gets one sent, which every menu in the app already answers.
-    if (e.type === "pointerup" && !travelled && b.click === "menu" && b.button !== "right") sendMenu(e.clientX, e.clientY);
+    if (e.type === "pointerup" && !travelled && b.click === "menu" && b.button !== "right")
+      sendMenu(e.clientX, e.clientY);
   };
 
   // --- wheel --------------------------------------------------------------------------
@@ -490,8 +547,13 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
   const onContext = (e: Event) => {
     e.preventDefault();
     if (systemsOwn(e)) e.stopImmediatePropagation();
-    else if (!replayed.has(e) && (e as MouseEvent).button === 2 && rightPress && !rightPress.menu
-      && clock() - rightPress.upAt < NATIVE_MENU_GRACE_MS) {
+    else if (
+      !replayed.has(e) &&
+      (e as MouseEvent).button === 2 &&
+      rightPress &&
+      !rightPress.menu &&
+      clock() - rightPress.upAt < NATIVE_MENU_GRACE_MS
+    ) {
       e.stopImmediatePropagation(); // the right button is not the menu button now
     }
   };

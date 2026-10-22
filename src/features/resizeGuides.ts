@@ -94,7 +94,9 @@ export class ResizeGuides {
     if (!this.axisLine || !this.sizeLine) {
       this.host = host;
       this.axisLine = segment(new THREE.LineBasicMaterial({ color: ink, opacity: 0.7, ...overlay }));
-      this.sizeLine = segment(new THREE.LineDashedMaterial({ color: ink, opacity: 0.95, dashSize: 1, gapSize: 1, ...overlay }));
+      this.sizeLine = segment(
+        new THREE.LineDashedMaterial({ color: ink, opacity: 0.95, dashSize: 1, gapSize: 1, ...overlay }),
+      );
       this.axisLine.name = "resize-axis";
       this.sizeLine.name = "resize-size";
       host.addToScene(this.axisLine);

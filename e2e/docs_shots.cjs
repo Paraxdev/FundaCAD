@@ -54,7 +54,9 @@ async function openPage(browser) {
   await page.addInitScript((ws) => {
     const N = window.WebSocket;
     window.WebSocket = class extends N {
-      constructor(u, p) { super(String(u).replace(":8765", `:${ws}`), p); }
+      constructor(u, p) {
+        super(String(u).replace(":8765", `:${ws}`), p);
+      }
     };
     // Items and History open, no welcome window, no tips.
     localStorage.setItem("fundacad.welcomeOnStartup", "false");
@@ -62,7 +64,9 @@ async function openPage(browser) {
     localStorage.setItem("fundacad.shell.history", "1");
   }, ENGINE_PORT);
   await page.goto(`${APP}?token=${TOKEN}`);
-  await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.sketch && !!window.geometry, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.sketch && !!window.geometry, null, {
+    timeout: 60000,
+  });
   // The frame-rate and round-trip readouts are diagnostics, not part of the product.
   await page.addStyleTag({ content: "#fps,.roundtrip,.perf-warn-group{display:none!important}" });
   await sleep(1500);
@@ -137,7 +141,10 @@ function makeCtx(page, name) {
   ctx.zoom = async (n) => {
     const canvas = await page.locator("#canvas").boundingBox();
     await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
-    for (let i = 0; i < Math.abs(n); i++) { await page.mouse.wheel(0, n > 0 ? -240 : 240); await sleep(150); }
+    for (let i = 0; i < Math.abs(n); i++) {
+      await page.mouse.wheel(0, n > 0 ? -240 : 240);
+      await sleep(150);
+    }
     await sleep(900);
   };
   // The canvas runs under the floating cards, so its middle is not the middle of
@@ -183,7 +190,8 @@ function makeCtx(page, name) {
   ctx.box = async (selector, pad = 14) => {
     const b = await page.locator(selector).first().boundingBox();
     if (!b) throw new Error(`no ${selector}`);
-    const x = Math.max(0, b.x - pad), y = Math.max(0, b.y - pad);
+    const x = Math.max(0, b.x - pad),
+      y = Math.max(0, b.y - pad);
     return { x, y, width: Math.min(W - x, b.width + 2 * pad), height: Math.min(H - y, b.height + 2 * pad) };
   };
   ctx.made = [];
@@ -195,18 +203,24 @@ function makeCtx(page, name) {
       const r = n.getBoundingClientRect();
       return { x: r.x, y: r.y, width: r.width, height: r.height };
     }, selector);
-    const x = Math.max(0, b.x - pad), y = Math.max(0, b.y - pad);
+    const x = Math.max(0, b.x - pad),
+      y = Math.max(0, b.y - pad);
     return { x, y, width: Math.min(1440 - x, b.width + 2 * pad), height: Math.min(900 - y, b.height + 2 * pad) };
   };
 
-  ctx.startRec = (clip) => { ctx.clip = clip; ctx.frames = []; };
+  ctx.startRec = (clip) => {
+    ctx.clip = clip;
+    ctx.frames = [];
+  };
   ctx.frame = async (ms = 100) => {
     if (!ctx.clip) return;
     const f = path.join(ctx.dir, `f${String(ctx.frames.length).padStart(4, "0")}.png`);
     await page.screenshot({ path: f, clip: ctx.clip });
     ctx.frames.push({ f, ms });
   };
-  ctx.hold = async (ms, n = 1) => { for (let i = 0; i < n; i++) await ctx.frame(ms / n); };
+  ctx.hold = async (ms, n = 1) => {
+    for (let i = 0; i < n; i++) await ctx.frame(ms / n);
+  };
   ctx.endRec = (file, width = 800) => {
     const list = path.join(ctx.dir, "frames.txt");
     fs.writeFileSync(list, ctx.frames.map((f) => `${f.f}\t${f.ms}`).join("\n"));
@@ -238,7 +252,10 @@ frames[0].save(sys.argv[2], save_all=True, append_images=frames[1:], duration=du
       const r = spawnSync("python", ["-I", "-c", code, list, out, String(width), String(colors)], { encoding: "utf8" });
       if (r.status !== 0) throw new Error(`gif assembly failed: ${r.stderr}`);
       const kb = fs.statSync(out).size / 1024;
-      if (kb < 1400 || colors <= 24) { console.log(`  ${file}.gif ${Math.round(kb)} KB, ${ctx.frames.length} frames, ${colors} colours`); break; }
+      if (kb < 1400 || colors <= 24) {
+        console.log(`  ${file}.gif ${Math.round(kb)} KB, ${ctx.frames.length} frames, ${colors} colours`);
+        break;
+      }
       colors = Math.max(24, Math.round(colors * 0.7));
     }
     ctx.made.push(`${file}.gif`);
@@ -252,7 +269,8 @@ frames[0].save(sys.argv[2], save_all=True, append_images=frames[1:], duration=du
 // The mounting plate of the first-part tutorial, 40 x 20 x 5 with a 6 mm hole.
 const plate = () => [
   {
-    type: "sketch", plane: "XY",
+    type: "sketch",
+    plane: "XY",
     entities: [
       { type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 20 },
       { type: "circle", id: "c1", x: -10, y: 0, radius: 3 },
@@ -270,7 +288,8 @@ const bracket = () => {
     { type: "sketch", plane: "XY", entities: [{ type: "rectangle", width: B, height: 50, x: -31, y: 0 }] },
     { type: "extrude", sketch: 2, distance: 58, operation: "join" },
     {
-      type: "sketch", plane: P([0, 3, 0], [0, -1, 0], [1, 0, 0]),
+      type: "sketch",
+      plane: P([0, 3, 0], [0, -1, 0], [1, 0, 0]),
       entities: [
         { type: "line", x1: -27, y1: B, x2: -27, y2: 46 },
         { type: "line", x1: -27, y1: 46, x2: 6, y2: B },
@@ -280,16 +299,23 @@ const bracket = () => {
     { type: "extrude", sketch: 4, distance: 6, operation: "join" },
     { type: "fillet", edges: [{ kind: "edge", by: "nearest", point: [-27, -14, B] }], radius: 4 },
     {
-      type: "sketch", plane: "XY",
+      type: "sketch",
+      plane: "XY",
       entities: [
-        { type: "circle", radius: 2.75, x: 0, y: 17 }, { type: "circle", radius: 2.75, x: 0, y: -17 },
-        { type: "circle", radius: 2.75, x: 24, y: 17 }, { type: "circle", radius: 2.75, x: 24, y: -17 },
+        { type: "circle", radius: 2.75, x: 0, y: 17 },
+        { type: "circle", radius: 2.75, x: 0, y: -17 },
+        { type: "circle", radius: 2.75, x: 24, y: 17 },
+        { type: "circle", radius: 2.75, x: 24, y: -17 },
       ],
     },
     { type: "extrude", sketch: 7, distance: B, operation: "cut" },
     {
-      type: "sketch", plane: P([-35, 0, 0], [1, 0, 0], [0, 1, 0]),
-      entities: [{ type: "circle", radius: 2.75, x: 0, y: 22 }, { type: "circle", radius: 2.75, x: 0, y: 42 }],
+      type: "sketch",
+      plane: P([-35, 0, 0], [1, 0, 0], [0, 1, 0]),
+      entities: [
+        { type: "circle", radius: 2.75, x: 0, y: 22 },
+        { type: "circle", radius: 2.75, x: 0, y: 42 },
+      ],
     },
     { type: "extrude", sketch: 9, distance: B, operation: "cut" },
     { type: "fillet", edges: [{ kind: "edge", by: "nearest", point: [35, 25, 4] }], radius: 8 },
@@ -345,7 +371,6 @@ async function drawPlate(ctx, { stills }) {
   await sleep(300);
 }
 
-
 // A 40 x 30 x 20 block, and a bolt-on part beside it, for the tool shots.
 const block = () => [
   { type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 30 }] },
@@ -378,9 +403,10 @@ async function edgeScreen(ctx, pt) {
     const v = window.viewport;
     const V = v.camera.position.constructor;
     const sp = v.projectToScreen(new V(pt[0], pt[1], pt[2]));
-    for (let dx = -6; dx <= 6; dx += 2) for (let dy = -6; dy <= 6; dy += 2) {
-      if (v.pickEdgeAt(sp.x + dx, sp.y + dy)) return { x: sp.x + dx, y: sp.y + dy };
-    }
+    for (let dx = -6; dx <= 6; dx += 2)
+      for (let dy = -6; dy <= 6; dy += 2) {
+        if (v.pickEdgeAt(sp.x + dx, sp.y + dy)) return { x: sp.x + dx, y: sp.y + dy };
+      }
     return null;
   }, pt);
 }
@@ -392,7 +418,8 @@ async function nudgeHandle(page) {
     const k = window.viewport.pixelWorldSize(w.anchor);
     const ax = w.axis(window.viewport);
     const at = (n) => window.viewport.projectToScreen(w.anchor.clone().addScaledVector(ax, k * n));
-    const a = at(20), b = at(60);
+    const a = at(20),
+      b = at(60);
     return { x: a.x, y: a.y, dx: b.x - a.x, dy: b.y - a.y };
   });
 }
@@ -422,7 +449,6 @@ const STILLS = {
     await openExport(ctx);
     await ctx.still("first-part-export", await ctx.box(".export-dialog"));
   },
-
 
   async "items-list"(ctx) {
     await ctx.features(trio());
@@ -477,10 +503,15 @@ const STILLS = {
 
   async "extrude-taper"(ctx) {
     const { page } = ctx;
-    await ctx.features([{ type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 30 }] }]);
+    await ctx.features([
+      { type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 30 }] },
+    ]);
     await ctx.view("iso", 1);
     await ctx.centre();
-    await page.evaluate(() => { window.overlay.selectRegionsByPoints([[0, 0, 0]]); window.__fundacad.handleAction("extrude"); });
+    await page.evaluate(() => {
+      window.overlay.selectRegionsByPoints([[0, 0, 0]]);
+      window.__fundacad.handleAction("extrude");
+    });
     await sleep(600);
     const typeInto = async (i, text) => {
       const f = (await page.$$(".dim-input input"))[i];
@@ -498,11 +529,24 @@ const STILLS = {
 
   async "extrude-thin"(ctx) {
     await ctx.features([
-      { type: "sketch", plane: "XY", entities: [
-        { type: "line", id: "a", x1: -20, y1: -15, x2: 20, y2: -15 },
-        { type: "line", id: "b", x1: 20, y1: -15, x2: 20, y2: 15 },
-      ] },
-      { type: "extrude", sketch: 0, distance: 20, operation: "new", thin: true, curves: ["a", "b"], thickness: 2, side: "inside" },
+      {
+        type: "sketch",
+        plane: "XY",
+        entities: [
+          { type: "line", id: "a", x1: -20, y1: -15, x2: 20, y2: -15 },
+          { type: "line", id: "b", x1: 20, y1: -15, x2: 20, y2: 15 },
+        ],
+      },
+      {
+        type: "extrude",
+        sketch: 0,
+        distance: 20,
+        operation: "new",
+        thin: true,
+        curves: ["a", "b"],
+        thickness: 2,
+        side: "inside",
+      },
     ]);
     await ctx.view("iso", 1);
     await ctx.centre();
@@ -545,7 +589,6 @@ const STILLS = {
     await ctx.park();
     await ctx.still("sketch-overview");
   },
-
 
   async "parameters-dialog"(ctx) {
     const { page } = ctx;
@@ -699,7 +742,7 @@ const GIFS = {
   },
 
   // Grab the arrow on the top face and pull it out.
-  async "presspull"(ctx) {
+  async presspull(ctx) {
     const { page } = ctx;
     await ctx.features(block());
     await ctx.view("iso", -2);
@@ -750,7 +793,7 @@ const GIFS = {
   },
 
   // A finished part turning in the viewport.
-  async "orbit"(ctx) {
+  async orbit(ctx) {
     const { page } = ctx;
     await ctx.features(bracket());
     await ctx.view("iso", 0);
@@ -844,8 +887,19 @@ Object.assign(STILLS, {
   async "loft-adapter"(ctx) {
     await ctx.features([
       { type: "sketch", plane: "XY", entities: [{ type: "circle", id: "c1", x: 0, y: 0, radius: 14 }] },
-      { type: "sketch", plane: P([0, 0, 30], [0, 0, 1], [1, 0, 0]), entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 36, height: 36 }] },
-      { type: "loft", profiles: [{ sketch: 0, region: [0, 0, 0] }, { sketch: 1, region: [0, 0, 30] }], operation: "new" },
+      {
+        type: "sketch",
+        plane: P([0, 0, 30], [0, 0, 1], [1, 0, 0]),
+        entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 36, height: 36 }],
+      },
+      {
+        type: "loft",
+        profiles: [
+          { sketch: 0, region: [0, 0, 0] },
+          { sketch: 1, region: [0, 0, 30] },
+        ],
+        operation: "new",
+      },
     ]);
     await showModel(ctx);
     await ctx.still("loft-adapter", VIEW);
@@ -854,7 +908,8 @@ Object.assign(STILLS, {
   async "revolve-profile"(ctx) {
     await ctx.features([
       {
-        type: "sketch", plane: "XZ",
+        type: "sketch",
+        plane: "XZ",
         entities: [
           { type: "line", x1: 0, y1: 0, x2: 14, y2: 0 },
           { type: "line", x1: 14, y1: 0, x2: 20, y2: 15 },
@@ -892,10 +947,7 @@ Object.assign(STILLS, {
   },
 
   async "split-body"(ctx) {
-    await ctx.features([
-      ...block(),
-      { type: "split", plane: "XZ", keep: "both" },
-    ]);
+    await ctx.features([...block(), { type: "split", plane: "XZ", keep: "both" }]);
     await showModel(ctx);
     await ctx.still("split-body", VIEW);
   },
@@ -913,7 +965,11 @@ Object.assign(STILLS, {
     await ctx.features([
       { type: "sketch", plane: "XY", entities: [{ type: "rectangle", x: 0, y: 0, width: 80, height: 30 }] },
       { type: "extrude", sketch: 0, distance: 6, operation: "new", regions: [[0, 0, 0]] },
-      { type: "sketch", plane: P([0, 0, 6], [0, 0, 1], [1, 0, 0]), entities: [{ type: "circle", x: -28, y: 0, radius: 3.5 }] },
+      {
+        type: "sketch",
+        plane: P([0, 0, 6], [0, 0, 1], [1, 0, 0]),
+        entities: [{ type: "circle", x: -28, y: 0, radius: 3.5 }],
+      },
       { type: "extrude", sketch: 2, distance: -6, operation: "cut" },
       { type: "patternLinear", count: 5, spacing: 14, axis: "X", features: [3] },
     ]);
@@ -1000,7 +1056,13 @@ Object.assign(STILLS, {
     await startSketch(ctx);
     await page.keyboard.press("l");
     await page.keyboard.down("Control");
-    for (const [x, y] of [[640, 400], [880, 400], [880, 520], [640, 520], [640, 404]]) {
+    for (const [x, y] of [
+      [640, 400],
+      [880, 400],
+      [880, 520],
+      [640, 520],
+      [640, 404],
+    ]) {
       await ctx.move(x, y, 6);
       await page.mouse.click(x, y);
       await sleep(150);
@@ -1098,10 +1160,7 @@ Object.assign(STILLS, {
 Object.assign(STILLS, {
   async "suppress-step"(ctx) {
     const { page } = ctx;
-    await ctx.features([
-      ...block(),
-      { type: "cylinder", radius: 6, height: 40, operation: "cut" },
-    ]);
+    await ctx.features([...block(), { type: "cylinder", radius: 6, height: 40, operation: "cut" }]);
     await showModel(ctx);
     const row = () => page.locator("#timeline").getByText("Cylinder", { exact: true }).last();
     await row().click({ button: "right" });
@@ -1114,7 +1173,6 @@ Object.assign(STILLS, {
     await page.keyboard.press("Escape");
   },
 });
-
 
 // ------------------------------------------------------------------ pass 2 --
 
@@ -1176,7 +1234,11 @@ const overlapPair = () => [
 const tee = () => [
   { type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 20, height: 20 }] },
   { type: "extrude", sketch: 0, distance: 20, operation: "new", regions: [[0, 0, 0]] },
-  { type: "sketch", plane: P([0, 0, 20], [0, 0, 1], [1, 0, 0]), entities: [{ type: "rectangle", id: "r2", x: 0, y: 0, width: 50, height: 20 }] },
+  {
+    type: "sketch",
+    plane: P([0, 0, 20], [0, 0, 1], [1, 0, 0]),
+    entities: [{ type: "rectangle", id: "r2", x: 0, y: 0, width: 50, height: 20 }],
+  },
   { type: "extrude", sketch: 2, distance: 8, operation: "join", targets: ["body1"], regions: [[20, 0, 0]] },
 ];
 
@@ -1214,9 +1276,20 @@ async function orbitDown(ctx, dy) {
 const smallBracket = () => [
   { type: "sketch", plane: "XY", entities: [{ type: "rectangle", x: 0, y: 0, width: 40, height: 30 }] },
   { type: "extrude", sketch: 0, distance: 8, operation: "new" },
-  { type: "sketch", plane: P([-20, 0, 0], [1, 0, 0], [0, 1, 0]), entities: [{ type: "rectangle", x: 0, y: 19, width: 30, height: 22 }] },
+  {
+    type: "sketch",
+    plane: P([-20, 0, 0], [1, 0, 0], [0, 1, 0]),
+    entities: [{ type: "rectangle", x: 0, y: 19, width: 30, height: 22 }],
+  },
   { type: "extrude", sketch: 2, distance: 8, operation: "join", targets: ["body1"] },
-  { type: "sketch", plane: "XY", entities: [{ type: "circle", radius: 2.5, x: 8, y: 9 }, { type: "circle", radius: 2.5, x: 8, y: -9 }] },
+  {
+    type: "sketch",
+    plane: "XY",
+    entities: [
+      { type: "circle", radius: 2.5, x: 8, y: 9 },
+      { type: "circle", radius: 2.5, x: 8, y: -9 },
+    ],
+  },
   { type: "extrude", sketch: 4, distance: 8, operation: "cut", targets: ["body1"] },
 ];
 
@@ -1236,10 +1309,12 @@ async function runStress(ctx) {
   await ctx.clickAt(l.x, l.y);
   await sleep(700);
   await page.getByRole("button", { name: "Run", exact: true }).click();
-  await page.waitForFunction(() => /safety|peak|Peak/i.test(document.body.innerText), null, { timeout: 90000 }).catch(async (e) => {
-    await page.screenshot({ path: path.join(OUT, "debug-stress.png") });
-    throw e;
-  });
+  await page
+    .waitForFunction(() => /safety|peak|Peak/i.test(document.body.innerText), null, { timeout: 90000 })
+    .catch(async (e) => {
+      await page.screenshot({ path: path.join(OUT, "debug-stress.png") });
+      throw e;
+    });
   await sleep(2500);
   await page.getByRole("button", { name: "1x", exact: true }).click();
   await ctx.park();
@@ -1308,7 +1383,6 @@ Object.assign(STILLS, {
     await hideRail(ctx);
     await ctx.still("stress-results", { x: 290, y: 120, width: 900, height: 740 });
   },
-
 });
 
 Object.assign(STILLS, {
@@ -1370,7 +1444,10 @@ Object.assign(STILLS, {
         { path: "D:/Projects/shelf/wall bracket.funda", mtimeMs: now - 26 * 3600_000, thumb: thumbs[1] },
         { path: "D:/Projects/press/lever arm.fundab", mtimeMs: now - 4 * 86400_000, thumb: thumbs[2] },
       ];
-      localStorage.setItem("fundacad.recentFiles", JSON.stringify(files.map((f, i) => ({ path: f.path, openedAt: now - i * 1000 }))));
+      localStorage.setItem(
+        "fundacad.recentFiles",
+        JSON.stringify(files.map((f, i) => ({ path: f.path, openedAt: now - i * 1000 }))),
+      );
       localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/Projects/shelf", addedAt: now }]));
       localStorage.setItem("fundacad.welcomeOnStartup", "true");
       window.__fundacad.home.useFakeLibrary(files);
@@ -1430,7 +1507,12 @@ Object.assign(STILLS, {
   async "parameter-setup"(ctx) {
     const { page } = ctx;
     await ctx.features(plate());
-    await page.evaluate(() => { const s = window.store; s.addParam("width", "40"); s.addParam("gap", "0.4"); s.addParam("solidCore", "1", "count"); });
+    await page.evaluate(() => {
+      const s = window.store;
+      s.addParam("width", "40");
+      s.addParam("gap", "0.4");
+      s.addParam("solidCore", "1", "count");
+    });
     await sleep(2500);
     await page.getByText("Edit", { exact: true }).first().click();
     await sleep(500);
@@ -1448,7 +1530,9 @@ Object.assign(STILLS, {
   },
   async "expression-value"(ctx) {
     const { page } = ctx;
-    await ctx.features([{ type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 30 }] }]);
+    await ctx.features([
+      { type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 30 }] },
+    ]);
     await page.evaluate(() => window.store.addParam("width", "40"));
     await ctx.view("iso", 0);
     await page.evaluate(() => window.__fundacad.handleAction("extrude"));
@@ -1462,8 +1546,7 @@ Object.assign(STILLS, {
   },
 });
 
-Object.assign(STILLS, {
-});
+Object.assign(STILLS, {});
 
 // --------------------------------------------------------------------- main --
 
@@ -1474,12 +1557,23 @@ Object.assign(STILLS, {
     ...Object.keys(STILLS).map((n) => ({ n, kind: "still", fn: STILLS[n] })),
     ...Object.keys(GIFS).map((n) => ({ n, kind: "gif", fn: GIFS[n] })),
   ];
-  if (args.includes("--list")) { console.log(all.map((s) => `${s.n} (${s.kind})`).join("\n")); return; }
-  if (!TOKEN) { console.error("set SC_TOKEN to the engine token"); process.exit(1); }
+  if (args.includes("--list")) {
+    console.log(all.map((s) => `${s.n} (${s.kind})`).join("\n"));
+    return;
+  }
+  if (!TOKEN) {
+    console.error("set SC_TOKEN to the engine token");
+    process.exit(1);
+  }
   const todo = all.filter((s) =>
-    only ? only.includes(s.n)
-      : args.includes("--stills") ? s.kind === "still"
-        : args.includes("--gifs") ? s.kind === "gif" : true);
+    only
+      ? only.includes(s.n)
+      : args.includes("--stills")
+        ? s.kind === "still"
+        : args.includes("--gifs")
+          ? s.kind === "gif"
+          : true,
+  );
 
   const browser = await chromium.launch({
     executablePath: EXE,

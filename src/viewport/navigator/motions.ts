@@ -4,10 +4,7 @@
 
 import * as THREE from "three";
 import { turntableQuat } from "./math";
-import {
-  eyeOf, forwardOf, halfTan, rightOf, setOrientation, setTurntable, upOf,
-  type Pose,
-} from "./pose";
+import { eyeOf, forwardOf, halfTan, rightOf, setOrientation, setTurntable, upOf, type Pose } from "./pose";
 
 const v0 = new THREE.Vector3();
 const v1 = new THREE.Vector3();
@@ -50,13 +47,7 @@ export function rotateAbout(p: Pose, pivot: THREE.Vector3, qNew: THREE.Quaternio
  *  the view axis (0 for a level view). Yaw steps are about world Z and
  *  elevation steps about camera right, Rz(dyaw)·q·Rx(delev), which commute, so
  *  any slicing of a drag lands on the same pose. */
-export function turntableAbout(
-  p: Pose,
-  pivot: THREE.Vector3,
-  yaw: number,
-  elev: number,
-  roll: number,
-): void {
+export function turntableAbout(p: Pose, pivot: THREE.Vector3, yaw: number, elev: number, roll: number): void {
   const q = turntableQuat(yaw, elev, q1.clone());
   if (roll !== 0) q.multiply(q0.setFromAxisAngle(v0.set(0, 0, 1), roll));
   rotateAbout(p, pivot, q);

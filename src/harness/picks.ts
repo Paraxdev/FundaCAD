@@ -47,14 +47,28 @@ export const facesOf = (h: PickHost, body: Parameters<typeof sel.facesOf>[1]) =>
 export const resolveFace = (h: PickHost, s: string) => asHarness(() => sel.resolveFace(h, s));
 export const resolveEdge = (h: PickHost, s: string) => asHarness(() => sel.resolveEdge(h, s));
 
-const VIEW_FOR: Record<string, string> = { "+z": "top", "-z": "bottom", "-y": "front", "+y": "back", "+x": "right", "-x": "left" };
+const VIEW_FOR: Record<string, string> = {
+  "+z": "top",
+  "-z": "bottom",
+  "-y": "front",
+  "+y": "back",
+  "+x": "right",
+  "-x": "left",
+};
 
 /** Points worth trying on a face: middles of its biggest triangles first. */
 export function faceSamples(f: FaceInfo): THREE.Vector3[] {
-  const big = f.tris.slice().sort((a, b) => b.getArea() - a.getArea()).slice(0, 12);
+  const big = f.tris
+    .slice()
+    .sort((a, b) => b.getArea() - a.getArea())
+    .slice(0, 12);
   const out = big.map((t) => t.getMidpoint(new THREE.Vector3()));
   for (const t of big.slice(0, 4)) {
-    for (const [u, v, w] of [[0.6, 0.2, 0.2], [0.2, 0.6, 0.2], [0.2, 0.2, 0.6]] as const) {
+    for (const [u, v, w] of [
+      [0.6, 0.2, 0.2],
+      [0.2, 0.6, 0.2],
+      [0.2, 0.2, 0.6],
+    ] as const) {
       out.push(new THREE.Vector3().addScaledVector(t.a, u).addScaledVector(t.b, v).addScaledVector(t.c, w));
     }
   }
@@ -72,21 +86,27 @@ export function facePoint(h: PickHost, sel: string, onCanvas: CanvasTest = canva
       return { x: p.x, y: p.y, faceId: f.faceId, body: f.body, index: f.index, what };
     }
   }
-  const view = f.planar ? VIEW_FOR[axisWord(f.normal)] ?? "iso" : "iso";
+  const view = f.planar ? (VIEW_FOR[axisWord(f.normal)] ?? "iso") : "iso";
   throw new HarnessError(`face ${what} cannot be clicked from this view, try s.view("${view}")`, "Occluded");
 }
 
 const EDGE_FRACTIONS = [0.5, 0.35, 0.65, 0.2, 0.8, 0.1, 0.9];
 
 /** `via: "edge"` checks the point with the edge tools' own pick (fillet, chamfer). */
-export function edgePoint(h: PickHost, sel: string, via: "select" | "edge" = "select", onCanvas: CanvasTest = canvasTest(h.viewport.domElement)) {
+export function edgePoint(
+  h: PickHost,
+  sel: string,
+  via: "select" | "edge" = "select",
+  onCanvas: CanvasTest = canvasTest(h.viewport.domElement),
+) {
   const e = resolveEdge(h, sel);
   const pts = edgePts(e);
   for (const f of EDGE_FRACTIONS) {
     const p = h.viewport.projectToScreen(along(pts, f));
     if (!onCanvas(p.x, p.y)) continue;
     const hit = via === "edge" ? h.viewport.pickEdgeAt(p.x, p.y) : h.viewport.pickEntity(p.x, p.y);
-    if (hit?.kind === "edge" && hit.edge.id === e.id) return { x: p.x, y: p.y, edgeId: e.id, body: e.body ?? null, what: `edge ${edgeName(e)}` };
+    if (hit?.kind === "edge" && hit.edge.id === e.id)
+      return { x: p.x, y: p.y, edgeId: e.id, body: e.body ?? null, what: `edge ${edgeName(e)}` };
   }
   throw new HarnessError(`edge ${edgeName(e)} cannot be clicked from this view, try another s.view(...)`, "Occluded");
 }
@@ -122,7 +142,17 @@ export function planePoint(h: PickHost, name: string, onCanvas: CanvasTest = can
   if (!g.boundingBox) g.computeBoundingBox();
   const box = g.boundingBox ?? new THREE.Box3(new THREE.Vector3(-1, -1, 0), new THREE.Vector3(1, 1, 0));
   const want = base ? name.trim().toUpperCase() : name.trim();
-  for (const [u, v] of [[0.5, 0.5], [0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7], [0.15, 0.5], [0.85, 0.5], [0.5, 0.15], [0.5, 0.85]] as const) {
+  for (const [u, v] of [
+    [0.5, 0.5],
+    [0.3, 0.3],
+    [0.7, 0.3],
+    [0.3, 0.7],
+    [0.7, 0.7],
+    [0.15, 0.5],
+    [0.85, 0.5],
+    [0.5, 0.15],
+    [0.5, 0.85],
+  ] as const) {
     const local = new THREE.Vector3(
       box.min.x + u * (box.max.x - box.min.x),
       box.min.y + v * (box.max.y - box.min.y),
@@ -137,12 +167,23 @@ export function planePoint(h: PickHost, name: string, onCanvas: CanvasTest = can
   throw new HarnessError(`plane ${want} cannot be clicked from this view`, "Occluded");
 }
 
-export function worldPoint(h: PickHost, x: number, y: number, z: number, onCanvas: CanvasTest = canvasTest(h.viewport.domElement)) {
+export function worldPoint(
+  h: PickHost,
+  x: number,
+  y: number,
+  z: number,
+  onCanvas: CanvasTest = canvasTest(h.viewport.domElement),
+) {
   const p = h.viewport.projectToScreen(new THREE.Vector3(x, y, z));
   return { x: p.x, y: p.y, covered: !onCanvas(p.x, p.y) };
 }
 
-export function sketchPoint(h: PickHost, x: number, y: number, onCanvas: CanvasTest = canvasTest(h.viewport.domElement)) {
+export function sketchPoint(
+  h: PickHost,
+  x: number,
+  y: number,
+  onCanvas: CanvasTest = canvasTest(h.viewport.domElement),
+) {
   if (!h.sketch.active) throw new HarnessError("no sketch is open", "BadArgs");
   const p = h.viewport.projectToScreen(h.sketch.activePlane.to3D(x, y));
   return { x: p.x, y: p.y, covered: !onCanvas(p.x, p.y) };

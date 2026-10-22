@@ -351,7 +351,12 @@ const PICTURE_POLL_MS = 250;
 
 /** What a raw ipc::Response arrives as. */
 function base64(bytes: unknown): string {
-  const b = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes as number[]);
+  const b =
+    bytes instanceof ArrayBuffer
+      ? new Uint8Array(bytes)
+      : bytes instanceof Uint8Array
+        ? bytes
+        : Uint8Array.from(bytes as number[]);
   let s = "";
   for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
   return btoa(s);

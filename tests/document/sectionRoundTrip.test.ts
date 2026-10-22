@@ -92,7 +92,10 @@ describe("the palette", () => {
   });
 
   it("round trips a file's own palette, and the next document gets the default back", () => {
-    const own = [{ name: "Slate", color: "#3c4a5b" }, { name: "Rust", color: "#a0522d", material: "m1" }];
+    const own = [
+      { name: "Slate", color: "#3c4a5b" },
+      { name: "Rust", color: "#a0522d", material: "m1" },
+    ];
     const s = opened({ palette: own });
     expect(s.colorPalette).toEqual(own);
     expect(saved(s).palette).toEqual(own);

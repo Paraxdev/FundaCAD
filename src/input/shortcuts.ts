@@ -89,13 +89,25 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "arrowup", action: "view-step-up", context: "global", label: "Tilt the view up 15°" },
   { key: "arrowdown", action: "view-step-down", context: "global", label: "Tilt the view down 15°" },
   { key: "arrowleft", shift: true, action: "view-step-left-fine", context: "global", label: "Turn the view left 5°" },
-  { key: "arrowright", shift: true, action: "view-step-right-fine", context: "global", label: "Turn the view right 5°" },
+  {
+    key: "arrowright",
+    shift: true,
+    action: "view-step-right-fine",
+    context: "global",
+    label: "Turn the view right 5°",
+  },
   { key: "arrowup", shift: true, action: "view-step-up-fine", context: "global", label: "Tilt the view up 5°" },
   { key: "arrowdown", shift: true, action: "view-step-down-fine", context: "global", label: "Tilt the view down 5°" },
   { key: "?", action: "shortcut-help", context: "global", label: "Shortcut help" },
   { key: "z", action: "viewmode-cycle", context: "global", label: "Next view mode" },
   { key: "z", shift: true, action: "viewmode-cycle-back", context: "global", label: "Previous view mode" },
-  { key: "v", shift: true, action: "clean-view", context: "global", label: "Clean view (hide every overlay, again to bring them back)" },
+  {
+    key: "v",
+    shift: true,
+    action: "clean-view",
+    context: "global",
+    label: "Clean view (hide every overlay, again to bring them back)",
+  },
 ];
 
 /** How a shortcut is written for a human ("Shift+H", "Ctrl+U", "Home").
@@ -117,12 +129,7 @@ export function keyHint(action: string): string | undefined {
 
 /** Resolve a keydown to an action for the current context (sketch keys are preferred
  *  while sketching; model keys otherwise; global always). */
-export function resolveShortcut(
-  key: string,
-  shift: boolean,
-  context: "model" | "sketch",
-  ctrl = false,
-): string | null {
+export function resolveShortcut(key: string, shift: boolean, context: "model" | "sketch", ctrl = false): string | null {
   const k = key.toLowerCase();
   for (const s of activeShortcuts()) {
     // Every flag is compared, including the absent ones. A bare "b" must not
@@ -156,10 +163,21 @@ export type ShortcutProblem = { conflict: Shortcut } | { reserved: string } | { 
 /** Combos handled before the table is asked (keymap.ts, app/keyboard.ts,
  *  app/engine.ts), written as formatShortcut writes them. */
 const RESERVED: Record<string, string> = {
-  "Ctrl+Z": "Undo", "Ctrl+Shift+Z": "Redo", "Ctrl+Y": "Redo",
-  "Ctrl+S": "Save", "Ctrl+Shift+S": "Save As", "Ctrl+N": "New", "Ctrl+O": "Open",
-  "Ctrl+E": "Export", "Ctrl+F": "Find", "Ctrl+K": "Command palette", "Ctrl+,": "Preferences",
-  Escape: "Cancel", Tab: "Box select filter", Delete: "Delete", Backspace: "Delete",
+  "Ctrl+Z": "Undo",
+  "Ctrl+Shift+Z": "Redo",
+  "Ctrl+Y": "Redo",
+  "Ctrl+S": "Save",
+  "Ctrl+Shift+S": "Save As",
+  "Ctrl+N": "New",
+  "Ctrl+O": "Open",
+  "Ctrl+E": "Export",
+  "Ctrl+F": "Find",
+  "Ctrl+K": "Command palette",
+  "Ctrl+,": "Preferences",
+  Escape: "Cancel",
+  Tab: "Box select filter",
+  Delete: "Delete",
+  Backspace: "Delete",
   "?": "This sheet",
 };
 
@@ -184,7 +202,9 @@ export function activeShortcuts(): Shortcut[] {
   for (const o of overrides) {
     if (!o.key) continue;
     const rows = SHORTCUTS.filter((s) => s.action === o.action);
-    const base = rows.length ? rows : [{ action: o.action, context: o.context ?? "global", label: o.label ?? o.action, key: "" } as Shortcut];
+    const base = rows.length
+      ? rows
+      : [{ action: o.action, context: o.context ?? "global", label: o.label ?? o.action, key: "" } as Shortcut];
     for (const r of base) {
       const { shift: _s, ctrl: _c, ...rest } = r;
       mine.push({ ...rest, ...combo(o), context: o.context ?? r.context });
@@ -219,7 +239,9 @@ export function describeShortcutProblem(p: ShortcutProblem): string {
 
 /** Replace every override. Reserved and refused ones are left out; the rest
  *  apply, and the conflicts among them are returned and shown on the sheet. */
-export function setShortcutOverrides(list: readonly ShortcutOverride[]): { action: string; problem: ShortcutProblem }[] {
+export function setShortcutOverrides(
+  list: readonly ShortcutOverride[],
+): { action: string; problem: ShortcutProblem }[] {
   const out: { action: string; problem: ShortcutProblem }[] = [];
   const kept: ShortcutOverride[] = [];
   for (const o of list) {
@@ -243,7 +265,8 @@ export function shortcutConflicts(): [Shortcut, Shortcut][] {
   const out: [Shortcut, Shortcut][] = [];
   for (let i = 0; i < t.length; i++) {
     for (let j = i + 1; j < t.length; j++) {
-      const a = t[i]!, b = t[j]!;
+      const a = t[i]!,
+        b = t[j]!;
       if (a.action !== b.action && sameCombo(a, b) && overlap(a.context, b.context)) out.push([a, b]);
     }
   }
@@ -266,8 +289,13 @@ export function shortcutHudGroups(): HudGroup[] {
   const byContext = (ctx: Shortcut["context"]) =>
     activeShortcuts()
       .filter((s) => s.context === ctx)
-      .map((s) => (shortcutOverridden(s.action) ? { key: fmt(s), label: s.label, changed: true } : { key: fmt(s), label: s.label }));
-  const clashes = shortcutConflicts().map(([a, b]) => ({ key: fmt(a), label: `${a.label} and ${b.label} share this key, ${a.label} applies` }));
+      .map((s) =>
+        shortcutOverridden(s.action) ? { key: fmt(s), label: s.label, changed: true } : { key: fmt(s), label: s.label },
+      );
+  const clashes = shortcutConflicts().map(([a, b]) => ({
+    key: fmt(a),
+    label: `${a.label} and ${b.label} share this key, ${a.label} applies`,
+  }));
   const custom = pointerBindings() !== DEFAULT_BINDINGS;
   return [
     ...(clashes.length ? [{ name: "Conflicts", rows: clashes }] : []),
@@ -295,7 +323,11 @@ export function shortcutHudGroups(): HudGroup[] {
         // A gesture rather than a key, and the only place anyone would look
         // for it is here. "right"/"left" name the drag direction, not a mouse
         // button, everything here is a left-button drag.
-        { key: "Drag", label: "Box select: dragging to the right takes what is fully inside, dragging to the left takes what it touches" },
+        {
+          key: "Drag",
+          label:
+            "Box select: dragging to the right takes what is fully inside, dragging to the left takes what it touches",
+        },
         { key: "Shift+Drag", label: "Box select, adding to what is selected" },
         { key: "Tab", label: "While boxing: take everything / faces / edges" },
       ],

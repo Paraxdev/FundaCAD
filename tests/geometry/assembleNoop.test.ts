@@ -12,7 +12,9 @@ import type { RebuildResult } from "../../src/types";
 
 function full(id: string, etag: string) {
   return {
-    id, name: id, etag,
+    id,
+    name: id,
+    etag,
     positions: [0, 0, 0, 1, 0, 0, 0, 1, 0],
     indices: [0, 1, 2],
     faceIds: [0],
@@ -26,7 +28,10 @@ function client() {
   const g = new Geometry();
   const call = (bodies: unknown[], extra: Record<string, unknown> = {}) =>
     (g as unknown as { assemble(r: unknown): RebuildResult | null }).assemble({
-      protocol: 2, bodies, bbox: { min: [0, 0, 0], max: [1, 1, 1] }, ...extra,
+      protocol: 2,
+      bodies,
+      bbox: { min: [0, 0, 0], max: [1, 1, 1] },
+      ...extra,
     });
   return call;
 }

@@ -81,7 +81,9 @@ export function settle(
   const timeout = args.timeoutMs ?? 60_000;
   const start = clock.now();
   let lastEvent = start;
-  const bump = () => { lastEvent = clock.now(); };
+  const bump = () => {
+    lastEvent = clock.now();
+  };
   const offs = [h.store.onBuild(bump), h.store.onDocChange(bump), onLogChange(bump)];
   lastEvent = start;
   return new Promise((resolve, reject) => {
@@ -96,7 +98,12 @@ export function settle(
         resolve({ ms: Math.round(now - start) });
       } else if (now - start > timeout) {
         offs.forEach((off) => off());
-        reject(new HarnessError(`not settled after ${Math.round(timeout / 1000)} s: ${describeQuiet(q, args.trace)}`, "SettleTimeout"));
+        reject(
+          new HarnessError(
+            `not settled after ${Math.round(timeout / 1000)} s: ${describeQuiet(q, args.trace)}`,
+            "SettleTimeout",
+          ),
+        );
       } else clock.frame(tick);
     };
     clock.frame(tick);

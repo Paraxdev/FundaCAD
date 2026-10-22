@@ -44,7 +44,11 @@ describe("DimInput hit testing", () => {
   });
 
   it("does not step aside for a press on itself", () => {
-    dim.show([{ name: "radius", label: "R" }], () => {}, () => {});
+    dim.show(
+      [{ name: "radius", label: "R" }],
+      () => {},
+      () => {},
+    );
     const ok = root().querySelector<HTMLElement>(".dim-ok")!;
     press("pointerdown", ok);
     // Turning the box click-through here would mean the confirm button could
@@ -90,7 +94,11 @@ describe("iconElement", () => {
   });
 
   it("puts one in each of the box's buttons", () => {
-    dim.show([{ name: "radius", label: "R" }], () => {}, () => {});
+    dim.show(
+      [{ name: "radius", label: "R" }],
+      () => {},
+      () => {},
+    );
     expect(root().querySelector(".dim-ok .icon")).not.toBeNull();
     expect(root().querySelector(".dim-no .icon")).not.toBeNull();
   });
@@ -112,7 +120,9 @@ describe("DimInput's optional switch", () => {
   it("reports a press and reflects the state it lands in", () => {
     const seen: boolean[] = [];
     dim.show([{ name: "distance", label: "D" }], () => {}, undefined, {
-      label: "Symmetric", title: "both ways", initial: false,
+      label: "Symmetric",
+      title: "both ways",
+      initial: false,
       onChange: (on) => seen.push(on),
     });
     const b = toggle()!;
@@ -130,7 +140,10 @@ describe("DimInput's optional switch", () => {
 
   it("opens in the state a re-opened feature was saved with", () => {
     dim.show([{ name: "distance", label: "D" }], () => {}, undefined, {
-      label: "Symmetric", title: "both ways", initial: true, onChange: () => {},
+      label: "Symmetric",
+      title: "both ways",
+      initial: true,
+      onChange: () => {},
     });
     expect(toggle()!.classList.contains("on")).toBe(true);
   });
@@ -140,7 +153,9 @@ describe("DimInput's optional switch", () => {
     // about a mode the user is looking at unless the tool can push it here.
     const seen: boolean[] = [];
     dim.show([{ name: "distance", label: "D" }], () => {}, undefined, {
-      label: "Symmetric", title: "both ways", initial: false,
+      label: "Symmetric",
+      title: "both ways",
+      initial: false,
       onChange: (on) => seen.push(on),
     });
     dim.setToggle(true);
@@ -154,7 +169,10 @@ describe("DimInput's optional switch", () => {
 
   it("does not survive into the next tool's showing", () => {
     dim.show([{ name: "distance", label: "D" }], () => {}, undefined, {
-      label: "Symmetric", title: "both ways", initial: true, onChange: () => {},
+      label: "Symmetric",
+      title: "both ways",
+      initial: true,
+      onChange: () => {},
     });
     expect(toggle()).not.toBeNull();
     dim.show([{ name: "radius", label: "R" }], () => {});
@@ -233,7 +251,10 @@ describe("DimInput confirm and cancel", () => {
     it(`${which} keeps its release off the canvas behind it`, () => {
       const { canvas, heard } = canvasHearing();
       let closed = 0;
-      const close = () => { closed++; dim.hide(); };
+      const close = () => {
+        closed++;
+        dim.hide();
+      };
       dim.show([{ name: "radius", label: "R" }], close, close);
       press("pointerdown", root().querySelector<HTMLElement>(which)!);
       expect(closed).toBe(1);
@@ -246,7 +267,11 @@ describe("DimInput confirm and cancel", () => {
 
   it("lets the next press through", async () => {
     const { canvas, heard } = canvasHearing();
-    dim.show([{ name: "radius", label: "R" }], () => dim.hide(), () => dim.hide());
+    dim.show(
+      [{ name: "radius", label: "R" }],
+      () => dim.hide(),
+      () => dim.hide(),
+    );
     press("pointerdown", root().querySelector<HTMLElement>(".dim-no")!);
     press("pointerup", canvas);
     press("click", canvas);
@@ -260,7 +285,14 @@ describe("DimInput confirm and cancel", () => {
 
 describe("DimInput hidden fields", () => {
   it("hides a field in place, keeps what was typed and Tab skips it", () => {
-    dim.show([{ name: "distance", label: "D" }, { name: "taper", label: "Angle" }, { name: "depth", label: "H" }], () => {});
+    dim.show(
+      [
+        { name: "distance", label: "D" },
+        { name: "taper", label: "Angle" },
+        { name: "depth", label: "H" },
+      ],
+      () => {},
+    );
     const inputs = [...root().querySelectorAll<HTMLInputElement>("input")];
     inputs[0]!.value = "4.7";
     dim.setFieldHidden("taper", true);
@@ -282,14 +314,18 @@ describe("what is typed is read, or refused out loud", () => {
     input(i).value = text;
     input(i).dispatchEvent(new Event("input", { bubbles: true }));
   };
-  const enter = (i = 0) =>
-    input(i).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  const enter = (i = 0) => input(i).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   const problem = () => root().querySelector(".dim-problem")?.textContent ?? null;
 
   it("keeps the sign, the comma and the arithmetic", () => {
     const got: Record<string, number>[] = [];
     dim.show([{ name: "move", label: "Move" }], (v) => got.push(v));
-    for (const [text, want] of [["-2", -2], ["20,5", 20.5], ["-(5+2)", -7], ["\u22123", -3]] as const) {
+    for (const [text, want] of [
+      ["-2", -2],
+      ["20,5", 20.5],
+      ["-(5+2)", -7],
+      ["\u22123", -3],
+    ] as const) {
       type(text);
       enter();
       expect(got.pop()!.move).toBeCloseTo(want);
@@ -386,10 +422,23 @@ describe("DimInput's choice on a field's name", () => {
     return /^[-+]/.test(raw) ? { choice: "offset", text: raw } : null;
   };
   const show = (seen: [string, boolean][], withRead = true) =>
-    dim.show([{
-      name: "size", label: "Diameter", icon: "diameter", kind: "length",
-      choices: { options, chosen: "diameter", ...(withRead ? { read } : {}), onChoose: (id, typed) => seen.push([id, typed]) },
-    }], () => {});
+    dim.show(
+      [
+        {
+          name: "size",
+          label: "Diameter",
+          icon: "diameter",
+          kind: "length",
+          choices: {
+            options,
+            chosen: "diameter",
+            ...(withRead ? { read } : {}),
+            onChoose: (id, typed) => seen.push([id, typed]),
+          },
+        },
+      ],
+      () => {},
+    );
 
   it("is a plain name unless the field has choices", () => {
     dim.show([{ name: "size", label: "D" }], () => {});
@@ -458,13 +507,19 @@ describe("DimInput's choice on a field's name", () => {
 describe("DimInput names", () => {
   it("names each input with its field label, and the two buttons", () => {
     dim.show(
-      [{ name: "depth", label: "D" }, { name: "angle", label: "Taper angle", icon: "angle", kind: "angle" }],
+      [
+        { name: "depth", label: "D" },
+        { name: "angle", label: "Taper angle", icon: "angle", kind: "angle" },
+      ],
       () => {},
       () => {},
     );
     const inputs = [...root().querySelectorAll("input")];
     expect(inputs.map((i) => i.getAttribute("aria-label"))).toEqual(["D", "Taper angle"]);
-    expect([...root().querySelectorAll<HTMLElement>(".dim-field")].map((f) => f.dataset.field)).toEqual(["depth", "angle"]);
+    expect([...root().querySelectorAll<HTMLElement>(".dim-field")].map((f) => f.dataset.field)).toEqual([
+      "depth",
+      "angle",
+    ]);
     expect(root().querySelector(".dim-ok")!.getAttribute("aria-label")).toBe("Confirm");
     expect(root().querySelector(".dim-no")!.getAttribute("aria-label")).toBe("Cancel");
   });

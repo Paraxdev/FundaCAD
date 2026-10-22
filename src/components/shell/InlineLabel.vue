@@ -80,10 +80,7 @@ defineExpose({ start });
     @keydown.stop="onKeydown"
     @blur="finish(true)"
   ></span>
-  <span
-    v-else
-    class="tree-label"
-    :style="labelStyle"
-    @dblclick="renameOnDblclick ? start() : undefined"
-  >{{ text }}</span>
+  <span v-else class="tree-label" :style="labelStyle" @dblclick="renameOnDblclick ? start() : undefined">{{
+    text
+  }}</span>
 </template>

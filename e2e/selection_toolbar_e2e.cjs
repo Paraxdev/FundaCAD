@@ -23,7 +23,10 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "seltoolbar_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -34,7 +37,10 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -49,7 +55,10 @@ const check = (name, ok, detail) => {
   await page.goto(process.env.SC_URL || "http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   // Three boxes, spread along X, so one can be hidden and the others still seen.
@@ -58,14 +67,20 @@ const check = (name, ok, detail) => {
       window.store.addFeature({ id: window.store.nextId(), type: "box", length: 12, width: 10, height: 8 });
       if (i) {
         window.store.addFeature({
-          id: window.store.nextId(), type: "move",
-          bodies: [`body${i + 1}`], dx: i * 26, dy: 0, dz: 0,
+          id: window.store.nextId(),
+          type: "move",
+          bodies: [`body${i + 1}`],
+          dx: i * 26,
+          dy: 0,
+          dz: 0,
         });
       }
     }
     await window.store.rebuildNow();
   });
-  await page.waitForFunction(() => (window.store.buildState.result?.bodies ?? []).length >= 3, null, { timeout: 60000 });
+  await page.waitForFunction(() => (window.store.buildState.result?.bodies ?? []).length >= 3, null, {
+    timeout: 60000,
+  });
   await page.evaluate(() => window.__fundacad.handleAction("fit"));
   await page.waitForTimeout(800);
 
@@ -83,27 +98,41 @@ const check = (name, ok, detail) => {
     await page.waitForTimeout(400);
   };
 
-  const barButtons = () => page.evaluate(() => ({
-    tools: [...document.querySelectorAll("#toolrail [data-action^='offer:']")].map((b) => b.getAttribute("data-action").slice(6)),
-    looks: [...document.querySelectorAll("#toolrail [data-action^='look:']")].map((b) => b.getAttribute("data-action").slice(5)),
-  }));
+  const barButtons = () =>
+    page.evaluate(() => ({
+      tools: [...document.querySelectorAll("#toolrail [data-action^='offer:']")].map((b) =>
+        b.getAttribute("data-action").slice(6),
+      ),
+      looks: [...document.querySelectorAll("#toolrail [data-action^='look:']")].map((b) =>
+        b.getAttribute("data-action").slice(5),
+      ),
+    }));
 
-  const menuRows = () => page.evaluate(() =>
-    [...document.querySelectorAll(".context-menu .ctx-item .ctx-label")].map((n) => n.textContent.trim()));
+  const menuRows = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll(".context-menu .ctx-item .ctx-label")].map((n) => n.textContent.trim()),
+    );
 
   // --- 1. one body: the modelling verbs, the patterns now among them ---------
   await select([ids[0]]);
   let bar = await barButtons();
   console.log("  one body ->", JSON.stringify(bar), "\n");
   check("the bar is drawn for a picked body", bar.tools.length + bar.looks.length > 0);
-  check("both patterns are on it, which is the gap this closed",
+  check(
+    "both patterns are on it, which is the gap this closed",
     bar.tools.includes("pattern-linear") && bar.tools.includes("pattern-circular"),
-    JSON.stringify(bar.tools));
-  check("Move is still there, and a boolean is not, on one body",
-    bar.tools.includes("move") && !bar.tools.includes("boolean-union"), JSON.stringify(bar.tools));
-  check("the appearance half is drawn beside them",
+    JSON.stringify(bar.tools),
+  );
+  check(
+    "Move is still there, and a boolean is not, on one body",
+    bar.tools.includes("move") && !bar.tools.includes("boolean-union"),
+    JSON.stringify(bar.tools),
+  );
+  check(
+    "the appearance half is drawn beside them",
     JSON.stringify(bar.looks) === JSON.stringify(["material", "hide", "isolate"]),
-    JSON.stringify(bar.looks));
+    JSON.stringify(bar.looks),
+  );
 
   await page.screenshot({ path: `${OUT}/bar-one-body.png` });
 
@@ -112,10 +141,12 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(400);
   const rows = await menuRows();
   console.log("\n  menu rows:", JSON.stringify(rows), "\n");
-  check("clicking Material opens the library itself",
-    rows.length >= 10 && rows.includes("None"), `${rows.length} rows`);
-  check("no modal was raised over the model",
-    (await page.$(".mats-panel")) === null);
+  check(
+    "clicking Material opens the library itself",
+    rows.length >= 10 && rows.includes("None"),
+    `${rows.length} rows`,
+  );
+  check("no modal was raised over the model", (await page.$(".mats-panel")) === null);
   check("the starter library is what is in it", rows.includes("Copper"), JSON.stringify(rows));
 
   await page.screenshot({ path: `${OUT}/material-menu.png` });
@@ -137,8 +168,11 @@ const check = (name, ok, detail) => {
     }, ids[0]);
     console.log("  the body now wears:", JSON.stringify(painted), "\n");
     check("picking a row puts that material on the body", painted.name === "Copper", JSON.stringify(painted));
-    check("and the finish reaches the renderer, not just the document",
-      painted.metalness !== null && painted.metalness > 0.5, String(painted.metalness));
+    check(
+      "and the finish reaches the renderer, not just the document",
+      painted.metalness !== null && painted.metalness > 0.5,
+      String(painted.metalness),
+    );
   }
   await page.evaluate(() => window.__fundacad.handleAction("fit"));
   await page.waitForTimeout(700);
@@ -150,10 +184,15 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(500);
   let vis = await page.evaluate((all) => all.map((id) => window.store.isBodyVisible(id)), ids);
   console.log("  after Isolate:", JSON.stringify(vis));
-  check("Isolate leaves only the picked body showing",
-    vis[0] === true && vis[1] === false && vis[2] === false, JSON.stringify(vis));
-  check("and keeps it selected, so the bar is still there",
-    (await page.evaluate(() => window.viewport.getSelectedBodies().length)) === 1);
+  check(
+    "Isolate leaves only the picked body showing",
+    vis[0] === true && vis[1] === false && vis[2] === false,
+    JSON.stringify(vis),
+  );
+  check(
+    "and keeps it selected, so the bar is still there",
+    (await page.evaluate(() => window.viewport.getSelectedBodies().length)) === 1,
+  );
   await page.locator("#viewport").screenshot({ path: `${OUT}/isolated.png` });
 
   await page.evaluate(() => window.__fundacad.handleAction("show-all-bodies"));
@@ -161,9 +200,11 @@ const check = (name, ok, detail) => {
 
   await select([ids[1], ids[2]]);
   bar = await barButtons();
-  check("two bodies bring the booleans in beside the patterns",
+  check(
+    "two bodies bring the booleans in beside the patterns",
     bar.tools.includes("boolean-union") && bar.tools.includes("pattern-linear"),
-    JSON.stringify(bar.tools));
+    JSON.stringify(bar.tools),
+  );
   const label = await page.getAttribute("#toolrail [data-action='look:hide']", "title");
   check("the verb says how many it is about", label === "Hide 2 bodies", String(label));
 
@@ -174,8 +215,11 @@ const check = (name, ok, detail) => {
   const barsLeft = await page.evaluate(() => document.querySelectorAll("#toolrail[data-mode='selection']").length);
   console.log("  after Hide:", JSON.stringify(vis), "selected:", stillSelected, "bars:", barsLeft, "\n");
   check("Hide takes both bodies", vis[1] === false && vis[2] === false, JSON.stringify(vis));
-  check("and lets go of them, so the bar does not float over nothing",
-    stillSelected === 0 && barsLeft === 0, `${stillSelected} selected, ${barsLeft} bars`);
+  check(
+    "and lets go of them, so the bar does not float over nothing",
+    stillSelected === 0 && barsLeft === 0,
+    `${stillSelected} selected, ${barsLeft} bars`,
+  );
 
   await page.evaluate(() => window.__fundacad.handleAction("show-all-bodies"));
   await page.waitForTimeout(500);
@@ -192,9 +236,14 @@ const check = (name, ok, detail) => {
     // edge takes the edge. The nearest spot beside it that is plainly a face.
     for (let rad = 12; rad < 120; rad += 6) {
       for (let a = 0; a < 12; a++) {
-        const x = p.x + Math.cos(a * 0.52) * rad, y = p.y + Math.sin(a * 0.52) * rad;
-        if (window.viewport.bodyIdAt(x, y) === id && window.viewport.pickEntity(x, y)?.kind === "face" &&
-          document.elementFromPoint(x, y) === window.viewport.domElement) return { x, y };
+        const x = p.x + Math.cos(a * 0.52) * rad,
+          y = p.y + Math.sin(a * 0.52) * rad;
+        if (
+          window.viewport.bodyIdAt(x, y) === id &&
+          window.viewport.pickEntity(x, y)?.kind === "face" &&
+          document.elementFromPoint(x, y) === window.viewport.domElement
+        )
+          return { x, y };
       }
     }
     return { x: p.x, y: p.y };
@@ -212,8 +261,11 @@ const check = (name, ok, detail) => {
   console.log("  one face ->", JSON.stringify(bar), `(${faces} face selected)\n`);
   check("the click actually landed on a face", faces === 1, String(faces));
   check("a picked face is offered no appearance verbs", bar.looks.length === 0, JSON.stringify(bar.looks));
-  check("CONTROL: it is still offered its own modelling tools",
-    bar.tools.includes("fillet"), JSON.stringify(bar.tools));
+  check(
+    "CONTROL: it is still offered its own modelling tools",
+    bar.tools.includes("fillet"),
+    JSON.stringify(bar.tools),
+  );
   await page.screenshot({ path: `${OUT}/bar-one-face.png` });
 
   // --- 5. the same gizmo used to make the body's RIGHT-CLICK menu dead too ---
@@ -239,9 +291,11 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(500);
   const bodyRows = await menuRows();
   console.log("  right-click on an already-selected body ->", JSON.stringify(bodyRows));
-  check("a body that is already selected still has a menu",
+  check(
+    "a body that is already selected still has a menu",
     bodyRows.includes("Union with…") && bodyRows.includes("Material for 2 bodies"),
-    bodyRows.length + " rows");
+    bodyRows.length + " rows",
+  );
   await page.screenshot({ path: OUT + "/body-menu.png" });
 
   const before = await page.evaluate(() => window.store.document.features.length);
@@ -253,9 +307,11 @@ const check = (name, ok, detail) => {
     refused: document.body.innerText.includes("Finish the active tool first"),
   }));
   console.log("  after Union:", JSON.stringify(after), "(was " + before + " features)");
-  check("and its items run instead of refusing themselves",
+  check(
+    "and its items run instead of refusing themselves",
     !after.refused && after.features === before + 1 && after.last === "boolean",
-    JSON.stringify(after));
+    JSON.stringify(after),
+  );
 
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall checks passed");

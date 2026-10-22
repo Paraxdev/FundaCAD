@@ -84,16 +84,32 @@ async function bakeSource(
   try {
     doc = buildableSource(source.text);
   } catch (e) {
-    return { ok: false, message: `could not read ${baseName(source.path)}: ${e instanceof Error ? e.message : String(e)}` };
+    return {
+      ok: false,
+      message: `could not read ${baseName(source.path)}: ${e instanceof Error ? e.message : String(e)}`,
+    };
   }
   if (!doc.features.length) return { ok: false, message: `${baseName(source.path)} has nothing in it to insert` };
   const label = baseName(source.path);
-  const exported = await store.runBusy(`Building ${label}`, (onStarted) => geometry.export(doc, "step", tempPath, {}, onStarted));
+  const exported = await store.runBusy(`Building ${label}`, (onStarted) =>
+    geometry.export(doc, "step", tempPath, {}, onStarted),
+  );
   if (!exported.ok) {
-    return { ok: false, message: exported.message ?? `could not build ${label}`, ...(exported.cancelled ? { cancelled: true } : {}) };
+    return {
+      ok: false,
+      message: exported.message ?? `could not build ${label}`,
+      ...(exported.cancelled ? { cancelled: true } : {}),
+    };
   }
-  const read = await store.runBusy(`Reading ${label}`, (onStarted) => geometry.importGeometry(exported.path ?? tempPath, "step", onStarted));
-  if (!read.ok) return { ok: false, message: read.message ?? `could not read ${label} back`, ...(read.cancelled ? { cancelled: true } : {}) };
+  const read = await store.runBusy(`Reading ${label}`, (onStarted) =>
+    geometry.importGeometry(exported.path ?? tempPath, "step", onStarted),
+  );
+  if (!read.ok)
+    return {
+      ok: false,
+      message: read.message ?? `could not read ${label} back`,
+      ...(read.cancelled ? { cancelled: true } : {}),
+    };
   return read;
 }
 
@@ -129,7 +145,10 @@ export async function updateFundaLink(
   source: FundaSource,
   tempPath: string,
 ): Promise<InsertOutcome> {
-  const f = asFeature(store.document.features.find((x) => x.id === featureId), "import");
+  const f = asFeature(
+    store.document.features.find((x) => x.id === featureId),
+    "import",
+  );
   if (!f?.link) return { ok: false, message: "that step is not linked to a file" };
   const baked = await bakeSource(store, geometry, source, tempPath);
   if (!baked.ok) return baked;

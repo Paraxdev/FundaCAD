@@ -54,9 +54,7 @@ export function parseCssColor(raw: string): number | null {
   const parts = m[1]!.split(/[\s,/]+/).filter(Boolean);
   if (parts.length < 3) return null;
   const ch = parts.slice(0, 3).map((p) => {
-    const v = p.endsWith("%")
-      ? (Number.parseFloat(p) / 100) * 255
-      : Number.parseFloat(p);
+    const v = p.endsWith("%") ? (Number.parseFloat(p) / 100) * 255 : Number.parseFloat(p);
     return Number.isFinite(v) ? Math.max(0, Math.min(255, Math.round(v))) : null;
   });
   if (ch.some((c) => c === null)) return null;

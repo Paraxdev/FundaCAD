@@ -134,7 +134,10 @@ describe("its settings", () => {
 
   it("adopts the old key once and reads every later change from the app's store", async () => {
     const store = new MemoryStorage();
-    store.setItem("fundacad.gamepad.config", JSON.stringify({ deadzone: 0.3, invertOrbitY: true, buttons: { 0: "fit" } }));
+    store.setItem(
+      "fundacad.gamepad.config",
+      JSON.stringify({ deadzone: 0.3, invertOrbitY: true, buttons: { 0: "fit" } }),
+    );
     const m = await start(store);
     expect(m.getGamepadConfig()).toMatchObject({ deadzone: 0.3, invertOrbitY: true });
     expect(m.getGamepadConfig().buttons[0]).toBe("fit");

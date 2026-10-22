@@ -41,11 +41,17 @@ function rig() {
     const i = features.findIndex((f) => f.id === id);
     features[i] = { ...features[i], ...patch } as Feature;
   });
-  const endEditPreview = vi.fn(() => { editId = null; });
+  const endEditPreview = vi.fn(() => {
+    editId = null;
+  });
   const store = {
     document: { parameters: {}, features },
-    get buildState() { return build; },
-    get editPreviewId() { return editId; },
+    get buildState() {
+      return build;
+    },
+    get editPreviewId() {
+      return editId;
+    },
     onBuild: (fn: (s: RebuildState) => void) => {
       listeners.add(fn);
       fn(build);
@@ -67,7 +73,15 @@ function rig() {
     hoverEdge: vi.fn(),
     pickEdgeAt: () => {
       const x = build.result === rolled ? 10 : 110;
-      return { selector: near([x, 0, 10]), edge: { points: [[x, -10, 10], [x, 10, 10]] } };
+      return {
+        selector: near([x, 0, 10]),
+        edge: {
+          points: [
+            [x, -10, 10],
+            [x, 10, 10],
+          ],
+        },
+      };
     },
   };
   const deps = {
@@ -81,7 +95,9 @@ function rig() {
     noteCommitted: vi.fn(),
     isSketchConsumed: () => false,
     getSelectedFeature: () => null,
-    setPlanePick: (v: boolean) => { planePick = v; },
+    setPlanePick: (v: boolean) => {
+      planePick = v;
+    },
     datumMoveTarget: () => null,
   } as unknown as FeatureStartersDeps;
   const starters = createFeatureStarters(deps);
@@ -93,7 +109,10 @@ function rig() {
 beforeEach(() => {
   setActivePinia(createPinia());
   frames = [];
-  vi.stubGlobal("requestAnimationFrame", (f: () => void) => { frames.push(f); return frames.length; });
+  vi.stubGlobal("requestAnimationFrame", (f: () => void) => {
+    frames.push(f);
+    return frames.length;
+  });
 });
 afterEach(() => {
   resetTreePicks();
@@ -111,8 +130,9 @@ describe("re-pick on the model rolled back to the feature", () => {
     const edges = (r.features[1] as { edges: { point: number[] }[] }).edges;
     expect(edges[0]!.point[0]).toBe(10);
     expect(r.store.endEditPreview).toHaveBeenCalledTimes(1);
-    expect(r.store.updateFeature.mock.invocationCallOrder[0]!)
-      .toBeLessThan(r.store.endEditPreview.mock.invocationCallOrder[0]!);
+    expect(r.store.updateFeature.mock.invocationCallOrder[0]!).toBeLessThan(
+      r.store.endEditPreview.mock.invocationCallOrder[0]!,
+    );
     expect(r.planePick()).toBe(false);
   });
 

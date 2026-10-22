@@ -67,8 +67,6 @@ function apply() {
     <div class="measure-row">
       <span class="measure-v" style="color: #e24a3b">red = unsupported overhang</span>
     </div>
-    <div class="measure-hint">
-      Faces past this angle from horizontal need support · toggle Draft to close
-    </div>
+    <div class="measure-hint"> Faces past this angle from horizontal need support · toggle Draft to close </div>
   </FloatingPanel>
 </template>

@@ -111,7 +111,10 @@ describe("describeProfile", () => {
 
 describe("sectionPath", () => {
   const mid = (p: number) => {
-    const pts = sectionPath(p).split(/[ML]/).filter(Boolean).map((s) => s.trim().split(" ").map(Number));
+    const pts = sectionPath(p)
+      .split(/[ML]/)
+      .filter(Boolean)
+      .map((s) => s.trim().split(" ").map(Number));
     return pts[1 + 10]!; // the curve's middle sample, after the top face start
   };
   it("draws the chord near -1, the circle at 0 and hugs the corner near +1", () => {

@@ -3,8 +3,15 @@ import { createNavigatorRig } from "../../../src/viewport/navigator/rig";
 import { eyeOf } from "../../../src/viewport/navigator/pose";
 const distanceOf = (p: Parameters<typeof eyeOf>[0]) => eyeOf(p).length();
 import {
-  DEFAULT_BINDINGS, bindingRows, pointerBindings, resolvePointer, setLeftButtonOwner, setPointerBindings,
-  validateBindings, type PointerBinding, type PointerGesture,
+  DEFAULT_BINDINGS,
+  bindingRows,
+  pointerBindings,
+  resolvePointer,
+  setLeftButtonOwner,
+  setPointerBindings,
+  validateBindings,
+  type PointerBinding,
+  type PointerGesture,
 } from "../../../src/viewport/navigator/bindings";
 import { BoxScene, H, UNIT_BOX, W } from "./kit";
 
@@ -17,11 +24,34 @@ class FakeEvent {
   stopped = false;
   [k: string]: unknown;
   constructor(type: string, init: Record<string, unknown> = {}) {
-    Object.assign(this, { pointerId: 1, pointerType: "mouse", button: -1, buttons: 0, clientX: 0, clientY: 0, screenX: 0, screenY: 0, shiftKey: false, ctrlKey: false, altKey: false, deltaX: 0, deltaY: 0, deltaMode: 0 }, init);
+    Object.assign(
+      this,
+      {
+        pointerId: 1,
+        pointerType: "mouse",
+        button: -1,
+        buttons: 0,
+        clientX: 0,
+        clientY: 0,
+        screenX: 0,
+        screenY: 0,
+        shiftKey: false,
+        ctrlKey: false,
+        altKey: false,
+        deltaX: 0,
+        deltaY: 0,
+        deltaMode: 0,
+      },
+      init,
+    );
     this.type = type;
   }
-  preventDefault() { this.defaultPrevented = true; }
-  stopImmediatePropagation() { this.stopped = true; }
+  preventDefault() {
+    this.defaultPrevented = true;
+  }
+  stopImmediatePropagation() {
+    this.stopped = true;
+  }
 }
 class Native extends FakeEvent {}
 
@@ -30,14 +60,21 @@ function rigWithBox() {
   const seen: { type: string; native: boolean; buttons: unknown }[] = [];
   const el = {
     style: {} as Record<string, string>,
-    addEventListener: (t: string, f: Listener) => { (listeners[t] ??= []).push(f); },
-    removeEventListener: (t: string, f: Listener) => { listeners[t] = (listeners[t] ?? []).filter((g) => g !== f); },
+    addEventListener: (t: string, f: Listener) => {
+      (listeners[t] ??= []).push(f);
+    },
+    removeEventListener: (t: string, f: Listener) => {
+      listeners[t] = (listeners[t] ?? []).filter((g) => g !== f);
+    },
     getBoundingClientRect: () => ({ left: 0, top: 0, right: W, bottom: H, width: W, height: H, x: 0, y: 0 }),
     setPointerCapture: () => {},
     releasePointerCapture: () => {},
     hasPointerCapture: () => false,
     dispatchEvent: (e: FakeEvent) => {
-      for (const f of listeners[e.type] ?? []) { f(e); if (e.stopped) break; }
+      for (const f of listeners[e.type] ?? []) {
+        f(e);
+        if (e.stopped) break;
+      }
       return !e.defaultPrevented;
     },
   };
@@ -52,12 +89,18 @@ function rigWithBox() {
   rig.update(1 / 60);
   // The app behind the navigator, bound after it as the viewport and tools are.
   for (const t of ["pointerdown", "pointermove", "pointerup", "contextmenu"]) {
-    el.addEventListener(t, (e) => { seen.push({ type: e.type, native: e instanceof Native, buttons: e.buttons }); });
+    el.addEventListener(t, (e) => {
+      seen.push({ type: e.type, native: e instanceof Native, buttons: e.buttons });
+    });
   }
   const MASK: Record<number, number> = { 0: 1, 1: 4, 2: 2 };
   const fire = (type: string, button: number, x: number, mods: Record<string, boolean> = {}, y = 300) => {
     const e = new Native(type, {
-      button: type === "pointermove" ? -1 : button, buttons: type === "pointerup" ? 0 : MASK[button], clientX: x, clientY: y, ...mods,
+      button: type === "pointermove" ? -1 : button,
+      buttons: type === "pointerup" ? 0 : MASK[button],
+      clientX: x,
+      clientY: y,
+      ...mods,
     });
     el.dispatchEvent(e);
     return e;
@@ -159,7 +202,10 @@ describe("Middle orbits, Shift+middle pans", () => {
 });
 
 describe("the context menu on another button", () => {
-  const table: PointerBinding[] = [{ button: "middle", drag: "orbit", click: "menu" }, { button: "right", drag: "pan" }];
+  const table: PointerBinding[] = [
+    { button: "middle", drag: "orbit", click: "menu" },
+    { button: "right", drag: "pan" },
+  ];
   it("sends one menu on a middle release without travel", () => {
     setPointerBindings(table);
     const { click, menus } = rigWithBox();
@@ -183,7 +229,10 @@ describe("the context menu on another button", () => {
 
 describe("a zoom drag", () => {
   it("zooms out dragging down and in dragging up, as the wheel does", () => {
-    setPointerBindings([{ button: "middle", drag: "zoom" }, { button: "right", drag: "orbit", click: "menu" }]);
+    setPointerBindings([
+      { button: "middle", drag: "zoom" },
+      { button: "right", drag: "orbit", click: "menu" },
+    ]);
     const { rig, fire } = rigWithBox();
     const d0 = distanceOf(rig.navigator.pose);
     fire("pointerdown", 1, 400);
@@ -203,10 +252,13 @@ describe("a zoom drag", () => {
 describe("a gesture drag", () => {
   it("hands the press over once it has travelled, and a click is still the menu", () => {
     const got: PointerGesture[] = [];
-    setPointerBindings([
-      { button: "middle", drag: "orbit" },
-      { button: "right", drag: "gesture", click: "menu" },
-    ], (g) => got.push(g));
+    setPointerBindings(
+      [
+        { button: "middle", drag: "orbit" },
+        { button: "right", drag: "gesture", click: "menu" },
+      ],
+      (g) => got.push(g),
+    );
     const { fire, rig } = rigWithBox();
     fire("pointerdown", 2, 400);
     fire("pointermove", 2, 403);
@@ -220,17 +272,29 @@ describe("a gesture drag", () => {
 
 describe("validateBindings", () => {
   it("names both actions bound to the same button and modifiers", () => {
-    const bad = validateBindings([{ button: "middle", drag: "orbit" }, { button: "middle", drag: "gesture" }]);
+    const bad = validateBindings([
+      { button: "middle", drag: "orbit" },
+      { button: "middle", drag: "gesture" },
+    ]);
     expect(bad.join()).toContain("Middle is bound twice, to orbit and to the radial menu");
   });
   it("refuses plain left, which selects", () => {
     expect(validateBindings([{ button: "left", drag: "orbit" }]).join()).toContain("is selection");
-    expect(validateBindings([{ button: "left", alt: false, drag: "orbit" }, { button: "right", drag: "orbit" }]).join()).toContain("is selection");
+    expect(
+      validateBindings([
+        { button: "left", alt: false, drag: "orbit" },
+        { button: "right", drag: "orbit" },
+      ]).join(),
+    ).toContain("is selection");
   });
   it("refuses Shift+left and Ctrl+left, which add to the selection", () => {
     const orbit: PointerBinding = { button: "right", drag: "orbit" };
-    expect(validateBindings([{ button: "left", shift: true, drag: "pan" }, orbit]).join()).toContain("Shift+left is selection");
-    expect(validateBindings([{ button: "left", ctrl: true, drag: "zoom" }, orbit]).join()).toContain("Ctrl+left is selection");
+    expect(validateBindings([{ button: "left", shift: true, drag: "pan" }, orbit]).join()).toContain(
+      "Shift+left is selection",
+    );
+    expect(validateBindings([{ button: "left", ctrl: true, drag: "zoom" }, orbit]).join()).toContain(
+      "Ctrl+left is selection",
+    );
     expect(validateBindings([{ button: "left", alt: true, shift: true, drag: "pan" }, orbit])).toEqual([]);
   });
   it("accepts the default and a modifier+left table", () => {
@@ -244,8 +308,13 @@ describe("validateBindings", () => {
     expect(pointerBindings()).toBe(DEFAULT_BINDINGS);
   });
   it("resolves Cmd as Ctrl", () => {
-    const t: PointerBinding[] = [{ button: "middle", ctrl: true, drag: "pan" }, { button: "middle", drag: "orbit" }];
-    expect(resolvePointer(t, { button: 1, shiftKey: false, ctrlKey: false, altKey: false, metaKey: true })?.drag).toBe("pan");
+    const t: PointerBinding[] = [
+      { button: "middle", ctrl: true, drag: "pan" },
+      { button: "middle", drag: "orbit" },
+    ];
+    expect(resolvePointer(t, { button: 1, shiftKey: false, ctrlKey: false, altKey: false, metaKey: true })?.drag).toBe(
+      "pan",
+    );
   });
   it("writes the ? sheet rows from the table", () => {
     expect(bindingRows(MIDDLE_ORBITS)).toEqual([

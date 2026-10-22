@@ -20,11 +20,9 @@ const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
 const GLUE = path.join(ROOT, "node_modules/@salusoft89/planegcs/dist/planegcs_dist");
-const EXE = process.env.SC_CHROME
-  || "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe";
+const EXE = process.env.SC_CHROME || "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe";
 
-const CSP = JSON.parse(fs.readFileSync(path.join(ROOT, "src-tauri/tauri.conf.json"), "utf8"))
-  .app.security.csp;
+const CSP = JSON.parse(fs.readFileSync(path.join(ROOT, "src-tauri/tauri.conf.json"), "utf8")).app.security.csp;
 
 // The driver is an EXTERNAL module, never inline: `script-src 'self'` blocks
 // inline scripts, so an inline driver would be blocked before it ever reached
@@ -59,7 +57,10 @@ function serve(csp) {
         return res.end(DRIVER);
       }
       const file = path.join(GLUE, path.basename(url));
-      if (!fs.existsSync(file)) { res.writeHead(404, headers); return res.end(); }
+      if (!fs.existsSync(file)) {
+        res.writeHead(404, headers);
+        return res.end();
+      }
       res.writeHead(200, {
         ...headers,
         "Content-Type": file.endsWith(".wasm") ? "application/wasm" : "text/javascript",
@@ -75,9 +76,7 @@ async function run(browser, csp) {
   try {
     const page = await browser.newPage();
     await page.goto(`http://localhost:${port}/`, { waitUntil: "networkidle" });
-    await page
-      .waitForFunction(() => window.__result !== undefined, null, { timeout: 30000 })
-      .catch(() => {});
+    await page.waitForFunction(() => window.__result !== undefined, null, { timeout: 30000 }).catch(() => {});
     const result = await page.evaluate(() => window.__result ?? "(never resolved)");
     await page.close();
     return result;
@@ -115,4 +114,7 @@ async function run(browser, csp) {
     await browser.close();
   }
   process.exit(failed ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

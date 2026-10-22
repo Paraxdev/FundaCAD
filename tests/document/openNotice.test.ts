@@ -54,10 +54,13 @@ describe("openNotices", () => {
   });
 
   it("is a short info note for a newer file whose types are all known", () => {
-    expect(openNotices({ features: [box] }, NEWER)).toEqual([{
-      kind: "info",
-      message: "Opened a file from a newer version of FundaCAD. Anything this version does not know is kept and saved with the file.",
-    }]);
+    expect(openNotices({ features: [box] }, NEWER)).toEqual([
+      {
+        kind: "info",
+        message:
+          "Opened a file from a newer version of FundaCAD. Anything this version does not know is kept and saved with the file.",
+      },
+    ]);
   });
 
   it("names three types and counts the rest, with every one in the detail", () => {

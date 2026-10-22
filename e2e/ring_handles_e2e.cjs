@@ -27,7 +27,10 @@ const URL = process.env.SC_URL || "http://localhost:5173/";
 const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = path.resolve(process.argv[2] || "ring_handles_shots");
 const ONLY_SHOTS = process.env.SC_ONLY_SHOTS === "1";
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 
 let failures = 0;
 const check = (name, ok, detail) => {
@@ -39,19 +42,29 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((port) => {
     const N = window.WebSocket;
     class P extends N {
-      constructor(u, p) { super(String(u).replace(":8765", `:${port}`), p); }
+      constructor(u, p) {
+        super(String(u).replace(":8765", `:${port}`), p);
+      }
     }
     window.WebSocket = P;
   }, ENGINE_PORT);
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(2500);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
-  await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, { timeout: 60000 });
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
+  await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, {
+    timeout: 60000,
+  });
 
   const shot = async (name, clip) => page.screenshot({ path: `${OUT}/${name}.png`, ...(clip ? { clip } : {}) });
   const settle = async () => {
@@ -59,7 +72,10 @@ const check = (name, ok, detail) => {
     await page.waitForFunction(() => !window.store.buildState.building, null, { timeout: 60000 });
     await page.waitForTimeout(250);
   };
-  const park = async () => { await page.mouse.move(1380, 600); await page.waitForTimeout(250); };
+  const park = async () => {
+    await page.mouse.move(1380, 600);
+    await page.waitForTimeout(250);
+  };
   const pose = () => page.evaluate(() => ({ ...window.__fundacad.datumPose.pose }));
   const active = () => page.evaluate(() => window.__fundacad.datumPose.active);
 
@@ -72,16 +88,25 @@ const check = (name, ok, detail) => {
   await settle();
   // The history panel covers the right of the view; the shots are about the handles.
   const hist = await page.evaluate(() => {
-    const h = [...document.querySelectorAll("*")].find((n) => n.children.length === 0 && n.textContent.trim() === "History");
+    const h = [...document.querySelectorAll("*")].find(
+      (n) => n.children.length === 0 && n.textContent.trim() === "History",
+    );
     let el = h;
     for (let i = 0; i < 6 && el; i++) {
       el = el.parentElement;
-      const b = [...(el?.querySelectorAll("button") ?? [])].find((x) => /close/i.test(x.title + x.getAttribute("aria-label")));
-      if (b) { b.click(); return true; }
+      const b = [...(el?.querySelectorAll("button") ?? [])].find((x) =>
+        /close/i.test(x.title + x.getAttribute("aria-label")),
+      );
+      if (b) {
+        b.click();
+        return true;
+      }
     }
     return false;
   });
-  if (!hist) { await page.mouse.click(1362, 74); }
+  if (!hist) {
+    await page.mouse.click(1362, 74);
+  }
   await page.waitForTimeout(300);
 
   const view = async (v) => {
@@ -97,35 +122,44 @@ const check = (name, ok, detail) => {
   };
 
   /** A point on P0's quad that a double-click takes, clear of any body. */
-  const grabDatum = () => page.evaluate(() => {
-    const f = window.store.document.features.find((x) => x.id === "P0");
-    const d = window.__fundacad.datumPlaneDef(f);
-    const n = d.normal, u = d.xdir;
-    const v = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
-    const vp = window.viewport;
-    for (const r of [36, 30, 22, 38]) {
-      for (let a = 0; a < 360; a += 15) {
-        const x = r * Math.cos(a * Math.PI / 180), y = r * Math.sin(a * Math.PI / 180);
-        const p = [0, 1, 2].map((i) => d.origin[i] + u[i] * x + v[i] * y);
-        const s = vp.projectToScreen({ x: p[0], y: p[1], z: p[2] });
-        if (s.x < 300 || s.x > 1050 || s.y < 60 || s.y > 780) continue;
-        if (vp.pickDatumAt(s.x, s.y) === "P0" && vp.faceIdAt(s.x, s.y) == null) return s;
+  const grabDatum = () =>
+    page.evaluate(() => {
+      const f = window.store.document.features.find((x) => x.id === "P0");
+      const d = window.__fundacad.datumPlaneDef(f);
+      const n = d.normal,
+        u = d.xdir;
+      const v = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
+      const vp = window.viewport;
+      for (const r of [36, 30, 22, 38]) {
+        for (let a = 0; a < 360; a += 15) {
+          const x = r * Math.cos((a * Math.PI) / 180),
+            y = r * Math.sin((a * Math.PI) / 180);
+          const p = [0, 1, 2].map((i) => d.origin[i] + u[i] * x + v[i] * y);
+          const s = vp.projectToScreen({ x: p[0], y: p[1], z: p[2] });
+          if (s.x < 300 || s.x > 1050 || s.y < 60 || s.y > 780) continue;
+          if (vp.pickDatumAt(s.x, s.y) === "P0" && vp.faceIdAt(s.x, s.y) == null) return s;
+        }
       }
-    }
-    return null;
-  });
+      return null;
+    });
 
   const open = async () => {
     if (await active()) return true;
     await page.evaluate(() => window.__fundacad.editFeature("P0"));
     await page.waitForTimeout(400);
-    const p = await active() ? null : await grabDatum();
-    if (p) { await page.mouse.dblclick(p.x, p.y); await page.waitForTimeout(400); }
+    const p = (await active()) ? null : await grabDatum();
+    if (p) {
+      await page.mouse.dblclick(p.x, p.y);
+      await page.waitForTimeout(400);
+    }
     await park();
     return active();
   };
   const close = async () => {
-    if (await active()) { await page.keyboard.press("Enter"); await settle(); }
+    if (await active()) {
+      await page.keyboard.press("Enter");
+      await settle();
+    }
   };
   const resetPose = async () => {
     await close();
@@ -142,36 +176,52 @@ const check = (name, ok, detail) => {
 
   /** The screen path that drives `g` towards `target`: the ring's grab point
    *  carried round its axis, finely sampled. */
-  const pathFor = (g, field, target) => page.evaluate(({ g, field, target }) => {
-    const T = window.__fundacad.datumPose;
-    const vp = window.viewport;
-    const s = T.scene();
-    const pr = T.handles.probe(g, s);
-    if (!pr) return null;
-    const want = target - T.pose[field];
-    const sign = want >= 0 ? 1 : -1;
-    const axis = s.axes[g].clone().normalize();
-    const rel = pr.grabAt.clone().sub(s.pivot);
-    const out = [];
-    const reach = Math.max(Math.abs(want) * 3, 30);
-    for (let d = 0; d <= reach; d += 0.5) {
-      out.push(vp.projectToScreen(rel.clone().applyAxisAngle(axis, sign * d * Math.PI / 180).add(s.pivot)));
-    }
-    return out;
-  }, { g, field, target });
+  const pathFor = (g, field, target) =>
+    page.evaluate(
+      ({ g, field, target }) => {
+        const T = window.__fundacad.datumPose;
+        const vp = window.viewport;
+        const s = T.scene();
+        const pr = T.handles.probe(g, s);
+        if (!pr) return null;
+        const want = target - T.pose[field];
+        const sign = want >= 0 ? 1 : -1;
+        const axis = s.axes[g].clone().normalize();
+        const rel = pr.grabAt.clone().sub(s.pivot);
+        const out = [];
+        const reach = Math.max(Math.abs(want) * 3, 30);
+        for (let d = 0; d <= reach; d += 0.5) {
+          out.push(
+            vp.projectToScreen(
+              rel
+                .clone()
+                .applyAxisAngle(axis, (sign * d * Math.PI) / 180)
+                .add(s.pivot),
+            ),
+          );
+        }
+        return out;
+      },
+      { g, field, target },
+    );
 
   /** Press on the handle, follow `pts` until the box reads `target`, and let go
    *  unless `hold`. */
   const dragTo = async (g, field, target, hold = false, mirror = false) => {
     let pts = await pathFor(g, field, target);
-    if (!pts) { check(`${g} has a handle`, false); return { px: 0, got: null, pressed: null, drags: 0 }; }
+    if (!pts) {
+      check(`${g} has a handle`, false);
+      return { px: 0, got: null, pressed: null, drags: 0 };
+    }
     if (mirror) pts = pts.map((p) => ({ x: 2 * pts[0].x - p.x, y: 2 * pts[0].y - p.y }));
     const pressed = await page.evaluate((p) => window.__fundacad.datumPose.hit(p.x, p.y), pts[0]);
     const from = (await pose())[field];
     await page.mouse.move(pts[0].x, pts[0].y);
     await page.waitForTimeout(60);
     await page.mouse.down();
-    let px = 0, got = from, last = pts[0];
+    let px = 0,
+      got = from,
+      last = pts[0];
     for (let i = 1; i < pts.length; i++) {
       const d = Math.hypot(pts[i].x - last.x, pts[i].y - last.y);
       if (d < 1 && i < pts.length - 1) continue;
@@ -194,69 +244,92 @@ const check = (name, ok, detail) => {
   };
 
   /** Of each handle's drawn pixels, the share whose press takes that handle. */
-  const aimable = () => page.evaluate(() => {
-    const T = window.__fundacad.datumPose;
-    const vp = window.viewport;
-    const out = {};
-    for (const g of ["offset", "tiltX", "tiltY", "spin"]) {
-      const pr = T.handles.probe(g, T.scene());
-      if (!pr) continue;
-      // Every screen pixel the handle's visible meshes and lines cover.
-      const pixels = new Set();
-      const put = (x, y) => pixels.add(`${Math.round(x)},${Math.round(y)}`);
-      for (const root of pr.drawn) {
-        root.updateMatrixWorld(true);
-        root.traverseVisible((o) => {
-          const mat = o.material;
-          if (!mat || mat.visible === false || !o.geometry) return;
-          const pos = o.geometry.getAttribute("position");
-          if (!pos) return;
-          const idx = o.geometry.index;
-          const at = (i) => vp.projectToScreen(new window.__THREE_V3(pos.getX(i), pos.getY(i), pos.getZ(i)).applyMatrix4(o.matrixWorld));
-          if (o.isMesh) {
-            const n = idx ? idx.count : pos.count;
-            for (let i = 0; i + 2 < n; i += 3) {
-              const A = at(idx ? idx.getX(i) : i), B = at(idx ? idx.getX(i + 1) : i + 1), C = at(idx ? idx.getX(i + 2) : i + 2);
-              const x0 = Math.floor(Math.min(A.x, B.x, C.x)), x1 = Math.ceil(Math.max(A.x, B.x, C.x));
-              const y0 = Math.floor(Math.min(A.y, B.y, C.y)), y1 = Math.ceil(Math.max(A.y, B.y, C.y));
-              const e = (P, Q, x, y) => (Q.x - P.x) * (y - P.y) - (Q.y - P.y) * (x - P.x);
-              const area = e(A, B, C.x, C.y);
-              if (Math.abs(area) < 1e-6) { put(A.x, A.y); continue; }
-              for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-                const px = x + 0.5, py = y + 0.5;
-                const w0 = e(B, C, px, py) / area, w1 = e(C, A, px, py) / area, w2 = e(A, B, px, py) / area;
-                if (w0 >= 0 && w1 >= 0 && w2 >= 0) put(x, y);
+  const aimable = () =>
+    page.evaluate(() => {
+      const T = window.__fundacad.datumPose;
+      const vp = window.viewport;
+      const out = {};
+      for (const g of ["offset", "tiltX", "tiltY", "spin"]) {
+        const pr = T.handles.probe(g, T.scene());
+        if (!pr) continue;
+        // Every screen pixel the handle's visible meshes and lines cover.
+        const pixels = new Set();
+        const put = (x, y) => pixels.add(`${Math.round(x)},${Math.round(y)}`);
+        for (const root of pr.drawn) {
+          root.updateMatrixWorld(true);
+          root.traverseVisible((o) => {
+            const mat = o.material;
+            if (!mat || mat.visible === false || !o.geometry) return;
+            const pos = o.geometry.getAttribute("position");
+            if (!pos) return;
+            const idx = o.geometry.index;
+            const at = (i) =>
+              vp.projectToScreen(
+                new window.__THREE_V3(pos.getX(i), pos.getY(i), pos.getZ(i)).applyMatrix4(o.matrixWorld),
+              );
+            if (o.isMesh) {
+              const n = idx ? idx.count : pos.count;
+              for (let i = 0; i + 2 < n; i += 3) {
+                const A = at(idx ? idx.getX(i) : i),
+                  B = at(idx ? idx.getX(i + 1) : i + 1),
+                  C = at(idx ? idx.getX(i + 2) : i + 2);
+                const x0 = Math.floor(Math.min(A.x, B.x, C.x)),
+                  x1 = Math.ceil(Math.max(A.x, B.x, C.x));
+                const y0 = Math.floor(Math.min(A.y, B.y, C.y)),
+                  y1 = Math.ceil(Math.max(A.y, B.y, C.y));
+                const e = (P, Q, x, y) => (Q.x - P.x) * (y - P.y) - (Q.y - P.y) * (x - P.x);
+                const area = e(A, B, C.x, C.y);
+                if (Math.abs(area) < 1e-6) {
+                  put(A.x, A.y);
+                  continue;
+                }
+                for (let y = y0; y <= y1; y++)
+                  for (let x = x0; x <= x1; x++) {
+                    const px = x + 0.5,
+                      py = y + 0.5;
+                    const w0 = e(B, C, px, py) / area,
+                      w1 = e(C, A, px, py) / area,
+                      w2 = e(A, B, px, py) / area;
+                    if (w0 >= 0 && w1 >= 0 && w2 >= 0) put(x, y);
+                  }
+              }
+            } else {
+              const step = o.isLineSegments ? 2 : 1;
+              for (let i = 0; i + 1 < pos.count; i += step) {
+                const A = at(i),
+                  B = at(i + 1);
+                const len = Math.max(1, Math.ceil(Math.hypot(B.x - A.x, B.y - A.y)));
+                for (let t = 0; t <= len; t++) put(A.x + ((B.x - A.x) * t) / len, A.y + ((B.y - A.y) * t) / len);
               }
             }
-          } else {
-            const step = o.isLineSegments ? 2 : 1;
-            for (let i = 0; i + 1 < pos.count; i += step) {
-              const A = at(i), B = at(i + 1);
-              const len = Math.max(1, Math.ceil(Math.hypot(B.x - A.x, B.y - A.y)));
-              for (let t = 0; t <= len; t++) put(A.x + (B.x - A.x) * t / len, A.y + (B.y - A.y) * t / len);
-            }
-          }
-        });
+          });
+        }
+        let own = 0;
+        const total = pixels.size;
+        for (const key of pixels) {
+          const [x, y] = key.split(",").map(Number);
+          if (T.hit(x + 0.5, y + 0.5) === g) own++;
+        }
+        out[g] = { px: total, share: total ? Math.round((own / total) * 100) : 0 };
       }
-      let own = 0;
-      const total = pixels.size;
-      for (const key of pixels) {
-        const [x, y] = key.split(",").map(Number);
-        if (T.hit(x + 0.5, y + 0.5) === g) own++;
-      }
-      out[g] = { px: total, share: total ? Math.round((own / total) * 100) : 0 };
-    }
-    return out;
-  });
+      return out;
+    });
 
   // --- shots -------------------------------------------------------------------
   await view("iso");
   check("the handles open on P0", await open());
-  await page.evaluate(() => { window.__THREE_V3 = window.viewport.camera.position.constructor; });
+  await page.evaluate(() => {
+    window.__THREE_V3 = window.viewport.camera.position.constructor;
+  });
   await park();
   await shot("1_iso_idle");
   const piv = await page.evaluate(() => window.viewport.projectToScreen(window.__fundacad.datumPose.scene().pivot));
-  const clip = { x: Math.max(0, Math.min(1400 - 600, Math.round(piv.x - 300))), y: Math.max(0, Math.min(900 - 450, Math.round(piv.y - 225))), width: 600, height: 450 };
+  const clip = {
+    x: Math.max(0, Math.min(1400 - 600, Math.round(piv.x - 300))),
+    y: Math.max(0, Math.min(900 - 450, Math.round(piv.y - 225))),
+    width: 600,
+    height: 450,
+  };
   await shot("0_closeup", clip);
   const tiltXGrab = "tiltX";
   const hoverAt = await page.evaluate((g) => {
@@ -311,12 +384,28 @@ const check = (name, ok, detail) => {
         let typed = 0;
         if (!ok) {
           // The hand gives up and types it.
-          const idx = await page.evaluate((label) => [...document.querySelectorAll(".dim-input .dim-field .dim-name")]
-            .findIndex((n) => (n.textContent || n.title || "").trim() === label), field === "tiltX" ? "Tilt X" : field === "tiltY" ? "Tilt Y" : "Spin");
+          const idx = await page.evaluate(
+            (label) =>
+              [...document.querySelectorAll(".dim-input .dim-field .dim-name")].findIndex(
+                (n) => (n.textContent || n.title || "").trim() === label,
+              ),
+            field === "tiltX" ? "Tilt X" : field === "tiltY" ? "Tilt Y" : "Spin",
+          );
           const f = (await page.$$(".dim-input .dim-field input"))[idx];
-          if (f) { await f.click({ clickCount: 3 }); await page.keyboard.type(String(target)); typed = String(target).length; }
+          if (f) {
+            await f.click({ clickCount: 3 });
+            await page.keyboard.type(String(target));
+            typed = String(target).length;
+          }
         }
-        tasks[`${v} ${name}`] = { drags: r.drags, dragPx: r.px, pressedRight: r.pressed === g, reached: ok, typed, clicks: ok ? 0 : 1 };
+        tasks[`${v} ${name}`] = {
+          drags: r.drags,
+          dragPx: r.px,
+          pressedRight: r.pressed === g,
+          reached: ok,
+          typed,
+          clicks: ok ? 0 : 1,
+        };
       };
       await run("tilt 30", tiltXGrab, "tiltX", 30);
       await run("tilt to 45", tiltXGrab, "tiltX", 45);
@@ -324,7 +413,16 @@ const check = (name, ok, detail) => {
       await close();
     }
   }
-  const total = Object.values(tasks).reduce((a, t) => ({ drags: a.drags + t.drags, dragPx: a.dragPx + t.dragPx, reached: a.reached + (t.reached ? 1 : 0), clicks: a.clicks + t.clicks, typed: a.typed + t.typed }), { drags: 0, dragPx: 0, reached: 0, clicks: 0, typed: 0 });
+  const total = Object.values(tasks).reduce(
+    (a, t) => ({
+      drags: a.drags + t.drags,
+      dragPx: a.dragPx + t.dragPx,
+      reached: a.reached + (t.reached ? 1 : 0),
+      clicks: a.clicks + t.clicks,
+      typed: a.typed + t.typed,
+    }),
+    { drags: 0, dragPx: 0, reached: 0, clicks: 0, typed: 0 },
+  );
   console.log(`\n[datum rings] tasks ${JSON.stringify(tasks, null, 1)}\n  total ${JSON.stringify(total)}`);
 
   // --- the Move gizmo on the box ---------------------------------------------------
@@ -337,42 +435,78 @@ const check = (name, ok, detail) => {
   check("the Move gizmo is up on the box", await page.evaluate(() => window.__fundacad.move.active), String(body));
   await park();
   const idleLook = await page.evaluate(() => window.__fundacad.move.rings.map((r) => r.ring.drawn().material.opacity));
-  check("every ring is faint at rest", idleLook.every((o) => o < 1), JSON.stringify(idleLook));
+  check(
+    "every ring is faint at rest",
+    idleLook.every((o) => o < 1),
+    JSON.stringify(idleLook),
+  );
   await shot("move_1_idle");
   /** A point on ring `i` a press takes, and a drag round it by `deg`. */
-  const movePath = (i, deg) => page.evaluate(({ i, deg }) => {
-    const M = window.__fundacad.move;
-    const g = M.gizmo;
-    g.updateMatrixWorld();
-    const k = g.scale.x;
-    const axis = M.frame[i].clone();
-    const a = M.frame[(i + 1) % 3].clone(), b = M.frame[(i + 2) % 3].clone();
-    let start = null;
-    for (let d = 10; d < 360 && !start; d += 7) {
-      const c = a.clone().multiplyScalar(Math.cos(d * Math.PI / 180)).add(b.clone().multiplyScalar(Math.sin(d * Math.PI / 180))).multiplyScalar(46 * k);
-      const s = window.viewport.projectToScreen(c.clone().add(g.position));
-      const h = M.hitHandle(s.x, s.y);
-      if (h && h.kind === "ring" && h.index === i) start = c;
-    }
-    if (!start) return null;
-    const out = [];
-    for (let s = 0; s <= Math.ceil(Math.abs(deg) / 3); s++) {
-      out.push(window.viewport.projectToScreen(start.clone().applyAxisAngle(axis, (deg * Math.PI / 180) * (s / Math.ceil(Math.abs(deg) / 3))).add(g.position)));
-    }
-    return out;
-  }, { i, deg });
+  const movePath = (i, deg) =>
+    page.evaluate(
+      ({ i, deg }) => {
+        const M = window.__fundacad.move;
+        const g = M.gizmo;
+        g.updateMatrixWorld();
+        const k = g.scale.x;
+        const axis = M.frame[i].clone();
+        const a = M.frame[(i + 1) % 3].clone(),
+          b = M.frame[(i + 2) % 3].clone();
+        let start = null;
+        for (let d = 10; d < 360 && !start; d += 7) {
+          const c = a
+            .clone()
+            .multiplyScalar(Math.cos((d * Math.PI) / 180))
+            .add(b.clone().multiplyScalar(Math.sin((d * Math.PI) / 180)))
+            .multiplyScalar(46 * k);
+          const s = window.viewport.projectToScreen(c.clone().add(g.position));
+          const h = M.hitHandle(s.x, s.y);
+          if (h && h.kind === "ring" && h.index === i) start = c;
+        }
+        if (!start) return null;
+        const out = [];
+        for (let s = 0; s <= Math.ceil(Math.abs(deg) / 3); s++) {
+          out.push(
+            window.viewport.projectToScreen(
+              start
+                .clone()
+                .applyAxisAngle(axis, ((deg * Math.PI) / 180) * (s / Math.ceil(Math.abs(deg) / 3)))
+                .add(g.position),
+            ),
+          );
+        }
+        return out;
+      },
+      { i, deg },
+    );
   const ringPts = await movePath(2, 90);
   check("a point on the Z ring takes a press", !!ringPts);
   if (ringPts) {
     await page.mouse.move(ringPts[0].x - 2, ringPts[0].y);
     await page.mouse.move(ringPts[0].x, ringPts[0].y);
     await page.waitForTimeout(300);
-    const look = await page.evaluate(() => window.__fundacad.move.rings.map((r) => ({ thick: r.ring.drawn().geometry.parameters.tube > 2, opacity: r.ring.drawn().material.opacity })));
-    check("only the hovered ring lights and thickens, the others step back",
-      look[2].thick && look[2].opacity === 1 && !look[0].thick && !look[1].thick && look[0].opacity < 0.3 && look[1].opacity < 0.3, JSON.stringify(look));
+    const look = await page.evaluate(() =>
+      window.__fundacad.move.rings.map((r) => ({
+        thick: r.ring.drawn().geometry.parameters.tube > 2,
+        opacity: r.ring.drawn().material.opacity,
+      })),
+    );
+    check(
+      "only the hovered ring lights and thickens, the others step back",
+      look[2].thick &&
+        look[2].opacity === 1 &&
+        !look[0].thick &&
+        !look[1].thick &&
+        look[0].opacity < 0.3 &&
+        look[1].opacity < 0.3,
+      JSON.stringify(look),
+    );
     await shot("move_2_hover_ring");
     await page.mouse.down();
-    for (const p of ringPts.slice(1)) { await page.mouse.move(p.x, p.y); await page.waitForTimeout(15); }
+    for (const p of ringPts.slice(1)) {
+      await page.mouse.move(p.x, p.y);
+      await page.waitForTimeout(15);
+    }
     await page.waitForTimeout(200);
     await shot("move_3_turning");
     const deg = await page.evaluate(() => window.__fundacad.move.ringDeg);
@@ -384,7 +518,9 @@ const check = (name, ok, detail) => {
   await settle();
   await page.evaluate(() => window.__fundacad.move.cancel());
   await page.evaluate(async () => {
-    window.store.mutate((d) => { d.features = d.features.filter((f) => ["B0", "M0", "P0"].includes(f.id)); });
+    window.store.mutate((d) => {
+      d.features = d.features.filter((f) => ["B0", "M0", "P0"].includes(f.id));
+    });
     await window.store.rebuildNow();
   });
   await settle();
@@ -397,7 +533,13 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(600);
   await page.click('.rd-tab[data-tab="environment"]');
   await page.waitForTimeout(200);
-  if (!(await page.evaluate(() => window.__fundacad.lightAim.angles && document.querySelector('[data-shadows="mode"]')?.getAttribute("aria-pressed") === "true"))) {
+  if (
+    !(await page.evaluate(
+      () =>
+        window.__fundacad.lightAim.angles &&
+        document.querySelector('[data-shadows="mode"]')?.getAttribute("aria-pressed") === "true",
+    ))
+  ) {
     await page.click('[data-shadows="mode"]');
   }
   await view("iso");
@@ -418,17 +560,32 @@ const check = (name, ok, detail) => {
     const foot = L.foot.clone();
     const V = tip.constructor;
     const out = [];
-    for (let d = 0; d <= 70; d += 2) out.push(window.viewport.projectToScreen(tip.clone().sub(foot).applyAxisAngle(new V(0, 0, 1), d * Math.PI / 180).add(foot)));
+    for (let d = 0; d <= 70; d += 2)
+      out.push(
+        window.viewport.projectToScreen(
+          tip
+            .clone()
+            .sub(foot)
+            .applyAxisAngle(new V(0, 0, 1), (d * Math.PI) / 180)
+            .add(foot),
+        ),
+      );
     return out;
   });
   await page.mouse.down();
-  for (const p of sunPath) { await page.mouse.move(p.x, p.y); await page.waitForTimeout(15); }
+  for (const p of sunPath) {
+    await page.mouse.move(p.x, p.y);
+    await page.waitForTimeout(15);
+  }
   await page.waitForTimeout(250);
   await shot("light_3_dragging");
   await page.mouse.up();
   const after = await page.evaluate(() => ({ ...window.__fundacad.lightAim.angles }));
-  check("the drag swung the light round, snapped to 5 degrees",
-    after.azimuth !== before.azimuth && after.azimuth % 5 === 0 && after.elevation % 5 === 0, JSON.stringify({ before, after }));
+  check(
+    "the drag swung the light round, snapped to 5 degrees",
+    after.azimuth !== before.azimuth && after.azimuth % 5 === 0 && after.elevation % 5 === 0,
+    JSON.stringify({ before, after }),
+  );
   await page.keyboard.press("Enter");
   await page.waitForTimeout(400);
   check("Enter puts the sun away and keeps the aim", await page.evaluate(() => !window.__fundacad.lightAim.active));
@@ -438,9 +595,20 @@ const check = (name, ok, detail) => {
     const p = JSON.parse(localStorage.getItem("fundacad.render") || "{}");
     return { azimuth: p.keyAzimuth, elevation: p.keyElevation };
   });
-  check("the aim is stored in the render settings", kept.azimuth === after.azimuth && kept.elevation === after.elevation, JSON.stringify(kept));
+  check(
+    "the aim is stored in the render settings",
+    kept.azimuth === after.azimuth && kept.elevation === after.elevation,
+    JSON.stringify(kept),
+  );
 
-  fs.writeFileSync(`${OUT}/measures.json`, JSON.stringify({ aimable: { iso: share, top: shareTop }, tasks, total, light: { before, after }, failures }, null, 1));
+  fs.writeFileSync(
+    `${OUT}/measures.json`,
+    JSON.stringify(
+      { aimable: { iso: share, top: shareTop }, tasks, total, light: { before, after }, failures },
+      null,
+      1,
+    ),
+  );
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall checks passed");
   process.exit(failures ? 1 : 0);

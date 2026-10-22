@@ -17,8 +17,7 @@
 #viewport {
   position: relative;
   min-width: 0;
-  background:
-    var(--bg);
+  background: var(--bg);
 }
 
 #canvas {
@@ -40,7 +39,7 @@
   z-index: 40;
   pointer-events: none;
   border: 1px solid var(--accent);
-  background: rgba(122, 162, 247, 0.10);
+  background: rgba(122, 162, 247, 0.1);
 }
 .areabox.crossing {
   border-style: dashed;
@@ -68,12 +67,23 @@
   white-space: nowrap;
   user-select: none;
 }
-.areachip svg { color: var(--accent); }
-.areachip-what { font-weight: 600; }
-.areachip-how { color: var(--text-mute); }
+.areachip svg {
+  color: var(--accent);
+}
+.areachip-what {
+  font-weight: 600;
+}
+.areachip-how {
+  color: var(--text-mute);
+}
 .areachip-key {
   padding: 1px var(--s-1);
-  font: 10px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font:
+    10px/1.4 ui-monospace,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace;
   color: var(--text-mute);
   background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
   border: 1px solid var(--line);
@@ -90,7 +100,12 @@
   right: var(--s-4);
   bottom: var(--s-4);
   padding: var(--s-0) var(--s-3);
-  font: 11px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font:
+    11px/1.4 ui-monospace,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace;
   font-variant-numeric: tabular-nums; /* digits stop twitching as the value changes */
   color: var(--text-dim);
   cursor: default;
@@ -113,7 +128,9 @@ button {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease),
+  transition:
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease);
 }
 button:hover {

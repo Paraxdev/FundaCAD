@@ -174,10 +174,12 @@ export function pastTip(
   const fits = (p: { left: number; top: number }) =>
     p.left >= bounds.left && p.top >= bounds.top && p.left + w <= bounds.right && p.top + h <= bounds.bottom;
   const first = tries[0]!;
-  return tries.find(fits) ?? {
-    left: Math.max(bounds.left, Math.min(first.left, bounds.right - w)),
-    top: Math.max(bounds.top, Math.min(first.top, bounds.bottom - h)),
-  };
+  return (
+    tries.find(fits) ?? {
+      left: Math.max(bounds.left, Math.min(first.left, bounds.right - w)),
+      top: Math.max(bounds.top, Math.min(first.top, bounds.bottom - h)),
+    }
+  );
 }
 
 /** Where a box of `size` goes beside a model that fills `model` on screen,
@@ -356,7 +358,13 @@ export class DimInput {
       wrap.appendChild(input);
 
       const field: Field = {
-        def, input, unit: initialUnit(def.kind), chip: null, tag, choice: def.choices?.chosen ?? null, userDriven: false,
+        def,
+        input,
+        unit: initialUnit(def.kind),
+        chip: null,
+        tag,
+        choice: def.choices?.chosen ?? null,
+        userDriven: false,
       };
       this.paintName(field);
       if (def.choices) {
@@ -605,7 +613,10 @@ export class DimInput {
    *  typing would silently go nowhere). */
   focus() {
     const f = this.fields.find((x) => x.def.name === this.focusName && !x.hidden) ?? this.fields[0];
-    if (f && this.active) { f.input.focus(); f.input.select(); }
+    if (f && this.active) {
+      f.input.focus();
+      f.input.select();
+    }
   }
 
   /** Make `name` the field typing goes to for this showing. */
@@ -671,34 +682,40 @@ export class DimInput {
    *  10 mm shown as inches is 0.3937 in, not 10 in. */
   private openUnitMenu(f: Field) {
     if (!f.unit || !f.chip) return;
-    this.openMenu(f.chip, commonUnits(f.unit.dim).map((u) => ({
-      label: u.label,
-      active: u.id === f.unit?.id,
-      pick: () => {
-        const current = tryParseMeasure(this.numberText(f), f.unit);
-        f.unit = u;
-        if (f.chip) f.chip.textContent = u.label;
-        if (current) f.input.value = String(toUnit(current.value, u));
-        this.sizeToContent(f);
-        f.input.focus();
-      },
-    })));
+    this.openMenu(
+      f.chip,
+      commonUnits(f.unit.dim).map((u) => ({
+        label: u.label,
+        active: u.id === f.unit?.id,
+        pick: () => {
+          const current = tryParseMeasure(this.numberText(f), f.unit);
+          f.unit = u;
+          if (f.chip) f.chip.textContent = u.label;
+          if (current) f.input.value = String(toUnit(current.value, u));
+          this.sizeToContent(f);
+          f.input.focus();
+        },
+      })),
+    );
   }
 
   /** The name's menu. The tool rewrites the value in the new terms. */
   private openChoiceMenu(f: Field) {
     const choices = f.def.choices;
     if (!choices) return;
-    this.openMenu(f.tag, choices.options.map((c) => ({
-      label: c.word,
-      active: c.id === f.choice,
-      pick: () => {
-        this.choose(f, c.id, false);
-        this.sizeToContent(f);
-        f.input.focus();
-        f.input.select();
-      },
-    })));
+    this.openMenu(
+      f.tag,
+      choices.options.map((c) => ({
+        label: c.word,
+        active: c.id === f.choice,
+        pick: () => {
+          this.choose(f, c.id, false);
+          this.sizeToContent(f);
+          f.input.focus();
+          f.input.select();
+        },
+      })),
+    );
   }
 
   private openMenu(anchor: HTMLElement, rows: { label: string; active: boolean; pick: () => void }[]) {

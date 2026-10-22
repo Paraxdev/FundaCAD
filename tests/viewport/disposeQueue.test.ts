@@ -83,7 +83,13 @@ describe("letting go of a model", () => {
     const err = console.error;
     console.error = () => {};
     try {
-      q.add([() => done.push(1), () => { throw new Error("lost context"); }, () => done.push(3)]);
+      q.add([
+        () => done.push(1),
+        () => {
+          throw new Error("lost context");
+        },
+        () => done.push(3),
+      ]);
       while (f.frame());
     } finally {
       console.error = err;

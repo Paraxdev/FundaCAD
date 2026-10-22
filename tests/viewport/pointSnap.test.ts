@@ -5,19 +5,13 @@
 // control for each rule is the same case with the rule's own candidate removed.
 
 import { describe, expect, it } from "vitest";
-import {
-  pickPoint,
-  polylineMidpoint3,
-  POINT_SNAP_PX,
-  type PointCandidate,
-} from "../../src/viewport/pointSnap";
+import { pickPoint, polylineMidpoint3, POINT_SNAP_PX, type PointCandidate } from "../../src/viewport/pointSnap";
 
 /** A projection that simply drops z, so a candidate's screen place is readable
  *  straight off its coordinates. */
 const flat = (p: readonly [number, number, number]) => ({ x: p[0], y: p[1] });
 const at = (x: number, y: number) => ({ x, y });
-const cand = (x: number, y: number, kind: PointCandidate["kind"]): PointCandidate =>
-  ({ p: [x, y, 0], kind });
+const cand = (x: number, y: number, kind: PointCandidate["kind"]): PointCandidate => ({ p: [x, y, 0], kind });
 
 describe("pickPoint", () => {
   it("prefers a corner to the surface it sits on", () => {
@@ -29,11 +23,7 @@ describe("pickPoint", () => {
   });
 
   it("ranks corner over edge middle over face centre", () => {
-    const all = [
-      cand(103, 100, "center"),
-      cand(102, 100, "midpoint"),
-      cand(106, 100, "vertex"),
-    ];
+    const all = [cand(103, 100, "center"), cand(102, 100, "midpoint"), cand(106, 100, "vertex")];
     expect(pickPoint(all, flat, at(100, 100))?.kind).toBe("vertex");
     expect(pickPoint(all.slice(0, 2), flat, at(100, 100))?.kind).toBe("midpoint");
     expect(pickPoint(all.slice(0, 1), flat, at(100, 100))?.kind).toBe("center");
@@ -80,14 +70,31 @@ describe("polylineMidpoint3", () => {
   });
 
   it("is the middle of a straight edge however densely it is sampled", () => {
-    expect(polylineMidpoint3([[0, 0, 0], [10, 0, 0]])![0]).toBeCloseTo(5, 9);
-    expect(polylineMidpoint3([[0, 0, 0], [1, 0, 0], [9, 0, 0], [10, 0, 0]])![0]).toBeCloseTo(5, 9);
+    expect(
+      polylineMidpoint3([
+        [0, 0, 0],
+        [10, 0, 0],
+      ])![0],
+    ).toBeCloseTo(5, 9);
+    expect(
+      polylineMidpoint3([
+        [0, 0, 0],
+        [1, 0, 0],
+        [9, 0, 0],
+        [10, 0, 0],
+      ])![0],
+    ).toBeCloseTo(5, 9);
   });
 
   it("refuses a run with no length", () => {
     // A closed edge's ends coincide; its "middle" would be a snap target at
     // wherever the kernel put the seam.
-    expect(polylineMidpoint3([[2, 2, 2], [2, 2, 2]])).toBeNull();
+    expect(
+      polylineMidpoint3([
+        [2, 2, 2],
+        [2, 2, 2],
+      ]),
+    ).toBeNull();
     expect(polylineMidpoint3([[1, 1, 1]])).toBeNull();
   });
 });

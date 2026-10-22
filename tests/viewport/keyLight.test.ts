@@ -14,7 +14,13 @@ describe("key light angles", () => {
   });
 
   it("round-trip through a direction", () => {
-    for (const [az, el] of [[0, 0], [90, 30], [-135, 60], [180, -20], [45, 89]] as const) {
+    for (const [az, el] of [
+      [0, 0],
+      [90, 30],
+      [-135, 60],
+      [180, -20],
+      [45, 89],
+    ] as const) {
       const a = keyAngles(keyDirection(az, el));
       expect(a.azimuth).toBeCloseTo(az, 9);
       expect(a.elevation).toBeCloseTo(el, 9);

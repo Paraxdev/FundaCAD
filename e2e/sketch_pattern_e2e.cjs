@@ -18,7 +18,10 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "sketch_pattern_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -30,7 +33,10 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -44,22 +50,32 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.sketch && !!window.viewport, null, { timeout: 60000 });
 
   await page.evaluate(async () => {
-    window.store.addFeature({ id: "s1", type: "sketch", plane: "XY", entities: [
-      { type: "circle", id: "c1", x: 30, y: 0, radius: 5 },
-    ] });
+    window.store.addFeature({
+      id: "s1",
+      type: "sketch",
+      plane: "XY",
+      entities: [{ type: "circle", id: "c1", x: 30, y: 0, radius: 5 }],
+    });
     await window.store.rebuildNow();
   });
   await page.evaluate(() => window.__fundacad.editFeature("s1"));
   await page.waitForTimeout(3000);
 
-  const scr = (x, y) => page.evaluate(([x, y]) => {
-    const s = window.sketch;
-    return window.viewport.projectToScreen(s.plane.to3D(x, y));
-  }, [x, y]);
+  const scr = (x, y) =>
+    page.evaluate(
+      ([x, y]) => {
+        const s = window.sketch;
+        return window.viewport.projectToScreen(s.plane.to3D(x, y));
+      },
+      [x, y],
+    );
   const pats = () => page.evaluate(() => JSON.parse(JSON.stringify(window.sketch.patterns || [])));
 
   // select the source circle
@@ -77,14 +93,23 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
   await page.evaluate(() => window.sketch.setTool("patternCircular"));
   await page.waitForTimeout(300);
   {
-    const centre = () => page.evaluate(() => {
-      const f = window.sketch.patternFlow;
-      return f && f.pending ? { cx: f.pending.cx, cy: f.pending.cy } : null;
-    });
+    const centre = () =>
+      page.evaluate(() => {
+        const f = window.sketch.patternFlow;
+        return f && f.pending ? { cx: f.pending.cx, cy: f.pending.cy } : null;
+      });
     let at = await centre();
-    check("choosing the tool starts the pattern centred on the selection", !!at && near(at.cx, 30, 0.001) && near(at.cy, 0, 0.001), JSON.stringify(at));
+    check(
+      "choosing the tool starts the pattern centred on the selection",
+      !!at && near(at.cx, 30, 0.001) && near(at.cy, 0, 0.001),
+      JSON.stringify(at),
+    );
     const hud = await page.evaluate(() => [...document.querySelectorAll(".dim-input input")].map((i) => i.value));
-    check("the HUD opens on the defaults, not blank fields", hud.length >= 2 && hud[0] === "6" && hud[1] !== "", JSON.stringify(hud));
+    check(
+      "the HUD opens on the defaults, not blank fields",
+      hud.length >= 2 && hud[0] === "6" && hud[1] !== "",
+      JSON.stringify(hud),
+    );
     await page.screenshot({ path: path.join(OUT, "00_started_on_selection.png") });
 
     const from = await scr(30, 0);
@@ -98,7 +123,11 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
     await page.mouse.up();
     await page.waitForTimeout(300);
     at = await centre();
-    check("dragging the centre dot snaps it onto the origin", !!at && near(at.cx, 0, 1e-6) && near(at.cy, 0, 1e-6), JSON.stringify(at));
+    check(
+      "dragging the centre dot snaps it onto the origin",
+      !!at && near(at.cx, 0, 1e-6) && near(at.cy, 0, 1e-6),
+      JSON.stringify(at),
+    );
     const still = await page.evaluate(() => {
       const f = window.sketch.patternFlow;
       return !!(f && f.pending) && window.sketch.patterns.length === 0;
@@ -184,7 +213,11 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
       const f = window.sketch.patternFlow;
       return f && f.pending ? { angle: f.pending.angle, sx: f.pending.spacingX, cy: f.pending.countY } : null;
     });
-    check("a row dragged at 45 degrees carries that direction", pend && near(pend.angle, 45, 0.001), JSON.stringify(pend));
+    check(
+      "a row dragged at 45 degrees carries that direction",
+      pend && near(pend.angle, 45, 0.001),
+      JSON.stringify(pend),
+    );
     check("its pitch is the drag length, not just the X part", pend && near(pend.sx, 20, 1.5), JSON.stringify(pend));
     await page.screenshot({ path: path.join(OUT, "05_row_45.png") });
   }

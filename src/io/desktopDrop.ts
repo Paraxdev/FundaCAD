@@ -1,6 +1,13 @@
 import type { Engine } from "../app/engine";
 import { mayDiscard } from "../app/documentActions";
-import { importFileBytes, importPath, openDocumentAtPath, openDocumentBytes, reportError, type OpenOutcome } from "./files";
+import {
+  importFileBytes,
+  importPath,
+  openDocumentAtPath,
+  openDocumentBytes,
+  reportError,
+  type OpenOutcome,
+} from "./files";
 import { describeDropLeftovers, planDrop } from "./dropRouting";
 import { closeHome } from "../ui/home";
 
@@ -78,7 +85,9 @@ async function askPaths(send: (id: string) => unknown): Promise<(string | null)[
   const { listen } = await import("@tauri-apps/api/event");
   const id = String(++nextRequest);
   let settle: (paths: (string | null)[] | null) => void = () => {};
-  const reply = new Promise<(string | null)[] | null>((resolve) => { settle = resolve; });
+  const reply = new Promise<(string | null)[] | null>((resolve) => {
+    settle = resolve;
+  });
   const unlisten = await listen<{ id: string; paths: (string | null)[] }>("files-dropped", (ev) => {
     if (ev.payload.id === id) settle(ev.payload.paths);
   });
@@ -96,7 +105,9 @@ async function askPaths(send: (id: string) => unknown): Promise<(string | null)[
 
 async function collect(files: File[]): Promise<DroppedFile[]> {
   const bridge = pathBridge();
-  const paths = bridge ? await askPaths((id) => bridge.postMessageWithAdditionalObjects(`fundacad-drop:${id}`, files)) : null;
+  const paths = bridge
+    ? await askPaths((id) => bridge.postMessageWithAdditionalObjects(`fundacad-drop:${id}`, files))
+    : null;
   return files.map((file, i) => ({ name: file.name, path: paths?.[i] ?? null, file }));
 }
 
@@ -119,9 +130,17 @@ export function installDesktopDrop(e: DropEngine, hint: (shown: boolean) => void
   // outside never fires dragstart in this window.
   let inPage = false;
   const carriesFiles = (ev: DragEvent) => !inPage && (carriesFileType(ev) || gtkFileDrag(ev));
-  const hide = () => { depth = 0; hint(false); };
-  const onStart = () => { inPage = true; };
-  const onEnd = () => { inPage = false; hide(); };
+  const hide = () => {
+    depth = 0;
+    hint(false);
+  };
+  const onStart = () => {
+    inPage = true;
+  };
+  const onEnd = () => {
+    inPage = false;
+    hide();
+  };
 
   const onEnter = (ev: DragEvent) => {
     if (!carriesFiles(ev)) return;
@@ -133,7 +152,10 @@ export function installDesktopDrop(e: DropEngine, hint: (shown: boolean) => void
     if (!carriesFiles(ev)) return;
     ev.preventDefault();
     if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
-    if (depth === 0) { depth = 1; hint(true); }
+    if (depth === 0) {
+      depth = 1;
+      hint(true);
+    }
   };
   const onLeave = (ev: DragEvent) => {
     if (!carriesFiles(ev)) return;
@@ -151,9 +173,11 @@ export function installDesktopDrop(e: DropEngine, hint: (shown: boolean) => void
     const files = Array.from(ev.dataTransfer?.files ?? []);
     const fromGtk = !files.length && gtkFileDrag(ev);
     if (!files.length && !fromGtk) return;
-    queue = queue.then(async () => takeDroppedFiles(e, await (fromGtk ? collectFromGtk() : collect(files)))).catch((err) => {
-      void reportError(`Couldn't take the dropped files: ${err instanceof Error ? err.message : String(err)}`);
-    });
+    queue = queue
+      .then(async () => takeDroppedFiles(e, await (fromGtk ? collectFromGtk() : collect(files))))
+      .catch((err) => {
+        void reportError(`Couldn't take the dropped files: ${err instanceof Error ? err.message : String(err)}`);
+      });
   };
 
   const opts = { capture: true };

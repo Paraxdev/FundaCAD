@@ -2,7 +2,13 @@
 // Along axis switch is offered, which way it starts, and where the arrow stands.
 
 import { describe, it, expect } from "vitest";
-import { anchorOnAxis, initialDirection, offeredAxis, offeredResize, resizeAxis } from "../../src/features/pressPullAxis";
+import {
+  anchorOnAxis,
+  initialDirection,
+  offeredAxis,
+  offeredResize,
+  resizeAxis,
+} from "../../src/features/pressPullAxis";
 import type { FaceAxisReply } from "../../src/geometry/client";
 
 const ceiling = { axis: { origin: [0, 0, 22.5], dir: [0, 0, -1] }, hole: true, sameAsNormal: false } as const;
@@ -35,13 +41,21 @@ describe("offeredAxis", () => {
 
 describe("anchorOnAxis", () => {
   it("drops the picked point onto the axis line", () => {
-    const axis = { origin: [1, 2, 0] as [number, number, number], dir: [0, 0, 1] as [number, number, number], hole: true };
+    const axis = {
+      origin: [1, 2, 0] as [number, number, number],
+      dir: [0, 0, 1] as [number, number, number],
+      hole: true,
+    };
     expect(anchorOnAxis([1.3, 2.4, 7], axis)).toEqual([1, 2, 7]);
   });
 
   it("keeps a point already on a slanted axis where it is", () => {
     const s = Math.SQRT1_2;
-    const axis = { origin: [0, 0, 0] as [number, number, number], dir: [s, 0, s] as [number, number, number], hole: false };
+    const axis = {
+      origin: [0, 0, 0] as [number, number, number],
+      dir: [s, 0, s] as [number, number, number],
+      hole: false,
+    };
     const [x, y, z] = anchorOnAxis([3, 0, 3], axis);
     expect(x).toBeCloseTo(3);
     expect(y).toBeCloseTo(0);
@@ -62,7 +76,12 @@ describe("offeredResize", () => {
       tangent: {
         faces: 2,
         lostWhen: "shrink" as const,
-        run: [[0, 9.125, 20], [0, 0, 18], [0, 0, 22], [0, -16.875, 20]] as [number, number, number][],
+        run: [
+          [0, 9.125, 20],
+          [0, 0, 18],
+          [0, 0, 22],
+          [0, -16.875, 20],
+        ] as [number, number, number][],
         closed: true,
         followable: true,
       },
@@ -81,8 +100,28 @@ describe("offeredResize", () => {
   });
 
   it("reads a round hole with nothing running into it", () => {
-    const hole = { ...slotEnd, resize: { ...slotEnd.resize, size: 3.369, full: true, contact: null, tangent: { faces: 0, lostWhen: null, run: [[0, 0, 0]] as [number, number, number][], closed: false, followable: false } } };
-    expect(offeredResize(hole)).toMatchObject({ radius: 3.369, full: true, contact: null, tangent: { faces: 0, lostWhen: null } });
+    const hole = {
+      ...slotEnd,
+      resize: {
+        ...slotEnd.resize,
+        size: 3.369,
+        full: true,
+        contact: null,
+        tangent: {
+          faces: 0,
+          lostWhen: null,
+          run: [[0, 0, 0]] as [number, number, number][],
+          closed: false,
+          followable: false,
+        },
+      },
+    };
+    expect(offeredResize(hole)).toMatchObject({
+      radius: 3.369,
+      full: true,
+      contact: null,
+      tangent: { faces: 0, lostWhen: null },
+    });
   });
 
   it("offers nothing for a face that is not a cylinder, or a reply with no resize", () => {
@@ -93,7 +132,10 @@ describe("offeredResize", () => {
 
   it("rejects a malformed reply rather than resizing from it", () => {
     const bad = (patch: Record<string, unknown>, tangent: Record<string, unknown> = {}) =>
-      offeredResize({ ...slotEnd, resize: { ...slotEnd.resize, ...patch, tangent: { ...slotEnd.resize.tangent, ...tangent } } } as never);
+      offeredResize({
+        ...slotEnd,
+        resize: { ...slotEnd.resize, ...patch, tangent: { ...slotEnd.resize.tangent, ...tangent } },
+      } as never);
     expect(bad({ size: 0 })).toBeNull();
     expect(bad({ size: -2 })).toBeNull();
     expect(bad({ size: Number.NaN })).toBeNull();
@@ -117,7 +159,11 @@ describe("offeredResize", () => {
 
   it("reads a sphere, a cone and a torus when asked for them", () => {
     const all = ["sphere", "cone", "torus"] as const;
-    expect(offeredResize(curved("sphere", { size: 4, centre: [0, 0, 10] }), all)).toMatchObject({ kind: "sphere", radius: 4, centre: [0, 0, 10] });
+    expect(offeredResize(curved("sphere", { size: 4, centre: [0, 0, 10] }), all)).toMatchObject({
+      kind: "sphere",
+      radius: 4,
+      centre: [0, 0, 10],
+    });
     expect(offeredResize(curved("cone", { size: 0 }), all)).toMatchObject({ kind: "cone", radius: 0 });
     expect(offeredResize(curved("torus", { size: 1.5 }), all)).toMatchObject({ kind: "torus", radius: 1.5 });
     expect(offeredResize(curved("torus", { size: 1.5 }), all)?.centre).toBeUndefined();
@@ -139,13 +185,21 @@ describe("resizeAxis", () => {
     ({
       reason: "none",
       resize: {
-        kind: "cylinder", size: 2, full: false, concave: true, axis, contact: 2,
+        kind: "cylinder",
+        size: 2,
+        full: false,
+        concave: true,
+        axis,
+        contact: 2,
         tangent: { faces: 2, lostWhen: "shrink", run: [], closed: true, followable: true },
       },
     }) as FaceAxisReply;
 
   it("reads the engine's axis with a unit direction", () => {
-    expect(resizeAxis(reply({ origin: [0, 7.125, 20], dir: [-3, 0, 0] }))).toEqual({ origin: [0, 7.125, 20], dir: [-1, 0, 0] });
+    expect(resizeAxis(reply({ origin: [0, 7.125, 20], dir: [-3, 0, 0] }))).toEqual({
+      origin: [0, 7.125, 20],
+      dir: [-1, 0, 0],
+    });
   });
 
   it("has none for a sphere, a malformed axis or no reply", () => {

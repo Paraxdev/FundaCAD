@@ -1,8 +1,16 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import {
-  snap, candidatesFromEntities, dragSnap, existingFixedPoint, originCandidate, pinOriginPoint, settleOriginPin, showsSnapMarker,
-  type ResolvedEntity, type SnapCandidate,
+  snap,
+  candidatesFromEntities,
+  dragSnap,
+  existingFixedPoint,
+  originCandidate,
+  pinOriginPoint,
+  settleOriginPin,
+  showsSnapMarker,
+  type ResolvedEntity,
+  type SnapCandidate,
 } from "../../src/sketch/snap";
 import { SketchPlane } from "../../src/sketch/plane";
 import type { SketchConstraint } from "../../src/types";
@@ -144,18 +152,35 @@ describe("candidatesFromEntities", () => {
   it("handles arc and spline fit points", () => {
     const arc = candidatesFromEntities([{ type: "arc", id: "a", x1: 0, y1: 0, x2: 4, y2: 0, mx: 2, my: 2 }]);
     expect(arc).toHaveLength(3);
-    const sp = candidatesFromEntities([{ type: "spline", id: "s", points: [{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 0 }] }]);
+    const sp = candidatesFromEntities([
+      {
+        type: "spline",
+        id: "s",
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+          { x: 2, y: 0 },
+        ],
+      },
+    ]);
     expect(sp).toHaveLength(3);
   });
 });
 
 describe("candidatesFromEntities, projected reference geometry", () => {
   it("a projected line snaps like a native one: endpoints 100, midpoint 80", () => {
-    const c = candidatesFromEntities([{
-      type: "projected", id: "p1",
-      source: { kind: "edge", body: "body1", sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } } },
-      curve: { kind: "line", x1: 0, y1: 0, x2: 10, y2: 0 },
-    }]);
+    const c = candidatesFromEntities([
+      {
+        type: "projected",
+        id: "p1",
+        source: {
+          kind: "edge",
+          body: "body1",
+          sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } },
+        },
+        curve: { kind: "line", x1: 0, y1: 0, x2: 10, y2: 0 },
+      },
+    ]);
     expect(c.filter((x) => x.kind === "endpoint" && x.priority === 100)).toHaveLength(2);
     const mid = c.find((x) => x.kind === "midpoint")!;
     expect(mid.priority).toBe(80);
@@ -163,20 +188,34 @@ describe("candidatesFromEntities, projected reference geometry", () => {
   });
 
   it("a projected circle exposes its center (90); a poly has strong ends and weak interior vertices", () => {
-    const circle = candidatesFromEntities([{
-      type: "projected", id: "pc",
-      source: { kind: "silhouette", body: "body1" },
-      curve: { kind: "circle", x: 3, y: 4, r: 5 },
-    }]);
+    const circle = candidatesFromEntities([
+      {
+        type: "projected",
+        id: "pc",
+        source: { kind: "silhouette", body: "body1" },
+        curve: { kind: "circle", x: 3, y: 4, r: 5 },
+      },
+    ]);
     expect(circle).toHaveLength(1);
     expect(circle[0]!.kind).toBe("center");
     expect(circle[0]!.priority).toBe(90);
 
-    const poly = candidatesFromEntities([{
-      type: "projected", id: "pp",
-      source: { kind: "silhouette", body: "body1" },
-      curve: { kind: "poly", pts: [[0, 0], [1, 1], [2, 0], [3, 1]] },
-    }]);
+    const poly = candidatesFromEntities([
+      {
+        type: "projected",
+        id: "pp",
+        source: { kind: "silhouette", body: "body1" },
+        curve: {
+          kind: "poly",
+          pts: [
+            [0, 0],
+            [1, 1],
+            [2, 0],
+            [3, 1],
+          ],
+        },
+      },
+    ]);
     expect(poly.filter((x) => x.priority === 100)).toHaveLength(2); // real ends
     expect(poly.filter((x) => x.priority === 60)).toHaveLength(2); // sample vertices
   });
@@ -317,7 +356,6 @@ describe("snap alignment composed with the grid", () => {
   });
 });
 
-
 // The marker is a statement about where the next click will PUT something. With
 // the select tool armed there is no next placement, and a ring left standing on
 // a grid intersection is a promise nothing is going to keep.
@@ -372,9 +410,13 @@ describe("axis line labels", () => {
   it("uses the plane's own directions", () => {
     const cands = originCandidate(new SketchPlane("XZ"));
     const plane = new SketchPlane("XZ");
-    expect([snap(new THREE.Vector2(40, 2), cands, toScreen, 0).label, snap(new THREE.Vector2(1, -35), cands, toScreen, 0).label])
-      .toEqual([`${["X", "Y", "Z"][[plane.u.x, plane.u.y, plane.u.z].findIndex((v) => Math.abs(v) === 1)]} Axis`,
-        `${["X", "Y", "Z"][[plane.v.x, plane.v.y, plane.v.z].findIndex((v) => Math.abs(v) === 1)]} Axis`]);
+    expect([
+      snap(new THREE.Vector2(40, 2), cands, toScreen, 0).label,
+      snap(new THREE.Vector2(1, -35), cands, toScreen, 0).label,
+    ]).toEqual([
+      `${["X", "Y", "Z"][[plane.u.x, plane.u.y, plane.u.z].findIndex((v) => Math.abs(v) === 1)]} Axis`,
+      `${["X", "Y", "Z"][[plane.v.x, plane.v.y, plane.v.z].findIndex((v) => Math.abs(v) === 1)]} Axis`,
+    ]);
   });
 });
 

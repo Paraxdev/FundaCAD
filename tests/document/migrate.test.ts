@@ -3,23 +3,35 @@ import { FORMAT_VERSION, migrateDocument } from "../../src/document/migrate";
 import { commitFieldExpr, recompute } from "../../src/params/engine";
 import type { CadDocument } from "../../src/types";
 
-const v1 = (doc: Partial<CadDocument>): CadDocument =>
-  ({ parameters: {}, features: [], ...doc }) as CadDocument; // no version field = v1
+const v1 = (doc: Partial<CadDocument>): CadDocument => ({ parameters: {}, features: [], ...doc }) as CadDocument; // no version field = v1
 
 describe("migrateDocument", () => {
   it("converts polygon.angle radians → degrees for v1 docs only", () => {
     const doc = v1({
-      features: [{ id: "f1", type: "sketch", plane: "XY", entities: [
-        { type: "polygon", id: "e1", x: 0, y: 0, radius: 10, sides: 6, angle: Math.PI / 2 },
-      ] }],
+      features: [
+        {
+          id: "f1",
+          type: "sketch",
+          plane: "XY",
+          entities: [{ type: "polygon", id: "e1", x: 0, y: 0, radius: 10, sides: 6, angle: Math.PI / 2 }],
+        },
+      ],
     });
     migrateDocument(doc);
     const poly = (doc.features[0] as { entities: { angle: number }[] }).entities[0]!;
     expect(poly.angle).toBeCloseTo(90);
 
-    const already = v1({ version: 2, features: [{ id: "f1", type: "sketch", plane: "XY", entities: [
-      { type: "polygon", id: "e1", x: 0, y: 0, radius: 10, sides: 6, angle: 90 },
-    ] }] });
+    const already = v1({
+      version: 2,
+      features: [
+        {
+          id: "f1",
+          type: "sketch",
+          plane: "XY",
+          entities: [{ type: "polygon", id: "e1", x: 0, y: 0, radius: 10, sides: 6, angle: 90 }],
+        },
+      ],
+    });
     migrateDocument(already);
     expect((already.features[0] as { entities: { angle: number }[] }).entities[0]!.angle).toBe(90);
   });
@@ -44,7 +56,9 @@ describe("migrateDocument", () => {
     expect((doc.features[1] as { distance: number }).distance).toBe(5);
     expect(doc.paramDefs!["thickness"]).toEqual({ expr: "5", value: 5, unit: "mm" });
     expect(doc.paramDefs!["d1"]).toEqual({
-      expr: "thickness", value: 5, unit: "mm",
+      expr: "thickness",
+      value: 5,
+      unit: "mm",
       target: { kind: "feature", feature: "f2", field: "distance" },
     });
     expect(doc.paramDefs!["d2"]!.target).toEqual({ kind: "feature", feature: "f4", field: "distance" });
@@ -84,7 +98,9 @@ describe("migrateDocument", () => {
       features: [{ id: "bx", type: "box", length: "b", width: 5, height: 5 }] as unknown as CadDocument["features"],
     });
     migrateDocument(doc);
-    const bound = Object.entries(doc.paramDefs!).filter(([, d]) => d.target?.kind === "feature" && d.target.feature === "bx");
+    const bound = Object.entries(doc.paramDefs!).filter(
+      ([, d]) => d.target?.kind === "feature" && d.target.feature === "bx",
+    );
     expect(bound).toEqual([["d1", { expr: "b", value: 20, unit: "mm", target }]]);
     const length = () => (doc.features[0] as unknown as { length: number }).length;
     expect(length()).toBe(20);
@@ -98,10 +114,17 @@ describe("migrateDocument", () => {
   it("binds rigid-entity fields but leaves solved geometry on the legacy path", () => {
     const doc = v1({
       parameters: { r: 8, width: 40 },
-      features: [{ id: "f1", type: "sketch", plane: "XY", entities: [
-        { type: "polygon", id: "e1", x: 0, y: 0, radius: "r", sides: 6, angle: 0 },
-        { type: "rectangle", id: "e2", width: "width", height: 20, x: 0, y: 0 },
-      ] }],
+      features: [
+        {
+          id: "f1",
+          type: "sketch",
+          plane: "XY",
+          entities: [
+            { type: "polygon", id: "e1", x: 0, y: 0, radius: "r", sides: 6, angle: 0 },
+            { type: "rectangle", id: "e2", width: "width", height: 20, x: 0, y: 0 },
+          ],
+        },
+      ],
     });
     migrateDocument(doc);
     const [poly, rect] = (doc.features[0] as { entities: Record<string, unknown>[] }).entities;
@@ -113,11 +136,19 @@ describe("migrateDocument", () => {
 
   it("stamps ids on dimension constraints and keeps existing ones", () => {
     const doc = v1({
-      features: [{ id: "f1", type: "sketch", plane: "XY", entities: [], constraints: [
-        { type: "distance", id: "c7", line: "e1", value: 10 },
-        { type: "radius", e: "e2", value: 4 },
-        { type: "horizontal", line: "e1" }, // not a dim: no id
-      ] }],
+      features: [
+        {
+          id: "f1",
+          type: "sketch",
+          plane: "XY",
+          entities: [],
+          constraints: [
+            { type: "distance", id: "c7", line: "e1", value: 10 },
+            { type: "radius", e: "e2", value: 4 },
+            { type: "horizontal", line: "e1" }, // not a dim: no id
+          ],
+        },
+      ],
     });
     migrateDocument(doc);
     const cs = (doc.features[0] as { constraints: Record<string, unknown>[] }).constraints;
@@ -156,12 +187,25 @@ describe("migrateDocument", () => {
     expect(FORMAT_VERSION).toBe(10);
     const doc = v1({
       version: 3,
-      features: [{ id: "f1", type: "sketch", plane: "XY", entities: [
-        { type: "projected", id: "p1",
-          source: { kind: "edge", body: "body1",
-            sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } } },
-          curve: { kind: "line", x1: 0, y1: 0, x2: 20, y2: 0 } },
-      ] }],
+      features: [
+        {
+          id: "f1",
+          type: "sketch",
+          plane: "XY",
+          entities: [
+            {
+              type: "projected",
+              id: "p1",
+              source: {
+                kind: "edge",
+                body: "body1",
+                sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } },
+              },
+              curve: { kind: "line", x1: 0, y1: 0, x2: 20, y2: 0 },
+            },
+          ],
+        },
+      ],
     });
     const before = JSON.stringify(doc);
     expect(migrateDocument(doc)).toEqual([]); // in-format: no warnings
@@ -176,11 +220,17 @@ describe("migrateDocument", () => {
       features: [
         { id: "dp", type: "datumPlane", plane: "XY", offset: 12 },
         // planeId keeps the datum link; plane stays as the resolved cache
-        { id: "f1", type: "sketch", planeId: "dp",
+        {
+          id: "f1",
+          type: "sketch",
+          planeId: "dp",
           plane: { origin: [0, 0, 12], normal: [0, 0, 1], xdir: [1, 0, 0] },
-          entities: [{ type: "circle", id: "c1", radius: 5, x: 0, y: 0 },
-                     { type: "circle", id: "c2", radius: 7, x: 0, y: 0 }],
-          constraints: [{ type: "offset", id: "k1", pairs: [{ src: "c1", cpy: "c2" }], value: 2 }] },
+          entities: [
+            { type: "circle", id: "c1", radius: 5, x: 0, y: 0 },
+            { type: "circle", id: "c2", radius: 7, x: 0, y: 0 },
+          ],
+          constraints: [{ type: "offset", id: "k1", pairs: [{ src: "c1", cpy: "c2" }], value: 2 }],
+        },
       ],
     });
     const before = JSON.stringify(doc);
@@ -197,9 +247,14 @@ describe("migrateDocument", () => {
     // axis-aligned, which is the wrong shape rather than a missing feature.
     const doc = v1({
       version: 5,
-      features: [{ id: "f1", type: "sketch", plane: "XY", entities: [
-        { type: "rectangle", id: "r1", width: 10, height: 4, x: 0, y: 0 },
-      ] }],
+      features: [
+        {
+          id: "f1",
+          type: "sketch",
+          plane: "XY",
+          entities: [{ type: "rectangle", id: "r1", width: 10, height: 4, x: 0, y: 0 }],
+        },
+      ],
     });
     const before = JSON.stringify(doc);
     expect(migrateDocument(doc)).toEqual([]);
@@ -211,9 +266,14 @@ describe("migrateDocument", () => {
   it("keeps a rotated rectangle's angle through a round trip", () => {
     const doc = v1({
       version: 6,
-      features: [{ id: "f1", type: "sketch", plane: "XY", entities: [
-        { type: "rectangle", id: "r1", width: 10, height: 4, x: 0, y: 0, angle: 37.5 },
-      ] }],
+      features: [
+        {
+          id: "f1",
+          type: "sketch",
+          plane: "XY",
+          entities: [{ type: "rectangle", id: "r1", width: 10, height: 4, x: 0, y: 0, angle: 37.5 }],
+        },
+      ],
     });
     const before = JSON.stringify(doc);
     expect(migrateDocument(doc)).toEqual([]);

@@ -2,7 +2,11 @@ import { afterEach, expect, it, vi } from "vitest";
 
 const toasts = vi.hoisted(() => [] as string[]);
 vi.mock("@tauri-apps/api/core", () => ({ invoke: async () => false }));
-vi.mock("../../src/ui/toast", () => ({ toast: (t: string) => { toasts.push(t); } }));
+vi.mock("../../src/ui/toast", () => ({
+  toast: (t: string) => {
+    toasts.push(t);
+  },
+}));
 vi.mock("../../src/ui/choice", () => ({ choose: async () => null }));
 
 import { checkForUpdates } from "../../src/ui/updates";

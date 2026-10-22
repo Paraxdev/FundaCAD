@@ -14,7 +14,10 @@ function lenient<T extends object>(known: T): T {
   const noop = () => [];
   return new Proxy(known, {
     get: (t, k) => (k in t ? (t as Record<string | symbol, unknown>)[k] : noop),
-    set: (t, k, v) => { (t as Record<string | symbol, unknown>)[k] = v; return true; },
+    set: (t, k, v) => {
+      (t as Record<string | symbol, unknown>)[k] = v;
+      return true;
+    },
   });
 }
 
@@ -37,8 +40,12 @@ function engine() {
     tools: lenient({ move: lenient({}) }),
     toolBusy: () => false,
     featureForFace: () => "hole1",
-    selectFeature: (id: string | null) => { calls.selected.push(id); },
-    editFeature: (id: string) => { calls.edited.push(id); },
+    selectFeature: (id: string | null) => {
+      calls.selected.push(id);
+    },
+    editFeature: (id: string) => {
+      calls.edited.push(id);
+    },
   } as Record<string, unknown>);
   return { e: e as unknown as Engine, viewport, calls };
 }

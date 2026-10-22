@@ -10,10 +10,18 @@ import { setUnit } from "../../src/ui/units";
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
-const face = (area: number, at = V(0, 0, 0), dir = V(0, 0, 1)): MeasureProbe =>
-  ({ kind: "face", area, point: at, dir });
-const edge = (length: number, at = V(0, 0, 0), dir = V(1, 0, 0)): MeasureProbe =>
-  ({ kind: "edge", length, point: at, dir });
+const face = (area: number, at = V(0, 0, 0), dir = V(0, 0, 1)): MeasureProbe => ({
+  kind: "face",
+  area,
+  point: at,
+  dir,
+});
+const edge = (length: number, at = V(0, 0, 0), dir = V(1, 0, 0)): MeasureProbe => ({
+  kind: "edge",
+  length,
+  point: at,
+  dir,
+});
 
 const keys = (rows: { k: string }[]) => rows.map((r) => r.k);
 const valueOf = (rows: { k: string; v: string }[], k: string) => rows.find((r) => r.k === k)?.v;

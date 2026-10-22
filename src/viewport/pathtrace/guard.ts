@@ -69,13 +69,17 @@ export async function guardSet(): Promise<boolean> {
 export async function armGuard(): Promise<void> {
   try {
     localStorage.setItem(KEY, String(Date.now()));
-  } catch { /* no storage, the IndexedDB copy still counts */ }
+  } catch {
+    /* no storage, the IndexedDB copy still counts */
+  }
   await writeDb(true);
 }
 
 export function clearGuard(): void {
   try {
     localStorage.removeItem(KEY);
-  } catch { /* nothing to clear */ }
+  } catch {
+    /* nothing to clear */
+  }
   void writeDb(false);
 }

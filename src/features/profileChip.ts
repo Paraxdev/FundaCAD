@@ -115,12 +115,7 @@ export class ProfileChip {
 
   /** Drag on `target` moves the profile by fraction of `px` pixels; a press that
    *  never moved is a click. `start` lets the track jump to where it was pressed. */
-  private wireScrub(
-    target: HTMLElement,
-    px: number,
-    click: (() => void) | null,
-    start?: (e: PointerEvent) => void,
-  ) {
+  private wireScrub(target: HTMLElement, px: number, click: (() => void) | null, start?: (e: PointerEvent) => void) {
     // Set here as well as in the stylesheet, so a finger scrub is a scrub and not
     // a page pan on whichever element is wired, styled or not.
     target.style.touchAction = "none";

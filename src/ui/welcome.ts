@@ -13,7 +13,9 @@ export function welcomeOnStartup(): boolean {
 export function setWelcomeOnStartup(on: boolean): void {
   try {
     localStorage.setItem(SHOW_KEY, on ? "true" : "false");
-  } catch { /* blocked storage keeps the default */ }
+  } catch {
+    /* blocked storage keeps the default */
+  }
 }
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;

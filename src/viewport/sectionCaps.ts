@@ -103,7 +103,10 @@ export class SectionCaps {
     this.front = stencilPass(plane, THREE.FrontSide, THREE.DecrementWrapStencilOp);
     bodies.forEach((b, i) => {
       const order = CAP_ORDER + i * 3;
-      for (const [mat, k] of [[this.back!, 0], [this.front!, 1]] as const) {
+      for (const [mat, k] of [
+        [this.back!, 0],
+        [this.front!, 1],
+      ] as const) {
         const m = new THREE.Mesh(b.mesh.geometry, mat);
         m.renderOrder = order + k;
         m.raycast = noRaycast;

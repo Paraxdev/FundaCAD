@@ -28,8 +28,24 @@ afterEach(() => {
 });
 
 const NAMES = [
-  "extrude", "edgeFeature", "targetEdit", "pressPull", "faceOffset", "draft", "thread", "textOnFace", "hole", "loft",
-  "pattern", "planeOffset", "datumPose", "lightAim", "revolvePitch", "joint", "mechanism", "move",
+  "extrude",
+  "edgeFeature",
+  "targetEdit",
+  "pressPull",
+  "faceOffset",
+  "draft",
+  "thread",
+  "textOnFace",
+  "hole",
+  "loft",
+  "pattern",
+  "planeOffset",
+  "datumPose",
+  "lightAim",
+  "revolvePitch",
+  "joint",
+  "mechanism",
+  "move",
 ];
 
 interface Opts {
@@ -49,8 +65,14 @@ function mountBar(o: Opts = {}) {
   for (const n of NAMES) {
     const t: Tool = {
       active: o.tool?.name === n,
-      cancel: () => { if (t.active) log.push(`cancel:${n}`); t.active = false; },
-      startEdit: () => { log.push(`startEdit:${n}`); return true; },
+      cancel: () => {
+        if (t.active) log.push(`cancel:${n}`);
+        t.active = false;
+      },
+      startEdit: () => {
+        log.push(`startEdit:${n}`);
+        return true;
+      },
     };
     tools[n] = t;
   }
@@ -60,13 +82,23 @@ function mountBar(o: Opts = {}) {
   const sketch = {
     active: !!o.sketch,
     editingSketchId: o.sketch?.editing ?? null,
-    enter: () => { log.push("sketch.enter"); },
-    finish: (c = true) => { sketch.active = false; log.push(`sketch.finish:${c}`); },
+    enter: () => {
+      log.push("sketch.enter");
+    },
+    finish: (c = true) => {
+      sketch.active = false;
+      log.push(`sketch.finish:${c}`);
+    },
   };
   const e = {
     viewport: { highlightDatum: () => {}, getSelectedFaceIds: () => [], getSelectedBodies: () => [] },
     overlay: { selectedRegions: () => [] },
-    bridge: { docVersion: ref(0), buildVersion: ref(0), editPreviewVersion: ref(0), busy: ref({ active: false, waiting: false }) },
+    bridge: {
+      docVersion: ref(0),
+      buildVersion: ref(0),
+      editPreviewVersion: ref(0),
+      busy: ref({ active: false, waiting: false }),
+    },
     tools,
     sketch,
     planePick: false,
@@ -75,7 +107,9 @@ function mountBar(o: Opts = {}) {
     toolAtWork: () => sketch.active || modalActive(),
     dropBodyGizmo: () => {},
     featureForFace: () => null,
-    setStatus: (t: string) => { status.push(t); },
+    setStatus: (t: string) => {
+      status.push(t);
+    },
     noteCommitted: () => {},
     store: {
       document: {
@@ -88,8 +122,12 @@ function mountBar(o: Opts = {}) {
           { id: "dp", type: "datumPlane", plane: "XY", offset: 5 },
         ],
       },
-      get editPreviewId() { return o.preview?.id ?? null; },
-      get editPreviewInPlace() { return !!o.preview?.inPlace; },
+      get editPreviewId() {
+        return o.preview?.id ?? null;
+      },
+      get editPreviewInPlace() {
+        return !!o.preview?.inPlace;
+      },
       onEditPreview: () => () => {},
       isSuppressed: (id: string) => !!o.suppressed?.includes(id),
       rollbackIndex: 6,
@@ -180,14 +218,20 @@ describe("History row double click while another edit is open", () => {
 
   it("enters a value typed in the heads-up box instead of throwing it away", async () => {
     const m = mountBar({ tool: { name: "extrude", on: "ex1" }, preview: { id: "ex1" } });
-    typedBox("5", () => { m.log.push("commit:extrude"); m.tool("extrude").active = false; });
+    typedBox("5", () => {
+      m.log.push("commit:extrude");
+      m.tool("extrude").active = false;
+    });
     await m.dbl("rv");
     expect(m.log).toEqual(["commit:extrude", "startEdit:revolvePitch"]);
   });
 
   it("keeps the edit and says why when the typed value is refused", async () => {
     const m = mountBar({ tool: { name: "extrude", on: "ex1" }, preview: { id: "ex1" } });
-    typedBox("abc", () => { m.log.push("commit:extrude"); m.tool("extrude").active = false; });
+    typedBox("abc", () => {
+      m.log.push("commit:extrude");
+      m.tool("extrude").active = false;
+    });
     await m.dbl("rv");
     expect(m.log).toEqual([]);
     expect(m.tool("extrude").active).toBe(true);
@@ -197,7 +241,9 @@ describe("History row double click while another edit is open", () => {
 
   it("keeps the edit and says so when entering the value leaves the tool open", async () => {
     const m = mountBar({ tool: { name: "extrude", on: "ex1" }, preview: { id: "ex1" } });
-    typedBox("5", () => { m.log.push("commit:extrude"); });
+    typedBox("5", () => {
+      m.log.push("commit:extrude");
+    });
     await m.dbl("rv");
     expect(m.log).toEqual(["commit:extrude"]);
     expect(m.status.at(-1)).toMatch(/Finish this edit/);
@@ -224,9 +270,18 @@ describe("History row double click while another edit is open", () => {
 });
 
 describe("an import's chip", () => {
-  const nodes = [{ name: "Gearbox", parent: null }, { name: "Shaft", parent: 0 }];
-  const imp = (id: string, name: string, extra: object = {}) =>
-    ({ id, type: "import", format: "step", name, source: "/in/gear-box.step", ...extra });
+  const nodes = [
+    { name: "Gearbox", parent: null },
+    { name: "Shaft", parent: 0 },
+  ];
+  const imp = (id: string, name: string, extra: object = {}) => ({
+    id,
+    type: "import",
+    format: "step",
+    name,
+    source: "/in/gear-box.step",
+    ...extra,
+  });
 
   it("is named by the assembly Items shows and keeps the file name in its tooltip", () => {
     const m = mountBar({ features: [imp("i1", "gear-box", { nodes })] });

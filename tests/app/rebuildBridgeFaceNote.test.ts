@@ -63,10 +63,17 @@ describe("the note for a face material whose face a rebuild took", () => {
     build(["fr1"]);
     expect(toasts).toEqual([{ count: "1", kind: "warning" }]);
     build(["fr1", "fr2", "fr3"]);
-    expect(toasts).toEqual([{ count: "1", kind: "warning" }, { count: "2", kind: "warning" }]);
+    expect(toasts).toEqual([
+      { count: "1", kind: "warning" },
+      { count: "2", kind: "warning" },
+    ]);
     build([]);
     build(["fr2"]);
-    expect(toasts).toEqual([{ count: "1", kind: "warning" }, { count: "2", kind: "warning" }, { count: "1", kind: "warning" }]);
+    expect(toasts).toEqual([
+      { count: "1", kind: "warning" },
+      { count: "2", kind: "warning" },
+      { count: "1", kind: "warning" },
+    ]);
   });
 
   it("says nothing for a preview or a timeline rolled back by one feature, and nothing once it is rolled forward", () => {

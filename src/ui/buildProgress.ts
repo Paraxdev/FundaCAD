@@ -46,9 +46,12 @@ const WAIT_DOING: Record<string, string> = {
 
 /** What a request of ours queued behind another client's job is waiting for. */
 export function waitLabel(w: EngineWait): string {
-  const who = w.who === "assistant"
-    ? (w.name?.trim().slice(0, 40) || "an AI assistant")
-    : w.who === "app" ? "the app" : "another session";
+  const who =
+    w.who === "assistant"
+      ? w.name?.trim().slice(0, 40) || "an AI assistant"
+      : w.who === "app"
+        ? "the app"
+        : "another session";
   return `Waiting: ${who} is ${WAIT_DOING[w.op] ?? "working"}`;
 }
 

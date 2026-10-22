@@ -11,7 +11,11 @@ import type { Plane3 } from "../types";
 type Sign = 1 | -1;
 type Axis = "x" | "y" | "z";
 export type Vec3 = [number, number, number];
-export interface Octant { x: Sign; y: Sign; z: Sign }
+export interface Octant {
+  x: Sign;
+  y: Sign;
+  z: Sign;
+}
 export interface TileShape {
   sizePx: number;
   gapPx: number;
@@ -21,7 +25,12 @@ export interface TileShape {
   octant: Octant;
 }
 export type TileState = "idle" | "dim" | "hot";
-export interface TilePose { centre: Vec3; u: Vec3; v: Vec3; normal: Vec3 }
+export interface TilePose {
+  centre: Vec3;
+  u: Vec3;
+  v: Vec3;
+  normal: Vec3;
+}
 
 export const TILE_SIZE_PX = 40;
 export const TILE_GAP_PX = 6;
@@ -154,7 +163,11 @@ interface Tile {
 
 function tileMaterial(color: number, depthTest: boolean): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({
-    color, transparent: true, side: THREE.DoubleSide, depthTest, depthWrite: false,
+    color,
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthTest,
+    depthWrite: false,
     // The XY tile lies in the plane of a part's floor, seen from below; the offset wins it that tie.
     ...(depthTest ? { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 } : {}),
   });
@@ -183,10 +196,14 @@ export class OriginTiles {
       const rim = new THREE.Mesh(rimGeometry(this.shape), tileMaterial(TILE_COLOR[k], true));
       rim.userData.role = "rim";
       rim.renderOrder = TILE_ORDER.rim;
-      const label = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: new THREE.Texture(),
-        transparent: true, depthTest: false, depthWrite: false,
-      }));
+      const label = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: new THREE.Texture(),
+          transparent: true,
+          depthTest: false,
+          depthWrite: false,
+        }),
+      );
       label.userData.role = "label";
       label.renderOrder = TILE_ORDER.label;
       label.scale.set(LABEL_BOX_PX.w, LABEL_BOX_PX.h, 1);
@@ -234,14 +251,25 @@ export class OriginTiles {
     const scale = glyphWorldScale(extent, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE);
     this.group.scale.setScalar(scale);
     const ortho = (camera as THREE.OrthographicCamera).isOrthographicCamera === true;
-    const eye = ortho ? camera.getWorldDirection(new THREE.Vector3()).negate() : camera.getWorldPosition(new THREE.Vector3());
+    const eye = ortho
+      ? camera.getWorldDirection(new THREE.Vector3()).negate()
+      : camera.getWorldPosition(new THREE.Vector3());
     const toEye = new THREE.Vector3();
     const centre = new THREE.Vector3();
     for (const p of PLANES) {
       this.tiles[p].label.scale.set(LABEL_BOX_PX.w / k, LABEL_BOX_PX.h / k, 1);
       const pose = tilePose(p, this.shape);
       if (ortho) toEye.copy(eye);
-      else toEye.subVectors(eye, centre.set(...pose.centre).multiplyScalar(scale).add(this.group.position)).normalize();
+      else
+        toEye
+          .subVectors(
+            eye,
+            centre
+              .set(...pose.centre)
+              .multiplyScalar(scale)
+              .add(this.group.position),
+          )
+          .normalize();
       this.fade[p] = nameFade(toEye.dot(new THREE.Vector3(...pose.normal)));
     }
     this.paintLook();

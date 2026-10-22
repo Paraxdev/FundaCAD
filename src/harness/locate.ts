@@ -14,7 +14,8 @@ export class HarnessError extends Error {
   }
 }
 
-const REF = /^(#|(action|family|pick|group|feature|item|folder|eye|field|prop|testid|tab|workspace|view-mode|category|menu|ctx|choice|opt|text):)/;
+const REF =
+  /^(#|(action|family|pick|group|feature|item|folder|eye|field|prop|testid|tab|workspace|view-mode|category|menu|ctx|choice|opt|text):)/;
 
 export const isRef = (target: string) => REF.test(target);
 
@@ -41,9 +42,7 @@ function nearMisses(walk: Walk, target: string): string[] {
     .map((c) => {
       const name = matchName(c.label);
       const starts = [name, ...words(name), ...words(c.ref.toLowerCase())].some((w) => w.startsWith(want));
-      const score = starts ? 3
-        : sharedStart(name, want) >= close ? 2
-          : want.includes(name) && name.length > 2 ? 1 : 0;
+      const score = starts ? 3 : sharedStart(name, want) >= close ? 2 : want.includes(name) && name.length > 2 ? 1 : 0;
       return { c, score };
     })
     .filter((x) => x.score > 0)
@@ -69,7 +68,12 @@ export function noValueBox(walk: Walk): string {
 function pickOne(matches: Control[], target: string, walk: Walk, index: number | null, anyState = false): Control {
   if (index != null) {
     const hit = matches[index - 1];
-    if (!hit) throw new HarnessError(`no control "${target}" number ${index}, there are ${matches.length}`, "NotFound", matches.map(describe));
+    if (!hit)
+      throw new HarnessError(
+        `no control "${target}" number ${index}, there are ${matches.length}`,
+        "NotFound",
+        matches.map(describe),
+      );
     return hit;
   }
   const enabled = anyState ? matches : matches.filter((c) => !c.disabled);
@@ -77,7 +81,11 @@ function pickOne(matches: Control[], target: string, walk: Walk, index: number |
   if (enabled.length > 1) {
     const refs = new Set(enabled.map((c) => c.ref));
     const list = refs.size === 1 ? enabled.map((c, i) => `${c.ref}#${i + 1} "${c.label}"`) : enabled.map(describe);
-    throw new HarnessError(`"${target}" matches ${enabled.length} controls: ${list.slice(0, 8).join(", ")}`, "Ambiguous", list.slice(0, 8));
+    throw new HarnessError(
+      `"${target}" matches ${enabled.length} controls: ${list.slice(0, 8).join(", ")}`,
+      "Ambiguous",
+      list.slice(0, 8),
+    );
   }
   if (matches.length) throw new HarnessError(`${describe(matches[0]!)} is disabled`, "Disabled", matches.map(describe));
   const related = walk.controls.find((c) => c.ref === "testid:history-related" && c.flags.includes("on"));
@@ -104,7 +112,13 @@ export function findControl(walk: Walk, target: string, opts: { disabled?: boole
   const index = m ? Number(m[2]) : null;
   const any = opts.disabled === true;
   if (isRef(base)) {
-    return pickOne(walk.controls.filter((c) => c.ref === base), base, walk, index, any);
+    return pickOne(
+      walk.controls.filter((c) => c.ref === base),
+      base,
+      walk,
+      index,
+      any,
+    );
   }
   const want = matchName(base);
   if (!want) throw new HarnessError("an empty label names nothing", "BadArgs");
@@ -153,8 +167,8 @@ export function toolPath(walk: Walk, label: string, mode: string, defs?: RailEnt
     if (hit) return [hit.family, { ref: hit.pick, button: "left" }];
     const families = rail.controls.filter((c) => c.ref.startsWith("family:"));
     throw new HarnessError(
-      `no tool "${label}" in the rail: click a family to list its tools (${families.map(describe).join(", ")}),`
-        + " a tool's own choices, such as the shapes of Primitive, show once it starts",
+      `no tool "${label}" in the rail: click a family to list its tools (${families.map(describe).join(", ")}),` +
+        " a tool's own choices, such as the shapes of Primitive, show once it starts",
       "NotFound",
       families.map(describe),
     );

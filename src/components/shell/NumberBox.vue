@@ -23,11 +23,14 @@ const error = computed(() => fieldError(text.value));
 let sent = props.modelValue;
 
 // Resync only when the model moved for a reason other than this box's own emit.
-watch(() => props.modelValue, (v) => {
-  if (v === sent) return;
-  sent = v;
-  text.value = v == null ? "" : String(v);
-});
+watch(
+  () => props.modelValue,
+  (v) => {
+    if (v === sent) return;
+    sent = v;
+    text.value = v == null ? "" : String(v);
+  },
+);
 
 function send(v: number | null) {
   sent = v;
@@ -52,7 +55,7 @@ function onInput(e: Event) {
     inputmode="decimal"
     :value="text"
     :class="{ 'input-error': !!error }"
-    :title="error ?? $attrs.title as string | undefined"
+    :title="error ?? ($attrs.title as string | undefined)"
     @input="onInput"
   />
 </template>

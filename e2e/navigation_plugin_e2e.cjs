@@ -15,7 +15,10 @@ const URL = process.env.SC_URL || "http://localhost:5173/";
 const PORT = process.env.SC_ENGINE_PORT || "8765";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = process.argv[2] || path.join(process.cwd(), "e2e-out", "navigation");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 
 let failures = 0;
 const check = (label, ok, detail = "") => {
@@ -27,27 +30,36 @@ const check = (label, ok, detail = "") => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   // Only the engine socket: rewrite its port and token, leave vite's HMR alone.
-  await page.addInitScript(([t, port]) => {
-    const N = window.WebSocket;
-    class P extends N {
-      constructor(u, p) {
-        let s = String(u);
-        if (s.startsWith("ws://127.0.0.1:8765")) {
-          s = s.replace("127.0.0.1:8765", `127.0.0.1:${port}`).replace(/([?&])token=[^&]*/, `$1token=${t}`);
-          if (!s.includes("token=")) s += (s.includes("?") ? "&" : "?") + "token=" + t;
+  await page.addInitScript(
+    ([t, port]) => {
+      const N = window.WebSocket;
+      class P extends N {
+        constructor(u, p) {
+          let s = String(u);
+          if (s.startsWith("ws://127.0.0.1:8765")) {
+            s = s.replace("127.0.0.1:8765", `127.0.0.1:${port}`).replace(/([?&])token=[^&]*/, `$1token=${t}`);
+            if (!s.includes("token=")) s += (s.includes("?") ? "&" : "?") + "token=" + t;
+          }
+          super(s, p);
         }
-        super(s, p);
       }
-    }
-    window.WebSocket = P;
-  }, [TOKEN, PORT]);
+      window.WebSocket = P;
+    },
+    [TOKEN, PORT],
+  );
 
   await page.goto(URL);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   await page.evaluate(async () => {
@@ -61,11 +73,13 @@ const check = (label, ok, detail = "") => {
     const r = c.getBoundingClientRect();
     return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
   });
-  const camera = () => page.evaluate(() => {
-    const c = window.viewport.rig.active;
-    return [...c.position.toArray(), ...c.quaternion.toArray()].map((v) => Math.round(v * 1000) / 1000).join(",");
-  });
-  const table = () => page.evaluate(async () => (await import("/src/viewport/navigator/bindings.ts")).pointerBindings());
+  const camera = () =>
+    page.evaluate(() => {
+      const c = window.viewport.rig.active;
+      return [...c.position.toArray(), ...c.quaternion.toArray()].map((v) => Math.round(v * 1000) / 1000).join(",");
+    });
+  const table = () =>
+    page.evaluate(async () => (await import("/src/viewport/navigator/bindings.ts")).pointerBindings());
   const settle = () => page.waitForTimeout(700);
   const drag = async (button, dx, dy) => {
     await page.mouse.move(box.cx, box.cy);
@@ -74,9 +88,10 @@ const check = (label, ok, detail = "") => {
     await page.mouse.up({ button });
     await settle();
   };
-  const config = (patch) => page.evaluate(async (p) => {
-    (await import("/plugins/FundaCAD.Navigation/state.ts")).updateConfig(p);
-  }, patch);
+  const config = (patch) =>
+    page.evaluate(async (p) => {
+      (await import("/plugins/FundaCAD.Navigation/state.ts")).updateConfig(p);
+    }, patch);
 
   // --- on, default preset: nothing changes ---------------------------------------
   const before = await table();
@@ -90,7 +105,10 @@ const check = (label, ok, detail = "") => {
   // --- Middle orbits, Shift+middle pans --------------------------------------------
   await config({ preset: "middle-shift" });
   const t = await table();
-  check("the preset reaches the core table", t.some((b) => b.button === "middle" && b.drag === "orbit" && !b.shift));
+  check(
+    "the preset reaches the core table",
+    t.some((b) => b.button === "middle" && b.drag === "orbit" && !b.shift),
+  );
   let c0 = await camera();
   await drag("right", 160, 0);
   check("a right drag leaves the camera alone", (await camera()) === c0);
@@ -101,8 +119,14 @@ const check = (label, ok, detail = "") => {
 
   await page.evaluate(() => window.__fundacad.handleAction("shortcut-help"));
   await page.waitForTimeout(300);
-  const mouseRows = await page.$$eval(".shortcut-hud-row", (rows) => rows.map((r) => r.textContent.replace(/\s+/g, " ").trim()));
-  check("the ? sheet shows the preset", mouseRows.some((r) => r.startsWith("Middle drag") && r.includes("Orbit")), mouseRows.filter((r) => /drag|click/.test(r)).join(" | "));
+  const mouseRows = await page.$$eval(".shortcut-hud-row", (rows) =>
+    rows.map((r) => r.textContent.replace(/\s+/g, " ").trim()),
+  );
+  check(
+    "the ? sheet shows the preset",
+    mouseRows.some((r) => r.startsWith("Middle drag") && r.includes("Orbit")),
+    mouseRows.filter((r) => /drag|click/.test(r)).join(" | "),
+  );
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
   if (await page.$(".shortcut-hud")) await page.evaluate(() => window.__fundacad.handleAction("shortcut-help"));
@@ -116,7 +140,9 @@ const check = (label, ok, detail = "") => {
   check("an Alt+left drag orbits", (await camera()) !== c0);
   await page.mouse.click(box.cx, box.cy);
   await settle();
-  const picked = await page.evaluate(() => window.viewport.getSelectedBodies().length + window.viewport.getSelectedFaceIds().length);
+  const picked = await page.evaluate(
+    () => window.viewport.getSelectedBodies().length + window.viewport.getSelectedFaceIds().length,
+  );
   check("a plain left click still selects", picked > 0, `selected ${picked}`);
   await page.keyboard.press("Escape");
   await settle();
@@ -196,7 +222,10 @@ const check = (label, ok, detail = "") => {
     (await import("/src/plugins/registry.ts")).setPluginEnabled("FundaCAD.Navigation", false);
   });
   await page.waitForTimeout(1200);
-  check("turning the plugin off restores the default buttons", JSON.stringify(await table()) === JSON.stringify(before));
+  check(
+    "turning the plugin off restores the default buttons",
+    JSON.stringify(await table()) === JSON.stringify(before),
+  );
 
   await browser.close();
   if (failures) {

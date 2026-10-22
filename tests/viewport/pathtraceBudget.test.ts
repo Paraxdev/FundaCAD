@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
-  BUDGET_STEPS, BUDGET_START, costProfile, fitPreview, FrameBudget, MAX_SLOTS, MIN_SLOTS, previewScale, renderScaleFor, STEP_UP_MS,
-  TARGET_MS, tracedPictureScale,
+  BUDGET_STEPS,
+  BUDGET_START,
+  costProfile,
+  fitPreview,
+  FrameBudget,
+  MAX_SLOTS,
+  MIN_SLOTS,
+  previewScale,
+  renderScaleFor,
+  STEP_UP_MS,
+  TARGET_MS,
+  tracedPictureScale,
 } from "../../src/viewport/pathtrace/budget";
 
 /** A GPU whose frame time grows with the work handed to it. */
@@ -128,7 +138,15 @@ describe("path trace preview size", () => {
 
   it("fits every budget step on wide, tall and odd traces", () => {
     for (const slots of BUDGET_STEPS) {
-      for (const [w, h] of [[1191, 948], [2880, 600], [500, 1900], [1921, 1081], [3840, 2160], [1, 1], [7, 3]] as const) {
+      for (const [w, h] of [
+        [1191, 948],
+        [2880, 600],
+        [500, 1900],
+        [1921, 1081],
+        [3840, 2160],
+        [1, 1],
+        [7, 3],
+      ] as const) {
         const s = previewScale(slots, w, h, 0.25);
         expect(Number.isFinite(s) && s > 0 && s <= 0.25).toBe(true);
         expect(pixels(s, w, h)).toBeLessThanOrEqual(Math.max(slots, 1));

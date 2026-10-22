@@ -13,8 +13,12 @@ import { contributedPalette, setPrompt } from "fundacad";
 import type { DocumentStore, Feature, Num, Selector, Viewport } from "fundacad";
 import * as panel from "./panel";
 import {
-  ANGLE_KINDS, PROJECTION_KINDS, SEED_KINDS, asTexture,
-  type TextureMode, type TextureValues,
+  ANGLE_KINDS,
+  PROJECTION_KINDS,
+  SEED_KINDS,
+  asTexture,
+  type TextureMode,
+  type TextureValues,
 } from "./textureForm";
 
 // Warm texture ticks are ~10-70ms engine-side (geometry-skeleton cache), so a
@@ -165,8 +169,7 @@ export class TextureTool {
     const numeric = [f.depth, f.scale, f.angle, f.offset, f.sharpness, f.boundaryInset, f.seed];
     if (numeric.some((v) => v !== undefined && typeof v !== "number")) return false; // parameter, the value rows' job
     const fields = ["depth", "scale", "angle", "offset", "sharpness", "boundaryInset", "seed"];
-    if (fields.some((field) => this.store.isParamBound({ kind: "feature", feature: f.id, field })))
-      return false; // parameter-driven field, the value rows' job
+    if (fields.some((field) => this.store.isParamBound({ kind: "feature", feature: f.id, field }))) return false; // parameter-driven field, the value rows' job
 
     this.active = true;
     this.onDone = onDone;
@@ -265,9 +268,15 @@ export class TextureTool {
         palette: contributedPalette(),
       },
       {
-        onCommit: (v) => { this.values = v; this.commit(); },
+        onCommit: (v) => {
+          this.values = v;
+          this.commit();
+        },
         onCancel: () => this.cancel(),
-        onChange: (v) => { this.values = v; this.pushPreview(); },
+        onChange: (v) => {
+          this.values = v;
+          this.pushPreview();
+        },
         onModeChange: (m) => this.setMode(m),
       },
     );
@@ -470,7 +479,11 @@ export class TextureTool {
         ? sel.selectors.filter((_, i) => this.viewport.faceIdToBodyId(sel.faceIds[i]!) === body)
         : sel.selectors;
       if (!selectors.length) return null;
-      return { ...base, ...(body ? { body } : {}), faces: selectors.length === 1 ? selectors[0]! : selectors } as Feature;
+      return {
+        ...base,
+        ...(body ? { body } : {}),
+        faces: selectors.length === 1 ? selectors[0]! : selectors,
+      } as Feature;
     }
     const body = this.viewport.getSelectedBodies()[0];
     if (!body) return null;

@@ -73,8 +73,18 @@ describe("a plugin's doc_get then doc_set", () => {
   });
 
   it("leaves a polygon's angle alone, since the copy says which format it is in", async () => {
-    const s = opened({ version: 10, parameters: {}, features: [{ id: "f1", type: "sketch", plane: "XY", entities: [
-      { type: "polygon", id: "e1", x: 12.5, y: -4.25, radius: 10, sides: 6, angle: 30 }] }] });
+    const s = opened({
+      version: 10,
+      parameters: {},
+      features: [
+        {
+          id: "f1",
+          type: "sketch",
+          plane: "XY",
+          entities: [{ type: "polygon", id: "e1", x: 12.5, y: -4.25, radius: 10, sides: 6, angle: 30 }],
+        },
+      ],
+    });
     await roundTrip(s);
     await roundTrip(s);
     expect((s.document.features[0] as unknown as { entities: { angle: number }[] }).entities[0]!.angle).toBe(30);
@@ -124,7 +134,13 @@ describe("a plugin's doc_get then doc_set", () => {
 
   it("leaves the section cut as the user has it now, and turns it off for an unrelated document", async () => {
     const read: SectionView = { origin: [12.5, -4, 3], normal: [0.6, 0, 0.8], offset: -2.5, side: 1, ghost: "faint" };
-    const moved: SectionView = { origin: [-7, 9.25, 1.5], normal: [0, -0.8, 0.6], offset: 3.75, side: -1, ghost: "strong" };
+    const moved: SectionView = {
+      origin: [-7, 9.25, 1.5],
+      normal: [0, -0.8, 0.6],
+      offset: 3.75,
+      side: -1,
+      ghost: "strong",
+    };
     for (const now of [moved, null]) {
       const s = workedOn();
       s.setSectionView(structuredClone(read));
@@ -136,7 +152,9 @@ describe("a plugin's doc_get then doc_set", () => {
     }
     const s = workedOn();
     s.setSectionView(structuredClone(read));
-    await plugin(s).callOrThrow("doc_set", { document: { parameters: {}, features: [box("g1", 2)], sectionView: read } });
+    await plugin(s).callOrThrow("doc_set", {
+      document: { parameters: {}, features: [box("g1", 2)], sectionView: read },
+    });
     expect(s.sectionView).toBeNull();
   });
 });
@@ -154,7 +172,10 @@ describe("an assistant's live edit", () => {
   it("keeps the versions when the assistant's doc_set left them out", () => {
     const s = workedOn();
     const d = s.document;
-    s.loadDocument({ parameters: d.parameters, paramDefs: d.paramDefs, features: d.features, bodyIds: d.bodyIds } as CadDocument, { replace: true });
+    s.loadDocument(
+      { parameters: d.parameters, paramDefs: d.paramDefs, features: d.features, bodyIds: d.bodyIds } as CadDocument,
+      { replace: true },
+    );
     expect(messages(s)).toEqual(["one", "two"]);
   });
 });

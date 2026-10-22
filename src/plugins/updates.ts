@@ -35,10 +35,7 @@ export function compareVersions(a: string, b: string): number {
 }
 
 /** The update to offer for one installed plugin, or null. */
-export function updateFor(
-  rec: InstalledPlugin,
-  offered: readonly OfficialPlugin[],
-): PluginUpdate | null {
+export function updateFor(rec: InstalledPlugin, offered: readonly OfficialPlugin[]): PluginUpdate | null {
   const offer = offered.find((p) => sameId(p.manifest.id, rec.id));
   if (!offer) return null;
   const had = installedManifest(rec);
@@ -48,8 +45,7 @@ export function updateFor(
     return {
       offer,
       covered,
-      reason:
-        `This copy was made for the previous engine and has no component for FundaCAD 1.0, so what it adds does not build. Version ${version} has one.`,
+      reason: `This copy was made for the previous engine and has no component for FundaCAD 1.0, so what it adds does not build. Version ${version} has one.`,
     };
   }
   if (compareVersions(version, rec.version) > 0) {

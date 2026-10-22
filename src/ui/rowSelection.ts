@@ -43,12 +43,7 @@ export function modsOf(e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolea
  *  selects just the clicked row and makes it the anchor, rather than guessing
  *  where a run should start. A Shift-click never moves the anchor, which is what
  *  lets a second Shift-click grow or shrink the same run. */
-export function selectRow<K>(
-  sel: RowSelection<K>,
-  order: readonly K[],
-  key: K,
-  mods: SelectMods,
-): RowSelection<K> {
+export function selectRow<K>(sel: RowSelection<K>, order: readonly K[], key: K, mods: SelectMods): RowSelection<K> {
   if (mods.range) {
     const from = sel.anchor === null ? -1 : order.indexOf(sel.anchor);
     const to = order.indexOf(key);

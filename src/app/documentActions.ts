@@ -81,9 +81,7 @@ export async function openOnBranch(e: VersionEngine, path: string, name: string)
   return true;
 }
 
-export function createDocumentActions(
-  e: Engine,
-): Pick<Engine, "newDocument" | "openDoc" | "doUndo" | "doRedo"> {
+export function createDocumentActions(e: Engine): Pick<Engine, "newDocument" | "openDoc" | "doUndo" | "doRedo"> {
   return {
     async newDocument() {
       if (!(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return;
@@ -92,7 +90,9 @@ export function createDocumentActions(
     },
 
     async openDoc() {
-      await openDocument(e.store, e.geometry, () => mayDiscard(e, "Discard unsaved changes and open another document?"));
+      await openDocument(e.store, e.geometry, () =>
+        mayDiscard(e, "Discard unsaved changes and open another document?"),
+      );
     },
 
     // Undo/redo routing: while a sketch is OPEN its geometry lives in SketchMode and
@@ -104,7 +104,15 @@ export function createDocumentActions(
     // a drag's rebuild: left armed, that re-open landed on the undone model and
     // took focus into its field (FI-2).
     // Home closes, so an undo from the title bar or a menu is seen on the document it changes.
-    doUndo() { closeHome(); e.tools.move.cancel(); if (!e.sketch.undoEdit()) e.store.undo(); },
-    doRedo() { closeHome(); e.tools.move.cancel(); if (!e.sketch.redoEdit()) e.store.redo(); },
+    doUndo() {
+      closeHome();
+      e.tools.move.cancel();
+      if (!e.sketch.undoEdit()) e.store.undo();
+    },
+    doRedo() {
+      closeHome();
+      e.tools.move.cancel();
+      if (!e.sketch.redoEdit()) e.store.redo();
+    },
   };
 }

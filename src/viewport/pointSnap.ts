@@ -81,7 +81,11 @@ export function polylineMidpoint3(
 ): [number, number, number] | null {
   if (pts.length < 2) return null;
   const dist = (a: readonly number[], b: readonly number[]) =>
-    Math.hypot((b[0] as number) - (a[0] as number), (b[1] as number) - (a[1] as number), (b[2] as number) - (a[2] as number));
+    Math.hypot(
+      (b[0] as number) - (a[0] as number),
+      (b[1] as number) - (a[1] as number),
+      (b[2] as number) - (a[2] as number),
+    );
   let total = 0;
   for (let i = 1; i < pts.length; i++) {
     const d = dist(pts[i - 1] as readonly number[], pts[i] as readonly number[]);

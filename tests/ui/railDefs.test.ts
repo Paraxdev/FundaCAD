@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { faceOf, familyOf, modelRail, sketchRail, sketchTool, SKETCH_OFF_RAIL, type RailEntry } from "../../src/ui/railDefs";
+import {
+  faceOf,
+  familyOf,
+  modelRail,
+  sketchRail,
+  sketchTool,
+  SKETCH_OFF_RAIL,
+  type RailEntry,
+} from "../../src/ui/railDefs";
 import { leavesOf, MODEL, SKETCH } from "../../src/ui/ribbonDefs";
 
 const actions = (entries: RailEntry[]) =>
@@ -14,7 +22,10 @@ describe("modelRail", () => {
   });
 
   it("files a plugin group as a category of its own", () => {
-    const rail = modelRail([...MODEL, { label: "PRINT", items: [{ action: "print", label: "Print", iconName: "print" }] }]);
+    const rail = modelRail([
+      ...MODEL,
+      { label: "PRINT", items: [{ action: "print", label: "Print", iconName: "print" }] },
+    ]);
     const last = rail[rail.length - 1]!;
     expect(last).toMatchObject({ kind: "family", label: "Print", style: "category", icon: "print" });
   });

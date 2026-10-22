@@ -33,8 +33,12 @@ let takes: AreaFilter = "all";
 
 const engine = {
   viewport: {
-    get areaDragState() { return drag; },
-    get areaTakes() { return takes; },
+    get areaDragState() {
+      return drag;
+    },
+    get areaTakes() {
+      return takes;
+    },
   },
 } as unknown as Engine;
 
@@ -50,8 +54,12 @@ async function show(): Promise<HTMLElement | null> {
 
 const box = (from: [number, number], at: [number, number], mode: "window" | "crossing" = "window") => {
   drag = {
-    rect: { x0: Math.min(from[0], at[0]), y0: Math.min(from[1], at[1]),
-            x1: Math.max(from[0], at[0]), y1: Math.max(from[1], at[1]) },
+    rect: {
+      x0: Math.min(from[0], at[0]),
+      y0: Math.min(from[1], at[1]),
+      x1: Math.max(from[0], at[0]),
+      y1: Math.max(from[1], at[1]),
+    },
     mode,
     from: { x: from[0], y: from[1] },
     at: { x: at[0], y: at[1] },
@@ -74,7 +82,10 @@ describe("AreaFilterChip", () => {
 
   it("names the filter the viewport is running", async () => {
     for (const [f, word] of [
-      ["all", "Everything"], ["faces", "Faces"], ["edges", "Edges"], ["bodies", "Bodies"],
+      ["all", "Everything"],
+      ["faces", "Faces"],
+      ["edges", "Edges"],
+      ["bodies", "Bodies"],
     ] as const) {
       takes = f;
       box([100, 100], [300, 300]);

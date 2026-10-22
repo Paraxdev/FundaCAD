@@ -49,7 +49,9 @@ export interface AtrousImage {
 const luma = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
 function albedoAt(a: Float32Array, i: number): [number, number, number] {
-  const r = a[i * 3]!, g = a[i * 3 + 1]!, b = a[i * 3 + 2]!;
+  const r = a[i * 3]!,
+    g = a[i * 3 + 1]!,
+    b = a[i * 3 + 2]!;
   if ((r + g + b) / 3 <= MIN_ALBEDO) return [1, 1, 1];
   return [Math.max(r, MIN_ALBEDO), Math.max(g, MIN_ALBEDO), Math.max(b, MIN_ALBEDO)];
 }
@@ -62,16 +64,18 @@ function albedoAt(a: Float32Array, i: number): [number, number, number] {
 export function atrousTrust(img: AtrousImage): Uint8Array {
   const { width: w, height: h, depth } = img;
   const trust = new Uint8Array(w * h);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const p = y * w + x;
-    const zp = depth[p]!;
-    let ok = zp > 0;
-    for (let j = -1; j <= 1 && ok; j++) for (let i = -1; i <= 1 && ok; i++) {
-      const zq = depth[Math.min(h - 1, Math.max(0, y + j)) * w + Math.min(w - 1, Math.max(0, x + i))]!;
-      ok = zq > 0 && Math.abs(zp - zq) <= EDGE_DEPTH * Math.min(zp, zq);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const p = y * w + x;
+      const zp = depth[p]!;
+      let ok = zp > 0;
+      for (let j = -1; j <= 1 && ok; j++)
+        for (let i = -1; i <= 1 && ok; i++) {
+          const zq = depth[Math.min(h - 1, Math.max(0, y + j)) * w + Math.min(w - 1, Math.max(0, x + i))]!;
+          ok = zq > 0 && Math.abs(zp - zq) <= EDGE_DEPTH * Math.min(zp, zq);
+        }
+      trust[p] = ok ? 1 : 0;
     }
-    trust[p] = ok ? 1 : 0;
-  }
   return trust;
 }
 
@@ -89,28 +93,44 @@ export function atrousCpu(img: AtrousImage, spp: number): Float32Array {
   }
   for (const step of ATROUS_STEPS) {
     const next = new Float32Array(cur);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const p = y * w + x;
-      if (!trust[p]) continue;
-      const zp = depth[p]!;
-      const lp = luma(cur[p * 3]!, cur[p * 3 + 1]!, cur[p * 3 + 2]!);
-      let sr = 0, sg = 0, sb = 0, ws = 0;
-      for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) {
-        const qx = Math.min(w - 1, Math.max(0, x + i * step));
-        const qy = Math.min(h - 1, Math.max(0, y + j * step));
-        const q = qy * w + qx;
-        if (!trust[q]) continue;
-        const zq = depth[q]!;
-        const dot = normal[p * 3]! * normal[q * 3]! + normal[p * 3 + 1]! * normal[q * 3 + 1]! + normal[p * 3 + 2]! * normal[q * 3 + 2]!;
-        const wn = Math.max(dot, 0) ** NORMAL_POWER;
-        const wz = Math.exp(-Math.abs(zp - zq) / (DEPTH_SIGMA * Math.min(zp, zq) * Math.min(step * Math.hypot(i, j), DEPTH_REACH) + 1e-4));
-        const lq = luma(cur[q * 3]!, cur[q * 3 + 1]!, cur[q * 3 + 2]!);
-        const wl = Math.exp(-Math.abs(lp - lq) / ((Math.max(lp, lq) + 1e-3) * sigma));
-        const wt = KERNEL[Math.abs(i)]! * KERNEL[Math.abs(j)]! * wn * wz * wl;
-        sr += cur[q * 3]! * wt; sg += cur[q * 3 + 1]! * wt; sb += cur[q * 3 + 2]! * wt; ws += wt;
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const p = y * w + x;
+        if (!trust[p]) continue;
+        const zp = depth[p]!;
+        const lp = luma(cur[p * 3]!, cur[p * 3 + 1]!, cur[p * 3 + 2]!);
+        let sr = 0,
+          sg = 0,
+          sb = 0,
+          ws = 0;
+        for (let j = -2; j <= 2; j++)
+          for (let i = -2; i <= 2; i++) {
+            const qx = Math.min(w - 1, Math.max(0, x + i * step));
+            const qy = Math.min(h - 1, Math.max(0, y + j * step));
+            const q = qy * w + qx;
+            if (!trust[q]) continue;
+            const zq = depth[q]!;
+            const dot =
+              normal[p * 3]! * normal[q * 3]! +
+              normal[p * 3 + 1]! * normal[q * 3 + 1]! +
+              normal[p * 3 + 2]! * normal[q * 3 + 2]!;
+            const wn = Math.max(dot, 0) ** NORMAL_POWER;
+            const wz = Math.exp(
+              -Math.abs(zp - zq) /
+                (DEPTH_SIGMA * Math.min(zp, zq) * Math.min(step * Math.hypot(i, j), DEPTH_REACH) + 1e-4),
+            );
+            const lq = luma(cur[q * 3]!, cur[q * 3 + 1]!, cur[q * 3 + 2]!);
+            const wl = Math.exp(-Math.abs(lp - lq) / ((Math.max(lp, lq) + 1e-3) * sigma));
+            const wt = KERNEL[Math.abs(i)]! * KERNEL[Math.abs(j)]! * wn * wz * wl;
+            sr += cur[q * 3]! * wt;
+            sg += cur[q * 3 + 1]! * wt;
+            sb += cur[q * 3 + 2]! * wt;
+            ws += wt;
+          }
+        next[p * 3] = sr / ws;
+        next[p * 3 + 1] = sg / ws;
+        next[p * 3 + 2] = sb / ws;
       }
-      next[p * 3] = sr / ws; next[p * 3 + 1] = sg / ws; next[p * 3 + 2] = sb / ws;
-    }
     cur = next;
   }
   for (let i = 0; i < w * h; i++) {
@@ -196,11 +216,20 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 `;
 
 // The few WebGPU shapes used here; the project carries no @webgpu/types.
-interface GpuTexture { width: number; height: number; createView(): unknown; destroy(): void }
-interface GpuBuffer { destroy(): void }
+interface GpuTexture {
+  width: number;
+  height: number;
+  createView(): unknown;
+  destroy(): void;
+}
+interface GpuBuffer {
+  destroy(): void;
+}
 interface GpuPass {
-  setPipeline(p: unknown): void; setBindGroup(i: number, g: unknown): void;
-  dispatchWorkgroups(x: number, y: number): void; end(): void;
+  setPipeline(p: unknown): void;
+  setBindGroup(i: number, g: unknown): void;
+  dispatchWorkgroups(x: number, y: number): void;
+  end(): void;
 }
 interface GpuDevice {
   createBindGroupLayout(d: unknown): unknown;
@@ -246,7 +275,9 @@ export class AtrousFilter {
     });
     this.layout = device.createBindGroupLayout({
       entries: [
-        tex(0), tex(1), tex(2),
+        tex(0),
+        tex(1),
+        tex(2),
         { binding: 3, visibility: SHADER_COMPUTE, storageTexture: { access: "write-only", format: "rgba16float" } },
         { binding: 4, visibility: SHADER_COMPUTE, buffer: { type: "uniform" } },
       ],
@@ -263,7 +294,9 @@ export class AtrousFilter {
     this.disposeTargets();
     for (let i = 0; i < 2; i++) {
       const t = device.createTexture({
-        size: [w, h], format: "rgba16float", usage: TEXTURE_STORAGE | TEXTURE_BINDING,
+        size: [w, h],
+        format: "rgba16float",
+        usage: TEXTURE_STORAGE | TEXTURE_BINDING,
       });
       this.ping.push(t);
       this.outputs.push(this.wrap(t, w, h));

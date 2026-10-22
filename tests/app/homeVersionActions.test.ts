@@ -31,9 +31,15 @@ function fakeEngine(filePath: string | null = null, dirty = false, toolAtWork = 
     dirty,
     filePath,
     versionRepo: repo(),
-    restoreVersion: vi.fn((id: string) => { calls.push(`restore ${id}`); }),
-    switchVersionBranch: vi.fn((name: string) => { calls.push(`switch ${name}`); }),
-    markOpenedWithoutPath: vi.fn((name: string) => { calls.push(`copy ${name}`); }),
+    restoreVersion: vi.fn((id: string) => {
+      calls.push(`restore ${id}`);
+    }),
+    switchVersionBranch: vi.fn((name: string) => {
+      calls.push(`switch ${name}`);
+    }),
+    markOpenedWithoutPath: vi.fn((name: string) => {
+      calls.push(`copy ${name}`);
+    }),
   };
   vi.mocked(openDocumentAtPath).mockClear();
   const status: string[] = [];
@@ -42,13 +48,18 @@ function fakeEngine(filePath: string | null = null, dirty = false, toolAtWork = 
     sketch: { hasUncommittedEdits: false },
     geometry: {},
     toolAtWork: () => toolAtWork,
-    setStatus: (t: string) => { status.push(t); },
+    setStatus: (t: string) => {
+      status.push(t);
+    },
   } as unknown as Engine;
   return { e, store, calls, status };
 }
 
 describe("versions from Home", () => {
-  beforeEach(() => { choice.pick = "discard"; disk.outcome = "ok"; });
+  beforeEach(() => {
+    choice.pick = "discard";
+    disk.outcome = "ok";
+  });
 
   it("opens a closed file, then restores the version", async () => {
     const { e, calls } = fakeEngine();

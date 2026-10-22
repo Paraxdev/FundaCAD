@@ -55,12 +55,22 @@ const features = useDocValue((doc) =>
 // the offers composable already watches both and bumps `counts` on a change.
 const selectionOffers = useSelectionOffers(engine);
 const RELATED_KEY = "fundacad.historyRelated";
-const relatedOn = ref((() => {
-  try { return localStorage.getItem(RELATED_KEY) !== "0"; } catch { return true; }
-})());
+const relatedOn = ref(
+  (() => {
+    try {
+      return localStorage.getItem(RELATED_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  })(),
+);
 function toggleRelated() {
   relatedOn.value = !relatedOn.value;
-  try { localStorage.setItem(RELATED_KEY, relatedOn.value ? "1" : "0"); } catch { /* not remembered */ }
+  try {
+    localStorage.setItem(RELATED_KEY, relatedOn.value ? "1" : "0");
+  } catch {
+    /* not remembered */
+  }
 }
 const related = computed<Set<string> | null>(() => {
   void selectionOffers.counts.value;
@@ -80,7 +90,9 @@ const related = computed<Set<string> | null>(() => {
 const filtering = computed(() => relatedOn.value && related.value !== null);
 
 const unit = ref(getUnit());
-const offUnit = onUnitChange(() => { unit.value = getUnit(); });
+const offUnit = onUnitChange(() => {
+  unit.value = getUnit();
+});
 onUnmounted(offUnit);
 
 // The SAVED marker, from the document. Transport buttons and the marker drag
@@ -139,16 +151,23 @@ watch(
     if (!b.active) {
       busySince.value = 0;
       delayElapsed.value = false;
-      if (timer) { clearTimeout(timer); timer = null; }
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
       return;
     }
     if (busySince.value) return; // already timing this op
     busySince.value = Date.now();
-    timer = setTimeout(() => { delayElapsed.value = true; }, CANCEL_DELAY_MS);
+    timer = setTimeout(() => {
+      delayElapsed.value = true;
+    }, CANCEL_DELAY_MS);
   },
   { immediate: true },
 );
-onUnmounted(() => { if (timer) clearTimeout(timer); });
+onUnmounted(() => {
+  if (timer) clearTimeout(timer);
+});
 
 const chip = computed(() =>
   busy.value.waiting
@@ -243,7 +262,9 @@ function onChipDblclick(id: string) {
 // --- renaming ------------------------------------------------------------
 const renamingId = ref<string | null>(null);
 function linkedPath(id: string): string | null {
-  return (store.document.features.find((f) => f.id === id) as { link?: { path: string } } | undefined)?.link?.path ?? null;
+  return (
+    (store.document.features.find((f) => f.id === id) as { link?: { path: string } } | undefined)?.link?.path ?? null
+  );
 }
 function hasOwnName(id: string): boolean {
   return !!(store.document.features.find((f) => f.id === id) as { name?: string } | undefined)?.name;
@@ -274,7 +295,9 @@ function onRenameKey(e: KeyboardEvent) {
 let offEditPreview: (() => void) | null = null;
 onMounted(() => {
   window.addEventListener("keydown", onRenameKey);
-  offEditPreview = store.onEditPreview(() => { editTick.value++; });
+  offEditPreview = store.onEditPreview(() => {
+    editTick.value++;
+  });
 });
 onUnmounted(() => {
   window.removeEventListener("keydown", onRenameKey);
@@ -332,7 +355,9 @@ function onDrop(id: string, i: number, e: DragEvent) {
 const errCycle = ref(0);
 watch(
   () => errors.value.size,
-  (n) => { if (n === 0) errCycle.value = 0; },
+  (n) => {
+    if (n === 0) errCycle.value = 0;
+  },
 );
 
 function jumpToNextError() {
@@ -383,7 +408,11 @@ function onMarkerDown(e: PointerEvent) {
  *  strip can be moved to the right-hand side, is in ui/trackGaps.ts. */
 function gapIndexAt(ev: PointerEvent): number {
   const nodes = [...(track.value?.querySelectorAll<HTMLElement>(".timeline-node:not(.building)") ?? [])];
-  return gapIndexIn(nodes.map((n) => n.getBoundingClientRect()), ev.clientX, ev.clientY);
+  return gapIndexIn(
+    nodes.map((n) => n.getBoundingClientRect()),
+    ev.clientX,
+    ev.clientY,
+  );
 }
 
 // --- right-click context menu (shared engine in ui/menu.ts) --------------
@@ -392,16 +421,17 @@ function openMenu(e: MouseEvent, id: string, i: number) {
   // "Re-pick" only appears when THIS feature's last build reported an ambiguous
   // saved reference, offering it on a healthy feature would invite users to
   // overwrite references that are working.
-  const repick = timeline.canRepick(id)
-    ? [{ label: "Re-pick face…", onClick: () => timeline.repick(id) }]
-    : [];
+  const repick = timeline.canRepick(id) ? [{ label: "Re-pick face…", onClick: () => timeline.repick(id) }] : [];
   contextMenu(e.clientX, e.clientY, [
     ...repick,
     ...(placeholders.value.has(id) ? [] : [{ label: "Edit", onClick: () => timeline.edit(id) }]),
     { label: "Rename", shortcut: "F2", onClick: () => startRename(id) },
     ...(linkedPath(id)
       ? [
-          { label: "Update from linked file", onClick: () => void import("../../io/fundaLinks").then((m) => m.refreshLink(store, engine.geometry, id)) },
+          {
+            label: "Update from linked file",
+            onClick: () => void import("../../io/fundaLinks").then((m) => m.refreshLink(store, engine.geometry, id)),
+          },
           { label: "Unlink", onClick: () => void import("../../io/fundaLinks").then((m) => m.unlink(store, id)) },
         ]
       : []),
@@ -416,13 +446,15 @@ function openMenu(e: MouseEvent, id: string, i: number) {
       ? [{ label: "Remove condition", onClick: () => store.removeFeatureField(id, "activeWhen") }]
       : features.value[i]?.type === "sketch"
         ? []
-        : [{
-            label: "Add condition",
-            onClick: () => {
-              store.updateFeature(id, { activeWhen: 1 } as unknown as Partial<Feature>);
-              timeline.select(id);
+        : [
+            {
+              label: "Add condition",
+              onClick: () => {
+                store.updateFeature(id, { activeWhen: 1 } as unknown as Partial<Feature>);
+                timeline.select(id);
+              },
             },
-          }]),
+          ]),
     // setRollback(k) builds features[0..k-1], so k = i excludes this step (the
     // model as it was right BEFORE it ran) and k = i + 1 includes it (right
     // after it ran). "Roll to here" now means what it says: the state this step
@@ -445,25 +477,60 @@ function openMenu(e: MouseEvent, id: string, i: number) {
         class="timeline-related"
         :class="{ on: relatedOn }"
         data-testid="history-related"
-        :title="relatedOn ? 'Showing what relates to the selection, click to show everything' : 'Show only what relates to the selection'"
+        :title="
+          relatedOn
+            ? 'Showing what relates to the selection, click to show everything'
+            : 'Show only what relates to the selection'
+        "
         @click="toggleRelated()"
-      >Related to Selection · {{ related.size }}</button>
+        >Related to Selection · {{ related.size }}</button
+      >
       <button
         class="timeline-errbadge"
         :class="{ hidden: errors.size === 0 }"
         title="Failing features, click to jump to the next one"
         @click="jumpToNextError()"
-      ><Icon name="warning" :size="14" /> {{ errors.size }}</button>
-      <button class="float-card-close" :title="fmtKeys('Hide the history (Ctrl+Alt+H)')" @click="shellStore.setHistory(false)"><Icon name="close" :size="14" /></button>
+        ><Icon name="warning" :size="14" /> {{ errors.size }}</button
+      >
+      <button
+        class="float-card-close"
+        :title="fmtKeys('Hide the history (Ctrl+Alt+H)')"
+        @click="shellStore.setHistory(false)"
+        ><Icon name="close" :size="14"
+      /></button>
     </div>
     <!-- Transport moves the SAVED marker (docRollback), and stands down while a
          feature is being edited: the drawn marker is on the edited step then, and
          scrubbing out from under a live edit is the "bugs out" case. -->
     <div class="timeline-transport">
-      <button class="tl-btn" title="Roll back to the start" :disabled="editing || docRollback <= 0" @click="store.setRollback(0)"><Icon name="skipStart" /></button>
-      <button class="tl-btn" title="Step one feature back" :disabled="editing || docRollback <= 0" @click="store.setRollback(Math.max(0, docRollback - 1))"><Icon name="stepBack" /></button>
-      <button class="tl-btn" title="Step one feature forward" :disabled="editing || docRollback >= features.length" @click="store.setRollback(Math.min(features.length, docRollback + 1))"><Icon name="stepForward" /></button>
-      <button class="tl-btn" title="Roll forward to the end" :disabled="editing || docRollback >= features.length" @click="store.setRollback(features.length)"><Icon name="skipEnd" /></button>
+      <button
+        class="tl-btn"
+        title="Roll back to the start"
+        :disabled="editing || docRollback <= 0"
+        @click="store.setRollback(0)"
+        ><Icon name="skipStart"
+      /></button>
+      <button
+        class="tl-btn"
+        title="Step one feature back"
+        :disabled="editing || docRollback <= 0"
+        @click="store.setRollback(Math.max(0, docRollback - 1))"
+        ><Icon name="stepBack"
+      /></button>
+      <button
+        class="tl-btn"
+        title="Step one feature forward"
+        :disabled="editing || docRollback >= features.length"
+        @click="store.setRollback(Math.min(features.length, docRollback + 1))"
+        ><Icon name="stepForward"
+      /></button>
+      <button
+        class="tl-btn"
+        title="Roll forward to the end"
+        :disabled="editing || docRollback >= features.length"
+        @click="store.setRollback(features.length)"
+        ><Icon name="skipEnd"
+      /></button>
     </div>
 
     <div ref="scroller" class="timeline-scroll" @dragover="onDragOverScroller">
@@ -478,7 +545,8 @@ function openMenu(e: MouseEvent, id: string, i: number) {
               class="timeline-marker"
               title="Drag to roll the model back / forward"
               @pointerdown="onMarkerDown"
-            ><span class="marker-grip"></span></div>
+              ><span class="marker-grip"></span
+            ></div>
             <div v-show="!filtering || related?.has(f.id)" class="timeline-item" :data-feature="f.id">
               <div
                 class="timeline-node"
@@ -515,7 +583,13 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                   @click.stop
                   @dblclick.stop
                   @pointerdown.stop
-                  @keydown.stop="$event.key === 'Enter' ? finishRename($event, true) : $event.key === 'Escape' ? finishRename($event, false) : undefined"
+                  @keydown.stop="
+                    $event.key === 'Enter'
+                      ? finishRename($event, true)
+                      : $event.key === 'Escape'
+                        ? finishRename($event, false)
+                        : undefined
+                  "
                   @blur="finishRename($event, true)"
                 />
                 <span v-else class="t-name">{{ f.shown }}</span>
@@ -535,7 +609,8 @@ function openMenu(e: MouseEvent, id: string, i: number) {
             class="timeline-marker"
             title="Drag to roll the model back / forward"
             @pointerdown="onMarkerDown"
-          ><span class="marker-grip"></span></div>
+            ><span class="marker-grip"></span
+          ></div>
 
           <div v-if="building" class="timeline-node building">
             <span class="t-build">{{ chip.label }}</span>
@@ -562,16 +637,21 @@ function openMenu(e: MouseEvent, id: string, i: number) {
           aria-valuemin="0"
           aria-valuemax="100"
           :aria-label="line.detail ?? undefined"
-        ><i :style="line.pct === null ? undefined : { width: `${line.pct}%` }"></i></span>
+          ><i :style="line.pct === null ? undefined : { width: `${line.pct}%` }"></i
+        ></span>
       </template>
     </div>
     <button
       class="timeline-cancel"
       :class="{ hidden: !showCancel }"
       :disabled="cancelling"
-      :title="busy.waiting ? 'Withdraw this request, the job it waits on carries on' : busy.label || 'Stop the running operation'"
+      :title="
+        busy.waiting
+          ? 'Withdraw this request, the job it waits on carries on'
+          : busy.label || 'Stop the running operation'
+      "
       @click="cancelBusy()"
-    >Cancel</button>
-
+      >Cancel</button
+    >
   </section>
 </template>

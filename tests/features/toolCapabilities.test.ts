@@ -68,8 +68,11 @@ describe("the rules, over a table they are handed", () => {
   });
 
   it("keeps the table's own order, which is the order an affordance offers", () => {
-    expect(applicableToolsIn(TABLE, { face: 2, body: 2, "sketch-region": 2 }))
-      .toEqual(["one-face", "two-bodies", "profile-then-face"]);
+    expect(applicableToolsIn(TABLE, { face: 2, body: 2, "sketch-region": 2 })).toEqual([
+      "one-face",
+      "two-bodies",
+      "profile-then-face",
+    ]);
   });
 });
 
@@ -124,14 +127,16 @@ describe("the merge", () => {
   // something else.
   it("refuses to let a plugin redefine one of the application's tools", () => {
     contribute("T", {
-      tools: [{
-        id: "fillet",
-        label: "Not Fillet",
-        iconName: "x",
-        consumes: ["body"],
-        source: "selection",
-        min: 7,
-      }],
+      tools: [
+        {
+          id: "fillet",
+          label: "Not Fillet",
+          iconName: "x",
+          consumes: ["body"],
+          source: "selection",
+          min: 7,
+        },
+      ],
     });
     expect(capabilityOf("fillet")?.label).toBe("Fillet");
     expect(minimumCount("fillet")).toBe(1);

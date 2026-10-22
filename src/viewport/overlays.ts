@@ -29,7 +29,9 @@ export function makeZebraMaterial(frequency = 7): THREE.ShaderMaterial {
         vP = wp.xyz;
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
-    fragmentShader: DISPLAY_COLOR_GLSL + /* glsl */ `
+    fragmentShader:
+      DISPLAY_COLOR_GLSL +
+      /* glsl */ `
       uniform float uFreq;
       varying vec3 vN;
       varying vec3 vP;
@@ -66,7 +68,9 @@ export function buildCurvatureCombs(view: ModelView, box: THREE.Box3): THREE.Lin
     if (!pts || pts.length < 3) continue;
     const hairs: Hair[] = [];
     for (let i = 1; i < pts.length - 1; i++) {
-      const p0 = pts[i - 1], p1 = pts[i], p2 = pts[i + 1];
+      const p0 = pts[i - 1],
+        p1 = pts[i],
+        p2 = pts[i + 1];
       if (!p0 || !p1 || !p2) continue;
       a.set(...p0);
       b.set(...p1);

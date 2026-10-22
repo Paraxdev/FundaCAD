@@ -14,16 +14,27 @@ import { ALL_HANDLES, setPrompt } from "fundacad";
 import type { Engine, Feature, Frame, MoveCommit, MoveResult, MoveTarget } from "fundacad";
 import * as panel from "./panel";
 import {
-  NODE_TYPE, asNodeFeature, freshNodeId, halfExtent, link, nodesBox, numOf, rotationMatrix, roundSize,
-  sizeLabel, unlinkNode,
-  type NodeFeature, type NodeValues,
+  NODE_TYPE,
+  asNodeFeature,
+  freshNodeId,
+  halfExtent,
+  link,
+  nodesBox,
+  numOf,
+  rotationMatrix,
+  roundSize,
+  sizeLabel,
+  unlinkNode,
+  type NodeFeature,
+  type NodeValues,
 } from "./nodeForm";
 
 const PREVIEW_DEBOUNCE_MS = 120;
 const DOT_PX = 6;
 const HIT_PX = 12;
 const DRAG_PX = 4;
-const PROMPT = "Click to place a node · Alt-drag a node to pull a linked one out · Shift-click to link · Del removes · Enter · Esc";
+const PROMPT =
+  "Click to place a node · Alt-drag a node to pull a linked one out · Shift-click to link · Del removes · Enter · Esc";
 
 const NODE_COLOR = 0x3fb6a8;
 const PICKED_COLOR = 0xffb347;
@@ -228,7 +239,8 @@ export class NodeTool {
     if (!fid || !this.working) return out;
     for (const n of this.working.nodes) {
       for (const k of ["x", "y", "z", "sx", "sy", "sz", "rx", "ry", "rz"]) {
-        if (this.e.store.isParamBound({ kind: "feature", feature: fid, field: `nodes.${n.id}.${k}` })) out.add(`${n.id}.${k}`);
+        if (this.e.store.isParamBound({ kind: "feature", feature: fid, field: `nodes.${n.id}.${k}` }))
+          out.add(`${n.id}.${k}`);
       }
     }
     return out;
@@ -454,7 +466,8 @@ export class NodeTool {
   private key(e: KeyboardEvent) {
     if (!this.active) return;
     const t = e.target as HTMLElement | null;
-    const typing = !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+    const typing =
+      !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -527,10 +540,7 @@ export class NodeTool {
       centroid: () => c0.clone(),
       box: () => {
         const h = halfExtent(n0);
-        return new THREE.Box3(
-          c0.clone().sub(new THREE.Vector3(...h)),
-          c0.clone().add(new THREE.Vector3(...h)),
-        );
+        return new THREE.Box3(c0.clone().sub(new THREE.Vector3(...h)), c0.clone().add(new THREE.Vector3(...h)));
       },
       begin: () => {},
       preview: (matrix: THREE.Matrix4) => {
@@ -593,7 +603,10 @@ export class NodeTool {
 
     const spineMat = new THREE.LineBasicMaterial({ color: NODE_COLOR, opacity: 0.8, ...onTop });
     for (const chain of w.chains) {
-      const pts = chain.map((id) => this.node(id)).filter((n): n is NodeValues => !!n).map(centerOf);
+      const pts = chain
+        .map((id) => this.node(id))
+        .filter((n): n is NodeValues => !!n)
+        .map(centerOf);
       if (pts.length < 2) continue;
       const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), spineMat.clone());
       line.renderOrder = 998;
@@ -620,11 +633,20 @@ export class NodeTool {
       const axes = [0, 1, 2].map((j) => new THREE.Vector3(m[0]![j]!, m[1]![j]!, m[2]![j]!));
       const c = centerOf(sel);
       const ringMat = new THREE.LineBasicMaterial({ color: PICKED_COLOR, opacity: 0.9, ...onTop });
-      for (const [a, b] of [[0, 1], [1, 2], [2, 0]] as const) {
+      for (const [a, b] of [
+        [0, 1],
+        [1, 2],
+        [2, 0],
+      ] as const) {
         const pts: THREE.Vector3[] = [];
         for (let k = 0; k <= 64; k++) {
           const t = (k / 64) * Math.PI * 2;
-          pts.push(c.clone().addScaledVector(axes[a]!, r[a]! * Math.cos(t)).addScaledVector(axes[b]!, r[b]! * Math.sin(t)));
+          pts.push(
+            c
+              .clone()
+              .addScaledVector(axes[a]!, r[a]! * Math.cos(t))
+              .addScaledVector(axes[b]!, r[b]! * Math.sin(t)),
+          );
         }
         const ring = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ringMat.clone());
         ring.renderOrder = 998;

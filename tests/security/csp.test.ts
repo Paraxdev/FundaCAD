@@ -131,10 +131,7 @@ describe("Content-Security-Policy", () => {
     const granted = directive(conf.app.security.csp, "script-src").includes("'unsafe-eval'");
 
     if (reasons.length) {
-      expect(
-        granted,
-        `the policy must keep 'unsafe-eval': ${reasons.join("; ")}`,
-      ).toBe(true);
+      expect(granted, `the policy must keep 'unsafe-eval': ${reasons.join("; ")}`).toBe(true);
     } else {
       expect(
         granted,

@@ -93,7 +93,9 @@ export class Picker {
   private targetCache: { view: ModelView; targets: THREE.Object3D[] } | null = null;
   private edgeTargets(view: ModelView): THREE.Object3D[] {
     if (this.targetCache?.view !== view) {
-      const targets = edgeObjects(view).filter((d) => d.pickable).map((d) => d.object);
+      const targets = edgeObjects(view)
+        .filter((d) => d.pickable)
+        .map((d) => d.object);
       this.targetCache = { view, targets };
     }
     return this.targetCache.targets;
@@ -119,13 +121,7 @@ export class Picker {
   /** General selection: a face is preferred over an edge unless the cursor is right on
    *  the edge line (within EDGE_NEAR_PX). The dedicated edge tools call
    *  pickEdgeAt() directly and keep the generous EDGE_PICK_THRESHOLD radius. */
-  pick(
-    clientX: number,
-    clientY: number,
-    rect: DOMRect,
-    camera: THREE.Camera,
-    view: ModelView,
-  ): Hit | null {
+  pick(clientX: number, clientY: number, rect: DOMRect, camera: THREE.Camera, view: ModelView): Hit | null {
     // Body BVHs are built after the first paint, not during setModel (see
     // raycastIndex.ts). If a pick arrives before that, build them now: three-mesh-bvh
     // would otherwise fall back to a brute-force scan of every triangle. Free
@@ -141,9 +137,7 @@ export class Picker {
     if (fHit) {
       const faceId = faceIdOfHit(fHit);
       const point = fHit.point.clone();
-      const normal =
-        fHit.normal?.clone().transformDirection(fHit.object.matrixWorld) ??
-        new THREE.Vector3(0, 0, 1);
+      const normal = fHit.normal?.clone().transformDirection(fHit.object.matrixWorld) ?? new THREE.Vector3(0, 0, 1);
       face = { kind: "face", faceId, selector: faceSelector(normal, point), point: [point.x, point.y, point.z] };
     }
 
@@ -165,15 +159,19 @@ export class Picker {
       if (px > nearPx) near = this.occludersNear((nearPx = Math.max(px, 2 * nearPx, 4)), camera, rect, view);
       return near;
     };
-    const i = preferredEdge(cands.map((c) => ({
-      screenDist: c.screenDist,
-      occluded: () => !this.pointVisible(c.point, camera, occluders(c.screenDist + 1), scale),
-      bandPx: () => edgeBandForPx(
-        faceBand,
-        c.edge.smooth ? 0 : shortEdgeBoostPx(edgeScreenLengthPx(c.edge, camera, rect)) * hitScale(),
-        c.edge.smooth,
-      ),
-    })), !!face);
+    const i = preferredEdge(
+      cands.map((c) => ({
+        screenDist: c.screenDist,
+        occluded: () => !this.pointVisible(c.point, camera, occluders(c.screenDist + 1), scale),
+        bandPx: () =>
+          edgeBandForPx(
+            faceBand,
+            c.edge.smooth ? 0 : shortEdgeBoostPx(edgeScreenLengthPx(c.edge, camera, rect)) * hitScale(),
+            c.edge.smooth,
+          ),
+      })),
+      !!face,
+    );
     const edge = i == null ? undefined : cands[i];
     return edge ? { kind: "edge", edge: edge.edge, selector: edge.selector } : face;
   }
@@ -247,10 +245,7 @@ export class Picker {
     camera: THREE.Camera,
     view: ModelView,
   ): EdgeCandidate[] {
-    this.ndc.set(
-      ((clientX - rect.left) / rect.width) * 2 - 1,
-      -((clientY - rect.top) / rect.height) * 2 + 1,
-    );
+    this.ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(this.ndc, camera);
     // Wide candidate threshold (three.js Line2 threshold is ~0.5× screen px, so
     // this is a forgiving grab radius).
@@ -289,7 +284,13 @@ export class Picker {
       const selector = seen?.selector ?? edgeSelectorFrom({ points: edge.points, body: edge.body });
       if (!selector) continue;
       byEdge.set(edge, {
-        kind: "edge", edge, selector, screenDist: d, rankPx: edgeRankPx(d, edge.smooth), depth: h.distance, point: p.clone(),
+        kind: "edge",
+        edge,
+        selector,
+        screenDist: d,
+        rankPx: edgeRankPx(d, edge.smooth),
+        depth: h.distance,
+        point: p.clone(),
       });
     }
     return [...byEdge.values()].sort((a, b) => a.rankPx - b.rankPx);
@@ -371,11 +372,7 @@ export const EDGE_DEPTH_FRACTION = 0.002;
  *  silhouette the face under the cursor sits in front of the edge it ends at.
  *  With no surface on that line there is nothing to be occluded BY, and an
  *  edge picked against empty space must keep working. */
-export function occludedEdge(
-  edgeDist: number,
-  faceDist: number | null,
-  modelScale: number,
-): boolean {
+export function occludedEdge(edgeDist: number, faceDist: number | null, modelScale: number): boolean {
   if (faceDist == null || !Number.isFinite(edgeDist)) return false;
   const s = Number.isFinite(modelScale) && modelScale > 0 ? modelScale : 0;
   return edgeDist > faceDist + Math.max(1e-6, s * EDGE_DEPTH_FRACTION);
@@ -393,12 +390,7 @@ const FACE_SAMPLE_BUDGET = 256;
  *  Reads the precomputed faceId -> triangle map rather than re-deriving one, and
  *  SAMPLES across it rather than taking a prefix: see sampleIndices for why that
  *  distinction decides whether a large face measures as large. */
-function faceScreenExtentPx(
-  view: ModelView,
-  faceId: number,
-  camera: THREE.Camera,
-  rect: DOMRect,
-): number | null {
+function faceScreenExtentPx(view: ModelView, faceId: number, camera: THREE.Camera, rect: DOMRect): number | null {
   const body = bodyOfFace(view, faceId);
   const tris = body?.faceTriangles.get(faceId);
   if (!body || !tris || tris.length === 0) return null;
@@ -417,7 +409,9 @@ function faceScreenExtentPx(
     if (tri === undefined) continue;
     for (let k = 0; k < 3; k++) {
       const v = index.getX(tri * 3 + k);
-      p.fromBufferAttribute(pos as THREE.BufferAttribute, v).applyMatrix4(world).project(camera);
+      p.fromBufferAttribute(pos as THREE.BufferAttribute, v)
+        .applyMatrix4(world)
+        .project(camera);
       box.add((p.x + 1) * halfW, (1 - p.y) * halfH);
     }
     // Past the cap the band is the plain constant whatever else this face does,

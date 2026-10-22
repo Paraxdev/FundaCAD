@@ -16,22 +16,66 @@ import {
   type VersionDiff,
   type VersionRepo,
 } from "./versions";
-import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ResolveDiag, SectionView, Selector, StressStudy, Vec3, ViewCubeSide, ViewOverride } from "../types";
+import type {
+  CadDocument,
+  Feature,
+  ImportColorSource,
+  ParamControl,
+  ParamExtras,
+  ParamTarget,
+  PlaneSpec,
+  ProjectedSource,
+  ProjectionUpdate,
+  RebuildReply,
+  RebuildResult,
+  ResolveDiag,
+  SectionView,
+  Selector,
+  StressStudy,
+  Vec3,
+  ViewCubeSide,
+  ViewOverride,
+} from "../types";
 import { asFeature } from "../types";
 import { applyProjectionUpdate } from "../types";
-import type { EngineWait, FaceAnchorReply, FaceAxisReply, GeometryBackend, PatternAxisReply, ProjectionResult } from "../geometry/client";
+import type {
+  EngineWait,
+  FaceAnchorReply,
+  FaceAxisReply,
+  GeometryBackend,
+  PatternAxisReply,
+  ProjectionResult,
+} from "../geometry/client";
 import { FORMAT_VERSION, migrateDocument } from "./migrate";
 import {
-  ancestryOf, descendantsOf, type ElementDef, freshElementName, reparented,
+  ancestryOf,
+  descendantsOf,
+  type ElementDef,
+  freshElementName,
+  reparented,
   withElementRemoved,
 } from "./elements";
 import {
-  type BodyFinish, finishOf, freshMaterialName, isDefaultFinish, type MaterialDef,
-  asHex, normalizeMaterial, slugId, STARTER_LIBRARY, uniqueId,
+  type BodyFinish,
+  finishOf,
+  freshMaterialName,
+  isDefaultFinish,
+  type MaterialDef,
+  asHex,
+  normalizeMaterial,
+  slugId,
+  STARTER_LIBRARY,
+  uniqueId,
 } from "./materials";
 import { faceKey } from "./faceMaterials";
 import {
-  bodyPrints, type FaceRef, type FaceResolution, type FaceTrack, loadFaceRefs, resolveFaceRefs, savedFaceRefs,
+  bodyPrints,
+  type FaceRef,
+  type FaceResolution,
+  type FaceTrack,
+  loadFaceRefs,
+  resolveFaceRefs,
+  savedFaceRefs,
 } from "./faceRefs";
 import { documentShapeProblem, UnreadableDocumentError } from "./documentShape";
 import { forgetStaleJoins, joinSignatures } from "./bodyIds";
@@ -134,7 +178,15 @@ export interface BusyState {
 
 type DocListener = (doc: CadDocument) => void;
 type BuildListener = (state: RebuildState) => void;
-const IDLE_BUSY: BusyState = { active: false, label: "", id: null, pct: null, stage: null, rebuild: false, waiting: null };
+const IDLE_BUSY: BusyState = {
+  active: false,
+  label: "",
+  id: null,
+  pct: null,
+  stage: null,
+  rebuild: false,
+  waiting: null,
+};
 
 type BusyListener = (state: BusyState) => void;
 type MetaListener = () => void;
@@ -162,10 +214,34 @@ const clone = (d: CadDocument): CadDocument => structuredClone(d);
  *  from a newer version and is carried. `geometry` is the JSON file's embedded
  *  blob map, which the Rust reader takes out and the writer puts back. */
 export const KNOWN_DOC_KEYS: ReadonlySet<string> = new Set([
-  "version", "parameters", "paramDefs", "paramExtras", "features", "viewOverrides", "bodyIds",
-  "suppressed", "rollback", "sketchVisibility", "bodyVisibility", "planeVisibility", "bodyNames",
-  "bodyColors", "bodyElement", "bodyMaterial", "faceMaterials", "facePrints", "importColorSource", "elements",
-  "materials", "palette", "stress", "environment", "versions", "geometry", "referenceImages", "sectionView",
+  "version",
+  "parameters",
+  "paramDefs",
+  "paramExtras",
+  "features",
+  "viewOverrides",
+  "bodyIds",
+  "suppressed",
+  "rollback",
+  "sketchVisibility",
+  "bodyVisibility",
+  "planeVisibility",
+  "bodyNames",
+  "bodyColors",
+  "bodyElement",
+  "bodyMaterial",
+  "faceMaterials",
+  "facePrints",
+  "importColorSource",
+  "elements",
+  "materials",
+  "palette",
+  "stress",
+  "environment",
+  "versions",
+  "geometry",
+  "referenceImages",
+  "sectionView",
 ]);
 const ELEMENT_KEYS: ReadonlySet<string> = new Set(["id", "name", "parent"]);
 const GEOMETRY_KEYS = ["parameters", "paramDefs", "paramExtras", "features", "viewOverrides", "bodyIds"] as const;
@@ -216,13 +292,16 @@ const isBool = (v: unknown) => typeof v === "boolean";
 const isText = (v: unknown) => typeof v === "string" && v.trim() !== "";
 const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 
-const isVec3 = (v: unknown) => Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n));
+const isVec3 = (v: unknown) =>
+  Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n));
 
 const VIEW_SIDES: ReadonlySet<string> = new Set(["front", "back", "left", "right", "top", "bottom"]);
 
 function readViewOverrides(raw: unknown): Pick<CadDocument, "viewOverrides"> {
   if (!isPlainObject(raw)) return {};
-  const kept = Object.entries(raw).filter(([side, o]) => VIEW_SIDES.has(side) && isPlainObject(o) && isVec3(o["normal"]) && isVec3(o["up"]));
+  const kept = Object.entries(raw).filter(
+    ([side, o]) => VIEW_SIDES.has(side) && isPlainObject(o) && isVec3(o["normal"]) && isVec3(o["up"]),
+  );
   return kept.length ? { viewOverrides: Object.fromEntries(kept) } : {};
 }
 
@@ -283,7 +362,10 @@ class Overlay<T> {
   private map = new Map<string, T>();
   /** Bumped on every write. */
   rev = 0;
-  constructor(readonly jsonKey: string, private readonly accepts: (v: unknown) => boolean = () => true) {}
+  constructor(
+    readonly jsonKey: string,
+    private readonly accepts: (v: unknown) => boolean = () => true,
+  ) {}
   get(id: string): T | undefined {
     return this.map.get(id);
   }
@@ -352,13 +434,15 @@ class FaceRefOverlay extends Overlay<FaceRef> {
     if (this.memo?.result === result && this.memo.rev === this.rev) return this.memo;
     if (this.memo?.result !== result) {
       // A ref written since the last look at the build before this one joins its track first.
-      if (this.memo && this.memo.rev !== this.rev) this.track = resolveFaceRefs(this.entries(), this.memo.result, this.track).track;
+      if (this.memo && this.memo.rev !== this.rev)
+        this.track = resolveFaceRefs(this.entries(), this.memo.result, this.track).track;
       this.prior = this.track;
     }
     const on = resolveFaceRefs(this.entries(), result, this.track);
     this.track = on.track;
     const owners = new Map<string, string>();
-    for (const [id, ref] of this.entries()) for (const f of on.faces.get(id) ?? []) owners.set(faceKey(ref.body, f), id);
+    for (const [id, ref] of this.entries())
+      for (const f of on.faces.get(id) ?? []) owners.set(faceKey(ref.body, f), id);
     this.memo = { result, rev: this.rev, on, owners };
     return this.memo;
   }
@@ -653,7 +737,10 @@ export class DocumentStore {
     fn: (onStarted: (id: string) => void) => Promise<T>,
     opts: { rebuild?: boolean; abort?: AbortController; holdHistory?: boolean } = {},
   ): Promise<T> {
-    const op = { state: { ...IDLE_BUSY, active: true, label, rebuild: opts.rebuild === true }, abort: opts.abort ?? null };
+    const op = {
+      state: { ...IDLE_BUSY, active: true, label, rebuild: opts.rebuild === true },
+      abort: opts.abort ?? null,
+    };
     if (opts.holdHistory) this.historyHeld++;
     this.busyOps.push(op);
     this.setBusy(op.state);
@@ -896,19 +983,27 @@ export class DocumentStore {
       const was = overlay.get(id);
       if ((was ?? null) === value) continue;
       prior.set(id, was);
-      if (value === null) overlay.delete(id); else overlay.set(id, value);
+      if (value === null) overlay.delete(id);
+      else overlay.set(id, value);
     }
     if (!prior.size) return false;
     this.markDirty();
     this.emitBuild();
     this.pushOverlayUndo({
       undo: () => {
-        for (const [id, was] of prior) { if (was === undefined) overlay.delete(id); else overlay.set(id, was); }
+        for (const [id, was] of prior) {
+          if (was === undefined) overlay.delete(id);
+          else overlay.set(id, was);
+        }
         this.markDirty();
         this.emitBuild();
       },
       redo: () => {
-        for (const [id] of prior) { const value = writes.get(id)!; if (value === null) overlay.delete(id); else overlay.set(id, value); }
+        for (const [id] of prior) {
+          const value = writes.get(id)!;
+          if (value === null) overlay.delete(id);
+          else overlay.set(id, value);
+        }
         this.markDirty();
         this.emitBuild();
       },
@@ -947,7 +1042,11 @@ export class DocumentStore {
   /** Injected (main.ts): headless planegcs re-solve of one sketch feature,
    *  kept out of the store so the document layer doesn't depend on the WASM
    *  solver (and tests don't need it). */
-  headlessSolve?: (sketch: Extract<Feature, { type: "sketch" }>, parameters: CadDocument["parameters"], anchor?: { x: number; y: number }) => Promise<{ entities: Extract<Feature, { type: "sketch" }>["entities"] } | null>;
+  headlessSolve?: (
+    sketch: Extract<Feature, { type: "sketch" }>,
+    parameters: CadDocument["parameters"],
+    anchor?: { x: number; y: number },
+  ) => Promise<{ entities: Extract<Feature, { type: "sketch" }>["entities"] } | null>;
   /** Injected: the sketch feature id currently OPEN in the sketch editor (it
    *  re-solves itself live and must not be overwritten headlessly). */
   openSketchId?: () => string | null;
@@ -983,7 +1082,9 @@ export class DocumentStore {
     const open = this.openSketchId?.() ?? null;
     for (const sid of r.affectedSketches) {
       if (sid === open) continue;
-      const f = draft.features.find((x): x is Extract<Feature, { type: "sketch" }> => x.type === "sketch" && x.id === sid);
+      const f = draft.features.find(
+        (x): x is Extract<Feature, { type: "sketch" }> => x.type === "sketch" && x.id === sid,
+      );
       if (!f) continue;
       const solved = await this.solveConstrainedSketch(f, draft.parameters);
       if (solved) f.entities = solved;
@@ -1033,7 +1134,9 @@ export class DocumentStore {
     if (this.projStreak >= 5) {
       if (this.projValveOpen) {
         this.projValveOpen = false;
-        this.onWarning?.("Projected geometry keeps changing on every rebuild, paused automatic refresh (edit the model or Compute All to retry).");
+        this.onWarning?.(
+          "Projected geometry keeps changing on every rebuild, paused automatic refresh (edit the model or Compute All to retry).",
+        );
       }
       return;
     }
@@ -1172,7 +1275,12 @@ export class DocumentStore {
   /** Classify raw dim expression input (incl. `name=expr`) for a (possibly
    *  not-yet-committed) binding without mutating anything, the sketch dim
    *  editor's pre-check. */
-  classifyTargetExpr(boundName: string | null, pendingName: string | null, raw: string, kind: FieldKind): params.ExprInput {
+  classifyTargetExpr(
+    boundName: string | null,
+    pendingName: string | null,
+    raw: string,
+    kind: FieldKind,
+  ): params.ExprInput {
     return params.classifyExprInput(this.doc, raw, kind, boundName, pendingName);
   }
 
@@ -1301,7 +1409,9 @@ export class DocumentStore {
       const nameBad = b.name && b.name !== bound ? params.validateName(params.defsOf(d), b.name) : null;
       const v = params.validateExpr(d, bound, b.expr, b.kind);
       if (!v.ok || nameBad) {
-        this.onWarning?.(`Dimension expression "${b.name ? `${b.name}=` : ""}${b.expr}" was dropped: ${nameBad ?? (v.ok ? "" : v.error)}`);
+        this.onWarning?.(
+          `Dimension expression "${b.name ? `${b.name}=` : ""}${b.expr}" was dropped: ${nameBad ?? (v.ok ? "" : v.error)}`,
+        );
         continue;
       }
       if (b.name) params.commitNamedFieldExpr(d, b.target, b.name, b.expr, b.kind);
@@ -1312,35 +1422,47 @@ export class DocumentStore {
   addFeature(feature: Feature, atIndex?: number, bindings?: SketchBinding[]) {
     // new features land at the rollback marker (mainstream MCAD), which then advances past it
     const at = atIndex ?? this.rollbackIndex;
-    this.step((d) => {
-      d.features.splice(at, 0, feature);
-      this.applyBindings(d, bindings);
-    }, true, () => {
-      if (this.rollback !== null && at <= this.rollback) this.rollback += 1;
-    });
+    this.step(
+      (d) => {
+        d.features.splice(at, 0, feature);
+        this.applyBindings(d, bindings);
+      },
+      true,
+      () => {
+        if (this.rollback !== null && at <= this.rollback) this.rollback += 1;
+      },
+    );
   }
 
   /** An edit to existing features plus any new ones, as ONE undo step. */
   editAndAdd(edit: (doc: CadDocument) => void, features: Feature[] = []) {
     const at = this.rollbackIndex;
-    this.step((d) => {
-      edit(d);
-      if (features.length) d.features.splice(at, 0, ...features);
-    }, true, () => {
-      if (features.length && this.rollback !== null && at <= this.rollback) this.rollback += features.length;
-    });
+    this.step(
+      (d) => {
+        edit(d);
+        if (features.length) d.features.splice(at, 0, ...features);
+      },
+      true,
+      () => {
+        if (features.length && this.rollback !== null && at <= this.rollback) this.rollback += features.length;
+      },
+    );
   }
 
   /** Several features as one undo step at the rollback marker (a thread is two). */
   addFeatures(features: Feature[], bindings?: SketchBinding[]) {
     if (!features.length) return;
     const at = this.rollbackIndex;
-    this.step((d) => {
-      d.features.splice(at, 0, ...features);
-      this.applyBindings(d, bindings);
-    }, true, () => {
-      if (this.rollback !== null && at <= this.rollback) this.rollback += features.length;
-    });
+    this.step(
+      (d) => {
+        d.features.splice(at, 0, ...features);
+        this.applyBindings(d, bindings);
+      },
+      true,
+      () => {
+        if (this.rollback !== null && at <= this.rollback) this.rollback += features.length;
+      },
+    );
   }
 
   /** A bound numeric field is re-asserted by the recompute; use setTargetValue/setTargetExpr. */
@@ -1433,12 +1555,16 @@ export class DocumentStore {
 
   removeFeature(id: string) {
     const idx = this.doc.features.findIndex((f) => f.id === id);
-    this.step((d) => {
-      d.features = d.features.filter((f) => f.id !== id);
-    }, true, () => {
-      if (this.rollback !== null && idx >= 0 && idx < this.rollback) this.rollback -= 1;
-      this.suppressed.delete(id);
-    });
+    this.step(
+      (d) => {
+        d.features = d.features.filter((f) => f.id !== id);
+      },
+      true,
+      () => {
+        if (this.rollback !== null && idx >= 0 && idx < this.rollback) this.rollback -= 1;
+        this.suppressed.delete(id);
+      },
+    );
   }
 
   // --- timeline: rollback marker, suppress, reorder ---
@@ -1541,9 +1667,7 @@ export class DocumentStore {
     if (failed === null) return null;
     // Any of the previewed features. A thread's sketch and its revolve are one
     // gesture to the user, so a refusal of either belongs on the same boxes.
-    const own = this.editPreview
-      ? [this.editPreview.id]
-      : (this.preview ?? []).map((f) => f.id);
+    const own = this.editPreview ? [this.editPreview.id] : (this.preview ?? []).map((f) => f.id);
     if (own.includes(failed)) return this.build.errorMessage;
     return this.editPreview?.inPlace ? this.downstreamRefusal(this.editPreview.id) : null;
   }
@@ -1688,7 +1812,8 @@ export class DocumentStore {
     if (was === visible) return;
     this.pushOverlayUndo({
       undo: () => {
-        if (was === undefined) this.sketchVis.delete(id); else this.sketchVis.set(id, was);
+        if (was === undefined) this.sketchVis.delete(id);
+        else this.sketchVis.set(id, was);
         this.markDirty();
       },
       redo: () => {
@@ -1745,7 +1870,8 @@ export class DocumentStore {
         isolateAfter = this.isolate;
         this.isolate = wasIsolate;
         for (const [id, was] of prior) {
-          if (was === undefined) this.bodyVis.delete(id); else this.bodyVis.set(id, was);
+          if (was === undefined) this.bodyVis.delete(id);
+          else this.bodyVis.set(id, was);
         }
         shown();
       },
@@ -1791,7 +1917,8 @@ export class DocumentStore {
     if (was === visible) return;
     this.pushOverlayUndo({
       undo: () => {
-        if (was === undefined) this.planeVis.delete(id); else this.planeVis.set(id, was);
+        if (was === undefined) this.planeVis.delete(id);
+        else this.planeVis.set(id, was);
         this.markDirty();
       },
       redo: () => {
@@ -1826,7 +1953,8 @@ export class DocumentStore {
       let seen = was.get(overlay);
       if (!seen) was.set(overlay, (seen = new Map()));
       if (!seen.has(key)) seen.set(key, overlay.get(key));
-      if (value === undefined) overlay.delete(key); else overlay.set(key, value);
+      if (value === undefined) overlay.delete(key);
+      else overlay.set(key, value);
     };
     // The engine's runs number the source's faces as they were before the Separate.
     const before = this.faceMaterial.before();
@@ -1855,17 +1983,25 @@ export class DocumentStore {
         const ref = faces.get(run.from + i);
         if (!ref) continue;
         const at = prints?.[run.from + i] ?? ref.at;
-        write(this.faceMaterial, newFaceRefId(), { body: piece.id, face: i, material: ref.material, ...(at ? { at: { ...at, faces: run.count } } : {}) });
+        write(this.faceMaterial, newFaceRefId(), {
+          body: piece.id,
+          face: i,
+          material: ref.material,
+          ...(at ? { at: { ...at, faces: run.count } } : {}),
+        });
       }
     }
     const changed = [...was].flatMap(([overlay, keys]) =>
-      [...keys].filter(([key, prior]) => overlay.get(key) !== prior).map(([key, prior]) => ({ overlay, key, prior, value: overlay.get(key) })),
+      [...keys]
+        .filter(([key, prior]) => overlay.get(key) !== prior)
+        .map(([key, prior]) => ({ overlay, key, prior, value: overlay.get(key) })),
     );
     if (!changed.length) return;
     const apply = (pick: (c: (typeof changed)[number]) => unknown) => {
       for (const c of changed) {
         const value = pick(c);
-        if (value === undefined) c.overlay.delete(c.key); else c.overlay.set(c.key, value);
+        if (value === undefined) c.overlay.delete(c.key);
+        else c.overlay.set(c.key, value);
       }
       this.markDirty();
       this.emitBuild();
@@ -2029,8 +2165,7 @@ export class DocumentStore {
 
   /** Move bodies into an element (null = top level) with one emit. */
   setBodiesElement(bodyIds: Iterable<string>, element: string | null) {
-    const target =
-      element !== null && this.elements.some((e) => e.id === element) ? element : null;
+    const target = element !== null && this.elements.some((e) => e.id === element) ? element : null;
     let changed = false;
     for (const id of bodyIds) {
       if ((this.bodyElement.get(id) ?? null) === target) continue;
@@ -2069,8 +2204,16 @@ export class DocumentStore {
       const before = this.refImages;
       const box = { v: after };
       this.pushOverlayUndo({
-        undo: () => { this.refCoalesce = null; this.setRefImagesQuiet(before); this.markDirty(); },
-        redo: () => { this.refCoalesce = null; this.setRefImagesQuiet(box.v); this.markDirty(); },
+        undo: () => {
+          this.refCoalesce = null;
+          this.setRefImagesQuiet(before);
+          this.markDirty();
+        },
+        redo: () => {
+          this.refCoalesce = null;
+          this.setRefImagesQuiet(box.v);
+          this.markDirty();
+        },
       });
       const top = this.undoStack[this.undoStack.length - 1];
       this.refCoalesce = opts.coalesce ? { key: opts.coalesce, top, after: box } : null;
@@ -2177,7 +2320,7 @@ export class DocumentStore {
       let id = owners.get(key);
       let ref = id === undefined ? undefined : now(id);
       // A ref a split left on several faces becomes one ref per face first.
-      const parts = id !== undefined && on ? on.faces.get(id) ?? [] : [];
+      const parts = id !== undefined && on ? (on.faces.get(id) ?? []) : [];
       if (id !== undefined && ref && parts.length > 1) {
         writes.set(id, null);
         for (const f of parts) {
@@ -2211,9 +2354,11 @@ export class DocumentStore {
   addMaterial(m?: Partial<MaterialDef>): string {
     const taken = new Set(this.materials.map((x) => x.id));
     const name = (m?.name ?? "").trim() || freshMaterialName(this.materials);
-    const next: MaterialDef =
-      normalizeMaterial({ ...m, name, color: m?.color ?? "#9aa7b4" }) ??
-      { id: slugId(name), name, color: "#9aa7b4" };
+    const next: MaterialDef = normalizeMaterial({ ...m, name, color: m?.color ?? "#9aa7b4" }) ?? {
+      id: slugId(name),
+      name,
+      color: "#9aa7b4",
+    };
     next.id = uniqueId(m?.id && !taken.has(m.id) ? m.id : slugId(name), taken);
     this.materials = [...this.materials, next];
     this.markDirty();
@@ -2295,10 +2440,16 @@ export class DocumentStore {
   private dropMaterialUses(ids: ReadonlySet<string>): boolean {
     let changed = false;
     for (const [body, held] of [...this.bodyMaterial.entries()]) {
-      if (ids.has(held)) { this.bodyMaterial.delete(body); changed = true; }
+      if (ids.has(held)) {
+        this.bodyMaterial.delete(body);
+        changed = true;
+      }
     }
     for (const [id, ref] of [...this.faceMaterial.entries()]) {
-      if (ids.has(ref.material)) { this.faceMaterial.delete(id); changed = true; }
+      if (ids.has(ref.material)) {
+        this.faceMaterial.delete(id);
+        changed = true;
+      }
     }
     return changed;
   }
@@ -2363,8 +2514,15 @@ export class DocumentStore {
   /** Append a duplicate feature, offset in X so the copy is not hidden inside the original. */
   duplicateBody(bodyId: string) {
     const feat: Feature = {
-      id: this.nextId(), type: "duplicate",
-      dx: 20, dy: 0, dz: 0, rx: 0, ry: 0, rz: 0, bodies: [bodyId],
+      id: this.nextId(),
+      type: "duplicate",
+      dx: 20,
+      dy: 0,
+      dz: 0,
+      rx: 0,
+      ry: 0,
+      rz: 0,
+      bodies: [bodyId],
     };
     this.addFeature(feat, this.doc.features.length);
   }
@@ -2585,7 +2743,8 @@ export class DocumentStore {
     if (!replace || !sameDoc) {
       delete this.unreadSections.sectionView;
       this.cut = replace ? null : readSectionView(parsed.sectionView);
-      if (!replace && parsed.sectionView != null && !this.cut) this.unreadSections.sectionView = structuredClone(parsed.sectionView);
+      if (!replace && parsed.sectionView != null && !this.cut)
+        this.unreadSections.sectionView = structuredClone(parsed.sectionView);
     }
     this.doc = {
       parameters: parsed.parameters ?? {},
@@ -2619,7 +2778,9 @@ export class DocumentStore {
     const reads = (key: string) => !only || only.has(key);
     const raw = parsed as unknown as Record<string, unknown>;
     if (reads("suppressed")) {
-      this.suppressed = new Set(Array.isArray(parsed.suppressed) ? parsed.suppressed.filter((id) => typeof id === "string") : []);
+      this.suppressed = new Set(
+        Array.isArray(parsed.suppressed) ? parsed.suppressed.filter((id) => typeof id === "string") : [],
+      );
     }
     if (reads("rollback")) this.rollback = isCount(parsed.rollback) ? parsed.rollback : null;
     for (const { overlay } of this.overlays) if (reads(overlay.jsonKey)) overlay.loadFrom(raw);
@@ -2635,7 +2796,8 @@ export class DocumentStore {
     if (reads("environment")) {
       this.environment = normalizeDocEnvironment(parsed.environment);
       delete this.unreadSections.environment;
-      if (parsed.environment != null && !this.environment) this.unreadSections.environment = structuredClone(parsed.environment);
+      if (parsed.environment != null && !this.environment)
+        this.unreadSections.environment = structuredClone(parsed.environment);
     }
     const carried = carriedKeys(raw, KNOWN_DOC_KEYS);
     this.unknownKeys = only
@@ -2667,16 +2829,22 @@ export class DocumentStore {
     const out = this.toObject(false) as unknown as Record<string, unknown>;
     for (const k of GEOMETRY_KEYS) delete out[k];
     // In id order, since undo of a cleared id sets it back at the end of its map.
-    for (const { overlay: { jsonKey: k } } of this.overlays) {
+    for (const {
+      overlay: { jsonKey: k },
+    } of this.overlays) {
       const map = out[k] as Record<string, unknown> | undefined;
       if (map) out[k] = Object.fromEntries(Object.entries(map).sort(([a], [b]) => (a < b ? -1 : 1)));
     }
     // Their undo steps go by id, and the faces they are on move with every rebuild.
     delete out["facePrints"];
     delete out["sectionView"];
-    if (this.faceMaterial.size) out["faceMaterials"] = located ? this.faceMaterial.located() : this.faceMaterial.stored();
+    if (this.faceMaterial.size)
+      out["faceMaterials"] = located ? this.faceMaterial.located() : this.faceMaterial.stored();
     out["bodyVisibility"] = [out["bodyVisibility"] ?? null, this.isolate];
-    return new Map([...Object.entries(out).map(([k, v]) => [k, JSON.stringify(v)] as const), ...this.timelineSections()]);
+    return new Map([
+      ...Object.entries(out).map(([k, v]) => [k, JSON.stringify(v)] as const),
+      ...this.timelineSections(),
+    ]);
   }
   /** The suppress set sorted, since toggling a step off and back moves it to the end. */
   private timelineSections(): Map<string, string> {
@@ -2752,7 +2920,8 @@ export class DocumentStore {
     // names no targets leaves hidden bodies alone.
     const bodyVisibility = this.bodyVis.size ? Object.fromEntries(this.bodyVis.entries()) : undefined;
     return {
-      parameters: this.doc.parameters, features,
+      parameters: this.doc.parameters,
+      features,
       ...(bodyVisibility ? { bodyVisibility } : {}),
       ...(this.doc.bodyIds ? { bodyIds: this.doc.bodyIds } : {}),
     };
@@ -2812,8 +2981,13 @@ export class DocumentStore {
     // A new rebuild invalidates any stream still in flight for the old one.
     this.buildEpoch++;
     this.build = {
-      ...this.build, building: true,
-      progress: null, meshed: null, meshTotal: null, streamed: null, streamTotal: null,
+      ...this.build,
+      building: true,
+      progress: null,
+      meshed: null,
+      meshTotal: null,
+      streamed: null,
+      streamTotal: null,
     };
     this.emitBuild();
   }
@@ -2832,15 +3006,15 @@ export class DocumentStore {
   /** What was about to be sent as preview, and whether a refusal of it is held. */
   private previewSnapshot(): { features: Feature[] | null; hold: boolean } {
     if (!this.preview && !this.editPreview) return { features: null, hold: false };
-    const features = [
-      ...(this.editPreview?.feature ? [this.editPreview.feature] : []),
-      ...(this.preview ?? []),
-    ];
+    const features = [...(this.editPreview?.feature ? [this.editPreview.feature] : []), ...(this.preview ?? [])];
     return { features, hold: this.previewHold };
   }
 
   /** The refusal of one of `sent`'s features in this reply, when the preview asked to be held. */
-  private heldRefusalOf(reply: RebuildReply, sent: { features: Feature[] | null; hold: boolean }): PreviewRefusal | null {
+  private heldRefusalOf(
+    reply: RebuildReply,
+    sent: { features: Feature[] | null; hold: boolean },
+  ): PreviewRefusal | null {
     if (!sent.hold || !sent.features?.length) return null;
     const ids = new Set(sent.features.map((f) => f.id));
     const errs = reply.ok
@@ -2851,7 +3025,7 @@ export class DocumentStore {
     return {
       featureId: err.feature_id,
       message: err.message,
-      code: ("code" in err && typeof err.code === "string") ? err.code : null,
+      code: "code" in err && typeof err.code === "string" ? err.code : null,
       diagnostics: reply.ok ? (reply.result.diagnostics ?? []).filter((d) => d.feature_id === err.feature_id) : [],
     };
   }
@@ -2859,8 +3033,13 @@ export class DocumentStore {
   /** A partial build carries its failure inside the result; an outright failure keeps the last mesh. */
   private settledBuild(reply: RebuildReply, sent: { features: Feature[] | null; hold: boolean }): RebuildState {
     const done = {
-      building: false, progress: null, meshed: null, meshTotal: null,
-      streamed: null, streamTotal: null, previewBuilt: sent.features,
+      building: false,
+      progress: null,
+      meshed: null,
+      meshTotal: null,
+      streamed: null,
+      streamTotal: null,
+      previewBuilt: sent.features,
       cancelled: !reply.ok && !!reply.cancelled,
     };
     const held = this.heldRefusalOf(reply, sent);
@@ -2914,51 +3093,55 @@ export class DocumentStore {
     this.rebuilding = true;
     const drain = (async () => {
       // runBusy gives a long rebuild its Cancel button.
-      await this.runBusy("Rebuilding", async (onStarted) => {
-        try {
-          do {
-            this.rebuildQueued = false;
-            this.emitBuildStarted();
-            const sent = this.doc;
-            const previewing = !!(this.preview || this.editPreview);
-            const sentPreview = this.previewSnapshot();
-            const effective = this.effectiveDoc();
-            const key = previewing ? null : buildKey(effective);
-            const flight: NonNullable<typeof this.inflight> = { gen: ++this.sendGen, id: null, cancelled: false };
-            this.inflight = flight;
-            markSent();
-            const reply = await this.geometry.rebuild(effective, undefined, (id) => {
-              flight.id = id;
-              onStarted(id);
-            });
-            markReceived();
+      await this.runBusy(
+        "Rebuilding",
+        async (onStarted) => {
+          try {
+            do {
+              this.rebuildQueued = false;
+              this.emitBuildStarted();
+              const sent = this.doc;
+              const previewing = !!(this.preview || this.editPreview);
+              const sentPreview = this.previewSnapshot();
+              const effective = this.effectiveDoc();
+              const key = previewing ? null : buildKey(effective);
+              const flight: NonNullable<typeof this.inflight> = { gen: ++this.sendGen, id: null, cancelled: false };
+              this.inflight = flight;
+              markSent();
+              const reply = await this.geometry.rebuild(effective, undefined, (id) => {
+                flight.id = id;
+                onStarted(id);
+              });
+              markReceived();
+              this.inflight = null;
+              if (flight.gen <= this.staleThrough) continue;
+              // Superseded and stopped, so there is nothing to show: the newer
+              // request queued behind it is what the user is waiting for. A Cancel
+              // the person pressed stops the queue too.
+              if (!reply.ok && reply.cancelled && flight.byUser) this.rebuildQueued = false;
+              if (!reply.ok && reply.cancelled && this.rebuildQueued) continue;
+              if (key !== null && this.refusedProvisional(reply, key)) continue;
+              if (!previewing) this.keepBodyIds(sent, reply);
+              const settled = this.settledBuild(reply, sentPreview);
+              // A stream that was in flight but never completed has left a PARTIAL
+              // model on screen. Tell the viewport to drop it before this result,
+              // which on a failure is the PREVIOUS document, renders over the top.
+              if (this.build.streamed !== null && (!reply.ok || settled.heldRefusal)) this.emitBuildAbort();
+              this.build = settled;
+              if (key !== null && reply.ok) this.committedShown = { key, state: settled };
+              this.emitBuild();
+              // After publishing; a failed rebuild says nothing about projections.
+              if (reply.ok) this.maybeQueueProjectionRefresh(reply.result.projectionUpdates);
+            } while (this.rebuildQueued);
+          } finally {
+            // Here, not in the outer finally: runBusy's teardown awaits, and a refresh
+            // queued in that window would be dropped.
+            this.rebuilding = false;
             this.inflight = null;
-            if (flight.gen <= this.staleThrough) continue;
-            // Superseded and stopped, so there is nothing to show: the newer
-            // request queued behind it is what the user is waiting for. A Cancel
-            // the person pressed stops the queue too.
-            if (!reply.ok && reply.cancelled && flight.byUser) this.rebuildQueued = false;
-            if (!reply.ok && reply.cancelled && this.rebuildQueued) continue;
-            if (key !== null && this.refusedProvisional(reply, key)) continue;
-            if (!previewing) this.keepBodyIds(sent, reply);
-            const settled = this.settledBuild(reply, sentPreview);
-            // A stream that was in flight but never completed has left a PARTIAL
-            // model on screen. Tell the viewport to drop it before this result,
-            // which on a failure is the PREVIOUS document, renders over the top.
-            if (this.build.streamed !== null && (!reply.ok || settled.heldRefusal)) this.emitBuildAbort();
-            this.build = settled;
-            if (key !== null && reply.ok) this.committedShown = { key, state: settled };
-            this.emitBuild();
-            // After publishing; a failed rebuild says nothing about projections.
-            if (reply.ok) this.maybeQueueProjectionRefresh(reply.result.projectionUpdates);
-          } while (this.rebuildQueued);
-        } finally {
-          // Here, not in the outer finally: runBusy's teardown awaits, and a refresh
-          // queued in that window would be dropped.
-          this.rebuilding = false;
-          this.inflight = null;
-        }
-      }, { rebuild: true });
+          }
+        },
+        { rebuild: true },
+      );
     })();
     this.rebuildDrain = drain;
     try {
@@ -2979,7 +3162,7 @@ export class DocumentStore {
       await this.rebuildNow();
       return;
     }
-    for (let d = this.rebuildDrain; d; ) {
+    for (let d = this.rebuildDrain; d;) {
       await d;
       d = this.rebuildDrain === d ? null : this.rebuildDrain;
     }

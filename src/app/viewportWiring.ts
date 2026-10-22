@@ -109,12 +109,11 @@ export function installViewportWiring(e: Engine): void {
     for (const r of rows) if (r.name) shared.set(r.name, (shared.get(r.name) ?? 0) + 1);
     // distinguish() is the last resort under that: two edges of ONE body still
     // read alike, and edgeTies would drop the choice rather than offer it.
-    const labels = distinguish(rows.map((r) =>
-      edgeChoiceLabel(
-        bodyRowLabel(r.name, r.index, (shared.get(r.name ?? "") ?? 0) > 1),
-        r.feature,
-        r.name,
-      )));
+    const labels = distinguish(
+      rows.map((r) =>
+        edgeChoiceLabel(bodyRowLabel(r.name, r.index, (shared.get(r.name ?? "") ?? 0) > 1), r.feature, r.name),
+      ),
+    );
     // Tied by rank, so a faint tangent edge beside a sharp one is not a question.
     // A fingertip cannot aim as finely as a cursor, so its tie band is wider.
     const choices = ambiguousCandidates(
@@ -129,28 +128,32 @@ export function installViewportWiring(e: Engine): void {
     // nudge cannot clear a line running in every direction at once, but it
     // reliably clears the pixel that was clicked, and the over-drawn emphasis
     // does the rest.
-    contextMenu(at.x + AMBIGUOUS_MENU_OFFSET, at.y + AMBIGUOUS_MENU_OFFSET, choices.map((c) => ({
-      label: c.label,
-      // Both: the tint says "this is the hovered edge" in the model's own
-      // vocabulary, and the over-drawn line makes it visible past the menu,
-      // which by construction opens right on top of the edges in question.
-      //
-      // KNOWN LIMIT, and not an oversight: where the two edges are EXACTLY
-      // coincident, two bodies meeting along one line, the commonest reason
-      // this menu opens at all, both previews draw the same pixels and only
-      // the label separates them. Which is why the label is the part that
-      // decides whether the menu opens (viewport/edgeTies.ts) rather than the
-      // geometry. Distinguishing them on screen would mean lighting the whole
-      // owning BODY, which is a bigger claim than a hover should make.
-      onHover: (on: boolean) => {
-        e.viewport.hoverEdge(on ? c.cand.edge : null);
-        e.viewport.emphasiseEdge(on ? c.cand.edge : null);
-      },
-      onClick: () => {
-        e.viewport.emphasiseEdge(null); // the choice is made; the pointer is gone
-        e.viewport.applyPick(c.cand, mods);
-      },
-    })));
+    contextMenu(
+      at.x + AMBIGUOUS_MENU_OFFSET,
+      at.y + AMBIGUOUS_MENU_OFFSET,
+      choices.map((c) => ({
+        label: c.label,
+        // Both: the tint says "this is the hovered edge" in the model's own
+        // vocabulary, and the over-drawn line makes it visible past the menu,
+        // which by construction opens right on top of the edges in question.
+        //
+        // KNOWN LIMIT, and not an oversight: where the two edges are EXACTLY
+        // coincident, two bodies meeting along one line, the commonest reason
+        // this menu opens at all, both previews draw the same pixels and only
+        // the label separates them. Which is why the label is the part that
+        // decides whether the menu opens (viewport/edgeTies.ts) rather than the
+        // geometry. Distinguishing them on screen would mean lighting the whole
+        // owning BODY, which is a bigger claim than a hover should make.
+        onHover: (on: boolean) => {
+          e.viewport.hoverEdge(on ? c.cand.edge : null);
+          e.viewport.emphasiseEdge(on ? c.cand.edge : null);
+        },
+        onClick: () => {
+          e.viewport.emphasiseEdge(null); // the choice is made; the pointer is gone
+          e.viewport.applyPick(c.cand, mods);
+        },
+      })),
+    );
     return true;
   };
 
@@ -181,11 +184,16 @@ export function installViewportWiring(e: Engine): void {
   // drag is still running, so it has to be said while the drag is still
   // running. Restores whatever the selection prompt was on release.
   e.viewport.onAreaDrag = (mode) => {
-    if (mode === null) { e.viewport.onSelectionChange?.(); return; }
+    if (mode === null) {
+      e.viewport.onSelectionChange?.();
+      return;
+    }
     const takes = areaFilterLabel(e.viewport.areaTakes);
-    setPrompt(mode === "window"
-      ? `Taking ${takes} fully inside the box, drag left to take anything it touches · Tab filters`
-      : `Taking ${takes} the box touches, drag right to take only what is fully inside · Tab filters`);
+    setPrompt(
+      mode === "window"
+        ? `Taking ${takes} fully inside the box, drag left to take anything it touches · Tab filters`
+        : `Taking ${takes} the box touches, drag right to take only what is fully inside · Tab filters`,
+    );
   };
 
   // A context menu holds targets captured at open time (faceId, edge line, body
@@ -224,7 +232,9 @@ export function installViewportWiring(e: Engine): void {
       modelScale: e.viewport.modelDiagonal() ?? 0,
       regionArea: regionArea(wr.region),
       faceArea,
-    }) ? wr : null;
+    })
+      ? wr
+      : null;
   };
   // SOLID-mode direct selection of a visible sketch's profile AREAS (MCAD-style):
   // click a shown sketch's cell to (pre)select it, then Extrude (E) uses it. Only
@@ -273,7 +283,10 @@ export function installViewportWiring(e: Engine): void {
     browser.setSelectedBodies(e.viewport.getSelectedBodies());
     if (e.toolBusy()) return;
     const ids = e.viewport.getSelectedBodies();
-    if (!ids.length) { setPrompt(null); return; }
+    if (!ids.length) {
+      setPrompt(null);
+      return;
+    }
     // A rebuild carrying the selection over is not a pick. Every undo and redo
     // is one, and arming the gizmo there focused its field, which then kept
     // every later Ctrl+Z and Ctrl+Y for itself (FI-2).
@@ -284,13 +297,17 @@ export function installViewportWiring(e: Engine): void {
   // toolBusy: the Move gizmo the selection raised cancels on the same key, and
   // gating on it left the body lit with no gizmo on it. Captured because the
   // gizmo's value box stops the key from bubbling.
-  window.addEventListener("keydown", (ev) => {
-    if (ev.key !== "Escape" || escapeClaimed()) return;
-    if (isEditableTarget(ev.target) && !e.tools.move.active) return;
-    if (e.viewport.selecting === "bodies" && !e.toolOwnsScreen() && e.viewport.getSelectedBodies().length) {
-      e.viewport.setSelectedBodies([]);
-    }
-  }, true);
+  window.addEventListener(
+    "keydown",
+    (ev) => {
+      if (ev.key !== "Escape" || escapeClaimed()) return;
+      if (isEditableTarget(ev.target) && !e.tools.move.active) return;
+      if (e.viewport.selecting === "bodies" && !e.toolOwnsScreen() && e.viewport.getSelectedBodies().length) {
+        e.viewport.setSelectedBodies([]);
+      }
+    },
+    true,
+  );
 
   // --- sketch overlays follow the document (when not actively sketching) ---
   e.store.onDocChange(() => {
@@ -322,11 +339,7 @@ export function installViewportWiring(e: Engine): void {
       // flip at the instant the tool takes the gesture over.
       const bb = e.store.buildState.result?.bbox;
       const centre = bb
-        ? new THREE.Vector3(
-            (bb.min[0] + bb.max[0]) / 2,
-            (bb.min[1] + bb.max[1]) / 2,
-            (bb.min[2] + bb.max[2]) / 2,
-          )
+        ? new THREE.Vector3((bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2)
         : null;
       e.nudge.show(
         edgeNudgePlacement(
@@ -339,9 +352,7 @@ export function installViewportWiring(e: Engine): void {
     } else if (regions.length) {
       e.nudge.show(regionNudgePlacement(regions, (x, y) => e.starters.grabRegionHandle(x, y)));
     } else {
-      e.nudge.show(
-        faceNudgePlacement(faces, (x, y) => e.starters.grabFaceHandle(x, y)) ?? recentExtrudePlacement(),
-      );
+      e.nudge.show(faceNudgePlacement(faces, (x, y) => e.starters.grabFaceHandle(x, y)) ?? recentExtrudePlacement());
     }
 
     if (e.toolBusy()) return;
@@ -393,8 +404,7 @@ export function installViewportWiring(e: Engine): void {
     const last = e.tools.extrude.lastCommit;
     if (!last) return null;
     const features = e.store.document.features;
-    const stillLast = features[features.length - 1]?.id === last.id
-      && e.store.rollbackIndex === features.length;
+    const stillLast = features[features.length - 1]?.id === last.id && e.store.rollbackIndex === features.length;
     if (!stillLast || e.store.buildState.errorFeatureId === last.id) return null;
     return {
       anchor: last.top,

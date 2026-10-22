@@ -64,7 +64,7 @@
   min-height: 0;
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
   border-radius: var(--float-radius);
   box-shadow: var(--float-shadow);
@@ -294,7 +294,7 @@
   max-height: 100%;
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
   border-radius: var(--float-radius);
   box-shadow: var(--float-shadow);
@@ -399,12 +399,15 @@
   height: var(--rail-tile);
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
   border-radius: var(--float-tile-radius);
   box-shadow: var(--float-shadow);
   color: var(--text);
-  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 .rail-btn:hover .rail-tile {
   background: var(--raised);
@@ -443,7 +446,7 @@
   padding: 3px 8px;
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
   border-radius: 6px;
   box-shadow: var(--float-shadow);
@@ -544,7 +547,7 @@
   border: 0;
   box-shadow: none;
   -webkit-backdrop-filter: none;
-          backdrop-filter: none;
+  backdrop-filter: none;
   overflow: visible;
 }
 
@@ -595,8 +598,12 @@
   background-color: var(--float-line);
   background-size: cover;
   cursor: pointer;
-  &:hover { border-color: var(--float-line); }
-  &.active { border-color: var(--accent); }
+  &:hover {
+    border-color: var(--float-line);
+  }
+  &.active {
+    border-color: var(--accent);
+  }
 }
 .pop-rule {
   height: 1px;
@@ -943,7 +950,7 @@
   padding: 3px;
   background: var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
-          backdrop-filter: var(--float-blur);
+  backdrop-filter: var(--float-blur);
   border: 1px solid var(--float-line);
   border-radius: var(--float-radius);
   box-shadow: var(--float-shadow);
@@ -1086,7 +1093,10 @@
   font: 600 12px/1.4 var(--ui);
   color: var(--text-dim);
   cursor: pointer;
-  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 .section-chip-btn:hover:not(.disabled) {
   color: var(--text);

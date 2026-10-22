@@ -9,7 +9,14 @@ const sources = import.meta.glob("../../src/styles/*.scss", {
 }) as Record<string, string>;
 
 const scss = new Map(
-  Object.entries(sources).map(([path, text]) => [path.split("/").pop()!.replace(/^_/, "").replace(/\.scss$/, ""), text]),
+  Object.entries(sources).map(([path, text]) => [
+    path
+      .split("/")
+      .pop()!
+      .replace(/^_/, "")
+      .replace(/\.scss$/, ""),
+    text,
+  ]),
 );
 
 const css = postcss.parse(

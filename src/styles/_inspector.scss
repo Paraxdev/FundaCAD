@@ -67,7 +67,9 @@
   font: inherit;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease),
+  transition:
+    border-color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease),
     box-shadow var(--t-fast) var(--ease);
 }
 .param-row input:hover {
@@ -99,7 +101,9 @@
   font: inherit;
   font-size: 12px;
   cursor: pointer;
-  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease),
+  transition:
+    border-color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease),
     box-shadow var(--t-fast) var(--ease);
 }
 .param-select:hover {
@@ -139,7 +143,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease),
+  transition:
+    border-color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease),
     box-shadow var(--t-fast) var(--ease);
 }
 .param-file .file-pick:hover {
@@ -196,14 +202,18 @@
   display: inline-flex;
   align-items: center;
   padding: 1px;
-  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
 }
 .param-switch .knob {
   width: 13px;
   height: 13px;
   border-radius: 50%;
   background: var(--text-dim);
-  transition: transform var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+  transition:
+    transform var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
 }
 .param-switch input:checked + .track {
   background: var(--accent);
@@ -394,7 +404,9 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
   cursor: pointer;
-  transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+  transition:
+    color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
 }
 .target-edit:hover:not(:disabled) {
   color: var(--accent-hot);

@@ -72,18 +72,22 @@ const copied = ref<number | null>(null);
 const flashed = ref<number | null>(null);
 
 // The error notice was clicked: show that entry whole, whatever the filters.
-watch(tick, async () => {
-  const id = revealedEntry();
-  if (id === null) return;
-  clearRevealed();
-  const entry = logEntries().find((x) => x.id === id);
-  if (!entry) return;
-  show.value[entry.level] = true;
-  if (entry.detail) expanded.value = new Set(expanded.value).add(id);
-  flashed.value = id;
-  await nextTick();
-  body.value?.querySelector(`[data-log-id="${id}"]`)?.scrollIntoView({ block: "nearest" });
-}, { immediate: true });
+watch(
+  tick,
+  async () => {
+    const id = revealedEntry();
+    if (id === null) return;
+    clearRevealed();
+    const entry = logEntries().find((x) => x.id === id);
+    if (!entry) return;
+    show.value[entry.level] = true;
+    if (entry.detail) expanded.value = new Set(expanded.value).add(id);
+    flashed.value = id;
+    await nextTick();
+    body.value?.querySelector(`[data-log-id="${id}"]`)?.scrollIntoView({ block: "nearest" });
+  },
+  { immediate: true },
+);
 
 // Follow the tail, but only when already at it: scrolling up to read something
 // and being yanked back down by the next frame's error is the single most
@@ -110,8 +114,7 @@ async function copy(text: string, id: number | null) {
   }
 }
 
-const clockOf = (at: number) =>
-  new Date(at).toLocaleTimeString(undefined, { hour12: false });
+const clockOf = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour12: false });
 </script>
 
 <template>
@@ -133,8 +136,7 @@ const clockOf = (at: number) =>
           {{ lvl }} <span class="logcon-count">{{ counts[lvl] }}</span>
         </button>
         <span class="logcon-spacer"></span>
-        <button type="button" class="logcon-btn" title="Copy everything shown"
-                @click="copy(formatLog(rows), null)">
+        <button type="button" class="logcon-btn" title="Copy everything shown" @click="copy(formatLog(rows), null)">
           <Icon name="copy" :size="14" />
         </button>
         <!-- cleanUp, not a bin: the table has no bin, and an icon name that is
@@ -161,12 +163,9 @@ const clockOf = (at: number) =>
           <span class="logcon-time">{{ clockOf(e.at) }}</span>
           <span v-if="e.source" class="logcon-src">{{ e.source }}</span>
           <span class="logcon-msg">{{ e.message }}</span>
-          <button
-            v-if="e.detail"
-            type="button"
-            class="logcon-more"
-            @click="toggleDetail(e.id)"
-          >{{ expanded.has(e.id) ? "less" : "more" }}</button>
+          <button v-if="e.detail" type="button" class="logcon-more" @click="toggleDetail(e.id)">{{
+            expanded.has(e.id) ? "less" : "more"
+          }}</button>
           <button
             type="button"
             class="logcon-copy"

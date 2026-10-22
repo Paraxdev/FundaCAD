@@ -36,8 +36,7 @@ export interface TracerEnv {
 
 export function chooseTracer(pref: TracerPref, env: TracerEnv): TracerKind | null {
   const usable = (k: TracerKind) => (k === "webgpu" ? env.webgpu : env.native.available);
-  const nativeFirst = pref === "native"
-    || (pref === "auto" && (!env.webgpu || env.native.path === "rayquery"));
+  const nativeFirst = pref === "native" || (pref === "auto" && (!env.webgpu || env.native.path === "rayquery"));
   const order: TracerKind[] = nativeFirst ? ["native", "webgpu"] : ["webgpu", "native"];
   const left = order.filter(usable);
   if (left.every((k) => env.faulted?.has(k)) && left.length > 1) return null;

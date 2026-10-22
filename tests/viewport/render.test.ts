@@ -108,10 +108,8 @@ describe("partitionMesh ranged (progressive loads)", () => {
     const whole = partitionMesh(r, ["b0", "b1"]);
     const first = partitionMesh(r, ["b0"], { range: { triStart: 0, triEnd: 2 } });
     const second = partitionMesh(r, ["b1"], { range: { triStart: 2, triEnd: 4 } });
-    expect(Array.from(first.trisByBody.get("b0")!))
-      .toEqual(Array.from(whole.trisByBody.get("b0")!));
-    expect(Array.from(second.trisByBody.get("b1")!))
-      .toEqual(Array.from(whole.trisByBody.get("b1")!));
+    expect(Array.from(first.trisByBody.get("b0")!)).toEqual(Array.from(whole.trisByBody.get("b0")!));
+    expect(Array.from(second.trisByBody.get("b1")!)).toEqual(Array.from(whole.trisByBody.get("b1")!));
   });
 
   it("reuses a caller-owned remap across chunks and hands it back clean", () => {
@@ -148,7 +146,10 @@ describe("buildBodyMesh with a partition", () => {
   it("produces byte-identical output to the scan path", () => {
     const r = sharedVertexReply();
     const metas = r.bodies!;
-    const p = partitionMesh(r, metas.map((m) => m.id));
+    const p = partitionMesh(
+      r,
+      metas.map((m) => m.id),
+    );
 
     for (const meta of metas) {
       const scanned = buildBodyMesh(r, meta, [], RES, undefined);
@@ -170,7 +171,10 @@ describe("buildBodyMesh with a partition", () => {
   it("is order-independent: rebuilding a body twice gives the same mesh", () => {
     const r = sharedVertexReply();
     const metas = r.bodies!;
-    const p = partitionMesh(r, metas.map((m) => m.id));
+    const p = partitionMesh(
+      r,
+      metas.map((m) => m.id),
+    );
     const first = snapshot(buildBodyMesh(r, metas[0]!, [], RES, undefined, p));
     buildBodyMesh(r, metas[1]!, [], RES, undefined, p); // dirties the shared buffer
     const again = snapshot(buildBodyMesh(r, metas[0]!, [], RES, undefined, p));
@@ -228,8 +232,12 @@ describe("buildBodyMesh with a partition", () => {
     const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
     const original = (local: number): number => {
       for (let v = 0; v < sentPos.length / 3; v++) {
-        if (near(sentPos[v * 3]!, pos.getX(local)) && near(sentPos[v * 3 + 1]!, pos.getY(local))
-          && near(sentPos[v * 3 + 2]!, pos.getZ(local))) return v;
+        if (
+          near(sentPos[v * 3]!, pos.getX(local)) &&
+          near(sentPos[v * 3 + 1]!, pos.getY(local)) &&
+          near(sentPos[v * 3 + 2]!, pos.getZ(local))
+        )
+          return v;
       }
       return -1;
     };
@@ -281,7 +289,11 @@ function viewOf(ranges: [start: number, count: number][]): ModelView {
 
 describe("bodyOfFace", () => {
   it("finds the owning body for every id in every range", () => {
-    const view = viewOf([[0, 3], [3, 1], [4, 10]]);
+    const view = viewOf([
+      [0, 3],
+      [3, 1],
+      [4, 10],
+    ]);
     expect(bodyOfFace(view, 0)?.id).toBe("b0");
     expect(bodyOfFace(view, 2)?.id).toBe("b0");
     expect(bodyOfFace(view, 3)?.id).toBe("b1");
@@ -292,7 +304,10 @@ describe("bodyOfFace", () => {
   it("returns undefined below, above, and INSIDE a gap", () => {
     // a gap is what a stale faceId from before a rebuild looks like, the old
     // linear .find returned undefined for it and the binary search must too
-    const view = viewOf([[0, 2], [10, 2]]);
+    const view = viewOf([
+      [0, 2],
+      [10, 2],
+    ]);
     expect(bodyOfFace(view, -1)).toBeUndefined();
     expect(bodyOfFace(view, 2)).toBeUndefined();
     expect(bodyOfFace(view, 9)).toBeUndefined();
@@ -300,7 +315,11 @@ describe("bodyOfFace", () => {
   });
 
   it("does not depend on the bodies array being sorted", () => {
-    const view = viewOf([[20, 5], [0, 5], [10, 5]]);
+    const view = viewOf([
+      [20, 5],
+      [0, 5],
+      [10, 5],
+    ]);
     expect(bodyOfFace(view, 0)?.id).toBe("b1");
     expect(bodyOfFace(view, 12)?.id).toBe("b2");
     expect(bodyOfFace(view, 24)?.id).toBe("b0");
@@ -332,14 +351,18 @@ describe("buildBodyMesh scaling", () => {
     const scanMs = performance.now() - t0;
 
     const t1 = performance.now();
-    const p = partitionMesh(r, metas.map((m) => m.id));
+    const p = partitionMesh(
+      r,
+      metas.map((m) => m.id),
+    );
     const built = metas.map((m) => buildBodyMesh(r, m, [], RES, undefined, p));
     const partMs = performance.now() - t1;
 
     for (let i = 0; i < metas.length; i++) {
       expect(built[i]!.faceIds).toEqual(scanned[i]!.faceIds);
-      expect(Array.from(built[i]!.mesh.geometry.getIndex()!.array))
-        .toEqual(Array.from(scanned[i]!.mesh.geometry.getIndex()!.array));
+      expect(Array.from(built[i]!.mesh.geometry.getIndex()!.array)).toEqual(
+        Array.from(scanned[i]!.mesh.geometry.getIndex()!.array),
+      );
     }
     expect(partMs).toBeLessThan(scanMs);
   }, 120_000);

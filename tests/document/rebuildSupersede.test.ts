@@ -35,7 +35,9 @@ function slowBackend(softCancel = true) {
       return true;
     },
     async init() {},
-    onStatus() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
   } as unknown as GeometryBackend;
   return { be, jobs, cancels };
 }
@@ -179,7 +181,9 @@ describe("a commit the kernel had not answered for", () => {
     store.verifyCommit("f1", "Fillet 60 mm");
     await flush();
     let finish!: () => void;
-    const reading = store.runBusy("Importing a.step", () => new Promise<void>((r) => (finish = r)), { holdHistory: true });
+    const reading = store.runBusy("Importing a.step", () => new Promise<void>((r) => (finish = r)), {
+      holdHistory: true,
+    });
     const refused = result("partial");
     refused.featureErrors = [{ feature_id: "f1", message: "too large" }];
     jobs[2]!.settle({ ok: true, result: refused });

@@ -21,7 +21,10 @@ const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const OUT = path.resolve(process.argv[2] || "sketch_click_pull_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -32,22 +35,37 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.sketch && !!window.viewport, null, { timeout: 60000 });
 
   const idle = () => page.waitForFunction(() => !window.store.buildState.building, null, { timeout: 60000 });
-  const inSketch = (x, y) => page.evaluate(([x, y]) => window.viewport.projectToScreen(window.sketch.plane.to3D(x, y)), [x, y]);
-  const extrudes = () => page.evaluate(() => window.store.document.features.filter((f) => f.type === "extrude").map((f) => ({ id: f.id, distance: f.distance })));
+  const inSketch = (x, y) =>
+    page.evaluate(([x, y]) => window.viewport.projectToScreen(window.sketch.plane.to3D(x, y)), [x, y]);
+  const extrudes = () =>
+    page.evaluate(() =>
+      window.store.document.features
+        .filter((f) => f.type === "extrude")
+        .map((f) => ({ id: f.id, distance: f.distance })),
+    );
   const offered = () => page.evaluate(() => !!window.__fundacad.nudge.want);
 
   await page.evaluate(async () => {
-    window.store.addFeature({ id: "s1", type: "sketch", plane: "XY", entities: [
-      { type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 40 },
-    ] });
+    window.store.addFeature({
+      id: "s1",
+      type: "sketch",
+      plane: "XY",
+      entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 40 }],
+    });
     await window.store.rebuildNow();
   });
   await page.evaluate(() => window.__fundacad.editFeature("s1"));
@@ -66,7 +84,11 @@ const check = (name, ok, detail) => {
     await page.mouse.click(inside.x, inside.y);
     await page.waitForTimeout(400);
     const s = await page.evaluate(() => ({ active: window.sketch.active, picked: window.sketch.selected.size }));
-    check("CONTROL: with a curve picked, a profile click keeps the sketch open and drops the curve", s.active && s.picked === 0, JSON.stringify(s));
+    check(
+      "CONTROL: with a curve picked, a profile click keeps the sketch open and drops the curve",
+      s.active && s.picked === 0,
+      JSON.stringify(s),
+    );
   }
 
   // --- 1b. nothing picked: the click finishes and offers the handle ----------
@@ -121,8 +143,16 @@ const check = (name, ok, detail) => {
     if (top) {
       await drag(top, 60);
       const ex2 = await extrudes();
-      check("pulling it again edits the same extrude, no second one", ex2.length === 1 && ex2[0].id === ex[0]?.id, JSON.stringify(ex2));
-      check("and the depth grew", ex2.length === 1 && ex2[0].distance > (ex[0]?.distance ?? Infinity), JSON.stringify({ before: ex[0]?.distance, after: ex2[0]?.distance }));
+      check(
+        "pulling it again edits the same extrude, no second one",
+        ex2.length === 1 && ex2[0].id === ex[0]?.id,
+        JSON.stringify(ex2),
+      );
+      check(
+        "and the depth grew",
+        ex2.length === 1 && ex2[0].distance > (ex[0]?.distance ?? Infinity),
+        JSON.stringify({ before: ex[0]?.distance, after: ex2[0]?.distance }),
+      );
       await page.screenshot({ path: path.join(OUT, "03_second_pull.png") });
     }
   }
@@ -137,9 +167,12 @@ const check = (name, ok, detail) => {
   // --- 4. double-clicking a visible profile reopens its sketch --------------------
   {
     await page.evaluate(async () => {
-      window.store.addFeature({ id: "s2", type: "sketch", plane: "XY", entities: [
-        { type: "rectangle", id: "r2", x: 50, y: 0, width: 30, height: 30 },
-      ] });
+      window.store.addFeature({
+        id: "s2",
+        type: "sketch",
+        plane: "XY",
+        entities: [{ type: "rectangle", id: "r2", x: 50, y: 0, width: 30, height: 30 }],
+      });
       await window.store.rebuildNow();
     });
     await idle();

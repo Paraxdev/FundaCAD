@@ -22,7 +22,14 @@ import type { Feature, Selector, Vec3 } from "../types";
 import { DimInput, type DimToggleDef } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { fmtLength, snap } from "../ui/units";
-import { axisDragDistance, createDragHandle, nameHandle, HANDLE_LENGTH, handleScale, type DragHandle } from "./manipulator";
+import {
+  axisDragDistance,
+  createDragHandle,
+  nameHandle,
+  HANDLE_LENGTH,
+  handleScale,
+  type DragHandle,
+} from "./manipulator";
 import { CanvasGesture } from "./canvasGesture";
 import { commitDecision } from "./edgeDragMath";
 import { deltaForDiameter, deltaForRadius, radialDrag, type RoundFace } from "./radialDrag";
@@ -162,8 +169,14 @@ export class FaceOffsetTool {
       if (!hit) return; // missed the body, let the click orbit
       e.preventDefault();
       e.stopImmediatePropagation();
-      this.beginDrag([hit.selector], [hit.faceId], hit.anchor, hit.normal, hit.bodyId,
-        this.viewport.roundFaceAt(hit.faceId, hit.anchor));
+      this.beginDrag(
+        [hit.selector],
+        [hit.faceId],
+        hit.anchor,
+        hit.normal,
+        hit.bodyId,
+        this.viewport.roundFaceAt(hit.faceId, hit.anchor),
+      );
       return;
     }
     // Ctrl/Cmd-click another face on the SAME body adds it; all faces share the
@@ -189,7 +202,11 @@ export class FaceOffsetTool {
       e.preventDefault();
       e.stopImmediatePropagation(); // don't orbit while dragging the handle
       // Captured so the release still lands here when it happens over the value box.
-      try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
+      try {
+        this.viewport.domElement.setPointerCapture(e.pointerId);
+      } catch {
+        /* capture optional */
+      }
       this.grabbing = true;
       this.grabValue = this.value;
       this.grabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);
@@ -199,8 +216,7 @@ export class FaceOffsetTool {
 
   private onUp(e: PointerEvent) {
     if (e.button !== 0 || this.phase !== "drag") return;
-    const moved =
-      Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.grabbing) {
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
@@ -214,7 +230,10 @@ export class FaceOffsetTool {
   }
 
   private onKey(e: KeyboardEvent) {
-    if (e.key === "Escape") { this.cancel(); return; }
+    if (e.key === "Escape") {
+      this.cancel();
+      return;
+    }
     // Thicken's one option worth a key: grow the wall both ways about the surface
     if ((e.key === "s" || e.key === "S") && this.mode === "thicken" && this.phase === "drag") {
       this.symmetric = !this.symmetric;
@@ -250,8 +269,12 @@ export class FaceOffsetTool {
   }
 
   private beginDrag(
-    faces: Selector[], faceIds: number[], anchor: THREE.Vector3,
-    normal: THREE.Vector3, bodyId: string | null = null, round: RoundFace | null = null,
+    faces: Selector[],
+    faceIds: number[],
+    anchor: THREE.Vector3,
+    normal: THREE.Vector3,
+    bodyId: string | null = null,
+    round: RoundFace | null = null,
   ) {
     this.faces = faces;
     this.faceIds = faceIds;
@@ -285,13 +308,19 @@ export class FaceOffsetTool {
   /** The value box for the current selection. A round face reads its size and
    *  offers Tangent faces follow; a flat one may read the thickness behind it. */
   private showBox() {
-    this.baseThickness = this.mode === "offsetFace" && !this.round
-      ? this.viewport.thicknessBehind(this.anchor, this.faceNormal)
-      : null;
+    this.baseThickness =
+      this.mode === "offsetFace" && !this.round ? this.viewport.thicknessBehind(this.anchor, this.faceNormal) : null;
     this.toggleKind = this.round ? "follow" : this.baseThickness != null ? "total" : null;
-    const toggle = this.toggleKind === "follow" ? this.followToggle() : this.toggleKind === "total" ? this.totalToggle() : undefined;
-    this.dim.show([{ name: "distance", ...this.fieldLabel(), kind: "length" }], () => this.commit(), () => this.cancel(),
-      toggle, undefined, () => this.onTyped());
+    const toggle =
+      this.toggleKind === "follow" ? this.followToggle() : this.toggleKind === "total" ? this.totalToggle() : undefined;
+    this.dim.show(
+      [{ name: "distance", ...this.fieldLabel(), kind: "length" }],
+      () => this.commit(),
+      () => this.cancel(),
+      toggle,
+      undefined,
+      () => this.onTyped(),
+    );
     // The box says only what this tool judged, held refusals included.
     this.dim.showOwnProblem(this.outcomes.refusal);
     this.syncToggle();
@@ -313,7 +342,8 @@ export class FaceOffsetTool {
   private followToggle(): DimToggleDef {
     return {
       label: "Tangent faces follow",
-      title: "On, the faces that run smoothly into this one move with it once it is too small or too big for them to meet it, so a slot narrows as one; off, that size is refused",
+      title:
+        "On, the faces that run smoothly into this one move with it once it is too small or too big for them to meet it, so a slot narrows as one; off, that size is refused",
       initial: this.follow,
       onChange: (on) => {
         this.follow = on;
@@ -618,7 +648,10 @@ export class FaceOffsetTool {
     }
     if (this.mode === "thicken") {
       return {
-        id: this.previewId, type: "thicken", faces, thickness: v,
+        id: this.previewId,
+        type: "thicken",
+        faces,
+        thickness: v,
         // thickening faces OF an existing solid should grow that solid; a
         // standalone surface body has nothing to join, and the engine's
         // _boolean_into_bodies falls back to a new body in that case anyway
@@ -629,7 +662,10 @@ export class FaceOffsetTool {
     }
     const distance = this.round ? Math.round(this.radial(this.value).distance * 1000) / 1000 : v;
     return {
-      id: this.previewId, type: "offsetFace", faces, distance,
+      id: this.previewId,
+      type: "offsetFace",
+      faces,
+      distance,
       ...(this.followOffered() ? { followTangent: this.follow } : {}),
       ...body,
     };

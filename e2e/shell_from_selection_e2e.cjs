@@ -18,7 +18,10 @@ const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const OUT = path.resolve(process.argv[2] || "shell_from_selection_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -29,20 +32,36 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   const idle = () => page.waitForFunction(() => !window.store.buildState.building, null, { timeout: 60000 });
   const prompt = () => page.evaluate(() => document.querySelector("#prompt")?.textContent ?? "");
-  const shells = () => page.evaluate(() => window.store.document.features.filter((f) => f.type === "shell").map((f) => ({ thickness: f.thickness, faces: f.faces })));
+  const shells = () =>
+    page.evaluate(() =>
+      window.store.document.features
+        .filter((f) => f.type === "shell")
+        .map((f) => ({ thickness: f.thickness, faces: f.faces })),
+    );
   const busy = () => page.evaluate(() => window.__fundacad.busyWhy().faceOffset);
 
   await page.evaluate(async () => {
-    window.store.addFeature({ id: "s1", type: "sketch", plane: "XY", entities: [{ type: "circle", id: "c1", x: 0, y: 0, radius: 25 }] });
+    window.store.addFeature({
+      id: "s1",
+      type: "sketch",
+      plane: "XY",
+      entities: [{ type: "circle", id: "c1", x: 0, y: 0, radius: 25 }],
+    });
     window.store.addFeature({ id: "e1", type: "extrude", sketch: "s1", distance: 30, operation: "new" });
     await window.store.rebuildNow();
   });
@@ -66,7 +85,11 @@ const check = (name, ok, detail) => {
     tile: document.querySelector("#toolrail [data-action=running-tool]")?.textContent ?? "",
     others: document.querySelectorAll("#toolrail [data-family], #toolrail [data-action^='offer:']").length,
   }));
-  check("the rail steps back to the running Shell", rail.mode === "running" && /Shell/.test(rail.tile) && rail.others === 0, JSON.stringify(rail));
+  check(
+    "the rail steps back to the running Shell",
+    rail.mode === "running" && /Shell/.test(rail.tile) && rail.others === 0,
+    JSON.stringify(rail),
+  );
   await page.screenshot({ path: path.join(OUT, "01_opened.png") });
 
   // Aim at the tool's own handle: its anchor, and a point a little way along its axis.
@@ -78,7 +101,8 @@ const check = (name, ok, detail) => {
     return { x: s0.x + (s1.x - s0.x) * 0.6, y: s0.y + (s1.y - s0.y) * 0.6, dx: s1.x - s0.x, dy: s1.y - s0.y, k };
   });
   const len = Math.hypot(aim.dx, aim.dy) || 1;
-  const ux = aim.dx / len, uy = aim.dy / len;
+  const ux = aim.dx / len,
+    uy = aim.dy / len;
   // Screen pixels per mm along the axis, so drags can aim at a wall.
   const perMm = len / (aim.k * 20);
   const grabAt = aim;
@@ -103,9 +127,11 @@ const check = (name, ok, detail) => {
   await idle();
   const kept = Number(/keeping ([\d.]+)/.exec(refused)?.[1]);
   const held = await shells();
-  check("letting go on a refused wall commits the size that was on screen",
+  check(
+    "letting go on a refused wall commits the size that was on screen",
     held.length === 1 && Number.isFinite(kept) && Math.abs(held[0].thickness - kept) < 0.05 && held[0].thickness < 25,
-    JSON.stringify({ kept, held }));
+    JSON.stringify({ kept, held }),
+  );
   check("and the tool is done", (await busy()) === false);
 
   await page.evaluate(() => window.store.undo());
@@ -131,7 +157,11 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(1000);
   await idle();
   const got = await shells();
-  check("letting go on a wall that builds commits one shell", got.length === 1 && got[0].thickness > 0 && got[0].thickness < 25, JSON.stringify(got));
+  check(
+    "letting go on a wall that builds commits one shell",
+    got.length === 1 && got[0].thickness > 0 && got[0].thickness < 25,
+    JSON.stringify(got),
+  );
   const err = await page.evaluate(() => window.store.buildState.errorMessage ?? null);
   check("and the model builds", err === null, String(err));
   check("the tool is done", (await busy()) === false);

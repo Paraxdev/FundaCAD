@@ -30,8 +30,7 @@ type Cards = { left: readonly Box[]; right: readonly Box[] };
 function rowFree(cy: number, hh: number, area: Box, cards: Cards, gap: number) {
   let L = area.left + gap;
   let R = area.right - gap;
-  const inRow = (o: Box) =>
-    o.right > o.left && o.bottom > o.top && o.bottom > cy - hh && o.top < cy + hh;
+  const inRow = (o: Box) => o.right > o.left && o.bottom > o.top && o.bottom > cy - hh && o.top < cy + hh;
   for (const o of cards.right) if (inRow(o)) R = Math.min(R, o.left - gap);
   for (const o of cards.left) if (inRow(o)) L = Math.max(L, o.right + gap);
   return { L, R };
@@ -138,7 +137,13 @@ export function layoutLabels(
       if (!take.length) continue;
       take.sort((a, b) => ls[a]!.x - ls[b]!.x || a - b);
       const half = take.map((i) => ls[i]!.hw);
-      const pos = spread(take.map((i) => ls[i]!.x), half, half.map((h) => L + h), half.map((h) => R - h), gap);
+      const pos = spread(
+        take.map((i) => ls[i]!.x),
+        half,
+        half.map((h) => L + h),
+        half.map((h) => R - h),
+        gap,
+      );
       take.forEach((i, n) => {
         out[i] = { x: pos[n]!, y };
         held.get(i)!.line = j;
@@ -173,7 +178,13 @@ export function layoutLabels(
       }
       take.sort((a, b) => ls[a]!.y - ls[b]!.y || a - b);
       const half = take.map((i) => ls[i]!.hh);
-      const pos = spread(take.map((i) => ls[i]!.y), half, half.map((h) => T + h), half.map((h) => B - h), gap);
+      const pos = spread(
+        take.map((i) => ls[i]!.y),
+        half,
+        half.map((h) => T + h),
+        half.map((h) => B - h),
+        gap,
+      );
       let next = wall;
       take.forEach((i, n) => {
         const hw = ls[i]!.hw;
