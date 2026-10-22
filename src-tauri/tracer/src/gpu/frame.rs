@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use crate::bloom::{self, Bloom, Chain};
 
-use super::{bytes, Estimator, FrameKey, GroundMode, Held, Tracer, MAX_LIGHTS};
+use super::{bytes, Estimator, FrameKey, GroundMode, Held, Tracer, MAX_LIGHTS, WAIT_LIMIT};
 
 /// What one dispatch aims for, short enough that the compositor and
 /// the WebGPU viewport keep their frames, long enough to amortise a submit.
@@ -230,11 +230,15 @@ impl Tracer {
         }
     }
 
-    /// Waits for the submitted work, at most the wait limit. A timeout or a
-    /// lost device becomes the tracer's fault, so the frames after it are black.
+    /// Waits for the submitted work, at most WAIT_LIMIT. A timeout or a lost
+    /// device becomes the tracer's fault, so the frames after it are black.
     pub fn wait(&self) -> Result<(), String> {
-        let polled = self.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: Some(self.wait_limit) });
-        settle(polled, self.wait_limit).inspect_err(|e| {
+        let polled = if self.stalled {
+            Err(wgpu::PollError::Timeout)
+        } else {
+            self.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: Some(WAIT_LIMIT) })
+        };
+        settle(polled, WAIT_LIMIT).inspect_err(|e| {
             let mut f = self.fault.lock().unwrap_or_else(|p| p.into_inner());
             f.lost.get_or_insert_with(|| e.clone());
         })
