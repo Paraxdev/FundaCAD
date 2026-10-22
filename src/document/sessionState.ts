@@ -30,6 +30,8 @@ export class SessionState {
   /** The rebuild on the wire, and the id a supersede cancels. `dropped` keeps one whose document was replaced off the
    *  wire if its request has not gone out yet. */
   inflight: { gen: number; id: string | null; cancelled: boolean; byUser?: boolean; dropped?: boolean } | null = null;
+  // The features the model on screen was built from, and the load it belongs to.
+  drawnFrom: { ids: Set<string>; load: number } | null = null;
   // The last preview-free build and its key: leaving a tool or undoing a refused commit shows it again without a rebuild.
   committedShown: { key: string; state: RebuildState } | null = null;
   /** A commit the kernel had not answered for yet, see verifyCommit. */

@@ -701,6 +701,17 @@ export class DocumentStore {
     }
   }
 
+  /** A feature the model on screen was built from is gone, by a delete or a replace load. */
+  get drawnBehind(): boolean {
+    const drawn = this.st.drawnFrom;
+    if (!drawn) return false;
+    if (drawn.load !== this.loads) return true;
+    const now = new Set(this.doc.features.map((f) => f.id));
+    for (const id of drawn.ids) if (!now.has(id)) return true;
+    return false;
+  }
+  private loads = 0;
+
   /** An edit is waiting out the rebuild debounce. */
   get rebuildPending(): boolean {
     return this.st.rebuildTimer != null;
@@ -894,6 +905,7 @@ export class DocumentStore {
   }
   // A failed rebuild keeps the last result, and a build in flight would hold up the new document's.
   private discardModelForReplacement() {
+    this.loads++;
     // A reply or chunk for the old document can still arrive before the cancel lands.
     this.staleThrough = this.sendGen;
     this.buildEpoch++;
@@ -2994,6 +3006,7 @@ export class DocumentStore {
               st.computeAllQueued = false;
               this.emitBuildStarted();
               const sent = this.doc;
+              const sentLoad = this.loads;
               const previewing = !!(this.preview || this.editPreview);
               const sentPreview = this.previewSnapshot();
               const effective = this.effectiveDoc();
@@ -3029,6 +3042,7 @@ export class DocumentStore {
               // previous document) renders over it.
               if (this.build.streamed !== null && (!reply.ok || settled.heldRefusal)) this.emitBuildAbort();
               this.build = settled;
+              if (reply.ok) st.drawnFrom = { ids: new Set(sent.features.map((f) => f.id)), load: sentLoad };
               if (key !== null && reply.ok) this.st.committedShown = { key, state: settled };
               this.emitBuild();
               // Compute All is the explicit retry the valve toast promises, so it re-arms the valve first.
@@ -3080,6 +3094,7 @@ export class DocumentStore {
       errorMessage: null,
       heldRefusal: null,
     };
+    st.drawnFrom = { ids: new Set(), load: this.loads };
     this.emitBuild();
     return true;
   }
