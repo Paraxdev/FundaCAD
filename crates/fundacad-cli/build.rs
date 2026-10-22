@@ -5,10 +5,8 @@ fn main() {
     embed_segment_heap_manifest();
 }
 
-/// The Segment Heap (Windows 10 2004 and later, ignored before) meshes a big
-/// document up to a third faster than the NT heap: BRepMesh's 1 MiB blocks
-/// are each a fresh VirtualAlloc there, and the page faults serialize the
-/// mesh threads. src-tauri/build.rs asks the same for the app executable.
+/// The Segment Heap (Windows 10 2004 and later) meshes a big document up to a third faster than the NT heap,
+/// where each 1 MiB BRepMesh block is a fresh VirtualAlloc whose page faults serialize the mesh threads.
 fn embed_segment_heap_manifest() {
     println!("cargo:rerun-if-changed=engine.manifest");
     let msvc = std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc");

@@ -1,11 +1,5 @@
-//! `fundacad-engine`, the Rust engine outside the app.
-//!
-//! `--ws` serves the engine the way the Python engine's `server.py` did, for a
-//! browser, the e2e scripts and the Python protocol suites. `--stdio` is the
-//! worker protocol the app speaks to `fundacad --engine`. `rebuild` runs one
-//! document through the same jobs, for CI and scripts. `doc-json` reads any
-//! saved document, .funda or .fundab, and prints its JSON. `golden-check`
-//! holds this engine to the Python engine's answers frozen in tests/golden.
+//! `fundacad-engine`, the Rust engine outside the app. `--ws` serves browsers, the e2e scripts and the protocol
+//! suites, `--stdio` is the app's `fundacad --engine` worker, and `rebuild`, `doc-json` and `golden-check` serve CI.
 
 mod golden;
 
@@ -46,8 +40,7 @@ const USAGE: &str = "usage:
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     fundacad_engine::set_build(env!("FUNDACAD_BUILD"));
-    // server.py's startup `plugin_geometry.discover()`: the engine reads the
-    // installed plugins' manifests, an eval or a library user has none.
+    // The engine loads the installed plugins' manifests, an eval or a library user has none.
     fundacad_geom::plugins::load();
     match args.first().map(String::as_str) {
         Some("--ws") => fundacad_engine::ws::run(GeomJobs),
@@ -228,10 +221,8 @@ fn read_json(path: &str) -> Result<Value, String> {
     serde_json::from_str(&text).map_err(|e| format!("{path} is not JSON: {e}"))
 }
 
-/// the Python engine's `eval_selector_survival.py` on this engine: one JSON line of
-/// metrics last on stdout, everything else on stderr, exit 2 on a setup failure.
-/// --config overrides the shipped tuning key by key, as `configure` does after
-/// geom_select.py loaded selector_tuning.json at import.
+/// `eval_selector_survival.py` on this engine: one JSON line of metrics last on stdout, the rest on stderr, exit 2
+/// on a setup failure. --config overrides the shipped tuning key by key, as `configure` does.
 fn select_eval(args: &[String]) -> ExitCode {
     use fundacad_geom::select::{eval, Tuning};
     let mut corpus_path = None;
