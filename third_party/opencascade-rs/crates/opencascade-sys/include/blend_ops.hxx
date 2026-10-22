@@ -174,10 +174,12 @@ enum BlSidesKind { BL_SIDES_MAP, BL_SIDES_MAP_FITS, BL_SIDES_FIT, BL_SIDES_TOUCH
 
 // `unseen`: with no fit, an edge the section build would get wrong in map order: a concave fill on a
 // face it runs past, clamped or crossed, or a chamfer at an inside corner while setbacks just meet.
+// `cornered`: a chamfered edge meeting another at an inside corner of a face.
 struct BlSides {
   int kind = BL_SIDES_MAP;
   std::vector<char> second;
   int unseen = -1;
+  int cornered = -1;
 };
 
 struct BlSeg {
@@ -366,6 +368,7 @@ inline BlSides bl_chamfer_sides(const TopoDS_Shape &shape, const std::vector<Top
           if (o.edge >= 0 && away.Dot(s.in) < 0) cornered = s.edge;
         }
     }
+    out.cornered = cornered;
     std::vector<char> concave(m, 0);
     for (size_t i = 0; i < m; ++i) {
       if (seg_at[i][0] < 0 || seg_at[i][1] < 0) return out;

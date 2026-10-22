@@ -443,11 +443,12 @@ This file starts on 2026-08-03. For anything before that, see the
   corner of each face and 3 at the other fits, and 1/12 came back carved one
   edge at a time without a word. A two distance chamfer that fits no way round,
   or that only the fallback build could make and would leave stepped where its
-  edge ends on a slanted or rounded face, is now refused, and so is one whose
-  setbacks just meet across a face with an inside corner, like the top of an
-  L with 5 + 5 on its 10 mm arm, where the fallback build left a wedge standing
-  in the corner without a word. Some of these used to build with a warning
-  about another corner while a concave fill was clipped without one.
+  edge ends on a slanted or rounded face, is now refused, and so is one that
+  fits or just meets across a face with an inside corner but that only the
+  fallback build could make, like the top of an L with 5 + 5 on its 10 mm arm
+  or 2/8 where that corner turns 225 degrees: the fallback build left a wedge
+  standing in the corner without a word. Some of these used to build with a
+  warning about another corner while a concave fill was clipped without one.
 
 - **One Undo takes back an import and the colours its file carried.** Each
   colour used to be an undo step of its own, so a coloured assembly took many

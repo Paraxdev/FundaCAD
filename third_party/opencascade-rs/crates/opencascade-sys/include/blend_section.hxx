@@ -2416,6 +2416,16 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
     BRepBuilderAPI_Copy pristine(shape, false);
     std::vector<TopoDS_Shape> pristine_es;
     for (const TopoDS_Shape &e : es) pristine_es.push_back(pristine.ModifiedShape(e));
+    // The section build ends both chamfers square at an inside corner and leaves their mitre standing, and
+    // only OCCT builds a set that fits there right, so no size is offered.
+    if (chamfer && !std::isnan(size2)) {
+      BlSides bs = bl_chamfer_sides(shape, es, sz, std::vector<double>(sz.size(), size2));
+      if (bs.cornered >= 0 && (bs.kind == BL_SIDES_FIT || bs.kind == BL_SIDES_MAP_FITS)) {
+        BRepAdaptor_Curve crv(TopoDS::Edge(es[bs.cornered]));
+        throw secblend::TooLarge(secblend::Misfit::Overlap, secblend::FITS_UNKNOWN,
+                                 crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter())));
+      }
+    }
     auto started = std::chrono::steady_clock::now();
     try {
       TopoDS_Shape out = secblend::blend_scaled(shape, es, chamfer, size2, g2, sz, draft, profile, one_shot);
