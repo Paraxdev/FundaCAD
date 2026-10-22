@@ -1,8 +1,5 @@
-//! Press/pull with `direction: "axis"` moves a hole's end along the hole, so
-//! the wall lengthens and the end keeps its shape.
-//!
-//! The spike is press_pull_split.rs's: a thin revolved spike with a 2 mm pin
-//! channel up its axis, capped by a 45 degree cone whose apex is at z 22.5.
+//! Press/pull with `direction: "axis"` moves a hole's end along the hole, so the wall lengthens and the end keeps
+//! its shape. The spike is press_pull_split.rs's, a 2 mm pin channel up its axis under a 45 degree cone, apex z 22.5.
 
 use std::f64::consts::PI;
 

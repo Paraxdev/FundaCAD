@@ -1,7 +1,5 @@
-//! Press/pull on a flat face carries the faces around it along, the way an
-//! offset face does: each neighbour is extended along its own surface to meet
-//! the moved face, so a sloped side keeps its slope rather than a straight wall
-//! rising off the old edge.
+//! Press/pull on a flat face extends each neighbour along its own surface to meet it, as an offset face does,
+//! so a sloped side keeps its slope rather than a straight wall rising off the old edge.
 
 use std::f64::consts::PI;
 

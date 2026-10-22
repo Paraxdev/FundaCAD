@@ -1,7 +1,5 @@
-//! The plugin host end to end on the PrintToolbox component, with the same
-//! documents and analytic volumes as plugins/FundaCAD.PrintToolbox/geometry/tests.
-//! Needs `python scripts/build-plugin-wasm.py FundaCAD.PrintToolbox` first;
-//! without the component every case is skipped with a note.
+//! The plugin host end to end on the PrintToolbox component, against plugins/FundaCAD.PrintToolbox/geometry/tests.
+//! Needs `python scripts/build-plugin-wasm.py FundaCAD.PrintToolbox` first, else every case is skipped with a note.
 #![cfg(feature = "plugins")]
 
 use std::f64::consts::PI;
@@ -130,9 +128,8 @@ fn job(r: fundacad_protocol::JobResult) -> serde_json::Map<String, Value> {
     }
 }
 
-/// A texture on the top of a plate: the rebuild stashes its spec, the viewport
-/// mesh of that face is displaced (more triangles, raised within its depth,
-/// its colour slot on the payload) and the other faces are untouched.
+/// The rebuild stashes the texture spec, and the face's mesh gets more triangles, rises within its depth and
+/// has its colour slot on the payload.
 #[test]
 fn a_texture_displaces_its_face_and_only_its_face() {
     if !built("FundaCAD.Texture") {
@@ -210,9 +207,8 @@ fn textured_face_spread(m: &fundacad_protocol::MeshResult, n: [f64; 3]) -> f64 {
     along.iter().copied().fold(f64::MIN, f64::max) - along.iter().copied().fold(f64::MAX, f64::min)
 }
 
-/// A knurl on one 1.41 mm wide chamfer face: every row of its lattice landed
-/// on a zero line of the pattern and every raised vertex sat on the pinned
-/// boundary, so the face stayed flat and nothing said so.
+/// On a 1.41 mm wide chamfer every row of a knurl lattice can land on a zero line of the pattern and every raised
+/// vertex on the pinned boundary, leaving the face flat without a word.
 #[test]
 fn a_texture_on_a_narrow_chamfer_raises_it() {
     if !built("FundaCAD.Texture") {
@@ -229,9 +225,8 @@ fn a_texture_on_a_narrow_chamfer_raises_it() {
     assert!(spread > 0.1 && spread < 0.4 + 1e-3, "{spread}");
 }
 
-/// A 0.42 mm chamfer lies in one flat land of a 2 mm knurl, so no mesh can
-/// raise it: the face stays plain and the feature says why, from a cached
-/// mesh too, although its rebuild had nothing to report.
+/// A 0.42 mm chamfer lies in one flat land of a 2 mm knurl, so no mesh can raise it: the feature says why,
+/// from a cached mesh too, although its rebuild had nothing to report.
 #[test]
 fn a_texture_that_leaves_its_face_flat_says_so() {
     if !built("FundaCAD.Texture") {

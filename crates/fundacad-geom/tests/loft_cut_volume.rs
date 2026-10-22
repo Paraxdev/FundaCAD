@@ -1,6 +1,5 @@
-//! The quick volume integration misses by a percent or more on a loft between
-//! closed spline sections, so a pin bored into one looked like a cut that grew
-//! the body, and a thread joined onto one looked like a join that lost material.
+//! The quick volume integration misses by a percent or more on a loft between closed spline sections,
+//! enough to make a cut into one look like it grew the body or a join onto one look like it lost material.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};
