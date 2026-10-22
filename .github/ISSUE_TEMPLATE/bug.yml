@@ -43,5 +43,5 @@ body:
   - type: markdown
     attributes:
       value: |
-        A picture helps: drag the fundacad-report.png you saved into the box above, or any screenshot.
-        To share the document, put the .funda file in a .zip and drag it in.
+        A picture helps: drag the fundacad-report.png you saved, or any screenshot, into What happened or Steps to reproduce.
+        To share the document, put the .funda file in a .zip and drag it into the same box.
