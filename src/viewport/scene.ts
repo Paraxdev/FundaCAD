@@ -16,7 +16,7 @@ import { MatcapDraw } from "./matcap";
 import { GpuTimer } from "./gpuTimer";
 import { OverlayDraw } from "./pathtrace/overlayDraw";
 import { viewCamera, type FrameView } from "./pathtrace/frameCamera";
-import { ModelPrepass, OverlayCompose, highAsked, stagesFor, type FrameFacts, type FrameState, type RealtimeQuality, type Stage } from "./realtimePipeline";
+import { GlowMask, maskHighPass, ModelPrepass, OverlayCompose, highAsked, stagesFor, type FrameFacts, type FrameState, type RealtimeQuality, type Stage } from "./realtimePipeline";
 import type { ViewMode } from "../ui/renderPrefs";
 import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
 import { buildRoom, disposeRoom } from "./environments";
@@ -448,6 +448,7 @@ export class PostChain {
   private composer: import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer | null = null;
   private bloom: import("three/examples/jsm/postprocessing/UnrealBloomPass.js").UnrealBloomPass | null = null;
   private bokeh: import("three/examples/jsm/postprocessing/BokehPass.js").BokehPass | null = null;
+  private glowMask: GlowMask | null = null;
   private passesLoading: Promise<void> | null = null;
   private passes: {
     EffectComposer: typeof import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer;
@@ -488,9 +489,8 @@ export class PostChain {
    *  the view is ABOUT: whatever you have centred is what stays in focus, which
    *  needs no control of its own and is never wrong. */
   focusDistance = 1;
-  /** Whether anything on screen can reach the bloom threshold: something that
-   *  glows, or a shiny finish that throws a hot highlight. Written by the viewport
-   *  with each finish pass. */
+  /** Something on the model glows or is shiny, so bloom takes the composer.
+   *  Written by the viewport with each finish pass. */
   bloomable = true;
   private quality: RealtimeQuality = "standard";
   private prepass: ModelPrepass | null = null;
@@ -938,11 +938,32 @@ export class PostChain {
     composer.addPass(new OutputPass());
     // addPass sized the glow in device pixels, setSize keeps it at CSS size.
     bloom.setSize(this.glowSize.x, this.glowSize.y);
+    this.maskBloom(bloom);
     this.bloom = bloom;
     this.bokeh = bokeh;
     this.composer = composer;
     this.camera = null; // force the re-aim above on the next frame
     return composer;
+  }
+
+  /** Only glowing faces bloom: the bright pass reads the glow mask, and is skipped
+   *  on a frame where nothing on screen glows. */
+  private maskBloom(bloom: import("three/examples/jsm/postprocessing/UnrealBloomPass.js").UnrealBloomPass) {
+    const glow = (this.glowMask ??= new GlowMask());
+    if (!maskHighPass(bloom.materialHighPassFilter, glow.target.texture)) {
+      console.warn("[viewport] three's bloom high pass changed, bloom is not limited to glowing faces");
+      return;
+    }
+    const spill = bloom.render.bind(bloom);
+    bloom.render = (r, write, read, dt, stencil) => {
+      const camera = this.camera;
+      let lit = false;
+      this.timed("glowMask", () => {
+        const bright = bloom.renderTargetBright;
+        lit = camera !== null && glow.render(r, this.scene, camera, bright.width, bright.height);
+      });
+      if (lit) spill(r, write, read, dt, stencil);
+    };
   }
 }
 

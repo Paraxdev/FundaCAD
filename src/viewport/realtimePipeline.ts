@@ -1,7 +1,8 @@
 // The High tier of the realtime frame: the model drawn on its own into the HDR
 // target, with a prepass of normals, roughness and depth beside it for the screen
 // space effects that read them, and the overlays drawn after the OutputPass on the
-// canvas, so they are never bloomed, blurred or tone mapped twice.
+// canvas, so they are never bloomed, blurred or tone mapped twice. The glow mask
+// at the end keeps bloom to glowing faces on either tier.
 
 import * as THREE from "three";
 import type { RealtimeQualityPref, ViewMode } from "../ui/renderPrefs";
@@ -362,5 +363,106 @@ export class OverlayCompose {
 
   dispose(): void {
     this.twins.dispose();
+  }
+}
+
+export function glows(m: THREE.Material): boolean {
+  const s = m as THREE.MeshStandardMaterial;
+  return s.isMeshStandardMaterial === true && s.emissiveIntensity > 0 && (s.emissive.r > 0 || s.emissive.g > 0 || s.emissive.b > 0);
+}
+
+const HIGH_PASS_TEXEL = "vec4 texel = texture2D( tDiffuse, vUv );";
+
+/** Makes UnrealBloomPass's high pass read only where `mask` is white. False when
+ *  three's shader no longer has the line this rewrites, and then nothing changed. */
+export function maskHighPass(m: THREE.ShaderMaterial, mask: THREE.Texture): boolean {
+  if (!m.fragmentShader.includes(HIGH_PASS_TEXEL)) return false;
+  m.uniforms["tMask"] = { value: mask };
+  m.fragmentShader = "uniform sampler2D tMask;\n"
+    + m.fragmentShader.replace(HIGH_PASS_TEXEL, `${HIGH_PASS_TEXEL}\n\ttexel *= texture2D( tMask, vUv ).r;`);
+  m.needsUpdate = true;
+  return true;
+}
+
+function glowTwin(): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial();
+}
+
+/** The bloom's mask: glowing faces white, every other solid body black, depth
+ *  tested so a body in front hides a glow behind it.
+ *
+ *  Note: a lit white face reaches the luminance of a glowing one (2.55 against
+ *  3.16 linear at bloom 0.4), so no threshold alone can keep it from blooming. */
+export class GlowMask {
+  readonly target = new THREE.WebGLRenderTarget(1, 1, { samples: 0, depthBuffer: true });
+  private twins = new Twins(glowTwin);
+  private clearWas = new THREE.Color();
+
+  private swapFor(scene: THREE.Scene): { swap: Swapped[]; hide: THREE.Object3D[] } | null {
+    const bodies: THREE.Mesh[] = [];
+    const hide: THREE.Object3D[] = [];
+    let lit = false;
+    scene.traverseVisible((o) => {
+      if (!drawable(o) || !onModelLayer(o)) return;
+      if (!isBody(o)) {
+        hide.push(o);
+        return;
+      }
+      bodies.push(o);
+      if (!lit && materialsOf(o).some(glows)) lit = true;
+    });
+    if (!lit) return null;
+    const twin = (src: THREE.Material) => {
+      const t = this.twins.get(src);
+      mirror(t, src);
+      const glow = glows(src);
+      // Glass in front of a glow lets the glow through, as it does in the picture.
+      const through = !glow && seenThrough(src);
+      t.color.set(glow ? 0xffffff : 0x000000);
+      t.wireframe = (src as THREE.MeshBasicMaterial).wireframe === true;
+      t.colorWrite = !through;
+      t.depthWrite = !through;
+      t.transparent = false;
+      t.blending = THREE.NoBlending;
+      return t;
+    };
+    const swap = bodies.map((mesh) => ({ mesh, material: Array.isArray(mesh.material) ? mesh.material.map(twin) : twin(mesh.material) }));
+    return { swap, hide };
+  }
+
+  /** Draws the mask at `w` x `h`. False, with nothing drawn, when no body on screen glows. */
+  render(r: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, w: number, h: number): boolean {
+    const plan = this.swapFor(scene);
+    if (!plan) {
+      this.twins.prune();
+      return false;
+    }
+    if (this.target.width !== w || this.target.height !== h) this.target.setSize(w, h);
+    const prevTarget = r.getRenderTarget();
+    r.getClearColor(this.clearWas);
+    const alpha = r.getClearAlpha();
+    const auto = r.autoClear;
+    const override = scene.overrideMaterial;
+    try {
+      drawSwapped(r, scene, camera, plan.swap, plan.hide, MODEL_MASK, () => {
+        scene.overrideMaterial = null;
+        r.autoClear = true;
+        r.setClearColor(0x000000, 1);
+        r.setRenderTarget(this.target);
+        r.render(scene, camera);
+      });
+    } finally {
+      scene.overrideMaterial = override;
+      r.autoClear = auto;
+      r.setRenderTarget(prevTarget);
+      r.setClearColor(this.clearWas, alpha);
+    }
+    this.twins.prune();
+    return true;
+  }
+
+  dispose(): void {
+    this.twins.dispose();
+    this.target.dispose();
   }
 }
