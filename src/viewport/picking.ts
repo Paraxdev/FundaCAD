@@ -266,8 +266,7 @@ function farthestPx(cands: readonly EdgeCandidate[]): number {
 const _sphere = new THREE.Sphere();
 const _onRay = new THREE.Vector3();
 
-/** World size of one screen pixel: `fixed` (orthographic) plus `perDepth` times the depth (perspective). Null for a
- *  camera of neither kind. */
+/** World size of one screen pixel, `fixed` plus `perDepth` times the depth. Null for a camera of neither kind. */
 function pixelSize(camera: THREE.Camera, viewHeightPx: number): { fixed: number; perDepth: number } | null {
   const persp = camera as THREE.PerspectiveCamera;
   const ortho = camera as THREE.OrthographicCamera;
@@ -282,14 +281,13 @@ function pixelSize(camera: THREE.Camera, viewHeightPx: number): { fixed: number;
   return null;
 }
 
-/** The object's bounding sphere in world space, in the shared scratch sphere. */
+// Returns the shared scratch sphere, overwritten by the next call.
 function worldSphere(o: THREE.Object3D & { geometry: THREE.BufferGeometry }): THREE.Sphere {
   const g = o.geometry;
   if (!g.boundingSphere) g.computeBoundingSphere();
   return _sphere.copy(g.boundingSphere!).applyMatrix4(o.matrixWorld);
 }
 
-/** Whether a sphere comes within `radiusPx` on screen of the pointer ray. */
 function sphereNearRay(s: THREE.Sphere, ray: THREE.Ray, px: { fixed: number; perDepth: number }, radiusPx: number) {
   const away = ray.closestPointToPoint(s.center, _onRay).distanceTo(s.center);
   const reach = radiusPx * (px.fixed + px.perDepth * (ray.origin.distanceTo(s.center) + s.radius));

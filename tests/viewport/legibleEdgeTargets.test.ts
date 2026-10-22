@@ -94,3 +94,91 @@ describe("legibleEdgeTargets", () => {
     expect(hits(kept, cam).hits.length).toBeLessThanOrEqual(6 * 32 * EDGE_PICK_MAX_DENSITY);
   });
 });
+
+// A slanted camera looking at a ring off the origin, at the depth where the ring's drawn disc holds `scale` times as
+// many pixels as it has segments.
+function atDensity(segments: number, scale: number, ortho: boolean) {
+  const mat = new LineMaterial({ linewidth: 1 });
+  const l = ring(segments, 2.5, new THREE.Vector3(7.3, -4.1, 2.2), mat);
+  l.rotation.set(0.4, -0.7, 0.2);
+  l.updateMatrixWorld(true);
+  l.geometry.computeBoundingSphere();
+  const s = l.geometry.boundingSphere!.clone().applyMatrix4(l.matrixWorld);
+  const dir = new THREE.Vector3(0.3, -0.5, 0.81).normalize();
+  // Pixels per world unit that make the disc pi * (r * k)^2 equal scale * segments.
+  const k = Math.sqrt((scale * segments) / Math.PI) / s.radius;
+  let cam: THREE.Camera;
+  if (ortho) {
+    const o = new THREE.OrthographicCamera(-40, 40, 30, -30, 0.1, 1e6);
+    o.zoom = (k * 60) / H;
+    cam = o;
+    cam.position.copy(s.center).addScaledVector(dir, 50);
+  } else {
+    const p = new THREE.PerspectiveCamera(38, W / H, 0.1, 1e6);
+    p.zoom = 1.3;
+    const depth = (H * 1.3) / (k * 2 * Math.tan(THREE.MathUtils.degToRad(38) / 2));
+    cam = p;
+    cam.position.copy(s.center).addScaledVector(dir, depth);
+  }
+  cam.lookAt(s.center);
+  cam.updateMatrixWorld(true);
+  (cam as THREE.PerspectiveCamera).updateProjectionMatrix();
+  const ray = new THREE.Ray(cam.position.clone(), s.center.clone().sub(cam.position).normalize());
+  return { l, cam, ray, s };
+}
+
+describe("legibleEdgeTargets guards", () => {
+  it("keeps nothing of nothing", () => {
+    const cam = camera(50, false);
+    expect(
+      legibleEdgeTargets([], new THREE.Ray(cam.position.clone(), new THREE.Vector3(0, 0, -1)), cam, H, GRAB),
+    ).toEqual([]);
+  });
+
+  for (const ortho of [false, true]) {
+    it(`keeps a body drawn at most one segment a pixel and skips one just denser (${ortho ? "ortho" : "perspective"})`, () => {
+      for (const segments of [3, 37, 4096]) {
+        const sparse = atDensity(segments, 1.000001, ortho);
+        expect(legibleEdgeTargets([sparse.l], sparse.ray, sparse.cam, H, GRAB)).toEqual([sparse.l]);
+        const dense = atDensity(segments, 0.999999, ortho);
+        expect(legibleEdgeTargets([dense.l], dense.ray, dense.cam, H, GRAB)).toEqual([]);
+      }
+    });
+  }
+
+  it("skips a sparse body whose sphere the grab radius does not reach, and keeps it once it does", () => {
+    const { l, cam, ray, s } = atDensity(16, 50, false);
+    const depth = cam.position.distanceTo(s.center);
+    const pxWorld = (2 * Math.tan(THREE.MathUtils.degToRad(38) / 2)) / (1.3 * H);
+    const reach = GRAB * pxWorld * (depth + s.radius);
+    const side = new THREE.Vector3().crossVectors(ray.direction, new THREE.Vector3(0.2, 0.9, -0.1)).normalize();
+    const aimAt = (gap: number) =>
+      new THREE.Ray(
+        ray.origin.clone(),
+        s.center
+          .clone()
+          .addScaledVector(side, s.radius + gap)
+          .sub(ray.origin)
+          .normalize(),
+      );
+    expect(legibleEdgeTargets([l], aimAt(reach * 0.9), cam, H, GRAB)).toEqual([l]);
+    expect(legibleEdgeTargets([l], aimAt(reach * 1.2), cam, H, GRAB)).toEqual([]);
+  });
+
+  it("keeps a dense body the camera stands inside, which fills the view", () => {
+    const { l, ray, s } = atDensity(50_000, 1e-6, false);
+    const inside = new THREE.PerspectiveCamera(38, W / H, 0.1, 1e6);
+    inside.position.copy(s.center).addScaledVector(ray.direction, -s.radius * 0.6);
+    inside.lookAt(s.center);
+    inside.updateMatrixWorld(true);
+    const r = new THREE.Ray(inside.position.clone(), s.center.clone().sub(inside.position).normalize());
+    expect(legibleEdgeTargets([l], r, inside, H, GRAB)).toEqual([l]);
+  });
+
+  it("passes through objects it cannot measure, and every target for a camera of neither kind", () => {
+    const { l, cam, ray } = atDensity(4096, 1e-3, false);
+    const group = new THREE.Group();
+    expect(legibleEdgeTargets([group, l], ray, cam, H, GRAB)).toEqual([group]);
+    expect(legibleEdgeTargets([group, l], ray, new THREE.Camera(), H, GRAB)).toEqual([group, l]);
+  });
+});
