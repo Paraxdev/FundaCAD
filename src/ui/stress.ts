@@ -480,7 +480,9 @@ function roundForce(v: number): number {
 
 /** The result as panel rows, lengths in the display unit. */
 export interface StressResultView {
+  /** The rows that say whether it holds and how far it bends; `details` holds the rest. */
   rows: PanelRow[];
+  details: PanelRow[];
   warnings: string[];
   /** The colour bar's ends, MPa. */
   legend: { min: number; max: number };
@@ -511,36 +513,47 @@ export function formatStressResult(
   unit: Unit,
   supports: readonly StressSupportType[] = [],
 ): StressResultView {
-  const rows: PanelRow[] = [];
   const sf = r.safetyFactor;
-  rows.push({ k: "Material", v: r.material.name });
-  rows.push({ k: "Peak von Mises", v: `${displayRound(r.maxVonMises.value)} MPa` });
+  const rows: PanelRow[] = [
+    { k: "Safety factor", v: sf !== null && Number.isFinite(sf) ? `${displayRound(sf)}` : "none, no stress" },
+    { k: "Peak stress", v: `${displayRound(r.maxVonMises.value)} MPa` },
+    { k: "Max deflection", v: `${displayRound(toDisplay(r.maxDisplacement.value))} ${unit}` },
+  ];
+  const details: PanelRow[] = [];
+  details.push({ k: "Material", v: r.material.name });
   // Not the engine's face index: it counts the faces of a copy of the body, a
   // number nothing else in the app shows.
-  rows.push({ k: "Peak at", v: fmtPoint(r.maxVonMises.at, unit) });
-  rows.push({ k: "Max deflection", v: `${displayRound(toDisplay(r.maxDisplacement.value))} ${unit}` });
-  rows.push({ k: "Deflection at", v: fmtPoint(r.maxDisplacement.at, unit) });
-  rows.push({ k: "Safety factor", v: sf !== null && Number.isFinite(sf) ? `${displayRound(sf)}` : "none, no stress" });
-  rows.push({ k: "Yield", v: `${displayRound(r.material.yield)} MPa` });
-  if (r.weight) rows.push({ k: "Weight", v: fmtForce(r.weight) });
-  rows.push({ k: "Applied", v: fmtForce(r.applied) });
-  rows.push({ k: "Reaction", v: fmtForce(r.reaction) });
+  details.push({ k: "Peak at", v: fmtPoint(r.maxVonMises.at, unit) });
+  details.push({ k: "Deflection at", v: fmtPoint(r.maxDisplacement.at, unit) });
+  details.push({ k: "Yield", v: `${displayRound(r.material.yield)} MPa` });
+  if (r.weight) details.push({ k: "Weight", v: fmtForce(r.weight) });
+  details.push({ k: "Applied", v: fmtForce(r.applied) });
+  details.push({ k: "Reaction", v: fmtForce(r.reaction) });
   // One support's reaction is the total above, so per support only with several.
   const reactions = r.reactions ?? [];
   if (reactions.length > 1) {
     for (const [i, f] of reactions.entries()) {
       const kind = supports[i];
       const label = kind ? SUPPORT_KINDS.find((x) => x.value === kind)?.label.toLowerCase() : undefined;
-      rows.push({ k: `Support ${i + 1}${label ? `, ${label}` : ""}`, v: fmtForce(f) });
+      details.push({ k: `Support ${i + 1}${label ? `, ${label}` : ""}`, v: fmtForce(f) });
     }
   }
   // In mm like the element size box and the engine's warnings about it.
-  rows.push({ k: "Mesh", v: `${r.mesh.elements} elements, ${displayRound(r.mesh.size)} mm` });
+  details.push({ k: "Mesh", v: `${r.mesh.elements} elements, ${displayRound(r.mesh.size)} mm` });
   const warnings = [...(r.warnings ?? [])];
   for (const e of r.errors ?? []) warnings.push(e.feature_id ? `${e.feature_id}: ${e.message}` : e.message);
   const values = r.surface?.vonMises ?? [];
   const legend = values.length ? valueRange(values) : { min: 0, max: r.maxVonMises.value };
-  return { rows, warnings, legend, yields: sf !== null && sf < 1 };
+  return { rows, details, warnings, legend, yields: sf !== null && sf < 1 };
+}
+
+/** The setup a result ran with, in one line: what holds it, what pushes, its own weight and the material. */
+export function setupSummary(s: StressSetup): string {
+  const n = (k: number, what: string) => `${k} ${what}${k === 1 ? "" : "s"}`;
+  const parts = [n(s.supports.length, "support"), n(s.loads.length, "load")];
+  if (s.gravity.on) parts.push(`own weight ${s.gravity.direction}`);
+  parts.push(s.material);
+  return parts.join(", ");
 }
 
 function fmtForce(f: Vec3): string {

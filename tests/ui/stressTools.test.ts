@@ -527,7 +527,7 @@ describe("weight and reactions in the result", () => {
 
   it("shows the weight and each support's reaction, named by its kind", () => {
     const v = formatStressResult(reply, "mm", ["pinned", "slider"]);
-    const row = (k: string) => v.rows.find((r) => r.k === k)?.v;
+    const row = (k: string) => v.details.find((r) => r.k === k)?.v;
     expect(row("Weight")).toBe("0, 0, -0.5 N");
     expect(row("Support 1, pinned")).toBe("0, 0, 60 N");
     expect(row("Support 2, slider")).toBe("0, 0, 40.5 N");
@@ -535,9 +535,9 @@ describe("weight and reactions in the result", () => {
 
   it("leaves out a weight without gravity and a per-support row for one support", () => {
     const v = formatStressResult({ ...reply, weight: null, reactions: [[0, 0, 100.5]] }, "mm", ["fixed"]);
-    expect(v.rows.some((r) => r.k === "Weight")).toBe(false);
-    expect(v.rows.some((r) => r.k.startsWith("Support"))).toBe(false);
-    expect(v.rows.find((r) => r.k === "Reaction")?.v).toBe("0, 0, 100.5 N");
+    expect(v.details.some((r) => r.k === "Weight")).toBe(false);
+    expect(v.details.some((r) => r.k.startsWith("Support"))).toBe(false);
+    expect(v.details.find((r) => r.k === "Reaction")?.v).toBe("0, 0, 100.5 N");
   });
 });
 

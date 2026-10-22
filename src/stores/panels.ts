@@ -90,6 +90,8 @@ export interface StressData {
   pins: StressProbePin[];
   /** The row whose next click on the body places a spot, null when none is. */
   placing: StressTarget | null;
+  /** The setup as JSON when the last Run started, to tell when the result no longer matches it. */
+  ranSetup: string | null;
 }
 
 /** The floating measure-panel popups. Independent fields, since Properties and Overhang settings can be open
@@ -132,6 +134,7 @@ export const usePanelsStore = defineStore("panels", () => {
       probe: false,
       pins: [],
       placing: null,
+      ranSetup: null,
     };
   }
 
@@ -140,6 +143,7 @@ export const usePanelsStore = defineStore("panels", () => {
   function replaceStressSetup(setup: StressSetup) {
     if (stress.value) {
       stress.value.setup = setup;
+      stress.value.ranSetup = null;
       clearStressResult();
     } else {
       stress.value = fresh(setup);
@@ -219,6 +223,7 @@ export const usePanelsStore = defineStore("panels", () => {
     stress.value.running = true;
     stress.value.requestId = null;
     stress.value.error = null;
+    stress.value.ranSetup = JSON.stringify(stress.value.setup);
   }
 
   function stressSent(id: string) {

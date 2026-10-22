@@ -690,7 +690,7 @@ describe("supports, gravity and the view's glyphs", () => {
       },
     });
     await run;
-    const rows = usePanelsStore().stress!.result!.rows;
+    const rows = usePanelsStore().stress!.result!.details;
     expect(rows.find((x) => x.k === "Support 2, pinned")?.v).toBe("0, 0, 30 N");
     expect(rows.find((x) => x.k === "Weight")?.v).toBe("0, 0, -0.2 N");
   });
