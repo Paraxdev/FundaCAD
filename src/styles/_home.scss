@@ -247,6 +247,8 @@ $card-bleed-bottom: 44px;
 /* A chip of glass of its own, the label is unreadable on the bare scrim over a light viewport. */
 .home-foot {
   display: flex;
+  align-items: center;
+  gap: var(--s-4);
   align-self: flex-start;
   margin: var(--s-2) var(--s-5) var(--s-4);
   padding: var(--s-2) var(--s-3);
@@ -258,6 +260,19 @@ $card-bleed-bottom: 44px;
   font-size: 12px;
   color: var(--text-dim);
   cursor: pointer;
+}
+.home-report {
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.home-report:hover {
+  background: transparent;
+  color: var(--text);
 }
 #stage.narrow .home {
   grid-template-columns: minmax(0, 1fr);

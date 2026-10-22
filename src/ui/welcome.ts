@@ -18,6 +18,8 @@ export function setWelcomeOnStartup(on: boolean): void {
   }
 }
 
+export const MANUAL_URL = "https://paraxdev.github.io/FundaCAD/";
+
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
 /** Open a URL in the system browser (Tauri opener; new tab in plain dev). */

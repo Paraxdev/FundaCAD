@@ -4,6 +4,7 @@ import { useHomeStore } from "../../stores/home";
 import { useModalStore } from "../../stores/modals";
 import { useModalGate } from "../../composables/useModalGate";
 import { welcomeOnStartup, setWelcomeOnStartup } from "../../ui/welcome";
+import { openReportDialog } from "../../ui/bugReporter";
 import { forgetRecent, getRecentFiles } from "../../io/recentFiles";
 import { library, type FileStat, type FolderListing } from "../../io/library";
 import { addFolder, getFolders, removeFolder } from "../../io/homeFolders";
@@ -401,6 +402,7 @@ onUnmounted(() => {
           <input v-model="showOnStartup" type="checkbox" />
           Show Home on startup
         </label>
+        <button type="button" class="home-report" @click="openReportDialog()">Report a problem</button>
       </div>
     </div>
   </div>

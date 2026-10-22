@@ -200,4 +200,23 @@ describe("modal depth gate", () => {
     expect(home.visible).toBe(false);
     expect(depth()).toBe(0);
   });
+
+  it("opens the report from the Home footer over Home, and Escape closes only the report", async () => {
+    const dialogs = useDialogStore();
+    const home = useHomeStore();
+    home.bind(fakeHomeCallbacks());
+    dialogs.bindBugReporter(fakeBugDeps());
+    home.visible = true;
+    await nextTick();
+    expect(depth()).toBe(1);
+
+    click(".home-foot .home-report");
+    await nextTick();
+    expect($(".bug-report-card")).not.toBeNull();
+    expect(depth()).toBe(2);
+
+    esc();
+    await nextTick();
+    expect([dialogs.bugReport, home.visible, depth()]).toEqual([false, true, 1]);
+  });
 });
