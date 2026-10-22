@@ -1080,7 +1080,10 @@ of what `doc_get` gave loses nothing, and `doc_get` then `file_write` is a whole
 save. `doc_set` is one undoable step that never changes the version history,
 which belongs to the file that is open: a document sent without versions, or
 with another file's, leaves them as they were, and a file brought in with
-`file_read` then `doc_set` keeps its own history on disk.
+`file_read` then `doc_set` keeps its own history on disk. The same goes for the
+section cut: it is the user's view, so `doc_set` ignores any `sectionView` it is
+sent. The cut on screen stays as it is, or goes off when the document sent
+shares no feature with the open one, as it does on Open.
 
 ### What is enforced where
 
