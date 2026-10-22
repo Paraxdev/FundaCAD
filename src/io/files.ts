@@ -37,6 +37,7 @@ import { asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary }
 import { importedBodyColors } from "../document/faceColors";
 import { openNotices } from "../document/openNotice";
 import type { FaceColorRuns } from "../types";
+import { isSessionEnded } from "../document/session";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -798,18 +799,27 @@ async function importWith(
   read: (onStarted: (id: string) => void, unit?: ImportUnit) => ReturnType<GeometryBackend["importGeometry"]>,
   opts: { unit?: ImportUnit | undefined; source?: string; retryable?: boolean } = {},
 ) {
+  const session = store.session;
+  const name = path.split(/[\\/]/).pop() || "file";
   let unit = opts.unit;
-  if (asksForUnit(fmt) && !unit) {
-    const picked = await askImportUnit(fmt);
-    if (!picked) return;
-    unit = picked;
+  let res: Awaited<ReturnType<typeof read>>;
+  try {
+    if (asksForUnit(fmt) && !unit) {
+      const picked = await session.step(askImportUnit(fmt));
+      if (!picked) return;
+      unit = picked;
+    }
+    // runBusy makes the import visible and stoppable; onStarted hands back the request id so Cancel targets it.
+    res = await session.step(
+      store.runBusy(`Importing ${name}`, (onStarted) => read(onStarted, unit), { holdHistory: true }),
+    );
+  } catch (e) {
+    if (!isSessionEnded(e)) throw e;
+    // The read was for a document that is gone; landing it in the next one would put a part where nobody asked.
+    const { toast } = await import("../ui/toast");
+    toast(`${name} was not imported, its document was closed while it was read.`, { kind: "warning" });
+    return "dropped" as const;
   }
-  // runBusy makes the import visible and stoppable; onStarted hands back the request id so Cancel targets it.
-  const res = await store.runBusy(
-    `Importing ${path.split(/[\\/]/).pop() ?? "file"}`,
-    (onStarted) => read(onStarted, unit),
-    { holdHistory: true },
-  );
   if (!res.ok) {
     if (res.cancelled) {
       // Cancelled: say nothing and add nothing to the document. The path stays in session state only, since a
