@@ -1021,6 +1021,8 @@ export class Geometry implements GeometryBackend {
     const id = crypto.randomUUID();
     const raw = JSON.stringify({ id, op, ...extra });
     const session = appScoped(op) ? null : (this.sessions?.current ?? null);
+    // A part standing down while its session ends may still ask; the request would only feed a closed document.
+    if (session && !session.alive) return Promise.reject(new SessionEnded());
     return new Promise((resolve, reject) => {
       // Refuse an over-cap message: the engine answers it with a 1009 close, and since the body stays in the document
       // every rebuild re-sent it and killed the session again (GH #4, "cannot open files larger than 245 MB").

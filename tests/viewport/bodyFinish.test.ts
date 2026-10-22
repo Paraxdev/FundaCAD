@@ -357,4 +357,47 @@ describe("BodyFinishLayer relief", () => {
     expect(getPatch(mat(a), "relief")).toBeDefined();
     expect(linked.length).toBe(1);
   });
+
+  it("a stand in that finishes linking after the model was cleared changes nothing, the next document warms its own", async () => {
+    let model = { bodies: [body("a")], edges: [] } as unknown as ModelView;
+    const releases: (() => void)[] = [];
+    const linked: THREE.Material[] = [];
+    let renders = 0;
+    const f = new BodyFinishLayer({
+      model: () => model,
+      scene: () => ({ renderer: { shadowMap: { enabled: false } } }) as never,
+      faceIdToBodyId: () => null,
+      addToScene: () => {},
+      requestRender: () => renders++,
+      savedMats: () => new Map(),
+      prepareMaterials: (obj) => {
+        obj.traverse((o) => {
+          if (o instanceof THREE.Mesh) linked.push(o.material as THREE.Material);
+        });
+        return new Promise<void>((r) => releases.push(r));
+      },
+    });
+    const old = model.bodies[0]!;
+    f.setRelief({ all: ridges(0.2) });
+    f.apply(base);
+    let disposedClone = false;
+    linked[0]!.addEventListener("dispose", () => (disposedClone = true));
+    f.clear();
+    renders = 0;
+    releases[0]!();
+    await Promise.resolve();
+    expect({ relief: getPatch(mat(old), "relief"), renders, disposedClone }).toEqual({
+      relief: undefined,
+      renders: 0,
+      disposedClone: true,
+    });
+
+    model = { bodies: [body("b")], edges: [] } as unknown as ModelView;
+    const next = model.bodies[0]!;
+    f.apply(base);
+    expect(linked.length).toBe(2);
+    releases[1]!();
+    await Promise.resolve();
+    expect(getPatch(mat(next), "relief")).toBeDefined();
+  });
 });
