@@ -3,8 +3,9 @@ import { computed, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
 import Icon from "../shell/Icon.vue";
+import StressVerdict from "./StressVerdict.vue";
 import { deformLabel, legendGradient, setupSummary, type StressResultView } from "../../ui/stress";
-import { displayRound } from "../../ui/units";
+import { displayRound, getUnit } from "../../ui/units";
 
 const props = defineProps<{ result: StressResultView }>();
 
@@ -14,6 +15,7 @@ const panels = usePanelsStore();
 const stress = computed(() => panels.stress!);
 const deform = computed(() => stress.value.deform);
 const gradient = legendGradient();
+const unit = computed(() => getUnit());
 
 const modelChanged = computed(() => stress.value.colours === "none");
 const setupChanged = computed(
@@ -37,6 +39,12 @@ function onDeform(e: Event) {
 
 <template>
   <div class="stress-step stress-results">
+    <StressVerdict
+      :view="result.verdict"
+      :scale="deform?.scale ?? null"
+      :max-deflection="result.maxDeflection"
+      :unit="unit"
+    />
     <div class="measure-k stress-ran-with">{{ ranWith }}</div>
 
     <div v-if="modelChanged || setupChanged" class="stress-stale">

@@ -38,7 +38,7 @@ function rig() {
     projectToScreen: (v: THREE.Vector3) => ({ x: v.x + 50, y: 50 - v.y }),
     requestRender: () => {},
     pickStressOverlay: pick,
-    stressOverlayPoint: () => [1, 2, 0] as [number, number, number],
+    stressOverlayPoint: vi.fn((tri: number) => [1 + tri, 2, 0] as [number, number, number]),
     overlayDrawn: () => true,
     watchOverlays: () => () => {},
   } as unknown as StressGlyphHost;
@@ -51,7 +51,7 @@ function rig() {
   } satisfies StressGlyphHandlers;
   const glyphs = new StressGlyphs(host, handlers);
   live.push(glyphs);
-  return { glyphs, handlers, scene, canvas, pick };
+  return { glyphs, handlers, scene, canvas, pick, host };
 }
 
 const model = (force = 1, into: [number, number, number] | null = null): StressGlyphModel => ({
@@ -209,5 +209,21 @@ describe("StressGlyphs", () => {
     glyphs.dispose();
     expect(scene.children).toHaveLength(0);
     expect(document.body.querySelector(".stress-glyph-label")).toBeNull();
+  });
+
+  it("pins the weakest spot beside the probes, where its triangle is drawn, and takes it away on null", () => {
+    const { glyphs, scene, host } = rig();
+    glyphs.setProbePins([{ tri: 0, weights: [1, 0, 0], label: "3 MPa" }]);
+    glyphs.setWeakSpot({ tri: 7, weights: [0, 1, 0], label: "Weakest, 3.3x" });
+    const weak = [...document.body.querySelectorAll<HTMLElement>(".stress-weak-pin")];
+    expect(weak.map((w) => [w.textContent, w.style.left])).toEqual([["Weakest, 3.3x", "66px"]]);
+    expect(host.stressOverlayPoint).toHaveBeenCalledWith(7, [0, 1, 0]);
+    expect(document.body.querySelectorAll(".stress-probe-pin")).toHaveLength(2);
+    expect(scene.children).toHaveLength(2);
+    glyphs.setProbePins([]);
+    expect(document.body.querySelectorAll(".stress-weak-pin")).toHaveLength(1);
+    glyphs.setWeakSpot(null);
+    expect(document.body.querySelectorAll(".stress-probe-pin")).toHaveLength(0);
+    expect(scene.children).toHaveLength(0);
   });
 });

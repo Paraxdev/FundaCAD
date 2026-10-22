@@ -25,6 +25,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Stress results open with a plain verdict.** The first line says whether the
+  part holds and with how much margin, or where it is likely to fail, and a pin
+  marks the weakest spot on the part. A line under it says how far it bends and
+  how much larger it is drawn.
+
 - **The stress preview bends smoothly.** The coloured part is drawn from a finer
   copy of the analysed surface, so curved faces and the bend look smooth and the
   colours blend instead of jumping. Sharp edges and flat faces stay as they are,

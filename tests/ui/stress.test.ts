@@ -247,6 +247,41 @@ describe("formatStressResult", () => {
     ]);
   });
 
+  it("opens with a verdict and carries the peak and the deflection, for a part that holds and one that fails", () => {
+    expect(formatStressResult(reply, "mm")).toEqual({
+      rows: [
+        { k: "Safety factor", v: "1.6" },
+        { k: "Peak stress", v: "31.25 MPa" },
+        { k: "Max deflection", v: "1.27 mm" },
+      ],
+      details: [
+        { k: "Material", v: "PLA" },
+        { k: "Peak at", v: "25.4, 0, 50.8 mm" },
+        { k: "Deflection at", v: "254, 0, 0 mm" },
+        { k: "Yield", v: "50 MPa" },
+        { k: "Applied", v: "0, 0, -20 N" },
+        { k: "Reaction", v: "0, 0, 20 N" },
+        { k: "Mesh", v: "4800 elements, 2.54 mm" },
+      ],
+      warnings: ["printed parts are weaker across layers", "f3: fillet failed"],
+      legend: { min: 2, max: 31.25 },
+      yields: false,
+      verdict: { level: "holds", headline: "Holds, about 1.6x safe.", detail: "Weakest at the marked spot." },
+      peakAt: [25.4, 0, 50.8],
+      maxDeflection: 1.27,
+    });
+    const fails = formatStressResult({ ...reply, safetyFactor: 0.62 }, "mm");
+    expect({ verdict: fails.verdict, yields: fails.yields, peakAt: fails.peakAt }).toEqual({
+      verdict: {
+        level: "fails",
+        headline: "Likely to fail at the marked spot.",
+        detail: "The load is about 1.7x what it can take.",
+      },
+      yields: true,
+      peakAt: [25.4, 0, 50.8],
+    });
+  });
+
   it("reads a peak inside the body, with a null face", () => {
     const v = formatStressResult({ ...reply, maxVonMises: { value: 3, at: [0, 0, 0], face: null } }, "mm");
     expect(v.details.find((r) => r.k === "Peak at")?.v).toBe("0, 0, 0 mm");

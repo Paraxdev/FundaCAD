@@ -207,6 +207,39 @@
   margin-top: var(--s-3);
 }
 
+// The verdict a result opens with: a rule in the colour of how it went, the headline in the text ink, or the warn and
+// error inks mixed for small text on glass.
+.stress-verdict {
+  margin: var(--s-1) 0 var(--s-2);
+  padding: var(--s-1) 0 var(--s-1) var(--s-3);
+  border-left: 3px solid var(--line);
+}
+.stress-verdict.holds {
+  border-left-color: var(--ok);
+}
+.stress-verdict.marginal {
+  border-left-color: var(--warn);
+}
+.stress-verdict.fails {
+  border-left-color: var(--error);
+}
+.stress-verdict-head {
+  font-weight: 600;
+  color: var(--text);
+}
+.stress-verdict.marginal .stress-verdict-head {
+  color: color-mix(in srgb, var(--warn) 60%, var(--text));
+}
+.stress-verdict.fails .stress-verdict-head {
+  color: color-mix(in srgb, var(--error) 60%, var(--text));
+}
+.stress-verdict-line {
+  margin-top: 2px;
+  color: var(--text-dim);
+}
+.stress-weak-pin {
+  font-weight: 600;
+}
 .stress-ran-with {
   margin-bottom: var(--s-2);
 }
