@@ -28,7 +28,7 @@ import { pushAll } from "../lib/pushAll";
 import { radialAt } from "../features/planeMath";
 import type { RoundFace } from "../features/radialDrag";
 import { TRIM_BUDGET, sectionOutline, sweepBlendGhost, type BlendKind, type EdgeSample, type Pt3 } from "../features/blendGhost";
-import { bodyOfFace, type BodyEdges, type BodyMesh, type ModelView } from "./render";
+import { bodyOfFace, type BodyMesh, type ModelView } from "./render";
 import { themeColor } from "./themeColors";
 
 /** The slice of Viewport these previews need, live accessors, not copies. */
@@ -238,58 +238,33 @@ export class GhostLayer {
     this.host.requestRender();
   }
 
-  // --- Move ghost: translate the selected bodies' mesh + edges live during a drag,
-  // with NO engine rebuild (a rigid move needs no geometry recompute), so dragging
-  // is snappy. The real `move` feature is committed on release. With per-body meshes
-  // this is a pure object-transform offset: zero vertex writes, zero GPU uploads.
-  // Raycasts (bodyIdAt, pointInSolid parity) follow matrixWorld, refreshed eagerly
-  // on every offset so picking never lags the visual. On commit (restore=false) the
-  // offset stays until the rebuilt body arrives; the moved body's etag changes, so
-  // setModel replaces its mesh (position 0), and resetBodyAppearance() clears any
-  // lingering offset on the reuse path as a belt-and-braces guard.
-  private moveGhost: {
-    bodies: BodyMesh[];
-    edges: BodyEdges[];
-  } | null = null;
+  // --- Move ghost: a rigid move needs no rebuild, so a drag only poses the
+  // selected bodies' mesh and edge objects; raycasts read matrixWorld, refreshed
+  // on every frame. On commit the pose stays until the rebuilt body (new etag,
+  // new mesh at identity) arrives, so a drag begun before that, as on a big
+  // import, starts from the pose the object wears and not from identity.
+  private moveGhost: { obj: THREE.Object3D; base: THREE.Matrix4 }[] | null = null;
   beginBodyMoveGhost(bodyIds: string[]) {
     this.endBodyMoveGhost(true);
     const model = this.host.model();
     if (!model) return;
     const sel = new Set(bodyIds);
-    const bodies = model.bodies.filter((b) => sel.has(b.id));
-    if (!bodies.length) return;
-    const edges = bodies.map((b) => b.edges);
-    this.moveGhost = { bodies, edges };
+    const objs = model.bodies.filter((b) => sel.has(b.id)).flatMap((b) => [b.mesh, b.edges.object]);
+    if (!objs.length) return;
+    this.moveGhost = objs.map((obj) => {
+      obj.updateWorldMatrix(true, false);
+      return { obj, base: obj.matrixWorld.clone() };
+    });
   }
   setBodyMoveOffset(offset: THREE.Vector3) {
     this.setBodyMoveTransform(new THREE.Matrix4().makeTranslation(offset.x, offset.y, offset.z));
   }
 
-  /** The ghost under a FULL transform, so the gizmo's rotation is previewed the
-   *  same way its translation always was.
-   *
-   *  Decomposed onto the objects rather than assigned as a matrix, because the
-   *  mesh and its edges keep matrixAutoUpdate on and would overwrite one. The
-   *  scale component is carried too: an assembly imported at a non-unit scale
-   *  has it in matrixWorld already, and dropping it here would make the ghost
-   *  the wrong size for exactly those documents. */
+  /** `m` is the drag's world transform since it began, scale included. */
   setBodyMoveTransform(m: THREE.Matrix4) {
     if (!this.moveGhost || !this.host.model()) return;
-    const pos = new THREE.Vector3();
-    const quat = new THREE.Quaternion();
-    const scl = new THREE.Vector3();
-    m.decompose(pos, quat, scl);
-    for (const b of this.moveGhost.bodies) {
-      b.mesh.position.copy(pos);
-      b.mesh.quaternion.copy(quat);
-      b.mesh.scale.copy(scl);
-      b.mesh.updateMatrixWorld();
-    }
-    for (const e of this.moveGhost.edges) {
-      e.object.position.copy(pos);
-      e.object.quaternion.copy(quat);
-      e.object.scale.copy(scl);
-    }
+    const world = new THREE.Matrix4();
+    for (const g of this.moveGhost) placeWorld(g.obj, world.multiplyMatrices(m, g.base));
     this.host.requestRender();
   }
   // --- Pattern ghosts: translucent copies of a body, one per pattern cell -----
@@ -423,21 +398,18 @@ export class GhostLayer {
       return;
     }
     if (restore) {
-      for (const b of this.moveGhost.bodies) {
-        b.mesh.position.set(0, 0, 0);
-        b.mesh.quaternion.identity();
-        b.mesh.scale.set(1, 1, 1);
-        b.mesh.updateMatrixWorld();
-      }
-      for (const e of this.moveGhost.edges) {
-        e.object.position.set(0, 0, 0);
-        e.object.quaternion.identity();
-        e.object.scale.set(1, 1, 1);
-      }
+      for (const g of this.moveGhost) placeWorld(g.obj, g.base);
       this.host.requestRender();
     }
     this.moveGhost = null;
   }
+}
+
+/** Decomposed rather than assigned: the objects keep matrixAutoUpdate on and would overwrite a matrix. */
+function placeWorld(obj: THREE.Object3D, world: THREE.Matrix4) {
+  const local = obj.parent ? new THREE.Matrix4().copy(obj.parent.matrixWorld).invert().multiply(world) : world;
+  local.decompose(obj.position, obj.quaternion, obj.scale);
+  obj.updateMatrixWorld();
 }
 
 // --- blend ghost support: which two faces meet an edge, read off the mesh ---
