@@ -292,6 +292,17 @@
   justify-self: start;
 }
 
+#renderdock .rd-chip-row {
+  cursor: default;
+  align-items: start;
+}
+#renderdock .rd-chip-row > .prefs-label {
+  padding-top: 4px;
+}
+#renderdock .rd-chip-row > .rd-chips {
+  margin-bottom: 0;
+}
+
 .rd-value {
   flex: 0 0 auto;
   min-width: 34px;
