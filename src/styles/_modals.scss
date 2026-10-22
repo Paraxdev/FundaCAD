@@ -684,21 +684,6 @@
 .properties-panel {
   min-width: 260px;
 }
-/* A fixed narrow column, clear of the model and arrows it analyses: hints wrap and a long
-   setup scrolls. */
-.stress-panel {
-  box-sizing: border-box;
-  width: 340px;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 160px);
-  overflow-y: auto;
-  overflow-wrap: anywhere;
-}
-/* A button keeps its label whole; the row of them wraps instead. */
-.stress-panel .btn {
-  overflow-wrap: normal;
-  white-space: nowrap;
-}
 /* Stress labels in the view: the value by the cursor while dragging or probing, and each
    pinned probe's readout. */
 .stress-glyph-label {

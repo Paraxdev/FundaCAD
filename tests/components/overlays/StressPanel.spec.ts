@@ -49,6 +49,23 @@ async function mounted() {
 }
 
 const q = (sel: string) => document.body.querySelector(sel) as HTMLElement | null;
+const value = (el: Element | null) => el?.getAttribute("data-value");
+
+/** Opens a Select and clicks the option with this label. */
+async function pick(trigger: Element, label: string) {
+  (trigger as HTMLElement).click();
+  await flushPromises();
+  const row = [...document.body.querySelectorAll<HTMLElement>(".select-pop .opt-row")].find(
+    (r) => r.querySelector(".opt-label")?.textContent === label,
+  );
+  if (!row) throw new Error(`no option ${label}`);
+  row.click();
+  await flushPromises();
+}
+
+function optionLabels(): string[] {
+  return [...document.body.querySelectorAll(".select-pop .opt-label")].map((e) => e.textContent ?? "");
+}
 
 describe("StressPanel", () => {
   it("renders nothing while closed", async () => {
@@ -61,8 +78,8 @@ describe("StressPanel", () => {
     usePanelsStore().showStress("b1");
     await flushPromises();
     expect(q(".stress-panel")?.textContent).toContain("Support 1");
-    expect((q(".stress-support-type") as HTMLSelectElement).value).toBe("fixed");
-    expect((q(".stress-body") as HTMLSelectElement).value).toBe("b1");
+    expect(value(q(".stress-support-type"))).toBe("fixed");
+    expect(value(q(".stress-body"))).toBe("b1");
     q(".stress-set-support")!.click();
     q(".stress-set-load")!.click();
     expect(panels.setStressFacesFromSelection.mock.calls).toEqual([[{ support: 1 }], [{ load: 1 }]]);
@@ -121,7 +138,7 @@ describe("StressPanel", () => {
     expect(q(".stress-size")?.parentElement?.textContent).toContain("mm");
     p.stressStarted();
     await flushPromises();
-    expect((q(".stress-body") as HTMLSelectElement).disabled).toBe(true);
+    expect((q(".stress-body") as HTMLButtonElement).disabled).toBe(true);
     p.stressFinished({});
     p.setStressColours("shown");
     await flushPromises();
@@ -161,11 +178,10 @@ describe("StressPanel", () => {
     p.showStress("b1");
     p.addStressSupport("pinned");
     await flushPromises();
-    const kinds = document.body.querySelectorAll<HTMLSelectElement>(".stress-support-type");
-    expect([...kinds].map((k) => k.value)).toEqual(["fixed", "pinned"]);
-    kinds[1]!.value = "slider";
-    kinds[1]!.dispatchEvent(new Event("change"));
-    expect(panels.setStressSupportType).toHaveBeenCalledWith(2, "slider");
+    const kinds = document.body.querySelectorAll(".stress-support-type");
+    expect([...kinds].map(value)).toEqual(["fixed", "pinned"]);
+    await pick(kinds[1]!, "Slider");
+    expect(panels.setStressSupportType.mock.calls).toEqual([[2, "slider"]]);
     q(".stress-add-support")!.click();
     expect(panels.addStressSupport).toHaveBeenCalledOnce();
     document.body.querySelectorAll<HTMLButtonElement>(".stress-remove-support")[1]!.click();
@@ -178,16 +194,15 @@ describe("StressPanel", () => {
     p.showStress("b1");
     await flushPromises();
     const on = q(".stress-gravity-on") as HTMLInputElement;
-    const dir = q(".stress-gravity-dir") as HTMLSelectElement;
+    const dir = q(".stress-gravity-dir") as HTMLButtonElement;
     expect(on.checked).toBe(false);
     expect(dir.disabled).toBe(true);
     on.click();
     await flushPromises();
     expect(p.stress!.setup.gravity.on).toBe(true);
     expect(dir.disabled).toBe(false);
-    dir.value = "+Y";
-    dir.dispatchEvent(new Event("change"));
-    expect(p.stress!.setup.gravity.direction).toBe("+Y");
+    await pick(dir, "+Y");
+    expect(p.stress!.setup.gravity).toEqual({ on: true, direction: "+Y" });
   });
 
   it("shows the deformation with its factor, 1x, Animate, Probe and the pinned probes", async () => {
@@ -286,9 +301,48 @@ describe("StressPanel", () => {
     const p = usePanelsStore();
     p.showStress("b7");
     await flushPromises();
-    const body = q(".stress-body") as HTMLSelectElement;
-    expect(body.value).toBe("b7");
-    expect(body.selectedOptions[0]?.textContent).toBe("b7 (not on the current model)");
+    const body = q(".stress-body")!;
+    expect(value(body)).toBe("b7");
+    expect(body.textContent?.trim()).toBe("b7 (not on the current model)");
+  });
+
+  it("lists the missing body without letting it be chosen, and hands a real body to the facade", async () => {
+    const { panels } = await mounted();
+    const p = usePanelsStore();
+    p.showStress("b7");
+    await flushPromises();
+    q(".stress-body")!.click();
+    await flushPromises();
+    expect(optionLabels()).toEqual(["Choose…", "Bracket", "b7 (not on the current model)"]);
+    const missing = [...document.body.querySelectorAll<HTMLElement>(".select-pop .opt-row")][2]!;
+    expect(missing.getAttribute("aria-disabled")).toBe("true");
+    missing.click();
+    await flushPromises();
+    expect(panels.setStressBody).not.toHaveBeenCalled();
+    q(".stress-body")!.click();
+    await flushPromises();
+    await pick(q(".stress-body")!, "Bracket");
+    expect(panels.setStressBody.mock.calls).toEqual([["b1"]]);
+  });
+
+  it("sets the load kind, the force direction and the material through the app's selects", async () => {
+    await mounted();
+    const p = usePanelsStore();
+    p.showStress("b1");
+    await flushPromises();
+    expect(q(".stress-panel select")).toBeNull();
+    await pick(q(".stress-direction")!, "+X");
+    await pick(q(".stress-material")!, "PETG");
+    expect(q(".stress-panel")?.textContent).toContain("E 2100 MPa");
+    await pick(q(".stress-load-kind")!, "Pressure");
+    const l = p.stress!.setup.loads[0]!;
+    expect({ kind: l.kind, direction: l.direction, material: p.stress!.setup.material }).toEqual({
+      kind: "pressure",
+      direction: "+X",
+      material: "PETG",
+    });
+    expect(q(".stress-direction")).toBeNull();
+    expect(q(".stress-pressure")).not.toBeNull();
   });
 
   it("keeps Stop probing pressable when the colours have gone", async () => {
