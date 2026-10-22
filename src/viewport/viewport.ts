@@ -216,9 +216,10 @@ const MOTION_RESTORE_MAX_MS = 2500;
 const MAX_RESIZE_WAIT_MS = 250;
 
 export class Viewport {
-  /** Nothing is left to draw and the camera did not move on the last frame. */
+  /** Nothing is left to draw, the camera did not move on the last frame, and the
+   *  edges are the full set, not the moving frames' batches kept until motion settles. */
   get renderIdle(): boolean {
-    return !this.needsRender && this.lingerFrames === 0 && !this.frameMoved && !this.edgeBlend.pending;
+    return !this.needsRender && this.lingerFrames === 0 && !this.frameMoved && !this.edgeBlend.pending && this.edgeFrameNow === null;
   }
 
   readonly scene: SceneBundle;

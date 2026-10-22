@@ -171,6 +171,13 @@ AT_REST = """() => {
   };
 }"""
 
+# What a thin verify that saved too little leaves behind (EdgeMotionRule.notEdgeBound): merged all drag.
+HOLD_MERGED = """() => {
+  const v = window.viewport;
+  v.edgeRule.reset();
+  v.edgeRule.notEdgeBound = v.model.bodies.reduce((n, b) => n + b.edges.segments, 0);
+}"""
+
 
 def quantile(xs, f):
     s = sorted(xs)
@@ -265,12 +272,17 @@ def run_merged(s, tmp_path):
     _, _, _, drag, rest, members = orbit(s.page)
     # Two windows of four frames before a slow renderer may draw thin.
     first = [m for _, m in drag[:8]]
+    # A renderer whose frames thin lines barely speed up ends the drag merged, as
+    # CI's SwiftShader does, so the view must not report idle before the full edges are back.
+    s.page.evaluate(HOLD_MERGED)
+    _, _, _, held_drag, held_rest, _ = orbit(s.page)
     # Ghosts blend over the edges, so each body's edges sort with their own mesh.
     s.page.evaluate("() => window.viewport.setXray(true)")
     s.settle()
     _, _, _, xray_drag, xray_rest, _ = orbit(s.page)
     s.page.evaluate("() => window.viewport.setXray(false)")
     got = {"looks": looks, "first_frames": first, "members_max": max(members, default=0), "at_rest": rest,
+           "held_modes": sorted({m for _, m in held_drag}), "held_at_rest": held_rest,
            "xray_modes": sorted({m for _, m in xray_drag}), "xray_at_rest": xray_rest}
     print("big model orbit, merged:", json.dumps(got))
     for look in looks:
@@ -279,6 +291,8 @@ def run_merged(s, tmp_path):
     assert first and set(first) == {"merged"}, f"the first moving frames did not draw merged, {got}"
     assert got["members_max"] >= MERGE_ON_DRAWS, f"the moving frames did not merge the bodies' edges, {got}"
     assert rest["mode"] == "full" and rest["drawn"] is None and rest["hidden"] == 0, f"the full edges were not back at rest, {got}"
+    assert got["held_modes"] == ["merged"], f"the held drag did not draw merged to its end, {got}"
+    assert held_rest["mode"] == "full" and held_rest["drawn"] is None and held_rest["hidden"] == 0, f"the full edges were not back at rest after a merged drag, {got}"
     assert got["xray_modes"] == ["full"], f"x ray drew the edges merged or thin, {got}"
     assert xray_rest["drawn"] is None and xray_rest["hidden"] == 0, f"x ray left edges hidden, {got}"
     return got
