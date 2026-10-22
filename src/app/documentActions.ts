@@ -49,6 +49,7 @@ export function isBlankDocument(e: Pick<Engine, "store" | "sketch">): boolean {
     !e.store.document.features.length &&
     !e.store.dirty &&
     !e.sketch.active &&
+    !e.store.importRunning &&
     !openingImports.has(e.store)
   );
 }
@@ -81,15 +82,25 @@ function openingImport(store: Engine["store"]) {
 
 type HomeImportEngine = Pick<Engine, "store" | "sketch" | "viewport">;
 
-// A cancelled import is still on the redo stack, and a new document would cancel an import added during the read,
-// so either way the document keeps everything and gives up only the name.
-function backToBlank(store: Engine["store"]): void {
-  if (store.document.features.length || store.dirty) return;
-  if (store.canRedo || store.importRunning) store.markOpenedWithoutPath("Untitled");
-  else store.newDocument();
+const landedFrom = (store: Engine["store"], files: readonly string[]) =>
+  store.document.features.some((f) => {
+    const source = f.type === "import" ? f.source : undefined;
+    return typeof source === "string" && files.includes(source.split(/[\\/]/).pop() ?? source);
+  });
+
+// Only the name the import gave is taken back. A new document would cancel what the maker started during the read,
+// an import added, an environment dropped or a sketch, and a cancelled build keeps its import on the redo stack.
+function backToBlank(store: Engine["store"], name: string, files: readonly string[]): void {
+  if (store.filePath || store.fileName !== name || landedFrom(store, files)) return;
+  store.dropPathlessName();
 }
 
-async function importNamed(e: HomeImportEngine, name: string, run: () => Promise<unknown>): Promise<void> {
+async function importNamed(
+  e: HomeImportEngine,
+  name: string,
+  files: readonly string[],
+  run: () => Promise<unknown>,
+): Promise<void> {
   e.store.markOpenedWithoutPath(name);
   closeHome();
   const opening = openingImport(e.store);
@@ -98,7 +109,7 @@ async function importNamed(e: HomeImportEngine, name: string, run: () => Promise
   } finally {
     opening.end();
   }
-  if (!opening.replaced) backToBlank(e.store);
+  if (!opening.replaced) backToBlank(e.store, name, files);
 }
 
 /** A blank document takes the files, anything else asks whether they join it or start a new one. `run` is the
@@ -111,7 +122,7 @@ export async function importFromHome(
   const first = names[0];
   if (first === undefined) return false;
   if (isBlankDocument(e)) {
-    await importNamed(e, importedName(first), run);
+    await importNamed(e, importedName(first), names, run);
     return true;
   }
   const doc = displayName(e.store.fileName);
@@ -132,7 +143,7 @@ export async function importFromHome(
   if (pick !== "new" || !(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return false;
   e.store.newDocument();
   e.viewport.resetCamera(false);
-  await importNamed(e, importedName(first), run);
+  await importNamed(e, importedName(first), names, run);
   return true;
 }
 
@@ -163,8 +174,10 @@ async function importExample(e: ExampleEngine, info: TemplateInfo): Promise<void
   e.store.markOpenedWithoutPath(info.name);
   closeHome();
   const opening = openingImport(e.store);
+  const files: string[] = [];
   try {
     const file = await templateFile(info.id);
+    files.push(file.name);
     // importFileBytes watches for an open only from here on, so one during the fetch is caught here.
     if (opening.replaced) await importDropped([file.name]);
     else await importFileBytes(e.store, e.geometry, file, undefined, { opening: true });
@@ -173,7 +186,7 @@ async function importExample(e: ExampleEngine, info: TemplateInfo): Promise<void
   } finally {
     opening.end();
   }
-  if (!opening.replaced) backToBlank(e.store);
+  if (!opening.replaced) backToBlank(e.store, info.name, files);
 }
 
 type VersionEngine = Pick<Engine, "store" | "sketch" | "geometry" | "toolAtWork" | "setStatus">;

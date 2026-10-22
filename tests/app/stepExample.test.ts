@@ -265,12 +265,12 @@ describe("the 3D printer example", () => {
     expect(seen(store)).toMatchObject({ features: ["import"], dirty: true });
   });
 
-  it("keeps a change made before the build was cancelled", async () => {
+  it("keeps a change made before the build was cancelled, in an untitled document", async () => {
     const { e, store } = rig();
     h.cancel = true;
     h.reading = environment;
     await newFromTemplate(e, "printer");
-    expect(seen(store)).toMatchObject({ features: [], name: "3D printer", dirty: true });
+    expect(seen(store)).toMatchObject({ features: [], name: "Untitled", dirty: true });
   });
 
   it("says so when the example file cannot be read", async () => {
@@ -474,13 +474,16 @@ describe("a cancelled import", () => {
   it.each([
     ["the environment", environment],
     ["the material library", material],
-  ])("keeps the 3D printer example unsaved when the maker changed %s after it landed", async (_what, edit) => {
-    const { e, store } = rig();
-    h.cancel = true;
-    h.building = edit;
-    await newFromTemplate(e, "printer");
-    expect(seen(store)).toMatchObject({ features: [], name: "3D printer", dirty: true, reported: [] });
-  });
+  ])(
+    "keeps the 3D printer example's document unsaved when the maker changed %s after it landed",
+    async (_what, edit) => {
+      const { e, store } = rig();
+      h.cancel = true;
+      h.building = edit;
+      await newFromTemplate(e, "printer");
+      expect(seen(store)).toMatchObject({ features: [], name: "Untitled", dirty: true, reported: [] });
+    },
+  );
 });
 
 const flush = async () => {
@@ -646,26 +649,29 @@ describe("an opening import that fails while a file added to its document is sti
     expect(h.told).toEqual([]);
   });
 
-  it.each(openings)("keeps the added file where it landed when %s fails after it", async (_what, first, open) => {
-    const { e, store } = rig();
-    h.fails = [first];
-    const releaseFirst = held(first);
-    const opening = open(e);
-    await flush();
-    new Home({} as HomeCallbacks).open();
-    h.answers = ["add"];
-    await dropStep(e, "b.step");
-    await releaseFirst();
-    await opening;
-    expect(seen(store)).toEqual({
-      features: ["import"],
-      name: first === "a.step" ? "a" : "3D printer",
-      path: null,
-      dirty: true,
-      home: false,
-      imported: [first, "b.step"],
-      reported: [`Couldn't import ${first}: the file has no solids`],
-    });
-    expect(h.told).toEqual([]);
-  });
+  it.each(openings)(
+    "keeps the added file, in an untitled document, when %s fails after it",
+    async (_what, first, open) => {
+      const { e, store } = rig();
+      h.fails = [first];
+      const releaseFirst = held(first);
+      const opening = open(e);
+      await flush();
+      new Home({} as HomeCallbacks).open();
+      h.answers = ["add"];
+      await dropStep(e, "b.step");
+      await releaseFirst();
+      await opening;
+      expect(seen(store)).toEqual({
+        features: ["import"],
+        name: "Untitled",
+        path: null,
+        dirty: true,
+        home: false,
+        imported: [first, "b.step"],
+        reported: [`Couldn't import ${first}: the file has no solids`],
+      });
+      expect(h.told).toEqual([]);
+    },
+  );
 });
