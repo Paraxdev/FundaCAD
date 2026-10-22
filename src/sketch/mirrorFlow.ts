@@ -63,6 +63,7 @@ let nextPanelId = 1;
 
 export class MirrorFlow {
   private fields: MirrorFields<MirrorAxis> | null = null;
+  private pre: string[] = [];
   private hoverId: string | null = null;
   private panelId = 0;
   private refusal: string | null = null;
@@ -85,12 +86,11 @@ export class MirrorFlow {
       this.host.warn(PROJECTED_FIXED_MSG);
       for (const id of projected) sel.delete(id);
     }
-    this.fields = startFields<MirrorAxis>(
-      this.host
-        .entities()
-        .filter((e) => sel.has(e.id))
-        .map((e) => e.id),
-    );
+    this.pre = this.host
+      .entities()
+      .filter((e) => sel.has(e.id))
+      .map((e) => e.id);
+    this.fields = startFields<MirrorAxis>(this.pre);
     this.panelId = nextPanelId++;
     this.hoverId = null;
     this.refusal = null;
@@ -162,12 +162,15 @@ export class MirrorFlow {
     return true;
   }
 
+  /** The selection from before the start comes back. */
   cancel(): void {
     if (!this.fields) return;
     this.reset();
-    this.host.selected().clear();
-    this.host.refreshActive();
     this.host.armSelect();
+    const sel = this.host.selected();
+    sel.clear();
+    for (const id of this.pre) sel.add(id);
+    this.host.refreshActive();
   }
 
   activate(k: MirrorFieldKey): void {
