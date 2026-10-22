@@ -235,6 +235,30 @@ describe("OriginTiles", () => {
     t.dispose();
   });
 
+  it("fades a name by the unit direction from the tile's scaled centre to a perspective eye", () => {
+    const t = new OriginTiles(new THREE.Scene());
+    t.setShown(true);
+    const eyeAt = (x: number, y: number, z: number, look: [number, number, number]) => {
+      const cam = new THREE.PerspectiveCamera(30, 1.5, 1, 5000);
+      cam.up.set(0, 1, 0);
+      cam.position.set(x, y, z);
+      cam.lookAt(...look);
+      cam.updateMatrixWorld(true);
+      return cam;
+    };
+    t.update(0.37, null, eyeAt(12, -7, 300, [12, -7, 0]));
+    expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.idle.label, XZ: 0, YZ: 0 });
+    // At scale 2 the XZ centre is (52, 0, 52) and the YZ centre (0, -52, 52): the eye is 67 and 63 away.
+    t.update(2, null, eyeAt(10, -15, 102, [30, -20, 15]));
+    const ramp = (facing: number) => TILE_LOOK.idle.label * (facing - 0.15) / 0.2;
+    expect(labelOpacity(t)).toEqual({
+      XY: TILE_LOOK.idle.label,
+      XZ: expect.closeTo(ramp(15 / 67), 12),
+      YZ: expect.closeTo(ramp(10 / 63), 12),
+    });
+    t.dispose();
+  });
+
   it("rims each tile in its axis colour pulled towards the ink, and inks the names", () => {
     const t = new OriginTiles(new THREE.Scene());
     const colours = () => PLANES.map((k) => [

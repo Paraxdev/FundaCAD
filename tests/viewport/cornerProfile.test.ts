@@ -53,6 +53,7 @@ describe("conicCorner", () => {
     expect(at(2).length).toBe(3);
     expect(at(10).length).toBe(11);
     expect(at(2.4)).toEqual(at(2));
+    expect(at(2.6)).toEqual(at(3));
   });
 });
 
