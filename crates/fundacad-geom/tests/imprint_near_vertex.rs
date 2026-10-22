@@ -1,6 +1,5 @@
-//! A sketch corner snapped to a model vertex arrives a few 1e-5 mm off it. The
-//! imprint must land on that vertex rather than leave an edge that short, which
-//! no fillet can take and which the viewport cannot show.
+//! A sketch corner snapped to a model vertex arrives a few 1e-5 mm off it. The imprint must land on the
+//! vertex rather than leave an edge that short, which no fillet can take and the viewport cannot show.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};

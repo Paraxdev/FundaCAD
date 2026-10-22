@@ -1,7 +1,5 @@
-//! Healing an imported solid answers to the job: it beats the heartbeat while
-//! it works, and a solid that takes longer than its budget is kept as the
-//! file has it instead of holding the whole import. A file of its own, since
-//! the budget is process wide.
+//! Healing an imported solid beats the heartbeat, and a solid past its budget is kept as the file has
+//! it. A file of its own, since the budget is process wide.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};

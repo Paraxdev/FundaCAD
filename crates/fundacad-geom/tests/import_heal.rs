@@ -1,6 +1,5 @@
-//! A solid whose file draws an edge away from the faces it bounds is healed
-//! where the file is read. tests/fixtures/heal_edge_off.step is written by
-//! tests/step/gen_heal_edge_off.py.
+//! A solid whose file draws an edge away from the faces it bounds is healed where the file is read.
+//! tests/fixtures/heal_edge_off.step is written by tests/step/gen_heal_edge_off.py.
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
