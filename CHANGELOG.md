@@ -438,6 +438,15 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A two distance chamfer puts each distance on the face where it fits.** On
+  the vertical edges of a 20 mm box, 3/12 was refused although 12 at one
+  corner of each face and 3 at the other fits, and 1/12 came back carved one
+  edge at a time without a word. A two distance chamfer that fits no way round,
+  or that only the fallback build could make and would leave stepped where its
+  edge ends on a slanted or rounded face, is now refused. Some of these used to
+  build with a warning about another corner while a concave fill was clipped
+  without one.
+
 - **One Undo takes back an import and the colours its file carried.** Each
   colour used to be an undo step of its own, so a coloured assembly took many
   Undos, and one with more than 49 colours could not be undone at all. An
