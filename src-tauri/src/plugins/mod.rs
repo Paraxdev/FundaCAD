@@ -1,7 +1,5 @@
-//! Installing plugins: download a bundle, prove it is the one the user agreed to, and unpack it where it can only be
-//! itself. In Rust because widening `connect-src` would open the releases host to every script. Grants are opaque
-//! strings here. A bundle may come from any HTTPS URL or a local zip. The link that is never optional: the unpacked
-//! bundle's grants equal the ones on the consent screen. Signatures and revocation are a later phase.
+//! Installing plugins from any HTTPS URL or a local zip: check the bundle is the one the user agreed to and unpack it
+//! where it can only be itself. Grants are opaque strings here; signatures and revocation are a later phase.
 
 pub mod bundle;
 pub mod data;
@@ -111,8 +109,8 @@ fn install_bytes(
     source: String,
     official: bool,
     bytes: &[u8],
-    // Optional, and enforced when present. See the chain in the module docs:
-    // this pins bytes, it does not establish who published them.
+    // Optional: a build cannot carry the digest of an asset republished after it shipped, so what arrived is
+    // recorded, not demanded. Authenticity comes from TLS plus the consent screen.
     sha256: Option<String>,
     promise: String,
     expect: Consented,
@@ -145,7 +143,8 @@ fn install_bytes(
         return finish(Err(e), &staging);
     }
 
-    // The bundle's own account of itself, which is what will actually run.
+    // The bundle's own account of itself, which is what will actually run. No index is served over the wire, so
+    // there is nothing to keep in step with one.
     let manifest_text = match std::fs::read_to_string(staging.join(MANIFEST)) {
         Ok(t) => t,
         Err(e) => return finish(Err(format!("the bundle has no {MANIFEST}: {e}")), &staging),
@@ -154,6 +153,7 @@ fn install_bytes(
         Ok(m) => m,
         Err(e) => return finish(Err(format!("unreadable {MANIFEST}: {e}")), &staging),
     };
+    // The link that is never optional: the unpacked grants equal the ones on the consent screen.
     if let Err(e) = grants_match(&expect, &found) {
         return finish(Err(e), &staging);
     }
@@ -247,7 +247,8 @@ pub fn plugin_inspect_file(app: AppHandle, path: String) -> Result<Inspected, St
     inspect_bytes(&app, &bytes, path, false)
 }
 
-/// Get a bundle's bytes over HTTPS, refusing to reach anywhere it may not.
+/// Get a bundle's bytes over HTTPS, refusing to reach anywhere it may not. In Rust, since widening `connect-src` for a
+/// fetch() would open the releases host to every script in the window.
 async fn fetch_bundle(url: &str) -> Result<Vec<u8>, String> {
     if !allowed_bundle_url(url) {
         return Err(format!(

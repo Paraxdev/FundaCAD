@@ -1,7 +1,5 @@
 //! Native SpaceMouse reader, since WebKitGTK has no WebHID: reports become `spacemouse:motion` and `spacemouse:button`.
-//! Linux reads spacenavd first (see `spnav`); without it the udev rule must target hidraw, see
-//! packaging/99-spacemouse.rules. FUNDACAD_SPACEMOUSE_DEBUG=1 logs raw reports (the old SINDRICAD_ spelling still
-//! works).
+//! Linux reads spacenavd first (`spnav`), else the udev rule in packaging/99-spacemouse.rules must target hidraw.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;

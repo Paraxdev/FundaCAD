@@ -1,7 +1,6 @@
-//! A sphere on a floor at 96x64, traced on every path the machine has. Both
-//! paths walk the same seeds, so they agree to rounding, and each stays near
-//! the committed picture. Without an adapter (GitHub's Windows runners) the
-//! test says so and passes.
+//! A sphere on a floor at 96x64, traced on every path the machine has. Both paths walk the same seeds, so they agree to
+//! rounding, and each stays near the committed picture. Without an adapter (GitHub's Windows runners) it says so and
+//! passes.
 
 mod common;
 

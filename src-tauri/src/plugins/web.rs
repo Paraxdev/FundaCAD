@@ -81,6 +81,8 @@ pub fn host_allowed(host: &str, list: &[String]) -> bool {
     })
 }
 
+/// The inverse of localnet's rule, so the loopback engine port and the local network stay out of reach even for a name
+/// that resolves there.
 fn is_public(ip: IpAddr) -> bool {
     let v4 = match ip {
         IpAddr::V4(v4) => Some(v4),
