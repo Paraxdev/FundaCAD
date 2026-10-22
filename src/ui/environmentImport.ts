@@ -93,9 +93,13 @@ export async function importEnvironmentBytes(
 ): Promise<string | null> {
   try {
     const rec = await storeHdr(await decodeHdr(bytes, name), name, library);
-    // Ready before the look changes, so the document write that follows has no library read for an open to slip into.
-    if (store) await embedFor(rec.hash, library);
-    if (opts.leftOut?.()) return null;
+    if (opts.leftOut) {
+      // Ready before the look changes, so the document write that follows has no library read for an open to slip
+      // into. Held only once the look is taken, the cache keeps the open document's panorama.
+      const embed = store ? (embedded.get(rec.hash) ?? (await readEmbed(rec.hash, library))) : null;
+      if (opts.leftOut()) return null;
+      if (embed) holdEmbed(embed);
+    }
     setActiveSaved(null);
     setRenderPref("environment", `hdr:${rec.hash}`);
     if (store) await syncDocumentEnvironment(store, library);
@@ -131,9 +135,15 @@ const embedded = new Map<string, EmbeddedHdr>();
 async function embedFor(hash: string, library: EnvLibrary): Promise<EmbeddedHdr | null> {
   const held = embedded.get(hash);
   if (held) return held;
+  const e = await readEmbed(hash, library);
+  if (e) holdEmbed(e);
+  return e;
+}
+
+async function readEmbed(hash: string, library: EnvLibrary): Promise<EmbeddedHdr | null> {
   const rec = await library.getHdr(hash);
   if (!rec) return null;
-  const e: EmbeddedHdr = {
+  return {
     name: rec.name,
     width: rec.width,
     height: rec.height,
@@ -141,9 +151,11 @@ async function embedFor(hash: string, library: EnvLibrary): Promise<EmbeddedHdr 
     sha256: rec.hash,
     data: deflateBase64(rec.rgbe),
   };
+}
+
+function holdEmbed(e: EmbeddedHdr) {
   embedded.clear();
-  embedded.set(hash, e);
-  return e;
+  embedded.set(e.sha256, e);
 }
 
 /** What the document should carry for the current look: an imported panorama

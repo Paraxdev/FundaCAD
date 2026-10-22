@@ -31,6 +31,8 @@ const SAVED: Feature[] = [
   { id: "ex1", type: "extrude", sketch: "sk1", distance: 7.3, operation: "new" },
 ] as unknown as Feature[];
 
+// A read waits for the test to let it end, and fails when told to.
+const reading = { done: Promise.resolve(), fails: false };
 const geometry = {
   async rebuild() {
     const result: RebuildResult = {
@@ -41,7 +43,11 @@ const geometry = {
     };
     return { ok: true as const, result };
   },
-  importGeometry: async (path: string) => ({ ok: true as const, name: path, geom: "brep", solid: true }),
+  importGeometry: async (path: string) => {
+    await reading.done;
+    if (reading.fails) return { ok: false as const, message: "the file has no solids" };
+    return { ok: true as const, name: path, geom: "brep", solid: true };
+  },
   async init() {},
   onStatus: () => () => {},
   onProgress: () => () => {},
@@ -122,6 +128,7 @@ const ways = [
 beforeEach(() => {
   Object.assign(h, { answers: [], reported: [], told: [] });
   storing = null;
+  Object.assign(reading, { done: Promise.resolve(), fails: false });
   setRenderPref("environment", "studio");
   useEnvLibrary(createEnvLibrary(heldKv()));
 });
@@ -177,6 +184,60 @@ describe("the environment at the end of a dropped batch", () => {
         look: "panorama",
         home: false,
         reported: [],
+        told: [],
+      });
+    },
+  );
+});
+
+const dropped = (name: string) => `${name} was not imported, another document was opened while it was read.`;
+
+describe("an environment dropped on its own", () => {
+  it("is left out of a document opened while the environment code loads", async () => {
+    const { e, store } = rig(false);
+    const drop = takeDroppedFiles(e, [{ name: "studio.hdr", file: studio() }]);
+    opensGear(store);
+    await drop;
+    await new Promise((r) => setTimeout(r, 0));
+    expect(seen(store)).toEqual({
+      features: ["sketch", "extrude"],
+      name: "Gear.funda",
+      dirty: false,
+      environment: null,
+      look: "studio",
+      home: false,
+      reported: [],
+      told: [dropped("studio.hdr")],
+    });
+  });
+
+  it.each([
+    ["fails", true, { features: [], name: "Untitled", reported: ["Couldn't import a.step: the file has no solids"] }],
+    ["lands", false, { features: ["import"], name: "a", reported: [] }],
+  ])(
+    "lights the document a STEP dropped on a blank Home is opening when that read %s while the panorama is stored",
+    async (_end, fails, after) => {
+      const { e, store } = rig(true);
+      store.newDocument();
+      let endRead!: () => void;
+      reading.done = new Promise((r) => (endRead = r));
+      reading.fails = fails;
+      const opening = takeDroppedFiles(e, [{ name: "a.step", path: "D:/parts/a.step" }]);
+      await new Promise((r) => setTimeout(r, 0));
+      const held = holdStoring();
+      const lighting = takeDroppedFiles(e, [{ name: "studio.hdr", file: studio() }]);
+      await held.reached;
+      endRead();
+      await opening;
+      held.open();
+      await lighting;
+      await new Promise((r) => setTimeout(r, 0));
+      expect(seen(store)).toEqual({
+        ...after,
+        dirty: true,
+        environment: "studio.hdr",
+        look: "panorama",
+        home: false,
         told: [],
       });
     },
