@@ -1,7 +1,5 @@
-// Standard hole sizes, and the dimensions a hole type and size default to.
-//
-// Mirrors the Python engine's `hole_feature.py`, which fills in any dimension a document
-// leaves out. Both test files pin the same numbers.
+// Standard hole sizes and the dimensions a hole type and size default to, mirroring the engine's hole_feature.py.
+// Both test files pin the same numbers.
 
 import type { Feature, HoleFit, HoleStandard, HoleType } from "../types";
 import { plainNumber } from "../ui/units";
@@ -141,12 +139,8 @@ function customDims(holeType: HoleType, d: number): HoleDims {
 
 type HoleFeature = Extract<Feature, { type: "hole" }>;
 
-/** The patch for picking `value` in one of a hole's choice rows: the choice,
- *  and the dimensions that follow from it.
- *
- *  A size, type or standard rewrites every dimension its standard defines, a
- *  fit only the diameter. A stand-in only fills a dimension that is absent, and
- *  a dimension a parameter drives (`bound`) is never touched. */
+/** A size, type or standard rewrites every dimension its standard defines, a fit only the diameter. A stand-in
+ *  fills only absent dimensions, and one a parameter drives (`bound`) is never touched. */
 export function holeChoicePatch(
   f: HoleFeature,
   field: string,

@@ -1,18 +1,6 @@
-// Interactive Extrude (MCAD-style): select one or more profile AREAS, then set
-// the distance by moving the cursor along the profile normal (live solid preview +
-// arrow manipulator + numeric box). Areas can be pre-selected in the sketch or
-// picked here: plain click picks one and starts the depth drag, Ctrl-click adds
-// more (Enter to confirm the set). A ring (annulus) area previews/extrudes as a
-// tube; selecting several areas unions them.
-//
-// The operation is DECIDED, never asked: New Body when nothing exists, Cut when
-// the profile pushes into existing material, Join when it pulls away from it, a
-// profile drawn on a face and pulled off it is the common case, and it joins. The
-// commit used to stop on a four-way modal to have that answer confirmed, which
-// put a decision in front of every extrude in order to change the few where the
-// guess is wrong. The prompt names the operation while you drag instead, and
-// Properties edits it afterwards (document/optionFields.ts has carried the row
-// for a while), so the answer is both visible before and changeable after.
+// Interactive Extrude: pick profile areas (Ctrl-click adds, Enter confirms) and drag the depth along the normal; a
+// ring extrudes as a tube and several areas union. The operation is decided, never asked (extrudeOperation.ts): the
+// prompt names it while you drag and Properties edits it afterwards.
 
 import * as THREE from "three";
 import { asFeature } from "../types";
@@ -39,26 +27,17 @@ import { OP_WORD, plannedOperation, type ExtrudeOp } from "./extrudeOperation";
 import { sweepProbePoints } from "./sweepProbe";
 import { previewVerdict } from "./previewVerdict";
 
-/** Below this taper the extrude is treated as straight: the frontend prism draws
- *  instantly and no kernel preview is asked for. Above it the walls lean and the
- *  exact solid can only come from OCCT. */
+/** Below this the extrude is straight: the frontend prism draws instantly and no kernel preview is asked for. */
 const TAPER_EPS = 0.05;
 
-/** A taper needs depth to swing about (angle = atan(inset / depth)); under this
- *  the lever is too short to read and the handle is not offered. */
+/** Under this depth the taper lever, atan(inset / depth), is too short to read and no handle is offered. */
 const TAPER_MIN_DEPTH = 1;
 
-/** Steepest taper the tool offers, degrees. Just under the engine's own limit
- *  (it refuses at or past 89, where a wall folds through itself), so a value the
- *  handle or field allows is always one the kernel will attempt. Unlike Draft
- *  this is not held to 60: an extrude taper has no neutral line to outswing, and
- *  a deep pocket wants the steeper walls. Whether a given profile survives that
- *  far is the kernel's call, surfaced as a readable refusal in the readout. */
+/** Degrees, just under the engine's refusal at 89 where a wall folds through itself. Not held to Draft's 60: an
+ *  extrude taper has no neutral line to outswing, and a deep pocket wants steep walls. */
 const MAX_TAPER_DEG = 88;
 
-/** How far ABOVE the far face the taper arc floats, in pixels, along the normal:
- *  clear of the depth handle's head (~45px), so the rotation control caps the
- *  depth control rather than crowding it. */
+/** Pixels above the far face along the normal, clear of the depth handle's head (about 45px). */
 const TAPER_ABOVE_PX = 48;
 
 type Phase = "pick" | "drag";
@@ -70,65 +49,48 @@ export class ExtrudeTool {
   private phase: Phase = "pick";
   private selected: WorldRegion[] = [];
   private distance = 10;
-  /** Sweep both ways off the plane, `distance` each way. Off by default and
-   *  reset on every entry, it is a property of the gesture you are making, not
-   *  a mode the tool sits in. An EDIT seeds it from the saved feature. */
+  /** `distance` each way off the plane. Reset on every entry since it belongs to the gesture, not the tool; an edit
+   *  seeds it from the saved feature. */
   private symmetric = false;
   private preview: THREE.Group | null = null;
   private previewMat: THREE.MeshStandardMaterial | null = null;
   private previewKey = ""; // depth+sign+selection of the built preview geometry
-  /** The chunky slider at the far face you pull along the normal to set depth.
-   *  The same glyph the taper handle, the fillet/chamfer and the press/pull tools
-   *  use, its own generous invisible grab volumes and all, so the whole app grabs
-   *  one shape. Its constant screen size and its being drawn THROUGH the model
-   *  (so a cut's handle is not buried in the material it removes) come with it. */
+  /** The same glyph as the taper, fillet and press/pull handles, drawn through the model so a cut's handle is not
+   *  buried in the material it removes. */
   private depthHandle: DragHandle | null = null;
   private hovering = false;
   private grabbing = false;
-  /** The distance at the moment the handle was taken hold of. The drag is
-   *  relative to it, so grabbing an existing 40 mm extrude does not snap it to
-   *  wherever the cursor happens to project. */
+  /** The drag is relative to it, so grabbing a 40 mm extrude does not snap it to the cursor's projection. */
   private grabValue = 0;
   private dim = new DimInput();
   private hitScratch = new THREE.Vector3();
   private onDone: ((id: string | null) => void) | null = null;
 
-  // --- edit mode (re-opening a committed extrude) ---
   private editId: string | null = null; // committed feature id being edited
   private editOp: Op | null = null; // saved operation, an edit keeps it rather than re-guessing
   private editHiddenBodies: string[] | undefined; // participants captured at creation, KEPT
-  /** while editing, this sketch is forced visible so its regions exist
-   *  (consumed sketches hide by default), main.ts's isSketchVisible honors it. */
+  /** Forced visible while editing so its regions exist (consumed sketches hide), see main.ts's isSketchVisible. */
   forcedSketchId: string | null = null;
-  /** The operation a consumed sketch's second extrude is held to. Its profile
-   *  sits on the solid its first extrude made, so the direction guess would
-   *  read Cut and shave that body. New body until Alt+O picks another. */
+  /** A consumed sketch's second extrude sits on the solid its first made, so the guess would read Cut and shave that
+   *  body. New body until Alt+O picks another. */
   private pinnedOp: Op | null = null;
 
-  /** Where the last commit's far face stands and which way it grew, so the
-   *  model view can keep a handle on it that reopens this extrude. The wiring
-   *  clears it once the user moves on. */
+  /** Lets the model view keep a handle on the last commit's far face that reopens this extrude; cleared once the user
+   *  moves on. */
   lastCommit: { id: string; top: THREE.Vector3; dir: THREE.Vector3 } | null = null;
 
-  /** Fluent grab: the cursor's projection along the normal at the moment the
-   *  passive handle was pressed. Null for every other entry, where the depth
-   *  free-tracks the cursor's ABSOLUTE projection. Holding the button changes
-   *  what the gesture means, the depth has to grow from where you took hold,
-   *  not snap to wherever the arrow tip happened to project. */
+  /** Fluent grab: the cursor's projection along the normal at the press, so the depth grows from where you took
+   *  hold. Null for every other entry, where the depth tracks the absolute projection. */
   private grabProj: number | null = null;
   private fluentGrab = false;
   private downPos = { x: 0, y: 0 };
 
-  // --- taper (lean the walls as the extrude climbs) ---
   /** Degrees, positive narrows the far face. Zero is the plain straight prism. */
   private taper = 0;
-  /** The chunky slider you swing to set the taper, at the top rim of the solid.
-   *  Only built once there is depth to swing about, and never in edit mode (the
-   *  Properties row edits a committed taper). */
+  /** Only built once there is depth to swing about, never in edit mode (the Properties row edits a committed taper). */
   private taperHandle: DragHandle | null = null;
   private taperGuide: THREE.Line | null = null;
-  /** In-plane drag axis the taper handle runs along (the sketch's local +X). A
-   *  drag of `inset` mm inward means atan(inset / depth). */
+  /** The sketch's local +X. A drag of `inset` mm inward means atan(inset / depth). */
   private taperAxis = new THREE.Vector3(1, 0, 0);
   /** World point the taper handle floats beside: the centre of the far face. */
   private taperTop = new THREE.Vector3();
@@ -136,15 +98,11 @@ export class ExtrudeTool {
   private taperGrabbing = false;
   private taperGrabProj = 0;
   private taperGrabInset = 0;
-  /** Stable id for the engine preview AND the committed feature, one per gesture
-   *  so a tapered preview replaces itself instead of piling up. */
+  /** One per gesture, shared by the engine preview and the committed feature, so a tapered preview replaces itself. */
   private previewId = "";
-  /** true while the exact tapered solid is being previewed through the engine
-   *  (the frontend prism is hidden), so the switch back to straight knows to
-   *  clear it. */
+  /** The exact tapered solid is previewed through the engine (prism hidden), so going straight knows to clear it. */
   private taperPreviewOn = false;
-  /** depth+sign+taper+selection of the tapered preview last asked of the engine,
-   *  so an unchanged drag does not re-trigger an OCCT rebuild. */
+  /** So an unchanged drag does not re-trigger an OCCT rebuild. */
   private taperKey = "";
 
   private boundMove: (e: PointerEvent) => void;
@@ -163,15 +121,9 @@ export class ExtrudeTool {
     this.boundKey = (e) => this.onKey(e);
   }
 
-  /** `opts.grabAt` is the direct-manipulation entry (features/regionNudge.ts):
-   *  the user pressed the handle that appears the moment a profile is selected,
-   *  so we arm from that pre-selection AND begin scrubbing inside the same
-   *  pointerdown.
-   *
-   *  `opts.sketch` is a sketch chosen in the tree that is hidden, usually because
-   *  an earlier extrude consumed it. It is shown for the length of the gesture
-   *  and every area of it is pre-selected, so a second extrude of the same
-   *  profile is a new feature. Returns false when that sketch has no closed area. */
+  /** `opts.grabAt` is the direct entry (features/regionNudge.ts): arm from the pre-selection and start scrubbing in the
+   *  same pointerdown. `opts.sketch` is a hidden, usually consumed, sketch shown for the gesture with every area
+   *  selected, so a second extrude of it is a new feature. False when it has no closed area. */
   start(onDone: (id: string | null) => void, opts?: { grabAt?: { x: number; y: number }; sketch?: string }): boolean {
     if (this.active) return false;
     if (opts?.sketch) {
@@ -187,10 +139,8 @@ export class ExtrudeTool {
       this.overlay.selectRegionsByPoints(points);
       this.pinnedOp = "new";
     }
-    // Read the pre-selection BEFORE installing anything: a handle whose regions
-    // have gone (the sketch was hidden or re-solved between the paint and the
-    // press) must not arm the pick phase, which would be a bait-and-switch into
-    // a tool nobody asked for, holding toolBusy() until noticed.
+    // Read the pre-selection first: a handle whose regions have gone must not arm an unasked pick phase that holds
+    // toolBusy() until noticed.
     const pre = this.overlay.selectedRegions();
     if (opts?.grabAt && !pre.length) return false;
     this.active = true;
@@ -203,7 +153,6 @@ export class ExtrudeTool {
     el.addEventListener("pointerdown", this.boundDown);
     el.addEventListener("pointerup", this.boundUp);
     window.addEventListener("keydown", this.boundKey, true);
-    // honour any areas pre-selected in the sketch
     this.selected = pre;
     if (this.selected.length) {
       this.beginDrag();
@@ -214,30 +163,22 @@ export class ExtrudeTool {
     return true;
   }
 
-  /** Take hold of the arrow at (x, y) without a fresh pointerdown of our own,
-   *  the press that started the gesture landed on the passive selection handle,
-   *  before this tool existed. */
+  /** The press that started the gesture landed on the passive selection handle before this tool existed. */
   private grabHandle(clientX: number, clientY: number) {
     const first = this.selected[0];
     if (this.phase !== "drag" || !first) return;
     this.fluentGrab = true;
     this.downPos = { x: clientX, y: clientY };
     this.grabProj = axisDragDistance(this.viewport, clientX, clientY, this.anchor(), first.plane.n);
-    // Start at nothing rather than at beginDrag's default 10 mm: the depth is
-    // about to follow the hand that is already on the arrow, and a solid that
-    // sprang to 10 mm before the first movement would read as the grab itself
-    // having done something.
+    // Start at 0, not beginDrag's 10 mm: the depth is about to follow the hand, and a jump before the first move
+    // would read as the grab doing something.
     this.distance = 0;
     this.updatePreview();
     this.viewport.domElement.style.cursor = "grabbing";
   }
 
-  /** Re-open a committed extrude for editing: the model rolls back to just
-   *  before it, its sketch is forced visible, the saved profile areas are
-   *  pre-selected, and the saved distance seeds (and locks) the input, retype
-   *  or Ctrl-click areas, then commit to REPLACE the feature in place (same id,
-   *  one undo step). Returns false when the distance is a parameter expression
-   *  (the value rows' job). */
+  /** Rolls the model back before the extrude, forces its sketch visible and preselects its areas; commit replaces
+   *  the feature in place (same id, one undo step). False when the distance is a parameter expression. */
   startEdit(
     featureId: string,
     onDone: (id: string | null) => void,
@@ -270,28 +211,19 @@ export class ExtrudeTool {
     const el = this.viewport.domElement;
     el.addEventListener("pointermove", this.boundMove);
     el.addEventListener("pointerdown", this.boundDown);
-    // pointerup as well, which create mode has always wired but edit mode never
-    // did: without it, releasing a handle in an edit does nothing, so a taper (or
-    // depth) swung open by double-click could never be committed by letting go.
+    // Without pointerup an edit could never commit a taper or depth swung open by double-click by letting go.
     el.addEventListener("pointerup", this.boundUp);
     window.addEventListener("keydown", this.boundKey, true);
 
-    // roll the model back so the pre-extrude state is what previews/op-guesses
-    // see (exactly what the tool saw at creation), then rebuild the overlay so
-    // the now-forced-visible sketch contributes regions to select from.
+    // Roll back so previews and the op guess see the pre-extrude model, then rebuild the overlay so the forced
+    // sketch contributes regions.
     this.store.beginEditPreview(featureId);
     this.overlay.update(this.store.document);
     const saved: [number, number, number][] = (f.regions ?? (f.region ? [f.region] : [])) as [number, number, number][];
     this.overlay.selectRegionsByPoints(saved);
     this.selected = this.overlay.selectedRegions();
-    // A whole-sketch extrude saved no region anchors, so there was nothing to
-    // match and the selection is empty, which is NOT "its areas are gone", it is
-    // the whole sketch. Reselect every area of it so the edit reopens previewing
-    // and draggable, exactly as it was created. Only when NOTHING was saved:
-    // an extrude that named specific areas which no longer resolve genuinely has
-    // lost them, and that keeps the honest prompt below. Commit writes explicit
-    // regions either way, as it always has, so this reselection changes no
-    // geometry.
+    // A whole sketch extrude saved no region anchors, so an empty selection means the whole sketch: reselect every
+    // area. Saved areas that no longer resolve really are lost and keep the prompt below.
     if (!this.selected.length && !saved.length) {
       this.overlay.selectRegionsByPoints(this.overlay.regionPointsForSketch(f.sketch));
       this.selected = this.overlay.selectedRegions();
@@ -326,9 +258,7 @@ export class ExtrudeTool {
     const plane = first.plane;
     const anchor = this.anchor();
     if (this.taperGrabbing) {
-      // Swing the far face over: a drag inward (against the handle's axis) leans
-      // the walls in, and how far it leans per millimetre depends on the depth it
-      // has to climb, exactly the atan(inset / lever) a draft reads (draftMath).
+      // A drag inward leans the walls in by atan(inset / depth), the same reading as a draft (draftMath).
       const depth = Math.abs(this.distance);
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.taperTop, this.taperAxis);
       const inset = this.taperGrabInset + (this.taperGrabProj - proj);
@@ -340,11 +270,8 @@ export class ExtrudeTool {
       return;
     }
     if (this.grabbing) {
-      // A deliberate drag on the arrow is preferred over a typed value. That is the
-      // exception DimInput.seed documents in as many words and takeOver()
-      // exists for. Without it, re-opening an extrude to lengthen it by hand
-      // was impossible: the seed locks the field, the lock stops cursor
-      // tracking, and the arrow drawn right there did nothing at all.
+      // A deliberate drag on the arrow beats a typed value (DimInput.seed's exception, takeOver()); without it a
+      // reopened extrude could not be lengthened by hand.
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, anchor, plane.n);
       this.distance = this.grabValue + (proj - (this.grabProj ?? proj));
       this.dim.takeOver("distance");
@@ -353,22 +280,17 @@ export class ExtrudeTool {
       this.updatePreview();
       return;
     }
-    // Not dragging, but the arrow and the taper handle are targets: say so, or
-    // the only affordance is that the depth happens to follow the cursor.
+    // Not dragging, but the handles are targets: say so, or the only affordance is the depth following the cursor.
     this.taperHovering = this.hitTaper(e.clientX, e.clientY);
     this.hovering = !this.taperHovering && this.hitGizmo(e.clientX, e.clientY);
     const cur = this.viewport.domElement.style.cursor;
     if (this.hovering || this.taperHovering) this.viewport.domElement.style.cursor = "grab";
     else if (cur === "grab") this.viewport.domElement.style.cursor = "default";
     if (!this.dim.isUserDriven("distance") && !this.hovering && !this.taperHovering) {
-      // The depth free-tracks the cursor UNTIL it is over a handle. Without that
-      // last guard, reaching for the taper arc (or the depth handle) would move
-      // the depth, which moves the handle, so the press lands where the handle no
-      // longer is and commits instead of grabbing. Freezing on hover holds the
-      // handle still to be taken hold of.
+      // The depth tracks the cursor until it is over a handle; otherwise reaching for a handle moves it, and the
+      // press commits instead of grabbing.
       const proj = axisDragDistance(this.viewport, e.clientX, e.clientY, anchor, plane.n);
-      // Relative once the handle has been grabbed, absolute otherwise, see
-      // grabProj. Both come off the same projection; only the origin differs.
+      // Relative once the handle is grabbed, absolute otherwise (grabProj).
       const d = this.grabProj == null ? proj : proj - this.grabProj;
       this.distance = d;
       this.dim.updateFromCursor({ distance: Math.abs(d) });
@@ -381,11 +303,8 @@ export class ExtrudeTool {
     this.updatePreview();
   }
 
-  /** Keystroke-driven twin of onMove's typed branch (lines above): a value typed
-   *  with the mouse sitting still never fires a pointermove, so without this the
-   *  prompt (and the operation buildFeature reads off it) would keep showing
-   *  whatever direction the depth defaulted to until Enter forced a recompute at
-   *  commit, one word behind what was actually about to be built. */
+  /** A value typed with the mouse still fires no pointermove, so this keeps the prompt and the operation read off it
+   *  from lagging one word behind until Enter. */
   private onTypedDistance() {
     if (this.phase !== "drag" || !this.dim.isUserDriven("distance")) return;
     const v = this.dim.getValue("distance");
@@ -393,10 +312,8 @@ export class ExtrudeTool {
     this.updatePreview();
   }
 
-  /** Park the depth input at a STABLE spot near the profile, anchored to the
-   *  selection center (which doesn't move while you drag depth), offset off the
-   *  geometry and clamped inside the viewport. Following the cursor made the box
-   *  (and its buttons) impossible to click. */
+  /** At a stable spot by the selection centre, clamped inside the viewport; following the cursor made the box
+   *  impossible to click. */
   private positionDim(anchor: THREE.Vector3 = this.anchor()) {
     const s = this.viewport.projectToScreen(anchor);
     const rect = this.viewport.domElement.getBoundingClientRect();
@@ -417,33 +334,26 @@ export class ExtrudeTool {
       const additive = e.ctrlKey || e.metaKey || e.shiftKey;
       this.overlay.toggleRegionSelection(r, additive);
       this.selected = this.overlay.selectedRegions();
-      // plain click picks one area and goes straight to depth; Ctrl-click keeps
-      // accumulating (Enter confirms the set)
+      // A plain click picks one area and goes to depth; Ctrl-click accumulates and Enter confirms.
       if (!additive && this.selected.length) this.beginDrag();
       return;
     }
     e.preventDefault();
-    // Taking hold of the taper handle, tested first: it floats to the side of
-    // the depth arrow and setting the lean is never a commit either. A drag on
-    // it swings the walls; the depth stays put.
+    // The taper handle is tested first: it floats beside the depth arrow, and a drag on it swings the walls without
+    // moving the depth.
     if (!e.ctrlKey && !e.metaKey && !e.shiftKey && this.hitTaper(e.clientX, e.clientY)) {
       e.stopImmediatePropagation();
       this.taperGrabbing = true;
       this.downPos = { x: e.clientX, y: e.clientY };
-      // Freeze the depth the instant the taper is taken hold of. Otherwise the
-      // depth free-tracks the cursor, so letting go of the taper and moving the
-      // hand would collapse the solid to wherever the pointer landed, which read
-      // as the extrude closing the moment you tried to adjust the lean. The depth
-      // arrow still takes it back (takeOver) for a deliberate depth drag.
+      // Freeze the depth when the taper is grabbed, or letting go and moving the hand would collapse the solid to the
+      // pointer. The depth arrow takes it back (takeOver) for a deliberate depth drag.
       this.dim.seed("distance", this.distance);
       this.taperGrabInset = draftDelta(this.taper, Math.abs(this.distance), MAX_TAPER_DEG);
       this.taperGrabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.taperTop, this.taperAxis);
       this.viewport.domElement.style.cursor = "grabbing";
       return;
     }
-    // Taking hold of the arrow, tested before the modifier and commit branches
-    // below: a press on the handle is the start of a drag and never a commit,
-    // and a tool whose handle committed on contact could not be used at all.
+    // Tested before the modifier and commit branches: a press on the handle starts a drag, never a commit.
     const grabFirst = this.selected[0];
     if (!e.ctrlKey && !e.metaKey && !e.shiftKey && grabFirst && this.hitGizmo(e.clientX, e.clientY)) {
       e.stopImmediatePropagation(); // don't orbit while dragging the handle
@@ -454,23 +364,16 @@ export class ExtrudeTool {
       this.viewport.domElement.style.cursor = "grabbing";
       return;
     }
-    // Ctrl-click keeps changing WHICH areas, even once the depth is being set.
-    // The prompt has said "Ctrl-click areas" for as long as the edit flow has
-    // existed and the tool did not honour it: every click in the drag phase
-    // committed, the modified one included, so re-opening an extrude to fix
-    // the areas it caught ended the moment you tried to.
+    // Ctrl-click keeps changing which areas even in the drag phase, so an edit can fix the areas it caught.
     if (e.ctrlKey || e.metaKey || e.shiftKey) {
       const r = this.regionUnder(e.clientX, e.clientY);
-      // A modifier click on empty space is not a commit either: it is a miss,
-      // and committing on a miss is how a correction becomes a mistake.
+      // A modifier click on empty space is a miss, not a commit; a commit on a miss turns a fix into a mistake.
       if (!r) return;
       this.overlay.toggleRegionSelection(r, true);
       this.selected = this.overlay.selectedRegions();
       if (!this.selected.length) {
-        // Every area taken off. There is nothing to extrude and nothing for the
-        // handles to hang from, so drop back to picking rather than hold a drag
-        // over an empty set. updatePreview early-returns on an empty set, so a
-        // handle left alone would float in the air off nothing.
+        // Every area taken off: drop back to picking, since updatePreview returns early on an empty set and the
+        // handles would float off nothing.
         this.phase = "pick";
         this.dim.hide();
         this.disposePreviewGeom();
@@ -488,26 +391,20 @@ export class ExtrudeTool {
     this.commit();
   }
 
-  /** Only the fluent gesture ends on a release. Every other entry keeps the
-   *  free-track-then-click flow, where a pointerup is just the tail of the
-   *  click that onDown already handled. */
+  /** Only the fluent gesture ends on a release; elsewhere a pointerup is the tail of the click onDown handled. */
   private onUp(e: PointerEvent) {
     if (e.button !== 0 || this.phase !== "drag") return;
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.taperGrabbing) {
-      // Let go of the taper arc and the extrude is done: a grab-drag-release is
-      // one whole gesture, so the release finishes it rather than leaving it open
-      // for a second click nobody expects to have to make. A press that never
-      // travelled is not a swing, so it stays put (double-click reopens to tune).
+      // A grab, drag and release is one whole gesture, so letting go of the taper finishes it. A press that never
+      // travelled stays put (double-click reopens to tune).
       this.taperGrabbing = false;
       this.viewport.domElement.style.cursor = this.taperHovering ? "grab" : "default";
       if (moved) this.commit();
       return;
     }
     if (this.grabbing) {
-      // Same rule for the depth handle: pull it, let go, done. A click that never
-      // travelled commits too (it is how you accept the depth the cursor set),
-      // so either way releasing the handle finishes the extrude.
+      // Same for the depth handle: a click that never travelled commits too, it accepts the depth the cursor set.
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       this.commit();
@@ -520,25 +417,19 @@ export class ExtrudeTool {
       // The same threshold commit() uses to ignore a zero extrude.
       meaningful: Math.abs(this.distance) >= 1e-3,
     });
-    // Cleared BEFORE dispatching, not in cleanup: commit() can decline and
-    // leave the tool alive (a zero depth is ignored rather than committed), and
-    // a stale flag would then make the NEXT release of any click re-run this
-    // decision on a gesture that ended long ago.
+    // Cleared before dispatching: commit() can decline a zero depth and leave the tool alive, and a stale flag would
+    // re-run this on the next release.
     this.fluentGrab = false;
     if (release === "commit") return this.commit();
     if (release === "cancel") return this.cancel();
-    // Stayed armed: a press that never travelled is the way IN to the full
-    // tool. The depth keeps tracking relative to where the arrow was taken
-    // hold of, which is exactly where the pointer still is, so nothing jumps.
+    // Stayed armed: a press that never travelled opens the full tool, and the depth tracks relative to the grab,
+    // where the pointer still is.
     this.viewport.domElement.style.cursor = "default";
   }
 
   private onKey(e: KeyboardEvent) {
-    // Alt+S, and checked BEFORE the typing guard below, because the depth field
-    // holds focus for the whole drag and this has to work while it does. A chord
-    // rather than a bare letter: the field takes spelled-out units, and
-    // "millimeters", "inches" and "mils" all contain an s, so claiming the plain
-    // key would eat a letter out of a legitimate value.
+    // Alt+S, checked before the typing guard since the depth field holds focus all drag; a bare s would eat a letter
+    // from "millimeters", "inches" or "mils".
     if (e.altKey && (e.key === "s" || e.key === "S" || e.code === "KeyS") && this.phase === "drag") {
       e.preventDefault();
       e.stopPropagation();
@@ -561,12 +452,8 @@ export class ExtrudeTool {
     else if (e.key === "Enter" && this.phase === "pick" && this.selected.length) this.beginDrag();
   }
 
-  /** Turn Symmetric on or off from anywhere, and keep the box's switch with it.
-   *
-   *  The operation is recomputed rather than left alone: symmetric reaches
-   *  material that a one-sided extrude was pointing away from, so the word on
-   *  the prompt can change without the depth or the selection moving, which is
-   *  what the prompt's own cache is keyed on. */
+  /** The operation is recomputed: symmetric reaches material a one sided extrude pointed away from, and the prompt's
+   *  cache is keyed only on depth and selection. */
   private setSymmetric(on: boolean) {
     if (this.symmetric === on) return;
     this.symmetric = on;
@@ -578,17 +465,12 @@ export class ExtrudeTool {
   private beginDrag() {
     this.phase = "drag";
     this.overlay.setHoverRegion(null);
-    // One id for the whole gesture: the engine taper preview and the committed
-    // feature share it, so a live tapered preview replaces itself each rebuild
-    // rather than accumulating a new body per drag step.
+    // One id per gesture, shared by the engine taper preview and the commit, so the preview replaces itself.
     this.previewId = this.editId ?? this.store.nextId();
-    // A fresh gesture starts straight; an edit keeps whatever taper was saved
-    // (the arrow is not offered in edit mode, so this only feeds the ∠ field).
+    // A fresh gesture starts straight; an edit keeps its saved taper.
     this.taper = this.editId ? this.taper : 0;
     this.dim.show(
-      // The ∠ field rides beside the depth: the depth free-tracks the cursor,
-      // the taper is set by its own handle or typed here, and the two never
-      // clobber each other because updateFromCursor only ever pushes `distance`.
+      // The ∠ field rides beside the depth; they never clobber each other, updateFromCursor only pushes `distance`.
       [
         { name: "distance", label: "D" },
         { name: "taper", label: "Angle", icon: "angle", kind: "angle" },
@@ -606,15 +488,8 @@ export class ExtrudeTool {
     );
     this.dim.updateFromCursor({ taper: this.taper });
     if (this.editId) {
-      // seed the SIGNED saved distance and lock the field (userDriven): extrude's
-      // onMove free-tracks the cursor and would clobber the seed on the first
-      // move otherwise. So FREE tracking is off in edit mode, a hand that
-      // happens to be moving must not rewrite a saved depth. Dragging the arrow
-      // still works and is preferred over the seed, see onMove's grab branch: that is a
-      // deliberate gesture on the handle that owns the field, which is the
-      // exception DimInput.seed promises and takeOver() performs. (Seeding the
-      // abs value would silently drop a cut's sign the moment getValue is read
-      // back, the DimInput abs-display trap.)
+      // Seed the signed distance and lock the field (userDriven), or free tracking would rewrite a saved depth on the
+      // first move; dragging the arrow still overrides it (takeOver). Seeding the abs value would drop a cut's sign.
       this.dim.seed("distance", this.distance);
     } else {
       this.distance = 10;
@@ -626,7 +501,6 @@ export class ExtrudeTool {
     this.updatePreview();
   }
 
-  // --- geometry helpers ---
   /** the front-most region whose material (loop minus holes) contains the cursor */
   private regionUnder(cx: number, cy: number): WorldRegion | null {
     const ray = this.viewport.rayFrom(cx, cy).ray;
@@ -645,15 +519,13 @@ export class ExtrudeTool {
     return best;
   }
 
-  /** average of the selected areas' interior points, the arrow anchor.
-   *  Shared with the passive handle so the two arrows stand in the same place
-   *  across the hand-off (features/regionNudge.ts). */
+  /** Mean of the selected areas' interior points, shared with the passive handle (features/regionNudge.ts) so the
+   *  arrow stays put across the hand-off. */
   private anchor(): THREE.Vector3 {
     return regionAnchor(this.selected);
   }
 
-  /** A stable key for the selected areas, so a preview keyed on depth+selection
-   *  can tell a real change from a repaint. */
+  /** Lets a preview keyed on depth and selection tell a real change from a repaint. */
   private selectionIds(): string {
     return this.selected
       .map((s) => `${s.sketchId}:${s.interior3D.x.toFixed(2)},${s.interior3D.y.toFixed(2)}`)
@@ -671,12 +543,8 @@ export class ExtrudeTool {
     this.syncPeek();
     const sign = this.distance >= 0 ? 1 : -1;
     const depth = Math.abs(this.distance);
-    // A leaning wall is not a prism, and THREE.ExtrudeGeometry cannot taper one,
-    // so the instant frontend preview only serves the straight case. Once the
-    // taper matters the exact solid comes from the kernel, exactly as Draft and
-    // Press/Pull do: a NEW extrude previews through store.setPreview, an EDIT
-    // through beginEditPreview(id, feature), which varies the committed feature
-    // in place instead of stacking a second preview on the rolled-back model.
+    // THREE.ExtrudeGeometry cannot taper, so a tapered extrude previews through the kernel like Draft: a new one via
+    // store.setPreview, an edit via beginEditPreview(id, feature), varying the committed feature in place.
     const tapering = depth > 1e-6 && Math.abs(this.taper) >= TAPER_EPS;
     if (tapering) {
       this.disposePreviewGeom(); // the straight prism, if one is up, is now a lie
@@ -696,11 +564,8 @@ export class ExtrudeTool {
 
   private peekKey = "";
 
-  /** See through the bodies the preview passes into, or a pocket is drawn inside
-   *  opaque material and all that shows is the arrow. A cut counts every body
-   *  whose box the sweep reaches: a tapered cut previews the pocket itself, where
-   *  a parity probe finds no material left, and an edit starts on a model that
-   *  may still hold the pocket. Anything else needs the probe to land in material. */
+  /** See through the bodies the preview passes into, or a pocket hides inside opaque material. A cut counts every
+   *  body its sweep box reaches, since a tapered cut previews the pocket where a parity probe finds no material. */
   private syncPeek() {
     const op = this.shownOp ?? this.plannedOperation();
     const key = `${op}:${this.distance.toFixed(1)}:${this.symmetric}:${this.selectionIds()}`;
@@ -728,15 +593,13 @@ export class ExtrudeTool {
     this.viewport.setPeek(null);
   }
 
-  /** Send the exact tapered solid to the kernel: as a floating preview for a new
-   *  extrude, as a varied edit for a committed one. */
+  /** A floating preview for a new extrude, a varied edit for a committed one. */
   private pushTaperPreview() {
     if (this.editId) this.store.beginEditPreview(this.editId, this.buildFeature());
     else this.store.setPreview(this.buildFeature());
   }
 
-  /** Take the tapered preview back down: a new extrude drops its floating
-   *  preview, an edit returns to the rolled-back model the straight prism draws on. */
+  /** A new extrude drops its floating preview, an edit returns to the rolled back model. */
   private clearTaperPreview() {
     if (this.editId) this.store.beginEditPreview(this.editId);
     else this.store.setPreview(null);
@@ -744,8 +607,7 @@ export class ExtrudeTool {
     this.taperKey = "";
   }
 
-  /** The instant translucent prism for the STRAIGHT extrude, no kernel round-trip
-   *  (that is what makes depth dragging feel immediate). */
+  /** No kernel round trip, which makes depth dragging feel immediate. */
   private updatePrism(sign: number, depth: number) {
     const cut = this.drawsAsCut(sign);
     const key = `${depth.toFixed(3)}:${sign}:${this.symmetric ? "sym" : "one"}:${this.selectionIds()}`;
@@ -766,10 +628,8 @@ export class ExtrudeTool {
         for (const h of wr.region.holes) {
           shape.holes.push(new THREE.Path(h.map((p) => p.clone())));
         }
-        // Symmetric is drawn as one prism of twice the depth pulled back half
-        // its length, in LOCAL space before the basis is applied, so the same
-        // one matrix still places it and the mesh really is centred on the
-        // plane rather than two prisms that meet on it.
+        // Symmetric is one prism of twice the depth pulled back half its length in local space, so the same matrix
+        // places it centred on the plane.
         const geo = new THREE.ExtrudeGeometry(shape, {
           depth: this.symmetric ? depth * 2 : depth,
           bevelEnabled: false,
@@ -787,11 +647,8 @@ export class ExtrudeTool {
     }
   }
 
-  /** The two controls, the depth handle and the taper handle, shown in both
-   *  preview modes because they are the controls and not the geometry. Both are
-   *  the SAME glyph oriented to their own axis: pull the depth handle along the
-   *  normal to set depth, swing the taper handle in-plane to lean the walls, so
-   *  the two degrees of freedom read as one design. */
+  /** Shown in both preview modes since they are controls, not geometry: one glyph pulled along the normal for depth
+   *  and swung in plane for taper. */
   private updateManipulators(sign: number, depth: number) {
     const first = this.selected[0];
     if (!first) return;
@@ -799,10 +656,7 @@ export class ExtrudeTool {
     const anchor = this.anchor();
     const dir = plane.n.clone().multiplyScalar(sign);
     const px = this.viewport.pixelWorldSize(anchor);
-    // The centre of the far face: the depth handle stands here (pull it along the
-    // normal), the taper handle floats beside it. True for one-sided AND
-    // symmetric, whose near half sits a depth behind the plane, so its far face
-    // lands here too, and the taper drag measures its inward pull against it.
+    // The centre of the far face, for one sided and symmetric alike (its near half sits a depth behind the plane).
     this.taperTop.copy(anchor).addScaledVector(dir, depth);
 
     if (!this.depthHandle) {
@@ -815,14 +669,9 @@ export class ExtrudeTool {
     this.updateTaperHandle(plane, dir, px);
   }
 
-  /** The curved arrow you swing to lean the walls, capping the depth handle above
-   *  the far face. A rotation reads as a rotation glyph, distinct from the depth
-   *  handle's straight one, the translate-vs-rotate language every gizmo uses.
-   *  Offered once there is depth to swing about, for a new extrude AND for one
-   *  reopened by double-click, so editing a taper is the same easy grab. */
+  /** A rotation glyph, distinct from the depth handle's straight one. Offered once there is depth, for a new extrude
+   *  and for one reopened by double-click. */
   private updateTaperHandle(plane: WorldRegion["plane"], dir: THREE.Vector3, px: number) {
-    // A taper needs depth to swing about (angle = atan(inset / depth)); with too
-    // little the lever is unreadable and the handle is not offered.
     if (Math.abs(this.distance) < TAPER_MIN_DEPTH) {
       this.disposeTaperHandle();
       return;
@@ -831,22 +680,17 @@ export class ExtrudeTool {
       this.taperHandle = nameHandle(createRotationArc(), "taper");
       this.viewport.addToScene(this.taperHandle.group);
     }
-    // The sketch's local +X, in world space: a deterministic in-plane axis to run
-    // the drag against (moving the top edge in leans the wall in).
+    // The sketch's local +X in world space, a deterministic in plane axis (moving the top edge in leans the wall in).
     const o = plane.to3D(0, 0);
     this.taperAxis.copy(plane.to3D(1, 0)).sub(o).normalize();
     const g = this.taperHandle.group;
-    // Float it a head's height above the far-face centre, along the normal, so it
-    // caps the depth handle rather than crowding it.
     g.position.copy(this.taperTop).addScaledVector(dir, px * TAPER_ABOVE_PX);
-    // The arc swings in the plane the wall actually tips through, spanned by the
-    // in-plane drag axis and the normal: local X -> taperAxis, local Y (the arc's
-    // centre) -> the normal so it arches upward, local Z the plane's own normal.
+    // The arc swings in the plane the wall tips through: local X along taperAxis, local Y up the normal, local Z the
+    // plane's own normal.
     const z = new THREE.Vector3().crossVectors(this.taperAxis, dir).normalize();
     g.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(this.taperAxis, dir, z));
     g.scale.setScalar(px);
-    // Red once the walls undercut (a negative taper, which no mould can draw),
-    // amber otherwise.
+    // Red once the walls undercut (a negative taper no mould can draw), amber otherwise.
     this.taperHandle.paint({
       hot: this.taperHovering || this.taperGrabbing,
       tone: this.taper < 0 ? "cut" : "idle",
@@ -854,8 +698,7 @@ export class ExtrudeTool {
     this.updateTaperGuide(dir, z);
   }
 
-  /** A dashed arc from the straight wall to the leaning one, standing on the far
-   *  face, so the angle reads on the model and not only in the value box. */
+  /** From the straight wall to the leaning one on the far face, so the angle reads on the model too. */
   private updateTaperGuide(dir: THREE.Vector3, swingNormal: THREE.Vector3) {
     if (Math.abs(this.taper) < 0.05) {
       this.disposeTaperGuide();
@@ -907,16 +750,12 @@ export class ExtrudeTool {
     this.taperGuide = null;
   }
 
-  /** Orient, size, and tint one chunky slider at `at`, lying along `axis`. The
-   *  one place the depth and taper handles are placed, so they cannot drift into
-   *  two shapes or two screen-size rules: constant `pixelWorldSize` scale, glyph
-   *  laid along its axis, amber or red for its state. */
-  /** Red for a cut. Otherwise a negative depth reads as one, which a pinned
-   *  operation says nothing about. */
+  /** A negative depth reads as a cut unless an operation is pinned. */
   private drawsAsCut(sign: number): boolean {
     return this.pinnedOp ? this.pinnedOp === "cut" : sign < 0;
   }
 
+  /** The one place both handles are placed, so they cannot drift into two shapes or two screen size rules. */
   private placeHandle(
     handle: DragHandle,
     at: THREE.Vector3,
@@ -947,21 +786,18 @@ export class ExtrudeTool {
     this.taperHandle = null;
   }
 
-  /** Is the cursor on the depth handle? Tested against the glyph's own generous
-   *  invisible grab volumes (direct children of the group), never the drawn
-   *  shape, the convention every createDragHandle caller shares. */
+  /** Tested against the glyph's invisible grab volumes (the group's direct children), never the drawn shape, like
+   *  every createDragHandle caller. */
   private hitGizmo(x: number, y: number): boolean {
     return this.handleAt(x, y) === "depth";
   }
 
-  /** Is the cursor on the taper handle? Same convention as the depth handle. */
   private hitTaper(x: number, y: number): boolean {
     return this.handleAt(x, y) === "taper";
   }
 
-  /** The handle under the pointer, the taper first as the press tests them. One
-   *  probe for both, so a finger's wider reach takes the handle under the
-   *  touch before one beside it. */
+  /** The taper first, as the press tests them; one probe for both so a finger's wider reach takes the handle under
+   *  the touch. */
   private handleAt(x: number, y: number): "taper" | "depth" | null {
     if (this.phase !== "drag") return null;
     const taper = this.taperHandle;
@@ -976,9 +812,8 @@ export class ExtrudeTool {
     );
   }
 
-  /** The feature this gesture would commit (also what the engine previews while
-   *  a taper is being swung). `taper` is written only when it bites, so a plain
-   *  extrude's JSON is byte-identical to what earlier builds wrote. */
+  /** Also what the engine previews during a taper swing. `taper` is written only when it bites, so a plain extrude's
+   *  JSON stays byte identical. */
   private buildFeature(): Feature {
     const first = this.selected[0]!;
     const hiddenBodies = this.editId ? this.editHiddenBodies : this.store.hiddenBodyIds();
@@ -987,10 +822,7 @@ export class ExtrudeTool {
       type: "extrude",
       sketch: first.sketchId,
       distance: Math.round(this.distance * 1000) / 1000,
-      // shownOp is what refreshPrompt just put on screen (or, before the first
-      // paint, the same fresh computation): reading it here rather than calling
-      // plannedOperation() again is what keeps the built feature from ever
-      // disagreeing with the word the prompt showed for this distance.
+      // shownOp is the word the prompt showed; reading it rather than recomputing keeps the two from disagreeing.
       operation: this.shownOp ?? this.plannedOperation(),
       regions: this.selected.map((wr) => [wr.interior3D.x, wr.interior3D.y, wr.interior3D.z]),
       ...(this.symmetric ? { symmetric: true } : {}),
@@ -999,30 +831,22 @@ export class ExtrudeTool {
     };
   }
 
-  // Does the extrude direction push INTO existing material? One of the four facts
-  // features/extrudeOperation.ts reads, and the only one that needs the scene: it
-  // steps each area's interior a hair along the direction and asks the model.
-  //
-  // This replaced a pure drag-SIGN guess, which defaulted "push a face through the
-  // model" to Join and silently no-op'd (the union was already inside the body).
+  // Steps each area's interior a hair along the direction and asks the model, the one extrudeOperation.ts fact that
+  // needs the scene. A drag sign guess made a push through the model a Join that silently did nothing.
   private entersSolid(): boolean {
     if (!this.selected.length) return false;
     const sign = this.distance >= 0 ? 1 : -1;
     let inside = 0;
     for (const wr of this.selected) {
-      // Symmetric sweeps BOTH ways, so it enters material if EITHER side does.
-      // Reading one side is what made a profile on a datum plane buried in a
-      // body guess Join, which then reported adding no material because the
-      // prism was already inside the part.
+      // Symmetric sweeps both ways, so either side entering counts; one side made a profile on a datum plane buried
+      // in a body guess Join and add nothing.
       if (this.areaEnters(wr, sign) || (this.symmetric && this.areaEnters(wr, -sign))) inside++;
     }
     return inside * 2 > this.selected.length; // majority of selected areas
   }
 
-  /** Measured once per area and direction for the whole gesture. A tapered
-   *  preview replaces the model on screen with the kernel's result, so probing
-   *  again finds the pocket the preview just cut, calls the next step a Join,
-   *  and the preview flips between the two on every rebuild. */
+  /** Once per area and direction per gesture: a tapered preview replaces the model, so probing again would find its
+   *  own pocket and flip the operation every rebuild. */
   private entersMemo = new Map<string, boolean>();
   private areaEnters(wr: WorldRegion, dir: number): boolean {
     const p = wr.interior3D;
@@ -1036,9 +860,7 @@ export class ExtrudeTool {
     return hit;
   }
 
-  /** The situation the rules in features/extrudeOperation.ts read, measured off
-   *  the live model and the live selection. Everything the commit modal used to
-   *  pre-sort its list by, gathered in one place. */
+  /** The situation features/extrudeOperation.ts reads, measured off the live model and selection. */
   private plannedOperation(): Op {
     return plannedOperation({
       savedOperation: this.editId ? this.editOp : this.pinnedOp,
@@ -1048,19 +870,8 @@ export class ExtrudeTool {
     });
   }
 
-  /** The operation, on the prompt line, following the drag across zero.
-   *
-   *  This is what replaced the commit dialog. The dialog's one honest job was
-   *  saying which boolean you were about to get; a line that says so while you
-   *  are still dragging does that job without stopping the gesture to do it.
-   *
-   *  Gated on the two things the answer can turn on, which side of zero the
-   *  depth is, and how many areas are selected, because this runs on every
-   *  pointermove and plannedOperation() casts a ray through the whole model per
-   *  selected area. Nothing else moves during a drag: the model and the areas
-   *  are fixed, and the depth's MAGNITUDE cannot change which boolean is meant.
-   *  A dropped frame of a stale word is not a risk here; a raycast per area per
-   *  move on an imported assembly is. */
+  /** The operation on the prompt line, following the drag across zero. Gated on the depth's sign and the area count,
+   *  since this runs every pointermove and plannedOperation() raycasts the whole model per area. */
   private shownOp: Op | null = null;
   private shownSym = false;
   private promptKey = "";
@@ -1070,9 +881,7 @@ export class ExtrudeTool {
     if (key === this.promptKey) return;
     this.promptKey = key;
     const op = this.plannedOperation();
-    // The symmetric state is on the line as well as the operation, so an
-    // unchanged word does not skip a repaint that has to announce the toggle
-    // the user just pressed.
+    // Symmetric is on the line too, so an unchanged word still repaints to announce the toggle.
     if (op === this.shownOp && this.symmetric === this.shownSym) return;
     this.shownOp = op;
     this.shownSym = this.symmetric;
@@ -1090,10 +899,8 @@ export class ExtrudeTool {
   private commit() {
     if (!this.selected.length) return this.cancel();
     const v = this.dim.getValue("distance");
-    // GATE on isUserDriven: while dragging, the field displays |distance|,
-    // reading it back unconditionally strips the drag's sign and sends the
-    // extrude the wrong way ("Cut removed nothing" on cut-toward-body).
-    // Typed values (userDriven) carry their own sign and are preferred.
+    // Only when typed: while dragging the field shows |distance|, and reading it back strips the sign so a cut goes
+    // the wrong way ("Cut removed nothing").
     if (v != null && this.dim.isUserDriven("distance")) this.distance = v;
     if (Math.abs(this.distance) < 1e-3) return; // ignore zero
     // A typed ∠ is the truth for the taper, the same rule the depth follows.
@@ -1117,15 +924,10 @@ export class ExtrudeTool {
         return;
       }
     }
-    // A typed value with no drag in between never ran onMove, so the prompt can
-    // still be showing the word picked for the default distance rather than the
-    // one just typed. Refresh it here so shownOp is read off the FINAL distance:
-    // buildFeature reads shownOp rather than re-deriving it, so the operation
-    // that gets built is provably the one the word on screen just promised.
+    // A typed value with no drag never ran onMove, so refresh the prompt: buildFeature reads shownOp, so what is
+    // built is the word on screen.
     this.refreshPrompt();
-    // Feature construction (id, regions, symmetric, taper, captured participants)
-    // is shared with the live engine preview, so the thing committed is exactly
-    // the thing that was on screen. See buildFeature.
+    // Shared with the live engine preview, so the commit is exactly what was on screen.
     const feature = this.buildFeature();
     const id = feature.id;
     const dir = first.plane.n.clone().multiplyScalar(this.distance >= 0 ? 1 : -1);
@@ -1134,9 +936,8 @@ export class ExtrudeTool {
       top: this.anchor().addScaledVector(dir, Math.abs(this.distance)),
       dir,
     };
-    // Drop any live taper preview before the real write. A new extrude's floating
-    // preview carries the same id, so building both at once would duplicate it;
-    // an edit's preview is torn down by endEditPreview below instead.
+    // A new extrude's floating taper preview carries the same id and would duplicate the write; an edit's goes with
+    // endEditPreview below.
     if (this.taperPreviewOn) {
       if (!this.editId) this.store.setPreview(null);
       this.taperPreviewOn = false;
@@ -1179,9 +980,7 @@ export class ExtrudeTool {
     this.disposeTaperHandle();
     this.clearPeek();
     this.entersMemo.clear();
-    // A create-mode cancel or commit can leave a live floating taper preview up;
-    // drop it so the model returns to what is actually committed. An edit's taper
-    // preview is torn down by endEditPreview in cancel()/commit() instead.
+    // A create mode cancel or commit can leave a floating taper preview up; an edit's goes with endEditPreview.
     if (this.taperPreviewOn && !this.editId) this.store.setPreview(null);
     this.taperPreviewOn = false;
     this.taperKey = "";
@@ -1206,7 +1005,7 @@ export class ExtrudeTool {
     setPrompt(null);
   }
 
-  /** remove + dispose the preview group's geometries (the material is reused) */
+  /** The material is reused. */
   private disposePreviewGeom() {
     if (!this.preview) return;
     this.viewport.removeFromScene(this.preview);

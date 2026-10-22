@@ -1,9 +1,5 @@
-// The face a hole sits on, written as a `tracked` selector so the hole follows
-// the face through a parameter change instead of staying where it was drawn.
-//
-// `extent` is the face outline's extent in the engine's own face frame, taken
-// from a build's `trackedFaces`: only the engine measures it, so it is written
-// back from a build rather than worked out here.
+// The face a hole sits on as a `tracked` selector, so the hole follows the face through a parameter change.
+// `extent` is measured by the engine in its own face frame and written back from a build's `trackedFaces`.
 
 import type { Selector, TrackedFaceRecord, Vec3 } from "../types";
 
@@ -35,10 +31,8 @@ export function withExtent(face: Selector, rec: TrackedFaceRecord | undefined): 
   return { ...face, extent: [...rec.extent] as Extent };
 }
 
-/** A hole's face and positions moved to where the last build put them, so an
- *  edit starts from the holes on screen and writes an extent that is current.
- *  A build that measured no extent leaves a face with a centre or an extent as
- *  it was: its positions carried against that stale form would move twice. */
+/** So an edit starts from the holes on screen with a current extent. A build that measured no extent leaves a face
+ *  with a centre or an extent alone, or its positions carried against that stale form would move twice. */
 export function rebaseHole(
   face: Selector,
   points: Vec3[],
