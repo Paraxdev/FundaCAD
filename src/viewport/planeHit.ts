@@ -1,5 +1,5 @@
 // Where an origin plane can be clicked, worked out on screen so a tile seen at a slant or edge on still
-// has a finger sized target, and where its name goes so an edge on tile is still named and pickable.
+// has a finger sized target, and where its name goes.
 
 import type { Plane3 } from "../types";
 
@@ -34,13 +34,6 @@ export interface PlaneHit {
 
 export const HIT_MIN_PX = 44;
 export const HIT_MIN_COARSE_PX = 48;
-/** A name that fits the tile with this much room to spare sits in its middle. */
-export const LABEL_FIT_MARGIN_PX = 6;
-/** Over this much missing room the name moves fully beside the tile, so it slides out as the tile turns. */
-export const LABEL_SLIDE_PX = 16;
-export const LABEL_GAP_PX = 10;
-const PUSH_STEP_PX = 4;
-const PUSH_STEPS = 16;
 
 export function planeHitMinPx(coarseMedia: boolean, lastPointerType: string | null): number {
   return coarseMedia || lastPointerType === "touch" ? HIT_MIN_COARSE_PX : HIT_MIN_PX;
@@ -98,69 +91,10 @@ function rectDistance(p: P2, c: P2, size: LabelSize): number {
   return Math.hypot(dx, dy);
 }
 
-function rectsOverlap(a: P2, b: P2, size: LabelSize, gap: number): boolean {
-  return Math.abs(a.x - b.x) < size.w + gap && Math.abs(a.y - b.y) < size.h + gap;
-}
-
-function rectOverlapsPolygon(c: P2, size: LabelSize, poly: P2[]): boolean {
-  const corners = [
-    { x: c.x - size.w / 2, y: c.y - size.h / 2 },
-    { x: c.x + size.w / 2, y: c.y - size.h / 2 },
-    { x: c.x + size.w / 2, y: c.y + size.h / 2 },
-    { x: c.x - size.w / 2, y: c.y + size.h / 2 },
-  ];
-  if (poly.length > 2 && corners.some((q) => insidePolygon(q, poly))) return true;
-  if (poly.some((q) => Math.abs(q.x - c.x) <= size.w / 2 && Math.abs(q.y - c.y) <= size.h / 2)) return true;
-  // An edge on tile is a line that can cross the box with no vertex inside it.
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    if (segmentDistance(c, poly[j]!, poly[i]!) < Math.min(size.w, size.h) / 2) return true;
-  }
-  return false;
-}
-
-/** Each name in its tile's middle while it fits, otherwise slid out beside the tile, on the side away from the
- *  other tiles, then pushed further out until it overlaps no other name and no other tile. */
-export function placeLabels(planes: PlaneOnScreen[], size: LabelSize): Record<string, P2> {
-  const cluster = planes.reduce(
-    (s, t) => ({ x: s.x + t.centre.x / planes.length, y: s.y + t.centre.y / planes.length }),
-    {
-      x: 0,
-      y: 0,
-    },
-  );
+/** Each name sits at the projected centre of its own tile, at every angle. */
+export function placeLabels(planes: PlaneOnScreen[]): Record<string, P2> {
   const out: Record<string, P2> = {};
-  const moved: { plane: Plane3; dir: P2 }[] = [];
-  for (const t of planes) {
-    const { across, halfAcross } = tileAxes(t);
-    const need = Math.abs(across.x) * size.w + Math.abs(across.y) * size.h;
-    const missing = need + LABEL_FIT_MARGIN_PX - 2 * halfAcross;
-    const slide = Math.min(1, Math.max(0, missing / LABEL_SLIDE_PX));
-    if (slide === 0) {
-      out[t.plane] = { ...t.centre };
-      continue;
-    }
-    const away = sub(t.centre, cluster);
-    const dir = dot(away, across) >= 0 ? across : { x: -across.x, y: -across.y };
-    const reach = (halfAcross + need / 2 + LABEL_GAP_PX) * slide;
-    out[t.plane] = { x: t.centre.x + dir.x * reach, y: t.centre.y + dir.y * reach };
-    moved.push({ plane: t.plane, dir });
-  }
-  // The least facing moves first, it is the one whose tile cannot hold a name.
-  const order = moved.sort(
-    (a, b) => planes.find((t) => t.plane === a.plane)!.facing - planes.find((t) => t.plane === b.plane)!.facing,
-  );
-  for (const m of order) {
-    for (let i = 0; i < PUSH_STEPS; i++) {
-      const at = out[m.plane]!;
-      const clash = planes.some(
-        (t) =>
-          t.plane !== m.plane &&
-          (rectsOverlap(at, out[t.plane]!, size, LABEL_GAP_PX) || rectOverlapsPolygon(at, size, t.outline)),
-      );
-      if (!clash) break;
-      out[m.plane] = { x: at.x + m.dir.x * PUSH_STEP_PX, y: at.y + m.dir.y * PUSH_STEP_PX };
-    }
-  }
+  for (const t of planes) out[t.plane] = { ...t.centre };
   return out;
 }
 
@@ -174,7 +108,7 @@ export function pickPlaneOnScreen(
   minPx: number,
   size: LabelSize,
 ): PlaneHit | null {
-  let best: (PlaneHit & { facing: number }) | null = null;
+  let best: (PlaneHit & { facing: number; rank: number }) | null = null;
   for (const t of planes) {
     const { long, across, halfLong, halfAcross } = tileAxes(t);
     const d = sub(p, t.centre);
@@ -191,11 +125,14 @@ export function pickPlaneOnScreen(
     if (tileD > 0 && !inPad && !inLabelPad) continue;
     const distance = Math.min(tileD, labelD);
     const part: PlaneHitPart = labelD === 0 ? "label" : tileD === 0 ? "tile" : "pad";
-    const hit = { plane: t.plane, distance, part, facing: t.facing };
+    // A name too thin a tile to hold it keeps its full box ahead of a neighbour's drawn tile.
+    const rank = inLabelPad && 2 * halfAcross < minPx / 2 ? 1 : 0;
+    const hit = { plane: t.plane, distance, part, facing: t.facing, rank };
     if (
       !best ||
-      distance < best.distance - 1e-9 ||
-      (Math.abs(distance - best.distance) <= 1e-9 && t.facing > best.facing)
+      rank > best.rank ||
+      (rank === best.rank && distance < best.distance - 1e-9) ||
+      (rank === best.rank && Math.abs(distance - best.distance) <= 1e-9 && t.facing > best.facing)
     )
       best = hit;
   }

@@ -1,6 +1,6 @@
 // The origin planes as three small tiles beside the origin: shown only while a
 // tool asks for a plane, a constant size on screen, each picking its own plane by
-// its tile or its name with at least a 44 px target at any angle, in Noir and
+// its tile or its name with a 44 px target at any angle, in Noir and
 // Solarized Light. SC_VARIANTS=1 also writes the corner comparison
 // renders (circular corners against the squircle, close and far).
 //
@@ -13,9 +13,9 @@ const os = require("os");
 const path = require("path");
 
 // TILE_SIZE_PX, TILE_GAP_PX + TILE_SIZE_PX and the MIN_TILE_SCALE floor in src/viewport/originTiles.ts.
-const SIZE = 68;
-const EXTENT = 78;
-const FLOOR = 0.6 * SIZE;
+const SIZE = 85;
+const EXTENT = 97;
+const FLOOR = 0.48 * SIZE;
 
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
@@ -269,7 +269,7 @@ const PLANES = ["XY", "XZ", "YZ"];
     }, PLANES);
   const topTargets = await targets();
   check(
-    "top view: every plane, the two edge on ones too, has at least a 44 px target",
+    "top view: every plane, the two edge on ones too, has a 44 px target",
     PLANES.every((k) => topTargets[k] >= 44),
     JSON.stringify(topTargets),
   );
@@ -304,7 +304,7 @@ const PLANES = ["XY", "XZ", "YZ"];
   await page.waitForTimeout(900);
   const obliqueTargets = await targets();
   check(
-    "oblique view: every plane has at least a 44 px target",
+    "oblique view: every plane has a 44 px target",
     PLANES.every((k) => obliqueTargets[k] >= 44),
     JSON.stringify(obliqueTargets),
   );
@@ -501,7 +501,7 @@ const PLANES = ["XY", "XZ", "YZ"];
         window.viewport.scene.originTiles.reshape(s);
         window.viewport.requestRender();
       }, shape);
-    const DEFAULT = { sizePx: SIZE, gapPx: EXTENT - SIZE, radiusPx: 29, exponent: 4, octant: { x: 1, y: -1, z: 1 } };
+    const DEFAULT = { sizePx: SIZE, gapPx: EXTENT - SIZE, radiusPx: 36, exponent: 4, octant: { x: 1, y: -1, z: 1 } };
     const BIG = { sizePx: 240, radiusPx: 102, gapPx: 36 };
     for (const theme of ["noir", "solarized"]) {
       await page.evaluate((th) => {
