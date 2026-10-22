@@ -3,7 +3,26 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import type { GeometryBackend } from "../../src/geometry/client";
 
-import { FORMATS } from "../../src/io/exportSettings";
+// Mocked once for the file: two doMocks of one path queued together are applied
+// in whichever order vitest resolves them, so a test's own could lose to beforeEach's.
+type ExportAsk = { scope?: string; selected?: readonly string[]; flat?: { label: string }; format?: string };
+const ui = vi.hoisted(() => ({
+  reported: [] as string[],
+  picked: null as string | null,
+  save: async (_o: { defaultPath: string }): Promise<string | null> => null,
+  exportDialog: async (_what: ExportAsk): Promise<unknown> => null,
+  closeHome: vi.fn(),
+}));
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  save: (o: { defaultPath: string }) => ui.save(o),
+  open: async () => ui.picked,
+  message: async (m: string) => void ui.reported.push(m),
+}));
+vi.mock("../../src/ui/choice", () => ({ choose: async () => null, listModal: async () => {} }));
+vi.mock("../../src/stores/exportDialog", () => ({ useExportDialogStore: () => ({ open: (what: ExportAsk) => ui.exportDialog(what) }) }));
+vi.mock("../../src/ui/home", () => ({ closeHome: ui.closeHome }));
+
+import { DEFAULT_SETTINGS, FORMATS } from "../../src/io/exportSettings";
 import { routeDroppedName } from "../../src/io/dropRouting";
 import { IMPORT_EXTS, dialogExts, describeImportCapability, extToFormat, extToImportFormat, importedBodyCount, looksLikeContainer } from "../../src/io/files";
 
@@ -142,10 +161,13 @@ describe("looksLikeContainer", () => {
 // whatever ran most recently (the document stays editable meanwhile).
 describe("export runs as a cancellable busy op", () => {
   const savePath = "/tmp/part.step";
-  let reported: string[];
 
   beforeEach(() => {
-    reported = [];
+    ui.reported = [];
+    ui.picked = null;
+    ui.save = async () => savePath;
+    // The Export dialog answers STEP, whole document.
+    ui.exportDialog = async () => ({ settings: { ...DEFAULT_SETTINGS, format: "step" }, scope: "all" });
     // No jsdom in this project on purpose (see vitest.config.ts), so stand up
     // the one property exportModel's isTauri() probe reads, nothing more.
     // diagnostics/breadcrumbs.ts registers global handlers at MODULE scope
@@ -155,32 +177,10 @@ describe("export runs as a cancellable busy op", () => {
       addEventListener() {},
       removeEventListener() {},
     };
-    vi.doMock("@tauri-apps/plugin-dialog", () => ({
-      save: async () => savePath,
-      open: async () => null,
-      message: async (m: string) => void reported.push(m),
-    }));
-    vi.doMock("../../src/ui/choice", () => ({
-      choose: async () => null,
-      listModal: async () => {},
-    }));
-    // The Export dialog answers STEP, whole document.
-    vi.doMock("../../src/stores/exportDialog", async () => {
-      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
-      return {
-        useExportDialogStore: () => ({
-          open: async () => ({ settings: { ...DEFAULT_SETTINGS, format: "step" }, scope: "all" }),
-        }),
-      };
-    });
   });
 
   afterEach(() => {
-    vi.doUnmock("@tauri-apps/plugin-dialog");
-    vi.doUnmock("../../src/ui/choice");
-    vi.doUnmock("../../src/stores/exportDialog");
     vi.unstubAllGlobals();
-    vi.resetModules();
     delete (globalThis as unknown as Record<string, unknown>).window;
   });
 
@@ -217,7 +217,7 @@ describe("export runs as a cancellable busy op", () => {
     const { exportModel } = await import("../../src/io/files");
     await exportModel(store, backend);
 
-    expect(reported).toEqual([]);   // no "Export failed: cancelled" dialog
+    expect(ui.reported).toEqual([]);   // no "Export failed: cancelled" dialog
     expect(store.busyState.active).toBe(false);
   });
 
@@ -226,14 +226,12 @@ describe("export runs as a cancellable busy op", () => {
     const { exportModel } = await import("../../src/io/files");
     await exportModel(store, backend);
 
-    expect(reported.join(" ")).toContain("disk full");
+    expect(ui.reported.join(" ")).toContain("disk full");
     expect(store.busyState.active).toBe(false);
   });
 
   it("cancelling the Export dialog exports nothing", async () => {
-    vi.doMock("../../src/stores/exportDialog", () => ({
-      useExportDialogStore: () => ({ open: async () => null }),
-    }));
+    ui.exportDialog = async () => null;
     let called = false;
     const { backend, store } = storeWith(async () => { called = true; return { ok: true, path: savePath }; });
     const { exportModel } = await import("../../src/io/files");
@@ -242,16 +240,9 @@ describe("export runs as a cancellable busy op", () => {
   });
 
   it("sends the faceting and units with a mesh format", async () => {
-    vi.doMock("../../src/stores/exportDialog", async () => {
-      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
-      return {
-        useExportDialogStore: () => ({
-          open: async () => ({
-            settings: { ...DEFAULT_SETTINGS, format: "stl", unit: "in", faceting: { surfaceDeviation: 0.01, normalDeviation: 8, maxEdgeLength: 3 } },
-            scope: "all",
-          }),
-        }),
-      };
+    ui.exportDialog = async () => ({
+      settings: { ...DEFAULT_SETTINGS, format: "stl", unit: "in", faceting: { surfaceDeviation: 0.01, normalDeviation: 8, maxEdgeLength: 3 } },
+      scope: "all",
     });
     let sent: { format?: string; mesh?: unknown } = {};
     const { backend, store } = storeWith(async (_d, format, _p, opts) => {
@@ -268,17 +259,10 @@ describe("export runs as a cancellable busy op", () => {
 
   it("starts from the selected bodies and exports only those", async () => {
     let asked: { scope?: string; selected?: readonly string[] } = {};
-    vi.doMock("../../src/stores/exportDialog", async () => {
-      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
-      return {
-        useExportDialogStore: () => ({
-          open: async (what: { scope?: string; selected?: readonly string[] }) => {
-            asked = what;
-            return { settings: { ...DEFAULT_SETTINGS, format: "stl" }, scope: what.scope };
-          },
-        }),
-      };
-    });
+    ui.exportDialog = async (what) => {
+      asked = what;
+      return { settings: { ...DEFAULT_SETTINGS, format: "stl" }, scope: what.scope };
+    };
     let sent: { body?: string | undefined; bodies?: string[] | undefined; separate?: boolean | undefined } = {};
     let path = "";
     const { backend, store } = storeWith(async (_d, _f, p, opts) => {
@@ -291,11 +275,7 @@ describe("export runs as a cancellable busy op", () => {
       bodies: ["body1", "body2", "body3"].map((id) => ({ id, name: id })),
     };
     const saved: string[] = [];
-    vi.doMock("@tauri-apps/plugin-dialog", () => ({
-      save: async (o: { defaultPath: string }) => { saved.push(o.defaultPath); return savePath; },
-      open: async () => null,
-      message: async (m: string) => void reported.push(m),
-    }));
+    ui.save = async (o) => { saved.push(o.defaultPath); return savePath; };
     const { exportModel } = await import("../../src/io/files");
     await exportModel(store, backend, ["body3", "body1", "body9"]);
     expect(asked.scope).toBe("selected");
@@ -307,17 +287,10 @@ describe("export runs as a cancellable busy op", () => {
 
   it("draws a sketch as DXF with its id and tolerance, and no body options", async () => {
     let asked: { flat?: { label: string }; format?: string } = {};
-    vi.doMock("../../src/stores/exportDialog", async () => {
-      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
-      return {
-        useExportDialogStore: () => ({
-          open: async (what: { flat?: { label: string }; format?: string; scope?: string }) => {
-            asked = what;
-            return { settings: { ...DEFAULT_SETTINGS, format: what.format, tolerance: 5 }, scope: "all" };
-          },
-        }),
-      };
-    });
+    ui.exportDialog = async (what) => {
+      asked = what;
+      return { settings: { ...DEFAULT_SETTINGS, format: what.format, tolerance: 5 }, scope: "all" };
+    };
     let sent: Record<string, unknown> = {};
     let format = "";
     const { backend, store } = storeWith(async (_d, f, p, opts) => {
@@ -326,11 +299,7 @@ describe("export runs as a cancellable busy op", () => {
       return { ok: true, path: p };
     });
     const saved: string[] = [];
-    vi.doMock("@tauri-apps/plugin-dialog", () => ({
-      save: async (o: { defaultPath: string }) => { saved.push(o.defaultPath); return "/tmp/plate.dxf"; },
-      open: async () => null,
-      message: async (m: string) => void reported.push(m),
-    }));
+    ui.save = async (o) => { saved.push(o.defaultPath); return "/tmp/plate.dxf"; };
     const kept = new Map([["fundacad.exportSettings", JSON.stringify({ format: "3mf" })]]);
     vi.stubGlobal("localStorage", { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) });
     const { exportModel } = await import("../../src/io/files");
@@ -347,14 +316,7 @@ describe("export runs as a cancellable busy op", () => {
   });
 
   it("draws a flat face as SVG with its selector and plane", async () => {
-    vi.doMock("../../src/stores/exportDialog", async () => {
-      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
-      return {
-        useExportDialogStore: () => ({
-          open: async () => ({ settings: { ...DEFAULT_SETTINGS, format: "svg" }, scope: "all" }),
-        }),
-      };
-    });
+    ui.exportDialog = async () => ({ settings: { ...DEFAULT_SETTINGS, format: "svg" }, scope: "all" });
     let sent: Record<string, unknown> = {};
     const { backend, store } = storeWith(async (_d, _f, p, opts) => {
       sent = { ...opts };
@@ -490,24 +452,18 @@ describe("extensions in any case", () => {
 });
 
 describe("Open with a mesh or CAD file", () => {
-  const closeHome = vi.fn();
-  let picked = "";
-
   beforeEach(() => {
-    closeHome.mockReset();
+    ui.closeHome.mockReset();
+    ui.reported = [];
+    ui.picked = null;
     (globalThis as unknown as Record<string, unknown>).window = {
       __TAURI_INTERNALS__: {},
       addEventListener() {},
       removeEventListener() {},
     };
-    vi.doMock("@tauri-apps/plugin-dialog", () => ({ open: async () => picked, message: async () => {} }));
-    vi.doMock("../../src/ui/home", () => ({ closeHome }));
   });
 
   afterEach(() => {
-    vi.doUnmock("@tauri-apps/plugin-dialog");
-    vi.doUnmock("../../src/ui/home");
-    vi.resetModules();
     delete (globalThis as unknown as Record<string, unknown>).window;
   });
 
@@ -520,9 +476,10 @@ describe("Open with a mesh or CAD file", () => {
     } as unknown as GeometryBackend;
     const store = new DocumentStore(backend, { parameters: {}, features: [] });
     const { openDocument } = await import("../../src/io/files");
-    picked = "/tmp/part.step";
+    ui.picked = "/tmp/part.step";
     await openDocument(store, backend, async () => true);
+    expect(ui.reported).toEqual([]);
     expect(imported).toEqual(["/tmp/part.step"]);
-    expect(closeHome).toHaveBeenCalledTimes(1);
+    expect(ui.closeHome).toHaveBeenCalledTimes(1);
   });
 });
