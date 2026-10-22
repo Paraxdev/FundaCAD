@@ -188,6 +188,12 @@ const steps: [string, object, CadDocument, (s: DocumentStore) => void][] = [
     { parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5), box("f4", 5.5)], rollback: 1 },
     (s) => s.editAndAdd((d) => void ((d.features[0] as unknown as { length: number }).length = 8.25), [box("f5", 2.75)]),
   ],
+  [
+    "an isolate",
+    { features: [box("f1", 10.5), box("f2", 4.25, 2)], bodyVisibility: { body3: false } },
+    { parameters: {}, features: [box("f1", 10.5), box("f9", 3.75, 2.5)] },
+    (s) => s.isolateBodies(["body2"]),
+  ],
 ];
 
 describe("undo of a step taken after a replacing load", () => {

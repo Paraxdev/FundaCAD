@@ -1572,6 +1572,8 @@ export class DocumentStore {
     // exactly the CURRENT hidden set, so even a call that changes nothing
     // (re-isolating the same body) must not leave a stale isolate=true from
     // before it. isolateBodies() re-asserts true right after this returns.
+    const wasIsolate = this.isolate;
+    let isolateAfter = false;
     this.isolate = false;
     const prior = new Map<string, boolean | undefined>();
     for (const [id, visible] of vis) {
@@ -1593,12 +1595,15 @@ export class DocumentStore {
     shown();
     this.pushOverlayUndo({
       undo: () => {
+        isolateAfter = this.isolate;
+        this.isolate = wasIsolate;
         for (const [id, was] of prior) {
           if (was === undefined) this.bodyVis.delete(id); else this.bodyVis.set(id, was);
         }
         shown();
       },
       redo: () => {
+        this.isolate = isolateAfter;
         for (const [id] of prior) this.bodyVis.set(id, vis.get(id)!);
         shown();
       },
