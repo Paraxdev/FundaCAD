@@ -1,10 +1,5 @@
-// Whether anything a shadow map is drawn from changed since the last look.
-//
-// Every requestRender used to redraw every shadow map, and most do not need it:
-// a hover, a selection, an overlay or a material edit changes no caster and no
-// light. A point light's map is six depth passes over the model, so on a dense
-// model that was most of every frame. The casters and the shadow lights are few
-// next to the triangles behind them, so reading them each frame is cheap.
+// Most redraws (a hover, a selection, a material edit) change no caster and no light, and a point light's map is six
+// depth passes over the model. Casters and shadow lights are few, so reading them each frame is cheap.
 
 import * as THREE from "three";
 
