@@ -33,6 +33,7 @@ import { documentShapeProblem, UnreadableDocumentError } from "./documentShape";
 import { forgetStaleJoins, joinSignatures } from "./bodyIds";
 import { canonicalMirrorPlanes } from "./mirrorPlane";
 import { normalizeStressStudy } from "./stressStudy";
+import { contentHash } from "./contentHash";
 import { normalizeDocEnvironment, sameDocEnvironment, type DocEnvironment } from "./docEnvironment";
 import { readsBodyVisibility } from "./readsVisibility";
 import * as params from "../params/engine";
@@ -133,13 +134,19 @@ const IDLE_BUSY: BusyState = { active: false, label: "", id: null, pct: null, st
 type BusyListener = (state: BusyState) => void;
 type MetaListener = () => void;
 
+/** Per top level key a step changed: the JSON to put back (undefined for none) and the fingerprint of
+ *  the JSON the step left. A key changed since keeps its value, so a kept id map may name a missing id. */
+type StateSwap = Map<string, { put: string | undefined; expect: string }>;
+const fingerprint = (json: string | undefined) => contentHash(json ?? "");
+const TIMELINE_KEYS: ReadonlySet<string> = new Set(["suppressed", "rollback"]);
+
 /** One undo-stack slot: either a full document snapshot (a real edit) or a
  *  small reversible overlay change (visibility and the like). Both share one
  *  stack in chronological order, so Ctrl+Z undoes whichever happened last
  *  instead of silently skipping display-only changes and eating a feature
  *  edit that came before them. */
 type UndoEntry =
-  | { kind: "doc"; doc: CadDocument }
+  | { kind: "doc"; doc: CadDocument; state?: StateSwap }
   | { kind: "overlay"; undo: () => void; redo: () => void }
   | { kind: "group"; entries: UndoEntry[] };
 
@@ -156,6 +163,17 @@ export const KNOWN_DOC_KEYS: ReadonlySet<string> = new Set([
   "materials", "palette", "stress", "environment", "versions", "geometry", "referenceImages",
 ]);
 const ELEMENT_KEYS: ReadonlySet<string> = new Set(["id", "name", "parent"]);
+const GEOMETRY_KEYS = ["parameters", "paramDefs", "paramExtras", "features", "viewOverrides", "bodyIds"] as const;
+
+function stateSwap(before: Map<string, string>, after: Map<string, string>): StateSwap {
+  const swap: StateSwap = new Map();
+  for (const k of new Set([...before.keys(), ...after.keys()])) {
+    const put = before.get(k);
+    const left = after.get(k);
+    if (put !== left) swap.set(k, { put, expect: fingerprint(left) });
+  }
+  return swap;
+}
 
 function sharesAFeature(a: readonly Feature[], b: readonly Feature[]): boolean {
   const ids = new Set(a.map((f) => f.id));
@@ -227,7 +245,7 @@ const DEFAULT_PALETTE: { name: string; color: string }[] = [
 /** A persisted display-only id to value map, stored under one CadDocument field. */
 class Overlay<T> {
   private map = new Map<string, T>();
-  constructor(private readonly jsonKey: string) {}
+  constructor(readonly jsonKey: string) {}
   get(id: string): T | undefined {
     return this.map.get(id);
   }
@@ -655,6 +673,7 @@ export class DocumentStore {
     this.rearmProjectionValve(); // valve state must never cross documents
     this.suppressed.clear();
     for (const { overlay } of this.overlays) overlay.clear();
+    this.isolate = false;
     this.palette = DEFAULT_PALETTE.map((s) => ({ ...s }));
     this.elements = [];
     this.materials = STARTER_LIBRARY.map((m) => ({ ...m }));
@@ -703,11 +722,11 @@ export class DocumentStore {
   /** Set while undoAsOne runs: the steps go here instead of onto the stack. */
   private collecting: UndoEntry[] | null = null;
 
-  private pushUndo() {
-    const entry: UndoEntry = { kind: "doc", doc: clone(this.doc) };
-    if (this.collecting) return void this.collecting.push(entry);
-    this.undoStack.push(entry);
-    if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
+  private pushUndo(): UndoEntry & { kind: "doc" } {
+    const entry = { kind: "doc" as const, doc: clone(this.doc) };
+    if (this.collecting) this.collecting.push(entry);
+    else if (this.undoStack.push(entry) > DocumentStore.UNDO_CAP) this.undoStack.shift();
+    return entry;
   }
 
   /** Push a reversible overlay-only change (visibility and the like) onto the
@@ -751,7 +770,17 @@ export class DocumentStore {
   }
 
   mutate(fn: (doc: CadDocument) => void, immediate = false) {
-    this.pushUndo();
+    this.step(fn, immediate);
+  }
+  /** `move` shifts the rollback marker or the suppress set with the edit, inside its undo step. */
+  private step(fn: (doc: CadDocument) => void, immediate: boolean, move?: () => void) {
+    const before = move && this.timelineSections();
+    move?.();
+    const entry = this.pushUndo();
+    if (before) {
+      const swap = stateSwap(before, this.timelineSections());
+      if (swap.size) entry.state = swap;
+    }
     this.redoStack = [];
     // a user edit is the "edit the model to retry" the valve toast promises
     this.rearmProjectionValve();
@@ -1136,32 +1165,35 @@ export class DocumentStore {
   addFeature(feature: Feature, atIndex?: number, bindings?: SketchBinding[]) {
     // new features land at the rollback marker (mainstream MCAD), which then advances past it
     const at = atIndex ?? this.rollbackIndex;
-    if (this.rollback !== null && at <= this.rollback) this.rollback += 1;
-    this.mutate((d) => {
+    this.step((d) => {
       d.features.splice(at, 0, feature);
       this.applyBindings(d, bindings);
-    }, true);
+    }, true, () => {
+      if (this.rollback !== null && at <= this.rollback) this.rollback += 1;
+    });
   }
 
   /** An edit to existing features plus any new ones, as ONE undo step. */
   editAndAdd(edit: (doc: CadDocument) => void, features: Feature[] = []) {
     const at = this.rollbackIndex;
-    if (features.length && this.rollback !== null && at <= this.rollback) this.rollback += features.length;
-    this.mutate((d) => {
+    this.step((d) => {
       edit(d);
       if (features.length) d.features.splice(at, 0, ...features);
-    }, true);
+    }, true, () => {
+      if (features.length && this.rollback !== null && at <= this.rollback) this.rollback += features.length;
+    });
   }
 
   /** Several features as one undo step at the rollback marker (a thread is two). */
   addFeatures(features: Feature[], bindings?: SketchBinding[]) {
     if (!features.length) return;
     const at = this.rollbackIndex;
-    if (this.rollback !== null && at <= this.rollback) this.rollback += features.length;
-    this.mutate((d) => {
+    this.step((d) => {
       d.features.splice(at, 0, ...features);
       this.applyBindings(d, bindings);
-    }, true);
+    }, true, () => {
+      if (this.rollback !== null && at <= this.rollback) this.rollback += features.length;
+    });
   }
 
   /** A bound numeric field is re-asserted by the recompute; use setTargetValue/setTargetExpr. */
@@ -1254,11 +1286,12 @@ export class DocumentStore {
 
   removeFeature(id: string) {
     const idx = this.doc.features.findIndex((f) => f.id === id);
-    if (this.rollback !== null && idx >= 0 && idx < this.rollback) this.rollback -= 1;
-    this.suppressed.delete(id);
-    this.mutate((d) => {
+    this.step((d) => {
       d.features = d.features.filter((f) => f.id !== id);
-    }, true);
+    }, true, () => {
+      if (this.rollback !== null && idx >= 0 && idx < this.rollback) this.rollback -= 1;
+      this.suppressed.delete(id);
+    });
   }
 
   // --- timeline: rollback marker, suppress, reorder ---
@@ -1436,6 +1469,7 @@ export class DocumentStore {
     }
     const was: UndoEntry = { kind: "doc", doc: clone(this.doc) };
     this.doc = e.doc;
+    if (e.state) was.state = this.swapState(e.state);
     this.rearmProjectionValve();
     this.markDirty();
     this.emitDoc();
@@ -1538,6 +1572,8 @@ export class DocumentStore {
     // exactly the CURRENT hidden set, so even a call that changes nothing
     // (re-isolating the same body) must not leave a stale isolate=true from
     // before it. isolateBodies() re-asserts true right after this returns.
+    const wasIsolate = this.isolate;
+    let isolateAfter = false;
     this.isolate = false;
     const prior = new Map<string, boolean | undefined>();
     for (const [id, visible] of vis) {
@@ -1559,12 +1595,15 @@ export class DocumentStore {
     shown();
     this.pushOverlayUndo({
       undo: () => {
+        isolateAfter = this.isolate;
+        this.isolate = wasIsolate;
         for (const [id, was] of prior) {
           if (was === undefined) this.bodyVis.delete(id); else this.bodyVis.set(id, was);
         }
         shown();
       },
       redo: () => {
+        this.isolate = isolateAfter;
         for (const [id] of prior) this.bodyVis.set(id, vis.get(id)!);
         shown();
       },
@@ -2265,9 +2304,20 @@ export class DocumentStore {
 
   /** Move onto a branch, bringing back its newest version. */
   switchVersionBranch(name: string) {
-    if (!this.repo) return;
-    const head = switchVersionBranch(this.repo, name);
-    this.restoreVersion(head.id);
+    const repo = this.repo;
+    if (!repo) return;
+    const was = repo.current;
+    const head = switchVersionBranch(repo, name);
+    // this.repo, not repo: a live session's replacing load since then brings its own copy of the versions.
+    const onto = (branch: string) => {
+      if (!this.repo?.branches[branch]) return;
+      this.repo.current = branch;
+      this.emitMeta();
+    };
+    this.undoAsOne(() => {
+      this.restoreVersion(head.id);
+      this.pushOverlayUndo({ undo: () => onto(was), redo: () => onto(name) });
+    });
   }
   toJSON(): string {
     return JSON.stringify(this.toObject(), null, 2);
@@ -2291,44 +2341,17 @@ export class DocumentStore {
     for (const w of migrateDocument(parsed)) this.onWarning?.(w);
     if (!opts.replace) this.emitOpen();
     this.emitRewind();
-    if (opts.replace) this.pushUndo();
-    else this.undoStack = [];
+    const replaced = opts.replace ? { entry: this.pushUndo(), before: this.stateSections() } : null;
+    if (!replaced) this.undoStack = [];
     this.redoStack = [];
     this.rearmProjectionValve(); // valve state must never cross documents
-    // split persisted project state back out of the document; keep `this.doc`
-    // pure geometry (+ viewOverrides) so undo/rebuild stay unaffected by it.
-    this.suppressed = new Set(parsed.suppressed ?? []);
-    this.rollback = parsed.rollback ?? null;
-    for (const { overlay, mapValue } of this.overlays) overlay.loadFrom(parsed as unknown as Record<string, unknown>, mapValue);
-    this.isolate = false; // the hidden set just came from the file, it is not an isolate
-    this.palette = parsed.palette?.length ? parsed.palette.map((s) => ({ ...s })) : DEFAULT_PALETTE.map((s) => ({ ...s }));
-    // Elements without an id and materials without a colour are dropped here, not at every reader.
     this.repo = normalizeRepo(parsed.versions);
-    this.stress = normalizeStressStudy(parsed.stress);
-    this.environment = normalizeDocEnvironment(parsed.environment);
+    this.unreadSections = parsed.versions != null && !this.repo ? { versions: structuredClone(parsed.versions) } : {};
     this.openedVersion = typeof parsed.version === "number" ? parsed.version : 1;
     // A replacing load sharing no feature with this one is a different document
     // after all, and sections it did not come with must not be saved into it.
     if (!opts.replace || !sharesAFeature(this.doc.features, parsed.features ?? [])) this.carriedSections = [];
-    this.unknownKeys = carriedKeys(parsed as unknown as Record<string, unknown>, KNOWN_DOC_KEYS);
-    this.setRefImagesQuiet(readReferenceImages(parsed.referenceImages));
-    this.unreadSections = {};
-    if (parsed.versions != null && !this.repo) this.unreadSections.versions = structuredClone(parsed.versions);
-    if (parsed.stress != null && !this.stress) this.unreadSections.stress = structuredClone(parsed.stress);
-    if (parsed.environment != null && !this.environment) this.unreadSections.environment = structuredClone(parsed.environment);
-    this.materials = parsed.materials?.length
-      ? parsed.materials
-          .map((m, i) => normalizeMaterial(m, i))
-          .filter((m): m is MaterialDef => m !== null)
-      : STARTER_LIBRARY.map((m) => ({ ...m }));
-    this.elements = (parsed.elements ?? [])
-      .filter((e) => e && typeof e.id === "string" && e.id)
-      .map((e) => ({
-        ...carriedKeys(e as unknown as Record<string, unknown>, ELEMENT_KEYS),
-        id: e.id,
-        name: typeof e.name === "string" && e.name.trim() ? e.name : e.id,
-        ...(typeof e.parent === "string" && e.parent ? { parent: e.parent } : {}),
-      }));
+    this.readProjectState(parsed);
     this.doc = {
       parameters: parsed.parameters ?? {},
       ...(parsed.paramDefs ? { paramDefs: parsed.paramDefs } : {}),
@@ -2345,11 +2368,98 @@ export class DocumentStore {
       }
     }
     canonicalMirrorPlanes(this.doc);
+    if (replaced) replaced.entry.state = stateSwap(replaced.before, this.stateSections());
     this.markDirty(); // openDocument clears this via markSaved() once the path is known
     if (!opts.replace) this.dropToolPreview();
     this.discardModelForReplacement();
     this.emitDoc();
     this.scheduleRebuild(true);
+  }
+  /** The project state a file holds beside the geometry and the versions, kept out
+   *  of `this.doc` so undo and rebuild stay unaffected by it. `only` reads just
+   *  those top level keys and leaves the rest as it is. */
+  private readProjectState(parsed: CadDocument, only?: ReadonlySet<string>) {
+    const reads = (key: string) => !only || only.has(key);
+    const raw = parsed as unknown as Record<string, unknown>;
+    if (reads("suppressed")) this.suppressed = new Set(parsed.suppressed ?? []);
+    if (reads("rollback")) this.rollback = parsed.rollback ?? null;
+    for (const { overlay, mapValue } of this.overlays) if (reads(overlay.jsonKey)) overlay.loadFrom(raw, mapValue);
+    if (reads("bodyVisibility")) this.isolate = false; // the hidden set just came from the file, it is not an isolate
+    if (reads("palette")) {
+      this.palette = parsed.palette?.length ? parsed.palette.map((s) => ({ ...s })) : DEFAULT_PALETTE.map((s) => ({ ...s }));
+    }
+    if (reads("stress")) {
+      this.stress = normalizeStressStudy(parsed.stress);
+      delete this.unreadSections.stress;
+      if (parsed.stress != null && !this.stress) this.unreadSections.stress = structuredClone(parsed.stress);
+    }
+    if (reads("environment")) {
+      this.environment = normalizeDocEnvironment(parsed.environment);
+      delete this.unreadSections.environment;
+      if (parsed.environment != null && !this.environment) this.unreadSections.environment = structuredClone(parsed.environment);
+    }
+    const carried = carriedKeys(raw, KNOWN_DOC_KEYS);
+    this.unknownKeys = only
+      ? { ...Object.fromEntries(Object.entries(this.unknownKeys).filter(([k]) => !only.has(k))), ...carried }
+      : carried;
+    if (reads("referenceImages")) this.setRefImagesQuiet(readReferenceImages(parsed.referenceImages));
+    // Elements without an id and materials without a colour are dropped here, not at every reader.
+    if (reads("materials")) {
+      this.materials = parsed.materials?.length
+        ? parsed.materials
+            .map((m, i) => normalizeMaterial(m, i))
+            .filter((m): m is MaterialDef => m !== null)
+        : STARTER_LIBRARY.map((m) => ({ ...m }));
+    }
+    if (reads("elements")) {
+      this.elements = (parsed.elements ?? [])
+        .filter((e) => e && typeof e.id === "string" && e.id)
+        .map((e) => ({
+          ...carriedKeys(e as unknown as Record<string, unknown>, ELEMENT_KEYS),
+          id: e.id,
+          name: typeof e.name === "string" && e.name.trim() ? e.name : e.id,
+          ...(typeof e.parent === "string" && e.parent ? { parent: e.parent } : {}),
+        }));
+    }
+  }
+  /** The project state as a save writes it, as JSON per top level key, without the
+   *  geometry the undo entry's `doc` holds. Isolate is not saved, so it rides with
+   *  the hidden set it explains. */
+  private stateSections(): Map<string, string> {
+    const out = this.toObject(false) as unknown as Record<string, unknown>;
+    for (const k of GEOMETRY_KEYS) delete out[k];
+    // In id order, since undo of a cleared id sets it back at the end of its map.
+    for (const { overlay: { jsonKey: k } } of this.overlays) {
+      const map = out[k] as Record<string, unknown> | undefined;
+      if (map) out[k] = Object.fromEntries(Object.entries(map).sort(([a], [b]) => (a < b ? -1 : 1)));
+    }
+    out["bodyVisibility"] = [out["bodyVisibility"] ?? null, this.isolate];
+    return new Map([...Object.entries(out).map(([k, v]) => [k, JSON.stringify(v)] as const), ...this.timelineSections()]);
+  }
+  /** The suppress set sorted, since toggling a step off and back moves it to the end. */
+  private timelineSections(): Map<string, string> {
+    const out = new Map<string, string>();
+    if (this.suppressed.size) out.set("suppressed", JSON.stringify([...this.suppressed].sort()));
+    if (this.rollback !== null) out.set("rollback", JSON.stringify(this.rollback));
+    return out;
+  }
+  /** Puts back each key of `swap` the user has not changed since, and returns the
+   *  swap that takes those back again. */
+  private swapState(swap: StateSwap): StateSwap {
+    const now = [...swap.keys()].every((k) => TIMELINE_KEYS.has(k)) ? this.timelineSections() : this.stateSections();
+    const back: StateSwap = new Map();
+    const put: Record<string, unknown> = {};
+    for (const [k, { put: json, expect }] of swap) {
+      const current = now.get(k);
+      if (fingerprint(current) !== expect) continue;
+      back.set(k, { put: current, expect: fingerprint(json) });
+      if (json !== undefined) put[k] = JSON.parse(json);
+    }
+    const vis = put["bodyVisibility"] as [Record<string, boolean> | null, boolean] | undefined;
+    if (vis) put["bodyVisibility"] = vis[0] ?? undefined;
+    this.readProjectState(put as unknown as CadDocument, new Set(back.keys()));
+    if (vis) this.isolate = vis[1];
+    return back;
   }
   loadDocument(doc: CadDocument, opts: { replace?: boolean } = {}) {
     this.load(JSON.stringify(doc), opts);
