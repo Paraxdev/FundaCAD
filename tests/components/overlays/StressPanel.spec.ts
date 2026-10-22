@@ -117,7 +117,14 @@ describe("StressPanel", () => {
     expect(q(".stress-panel")?.textContent).toContain("Support 1");
     expect(value(q(".stress-support-type"))).toBe("fixed");
     expect(value(q(".stress-body"))).toBe("b1");
-    expect(q(".stress-set-support")?.textContent).toBe("Use selected");
+    expect([q(".stress-place-support")?.textContent, q(".stress-set-support")?.textContent]).toEqual([
+      "Click on body",
+      "Use selected faces",
+    ]);
+    expect([...document.body.querySelectorAll(".stress-count")].map((e) => e.textContent)).toEqual([
+      "No faces yet",
+      "No faces yet",
+    ]);
     q(".stress-set-support")!.click();
     q(".stress-set-load")!.click();
     expect(panels.setStressFacesFromSelection.mock.calls).toEqual([[{ support: 1 }], [{ load: 1 }]]);
@@ -419,7 +426,7 @@ describe("StressPanel", () => {
     on.click();
     await flushPromises();
     expect(p.stress!.setup.gravity.on).toBe(true);
-    await pick(q(".stress-gravity-dir")!, "+Y");
+    await pick(q(".stress-gravity-dir")!, "Back (+Y)");
     expect(p.stress!.setup.gravity).toEqual({ on: true, direction: "+Y" });
   });
 
@@ -520,6 +527,60 @@ describe("StressPanel", () => {
     expect(panels.removeStressLoad).toHaveBeenCalledWith(1);
   });
 
+  it("counts loads as it counts supports, 0 included", async () => {
+    await mounted();
+    const p = usePanelsStore();
+    p.showStress("b1");
+    p.addStressLoad();
+    await flushPromises();
+    const pills = () => [...document.body.querySelectorAll(".stress-caption .tree-count")].map((e) => e.textContent);
+    expect(pills()).toEqual(["1", "2"]);
+    p.stress!.setup.loads = [];
+    await flushPromises();
+    expect(pills()).toEqual(["1", "0"]);
+  });
+
+  it("says Ready under the setup once it can run, and how to get there until then", async () => {
+    await mounted();
+    const p = usePanelsStore();
+    p.showStress("b1");
+    await flushPromises();
+    const hint = () => q(".measure-hint:not(.stress-error)")!.textContent;
+    expect(hint()).not.toContain("Ready");
+    const sel: Selector = { kind: "face", by: "nearest", point: [12.5, -3, 4.25], body: "b1" };
+    const faces = { selectors: [sel], faceIds: [4], normalSum: [5.4, 0, 7.2] as [number, number, number], area: 9 };
+    p.setStressSupportFaces(1, faces);
+    await flushPromises();
+    expect(hint()).not.toContain("Ready");
+    p.setStressLoadFaces(1, faces);
+    await flushPromises();
+    expect(hint()).toBe("Ready, press Run.");
+  });
+
+  it("names the directions by the way they point, with the axis", async () => {
+    await mounted();
+    const p = usePanelsStore();
+    p.showStress("b1");
+    p.stress!.setup.gravity.on = true;
+    await flushPromises();
+    (q(".stress-gravity-dir") as HTMLElement).click();
+    await flushPromises();
+    expect(optionLabels()).toEqual(["Down (-Z)", "Up (+Z)", "Right (+X)", "Left (-X)", "Back (+Y)", "Front (-Y)"]);
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    (q(".stress-direction") as HTMLElement).click();
+    await flushPromises();
+    expect(optionLabels()).toEqual([
+      "Into the face",
+      "Down (-Z)",
+      "Up (+Z)",
+      "Right (+X)",
+      "Left (-X)",
+      "Back (+Y)",
+      "Front (-Y)",
+      "Custom vector",
+    ]);
+  });
+
   it("counts the faces a Run sends, saying which the view cannot show or the model lacks", async () => {
     await mounted();
     const p = usePanelsStore();
@@ -574,7 +635,7 @@ describe("StressPanel", () => {
     p.showStress("b1");
     await flushPromises();
     expect(q(".stress-panel select")).toBeNull();
-    await pick(q(".stress-direction")!, "+X");
+    await pick(q(".stress-direction")!, "Right (+X)");
     await pick(q(".stress-material")!, "PETG");
     expect(q(".stress-panel")?.textContent).toContain("E 2100 MPa");
     await pick(q(".stress-load-kind")!, "Pressure");

@@ -61,18 +61,23 @@ export function cssHex(c: number): string {
 
 export type ForceDirection = StressStudy["loads"][number]["direction"];
 
+export const GRAVITY_DIRECTIONS: readonly AxisDirection[] = ["-Z", "+Z", "+X", "-X", "+Y", "-Y"];
+
+// Z is up and the front view looks along +Y.
+export const AXIS_LABELS: Record<AxisDirection, string> = {
+  "-Z": "Down (-Z)",
+  "+Z": "Up (+Z)",
+  "+X": "Right (+X)",
+  "-X": "Left (-X)",
+  "+Y": "Back (+Y)",
+  "-Y": "Front (-Y)",
+};
+
 export const FORCE_DIRECTIONS: readonly { value: ForceDirection; label: string }[] = [
   { value: "into", label: "Into the face" },
-  { value: "-Z", label: "-Z" },
-  { value: "+Z", label: "+Z" },
-  { value: "+X", label: "+X" },
-  { value: "-X", label: "-X" },
-  { value: "+Y", label: "+Y" },
-  { value: "-Y", label: "-Y" },
+  ...GRAVITY_DIRECTIONS.map((d) => ({ value: d, label: AXIS_LABELS[d] })),
   { value: "custom", label: "Custom vector" },
 ];
-
-export const GRAVITY_DIRECTIONS: readonly AxisDirection[] = ["-Z", "+Z", "+X", "-X", "+Y", "-Y"];
 
 export const AXES: Record<AxisDirection, Vec3> = {
   "-Z": [0, 0, -1],
@@ -117,7 +122,7 @@ export function faceCountLabel(set: StressFaceSet, spots: readonly StressSpot[] 
 
 function facesLabel(set: StressFaceSet): string {
   const n = set.selectors.length;
-  if (!n) return "none";
+  if (!n) return "No faces yet";
   const faces = `${n} face${n === 1 ? "" : "s"}`;
   const missing = set.missing ?? 0;
   if (missing)
@@ -739,10 +744,8 @@ export function forceDragPatch(
 
 /** The live label beside a dragged arrow. */
 export function forceDragLabel(patch: { direction: ForceDirection; force: number }): string {
-  const named =
-    patch.direction === "custom"
-      ? ""
-      : `, ${FORCE_DIRECTIONS.find((d) => d.value === patch.direction)?.label.toLowerCase()}`;
+  const label = FORCE_DIRECTIONS.find((d) => d.value === patch.direction)?.label;
+  const named = patch.direction === "custom" || !label ? "" : `, ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
   return `${patch.force} N${named}`;
 }
 

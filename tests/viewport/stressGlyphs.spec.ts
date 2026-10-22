@@ -92,7 +92,7 @@ describe("StressGlyphs", () => {
     pointer(canvas, "pointermove", 130, 51);
     const out = dragForce(start, 80 + start.offsetPx);
     expect(handlers.forceDrag).toHaveBeenLastCalledWith(1, { direction: "+X", custom: null, force: out });
-    expect(document.body.querySelector(".stress-cursor-label")?.textContent).toBe(`${out} N, +x`);
+    expect(document.body.querySelector(".stress-cursor-label")?.textContent).toBe(`${out} N, right (+X)`);
     // Swung round to straight down the screen: -Y.
     pointer(canvas, "pointermove", 50, 100);
     expect(handlers.forceDrag).toHaveBeenLastCalledWith(1, {

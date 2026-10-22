@@ -322,7 +322,7 @@ describe("the force arrow", () => {
     const start = forceDragStart(30, forceToArrowPx(30));
     const named = forceDragPatch({ key: "-Z", dir: [0, 0, -1], length: 50 }, 0.5, start);
     expect(named).toEqual({ direction: "-Z", custom: null, force: arrowPxToForce(100) });
-    expect(forceDragLabel(named)).toBe(`${named.force} N, -z`);
+    expect(forceDragLabel(named)).toBe(`${named.force} N, down (-Z)`);
     const free = forceDragPatch({ key: "custom", dir: [0.70710678, 0, -0.70710678], length: 20 }, 1, start);
     expect(free.custom).toEqual([0.707, 0, -0.707]);
     expect(forceDragLabel(free)).toBe(`${free.force} N`);
@@ -361,7 +361,7 @@ describe("where the glyphs stand", () => {
     const three = { selectors: [top, bottom, hole], faceIds: [1], normalSum: [0, 0, 1] as Vec3, area: 1 };
     expect(faceCountLabel({ ...three, missing: 1, unshown: 1 })).toBe("3 faces, 1 not found on the current model");
     expect(faceCountLabel({ ...three, missing: 0, unshown: 2 })).toBe("3 faces (2 not shown in the view)");
-    expect(faceCountLabel({ selectors: [], faceIds: [], normalSum: [0, 0, 0], area: 0 })).toBe("none");
+    expect(faceCountLabel({ selectors: [], faceIds: [], normalSum: [0, 0, 0], area: 0 })).toBe("No faces yet");
   });
 
   it("spreads pressure arrows over the faces, pointing in", () => {
