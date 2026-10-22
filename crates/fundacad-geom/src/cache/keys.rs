@@ -197,7 +197,7 @@ fn reads_visibility(f: &Value) -> bool {
 /// from disk until an edit upstream of them; `FUNDACAD_DISK_CACHE=0` or
 /// `FUNDACAD_ENV_SIG` gets past that. A false bump costs one cold reopen, a
 /// missed one stale geometry, so bump when unsure.
-pub const GEOMETRY_VERSION: u32 = 2;
+pub const GEOMETRY_VERSION: u32 = 3;
 
 /// Bump when what a checkpoint holds, or how `checkpoint.rs` reads one back,
 /// changes: a field it lacks comes back empty without an error.
@@ -509,8 +509,11 @@ mod tests {
     /// with the `GEOMETRY_VERSION` it was pinned at. A re-record adds a pair at
     /// a bumped version; a version that has not shipped may take one in place,
     /// which these tests cannot tell from a missed bump.
-    const GOLDEN_DIGESTS: [(u32, &str); 2] =
-        [(1, "74269bcbe84820d4693f680ddbf76ecc"), (2, "f6512ae1dbbc6e485eb4cd4252d480a1")];
+    const GOLDEN_DIGESTS: [(u32, &str); 3] = [
+        (1, "74269bcbe84820d4693f680ddbf76ecc"),
+        (2, "f6512ae1dbbc6e485eb4cd4252d480a1"),
+        (3, "5f9cfa982ced8d4ceca0fcf902ad0bbf"),
+    ];
 
     #[test]
     fn each_golden_digest_came_with_a_version_bump() {

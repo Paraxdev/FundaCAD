@@ -1322,8 +1322,9 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
                                                            bool chamfer, double size, double size2, bool g2,
                                                            double tol, bool draft, double profile, double margin,
                                                            std::vector<Rest> *rests = nullptr,
-                                                           Overrun *over = nullptr) {
+                                                           Overrun *over = nullptr, bool d1_second = false) {
   std::vector<TopoDS_Face> faces = faces_of(shape, edge);
+  if (d1_second) std::swap(faces[0], faces[1]);
   Sides sides;
   for (const TopoDS_Face &f : faces) sides.emplace_back(new Side(f, edge));
   BRepAdaptor_Curve crv(edge);
@@ -2093,6 +2094,7 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
   RoundTools out;
   std::vector<Round> rounds;
   Overrun first;
+  std::vector<char> second(edges.size(), 0);
   if (chamfer && !std::isnan(size2) && size2 != 0) {
     std::vector<double> d1(sizes.begin(), sizes.begin() + std::min(sizes.size(), edges.size()));
     BlSides bs = bl_chamfer_sides(shape, edges, d1, std::vector<double>(d1.size(), size2));
@@ -2100,6 +2102,7 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
       BRepAdaptor_Curve crv(TopoDS::Edge(edges[bs.concave]));
       throw TooLarge(Misfit::Overlap, FITS_UNKNOWN, crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter())));
     }
+    second = bs.second;
   }
   for (size_t k = 0; k < edges.size(); ++k) {
     check_cancel();
@@ -2108,7 +2111,7 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
     r.size = sizes[k];
     Overrun over;
     auto got = edge_tool(shape, r.edge, chamfer, sizes[k], size2, g2, tol, draft, profile,
-                         1.0 + 0.11 * static_cast<double>(k), &r.rests, &over);
+                         1.0 + 0.11 * static_cast<double>(k), &r.rests, &over, second[k] != 0);
     if (over.any && !first.any) first = over;
     auto &dst = got.first > 0 ? out.cut : out.fuse;
     dst.insert(dst.end(), got.second.begin(), got.second.end());
