@@ -19,6 +19,8 @@ function describe(o: Object3D): string {
 }
 
 export interface SceneAuditResult {
+  // EXTRA is the leaked, doubled geometry. MISSING is a body that is selectable and measurable but unseen, which
+  // happened when a stream released buffers it was about to hand on.
   extra: string[];
   missing: string[];
   duplicateIds: string[];
