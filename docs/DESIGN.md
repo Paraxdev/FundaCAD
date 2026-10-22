@@ -541,7 +541,7 @@ one; a name that is not there renders nothing. The common actions:
 | Add, remove | `plus`, `minus` |
 | Search | `search` |
 | Show, hide | `visible`, `hidden` |
-| Expand, collapse | `caretRight`, `caretDown`, `caretUp` |
+| Expand, collapse | `caretRight`, `caretDown` |
 | Undo, redo | `undo`, `redo` |
 | Warning | `warning` |
 | Save, open, export, import | `save`, `open`, `export`, `import` |
