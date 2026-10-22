@@ -426,3 +426,22 @@ fn a_two_distance_chamfer_runs_on_past_a_short_slanted_end() {
         assert_eq!(got, (Vec::<&str>::new(), Vec::<&str>::new(), 14, true), "{e} then {d}/{d2}: {v}");
     }
 }
+
+/// The section build cuts a straight chamfer only over its edge: past a slanted
+/// end or a fillet it left a step, built with no word where OCCT finds no cut.
+#[test]
+fn a_two_distance_chamfer_the_section_build_would_leave_a_step_on_is_never_silent() {
+    for (e, d, d2) in [(1.0, 1.0, 12.0), (2.0, 12.0, 2.0)] {
+        let r = x_chamfered_then(24.0, 20.0, e, d, d2);
+        let v = (volume(&r) * 100.0).round() / 100.0;
+        let clean = x_chamfered_cuts(24.0, 20.0, e, d, d2).iter().any(|c| (c - v).abs() < 0.015);
+        assert!(!r.errors.is_empty() || !warnings(&r, "c").is_empty() || clean, "{e} then {d}/{d2}: built {v} with no word");
+    }
+    let top = json!({"kind": "edge", "by": "ofFace", "body": "body1",
+        "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}});
+    let r = prism_with(&rect(-6.0, 11.0, 20.0, 20.0), 10.0, vec![
+        json!({"id": "f", "type": "fillet", "radius": 2.0, "edges": top}),
+        two_distance("c", 3.0, 12.0, z_edges(), json!({})),
+    ]);
+    assert!(!r.errors.is_empty() || !warnings(&r, "c").is_empty(), "built {} with no word", volume(&r));
+}
