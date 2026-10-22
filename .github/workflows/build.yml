@@ -91,6 +91,12 @@ jobs:
           CARGO_TARGET_DIR: ${{ runner.temp }}/spnav-target
         run: cargo test --manifest-path src-tauri/spnav/Cargo.toml -- --test-threads=4
 
+      # The app's log file, rotation and redirect, std only like the above.
+      - name: Linux log file tests
+        run: |
+          rustc --edition 2021 --test -D warnings src-tauri/src/log_file.rs -o "$RUNNER_TEMP/log_file_test"
+          "$RUNNER_TEMP/log_file_test"
+
   # What this run builds and where it goes (docs/ENGINE.md section 7). `config`
   # is empty on a ref that builds no installers. `gated` is false on dev, whose
   # installers still start after `test` and `rust-geom` finish but do not need
@@ -210,6 +216,16 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-wasip2
+
+      # A release exe is a GUI subsystem process with no std handles, so its log
+      # file is the only place its output lands. std only, so this takes seconds.
+      - name: Windows log file tests
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --edition 2021 --test -D warnings src-tauri/src/log_file.rs -o "$RUNNER_TEMP/log_file_test.exe"
+          "$RUNNER_TEMP/log_file_test.exe"
 
       # The root workspace too: fundacad-mcp is built there. A cache saved on
       # a tag is only ever read by that tag's re-runs, and the quota is shared.
@@ -441,7 +457,7 @@ jobs:
           trap 'kill -- -"$gui" 2>/dev/null || true' EXIT
           for _ in $(seq 120); do [ -f "$session" ] && break; sleep 1; done
           if [ ! -f "$session" ]; then
-            echo "::error::the app wrote no session file in 120 s"; tail -n 50 "$RUNNER_TEMP/gui.log"; exit 1
+            echo "::error::the app wrote no session file in 120 s"; tail -n 50 "$RUNNER_TEMP/gui.log" "$XDG_DATA_HOME/dev.fundacad.app/logs/fundacad.log" || true; exit 1
           fi
           FUNDACAD_MCP_MODE=attach FUNDACAD_SESSION_FILE="$session" \
             python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
