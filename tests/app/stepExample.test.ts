@@ -41,7 +41,7 @@ vi.mock("../../src/templates", async (importOriginal) => ({
     h.file ? h.file() : Promise.resolve(new File([new Uint8Array([31, 139])], `${id}.stpz`)),
 }));
 
-import { hasUnsavedWork, importFromHome, newFromTemplate } from "../../src/app/documentActions";
+import { hasUnsavedWork, importFromHome, isBlankDocument, newFromTemplate } from "../../src/app/documentActions";
 
 const SAVED: Feature[] = [
   { id: "sk1", type: "sketch", plane: "XZ", entities: [] },
@@ -477,5 +477,133 @@ describe("a cancelled import", () => {
     h.building = edit;
     await newFromTemplate(e, "printer");
     expect(seen(store)).toMatchObject({ features: [], name: "3D printer", dirty: true, reported: [] });
+  });
+});
+
+const flush = async () => {
+  for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 0));
+};
+function held(name: string) {
+  let release!: () => void;
+  h.hold[name] = new Promise((r) => (release = r));
+  return async () => {
+    release();
+    await flush();
+  };
+}
+const dropMotor = (e: Engine) => importFromHome(e, ["motor.step"], () => importFileBytes(e.store, geometry, motor()));
+
+describe("a STEP dropped on a blank Home", () => {
+  it("leaves a 3D printer example clicked during its read in place when the STEP read ends first", async () => {
+    const { e, store } = rig();
+    store.newDocument();
+    const releaseMotor = held("motor.step");
+    const releasePrinter = held("printer.stpz");
+    const drop = dropMotor(e);
+    await flush();
+    new Home({} as HomeCallbacks).open();
+    const example = newFromTemplate(e, "printer");
+    await flush();
+    await releaseMotor();
+    await releasePrinter();
+    await Promise.all([drop, example]);
+    expect(seen(store)).toEqual({
+      features: ["import"],
+      name: "3D printer",
+      path: null,
+      dirty: false,
+      home: false,
+      imported: ["motor.step", "printer.stpz"],
+      reported: [],
+    });
+    expect(h.told).toEqual([dropped("motor.step")]);
+  });
+
+  it("leaves an empty saved document opened during its read as it was opened", async () => {
+    const { e, store } = rig();
+    store.newDocument();
+    h.reading = (s) => {
+      s.load(JSON.stringify({ parameters: {}, features: [], version: 10 }));
+      s.markSaved("D:/jigs/Empty.funda");
+    };
+    await dropMotor(e);
+    expect(seen(store)).toEqual({
+      features: [],
+      name: "Empty.funda",
+      path: "D:/jigs/Empty.funda",
+      dirty: false,
+      home: false,
+      imported: ["motor.step"],
+      reported: [],
+    });
+    expect(h.told).toEqual([dropped("motor.step")]);
+  });
+
+  it("goes back to a blank untitled document when its read fails and nothing else was opened", async () => {
+    const { e, store } = rig();
+    store.newDocument();
+    h.land = false;
+    await dropMotor(e);
+    expect(seen(store)).toEqual({
+      features: [],
+      name: "Untitled",
+      path: null,
+      dirty: false,
+      home: false,
+      imported: ["motor.step"],
+      reported: ["Couldn't import motor.step: the file has no solids"],
+    });
+    expect(h.told).toEqual([]);
+  });
+});
+
+describe("the 3D printer example while its file is read", () => {
+  it("is not a blank document", async () => {
+    const { e } = rig();
+    const blank: boolean[] = [];
+    h.reading = () => blank.push(isBlankDocument(e));
+    await newFromTemplate(e, "printer");
+    expect([blank, isBlankDocument(e)]).toEqual([[false], false]);
+  });
+
+  it("is blank again once its read failed", async () => {
+    const { e } = rig();
+    h.land = false;
+    await newFromTemplate(e, "printer");
+    expect(isBlankDocument(e)).toBe(true);
+  });
+
+  it("leaves a new document opened during the read blank", async () => {
+    const { e } = rig();
+    const blank: boolean[] = [];
+    h.reading = (s) => {
+      s.newDocument();
+      blank.push(isBlankDocument(e));
+    };
+    await newFromTemplate(e, "printer");
+    expect([blank, isBlankDocument(e), h.told]).toEqual([[true], true, [dropped("printer.stpz")]]);
+  });
+
+  it.each([
+    ["add", { features: ["import", "import"], name: "3D printer", imported: ["printer.stpz", "motor.step"] }, []],
+    [
+      "new",
+      { features: ["import"], name: "motor", imported: ["printer.stpz", "motor.step"] },
+      [dropped("printer.stpz")],
+    ],
+  ])("asks where a STEP dropped on Home goes, answered %s", async (answer, landed, told) => {
+    const { e, store } = rig();
+    const releasePrinter = held("printer.stpz");
+    const example = newFromTemplate(e, "printer");
+    await flush();
+    new Home({} as HomeCallbacks).open();
+    h.answers = [answer];
+    const drop = dropMotor(e);
+    await flush();
+    await releasePrinter();
+    await Promise.all([example, drop]);
+    expect(h.asked).toEqual(["Add motor.step to 3D printer, or start a new document with it?"]);
+    expect(seen(store)).toEqual({ ...landed, path: null, dirty: true, home: false, reported: [] });
+    expect(h.told).toEqual(told);
   });
 });
