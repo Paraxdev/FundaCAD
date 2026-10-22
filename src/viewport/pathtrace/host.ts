@@ -254,8 +254,10 @@ export class PathTraceHost {
       this.settled = false;
     }
     this.syncBloom(b, f);
+    // Note: at the cap the held frames come back fast and would step the budget up, a
+    // change then lands on a finished trace that nothing polls again.
     if (this.measured !== null) {
-      if (this.budget.frame(this.measured, f.now)) b.setFrameBudget(this.budget.budget);
+      if (s === "trace" && this.budget.frame(this.measured, f.now)) b.setFrameBudget(this.budget.budget);
       this.measured = null;
     }
     if (s === "trace") {

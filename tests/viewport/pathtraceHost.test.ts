@@ -790,6 +790,40 @@ describe("path trace host", () => {
     expect(budgets.at(-1)).toBeLessThan(120_000);
   });
 
+  it("hands the tracer no budget change once the cap is reached, the last frame's time is dropped", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    t.answer(1);
+    await flush();
+    t.frameMs = 3;
+    let now = 1000;
+    for (let i = 0; i < 4; i++) {
+      now += 16;
+      host.tick(frame({}, now));
+      t.answer(2 + i);
+      await flush();
+    }
+    t.holdFrames = true;
+    now += 16;
+    host.tick(frame({}, now));
+    t.answer(256);
+    await flush();
+    now += 16;
+    host.tick(frame({}, now));
+    expect(host.state).toBe("done");
+    t.calls.length = 0;
+    // Fast enough to be the fifth quick frame a step up waits for.
+    t.land();
+    await flush();
+    for (let i = 0; i < 5; i++) {
+      now += 16;
+      host.tick(frame({}, now));
+      await flush();
+    }
+    expect(t.calls.filter((c) => c.startsWith("budget:"))).toEqual([]);
+    expect(host.state).toBe("done");
+  });
+
   it("traces below the canvas size", async () => {
     const { host, t } = await started();
     host.tick(frame());

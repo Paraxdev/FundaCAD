@@ -58,6 +58,64 @@ mod t {
         assert!(s.samples() > 4);
     }
 
+    fn red_quad_at_cap(cap: u32) -> Option<Tracer> {
+        let Ok(mut s) = super::common::tracer(TracerOptions { software: true, ..Default::default() }) else {
+            eprintln!("skipped: no adapter");
+            return None;
+        };
+        let bodies: Vec<BodyDesc> = serde_json::from_str(
+            r#"[{"id":"body1","key":"body1:e1:7:0:0","matrix":[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+                 "materials":[{"color":[0.8,0.2,0.2],"roughness":0.4}]}]"#,
+        )
+        .unwrap();
+        s.set_bodies(bodies);
+        let (key, mesh) = decode_mesh(&quad_frame("body1:e1:7:0:0")).unwrap();
+        s.add_mesh(&key, mesh);
+        s.set_camera(serde_json::from_str(r#"{"eye":[0,-8,6],"target":[0,0,0],"up":[0,0,1],"fov":50}"#).unwrap());
+        s.set_look(serde_json::from_str(r#"{"sunDir":[0.3,-0.4,1],"sunColor":[3,3,3]}"#).unwrap());
+        s.set_cap(cap);
+        let mut frames = 0;
+        while !s.done() {
+            s.frame(64, 48, Duration::from_millis(12));
+            frames += 1;
+            assert!(frames < 200, "stuck at {} samples", s.samples());
+        }
+        Some(s)
+    }
+
+    fn frames_until_denoised(s: &mut Tracer) {
+        let start = std::time::Instant::now();
+        while !s.denoised() {
+            assert!(start.elapsed() < Duration::from_secs(30), "no denoise: {:?}", s.denoise_error());
+            s.frame(64, 48, Duration::from_millis(12));
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// The page steps the budget from frame times, at the cap too, where the held frames come back fast.
+    #[test]
+    fn a_budget_change_keeps_the_samples_and_the_denoise() {
+        let Some(mut s) = red_quad_at_cap(4) else { return };
+        s.set_frame_budget(64 * 16);
+        assert_eq!(s.samples(), 4);
+        assert!(s.done());
+        frames_until_denoised(&mut s);
+        let denoised = s.frame(64, 48, Duration::from_millis(12));
+        s.set_frame_budget(64 * 8);
+        assert_eq!(s.samples(), 4);
+        assert!(s.denoised());
+        assert_eq!(s.frame(64, 48, Duration::from_millis(12)), denoised);
+    }
+
+    #[test]
+    fn a_denoise_level_change_while_the_cap_denoises_denoises_again() {
+        let Some(mut s) = red_quad_at_cap(2) else { return };
+        assert!(s.denoising());
+        s.set_denoise(Quality::High);
+        frames_until_denoised(&mut s);
+        assert_eq!(s.samples(), 2);
+    }
+
     /// The page opens frames before its scene lands, and a body's mesh comes
     /// after the body list, so the loop traces with no instance at all first.
     #[test]
