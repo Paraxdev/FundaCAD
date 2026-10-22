@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { computeBoundsTree, acceleratedRaycast } from "three-mesh-bvh";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { applyKeptSpan, keptPoint, keptSpan } from "../../src/viewport/sectionPick";
+import { applyKeptSpan, firstKeptHit, keptPoint, keptSpan } from "../../src/viewport/sectionPick";
 
 const n = new THREE.Vector3(3, -4, 12).divideScalar(13);
 const plane = new THREE.Plane(n.clone(), -40);
@@ -142,5 +142,71 @@ describe("applyKeptSpan on a real raycast", () => {
     expect(rc.near).toBeGreaterThan(10);
     expect(applyKeptSpan(rc, null, SLACK)).toBe(true);
     expect({ near: rc.near, far: rc.far }).toEqual({ near: 0, far: Infinity });
+  });
+});
+
+describe("firstKeptHit on a closed body cut through its middle", () => {
+  const C = new THREE.Vector3(63, -21, 14);
+  const m = new THREE.Vector3(2, -1, 6).normalize();
+  const cut = new THREE.Plane().setFromNormalAndCoplanarPoint(m, C);
+  const u = new THREE.Vector3(1, 2, 0).cross(m).normalize();
+  const crossing = (r: THREE.Ray) => r.distanceToPlane(new THREE.Plane(m, cut.constant + SLACK))!;
+  const body = (bvh: boolean, halfTurn = false) => {
+    const geo = new THREE.BoxGeometry(40, 30, 36);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    if (bvh) {
+      computeBoundsTree.call(geo);
+      mesh.raycast = acceleratedRaycast;
+    }
+    mesh.position.copy(C);
+    // A half turn across the ray leaves the wall's normal, read in the mesh's own frame, pointing back at the ray.
+    if (halfTurn) mesh.quaternion.setFromAxisAngle(u, Math.PI);
+    else mesh.rotation.set(2.6, -0.4, 1.9);
+    mesh.updateMatrixWorld();
+    return mesh;
+  };
+  const cast = (r: THREE.Ray, plane: THREE.Plane | null, meshes: THREE.Mesh[], bvh = false) => {
+    const rc = Object.assign(new THREE.Raycaster(r.origin, r.direction), { firstHitOnly: bvh });
+    const k = firstKeptHit(rc, meshes, plane, SLACK);
+    return k && { cap: k.cap, distance: k.distance, wall: k.hit.distance };
+  };
+  // From the removed half, crossing the cut at 7 mm from C, which is inside the box.
+  const intoCap = new THREE.Ray(C.clone().addScaledVector(m, -150).addScaledVector(u, 7), m.clone().addScaledVector(u, 0.02).normalize());
+
+  it("a ray that enters the kept half inside the body is on the cap, at the cut", () => {
+    for (const [bvh, halfTurn] of [[false, false], [true, false], [false, true]]) {
+      const got = cast(intoCap, cut, [body(bvh!, halfTurn)], bvh)!;
+      expect(got).toEqual({ cap: true, distance: expect.closeTo(crossing(intoCap), 9), wall: expect.any(Number) });
+      expect(got.wall - got.distance).toBeGreaterThan(5);
+    }
+  });
+
+  it("the same ray without the cut hits the outside of the removed half", () => {
+    const got = cast(intoCap, null, [body(false)])!;
+    expect(got).toEqual({ cap: false, distance: got.wall, wall: expect.any(Number) });
+    expect(got.wall).toBeLessThan(crossing(intoCap) - 5);
+  });
+
+  it("a ray that crosses the cut beside the body reaches its kept outside, no cap", () => {
+    const from = C.clone().addScaledVector(m, -3).addScaledVector(u, 80);
+    const to = C.clone().addScaledVector(m, 6);
+    const r = new THREE.Ray(from, to.clone().sub(from).normalize());
+    expect(r.at(crossing(r), new THREE.Vector3()).distanceTo(C)).toBeGreaterThan(40);
+    const got = cast(r, cut, [body(true)], true)!;
+    expect(got).toEqual({ cap: false, distance: got.wall, wall: expect.any(Number) });
+    expect(got.wall).toBeGreaterThan(crossing(r));
+  });
+
+  it("a ray from inside the body in the kept half sees its wall from inside, which is no cap", () => {
+    const r = new THREE.Ray(C.clone().addScaledVector(m, 4).addScaledVector(u, -3), m.clone().addScaledVector(u, 0.3).normalize());
+    const got = cast(r, cut, [body(false)])!;
+    expect(got).toEqual({ cap: false, distance: got.wall, wall: expect.any(Number) });
+    expect(got.wall).toBeLessThan(25);
+  });
+
+  it("no body, or nothing kept along the ray, is no hit", () => {
+    expect(cast(intoCap, cut, [])).toBeNull();
+    const away = new THREE.Ray(intoCap.origin, intoCap.direction.clone().negate());
+    expect(cast(away, cut, [body(true)], true)).toBeNull();
   });
 });

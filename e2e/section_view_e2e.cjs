@@ -402,17 +402,22 @@ function modelDoc() {
         entity,
         gone: gone && { id: gone.id, now: goneNow ? { id: goneNow.edge.id, d: depth(goneNow.point.toArray()) } : null },
         rim: back && { id: back.id, d: back.d, got: v.pickEdgeAt(bs.x, bs.y)?.edge.id ?? null },
-        face: { before: depth(face.point), now: fh && depth(fh.anchor.toArray()), sameAsHover: v.faceIdAt(face.x, face.y) === (fh?.faceId ?? null) },
+        face: {
+          before: depth(face.point),
+          now: fh && depth(fh.anchor.toArray()),
+          sameAsHover: v.faceIdAt(face.x, face.y) === (fh?.faceId ?? null),
+          body: v.bodyIdAt(face.x, face.y),
+        },
       };
     }, [f4, HEIGHT]);
     check("without the cut the picker takes an edge of the removed half", !!picks.gone, picks);
     check("with the cut on Fillet does not reach that edge, only kept ones",
       !!picks.gone && (picks.gone.now === null || (picks.gone.now.id !== picks.gone.id && picks.gone.now.d >= -0.01)), picks.gone);
     check("a pocket rim edge the cut keeps still picks", !!picks.rim && picks.rim.d > 1 && picks.rim.got === picks.rim.id, picks.rim);
-    check("a pick on the removed half lands on what the cut keeps, or nothing",
-      picks.face.before < -1 && (picks.face.now === null || picks.face.now >= -0.01) && picks.face.sameAsHover, picks.face);
-    check("a click on the removed half selects what the cut keeps, or nothing",
-      picks.entity === null || (picks.entity.d >= -0.01 && picks.entity.sameFace !== false), picks.entity);
+    // The removed front face sits over the bulk the cut keeps, so the pointer is on the cap: the body, and no face.
+    check("a Press/Pull or hover on the removed half over the cap takes no face, and the body is there",
+      picks.face.before < -1 && picks.face.now === null && picks.face.sameAsHover && picks.face.body !== null, picks.face);
+    check("a click on the removed half over the cap picks no face behind it", picks.entity === null, picks.entity);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
     s = await state();
@@ -432,6 +437,54 @@ function modelDoc() {
     check("a selected body's glow is clipped by the cut", glow.selected.length === 1 && glow.glows >= 1 && glow.clipped, glow);
     check("the clipped glow shader compiles", shaderErrors.length === 0, shaderErrors);
     await shot("05_glow");
+
+    console.log("\n[part 6: the cap from the top]");
+    await page.evaluate(() => {
+      window.section.stop();
+      window.viewport.clearSelection();
+      window.__fundacad.handleAction("top");
+      window.__fundacad.handleAction("fit");
+    });
+    await page.waitForTimeout(800);
+    const capProbe = () => page.evaluate(() => {
+      const v = window.viewport;
+      const V = v.camera.position.constructor;
+      const out = {};
+      // On the cap well clear of the pocket, and on the pocket floor (z 15) seen through the cap's hole.
+      for (const [name, p] of [["cap", [80, 20, 20]], ["pocket", [70, 9, 20]]]) {
+        const s = v.projectToScreen(new V(...p));
+        const hit = v.pickEntity(s.x, s.y);
+        const pp = v.pickFaceForPressPull(s.x, s.y);
+        out[name] = {
+          at: s,
+          canvas: document.elementFromPoint(s.x, s.y)?.tagName === "CANVAS",
+          pick: hit && (hit.kind === "face" ? { face: hit.faceId, z: Math.round(hit.point[2] * 100) / 100 } : { edge: hit.edge.id }),
+          pressPull: pp && { face: pp.faceId, z: Math.round(pp.anchor.z * 100) / 100, nz: Math.round(pp.normal.z * 1e3) / 1e3 },
+          hover: v.faceIdAt(s.x, s.y),
+          body: v.bodyIdAt(s.x, s.y),
+        };
+      }
+      return out;
+    });
+    const open6 = await capProbe();
+    check("without a cut the top is picked there",
+      open6.cap.pick?.z === HEIGHT && open6.cap.pressPull?.z === HEIGHT && open6.cap.hover === open6.cap.pick?.face, open6.cap);
+    await page.evaluate(() => { window.section.start("Z"); window.section.flip(); window.section.confirm(); });
+    await page.waitForTimeout(800);
+    const cut6 = await capProbe();
+    s = await state();
+    check("a Z cut through the middle keeps the bottom", s.phase === "on" && s.plane[2] === -1 && s.plane[3] === HEIGHT / 2, s.plane);
+    check("on the cap a click, hover, Measure and Press/Pull take no face, the body is there",
+      cut6.cap.pick === null && cut6.cap.pressPull === null && cut6.cap.hover === null && cut6.cap.body === open6.cap.body && !!cut6.cap.body,
+      cut6.cap);
+    check("the pocket floor seen past the cap is still picked, facing up",
+      cut6.pocket.pick?.z === 15 && cut6.pocket.pressPull?.z === 15 && cut6.pocket.pressPull?.nz === 1 && cut6.pocket.hover === cut6.pocket.pick?.face,
+      cut6.pocket);
+    await page.mouse.click(cut6.cap.at.x, cut6.cap.at.y);
+    await page.waitForTimeout(400);
+    const sel6 = await page.evaluate(() => ({ bodies: window.viewport.getSelectedBodies(), faces: window.viewport.getSelectedFaceIds() }));
+    check("a click on the cap selects its body", cut6.cap.canvas && sel6.bodies.length === 1 && sel6.bodies[0] === cut6.cap.body && sel6.faces.length === 0, sel6);
+    await shot("06_cap");
   } catch (err) {
     console.error(err);
     failures++;

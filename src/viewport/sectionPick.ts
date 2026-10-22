@@ -34,3 +34,35 @@ export function applyKeptSpan(raycaster: THREE.Raycaster, plane: THREE.Plane | n
 export function keptPoint(point: THREE.Vector3, plane: THREE.Plane, slack: number): boolean {
   return plane.distanceToPoint(point) >= -slack;
 }
+
+const normal = new THREE.Vector3();
+const normalMatrix = new THREE.Matrix3();
+
+/** Whether `hit`, the first hit of a cast limited by applyKeptSpan, is a wall seen from inside: the ray entered the
+ *  kept half through a body, where the section's cap is drawn over that wall. */
+export function onCap(raycaster: THREE.Raycaster, hit: THREE.Intersection): boolean {
+  if (!(raycaster.near > 0) || !hit.face) return false;
+  normalMatrix.getNormalMatrix(hit.object.matrixWorld);
+  return normal.copy(hit.face.normal).applyNormalMatrix(normalMatrix).dot(raycaster.ray.direction) > 0;
+}
+
+export interface KeptHit {
+  hit: THREE.Intersection;
+  /** On the cap there is no face to pick, only the body, and the surface is the cut plane at `distance`. */
+  cap: boolean;
+  distance: number;
+}
+
+/** The first hit on `meshes` that `plane` keeps along `raycaster`, null for none. Leaves the raycaster limited. */
+export function firstKeptHit(
+  raycaster: THREE.Raycaster,
+  meshes: THREE.Object3D[],
+  plane: THREE.Plane | null,
+  slack: number,
+): KeptHit | null {
+  if (!applyKeptSpan(raycaster, plane, slack)) return null;
+  const hit = raycaster.intersectObjects(meshes, false)[0];
+  if (!hit) return null;
+  const cap = onCap(raycaster, hit);
+  return { hit, cap, distance: cap ? raycaster.near : hit.distance };
+}

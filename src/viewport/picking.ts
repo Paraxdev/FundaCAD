@@ -9,7 +9,7 @@ import { bodyOfFace, edgeObjects, faceIdOfHit, visibleBodyMeshes } from "./rende
 import type { BodyEdges, EdgeRef } from "./edgeLines";
 import { edgeSelectorFrom } from "./edgeMatch";
 import { flushRaycastIndex } from "./raycastIndex";
-import { applyKeptSpan, keptPoint, SECTION_PICK_SLACK } from "./sectionPick";
+import { firstKeptHit, keptPoint, SECTION_PICK_SLACK } from "./sectionPick";
 import { hitScale } from "../input/pointerKind";
 import { overlayLayer } from "./overlayKinds";
 import {
@@ -135,8 +135,8 @@ export class Picker {
 
     this.raycaster.setFromCamera(this.ndc, camera); // ndc set by pickEdgeCandidates
     const scale = modelScale(view);
-    const open = applyKeptSpan(this.raycaster, this.clip, SECTION_PICK_SLACK * scale);
-    const fHit = open ? this.raycaster.intersectObjects(visibleBodyMeshes(view), false)[0] : undefined;
+    const kept = firstKeptHit(this.raycaster, visibleBodyMeshes(view), this.clip, SECTION_PICK_SLACK * scale);
+    const fHit = kept && !kept.cap ? kept.hit : undefined;
     let face: FaceHit | null = null;
     if (fHit) {
       const faceId = faceIdOfHit(fHit);
@@ -224,9 +224,8 @@ export class Picker {
   private pointVisible(point: THREE.Vector3, camera: THREE.Camera, meshes: THREE.Mesh[], scale: number): boolean {
     const p = this.scratch.copy(point).project(camera);
     this.sightRay.setFromCamera(this.sightNdc.set(p.x, p.y), camera);
-    const open = applyKeptSpan(this.sightRay, this.clip, SECTION_PICK_SLACK * scale);
-    const hit = open ? this.sightRay.intersectObjects(meshes, false)[0] : undefined;
-    return !occludedEdge(this.sightRay.ray.origin.distanceTo(point), hit?.distance ?? null, scale);
+    const kept = firstKeptHit(this.sightRay, meshes, this.clip, SECTION_PICK_SLACK * scale);
+    return !occludedEdge(this.sightRay.ray.origin.distanceTo(point), kept?.distance ?? null, scale);
   }
 
   /** Every edge the cursor could have meant, nearest first in SCREEN space,
