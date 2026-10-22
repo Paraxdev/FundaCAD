@@ -6,6 +6,7 @@
 #pragma once
 #include "rust/cxx.h"
 #include <bindings_common.hxx>
+#include "blend_ops.hxx"
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Curve2d.hxx>
@@ -1321,8 +1322,9 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
                                                            bool chamfer, double size, double size2, bool g2,
                                                            double tol, bool draft, double profile, double margin,
                                                            std::vector<Rest> *rests = nullptr,
-                                                           Overrun *over = nullptr) {
+                                                           Overrun *over = nullptr, bool d1_second = false) {
   std::vector<TopoDS_Face> faces = faces_of(shape, edge);
+  if (d1_second) std::swap(faces[0], faces[1]);
   Sides sides;
   for (const TopoDS_Face &f : faces) sides.emplace_back(new Side(f, edge));
   BRepAdaptor_Curve crv(edge);
@@ -2081,6 +2083,54 @@ inline Overrun &last_overrun() {
   return o;
 }
 
+// A straight chamfer is cut as a prism over its edge, so past an end face that leans out over the
+// cut, like an earlier 45 degree chamfer or a fillet, it leaves a step where OCCT's chamfer runs on.
+inline bool steps_past_end(const TopoDS_Shape &shape, const TopoDS_Edge &edge, const std::vector<TopoDS_Shape> &edges,
+                           double s, gp_Pnt &at) {
+  std::vector<TopoDS_Face> faces = faces_of(shape, edge);
+  if (faces.size() != 2 || !(s > 0)) return false;
+  gp_Vec n[2];
+  for (int k = 0; k < 2; ++k) {
+    BRepAdaptor_Surface sf(faces[k]);
+    if (sf.GetType() != GeomAbs_Plane) return false;
+    gp_Dir d = sf.Plane().Axis().Direction();
+    if (faces[k].Orientation() == TopAbs_REVERSED) d.Reverse();
+    n[k] = gp_Vec(d);
+  }
+  TopoDS_Vertex v[2];
+  TopExp::Vertices(edge, v[0], v[1]);
+  if (v[0].IsNull() || v[1].IsNull()) return false;
+  gp_Pnt P[2] = {BRep_Tool::Pnt(v[0]), BRep_Tool::Pnt(v[1])};
+  gp_Vec T(P[0], P[1]);
+  if (T.Magnitude() < 1e-9) return false;
+  T.Normalize();
+  gp_Vec in[2];
+  for (int k = 0; k < 2; ++k) {
+    in[k] = T.Crossed(n[k]);
+    if (in[k].Magnitude() < 1e-9) return false;
+    in[k].Normalize();
+    if (in[k].Dot(n[1 - k]) > 0) in[k].Reverse();
+  }
+  BRepClass3d_SolidClassifier cls(shape);
+  const double share[3][2] = {{1.0 / 3, 1.0 / 3}, {0.7, 0.15}, {0.15, 0.7}};
+  for (int end = 0; end < 2; ++end) {
+    bool shared = false;
+    for (const TopoDS_Shape &e : edges)
+      if (!e.IsSame(edge) && touches(e, {v[end]})) shared = true;
+    if (shared) continue;
+    gp_Vec out = end == 0 ? T.Reversed() : T;
+    for (const auto &w : share) {
+      gp_Pnt q = P[end].Translated(out * (0.1 * s) + in[0] * (s * w[0]) + in[1] * (s * w[1]));
+      cls.Perform(q, 1e-7);
+      if (cls.State() == TopAbs_IN) {
+        at = P[end];
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 struct RoundTools {
   std::vector<TopoDS_Shape> cut, fuse;
   std::vector<std::pair<TopoDS_Shape, double>> convex;
@@ -2092,6 +2142,18 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
   RoundTools out;
   std::vector<Round> rounds;
   Overrun first;
+  std::vector<char> second(edges.size(), 0);
+  bool judged = false;
+  if (chamfer && !std::isnan(size2) && size2 != 0) {
+    std::vector<double> d1(sizes.begin(), sizes.begin() + std::min(sizes.size(), edges.size()));
+    BlSides bs = bl_chamfer_sides(shape, edges, d1, std::vector<double>(d1.size(), size2));
+    if (bs.unseen >= 0) {
+      BRepAdaptor_Curve crv(TopoDS::Edge(edges[bs.unseen]));
+      throw TooLarge(Misfit::Overlap, FITS_UNKNOWN, crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter())));
+    }
+    second = bs.second;
+    judged = bs.kind != BL_SIDES_MAP;
+  }
   for (size_t k = 0; k < edges.size(); ++k) {
     check_cancel();
     Round r;
@@ -2099,10 +2161,13 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
     r.size = sizes[k];
     Overrun over;
     auto got = edge_tool(shape, r.edge, chamfer, sizes[k], size2, g2, tol, draft, profile,
-                         1.0 + 0.11 * static_cast<double>(k), &r.rests, &over);
+                         1.0 + 0.11 * static_cast<double>(k), &r.rests, &over, second[k] != 0);
     if (over.any && !first.any) first = over;
     auto &dst = got.first > 0 ? out.cut : out.fuse;
     dst.insert(dst.end(), got.second.begin(), got.second.end());
+    gp_Pnt step_at;
+    if (judged && got.first > 0 && steps_past_end(shape, r.edge, edges, std::min(sizes[k], size2), step_at))
+      throw TooLarge(Misfit::IntoBody, FITS_NONE, step_at);
     if (got.first > 0) {
       out.convex.push_back({edges[k], sizes[k]});
       BRepAdaptor_Curve crv(r.edge);
@@ -2351,6 +2416,16 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
     BRepBuilderAPI_Copy pristine(shape, false);
     std::vector<TopoDS_Shape> pristine_es;
     for (const TopoDS_Shape &e : es) pristine_es.push_back(pristine.ModifiedShape(e));
+    // The section build ends both chamfers square at an inside corner and leaves their mitre standing, and
+    // only OCCT builds a set that fits there right, so no size is offered.
+    if (chamfer && !std::isnan(size2)) {
+      BlSides bs = bl_chamfer_sides(shape, es, sz, std::vector<double>(sz.size(), size2));
+      if (bs.cornered >= 0 && (bs.kind == BL_SIDES_FIT || bs.kind == BL_SIDES_MAP_FITS)) {
+        BRepAdaptor_Curve crv(TopoDS::Edge(es[bs.cornered]));
+        throw secblend::TooLarge(secblend::Misfit::Overlap, secblend::FITS_UNKNOWN,
+                                 crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter())));
+      }
+    }
     auto started = std::chrono::steady_clock::now();
     try {
       TopoDS_Shape out = secblend::blend_scaled(shape, es, chamfer, size2, g2, sz, draft, profile, one_shot);

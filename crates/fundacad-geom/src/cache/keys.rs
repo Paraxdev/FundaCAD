@@ -173,7 +173,7 @@ fn reads_visibility(f: &Value) -> bool {
 /// Bump when a feature, kernel patch or default can change the shape a document builds to, so older
 /// checkpoints miss. Re-recording tests/golden is the usual sign, and `GOLDEN_DIGESTS` fails until both move.
 /// A false bump costs one cold reopen, a missed one stale geometry, so bump when unsure.
-pub const GEOMETRY_VERSION: u32 = 2;
+pub const GEOMETRY_VERSION: u32 = 3;
 
 /// Bump when what a checkpoint holds, or how `checkpoint.rs` reads one back,
 /// changes: a field it lacks comes back empty without an error.

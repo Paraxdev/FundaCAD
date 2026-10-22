@@ -5,7 +5,7 @@ use std::f64::consts::PI;
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
-use fundacad_geom::kernel;
+use fundacad_geom::kernel::{self, Kind};
 use serde_json::{json, Value};
 
 fn build(raw: &Value) -> Rebuild {
@@ -207,5 +207,320 @@ fn rounds_that_cross_near_an_end_are_refused_with_the_size_that_keeps_them_apart
             let lone = prism_fillet(c.corners, c.height, c.crossing[1], &[p]);
             assert!(lone.errors.is_empty(), "the lone round at {p:?} has no neighbour to cross: {:?}", messages(&lone));
         }
+    }
+}
+
+fn prism_with(corners: &[(f64, f64)], height: f64, blends: Vec<Value>) -> Rebuild {
+    let n = corners.len();
+    let lines: Vec<Value> = (0..n)
+        .map(|i| {
+            let (a, b) = (corners[i], corners[(i + 1) % n]);
+            json!({"type": "line", "id": format!("l{i}"), "x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1})
+        })
+        .collect();
+    let mut features = vec![
+        json!({"id": "sk", "type": "sketch", "plane": "XY", "entities": lines}),
+        json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": height, "operation": "new"}),
+    ];
+    features.extend(blends);
+    build(&json!({"parameters": {}, "features": features}))
+}
+
+fn two_distance(id: &str, d: f64, d2: f64, edges: Value, extra: Value) -> Value {
+    let mut chamfer = json!({"id": id, "type": "chamfer", "chamferType": "twoDistance", "edges": edges,
+        "distance": d, "distance2": d2});
+    chamfer.as_object_mut().expect("an object").extend(extra.as_object().cloned().unwrap_or_default());
+    chamfer
+}
+
+fn prism_chamfer(corners: &[(f64, f64)], height: f64, d: f64, d2: f64, edges: Value, extra: Value) -> Rebuild {
+    prism_with(corners, height, vec![two_distance("c", d, d2, edges, extra)])
+}
+
+fn rect(x: f64, y: f64, l: f64, w: f64) -> [(f64, f64); 4] {
+    [(x, y), (x + l, y), (x + l, y + w), (x, y + w)]
+}
+
+/// A convex prism less a d x d2 triangle at every corner, whichever wall takes d.
+fn clean_cut(corners: &[(f64, f64)], height: f64, d: f64, d2: f64) -> f64 {
+    let n = corners.len();
+    let (mut area, mut cut) = (0.0, 0.0);
+    for i in 0..n {
+        let (p, a, b) = (corners[(i + n - 1) % n], corners[i], corners[(i + 1) % n]);
+        area += a.0 * b.1 - b.0 * a.1;
+        let (u, v) = ((p.0 - a.0, p.1 - a.1), (b.0 - a.0, b.1 - a.1));
+        cut += d * d2 / 2.0 * (u.0 * v.1 - u.1 * v.0).abs() / (u.0.hypot(u.1) * v.0.hypot(v.1));
+    }
+    (area.abs() / 2.0 - cut) * height
+}
+
+/// A chamfer that should cut every vertical corner of a convex prism cleanly, with no word said.
+fn check_clean(corners: &[(f64, f64)], d: f64, d2: f64, extra: Value) {
+    check_cut(corners, d, d2, extra, 2 * corners.len() + 2);
+}
+
+fn check_cut(corners: &[(f64, f64)], d: f64, d2: f64, extra: Value, faces: usize) {
+    let r = prism_chamfer(corners, 10.0, d, d2, z_edges(), extra.clone());
+    let face_count = r.bodies.first().map(|b| kernel::count(&b.shape, Kind::Face));
+    let got = (messages(&r), warnings(&r, "c"), face_count, (volume(&r) * 100.0).round() / 100.0);
+    let want_volume = (clean_cut(corners, 10.0, d, d2) * 100.0).round() / 100.0;
+    let want = (Vec::<&str>::new(), Vec::<&str>::new(), Some(faces), want_volume);
+    assert_eq!(got, want, "{corners:?} at {d}/{d2} {extra}");
+}
+
+const PARALLELOGRAM: [(f64, f64); 4] = [(5.0, 2.0), (27.0, 2.0), (35.0, 18.0), (13.0, 18.0)];
+const TRIANGLE: [(f64, f64); 3] = [(4.0, 1.0), (14.0, 1.0), (9.0, 9.660254)];
+
+/// 3 + 12 fits a 20 mm wall only with the 12 at one corner and the 3 at the other. d went on the face the kernel's
+/// map lists first, putting 12 + 12 on two walls: 3/12 was refused, 1/12 built 3746.71 for 3760.
+#[test]
+fn a_two_distance_chamfer_that_fits_with_one_size_at_each_end_of_a_face_builds() {
+    for (d, d2) in [(3.0, 12.0), (12.0, 3.0), (3.0, 16.0)] {
+        check_clean(&rect(7.0, -3.0, 20.0, 20.0), d, d2, json!({}));
+    }
+    for (d, d2) in [(3.0, 12.0), (12.0, 3.0)] {
+        check_clean(&PARALLELOGRAM, d, d2, json!({}));
+    }
+    check_clean(&TRIANGLE, 2.0, 7.0, json!({}));
+    for ((l, w), d, d2) in
+        [((20.0, 20.0), 1.0, 12.0), ((40.0, 40.0), 3.0, 30.0), ((40.0, 40.0), 3.0, 36.0), ((25.0, 15.0), 12.0, 1.0)]
+    {
+        check_clean(&rect(-6.0, 11.0, l, w), d, d2, json!({}));
+    }
+}
+
+/// On a 30 x 10 prism the 12 fits only on the 30 mm walls, in either order: 12/3 came back warned at 2525.
+/// tangentEdges false goes straight to the section build.
+#[test]
+fn a_two_distance_chamfer_takes_the_faces_it_fits_on_in_either_order() {
+    for extra in [json!({}), json!({"tangentEdges": false})] {
+        check_clean(&rect(-12.0, 4.0, 30.0, 10.0), 3.0, 12.0, extra.clone());
+        check_clean(&rect(-12.0, 4.0, 30.0, 10.0), 12.0, 3.0, extra.clone());
+    }
+    check_clean(&rect(3.0, -21.0, 40.0, 20.0), 18.0, 3.0, json!({"tangentEdges": false}));
+    check_clean(&rect(7.0, -3.0, 20.0, 20.0), 3.0, 12.0, json!({"tangentEdges": false}));
+}
+
+/// Setbacks that just meet use up each wall and the section build cuts them, a hair past they cross.
+#[test]
+fn two_distance_setbacks_that_just_meet_on_a_wall_build() {
+    check_clean(&rect(7.0, -3.0, 20.0, 20.0), 3.0, 16.9, json!({}));
+    for (d, d2) in [(3.0, 17.0), (9.0, 11.0)] {
+        check_cut(&rect(7.0, -3.0, 20.0, 20.0), d, d2, json!({}), 6);
+    }
+    let r = prism_chamfer(&rect(7.0, -3.0, 20.0, 20.0), 10.0, 3.0, 17.5, z_edges(), json!({}));
+    assert!(!r.errors.is_empty() || !warnings(&r, "c").is_empty(), "3/17.5 built {} with no word", volume(&r));
+}
+
+/// None of these fits either way round. Cut one edge at a time, 40 x 20 at 3/30 came back 6002.65 with both 40 mm
+/// walls carved and no word said.
+#[test]
+fn a_two_distance_chamfer_that_runs_past_a_face_is_never_silent() {
+    for ((l, w), d, d2) in
+        [((40.0, 20.0), 3.0, 30.0), ((40.0, 20.0), 30.0, 3.0), ((30.0, 10.0), 1.0, 20.0), ((40.0, 40.0), 38.0, 3.0)]
+    {
+        let r = prism_chamfer(&rect(-6.0, 11.0, l, w), 10.0, d, d2, z_edges(), json!({}));
+        assert!(
+            !r.errors.is_empty() || !warnings(&r, "c").is_empty(),
+            "{l} x {w} at {d}/{d2}: built {} with no word",
+            volume(&r)
+        );
+    }
+}
+
+/// 1 + 1 already runs past the ledge's 1.5 mm wall, a convex chamfer at one end and a concave fill at the other.
+/// The section build never checked a fill against its neighbour: 3/1 built 1486.62 for at most 1492.
+#[test]
+fn a_chamfer_and_a_fill_crossing_on_a_short_wall_are_refused() {
+    let ledge = [(6.0, -4.0), (26.0, -4.0), (26.0, 1.0), (24.5, 1.0), (24.5, 6.0), (6.0, 6.0)];
+    for (d, d2) in [(1.0, 3.0), (3.0, 1.0), (1.0, 2.0), (2.0, 1.0)] {
+        for extra in [json!({}), json!({"tangentEdges": false})] {
+            let r = prism_chamfer(&ledge, 8.0, d, d2, z_edges(), extra.clone());
+            assert!(
+                !r.errors.is_empty() || !warnings(&r, "c").is_empty(),
+                "{d}/{d2} {extra}: built {} with no word",
+                volume(&r)
+            );
+        }
+    }
+    let near = |x: f64, y: f64| json!({"kind": "edge", "by": "nearest", "point": [x, y, 4.0], "body": "body1"});
+    let r = prism_with(
+        &ledge,
+        8.0,
+        vec![
+            two_distance("c1", 3.0, 1.0, near(26.0, 1.0), json!({})),
+            two_distance("c2", 3.0, 1.0, near(24.5, 1.0), json!({})),
+        ],
+    );
+    let refused: Vec<Option<&str>> = r.errors.iter().map(|e| e.feature_id.as_deref()).collect();
+    assert_eq!(refused, [Some("c2")], "the fill after the chamfer: {:?}, volume {}", messages(&r), volume(&r));
+    assert!((volume(&r) - (1540.0 - 12.0)).abs() < 0.01, "the chamfer alone cuts 3 x 1 / 2 x 8: {}", volume(&r));
+}
+
+/// A U with a 12 mm deep, 8 mm wide slot, chamfered at every other corner, the slot's right one concave.
+const U_PRISM: [(f64, f64); 8] =
+    [(5.0, -7.0), (29.0, -7.0), (29.0, 13.0), (21.0, 13.0), (21.0, 1.0), (13.0, 1.0), (13.0, 13.0), (5.0, 13.0)];
+
+fn u_alternate_corners() -> Value {
+    let at = |i: usize| json!({"kind": "edge", "by": "nearest", "point": [U_PRISM[i].0, U_PRISM[i].1, 5.0], "body": "body1"});
+    json!([at(0), at(2), at(4), at(6)])
+}
+
+/// A 17 mm fill fits neither the 12 mm wall nor the 8 mm floor of the U's inner corner: it came back warned about a
+/// convex corner, the fill clamped without a word.
+#[test]
+fn a_concave_fill_longer_than_both_its_faces_is_refused() {
+    for (d, d2) in [(1.0, 17.0), (17.0, 1.0), (3.0, 21.0)] {
+        let r = prism_with(&U_PRISM, 10.0, vec![two_distance("c", d, d2, u_alternate_corners(), json!({}))]);
+        assert_eq!(messages(&r).len(), 1, "{d}/{d2}: built {} with {:?}", volume(&r), warnings(&r, "c"));
+    }
+}
+
+/// The U's inner corner takes its 12 along the 12 mm wall, just reaching the corner above, and 1 along the floor.
+/// Given 1/12 it put the 12 on the 8 mm floor, warned at 3713.33.
+#[test]
+fn a_concave_fill_that_just_reaches_the_next_corner_builds() {
+    for (d, d2) in [(1.0, 12.0), (12.0, 1.0)] {
+        let r = prism_with(&U_PRISM, 10.0, vec![two_distance("c", d, d2, u_alternate_corners(), json!({}))]);
+        let got = (messages(&r), warnings(&r, "c"), (volume(&r) * 100.0).round() / 100.0);
+        assert_eq!(got, (Vec::<&str>::new(), Vec::<&str>::new(), 3840.0 - 2.0 * 60.0), "{d}/{d2}");
+    }
+}
+
+fn x_chamfered_then(l: f64, w: f64, e: f64, d: f64, d2: f64) -> Rebuild {
+    let x_edges = json!({"kind": "edge", "by": "axis", "axis": "X", "body": "body1"});
+    prism_with(
+        &rect(-6.0, 11.0, l, w),
+        10.0,
+        vec![
+            json!({"id": "c0", "type": "chamfer", "distance": e, "edges": x_edges}),
+            two_distance("c", d, d2, z_edges(), json!({})),
+        ],
+    )
+}
+
+/// An l x w x 10 block, X edges chamfered e, less each corner's d x d2 wedge, for every way round the corners take.
+fn x_chamfered_cuts(l: f64, w: f64, e: f64, d: f64, d2: f64) -> Vec<f64> {
+    let wedge = |a: f64, b: f64| {
+        let m = e.min(b);
+        let under = e * m - m * m / 2.0 - e * m * m / (2.0 * b) + m * m * m / (3.0 * b);
+        a * b * 10.0 / 2.0 - 2.0 * a * under
+    };
+    let block = l * w * 10.0 - 2.0 * e * e * l;
+    (0..16u32)
+        .map(|bits| {
+            let cut: f64 = (0..4).map(|c| if (bits >> c) & 1 == 1 { wedge(d, d2) } else { wedge(d2, d) }).sum();
+            ((block - cut) * 100.0).round() / 100.0
+        })
+        .collect()
+}
+
+/// Past a 45 degree X edge chamfer each Z edge's wall ends on a short slant. The fit check read a longer setback as
+/// crossing the bottom edge and skipped OCCT, the section build left 22 faces and 3864 for 3848.56 at 1 then 2/3.
+#[test]
+fn a_two_distance_chamfer_runs_on_past_a_short_slanted_end() {
+    for (e, d, d2) in [(1.0, 2.0, 3.0), (1.0, 1.5, 1.0), (2.0, 5.0, 3.0), (4.0, 6.0, 5.0), (4.0, 2.0, 3.0)] {
+        let r = x_chamfered_then(24.0, 20.0, e, d, d2);
+        let v = (volume(&r) * 100.0).round() / 100.0;
+        let one_way_round = x_chamfered_cuts(24.0, 20.0, e, d, d2).iter().any(|c| (c - v).abs() < 0.015);
+        let got = (messages(&r), warnings(&r, "c"), kernel::count(&r.bodies[0].shape, Kind::Face), one_way_round);
+        assert_eq!(got, (Vec::<&str>::new(), Vec::<&str>::new(), 14, true), "{e} then {d}/{d2}: {v}");
+    }
+}
+
+/// The section build cuts a straight chamfer only over its edge, so past a slanted end or a fillet it left a step
+/// with no word where OCCT finds no cut.
+#[test]
+fn a_two_distance_chamfer_the_section_build_would_leave_a_step_on_is_never_silent() {
+    for (e, d, d2) in [(1.0, 1.0, 12.0), (2.0, 12.0, 2.0)] {
+        let r = x_chamfered_then(24.0, 20.0, e, d, d2);
+        let v = (volume(&r) * 100.0).round() / 100.0;
+        let clean = x_chamfered_cuts(24.0, 20.0, e, d, d2).iter().any(|c| (c - v).abs() < 0.015);
+        assert!(
+            !r.errors.is_empty() || !warnings(&r, "c").is_empty() || clean,
+            "{e} then {d}/{d2}: built {v} with no word"
+        );
+    }
+    let top = json!({"kind": "edge", "by": "ofFace", "body": "body1",
+        "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}});
+    let r = prism_with(
+        &rect(-6.0, 11.0, 20.0, 20.0),
+        10.0,
+        vec![
+            json!({"id": "f", "type": "fillet", "radius": 2.0, "edges": top}),
+            two_distance("c", 3.0, 12.0, z_edges(), json!({})),
+        ],
+    );
+    assert!(!r.errors.is_empty() || !warnings(&r, "c").is_empty(), "built {} with no word", volume(&r));
+}
+
+const L_TOP: [(f64, f64); 6] = [(0.0, 0.0), (30.0, 0.0), (30.0, 10.0), (12.0, 10.0), (12.0, 24.0), (0.0, 24.0)];
+const T_TOP: [(f64, f64); 8] =
+    [(0.0, 0.0), (30.0, 0.0), (30.0, 10.0), (20.0, 10.0), (20.0, 24.0), (10.0, 24.0), (10.0, 10.0), (0.0, 10.0)];
+const BAR_TOP: [(f64, f64); 4] = [(0.0, 0.0), (30.0, 0.0), (30.0, 10.0), (0.0, 10.0)];
+
+/// The outline turned by atan(3/4) and moved off the origin, its top edges chamfered d on one face, d2 on the other.
+fn top_ring(corners: &[(f64, f64)], d: f64, d2: f64) -> Rebuild {
+    let turned: Vec<(f64, f64)> =
+        corners.iter().map(|&(x, y)| (7.0 + 0.8 * x - 0.6 * y, -3.0 + 0.6 * x + 0.8 * y)).collect();
+    let top = json!({"kind": "edge", "by": "ofFace", "body": "body1",
+        "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}});
+    prism_chamfer(&turned, 10.0, d, d2, top, json!({}))
+}
+
+fn outcome(r: &Rebuild) -> (usize, Vec<&str>, f64) {
+    (r.errors.len(), warnings(r, "c"), (volume(r) * 100.0).round() / 100.0)
+}
+
+/// 5 + 5 just meets across the 10 mm arms and 10 runs down the 10 mm walls. The section build ended each chamfer
+/// square at the inside corner, leaving the mitre: the L came back 2625 for 2550, the T 2420 for 2270, no word said.
+#[test]
+fn two_distance_setbacks_that_just_meet_past_an_inside_corner_are_refused() {
+    let sizes = [(5.0, 9.0, 4.99), (9.0, 5.0, 8.99), (5.01, 9.0, 4.99), (4.0, 10.0, 3.99), (10.0, 4.0, 9.99)];
+    for (corners, whole) in [(&L_TOP[..], 4680.0), (&T_TOP[..], 4400.0)] {
+        for (d, d2, fits) in sizes {
+            let r = top_ring(corners, d, d2);
+            let got = (outcome(&r), messages(&r).first().and_then(|m| offered(m)));
+            assert_eq!(got, ((1, vec![], whole), Some(fits)), "{corners:?} at {d}/{d2}: {:?}", messages(&r));
+            let again = top_ring(corners, fits, d2 * fits / d);
+            assert_eq!(
+                (again.errors.len(), warnings(&again, "c").len()),
+                (0, 0),
+                "{corners:?} at {d}/{d2} offered {fits}"
+            );
+        }
+    }
+}
+
+/// A hair short of meeting OCCT cuts the mitre, and a bar with no inside corner still takes setbacks that just meet.
+#[test]
+fn two_distance_setbacks_short_of_an_inside_corner_or_meeting_on_a_bar_build() {
+    let cases = [
+        (&L_TOP[..], 4.99, 9.0, 2620.23),
+        (&L_TOP[..], 9.0, 4.99, 2553.66),
+        (&T_TOP[..], 4.99, 9.0, 2373.51),
+        (&BAR_TOP[..], 5.0, 9.0, 1566.67),
+        (&BAR_TOP[..], 9.0, 5.0, 1500.0),
+    ];
+    for (corners, d, d2, want) in cases {
+        let r = top_ring(corners, d, d2);
+        assert_eq!(outcome(&r), (0, vec![], want), "{corners:?} at {d}/{d2}: {:?}", messages(&r));
+    }
+}
+
+const SLANT_TOP: [(f64, f64); 6] = [(0.0, 0.0), (30.0, 0.0), (30.0, 10.0), (20.0, 10.0), (10.0, 20.0), (0.0, 20.0)];
+
+/// The inside corner turns 225 degrees. Each size fits one way round but OCCT fails it, and the section build ended
+/// both chamfers square at the corner: 2/8 came back 3819.2 where OCP cuts at most 3797.5, with no word.
+#[test]
+fn two_distance_chamfers_the_kernel_fails_past_a_slanted_inside_corner_are_refused() {
+    for (d, d2) in [(2.0, 8.0), (3.0, 8.0), (4.0, 8.0), (3.0, 5.0)] {
+        let r = top_ring(&SLANT_TOP, d, d2);
+        let got = (outcome(&r), messages(&r).first().and_then(|m| offered(m)));
+        assert_eq!(got, ((1, vec![], 4500.0), None), "at {d}/{d2}: {:?}", messages(&r));
+    }
+    for (d, d2, want) in [(4.0, 3.0, 3983.15), (5.0, 2.0, 4055.96)] {
+        let r = top_ring(&SLANT_TOP, d, d2);
+        assert_eq!(outcome(&r), (0, vec![], want), "at {d}/{d2}: {:?}", messages(&r));
     }
 }

@@ -166,8 +166,11 @@ fn the_signature_moves_only_with_what_shapes_geometry() {
 
 /// Each tests/golden digest (CRLF read as LF, the MCP transcript left out) with the `GEOMETRY_VERSION` it was
 /// pinned at. A re-record adds a pair at a bumped version, or replaces one at a version that has not shipped.
-const GOLDEN_DIGESTS: [(u32, &str); 2] =
-    [(1, "74269bcbe84820d4693f680ddbf76ecc"), (2, "f6512ae1dbbc6e485eb4cd4252d480a1")];
+const GOLDEN_DIGESTS: [(u32, &str); 3] = [
+    (1, "74269bcbe84820d4693f680ddbf76ecc"),
+    (2, "f6512ae1dbbc6e485eb4cd4252d480a1"),
+    (3, "5f9cfa982ced8d4ceca0fcf902ad0bbf"),
+];
 
 #[test]
 fn each_golden_digest_came_with_a_version_bump() {
