@@ -45,7 +45,12 @@ function save() {
 }
 
 function restore(v: Version) {
-  store.restoreVersion(v.id);
+  try {
+    store.restoreVersion(v.id);
+  } catch (e) {
+    toast(`Could not go back to "${v.message}": ${e instanceof Error ? e.message : String(e)}`, { kind: "error" });
+    return;
+  }
   toast(`Back at "${v.message}". Undo brings back what you had.`);
 }
 
@@ -91,8 +96,16 @@ function summary(d: VersionDiff): string {
 function changedNames(v: Version): { kind: string; name: string }[] {
   const r = store.versionRepo!;
   const d = diffOf(v);
-  const here = snapshotOf(r, v.id).features;
-  const before = v.parent ? snapshotOf(r, v.parent).features : [];
+  // An unreadable version is named by ids, so its Restore button still shows and reports why.
+  const featuresOf = (id: string) => {
+    try {
+      return snapshotOf(r, id).features;
+    } catch {
+      return [];
+    }
+  };
+  const here = featuresOf(v.id);
+  const before = v.parent ? featuresOf(v.parent) : [];
   const label = (id: string, list: typeof here) => {
     const f = list.find((x) => x.id === id) as ({ name?: string } & (typeof here)[number]) | undefined;
     return f ? f.name || featureMeta(f).label : id;
