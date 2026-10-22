@@ -1,8 +1,5 @@
-//! Text on a face, embossed or engraved. Glyph outlines go into the face's
-//! (u, v) through an isometry of its surface (a plane, a cylinder, a cone rolled
-//! out flat), so letters keep their size on a round face instead of being
-//! projected onto it. The face is found again at every build, so the text
-//! follows it through upstream edits.
+//! Text on a face, embossed or engraved. Glyphs go into the face's (u, v) through an isometry of its surface, so
+//! letters keep their size on a round face, and the face is found again every build so the text follows edits.
 
 use fundacad_core::schema::{Operation, TextOnFace};
 use glam::{DVec2, DVec3};

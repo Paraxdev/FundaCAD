@@ -1,15 +1,6 @@
-//! Surface mesh to linear tetrahedra by isosurface stuffing (Labelle and Shewchuk, "Isosurface
-//! Stuffing: Fast Tetrahedral Meshes with Good Dihedral Angles", SIGGRAPH 2007).
-//!
-//! A uniform body-centred cubic lattice of spacing `size` covers the part. The signed distance
-//! to the surface (negative inside) is evaluated at every lattice vertex through a bounding
-//! volume hierarchy over the triangles, signed by angle-weighted pseudonormals. Edges whose ends
-//! lie on opposite sides get a cut point on the surface; a lattice vertex too close to a cut
-//! point is warped onto it. Each lattice tetrahedron that reaches inside is then filled with the
-//! paper's stencil for its sign pattern, which keeps every dihedral angle between about 10.7 and
-//! 164.8 degrees. Where the part is thinner than about one element the stuffing cannot follow
-//! it, so a mesh that came apart, bridged a gap or lost much of the volume is refused rather
-//! than returned. Everything runs sequentially in lattice order, so the output is deterministic.
+//! Surface mesh to linear tetrahedra by isosurface stuffing (Labelle and Shewchuk, SIGGRAPH 2007): a BCC lattice
+//! of spacing `size`, signed distance through a BVH with pseudonormals, warped cut points and the paper's stencils
+//! keep dihedral angles in about 10.7 to 164.8 degrees. Runs in lattice order, so the output is deterministic.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -195,9 +186,8 @@ pub fn tetrahedralize(
         stats.volume += orient(&p) / 6.0;
     }
 
-    // Where the part is thinner than about one element, the stuffing can drop the material,
-    // split it, bridge a narrow gap or leave elements hinged on an edge. A solver cannot use
-    // such a mesh, so refuse it rather than hand it on.
+    // Where the part is thinner than about one element the stuffing can drop, split or bridge material or hinge
+    // elements on an edge, which a solver cannot use, so refuse it.
     let (boundary, pieces) = boundary_faces(&tets);
     if pieces != Some(surf.solids)
         || !closed_manifold(&boundary)
@@ -218,10 +208,8 @@ pub fn tetrahedralize(
     Ok((TetMesh { nodes, tets, boundary, boundary_face, node_faces }, stats))
 }
 
-/// A boundary node lies on a face when one of the face's triangles passes within this share
-/// of the element size of it. Every boundary node is a point of the surface, a lattice vertex
-/// warped onto it or a cut point found to within a ten-billionth of the size, so this only
-/// has to allow for rounding, and a node on an edge comes out on both faces.
+/// A boundary node lies on a face when a face triangle passes within this share of the size. Boundary nodes are
+/// surface points to a ten-billionth, so this only allows for rounding, and an edge node lands on both faces.
 const ON_FACE: f64 = 1e-6;
 
 /// The faces each boundary node lies on, as sorted (node, face id) pairs. A node no face
@@ -291,9 +279,6 @@ fn choose_size(surf: &Surface, opts: &MeshOptions) -> (f64, Coarsening) {
     (h, coarsening)
 }
 
-// ---------------------------------------------------------------------------------------------
-// Vector helpers.
-
 fn add(a: V3, b: V3) -> V3 {
     [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 }
@@ -347,9 +332,6 @@ fn dihedral_range(p: &[V3; 4]) -> (f64, f64) {
     }
     (lo, hi)
 }
-
-// ---------------------------------------------------------------------------------------------
-// Signed distance to the surface.
 
 /// Where on a triangle the closest point lies; the sign of the distance comes from the
 /// pseudonormal of that feature (Baerentzen and Aanaes 2005).
@@ -769,9 +751,6 @@ fn closest_on_triangle(p: V3, v: &[V3; 3]) -> (V3, Feature) {
     (add(a, add(scale(ab, vb * denom), scale(ac, vc * denom))), Feature::Face)
 }
 
-// ---------------------------------------------------------------------------------------------
-// The lattice.
-
 /// Black vertices sit on the grid points `lo + h (i, j, k)` (shifted by the margin), red ones at
 /// the cell centres. Black vertices come first in the numbering, then red, each x fastest.
 struct Lattice {
@@ -910,9 +889,6 @@ impl Hasher for KeyHasher {
 
 type CutMap = HashMap<u64, u32, BuildHasherDefault<KeyHasher>>;
 
-// ---------------------------------------------------------------------------------------------
-// Stuffing.
-
 struct Stuffed {
     nodes: Vec<V3>,
     tets: Vec<[u32; 4]>,
@@ -969,9 +945,8 @@ fn stuff(surf: &Surface, h: f64, tick: &mut dyn FnMut() -> bool) -> Result<Stuff
         }
     }
 
-    // Warp every vertex that a cut point violates onto the closest violating cut point. The
-    // vertex is then on the surface, which retires the cut points of all its edges: an edge
-    // keeps its cut point exactly while its ends have strictly opposite signs.
+    // Warp every vertex a cut point violates onto the closest violating cut point. On the surface it retires the
+    // cut points of all its edges, as an edge keeps one exactly while its ends have strictly opposite signs.
     let short = h * 3f64.sqrt() * 0.5;
     for v in 0..nv {
         if v % TICK_EVERY == 0 && !tick() {
@@ -1112,11 +1087,8 @@ impl Stencils<'_> {
             }
         }
         let id = |v: usize| v as u32;
-        // No vertex inside. Four vertices on the surface can make an arbitrarily flat
-        // tetrahedron (on a smooth surface they are nearly coplanar), so one is kept only when
-        // it lies inside and its angles are within the paper's bounds. Dropping them all would
-        // also drop the one element through a wall about one element thick and leave the
-        // remaining ones hinged on an edge.
+        // No vertex inside. Four surface vertices can make a flat tetrahedron, so one is kept only inside and within the
+        // paper's angle bounds. Dropping them all would lose the one element through a wall one element thick.
         if ni == 0 {
             if no == 0 {
                 let p = t.map(|v| self.pos[v]);
@@ -1188,12 +1160,9 @@ impl Stencils<'_> {
         }
     }
 
-    /// The inside vertex that the diagonal of the quadrilateral on lattice face (`a`, `b`, `o`)
-    /// touches; the quadrilateral is `a`, `b`, cut(b, o), cut(a, o). Both lattice tetrahedra on
-    /// the face must agree, so the choice depends on the face alone. On a long edge `a`-`b` the
-    /// face is symmetric and the parity rule picks the even end. On a short edge, one of
-    /// `a`-`o` and `b`-`o` is long and the diagonal starts at that edge's inside end (the other
-    /// choice measured a few degrees worse on random shapes).
+    /// The inside vertex the diagonal of the quadrilateral `a`, `b`, cut(b, o), cut(a, o) on lattice face (`a`, `b`,
+    /// `o`) touches, from the face alone so both tetrahedra on it agree. A long `a`-`b` takes the even end by parity,
+    /// a short one starts at the inside end of whichever of `a`-`o`, `b`-`o` is long (measured a few degrees better).
     fn diagonal_end(&self, a: usize, b: usize, o: usize) -> usize {
         if self.lat.same_grid(a, b) {
             if self.lat.parity(a) == 0 {
@@ -1208,11 +1177,9 @@ impl Stencils<'_> {
         }
     }
 
-    /// Splits the prism with triangles `top` and `bot` (column `i` runs from `top[i]` to
-    /// `bot[i]`) into three tetrahedra. `dirs` covers the quadrilaterals between columns
-    /// (0, 1), (0, 2) and (1, 2): `Some(true)` when the diagonal runs from the first column's
-    /// top to the second column's bottom, `Some(false)` for the other one, `None` when the
-    /// quadrilateral is free; a free one takes the diagonal that gives the better tetrahedra.
+    /// Splits the prism with triangles `top` and `bot` (column `i` from `top[i]` to `bot[i]`) into three tetrahedra.
+    /// `dirs` covers the quads between columns (0, 1), (0, 2), (1, 2): `Some(true)` for the diagonal from the first
+    /// column's top to the second's bottom, `Some(false)` the other, `None` free, which takes the better tetrahedra.
     fn prism(&mut self, top: [u32; 3], bot: [u32; 3], dirs: [Option<bool>; 3]) {
         const PAIRS: [(usize, usize); 3] = [(0, 1), (0, 2), (1, 2)];
         let mut best: Option<(f64, [[u32; 4]; 3])> = None;

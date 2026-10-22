@@ -1,5 +1,4 @@
-//! Shell, thicken and draft: the Python engine's `solid_ops.py` `_shell`, `_draft` and the
-//! handlers of the Python engine's `builder.py` that drive them.
+//! Shell, thicken and draft, `_shell` and `_draft` of solid_ops.py and the builder.py handlers that drive them.
 
 use fundacad_core::schema::{Draft, OneOrMany, Selector, Shell, Thicken};
 use glam::DVec3;
@@ -13,10 +12,8 @@ use crate::builder::{py_g, Ctx, FResult, Fail};
 use crate::kernel::{self, BoolKind, Kind};
 use crate::select::{group_by_body, Resolver};
 
-/// The class name an OpenCASCADE failure reaches Python as.
-///
-/// The class is what the user reads, the whole exception text goes to the
-/// error report through the trace.
+/// The class name an OpenCASCADE failure reaches Python as. The user reads the class, the whole exception text
+/// goes to the error report through the trace.
 pub(crate) fn occt_class(e: &opencascade::Error) -> String {
     if let opencascade::Error::Occt(m) = e {
         crate::trace::failed("OpenCASCADE", None, m.clone(), None);

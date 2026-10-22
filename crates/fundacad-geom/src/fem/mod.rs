@@ -26,12 +26,9 @@ pub struct TetMesh {
     pub tets: Vec<[u32; 4]>,
     pub boundary: Vec<[u32; 3]>,
     pub boundary_face: Vec<u32>,
-    /// Every face each boundary node lies on, as (node, face index) pairs sorted by node and
-    /// then face; a node on an edge lies on the faces on both sides of it. A boundary
-    /// triangle's tag names one face only, and where the mesh rounds an edge over a triangle
-    /// tagged with one face has corners on the face beside it, so a support holds the nodes
-    /// listed here, not every corner of its tagged triangles. Empty for a mesh built by hand,
-    /// whose nodes then lie on the faces of the boundary triangles they are corners of.
+    /// Every face each boundary node lies on, as (node, face index) sorted by node then face, an edge node on both
+    /// sides. A triangle's tag names one face, and where the mesh rounds an edge its corners can sit on the next face,
+    /// so supports hold these nodes. Empty for a hand built mesh, whose nodes lie on their triangles' faces.
     pub node_faces: Vec<(u32, u32)>,
 }
 

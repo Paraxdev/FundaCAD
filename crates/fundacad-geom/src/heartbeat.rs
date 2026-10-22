@@ -1,10 +1,5 @@
-//! Proof of life from inside one long kernel call, the Rust side of
-//! progress.py `progress_tick` while solid_ops.py `_run_offset_child` waits.
-//!
-//! The engine reaps a job whose beats stop. A single whole-body offset can run
-//! longer than that budget without being wedged, so it beats from a side thread
-//! while it works, for at most its own deadline, after which the beats stop and
-//! the supervisor decides.
+//! Proof of life from inside one long kernel call, progress.py `progress_tick`. The engine reaps a job whose beats
+//! stop, so a long whole-body offset beats from a side thread, up to its own deadline, then the supervisor decides.
 
 use std::cell::RefCell;
 use std::sync::mpsc;
