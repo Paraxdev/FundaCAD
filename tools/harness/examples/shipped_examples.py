@@ -28,15 +28,26 @@ PRINTER_BUDGET_S = 60
 INSPECT = "() => window.geometry.session('inspect', { document: window.store.document })"
 PLAIN = "() => window.geometry.session('inspect', { document: window.store.document, detail: false })"
 CLASHES = "() => window.geometry.interference(window.store.document, 0.01)"
+WATCH_OPEN = """() => {
+  window.__exampleOpened = false;
+  const off = window.store.onOpen(() => {
+    window.__exampleOpened = true;
+    off();
+  });
+}"""
+OPENED = "() => window.__exampleOpened && window.store.document.features.length > 0"
 
 
 def open_example(s, name):
     unsaved = s.status(raw=True)["dirty"]
     if s.bridge.call("startScreen") != "home":
         s.menu("File/Home")
+    s.page.evaluate(WATCH_OPEN)
     s.page.click(f'.home-example:has-text("{name}")')
     if unsaved:
         s.click("Discard")
+    # The card fetches the example's file before anything is busy, settle alone can return during that fetch.
+    s.page.wait_for_function(OPENED, timeout=PRINTER_BUDGET_S * 1000, polling=100)
     s.settle()
 
 
