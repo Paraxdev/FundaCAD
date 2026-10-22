@@ -6,7 +6,7 @@
 //! the one before to fundacad.2.log, so at most `KEEP` files remain.
 
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, IsTerminal, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -70,6 +70,64 @@ pub fn rotate_if_over(dir: &Path, cap: u64) -> io::Result<bool> {
         return Ok(false);
     }
     start(dir, cap).map(|_| true)
+}
+
+/// The last `max` bytes of the log, reaching back into the rotated ones, from
+/// a line start and with user names hidden. None while there is no log.
+pub fn tail(dir: &Path, max: u64) -> Option<String> {
+    let mut chunks = Vec::new();
+    let (mut left, mut cut) = (max, false);
+    for n in 0..KEEP {
+        let Ok(mut file) = File::open(generation(dir, n)) else { continue };
+        let len = file.metadata().map_or(0, |m| m.len());
+        let from = len - len.min(left);
+        // One byte before the cut tells whether it falls on a line start.
+        let back = u64::from(from > 0);
+        let mut buf = Vec::new();
+        if file.seek(SeekFrom::Start(from - back)).is_err() || file.take(len - from + back).read_to_end(&mut buf).is_err() {
+            continue;
+        }
+        left -= len - from;
+        cut = from > 0;
+        chunks.push(buf);
+        if left == 0 {
+            break;
+        }
+    }
+    let mut bytes: Vec<u8> = chunks.into_iter().rev().flatten().collect();
+    if cut {
+        let first_line = bytes.iter().position(|&b| b == b'\n').map_or(0, |i| i + 1);
+        bytes.drain(..first_line);
+    }
+    (!bytes.is_empty()).then(|| redact_user_paths(&String::from_utf8_lossy(&bytes)))
+}
+
+/// Hides the name in `\Users\<name>`, `/Users/<name>` and `/home/<name>`, from
+/// any machine, since a log can carry a path someone else pasted.
+pub fn redact_user_paths(text: &str) -> String {
+    let unix_end = |c: char| matches!(c, '/' | '\\' | '"' | '\'') || c.is_whitespace();
+    // A Windows profile folder may hold spaces, a Unix user name does not.
+    let s = redact_after(text, r"\users\", |c| matches!(c, '/' | '\\' | '"' | '\'' | '\n' | '\r'));
+    let s = redact_after(&s, "/home/", unix_end);
+    redact_after(&s, "/users/", unix_end)
+}
+
+fn redact_after(text: &str, needle: &str, ends: impl Fn(char) -> bool) -> String {
+    // ASCII lowering keeps every byte where it was, so its offsets index `text`.
+    let lower = text.to_ascii_lowercase();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while let Some(at) = lower[i..].find(needle) {
+        let name = i + at + needle.len();
+        out.push_str(&text[i..name]);
+        let len = text[name..].find(&ends).unwrap_or(text.len() - name);
+        if len > 0 {
+            out.push_str("[REDACTED]");
+        }
+        i = name + len;
+    }
+    out.push_str(&text[i..]);
+    out
 }
 
 #[cfg(unix)]

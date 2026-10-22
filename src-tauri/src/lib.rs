@@ -207,6 +207,15 @@ fn frontend_ready(state: tauri::State<'_, FrontendReady>, safe: tauri::State<'_,
     }
 }
 
+/// What a bug report attaches of the log: the report reaches a GitHub issue
+/// through the clipboard, and an issue body holds 65,536 characters.
+const LOG_TAIL: u64 = 16 << 10;
+
+#[tauri::command]
+fn log_tail(app: tauri::AppHandle) -> Option<String> {
+    log_file::tail(&app.path().app_log_dir().ok()?, LOG_TAIL)
+}
+
 /// Why this session runs in safe mode, if it does (safe_mode.rs).
 struct SafeMode {
     reason: Option<safe_mode::Reason>,
@@ -355,6 +364,7 @@ pub fn run() {
         restart_for_update,
         updates_supported,
         frontend_ready,
+        log_tail,
         safe_mode_exit,
         launch::take_launch_paths,
         drop_paths::drop_paths_take,
