@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { deflectionNote, type StressVerdictView } from "../../ui/stressVerdict";
+import { deflectionNote, verdictView, type VerdictInput } from "../../ui/stressVerdict";
 import type { Unit } from "../../ui/units";
 
 const props = defineProps<{
-  view: StressVerdictView;
+  input: VerdictInput;
+  marked: boolean;
   scale: number | null;
   maxDeflection: number | null;
   unit: Unit;
 }>();
 
+const view = computed(() => verdictView(props.input, undefined, props.marked));
 const bend = computed(() =>
   props.scale === null ? null : deflectionNote(props.maxDeflection, props.unit, props.scale),
 );

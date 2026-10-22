@@ -266,17 +266,15 @@ describe("formatStressResult", () => {
       warnings: ["printed parts are weaker across layers", "f3: fillet failed"],
       legend: { min: 2, max: 31.25 },
       yields: false,
-      verdict: { level: "holds", headline: "Holds, about 1.6x safe.", detail: "Weakest at the marked spot." },
+      verdict: { safetyFactor: 1.6, peakPlace: null },
       peakAt: [25.4, 0, 50.8],
       maxDeflection: 1.27,
     });
-    const fails = formatStressResult({ ...reply, safetyFactor: 0.62 }, "mm");
+    const corner =
+      "the peak stress is at a sharp inside corner, stress at a sharp inside corner or where a support ends grows as the mesh is refined, look at the colour away from it";
+    const fails = formatStressResult({ ...reply, safetyFactor: 0.62, warnings: [corner] }, "mm");
     expect({ verdict: fails.verdict, yields: fails.yields, peakAt: fails.peakAt }).toEqual({
-      verdict: {
-        level: "fails",
-        headline: "Likely to fail at the marked spot.",
-        detail: "The load is about 1.7x what it can take.",
-      },
+      verdict: { safetyFactor: 0.62, peakPlace: "corner" },
       yields: true,
       peakAt: [25.4, 0, 50.8],
     });
