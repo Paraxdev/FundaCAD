@@ -55,7 +55,7 @@ const FINISH_SKETCH = "Update not installed, finish the sketch first. Restart & 
 
 function rig(o: { dirty?: boolean; sketchEdits?: boolean } = {}) {
   return {
-    store: { dirty: o.dirty ?? false, fileName: "bracket.funda", onMeta: () => {} },
+    store: { dirty: o.dirty ?? false, fileName: "bracket.funda", onMeta: () => {}, markGivenUp: () => {} },
     sketch: { hasUncommittedEdits: o.sketchEdits ?? false },
   } as unknown as Engine;
 }

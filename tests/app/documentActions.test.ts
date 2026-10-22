@@ -16,7 +16,7 @@ import type { Engine } from "../../src/app/engine";
 function fakeEngine(dirty: boolean, sketchEdits: boolean) {
   const calls: string[] = [];
   const e = {
-    store: { dirty, newDocument: () => calls.push("new") },
+    store: { dirty, newDocument: () => calls.push("new"), markGivenUp: () => calls.push("given up") },
     sketch: { hasUncommittedEdits: sketchEdits },
     viewport: { resetCamera: () => {} },
     geometry: {},
@@ -50,7 +50,7 @@ describe("New", () => {
     const { e, calls } = fakeEngine(false, true);
     choose.mockResolvedValue("discard");
     await createDocumentActions(e).newDocument();
-    expect(calls).toEqual(["new"]);
+    expect(calls).toEqual(["given up", "new"]);
   });
 
   it("does not ask when nothing would be lost", async () => {
@@ -76,13 +76,16 @@ describe("Open", () => {
     expect(await mayReplace()).toBe(true);
     expect(choose).not.toHaveBeenCalled();
 
-    const busy = fakeEngine(false, true).e;
-    await createDocumentActions(busy).openDoc();
+    const busy = fakeEngine(false, true);
+    await createDocumentActions(busy.e).openDoc();
     const ask = openDocument.mock.calls[1]?.[2] as () => Promise<boolean>;
     choose.mockResolvedValue("cancel");
-    expect(await ask()).toBe(false);
+    const cancelled = { asked: await ask(), calls: [...busy.calls] };
     choose.mockResolvedValue("discard");
-    expect(await ask()).toBe(true);
+    expect({ cancelled, discarded: { asked: await ask(), calls: busy.calls } }).toEqual({
+      cancelled: { asked: false, calls: [] },
+      discarded: { asked: true, calls: ["given up"] },
+    });
   });
 });
 
