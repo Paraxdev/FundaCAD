@@ -46,16 +46,47 @@ const MAX_MESSAGE: usize = 512 << 20;
 struct State {
     tracer: Tracer,
     fault: Option<String>,
-    /// The seq of the last frame drawn, which pt_camera answers so the page
+}
+
+/// As in the app: pt_camera leaves its camera for the next frame instead of
+/// waiting for the frame in progress.
+#[derive(Default)]
+struct Aim {
+    camera: Option<Camera>,
+    /// The seq of the last frame started, which pt_camera answers so the page
     /// can tell which camera a frame was traced with.
     drawn: u32,
 }
 
-struct TracerSource(Mutex<State>);
+struct TracerSource {
+    state: Mutex<State>,
+    aim: Mutex<Aim>,
+}
 
 impl TracerSource {
     fn lock(&self) -> MutexGuard<'_, State> {
-        self.0.lock().unwrap_or_else(|p| p.into_inner())
+        self.lock_for(None)
+    }
+
+    /// A frame marks itself started under the camera's lock, so pt_camera's
+    /// answer and the frames that see its camera agree.
+    fn lock_for(&self, frame: Option<u32>) -> MutexGuard<'_, State> {
+        let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
+        let camera = {
+            let mut a = self.aim();
+            if let Some(seq) = frame {
+                a.drawn = seq;
+            }
+            a.camera.take()
+        };
+        if let Some(c) = camera {
+            s.tracer.set_camera(c);
+        }
+        s
+    }
+
+    fn aim(&self) -> MutexGuard<'_, Aim> {
+        self.aim.lock().unwrap_or_else(|p| p.into_inner())
     }
 
     fn name(&self) -> String {
@@ -70,8 +101,7 @@ impl TracerSource {
 
 impl FrameSource for TracerSource {
     fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32) {
-        let mut s = self.lock();
-        s.drawn = seq;
+        let mut s = self.lock_for(Some(seq));
         if s.fault.is_some() {
             out.fill(0);
             return;
@@ -158,7 +188,9 @@ impl Dev {
                 return Err("the native tracer is off (FUNDACAD_TRACER=off)".into());
             }
             let opts = TracerOptions { software: mode == "software", ..Default::default() };
-            Tracer::new(opts).map(|tracer| TracerSource(Mutex::new(State { tracer, fault: None, drawn: 0 }))).map_err(|e| e.to_string())
+            Tracer::new(opts)
+                .map(|tracer| TracerSource { state: Mutex::new(State { tracer, fault: None }), aim: Mutex::default() })
+                .map_err(|e| e.to_string())
         })
     }
 
@@ -211,11 +243,10 @@ impl Dev {
             }
             "pt_camera" => {
                 let c: Camera = arg(args, "camera")?;
-                self.with_state(|s| {
-                    s.tracer.set_camera(c);
-                    s.drawn
-                })
-                .map(Value::from)
+                let t = self.tracer.current().ok_or("the native tracer is not open")?;
+                let mut a = t.aim();
+                a.camera = Some(c);
+                Ok(Value::from(a.drawn))
             }
             "pt_look" => {
                 let l: Look = arg(args, "look")?;
@@ -258,7 +289,7 @@ impl Dev {
         drop(self.open.take());
         let src = self.tracer()?;
         // A new transport counts its frames from 1.
-        src.lock().drawn = 0;
+        src.aim().drawn = 0;
         let source = src.name();
         let token = mint_token().map_err(|e| e.to_string())?;
         let gate = Gate::new(token.clone(), &appenv("EXTRA_ORIGINS").unwrap_or_default());

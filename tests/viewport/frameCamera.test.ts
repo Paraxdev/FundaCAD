@@ -39,6 +39,17 @@ describe("the camera of a native frame", () => {
     expect(eyeX(k.of(6))).toBe(1);
   });
 
+  it("keeps the newest answered camera however many cameras wait for a reply after it", () => {
+    for (const waiting of [0, 1, 63, 64, 199]) {
+      const k = new FrameCameras();
+      k.send(cam(-2.5))(3);
+      const replies = Array.from({ length: waiting }, (_, i) => k.send(cam(10 + i)));
+      expect([eyeX(k.of(4)), eyeX(k.of(900))]).toEqual([-2.5, -2.5]);
+      replies.at(-1)?.(7);
+      expect([eyeX(k.of(4)), eyeX(k.of(8))]).toEqual([-2.5, waiting ? 10 + waiting - 1 : -2.5]);
+    }
+  });
+
   it("counts on past the seq wrapping round", () => {
     const k = new FrameCameras();
     k.send(cam(1))(0xfffffffe);
