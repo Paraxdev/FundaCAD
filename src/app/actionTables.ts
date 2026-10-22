@@ -73,6 +73,7 @@ export const NON_REPEATABLE = new Set([
   "suggest-idea",
   "finish",
   "palette",
+  "construction",
   "fit",
   "reset-camera",
   "iso",
