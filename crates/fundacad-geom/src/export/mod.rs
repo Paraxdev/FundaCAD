@@ -1,9 +1,5 @@
-//! The `export` op, replaces `_export_job`, `_mesh_options`, `_budget_refusal`
-//! and `_budget_warning` of the Python engine's `server.py`, with the writers of
-//! `mesh_writers.py`, `mesh_refine.py`, `exporters.py` and `export_tree.py`.
-//!
-//! Not here yet: the export mesh cache tiers and plugin mesh passes, so the
-//! per face density cap has nothing to bound.
+//! The `export` op, `_export_job` of server.py with the writers of mesh_writers.py, mesh_refine.py, exporters.py
+//! and export_tree.py. Not ported yet: the export mesh cache tiers and plugin mesh passes.
 
 pub mod flat;
 pub mod glb;
@@ -111,11 +107,8 @@ pub fn export_mesh_with(shape: &Shape, opts: &MeshOptions, passes: &[Value]) -> 
 /// Positions closer than this in every coordinate, in mm, are one vertex to `weld`.
 const WELD_QUANTUM: f64 = 1e-6;
 
-/// One vertex per position, so faces that meet share the nodes along their
-/// common edge. `export_mesh` gives every face its own copy of them, and a 3MF
-/// reader connects triangles through shared vertices only, so an unwelded
-/// solid reads as one open patch per face. Triangles the weld collapses are
-/// dropped.
+/// One vertex per position, since a 3MF reader connects triangles only through shared vertices and
+/// `export_mesh` gives each face its own copy. Triangles the weld collapses are dropped.
 pub fn weld(positions: &[f64], indices: &[u32]) -> (Vec<f64>, Vec<u32>) {
     let (out_pos, remap) = weld_vertices(positions);
     let mut out_idx = Vec::with_capacity(indices.len());
@@ -201,10 +194,8 @@ impl Exporter<'_> {
         let shapes: Vec<&Shape> = bodies.iter().map(|b| b.shape).collect();
         let groups = crate::par::share_groups(&shapes);
         let of_group: Vec<usize> = group_index(&groups, bodies.len());
-        // A batch at a time, in body order, because the triangle budget refuses
-        // AT the body that passes it: a whole document meshed up front would
-        // hold the very mesh the budget exists to refuse. One batch of extra
-        // work is the price, and the refusal names the same body and count.
+        // A batch at a time in body order: the triangle budget refuses at the body that passes it, and meshing the
+        // whole document up front would hold the very mesh it refuses. The refusal names the same body and count.
         for batch in (0..bodies.len()).collect::<Vec<_>>().chunks(crate::par::threads().max(1)) {
             let mut sub: Vec<Vec<usize>> = vec![Vec::new(); groups.len()];
             for &i in batch {

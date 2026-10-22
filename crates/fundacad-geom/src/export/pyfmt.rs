@@ -1,6 +1,5 @@
-//! Python's float and JSON text, so the writers produce the Python engine's bytes:
-//! `format(x, ".6e")`, `format(x, ".6g")`, `repr(float)` and `json.dumps`
-//! with its default `ensure_ascii`.
+//! Python's float and JSON text, so the writers produce the Python engine's bytes: `format(x, ".6e")`,
+//! `format(x, ".6g")`, `repr(float)` and `json.dumps` with its default `ensure_ascii`.
 
 use std::fmt::Write;
 

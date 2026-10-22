@@ -1,10 +1,5 @@
-//! Not rebuilding what has not changed, the Python engine's `rebuild_cache.py` and the
-//! `rebuild_cached` half of builder.py, over the store of geomstore.py.
-//!
-//! Two tiers resume a rebuild at the longest unchanged prefix of chain keys:
-//! a ring of per-feature snapshots in this process, and disk checkpoints that
-//! outlive it. Built payloads are kept the same two ways. Every hit is counted
-//! in `CacheStats`, which is also logged the way the Python engine logs it.
+//! Not rebuilding what has not changed, rebuild_cache.py and `rebuild_cached`. A rebuild resumes at the longest
+//! unchanged chain key prefix from an in process snapshot ring or a disk checkpoint, payloads are kept likewise.
 
 pub mod checkpoint;
 pub mod keys;
@@ -163,10 +158,8 @@ impl RebuildCache {
         let mut source = Source::Full;
         let mut modified = Modified::new();
 
-        // Never resume PAST the first sketch that projects: an unapplied
-        // projection update is not derivable from the document, so that sketch
-        // runs again. The RAM tier may pass the cap when the previous build of
-        // this prefix emitted no updates at all, a quiet proof.
+        // Never resume past the first sketch that projects, its unapplied update is not derivable from the document.
+        // The RAM tier may pass the cap when this prefix's previous build emitted no updates at all.
         let cap = projection_cap(raw);
         let mut common = keys.iter().zip(&self.ring_keys).take_while(|(a, b)| a == b).count();
         if let Some(cap) = cap {
@@ -236,9 +229,8 @@ impl RebuildCache {
         let built = builder::rebuild_from(doc, raw, watch, resume, &mut tap);
         let elapsed = began.elapsed();
 
-        // A blob that arrived, or was dropped as corrupt, while this built: the
-        // keys no longer say what the imports read, so nothing is kept under
-        // them, the checkpoints a cancelled build left included.
+        // A blob arrived or was dropped as corrupt during this build, so the keys no longer say what the imports
+        // read and nothing is kept under them, including the checkpoints a cancelled build left.
         if absent_geometry(raw) != absent {
             let replayed = std::mem::take(&mut tap.replayed);
             drop(tap);
@@ -371,10 +363,8 @@ fn projection_cap(raw: &Value) -> Option<usize> {
     })
 }
 
-/// Frees `old` on a background thread. The snapshots of a big build hold every
-/// body after every feature, and freeing them took 0.6 s at 1,000 bodies, all of
-/// it in front of the reply of the next document's rebuild. OCCT handle counts
-/// are atomic, so a shape still shared with the kept ring is safe to release here.
+/// Frees `old` on a background thread: dropping a big build's snapshots took 0.6 s at 1,000 bodies, all in
+/// front of the next reply. OCCT handle counts are atomic, so shapes still shared with the ring are safe.
 fn reap<T: Send + 'static>(old: T) {
     type Garbage = Box<dyn Send>;
     static REAPER: OnceLock<Option<Mutex<mpsc::Sender<Garbage>>>> = OnceLock::new();

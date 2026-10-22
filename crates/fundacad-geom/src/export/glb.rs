@@ -1,6 +1,4 @@
-//! Binary glTF 2.0, one node, mesh and material per body, replaces
-//! `write_glb`, `_vertex_normals`, `_base_color_factor` and `norm_color` of
-//! the Python engine's `mesh_writers.py`.
+//! Binary glTF 2.0, one node, mesh and material per body, `write_glb` and its helpers of mesh_writers.py.
 
 use std::io::{self, Write};
 use std::path::Path;
