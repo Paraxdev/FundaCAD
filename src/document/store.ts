@@ -2427,7 +2427,6 @@ export class DocumentStore {
     const carried = this.carriedSections;
     this.load(JSON.stringify(snapshot), { replace: true });
     this.carriedSections = carried;
-    this.repo = repo;
     this.emitMeta();
   }
 
@@ -2445,10 +2444,9 @@ export class DocumentStore {
     if (!repo) return;
     const was = repo.current;
     const head = switchVersionBranch(repo, name);
-    // this.repo, not repo: a live session's replacing load since then brings its own copy of the versions.
     const onto = (branch: string) => {
-      if (!this.repo?.branches[branch]) return;
-      this.repo.current = branch;
+      if (!repo.branches[branch]) return;
+      repo.current = branch;
       this.emitMeta();
     };
     this.undoAsOne(() => {
@@ -2461,7 +2459,7 @@ export class DocumentStore {
   }
   /** Open a document, with a history of its own. `replace` is for putting
    *  another state of the SAME document in place (a version, an assistant's or a
-   *  plugin's edit), which stays one undoable step. */
+   *  plugin's edit), which stays one undoable step and leaves the versions alone. */
   load(json: string, opts: { replace?: boolean } = {}) {
     let raw: unknown;
     try {
@@ -2482,11 +2480,14 @@ export class DocumentStore {
     if (!replaced) this.undoStack = [];
     this.redoStack = [];
     this.rearmProjectionValve(); // valve state must never cross documents
-    this.repo = normalizeRepo(parsed.versions);
-    this.unreadSections = parsed.versions != null && !this.repo ? { versions: structuredClone(parsed.versions) } : {};
+    // The versions are the open file's history, which a replacing load's copy may lack or hold stale or foreign.
+    if (!opts.replace) {
+      this.repo = normalizeRepo(parsed.versions);
+      this.unreadSections = parsed.versions != null && !this.repo ? { versions: structuredClone(parsed.versions) } : {};
+    }
     this.openedVersion = typeof parsed.version === "number" ? parsed.version : 1;
-    // A replacing load sharing no feature with this one is a different document
-    // after all, and sections it did not come with must not be saved into it.
+    // The .fundab sections this version cannot read may describe the content that a replacing
+    // load sharing no feature with it took out, so they are not saved with what came in.
     if (!opts.replace || !sharesAFeature(this.doc.features, parsed.features ?? [])) this.carriedSections = [];
     this.readProjectState(parsed);
     this.doc = {
