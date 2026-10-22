@@ -36,9 +36,7 @@ impl DocState {
         }
         if let Some(len) = ops.get("length").and_then(Value::as_u64) {
             let len = len as usize;
-            let feats = doc
-                .entry("features")
-                .or_insert_with(|| Value::Array(vec![]));
+            let feats = doc.entry("features").or_insert_with(|| Value::Array(vec![]));
             if let Value::Array(a) = feats {
                 a.resize(len, Value::Null);
             }
@@ -57,8 +55,7 @@ impl DocState {
                 }
             }
         }
-        let hole =
-            matches!(doc.get("features"), Some(Value::Array(a)) if a.iter().any(Value::is_null));
+        let hole = matches!(doc.get("features"), Some(Value::Array(a)) if a.iter().any(Value::is_null));
         if hole {
             self.doc = None;
             return None;

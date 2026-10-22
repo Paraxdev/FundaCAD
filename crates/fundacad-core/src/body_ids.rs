@@ -41,12 +41,7 @@ pub struct BodyIds {
 impl BodyIds {
     /// `recorded` is the document's `bodyIds`, `None` for a document without one.
     pub fn new(recorded: Option<IndexMap<String, String>>) -> Self {
-        let floor = recorded
-            .iter()
-            .flat_map(|m| m.values())
-            .map(|v| number(v))
-            .max()
-            .unwrap_or(0);
+        let floor = recorded.iter().flat_map(|m| m.values()).map(|v| number(v)).max().unwrap_or(0);
         BodyIds {
             recorded,
             floor,
@@ -83,24 +78,17 @@ impl BodyIds {
     /// `inherit` and keeps it, unless the map recorded a different id for it.
     pub fn assign(&mut self, key: &str, inherit: Option<&str>) -> String {
         let inherit = inherit.filter(|i| !i.is_empty());
-        let chosen = self
-            .recorded
-            .as_ref()
-            .and_then(|rec| match (inherit, rec.get(key)) {
-                (Some(i), None) => Some(i.to_owned()),
-                (Some(i), Some(r)) if r == i => Some(i.to_owned()),
-                (_, Some(r)) if !r.is_empty() && !self.taken.contains(r) => Some(r.clone()),
-                _ => None,
-            });
+        let chosen = self.recorded.as_ref().and_then(|rec| match (inherit, rec.get(key)) {
+            (Some(i), None) => Some(i.to_owned()),
+            (Some(i), Some(r)) if r == i => Some(i.to_owned()),
+            (_, Some(r)) if !r.is_empty() && !self.taken.contains(r) => Some(r.clone()),
+            _ => None,
+        });
         let id = chosen.unwrap_or_else(|| format!("body{}", self.top.max(self.floor) + 1));
         self.top = self.top.max(number(&id));
         self.taken.insert(id.clone());
         self.keys.insert(key.to_owned());
-        self.events.push(Event {
-            key: key.to_owned(),
-            inherit: inherit.map(str::to_owned),
-            id: id.clone(),
-        });
+        self.events.push(Event { key: key.to_owned(), inherit: inherit.map(str::to_owned), id: id.clone() });
         id
     }
 
@@ -115,9 +103,7 @@ impl BodyIds {
     /// Replays a cached prefix under this document's map. False when the map
     /// would now number that prefix differently, so the cache cannot be used.
     pub fn restore(&mut self, events: &[Event]) -> bool {
-        events
-            .iter()
-            .all(|e| self.assign(&e.key, e.inherit.as_deref()) == e.id)
+        events.iter().all(|e| self.assign(&e.key, e.inherit.as_deref()) == e.id)
     }
 
     pub fn resulting_map(&self) -> IndexMap<String, String> {
@@ -130,8 +116,7 @@ impl BodyIds {
 }
 
 fn join_targets(f: &Value) -> Option<&Value> {
-    (f.get("operation").and_then(Value::as_str) == Some("join"))
-        .then(|| f.get("targets").unwrap_or(&Value::Null))
+    (f.get("operation").and_then(Value::as_str) == Some("join")).then(|| f.get("targets").unwrap_or(&Value::Null))
 }
 
 /// Whether `key` is one `BodyIds::key` gave a body of `feature_id`.

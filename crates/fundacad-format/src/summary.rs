@@ -70,16 +70,9 @@ impl<'de> Deserialize<'de> for Pairs {
 /// The first of `names` in the order a JavaScript object lists its keys: whole
 /// number keys first, smallest first, then the rest as written.
 fn first_js_key<'a>(names: impl Iterator<Item = &'a String>) -> Option<&'a String> {
-    let index = |k: &str| {
-        k.parse::<u32>().ok().filter(|n| *n != u32::MAX && n.to_string() == k)
-    };
+    let index = |k: &str| k.parse::<u32>().ok().filter(|n| *n != u32::MAX && n.to_string() == k);
     let names: Vec<&String> = names.collect();
-    names
-        .iter()
-        .filter_map(|k| index(k).map(|n| (n, *k)))
-        .min()
-        .map(|(_, k)| k)
-        .or_else(|| names.first().copied())
+    names.iter().filter_map(|k| index(k).map(|n| (n, *k))).min().map(|(_, k)| k).or_else(|| names.first().copied())
 }
 
 #[derive(Deserialize)]
@@ -158,12 +151,8 @@ fn summarise(format: &'static str, head: Head) -> Summary {
         .collect();
     let first = first_js_key(pairs.iter().map(|(name, _)| name)).cloned();
     let branches: BTreeMap<String, String> = pairs.into_iter().collect();
-    let current = repo
-        .current
-        .ok()
-        .filter(|c| branches.contains_key(c))
-        .or(first)
-        .unwrap_or_else(|| MAIN_BRANCH.into());
+    let current =
+        repo.current.ok().filter(|c| branches.contains_key(c)).or(first).unwrap_or_else(|| MAIN_BRANCH.into());
     Summary { format, versions, branches, current }
 }
 
@@ -245,7 +234,11 @@ mod tests {
     /// The document with a large geometry map after it, as the app writes an import.
     fn with_geometry(doc: &str) -> String {
         let blob = "QUJD".repeat(250_000);
-        format!("{},\n  \"geometry\": {{ \"{}\": \"{blob}\" }}\n}}", doc.trim_end().trim_end_matches('}'), "0".repeat(32))
+        format!(
+            "{},\n  \"geometry\": {{ \"{}\": \"{blob}\" }}\n}}",
+            doc.trim_end().trim_end_matches('}'),
+            "0".repeat(32)
+        )
     }
 
     #[test]
@@ -296,7 +289,10 @@ mod tests {
     #[test]
     fn rows_of_the_wrong_shape_are_read_as_the_app_reads_them() {
         let row = r#"{ "id": "v1", "parent": 4, "branch": "main", "tree": { "features": [], "rest": "r" } }"#;
-        let s = summary_of("parent", &format!(r#"{{ "versions": {{ "versions": [{row}], "branches": {{ "main": "v1" }} }} }}"#));
+        let s = summary_of(
+            "parent",
+            &format!(r#"{{ "versions": {{ "versions": [{row}], "branches": {{ "main": "v1" }} }} }}"#),
+        );
         assert_eq!(s.versions.len(), 1);
         assert_eq!(s.versions[0].parent, None);
         for repo in [r#""versions": 3"#, r#""versions": { "versions": {}, "branches": [] }"#] {
@@ -310,7 +306,12 @@ mod tests {
     fn with_no_current_branch_the_first_in_the_file_is_taken() {
         let row = |id: &str| format!(r#"{{ "id": "{id}", "branch": "b", "tree": {{ "features": [], "rest": "r" }} }}"#);
         let doc = |branches: &str| {
-            format!(r#"{{ "versions": {{ "versions": [{}, {}, {}], "branches": {{ {branches} }} }} }}"#, row("v1"), row("v2"), row("v3"))
+            format!(
+                r#"{{ "versions": {{ "versions": [{}, {}, {}], "branches": {{ {branches} }} }} }}"#,
+                row("v1"),
+                row("v2"),
+                row("v3")
+            )
         };
         assert_eq!(summary_of("order", &doc(r#""zeta": "v1", "alpha": "v2""#)).current, "zeta");
         assert_eq!(summary_of("index", &doc(r#""zeta": "v1", "10": "v2", "2": "v3""#)).current, "2");

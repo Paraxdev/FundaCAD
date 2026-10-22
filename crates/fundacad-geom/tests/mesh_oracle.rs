@@ -10,17 +10,8 @@ use std::path::PathBuf;
 #[path = "support/soup.rs"]
 mod soup;
 
-const FIXTURES: [&str; 9] = [
-    "box",
-    "box_minus_cylinder",
-    "filleted_box",
-    "sphere",
-    "cone",
-    "torus",
-    "revolved",
-    "thin_shell",
-    "two_solids",
-];
+const FIXTURES: [&str; 9] =
+    ["box", "box_minus_cylinder", "filleted_box", "sphere", "cone", "torus", "revolved", "thin_shell", "two_solids"];
 
 fn dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/mesh_oracle")
@@ -36,17 +27,9 @@ fn stats(pos: &[f32], idx: &[u32]) -> (f64, f64) {
         let (a, b, c) = (p(t[0]), p(t[1]), p(t[2]));
         let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
         let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-        let cr = [
-            u[1] * v[2] - u[2] * v[1],
-            u[2] * v[0] - u[0] * v[2],
-            u[0] * v[1] - u[1] * v[0],
-        ];
+        let cr = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
         area += (cr[0] * cr[0] + cr[1] * cr[1] + cr[2] * cr[2]).sqrt() / 2.0;
-        let bc = [
-            b[1] * c[2] - b[2] * c[1],
-            b[2] * c[0] - b[0] * c[2],
-            b[0] * c[1] - b[1] * c[0],
-        ];
+        let bc = [b[1] * c[2] - b[2] * c[1], b[2] * c[0] - b[0] * c[2], b[0] * c[1] - b[1] * c[0]];
         vol += (a[0] * bc[0] + a[1] * bc[1] + a[2] * bc[2]) / 6.0;
     }
     (vol, area)
@@ -61,27 +44,14 @@ fn viewport_mesh_matches_the_python_payload() {
     let mut failures = Vec::new();
     for name in FIXTURES {
         let text = std::fs::read_to_string(dir().join(format!("{name}.brep"))).unwrap();
-        let want: Value = serde_json::from_str(
-            &std::fs::read_to_string(dir().join(format!("{name}.json"))).unwrap(),
-        )
-        .unwrap();
+        let want: Value =
+            serde_json::from_str(&std::fs::read_to_string(dir().join(format!("{name}.json"))).unwrap()).unwrap();
         let shape = mesh_access::read_brep_str(&text).expect("fixture BREP reads");
-        let got = mesh::body_payload(
-            &shape,
-            name,
-            name,
-            f(&want["requested"]),
-            mesh::viewport_profile(1),
-        );
+        let got = mesh::body_payload(&shape, name, name, f(&want["requested"]), mesh::viewport_profile(1));
         let mut fail = |what: String| failures.push(format!("{name}: {what}"));
 
         let keys: Vec<&str> = got.fields.keys().skip(3).map(String::as_str).collect();
-        let want_keys: Vec<&str> = want["keys"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|k| k.as_str().unwrap())
-            .collect();
+        let want_keys: Vec<&str> = want["keys"].as_array().unwrap().iter().map(|k| k.as_str().unwrap()).collect();
         if keys != want_keys {
             fail(format!("keys {keys:?} vs {want_keys:?}"));
         }
@@ -94,40 +64,17 @@ fn viewport_mesh_matches_the_python_payload() {
             fail(format!("faceOwners {owners} vs {}", want["faces"]));
         }
         if got.edges.len() as u64 != want["edgeCount"].as_u64().unwrap() {
-            fail(format!(
-                "edges {} vs {}",
-                got.edges.len(),
-                want["edgeCount"]
-            ));
+            fail(format!("edges {} vs {}", got.edges.len(), want["edgeCount"]));
         }
-        let smooth: Vec<u64> = got
-            .edges
-            .iter()
-            .enumerate()
-            .filter(|(_, e)| e.smooth)
-            .map(|(i, _)| i as u64)
-            .collect();
-        let want_smooth: Vec<u64> = want["smooth"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|v| v.as_u64().unwrap())
-            .collect();
+        let smooth: Vec<u64> = got.edges.iter().enumerate().filter(|(_, e)| e.smooth).map(|(i, _)| i as u64).collect();
+        let want_smooth: Vec<u64> = want["smooth"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
         if smooth != want_smooth {
             fail(format!("smooth {smooth:?} vs {want_smooth:?}"));
         }
         let edge_points: Vec<u64> = got.edges.iter().map(|e| e.points.len() as u64).collect();
-        let want_points: Vec<u64> = want["edgePoints"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|v| v.as_u64().unwrap())
-            .collect();
-        let points_off = edge_points
-            .iter()
-            .zip(&want_points)
-            .filter(|(a, b)| a != b)
-            .count();
+        let want_points: Vec<u64> =
+            want["edgePoints"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+        let points_off = edge_points.iter().zip(&want_points).filter(|(a, b)| a != b).count();
 
         let flat = soup::flat_triangles(&got.positions, &got.indices);
         if !flat.is_empty() {
@@ -157,12 +104,7 @@ fn viewport_mesh_matches_the_python_payload() {
             fail(format!("bbox off by {bbox_err}"));
         }
 
-        let tris: Vec<u64> = want["trisPerFace"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|v| v.as_u64().unwrap())
-            .collect();
+        let tris: Vec<u64> = want["trisPerFace"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
         let mut got_tris = vec![0u64; face_count as usize];
         for &fid in &got.face_ids {
             got_tris[fid as usize] += 1;
@@ -190,10 +132,7 @@ fn viewport_mesh_matches_the_python_payload() {
                 }
                 for &v in t {
                     let i = v as usize * 3;
-                    let d = (0..3)
-                        .map(|k| (got.positions[i + k] as f64 - pt[k]).powi(2))
-                        .sum::<f64>()
-                        .sqrt();
+                    let d = (0..3).map(|k| (got.positions[i + k] as f64 - pt[k]).powi(2)).sum::<f64>().sqrt();
                     if d < best.0 {
                         best = (d, v as usize);
                     }
@@ -207,9 +146,7 @@ fn viewport_mesh_matches_the_python_payload() {
             worst_dist = worst_dist.max(best.0);
         }
         if worst_deg > 1.0 {
-            fail(format!(
-                "normal off by {worst_deg} degrees (nearest vertex {worst_dist})"
-            ));
+            fail(format!("normal off by {worst_deg} degrees (nearest vertex {worst_dist})"));
         }
         let total: u64 = tris.iter().sum();
         eprintln!(

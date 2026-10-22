@@ -33,11 +33,9 @@ fn sort_key(v: &Value, fields: &[&str]) -> String {
     fields
         .iter()
         .map(|f| match &v[*f] {
-            Value::Array(a) => a
-                .iter()
-                .map(|x| format!("{:.3}", x.as_f64().unwrap_or(0.0) + 0.0))
-                .collect::<Vec<_>>()
-                .join(","),
+            Value::Array(a) => {
+                a.iter().map(|x| format!("{:.3}", x.as_f64().unwrap_or(0.0) + 0.0)).collect::<Vec<_>>().join(",")
+            }
             Value::Number(n) => format!("{:.3}", n.as_f64().unwrap_or(0.0)),
             other => other.to_string(),
         })
@@ -269,10 +267,8 @@ fn a_summary_counts_without_measuring_and_places_shared_shapes() {
     let turned = kernel::translated(&kernel::rotated(&cyl, [90.0, 0.0, 0.0]).unwrap(), [7.0, 3.0, 1.0]).unwrap();
     let tilted = kernel::rotated(&cyl, [30.0, 20.0, 0.0]).unwrap();
     let shapes = [&cyl, &turned, &tilted];
-    let bodies: Vec<inspect::InspectBody> = shapes
-        .iter()
-        .map(|s| inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(*s) })
-        .collect();
+    let bodies: Vec<inspect::InspectBody> =
+        shapes.iter().map(|s| inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(*s) }).collect();
     for _ in 0..2 {
         let rep = inspect::inspect_bodies_at(&bodies, inspect::Level::Summary, 400, 800).unwrap();
         for (r, s) in rep.iter().zip(shapes) {
@@ -290,10 +286,23 @@ fn a_summary_counts_without_measuring_and_places_shared_shapes() {
             assert_eq!(r["openEdges"], json!([]));
             assert!(r.get("faces").is_none());
         }
-        let com = |i: usize| rep[i]["centerOfMass"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect::<Vec<_>>();
-        let want = kernel::translated(&kernel::rotated(&kernel::make_cylinder(5.0, 10.0).unwrap(), [90.0, 0.0, 0.0]).unwrap(), [7.0, 3.0, 1.0]).unwrap();
-        let plain = inspect::inspect_bodies(&[inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(&want) }], false, 400, 800).unwrap();
-        let expect: Vec<f64> = plain[0]["centerOfMass"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+        let com = |i: usize| {
+            rep[i]["centerOfMass"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect::<Vec<_>>()
+        };
+        let want = kernel::translated(
+            &kernel::rotated(&kernel::make_cylinder(5.0, 10.0).unwrap(), [90.0, 0.0, 0.0]).unwrap(),
+            [7.0, 3.0, 1.0],
+        )
+        .unwrap();
+        let plain = inspect::inspect_bodies(
+            &[inspect::InspectBody { id: json!("b"), name: json!("B"), shape: Some(&want) }],
+            false,
+            400,
+            800,
+        )
+        .unwrap();
+        let expect: Vec<f64> =
+            plain[0]["centerOfMass"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
         for (g, w) in com(1).iter().zip(&expect) {
             assert!((g - w).abs() < 1e-6, "{:?} vs {expect:?}", com(1));
         }

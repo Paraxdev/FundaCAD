@@ -168,7 +168,8 @@ fn channel(props: &[Property], row: &[f64], names: [&str; 3]) -> Option<[u8; 3]>
 }
 
 fn color_of(props: &[Property], row: &[f64]) -> Option<[u8; 3]> {
-    channel(props, row, ["red", "green", "blue"]).or_else(|| channel(props, row, ["diffuse_red", "diffuse_green", "diffuse_blue"]))
+    channel(props, row, ["red", "green", "blue"])
+        .or_else(|| channel(props, row, ["diffuse_red", "diffuse_green", "diffuse_blue"]))
 }
 
 pub fn read_ply(data: &[u8]) -> Result<MeshObject, String> {
@@ -202,7 +203,8 @@ pub fn read_ply(data: &[u8]) -> Result<MeshObject, String> {
         if is_vertex && xyz.is_none() {
             return Err(bad("its vertices have no x, y and z"));
         }
-        let corners = e.props.iter().position(|p| p.list.is_some() && (p.name == "vertex_indices" || p.name == "vertex_index"));
+        let corners =
+            e.props.iter().position(|p| p.list.is_some() && (p.name == "vertex_indices" || p.name == "vertex_index"));
         if is_vertex {
             verts.reserve(e.count);
         }

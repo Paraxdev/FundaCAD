@@ -29,7 +29,11 @@ fn boxes(t: &mut Tracer, size: (u32, u32), boxes: &[([f32; 3], [f32; 3])]) {
     look.lights = None;
     t.set_look(look);
     let m = common::matte([0.8, 0.8, 0.8]);
-    let bodies = boxes.iter().enumerate().map(|(i, (at, _))| common::place(&format!("b{i}"), &format!("box{i}"), 1.0, *at, m.clone())).collect();
+    let bodies = boxes
+        .iter()
+        .enumerate()
+        .map(|(i, (at, _))| common::place(&format!("b{i}"), &format!("box{i}"), 1.0, *at, m.clone()))
+        .collect();
     for key in t.set_bodies(bodies) {
         let i: usize = key[3..].parse().unwrap();
         let h = boxes[i].1;
@@ -50,7 +54,10 @@ fn profile(t: &Tracer) -> Vec<f32> {
     let hdr = t.read_hdr();
     let rows = h / 2 - 4..h / 2 + 4;
     (0..w)
-        .map(|x| rows.clone().map(|y| hdr[(y * w + x) as usize]).map(|v| (v[0] + v[1] + v[2]) / 3.0).sum::<f32>() / rows.len() as f32)
+        .map(|x| {
+            rows.clone().map(|y| hdr[(y * w + x) as usize]).map(|v| (v[0] + v[1] + v[2]) / 3.0).sum::<f32>()
+                / rows.len() as f32
+        })
         .collect()
 }
 
@@ -77,7 +84,13 @@ fn an_ortho_front_view_keeps_near_and_far_widths_equal() {
     // the eye, the last one behind it, 16 px per unit.
     let (w, h) = (128u32, 96u32);
     let cubes = [([-2.5, 0.0, 0.0], [1.0; 3]), ([0.0, -20.0, 0.0], [1.0; 3]), ([2.5, 60.0, 0.0], [1.0; 3])];
-    let cam = Camera { eye: [0.0, -10.0, 0.0], target: [0.0; 3], up: [0.0, 0.0, 1.0], ortho: Some(Ortho { half_height: 3.0 }), ..Default::default() };
+    let cam = Camera {
+        eye: [0.0, -10.0, 0.0],
+        target: [0.0; 3],
+        up: [0.0, 0.0, 1.0],
+        ortho: Some(Ortho { half_height: 3.0 }),
+        ..Default::default()
+    };
     for mut t in tracers() {
         boxes(&mut t, (w, h), &cubes);
         render(&mut t, cam, 64);
@@ -94,7 +107,11 @@ fn an_ortho_front_view_keeps_near_and_far_widths_equal() {
         // From a view plane behind every body, so the denoiser's relative
         // depth test sees steps of the model's size.
         assert!(d.iter().all(|&x| x > 0.0 && x < 100.0), "{:?}: ortho depth {d:?}", t.path());
-        assert!((d[2] - d[0] - 60.0).abs() < 0.1 && (d[0] - d[1] - 20.0).abs() < 0.1, "{:?}: ortho depth {d:?}", t.path());
+        assert!(
+            (d[2] - d[0] - 60.0).abs() < 0.1 && (d[0] - d[1] - 20.0).abs() < 0.1,
+            "{:?}: ortho depth {d:?}",
+            t.path()
+        );
     }
 }
 
@@ -103,7 +120,8 @@ fn a_lens_keeps_the_focus_plane_sharp_and_blurs_with_distance() {
     // Edges at 9 (in focus), 19 and 39 units along the view, each where the
     // box's side face stays hidden: the near box's left, the others' right.
     let (w, h) = (256u32, 192u32);
-    let cubes = [([-2.5, 0.0, 0.0], [1.0, 1.0, 3.0]), ([0.0, 10.0, 0.0], [1.0, 1.0, 3.0]), ([9.0, 30.0, 0.0], [2.0, 1.0, 3.0])];
+    let cubes =
+        [([-2.5, 0.0, 0.0], [1.0, 1.0, 3.0]), ([0.0, 10.0, 0.0], [1.0, 1.0, 3.0]), ([9.0, 30.0, 0.0], [2.0, 1.0, 3.0])];
     let pin = Camera { eye: [0.0, -10.0, 0.0], target: [0.0; 3], up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() };
     let r = 0.3;
     let lens = Camera { lens: Some(Lens { focus_distance: 9.0, aperture_radius: r }), ..pin };
@@ -114,7 +132,15 @@ fn a_lens_keeps_the_focus_plane_sharp_and_blurs_with_distance() {
         let p = profile(t);
         let back: Vec<f32> = p.iter().rev().copied().collect();
         let n = p.len() - 1;
-        edges.map(|(e, inside, falls)| if falls { rise(&back, n - e, mean(&p, inside, 4)) } else { rise(&p, e, mean(&p, inside, 4)) })
+        edges.map(
+            |(e, inside, falls)| {
+                if falls {
+                    rise(&back, n - e, mean(&p, inside, 4))
+                } else {
+                    rise(&p, e, mean(&p, inside, 4))
+                }
+            },
+        )
     };
     for mut t in tracers() {
         boxes(&mut t, (w, h), &cubes);
@@ -142,6 +168,8 @@ fn a_camera_payload_without_ortho_or_lens_still_parses() {
     .unwrap();
     assert_eq!(new.ortho, Some(Ortho { half_height: 2.5 }));
     assert_eq!(new.lens, Some(Lens { focus_distance: 120.0, aperture_radius: 1.5 }));
-    let nulls: Camera = serde_json::from_str(r#"{"eye":[1,2,3],"target":[0,0,0],"up":[0,0,1],"fov":40,"ortho":null,"lens":null}"#).unwrap();
+    let nulls: Camera =
+        serde_json::from_str(r#"{"eye":[1,2,3],"target":[0,0,0],"up":[0,0,1],"fov":40,"ortho":null,"lens":null}"#)
+            .unwrap();
     assert_eq!((nulls.ortho, nulls.lens), (None, None));
 }

@@ -95,18 +95,13 @@ fn the_old_macos_log_is_kept_as_the_first_rotated_one() {
     fs::write(dir.join("fundacad.old.log"), "older build\n").unwrap();
     fs::write(dir.join(NAME), "last run\n").unwrap();
     start_run(&dir, CAP, "this run");
-    assert_eq!(
-        listing(&dir),
-        pairs(&[("fundacad.1.log", "older build\n"), (NAME, "last run\nthis run\n")])
-    );
+    assert_eq!(listing(&dir), pairs(&[("fundacad.1.log", "older build\n"), (NAME, "last run\nthis run\n")]));
     start_run(&dir, 8, "next run");
     assert_eq!(
         listing(&dir),
-        pairs(&[
-            ("fundacad.1.log", "last run\nthis run\n"),
-            ("fundacad.2.log", "older build\n"),
-            (NAME, "next run\n"),
-        ])
+        pairs(
+            &[("fundacad.1.log", "last run\nthis run\n"), ("fundacad.2.log", "older build\n"), (NAME, "next run\n"),]
+        )
     );
     fs::remove_dir_all(dir.parent().unwrap()).unwrap();
 }
@@ -193,7 +188,8 @@ fn a_run_past_the_cap_moves_on_to_a_fresh_log_and_keeps_the_last_three() {
         [NAME, "fundacad.1.log", "fundacad.2.log"].map(|n| marked(&dir.join(n))),
         [fourth, vec![format!("[t] third {}", "z".repeat(200))], vec![format!("[t] second {}", "y".repeat(200))]]
     );
-    let mut names: Vec<String> = fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+    let mut names: Vec<String> =
+        fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
     names.sort();
     assert_eq!(names, ["fundacad.1.log", "fundacad.2.log", "fundacad.log"]);
     fs::remove_dir_all(dir.parent().unwrap()).unwrap();
@@ -262,7 +258,10 @@ fn user_names_in_paths_are_hidden() {
         ("path /home/alice/proj/x.py and /Users/bob/y", "path /home/[REDACTED]/proj/x.py and /Users/[REDACTED]/y"),
         (r#"log at "C:\Users\name" end"#, r#"log at "C:\Users\[REDACTED]" end"#),
         (r"c:\users\John Smith\Documents\bracket.funda", r"c:\users\[REDACTED]\Documents\bracket.funda"),
-        ("İstanbul C:\\Users\\Ümit\\x and C:/Users/user/y", "İstanbul C:\\Users\\[REDACTED]\\x and C:/Users/[REDACTED]/y"),
+        (
+            "İstanbul C:\\Users\\Ümit\\x and C:/Users/user/y",
+            "İstanbul C:\\Users\\[REDACTED]\\x and C:/Users/[REDACTED]/y",
+        ),
         ("home C:\\Users\\bob\nnext /home/carol", "home C:\\Users\\[REDACTED]\nnext /home/[REDACTED]"),
         (r"C:\Users\\x and C:\Users\", r"C:\Users\\x and C:\Users\"),
         ("no paths here", "no paths here"),

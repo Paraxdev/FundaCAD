@@ -34,8 +34,8 @@ pub fn rebuild_request(req: &Map<String, Value>, watch: &dyn Watch) -> Result<(V
     let Some(doc) = req.get("document") else {
         return Err(error_result("'document'"));
     };
-    let typed: CadDocument = CadDocument::from_value_lenient(doc)
-        .map_err(|e| error_result(&format!("the document does not parse: {e}")))?;
+    let typed: CadDocument =
+        CadDocument::from_value_lenient(doc).map_err(|e| error_result(&format!("the document does not parse: {e}")))?;
     // Through the rebuild's own cache: an inspect right after a build of the
     // same document replays nothing, where a cold rebuild of an import is
     // most of a minute.
@@ -96,11 +96,7 @@ fn face_entry(
     body_id: &Value,
 ) -> builder::FResult<Value> {
     let fp = face_fingerprint(face)?;
-    let mut neighbors: Vec<usize> = adj
-        .neighbors(adj.index_of(face))
-        .into_iter()
-        .filter_map(renum)
-        .collect();
+    let mut neighbors: Vec<usize> = adj.neighbors(adj.index_of(face)).into_iter().filter_map(renum).collect();
     neighbors.sort_unstable();
     let mut e = Map::new();
     e.insert("i".into(), json!(i));
@@ -112,10 +108,7 @@ fn face_entry(
     e.insert("neighbors".into(), json!(neighbors));
     let point = sa::distance_to_point(face, vec3(&fp["centroid"])).map(|(_, p)| p);
     let radius = fp.get("radius").and_then(Value::as_f64);
-    e.insert(
-        "selector".into(),
-        json!({"kind": "face", "by": "match", "fp": fp, "body": body_id}),
-    );
+    e.insert("selector".into(), json!({"kind": "face", "by": "match", "fp": fp, "body": body_id}));
     if let Some(p) = point {
         e.insert("point".into(), r3(p));
     }
@@ -146,10 +139,7 @@ fn edge_entry(
     e.insert("faces".into(), json!(faces));
     let radius = fp.get("radius").and_then(Value::as_f64);
     let center = fp.get("center").map(vec3);
-    e.insert(
-        "selector".into(),
-        json!({"kind": "edge", "by": "match", "fp": fp, "body": body_id}),
-    );
+    e.insert("selector".into(), json!({"kind": "edge", "by": "match", "fp": fp, "body": body_id}));
     if faces.len() == 2 && faces[0] == faces[1] {
         e.insert("seam".into(), json!(true));
     } else if faces.len() == 1 && adj.lies_inside(edge) {
@@ -202,9 +192,10 @@ struct Local {
 }
 
 fn union(boxes: impl IntoIterator<Item = Option<[f64; 6]>>) -> Option<[f64; 6]> {
-    boxes.into_iter().flatten().reduce(|a, b| {
-        [a[0].min(b[0]), a[1].min(b[1]), a[2].min(b[2]), a[3].max(b[3]), a[4].max(b[4]), a[5].max(b[5])]
-    })
+    boxes
+        .into_iter()
+        .flatten()
+        .reduce(|a, b| [a[0].min(b[0]), a[1].min(b[1]), a[2].min(b[2]), a[3].max(b[3]), a[4].max(b[4]), a[5].max(b[5])])
 }
 
 fn face_box(face: &Shape) -> Option<[f64; 6]> {
@@ -384,9 +375,8 @@ fn placed_boxes(
                 (_, None) => None,
                 (None, b) => b,
                 (Some(m), Some(b)) => permuted_box(m, &b).or_else(|| {
-                    let known = shapes[i]
-                        .and_then(|s| cache.entries.get(&local_key(s)))
-                        .and_then(|e| e.placed.get(&bits(m)));
+                    let known =
+                        shapes[i].and_then(|s| cache.entries.get(&local_key(s))).and_then(|e| e.placed.get(&bits(m)));
                     if known.is_none() {
                         again.push(i);
                     }
@@ -428,11 +418,8 @@ fn detail_lists(comp: &Shape, body_id: &Value, max_faces: usize, max_edges: usiz
     let renum = |j: usize| renum_map.get(&j).copied();
     let fs = &faces[..faces.len().min(max_faces)];
     let es = &edges[..edges.len().min(max_edges)];
-    let face_list = fs
-        .iter()
-        .enumerate()
-        .map(|(k, f)| face_entry(k, f, &adj, &renum, body_id))
-        .collect::<Result<Vec<_>, _>>()?;
+    let face_list =
+        fs.iter().enumerate().map(|(k, f)| face_entry(k, f, &adj, &renum, body_id)).collect::<Result<Vec<_>, _>>()?;
     let fps = edge_fingerprints(es, comp)?;
     let edge_list = es
         .iter()
@@ -542,10 +529,7 @@ pub fn inspect_bodies_at(
                     entry.insert("faces".into(), Value::Array(face_list));
                     entry.insert("edges".into(), Value::Array(edge_list));
                     if local.faces > nf || local.edges > ne {
-                        entry.insert(
-                            "truncated".into(),
-                            json!({"faces": local.faces - nf, "edges": local.edges - ne}),
-                        );
+                        entry.insert("truncated".into(), json!({"faces": local.faces - nf, "edges": local.edges - ne}));
                     }
                 }
             }
@@ -558,9 +542,7 @@ pub fn inspect_bodies_at(
 fn cap(req: &Map<String, Value>, key: &str, default: usize) -> usize {
     match req.get(key) {
         None | Some(Value::Null) => default,
-        Some(v) => v
-            .as_f64()
-            .map_or(default, |x| if x < 0.0 { 0 } else { x.trunc() as usize }),
+        Some(v) => v.as_f64().map_or(default, |x| if x < 0.0 { 0 } else { x.trunc() as usize }),
     }
 }
 
@@ -590,30 +572,20 @@ pub fn inspect_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult 
         .filter(|b| want.as_ref().map_or(true, |w| w.contains(&b.id) || w.contains(&b.name)))
         .map(|b| InspectBody { id: json!(b.id), name: json!(b.name), shape: Some(&b.shape) })
         .collect();
-    let bodies = match inspect_bodies_at(
-        &live,
-        level,
-        cap(req, "maxFaces", MAX_FACES),
-        cap(req, "maxEdges", MAX_EDGES),
-    ) {
+    let bodies = match inspect_bodies_at(&live, level, cap(req, "maxFaces", MAX_FACES), cap(req, "maxEdges", MAX_EDGES))
+    {
         Ok(b) => b,
         Err(e) => return error_result(&fail_text(&e)),
     };
     let mut m = Map::new();
     m.insert("bodies".into(), Value::Array(bodies));
     m.insert("errors".into(), Value::Array(r.errors.iter().map(FeatureError::wire).collect()));
-    let mut unknown: Vec<&String> = want
-        .iter()
-        .flatten()
-        .filter(|w| !r.bodies.iter().any(|b| &b.id == *w || &b.name == *w))
-        .collect();
+    let mut unknown: Vec<&String> =
+        want.iter().flatten().filter(|w| !r.bodies.iter().any(|b| &b.id == *w || &b.name == *w)).collect();
     if !unknown.is_empty() {
         unknown.sort();
         m.insert("unknown".into(), json!(unknown));
-        m.insert(
-            "have".into(),
-            Value::Array(r.bodies.iter().map(|b| json!({"id": b.id, "name": b.name})).collect()),
-        );
+        m.insert("have".into(), Value::Array(r.bodies.iter().map(|b| json!({"id": b.id, "name": b.name})).collect()));
     }
     JobResult::Json(m)
 }
@@ -693,7 +665,12 @@ fn clash(a: &BuiltBody, b: &BuiltBody, material: (&Shape, &Shape), threshold: Op
 /// the pairs checked on the engine's threads and reported in row order. A
 /// body that is not closed solids is listed under `unchecked` with why, and no
 /// pair with it is tested: its common comes back without an error and wrong.
-pub fn interference(bodies: &[BuiltBody], clearance: Option<f64>, max_ops: usize, watch: &dyn Watch) -> Map<String, Value> {
+pub fn interference(
+    bodies: &[BuiltBody],
+    clearance: Option<f64>,
+    max_ops: usize,
+    watch: &dyn Watch,
+) -> Map<String, Value> {
     let boxes: Vec<[f64; 6]> = bodies.iter().map(|b| bbox(&b.shape)).collect();
     let threshold = clearance.filter(|t| *t > 0.0);
     let reject = threshold.unwrap_or(1e-6);

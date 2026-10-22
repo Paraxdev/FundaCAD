@@ -53,7 +53,11 @@ pub fn import_ifc(data: &[u8]) -> Result<Imported, String> {
         if pieces.iter().any(|s| kernel::count(s, Kind::Solid) == 0) {
             notes.push(format!("{name}: its faces do not close into a solid, it came in as an open shell"));
         }
-        bodies.push(if pieces.len() == 1 { pieces.into_iter().next().unwrap_or_else(Shape::empty) } else { kernel::compound(pieces.iter()) });
+        bodies.push(if pieces.len() == 1 {
+            pieces.into_iter().next().unwrap_or_else(Shape::empty)
+        } else {
+            kernel::compound(pieces.iter())
+        });
     }
     let mut fields = Map::new();
     let shape = if bodies.len() == 1 {
@@ -123,12 +127,13 @@ pub fn read_ifc(data: &[u8]) -> Result<(Vec<IfcElement>, Vec<String>), String> {
     let mut objs: Vec<IfcElement> = Vec::with_capacity(products.len());
     for (i, pieces) in products.values().enumerate() {
         let first = pieces[0];
-        let name = first
-            .name
-            .as_deref()
-            .map(super::clean)
-            .filter(|n| !n.is_empty())
-            .unwrap_or_else(|| if first.ifc_type.is_empty() { format!("Object {}", i + 1) } else { first.ifc_type.clone() });
+        let name = first.name.as_deref().map(super::clean).filter(|n| !n.is_empty()).unwrap_or_else(|| {
+            if first.ifc_type.is_empty() {
+                format!("Object {}", i + 1)
+            } else {
+                first.ifc_type.clone()
+            }
+        });
         // A piece that closes on its own is sewn alone, so two items of one
         // element that touch stay two solids instead of one with a face inside.
         let mut closed = Vec::new();
@@ -154,8 +159,9 @@ pub fn read_ifc(data: &[u8]) -> Result<(Vec<IfcElement>, Vec<String>), String> {
         // ifc-lite paints an unstyled product with a stock colour of its type,
         // which is not the author's, so that colour is dropped.
         let stock = rgb(default_color_for_type(IfcType::from_str(&first.ifc_type)).0);
-        let color = dominant_color(pieces.iter().flat_map(|m| std::iter::repeat_n(Some(rgb(m.color)), m.indices.len() / 3)))
-            .filter(|&c| c != stock);
+        let color =
+            dominant_color(pieces.iter().flat_map(|m| std::iter::repeat_n(Some(rgb(m.color)), m.indices.len() / 3)))
+                .filter(|&c| c != stock);
         objs.push(IfcElement { name, color, pieces: closed });
     }
     if objs.is_empty() {
@@ -172,7 +178,9 @@ fn soup(pieces: &[&MeshData]) -> MeshObject {
     for m in pieces {
         reach = m.positions.iter().fold(reach, |r, v| r.max(v.abs()));
         let base = (o.pos.len() / 3) as u32;
-        o.pos.extend(m.positions.chunks_exact(3).flat_map(|p| [0, 1, 2].map(|k| (m.origin[k] + f64::from(p[k])) * 1000.0)));
+        o.pos.extend(
+            m.positions.chunks_exact(3).flat_map(|p| [0, 1, 2].map(|k| (m.origin[k] + f64::from(p[k])) * 1000.0)),
+        );
         idx.extend(m.indices[..m.indices.len() / 3 * 3].iter().map(|&i| base + i));
     }
     // ifc-lite's metres are f32, so a T vertex sits up to a step of the
@@ -183,7 +191,8 @@ fn soup(pieces: &[&MeshData]) -> MeshObject {
 }
 
 fn open_edges(idx: &[u32]) -> usize {
-    let edges: HashSet<(u32, u32)> = idx.chunks_exact(3).flat_map(|t| (0..3).map(move |k| (t[k], t[(k + 1) % 3]))).collect();
+    let edges: HashSet<(u32, u32)> =
+        idx.chunks_exact(3).flat_map(|t| (0..3).map(move |k| (t[k], t[(k + 1) % 3]))).collect();
     edges.iter().filter(|&&(a, b)| !edges.contains(&(b, a))).count()
 }
 
@@ -196,15 +205,17 @@ pub fn split_t_junctions(pos: &[f64], idx: &[u32], tol: f64) -> Vec<u32> {
         [pos[i], pos[i + 1], pos[i + 2]]
     };
     let mut welded: HashMap<[i64; 3], u32> = HashMap::new();
-    let canon: Vec<u32> =
-        (0..(pos.len() / 3) as u32).map(|i| *welded.entry(at(i).map(|v| (v / tol).round() as i64)).or_insert(i)).collect();
+    let canon: Vec<u32> = (0..(pos.len() / 3) as u32)
+        .map(|i| *welded.entry(at(i).map(|v| (v / tol).round() as i64)).or_insert(i))
+        .collect();
     let mut tris: Vec<[u32; 3]> = idx
         .chunks_exact(3)
         .map(|t| [canon[t[0] as usize], canon[t[1] as usize], canon[t[2] as usize]])
         .filter(|t| t[0] != t[1] && t[1] != t[2] && t[0] != t[2])
         .collect();
     for _ in 0..8 {
-        let edges: HashSet<(u32, u32)> = tris.iter().flat_map(|t| (0..3).map(move |k| (t[k], t[(k + 1) % 3]))).collect();
+        let edges: HashSet<(u32, u32)> =
+            tris.iter().flat_map(|t| (0..3).map(move |k| (t[k], t[(k + 1) % 3]))).collect();
         let open: Vec<(usize, usize)> = tris
             .iter()
             .enumerate()
@@ -238,7 +249,8 @@ pub fn split_t_junctions(pos: &[f64], idx: &[u32], tol: f64) -> Vec<u32> {
                     let w = [p[0] - pa[0], p[1] - pa[1], p[2] - pa[2]];
                     let t = (w[0] * d[0] + w[1] * d[1] + w[2] * d[2]) / len2;
                     let off = [w[0] - t * d[0], w[1] - t * d[1], w[2] - t * d[2]];
-                    let inside = t > 0.0 && t < 1.0 && t * t * len2 > tol * tol && (1.0 - t) * (1.0 - t) * len2 > tol * tol;
+                    let inside =
+                        t > 0.0 && t < 1.0 && t * t * len2 > tol * tol && (1.0 - t) * (1.0 - t) * len2 > tol * tol;
                     (inside && off[0] * off[0] + off[1] * off[1] + off[2] * off[2] <= tol * tol).then_some((t, v))
                 })
                 .collect();

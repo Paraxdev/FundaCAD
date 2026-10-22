@@ -93,12 +93,7 @@ pub struct LiveLink {
 
 impl Default for LiveLink {
     fn default() -> Self {
-        LiveLink {
-            name: "an assistant".into(),
-            base: None,
-            title: None,
-            status: json!({}),
-        }
+        LiveLink { name: "an assistant".into(), base: None, title: None, status: json!({}) }
     }
 }
 
@@ -108,10 +103,7 @@ impl LiveLink {
     }
 
     pub async fn state(&self, link: &EngineLink) -> Result<Value, LiveError> {
-        let reply = link
-            .call("session_state", args([("name", json!(self.name))]))
-            .await
-            .map_err(lost)?;
+        let reply = link.call("session_state", args([("name", json!(self.name))])).await.map_err(lost)?;
         if reply.get("ok") == Some(&json!(true)) {
             Ok(reply.get("result").cloned().unwrap_or_else(|| json!({})))
         } else {
@@ -132,25 +124,14 @@ impl LiveLink {
             ));
         }
         self.base = Some(st.get("revision").and_then(Value::as_i64).unwrap_or(0));
-        self.title = st
-            .get("title")
-            .and_then(Value::as_str)
-            .map(str::to_string);
+        self.title = st.get("title").and_then(Value::as_str).map(str::to_string);
         self.status = st.get("status").cloned().unwrap_or_else(|| json!({}));
-        Ok(st
-            .get("document")
-            .and_then(Value::as_object)
-            .cloned())
+        Ok(st.get("document").and_then(Value::as_object).cloned())
     }
 
     /// Offer `document` and wait for the app to take it. Returns the revision
     /// the app landed on.
-    pub async fn push(
-        &mut self,
-        link: &EngineLink,
-        document: &Doc,
-        note: &str,
-    ) -> Result<i64, LiveError> {
+    pub async fn push(&mut self, link: &EngineLink, document: &Doc, note: &str) -> Result<i64, LiveError> {
         if self.base.is_none() {
             self.pull(link).await?;
         }
@@ -186,18 +167,10 @@ impl LiveLink {
         }
         let res = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         if res.get("ok") == Some(&json!(true)) {
-            let proposal = res
-                .get("proposal")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string();
+            let proposal = res.get("proposal").and_then(Value::as_str).unwrap_or_default().to_string();
             return self.await_adoption(link, &proposal).await;
         }
-        let message = res
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string();
+        let message = res.get("message").and_then(Value::as_str).unwrap_or_default().to_string();
         match res.get("reason").and_then(Value::as_str) {
             Some("no-host") => Err(LiveError::NoAppOpen(if message.is_empty() {
                 "no FundaCAD window is open".into()
@@ -207,11 +180,9 @@ impl LiveLink {
             // Its own kind, because the caller's answer to it is different from
             // every other refusal: re-read and decide again, rather than report
             // a failure.
-            Some("stale") => Err(LiveError::Stale(if message.is_empty() {
-                "the document moved on".into()
-            } else {
-                message
-            })),
+            Some("stale") => {
+                Err(LiveError::Stale(if message.is_empty() { "the document moved on".into() } else { message }))
+            }
             reason => Err(LiveError::Refused(if message.is_empty() {
                 format!("the edit was refused ({})", reason.unwrap_or("unknown"))
             } else {
@@ -233,9 +204,7 @@ impl LiveLink {
             tokio::time::sleep(POLL_INTERVAL).await;
             let st = self.state(link).await?;
             if st.get("attached") != Some(&json!(true)) {
-                return Err(LiveError::NoAppOpen(
-                    "the FundaCAD window closed before the edit was applied".into(),
-                ));
+                return Err(LiveError::NoAppOpen("the FundaCAD window closed before the edit was applied".into()));
             }
             let status = st.get("status").cloned().unwrap_or_else(|| json!({}));
             let applied = status

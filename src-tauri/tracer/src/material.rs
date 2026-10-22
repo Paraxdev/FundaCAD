@@ -209,7 +209,16 @@ mod tests {
             ("matte", r#"{"color":[0.8,0.8,0.8],"roughness":0.9}"#, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0),
             ("metal", r#"{"metalness":1,"roughness":0.2}"#, 1.0, 0.2, 0.0, 0.0, 0.0, 0.0),
             ("glass", r#"{"transmission":1,"roughness":0,"ior":1.5,"dispersion":0.3}"#, 0.0, 0.0, 1.0, 0.0, 0.0, 0.3),
-            ("car paint", r#"{"metalness":0.6,"roughness":0.4,"clearcoat":1,"clearcoatRoughness":0.05}"#, 0.6, 0.4, 0.0, 1.0, 0.05, 0.0),
+            (
+                "car paint",
+                r#"{"metalness":0.6,"roughness":0.4,"clearcoat":1,"clearcoatRoughness":0.05}"#,
+                0.6,
+                0.4,
+                0.0,
+                1.0,
+                0.05,
+                0.0,
+            ),
         ];
         for (name, j, me, ro, tr, cc, ccr, di) in rows {
             let m = parse(j);

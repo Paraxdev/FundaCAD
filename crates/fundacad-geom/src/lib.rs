@@ -28,9 +28,9 @@ pub mod kernel;
 pub mod measure;
 pub mod mesh;
 pub mod par;
-pub mod printcheck;
 #[cfg(feature = "plugins")]
 pub mod plugins;
+pub mod printcheck;
 pub mod projection;
 pub mod reply;
 pub mod select;
@@ -90,11 +90,7 @@ mod tests {
         let m = mesh::body_payload(&b, "b1", "Body1", 0.1, mesh::viewport_profile(1));
         assert_eq!(m.positions.len() % 3, 0);
         assert_eq!(m.indices.len() % 3, 0);
-        assert_eq!(
-            m.face_ids.len(),
-            m.indices.len() / 3,
-            "one face id per triangle"
-        );
+        assert_eq!(m.face_ids.len(), m.indices.len() / 3, "one face id per triangle");
         assert_eq!(m.fields["faceCount"], 6);
         let mut seen: Vec<u32> = m.face_ids.clone();
         seen.sort_unstable();
@@ -127,10 +123,7 @@ mod tests {
                 "normals"
             ]
         );
-        assert_eq!(
-            m.fields["faceOwners"],
-            serde_json::json!([null, null, null, null, null, null])
-        );
+        assert_eq!(m.fields["faceOwners"], serde_json::json!([null, null, null, null, null, null]));
         let json = m.to_json();
         assert!(json.get("faceIds").is_some() && json.get("normals").is_some());
     }
@@ -155,26 +148,14 @@ mod tests {
                 node_ref: Some(serde_json::json!("n1")),
                 ..Default::default()
             },
-            mesh::MeshBody {
-                id: "c".into(),
-                name: "C".into(),
-                shape: Some(&c),
-                ..Default::default()
-            },
-            mesh::MeshBody {
-                id: "empty".into(),
-                name: "Empty".into(),
-                ..Default::default()
-            },
+            mesh::MeshBody { id: "c".into(), name: "C".into(), shape: Some(&c), ..Default::default() },
+            mesh::MeshBody { id: "empty".into(), name: "Empty".into(), ..Default::default() },
         ];
         let first = mesh::mesh_result(&bodies, 0.1, &serde_json::Map::new());
         assert_eq!(first.bodies.len(), 2);
         let tag = first.bodies[0].fields()["etag"].clone();
         assert_eq!(tag.as_str().map(str::len), Some(32));
-        assert_eq!(
-            first.fields.keys().collect::<Vec<_>>(),
-            ["protocol", "bodies", "bbox"]
-        );
+        assert_eq!(first.fields.keys().collect::<Vec<_>>(), ["protocol", "bodies", "bbox"]);
         let min_x = first.fields["bbox"]["min"][0].as_f64().unwrap();
         assert!((min_x + 5.0).abs() < 1e-2, "{min_x}");
         assert_eq!(first.fields["bbox"]["max"][0], 20.0);
@@ -185,28 +166,16 @@ mod tests {
         match &second.bodies[0] {
             fundacad_protocol::WireBody::Stub(m) => {
                 assert_eq!(m["etag"], tag);
-                assert_eq!(
-                    m.keys().collect::<Vec<_>>(),
-                    ["id", "name", "etag", "nodeRef", "unchanged"]
-                );
+                assert_eq!(m.keys().collect::<Vec<_>>(), ["id", "name", "etag", "nodeRef", "unchanged"]);
             }
             other => panic!("expected a stub, got {other:?}"),
         }
-        assert!(matches!(
-            second.bodies[1],
-            fundacad_protocol::WireBody::Full(_)
-        ));
+        assert!(matches!(second.bodies[1], fundacad_protocol::WireBody::Full(_)));
         // A content etag: the sphere meshed finer is a new payload, while a box
         // at any tolerance is the same twelve triangles and stays a stub.
         known.insert("c".into(), first.bodies[1].fields()["etag"].clone());
         let finer = mesh::mesh_result(&bodies, 0.05, &known);
-        assert!(matches!(
-            finer.bodies[0],
-            fundacad_protocol::WireBody::Stub(_)
-        ));
-        assert!(matches!(
-            finer.bodies[1],
-            fundacad_protocol::WireBody::Full(_)
-        ));
+        assert!(matches!(finer.bodies[0], fundacad_protocol::WireBody::Stub(_)));
+        assert!(matches!(finer.bodies[1], fundacad_protocol::WireBody::Full(_)));
     }
 }

@@ -34,11 +34,7 @@ fn rebuild(doc: &Value) -> builder::Rebuild {
 
 fn built(doc: &Value) -> Shape {
     let r = rebuild(doc);
-    assert!(
-        r.errors.is_empty(),
-        "{:?}",
-        r.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
-    );
+    assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
     r.bodies[0].shape.clone()
 }
 

@@ -75,8 +75,7 @@ impl Persist<'_> {
         for b in &state.ctx.bodies {
             let stale = self.modified.get(&b.id).map_or(true, |(ident, _)| *ident != b.identity());
             if stale {
-                self.modified
-                    .insert(b.id.clone(), (b.identity(), blob_key(&self.keys[index], &b.id)));
+                self.modified.insert(b.id.clone(), (b.identity(), blob_key(&self.keys[index], &b.id)));
             }
         }
         self.acc_ms += elapsed.as_secs_f64() * 1000.0;
@@ -134,14 +133,7 @@ impl Persist<'_> {
             "face_owners": face_owners,
             "fps": fps,
         });
-        let record = Checkpoint {
-            feat_index: index,
-            manifest,
-            state,
-            replay_ms: self.acc_ms,
-            bytes: 0,
-            pinned: false,
-        };
+        let record = Checkpoint { feat_index: index, manifest, state, replay_ms: self.acc_ms, bytes: 0, pinned: false };
         if self.store.save_checkpoint(chain_key, record).is_ok() {
             self.written += 1;
             self.acc_ms = 0.0;
@@ -221,18 +213,8 @@ pub fn restore(store: &GeomStore, keys: &[String]) -> Option<(usize, Snapshot, M
         modified.insert(entry.body_id.clone(), (body.identity(), entry.blob_key.clone()));
         bodies.push(body);
     }
-    let errors = state
-        .get("errors")?
-        .as_array()?
-        .iter()
-        .map(parse_error)
-        .collect::<Option<Vec<_>>>()?;
-    let id_events = state
-        .get("ids")?
-        .as_array()?
-        .iter()
-        .map(parse_event)
-        .collect::<Option<Vec<_>>>()?;
+    let errors = state.get("errors")?.as_array()?.iter().map(parse_error).collect::<Option<Vec<_>>>()?;
+    let id_events = state.get("ids")?.as_array()?.iter().map(parse_event).collect::<Option<Vec<_>>>()?;
     let datums: IndexMap<String, PlaneRecord> = object_map(state.get("datums")?)?;
     let snap = Snapshot {
         bodies,

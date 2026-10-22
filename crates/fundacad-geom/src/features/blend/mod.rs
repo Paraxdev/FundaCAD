@@ -149,10 +149,7 @@ fn checkpoint() -> FResult {
 }
 
 fn value_err(message: impl Into<String>, code: Option<&'static str>) -> Fail {
-    Fail::Value {
-        message: message.into(),
-        code,
-    }
+    Fail::Value { message: message.into(), code }
 }
 
 /// conic_blend.py `clamp_profile`.
@@ -175,26 +172,13 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
     let only_picked = f.tangent_edges == Some(false);
     let draft = f.draft == Some(true);
 
-    let op =
-        move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> {
-            let radii: Vec<f64> = es
-                .iter()
-                .map(|e| {
-                    if chord {
-                        chord_radius(s, e, size)
-                    } else {
-                        size
-                    }
-                })
-                .collect();
-            native_fillet(s, es, &radii)
-        };
+    let op = move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> {
+        let radii: Vec<f64> = es.iter().map(|e| if chord { chord_radius(s, e, size) } else { size }).collect();
+        native_fillet(s, es, &radii)
+    };
     let section_at = move |profile: f64| {
         move |s: &Shape, es: &[Shape]| -> Result<Shape, SectionErr> {
-            let sizes: Vec<f64> = es
-                .iter()
-                .map(|e| if chord { chord_radius(s, e, r) } else { r })
-                .collect();
+            let sizes: Vec<f64> = es.iter().map(|e| if chord { chord_radius(s, e, r) } else { r }).collect();
             ops::section(s, es, false, &sizes, None, r, g2, draft, profile)
         }
     };
@@ -214,10 +198,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
             g2 || only_picked,
         );
     }
-    let conic =
-        move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> {
-            ops::conic(s, es, size, p)
-        };
+    let conic = move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> { ops::conic(s, es, size, p) };
     match blend_edges(
         ctx,
         &f.id,
@@ -230,10 +211,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
         Some(&section),
         false,
     ) {
-        Err(Fail::Value {
-            message,
-            code: Some(CONIC_NOT_APPLICABLE),
-        }) => {
+        Err(Fail::Value { message, code: Some(CONIC_NOT_APPLICABLE) }) => {
             let _ = message;
             match blend_edges(
                 ctx,
@@ -330,10 +308,7 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
 static DRAFT_FELL_BACK: std::sync::Mutex<Vec<(String, f64)>> = std::sync::Mutex::new(Vec::new());
 
 fn fell_back_before(key: &str, size: f64) -> bool {
-    DRAFT_FELL_BACK
-        .lock()
-        .map(|v| v.iter().any(|(k, at)| k == key && size >= *at))
-        .unwrap_or(false)
+    DRAFT_FELL_BACK.lock().map(|v| v.iter().any(|(k, at)| k == key && size >= *at)).unwrap_or(false)
 }
 
 fn remember_fell_back(key: String, size: f64) {
@@ -361,19 +336,12 @@ fn build123d_chamfer(s: &Shape, es: &[Shape], size: f64) -> Result<Shape, BlendE
     let d = vec![size; es.len()];
     match ops::chamfer(s, es, &d, &d) {
         Ok((out, Built::Done)) => Ok(out),
-        _ => Err(BlendErr::Kernel(
-            "Failed creating a chamfer, try a smaller length value(s)".into(),
-        )),
+        _ => Err(BlendErr::Kernel("Failed creating a chamfer, try a smaller length value(s)".into())),
     }
 }
 
 /// blends.py `native_two_distance_chamfer`.
-fn native_two_distance_chamfer(
-    s: &Shape,
-    es: &[Shape],
-    d1: f64,
-    d2: f64,
-) -> Result<Shape, BlendErr> {
+fn native_two_distance_chamfer(s: &Shape, es: &[Shape], d1: f64, d2: f64) -> Result<Shape, BlendErr> {
     const MSG: &str = "Failed creating a chamfer, try a smaller length value(s)";
     let a = vec![d1; es.len()];
     let b = vec![d2; es.len()];
@@ -429,11 +397,7 @@ fn drop_seams(shape: &Shape, sels: &[Value], edges: Vec<Shape>, label: &str) -> 
 /// kernel refuses the whole blend over an edge it cannot put a round on.
 fn drop_slivers(edges: Vec<Shape>, label: &str) -> FResult<Vec<Shape>> {
     use crate::mesh::edges::SLIVER_EDGE_MM;
-    let real: Vec<Shape> = edges
-        .iter()
-        .filter(|e| crate::kernel::length(e) >= SLIVER_EDGE_MM)
-        .cloned()
-        .collect();
+    let real: Vec<Shape> = edges.iter().filter(|e| crate::kernel::length(e) >= SLIVER_EDGE_MM).cloned().collect();
     if real.is_empty() && !edges.is_empty() {
         return Err(Fail::msg(format!(
             "can't {} here, the selected edge is under {}mm long, a sliver left where two corners nearly meet. Pick the edges beside it instead.",
@@ -476,10 +440,7 @@ fn refuse_unchanged(before: &Shape, after: &Shape, label: &str, body: &str) -> F
 }
 
 fn refuse_smooth_edges(shape: &Shape, edges: &[Shape], label: &str) -> FResult {
-    let smooth = edges
-        .iter()
-        .filter(|e| ops::dihedral_deg(shape, e).is_some_and(|a| a < SMOOTH_EDGE_DEG))
-        .count();
+    let smooth = edges.iter().filter(|e| ops::dihedral_deg(shape, e).is_some_and(|a| a < SMOOTH_EDGE_DEG)).count();
     if smooth == 0 {
         return Ok(());
     }
@@ -488,10 +449,7 @@ fn refuse_smooth_edges(shape: &Shape, edges: &[Shape], label: &str) -> FResult {
     } else if smooth == edges.len() {
         format!("all {} selected edges are already smooth", edges.len())
     } else {
-        format!(
-            "{smooth} of the {} selected edges are already smooth",
-            edges.len()
-        )
+        format!("{smooth} of the {} selected edges are already smooth", edges.len())
     };
     Err(value_err(
         format!(
@@ -536,11 +494,7 @@ fn edge_identity(e: &Shape) -> Option<Map<String, Value>> {
 
 fn fp_vec(fp: &Map<String, Value>, key: &str) -> [f64; 3] {
     let a = fp.get(key).and_then(Value::as_array);
-    let at = |i: usize| {
-        a.and_then(|a| a.get(i))
-            .and_then(Value::as_f64)
-            .unwrap_or(0.0)
-    };
+    let at = |i: usize| a.and_then(|a| a.get(i)).and_then(Value::as_f64).unwrap_or(0.0);
     [at(0), at(1), at(2)]
 }
 
@@ -553,12 +507,7 @@ fn canonical_key(fp: &Map<String, Value>) -> [f64; 7] {
 }
 
 /// `_rematch_edge`: the cheapest edge within the drift gate, the first on a tie.
-fn rematch_edge(
-    shape: &Shape,
-    fp: &Map<String, Value>,
-    max_mid_dist: f64,
-    tol_pos: f64,
-) -> Option<Shape> {
+fn rematch_edge(shape: &Shape, fp: &Map<String, Value>, max_mid_dist: f64, tol_pos: f64) -> Option<Shape> {
     let mid = DVec3::from_array(fp_vec(fp, "mid"));
     let tuning = Tuning::shipped();
     let mut best: Option<(f64, Shape)> = None;
@@ -615,10 +564,8 @@ pub(crate) fn sequential_blend(
 ) -> (Shape, Vec<Shape>) {
     // The body each edge last failed on: the kernel answers the same body the
     // same way, so the next pass skips an edge until a neighbour has changed it.
-    let mut pending: Vec<(Shape, Map<String, Value>, Option<Shape>)> = edges
-        .iter()
-        .map(|e| (e.clone(), edge_identity(e).unwrap_or_default(), None))
-        .collect();
+    let mut pending: Vec<(Shape, Map<String, Value>, Option<Shape>)> =
+        edges.iter().map(|e| (e.clone(), edge_identity(e).unwrap_or_default(), None)).collect();
     pending.sort_by(|a, b| {
         let (ka, kb) = (canonical_key(&a.1), canonical_key(&b.1));
         ka.partial_cmp(&kb).unwrap_or(std::cmp::Ordering::Equal)
@@ -640,8 +587,7 @@ pub(crate) fn sequential_blend(
                 continue;
             }
             let Some(target) = crate::bench::phase("blend_rematch", || {
-                rematch_edge(&current, &fp, max_mid_dist, tol_pos)
-                    .filter(|t| still_on(&orig, t, on_curve))
+                rematch_edge(&current, &fp, max_mid_dist, tol_pos).filter(|t| still_on(&orig, t, on_curve))
             }) else {
                 still.push((orig, fp, failed_on));
                 continue;
@@ -663,8 +609,7 @@ fn size_probe(shape: &Shape, blend_size: f64) -> Option<f64> {
     if !(blend_size > 0.0) {
         return None;
     }
-    let small = (blend_size * SIZE_PROBE_FRACTION)
-        .min(crate::kernel::bbox_diagonal(shape) * SIZE_PROBE_BODY_FRACTION);
+    let small = (blend_size * SIZE_PROBE_FRACTION).min(crate::kernel::bbox_diagonal(shape) * SIZE_PROBE_BODY_FRACTION);
     (small > 0.0).then_some(small)
 }
 
@@ -701,9 +646,9 @@ fn group_fits_at(body: &Shape, edges: &[Shape], op: &BlendOp, blend_size: f64) -
     if edges.len() < 2 {
         return None;
     }
-    (1..=4).map(|k| blend_size / f64::from(1u32 << k)).find(|&size| {
-        op(body, edges, size).is_ok_and(|out| !overlap::folds_over_itself(body, &out, size))
-    })
+    (1..=4)
+        .map(|k| blend_size / f64::from(1u32 << k))
+        .find(|&size| op(body, edges, size).is_ok_and(|out| !overlap::folds_over_itself(body, &out, size)))
 }
 
 fn blend_failure(
@@ -717,11 +662,9 @@ fn blend_failure(
 ) -> Fail {
     let probed = size_probe(body.shape, blend_size);
     let helps = match probed {
-        Some(small) if unresolved.len() <= 8 => Some(
-            unresolved
-                .iter()
-                .all(|e| one_edge_at(body.shape, e, small).is_ok()),
-        ),
+        Some(small) if unresolved.len() <= 8 => {
+            Some(unresolved.iter().all(|e| one_edge_at(body.shape, e, small).is_ok()))
+        }
         _ => None,
     };
     if helps != Some(false) {
@@ -745,11 +688,7 @@ fn blend_failure(
             );
         }
         return value_err(
-            format!(
-                "{label} failed on {}: {}",
-                body.name,
-                kernel_sentence(err.text())
-            ),
+            format!("{label} failed on {}: {}", body.name, kernel_sentence(err.text())),
             helps.and(Some(BLEND_TOO_LARGE)),
         );
     }
@@ -816,21 +755,12 @@ fn short_edge_at(body: &Shape, edges: &[Shape], at: &[[f64; 3]], blend_size: f64
 }
 
 /// `_report_edge_failures`.
-fn report_edge_failures(
-    diag: &mut Vec<Value>,
-    fid: &str,
-    edges: &[Shape],
-    try_one: &dyn Fn(&Shape) -> bool,
-) {
+fn report_edge_failures(diag: &mut Vec<Value>, fid: &str, edges: &[Shape], try_one: &dyn Fn(&Shape) -> bool) {
     if edges.len() > 32 {
         return;
     }
     let failed: Vec<&Shape> = edges.iter().filter(|e| !try_one(e)).collect();
-    let probed: Vec<&Shape> = if failed.is_empty() {
-        edges.iter().collect()
-    } else {
-        failed.clone()
-    };
+    let probed: Vec<&Shape> = if failed.is_empty() { edges.iter().collect() } else { failed.clone() };
     let mids: Vec<Value> = probed
         .iter()
         .map(|e| {
@@ -874,10 +804,7 @@ fn blend_edges(
     section_only: bool,
 ) -> FResult {
     if !(blend_size > 0.0) {
-        return Err(Fail::msg(format!(
-            "{label}: size must be greater than 0 (got {})",
-            py_g(blend_size)
-        )));
+        return Err(Fail::msg(format!("{label}: size must be greater than 0 (got {})", py_g(blend_size))));
     }
     let groups = select::group_by_body(ctx, sels, label)?;
     let mut staged: Vec<(usize, Shape)> = Vec::new();
@@ -886,19 +813,10 @@ fn blend_edges(
         checkpoint()?;
         let body_shape = ctx.bodies[index].shape().clone();
         let body_name = ctx.bodies[index].name.clone();
-        let sel_value = Value::Array(
-            group
-                .iter()
-                .map(|s| serde_json::to_value(s).unwrap_or(Value::Null))
-                .collect(),
-        );
-        let edges =
-            Resolver::new(Some(&mut ctx.diagnostics), Some(fid)).edges(&body_shape, &sel_value)?;
+        let sel_value = Value::Array(group.iter().map(|s| serde_json::to_value(s).unwrap_or(Value::Null)).collect());
+        let edges = Resolver::new(Some(&mut ctx.diagnostics), Some(fid)).edges(&body_shape, &sel_value)?;
         if edges.is_empty() {
-            return Err(Fail::msg(format!(
-                "no edge found to {} on {body_name}",
-                label.to_lowercase()
-            )));
+            return Err(Fail::msg(format!("no edge found to {} on {body_name}", label.to_lowercase())));
         }
         let sels = sel_value.as_array().map_or(&[][..], Vec::as_slice);
         let edges = drop_seams(&body_shape, sels, edges, label)?;
@@ -960,10 +878,8 @@ fn blend_edges(
             }
         }
 
-        let (work, work_edges) =
-            ops::copy(&body_shape, &edges).unwrap_or((body_shape.clone(), edges.clone()));
-        let one_edge_at =
-            |s: &Shape, e: &Shape, size: f64| op(s, std::slice::from_ref(e), size);
+        let (work, work_edges) = ops::copy(&body_shape, &edges).unwrap_or((body_shape.clone(), edges.clone()));
+        let one_edge_at = |s: &Shape, e: &Shape, size: f64| op(s, std::slice::from_ref(e), size);
         let new_shape = match op(&work, &work_edges, blend_size) {
             Ok(out) => out,
             Err(BlendErr::Conic(msg)) => return Err(value_err(msg, Some(CONIC_NOT_APPLICABLE))),
@@ -972,8 +888,7 @@ fn blend_edges(
                 let (out, unresolved) = if draft && section.is_some() {
                     (work.clone(), work_edges.clone())
                 } else {
-                    let apply =
-                        |s: &Shape, e: &Shape| op(s, std::slice::from_ref(e), blend_size);
+                    let apply = |s: &Shape, e: &Shape| op(s, std::slice::from_ref(e), blend_size);
                     sequential_blend(&work, &work_edges, &apply, blend_size)
                 };
                 if unresolved.is_empty() {
@@ -994,19 +909,8 @@ fn blend_edges(
                     if let Some(fail) = misfit.take() {
                         return Err(fail);
                     }
-                    let body = BodyRef {
-                        name: &body_name,
-                        shape: &work,
-                    };
-                    return Err(blend_failure(
-                        label,
-                        &body,
-                        &unresolved,
-                        &one_edge_at,
-                        op,
-                        blend_size,
-                        &combined_err,
-                    ));
+                    let body = BodyRef { name: &body_name, shape: &work };
+                    return Err(blend_failure(label, &body, &unresolved, &one_edge_at, op, blend_size, &combined_err));
                 }
             }
         };

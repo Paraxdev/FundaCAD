@@ -3,12 +3,10 @@
 
 use std::path::Path;
 
-use fundacad_core::params::targets::{
-    write_targets, COMMON_NUM_FIELDS, FEATURE_NUM_FIELDS, INT_FIELDS,
-};
+use fundacad_core::params::targets::{write_targets, COMMON_NUM_FIELDS, FEATURE_NUM_FIELDS, INT_FIELDS};
 use fundacad_core::params::{
-    check_results, eval_expr, extract_refs, is_ident_name, is_numeric_literal, is_reserved_name,
-    rename_refs, resolve, validate_expr, FieldKind,
+    check_results, eval_expr, extract_refs, is_ident_name, is_numeric_literal, is_reserved_name, rename_refs, resolve,
+    validate_expr, FieldKind,
 };
 use fundacad_core::schema::{ParamCheck, ParamDef};
 use indexmap::IndexMap;
@@ -16,18 +14,11 @@ use serde_json::{json, Map, Value};
 
 fn vectors() -> Value {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/vectors/params.json");
-    serde_json::from_str(&std::fs::read_to_string(path).expect("read vectors"))
-        .expect("parse vectors")
+    serde_json::from_str(&std::fs::read_to_string(path).expect("read vectors")).expect("parse vectors")
 }
 
 fn scope(v: &Value) -> IndexMap<String, f64> {
-    v.as_object()
-        .map(|m| {
-            m.iter()
-                .map(|(k, x)| (k.clone(), x.as_f64().expect("number")))
-                .collect()
-        })
-        .unwrap_or_default()
+    v.as_object().map(|m| m.iter().map(|(k, x)| (k.clone(), x.as_f64().expect("number"))).collect()).unwrap_or_default()
 }
 
 fn expected(v: &Value) -> f64 {
@@ -56,10 +47,7 @@ fn evaluation() {
             assert!(got.is_nan(), "{expr}: got {got}, want NaN");
         } else if let Some(digits) = c["digits"].as_i64() {
             let tol = 10f64.powi(-i32::try_from(digits).expect("digits")) / 2.0;
-            assert!(
-                (got - want).abs() < tol,
-                "{expr}: got {got}, want {want} to {digits} digits"
-            );
+            assert!((got - want).abs() < tol, "{expr}: got {got}, want {want} to {digits} digits");
         } else {
             assert!(got == want, "{expr}: got {got:?}, want {want:?}");
         }
@@ -73,11 +61,7 @@ fn errors() {
         let want = c["error"].as_str().expect("error");
         match eval_expr(expr, &scope(&c["values"])) {
             Ok(v) => panic!("{expr:?}: evaluated to {v}, want an error containing {want:?}"),
-            Err(e) => assert!(
-                e.message.contains(want),
-                "{expr:?}: {:?} does not contain {want:?}",
-                e.message
-            ),
+            Err(e) => assert!(e.message.contains(want), "{expr:?}: {:?} does not contain {want:?}", e.message),
         }
     }
 }
@@ -93,10 +77,7 @@ fn references_renames_literals_and_names() {
     }
     for c in v["rename"].as_array().expect("rename") {
         let s = |k: &str| c[k].as_str().expect("string");
-        assert_eq!(
-            rename_refs(s("expr"), s("from"), s("to")).expect("renames"),
-            s("expect")
-        );
+        assert_eq!(rename_refs(s("expr"), s("from"), s("to")).expect("renames"), s("expect"));
     }
     for c in v["numericLiteral"].as_array().expect("numericLiteral") {
         assert_eq!(
@@ -106,21 +87,12 @@ fn references_renames_literals_and_names() {
             c["expr"]
         );
     }
-    let names = |section: &str, key: &str| -> Vec<String> {
-        serde_json::from_value(v[section][key].clone()).expect("names")
-    };
-    names("reserved", "yes")
-        .iter()
-        .for_each(|n| assert!(is_reserved_name(n), "{n}"));
-    names("reserved", "no")
-        .iter()
-        .for_each(|n| assert!(!is_reserved_name(n), "{n}"));
-    names("identNames", "yes")
-        .iter()
-        .for_each(|n| assert!(is_ident_name(n), "{n}"));
-    names("identNames", "no")
-        .iter()
-        .for_each(|n| assert!(!is_ident_name(n), "{n}"));
+    let names =
+        |section: &str, key: &str| -> Vec<String> { serde_json::from_value(v[section][key].clone()).expect("names") };
+    names("reserved", "yes").iter().for_each(|n| assert!(is_reserved_name(n), "{n}"));
+    names("reserved", "no").iter().for_each(|n| assert!(!is_reserved_name(n), "{n}"));
+    names("identNames", "yes").iter().for_each(|n| assert!(is_ident_name(n), "{n}"));
+    names("identNames", "no").iter().for_each(|n| assert!(!is_ident_name(n), "{n}"));
 }
 
 #[test]
@@ -131,23 +103,13 @@ fn table_resolution() {
         let want = scope(&c["values"]);
         assert_eq!(r.values.len(), want.len(), "{name}");
         for (k, w) in &want {
-            assert!(
-                r.values.get(k).is_some_and(|g| g == w),
-                "{name}: {k} = {:?}, want {w}",
-                r.values.get(k)
-            );
+            assert!(r.values.get(k).is_some_and(|g| g == w), "{name}: {k} = {:?}, want {w}", r.values.get(k));
         }
         let issues = c["issues"].as_object().expect("issues");
         assert_eq!(r.issues.len(), issues.len(), "{name}: {:?}", r.issues);
         for (k, w) in issues {
-            let got = r
-                .issues
-                .get(k)
-                .unwrap_or_else(|| panic!("{name}: no issue for {k}"));
-            assert!(
-                got.contains(w.as_str().expect("issue")),
-                "{name}: {k}: {got:?}"
-            );
+            let got = r.issues.get(k).unwrap_or_else(|| panic!("{name}: no issue for {k}"));
+            assert!(got.contains(w.as_str().expect("issue")), "{name}: {k}: {got:?}");
         }
     }
 }
@@ -171,13 +133,9 @@ fn validation_and_checks() {
         }
     }
     for group in v["checks"].as_array().expect("checks") {
-        let checks: Vec<ParamCheck> =
-            serde_json::from_value(group["checks"].clone()).expect("checks");
+        let checks: Vec<ParamCheck> = serde_json::from_value(group["checks"].clone()).expect("checks");
         let got = check_results(&defs(&group["defs"]), &checks);
-        for (g, want) in got
-            .iter()
-            .zip(group["results"].as_array().expect("results"))
-        {
+        for (g, want) in got.iter().zip(group["results"].as_array().expect("results")) {
             assert_eq!(g.ok, want["ok"].as_bool().expect("ok"));
             match (&g.error, want["error"].as_str()) {
                 (None, None) => {}
@@ -214,24 +172,15 @@ fn field_tables() {
             FieldKind::Count => "count",
         }
     }
-    let rows = |r: &[(&str, FieldKind)]| -> Value {
-        r.iter().map(|(f, k)| json!([f, kind(*k)])).collect()
-    };
+    let rows = |r: &[(&str, FieldKind)]| -> Value { r.iter().map(|(f, k)| json!([f, kind(*k)])).collect() };
     let v = vectors();
-    let own: Map<String, Value> = FEATURE_NUM_FIELDS
-        .iter()
-        .map(|(t, r)| ((*t).to_owned(), rows(r)))
-        .collect();
+    let own: Map<String, Value> = FEATURE_NUM_FIELDS.iter().map(|(t, r)| ((*t).to_owned(), rows(r))).collect();
     assert_eq!(Value::Object(own), v["featureNumFields"]);
     assert_eq!(rows(COMMON_NUM_FIELDS), v["commonNumFields"]);
     let ints: Map<String, Value> = INT_FIELDS
         .iter()
         .map(|(f, min)| {
-            let min = if min.is_finite() {
-                json!(*min as i64)
-            } else {
-                json!("-Infinity")
-            };
+            let min = if min.is_finite() { json!(*min as i64) } else { json!("-Infinity") };
             ((*f).to_owned(), min)
         })
         .collect();

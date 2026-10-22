@@ -18,8 +18,8 @@ use indexmap::IndexMap;
 
 pub use eval::{eval_expr, eval_node, nearly_equal, Scope};
 pub use parse::{
-    extract_refs, is_ident_name, is_numeric_literal, is_reserved_name, parse_expr, refs_of,
-    rename_refs, Expr, ExprError,
+    extract_refs, is_ident_name, is_numeric_literal, is_reserved_name, parse_expr, refs_of, rename_refs, Expr,
+    ExprError,
 };
 
 use crate::schema::{CadDocument, ParamCheck, ParamDef, Real};
@@ -40,14 +40,7 @@ pub fn resolve(defs: &IndexMap<String, ParamDef>) -> Resolution {
     let nodes: Vec<Option<Expr>> = defs.values().map(|d| parse_expr(&d.expr).ok()).collect();
     let deps: Vec<Vec<usize>> = nodes
         .iter()
-        .map(|n| {
-            n.as_ref().map_or_else(Vec::new, |n| {
-                refs_of(n)
-                    .iter()
-                    .filter_map(|r| defs.get_index_of(r))
-                    .collect()
-            })
-        })
+        .map(|n| n.as_ref().map_or_else(Vec::new, |n| refs_of(n).iter().filter_map(|r| defs.get_index_of(r)).collect()))
         .collect();
 
     let mut indeg: Vec<usize> = deps.iter().map(Vec::len).collect();
@@ -80,15 +73,9 @@ pub fn resolve(defs: &IndexMap<String, ParamDef>) -> Resolution {
         }
     }
 
-    let mut values: IndexMap<String, f64> = defs
-        .iter()
-        .map(|(n, d)| (n.clone(), d.value.get()))
-        .collect();
+    let mut values: IndexMap<String, f64> = defs.iter().map(|(n, d)| (n.clone(), d.value.get())).collect();
     for n in order {
-        let name = defs
-            .get_index(n)
-            .map(|(k, _)| k.clone())
-            .unwrap_or_default();
+        let name = defs.get_index(n).map(|(k, _)| k.clone()).unwrap_or_default();
         let Some(node) = &nodes[n] else {
             issues.insert(name, "invalid expression".to_owned());
             continue;
@@ -122,11 +109,7 @@ pub fn recompute_values(doc: &mut CadDocument) -> IndexMap<String, String> {
             }
         }
     }
-    doc.parameters = Some(
-        defs.iter()
-            .map(|(n, d)| (n.clone(), d.value.clone()))
-            .collect(),
-    );
+    doc.parameters = Some(defs.iter().map(|(n, d)| (n.clone(), d.value.clone())).collect());
     r.issues
 }
 
@@ -134,16 +117,8 @@ pub fn recompute_values(doc: &mut CadDocument) -> IndexMap<String, String> {
 /// or the plain `parameters` map of a document from before the table existed.
 pub fn scope_of(doc: &CadDocument) -> IndexMap<String, f64> {
     match &doc.param_defs {
-        Some(defs) => defs
-            .iter()
-            .map(|(n, d)| (n.clone(), d.value.get()))
-            .collect(),
-        None => doc
-            .parameters
-            .iter()
-            .flatten()
-            .map(|(n, v)| (n.clone(), v.get()))
-            .collect(),
+        Some(defs) => defs.iter().map(|(n, d)| (n.clone(), d.value.get())).collect(),
+        None => doc.parameters.iter().flatten().map(|(n, v)| (n.clone(), v.get())).collect(),
     }
 }
 
@@ -155,11 +130,7 @@ pub enum FieldKind {
     Count,
 }
 
-fn find_cycle(
-    defs: &IndexMap<String, ParamDef>,
-    name: &str,
-    refs: &[String],
-) -> Option<Vec<String>> {
+fn find_cycle(defs: &IndexMap<String, ParamDef>, name: &str, refs: &[String]) -> Option<Vec<String>> {
     fn walk(
         defs: &IndexMap<String, ParamDef>,
         name: &str,
@@ -177,17 +148,12 @@ fn find_cycle(
         }
         seen.push(from.to_owned());
         let def = defs.get(from)?;
-        let refs = parse_expr(&def.expr)
-            .map(|n| refs_of(&n))
-            .unwrap_or_default();
-        refs.iter()
-            .filter(|r| defs.contains_key(*r))
-            .find_map(|r| walk(defs, name, r, &here, seen))
+        let refs = parse_expr(&def.expr).map(|n| refs_of(&n)).unwrap_or_default();
+        refs.iter().filter(|r| defs.contains_key(*r)).find_map(|r| walk(defs, name, r, &here, seen))
     }
     let mut seen = Vec::new();
     let start = vec![name.to_owned()];
-    refs.iter()
-        .find_map(|r| walk(defs, name, r, &start, &mut seen))
+    refs.iter().find_map(|r| walk(defs, name, r, &start, &mut seen))
 }
 
 /// Commit-time validation of `expr` for the parameter `name` (or a fresh
@@ -217,10 +183,7 @@ pub fn validate_expr(
     if kind == Some(FieldKind::Count) && parse::has_unit_literal(&node) {
         return Err("this field is unitless, write a plain number".to_owned());
     }
-    let values: IndexMap<String, f64> = defs
-        .iter()
-        .map(|(n, d)| (n.clone(), d.value.get()))
-        .collect();
+    let values: IndexMap<String, f64> = defs.iter().map(|(n, d)| (n.clone(), d.value.get())).collect();
     let value = eval_node(&node, &values).map_err(|e| e.message)?;
     if !value.is_finite() {
         return Err("does not evaluate to a finite number".to_owned());
@@ -237,25 +200,13 @@ pub struct CheckResult {
 
 /// Each check against the cached values: it holds when its expression is non-zero.
 pub fn check_results(defs: &IndexMap<String, ParamDef>, checks: &[ParamCheck]) -> Vec<CheckResult> {
-    let values: IndexMap<String, f64> = defs
-        .iter()
-        .map(|(n, d)| (n.clone(), d.value.get()))
-        .collect();
+    let values: IndexMap<String, f64> = defs.iter().map(|(n, d)| (n.clone(), d.value.get())).collect();
     checks
         .iter()
         .map(|c| match eval_expr(&c.expr, &values) {
-            Ok(v) if v.is_nan() => CheckResult {
-                ok: false,
-                error: Some("does not evaluate to a number".to_owned()),
-            },
-            Ok(v) => CheckResult {
-                ok: v != 0.0,
-                error: None,
-            },
-            Err(e) => CheckResult {
-                ok: false,
-                error: Some(e.message),
-            },
+            Ok(v) if v.is_nan() => CheckResult { ok: false, error: Some("does not evaluate to a number".to_owned()) },
+            Ok(v) => CheckResult { ok: v != 0.0, error: None },
+            Err(e) => CheckResult { ok: false, error: Some(e.message) },
         })
         .collect()
 }

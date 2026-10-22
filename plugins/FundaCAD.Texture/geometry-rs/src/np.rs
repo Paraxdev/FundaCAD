@@ -83,8 +83,7 @@ pub fn searchsorted(a: &[f64], x: f64) -> usize {
 }
 
 pub fn min_max(v: impl IntoIterator<Item = f64>) -> (f64, f64) {
-    v.into_iter()
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| (lo.min(x), hi.max(x)))
+    v.into_iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| (lo.min(x), hi.max(x)))
 }
 
 /// Least squares `M a = y` for an (n, 3) design matrix, by Householder QR.

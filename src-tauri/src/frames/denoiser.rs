@@ -71,10 +71,8 @@ pub async fn pt_denoiser(app: tauri::AppHandle) -> Info {
 pub async fn pt_denoiser_download(app: tauri::AppHandle) -> Result<Info, String> {
     let rel = oidn::release()?;
     let dest = dir(&app)?;
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(600))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client =
+        reqwest::Client::builder().timeout(std::time::Duration::from_secs(600)).build().map_err(|e| e.to_string())?;
     let offline = |e: reqwest::Error| format!("the download failed, the edge aware filter stays ({e})");
     let resp = client.get(rel.url).send().await.map_err(offline)?.error_for_status().map_err(offline)?;
     let bytes = resp.bytes().await.map_err(offline)?;

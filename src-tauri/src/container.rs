@@ -23,11 +23,7 @@ pub use fundacad_format::container::*;
 /// assembly), this one holds one per IMPORT FEATURE.
 pub fn blob_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("blobs");
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("blobs");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
@@ -37,11 +33,7 @@ pub fn blob_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 /// next to the blobs rather than in geomstore so a container can seed it.
 pub fn mesh_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("meshes");
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("meshes");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
@@ -50,11 +42,7 @@ pub fn mesh_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 /// written back on save, one file per section named by its hash.
 pub fn section_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("sections");
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("sections");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }

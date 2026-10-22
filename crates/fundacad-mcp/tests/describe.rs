@@ -13,7 +13,7 @@ use serde_json::json;
 fn a_rounded_number_prints_the_way_python_prints_it() {
     let cases: &[(f64, i32, &str)] = &[
         (20.0, 3, "20"),
-        (0.5, 0, "0"),   // halves go to the even neighbour
+        (0.5, 0, "0"), // halves go to the even neighbour
         (1.5, 0, "2"),
         (2.5, 0, "2"),
         (-2.5, 0, "-2"),
@@ -67,10 +67,7 @@ fn a_body_reads_as_one_line_and_its_traps_as_warnings() {
     assert!(summary.contains("! 1 face(s) wrap all the way round (F0)"), "{summary}");
     assert!(summary.contains("! 1 edge(s) bound only ONE face"), "{summary}");
     assert!(summary.contains("this body is 2 solids that do not touch"), "{summary}");
-    assert!(
-        summary.contains("ERROR (feature fil1): the blend was refused"),
-        "{summary}"
-    );
+    assert!(summary.contains("ERROR (feature fil1): the blend was refused"), "{summary}");
     assert!(!summary.contains("  faces:"), "a summary lists no faces");
 
     let detail = describe(&report, true);
@@ -78,16 +75,10 @@ fn a_body_reads_as_one_line_and_its_traps_as_warnings() {
         detail.contains("  F0 cylinder | area 1884.95 | r 10 | at (0, 0, 0) | normal (1, -0, 0) | WRAPS"),
         "{detail}"
     );
-    assert!(
-        detail.contains("  E0 line | len 30 | mid (10, 0, 0) | between F0 | SEAM | OPEN"),
-        "{detail}"
-    );
+    assert!(detail.contains("  E0 line | len 30 | mid (10, 0, 0) | between F0 | SEAM | OPEN"), "{detail}");
 }
 
 #[test]
 fn nothing_built_says_so() {
-    assert_eq!(
-        describe(&json!({"bodies": []}), true),
-        "No bodies. The document built nothing."
-    );
+    assert_eq!(describe(&json!({"bodies": []}), true), "No bodies. The document built nothing.");
 }

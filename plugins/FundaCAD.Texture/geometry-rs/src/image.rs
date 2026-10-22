@@ -40,32 +40,22 @@ pub fn load(path: &str) -> Result<Gray, String> {
         DynamicImage::ImageLumaA8(b) => b.pixels().map(|p| f64::from(p.0[0])).collect(),
         DynamicImage::ImageLuma16(b) => b.pixels().map(|p| f64::from(p.0[0].min(255))).collect(),
         DynamicImage::ImageLumaA16(b) => b.pixels().map(|p| f64::from(p.0[0].min(255))).collect(),
-        DynamicImage::ImageRgb8(b) => b
-            .pixels()
-            .map(|p| l24(u32::from(p.0[0]), u32::from(p.0[1]), u32::from(p.0[2])))
-            .collect(),
-        DynamicImage::ImageRgba8(b) => b
-            .pixels()
-            .map(|p| l24(u32::from(p.0[0]), u32::from(p.0[1]), u32::from(p.0[2])))
-            .collect(),
-        DynamicImage::ImageRgb16(b) => b
-            .pixels()
-            .map(|p| l24(u32::from(p.0[0] >> 8), u32::from(p.0[1] >> 8), u32::from(p.0[2] >> 8)))
-            .collect(),
-        DynamicImage::ImageRgba16(b) => b
-            .pixels()
-            .map(|p| l24(u32::from(p.0[0] >> 8), u32::from(p.0[1] >> 8), u32::from(p.0[2] >> 8)))
-            .collect(),
+        DynamicImage::ImageRgb8(b) => {
+            b.pixels().map(|p| l24(u32::from(p.0[0]), u32::from(p.0[1]), u32::from(p.0[2]))).collect()
+        }
+        DynamicImage::ImageRgba8(b) => {
+            b.pixels().map(|p| l24(u32::from(p.0[0]), u32::from(p.0[1]), u32::from(p.0[2]))).collect()
+        }
+        DynamicImage::ImageRgb16(b) => {
+            b.pixels().map(|p| l24(u32::from(p.0[0] >> 8), u32::from(p.0[1] >> 8), u32::from(p.0[2] >> 8))).collect()
+        }
+        DynamicImage::ImageRgba16(b) => {
+            b.pixels().map(|p| l24(u32::from(p.0[0] >> 8), u32::from(p.0[1] >> 8), u32::from(p.0[2] >> 8))).collect()
+        }
         other => {
             let rgb = other.to_rgb8();
-            rgb.pixels()
-                .map(|p| l24(u32::from(p.0[0]), u32::from(p.0[1]), u32::from(p.0[2])))
-                .collect()
+            rgb.pixels().map(|p| l24(u32::from(p.0[0]), u32::from(p.0[1]), u32::from(p.0[2]))).collect()
         }
     };
-    Ok(Gray {
-        w,
-        h,
-        px: px.into_iter().map(|x| x / 255.0).collect(),
-    })
+    Ok(Gray { w, h, px: px.into_iter().map(|x| x / 255.0).collect() })
 }

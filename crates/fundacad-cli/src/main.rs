@@ -74,8 +74,7 @@ impl Outbox for Channel {
     fn send(&self, msgs: &mut dyn Iterator<Item = Message>) -> io::Result<()> {
         let tx = self.0.lock().unwrap_or_else(|p| p.into_inner());
         for m in msgs {
-            tx.send(m)
-                .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
+            tx.send(m).map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
         }
         Ok(())
     }
@@ -146,11 +145,7 @@ fn rebuild(args: &[String]) -> ExitCode {
     if std::env::var_os("FUNDACAD_BENCH_PHASES").is_some_and(|v| v != "0") {
         eprintln!("phases {}", fundacad_geom::bench::report());
     }
-    let written = if as_json {
-        writeln!(out, "{reply}")
-    } else {
-        writeln!(out, "{}", summary(&reply))
-    };
+    let written = if as_json { writeln!(out, "{reply}") } else { writeln!(out, "{}", summary(&reply)) };
     if written.and_then(|_| out.flush()).is_err() {
         return ExitCode::from(2);
     }
@@ -203,10 +198,7 @@ fn doc_json(args: &[String]) -> ExitCode {
 
 fn summary(reply: &Value) -> String {
     if reply["ok"] != true {
-        return format!(
-            "error: {}",
-            reply["error"]["message"].as_str().unwrap_or("unknown")
-        );
+        return format!("error: {}", reply["error"]["message"].as_str().unwrap_or("unknown"));
     }
     let res = &reply["result"];
     let bodies = res["bodies"].as_array().map_or(0, Vec::len);
@@ -284,14 +276,8 @@ fn select_eval(args: &[String]) -> ExitCode {
     metrics.insert("tests_pass".into(), json!(tests_pass));
     let survived: usize = counts.iter().map(|c| c.1).sum();
     let valid: usize = counts.iter().map(|c| c.2).sum();
-    let per: Vec<String> = counts
-        .iter()
-        .map(|(c, s, v)| format!("{c}: ({s}, {v})"))
-        .collect();
-    eprintln!(
-        "survive={survived}/{valid} per-category={{{}}}",
-        per.join(", ")
-    );
+    let per: Vec<String> = counts.iter().map(|(c, s, v)| format!("{c}: ({s}, {v})")).collect();
+    eprintln!("survive={survived}/{valid} per-category={{{}}}", per.join(", "));
     println!("{}", Value::Object(metrics));
     ExitCode::SUCCESS
 }

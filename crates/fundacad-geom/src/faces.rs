@@ -30,11 +30,7 @@ fn sub(a: V3, b: V3) -> V3 {
 }
 
 fn cross(a: V3, b: V3) -> V3 {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 
 fn norm(a: V3) -> f64 {
@@ -137,13 +133,7 @@ pub fn surface_of(face: &Shape) -> Result<Option<Surface>, cxx::Exception> {
         3 => Some(Surface::Sphere { centre: loc, radius: o[7], flip }),
         4 => {
             let d = canon_dir(dir);
-            Some(Surface::Torus {
-                dir: d,
-                loc,
-                major: o[7],
-                minor: o[8],
-                side: torus_side(face, d, loc, o[7])?,
-            })
+            Some(Surface::Torus { dir: d, loc, major: o[7], minor: o[8], side: torus_side(face, d, loc, o[7])? })
         }
         _ => None,
     })

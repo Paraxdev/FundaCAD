@@ -17,11 +17,7 @@ pub struct GlbMesh<'a> {
 /// `'#RRGGBB'` upper case, from `#rrggbb`, `rrggbb` or `rrggbbaa`, else grey.
 pub fn norm_color(c: &str) -> String {
     let s = c.trim().trim_start_matches('#');
-    let s = if s.chars().count() == 8 {
-        &s[..s.char_indices().nth(6).map_or(s.len(), |(i, _)| i)]
-    } else {
-        s
-    };
+    let s = if s.chars().count() == 8 { &s[..s.char_indices().nth(6).map_or(s.len(), |(i, _)| i)] } else { s };
     if s.len() != 6 || !s.chars().all(|c| c.is_ascii_hexdigit()) {
         return "#808080".into();
     }
@@ -45,12 +41,7 @@ fn base_color_factor(hex: Option<&str>) -> [f64; 4] {
         Some([b(0)?, b(2)?, b(4)?])
     })()
     .unwrap_or([128, 128, 128]);
-    [
-        round6(srgb_to_linear(rgb[0])),
-        round6(srgb_to_linear(rgb[1])),
-        round6(srgb_to_linear(rgb[2])),
-        1.0,
-    ]
+    [round6(srgb_to_linear(rgb[0])), round6(srgb_to_linear(rgb[1])), round6(srgb_to_linear(rgb[2])), 1.0]
 }
 
 /// Area weighted, summed corner by corner in triangle order as numpy's
@@ -67,11 +58,7 @@ fn vertex_normals(pos: &[f64], idx: &[u32]) -> Vec<f32> {
             let (a, b, c) = (p(t[0]), p(t[1]), p(t[2]));
             let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
             let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-            [
-                u[1] * v[2] - u[2] * v[1],
-                u[2] * v[0] - u[0] * v[2],
-                u[0] * v[1] - u[1] * v[0],
-            ]
+            [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
         })
         .collect();
     let mut nrm = vec![[0.0f64; 3]; n];
@@ -134,21 +121,9 @@ pub fn write(meshes: &[GlbMesh<'_>], mut out: impl Write) -> io::Result<()> {
         let idx = &m.indices[..ntri * 3];
         let nrm = vertex_normals(pos, idx);
 
-        let p_view = view(
-            pos.iter().flat_map(|&v| (v as f32).to_le_bytes()).collect(),
-            34962,
-            &mut views,
-        );
-        let n_view = view(
-            nrm.iter().flat_map(|v| v.to_le_bytes()).collect(),
-            34962,
-            &mut views,
-        );
-        let i_view = view(
-            idx.iter().flat_map(|v| v.to_le_bytes()).collect(),
-            34963,
-            &mut views,
-        );
+        let p_view = view(pos.iter().flat_map(|&v| (v as f32).to_le_bytes()).collect(), 34962, &mut views);
+        let n_view = view(nrm.iter().flat_map(|v| v.to_le_bytes()).collect(), 34962, &mut views);
+        let i_view = view(idx.iter().flat_map(|v| v.to_le_bytes()).collect(), 34963, &mut views);
 
         let mut lo = [f64::INFINITY; 3];
         let mut hi = [f64::NEG_INFINITY; 3];
@@ -192,10 +167,7 @@ pub fn write(meshes: &[GlbMesh<'_>], mut out: impl Write) -> io::Result<()> {
             (
                 "pbrMetallicRoughness",
                 Json::Obj(vec![
-                    (
-                        "baseColorFactor",
-                        Json::Arr(factor.iter().map(|&x| Json::Float(x)).collect()),
-                    ),
+                    ("baseColorFactor", Json::Arr(factor.iter().map(|&x| Json::Float(x)).collect())),
                     ("metallicFactor", Json::Float(0.0)),
                     ("roughnessFactor", Json::Float(0.7)),
                 ]),
@@ -207,19 +179,13 @@ pub fn write(meshes: &[GlbMesh<'_>], mut out: impl Write) -> io::Result<()> {
             (
                 "primitives",
                 Json::Arr(vec![Json::Obj(vec![
-                    (
-                        "attributes",
-                        Json::Obj(vec![("POSITION", Json::Int(a)), ("NORMAL", Json::Int(a + 1))]),
-                    ),
+                    ("attributes", Json::Obj(vec![("POSITION", Json::Int(a)), ("NORMAL", Json::Int(a + 1))])),
                     ("indices", Json::Int(a + 2)),
                     ("material", Json::Int(materials.len() as i64 - 1)),
                 ])]),
             ),
         ]));
-        nodes.push(Json::Obj(vec![
-            ("name", Json::Str(name)),
-            ("mesh", Json::Int(gl_meshes.len() as i64 - 1)),
-        ]));
+        nodes.push(Json::Obj(vec![("name", Json::Str(name)), ("mesh", Json::Int(gl_meshes.len() as i64 - 1))]));
     }
 
     let children = Json::Arr((1..=nodes.len() as i64).map(Json::Int).collect());
@@ -234,13 +200,7 @@ pub fn write(meshes: &[GlbMesh<'_>], mut out: impl Write) -> io::Result<()> {
     );
     let any = !gl_meshes.is_empty();
     let mut doc = vec![
-        (
-            "asset",
-            Json::Obj(vec![
-                ("version", Json::Str("2.0".into())),
-                ("generator", Json::Str("FundaCAD".into())),
-            ]),
-        ),
+        ("asset", Json::Obj(vec![("version", Json::Str("2.0".into())), ("generator", Json::Str("FundaCAD".into()))])),
         ("scene", Json::Int(0)),
         ("scenes", Json::Arr(vec![Json::Obj(vec![("nodes", Json::Arr(vec![Json::Int(0)]))])])),
         ("nodes", Json::Arr(nodes)),

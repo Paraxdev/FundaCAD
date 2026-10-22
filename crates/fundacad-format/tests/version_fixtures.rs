@@ -24,15 +24,8 @@ fn scratch(tag: &str) -> PathBuf {
 #[ignore]
 fn write_the_v10_binary_fixture() {
     let text = std::fs::read_to_string(versions().join("v10.funda")).unwrap();
-    write_document(
-        &versions().join("v10.fundab"),
-        &text,
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        &[],
-        "FundaCAD fixture",
-    )
-    .unwrap();
+    write_document(&versions().join("v10.fundab"), &text, &BTreeMap::new(), &BTreeMap::new(), &[], "FundaCAD fixture")
+        .unwrap();
 }
 
 #[test]
@@ -61,11 +54,26 @@ fn write_the_segmented_fixture() {
     let info = fnda::json_to_cbor(r#"{"app":"FundaCAD fixture","hashAlg":"blake2b-128"}"#).unwrap();
     let doc = fnda::json_to_cbor(SEGMENTED_DOCUMENT).unwrap();
     let mut sections = vec![
-        fnda::SectionSpec { kind: fnda::KIND_INFO, name: "info".into(), source: fnda::Source::Bytes(&info), layout: fnda::SMALL_LAYOUT },
-        fnda::SectionSpec { kind: fnda::KIND_DOCUMENT, name: "document".into(), source: fnda::Source::Bytes(&doc), layout: fnda::SMALL_LAYOUT },
+        fnda::SectionSpec {
+            kind: fnda::KIND_INFO,
+            name: "info".into(),
+            source: fnda::Source::Bytes(&info),
+            layout: fnda::SMALL_LAYOUT,
+        },
+        fnda::SectionSpec {
+            kind: fnda::KIND_DOCUMENT,
+            name: "document".into(),
+            source: fnda::Source::Bytes(&doc),
+            layout: fnda::SMALL_LAYOUT,
+        },
     ];
     for (hash, bytes) in &blobs {
-        sections.push(fnda::SectionSpec { kind: fnda::KIND_GEOMETRY, name: hash.clone(), source: fnda::Source::Bytes(bytes), layout: fnda::LARGE_LAYOUT });
+        sections.push(fnda::SectionSpec {
+            kind: fnda::KIND_GEOMETRY,
+            name: hash.clone(),
+            source: fnda::Source::Bytes(bytes),
+            layout: fnda::LARGE_LAYOUT,
+        });
     }
     let o = fnda::WriteOptions { segment_raw: 64 << 10, threads: 1 };
     fnda::write_with(&mut std::fs::File::create(versions().join("segmented.fundab")).unwrap(), &sections, &o).unwrap();
@@ -78,7 +86,10 @@ fn the_segmented_fixture_opens_with_its_geometry() {
     let blobs = scratch("segmented");
     let (doc, report) = open_document_checked(&path, &blobs, None).unwrap();
     assert!(report.repaired_shards == 0 && !report.used_backup_index);
-    assert_eq!(serde_json::from_str::<Value>(&doc).unwrap(), serde_json::from_str::<Value>(SEGMENTED_DOCUMENT).unwrap());
+    assert_eq!(
+        serde_json::from_str::<Value>(&doc).unwrap(),
+        serde_json::from_str::<Value>(SEGMENTED_DOCUMENT).unwrap()
+    );
     let geometry = segmented_geometry();
     assert_eq!(std::fs::read(blobs.join(format!("{}.bbrep", hash_bytes(&geometry)))).unwrap(), geometry);
     let _ = std::fs::remove_dir_all(blobs);

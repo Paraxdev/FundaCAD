@@ -33,10 +33,7 @@ pub struct Limits {
 
 impl Default for Limits {
     fn default() -> Self {
-        Limits {
-            max_frame: MAX_FRAME,
-            chunk_target: CHUNK_TARGET_BYTES,
-        }
+        Limits { max_frame: MAX_FRAME, chunk_target: CHUNK_TARGET_BYTES }
     }
 }
 
@@ -122,10 +119,7 @@ impl<'a> Packer<'a> {
     }
 
     fn meta(&self) -> Value {
-        self.bufs
-            .iter()
-            .map(|b| json!({"dtype": b.dtype(), "len": b.len()}))
-            .collect()
+        self.bufs.iter().map(|b| json!({"dtype": b.dtype(), "len": b.len()})).collect()
     }
 }
 
@@ -136,13 +130,7 @@ fn pack_edges<'a>(body: &'a FullBody, p: &mut Packer<'a>) -> Value {
     out.insert("$pts".into(), p.take(BufSrc::EdgePoints(&body.edges)));
     out.insert("$counts".into(), p.take(BufSrc::EdgeCounts(&body.edges)));
     out.insert("body".into(), body.id().clone());
-    let smooth: Vec<Value> = body
-        .edges
-        .iter()
-        .enumerate()
-        .filter(|(_, e)| e.smooth)
-        .map(|(i, _)| i.into())
-        .collect();
+    let smooth: Vec<Value> = body.edges.iter().enumerate().filter(|(_, e)| e.smooth).map(|(i, _)| i.into()).collect();
     if !smooth.is_empty() {
         out.insert("smooth".into(), Value::Array(smooth));
     }
@@ -179,11 +167,7 @@ fn pack_bodies<'a>(bodies: &'a [WireBody], p: &mut Packer<'a>) -> Vec<Value> {
 
 /// `_frame_bytes`: size the frame from its parts, refuse at the cap, then lay
 /// it out in one allocation.
-fn frame_bytes(
-    envelope: &Value,
-    bufs: &[BufSrc<'_>],
-    max_frame: usize,
-) -> Result<Vec<u8>, TooLarge> {
+fn frame_bytes(envelope: &Value, bufs: &[BufSrc<'_>], max_frame: usize) -> Result<Vec<u8>, TooLarge> {
     let header = pyjson::to_string(envelope);
     let pad = (4 - header.len() % 4) % 4;
     let total = 4 + header.len() + pad + bufs.iter().map(|b| 4 * b.len()).sum::<usize>();
@@ -201,36 +185,20 @@ fn frame_bytes(
 }
 
 /// `_encode_binary_reply`: a successful mesh result as one binary frame.
-pub fn encode_binary_reply(
-    id: &Value,
-    res: &MeshResult,
-    limits: &Limits,
-) -> Result<Vec<u8>, TooLarge> {
+pub fn encode_binary_reply(id: &Value, res: &MeshResult, limits: &Limits) -> Result<Vec<u8>, TooLarge> {
     let mut p = Packer::default();
     let mut header = res.fields.clone();
-    header.insert(
-        "bodies".into(),
-        Value::Array(pack_bodies(&res.bodies, &mut p)),
-    );
+    header.insert("bodies".into(), Value::Array(pack_bodies(&res.bodies, &mut p)));
     header.insert("$buffers".into(), p.meta());
     let env = json!({"id": id, "ok": true, "result": header});
     frame_bytes(&env, &p.bufs, limits.max_frame)
 }
 
 /// One frame of a chunked stream, `{"id", "stream", "ok"|"status", "result"}`.
-fn stream_envelope(
-    id: &Value,
-    sid: &str,
-    seq: usize,
-    fin: bool,
-    result: Map<String, Value>,
-) -> Value {
+fn stream_envelope(id: &Value, sid: &str, seq: usize, fin: bool, result: Map<String, Value>) -> Value {
     let mut env = Map::new();
     env.insert("id".into(), id.clone());
-    env.insert(
-        "stream".into(),
-        json!({"sid": sid, "seq": seq, "final": fin}),
-    );
+    env.insert("stream".into(), json!({"sid": sid, "seq": seq, "final": fin}));
     if fin {
         env.insert("ok".into(), Value::Bool(true));
     } else {
@@ -250,17 +218,9 @@ pub(crate) fn encode_stream_head(
 ) -> Result<Vec<u8>, TooLarge> {
     let mut head = res.fields.clone();
     head.shift_remove("bodies");
-    let manifest = res
-        .bodies
-        .iter()
-        .map(|b| Value::Object(b.manifest_entry()))
-        .collect();
+    let manifest = res.bodies.iter().map(|b| Value::Object(b.manifest_entry())).collect();
     head.insert("manifest".into(), Value::Array(manifest));
-    frame_bytes(
-        &stream_envelope(id, sid, 0, fin, head),
-        &[],
-        limits.max_frame,
-    )
+    frame_bytes(&stream_envelope(id, sid, 0, fin, head), &[], limits.max_frame)
 }
 
 /// Frame `seq` of a stream, carrying a contiguous slice of the bodies.
@@ -276,11 +236,7 @@ pub(crate) fn encode_stream_chunk(
     let mut result = Map::new();
     result.insert("bodies".into(), Value::Array(pack_bodies(bodies, &mut p)));
     result.insert("$buffers".into(), p.meta());
-    frame_bytes(
-        &stream_envelope(id, sid, seq, fin, result),
-        &p.bufs,
-        limits.max_frame,
-    )
+    frame_bytes(&stream_envelope(id, sid, seq, fin, result), &p.bufs, limits.max_frame)
 }
 
 /// `sysmem.describe`: a human size for an error message, "1.8 GiB".
@@ -331,12 +287,7 @@ pub fn too_large_error(id: &Value, size: usize, n_bodies: usize, limits: &Limits
 
 /// `_body_too_large_error`: one body alone is over the cap, the case chunking
 /// cannot fix because a body is the indivisible unit of a chunk.
-pub fn body_too_large_error(
-    id: &Value,
-    chunk: &[WireBody],
-    size: usize,
-    limits: &Limits,
-) -> String {
+pub fn body_too_large_error(id: &Value, chunk: &[WireBody], size: usize, limits: &Limits) -> String {
     // Python's max() keeps the FIRST of equal sizes, Iterator::max_by_key the last.
     let mut worst: Option<&WireBody> = None;
     for b in chunk {
@@ -344,9 +295,7 @@ pub fn body_too_large_error(
             worst = Some(b);
         }
     }
-    let label = worst
-        .map(|w| label_of(w.fields()))
-        .unwrap_or_else(|| "a body".into());
+    let label = worst.map(|w| label_of(w.fields())).unwrap_or_else(|| "a body".into());
     eprintln!(
         "[rebuild] body {label:?} alone is {}, over the {} frame cap",
         describe_size(size),
@@ -411,10 +360,7 @@ pub enum Buf {
 /// rather than as one JSON number per coordinate.
 pub fn decode_frame_raw(bytes: &[u8]) -> Result<(Value, Vec<Buf>), String> {
     let word = |at: usize| -> Result<[u8; 4], String> {
-        bytes
-            .get(at..at + 4)
-            .and_then(|b| b.try_into().ok())
-            .ok_or_else(|| "the frame ends early".to_string())
+        bytes.get(at..at + 4).and_then(|b| b.try_into().ok()).ok_or_else(|| "the frame ends early".to_string())
     };
     let hl = u32::from_le_bytes(word(0)?) as usize;
     let head = bytes.get(4..4 + hl).ok_or("the frame header ends early")?;
@@ -506,34 +452,22 @@ mod tests {
         b.indices = vec![0, 1, 2];
         b.face_ids = vec![0];
         b.edges = vec![
-            Edge {
-                points: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
-                smooth: false,
-            },
-            Edge {
-                points: vec![[1.0, 1.0, 1.0]],
-                smooth: true,
-            },
+            Edge { points: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], smooth: false },
+            Edge { points: vec![[1.0, 1.0, 1.0]], smooth: true },
         ];
         b
     }
 
     #[test]
     fn frame_layout_decodes() {
-        let res = MeshResult {
-            fields: Map::new(),
-            bodies: vec![WireBody::Full(body())],
-        };
+        let res = MeshResult { fields: Map::new(), bodies: vec![WireBody::Full(body())] };
         let frame = encode_binary_reply(&json!("r"), &res, &Limits::default()).expect("fits");
         let hl = u32::from_le_bytes([frame[0], frame[1], frame[2], frame[3]]) as usize;
         let header: Value = serde_json::from_slice(&frame[4..4 + hl]).expect("json");
         let mut off = 4 + hl + (4 - hl % 4) % 4;
         assert_eq!(off % 4, 0);
         let bufs = header["result"]["$buffers"].as_array().expect("buffers");
-        let lens: Vec<u64> = bufs
-            .iter()
-            .map(|b| b["len"].as_u64().unwrap_or(0))
-            .collect();
+        let lens: Vec<u64> = bufs.iter().map(|b| b["len"].as_u64().unwrap_or(0)).collect();
         assert_eq!(lens, vec![9, 3, 1, 9, 2]);
         off += 4 * lens.iter().sum::<u64>() as usize;
         assert_eq!(off, frame.len());
@@ -545,27 +479,18 @@ mod tests {
 
     #[test]
     fn decoded_frame_is_the_text_reply() {
-        let res = MeshResult {
-            fields: Map::new(),
-            bodies: vec![WireBody::Full(body())],
-        };
+        let res = MeshResult { fields: Map::new(), bodies: vec![WireBody::Full(body())] };
         let frame = encode_binary_reply(&json!("r"), &res, &Limits::default()).expect("fits");
         let decoded = decode_frame(&frame).expect("decodes");
-        let text: Value = serde_json::from_str(&envelope::reply_for(&json!("r"), &JobResult::Mesh(res).to_json()))
-            .expect("json");
+        let text: Value =
+            serde_json::from_str(&envelope::reply_for(&json!("r"), &JobResult::Mesh(res).to_json())).expect("json");
         assert_eq!(decoded, text);
     }
 
     #[test]
     fn too_large_refuses() {
-        let res = MeshResult {
-            fields: Map::new(),
-            bodies: vec![WireBody::Full(body())],
-        };
-        let limits = Limits {
-            max_frame: 64,
-            chunk_target: 16,
-        };
+        let res = MeshResult { fields: Map::new(), bodies: vec![WireBody::Full(body())] };
+        let limits = Limits { max_frame: 64, chunk_target: 16 };
         let msg = reply_bytes(&json!("r"), &JobResult::Mesh(res), true, &limits);
         match msg {
             Message::Text(t) => {

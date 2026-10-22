@@ -29,10 +29,7 @@ struct Client {
 impl Client {
     fn new() -> Client {
         let (tx, rx) = channel();
-        Client {
-            engine: Engine::start(GeomJobs, Arc::new(Channel(Mutex::new(tx)))),
-            rx,
-        }
+        Client { engine: Engine::start(GeomJobs, Arc::new(Channel(Mutex::new(tx)))), rx }
     }
 
     fn call(&self, req: Value) -> Value {
@@ -57,11 +54,7 @@ fn list_fonts_answers_a_sorted_family_list() {
     assert_eq!(r.as_object().map(|m| m.len()), Some(1), "only families");
     let names: Vec<&str> = families.iter().filter_map(Value::as_str).collect();
     assert!(names.windows(2).all(|w| w[0] <= w[1]), "sorted");
-    assert_eq!(
-        names.len(),
-        names.iter().collect::<std::collections::HashSet<_>>().len(),
-        "deduplicated"
-    );
+    assert_eq!(names.len(), names.iter().collect::<std::collections::HashSet<_>>().len(), "deduplicated");
 }
 
 #[test]
@@ -75,10 +68,7 @@ fn tessellate_text_gives_outer_contours_and_counters() {
         return;
     }
     assert_eq!(faces.len(), 2, "one face per glyph: {r}");
-    let holes: Vec<usize> = faces
-        .iter()
-        .map(|f| f["holes"].as_array().map_or(0, Vec::len))
-        .collect();
+    let holes: Vec<usize> = faces.iter().map(|f| f["holes"].as_array().map_or(0, Vec::len)).collect();
     assert_eq!(holes, vec![1, 2], "an o has one counter, a B has two");
     for f in &faces {
         let outer = f["outer"].as_array().cloned().unwrap_or_default();

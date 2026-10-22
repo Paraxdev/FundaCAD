@@ -47,15 +47,11 @@ pub struct AppSession {
 pub fn app_data_dir() -> PathBuf {
     let base = if cfg!(windows) {
         // FOLDERID_RoamingAppData. Tauri uses the roaming one, not Local.
-        std::env::var_os("APPDATA")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home().join("AppData").join("Roaming"))
+        std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| home().join("AppData").join("Roaming"))
     } else if cfg!(target_os = "macos") {
         home().join("Library").join("Application Support")
     } else {
-        std::env::var_os("XDG_DATA_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home().join(".local").join("share"))
+        std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home().join(".local").join("share"))
     };
     base.join(APP_IDENTIFIER)
 }
@@ -112,10 +108,7 @@ pub fn read_session_file(path: Option<&Path>) -> Option<AppSession> {
 pub async fn probe(info: &AppSession, timeout: Duration) -> Option<Value> {
     let call = async {
         let mut ws = crate::link::Socket::connect(info.port, &info.token).await.ok()?;
-        let reply = ws
-            .request("probe", &serde_json::json!({"op": "ping"}))
-            .await
-            .ok()?;
+        let reply = ws.request("probe", &serde_json::json!({"op": "ping"})).await.ok()?;
         let _ = ws.close().await;
         let result = reply.get("result")?;
         (result.get("pong") == Some(&Value::Bool(true))).then(|| result.clone())

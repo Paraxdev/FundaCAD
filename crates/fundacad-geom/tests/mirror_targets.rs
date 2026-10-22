@@ -58,7 +58,8 @@ fn mirror_without_bodies_still_reflects_the_active_body() {
 
 #[test]
 fn mirror_of_a_missing_body_refuses_and_names_it() {
-    let r = build(&two_boxes(json!({"id": "m", "type": "mirror", "plane": {"name": "YZ"}, "bodies": ["body1", "body9"]})));
+    let r =
+        build(&two_boxes(json!({"id": "m", "type": "mirror", "plane": {"name": "YZ"}, "bodies": ["body1", "body9"]})));
     let msg = only_error_of_m(&r);
     assert!(msg.contains("body9") && !msg.contains("body1"), "{msg}");
     let (v1, _) = volume_and_min_x(&r, "body1");

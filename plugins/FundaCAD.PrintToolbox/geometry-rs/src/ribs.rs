@@ -11,10 +11,7 @@ pub fn thread_ribs(f: &F) -> Result<(), String> {
     let raw_count = f.num("ribCount", 3.0)?;
     let count = raw_count.round_ties_even() as i64;
     if (raw_count - count as f64).abs() > 1e-9 || !(3..=8).contains(&count) {
-        return Err(format!(
-            "{label}: the rib count must be a whole number from 3 to 8 (got {})",
-            py_g(raw_count)
-        ));
+        return Err(format!("{label}: the rib count must be a whole number from 3 to 8 (got {})", py_g(raw_count)));
     }
     let width = f.num("ribWidth", 0.6)?;
     if width <= 0.0 {

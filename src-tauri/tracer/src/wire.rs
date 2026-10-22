@@ -70,8 +70,7 @@ pub fn decode_mesh(bytes: &[u8]) -> Result<(String, Mesh), String> {
     let mut r = Reader(body);
     let positions = r.vec3(h.vertices, "positions")?;
     let normals = if h.normals { r.vec3(h.vertices, "normals")? } else { Vec::new() };
-    let indices =
-        if h.indices > 0 { r.u32s(h.indices, "indices")? } else { (0..h.vertices as u32).collect() };
+    let indices = if h.indices > 0 { r.u32s(h.indices, "indices")? } else { (0..h.vertices as u32).collect() };
     if indices.len() % 3 != 0 {
         return Err(format!("{} indices is not whole triangles", indices.len()));
     }
@@ -167,8 +166,8 @@ mod tests {
 
     #[test]
     fn colours_set_or_clear() {
-        let (k, c) = decode_colors(&encode(r#"{"key":"k","vertices":1,"colors":true}"#, &[0.5, 0.25, 1.], &[], &[]))
-            .unwrap();
+        let (k, c) =
+            decode_colors(&encode(r#"{"key":"k","vertices":1,"colors":true}"#, &[0.5, 0.25, 1.], &[], &[])).unwrap();
         assert_eq!((k.as_str(), c), ("k", Some(vec![[0.5, 0.25, 1.]])));
         assert_eq!(decode_colors(&encode(r#"{"key":"k","vertices":1}"#, &[], &[], &[])).unwrap().1, None);
     }

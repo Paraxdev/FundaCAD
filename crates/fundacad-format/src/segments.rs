@@ -122,7 +122,10 @@ fn decode_inner(b: &[u8]) -> Option<Vec<Row>> {
         let body = take(n.checked_mul(8)?)?;
         let segments = body
             .chunks_exact(8)
-            .map(|c| Segment { stored: u32::from_le_bytes(c[0..4].try_into().unwrap()), raw: u32::from_le_bytes(c[4..8].try_into().unwrap()) })
+            .map(|c| Segment {
+                stored: u32::from_le_bytes(c[0..4].try_into().unwrap()),
+                raw: u32::from_le_bytes(c[4..8].try_into().unwrap()),
+            })
             .collect();
         rows.push(Row { kind, codec, raw_hash, stored_len, crc_table_crc, segments });
     }
@@ -132,7 +135,15 @@ fn decode_inner(b: &[u8]) -> Option<Vec<Row>> {
 /// Whether a row describes this very section: an older writer may have carried
 /// the index over a section it encoded again, so a row that does not fit is
 /// ignored and the section is read as one stream.
-pub fn matches(row: &Row, kind: u8, codec: u8, raw_hash: &[u8; 16], stored_len: u64, raw_len: u64, crc_table_crc: u32) -> bool {
+pub fn matches(
+    row: &Row,
+    kind: u8,
+    codec: u8,
+    raw_hash: &[u8; 16],
+    stored_len: u64,
+    raw_len: u64,
+    crc_table_crc: u32,
+) -> bool {
     let n = row.segments.len() as u64;
     if row.kind != kind || row.codec != codec || codec != crate::fnda::CODEC_DEFLATE {
         return false;

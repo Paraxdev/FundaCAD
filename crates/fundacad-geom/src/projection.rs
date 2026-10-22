@@ -119,11 +119,7 @@ fn kind(c: &Value) -> Option<&str> {
 fn pts(c: &Value) -> Vec<(f64, f64)> {
     c.get("pts")
         .and_then(Value::as_array)
-        .map(|a| {
-            a.iter()
-                .map(|p| (p[0].as_f64().unwrap_or(0.0), p[1].as_f64().unwrap_or(0.0)))
-                .collect()
-        })
+        .map(|a| a.iter().map(|p| (p[0].as_f64().unwrap_or(0.0), p[1].as_f64().unwrap_or(0.0))).collect())
         .unwrap_or_default()
 }
 
@@ -140,11 +136,9 @@ pub fn curve_close(a: &Value, b: &Value, tol: f64) -> bool {
     let Some(m) = a.as_object() else {
         return false;
     };
-    m.iter().filter(|(k, _)| k.as_str() != "kind").all(|(k, v)| {
-        match (v.as_f64(), num(b, k)) {
-            (Some(x), Some(y)) => (x - y).abs() <= tol,
-            _ => false,
-        }
+    m.iter().filter(|(k, _)| k.as_str() != "kind").all(|(k, v)| match (v.as_f64(), num(b, k)) {
+        (Some(x), Some(y)) => (x - y).abs() <= tol,
+        _ => false,
     })
 }
 
@@ -236,7 +230,8 @@ pub fn silhouette(shape: &Shape, plane: &Frame) -> FResult<Vec<Value>> {
                 let p = pts(&c);
                 let span = |g: fn(&P2) -> f64| {
                     let v: Vec<f64> = p.iter().map(g).collect();
-                    v.iter().cloned().fold(f64::NEG_INFINITY, f64::max) - v.iter().cloned().fold(f64::INFINITY, f64::min)
+                    v.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
+                        - v.iter().cloned().fold(f64::INFINITY, f64::min)
                 };
                 if span(|q| q.0) < 1e-6 && span(|q| q.1) < 1e-6 {
                     continue;
@@ -291,12 +286,8 @@ pub fn assign_silhouette(sibs: &[&Value], fresh: Option<&[Value]>) -> Vec<(Strin
         taken_sibs.insert(i);
         taken_curves.insert(j);
     }
-    let rest: Vec<&Value> = remaining
-        .iter()
-        .enumerate()
-        .filter(|(j, _)| !taken_curves.contains(j))
-        .map(|(_, c)| c)
-        .collect();
+    let rest: Vec<&Value> =
+        remaining.iter().enumerate().filter(|(j, _)| !taken_curves.contains(j)).map(|(_, c)| c).collect();
     let unmatched = movers.iter().enumerate().filter(|(i, _)| !taken_sibs.contains(i));
     for (k, (_, e)) in unmatched.enumerate() {
         out.push((id(e), rest.get(k).map(|c| (*c).clone())));
@@ -338,14 +329,10 @@ fn resolve_sketch_curve(
         .and_then(Value::as_array)
         .and_then(|es| es.iter().find(|e| e.get("id") == src.get("entity")))
         .ok_or_else(|| Fail::msg("the source curve no longer exists in its sketch"))?;
-    let typed: SketchEntity =
-        serde_json::from_value(ent.clone()).map_err(|_| Fail::Internal("TypeError".into()))?;
+    let typed: SketchEntity = serde_json::from_value(ent.clone()).map_err(|_| Fail::Internal("TypeError".into()))?;
     let eds = entity_curve_edges(ctx, &typed)?;
     if eds.is_empty() {
-        return Err(Fail::msg(format!(
-            "a \"{}\" entity has no curve to project",
-            py_str(ent.get("type"))
-        )));
+        return Err(Fail::msg(format!("a \"{}\" entity has no curve to project", py_str(ent.get("type")))));
     }
     let spec: PlaneSpec = sf
         .get("plane")
@@ -416,10 +403,7 @@ pub fn refresh(ctx: &mut Ctx, feature: &Value, prefix: &[Value]) {
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter(|e| {
-            e.get("type").and_then(Value::as_str) == Some("projected")
-                && e.get("id").is_some_and(truthy)
-        })
+        .filter(|e| e.get("type").and_then(Value::as_str) == Some("projected") && e.get("id").is_some_and(truthy))
         .collect();
     if ents.is_empty() {
         return;
@@ -440,10 +424,7 @@ pub fn refresh(ctx: &mut Ctx, feature: &Value, prefix: &[Value]) {
     let mut groups: IndexMap<(String, String), Vec<&Value>> = IndexMap::new();
     for e in &ents {
         if source(e, "kind") == json!("silhouette") {
-            groups
-                .entry((source(e, "body").to_string(), source(e, "group").to_string()))
-                .or_default()
-                .push(e);
+            groups.entry((source(e, "body").to_string(), source(e, "group").to_string())).or_default().push(e);
         }
     }
     let mut assigned: HashMap<String, Option<Value>> = HashMap::new();
@@ -492,15 +473,12 @@ pub fn refresh(ctx: &mut Ctx, feature: &Value, prefix: &[Value]) {
 }
 
 fn require_body<'a>(bodies: &'a [BuiltBody], bid: Option<&Value>) -> FResult<&'a BuiltBody> {
-    bodies
-        .iter()
-        .find(|b| bid.and_then(Value::as_str) == Some(b.id.as_str()))
-        .ok_or_else(|| {
-            Fail::msg(format!(
-                "source body \"{}\" is not available here, it may have been created after this sketch",
-                py_str(bid)
-            ))
-        })
+    bodies.iter().find(|b| bid.and_then(Value::as_str) == Some(b.id.as_str())).ok_or_else(|| {
+        Fail::msg(format!(
+            "source body \"{}\" is not available here, it may have been created after this sketch",
+            py_str(bid)
+        ))
+    })
 }
 
 /// `_project_source`: one source strictly, `[{fp?, curve}]` or a refusal.
@@ -538,27 +516,17 @@ fn project_source(
                 return Err(Fail::msg("the source geometry no longer exists on the body"));
             }
             if let Some(lossy) = diag.iter().find(|d| d.get("lossy").is_some_and(truthy)) {
-                let reason = lossy
-                    .get("reason")
-                    .filter(|r| truthy(r))
-                    .and_then(Value::as_str)
-                    .unwrap_or("low-confidence match");
+                let reason =
+                    lossy.get("reason").filter(|r| truthy(r)).and_then(Value::as_str).unwrap_or("low-confidence match");
                 return Err(Fail::msg(format!("the source selection is ambiguous on this body, {reason}")));
             }
             let fps = edge_fingerprints(&edges, shape)?;
-            edges
-                .iter()
-                .zip(fps)
-                .map(|(e, fp)| Ok(json!({"fp": fp, "curve": project_edge(e, plane)?})))
-                .collect()
+            edges.iter().zip(fps).map(|(e, fp)| Ok(json!({"fp": fp, "curve": project_edge(e, plane)?}))).collect()
         }
         Some("sketchCurve") => {
             let features = document.get("features").and_then(Value::as_array).cloned().unwrap_or_default();
             let (from, eds) = resolve_sketch_curve(ctx, &features, src, datums)?;
-            Ok(located_projection(&eds, &from, plane)?
-                .into_iter()
-                .map(|c| json!({"curve": c}))
-                .collect())
+            Ok(located_projection(&eds, &from, plane)?.into_iter().map(|c| json!({"curve": c})).collect())
         }
         Some("silhouette") => {
             let body = require_body(bodies, src.get("body"))?;
@@ -568,10 +536,7 @@ fn project_source(
             }
             Ok(curves.into_iter().map(|c| json!({"curve": c})).collect())
         }
-        _ => Err(Fail::msg(format!(
-            "unknown projection source kind: {}",
-            py_str(src.get("kind"))
-        ))),
+        _ => Err(Fail::msg(format!("unknown projection source kind: {}", py_str(src.get("kind"))))),
     }
 }
 

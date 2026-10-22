@@ -69,9 +69,7 @@ impl WebSocketTransport {
             notes,
         });
         let s = shared.clone();
-        std::thread::Builder::new()
-            .name("frames-ws".into())
-            .spawn(move || accept_loop(listener, s))?;
+        std::thread::Builder::new().name("frames-ws".into()).spawn(move || accept_loop(listener, s))?;
         Ok(WebSocketTransport { shared, addr })
     }
 

@@ -81,7 +81,14 @@ fn a_camera_sent_during_a_frame_answers_at_once_and_the_next_frame_traces_with_i
     };
     with(|t| t.set_cap(4096)).unwrap();
     t.opened();
-    let camera = Camera { eye: [3.5, -12.0, 4.25], target: [0.5, 1.5, -0.75], up: [0.0, 0.0, 1.0], fov: 38.0, ortho: None, lens: None };
+    let camera = Camera {
+        eye: [3.5, -12.0, 4.25],
+        target: [0.5, 1.5, -0.75],
+        up: [0.0, 0.0, 1.0],
+        fov: 38.0,
+        ortho: None,
+        lens: None,
+    };
     assert_eq!(pt_camera(Camera { eye: [-6.0, 9.5, 2.0], ..camera }), Ok(0));
     let mut out = vec![0; 32 * 24 * 4];
     for seq in 1..=2 {

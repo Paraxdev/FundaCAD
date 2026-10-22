@@ -133,10 +133,7 @@ pub fn eval_node(n: &Expr, values: &(impl Scope + ?Sized)) -> Result<f64, ExprEr
             if args.len() < *lo || hi.is_some_and(|h| args.len() > h) {
                 return Err(ExprError::new(arity_message(name, *lo, *hi), None));
             }
-            let vals = args
-                .iter()
-                .map(|a| eval_node(a, values))
-                .collect::<Result<Vec<_>, _>>()?;
+            let vals = args.iter().map(|a| eval_node(a, values)).collect::<Result<Vec<_>, _>>()?;
             apply(name, &vals)
         }
         Expr::Bin { op, l, r } => {

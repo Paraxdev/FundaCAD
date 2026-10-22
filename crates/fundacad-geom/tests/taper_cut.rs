@@ -59,7 +59,8 @@ fn block() -> Vec<Value> {
 }
 
 fn tapered(pts: &[[f64; 2]], z: f64, extra: Value) -> Vec<Value> {
-    let mut cut = json!({"id": "ridge", "type": "extrude", "sketch": "ridgeSk", "operation": "cut", "targets": ["body1"]});
+    let mut cut =
+        json!({"id": "ridge", "type": "extrude", "sketch": "ridgeSk", "operation": "cut", "targets": ["body1"]});
     for (k, v) in extra.as_object().expect("fields") {
         cut[k] = v.clone();
     }
@@ -206,7 +207,9 @@ fn the_ridge_keeps_its_edges_past_where_a_side_closes_up() {
     let pts = outline();
     let turned: Vec<[f64; 2]> = pts.iter().rev().copied().collect();
     let before = measured(&build(block()));
-    for (distance, taper, want) in [(2.1, 45.0, 2255.800), (2.2, 45.0, 2301.796), (1.9, 49.0, 1995.497), (1.9, 60.0, 1448.676)] {
+    for (distance, taper, want) in
+        [(2.1, 45.0, 2255.800), (2.2, 45.0, 2301.796), (1.9, 49.0, 1995.497), (1.9, 60.0, 1448.676)]
+    {
         for (label, outline) in [("as drawn", &pts), ("turned round", &turned)] {
             for way in [1.0, -1.0] {
                 let label = format!("{label}, {} by {taper}", way * distance);
@@ -270,7 +273,11 @@ fn spline(id: &str, closed: bool, pts: &[[f64; 2]]) -> Value {
 /// below its plane.
 #[test]
 fn a_spline_outline_tapers_both_ways_on_its_own_side() {
-    let blob = json!([spline("b", true, &[[0.0, -20.0], [25.0, -18.0], [30.0, 5.0], [12.0, 28.0], [-15.0, 22.0], [-28.0, 0.0]])]);
+    let blob = json!([spline(
+        "b",
+        true,
+        &[[0.0, -20.0], [25.0, -18.0], [30.0, 5.0], [12.0, 28.0], [-15.0, 22.0], [-28.0, 0.0]]
+    )]);
     let lens = json!([
         spline("a", false, &[[0.0, 0.0], [5.0, 6.0], [15.0, 6.0], [20.0, 0.0]]),
         spline("b", false, &[[20.0, 0.0], [15.0, -6.0], [5.0, -6.0], [0.0, 0.0]]),
@@ -546,7 +553,11 @@ fn an_inside_corner_tapers_to_an_edge_beside_an_arc_that_closes_up() {
         for (distance, taper, exact) in [(h, 30.0, narrow), (-h, 30.0, narrow), (h, -30.0, flare), (-h, -30.0, flare)] {
             let m = measured(&boss(outline.clone(), json!({"distance": distance, "taper": taper})));
             assert_eq!(m.solids, 1, "{winding}, {distance} by {taper}");
-            assert!((m.volume - exact).abs() < 1e-4, "{winding}, {distance} by {taper}: volume {} against {exact}", m.volume);
+            assert!(
+                (m.volume - exact).abs() < 1e-4,
+                "{winding}, {distance} by {taper}: volume {} against {exact}",
+                m.volume
+            );
         }
     }
 }
@@ -572,11 +583,20 @@ fn a_corner_of_an_outline_with_a_spline_tapers_to_an_edge() {
         (
             "bulging L",
             json!([
-                seg("a", [0.0, 0.0], [10.0, 0.0]), seg("b", [10.0, 0.0], [10.0, 4.0]), seg("c", [10.0, 4.0], [4.0, 4.0]),
-                seg("d", [4.0, 4.0], [4.0, 10.0]), seg("e", [4.0, 10.0], [0.0, 10.0]), bulge.clone(),
+                seg("a", [0.0, 0.0], [10.0, 0.0]),
+                seg("b", [10.0, 0.0], [10.0, 4.0]),
+                seg("c", [10.0, 4.0], [4.0, 4.0]),
+                seg("d", [4.0, 4.0], [4.0, 10.0]),
+                seg("e", [4.0, 10.0], [0.0, 10.0]),
+                bulge.clone(),
             ]),
             [
-                json!([seg("a", [0.0, 0.0], [4.0, 0.0]), seg("b", [4.0, 0.0], [4.0, 10.0]), seg("c", [4.0, 10.0], [0.0, 10.0]), bulge]),
+                json!([
+                    seg("a", [0.0, 0.0], [4.0, 0.0]),
+                    seg("b", [4.0, 0.0], [4.0, 10.0]),
+                    seg("c", [4.0, 10.0], [0.0, 10.0]),
+                    bulge
+                ]),
                 polygon(&[[0.0, 0.0], [10.0, 0.0], [10.0, 4.0], [0.0, 4.0]]),
             ],
             polygon(&[[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]]),
@@ -586,12 +606,21 @@ fn a_corner_of_an_outline_with_a_spline_tapers_to_an_edge() {
         (
             "hump",
             json!([
-                seg("a", [0.0, 0.0], [20.0, 0.0]), seg("b", [20.0, 0.0], [20.0, 10.0]), seg("c", [20.0, 10.0], [14.0, 10.0]),
-                hump.clone(), seg("e", [6.0, 10.0], [0.0, 10.0]), seg("f", [0.0, 10.0], [0.0, 0.0]),
+                seg("a", [0.0, 0.0], [20.0, 0.0]),
+                seg("b", [20.0, 0.0], [20.0, 10.0]),
+                seg("c", [20.0, 10.0], [14.0, 10.0]),
+                hump.clone(),
+                seg("e", [6.0, 10.0], [0.0, 10.0]),
+                seg("f", [0.0, 10.0], [0.0, 0.0]),
             ]),
             [
                 polygon(&[[0.0, 0.0], [20.0, 0.0], [20.0, 10.0], [0.0, 10.0]]),
-                json!([seg("a", [6.0, 6.0], [14.0, 6.0]), seg("b", [14.0, 6.0], [14.0, 10.0]), hump, seg("d", [6.0, 10.0], [6.0, 6.0])]),
+                json!([
+                    seg("a", [6.0, 6.0], [14.0, 6.0]),
+                    seg("b", [14.0, 6.0], [14.0, 10.0]),
+                    hump,
+                    seg("d", [6.0, 10.0], [6.0, 6.0])
+                ]),
             ],
             polygon(&[[6.0, 6.0], [14.0, 6.0], [14.0, 10.0], [6.0, 10.0]]),
         ),
@@ -673,7 +702,10 @@ fn a_corner_the_taper_cannot_bring_to_an_edge_fails_with_a_sentence() {
         let r = boss(rounded_ell(0.5), json!({"distance": distance, "taper": 45}));
         let msgs = messages(&r);
         assert_eq!(msgs.len(), 1, "{distance}: {msgs:?}");
-        assert!(msgs[0].contains("corner") && msgs[0].contains("taper") && !msgs[0].contains("Error"), "{distance}: {msgs:?}");
+        assert!(
+            msgs[0].contains("corner") && msgs[0].contains("taper") && !msgs[0].contains("Error"),
+            "{distance}: {msgs:?}"
+        );
         assert!(r.bodies.is_empty(), "{distance}: a body was made all the same");
     }
 }
@@ -685,8 +717,17 @@ fn a_corner_the_taper_cannot_bring_to_an_edge_fails_with_a_sentence() {
 #[test]
 fn a_spline_the_kernel_cannot_lean_fails_with_a_sentence() {
     let poles = [
-        [14.0, 10.0], [14.0, 11.0], [14.0, 12.0], [14.0, 13.0], [13.0, 16.0], [10.0, 17.0],
-        [7.0, 16.0], [6.0, 13.0], [6.0, 12.0], [6.0, 11.0], [6.0, 10.0],
+        [14.0, 10.0],
+        [14.0, 11.0],
+        [14.0, 12.0],
+        [14.0, 13.0],
+        [13.0, 16.0],
+        [10.0, 17.0],
+        [7.0, 16.0],
+        [6.0, 13.0],
+        [6.0, 12.0],
+        [6.0, 11.0],
+        [6.0, 10.0],
     ];
     let outline = json!([
         seg("a", [0.0, 0.0], [20.0, 0.0]),
@@ -713,7 +754,8 @@ const KAPPA: f64 = 0.552_284_749_830_793_6;
 /// wall a spline turned about the axis. Like the duct of the report it is a
 /// void whose wall leans 45 degrees at the level the ridge is drawn on, which
 /// is `TUNNEL.0`, there between the radii `TUNNEL.1` and `TUNNEL.2`.
-const TUNNEL: (f64, f64, f64) = (20.0 + 0.9 * (4.0 + 3.0 * KAPPA), 30.0 - 0.9 * (4.0 + 3.0 * KAPPA), 30.0 + 0.9 * (4.0 + 3.0 * KAPPA));
+const TUNNEL: (f64, f64, f64) =
+    (20.0 + 0.9 * (4.0 + 3.0 * KAPPA), 30.0 - 0.9 * (4.0 + 3.0 * KAPPA), 30.0 + 0.9 * (4.0 + 3.0 * KAPPA));
 
 fn tunnel() -> Vec<Value> {
     let quarters = [

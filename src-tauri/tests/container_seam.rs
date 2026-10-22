@@ -25,11 +25,7 @@ fn tmpdir(tag: &str) -> PathBuf {
 }
 
 fn fixture(name: &str) -> String {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../tests/fixtures")
-        .join(name)
-        .to_string_lossy()
-        .into_owned()
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures").join(name).to_string_lossy().into_owned()
 }
 
 #[test]
@@ -60,8 +56,7 @@ fn an_engine_blob_survives_the_container_and_rebuilds() {
         .expect("write_container failed");
 
     // 3. The app opens it somewhere that has never seen this geometry.
-    let (got_doc, manifest) =
-        fundacad_lib::container::read_container(&dest, &blobs_b, None).expect("read_container");
+    let (got_doc, manifest) = fundacad_lib::container::read_container(&dest, &blobs_b, None).expect("read_container");
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&got_doc).unwrap(),
         serde_json::from_str::<serde_json::Value>(&doc).unwrap(),
@@ -116,7 +111,12 @@ fn future_fundab(dir: &Path, payload: &[u8]) -> PathBuf {
     let cbor = fnda::json_to_cbor(r#"{"version":11,"features":[]}"#).unwrap();
     let (b, m) = (BTreeMap::new(), BTreeMap::new());
     let mut sections = fnda::document_sections(&info, &cbor, &b, &m, &[]);
-    sections.push(fnda::SectionSpec { kind: 9, name: "futureIndex".into(), source: fnda::Source::Bytes(payload), layout: fnda::SMALL_LAYOUT });
+    sections.push(fnda::SectionSpec {
+        kind: 9,
+        name: "futureIndex".into(),
+        source: fnda::Source::Bytes(payload),
+        layout: fnda::SMALL_LAYOUT,
+    });
     let path = dir.join("future.fundab");
     fnda::write(&mut std::fs::File::create(&path).unwrap(), &sections).unwrap();
     path
@@ -128,13 +128,16 @@ fn a_section_this_version_does_not_read_is_saved_back_into_a_fundab_only() {
     let dir = tmpdir("carried");
     let stores = Stores { blobs: dir.join("blobs"), meshes: dir.join("meshes"), sections: dir.join("sections") };
     let payload: Vec<u8> = (0..4000u32).map(|i| (i % 249) as u8).collect();
-    let opened = open_document_full(&future_fundab(&dir, &payload), &stores.blobs, Some(&stores.meshes), Some(&stores.sections)).unwrap();
+    let opened =
+        open_document_full(&future_fundab(&dir, &payload), &stores.blobs, Some(&stores.meshes), Some(&stores.sections))
+            .unwrap();
     assert_eq!(opened.carried.len(), 1);
 
     let bin = dir.join("saved.fundab");
     let json = dir.join("saved.funda");
     for dest in [&bin, &json] {
-        save_document(&stores, dest, &opened.document, vec![], vec![], vec![], opened.carried.clone(), "seam-test").unwrap();
+        save_document(&stores, dest, &opened.document, vec![], vec![], vec![], opened.carried.clone(), "seam-test")
+            .unwrap();
     }
     let elsewhere = dir.join("sections_b");
     let again = open_document_full(&bin, &dir.join("blobs_b"), None, Some(&elsewhere)).unwrap();
@@ -159,10 +162,13 @@ fn geometry_a_hash_shaped_string_names_is_embedded_when_stored_and_skipped_when_
     let stored = fundacad_lib::container::hash_bytes(&data);
     std::fs::write(stores.blobs.join(format!("{stored}.bbrep")), &data).unwrap();
     let absent = "0123456789abcdef0123456789abcdef".to_string();
-    let doc = format!(r#"{{"version":99,"features":[{{"id":"w1","type":"futureWidget","blob":"{stored}","also":"{absent}"}}]}}"#);
+    let doc = format!(
+        r#"{{"version":99,"features":[{{"id":"w1","type":"futureWidget","blob":"{stored}","also":"{absent}"}}]}}"#
+    );
 
     let dest = dir.join("saved.funda");
-    save_document(&stores, &dest, &doc, vec![], vec![stored.clone(), absent.clone()], vec![], vec![], "seam-test").unwrap();
+    save_document(&stores, &dest, &doc, vec![], vec![stored.clone(), absent.clone()], vec![], vec![], "seam-test")
+        .unwrap();
     let fresh = dir.join("blobs_b");
     open_document_full(&dest, &fresh, None, None).unwrap();
     assert_eq!(std::fs::read(fresh.join(format!("{stored}.bbrep"))).unwrap(), data);
@@ -176,15 +182,20 @@ fn geometry_a_hash_shaped_string_names_is_embedded_when_stored_and_skipped_when_
 /// the app opens a file publishes the same bytes on a machine that never saw it.
 #[test]
 fn a_big_import_saved_in_segments_opens_the_same_every_way() {
-    use fundacad_lib::container::{hash_bytes, open_document_bytes, open_document_checked, open_document_full, save_document, Stores};
+    use fundacad_lib::container::{
+        hash_bytes, open_document_bytes, open_document_checked, open_document_full, save_document, Stores,
+    };
     use fundacad_lib::fnda;
     let dir = tmpdir("segmented");
     let stores = Stores { blobs: dir.join("blobs"), meshes: dir.join("meshes"), sections: dir.join("sections") };
     std::fs::create_dir_all(&stores.blobs).unwrap();
-    let data: Vec<u8> = (0..3u32 << 20).map(|i| b"0123456789 ,.-e"[((i.wrapping_mul(2654435761) >> 15) % 15) as usize]).collect();
+    let data: Vec<u8> =
+        (0..3u32 << 20).map(|i| b"0123456789 ,.-e"[((i.wrapping_mul(2654435761) >> 15) % 15) as usize]).collect();
     let hash = hash_bytes(&data);
     std::fs::write(stores.blobs.join(format!("{hash}.bbrep")), &data).unwrap();
-    let doc = format!(r#"{{"version":10,"parameters":{{}},"features":[{{"id":"f1","type":"import","name":"Big","format":"step","geom":"{hash}"}}]}}"#);
+    let doc = format!(
+        r#"{{"version":10,"parameters":{{}},"features":[{{"id":"f1","type":"import","name":"Big","format":"step","geom":"{hash}"}}]}}"#
+    );
     let dest = dir.join("big.fundab");
     save_document(&stores, &dest, &doc, vec![hash.clone()], vec![], vec![], vec![], "seam-test").unwrap();
     let index = fnda::read_section_of_kind(&dest, fnda::KIND_SEGMENTS).unwrap();
@@ -197,15 +208,20 @@ fn a_big_import_saved_in_segments_opens_the_same_every_way() {
     let checked = dir.join("blobs_checked");
     let (got, _) = open_document_checked(&dest, &checked, None).unwrap();
     let dropped = dir.join("blobs_dropped");
-    let from_bytes = open_document_bytes(&std::fs::read(&dest).unwrap(), &dropped, None, Some(&dir.join("sections_c"))).unwrap();
+    let from_bytes =
+        open_document_bytes(&std::fs::read(&dest).unwrap(), &dropped, None, Some(&dir.join("sections_c"))).unwrap();
     assert!(from_bytes.was_container && from_bytes.carried.is_empty());
     for (store, text) in [(&full, &opened.document), (&checked, &got), (&dropped, &from_bytes.document)] {
-        assert_eq!(serde_json::from_str::<serde_json::Value>(text).unwrap(), serde_json::from_str::<serde_json::Value>(&doc).unwrap());
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(text).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&doc).unwrap()
+        );
         assert_eq!(std::fs::read(store.join(format!("{hash}.bbrep"))).unwrap(), data);
     }
 
     let fixture_store = dir.join("blobs_fixture");
-    let fixture = open_document_full(Path::new(&fixture("versions/segmented.fundab")), &fixture_store, None, None).unwrap();
+    let fixture =
+        open_document_full(Path::new(&fixture("versions/segmented.fundab")), &fixture_store, None, None).unwrap();
     assert_eq!(serde_json::from_str::<serde_json::Value>(&fixture.document).unwrap()["version"], 10);
     assert_eq!(std::fs::read_dir(&fixture_store).unwrap().count(), 1);
     let _ = std::fs::remove_dir_all(&dir);

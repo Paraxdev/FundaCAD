@@ -175,7 +175,13 @@ impl Guest for Screws {
         Err(format!("no mesh pass {pass:?} here"))
     }
 
-    fn displace(pass: String, _face: &Shape, _spec: String, _tag: String, _options: DisplaceOptions) -> Result<Mesh, String> {
+    fn displace(
+        pass: String,
+        _face: &Shape,
+        _spec: String,
+        _tag: String,
+        _options: DisplaceOptions,
+    ) -> Result<Mesh, String> {
         Err(format!("no mesh pass {pass:?} here"))
     }
 

@@ -21,18 +21,12 @@ fn compare_outcomes(
 ) -> Result<(Vec<Vec<String>>, usize), String> {
     let cases = ctx.cases().as_object().ok_or("the golden has no cases")?;
     if got.len() != cases.len() {
-        return Err(format!(
-            "the golden has {} cases, the corpus {}",
-            cases.len(),
-            got.len()
-        ));
+        return Err(format!("the golden has {} cases, the corpus {}", cases.len(), got.len()));
     }
     let (mut rows, mut bad) = (Vec::new(), 0);
     for (id, outcome) in got {
-        let want = cases
-            .get(id)
-            .and_then(|c| c[field].as_str())
-            .ok_or_else(|| format!("the golden has no case {id}"))?;
+        let want =
+            cases.get(id).and_then(|c| c[field].as_str()).ok_or_else(|| format!("the golden has no case {id}"))?;
         let same = want == outcome;
         bad += usize::from(!same);
         if !same || want != "pass" && want != "survive" {
@@ -53,15 +47,9 @@ pub fn fillet(ctx: &Ctx) -> Result<bool, String> {
     let report = eval::run(&ctx.corpus, |_| {})?;
     let path = ctx.header()["corpus"].as_str().unwrap_or("");
     println!("{}\n", eval::render(path, &ctx.corpus, &report, true));
-    let got: Vec<(String, String)> = report
-        .outcomes
-        .iter()
-        .map(|(id, o)| (id.clone(), (*o).to_owned()))
-        .collect();
+    let got: Vec<(String, String)> = report.outcomes.iter().map(|(id, o)| (id.clone(), (*o).to_owned())).collect();
     let cases = ctx.cases().clone();
-    let (rows, bad) = compare_outcomes(ctx, &got, "outcome", |id| {
-        cases[id]["band"].as_str().unwrap_or("").to_owned()
-    })?;
+    let (rows, bad) = compare_outcomes(ctx, &got, "outcome", |id| cases[id]["band"].as_str().unwrap_or("").to_owned())?;
     println!("cases python did not pass, and every mismatch:");
     table(&rows, &["case", "band", "python", "rust", "status"]);
     let summary = &ctx.header()["summary"];
@@ -108,13 +96,8 @@ pub fn record_fillet(ctx: &Ctx, id: &str) -> Result<Value, String> {
 
 pub fn refresh_fillet_summary(ctx: &mut Ctx) {
     let cases = ctx.cases().as_object().cloned().unwrap_or_default();
-    let with = |o: &str| -> Vec<String> {
-        cases
-            .iter()
-            .filter(|(_, c)| c["outcome"] == o)
-            .map(|(k, _)| k.clone())
-            .collect()
-    };
+    let with =
+        |o: &str| -> Vec<String> { cases.iter().filter(|(_, c)| c["outcome"] == o).map(|(k, _)| k.clone()).collect() };
     let failed = with("fail");
     ctx.golden["golden"]["summary"] = serde_json::json!({
         "count": cases.len(), "failed": failed.len(),
@@ -156,9 +139,7 @@ pub fn selectors(ctx: &Ctx) -> Result<bool, String> {
     use fundacad_geom::select::eval::{self, Outcome};
     use fundacad_geom::select::Tuning;
     let tuning = *Tuning::shipped();
-    let cases_in = ctx.corpus["cases"]
-        .as_array()
-        .ok_or("the corpus has no cases")?;
+    let cases_in = ctx.corpus["cases"].as_array().ok_or("the corpus has no cases")?;
     let mut outcomes = Vec::new();
     let mut got = Vec::new();
     for case in cases_in {
@@ -177,43 +158,25 @@ pub fn selectors(ctx: &Ctx) -> Result<bool, String> {
     }
     let metrics = eval::aggregate(&outcomes);
     let cases = ctx.cases().clone();
-    let (mut rows, mut bad) = compare_outcomes(ctx, &got, "outcome", |id| {
-        cases[id]["category"].as_str().unwrap_or("").to_owned()
-    })?;
-    let want = ctx.header()["metrics"]
-        .as_object()
-        .cloned()
-        .unwrap_or_default();
+    let (mut rows, mut bad) =
+        compare_outcomes(ctx, &got, "outcome", |id| cases[id]["category"].as_str().unwrap_or("").to_owned())?;
+    let want = ctx.header()["metrics"].as_object().cloned().unwrap_or_default();
     let mut metric_rows = Vec::new();
     for (k, w) in &want {
         let g = metrics.get(k).cloned().unwrap_or(Value::Null);
         let same = same_number_or_value(&g, w);
         bad += usize::from(!same);
-        metric_rows.push(vec![
-            k.clone(),
-            w.to_string(),
-            g.to_string(),
-            if same { "match" } else { "MISMATCH" }.into(),
-        ]);
+        metric_rows.push(vec![k.clone(), w.to_string(), g.to_string(), if same { "match" } else { "MISMATCH" }.into()]);
     }
     let tests = eval::selector_v2_checks(&tuning);
     if let Err(e) = &tests {
         bad += 1;
-        rows.push(vec![
-            "selector v2 checks".into(),
-            String::new(),
-            "pass".into(),
-            e.clone(),
-            "MISMATCH".into(),
-        ]);
+        rows.push(vec!["selector v2 checks".into(), String::new(), "pass".into(), e.clone(), "MISMATCH".into()]);
     }
     println!("cases python did not see survive, and every mismatch:");
     table(&rows, &["case", "category", "python", "rust", "status"]);
     println!();
     table(&metric_rows, &["metric", "python", "rust", "status"]);
-    println!(
-        "\nselector v2 checks: {}",
-        if tests.is_ok() { "pass" } else { "FAIL" }
-    );
+    println!("\nselector v2 checks: {}", if tests.is_ok() { "pass" } else { "FAIL" });
     Ok(super::verdict(bad, got.len() + want.len() + 1))
 }

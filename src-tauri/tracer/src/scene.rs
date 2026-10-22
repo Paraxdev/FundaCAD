@@ -102,9 +102,15 @@ fn inverse(m: &[f32; 12]) -> [f32; 12] {
     let det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
     let k = if det.abs() > 1e-30 { 1.0 / det } else { 0.0 };
     let r = [
-        (e * i - f * h) * k, (c * h - b * i) * k, (b * f - c * e) * k,
-        (f * g - d * i) * k, (a * i - c * g) * k, (c * d - a * f) * k,
-        (d * h - e * g) * k, (b * g - a * h) * k, (a * e - b * d) * k,
+        (e * i - f * h) * k,
+        (c * h - b * i) * k,
+        (b * f - c * e) * k,
+        (f * g - d * i) * k,
+        (a * i - c * g) * k,
+        (c * d - a * f) * k,
+        (d * h - e * g) * k,
+        (b * g - a * h) * k,
+        (a * e - b * d) * k,
     ];
     let t = [m[3], m[7], m[11]];
     let mut out = [0.0; 12];

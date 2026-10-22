@@ -42,9 +42,7 @@ fn tube_with_bumps(copies: usize, height: f64) -> Vec<Shape> {
     let doc: CadDocument = serde_json::from_value(raw.clone()).expect("a document");
     let r = builder::rebuild(&doc, &raw, &NoWatch).expect("not cancelled");
     assert!(r.errors.is_empty(), "{:?}", r.errors);
-    ["body1", "body2"]
-        .map(|id| r.bodies.iter().find(|b| b.id == id).expect("the body").shape.clone())
-        .to_vec()
+    ["body1", "body2"].map(|id| r.bodies.iter().find(|b| b.id == id).expect("the body").shape.clone()).to_vec()
 }
 
 /// Triangle sides not met exactly twice, corners joined by exact position.

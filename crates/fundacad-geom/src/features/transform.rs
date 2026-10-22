@@ -26,11 +26,7 @@ fn placement(ctx: &Ctx, m: &Move) -> FResult<([f64; 3], [f64; 3])> {
     Ok((r, d))
 }
 
-fn placed(
-    shape: &opencascade::primitives::Shape,
-    r: [f64; 3],
-    d: [f64; 3],
-) -> FResult<opencascade::primitives::Shape> {
+fn placed(shape: &opencascade::primitives::Shape, r: [f64; 3], d: [f64; 3]) -> FResult<opencascade::primitives::Shape> {
     let mut sh = shape.clone();
     if r.iter().any(|x| *x != 0.0) {
         sh = kernel::rotated(&sh, r)?;
@@ -58,11 +54,7 @@ pub fn duplicate(ctx: &mut Ctx, m: &Move) -> FResult {
     let (r, d) = placement(ctx, m)?;
     for t in targets(ctx, m.bodies.as_ref(), "Duplicate")? {
         let Some(i) = t else {
-            ctx.skip_feature(
-                &m.id,
-                "duplicate",
-                "target body already consumed or missing",
-            );
+            ctx.skip_feature(&m.id, "duplicate", "target body already consumed or missing");
             ctx.skip_body_slot();
             continue;
         };
@@ -78,21 +70,11 @@ pub fn duplicate(ctx: &mut Ctx, m: &Move) -> FResult {
 pub fn scale(ctx: &mut Ctx, s: &Scale) -> FResult {
     let tgts = targets(ctx, s.bodies.as_ref(), "Scale")?;
     let factor = ctx.val(&s.factor)?;
-    let axes = [
-        ctx.val_or(s.sx.as_ref(), factor)?,
-        ctx.val_or(s.sy.as_ref(), factor)?,
-        ctx.val_or(s.sz.as_ref(), factor)?,
-    ];
-    for (name, v) in [
-        ("factor", factor),
-        ("sx", axes[0]),
-        ("sy", axes[1]),
-        ("sz", axes[2]),
-    ] {
+    let axes =
+        [ctx.val_or(s.sx.as_ref(), factor)?, ctx.val_or(s.sy.as_ref(), factor)?, ctx.val_or(s.sz.as_ref(), factor)?];
+    for (name, v) in [("factor", factor), ("sx", axes[0]), ("sy", axes[1]), ("sz", axes[2])] {
         if v == 0.0 {
-            return Err(Fail::msg(format!(
-                "Scale: {name} must not be 0, it would collapse the body flat"
-            )));
+            return Err(Fail::msg(format!("Scale: {name} must not be 0, it would collapse the body flat")));
         }
     }
     let uniform = axes == [factor; 3];
@@ -123,12 +105,8 @@ pub fn mirror(ctx: &mut Ctx, m: &Mirror) -> FResult {
         )));
     }
     let plane = plane_of(PlaneRef::Name(m.plane.name()), &ctx.datums)?;
-    let mut missing: Vec<&str> = named
-        .into_iter()
-        .flatten()
-        .map(String::as_str)
-        .filter(|id| ctx.find_body(id).is_none())
-        .collect();
+    let mut missing: Vec<&str> =
+        named.into_iter().flatten().map(String::as_str).filter(|id| ctx.find_body(id).is_none()).collect();
     missing.sort_unstable();
     missing.dedup();
     if !missing.is_empty() {
@@ -155,11 +133,7 @@ pub fn mirror(ctx: &mut Ctx, m: &Mirror) -> FResult {
 pub fn remove_body(ctx: &mut Ctx, r: &RemoveBody) -> FResult {
     let ids: HashSet<String> = r.bodies.iter().cloned().collect();
     let have: HashSet<&str> = ctx.bodies.iter().map(|b| b.id.as_str()).collect();
-    let mut missing: Vec<&str> = ids
-        .iter()
-        .map(String::as_str)
-        .filter(|i| !have.contains(i))
-        .collect();
+    let mut missing: Vec<&str> = ids.iter().map(String::as_str).filter(|i| !have.contains(i)).collect();
     missing.sort_unstable();
     if !missing.is_empty() {
         return Err(Fail::msg(format!(

@@ -25,7 +25,9 @@ async fn a_newer_file_opens_with_a_note_and_saves_back_whole() {
     assert!(!is_error(&r), "{}", text_of(&r));
     let reply = text_of(&r);
     assert!(
-        reply.lines().any(|l| l.starts_with("note: ") && l.contains("1 feature was not included") && l.contains("futureWidget")),
+        reply
+            .lines()
+            .any(|l| l.starts_with("note: ") && l.contains("1 feature was not included") && l.contains("futureWidget")),
         "{reply}"
     );
 
@@ -41,7 +43,11 @@ async fn a_newer_file_opens_with_a_note_and_saves_back_whole() {
     let r = srv.t_doc_save(args(&out)).await.unwrap();
     assert!(!is_error(&r), "{}", text_of(&r));
     let mut saved: Value = serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
-    assert_eq!(saved["version"], json!(FORMAT_VERSION), "MCP writes the document, so it stamps its own version like the app");
+    assert_eq!(
+        saved["version"],
+        json!(FORMAT_VERSION),
+        "MCP writes the document, so it stamps its own version like the app"
+    );
     saved["version"] = input["version"].clone();
     assert_eq!(saved, input, "everything else the newer version wrote stays");
 }

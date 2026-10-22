@@ -30,9 +30,7 @@ fn face(dir: [f64; 3]) -> Value {
 }
 
 fn run(req: Value) -> Value {
-    let Value::Object(m) = req else {
-        panic!("a request is an object")
-    };
+    let Value::Object(m) = req else { panic!("a request is an object") };
     json_of(stress_result(&m, &NoWatch))
 }
 
@@ -54,10 +52,7 @@ fn vec3(v: &Value) -> [f64; 3] {
 }
 
 fn error_of(v: &Value) -> String {
-    v["error"]["message"]
-        .as_str()
-        .unwrap_or_else(|| panic!("expected an error: {v}"))
-        .to_string()
+    v["error"]["message"].as_str().unwrap_or_else(|| panic!("expected an error: {v}")).to_string()
 }
 
 #[test]
@@ -76,10 +71,7 @@ fn a_cantilever_matches_timoshenko_and_balances() {
     let g = e / (2.0 * (1.0 + nu));
     let want = p * l.powi(3) / (3.0 * e * i) + p * l / (5.0 / 6.0 * g * a);
     let got = num(&r["maxDisplacement"]["value"]);
-    assert!(
-        (got - want).abs() < 0.05 * want,
-        "tip deflection {got} mm vs {want} mm"
-    );
+    assert!((got - want).abs() < 0.05 * want, "tip deflection {got} mm vs {want} mm");
     let tip = vec3(&r["maxDisplacement"]["vector"]);
     assert!(tip[2] < 0.0 && tip[2].abs() > 0.99 * got, "{tip:?}");
     assert!(num(&r["maxDisplacement"]["at"][0]) > 99.0, "{r}");
@@ -91,49 +83,23 @@ fn a_cantilever_matches_timoshenko_and_balances() {
     assert_eq!(r["reactions"].as_array().map(Vec::len), Some(1), "{r}");
     assert_eq!(vec3(&r["reactions"][0]), reaction);
     for k in 0..3 {
-        assert!(
-            (applied[k] + reaction[k]).abs() < 1e-6 * 100.0,
-            "{applied:?} vs {reaction:?}"
-        );
+        assert!((applied[k] + reaction[k]).abs() < 1e-6 * 100.0, "{applied:?} vs {reaction:?}");
     }
 
     let peak = num(&r["maxVonMises"]["value"]);
     // M c / I at the root is 60 MPa; the corner where the fixture ends reads higher.
     assert!(peak > 50.0 && peak < 200.0, "{peak}");
     let sf = num(&r["safetyFactor"]);
-    assert!(
-        (sf - 275.0 / peak).abs() < 1e-5 * sf,
-        "{sf} vs {}",
-        275.0 / peak
-    );
+    assert!((sf - 275.0 / peak).abs() < 1e-5 * sf, "{sf} vs {}", 275.0 / peak);
     assert!(r["maxVonMises"]["face"].is_u64(), "{r}");
-    let warnings: Vec<&str> = r["warnings"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(Value::as_str)
-        .collect();
-    assert!(
-        warnings
-            .iter()
-            .any(|w| w.contains("is where a fixed face ends")),
-        "{warnings:?}"
-    );
-    assert!(
-        !warnings.iter().any(|w| w.contains("deflection")),
-        "{warnings:?}"
-    );
-    assert!(
-        !warnings.iter().any(|w| w.contains("printed")),
-        "{warnings:?}"
-    );
+    let warnings: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(warnings.iter().any(|w| w.contains("is where a fixed face ends")), "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w.contains("deflection")), "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w.contains("printed")), "{warnings:?}");
 
     let mesh = &r["mesh"];
     assert_eq!(num(&mesh["size"]), 2.5);
-    assert!(
-        num(&mesh["elements"]) > 1000.0 && num(&mesh["nodes"]) > num(&mesh["elements"]),
-        "{mesh}"
-    );
+    assert!(num(&mesh["elements"]) > 1000.0 && num(&mesh["nodes"]) > num(&mesh["elements"]), "{mesh}");
     assert!(num(&mesh["minDihedral"]) > 9.0, "{mesh}");
 
     // One value per surface vertex, one face id per triangle, the six faces of the bar.
@@ -145,17 +111,8 @@ fn a_cantilever_matches_timoshenko_and_balances() {
     let tris = s["indices"].as_array().unwrap().len();
     assert_eq!(tris % 3, 0);
     assert_eq!(s["faceIds"].as_array().unwrap().len(), tris / 3);
-    assert!(s["indices"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .all(|i| (num(i) as usize) < n / 3));
-    let mut ids: Vec<u64> = s["faceIds"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_u64().unwrap())
-        .collect();
+    assert!(s["indices"].as_array().unwrap().iter().all(|i| (num(i) as usize) < n / 3));
+    let mut ids: Vec<u64> = s["faceIds"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
     ids.sort_unstable();
     ids.dedup();
     assert_eq!(ids, vec![0, 1, 2, 3, 4, 5]);
@@ -177,16 +134,10 @@ fn a_pressure_on_the_top_pushes_down_and_balances() {
     // 0.1 MPa on 100 x 10 mm is 100 N, pushing into the top face.
     let applied = vec3(&r["applied"]);
     let reaction = vec3(&r["reaction"]);
-    assert!(
-        applied[0].abs() < 1e-9 && applied[1].abs() < 1e-9,
-        "{applied:?}"
-    );
+    assert!(applied[0].abs() < 1e-9 && applied[1].abs() < 1e-9, "{applied:?}");
     assert!((applied[2] + 100.0).abs() < 1e-6 * 100.0, "{applied:?}");
     for k in 0..3 {
-        assert!(
-            (applied[k] + reaction[k]).abs() < 1e-6 * 100.0,
-            "{applied:?} vs {reaction:?}"
-        );
+        assert!((applied[k] + reaction[k]).abs() < 1e-6 * 100.0, "{applied:?} vs {reaction:?}");
     }
     // A uniform load q on a cantilever bends its tip q L^4 / 8 E I.
     let want = 1.0 * 100.0f64.powi(4) / (8.0 * 3500.0 * (10.0 * 1000.0 / 12.0));
@@ -194,10 +145,7 @@ fn a_pressure_on_the_top_pushes_down_and_balances() {
     assert!((got - want).abs() < 0.1 * want, "{got} vs {want}");
     assert!(num(&r["maxDisplacement"]["vector"][2]) < 0.0);
     let warnings = r["warnings"].to_string();
-    assert!(
-        warnings.contains("not trustworthy") && warnings.contains("printed parts"),
-        "{warnings}"
-    );
+    assert!(warnings.contains("not trustworthy") && warnings.contains("printed parts"), "{warnings}");
     assert_eq!(r["material"]["name"], "PLA");
 }
 
@@ -211,41 +159,23 @@ fn the_refusals_say_why() {
     };
 
     let unknown = with("body", json!("Spring"));
-    assert!(
-        unknown.contains("there is no body 'Spring'") && unknown.contains("body1 (Box)"),
-        "{unknown}"
-    );
+    assert!(unknown.contains("there is no body 'Spring'") && unknown.contains("body1 (Box)"), "{unknown}");
     let none = with("fixed", json!([]));
     assert!(none.contains("no face is fixed"), "{none}");
     let nothing = with("fixed", json!([face([0.0, 0.6, 0.8])]));
-    assert!(
-        nothing.contains("fixed[0] matches no face of body1"),
-        "{nothing}"
-    );
-    let other = with(
-        "fixed",
-        json!({"kind": "face", "by": "normal", "dir": [-1, 0, 0], "body": "body7"}),
-    );
+    assert!(nothing.contains("fixed[0] matches no face of body1"), "{nothing}");
+    let other = with("fixed", json!({"kind": "face", "by": "normal", "dir": [-1, 0, 0], "body": "body7"}));
     assert!(other.contains("picks a face of body7"), "{other}");
     let no_load = with("loads", json!([]));
     assert!(no_load.contains("there is no load"), "{no_load}");
-    let both = with(
-        "loads",
-        json!([{"faces": face([1.0, 0.0, 0.0]), "force": [0, 0, 1], "pressure": 1}]),
-    );
+    let both = with("loads", json!([{"faces": face([1.0, 0.0, 0.0]), "force": [0, 0, 1], "pressure": 1}]));
     assert!(both.contains("load 1 (loads[0]) has both"), "{both}");
     let wood = with("material", json!("oak"));
-    assert!(
-        wood.contains("no material called 'oak'") && wood.contains("PLA"),
-        "{wood}"
-    );
+    assert!(wood.contains("no material called 'oak'") && wood.contains("PLA"), "{wood}");
     let size = with("size", json!(-1));
     assert!(size.contains("size must be a number above 0"), "{size}");
     let few = with("maxElements", json!(20));
-    assert!(
-        few.contains("could not be meshed") && few.contains("allow more elements"),
-        "{few}"
-    );
+    assert!(few.contains("could not be meshed") && few.contains("allow more elements"), "{few}");
 
     let mut req = base();
     req.as_object_mut().unwrap().remove("body");
@@ -286,11 +216,7 @@ fn a_feature_that_failed_is_reported_with_the_answer() {
     req["body"] = json!("Bracket");
     let r = run(req);
     let msg = error_of(&r);
-    assert!(
-        msg.contains("there is no body 'Bracket'")
-            && msg.contains("a feature failed, the first (bad): "),
-        "{msg}"
-    );
+    assert!(msg.contains("there is no body 'Bracket'") && msg.contains("a feature failed, the first (bad): "), "{msg}");
     assert_eq!(r["error"]["feature_id"], "bad", "{r}");
 }
 
@@ -321,10 +247,7 @@ fn the_op_answers_over_the_protocol() {
             }
         }
     };
-    let mut req = cantilever(
-        json!({"E": 2000, "nu": 0.3, "yield": 30, "name": "my PETG"}),
-        3.0,
-    );
+    let mut req = cantilever(json!({"E": 2000, "nu": 0.3, "yield": 30, "name": "my PETG"}), 3.0);
     req["id"] = json!(1);
     req["op"] = json!("stress");
     engine.handle(Message::Text(req.to_string()));
@@ -355,19 +278,11 @@ fn the_op_answers_over_the_protocol() {
         assert!(keys.contains(&k), "{k} missing from {keys:?}");
     }
 
-    engine.handle(Message::Text(
-        json!({"id": 2, "op": "stress", "document": bar(), "body": "body9"}).to_string(),
-    ));
+    engine.handle(Message::Text(json!({"id": 2, "op": "stress", "document": bar(), "body": "body9"}).to_string()));
     // An error reply: {id, ok: false, error: {message}}, with no feature id as none failed.
     let r = reply(2);
     assert_eq!(r["ok"], false, "{r}");
-    assert!(
-        r["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("there is no body 'body9'"),
-        "{r}"
-    );
+    assert!(r["error"]["message"].as_str().unwrap().contains("there is no body 'body9'"), "{r}");
     assert!(r["error"].get("feature_id").is_none(), "{r}");
 }
 
@@ -385,30 +300,15 @@ fn the_peak_face_is_the_one_it_lies_on() {
     let at = vec3(&r["maxVonMises"]["at"]);
     assert!(at[0] < 3.0, "{at:?}");
     // The plane of the bar's sides it lies in, and not on an edge where two meet.
-    let planes = [
-        (0, 0.0),
-        (0, 100.0),
-        (1, -5.0),
-        (1, 5.0),
-        (2, -5.0),
-        (2, 5.0),
-    ];
-    let on: Vec<(usize, f64)> = planes
-        .into_iter()
-        .filter(|&(a, c)| (at[a] - c).abs() < 1e-6)
-        .collect();
+    let planes = [(0, 0.0), (0, 100.0), (1, -5.0), (1, 5.0), (2, -5.0), (2, 5.0)];
+    let on: Vec<(usize, f64)> = planes.into_iter().filter(|&(a, c)| (at[a] - c).abs() < 1e-6).collect();
     let [(axis, c)] = on[..] else {
         panic!("the peak at {at:?} is not inside one face");
     };
     // That face's id: the face of the surface triangles lying in that plane.
     let s = &r["surface"];
     let p: Vec<f64> = s["positions"].as_array().unwrap().iter().map(num).collect();
-    let idx: Vec<usize> = s["indices"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|i| num(i) as usize)
-        .collect();
+    let idx: Vec<usize> = s["indices"].as_array().unwrap().iter().map(|i| num(i) as usize).collect();
     let face = idx
         .chunks_exact(3)
         .position(|t| t.iter().all(|&v| (p[3 * v + axis] - c).abs() < 1e-6))
@@ -429,10 +329,7 @@ fn a_load_only_on_fixed_faces_is_refused() {
         {"faces": face([1.0, 0.0, 0.0]), "force": [0, 0, -100]},
     ]);
     let w = warnings_of(&run(req));
-    assert!(
-        w.contains("load 1 (loads[0]) is only on fixed faces"),
-        "{w}"
-    );
+    assert!(w.contains("load 1 (loads[0]) is only on fixed faces"), "{w}");
 }
 
 /// A solid whose shell lost a face, as an inline BREP import brings it in (tangent_union.rs).
@@ -440,25 +337,14 @@ fn open_box_brep() -> String {
     let dir = std::env::temp_dir().join(format!("fundacad-stress-open-box-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("dir");
     let path = dir.join("box.brep");
-    kernel::make_box(10.0, 10.0, 10.0)
-        .expect("box")
-        .write_brep_text(&path)
-        .expect("written");
+    kernel::make_box(10.0, 10.0, 10.0).expect("box").write_brep_text(&path).expect("written");
     let text = std::fs::read_to_string(&path).expect("read");
     let _ = std::fs::remove_dir_all(&dir);
     // The shell's line lists its six faces, "-26 0 +16 0 ... *": drop the first.
     // The writer heads the file with a DBRep line the importer does not take.
-    let lines: Vec<&str> = text
-        .lines()
-        .skip_while(|l| !l.starts_with("CASCADE"))
-        .collect();
+    let lines: Vec<&str> = text.lines().skip_while(|l| !l.starts_with("CASCADE")).collect();
     let sh = lines.iter().position(|l| *l == "Sh").expect("a shell");
-    let faces = sh
-        + lines[sh + 1..]
-            .iter()
-            .position(|l| l.ends_with('*'))
-            .expect("its faces")
-        + 1;
+    let faces = sh + lines[sh + 1..].iter().position(|l| l.ends_with('*')).expect("its faces") + 1;
     let mut out: Vec<String> = lines.iter().map(|l| (*l).to_owned()).collect();
     let tokens: Vec<&str> = lines[faces].split(' ').collect();
     out[faces] = tokens[2..].join(" ");
@@ -498,10 +384,7 @@ fn an_inside_corner_is_told_apart_from_a_convex_part() {
     }));
     let w = warnings_of(&r);
     let at = vec3(&r["maxVonMises"]["at"]);
-    assert!(
-        (at[0] + 25.0).abs() < 2.5 && (at[2] - 2.5).abs() < 2.5,
-        "{at:?}"
-    );
+    assert!((at[0] + 25.0).abs() < 2.5 && (at[2] - 2.5).abs() < 2.5, "{at:?}");
     assert!(w.contains("is at a sharp inside corner"), "{w}");
 
     // Half a cylinder is convex everywhere, whatever the volume mesh does to its edges.
@@ -549,24 +432,13 @@ fn balanced(r: &Value) {
     let reaction = vec3(&r["reaction"]);
     let size = applied.iter().map(|v| v * v).sum::<f64>().sqrt();
     for k in 0..3 {
-        assert!(
-            (applied[k] + reaction[k]).abs() < 1e-6 * size,
-            "{applied:?} vs {reaction:?}"
-        );
+        assert!((applied[k] + reaction[k]).abs() < 1e-6 * size, "{applied:?} vs {reaction:?}");
     }
     // One reaction per support, summing to the whole, within the reply's six places.
-    let parts: Vec<[f64; 3]> = r["reactions"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(vec3)
-        .collect();
+    let parts: Vec<[f64; 3]> = r["reactions"].as_array().unwrap().iter().map(vec3).collect();
     for k in 0..3 {
         let sum: f64 = parts.iter().map(|p| p[k]).sum();
-        assert!(
-            (sum - reaction[k]).abs() < 1e-5 + 1e-9 * size,
-            "{parts:?} vs {reaction:?}"
-        );
+        assert!((sum - reaction[k]).abs() < 1e-5 + 1e-9 * size, "{parts:?} vs {reaction:?}");
     }
 }
 
@@ -592,10 +464,7 @@ fn a_cantilever_on_a_wall_and_a_floor_balances() {
     assert!(floor[2] > 50.0, "{floor:?}");
     // The tip slides along the floor and does not sink into it.
     let tip = vec3(&r["maxDisplacement"]["vector"]);
-    assert!(
-        tip[2].abs() < 0.2 * tip[0].abs().max(tip[1].abs()),
-        "{tip:?}"
-    );
+    assert!(tip[2].abs() < 0.2 * tip[0].abs().max(tip[1].abs()), "{tip:?}");
 
     // `fixed` is a fixed support listed first: the same faces as a support with no type
     // give the same answer.
@@ -617,10 +486,7 @@ fn a_plate_on_sliders_alone_is_free_to_slide() {
         "size": 3,
     }));
     let msg = error_of(&r);
-    assert!(
-        msg.contains("the body can still slide along X, add a support that holds it that way"),
-        "{msg}"
-    );
+    assert!(msg.contains("the body can still slide along X, add a support that holds it that way"), "{msg}");
 }
 
 /// A ring of radius 20 round a hole of radius 5 along Z, with an arm out to x = 55.
@@ -651,27 +517,17 @@ fn a_lever_on_one_pin_turns_and_a_stop_holds_it() {
     };
     let msg = error_of(&run(req(json!([pin]))));
     assert!(
-        msg.contains(
-            "the body can still turn about the pin's axis through (0, 0, 0), add another support"
-        ),
+        msg.contains("the body can still turn about the pin's axis through (0, 0, 0), add another support"),
         "{msg}"
     );
     // A stop against the arm's side keeps it from turning.
     let stop = json!({"type": "slider", "faces": nearest([35.0, 5.0, 0.0])});
     let r = run(req(json!([pin, stop])));
     balanced(&r);
-    let parts: Vec<[f64; 3]> = r["reactions"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(vec3)
-        .collect();
+    let parts: Vec<[f64; 3]> = r["reactions"].as_array().unwrap().iter().map(vec3).collect();
     assert_eq!(parts.len(), 2);
     // The stop only pushes across the arm, so the pull on the ring goes to the pin.
-    assert!(
-        parts[1][0].abs() < 1e-3 && parts[1][2].abs() < 1e-3,
-        "{parts:?}"
-    );
+    assert!(parts[1][0].abs() < 1e-3 && parts[1][2].abs() < 1e-3, "{parts:?}");
     assert!(parts[1][1] < -10.0, "{parts:?}");
     assert!((parts[0][0] - 20.0).abs() < 1e-3, "{parts:?}");
 
@@ -680,20 +536,12 @@ fn a_lever_on_one_pin_turns_and_a_stop_holds_it() {
     let msg = error_of(&run(req(json!([flat, stop]))));
     // Named as the panel names it, then as the request does, and the face by what it is.
     assert!(
-        msg.contains(
-            "support 1 (supports[0]) is pinned, which needs cylindrical faces (a hole or a pin), but "
-        ) && msg.contains(" is flat, pick the round face of the hole or the pin"),
+        msg.contains("support 1 (supports[0]) is pinned, which needs cylindrical faces (a hole or a pin), but ")
+            && msg.contains(" is flat, pick the round face of the hole or the pin"),
         "{msg}"
     );
-    let msg = error_of(&run(req(
-        json!([{"type": "glued", "faces": face([0.0, 0.0, 1.0])}]),
-    )));
-    assert!(
-        msg.contains(
-            "support 1 (supports[0]) has type 'glued', a support is fixed, pinned or slider"
-        ),
-        "{msg}"
-    );
+    let msg = error_of(&run(req(json!([{"type": "glued", "faces": face([0.0, 0.0, 1.0])}]))));
+    assert!(msg.contains("support 1 (supports[0]) has type 'glued', a support is fixed, pinned or slider"), "{msg}");
     let mut none = req(json!([]));
     none.as_object_mut().unwrap().remove("supports");
     assert!(error_of(&run(none)).contains("no face is fixed"));
@@ -715,19 +563,13 @@ fn gravity_weighs_the_body_and_bends_it() {
     let weight = vec3(&r["weight"]);
     assert!(weight[0] == 0.0 && weight[1] == 0.0, "{weight:?}");
     // The mesh rounds the bar's edges over, and the weight is still the real bar's.
-    assert!(
-        (weight[2] + want).abs() < 1e-4 * want,
-        "{weight:?} vs {want}"
-    );
+    assert!((weight[2] + want).abs() < 1e-4 * want, "{weight:?} vs {want}");
     assert_eq!(vec3(&r["applied"]), weight);
     // The weight is a uniform load q = rho g A, bending the tip q L^4 / 8 E I.
     let q = want / 100.0;
     let tip_want = q * 100.0f64.powi(4) / (8.0 * 3500.0 * (10.0 * 1000.0 / 12.0));
     let tip = num(&r["maxDisplacement"]["value"]);
-    assert!(
-        (tip - tip_want).abs() < 0.1 * tip_want,
-        "{tip} vs {tip_want}"
-    );
+    assert!((tip - tip_want).abs() < 0.1 * tip_want, "{tip} vs {tip_want}");
     assert!(num(&r["maxDisplacement"]["vector"][2]) < 0.0);
 
     // Gravity as a vector, along +X here, and beside a load.
@@ -739,19 +581,13 @@ fn gravity_weighs_the_body_and_bends_it() {
     let w = vec3(&r["weight"]);
     assert!((w[0] - want).abs() < 1e-4 * want && w[2] == 0.0, "{w:?}");
     let applied = vec3(&r["applied"]);
-    assert!(
-        (applied[2] + 1.0).abs() < 1e-6 && (applied[0] - w[0]).abs() < 1e-6,
-        "{applied:?}"
-    );
+    assert!((applied[2] + 1.0).abs() < 1e-6 && (applied[0] - w[0]).abs() < 1e-6, "{applied:?}");
 
     // A material of your own needs a density for gravity.
     let mut custom = req.clone();
     custom["material"] = json!({"E": 2000, "nu": 0.3});
     let msg = error_of(&run(custom.clone()));
-    assert!(
-        msg.contains("gravity needs the material's density in g/cm3"),
-        "{msg}"
-    );
+    assert!(msg.contains("gravity needs the material's density in g/cm3"), "{msg}");
     custom["material"]["density"] = json!(-1);
     let msg = error_of(&run(custom.clone()));
     assert!(msg.contains("density must be a number above 0"), "{msg}");
@@ -819,10 +655,7 @@ fn a_slider_on_a_round_face_leaves_its_slide_and_turn_free() {
     assert!(msg.contains("the body can still slide along Z"), "{msg}");
     // With its end fixed it is held, and the round face, which has no friction, takes none
     // of the axial load.
-    let r = run(on_shaft(
-        json!([face([0.0, 0.0, -1.0])]),
-        json!([30, 0, -100]),
-    ));
+    let r = run(on_shaft(json!([face([0.0, 0.0, -1.0])]), json!([30, 0, -100])));
     balanced(&r);
     let round = vec3(&r["reactions"][1]);
     assert!(round[2].abs() < 1e-6 * 100.0, "{round:?}");
@@ -838,9 +671,7 @@ fn a_slider_on_a_round_face_leaves_its_slide_and_turn_free() {
         "material": "steel", "size": 3,
     })));
     assert!(
-        msg.contains(
-            "the body can still turn about the centre of its ball-shaped slider face at (0, 0, 0)"
-        ),
+        msg.contains("the body can still turn about the centre of its ball-shaped slider face at (0, 0, 0)"),
         "{msg}"
     );
 }
@@ -852,9 +683,7 @@ fn a_slider_on_a_round_face_leaves_its_slide_and_turn_free() {
 fn time_the_default_cantilever() {
     let mut req = cantilever(json!("PLA"), 1.0);
     req.as_object_mut().unwrap().remove("size");
-    let Value::Object(m) = req else {
-        unreachable!()
-    };
+    let Value::Object(m) = req else { unreachable!() };
     let t = std::time::Instant::now();
     let r = json_of(stress_result(&m, &NoWatch));
     let secs = t.elapsed().as_secs_f64();

@@ -68,15 +68,10 @@ pub struct Stats {
 }
 
 pub fn default_root() -> PathBuf {
-    let base = std::env::var_os("XDG_CACHE_HOME")
-        .filter(|d| !d.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let home = std::env::var_os("HOME")
-                .or_else(|| std::env::var_os("USERPROFILE"))
-                .unwrap_or_default();
-            PathBuf::from(home).join(".cache")
-        });
+    let base = std::env::var_os("XDG_CACHE_HOME").filter(|d| !d.is_empty()).map(PathBuf::from).unwrap_or_else(|| {
+        let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).unwrap_or_default();
+        PathBuf::from(home).join(".cache")
+    });
     // Apart from the Python engine's `geom`: its SQLite eviction reclaims every blob
     // no row of its own references, which would be all of these.
     base.join("fundacad").join("engine-geom")
@@ -119,10 +114,7 @@ impl GeomStore {
     }
 
     fn mesh_path(&self, key: &str) -> PathBuf {
-        let clean: String = key
-            .chars()
-            .map(|c| if c.is_ascii_hexdigit() || c == '-' { c } else { '-' })
-            .collect();
+        let clean: String = key.chars().map(|c| if c.is_ascii_hexdigit() || c == '-' { c } else { '-' }).collect();
         self.meshes.join(format!("{clean}.bin"))
     }
 
@@ -136,9 +128,7 @@ impl GeomStore {
         }
         // The clock alone names two writes of the same tick alike.
         static NTH: AtomicU64 = AtomicU64::new(0);
-        let nonce = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos());
+        let nonce = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
         let nth = NTH.fetch_add(1, Ordering::Relaxed);
         let tmp = self.tmp.join(format!("{nonce:x}-{}-{nth}.tmp", std::process::id()));
         let written = (|| {
@@ -231,15 +221,9 @@ impl GeomStore {
 
     /// Upserts the record; an existing pin survives.
     pub fn save_checkpoint(&self, chain_key: &str, mut cp: Checkpoint) -> std::io::Result<()> {
-        let path = self
-            .checkpoint_path(chain_key)
-            .ok_or_else(|| std::io::Error::other("not a cache key"))?;
-        cp.bytes = cp
-            .manifest
-            .iter()
-            .filter_map(|e| fs::metadata(self.blob_path(&e.blob_key)).ok())
-            .map(|m| m.len())
-            .sum();
+        let path = self.checkpoint_path(chain_key).ok_or_else(|| std::io::Error::other("not a cache key"))?;
+        cp.bytes =
+            cp.manifest.iter().filter_map(|e| fs::metadata(self.blob_path(&e.blob_key)).ok()).map(|m| m.len()).sum();
         if let Some(old) = self.read_checkpoint(chain_key) {
             cp.pinned |= old.pinned;
         }
@@ -397,10 +381,8 @@ impl GeomStore {
     /// A tenth of the free space plus what the cache holds, within
     /// [512 MiB, 8 GiB] and never past half; `FUNDACAD_CACHE_MAX_GB` overrides.
     pub fn cache_budget(&self) -> u64 {
-        if let Some(gb) = std::env::var("FUNDACAD_CACHE_MAX_GB")
-            .ok()
-            .and_then(|s| s.trim().parse::<f64>().ok())
-            .filter(|g| *g > 0.0)
+        if let Some(gb) =
+            std::env::var("FUNDACAD_CACHE_MAX_GB").ok().and_then(|s| s.trim().parse::<f64>().ok()).filter(|g| *g > 0.0)
         {
             return (gb * f64::from(1u32 << 30)) as u64;
         }
@@ -492,14 +474,7 @@ mod tests {
     }
 
     fn cp(index: usize, manifest: Vec<ManifestEntry>, replay_ms: f64) -> Checkpoint {
-        Checkpoint {
-            feat_index: index,
-            manifest,
-            state: Value::Null,
-            replay_ms,
-            bytes: 0,
-            pinned: false,
-        }
+        Checkpoint { feat_index: index, manifest, state: Value::Null, replay_ms, bytes: 0, pinned: false }
     }
 
     fn key(n: u8) -> String {
@@ -516,10 +491,17 @@ mod tests {
         let back = s.get_blob(&key(1)).unwrap();
         assert!((crate::kernel::volume(&back) - 1000.0).abs() < 1e-6);
         assert!(s.get_blob(&key(2)).is_none());
-        fs::write(s.blob_path(&key(3)).parent().map(|p| {
-            fs::create_dir_all(p).unwrap();
+        fs::write(
             s.blob_path(&key(3))
-        }).unwrap(), b"garbage").unwrap();
+                .parent()
+                .map(|p| {
+                    fs::create_dir_all(p).unwrap();
+                    s.blob_path(&key(3))
+                })
+                .unwrap(),
+            b"garbage",
+        )
+        .unwrap();
         assert!(s.get_blob(&key(3)).is_none());
         assert!(!s.has_blob(&key(3)), "a corrupt blob is removed");
         assert!(s.get_blob("../escape").is_none());
@@ -594,7 +576,12 @@ mod tests {
         s.put_mesh("bb-tv8", &[2u8; 100]).unwrap();
         let old = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
         fs::OpenOptions::new().append(true).open(s.mesh_path("aa-tv8")).unwrap().set_modified(old).unwrap();
-        fs::OpenOptions::new().append(true).open(s.mesh_path("bb-tv8")).unwrap().set_modified(old + std::time::Duration::from_secs(5)).unwrap();
+        fs::OpenOptions::new()
+            .append(true)
+            .open(s.mesh_path("bb-tv8"))
+            .unwrap()
+            .set_modified(old + std::time::Duration::from_secs(5))
+            .unwrap();
         assert_eq!(s.get_mesh("aa-tv8").unwrap(), vec![1u8; 100]);
         assert_eq!(s.evict_meshes(150), 1);
         assert!(s.get_mesh("aa-tv8").is_some() && s.get_mesh("bb-tv8").is_none());

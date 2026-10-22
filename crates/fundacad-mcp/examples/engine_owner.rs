@@ -19,9 +19,7 @@ async fn main() {
         let link = EngineLink::private();
         // A real request, so the engine is actually up rather than merely
         // spawned: a process that has not finished starting is not what leaks.
-        link.call("ping", serde_json::json!({}))
-            .await
-            .expect("the engine answers");
+        link.call("ping", serde_json::json!({})).await.expect("the engine answers");
         let pid = link.engine_pid().await.expect("it spawned one");
         // Leaked on purpose: dropping the link would kill the engine tidily,
         // which is the one thing this owner must not do.

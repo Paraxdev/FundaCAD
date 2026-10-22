@@ -9,7 +9,8 @@ use std::io::{BufRead, Write};
 
 use serde_json::{json, Value};
 
-const PNG_1PX: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+const PNG_1PX: &str =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
 fn answer(req: &Value) -> Value {
     let id = req.get("id").cloned().unwrap_or(Value::Null);

@@ -25,7 +25,9 @@ pub struct Sweep {
 
 fn number(v: Option<&Value>, key: &str) -> Result<f64, String> {
     match v {
-        Some(Value::Number(n)) => n.as_f64().filter(|f| f.is_finite()).ok_or_else(|| format!("`{key}` has to be a number")),
+        Some(Value::Number(n)) => {
+            n.as_f64().filter(|f| f.is_finite()).ok_or_else(|| format!("`{key}` has to be a number"))
+        }
         Some(Value::String(s)) => s.trim().parse::<f64>().map_err(|_| format!("`{key}` has to be a number, got {s:?}")),
         _ => Err(format!("the sweep needs `{key}`")),
     }
@@ -50,10 +52,7 @@ pub fn sweep_of(v: &Value) -> Result<Sweep, String> {
         let Some(list) = list.as_array() else {
             return Err("`values` is a list of numbers".into());
         };
-        list.iter()
-            .enumerate()
-            .map(|(i, x)| number(Some(x), &format!("values[{i}]")))
-            .collect::<Result<_, _>>()?
+        list.iter().enumerate().map(|(i, x)| number(Some(x), &format!("values[{i}]"))).collect::<Result<_, _>>()?
     } else {
         let from = number(obj.get("from"), "from")?;
         let to = number(obj.get("to"), "to")?;
@@ -149,10 +148,7 @@ pub fn failures(r: &Value) -> Vec<String> {
         .iter()
         .filter_map(|e| {
             let m = e.get("message").and_then(Value::as_str)?;
-            Some(format!(
-                "FEATURE FAILED ({}): {m}",
-                e.get("feature_id").and_then(Value::as_str).unwrap_or("None")
-            ))
+            Some(format!("FEATURE FAILED ({}): {m}", e.get("feature_id").and_then(Value::as_str).unwrap_or("None")))
         })
         .collect()
 }
@@ -174,10 +170,7 @@ pub fn missing(r: &Value, asked: &[String]) -> Vec<String> {
 /// The bodies the engine could not judge, each with why: a pair with one of
 /// them was tested for neither overlap nor clearance.
 pub fn unjudged(r: &Value) -> Vec<String> {
-    list(r, "unchecked")
-        .iter()
-        .map(|u| format!("{} {}", who(s(u, "id"), s(u, "name")), s(u, "reason")))
-        .collect()
+    list(r, "unchecked").iter().map(|u| format!("{} {}", who(s(u, "id"), s(u, "name")), s(u, "reason"))).collect()
 }
 
 /// The pairs within the clearance that do not overlap, nearest first.
@@ -205,7 +198,10 @@ pub fn report(r: &Value, clearance: f64) -> String {
     }
     if pairs.is_empty() {
         // "No bodies overlap" is a claim about every pair, and some were not tested.
-        out.push(if skipped.is_empty() { "No bodies overlap." } else { "No overlap among the pairs that were checked." }.to_string());
+        out.push(
+            if skipped.is_empty() { "No bodies overlap." } else { "No overlap among the pairs that were checked." }
+                .to_string(),
+        );
     } else {
         out.push(format!("{} overlapping pair{}:", pairs.len(), if pairs.len() == 1 { "" } else { "s" }));
         for p in pairs {
@@ -227,12 +223,7 @@ pub fn report(r: &Value, clearance: f64) -> String {
             for g in near {
                 let d = f(g, "distance");
                 let gap = if d < 1e-6 { "touching".to_string() } else { format!("{} mm apart", mm(d)) };
-                out.push(format!(
-                    "  {}: {gap}, at {} and {}",
-                    pair(g),
-                    point(g.get("pointA")),
-                    point(g.get("pointB"))
-                ));
+                out.push(format!("  {}: {gap}, at {} and {}", pair(g), point(g.get("pointA")), point(g.get("pointB"))));
             }
         }
     }
@@ -464,19 +455,26 @@ mod tests {
             text.contains("press = 12: clear (Slider not built) (features failed: ex2: depth must be positive)"),
             "{text}"
         );
-        assert!(text.contains("Slider was not built at 1 step (press = 12 mm), so its pairs were not checked there."), "{text}");
+        assert!(
+            text.contains("Slider was not built at 1 step (press = 12 mm), so its pairs were not checked there."),
+            "{text}"
+        );
         let none = sweep_report("press", "mm", &[Step { value: 0.0, reply: Err("x".into()) }], 1.0, &[]);
         assert!(none.starts_with("None of the 1 steps could be checked.\n"), "{none}");
     }
 
     #[test]
     fn a_pair_that_was_not_tested_is_never_called_clear() {
-        let reason = "has faces that point the wrong way, at 65 of its edges the two faces disagree about which side is inside";
+        let reason =
+            "has faces that point the wrong way, at 65 of its edges the two faces disagree about which side is inside";
         let r = json!({"pairs": [], "clearances": [], "uncheckedPairs": 1,
                        "unchecked": [{"id": "body1", "name": "Echo Dot 2", "reason": reason}]});
         let text = report(&r, 1.0);
         assert!(!text.contains("No bodies overlap"), "{text}");
-        assert!(text.starts_with("NOT CHECKED: 1 pair that may overlap, because one of the two bodies cannot be judged:"), "{text}");
+        assert!(
+            text.starts_with("NOT CHECKED: 1 pair that may overlap, because one of the two bodies cannot be judged:"),
+            "{text}"
+        );
         assert!(text.contains(&format!("  body1 \"Echo Dot 2\" {reason}")), "{text}");
         assert!(text.contains("No overlap among the pairs that were checked."), "{text}");
 

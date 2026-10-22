@@ -97,12 +97,15 @@ fn main() {
         t.set_look(Look { sun_dir: [0.4, -0.3, 1.0], sun_color: [2.0; 3], ..Look::default() });
         for k in t.set_bodies(bodies) {
             if k == "floor" {
-                t.add_mesh(&k, Mesh {
-                    positions: vec![[-1.0, -1.0, 0.0], [1.0, -1.0, 0.0], [1.0, 1.0, 0.0], [-1.0, 1.0, 0.0]],
-                    normals: vec![[0.0, 0.0, 1.0]; 4],
-                    indices: vec![0, 1, 2, 0, 2, 3],
-                    ..Default::default()
-                });
+                t.add_mesh(
+                    &k,
+                    Mesh {
+                        positions: vec![[-1.0, -1.0, 0.0], [1.0, -1.0, 0.0], [1.0, 1.0, 0.0], [-1.0, 1.0, 0.0]],
+                        normals: vec![[0.0, 0.0, 1.0]; 4],
+                        indices: vec![0, 1, 2, 0, 2, 3],
+                        ..Default::default()
+                    },
+                );
             } else {
                 t.add_mesh(&k, mesh.clone());
             }

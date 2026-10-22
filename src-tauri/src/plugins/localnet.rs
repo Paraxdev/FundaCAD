@@ -58,7 +58,9 @@ pub enum RequestBody {
     },
     /// multipart/form-data. A file part names a handle from `plugin_file_pick`,
     /// never a path, so what can be sent is what the person chose.
-    Form { parts: Vec<FormPart> },
+    Form {
+        parts: Vec<FormPart>,
+    },
 }
 
 #[derive(Deserialize)]
@@ -107,20 +109,14 @@ pub fn target_of(url: &reqwest::Url) -> Result<(String, u16, Option<IpAddr>), St
     }
     let host = url.host_str().ok_or("the address has no host")?.to_string();
     let port = url.port_or_known_default().ok_or("the address has no port")?;
-    let literal = host
-        .trim_start_matches('[')
-        .trim_end_matches(']')
-        .parse::<IpAddr>()
-        .ok();
+    let literal = host.trim_start_matches('[').trim_end_matches(']').parse::<IpAddr>().ok();
     Ok((host, port, literal))
 }
 
 /// Every address `host` resolves to, refused unless all of them are local.
 fn resolve_local(host: &str, port: u16) -> Result<Vec<SocketAddr>, String> {
-    let addrs: Vec<SocketAddr> = (host, port)
-        .to_socket_addrs()
-        .map_err(|e| format!("{host} could not be resolved: {e}"))?
-        .collect();
+    let addrs: Vec<SocketAddr> =
+        (host, port).to_socket_addrs().map_err(|e| format!("{host} could not be resolved: {e}"))?.collect();
     if addrs.is_empty() {
         return Err(format!("{host} resolved to no address"));
     }
@@ -152,9 +148,7 @@ pub async fn plugin_local_request(
 
     let mut builder = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_millis(
-            request.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS).clamp(1, MAX_TIMEOUT_MS),
-        ));
+        .timeout(Duration::from_millis(request.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS).clamp(1, MAX_TIMEOUT_MS)));
     match literal {
         Some(ip) if !is_local(ip) => {
             return Err(format!("{ip} is not on the local network"));
@@ -215,11 +209,8 @@ pub async fn plugin_local_request(
 
     let resp = req.send().await.map_err(|e| e.to_string())?;
     let status = resp.status().as_u16();
-    let content_type = resp
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
+    let content_type =
+        resp.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).map(str::to_string);
     if resp.content_length().is_some_and(|n| n as usize > MAX_RESPONSE) {
         return Err(format!("the reply is larger than {MAX_RESPONSE} bytes"));
     }
@@ -235,12 +226,7 @@ pub async fn plugin_local_request(
             base64: Some(base64::engine::general_purpose::STANDARD.encode(&bytes)),
         }
     } else {
-        LocalResponse {
-            status,
-            content_type,
-            text: Some(String::from_utf8_lossy(&bytes).into_owned()),
-            base64: None,
-        }
+        LocalResponse { status, content_type, text: Some(String::from_utf8_lossy(&bytes).into_owned()), base64: None }
     })
 }
 
@@ -254,7 +240,9 @@ mod tests {
 
     #[test]
     fn only_local_addresses_are_local() {
-        for ok in ["192.168.0.46", "10.1.2.3", "172.16.0.1", "169.254.10.10", "fd00::1", "fe80::1", "::ffff:192.168.1.2"] {
+        for ok in
+            ["192.168.0.46", "10.1.2.3", "172.16.0.1", "169.254.10.10", "fd00::1", "fe80::1", "::ffff:192.168.1.2"]
+        {
             assert!(is_local(ip(ok)), "{ok}");
         }
         for bad in ["127.0.0.1", "8.8.8.8", "172.32.0.1", "::1", "2001:db8::1", "0.0.0.0", "::ffff:8.8.8.8"] {

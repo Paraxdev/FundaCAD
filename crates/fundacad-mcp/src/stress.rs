@@ -93,9 +93,7 @@ fn load(v: &Value, at: &str) -> Result<(), String> {
         return Err(format!("`{at}` is {{faces, force}} or {{faces, pressure}}, got {v}"));
     };
     if let Some(k) = m.keys().find(|k| !LOAD_KEYS.contains(&k.as_str())) {
-        return Err(format!(
-            "`{at}` takes no '{k}', a load takes faces or spots and one of force or pressure"
-        ));
+        return Err(format!("`{at}` takes no '{k}', a load takes faces or spots and one of force or pressure"));
     }
     faces_or_spots(m, at)?;
     let force = m.get("force").filter(|f| !f.is_null());
@@ -121,7 +119,9 @@ fn load(v: &Value, at: &str) -> Result<(), String> {
 /// One of `supports`, and its name for the report.
 fn support(v: &Value, at: &str) -> Result<String, String> {
     let Some(m) = v.as_object() else {
-        return Err(format!("`{at}` is {{type, faces}}, a type of fixed, pinned or slider and the faces it holds, got {v}"));
+        return Err(format!(
+            "`{at}` is {{type, faces}}, a type of fixed, pinned or slider and the faces it holds, got {v}"
+        ));
     };
     if let Some(k) = m.keys().find(|k| !SUPPORT_KEYS.contains(&k.as_str())) {
         return Err(format!("`{at}` takes no '{k}', a support takes type and faces or spots"));
@@ -152,9 +152,9 @@ fn gravity(v: Option<&Value>) -> Result<bool, String> {
         Some(Value::Array(a)) if a.len() == 3 && a.iter().all(|x| finite(x).is_some()) => {
             Ok(a.iter().filter_map(finite).any(|x| x.abs() >= 1e-9))
         }
-        Some(other) => Err(format!(
-            "`gravity` is true for 9.81 m/s2 along -Z, false, or [gx, gy, gz] in m/s2, got {other}"
-        )),
+        Some(other) => {
+            Err(format!("`gravity` is true for 9.81 m/s2 along -Z, false, or [gx, gy, gz] in m/s2, got {other}"))
+        }
     }
 }
 
@@ -173,7 +173,11 @@ fn material(v: &Value) -> Result<(), String> {
             }
             match m.get("nu").and_then(finite) {
                 Some(nu) if nu > -1.0 && nu < 0.5 => {}
-                _ => return Err("`material.nu` is Poisson's ratio, a number between -1 and 0.5, e.g. 0.36 for PLA".into()),
+                _ => {
+                    return Err(
+                        "`material.nu` is Poisson's ratio, a number between -1 and 0.5, e.g. 0.36 for PLA".into()
+                    )
+                }
             }
             match m.get("yield") {
                 None | Some(Value::Null) => {}
@@ -183,18 +187,14 @@ fn material(v: &Value) -> Result<(), String> {
             match m.get("density") {
                 None | Some(Value::Null) => {}
                 Some(d) if finite(d).is_some_and(|d| d > 0.0) => {}
-                Some(d) => {
-                    return Err(format!("`material.density` is in g/cm3 above 0, e.g. 1.24 for PLA, got {d}"))
-                }
+                Some(d) => return Err(format!("`material.density` is in g/cm3 above 0, e.g. 1.24 for PLA, got {d}")),
             }
             match m.get("name") {
                 None | Some(Value::Null | Value::String(_)) => Ok(()),
                 Some(n) => Err(format!("`material.name` is text, got {n}")),
             }
         }
-        other => Err(format!(
-            "`material` is a preset name such as \"PLA\" or {{E, nu, yield}} in MPa, got {other}"
-        )),
+        other => Err(format!("`material` is a preset name such as \"PLA\" or {{E, nu, yield}} in MPa, got {other}")),
     }
 }
 
@@ -217,7 +217,9 @@ pub fn request_of(args: &Map<String, Value>) -> Result<Request, String> {
     };
     let mut names = Vec::new();
     // `fixed` may be left out, or empty, when `supports` holds the body.
-    let fixed = args.get("fixed").filter(|f| !f.is_null() && !(f.as_array().is_some_and(Vec::is_empty) && !supports.is_empty()));
+    let fixed = args
+        .get("fixed")
+        .filter(|f| !f.is_null() && !(f.as_array().is_some_and(Vec::is_empty) && !supports.is_empty()));
     match fixed {
         None if supports.is_empty() => {
             return Err(format!(
@@ -238,12 +240,13 @@ pub fn request_of(args: &Map<String, Value>) -> Result<Request, String> {
         None | Some(Value::Null) if pulled => Vec::new(),
         None | Some(Value::Null) => {
             return Err(
-                "`loads` is missing, give at least one {faces, force} or {faces, pressure}, or turn `gravity` on".into(),
+                "`loads` is missing, give at least one {faces, force} or {faces, pressure}, or turn `gravity` on"
+                    .into(),
             )
         }
         Some(Value::Array(a)) if a.is_empty() && !pulled => {
             return Err(
-                "`loads` is empty, give at least one {faces, force} or {faces, pressure}, or turn `gravity` on".into(),
+                "`loads` is empty, give at least one {faces, force} or {faces, pressure}, or turn `gravity` on".into()
             )
         }
         Some(Value::Array(a)) => a.clone(),
@@ -277,7 +280,8 @@ pub fn request_of(args: &Map<String, Value>) -> Result<Request, String> {
         material(m)?;
         if pulled && m.is_object() && m.get("density").is_none_or(Value::is_null) {
             return Err(
-                "`gravity` needs the material's density in g/cm3, add `density` to `material`, e.g. 1.24 for PLA".into(),
+                "`gravity` needs the material's density in g/cm3, add `density` to `material`, e.g. 1.24 for PLA"
+                    .into(),
             );
         }
         payload.insert("material".into(), m.clone());
@@ -303,11 +307,7 @@ pub fn request_of(args: &Map<String, Value>) -> Result<Request, String> {
         Some(Value::Bool(b)) => *b,
         Some(other) => return Err(format!("`image` is true or false, got {other}")),
     };
-    Ok(Request {
-        payload,
-        image,
-        supports: names,
-    })
+    Ok(Request { payload, image, supports: names })
 }
 
 /// Four significant figures, enough to compare and short enough to read.
@@ -449,9 +449,7 @@ pub struct Surface {
 }
 
 fn numbers(v: Option<&Value>) -> Vec<f64> {
-    v.and_then(Value::as_array)
-        .map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect())
-        .unwrap_or_default()
+    v.and_then(Value::as_array).map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect()).unwrap_or_default()
 }
 
 /// The reply's `surface`, or None when it has nothing to draw. The scale runs
@@ -469,10 +467,7 @@ pub fn surface_of(r: &Value) -> Option<Surface> {
     let low = values.iter().cloned().fold(f64::INFINITY, f64::min);
     let high = values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
     let span = high - low;
-    let colors = values
-        .iter()
-        .map(|&v| stress_color(if span > 0.0 { (v - low) / span } else { 0.0 }))
-        .collect();
+    let colors = values.iter().map(|&v| stress_color(if span > 0.0 { (v - low) / span } else { 0.0 })).collect();
 
     // An edge whose two triangles lie on different faces is a face boundary.
     // Walked in triangle order, so the same reply draws the same lines.
@@ -605,8 +600,7 @@ mod tests {
         assert!(both.contains("both a force and a pressure"), "{both}");
         assert!(refused(json!({"loads": [{"faces": [face([1.0, 0.0, 0.0])], "force": [0, 1]}]}))
             .contains("`loads[0].force` is three numbers"));
-        assert!(refused(json!({"loads": [{"faces": [face([1.0, 0.0, 0.0])], "push": 1}]}))
-            .contains("takes no 'push'"));
+        assert!(refused(json!({"loads": [{"faces": [face([1.0, 0.0, 0.0])], "push": 1}]})).contains("takes no 'push'"));
         assert!(refused(json!({"material": {"E": 2300}})).contains("`material.nu`"));
         assert!(refused(json!({"material": 7})).contains("`material` is a preset name"));
         assert!(refused(json!({"size": 0})).contains("`size`"));
@@ -696,8 +690,10 @@ mod tests {
 
     #[test]
     fn malformed_supports_and_gravity_are_named() {
-        let base = || json!({"body": "body1", "supports": [{"type": "slider", "faces": face([0.0, 0.0, -1.0])}],
-                             "loads": [{"faces": [face([1.0, 0.0, 0.0])], "force": [0, 0, -1]}]});
+        let base = || {
+            json!({"body": "body1", "supports": [{"type": "slider", "faces": face([0.0, 0.0, -1.0])}],
+                             "loads": [{"faces": [face([1.0, 0.0, 0.0])], "force": [0, 0, -1]}]})
+        };
         let refused = |patch: Value| {
             let mut a = base();
             for (k, v) in patch.as_object().expect("an object") {
@@ -706,7 +702,10 @@ mod tests {
             request_of(&args(a)).err().expect("refused")
         };
         let none = refused(json!({"supports": null}));
-        assert!(none.contains("`fixed` is missing, hold at least one face with `fixed`") && none.contains("`supports`"), "{none}");
+        assert!(
+            none.contains("`fixed` is missing, hold at least one face with `fixed`") && none.contains("`supports`"),
+            "{none}"
+        );
         assert!(refused(json!({"supports": [{"type": "glued", "faces": face([0.0, 0.0, 1.0])}]}))
             .contains("`supports[0].type` is fixed (held still), pinned"));
         assert!(refused(json!({"supports": [{"type": "slider"}]})).contains("`supports[0].faces` is missing"));

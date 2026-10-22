@@ -23,15 +23,17 @@ use serde_json::{Map, Value};
 
 /// What `doc_import` will read. The same set the app's file pickers offer, and
 /// the same names the engine's importer switches on.
-pub const IMPORT_FORMATS: &[&str] = &["step", "stl", "3mf", "obj", "brep", "glb", "gltf", "iges", "fcstd", "ply", "off", "amf", "vrml", "x3d", "xbf", "3dm", "ifc", "dxf", "fbx", "3ds", "svg"];
+pub const IMPORT_FORMATS: &[&str] = &[
+    "step", "stl", "3mf", "obj", "brep", "glb", "gltf", "iges", "fcstd", "ply", "off", "amf", "vrml", "x3d", "xbf",
+    "3dm", "ifc", "dxf", "fbx", "3ds", "svg",
+];
 
 /// How much file may arrive inline, summed over every piece of one upload. A
 /// TRANSPORT limit, not the reader's: the engine keeps its own per-format cap
 /// and applies it to the file on disk. `path` has no ceiling at all.
 pub const MAX_INLINE_BYTES: usize = 64 * 1024 * 1024;
 
-static INLINE_CAP: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(MAX_INLINE_BYTES);
+static INLINE_CAP: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(MAX_INLINE_BYTES);
 
 pub fn max_inline_bytes() -> usize {
     INLINE_CAP.load(std::sync::atomic::Ordering::Relaxed)
@@ -44,8 +46,7 @@ pub fn max_inline_bytes() -> usize {
 /// gigabyte of zeroes, and a limit only on what arrives is not a limit at all.
 pub const MAX_UNPACKED_BYTES: usize = 512 * 1024 * 1024;
 
-static UNPACKED_CAP: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(MAX_UNPACKED_BYTES);
+static UNPACKED_CAP: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(MAX_UNPACKED_BYTES);
 
 pub fn max_unpacked_bytes() -> usize {
     UNPACKED_CAP.load(std::sync::atomic::Ordering::Relaxed)
@@ -56,10 +57,7 @@ pub fn max_unpacked_bytes() -> usize {
 /// file is too large, not about writing half a gigabyte to find out.
 pub fn set_caps(inline: usize, unpacked: usize) -> (usize, usize) {
     use std::sync::atomic::Ordering::Relaxed;
-    (
-        INLINE_CAP.swap(inline, Relaxed),
-        UNPACKED_CAP.swap(unpacked, Relaxed),
-    )
+    (INLINE_CAP.swap(inline, Relaxed), UNPACKED_CAP.swap(unpacked, Relaxed))
 }
 
 /// Past this many pieces, say so. Inline content is written by the model, so
@@ -76,15 +74,12 @@ pub const UPLOAD_IDLE_SECONDS: u64 = 30 * 60;
 /// the name is all there is to go on. `.stpZ` is ISO 10303-21's own spelling
 /// for a zipped STEP and carries no inner extension to read, though FreeCAD
 /// and KiCad write it gzip, which the sniff in `unpack` catches.
-const ARCHIVE_SUFFIXES: &[(&str, &str, Option<&str>)] = &[
-    ("gz", "gzip", None),
-    ("gzip", "gzip", None),
-    ("zip", "zip", None),
-    ("stpz", "zip", Some("step")),
-];
+const ARCHIVE_SUFFIXES: &[(&str, &str, Option<&str>)] =
+    &[("gz", "gzip", None), ("gzip", "gzip", None), ("zip", "zip", None), ("stpz", "zip", Some("step"))];
 
 /// Spellings the file pickers accept that are not the format's own name.
-const FORMAT_ALIASES: &[(&str, &str)] = &[("stp", "step"), ("igs", "iges"), ("wrl", "vrml"), ("wrz", "vrml"), ("x3dz", "x3d")];
+const FORMAT_ALIASES: &[(&str, &str)] =
+    &[("stp", "step"), ("igs", "iges"), ("wrl", "vrml"), ("wrz", "vrml"), ("x3dz", "x3d")];
 
 /// Read and written in multiples of 4, so that a base64 spool splits at
 /// character boundaries the decoder can take one block at a time. Padding only
@@ -152,10 +147,7 @@ pub fn format_of(name: &str) -> Option<&'static str> {
 /// The format a spelling names, in any case: `STP` and `igs` as much as `step`.
 fn named_format(spelling: &str) -> Option<&'static str> {
     let spelling = spelling.to_ascii_lowercase();
-    let own = FORMAT_ALIASES
-        .iter()
-        .find(|(a, _)| *a == spelling)
-        .map_or(spelling.as_str(), |(_, f)| *f);
+    let own = FORMAT_ALIASES.iter().find(|(a, _)| *a == spelling).map_or(spelling.as_str(), |(_, f)| *f);
     IMPORT_FORMATS.iter().copied().find(|f| *f == own)
 }
 
@@ -184,9 +176,7 @@ fn extension(name: &str) -> String {
 
 fn without_extension(name: &str) -> String {
     match name.rfind('.') {
-        Some(at) if name[at..].len() > 1 && !name[at + 1..].contains(['/', '\\']) => {
-            name[..at].to_string()
-        }
+        Some(at) if name[at..].len() > 1 && !name[at + 1..].contains(['/', '\\']) => name[..at].to_string(),
         _ => name.to_string(),
     }
 }
@@ -221,13 +211,7 @@ pub fn safe_filename(name: &str, fmt: &str) -> String {
     let base = name.trim().rsplit(['/', '\\']).next().unwrap_or("");
     let cleaned: String = base
         .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-' {
-                c
-            } else {
-                '_'
-            }
-        })
+        .map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-' { c } else { '_' })
         .collect();
     if cleaned.trim_matches('.').is_empty() {
         format!("imported.{fmt}")
@@ -266,54 +250,34 @@ impl Upload {
         let name = args.get("name").and_then(Value::as_str).unwrap_or("");
         let (inner, wrapped) = unwrap_name(name);
 
-        let given = args
-            .get("compression")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_ascii_lowercase();
+        let given = args.get("compression").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
         let sniff = given != "none";
         let compression = if given == "none" {
             None // an explicit none overrules the name
         } else if !given.is_empty() {
             if given != "gzip" && given != "zip" {
-                return fail(format!(
-                    "Unknown compression '{given}'. Use \"gzip\", \"zip\", or leave it out."
-                ));
+                return fail(format!("Unknown compression '{given}'. Use \"gzip\", \"zip\", or leave it out."));
             }
             Some(given)
         } else {
             wrapped.map(str::to_string)
         };
 
-        let mut encoding = args
-            .get("encoding")
-            .and_then(Value::as_str)
-            .unwrap_or("base64")
-            .to_ascii_lowercase();
+        let mut encoding = args.get("encoding").and_then(Value::as_str).unwrap_or("base64").to_ascii_lowercase();
         if encoding == "utf8" || encoding == "utf-8" {
             encoding = "text".into();
         }
         if encoding != "base64" && encoding != "text" {
-            return fail(format!(
-                "Unknown encoding '{encoding}'. Use \"base64\" or \"text\"."
-            ));
+            return fail(format!("Unknown encoding '{encoding}'. Use \"base64\" or \"text\"."));
         }
 
         // Where the format came from decides one later question: a plain `.zip`
         // tells us nothing, so if nobody has said, the file inside gets to.
-        let told = args
-            .get("format")
-            .and_then(Value::as_str)
-            .filter(|f| !f.is_empty());
+        let told = args.get("format").and_then(Value::as_str).filter(|f| !f.is_empty());
         let told_format = told.is_some() || format_of(&inner).is_some();
-        let fmt = told
-            .map(format_told_as)
-            .unwrap_or_else(|| import_format(&inner).to_string());
+        let fmt = told.map(format_told_as).unwrap_or_else(|| import_format(&inner).to_string());
         if !IMPORT_FORMATS.contains(&fmt.as_str()) {
-            return fail(format!(
-                "Cannot import '{fmt}' files. Formats: {}.",
-                IMPORT_FORMATS.join(", ")
-            ));
+            return fail(format!("Cannot import '{fmt}' files. Formats: {}.", IMPORT_FORMATS.join(", ")));
         }
 
         let id = token_hex(3);
@@ -330,11 +294,7 @@ impl Upload {
             sniff,
             encoding,
             told_format,
-            name: if inner.is_empty() {
-                format!("imported.{fmt}")
-            } else {
-                inner.clone()
-            },
+            name: if inner.is_empty() { format!("imported.{fmt}") } else { inner.clone() },
             filename: safe_filename(&inner, &fmt),
             fmt,
             parts,
@@ -353,9 +313,7 @@ impl Upload {
     /// avoided it, because this is the one layer that knows both.
     pub fn write(&mut self, content: Option<&Value>, part: i64) -> Result<(), UploadError> {
         let Some(Value::String(content)) = content else {
-            return fail(
-                "content must be a string: base64, or the file's own text with encoding \"text\".",
-            );
+            return fail("content must be a string: base64, or the file's own text with encoding \"text\".");
         };
         let data: Vec<u8> = if self.encoding == "text" {
             content.as_bytes().to_vec()
@@ -410,9 +368,7 @@ impl Upload {
 fn token_hex(bytes: usize) -> String {
     let mut buf = vec![0u8; bytes];
     if getrandom::fill(&mut buf).is_err() {
-        let n = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos() as u64);
+        let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);
         for (i, b) in buf.iter_mut().enumerate() {
             *b = (n >> (i * 8)) as u8;
         }
@@ -488,11 +444,7 @@ fn sniff_compression(path: &Path) -> Option<&'static str> {
     (head == [0x1f, 0x8b]).then_some("gzip")
 }
 
-fn copy_capped(
-    src: &mut impl Read,
-    dst: &mut impl Write,
-    what: &str,
-) -> Result<usize, UploadError> {
+fn copy_capped(src: &mut impl Read, dst: &mut impl Write, what: &str) -> Result<usize, UploadError> {
     let mut total = 0usize;
     let mut block = vec![0u8; BLOCK];
     loop {
@@ -528,8 +480,7 @@ fn gunzip(src_path: &Path, dst_path: &Path) -> Result<usize, UploadError> {
         Err(e) if e.0.starts_with("the file could not be read") => fail(format!(
             "the gzip data could not be read ({}). If the file is not compressed, leave \
              compression out.",
-            e.0.trim_start_matches("the file could not be read (")
-                .trim_end_matches(").")
+            e.0.trim_start_matches("the file could not be read (").trim_end_matches(").")
         )),
         Err(e) => Err(e),
     }
@@ -540,12 +491,7 @@ fn gunzip(src_path: &Path, dst_path: &Path) -> Result<usize, UploadError> {
 /// An archive holding several is refused rather than guessed at: which one was
 /// meant is a question with a right answer that this process does not have, and
 /// importing the wrong one looks like success until the measurements are wrong.
-fn unzip_one(
-    src_path: &Path,
-    dst_path: &Path,
-    fmt: &str,
-    told_format: bool,
-) -> Result<String, UploadError> {
+fn unzip_one(src_path: &Path, dst_path: &Path, fmt: &str, told_format: bool) -> Result<String, UploadError> {
     let Ok(file) = std::fs::File::open(src_path) else {
         return fail("the zip archive could not be read. If the file is not compressed, leave compression out.");
     };
@@ -576,10 +522,7 @@ fn unzip_one(
         // to step whenever the name was silent, and letting that pick would
         // answer the question with a default.
         let want: Vec<&(usize, String, u64)> = if told_format {
-            entries
-                .iter()
-                .filter(|(_, name, _)| format_of(name) == Some(fmt))
-                .collect()
+            entries.iter().filter(|(_, name, _)| format_of(name) == Some(fmt)).collect()
         } else {
             Vec::new()
         };
@@ -615,9 +558,7 @@ fn unzip_one(
     // directory, so the two disagreeing means the archive is damaged, and a
     // short read would otherwise import as a truncated file.
     if total as u64 != declared {
-        return fail(format!(
-            "{name} says it is {declared} bytes but {total} came out, so the archive is damaged."
-        ));
+        return fail(format!("{name} says it is {declared} bytes but {total} came out, so the archive is damaged."));
     }
     Ok(name)
 }

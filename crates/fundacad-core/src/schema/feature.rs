@@ -25,10 +25,7 @@ pub enum PlaneSpec {
     Def(PlaneDef),
 }
 
-plain_struct!(AxisLine {
-    origin: Vec3,
-    dir: Vec3
-});
+plain_struct!(AxisLine { origin: Vec3, dir: Vec3 });
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -268,10 +265,7 @@ feature_struct!(
     }
 );
 
-plain_struct!(LoftProfile {
-    sketch: String,
-    region: Vec3
-});
+plain_struct!(LoftProfile { sketch: String, region: Vec3 });
 
 feature_struct!(Loft {
     #[serde(default, skip_serializing_if = "Option::is_none")] profiles: Option<Vec<LoftProfile>>,
@@ -319,8 +313,13 @@ feature_struct!(
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum PlaneThrough {
     /// Halfway between two planes, their bisector when they cross.
-    Mid { a: PlaneOf, b: PlaneOf },
-    Points { points: Vec<PointAt> },
+    Mid {
+        a: PlaneOf,
+        b: PlaneOf,
+    },
+    Points {
+        points: Vec<PointAt>,
+    },
     /// Normal to `edge` at the datum's `t`, or at `vertex` when given.
     #[serde(rename_all = "camelCase")]
     NormalToEdge {
@@ -329,9 +328,15 @@ pub enum PlaneThrough {
         vertex: Option<PointAt>,
     },
     /// Through two parallel or crossing coplanar edges.
-    TwoEdges { a: Selector, b: Selector },
+    TwoEdges {
+        a: Selector,
+        b: Selector,
+    },
     /// Through `edge`, turned the datum's `angle` from the plane `from`.
-    Angle { edge: Selector, from: PlaneOf },
+    Angle {
+        edge: Selector,
+        from: PlaneOf,
+    },
 }
 
 /// A plane a datum is built from: a flat face, or XY, XZ, YZ or a datum plane id.
@@ -357,8 +362,12 @@ pub enum PointAt {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         point: Option<Vec3>,
     },
-    Face { face: Selector },
-    Datum { datum: String },
+    Face {
+        face: Selector,
+    },
+    Datum {
+        datum: String,
+    },
 }
 
 feature_struct!(DatumPoint {
@@ -379,11 +388,19 @@ feature_struct!(DatumAxis {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum AxisThrough {
-    Points { a: PointAt, b: PointAt },
+    Points {
+        a: PointAt,
+        b: PointAt,
+    },
     /// The axis of a cylindrical face.
-    Cylinder { face: Selector },
+    Cylinder {
+        face: Selector,
+    },
     /// Where two planes meet.
-    Planes { a: PlaneOf, b: PlaneOf },
+    Planes {
+        a: PlaneOf,
+        b: PlaneOf,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -404,14 +421,8 @@ plain_struct!(ImportPart {
     #[serde(default, skip_serializing_if = "Option::is_none")] face_colors: Option<FaceColorRuns>,
     #[serde(default, skip_serializing_if = "Option::is_none")] color: Option<String>,
 });
-plain_struct!(ImportLink {
-    path: String,
-    stamp: String
-});
-plain_struct!(GeneratedBy {
-    plugin: String,
-    spec: Extra
-});
+plain_struct!(ImportLink { path: String, stamp: String });
+plain_struct!(GeneratedBy { plugin: String, spec: Extra });
 
 feature_struct!(
     /// An imported body, embedded so the file rebuilds without the original.
@@ -792,8 +803,7 @@ macro_rules! each_known {
             Feature::Mechanism($f) => $e,
             Feature::CleanUp($f) => $e,
             Feature::RemoveBody($f) => $e,
-            Feature::Unknown($unknown)
-            | Feature::Invalid(super::value::Invalid { raw: $unknown, .. }) => $u,
+            Feature::Unknown($unknown) | Feature::Invalid(super::value::Invalid { raw: $unknown, .. }) => $u,
         }
     };
 }
@@ -817,9 +827,7 @@ impl Feature {
     /// The keys a known feature carries and a build ignores. `name` is the
     /// label any feature may carry.
     pub fn unread_fields(&self) -> Vec<&str> {
-        self.extra()
-            .map(|e| e.keys().map(String::as_str).filter(|k| *k != "name").collect())
-            .unwrap_or_default()
+        self.extra().map(|e| e.keys().map(String::as_str).filter(|k| *k != "name").collect()).unwrap_or_default()
     }
 
     pub fn is_core_type(type_name: &str) -> bool {

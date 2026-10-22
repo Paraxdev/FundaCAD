@@ -100,7 +100,10 @@ pub fn read_chains(raw: &Value, nodes: &[Node]) -> Result<Vec<Vec<usize>>, Strin
         for w in idx.windows(2) {
             let (a, b) = (&nodes[w[0]], &nodes[w[1]]);
             if math::norm(math::sub(a.center, b.center)) < 1e-6 {
-                return Err(format!("nodes {} and {} sit on the same point, a chain cannot run between them", a.id, b.id));
+                return Err(format!(
+                    "nodes {} and {} sit on the same point, a chain cannot run between them",
+                    a.id, b.id
+                ));
             }
         }
         if idx.len() >= 2 {

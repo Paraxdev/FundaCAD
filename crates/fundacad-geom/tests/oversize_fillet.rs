@@ -110,11 +110,7 @@ fn rounds_a_hair_past_meeting_are_refused_and_the_offered_size_builds_the_ball()
 }
 
 fn warnings<'a>(r: &'a Rebuild, feature: &str) -> Vec<&'a str> {
-    r.diagnostics
-        .iter()
-        .filter(|d| d["feature_id"] == json!(feature))
-        .filter_map(|d| d["message"].as_str())
-        .collect()
+    r.diagnostics.iter().filter(|d| d["feature_id"] == json!(feature)).filter_map(|d| d["message"].as_str()).collect()
 }
 
 /// A lone round past the 40 mm face is no fillet: r = 100 on one Z edge left

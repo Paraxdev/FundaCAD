@@ -84,7 +84,9 @@ fn ringed_glyphs(fill_rule: Option<&str>) -> (Rebuild, f64) {
             };
             for j in 0..8 {
                 let (a, b) = (p(j), p(j + 1));
-                entities.push(json!({"id": format!("{tag}{k}_{j}"), "type": "line", "x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1}));
+                entities.push(
+                    json!({"id": format!("{tag}{k}_{j}"), "type": "line", "x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1}),
+                );
             }
         }
     }

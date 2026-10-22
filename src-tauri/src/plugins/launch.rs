@@ -60,10 +60,7 @@ pub fn plugin_system_dirs(app: AppHandle) -> SystemDirs {
 
 /// The first candidate that is an absolute path to an existing file.
 pub fn first_program(candidates: &[String]) -> Option<PathBuf> {
-    candidates
-        .iter()
-        .map(PathBuf::from)
-        .find(|p| p.is_absolute() && p.is_file())
+    candidates.iter().map(PathBuf::from).find(|p| p.is_absolute() && p.is_file())
 }
 
 type Approvals = BTreeMap<String, Vec<String>>;
@@ -73,10 +70,7 @@ fn approvals_path(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 fn read_approvals(path: &Path) -> Approvals {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default()
+    std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
 }
 
 pub fn is_approved(approvals: &Approvals, plugin: &str, program: &str) -> bool {
@@ -116,18 +110,19 @@ pub async fn plugin_launch(
     if !is_approved(&read_approvals(&path), &plugin, &program) {
         let dialog = app
             .dialog()
-            .message(format!("The plugin {plugin} wants to start this program:
+            .message(format!(
+                "The plugin {plugin} wants to start this program:
 
 {program}
 
-Allow it, now and next time?"))
+Allow it, now and next time?"
+            ))
             .title("Start a program")
             .kind(MessageDialogKind::Warning)
             .buttons(MessageDialogButtons::OkCancelCustom("Allow".into(), "Don't allow".into()));
         // blocking_show must not run on the main thread, which drives the dialog.
-        let allowed = tauri::async_runtime::spawn_blocking(move || dialog.blocking_show())
-            .await
-            .map_err(|e| e.to_string())?;
+        let allowed =
+            tauri::async_runtime::spawn_blocking(move || dialog.blocking_show()).await.map_err(|e| e.to_string())?;
         if !allowed {
             return Err(format!("starting {program} was not allowed"));
         }

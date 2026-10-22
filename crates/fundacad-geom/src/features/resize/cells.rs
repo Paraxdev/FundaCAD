@@ -113,7 +113,13 @@ pub(super) fn touches(cell: &Shape, faces: &[Shape]) -> bool {
 
 /// The pieces of `band` that are material (`cut`) or void, split along the
 /// whole surfaces in `tools`, keeping the ones touching `faces`.
-pub(super) fn split_keep(body: &Shape, band: &Shape, cut: bool, tools: &[Shape], faces: &[Shape]) -> Result<Vec<Shape>, Bad> {
+pub(super) fn split_keep(
+    body: &Shape,
+    band: &Shape,
+    cut: bool,
+    tools: &[Shape],
+    faces: &[Shape],
+) -> Result<Vec<Shape>, Bad> {
     let pieces = crate::bench::phase("resize_pieces", || {
         let (vb, vt) = (memo::volume(body), kernel::volume(band));
         if cut {

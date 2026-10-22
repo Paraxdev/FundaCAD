@@ -110,7 +110,9 @@ impl Surf {
     pub(super) fn offset_of(&self, other: &Surf) -> Option<f64> {
         let on_line = |p: DVec3, dir: DVec3, loc: DVec3| radial(dir, loc, p).length() < 1e-5;
         match (*self, *other) {
-            (Surf::Cyl { dir, loc, r }, Surf::Cyl { dir: d2, loc: l2, r: r2 }) if parallel(dir, d2) && on_line(l2, dir, loc) => {
+            (Surf::Cyl { dir, loc, r }, Surf::Cyl { dir: d2, loc: l2, r: r2 })
+                if parallel(dir, d2) && on_line(l2, dir, loc) =>
+            {
                 Some(r2 - r)
             }
             (Surf::Sphere { c, r }, Surf::Sphere { c: c2, r: r2 }) if (c - c2).length() < 1e-5 => Some(r2 - r),
@@ -149,9 +151,7 @@ pub(super) fn inner_point(face: &Shape) -> Option<(DVec3, DVec3)> {
     let grid = (0..7).flat_map(|i| (0..7).map(move |j| ((f64::from(i) + 0.5) / 7.0, (f64::from(j) + 0.5) / 7.0)));
     std::iter::once((0.5, 0.5)).chain(grid).find_map(|(s, t)| {
         let (u, v) = at(s, t);
-        (f.classify_uv(u, v, 1e-7).ok()? == PointState::In)
-            .then(|| f.point_and_normal(u, v).ok())
-            .flatten()
+        (f.classify_uv(u, v, 1e-7).ok()? == PointState::In).then(|| f.point_and_normal(u, v).ok()).flatten()
     })
 }
 
@@ -188,10 +188,7 @@ pub(super) fn tol_apart(delta: f64) -> f64 {
 
 /// Every face of `body` on the same family surface as `s`, offset by `size`.
 pub(super) fn faces_at(body: &Shape, s: &Surf, size: f64, tol: f64) -> Vec<Shape> {
-    faces_of(body)
-        .into_iter()
-        .filter(|f| s.offset_of(&surf(f)).is_some_and(|o| (o - size).abs() < tol))
-        .collect()
+    faces_of(body).into_iter().filter(|f| s.offset_of(&surf(f)).is_some_and(|o| (o - size).abs() < tol)).collect()
 }
 
 pub(super) fn area_at(body: &Shape, s: &Surf, size: f64, tol: f64) -> f64 {

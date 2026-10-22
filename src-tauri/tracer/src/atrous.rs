@@ -47,7 +47,17 @@ fn trust(w: usize, h: usize, depth: &[f32]) -> Vec<bool> {
     t
 }
 
-fn pass(w: usize, h: usize, rows: std::ops::Range<usize>, cur: &[[f32; 3]], input: &Input, trust: &[bool], step: i32, sigma: f32, out: &mut [[f32; 3]]) {
+fn pass(
+    w: usize,
+    h: usize,
+    rows: std::ops::Range<usize>,
+    cur: &[[f32; 3]],
+    input: &Input,
+    trust: &[bool],
+    step: i32,
+    sigma: f32,
+    out: &mut [[f32; 3]],
+) {
     let (n, d) = (&input.normal, &input.depth);
     for y in rows.clone() {
         for x in 0..w {
@@ -103,7 +113,9 @@ fn noise(w: usize, h: usize, c: &[[f32; 3]], trust: &[bool], n: &[f32]) -> f32 {
         for x in 1..w - 1 {
             let p = y * w + x;
             let q = [p - 1, p + 1, p - w, p + w];
-            let flat = |q: usize| trust[q] && n[p * 3] * n[q * 3] + n[p * 3 + 1] * n[q * 3 + 1] + n[p * 3 + 2] * n[q * 3 + 2] > 0.99;
+            let flat = |q: usize| {
+                trust[q] && n[p * 3] * n[q * 3] + n[p * 3 + 1] * n[q * 3 + 1] + n[p * 3 + 2] * n[q * 3 + 2] > 0.99
+            };
             if !trust[p] || !q.iter().all(|&q| flat(q)) {
                 continue;
             }
@@ -137,7 +149,8 @@ pub fn filter(input: &Input, samples: u32) -> Vec<f32> {
             [c[0] / a[0], c[1] / a[1], c[2] / a[2]]
         })
         .collect();
-    let sigma = (LUMA_SIGMA / (samples.max(1) as f32).sqrt()).min(NOISE_STOPS * noise(w, h, &cur, &trust, &input.normal));
+    let sigma =
+        (LUMA_SIGMA / (samples.max(1) as f32).sqrt()).min(NOISE_STOPS * noise(w, h, &cur, &trust, &input.normal));
     let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).min(h);
     let band = h.div_ceil(threads);
     for step in STEPS {

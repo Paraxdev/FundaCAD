@@ -23,7 +23,8 @@ pub fn read_off(text: &str) -> Result<MeshObject, String> {
         rest if rest.len() >= 2 => rest,
         _ => lines.next().ok_or_else(|| bad("it has no vertex and face counts"))?.split_whitespace().collect(),
     };
-    let num = |s: Option<&&str>| s.and_then(|s| s.parse::<usize>().ok()).ok_or_else(|| bad("its counts are not numbers"));
+    let num =
+        |s: Option<&&str>| s.and_then(|s| s.parse::<usize>().ok()).ok_or_else(|| bad("its counts are not numbers"));
     let nv = num(counts.first())?;
     let nf = num(counts.get(1))?;
     if nf as u64 > MAX_SCAN_TRIANGLES {
@@ -46,13 +47,17 @@ pub fn read_off(text: &str) -> Result<MeshObject, String> {
     for _ in 0..nf {
         let line = lines.next().ok_or_else(|| bad("it ends before all its faces are read"))?;
         let t: Vec<&str> = line.split_whitespace().collect();
-        let n: usize = t.first().and_then(|s| s.parse().ok()).ok_or_else(|| bad(&format!("the face '{line}' has no corner count")))?;
+        let n: usize = t
+            .first()
+            .and_then(|s| s.parse().ok())
+            .ok_or_else(|| bad(&format!("the face '{line}' has no corner count")))?;
         if t.len() < 1 + n {
             return Err(bad(&format!("the face '{line}' lists fewer corners than it says")));
         }
         let mut c = Vec::with_capacity(n);
         for s in &t[1..=n] {
-            let i: usize = s.parse().map_err(|_| bad(&format!("the face '{line}' has a corner that is not a number")))?;
+            let i: usize =
+                s.parse().map_err(|_| bad(&format!("the face '{line}' has a corner that is not a number")))?;
             if i >= nv {
                 return Err(bad("a face references a vertex that does not exist"));
             }

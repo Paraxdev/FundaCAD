@@ -27,9 +27,7 @@ use serde_json::{json, Map, Value};
 
 use crate::builder::{Fail, FeatureError, Watch};
 use crate::export;
-use crate::fem::solve::{
-    self, Axis, Hold, Load, LoadKind, Problem, SlideFace, Solution, SolveError, Support,
-};
+use crate::fem::solve::{self, Axis, Hold, Load, LoadKind, Problem, SlideFace, Solution, SolveError, Support};
 use crate::fem::tetmesh::{self, MeshError};
 use crate::fem::{MeshOptions, MeshStats, SurfaceMesh, TetMesh};
 use crate::kernel::{self, Kind};
@@ -83,58 +81,33 @@ const PRESETS: [(&str, &[&str], f64, f64, f64, f64, bool); 8] = [
     ("PETG", &[], 2100.0, 0.38, 50.0, 1.27, true),
     ("ABS", &[], 2200.0, 0.35, 40.0, 1.04, true),
     ("ASA", &[], 2200.0, 0.35, 45.0, 1.07, true),
-    (
-        "PA12 nylon",
-        &["PA12", "nylon", "PA"],
-        1700.0,
-        0.40,
-        45.0,
-        1.01,
-        true,
-    ),
+    ("PA12 nylon", &["PA12", "nylon", "PA"], 1700.0, 0.40, 45.0, 1.01, true),
     ("PC", &["polycarbonate"], 2400.0, 0.37, 60.0, 1.20, true),
     (
         "aluminium 6061-T6",
-        &[
-            "aluminium",
-            "aluminum",
-            "aluminum 6061-T6",
-            "6061",
-            "6061-T6",
-        ],
+        &["aluminium", "aluminum", "aluminum 6061-T6", "6061", "6061-T6"],
         69000.0,
         0.33,
         275.0,
         2.70,
         false,
     ),
-    (
-        "steel S235",
-        &["steel", "S235"],
-        210000.0,
-        0.30,
-        235.0,
-        7.85,
-        false,
-    ),
+    ("steel S235", &["steel", "S235"], 210000.0, 0.30, 235.0, 7.85, false),
 ];
 
 /// The preset called `name`, ignoring case.
 pub fn preset(name: &str) -> Option<Material> {
     let want = name.trim().to_lowercase();
-    PRESETS
-        .iter()
-        .find(|(n, alt, ..)| {
-            n.to_lowercase() == want || alt.iter().any(|a| a.to_lowercase() == want)
-        })
-        .map(|&(n, _, e, nu, y, density, printed)| Material {
+    PRESETS.iter().find(|(n, alt, ..)| n.to_lowercase() == want || alt.iter().any(|a| a.to_lowercase() == want)).map(
+        |&(n, _, e, nu, y, density, printed)| Material {
             name: n.to_string(),
             e,
             nu,
             yield_strength: Some(y),
             density: Some(density),
             printed,
-        })
+        },
+    )
 }
 
 fn preset_names() -> String {
@@ -145,10 +118,7 @@ fn material_of(v: Option<&Value>) -> Result<Material, String> {
     match v {
         None | Some(Value::Null) => Ok(preset("PLA").expect("PLA is a preset")),
         Some(Value::String(s)) => preset(s).ok_or_else(|| {
-            format!(
-                "there is no material called '{s}', the presets are {}, or give {{E, nu, yield}}",
-                preset_names()
-            )
+            format!("there is no material called '{s}', the presets are {}, or give {{E, nu, yield}}", preset_names())
         }),
         Some(Value::Object(m)) => {
             let num = |k: &str| m.get(k).and_then(Value::as_f64);
@@ -158,50 +128,27 @@ fn material_of(v: Option<&Value>) -> Result<Material, String> {
                 return Err(format!("the material's E must be above 0 MPa, got {e}"));
             }
             if !(nu.is_finite() && nu > -1.0 && nu < 0.5) {
-                return Err(format!(
-                    "the material's nu must be between -1 and 0.5, got {nu}"
-                ));
+                return Err(format!("the material's nu must be between -1 and 0.5, got {nu}"));
             }
             let yield_strength = match m.get("yield") {
                 None | Some(Value::Null) => None,
                 Some(y) => match y.as_f64() {
                     Some(y) if y.is_finite() && y > 0.0 => Some(y),
-                    _ => {
-                        return Err(format!(
-                            "the material's yield must be a number above 0 MPa, got {y}"
-                        ))
-                    }
+                    _ => return Err(format!("the material's yield must be a number above 0 MPa, got {y}")),
                 },
             };
             let density = match m.get("density") {
                 None | Some(Value::Null) => None,
                 Some(d) => match d.as_f64() {
                     Some(d) if d.is_finite() && d > 0.0 => Some(d),
-                    _ => {
-                        return Err(format!(
-                            "the material's density must be a number above 0 g/cm3, got {d}"
-                        ))
-                    }
+                    _ => return Err(format!("the material's density must be a number above 0 g/cm3, got {d}")),
                 },
             };
-            let name = m
-                .get("name")
-                .and_then(Value::as_str)
-                .unwrap_or("custom")
-                .to_string();
+            let name = m.get("name").and_then(Value::as_str).unwrap_or("custom").to_string();
             // Polymers sit far below metals; a custom one is most likely printed too.
-            Ok(Material {
-                name,
-                e,
-                nu,
-                yield_strength,
-                density,
-                printed: e < 20_000.0,
-            })
+            Ok(Material { name, e, nu, yield_strength, density, printed: e < 20_000.0 })
         }
-        Some(other) => Err(format!(
-            "material must be a preset name or {{E, nu, yield}}, got {other}"
-        )),
+        Some(other) => Err(format!("material must be a preset name or {{E, nu, yield}}, got {other}")),
     }
 }
 
@@ -265,17 +212,11 @@ fn slide_face(shape: &Shape, face: u32) -> SlideFace {
     let Some((kind, o)) = surface_kind(shape, face) else {
         return SlideFace::Mesh;
     };
-    let axis = Axis {
-        origin: [o[4], o[5], o[6]],
-        dir: [o[1], o[2], o[3]],
-    };
+    let axis = Axis { origin: [o[4], o[5], o[6]], dir: [o[1], o[2], o[3]] };
     match kind {
         0 => SlideFace::Plane(axis.dir),
         1 => SlideFace::Cylinder(axis),
-        2 => SlideFace::Cone {
-            axis,
-            semi_angle: o[7],
-        },
+        2 => SlideFace::Cone { axis, semi_angle: o[7] },
         3 => SlideFace::Sphere(axis.origin),
         4 => SlideFace::Torus { axis, major: o[7] },
         5 => SlideFace::Revolution(axis),
@@ -333,9 +274,7 @@ fn spots_of(v: Option<&Value>, at: &str, path: &str) -> Result<Vec<Spot>, String
         };
         let radius = spot.get("radius").and_then(Value::as_f64);
         let Some(radius) = radius.filter(|r| r.is_finite() && *r > 0.0) else {
-            return Err(format!(
-                "the radius of {path}[{i}] of {at} must be a number above 0 in mm"
-            ));
+            return Err(format!("the radius of {path}[{i}] of {at} must be a number above 0 in mm"));
         };
         out.push(Spot { at: p, radius });
     }
@@ -363,26 +302,16 @@ fn supports_of(shape: &Shape, body_id: &str, v: Option<&Value>) -> Result<Vec<Su
         let kind = match m.get("type") {
             None | Some(Value::Null) => "fixed",
             Some(Value::String(t)) => t.as_str(),
-            Some(other) => {
-                return Err(format!(
-                    "the type of {at} must be fixed, pinned or slider, got {other}"
-                ))
-            }
+            Some(other) => return Err(format!("the type of {at} must be fixed, pinned or slider, got {other}")),
         };
         let spots = spots_of(m.get("spots"), &at, &format!("supports[{i}].spots"))?;
         let named = m.get("faces").filter(|f| !selector_list(f).is_empty());
         if named.is_none() && spots.is_empty() {
-            return Err(format!(
-                "{at} has no faces, give the faces it holds, or spots to hold it at"
-            ));
+            return Err(format!("{at} has no faces, give the faces it holds, or spots to hold it at"));
         }
         let check = match kind.trim().to_lowercase().as_str() {
             k @ ("fixed" | "pinned" | "slider") => k.to_string(),
-            _ => {
-                return Err(format!(
-                    "{at} has type '{kind}', a support is fixed, pinned or slider"
-                ))
-            }
+            _ => return Err(format!("{at} has type '{kind}', a support is fixed, pinned or slider")),
         };
         if !spots.is_empty() && check != "fixed" {
             return Err(format!(
@@ -390,13 +319,9 @@ fn supports_of(shape: &Shape, body_id: &str, v: Option<&Value>) -> Result<Vec<Su
             ));
         }
         let faces = match named {
-            Some(faces) => face_ids(
-                shape,
-                body_id,
-                faces,
-                &format!("support {}", i + 1),
-                &format!("supports[{i}].faces"),
-            )?,
+            Some(faces) => {
+                face_ids(shape, body_id, faces, &format!("support {}", i + 1), &format!("supports[{i}].faces"))?
+            }
             None => Vec::new(),
         };
         let kind = match check.as_str() {
@@ -407,10 +332,7 @@ fn supports_of(shape: &Shape, body_id: &str, v: Option<&Value>) -> Result<Vec<Su
                 for &f in &faces {
                     let kind = surface_kind(shape, f);
                     match kind {
-                        Some((1, o)) => axes.push(Axis {
-                            origin: [o[4], o[5], o[6]],
-                            dir: [o[1], o[2], o[3]],
-                        }),
+                        Some((1, o)) => axes.push(Axis { origin: [o[4], o[5], o[6]], dir: [o[1], o[2], o[3]] }),
                         _ => {
                             // The face ids mean nothing to a person, so the face is told by
                             // what it is.
@@ -459,15 +381,8 @@ pub(crate) fn refuse(message: &str, errors: &[FeatureError]) -> JobResult {
         None => error_result(message),
         Some(first) => {
             let n = errors.len();
-            let which = first
-                .feature_id
-                .as_deref()
-                .map_or(String::new(), |id| format!(" ({id})"));
-            let lead = if n == 1 {
-                "a feature failed".to_string()
-            } else {
-                format!("{n} features failed")
-            };
+            let which = first.feature_id.as_deref().map_or(String::new(), |id| format!(" ({id})"));
+            let lead = if n == 1 { "a feature failed".to_string() } else { format!("{n} features failed") };
             let mut error = json!({"message": format!(
                 "{message}, note that {lead}, the first{which}: {}",
                 first.message
@@ -485,13 +400,7 @@ pub(crate) fn refuse(message: &str, errors: &[FeatureError]) -> JobResult {
 /// What the face selectors at `path` in the request pick on `shape` (the copy that was meshed),
 /// as its mesh face ids. A refusal names them by `words` first when there are any (the panel's
 /// "support 1"), then by `path`. A selector that picks nothing is refused rather than ignored.
-fn face_ids(
-    shape: &Shape,
-    body_id: &str,
-    sels: &Value,
-    words: &str,
-    path: &str,
-) -> Result<Vec<u32>, String> {
+fn face_ids(shape: &Shape, body_id: &str, sels: &Value, words: &str, path: &str) -> Result<Vec<u32>, String> {
     let label = |path: String| {
         if words.is_empty() {
             path
@@ -506,16 +415,10 @@ fn face_ids(
     let map = shape.shape_map(ShapeType::Face);
     let mut ids = Vec::new();
     for (i, sel) in list.iter().enumerate() {
-        let at = label(if list.len() > 1 || sels.is_array() {
-            format!("{path}[{i}]")
-        } else {
-            path.to_string()
-        });
+        let at = label(if list.len() > 1 || sels.is_array() { format!("{path}[{i}]") } else { path.to_string() });
         if let Some(b) = sel.get("body").and_then(Value::as_str) {
             if b != body_id {
-                return Err(format!(
-                    "{at} picks a face of {b}, not of the body analysed, {body_id}"
-                ));
+                return Err(format!("{at} picks a face of {b}, not of the body analysed, {body_id}"));
             }
         }
         let faces = Resolver::new(None, None)
@@ -545,22 +448,14 @@ fn vec3_of(v: &Value) -> Option<[f64; 3]> {
 }
 
 /// The loads, each with its spots, which may be none when gravity is on.
-fn loads_of(
-    shape: &Shape,
-    body_id: &str,
-    v: Option<&Value>,
-    gravity: bool,
-) -> Result<Vec<(Load, Vec<Spot>)>, String> {
+fn loads_of(shape: &Shape, body_id: &str, v: Option<&Value>, gravity: bool) -> Result<Vec<(Load, Vec<Spot>)>, String> {
     let list = match v {
         None | Some(Value::Null) => Vec::new(),
         Some(Value::Array(a)) => a.iter().collect(),
         Some(one) => vec![one],
     };
     if list.is_empty() && !gravity {
-        return Err(
-            "there is no load, add a force or a pressure on a face or a spot, or turn gravity on"
-                .into(),
-        );
+        return Err("there is no load, add a force or a pressure on a face or a spot, or turn gravity on".into());
     }
     let mut out = Vec::with_capacity(list.len());
     for (i, l) in list.iter().enumerate() {
@@ -568,39 +463,22 @@ fn loads_of(
         let spots = spots_of(l.get("spots"), &at, &format!("loads[{i}].spots"))?;
         let named = l.get("faces").filter(|f| !selector_list(f).is_empty());
         let faces = match named {
-            Some(faces) => face_ids(
-                shape,
-                body_id,
-                faces,
-                &format!("load {}", i + 1),
-                &format!("loads[{i}].faces"),
-            )?,
+            Some(faces) => face_ids(shape, body_id, faces, &format!("load {}", i + 1), &format!("loads[{i}].faces"))?,
             None if !spots.is_empty() => Vec::new(),
-            None => {
-                return Err(format!(
-                    "{at} has no faces, give the faces it pushes on, or spots to push at"
-                ))
-            }
+            None => return Err(format!("{at} has no faces, give the faces it pushes on, or spots to push at")),
         };
-        let kind =
-            match (l.get("force"), l.get("pressure")) {
-                (Some(f), None) => LoadKind::Force(vec3_of(f).ok_or_else(|| {
-                    format!("the force of {at} must be three numbers in N, got {f}")
-                })?),
-                (None, Some(p)) => {
-                    LoadKind::Pressure(p.as_f64().filter(|p| p.is_finite()).ok_or_else(|| {
-                        format!("the pressure of {at} must be a number in MPa, got {p}")
-                    })?)
-                }
-                (Some(_), Some(_)) => {
-                    return Err(format!("{at} has both a force and a pressure, give one"))
-                }
-                (None, None) => {
-                    return Err(format!(
-                        "{at} needs a force [x, y, z] in N or a pressure in MPa"
-                    ))
-                }
-            };
+        let kind = match (l.get("force"), l.get("pressure")) {
+            (Some(f), None) => LoadKind::Force(
+                vec3_of(f).ok_or_else(|| format!("the force of {at} must be three numbers in N, got {f}"))?,
+            ),
+            (None, Some(p)) => LoadKind::Pressure(
+                p.as_f64()
+                    .filter(|p| p.is_finite())
+                    .ok_or_else(|| format!("the pressure of {at} must be a number in MPa, got {p}"))?,
+            ),
+            (Some(_), Some(_)) => return Err(format!("{at} has both a force and a pressure, give one")),
+            (None, None) => return Err(format!("{at} needs a force [x, y, z] in N or a pressure in MPa")),
+        };
         out.push((Load { faces, kind }, spots));
     }
     Ok(out)
@@ -628,9 +506,7 @@ struct Spotted {
 impl Spotted {
     /// The face of the body an id lies on, itself for one of the body's own.
     fn face(&self, id: u32) -> u32 {
-        id.checked_sub(self.first)
-            .and_then(|i| self.origin.get(i as usize).copied())
-            .unwrap_or(id)
+        id.checked_sub(self.first).and_then(|i| self.origin.get(i as usize).copied()).unwrap_or(id)
     }
 
     /// The ids that cover face `id` of the body now.
@@ -685,13 +561,7 @@ fn triangle_distance(p: [f64; 3], [a, b, c]: [[f64; 3]; 3]) -> f64 {
 /// every triangle reached across shared edges whose centre is within the radius. Growing it
 /// from the point keeps a spot on one side of a thin wall off the other side. `labels` name
 /// the spots in a refusal, `size` is the element size.
-fn spotted(
-    mesh: &TetMesh,
-    spots: &[Spot],
-    labels: &[String],
-    body_id: &str,
-    size: f64,
-) -> Result<Spotted, String> {
+fn spotted(mesh: &TetMesh, spots: &[Spot], labels: &[String], body_id: &str, size: f64) -> Result<Spotted, String> {
     let centres: Vec<[f64; 3]> = mesh
         .boundary
         .iter()
@@ -716,11 +586,8 @@ fn spotted(
     for (s, spot) in spots.iter().enumerate() {
         // By the distance to the triangle and not to its centre, which on a wall thinner
         // than the elements can be nearer on the far side.
-        let reach: Vec<f64> = mesh
-            .boundary
-            .iter()
-            .map(|t| triangle_distance(spot.at, t.map(|i| mesh.nodes[i as usize])))
-            .collect();
+        let reach: Vec<f64> =
+            mesh.boundary.iter().map(|t| triangle_distance(spot.at, t.map(|i| mesh.nodes[i as usize]))).collect();
         let Some(seed) = (0..reach.len()).min_by(|&a, &b| reach[a].total_cmp(&reach[b])) else {
             break;
         };
@@ -755,12 +622,7 @@ fn spotted(
         }
     }
 
-    let first = mesh
-        .boundary_face
-        .iter()
-        .copied()
-        .max()
-        .map_or(0, |m| m + 1);
+    let first = mesh.boundary_face.iter().copied().max().map_or(0, |m| m + 1);
     let mut ids: HashMap<(u32, Vec<u32>), u32> = HashMap::new();
     let mut origin = Vec::new();
     let mut out = mesh.clone();
@@ -799,14 +661,7 @@ fn spotted(
             list.insert(0, *face);
         }
     }
-    Ok(Spotted {
-        mesh: out,
-        of_spot,
-        of_face,
-        origin,
-        first,
-        small,
-    })
+    Ok(Spotted { mesh: out, of_spot, of_face, origin, first, small })
 }
 
 /// One vertex per position, so the faces that meet share the nodes along their common edge,
@@ -850,11 +705,7 @@ fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
 }
 
 fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 
 fn unit(a: [f64; 3]) -> [f64; 3] {
@@ -878,20 +729,11 @@ struct PeakPlace {
 /// The boundary triangles touching TET10 node `node`: a corner node by being one of their
 /// corners, a mid-edge node by holding both ends of its edge. `held` lists the faces the
 /// supports hold, sorted, each with how it is held.
-fn peak_place(
-    mesh: &TetMesh,
-    sol: &Solution,
-    node: u32,
-    held: &[(u32, &'static str)],
-) -> PeakPlace {
-    let ends: Vec<u32> = if (node as usize) < sol.corners {
-        vec![node]
-    } else {
-        sol.edges[node as usize - sol.corners].to_vec()
-    };
-    let touching: Vec<usize> = (0..mesh.boundary.len())
-        .filter(|&t| ends.iter().all(|e| mesh.boundary[t].contains(e)))
-        .collect();
+fn peak_place(mesh: &TetMesh, sol: &Solution, node: u32, held: &[(u32, &'static str)]) -> PeakPlace {
+    let ends: Vec<u32> =
+        if (node as usize) < sol.corners { vec![node] } else { sol.edges[node as usize - sol.corners].to_vec() };
+    let touching: Vec<usize> =
+        (0..mesh.boundary.len()).filter(|&t| ends.iter().all(|e| mesh.boundary[t].contains(e))).collect();
     // A node on an edge touches triangles of both faces, the one it lies on mostly.
     let mut areas: Vec<(u32, f64)> = Vec::new();
     for &t in &touching {
@@ -903,19 +745,12 @@ fn peak_place(
         }
     }
     areas.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
-    let held_as = |t: usize| {
-        held.binary_search_by_key(&mesh.boundary_face[t], |h| h.0)
-            .ok()
-            .map(|i| held[i].1)
-    };
+    let held_as = |t: usize| held.binary_search_by_key(&mesh.boundary_face[t], |h| h.0).ok().map(|i| held[i].1);
     let free = touching.iter().any(|&t| held_as(t).is_none());
     // A fixed face first, as the one whose edge stress grows most with refinement.
     let mut ways: Vec<&'static str> = touching.iter().filter_map(|&t| held_as(t)).collect();
     ways.sort_by_key(|&w| !w.starts_with("fixed"));
-    PeakPlace {
-        face: areas.first().map(|a| a.0),
-        support_edge: ways.first().copied().filter(|_| free),
-    }
+    PeakPlace { face: areas.first().map(|a| a.0), support_edge: ways.first().copied().filter(|_| free) }
 }
 
 /// The edges where two faces meet folding inward by more than `SHARP_FOLD_DEG`, as segments.
@@ -943,10 +778,7 @@ fn inside_corners(surface: &SurfaceMesh) -> Vec<[[f64; 3]; 2]> {
         if surface.face_ids[s] == surface.face_ids[t] || dot(normal(s), normal(t)) > cos_sharp {
             continue;
         }
-        let far = surface.triangles[t]
-            .into_iter()
-            .find(|&v| v != a && v != b)
-            .expect("a triangle has a third corner");
+        let far = surface.triangles[t].into_iter().find(|&v| v != a && v != b).expect("a triangle has a third corner");
         if dot(normal(s), sub(p(far), p(a))) > 0.0 {
             out.push([p(a), p(b)]);
         }
@@ -958,15 +790,8 @@ fn inside_corners(surface: &SurfaceMesh) -> Vec<[[f64; 3]; 2]> {
 fn segment_distance(q: [f64; 3], s: &[[f64; 3]; 2]) -> f64 {
     let d = sub(s[1], s[0]);
     let len2 = dot(d, d);
-    let t = if len2 > 0.0 {
-        (dot(sub(q, s[0]), d) / len2).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    let r = sub(
-        q,
-        [s[0][0] + t * d[0], s[0][1] + t * d[1], s[0][2] + t * d[2]],
-    );
+    let t = if len2 > 0.0 { (dot(sub(q, s[0]), d) / len2).clamp(0.0, 1.0) } else { 0.0 };
+    let r = sub(q, [s[0][0] + t * d[0], s[0][1] + t * d[1], s[0][2] + t * d[2]]);
     dot(r, r).sqrt()
 }
 
@@ -999,18 +824,9 @@ fn surface_of(mesh: &TetMesh, sol: &Solution) -> Value {
     }
     // Rounded, as plenty for a picture and far shorter than every digit of an f64 (an f32
     // goes out widened, so no shorter): positions to 0.1 um, the fields to six places.
-    let positions: Vec<f64> = used
-        .iter()
-        .flat_map(|&v| mesh.nodes[v as usize].map(|x| py_round(x, 4) + 0.0))
-        .collect();
-    let von_mises: Vec<f64> = used
-        .iter()
-        .map(|&v| round6(sol.von_mises[v as usize]))
-        .collect();
-    let displacement: Vec<f64> = used
-        .iter()
-        .flat_map(|&v| sol.displacement[v as usize].map(round6))
-        .collect();
+    let positions: Vec<f64> = used.iter().flat_map(|&v| mesh.nodes[v as usize].map(|x| py_round(x, 4) + 0.0)).collect();
+    let von_mises: Vec<f64> = used.iter().map(|&v| round6(sol.von_mises[v as usize])).collect();
+    let displacement: Vec<f64> = used.iter().flat_map(|&v| sol.displacement[v as usize].map(round6)).collect();
     json!({
         "positions": positions,
         "indices": indices,
@@ -1057,13 +873,7 @@ fn exact_pressures(
     planar: &[bool],
     mesh: &TetMesh,
 ) -> (Vec<Load>, Vec<usize>) {
-    let faces = surface
-        .face_ids
-        .iter()
-        .chain(&mesh.boundary_face)
-        .copied()
-        .max()
-        .map_or(0, |m| m as usize + 1);
+    let faces = surface.face_ids.iter().chain(&mesh.boundary_face).copied().max().map_or(0, |m| m as usize + 1);
     let mut vector = vec![[0.0; 3]; faces];
     let mut area = vec![0.0; faces];
     for (t, &f) in surface.triangles.iter().zip(&surface.face_ids) {
@@ -1077,41 +887,25 @@ fn exact_pressures(
         let s = triangle_area(&mesh.nodes, t);
         meshed[f as usize] += dot(s, s).sqrt();
     }
-    let (mut out, mut origin) = (
-        Vec::with_capacity(loads.len()),
-        Vec::with_capacity(loads.len()),
-    );
+    let (mut out, mut origin) = (Vec::with_capacity(loads.len()), Vec::with_capacity(loads.len()));
     for (i, load) in loads.into_iter().enumerate() {
         let LoadKind::Pressure(p) = load.kind else {
             out.push(load);
             origin.push(i);
             continue;
         };
-        let (flat, curved): (Vec<u32>, Vec<u32>) = load
-            .faces
-            .iter()
-            .copied()
-            .partition(|&f| planar.get(f as usize).copied().unwrap_or(false));
+        let (flat, curved): (Vec<u32>, Vec<u32>) =
+            load.faces.iter().copied().partition(|&f| planar.get(f as usize).copied().unwrap_or(false));
         for f in flat {
             let s = vector[f as usize];
-            out.push(Load {
-                faces: vec![f],
-                kind: LoadKind::Force(s.map(|x| -p * x)),
-            });
+            out.push(Load { faces: vec![f], kind: LoadKind::Force(s.map(|x| -p * x)) });
             origin.push(i);
         }
         if !curved.is_empty() {
             let real: f64 = curved.iter().map(|&f| area[f as usize]).sum();
             let tagged: f64 = curved.iter().map(|&f| meshed[f as usize]).sum();
-            let scale = if real > 0.0 && tagged > 0.0 {
-                real / tagged
-            } else {
-                1.0
-            };
-            out.push(Load {
-                faces: curved,
-                kind: LoadKind::Pressure(p * scale),
-            });
+            let scale = if real > 0.0 && tagged > 0.0 { real / tagged } else { 1.0 };
+            out.push(Load { faces: curved, kind: LoadKind::Pressure(p * scale) });
             origin.push(i);
         }
     }
@@ -1124,10 +918,7 @@ fn renumber_load(e: SolveError, origin: &[usize]) -> SolveError {
     match e {
         SolveError::EmptyLoad { load } => SolveError::EmptyLoad { load: back(load) },
         SolveError::InvalidLoad { load } => SolveError::InvalidLoad { load: back(load) },
-        SolveError::MissingLoadFace { load, face } => SolveError::MissingLoadFace {
-            load: back(load),
-            face,
-        },
+        SolveError::MissingLoadFace { load, face } => SolveError::MissingLoadFace { load: back(load), face },
         other => other,
     }
 }
@@ -1168,16 +959,9 @@ pub fn stress_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     };
     let errors = &r.errors;
     let Some(wanted) = req.get("body").and_then(Value::as_str) else {
-        return refuse(
-            "name the body to analyse in 'body', by id or by name",
-            errors,
-        );
+        return refuse("name the body to analyse in 'body', by id or by name", errors);
     };
-    let Some(body) = r
-        .bodies
-        .iter()
-        .find(|b| b.id == wanted)
-        .or_else(|| r.bodies.iter().find(|b| b.name == wanted))
+    let Some(body) = r.bodies.iter().find(|b| b.id == wanted).or_else(|| r.bodies.iter().find(|b| b.name == wanted))
     else {
         if r.bodies.is_empty() {
             if let Some(e) = errors.first() {
@@ -1187,26 +971,13 @@ pub fn stress_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
             }
             return refuse("the document has no bodies to analyse", errors);
         }
-        let have: Vec<String> = r
-            .bodies
-            .iter()
-            .map(|b| format!("{} ({})", b.id, b.name))
-            .collect();
-        return refuse(
-            &format!(
-                "there is no body '{wanted}', the bodies are {}",
-                have.join(", ")
-            ),
-            errors,
-        );
+        let have: Vec<String> = r.bodies.iter().map(|b| format!("{} ({})", b.id, b.name)).collect();
+        return refuse(&format!("there is no body '{wanted}', the bodies are {}", have.join(", ")), errors);
     };
     match analyse(req, &body.id, &body.name, &body.shape, watch) {
         Ok(mut m) => {
             if !errors.is_empty() {
-                m.insert(
-                    "errors".into(),
-                    Value::Array(errors.iter().map(FeatureError::wire).collect()),
-                );
+                m.insert("errors".into(), Value::Array(errors.iter().map(FeatureError::wire).collect()));
             }
             JobResult::Json(m)
         }
@@ -1228,8 +999,7 @@ fn analyse(
         (Some(_), Some(d)) => Some(d),
         (Some(_), None) => {
             return Err(
-                "gravity needs the material's density in g/cm3, add density to the material or turn gravity off"
-                    .into(),
+                "gravity needs the material's density in g/cm3, add density to the material or turn gravity off".into(),
             )
         }
     };
@@ -1270,8 +1040,7 @@ fn analyse(
     if sound.inside_out() {
         return Err(format!("{id} {}, the analysis needs a solid that faces outward", crate::soundness::INSIDE_OUT));
     }
-    let shape =
-        kernel::copy(live).map_err(|e| format!("{id} could not be copied for meshing, {e}"))?;
+    let shape = kernel::copy(live).map_err(|e| format!("{id} could not be copied for meshing, {e}"))?;
     let volume = kernel::volume(&shape).abs();
     let area = kernel::area(&shape).abs();
     if !(volume > 0.0 && area > 0.0) {
@@ -1280,20 +1049,15 @@ fn analyse(
     let thickness = 2.0 * volume / area;
 
     let fixed_sel = req.get("fixed").unwrap_or(&Value::Null);
-    let has_supports = selector_list(req.get("supports").unwrap_or(&Value::Null))
-        .iter()
-        .any(|s| !s.is_null());
+    let has_supports = selector_list(req.get("supports").unwrap_or(&Value::Null)).iter().any(|s| !s.is_null());
     if selector_list(fixed_sel).is_empty() && !has_supports {
         return Err(
             "no face is fixed, fix at least one face or add a support (fixed, pinned or slider) so the body is held"
                 .into(),
         );
     }
-    let given_fixed = if selector_list(fixed_sel).is_empty() {
-        Vec::new()
-    } else {
-        face_ids(&shape, id, fixed_sel, "", "fixed")?
-    };
+    let given_fixed =
+        if selector_list(fixed_sel).is_empty() { Vec::new() } else { face_ids(&shape, id, fixed_sel, "", "fixed")? };
     let supports = supports_of(&shape, id, req.get("supports"))?;
     // Every face held in all three directions, by `fixed` or a fixed support.
     let mut fixed = given_fixed.clone();
@@ -1349,9 +1113,7 @@ fn analyse(
                 force_remesh: true,
             },
         );
-        let planar: Vec<bool> = (0..access.face_count())
-            .map(|f| access.face_plane_normal(f).is_some())
-            .collect();
+        let planar: Vec<bool> = (0..access.face_count()).map(|f| access.face_plane_normal(f).is_some()).collect();
         (weld(&t.positions, &t.indices, &t.face_ids), planar)
     });
     if surface.triangles.is_empty() {
@@ -1368,15 +1130,9 @@ fn analyse(
         crate::heartbeat::beat();
         !(watch.cancelled() || crate::cancel::requested())
     };
-    let (mesh, stats): (TetMesh, MeshStats) = tetmesh::tetrahedralize(
-        &surface,
-        &MeshOptions {
-            size: effective,
-            max_tets: max_elements,
-        },
-        &mut tick,
-    )
-    .map_err(|e| mesh_error_text(&e))?;
+    let (mesh, stats): (TetMesh, MeshStats) =
+        tetmesh::tetrahedralize(&surface, &MeshOptions { size: effective, max_tets: max_elements }, &mut tick)
+            .map_err(|e| mesh_error_text(&e))?;
 
     // Every spot in one list, the supports' first, each with its name for a refusal.
     let mut spots = Vec::new();
@@ -1384,23 +1140,14 @@ fn analyse(
     let support_spots: Vec<usize> = supports.iter().map(|s| s.2.len()).collect();
     for (i, (_, _, list)) in supports.iter().enumerate() {
         spots.extend(list);
-        labels.extend(
-            (0..list.len())
-                .map(|k| format!("spot {} of {}", k + 1, named("support", "supports", i))),
-        );
+        labels.extend((0..list.len()).map(|k| format!("spot {} of {}", k + 1, named("support", "supports", i))));
     }
     let load_spots: Vec<usize> = loads.iter().map(|l| l.1.len()).collect();
     for (i, (_, list)) in loads.iter().enumerate() {
         spots.extend(list);
-        labels.extend(
-            (0..list.len()).map(|k| format!("spot {} of {}", k + 1, named("load", "loads", i))),
-        );
+        labels.extend((0..list.len()).map(|k| format!("spot {} of {}", k + 1, named("load", "loads", i))));
     }
-    let spotted = if spots.is_empty() {
-        None
-    } else {
-        Some(spotted(&mesh, &spots, &labels, id, stats.size)?)
-    };
+    let spotted = if spots.is_empty() { None } else { Some(spotted(&mesh, &spots, &labels, id, stats.size)?) };
     // The ids of the next `n` spots of the list, as one sorted set.
     let mut next = 0;
     let mut take = |n: usize| {
@@ -1431,12 +1178,7 @@ fn analyse(
         })
         .collect();
     let kinds: Vec<LoadKind> = loads.iter().map(|l| l.0.kind).collect();
-    let (mut loads, mut origin) = exact_pressures(
-        loads.into_iter().map(|l| l.0).collect(),
-        &surface,
-        &planar,
-        &mesh,
-    );
+    let (mut loads, mut origin) = exact_pressures(loads.into_iter().map(|l| l.0).collect(), &surface, &planar, &mesh);
     if let Some(s) = &spotted {
         // A face a spot took part of is loaded through what is left of it and the parts
         // the spots took, and held the way it was through them all.
@@ -1471,10 +1213,7 @@ fn analyse(
     let solved = spotted.as_ref().map_or(&mesh, |s| &s.mesh);
     let problem = Problem {
         mesh: solved,
-        material: solve::Material {
-            e: material.e,
-            nu: material.nu,
-        },
+        material: solve::Material { e: material.e, nu: material.nu },
         fixed: given_fixed,
         supports,
         loads,
@@ -1482,24 +1221,16 @@ fn analyse(
         // within about an element, so the weight is what the real body weighs, as the
         // pressures above are what the real faces take.
         body_force: gravity.zip(density).map(|(g, d)| {
-            let scale = if stats.volume > 0.0 {
-                volume / stats.volume
-            } else {
-                1.0
-            };
+            let scale = if stats.volume > 0.0 { volume / stats.volume } else { 1.0 };
             body_force(d, g).map(|c| c * scale)
         }),
     };
-    let sol = solve::solve_with(&problem, &mut tick, &mut |f| {
-        crate::heartbeat::while_running(FACTOR_BEATS, f)
-    })
-    .map_err(|e| solve_error_text(&renumber_load(e, &origin), mesh.tets.len()))?;
+    let sol = solve::solve_with(&problem, &mut tick, &mut |f| crate::heartbeat::while_running(FACTOR_BEATS, f))
+        .map_err(|e| solve_error_text(&renumber_load(e, &origin), mesh.tets.len()))?;
 
     // Warnings, most telling first.
     let bb = kernel::bbox(&shape).unwrap_or([0.0; 6]);
-    let smallest = (0..3)
-        .map(|k| bb[k + 3] - bb[k])
-        .fold(f64::INFINITY, f64::min);
+    let smallest = (0..3).map(|k| bb[k + 3] - bb[k]).fold(f64::INFINITY, f64::min);
     if smallest.is_finite() && sol.max_displacement > smallest / 10.0 {
         warnings.push(format!(
             "the largest deflection, {:.3} mm, is more than a tenth of the part's smallest size ({:.3} mm), a linear analysis is not trustworthy for deflection this large",
@@ -1512,9 +1243,8 @@ fn analyse(
     if let Some(s) = &spotted {
         place.face = place.face.map(|f| s.face(f));
     }
-    let at_inside_corner = inside_corners(&surface)
-        .iter()
-        .any(|s| segment_distance(peak_at, s) <= CORNER_REACH * stats.size);
+    let at_inside_corner =
+        inside_corners(&surface).iter().any(|s| segment_distance(peak_at, s) <= CORNER_REACH * stats.size);
     if peak > 0.0 && (at_inside_corner || place.support_edge.is_some()) {
         let spot = match place.support_edge {
             Some("fixed spot") if !at_inside_corner => "where a fixed spot ends".to_string(),
@@ -1576,10 +1306,7 @@ fn analyse(
             "minDihedral": py_round(stats.min_dihedral_deg, 1),
         }),
     );
-    out.insert(
-        "maxVonMises".into(),
-        json!({"value": r6(peak), "at": r3(peak_at), "face": place.face}),
-    );
+    out.insert("maxVonMises".into(), json!({"value": r6(peak), "at": r3(peak_at), "face": place.face}));
     out.insert(
         "maxDisplacement".into(),
         json!({
@@ -1588,18 +1315,12 @@ fn analyse(
             "vector": r3(sol.displacement[disp_node]),
         }),
     );
-    let safety = material
-        .yield_strength
-        .filter(|_| peak > 0.0)
-        .map(|y| y / peak);
+    let safety = material.yield_strength.filter(|_| peak > 0.0).map(|y| y / peak);
     out.insert("safetyFactor".into(), safety.map_or(Value::Null, |s| r6(s)));
     out.insert("applied".into(), r3(sol.applied));
     out.insert("weight".into(), sol.weight.map_or(Value::Null, r3));
     out.insert("reaction".into(), r3(sol.reaction));
-    out.insert(
-        "reactions".into(),
-        Value::Array(sol.reactions.iter().map(|&r| r3(r)).collect()),
-    );
+    out.insert("reactions".into(), Value::Array(sol.reactions.iter().map(|&r| r3(r)).collect()));
     out.insert("warnings".into(), json!(warnings));
     out.insert("surface".into(), surface_of(&mesh, &sol));
     Ok(out)
@@ -1617,17 +1338,9 @@ mod tests {
         assert_eq!(preset("aluminium").unwrap().yield_strength, Some(275.0));
         assert_eq!(preset(" steel ").unwrap().e, 210000.0);
         assert!(preset("unobtainium").is_none());
-        assert!(material_of(Some(&json!("wood")))
-            .unwrap_err()
-            .contains("PLA, PETG"));
-        let custom = material_of(Some(
-            &json!({"E": 2000, "nu": 0.3, "yield": 30, "name": "my PETG"}),
-        ))
-        .unwrap();
-        assert_eq!(
-            (custom.name.as_str(), custom.e, custom.yield_strength),
-            ("my PETG", 2000.0, Some(30.0))
-        );
+        assert!(material_of(Some(&json!("wood"))).unwrap_err().contains("PLA, PETG"));
+        let custom = material_of(Some(&json!({"E": 2000, "nu": 0.3, "yield": 30, "name": "my PETG"}))).unwrap();
+        assert_eq!((custom.name.as_str(), custom.e, custom.yield_strength), ("my PETG", 2000.0, Some(30.0)));
         assert!(material_of(Some(&json!({"E": 2000, "nu": 0.6}))).is_err());
     }
 
@@ -1635,14 +1348,8 @@ mod tests {
     fn gravity_reads_as_a_force_per_volume_in_newtons() {
         assert_eq!(gravity_of(None), Ok(None));
         assert_eq!(gravity_of(Some(&json!(false))), Ok(None));
-        assert_eq!(
-            gravity_of(Some(&json!(true))),
-            Ok(Some([0.0, 0.0, -STANDARD_GRAVITY]))
-        );
-        assert_eq!(
-            gravity_of(Some(&json!([1, 2, 3]))),
-            Ok(Some([1.0, 2.0, 3.0]))
-        );
+        assert_eq!(gravity_of(Some(&json!(true))), Ok(Some([0.0, 0.0, -STANDARD_GRAVITY])));
+        assert_eq!(gravity_of(Some(&json!([1, 2, 3]))), Ok(Some([1.0, 2.0, 3.0])));
         assert!(gravity_of(Some(&json!([1, 2]))).is_err());
         // A vector of no length pulls nowhere, so it is no gravity.
         assert_eq!(gravity_of(Some(&json!([0, 0, 0]))), Ok(None));
@@ -1692,11 +1399,7 @@ mod tests {
         let s = default_size(10_000.0, 4_200.0, DEFAULT_MAX_ELEMENTS);
         assert!(s > 1.5 && s < 2.38, "{s}");
         // A thin plate: the thickness wins.
-        let plate = default_size(
-            100.0 * 100.0 * 1.0,
-            2.0 * 100.0 * 100.0 + 400.0,
-            DEFAULT_MAX_ELEMENTS,
-        );
+        let plate = default_size(100.0 * 100.0 * 1.0, 2.0 * 100.0 * 100.0 + 400.0, DEFAULT_MAX_ELEMENTS);
         assert!(plate <= 2.0 * 10_000.0 / 20_400.0 / 2.0 + 1e-12, "{plate}");
     }
 
@@ -1713,10 +1416,7 @@ mod tests {
 
     #[test]
     fn too_large_for_the_memory_names_a_limit_that_fits() {
-        let e = SolveError::TooLarge {
-            needed: 3_900_000_000,
-            limit: 3_200_000_000,
-        };
+        let e = SolveError::TooLarge { needed: 3_900_000_000, limit: 3_200_000_000 };
         let text = solve_error_text(&e, 60_000);
         assert!(
             text.contains("mesh of 60000 elements needs about 3.9 GB")

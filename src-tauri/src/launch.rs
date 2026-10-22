@@ -11,8 +11,8 @@ use std::path::Path;
 
 use tauri::{Emitter, Manager, Runtime};
 
-pub use crate::launch_args::LaunchPaths;
 use crate::launch_args::launch_paths;
+pub use crate::launch_args::LaunchPaths;
 
 pub fn queue_first_launch<R: Runtime>(app: &tauri::App<R>) {
     let cwd = std::env::current_dir().unwrap_or_default();

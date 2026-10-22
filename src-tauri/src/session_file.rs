@@ -56,12 +56,7 @@ pub struct SessionInfo {
 /// that stays true, and a token containing a quote would produce a file that
 /// silently parses into a DIFFERENT token. Escaped, always.
 pub fn to_json(info: &SessionInfo) -> String {
-    format!(
-        "{{\"port\":{},\"token\":{},\"pid\":{}}}\n",
-        info.port,
-        json_string(&info.token),
-        info.pid
-    )
+    format!("{{\"port\":{},\"token\":{},\"pid\":{}}}\n", info.port, json_string(&info.token), info.pid)
 }
 
 /// A JSON string literal. Minimal and complete for what goes in this file:

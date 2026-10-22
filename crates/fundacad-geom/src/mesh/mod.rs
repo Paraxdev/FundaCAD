@@ -55,7 +55,14 @@ pub struct MeshBody<'a> {
 /// returns and stores has the envelope keys stripped.
 pub trait PayloadCache {
     fn get(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile) -> Option<FullBody>;
-    fn put(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile, payload: &FullBody, build: std::time::Duration);
+    fn put(
+        &mut self,
+        body: &MeshBody<'_>,
+        tolerance: f64,
+        profile: ViewportProfile,
+        payload: &FullBody,
+        build: std::time::Duration,
+    );
 }
 
 pub struct NoPayloadCache;
@@ -89,32 +96,16 @@ fn with_envelope(body: &MeshBody<'_>, payload: FullBody) -> FullBody {
 
 /// The full payload of one body, meshed at the wire `tolerance` under
 /// `profile`, with null face owners.
-pub fn body_payload(
-    shape: &Shape,
-    id: &str,
-    name: &str,
-    tolerance: f64,
-    profile: ViewportProfile,
-) -> FullBody {
+pub fn body_payload(shape: &Shape, id: &str, name: &str, tolerance: f64, profile: ViewportProfile) -> FullBody {
     body_payload_for(
-        &MeshBody {
-            id: id.into(),
-            name: name.into(),
-            shape: Some(shape),
-            ..Default::default()
-        },
+        &MeshBody { id: id.into(), name: name.into(), shape: Some(shape), ..Default::default() },
         shape,
         tolerance,
         profile,
     )
 }
 
-fn body_payload_for(
-    body: &MeshBody<'_>,
-    shape: &Shape,
-    tolerance: f64,
-    profile: ViewportProfile,
-) -> FullBody {
+fn body_payload_for(body: &MeshBody<'_>, shape: &Shape, tolerance: f64, profile: ViewportProfile) -> FullBody {
     let access = crate::bench::phase("mesh_access", || MeshAccess::new(shape));
     let claims = crate::bench::phase("resolve_passes", || PassClaims::resolve(shape, &body.mesh_passes));
     let tess = claims.tessellate(
@@ -144,28 +135,20 @@ fn body_payload_for(
         _ => Vec::new(),
     };
     let listed = if from_map.is_empty() { &body.face_owners } else { &from_map };
-    let face_owners: Vec<Value> = (0..access.face_count())
-        .map(|i| listed.get(i).cloned().unwrap_or(Value::Null))
-        .collect();
+    let face_owners: Vec<Value> =
+        (0..access.face_count()).map(|i| listed.get(i).cloned().unwrap_or(Value::Null)).collect();
     let face_count = tess.face_ids.iter().max().map_or(0, |m| m + 1);
     let bbox = bbox_value(mesh_bbox(shape, &tess.positions));
 
     let mut b = FullBody {
         positions: tess.positions.iter().map(|&v| v as f32).collect(),
-        normals: tess
-            .normals
-            .as_ref()
-            .map(|n| n.iter().map(|&v| v as f32).collect()),
+        normals: tess.normals.as_ref().map(|n| n.iter().map(|&v| v as f32).collect()),
         indices: tess.indices,
         face_ids: tess.face_ids,
         edges: lines
             .into_iter()
             .map(|l| Edge {
-                points: l
-                    .points
-                    .iter()
-                    .map(|p| [p[0] as f32, p[1] as f32, p[2] as f32])
-                    .collect(),
+                points: l.points.iter().map(|p| [p[0] as f32, p[1] as f32, p[2] as f32]).collect(),
                 smooth: l.smooth,
             })
             .collect(),
@@ -228,19 +211,11 @@ impl PassClaims {
         #[cfg(feature = "plugins")]
         {
             if specs.is_empty() {
-                return PassClaims {
-                    faces: Vec::new(),
-                    claims: Default::default(),
-                    failures: Default::default(),
-                };
+                return PassClaims { faces: Vec::new(), claims: Default::default(), failures: Default::default() };
             }
             let faces = crate::kernel::subshapes(shape, crate::kernel::Kind::Face);
             let (claims, failed) = crate::plugins::claim_faces(shape, &faces, specs);
-            PassClaims {
-                faces,
-                claims,
-                failures: std::sync::Mutex::new(failed),
-            }
+            PassClaims { faces, claims, failures: std::sync::Mutex::new(failed) }
         }
         #[cfg(not(feature = "plugins"))]
         {
@@ -319,13 +294,7 @@ impl PassClaims {
     }
 
     /// Mesh `shape` with the claimed faces displaced.
-    pub fn tessellate(
-        &self,
-        shape: &Shape,
-        access: &MeshAccess,
-        params: MeshParams,
-        density_cap: u32,
-    ) -> Tessellation {
+    pub fn tessellate(&self, shape: &Shape, access: &MeshAccess, params: MeshParams, density_cap: u32) -> Tessellation {
         if self.is_empty() {
             return tessellate(shape, access, params);
         }
@@ -409,31 +378,15 @@ pub fn etag_with(body: &FullBody, passes: Option<&str>) -> String {
             h.update(&b);
         }
     };
-    section(
-        b"positions",
-        body.positions.len(),
-        &mut body.positions.iter().map(|v| v.to_le_bytes()),
-    );
+    section(b"positions", body.positions.len(), &mut body.positions.iter().map(|v| v.to_le_bytes()));
     let normals = body.normals.as_deref().unwrap_or(&[]);
     section(
-        if body.normals.is_some() {
-            b"normals"
-        } else {
-            b"no-normals"
-        },
+        if body.normals.is_some() { b"normals" } else { b"no-normals" },
         normals.len(),
         &mut normals.iter().map(|v| v.to_le_bytes()),
     );
-    section(
-        b"indices",
-        body.indices.len(),
-        &mut body.indices.iter().map(|v| v.to_le_bytes()),
-    );
-    section(
-        b"faceIds",
-        body.face_ids.len(),
-        &mut body.face_ids.iter().map(|v| v.to_le_bytes()),
-    );
+    section(b"indices", body.indices.len(), &mut body.indices.iter().map(|v| v.to_le_bytes()));
+    section(b"faceIds", body.face_ids.len(), &mut body.face_ids.iter().map(|v| v.to_le_bytes()));
     for e in &body.edges {
         section(
             if e.smooth { b"edge-smooth" } else { b"edge" },
@@ -483,11 +436,7 @@ pub fn union_bbox<'a>(boxes: impl IntoIterator<Item = &'a Value>) -> Value {
 /// without a shape left out, a stub for a body whose etag the client holds,
 /// and the document bbox as the union of the body boxes. The builder's own
 /// keys (`bodyIds`, `datumPlanes`, errors, ...) are the caller's to add.
-pub fn mesh_result(
-    bodies: &[MeshBody<'_>],
-    tolerance: f64,
-    known: &Map<String, Value>,
-) -> MeshResult {
+pub fn mesh_result(bodies: &[MeshBody<'_>], tolerance: f64, known: &Map<String, Value>) -> MeshResult {
     mesh_result_full(bodies, tolerance, known, &mut NoPayloadCache, &mut |_, _| {})
 }
 
@@ -533,10 +482,8 @@ fn built_payloads(
     let mut misses: Vec<usize> = Vec::new();
     let ticked = std::sync::atomic::AtomicUsize::new(0);
     for (i, body) in bodies.iter().enumerate() {
-        let cached = body
-            .shape
-            .and_then(|_| cache.get(body, tolerance, profile))
-            .map(|payload| with_envelope(body, payload));
+        let cached =
+            body.shape.and_then(|_| cache.get(body, tolerance, profile)).map(|payload| with_envelope(body, payload));
         if cached.is_none() && body.shape.is_some() {
             misses.push(i);
         } else {
@@ -551,9 +498,7 @@ fn built_payloads(
         let body = &bodies[i];
         let shape = body.shape.expect("a miss has a shape");
         let began = std::time::Instant::now();
-        let full = crate::bench::phase("body_payload", || {
-            body_payload_for(body, shape, tolerance, profile)
-        });
+        let full = crate::bench::phase("body_payload", || body_payload_for(body, shape, tolerance, profile));
         let done = ticked.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if let Ok(mut t) = tick.lock() {
             t(done, total);
@@ -616,8 +561,5 @@ pub fn mesh_result_full(
     if !failed.is_empty() {
         fields.insert(PASS_ERRORS.into(), Value::Array(failed));
     }
-    MeshResult {
-        fields,
-        bodies: out,
-    }
+    MeshResult { fields, bodies: out }
 }

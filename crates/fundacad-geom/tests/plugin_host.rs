@@ -102,10 +102,7 @@ fn roof_bridge_and_ribs_and_errors() {
     let mut f = base();
     f.push(json!({"id": "tr", "type": "threadRibs", "faces": face_at([0.0, 0.0, Z + R]), "ribCount": 2}));
     let r = build(f);
-    assert_eq!(
-        r.errors[0].message,
-        "Thread-forming ribs: the rib count must be a whole number from 3 to 8 (got 2)"
-    );
+    assert_eq!(r.errors[0].message, "Thread-forming ribs: the rib count must be a whole number from 3 to 8 (got 2)");
 }
 
 #[test]
@@ -299,8 +296,10 @@ fn a_fastener_is_generated() {
     let want = PI * (4.5f64.powi(2) - 2.15f64.powi(2)) * 0.8;
     assert!((m["volume"].as_f64().unwrap() - want).abs() < 1e-6 * want);
     let m = job(fundacad_geom::plugins::generate_shape_result(
-        &serde_json::from_value(json!({"generator": "fastener", "params": {"kind": "washer", "units": "mm", "name": "w"}}))
-            .unwrap(),
+        &serde_json::from_value(
+            json!({"generator": "fastener", "params": {"kind": "washer", "units": "mm", "name": "w"}}),
+        )
+        .unwrap(),
         None,
     ));
     assert_eq!(m["error"]["message"], json!("Fastener: missing washer type"));
@@ -318,8 +317,10 @@ fn a_slicer_project_is_exported() {
     let path = dir.join("proj.3mf");
     let doc = json!({"parameters": {}, "features": block(20.0, 20.0, 5.0)});
     let m = job(fundacad_geom::plugins::export_with_result(
-        &serde_json::from_value(json!({"exporter": "print-project-3mf", "path": path.to_string_lossy(), "document": doc,
-                                       "options": {"palette": [{"name": "Red", "color": "#e03030"}]}}))
+        &serde_json::from_value(
+            json!({"exporter": "print-project-3mf", "path": path.to_string_lossy(), "document": doc,
+                                       "options": {"palette": [{"name": "Red", "color": "#e03030"}]}}),
+        )
         .unwrap(),
         &NoWatch,
         None,
@@ -327,8 +328,13 @@ fn a_slicer_project_is_exported() {
     assert_eq!(m["info"], json!({}), "{m:?}");
     let bytes = std::fs::read(&path).unwrap();
     let _ = std::fs::remove_dir_all(&dir);
-    let names: Vec<&str> = ["[Content_Types].xml", "_rels/.rels", "3D/3dmodel.model", "Metadata/model_settings.config",
-        "Metadata/project_settings.config"]
+    let names: Vec<&str> = [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "3D/3dmodel.model",
+        "Metadata/model_settings.config",
+        "Metadata/project_settings.config",
+    ]
     .to_vec();
     for n in names {
         assert!(bytes.windows(n.len()).any(|w| w == n.as_bytes()), "{n} is in the zip");
@@ -345,10 +351,7 @@ fn an_op_names_the_plugin_it_cannot_find() {
     ) else {
         panic!("a json reply")
     };
-    assert_eq!(
-        m["error"]["message"],
-        json!("no plugin that is running offers the shape 'nope'")
-    );
+    assert_eq!(m["error"]["message"], json!("no plugin that is running offers the shape 'nope'"));
 
     let JobResult::Json(m) = fundacad_geom::plugins::export_with_result(
         &serde_json::from_value(json!({"exporter": "nope", "path": "x.bin", "document": {"features": []}})).unwrap(),
@@ -357,8 +360,5 @@ fn an_op_names_the_plugin_it_cannot_find() {
     ) else {
         panic!("a json reply")
     };
-    assert_eq!(
-        m["error"]["message"],
-        json!("no installed plugin provides the 'nope' export")
-    );
+    assert_eq!(m["error"]["message"], json!("no installed plugin provides the 'nope' export"));
 }

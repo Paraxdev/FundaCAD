@@ -81,20 +81,14 @@ fn unit_suffixes_convert_at_parse_time() {
 fn a_unit_suffix_only_binds_to_a_number() {
     // `2cm` is a literal; `x cm` is not, and must not silently become one.
     close(ev("2cm"), 20.0, 1e-9);
-    assert!(
-        refused("x mm", &[("x", 2.0)]),
-        "an identifier followed by a unit was accepted"
-    );
+    assert!(refused("x mm", &[("x", 2.0)]), "an identifier followed by a unit was accepted");
 }
 
 #[test]
 fn arguments_are_separated_by_semicolons() {
     close(ev("max(3; 7)"), 7.0, 1e-9);
     close(ev("min(3; 7; 2)"), 2.0, 1e-9);
-    assert!(
-        refused("max(3, 7)", &[]),
-        "a comma-separated argument list was accepted"
-    );
+    assert!(refused("max(3, 7)", &[]), "a comma-separated argument list was accepted");
 }
 
 #[test]
@@ -167,10 +161,7 @@ fn if_picks_a_branch_and_nan_never_picks_one() {
 #[test]
 fn reserved_names() {
     assert!(is_reserved_name("sin") && is_reserved_name("mm") && is_reserved_name("PI"));
-    assert!(
-        is_reserved_name("log"),
-        "reserved-but-unimplemented names are still reserved"
-    );
+    assert!(is_reserved_name("log"), "reserved-but-unimplemented names are still reserved");
     assert!(!is_reserved_name("hub_d"));
 }
 
@@ -179,9 +170,6 @@ fn nothing_is_evaluated_that_is_not_arithmetic() {
     // The parser is a parser. Anything a scripting language would happily
     // execute has to be a syntax error here, not a result.
     for src in ["__import__('os')", "1 if 1 else 2", "[1,2][0]", "a.b"] {
-        assert!(
-            refused(src, &[("a", 1.0)]),
-            "{src:?} evaluated instead of being refused"
-        );
+        assert!(refused(src, &[("a", 1.0)]), "{src:?} evaluated instead of being refused");
     }
 }

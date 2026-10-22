@@ -8,10 +8,10 @@
 pub mod container;
 pub mod fnda;
 pub mod json_doc;
-pub mod summary;
 mod par;
 mod pread;
 mod segments;
+pub mod summary;
 
 use std::path::Path;
 
