@@ -1,18 +1,5 @@
-// Where a circular pattern turns, the three ways the tool can place it.
-//
-//   "origin"  the world axis through the origin, stored as "X", "Y" or "Z", what
-//             every pattern did before and what a bolt circle round a centred
-//             part wants.
-//   "centre"  the same direction through the middle of the body being patterned,
-//             stored as a line. A hole on a part drawn from its corner is almost
-//             never meant to orbit the world origin, which is where most of its
-//             copies land off the part.
-//   "picked"  a line read off an edge or face the user clicked, stored as the
-//             line plus `axisRef`, the reference the engine re-resolves every
-//             rebuild so the axis follows the part (fundacad-geom
-//             features/pattern.rs `referenced_axis`).
-//
-// Pure, no THREE, so the rules are pinned in vitest.
+// Where a circular pattern turns: "origin" is stored as "X", "Y" or "Z", "centre" as a line through the body's middle,
+// "picked" as a line plus `axisRef`, which fundacad-geom features/pattern.rs re-resolves every rebuild.
 
 import type { Axis3, Selector, Vec3 } from "../types";
 import { axisVector } from "./patternMath";
@@ -28,16 +15,13 @@ export interface AxisLineValue {
 export interface PickedAxis extends AxisLineValue {
   ref: Selector;
 }
-
-/** Where a new circular pattern's axis starts. Repeating a feature on a body
- *  means turning about that body, repeating whole bodies means turning them
- *  about the origin, where a copy about its own middle would sit on itself. */
+/** Features turn about their body, whole bodies about the origin: a copy about its own middle sits on itself. */
+/** Features turn about their body. Whole bodies turn about the origin, since a copy about its own middle sits on itself. */
 export function defaultAxisPlace(featuresMode: boolean): AxisPlace {
   return featuresMode ? "centre" : "origin";
 }
 
-/** The largest component made positive, the engine's `canonical` rule, so the
- *  same edge or face gives the same line on both sides. */
+/** The engine's `canonical` rule, largest component positive, so both sides give the same line. */
 export function canonicalDir(d: Vec3): Vec3 {
   const len = Math.hypot(d[0], d[1], d[2]);
   if (!(len > 1e-12)) return [0, 0, 0];
@@ -47,7 +31,6 @@ export function canonicalDir(d: Vec3): Vec3 {
   return u[k]! < 0 ? [-u[0] + 0, -u[1] + 0, -u[2] + 0] : u;
 }
 
-/** The `axis` (and `axisRef`) fields a circular pattern is committed with. */
 export function circularAxisFields(
   place: AxisPlace,
   named: Axis3,
@@ -63,7 +46,6 @@ export function circularAxisFields(
   return { axis: named };
 }
 
-/** The line the copies turn about, for the ghosts and the drawn axis. */
 export function axisLine(place: AxisPlace, named: Axis3, centre: Vec3, picked: PickedAxis | null): AxisLineValue {
   if (place === "picked" && picked) return { origin: picked.origin, dir: picked.dir };
   return { origin: place === "centre" ? centre : [0, 0, 0], dir: axisVector(named) };
