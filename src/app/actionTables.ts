@@ -1,7 +1,6 @@
 import type { SketchTool } from "../sketch/sketchMode";
 
-/** Ribbon/keymap actions that create sketch geometry. Inside a sketch they
- *  switch the active tool; outside one they start a sketch with that tool. */
+/** Inside a sketch these switch the tool; outside one they start a sketch with it. */
 export const SKETCH_TOOLS = new Set([
   "line",
   "rectangle",
@@ -26,8 +25,7 @@ export const SKETCH_TOOLS = new Set([
   "honeycomb",
 ]);
 
-/** Sketch MODIFY tools (ribbon action -> sketch tool name). Only meaningful
- *  inside a sketch. */
+/** ribbon action → sketch tool, only inside a sketch */
 export const SKETCH_MODIFY: Record<string, SketchTool> = {
   trim: "trim",
   "fillet-sketch": "fillet",
@@ -55,9 +53,7 @@ export const SKETCH_MODIFY: Record<string, SketchTool> = {
   fix: "fix",
 };
 
-/** "Repeat <last command>" (Onshape-style): the empty-space menu re-runs the last
- *  real command. Navigation / view / file actions aren't commands you repeat, so
- *  they don't overwrite it. */
+/** Actions that do not overwrite the empty space menu's "Repeat <last command>". */
 export const NON_REPEATABLE = new Set([
   "new",
   "open",
@@ -101,7 +97,6 @@ export const NON_REPEATABLE = new Set([
  *  is placed, so a state change must not reset it to a line of this table. */
 export const SELF_PROMPTING = new Set<SketchTool>(["patternRect", "patternCircular"]);
 
-/** Per-tool instruction line shown in the viewport prompt while sketching. */
 export const SKETCH_PROMPTS: Record<string, string> = {
   select: "Line (L) · Rectangle (R) · Circle (C) · Arc (A) · Trim (T)",
   line: "Click points · length Tab angle · Enter · Esc",

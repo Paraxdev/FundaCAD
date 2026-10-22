@@ -10,16 +10,8 @@ import { setLibrary } from "../io/library";
 import { fakeLibrary, type FakeFile, type FakeLibrary } from "../io/fakeLibrary";
 import { contribute } from "../plugins/contrib";
 
-/** Debug handles for console + headless frontend-logic tests. Gated to DEV so
- *  they're absent from production bundles, a post-XSS attacker shouldn't be
- *  handed the live store/geometry API for free (the vite dev server is DEV, so
- *  the localhost:5173 test workflow keeps them).
- *
- *  The e2e scripts in e2e/*.cjs drive the app entirely through these, so the
- *  names here are a contract: `store`, `tree`, `viewport` and `geometry` are all
- *  waited on by `page.waitForFunction` before any test step runs. New scripts
- *  use the agent harness instead (src/harness, docs/HARNESS.md), these stay
- *  for the old ones until they are ported. */
+/** DEV only, so an XSS in production is not handed the live store. The names are a contract with the old e2e/*.cjs
+ *  scripts, which wait on `store`, `tree`, `viewport` and `geometry`; new scripts use src/harness. */
 export function installDevGlobals(e: Engine): void {
   if (!import.meta.env.DEV) return;
   const w = window as any;
@@ -34,11 +26,7 @@ export function installDevGlobals(e: Engine): void {
   w.pressPull = e.tools.pressPull;
   w.section = e.tools.section;
   w.solveSketch = solveSketch;
-  // The browser tree is components/shell/BrowserPane.vue now, so this is a
-  // handle onto its store rather than onto a class. refresh() is ASYNC: "render
-  // this now" in Vue is nextTick, and the bump is what makes it a genuine
-  // re-render rather than a no-op, e2e/browser_tree_perf.cjs times exactly this
-  // call and would otherwise measure nothing and report a false speedup.
+  // The bump forces a real re-render, which e2e/browser_tree_perf.cjs times; without it the test measures nothing.
   w.tree = {
     refresh: async () => {
       useBrowserStore().bumpView();
@@ -46,7 +34,6 @@ export function installDevGlobals(e: Engine): void {
     },
     beginRename: (id: string) => useBrowserStore().beginRename(id),
   };
-  // DEV-only handle for driving the app from outside (demo capture, e2e).
   w.__fundacad = {
     store: e.store,
     viewport: e.viewport,
@@ -67,17 +54,9 @@ export function installDevGlobals(e: Engine): void {
     setRenderPref,
     // Contribute as a plugin would, for a capability no plugin offers yet.
     contribute,
-    // Which feature the panels are showing. A harness that wants to open a
-    // feature's Properties has to say WHICH, and the timeline chip that normally
-    // does it is a click on a scrolling strip.
     selectFeature: (id: string | null) => e.selectFeature(id),
-    // Which feature is selected right now, the read that pairs with the setter
-    // above: a harness that clicks something in the viewport has no other way to
-    // ask what the click selected.
     selectedFeature: () => e.selectedFeature,
-    // Selecting a feature opens its values; EDITING it opens whatever
-    // manipulator that feature has. They are different doors and a harness that
-    // wants the second one cannot get there through the first.
+    // Selecting opens a feature's values, editing opens its manipulator.
     editFeature: (id: string) => e.editFeature(id),
     extrude: e.tools.extrude,
     move: e.tools.move,
@@ -94,20 +73,9 @@ export function installDevGlobals(e: Engine): void {
     nudge: e.nudge,
     faceOffset: e.tools.faceOffset,
     toolBusy: () => e.toolBusy(),
-    // The one formula every datum surface goes through: the drawn quad, "sketch
-    // on this plane", and an offset plane's target. Exposed so a harness can ask
-    // where a datum IS without reading it back out of the scene graph, which is
-    // the only way to see that a datum following a face followed it on screen
-    // too and not just in the kernel.
     datumPlaneDef: (f: Parameters<Engine["datumPlaneDef"]>[0]) => e.datumPlaneDef(f),
-    // Re-sync the datum planes/points/axes to the viewport from the current
-    // document + build result. Exposed so a harness can prove a followed datum
-    // is DRAWN where its resolved mark says, by writing a mark onto the build
-    // result and asking the viewport to reflect it, the render-side twin of the
-    // engine's datum_marks test.
+    // Lets a harness write a mark onto the build result and prove the datum is drawn there.
     syncDatumPlanes: () => e.syncDatumPlanes(),
-    // Direct handles on the two global overlay facades, so a harness can drive
-    // them without needing an operation that happens to raise one.
     toast,
     choose,
     menu: { contextMenu, dismissContextMenu },
