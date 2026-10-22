@@ -8,9 +8,7 @@ export interface ToolKey {
   altKey: boolean;
 }
 
-/** What a bare letter does inside a sketch: arm a drawing tool, or flip the
- *  tangent arc while the arc tool is armed. A key with a modifier is left to the
- *  global keymap, Shift+P, Shift+L and Shift+C are constraints there. */
+/** A key with a modifier is left to the global keymap, where Shift+P, Shift+L and Shift+C are constraints. */
 export function sketchToolKey(e: ToolKey, tool: SketchTool): SketchTool | "tangent-arc" | null {
   if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return null;
   switch (e.key.toLowerCase()) {

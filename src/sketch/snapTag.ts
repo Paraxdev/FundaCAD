@@ -23,8 +23,7 @@ export class SnapTag {
   }
 }
 
-/** The relations a shape being drawn will be recorded with, as constraint icons
- *  beside the cursor, before the click. `data-relations` names them for tests. */
+/** The relations a shape being drawn will get, as icons beside the cursor. `data-relations` names them for tests. */
 export class InferTag {
   private el: HTMLDivElement | null = null;
   private shown = "";
