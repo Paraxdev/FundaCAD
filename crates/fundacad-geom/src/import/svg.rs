@@ -1,6 +1,5 @@
-//! SVG drawings as sketches on XY in mm, Y up: one per top level group or
-//! Inkscape layer, the filled outlines healed into closed profiles that a
-//! sketch's even-odd fill extrudes with their holes.
+//! SVG drawings as sketches on XY in mm, Y up, one per top level group or Inkscape layer.
+//! Filled outlines are healed into closed profiles that an even-odd fill extrudes with holes.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::f64::consts::{PI, TAU};

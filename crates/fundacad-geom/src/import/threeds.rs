@@ -1,7 +1,5 @@
-//! 3D Studio (.3ds, 3ds Max before it was 3ds Max). Little endian chunks, each
-//! a u16 id and a u32 length that counts its own six header bytes. Every
-//! TRI_MESH becomes one named object, coloured by the diffuse colour of the
-//! material most of its faces use. Millimetres, times the master scale.
+//! 3D Studio .3ds: little endian chunks, a u16 id and a u32 length counting its 6 header bytes.
+//! Each TRI_MESH is one object, coloured by its main material, mm times the master scale.
 
 use std::collections::HashMap;
 

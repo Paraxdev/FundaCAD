@@ -1,9 +1,5 @@
-//! Rhino .3dm: Breps, extrusions and NURBS surfaces become OCCT faces with
-//! their trims, meshes go through the mesh path, layers become the tree.
-//!
-//! The decoder hands an IR of NURBS surfaces, 3D edge curves and 2D trims.
-//! There is no binding to build a B-spline surface or a pcurve, so each body
-//! is written as OCCT BRep text and read back, then healed.
+//! Rhino .3dm: Breps, extrusions and NURBS surfaces become trimmed OCCT faces, layers the tree.
+//! No binding builds a B-spline surface or pcurve, so each body goes through OCCT BRep text.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write as _;
@@ -217,8 +213,7 @@ impl<'a> Model<'a> {
         self.ix.get(table).and_then(|t| t.get(id).copied()).ok_or_else(|| format!("the file names a missing {id}"))
     }
 
-    /// Every importable object once, in the order of the file's records, and
-    /// how many bodies hold no face, a curve or a point cloud.
+    /// Every importable object once in file record order, and how many bodies hold no face.
     fn objects(&self) -> (Vec<Obj>, usize) {
         let mut rank: HashMap<&str, usize> = HashMap::new();
         let mut by_layer: HashSet<&str> = HashSet::new();
@@ -301,7 +296,6 @@ impl<'a> Model<'a> {
         })
     }
 
-    /// One note for what the file holds that does not import.
     fn skipped_note(&self, faceless: usize) -> Vec<String> {
         let mut out = Vec::new();
         let subds = self.list("subds").count();
@@ -808,10 +802,8 @@ struct TShape {
     subs: Vec<(bool, usize)>,
 }
 
-/// OCCT's BRep text, version 3. A TShape names a sub-shape by its distance
-/// from the end of the list, so the list is numbered only when written.
-/// Edges are records until `finish`, each face adds its trims to them, and a
-/// wire names its edges by record.
+/// OCCT BRep text v3. A TShape names a sub-shape by its distance from the list end, so the
+/// list is numbered only when written. Edges stay records until `finish` so faces add trims.
 struct BrepText {
     tol: f64,
     curves2d: Vec<String>,

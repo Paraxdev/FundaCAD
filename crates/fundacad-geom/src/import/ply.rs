@@ -1,5 +1,4 @@
-//! Stanford PLY, ascii and both binary byte orders, every element read so an
-//! unknown one is stepped over. Millimetres, as STL.
+//! Stanford PLY, ascii and both binary byte orders, unknown elements stepped over. Millimetres.
 
 use super::mesh::{dominant_color, MeshObject};
 use super::scan::{too_dense_for_a_scan, MAX_SCAN_TRIANGLES};
