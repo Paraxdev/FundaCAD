@@ -105,8 +105,14 @@ function pickOne(matches: Control[], target: string, walk: Walk, index: number |
   );
 }
 
-/** The control a ref or label names. A trailing `#n` picks the n-th of several. */
-export function findControl(walk: Walk, target: string, opts: { disabled?: boolean } = {}): Control {
+function byLabel(pool: Control[], want: string): Control[] {
+  const exact = pool.filter((c) => matchName(c.label) === want);
+  return exact.length ? exact : pool.filter((c) => matchName(c.label).startsWith(want));
+}
+
+/** The control a ref or label names. A trailing `#n` picks the n-th of several. With `folder` a label
+ *  matches Items folders first, an imported assembly's History step carries the folder's name too. */
+export function findControl(walk: Walk, target: string, opts: { disabled?: boolean; folder?: boolean } = {}): Control {
   const m = /^(.+?)#(\d+)$/.exec(target);
   const base = m ? m[1]! : target;
   const index = m ? Number(m[2]) : null;
@@ -123,10 +129,8 @@ export function findControl(walk: Walk, target: string, opts: { disabled?: boole
   const want = matchName(base);
   if (!want) throw new HarnessError("an empty label names nothing", "BadArgs");
   const named = walk.controls.filter((c) => c.role !== "eye");
-  const exact = named.filter((c) => matchName(c.label) === want);
-  if (exact.length) return pickOne(exact, base, walk, index, any);
-  const prefix = named.filter((c) => matchName(c.label).startsWith(want));
-  return pickOne(prefix, base, walk, index, any);
+  const folders = byLabel(opts.folder ? named.filter((c) => c.el.matches(".tree-folder")) : [], want);
+  return pickOne(folders.length ? folders : byLabel(named, want), base, walk, index, any);
 }
 
 let stamped: Element | null = null;
