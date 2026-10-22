@@ -69,11 +69,13 @@ fn exe_name() -> &'static str {
     }
 }
 
-fn app_name() -> &'static str {
+/// The development build's binary is fundacad-dev (src-tauri/tauri.dev-product.conf.json), so it can be installed
+/// beside the beta.
+fn app_names() -> [&'static str; 2] {
     if cfg!(windows) {
-        "fundacad.exe"
+        ["fundacad.exe", "fundacad-dev.exe"]
     } else {
-        "fundacad"
+        ["fundacad", "fundacad-dev"]
     }
 }
 
@@ -97,7 +99,8 @@ pub fn engine_command() -> Vec<String> {
     if let Some(p) = beside.as_ref().map(|d| d.join(exe_name())).filter(|p| p.is_file()) {
         return vec![p.to_string_lossy().into_owned()];
     }
-    if let Some(app) = beside.as_ref().map(|d| d.join(app_name())).filter(|p| is_rust_engine_app(p)) {
+    let app = beside.as_ref().and_then(|d| app_names().into_iter().map(|n| d.join(n)).find(|p| is_rust_engine_app(p)));
+    if let Some(app) = app {
         return vec![app.to_string_lossy().into_owned(), "--engine".into()];
     }
     let mut here = std::env::current_exe()
