@@ -13,8 +13,7 @@ const WALL_CURVES = new Set<SketchEntity["type"]>([
 
 export const THIN_DEFAULTS = { distance: 10, thickness: 2 } as const;
 
-/** A thin extrude of a sketch that has no closed area to extrude: a wall
- *  along every curve it has, or null when it has no curve a wall can follow. */
+/** For a sketch with no closed area to extrude: a wall along every curve that can carry one. */
 export function thinExtrudeOf(features: readonly Feature[], sketchId: string, id: string): Feature | null {
   const sk = features.find((f) => f.id === sketchId);
   if (sk?.type !== "sketch") return null;
@@ -36,8 +35,7 @@ export function thinExtrudeOf(features: readonly Feature[], sketchId: string, id
   };
 }
 
-/** The patch the Thin row writes: turning it on also gives a wall that has no
- *  thickness yet the default one, which the engine needs before it builds. */
+/** Turning thin on also sets the default thickness when none is set, the engine needs one to build. */
 export function thinTogglePatch(feature: Feature, on: boolean): Record<string, unknown> {
   const thickness = (feature as { thickness?: unknown }).thickness;
   return on && thickness == null ? { thin: true, thickness: THIN_DEFAULTS.thickness } : { thin: on };
