@@ -1,12 +1,7 @@
-/* ============================================================================
-   INSPECTOR, parameters + feature editor
-   ============================================================================ */
 .param-row {
   display: grid;
-  /* minmax(0, …) on both tracks: a grid track's automatic minimum is its
-     content's MIN-CONTENT width, so an unbreakable label or a long value would
-     push the row past the panel rather than ellipsing inside it, which is what
-     the side-mounted history did, at 195px. */
+  /* A track's automatic minimum is min-content, so a long label or value would push the
+     row past the panel instead of ellipsing. */
   grid-template-columns: minmax(0, 1fr) minmax(0, 120px);
   gap: var(--s-3);
   align-items: center;
@@ -26,9 +21,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The value and the unit it is measured in, which belongs beside the number
-   rather than appended to the label: "Radius mm | 5in" reads as a contradiction
-   and spends the label column's width on something that is not a name. */
+/* The unit sits beside the number, not in the label: "Radius mm | 5in" reads as a
+   contradiction. */
 .param-value {
   display: flex;
   align-items: center;
@@ -39,8 +33,8 @@
   font-size: 12px;
   padding: 2px 5px;
 }
-/* The chip states the unit for a value that cannot be re-shown in another one
-   (an expression is written in canonical units), so it is not pressable. */
+/* An expression is written in canonical units and cannot be shown in another, so this
+   chip is not pressable. */
 .param-value .dim-unit.static {
   border-color: transparent;
   background: none;
@@ -51,17 +45,11 @@
   border: 1px solid var(--line-strong);
   color: var(--text);
   border-radius: var(--r-sm);
-  /* The app's field size. Every text input and <select> in the app resolves to
-     this pair, the survey found 5px/8px here, 4px/7px in the Parameters
-     dialog, 4px/6px on the Units select and 8px/10px on the sign-in field, four
-     spellings of one control. --s-2 vertical rather than --s-3 keeps a field
-     shorter than a button, which is the hierarchy you want when they sit in the
-     same row. */
+  /* The app's field size, every input and <select> resolves here. --s-2 vertical keeps
+     a field shorter than a button beside it. */
   padding: var(--s-2) var(--s-3);
-  /* A flex item in .param-value, sharing the cell with the unit chip. width:100%
-     would resolve against the whole cell and leave the chip nowhere to go; the
-     0 minimum is what lets the field be narrower than the number in it, so a
-     long value scrolls inside the field rather than widening the panel. */
+  /* Not width: 100%, which leaves the unit chip no room. The 0 minimum lets a long value
+     scroll inside the field instead of widening the panel. */
   flex: 1 1 auto;
   min-width: 0;
   font: inherit;
@@ -81,15 +69,13 @@
   background: var(--bg);
   box-shadow: 0 0 0 3px var(--accent-tint);
 }
-/* rejected expression (kept in the field so the user can fix it) */
+/* A rejected expression stays in the field so the user can fix it. */
 .param-row input.input-error {
   border-color: #ff6b6b;
   box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.18);
 }
-/* A value that is one of a fixed set. Same box as .param-row input, same
-   padding, same border, same focus ring, because the two sit interleaved in
-   one column and a dropdown that read as a different KIND of control would
-   break the line down the middle of the panel. */
+/* Same box as .param-row input: they sit interleaved in one column and must read as one
+   kind of control. */
 .param-select {
   background: var(--panel-2);
   border: 1px solid var(--line-strong);
@@ -116,15 +102,8 @@
   box-shadow: 0 0 0 3px var(--accent-tint);
 }
 
-/* A value that is a file on disk. Same box as .param-select above, for the same
-   reason: it sits interleaved with dropdowns and number fields in one column,
-   and a button that read as a different KIND of control would break the line
-   down the middle of the panel.
-
-   The name of the file is what shows, left-aligned and ellipsised. A path is
-   longer than the 120px this column has, and the row's `title` carries the whole
-   of it, so what is on screen is the shortest thing that identifies the file
-   rather than the middle of a directory tree. */
+/* Same box as .param-select for the same reason. Only the file name shows, a path does
+   not fit 120px; the row's title carries the whole path. */
 .param-file {
   min-width: 0;
 }
@@ -157,8 +136,7 @@
   background: var(--bg);
   box-shadow: 0 0 0 3px var(--accent-tint);
 }
-/* Only present once there is something to clear, so it never sits there as a
-   dead control, and it never takes width from the name when the row is empty. */
+/* Only present once there is something to clear, so it never takes width from the name. */
 .param-file .file-clear {
   flex: 0 0 auto;
   background: none;
@@ -176,9 +154,8 @@
   border-color: var(--line-strong);
 }
 
-/* A value that is on or off. The checkbox itself stays in the document rather
-   than being display:none'd, so it keeps its keyboard behaviour and its label
-   association; it is only moved out from under the drawn switch. */
+/* The checkbox stays in the document, not display: none, so it keeps its keyboard
+   behaviour and label association. */
 .param-switch {
   position: relative;
   display: inline-flex;
@@ -233,21 +210,20 @@
   box-shadow: 0 0 0 3px var(--accent-tint);
 }
 
-/* field driven by a non-literal expression (Fusion's fx: convention) */
+/* A field driven by an expression (Fusion's fx: convention). */
 .fx-row label::before {
   content: "fx:";
   color: var(--accent);
   font-style: italic;
   margin-right: var(--s-1);
 }
-/* parameter whose cached value is stale (cycle / missing ref / non-finite),
-   same amber as the solver's over-defined flag */
+/* A stale cached value (cycle, missing ref, non finite), the amber of the solver's over
+   defined flag. */
 .param-stale input {
   border-color: #e0a020;
   box-shadow: 0 0 0 3px rgba(224, 160, 32, 0.15);
 }
 
-/* --- Change Parameters dialog (Modify → Parameters) --- */
 .params-dialog {
   min-width: 560px;
   max-width: 720px;
@@ -260,9 +236,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-dim);
-  /* Deliberately lopsided: a section caption belongs to what follows it, so the
-     space above is a real break and the space below is only enough to stop the
-     caption sitting on the first row's shoulders. */
+  /* Lopsided on purpose: a caption belongs to what follows it. */
   margin: var(--s-4) 0 var(--s-1);
 }
 .params-row {
@@ -270,9 +244,7 @@
   grid-template-columns: 110px 1fr 90px 1fr 24px;
   gap: var(--s-3);
   align-items: center;
-  /* Same rhythm as .param-row in the inspector. They are the same row, one
-     docked, one in a dialog, and read as unrelated widgets when the dialog
-     packed its rows 2px tighter than the panel did. */
+  /* Same rhythm as .param-row, it is the same row in a dialog. */
   margin-bottom: var(--s-2);
 }
 .params-head span {
@@ -287,10 +259,8 @@
   border: 1px solid var(--line-strong);
   color: var(--text);
   border-radius: var(--r-sm);
-  /* Field size, except on the right, where the 22px is not spacing at all: it
-     is clearance for the arrow the .params-row select paints as a background
-     image (right 7px, 9px wide), and it has to stay tied to that image rather
-     than to the scale or the caret starts overlapping the value. */
+  /* The right 22px is not spacing but clearance for the select's background arrow
+     (right 7px, 9px wide). */
   padding: var(--s-2) 22px var(--s-2) var(--s-3);
   width: 100%;
   font: inherit;
@@ -333,9 +303,7 @@
   border: 1px solid var(--line-strong);
   color: var(--text);
   border-radius: var(--r-sm);
-  /* Field size rather than button size: it sits directly under the parameter
-     grid and lining it up with the inputs above matters more than lining it up
-     with the dialog's footer buttons. */
+  /* Field size, not button size, to line up with the inputs above. */
   padding: var(--s-2) var(--s-3);
   font: inherit;
   font-size: 12px;
@@ -347,11 +315,11 @@
 .params-add button.input-error {
   border-color: #ff6b6b;
 }
-/* stale row inside the dialog: badge the whole row, not just inputs */
+/* In the dialog a stale row badges the whole row, not just its inputs. */
 .params-row.param-stale .params-value {
   color: #e0a020;
 }
-/* sketch dim driven by a non-literal expression (fx: prefix in the text) */
+/* A sketch dimension driven by an expression (fx: prefix in the text). */
 .sketch-dim-fx {
   color: var(--accent);
   font-style: italic;
@@ -361,7 +329,6 @@
   outline: none;
 }
 
-/* empty-state for panels (added by component markup) */
 .empty-state {
   color: var(--text-mute);
   font-size: 12px;
@@ -370,11 +337,8 @@
   text-align: left;
 }
 
-/* --- what a feature is applied to ------------------------------------------
-   The geometry half of a feature, shown in the same row rhythm as the values
-   beside it: it is one more thing about the feature, not a section of its own.
-   The count sits where a number would and the button where a unit chip would,
-   so a column of mixed rows still scans as one column. */
+/* What a feature is applied to, in the value row rhythm: the count sits where a number
+   would and the button where a unit chip would. */
 .target-value {
   justify-content: space-between;
 }
@@ -385,8 +349,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* An empty target usually MEANS something ("sealed hollow", "the whole body"),
-   so it is stated rather than dimmed away, just quieter than a count. */
+/* An empty target usually means something ("the whole body"), so it is stated, not
+   dimmed away. */
 .target-empty {
   color: var(--text-dim);
   font-style: italic;
@@ -423,14 +387,8 @@
   cursor: default;
 }
 
-/* The kernel's refusal of a value being previewed, under the row that holds it.
-   Only ever present while the field is being typed in: it arrives when a
-   preview build settles badly and goes when the value changes or the field is
-   left, so it never becomes a permanent piece of panel furniture.
-
-   Full width of the row rather than tucked in the value column: these sentences
-   name the measurement that is wrong and the one it is wrong against, which is
-   the half worth reading, and the value column is where the width runs out. */
+/* The kernel's refusal of a previewed value, only while typing. Full row width: the
+   sentence names the measurements, and the value column is where width runs out. */
 .param-row .param-problem {
   grid-column: 1 / -1;
   margin: var(--s-1) 0 0;
@@ -439,13 +397,8 @@
   color: var(--error);
 }
 
-/* A value the KERNEL refused, as opposed to one the parser did.
-   
-   Its own class rather than a change to .input-error, which every panel uses for
-   a value that failed to parse. Those two want different weight: a parse error
-   is the user's half-finished text and the number is still theirs to fix, so the
-   border marks it and the digits stay readable. A kernel refusal is about the
-   number itself, so the number is what turns. */
+/* A value the kernel refused, not the parser (.input-error): the number itself is wrong,
+   so the number turns, where a parse error only marks the border. */
 .param-row input.input-problem {
   border-color: var(--error);
   color: var(--error);

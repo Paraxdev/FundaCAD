@@ -1,4 +1,4 @@
-/* ---- Home: covers the stage, the title bar stays live ---- */
+/* Home covers the stage, the title bar stays live. */
 .home {
   position: absolute;
   inset: 0;
@@ -153,9 +153,8 @@
   font-weight: 600;
   color: var(--text-dim);
 }
-/* content-visibility clips paint to the cell, so the cell bleeds past its grid
-   area by the reach of --float-shadow and the card keeps its whole shadow. The
-   bleed takes no clicks, or it would steal them from the neighbouring cards. */
+/* content-visibility clips paint to the cell, so the cell bleeds by the reach of
+   --float-shadow; the bleed takes no clicks from the neighbouring cards. */
 $card-bleed-top: 8px;
 $card-bleed-side: 26px;
 $card-bleed-bottom: 44px;

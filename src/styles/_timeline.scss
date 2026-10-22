@@ -1,18 +1,13 @@
-/* ============================================================================
-   TIMELINE  (slimmer; modern feature chips)
-   ============================================================================ */
 #timeline {
   background: var(--panel);
   border-top: 1px solid var(--line);
-  /* Matches #titlebar and .ribbon-context: the three full-width bars share one
-     left edge so nothing in the chrome looks a couple of pixels out. */
+  /* Shares one left edge with #titlebar and .ribbon-context. */
   padding: 0 var(--s-4);
   display: flex;
   align-items: center;
   gap: var(--s-2);
   overflow: hidden; /* the .timeline-scroll child owns horizontal scrolling */
 }
-/* the scrolling strip between the transport buttons and the error badge */
 .timeline-scroll {
   flex: 1 1 auto;
   min-width: 0;
@@ -22,12 +17,10 @@
   white-space: nowrap;
   scrollbar-width: thin;
 }
-/* transport: roll-to-start / step / roll-to-end */
 .timeline-transport {
   flex: 0 0 auto;
   display: flex;
-  /* Hairline, the three transport buttons are one control, like the view
-     pill's segments over in _layout. */
+  /* Hairline: the three transport buttons are one control, like the view pill's segments. */
   gap: var(--s-0);
 }
 .tl-btn {
@@ -54,7 +47,6 @@
   opacity: 0.3;
   cursor: default;
 }
-/* failing-features badge (right end): click jumps to the next red chip */
 .timeline-errbadge {
   flex: 0 0 auto;
   /* Badge size, shared with .context-tab in the titlebar. */
@@ -70,8 +62,7 @@
 .timeline-errbadge.hidden {
   display: none;
 }
-/* cancel the running operation (import / long rebuild). Sibling of the track,
-   never inside it, the track is wiped on every render. */
+/* A sibling of the track, never inside it: the track is wiped on every render. */
 .timeline-cancel {
   flex: 0 0 auto;
   padding: var(--s-1) var(--s-3);
@@ -90,7 +81,6 @@
 .timeline-cancel.hidden {
   display: none;
 }
-/* what the running operation is doing, next to Cancel */
 .timeline-busy {
   flex: 0 0 auto;
   display: flex;
@@ -168,22 +158,17 @@
   margin: var(--s-1) var(--s-1) var(--s-3);
 }
 
-/* feature tree rows */
 .feature-row {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  /* List-row height, shared with .tree-folder above it in the same tree, the
-     two used to differ only in that one said 5px and the other said 5px against
-     a different horizontal, which is exactly the kind of near-duplicate that
-     makes a panel look hand-placed. The inline value stays one rung tighter
-     than a free-standing row because .tree-child already indents these. */
+  /* List row height, shared with .tree-folder. One rung tighter inline because
+     .tree-child already indents these. */
   padding: var(--s-2);
   border-radius: var(--r-sm);
   cursor: pointer;
-  /* A row, like the .tree-folder heads between them, not text: a long press
-     on a label held a finger's worth of selection instead of the row. The
-     rename field turns selection back on for itself, see .tree-label.renaming. */
+  /* A row, not text: a long press selected the label instead of the row. The rename
+     field turns selection back on, see .tree-label.renaming. */
   -webkit-user-select: none;
   user-select: none;
   color: var(--text);
@@ -212,7 +197,6 @@
   opacity: 1;
 }
 
-/* --- timeline track + nodes --- */
 .timeline-track {
   display: flex;
   align-items: center;
@@ -228,16 +212,13 @@
   font-size: 12px;
   font-style: normal;
 }
-/* The chip's feature name. Hidden in the horizontal strip, which is 52px of
-   chrome holding ~28px chips so a 100-feature document spans screens rather
-   than screen-miles; _shellsides.scss shows it in the side arrangement, where
-   each chip is a full-width row and a column of bare icons is unreadable. */
+/* Hidden in the 52px horizontal strip; _shellsides.scss shows it in the side
+   arrangement, where a column of bare icons is unreadable. */
 .t-name {
   display: none;
 }
-/* A chip and the values belonging to it. One box so the side arrangement can
-   stack them without the next chip landing between the two; in the horizontal
-   strip it is a transparent wrapper that changes nothing. */
+/* One box so the side arrangement keeps a chip and its values together; in the
+   horizontal strip a transparent wrapper. */
 .timeline-item {
   flex: 0 0 auto;
   display: inline-flex;
@@ -284,16 +265,16 @@
   color: var(--error);
   background: var(--error-tint);
 }
-/* Built, but with something to say (a cut that sealed a void, a shaky
-   reference). Amber and deliberately NOT tinted, so it reads as quieter than the
-   red above at a glance across a 100-chip strip: the build succeeded. */
+/* Built, with a warning: amber and not tinted, so it reads quieter than the red, the
+   build succeeded. */
 .timeline-node.warn {
   border-color: var(--warn);
   color: var(--warn);
 }
+/* Past the rollback marker, not built. */
 .timeline-node.rolled {
   opacity: 0.38;
-} /* past the rollback marker = not built */
+}
 .timeline-node.suppressed,
 .timeline-node.placeholder {
   opacity: 0.5;
@@ -305,9 +286,8 @@
 }
 .timeline-node.building {
   width: auto;
-  /* The one node that grows: it carries a live elapsed-time readout, so it
-     drops the fixed width and pads instead. The bottom rung is clearance for
-     the .t-bar progress strip pinned across its foot. */
+  /* The one node that grows, for its live elapsed time readout. The bottom rung clears
+     the .t-bar progress strip. */
   padding: 0 var(--s-4) var(--s-1);
   opacity: 0.9;
   cursor: default;
@@ -325,8 +305,7 @@
   bottom: 2px;
   height: 2px;
   background: var(--line);
-  /* --r-pill, not 1px: the intent is "fully rounded ends", and saying it that
-     way survives a change to the bar's height. */
+  /* --r-pill, not 1px, so the ends stay round if the bar's height changes. */
   border-radius: var(--r-pill);
   overflow: hidden;
 }
@@ -341,10 +320,8 @@
   line-height: 1;
 }
 
-/* The feature's values, floating above the bottom strip. The in-flow twin of
-   this (side arrangement) is styled in _shellsides.scss, where it is a plain
-   indented block, everything below is what it costs to be a free-standing
-   panel instead. */
+/* Floating above the bottom strip; the in-flow twin for the side arrangement is in
+   _shellsides.scss. */
 .timeline-props.floating {
   position: fixed;
   z-index: 180;
@@ -393,16 +370,14 @@
   color: var(--text);
 }
 
-/* rollback marker: a draggable vertical bar between features */
+/* The rollback marker, a draggable bar between features. */
 .timeline-marker {
   position: relative;
   flex: 0 0 auto;
   width: 14px;
   height: 34px;
-  /* A hairline rather than a rung: the marker is a drag target that sits
-     BETWEEN two feature chips to say where the rollback point is, so any real
-     gap here would read as a hole in the track and make the marker look like it
-     belonged to the chip on one side. */
+  /* A hairline, not a rung: a real gap reads as a hole in the track and ties the marker
+     to one chip. */
   margin: 0 1px;
   cursor: ew-resize;
 }
@@ -434,7 +409,6 @@
   box-shadow: 0 0 8px var(--accent-glow);
 }
 
-/* right-click context menu (timeline; reusable) */
 .context-menu {
   position: fixed;
   z-index: 3000;
@@ -470,8 +444,7 @@
 }
 .ctx-key {
   flex: 0 0 auto;
-  /* On top of .ctx-item's gap, so the shortcut always clears the longest label
-     by more than one word-space and the key column stays readable as a column. */
+  /* On top of .ctx-item's gap, so the key column reads as a column. */
   padding-left: var(--s-4);
   font-size: 11px;
   color: var(--text-dim);

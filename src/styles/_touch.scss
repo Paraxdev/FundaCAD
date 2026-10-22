@@ -1,43 +1,7 @@
-/* ============================================================================
-   TOUCH, what a finger needs that a mouse does not.
+/* Page rules are unconditional: the browser decides what a touch does before any pointer
+   event. Under data-pointer="touch" nothing may change layout, a touchscreen laptop flips kinds. */
 
-   Two kinds of rule live here.
-
-   The unconditional ones stop the page itself from reacting to a finger: no
-   pinch zoom of the whole app, no grey tap flash, no long-press callout, and
-   touch-action none on the things laid over the model that are dragged. Those
-   cannot wait for the pointer kind. The browser decides what a touch does
-   (pan, zoom or hand it to the page) before the first pointer event is
-   dispatched, so a rule keyed on data-pointer would always be one touch late.
-
-   The rest are keyed on :root[data-pointer="touch"], which input/pointerKind.ts
-   sets from the last pointer event. A laptop with a touchscreen flips between
-   "mouse" (the touchpad) and "touch" as the hand moves, so NOTHING in that
-   block may change layout, or the chrome would jump every time the screen was
-   touched. Small targets get a bigger hit area from a transparent pseudo
-   element with a negative inset instead: it takes taps for its host and moves
-   nothing. Each one is sized to reach about 40px, and is held back where a
-   neighbour or the edge of a scroller is closer than that. An absolutely
-   positioned box that pokes past a scroller's padding edge adds to what the
-   scroller can scroll, and a scrollbar appearing is exactly the reflow this
-   block exists to avoid.
-
-   The pointer kind changes during the pointerdown that reveals it, after the
-   browser has already hit tested that press, so the very first tap after the
-   touchpad was last used still lands on the small target. Every tap after it
-   gets the large one.
-
-   The hosts are given position: relative here and not in their own rules, so
-   the mouse layout is byte-for-byte what it was. None of them holds an
-   absolutely positioned child that was placed against an outer box.
-   ============================================================================ */
-
-/* ---- the page ----------------------------------------------------------------- */
-
-/* Panning stays (every list and card scrolls under a finger), pinch zoom and
-   double-tap zoom go. The model's canvas sets touch-action none for itself and
-   does its own pinch. The viewport meta in index.html says the same for the
-   browsers that read it. */
+/* Pinch and double tap zoom go, panning stays; the canvas does its own pinch. */
 html,
 body {
   touch-action: pan-x pan-y;
@@ -45,9 +9,8 @@ body {
 html {
   -webkit-tap-highlight-color: transparent;
 }
-/* A long press on a button is a held tool, not a request for the link and
-   image menu. Inherited, so it is turned back on for the places where text is
-   typed and the callout is how it is copied and pasted. */
+/* A long press is a held tool, not the link menu. Inherited, so it is turned back on where
+   text is typed. */
 body {
   -webkit-touch-callout: none;
 }
@@ -57,9 +20,8 @@ textarea,
   -webkit-touch-callout: default;
 }
 
-/* Things over the model that a finger drags. Without this the browser takes the
-   drag as a pan of whatever scrolls beneath, cancels the pointer and the label
-   or value never moves. */
+/* Dragged over the model: without this the browser pans what scrolls beneath and cancels
+   the pointer. */
 .sketch-dim,
 .sketch-glyph,
 .dim-input,
@@ -71,8 +33,8 @@ textarea,
   touch-action: none;
 }
 
-/* ---- hit areas ------------------------------------------------------------------ */
-
+/* Small targets grow to about 40px through a transparent pseudo element with a negative
+   inset, held back from scroller edges so no scrollbar appears and nothing reflows. */
 :root[data-pointer="touch"] {
   .tree-caret,
   .tree-eye,
@@ -118,8 +80,7 @@ textarea,
   .section-chip-btn::before,
   .sketch-dim::before,
   .sketch-glyph::before,
-  // ::before already draws the marker's line and the track's rail, so these
-  // three take ::after (the grip too, to keep the marker's two areas alike).
+  // ::before already draws the marker line and the track rail, so these take ::after.
   .timeline-marker::after,
   .timeline-marker .marker-grip::after,
   .profile-track::after {
@@ -127,36 +88,28 @@ textarea,
     position: absolute;
   }
 
-  // Items tree. The caret is 12px wide and, on a head that selects when it is
-  // clicked, the only way to open it. Both stay inside the card body's padding
-  // on the right and at the bottom, so neither can make the tree scroll.
+  // The 12px caret is the only way to open a head that selects on click. Both stay inside
+  // the card body's padding, so the tree never scrolls.
   .tree-caret::before {
     inset: -13px -14px;
   }
   .tree-eye::before {
     inset: -13px -6px;
   }
-  // The eye only brightens under a hovering mouse, and a finger never hovers,
-  // so at the resting 0.35 it is a control that looks switched off.
+  // A finger never hovers, so at the resting 0.35 the eye looks switched off.
   .tree-eye {
     opacity: 0.9;
   }
 
-  // Title bar. Each reaches the full 36px of the bar and no further, so none
-  // of them hangs over the model below it.
+  // Each reaches the full 36px bar and no further, never over the model.
   .tb-btn::before {
     inset: -6px -7px;
   }
   .menu-btn::before {
     inset: -8px -1px;
   }
-  // The segment clips its buttons to its rounded border, which would clip a
-  // hit area just as well. The clip is traded for the same rounding on the end
-  // buttons themselves (the inner radius of the group's border), which draws
-  // the same pill and lets the hit area out. The corners are round rather
-  // than the squircle the glass gives buttons, because round is the curve the
-  // group's border has and the clip used to cut. Between the two buttons
-  // nothing grows: they already touch.
+  // The segment's clip would clip the hit area too, so the end buttons take the group's
+  // round inner radius instead. The two buttons already touch.
   #workspace-toggle.segmented {
     overflow: visible;
   }
@@ -180,8 +133,7 @@ textarea,
     right: -6px;
   }
 
-  // Floating cards. The foot of a card is 4px from its clipped edge, so the
-  // button there grows less downwards.
+  // A card's foot is 4px from its clipped edge, so this grows less downwards.
   .float-card-close::before {
     inset: -6px;
   }
@@ -191,14 +143,13 @@ textarea,
   .float-tab::before {
     inset: -6px 0;
   }
-  // The whole row flips this switch too, so the switch only has to be easy to
-  // find by itself, not to take over the row.
+  // The whole row flips this switch, so it only has to be easy to find.
   .ft-switch::before {
     inset: -8px -4px;
   }
 
-  // History. The transport buttons sit 2px apart, so they grow up and down
-  // but sideways only into the gap, except outwards at the two ends.
+  // The transport buttons sit 2px apart, so they grow sideways only into the gap, and
+  // outwards at the two ends.
   .tl-btn::before {
     inset: -5px -1px;
   }
@@ -213,12 +164,8 @@ textarea,
   .timeline-related::before {
     inset: -7px 0;
   }
-  // The rollback marker. A strip the width of the row, kept short so the chips
-  // above and below it still take their own taps, and a grip-sized square
-  // around the grip itself where the marker is meant to be picked up. Both are
-  // raised over the chip that follows, which would otherwise cover their lower
-  // half. A tap that never moves on either lands in the gap the marker is
-  // already in, so it changes nothing.
+  // A short strip so the chips around keep their taps, and a square on the grip. Both sit
+  // over the next chip, which would cover their lower half.
   .timeline-marker::after {
     inset: 0 -6px;
     z-index: 1;
@@ -239,26 +186,22 @@ textarea,
     bottom: -9px;
   }
 
-  // Values and parameters.
   .params-del::before {
     inset: -9px -4px;
   }
   .target-edit::before {
     inset: -8px -2px;
   }
-  // The checkbox is already laid over the drawn switch, out of the flow, so it
-  // can simply be made bigger than the switch it stands in. A checkbox keeps
-  // its own width when only its edges are given, hence the explicit size.
+  // The checkbox already lies over the drawn switch, so it just grows. A checkbox keeps its
+  // own width when only its edges are given, hence the explicit size.
   .param-switch input {
     top: -9px;
     left: -5px;
     width: calc(100% + 10px);
     height: calc(100% + 18px);
   }
-  // Native sliders, so there is no thumb to restyle. Padding grows the box a
-  // press lands on and the negative margin hands the same space back: the UA
-  // margin on a range input is 2px, so -8px against 10px of padding leaves its
-  // outer box exactly the size it was.
+  // Padding grows the press area and the margin hands it back: the UA margin on a range is
+  // 2px, so -8px against 10px leaves the outer box unchanged.
   input[type="range"] {
     padding-top: 10px;
     padding-bottom: 10px;
@@ -266,8 +209,7 @@ textarea,
     margin-bottom: -8px;
   }
 
-  // Sketch palette. The delete cross only appears under a hovering mouse,
-  // which leaves a finger no way to reach it at all.
+  // The delete cross only appears under a hovering mouse, out of a finger's reach.
   .rel-del {
     visibility: visible;
   }
@@ -310,10 +252,8 @@ textarea,
     inset: -4px 0 -16px;
   }
 
-  // Sketch labels and constraint glyphs over the model. Each one grown is
-  // model that cannot be picked under it, so these stop at the 36px floor. The
-  // label's area goes beneath its own content (the label is a stacking context,
-  // it has a transform), or it would cover the value box a double tap opens.
+  // Each grown label hides model from picking, so these stop at 36px. The area goes under
+  // the label's content (it has a transform), or it would cover the value box.
   .sketch-dim::before {
     inset: -9px -4px;
     z-index: -1;
@@ -323,11 +263,8 @@ textarea,
   }
 }
 
-/* ---- hover ------------------------------------------------------------------------ */
-
-/* A finger leaves :hover set on whatever it last tapped until the next tap
-   elsewhere, so a hover that moves something leaves it moved. The colour
-   changes stay; they read as "the one I just pressed". */
+/* A finger leaves :hover set until the next tap elsewhere, so hover never moves anything
+   here; colour changes stay. */
 :root[data-pointer="touch"] {
   .timeline-node:hover {
     transform: none;
