@@ -1,12 +1,6 @@
-//! Loose ends of a sketch, the document side of the sketcher's red and amber
-//! dots (src/sketch/looseEnds.ts holds the same rules): an open end meets no
-//! other curve, an untied end meets one only by position, with no coincident
-//! or pointOnCurve holding it. `tie` adds those constraints AND moves the end
-//! onto what it touches, because the engine reads coordinates and never solves.
-//!
-//! Curve bodies a loose end can land on are lines, arcs, circles, rectangle
-//! edges and projected curves. The sketcher also measures to spline, slot and
-//! polygon bodies; here those only count through their ends.
+//! Loose ends of a sketch, the rules of src/sketch/looseEnds.ts: an open end meets no curve, an untied one
+//! meets one only by position. `tie` also moves the end onto what it touches, since the engine never solves.
+//! Unlike the sketcher, spline, slot and polygon bodies count here only through their ends.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -245,11 +239,8 @@ fn ref_key(e: &Value, p: &Value) -> Option<(String, i64)> {
     Some((e.as_str()?.to_string(), p.as_i64()?))
 }
 
-/// The profile ends a constraint holds. Coincidents join into classes, so a chain
-/// through a construction end still ties the curve ends on it. An end is tied when
-/// its class holds another profile end, or is put on a profile curve by a
-/// pointOnCurve or midpoint. Construction geometry, points and arc centres alone
-/// hold nothing the profile can close through.
+/// Coincidents join into classes, so a chain through a construction end still ties the curve ends on it.
+/// Construction geometry, points and arc centres alone hold nothing the profile can close through.
 fn tied_ends(f: &Value, ents: &[Ent]) -> BTreeSet<(String, i64)> {
     let mut parent: BTreeMap<(String, i64), (String, i64)> = BTreeMap::new();
     for c in constraints(f) {
@@ -475,9 +466,8 @@ pub struct Tied {
     pub left: LooseEnds,
 }
 
-/// Tie every tieable untied end: a coincident (and the end copied onto the
-/// one it touches, bit for bit) or a pointOnCurve (and the end projected onto
-/// the curve). A pair seen from both ends, or a ring at one corner, is tied once.
+/// Copies a coincident end onto its partner bit for bit, projects a pointOnCurve end onto the curve.
+/// A pair seen from both ends, or a ring at one corner, is tied once.
 pub fn tie(doc: &mut Doc, sketch: &str, tolerance: Option<f64>) -> Result<Tied, String> {
     let le = find(doc, sketch, tolerance)?;
     let tol = le.tolerance;

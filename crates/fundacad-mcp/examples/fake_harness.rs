@@ -1,9 +1,6 @@
-//! A stand in for `python -m fundacad_harness serve`, so `tests/ui_tools.rs`
-//! needs no Python, browser or engine. Its `open` reply says how it was started.
-//!
-//! A `do` step with `"do": "fail"` fails. With `FAKE_HARNESS_HOLD=1` it does
-//! not exit when stdin ends, so only something holding it can end it. With
-//! `FAKE_HARNESS_MISSING=1` it fails the way a Python without the package does.
+//! A stand in for `python -m fundacad_harness serve`, so `tests/ui_tools.rs` needs no Python, browser or engine.
+//! A `"do": "fail"` step fails, FAKE_HARNESS_HOLD=1 keeps it alive after stdin ends,
+//! FAKE_HARNESS_MISSING=1 fails like a Python without the package.
 
 use std::io::{BufRead, Write};
 

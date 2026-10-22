@@ -1,11 +1,5 @@
-//! `sketch_merge`: closed shapes of a sketch that overlap, replaced by the
-//! lines, arcs and circles that bound their union, so the sketch has one
-//! area where it had several cells and an extrude needs one seed, not one per
-//! cell.
-//!
-//! The engine draws the union (`sketchOutline`); this is the document side,
-//! what is refused before asking it and the rewrite after, kept free of the
-//! engine so it can be tested on its own.
+//! `sketch_merge`, the document side: what is refused before asking the engine for the union outline
+//! (`sketchOutline`) and the rewrite after, kept free of the engine so it can be tested on its own.
 
 use std::collections::BTreeSet;
 
@@ -13,8 +7,7 @@ use serde_json::{json, Map, Value};
 
 use crate::model::{self, Doc};
 
-/// What a merge will do, checked against the document before the engine is
-/// asked.
+/// What a merge will do, checked against the document before the engine is asked.
 #[derive(Debug, Clone)]
 pub struct Plan {
     pub sketch: String,
@@ -55,14 +48,11 @@ fn targeted(doc: &Doc, sketch: &str, ids: &[String], dropped: &[String]) -> Vec<
         .collect()
 }
 
-/// Whether an offset's pair names one of `ids`.
 fn pair_named(p: &Value, ids: &[String]) -> bool {
     names(&p["src"], ids) || names(&p["cpy"], ids)
 }
 
-/// The constraints of `f` a merge of `ids` drops: any that names one, and an
-/// offset none of whose pairs is left once those naming one go, as the app
-/// prunes it.
+/// Any constraint naming one of `ids`, and an offset left with none of its pairs, as the app prunes it.
 fn dropped_constraints(f: &Value, ids: &[String]) -> Vec<usize> {
     f.get("constraints")
         .and_then(Value::as_array)
@@ -190,7 +180,6 @@ pub fn plan(doc: &Doc, args: &Map<String, Value>) -> Result<Plan, String> {
     Ok(Plan { sketch: sid.to_string(), ids, base, bake })
 }
 
-/// What `apply` did, for the reply.
 #[derive(Debug, Default)]
 pub struct Merged {
     pub lines: Vec<String>,
@@ -206,8 +195,7 @@ pub struct Merged {
     pub whole: Vec<String>,
 }
 
-/// Replace the merged entities with the engine's outline, where the first of
-/// them was, and drop what named them.
+/// The outline goes where the first merged entity was, and whatever named the merged ones is dropped.
 pub fn apply(doc: &mut Doc, plan: &Plan, outline: &Value) -> Result<Merged, String> {
     let faces = outline.get("faces").and_then(Value::as_array).cloned().unwrap_or_default();
     if faces.is_empty() {

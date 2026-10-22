@@ -1,7 +1,5 @@
-//! Guide mode: the assistant points at controls and model areas in the user's
-//! open FundaCAD window, one step at a time, and waits for the user. It rides the
-//! live session (`session_guide`, docs/PROTOCOL.md), so it needs a window that
-//! shares its document and refuses everywhere else.
+//! Guide mode: the assistant points at controls and model areas in the user's open window, a step at a time.
+//! It rides the live session (`session_guide`, docs/PROTOCOL.md) and refuses without a window sharing its document.
 
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -100,7 +98,6 @@ fn stopped_text(stopped: &Value) -> String {
 }
 
 impl FundaCad {
-    /// The link to the user's window, or the reason there is none.
     async fn guide_link(&self) -> Result<(Arc<EngineLink>, String), CallToolResult> {
         if mode_from_env() == Mode::Standalone {
             return Err(failure(STANDALONE));
@@ -112,7 +109,6 @@ impl FundaCad {
         }
     }
 
-    /// One `session_guide`, its reply's result, or the failure to hand back.
     async fn guide_call(&self, link: &EngineLink, name: &str, command: Option<Value>) -> Result<Value, CallToolResult> {
         let mut payload = json!({"name": name});
         if let Some(c) = command {
@@ -141,7 +137,6 @@ impl FundaCad {
         Ok(res)
     }
 
-    /// A Stop the assistant has not been told about yet, as its sentence.
     fn unreported_stop(&self, guide: &Value) -> Option<String> {
         let stopped = guide.get("stopped").filter(|s| s.is_object());
         let n = stopped.and_then(|s| s["n"].as_i64()).unwrap_or(0);

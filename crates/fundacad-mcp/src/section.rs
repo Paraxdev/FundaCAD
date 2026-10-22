@@ -1,11 +1,5 @@
-//! `section`: a body cut by a plane, as the outline in the plane and the
-//! properties a beam calculation needs, area, centroid and second moments.
-//!
-//! Cut from the body's triangles rather than its exact faces: every triangle
-//! the plane crosses gives one segment, and the segments chain into closed
-//! loops because the faces of a solid share their edges' points. The triangles
-//! are asked for at a fine tolerance, so a 5 mm radius is a polygon whose area
-//! is within a fraction of a percent of the circle's.
+//! `section`: cut from the body's triangles, which chain into closed loops because a solid's faces share
+//! their edge points, meshed fine enough that a 5 mm circle's area is within a fraction of a percent.
 
 use std::collections::HashMap;
 
@@ -17,8 +11,7 @@ use crate::mesh::MeshBody;
 /// The chord tolerance the section asks the engine to mesh at, in mm.
 pub const TOLERANCE: f64 = 0.01;
 
-/// A cutting plane: a point on it, its normal, and the two in-plane axes the
-/// outline is written in, with u x v = n.
+/// A point on the plane, its normal, and the in-plane axes the outline is written in, with u x v = n.
 #[derive(Debug, Clone)]
 pub struct Plane {
     pub origin: [f64; 3],
@@ -129,9 +122,8 @@ pub struct Cut {
     pub on_face: Option<bool>,
 }
 
-/// Closer to the plane than this, in mm, a mesh point is taken to be on it.
-/// The mesh is single precision, so a point modelled on the plane can land
-/// a few hundred nanometres either side of it, more far from the origin.
+/// Closer than this in mm, a mesh point is on the plane: the mesh is single precision, so a point modelled
+/// on it can land a few hundred nanometres either side, more far from the origin.
 const ON_PLANE: f64 = 1e-5;
 
 /// How close counts as on the plane for this body: single precision is good
@@ -154,7 +146,6 @@ fn key(p: [f64; 2]) -> (i64, i64) {
     ((p[0] * 1e5).round() as i64, (p[1] * 1e5).round() as i64)
 }
 
-/// Cut a body's triangles with the plane.
 pub fn cut(body: &MeshBody, plane: &Plane) -> Cut {
     let tol = on_plane(body, plane);
     let (mut out, coplanar) = cut_at(body, plane, 0.0, tol);
@@ -169,10 +160,8 @@ pub fn cut(body: &MeshBody, plane: &Plane) -> Cut {
     if !coplanar {
         return out;
     }
-    // The plane lies on a face and nothing crosses it: a points-on-the-plane
-    // rule has to pick a side, so the bottom face of a part would read as a
-    // miss while its top face cut fine. Cut a hair inside the body instead,
-    // on whichever side the material is.
+    // The plane lies on a face and nothing crosses: the on-plane rule would make a bottom face miss while the
+    // top face cuts, so cut a hair inside the body on whichever side the material is.
     let nudge = 20.0 * tol;
     let mut best: Option<(Cut, bool)> = None;
     for shift in [nudge, -nudge] {
@@ -400,7 +389,6 @@ fn num4(x: f64) -> String {
     g_format(round(x, digits))
 }
 
-/// One body's cut, as text.
 pub fn report(id: &str, name: &str, plane: &Plane, cut: &Cut, outline: bool) -> String {
     let who = if name.is_empty() || name == id { id.to_string() } else { format!("{id} \"{name}\"") };
     if cut.loops.is_empty() && cut.open.is_empty() {
