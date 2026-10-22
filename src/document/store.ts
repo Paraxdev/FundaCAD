@@ -387,6 +387,18 @@ export function withoutDisplayName(f: Feature): Feature {
 }
 const unnamed = new WeakMap<Feature, Feature>();
 
+/** A version's document. An older app recorded the section cut in it as a key it did not know, but a cut is a view,
+ *  not part of the model. */
+function versionSnapshot(repo: VersionRepo, id: string): Snapshot {
+  const { sectionView: _, ...doc } = snapshotOf(repo, id) as Snapshot & { sectionView?: unknown };
+  return doc;
+}
+
+function restText(snapshot: Snapshot): string {
+  const { features: _, ...rest } = snapshot;
+  return JSON.stringify(rest);
+}
+
 export class DocumentStore {
   private doc: CadDocument;
   private undoStack: UndoEntry[] = [];
@@ -2452,8 +2464,13 @@ export class DocumentStore {
 
   /** What changed since the current branch's newest version, or null with no versions. */
   changesSinceVersion(): VersionDiff | null {
-    const head = this.repo ? headOf(this.repo) : undefined;
-    return head && this.repo ? diffAgainstWorking(this.repo, head.id, this.workingSnapshot()) : null;
+    const repo = this.repo;
+    const head = repo ? headOf(repo) : undefined;
+    if (!repo || !head) return null;
+    const working = this.workingSnapshot();
+    const diff = diffAgainstWorking(repo, head.id, working);
+    if (diff.settings && restText(versionSnapshot(repo, head.id)) === restText(working)) diff.settings = false;
+    return diff;
   }
 
   /** Put a version's document back in front of the user. Undoable like any
@@ -2461,7 +2478,7 @@ export class DocumentStore {
   restoreVersion(id: string) {
     const repo = this.repo;
     if (!repo) return;
-    const snapshot = snapshotOf(repo, id);
+    const snapshot = versionSnapshot(repo, id);
     const carried = this.carriedSections;
     this.load(JSON.stringify(snapshot), { replace: true });
     this.carriedSections = carried;
