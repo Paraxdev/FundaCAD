@@ -61,9 +61,8 @@ fn vertices(face: &Shape) -> Vec<DVec3> {
     kernel::subshapes(face, Kind::Vertex).iter().filter_map(kernel::bbox).map(|b| dvec3(b[0], b[1], b[2])).collect()
 }
 
-/// Whether `_refacet_clean` would merge any faces: region growth from the
-/// largest faces over edge neighbours whose vertices all lie within `tol` of
-/// the anchor's plane.
+/// Whether `_refacet_clean` would merge any faces: region growth from the largest faces over edge neighbours
+/// whose vertices all lie within `tol` of the anchor's plane.
 fn has_debris(shape: &Shape, tol: f64) -> bool {
     let fmap = shape.shape_map(ShapeType::Face);
     let emap = shape.ancestor_map(ShapeType::Edge, ShapeType::Face);

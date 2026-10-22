@@ -1,10 +1,5 @@
-//! Sketches turned into located profiles and region cells, replacing
-//! the Python engine's `sketch_build.py` (`_build_sketch`, `_entity_edges`,
-//! `_expand_pattern`, `_faces_from_edges`, `_subdivide_faces`, `_region_*`) and
-//! the `split_profile_cells` rule of the Python engine's `face_footprint.py`.
-//!
-//! A sketch follows the face it was made on through face_anchor.rs, and its
-//! text entities are drawn by the text module.
+//! Sketches turned into located profiles and region cells, `_build_sketch` and the `_region_*` helpers of
+//! sketch_build.py with `split_profile_cells` of face_footprint.py.
 
 use std::collections::HashMap;
 use std::f64::consts::PI;
@@ -904,10 +899,8 @@ struct Cell {
     area: f64,
 }
 
-/// The shapes a profile on a plane can be cut by, those whose box meets the
-/// plane and, when given, the `reach` box, with the model's box diagonal the
-/// cut tolerance scales by. Coarse boxes: the answer is the same, and an exact
-/// box of a big import that was never meshed is seconds.
+/// The shapes a profile on a plane can be cut by (box meets the plane and `reach`), with the model's diagonal the
+/// cut tolerance scales by. Coarse boxes give the same answer, an exact box of an unmeshed big import takes seconds.
 fn cut_candidates<'a>(
     shapes: &[&'a Shape],
     origin: [f64; 3],
@@ -971,9 +964,8 @@ fn region_cells(ctx: &Ctx, entry: &SketchEntry) -> Vec<Cell> {
     faces.into_iter().map(|face| Cell { bbox: kernel::bbox(&face), area: kernel::area(&face), face }).collect()
 }
 
-/// The `profileCuts` op: the lines the built model cuts a profile along on one
-/// plane, the same lines `region_cells` cuts with, so the sketch overlay offers
-/// exactly the areas a feature will build.
+/// The `profileCuts` op: the lines the built model cuts a profile along on one plane, the ones `region_cells`
+/// uses, so the sketch overlay offers exactly the areas a feature will build.
 pub fn profile_cuts_result(req: &serde_json::Map<String, serde_json::Value>) -> fundacad_protocol::JobResult {
     use serde_json::json;
     let vec3 = |k: &str| -> Option<[f64; 3]> {
@@ -1092,10 +1084,8 @@ pub fn frame_for_normal(origin: [f64; 3], normal: [f64; 3]) -> Frame {
     Frame::new(origin, hint, normal)
 }
 
-/// The `sketchOutline` op: the union of some of a sketch's closed shapes, as
-/// the lines, arcs and circles that bound it, for the MCP `sketch_merge`.
-/// Each face of the union comes back with its loops, outer first, and a point
-/// inside it in world coordinates, which is what an extrude's `regions` take.
+/// The `sketchOutline` op for MCP `sketch_merge`: the union of some closed shapes as bounding lines, arcs and
+/// circles. Each face comes back with its loops, outer first, and a world point inside it for an extrude's `regions`.
 pub fn sketch_outline_result(
     req: &serde_json::Map<String, serde_json::Value>,
     watch: &dyn crate::builder::Watch,
@@ -1159,9 +1149,8 @@ struct OutlineFace {
     loops: Vec<Vec<serde_json::Value>>,
 }
 
-/// The plane the sketch builds on, as `build` picks it: the face it follows,
-/// else its datum, else its plane. Following a face or a datum needs the
-/// model built, so only those rebuild; `None` when that fails.
+/// The plane the sketch builds on, as `build` picks it: the followed face, its datum, else its plane. Only the
+/// first two need the model rebuilt, `None` when that fails.
 fn outline_frame(
     req: &serde_json::Map<String, serde_json::Value>,
     f: &SketchFeature,
@@ -1196,10 +1185,8 @@ fn weld(reps: &mut Vec<[f64; 2]>, p: [f64; 2], tol: f64) -> [f64; 2] {
     p
 }
 
-/// A point well inside `face` and outside every shape of `avoid`, which an
-/// extrude's `regions` would otherwise pick instead: the centroid when it
-/// qualifies, else the middle of the widest run of qualifying samples on a
-/// few lines across the face, checked again before it is given.
+/// A point well inside `face` and outside every shape of `avoid`, which an extrude's `regions` would pick instead:
+/// the centroid if it qualifies, else the middle of the widest qualifying run on a few scan lines, rechecked.
 fn inside_point(face: &Shape, avoid: &[Shape]) -> Option<[f64; 2]> {
     let good = |x: f64, y: f64| {
         kernel::face_contains(face, [x, y, 0.0], 1e-7)
@@ -1250,9 +1237,8 @@ fn inside_point_grid(
     runs.into_iter().map(|(_, p)| p).find(|p| good(p[0], p[1]) && strict(p[0], p[1]))
 }
 
-/// The areas closed shapes bound: a rectangle, circle or ellipse each its own,
-/// and lines, arcs, polygons and slots by the cells their edges cut the plane
-/// into, so loops that share an edge or branch at a corner are all found.
+/// The areas closed shapes bound: a rectangle, circle or ellipse each its own, and lines, arcs, polygons and slots
+/// by the cells their edges cut the plane into, so loops sharing an edge or branching at a corner are all found.
 fn areas(items: &[&Item]) -> FResult<Vec<Shape>> {
     let mut faces = Vec::new();
     let mut edges = Vec::new();

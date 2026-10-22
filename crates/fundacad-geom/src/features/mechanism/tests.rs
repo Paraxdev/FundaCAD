@@ -367,9 +367,8 @@ fn moved_faces_keep_their_owners() {
     }
 }
 
-/// The crank-rocker driven at the rocker's ground pin instead, with `zero`
-/// the angle the pin reads as modelled (both sides then carry an x), or no x
-/// at all.
+/// The crank-rocker driven at the rocker's ground pin instead, with `zero` the angle the pin reads as modelled
+/// (both sides then carry an x), or no x at all.
 fn rocker_driven(angle: f64, zero: Option<f64>) -> Value {
     let mut f = four_bar(0.0, true, &[], &[]);
     let o4 = DVec2::new(GROUND, 0.0);

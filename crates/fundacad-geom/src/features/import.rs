@@ -1,8 +1,5 @@
-//! The import feature, the Python engine's `import_feature.py`: the stored geometry of an
-//! imported file, bound to its assembly manifest when it has one.
-//!
-//! Not here: `heal_snapped.heal_stored`, which repairs blobs written before the
-//! import mesh gate existed. Blobs this engine writes pass that gate already.
+//! The import feature, import_feature.py: an imported file's stored geometry, bound to its assembly manifest.
+//! `heal_snapped.heal_stored` is not ported, it repairs blobs from before the mesh gate this engine's blobs pass.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};

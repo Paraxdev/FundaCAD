@@ -1,9 +1,5 @@
-//! Revolve about a world axis or a stored line, the Python engine's `revolve_feature.py`
-//! `_handle_revolve` and `_revolve_axis`.
-//!
-//! Not ported yet: re-resolving `axisEdge` against the bodies; an axis aimed at
-//! an edge uses its cached line, which is where the Python engine falls back to
-//! when that edge stops resolving.
+//! Revolve about a world axis or a stored line, revolve_feature.py. `axisEdge` is not re-resolved yet: its cached
+//! line is used, which is the Python engine's fallback when that edge stops resolving.
 
 use fundacad_core::schema::{AxisSpec, Revolve};
 use opencascade::primitives::Shape;

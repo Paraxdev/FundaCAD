@@ -1,14 +1,7 @@
-//! Moving faces: press/pull and offset face, the Python engine's `solid_ops.py` `_press_pull`,
-//! `_offset_faces`, `_thicken_press_pull`, `_sweep_press_pull` and the
-//! handlers of the Python engine's `builder.py`.
-//!
-//! The Python engine runs the whole-body BRepOffset pass in offset_child.py
-//! because it has crashed its worker. Here it runs in process: the engine is
-//! itself a supervised worker, the freeform faces measured to crash are refused
-//! before any offset (`guard_offsetable`, the analytic-only dispatch below),
-//! and on OCCT 7.8.1 the chamfered cylinder offset_child.py documents refuses
-//! with an error instead of crashing. The BREP round trip the child did is kept,
-//! since it changes which offsets the kernel accepts.
+//! Moving faces: press/pull and offset face, `_press_pull` and friends of solid_ops.py. The BRepOffset pass
+//! runs in process, unlike offset_child.py: the engine is a supervised worker, faces measured to crash are refused
+//! first (`guard_offsetable`), and OCCT 7.8.1 refuses the chamfered cylinder rather than crashing. The child's
+//! BREP round trip is kept, since it changes which offsets the kernel accepts.
 
 use fundacad_core::schema::{OffsetFace, Operation, PressPull, Selector};
 use glam::{dvec3, DVec3};
@@ -162,16 +155,9 @@ fn slab_face(slab: &Shape, face: &Shape, dir: DVec3, along: f64) -> Option<Shape
         .find(|f| normal(f).dot(dir) > 0.999 && ((centre(f) - origin).dot(dir) - along).abs() < 0.5 * along)
 }
 
-/// A flat face moved along its normal with each face around it carried along
-/// its own surface to meet it, so a sloped side keeps its slope and a curved
-/// one keeps its curve, instead of a straight wall rising off the old edge.
-///
-/// Offsetting the face in the body itself fails once it runs into another part
-/// of the body, so the offset only takes a first short step there. That step's
-/// slab is bounded by the face's own neighbours and nothing else, so pushed on
-/// alone it goes as far as asked unless its sides meet, and merging it with
-/// the body settles whatever it ran into. None where the face cannot follow its
-/// neighbours at all, and the caller extrudes it straight.
+/// A flat face moved along its normal with each neighbour carried along its own surface to meet it, so a slope
+/// stays a slope. Offsetting in the body fails once it hits another part, so only a short first step is offset
+/// there and its slab is pushed on alone, then merged. None when the face cannot follow its neighbours at all.
 fn follow_neighbours(part: &Shape, face: &Shape, d: f64) -> FResult<Option<Shape>> {
     // A round running into the face tangentially has no slope to carry on, so
     // the face sinks or rises inside it as a straight recess or boss.
@@ -208,9 +194,8 @@ fn follow_neighbours(part: &Shape, face: &Shape, d: f64) -> FResult<Option<Shape
     Ok(fused(part, &grown, d > 0.0).ok().filter(|out| right_way(part, out, d)))
 }
 
-/// The slab with its front face gone and its sides carried on until they meet
-/// in a ridge or a point: a push past where the sides close in, which goes no
-/// further however far it is asked to.
+/// The slab with its front face gone and its sides carried on until they meet in a ridge or a point: a push past
+/// where the sides close in, which goes no further however far it is asked.
 fn collapsed(slab: &Shape, front: &Shape, face: &Shape, dir: DVec3, reach: f64) -> Option<Shape> {
     let front = front.as_face()?;
     let out = slab.remove_features(&[&front], true, &ProgressRange::detached()).ok()?.shape;
@@ -265,9 +250,8 @@ fn built(r: Resize) -> FResult<Shape> {
     }
 }
 
-/// A cylinder, cone, sphere or torus face resized about its own axis or
-/// centre. Where that cannot be built, a face nothing runs smoothly into is
-/// offset by the kernel instead, as far as asked and checked the same way.
+/// A cylinder, cone, sphere or torus face resized about its own axis or centre. Where that cannot be built, a face
+/// nothing runs smoothly into is offset by the kernel instead, checked the same way.
 fn resize_round(part: &Shape, face: &Shape, d: f64, follow: bool) -> FResult<Shape> {
     let r = match resize::resize(part, std::slice::from_ref(face), d, follow) {
         // Adding material never cuts a body apart. A sphere fused with the
@@ -288,11 +272,9 @@ fn resize_round(part: &Shape, face: &Shape, d: f64, follow: bool) -> FResult<Sha
     }
 }
 
-/// The selected faces that together are every face of one closed tangent
-/// run, such as all four faces of a slot, each run to be resized once, and
-/// which of `faces` that leaves nothing to do for: the run's faces, and the
-/// faces on the same surface as a round face picked before them, which move
-/// with it.
+/// The selected faces that make up a whole closed tangent run, such as a slot's four, each run to be resized
+/// once, and which of `faces` that leaves nothing to do for: the run's faces, and the faces on the surface of a
+/// round face picked before them, which move with it.
 fn whole_runs(part: &Shape, faces: &[Shape]) -> (Vec<Vec<Shape>>, Vec<bool>) {
     let n = faces.len();
     let mut taken = vec![false; n];
@@ -600,11 +582,8 @@ fn inner_point(face: &Shape) -> Option<DVec3> {
     })
 }
 
-/// Did pushing `pushed` in eat into a face it does not touch? An offset curved
-/// face grows or shrinks as it moves, so it can run out through the far side
-/// of a thin wall. What it removed is bounded by the pushed face, its
-/// neighbours, which it legitimately trims, and the faces it made; any other
-/// face of the body on that boundary is where it broke out.
+/// Whether pushing `pushed` in ate into a face it does not touch: an offset curved face changes size as it moves
+/// and can break out through a thin wall. Only the pushed face, its neighbours and new faces may bound the removal.
 fn broke_through(before: &Shape, after: &Shape, pushed: &Shape) -> bool {
     const TOL: f64 = 1e-3;
     let Ok(removed) = kernel::boolean_op(before, &[after], BoolKind::Cut) else {

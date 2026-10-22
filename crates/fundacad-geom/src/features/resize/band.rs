@@ -31,9 +31,8 @@ pub(super) fn cone_tool(s: &Surf, delta: f64, p: DVec3, bounds: (f64, f64)) -> O
     kernel::revolve(&profile, apex2.to_array(), a.to_array(), 360.0).ok()
 }
 
-/// The solid on the centre side of the group's surface offset by `delta`,
-/// reaching `ext` past the group along its axis but not far past `body`.
-/// None where the offset surface does not exist.
+/// The solid on the centre side of the group's surface offset by `delta`, reaching `ext` past the group along its
+/// axis but not far past `body`. None where the offset surface does not exist.
 pub(super) fn long_tool(group: &Shape, s: &Surf, delta: f64, ext: f64, body: &Shape) -> Option<Shape> {
     let margin = 1.0 + 2.0 * delta.abs();
     match *s {
