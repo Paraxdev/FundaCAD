@@ -17,6 +17,7 @@ function rig() {
     busy: false,
     inFlight: 0,
     idle: true,
+    gpu: true,
     open: true,
     trace: "idle",
     samples: 0,
@@ -50,6 +51,9 @@ function rig() {
     viewport: {
       get renderIdle() {
         return state.idle;
+      },
+      get gpuIdle() {
+        return state.gpu;
       },
       get traceStatus() {
         return { state: state.trace, samples: state.samples };
@@ -120,12 +124,19 @@ describe("settle", () => {
         s.idle = false;
       },
     ],
+    [
+      "a GPU still drawing the frames it was sent",
+      (s: ReturnType<typeof rig>["state"]) => {
+        s.gpu = false;
+      },
+    ],
   ] as const) {
     it(`holds for ${what}`, async () => {
       const r = rig();
       set(r.state);
       const { ms } = await r.run({}, (n) => {
-        if (n === 30) Object.assign(r.state, { pending: false, building: false, busy: false, inFlight: 0, idle: true });
+        if (n === 30)
+          Object.assign(r.state, { pending: false, building: false, busy: false, inFlight: 0, idle: true, gpu: true });
       });
       expect(ms).toBeGreaterThanOrEqual(30 * 16 + 3 * 16);
     });
@@ -146,6 +157,14 @@ describe("settle", () => {
       if (n === 20) Object.assign(r.state, { trace: "done", samples: 8 });
     });
     expect(ms).toBeGreaterThanOrEqual(20 * 16);
+  });
+
+  it("names a GPU that never finishes when it gives up", async () => {
+    const r = rig();
+    r.state.gpu = false;
+    const err = await r.run({ timeoutMs: 500 }).catch((e: unknown) => e);
+    expect((err as HarnessError).kind).toBe("SettleTimeout");
+    expect((err as Error).message).toMatch(/GPU still drawing/);
   });
 
   it("gives up with one line on what is still going on", async () => {

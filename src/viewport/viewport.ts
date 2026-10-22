@@ -239,6 +239,11 @@ export class Viewport {
     );
   }
 
+  /** The GPU has finished every frame sent. A software renderer can be seconds behind renderIdle. */
+  get gpuIdle(): boolean {
+    return this.fence.idle();
+  }
+
   readonly scene: SceneBundle;
   readonly rig: CameraRig;
   private cube: ViewCube;

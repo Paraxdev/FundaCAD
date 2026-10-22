@@ -2,14 +2,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { covered, findControl, HarnessError, stamp, toolPath } from "../../src/harness/locate";
 import { walkControls } from "../../src/harness/screenTree";
 import type { RailEntry } from "../../src/ui/railDefs";
-import { mountApp, rect } from "./fixture";
+import { APP_HTML, mountApp, rect } from "./fixture";
 
 beforeEach(() => mountApp());
 
 const walk = () => walkControls(document, { rect });
-const fail = (target: string): HarnessError => {
+const fail = (target: string, opts: Parameters<typeof findControl>[2] = {}): HarnessError => {
   try {
-    findControl(walk(), target);
+    findControl(walk(), target, opts);
   } catch (e) {
     return e as HarnessError;
   }
@@ -32,6 +32,34 @@ describe("findControl", () => {
     expect(findControl(walk(), "Robot").ref).toBe("folder:n:f1/0");
     expect(findControl(walk(), "Plate").ref).toBe("item:body1");
     expect(findControl(walk(), "eye:body1").role).toBe("eye");
+  });
+
+  it("looks for a folder first when a folder is wanted, as an import's History step shares its assembly name", () => {
+    const robotStep = APP_HTML.replace(
+      'data-id="s1"><span class="t-name">Sketch 1',
+      'data-id="f1"><span class="t-name">Robot',
+    );
+    mountApp(robotStep);
+    const folder = (target: string) => {
+      const c = findControl(walk(), target, { folder: true });
+      return [c.ref, c.label];
+    };
+    expect(fail("Robot").candidates).toEqual(['feature:f1 "Robot"', 'folder:n:f1/0 "Robot"']);
+    expect(folder("Robot")).toEqual(["folder:n:f1/0", "Robot"]);
+    expect(folder("rob")).toEqual(["folder:n:f1/0", "Robot"]);
+    expect(folder("Extrude 1")).toEqual(["feature:e1", "Extrude 1"]);
+    expect(folder("feature:f1")).toEqual(["feature:f1", "Robot"]);
+    expect(fail("Gripper", { folder: true }).kind).toBe("NotFound");
+
+    mountApp(
+      robotStep.replace(
+        '<div class="feature-row tree-child" data-id="body1">',
+        '<div class="tree-folder" data-key="n:f7/0" aria-expanded="true"><span class="tree-label">Robot</span></div>$&',
+      ),
+    );
+    const two = fail("Robot", { folder: true });
+    expect([two.kind, two.candidates]).toEqual(["Ambiguous", ['folder:n:f1/0 "Robot"', 'folder:n:f7/0 "Robot"']]);
+    expect(folder("Robot#2")).toEqual(["folder:n:f7/0", "Robot"]);
   });
 
   it("lists the refs when a label matches several", () => {

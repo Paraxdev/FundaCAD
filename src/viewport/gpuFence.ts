@@ -20,7 +20,7 @@ export class GpuFence {
     const gl = this.gl;
     const s = this.sync;
     if (!gl || !s) return true;
-    if (gl.getSyncParameter(s, gl.SYNC_STATUS) !== gl.SIGNALED) return false;
+    if (gl.getSyncParameter(s, gl.SYNC_STATUS) !== gl.SIGNALED && !gl.isContextLost()) return false;
     gl.deleteSync(s);
     this.sync = null;
     return true;

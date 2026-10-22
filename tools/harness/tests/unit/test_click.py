@@ -97,3 +97,31 @@ def test_type_with_enter_says_when_the_app_refused_the_value():
     with pytest.raises(StepFailed, match=r'field:size "Size" did not take "M13" on Enter: Size: "M13" is not a size'):
         s.type("Size", "M13", enter=True)
     s.close()
+
+
+def test_expand_asks_the_page_for_a_folder_and_click_for_any_control():
+    asked = []
+
+    class Spy(One):
+        def call(self, method, **args):
+            if method == "locate":
+                asked.append(args)
+            return super().call(method, **args)
+
+    carets = []
+    row = types.SimpleNamespace(
+        get_attribute=lambda name: "false",
+        click=lambda **k: None,
+        locator=lambda sel: types.SimpleNamespace(click=lambda **k: carets.append(sel)),
+    )
+    s = Session(engine=sys.executable, chrome=sys.executable, repo=REPO, open=False)
+    s.bridge = Spy({"ref": "folder:n:f1/0", "label": "Robot", "region": "items"})
+    s.page = types.SimpleNamespace(locator=lambda sel: row)
+    s.settle = lambda *a, **k: "settled"
+    try:
+        assert str(s.expand("Robot")).startswith('opened folder:n:f1/0 "Robot"')
+        s.click("Robot")
+    finally:
+        s.close()
+    assert asked == [{"target": "Robot", "folder": True}, {"target": "Robot"}]
+    assert carets == [".tree-caret"]
