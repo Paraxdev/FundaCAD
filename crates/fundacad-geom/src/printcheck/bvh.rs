@@ -1,6 +1,5 @@
-//! A bounding-box tree over every checked body's triangles, for the short
-//! rays the wall and gap checks cast. A uniform grid was the other choice, but
-//! one 100 mm triangle on a flat face would land in thousands of cells.
+//! A bounding-box tree over the checked bodies' triangles for the short wall and gap rays. A uniform
+//! grid would put one 100 mm triangle of a flat face in thousands of cells.
 
 /// A triangle the tree holds: its corners, and which body and triangle of
 /// that body it is.
@@ -76,9 +75,8 @@ impl Bvh {
         &self.tris[i]
     }
 
-    /// The nearest triangle the segment `o + t d`, `t_min <= t <= t_max`,
-    /// passes through, other than `skip` (an index into the tree's list) and
-    /// any of a body `keep` turns down.
+    /// The nearest triangle the segment `o + t d`, `t_min <= t <= t_max`, passes through, other than `skip`
+    /// (a tree list index) and any of a body `keep` turns down.
     pub fn first_hit(
         &self,
         o: [f64; 3],

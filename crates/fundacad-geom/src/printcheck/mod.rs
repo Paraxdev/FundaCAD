@@ -1,13 +1,5 @@
-//! `printability`: what will go wrong when the part is printed in layers
-//! of extruded plastic, found while it is still a model. Overhangs past the
-//! angle that prints unsupported, walls and floors too thin for the nozzle
-//! and the layer, gaps narrow enough to fuse, long bridges, and shells that
-//! are not closed solids.
-//!
-//! Measured on the triangles of a fine mesh, as `section` is: an STL is
-//! triangles too, so this checks what will actually be printed. Thickness
-//! and gaps are short rays from points spread over the surface, into the
-//! material and out of it, stopping at the first triangle.
+//! `printability`: overhangs, thin walls and floors, gaps that fuse, long bridges and open shells, found
+//! on a fine mesh's triangles as an STL prints them, by short rays from points over the surface.
 
 pub mod bridge;
 pub mod bvh;
@@ -48,8 +40,6 @@ pub(crate) type EdgeKey = (Key3, Key3);
 fn key3(p: [f64; 3]) -> Key3 {
     ((p[0] * 1e5).round() as i64, (p[1] * 1e5).round() as i64, (p[2] * 1e5).round() as i64)
 }
-
-// --- settings ------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Checks {
@@ -152,8 +142,6 @@ pub fn settings_of(args: &Map<String, Value>) -> Result<Settings, String> {
     })
 }
 
-// --- the bodies ------------------------------------------------------------------
-
 /// One body's triangles, ready to measure, and which way is up for it.
 pub struct Body {
     pub id: String,
@@ -238,9 +226,8 @@ impl Body {
         m
     }
 
-    /// Whether a face curves round the air rather than round the material,
-    /// as a hole does and a rounded edge does not: its normals point in
-    /// towards the middle of it.
+    /// Whether a face curves round the air, as a hole does and a rounded edge does not: its normals point
+    /// in towards its middle.
     pub fn hollow(&self, face: u32) -> bool {
         let tris: Vec<usize> = (0..self.tris.len()).filter(|&t| self.face[t] == face).collect();
         let (c, _) = spread(self, &tris);
@@ -282,9 +269,8 @@ impl Body {
     }
 }
 
-/// Points spread evenly over a triangle, each with the area it stands for:
-/// the centres of the n x n smaller triangles it splits into. They never
-/// lie on an edge, where a ray could slip between two triangles.
+/// The centres of the n x n smaller triangles a triangle splits into, each with its area. They never lie
+/// on an edge, where a ray could slip between two triangles.
 pub(crate) fn sub_samples(a: [f64; 3], b: [f64; 3], c: [f64; 3], area: f64, spacing: f64) -> Vec<([f64; 3], f64)> {
     let n = ((2.0 * area).sqrt() / spacing).ceil().clamp(1.0, 400.0) as usize;
     let (ab, ac) = (add(b, a, -1.0), add(c, a, -1.0));
@@ -302,8 +288,6 @@ pub(crate) fn sub_samples(a: [f64; 3], b: [f64; 3], c: [f64; 3], area: f64, spac
     }
     out
 }
-
-// --- findings ------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Kind {
@@ -348,9 +332,8 @@ pub struct Topology {
     pub fault: Option<String>,
 }
 
-/// Run the checks. `together` is an as-modelled check, where the bodies
-/// print as one object and gaps between them matter. `stop` is asked between
-/// bodies; once it says so the findings so far come back.
+/// `together` is an as-modelled check where the bodies print as one and gaps between them matter.
+/// `stop` is asked between bodies, once it says so the findings so far come back.
 pub fn run(
     bodies: &[Body],
     s: &Settings,
@@ -571,9 +554,8 @@ struct Cluster {
 }
 
 impl Cluster {
-    /// The thinnest measure, and where: the middle of the points within a
-    /// hundredth of it, so a wall of one even thickness is pointed at its
-    /// middle rather than at whichever point came first.
+    /// The thinnest measure, pointed at the middle of the points within a hundredth of it, so an even wall
+    /// is pointed at its middle rather than at whichever point came first.
     fn least(&self) -> (f64, [f64; 3], f64, f64) {
         let least = self.points.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
         let held = self.points.iter().filter(|p| p.0 <= least).map(|p| p.3).fold(0.0, f64::max);
@@ -600,10 +582,8 @@ impl Cluster {
 /// wider and a corner's two sides would count: a 45 degree rim is not a wall.
 const FACING: f64 = -0.9;
 
-/// How far under its limit a measure has to be to count: a round wall's
-/// facets stand a little closer than its curves, and a part far from the
-/// origin carries a few microns of noise, so a wall modelled at the limit
-/// must not be reported as under it.
+/// A round wall's facets stand a little closer than its curves and a far part carries microns of noise,
+/// so a wall modelled at the limit must not be reported as under it.
 const SLACK: f64 = 0.99;
 
 /// Walls, floors and gaps, by rays from points over every surface.
@@ -702,10 +682,8 @@ fn thickness(
         .collect()
 }
 
-/// An edge only one triangle uses, on a body the B-rep calls closed: a face
-/// with no triangles or two faces meshed apart, which an STL export has too.
-/// The face named is the lowest one on such an edge, so it is the same face
-/// on every run.
+/// An edge one triangle uses on a body the B-rep calls closed, as an STL export has too. The lowest face on
+/// such an edge is named, so it is the same face every run.
 fn mesh_hole(bi: usize, b: &Body, edges: &HashMap<EdgeKey, Vec<usize>>) -> Option<Finding> {
     let mut lo = [f64::INFINITY; 3];
     let mut hi = [f64::NEG_INFINITY; 3];
@@ -740,9 +718,7 @@ fn mesh_hole(bi: usize, b: &Body, edges: &HashMap<EdgeKey, Vec<usize>>) -> Optio
     })
 }
 
-/// The triangles without area a body's mesh still holds, by the measure
-/// mesh::flat removes them with. One finding a body, on the lowest face that
-/// has one.
+/// By the measure mesh::flat removes them with. One finding a body, on the lowest face that has one.
 fn flat_triangles(bi: usize, b: &Body) -> Option<Finding> {
     let limit = crate::mesh::flat::limit(b.pts.iter().flatten().copied());
     let mut lo = [f64::INFINITY; 3];
@@ -777,8 +753,6 @@ fn flat_triangles(bi: usize, b: &Body) -> Option<Finding> {
         limit: 0.0,
     })
 }
-
-// --- the reply ------------------------------------------------------------------
 
 /// How many of each kind a body lists before the rest are only counted.
 const SHOWN: usize = 5;
