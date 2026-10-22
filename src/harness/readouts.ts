@@ -11,7 +11,7 @@ import { sketchRail } from "../ui/railDefs";
 export interface ReadHost {
   store: Pick<
     DocumentStore,
-    "document" | "buildState" | "rollbackIndex" | "isSuppressed" | "isBodyVisible" | "bodyMaterialId" | "bodyColorSlot" | "busyState" | "previewError" | "canUndo" | "canRedo" | "dirty" | "fileName"
+    "document" | "buildState" | "rollbackIndex" | "isSuppressed" | "isBodyVisible" | "bodyMaterialOf" | "bodyColorSlot" | "busyState" | "previewError" | "canUndo" | "canRedo" | "dirty" | "fileName"
   >;
   viewport: Pick<Viewport, "getSelectedBodies" | "getSelectedFaceIds" | "selectedEdgeLines" | "faceIdToBodyId">;
 }
@@ -61,7 +61,7 @@ export function bodies(h: ReadHost): BodyRow[] {
     name: b.name,
     faces: b.faceCount,
     visible: h.store.isBodyVisible(b.id),
-    material: h.store.bodyMaterialId(b.id) ?? null,
+    material: h.store.bodyMaterialOf(b.id)?.name ?? null,
     slot: h.store.bodyColorSlot(b.id) ?? null,
     fault: b.fault ?? null,
   }));
