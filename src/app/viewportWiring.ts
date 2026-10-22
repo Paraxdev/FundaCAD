@@ -213,9 +213,9 @@ export function installViewportWiring(e: Engine): void {
     const onPlane = ray.intersectPlane(wr.plane.plane, new THREE.Vector3());
     const surface = e.viewport.surfaceHitAt(x, y);
     if (!onPlane || !surface) return wr;
-    let faceArea = faceAreas.get(surface.faceId);
-    if (faceArea === undefined) {
-      faceArea = e.viewport.faceArea(surface.faceId);
+    let faceArea = 0;
+    if (surface.faceId !== null) {
+      faceArea = faceAreas.get(surface.faceId) ?? e.viewport.faceArea(surface.faceId);
       faceAreas.set(surface.faceId, faceArea);
     }
     return regionBeatsSurface({

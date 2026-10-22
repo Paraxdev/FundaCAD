@@ -57,7 +57,7 @@ import { barycentric, displacedPositions, stressColors } from "../ui/stress";
 import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { flushRaycastIndex } from "./raycastIndex";
-import { applyKeptSpan, SECTION_PICK_SLACK } from "./sectionPick";
+import { applyKeptSpan, firstKeptHit, SECTION_PICK_SLACK, type KeptHit } from "./sectionPick";
 import { clipSelectionOverlays } from "./selectionGlow";
 import { GhostLayer, type BlendGhostEdge } from "./ghosts";
 import type { BlendKind } from "../features/blendGhost";
@@ -361,14 +361,7 @@ export class Viewport {
       this.requestRender();
     });
     this.rig.setScene({
-      raycast: (origin, dir) => {
-        if (!this.model) return null;
-        if (!this.streaming) flushRaycastIndex();
-        this.surfaceRaycaster.ray.set(origin, dir);
-        if (!this.keepSpan(this.surfaceRaycaster)) return null;
-        const hit = this.surfaceRaycaster.intersectObjects(visibleBodyMeshes(this.model), false)[0];
-        return hit ? hit.distance : null;
-      },
+      raycast: (origin, dir) => this.surfaceDistance(origin, dir),
       groundZ: () => (this.scene.grid.group.visible ? this.targetGridZ : null),
     });
     this.rig.setPivotSource(() => {
@@ -709,6 +702,11 @@ export class Viewport {
     return this.takesBody(bodyId, additive) ? bodyId : null;
   }
 
+  /** hitTakesBody, where a section's cap, which has no face to drill to, takes its body. */
+  private autoBodyAt(hit: Hit | null, clientX: number, clientY: number, additive: boolean): string | null {
+    return hit || !this.section ? this.hitTakesBody(hit, additive) : this.bodyIdAt(clientX, clientY);
+  }
+
   private handleHover(e: { clientX: number; clientY: number }, force = false) {
     const before = this.highlighter?.hoverState();
     this.hoverAt(e, force);
@@ -734,7 +732,7 @@ export class Viewport {
     if (auto && this.highlighter) {
       this.lastHover = { clientX: e.clientX, clientY: e.clientY, force };
       this.noteIntent(this.bodyOfHit(hit));
-      const whole = this.hitTakesBody(hit, false);
+      const whole = this.autoBodyAt(hit, e.clientX, e.clientY, false);
       if (whole && !this.regionHoverAt?.(e.clientX, e.clientY)) {
         this.highlighter.hoverBody(whole);
         return;
@@ -806,7 +804,7 @@ export class Viewport {
   bodyClickAt(clientX: number, clientY: number): string | null {
     if (this.selectPolicy !== "auto" || !this.model) return null;
     const hit = this.picker.pick(clientX, clientY, this.canvas.getBoundingClientRect(), this.rig.active, this.model);
-    return this.hitTakesBody(hit, false);
+    return this.autoBodyAt(hit, clientX, clientY, false);
   }
 
   private clickAt(clientX: number, clientY: number, ctrl: boolean, shift: boolean) {
@@ -823,7 +821,7 @@ export class Viewport {
       : null;
 
     if (this.selectPolicy === "auto" && this.model && this.highlighter) {
-      const bodyId = this.hitTakesBody(hit, ctrl || shift);
+      const bodyId = this.autoBodyAt(hit, clientX, clientY, ctrl || shift);
       if (bodyId) {
         if (this.regionPickAt?.(clientX, clientY, ctrl || shift)) return;
         this.setSelectionMode("bodies");
@@ -1513,8 +1511,8 @@ export class Viewport {
    *  menu agrees with a left-click at the same pixel. */
   bodyIdAt(clientX: number, clientY: number): string | null {
     if (!this.model) return null;
-    const fh = this.bodyRay(clientX, clientY)?.intersectObjects(visibleBodyMeshes(this.model), false)[0];
-    return fh ? this.faceIdToBodyId(faceIdOfHit(fh)) : null;
+    const kept = this.keptHit(this.rayFrom(clientX, clientY));
+    return kept ? this.faceIdToBodyId(faceIdOfHit(kept.hit)) : null;
   }
 
   private psRay = new THREE.Raycaster();
@@ -1719,11 +1717,10 @@ export class Viewport {
     // Faces only, nearest hit only. The general pick also raycasts every body's
     // edge lines, which have no BVH and which a drop would throw away anyway.
     flushRaycastIndex();
-    const ray = this.bodyRay(clientX, clientY);
-    const hitOnly = ray as (THREE.Raycaster & { firstHitOnly?: boolean }) | null;
-    if (hitOnly) hitOnly.firstHitOnly = true;
-    const fh = ray?.intersectObjects(visibleBodyMeshes(this.model), false)[0];
-    if (hitOnly) hitOnly.firstHitOnly = false;
+    const ray = this.rayFrom(clientX, clientY) as THREE.Raycaster & { firstHitOnly?: boolean };
+    ray.firstHitOnly = true;
+    const fh = this.faceHit(ray);
+    ray.firstHitOnly = false;
     const faceId = fh ? faceIdOfHit(fh) : null;
     const body = faceId === null ? null : bodyOfFace(this.model, faceId);
     if (faceId === null || !body) {
@@ -3495,7 +3492,7 @@ export class Viewport {
     clientY: number,
   ): { selector: Selector; faceId: number; normal: THREE.Vector3; anchor: THREE.Vector3; bodyId: string | null } | null {
     if (!this.model) return null;
-    const hit = this.bodyRay(clientX, clientY)?.intersectObjects(visibleBodyMeshes(this.model), false)[0];
+    const hit = this.faceHit(this.rayFrom(clientX, clientY));
     if (!hit || !hit.face) return null;
     const mesh = hit.object as THREE.Mesh;
     const pos = mesh.geometry.getAttribute("position");
@@ -3560,20 +3557,19 @@ export class Viewport {
   }
 
   private surfaceRaycaster = Object.assign(new THREE.Raycaster(), { firstHitOnly: true });
-  /** The nearest visible body surface under (x, y): its ray distance and face. */
-  surfaceHitAt(clientX: number, clientY: number): { distance: number; faceId: number } | null {
+  /** The nearest visible body surface under (x, y): its ray distance and face, no face on a section's cap. */
+  surfaceHitAt(clientX: number, clientY: number): { distance: number; faceId: number | null } | null {
     if (!this.model) return null;
     flushRaycastIndex();
     this.surfaceRaycaster.ray.copy(this.rayFrom(clientX, clientY).ray);
-    if (!this.keepSpan(this.surfaceRaycaster)) return null;
-    const hit = this.surfaceRaycaster.intersectObjects(visibleBodyMeshes(this.model), false)[0];
-    return hit ? { distance: hit.distance, faceId: faceIdOfHit(hit) } : null;
+    const kept = this.keptHit(this.surfaceRaycaster);
+    return kept ? { distance: kept.distance, faceId: kept.cap ? null : faceIdOfHit(kept.hit) } : null;
   }
 
   /** The faceId under (x, y), without touching the hover highlight. */
   faceIdAt(clientX: number, clientY: number): number | null {
     if (!this.model) return null;
-    const hit = this.bodyRay(clientX, clientY)?.intersectObjects(visibleBodyMeshes(this.model), false)[0];
+    const hit = this.faceHit(this.rayFrom(clientX, clientY));
     return hit ? faceIdOfHit(hit) : null;
   }
 
@@ -3581,7 +3577,7 @@ export class Viewport {
     this.highlighter?.clearHover();
     this.requestRender();
     if (!this.model) return null;
-    const hit = this.bodyRay(clientX, clientY)?.intersectObjects(visibleBodyMeshes(this.model), false)[0];
+    const hit = this.faceHit(this.rayFrom(clientX, clientY));
     if (!hit) return null;
     const faceId = faceIdOfHit(hit);
     this.highlighter?.hoverFace(faceId);
@@ -3712,15 +3708,25 @@ export class Viewport {
     return pickLayers(this.sharedRaycaster);
   }
 
-  /** rayFrom limited to what the section cut keeps, null when it keeps nothing along the ray. */
-  private bodyRay(clientX: number, clientY: number): THREE.Raycaster | null {
-    const ray = this.rayFrom(clientX, clientY);
-    return this.keepSpan(ray) ? ray : null;
+  /** How far along a ray the nearest kept body surface is: the orbit pivot's depth. */
+  private surfaceDistance(origin: THREE.Vector3, dir: THREE.Vector3): number | null {
+    if (!this.model) return null;
+    if (!this.streaming) flushRaycastIndex();
+    this.surfaceRaycaster.ray.set(origin, dir);
+    return this.keptHit(this.surfaceRaycaster)?.distance ?? null;
   }
 
-  private keepSpan(raycaster: THREE.Raycaster): boolean {
-    const slack = this.model ? SECTION_PICK_SLACK * modelScale(this.model) : 0;
-    return applyKeptSpan(raycaster, this.section ? this.sectionPlane : null, slack);
+  /** The first body surface the section keeps along `raycaster`. */
+  private keptHit(raycaster: THREE.Raycaster): KeptHit | null {
+    if (!this.model) return null;
+    const plane = this.section ? this.sectionPlane : null;
+    return firstKeptHit(raycaster, visibleBodyMeshes(this.model), plane, SECTION_PICK_SLACK * modelScale(this.model));
+  }
+
+  /** The face hit along `raycaster`, none on a section's cap. */
+  private faceHit(raycaster: THREE.Raycaster): THREE.Intersection | null {
+    const kept = this.keptHit(raycaster);
+    return kept && !kept.cap ? kept.hit : null;
   }
 
   cycleProjection(): ProjectionMode {
