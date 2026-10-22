@@ -261,13 +261,20 @@ export class StressGlyphs {
     this.probes = [];
     const shared = this.geometries();
     const all = this.weak ? [...this.pinned, this.weak] : this.pinned;
-    for (const p of all) {
+    for (const [i, p] of all.entries()) {
       const mesh = new THREE.Mesh(shared.ball, this.material(0xffffff));
       mesh.renderOrder = 1000;
       mesh.raycast = () => {};
       this.host.addToScene(mesh, "stress");
       const label = this.makeLabel(p === this.weak ? "stress-probe-pin stress-weak-pin" : "stress-probe-pin");
-      label.textContent = p.label;
+      if (p === this.weak) label.textContent = p.label;
+      else {
+        // Numbered as the panel's Point rows are.
+        const no = document.createElement("span");
+        no.className = "stress-pin-no";
+        no.textContent = String(i + 1);
+        label.append(no, ` ${p.label}`);
+      }
       this.probes.push({ mesh, tri: p.tri, weights: p.weights, label });
     }
     this.syncAttach();
