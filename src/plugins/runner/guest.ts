@@ -1,30 +1,5 @@
-// The plugin's end of the sandbox: what a plugin is handed, and the little
-// machinery that makes it work.
-//
-// A plugin gets ONE object, `app`, and it is the same shape as the broker
-// because it is the broker, reached down a wire. `app.call` returns a refusal
-// rather than throwing; `app.callOrThrow` throws; `app.can` answers from the
-// grant list the host sent. That last one is the only thing here a plugin could
-// lie to itself about, and lying gains it nothing: the host checks again, and
-// the host's copy is the one that decides.
-//
-// A plugin is an ASYNC FUNCTION BODY with `app` in scope. So it is written as
-// straight-line code with `await` in it and a `return` at the end, which is
-// what the work actually looks like:
-//
-//     const { id } = await app.callOrThrow("feature_add", { feature: {...} });
-//     return id;
-//
-// No module wrapper, no exported name to remember, nothing to get wrong before
-// the first line does anything.
-//
-// HOW THAT BODY BECOMES A FUNCTION IS THE CALLER'S PROBLEM, and deliberately
-// so, because it is a content-security-policy question rather than a language
-// one. In the app the plugin's text is inlined into the worker's own script by
-// ./spawn.ts and arrives here already compiled, as `run`, no Function
-// constructor, and so no `'unsafe-eval'`. A caller with a different policy can
-// pass `evaluate` instead and get the AsyncFunction route. Neither is buried in
-// a message handler where the policy it depends on would be invisible.
+// The plugin's end of the sandbox. A plugin is an async function body with one object in scope, `app`, the broker over
+// a wire. ./spawn.ts inlines it into the worker's own script as `run`, so the app needs no 'unsafe-eval'.
 
 import type { Grant } from "../manifest";
 import { BrokerRefused, type RefusalCode } from "../broker/broker";
@@ -42,12 +17,8 @@ export interface PluginApp {
   log(...parts: unknown[]): void;
 }
 
-/** Turns a plugin's source into something callable.
- *
- *  NEEDS `'unsafe-eval'`, which is why the app does not use it. Kept because it
- *  is the only way to run a plugin whose text arrives at runtime in a host that
- *  cannot inline it into a script, and because saying so in one named place is
- *  better than the requirement being implicit in a `new Function` somewhere. */
+/** Needs 'unsafe-eval', which is why the app does not use it. For a host that cannot inline a runtime plugin into a
+ *  script. */
 export type Evaluate = (source: string) => (app: PluginApp) => Promise<unknown>;
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (
@@ -59,8 +30,7 @@ export const evaluateWithAsyncFunction: Evaluate = (source) => {
   return (app) => fn(app);
 };
 
-/** Ops a plugin may attempt, for `can`. Sent by the host and advisory: the
- *  host checks again and its answer is the one that counts. */
+/** The grants are sent by the host and advisory: the host checks again and its answer is the one that counts. */
 function makeApp(port: Port, grants: readonly Grant[], pending: Map<number, (v: unknown) => void>) {
   let nextId = 1;
   const held = new Set(grants);
@@ -74,10 +44,7 @@ function makeApp(port: Port, grants: readonly Grant[], pending: Map<number, (v: 
 
   return {
     grants: Object.freeze([...held]),
-    // Deliberately NOT consulting the op table. The guest would then carry a
-    // copy of it, and a copy that fell behind would have a plugin skipping a
-    // call the host would happily have performed. Unknown ops answer false,
-    // which is also what the host would say.
+    // Not the op table: a copy here could fall behind and skip a call the host would perform.
     can: (op: string) => held.size > 0 && typeof op === "string" && op.length > 0,
     call,
     async callOrThrow<T = unknown>(op: string, params?: unknown): Promise<T> {
@@ -95,11 +62,7 @@ function makeApp(port: Port, grants: readonly Grant[], pending: Map<number, (v: 
   } satisfies PluginApp;
 }
 
-/** JSON, and a readable answer rather than a throw when it will not go.
- *
- *  A plugin logging a circular object is a plugin debugging something, and
- *  turning that into an exception inside its own logging call would end the run
- *  over the least important line in it. */
+/** Never throws: a plugin logging a circular object should not end its run over a log line. */
 function safeStringify(v: unknown): string {
   try {
     return JSON.stringify(v) ?? String(v);
@@ -110,16 +73,13 @@ function safeStringify(v: unknown): string {
 
 export interface GuestOptions {
   port: Port;
-  /** The plugin, already compiled. What ./spawn.ts passes: the worker's own
-   *  script carries the plugin's text, so there is nothing left to evaluate.
-   *  Takes precedence over `evaluate`, and makes the `source` in the start
-   *  message irrelevant. */
+  /** The plugin already compiled, as ./spawn.ts passes it. Takes precedence over `evaluate` and the start message's
+   *  `source`. */
   run?: (app: PluginApp) => Promise<unknown>;
   /** How to compile the source in the start message, when there is no `run`. */
   evaluate?: Evaluate;
 }
 
-/** Bring up the guest side and wait for work. Returns a teardown. */
 export function serveGuest(opts: GuestOptions): () => void {
   const evaluate = opts.evaluate ?? evaluateWithAsyncFunction;
   const pending = new Map<number, (v: unknown) => void>();
@@ -131,9 +91,7 @@ export function serveGuest(opts: GuestOptions): () => void {
 
     if (msg.t === "reply") {
       const resolve = pending.get(msg.id);
-      // An id nobody is waiting for. Either the host answered twice or the run
-      // moved on; both are the host's business and neither is worth a throw in
-      // the middle of somebody's plugin.
+      // An id nobody waits for: the host answered twice or the run moved on, not worth a throw in a plugin.
       if (!resolve) return;
       pending.delete(msg.id);
       resolve(
@@ -144,9 +102,7 @@ export function serveGuest(opts: GuestOptions): () => void {
       return;
     }
 
-    // A second start is refused rather than obeyed. Running a plugin twice over
-    // the same pending map would let the second run collect the first one's
-    // replies.
+    // A second start is refused, since it would collect the first run's replies from the same pending map.
     if (started) return;
     started = true;
 
@@ -155,8 +111,7 @@ export function serveGuest(opts: GuestOptions): () => void {
     try {
       run = opts.run ?? evaluate(msg.source);
     } catch (e) {
-      // A syntax error, which is the most common thing to be wrong with a
-      // plugin and deserves to say so rather than "the plugin failed".
+      // Most likely a syntax error, which deserves to say so rather than "the plugin failed".
       opts.port.postMessage({
         t: "failed",
         why: `the plugin would not compile: ${e instanceof Error ? e.message : String(e)}`,
@@ -166,10 +121,8 @@ export function serveGuest(opts: GuestOptions): () => void {
 
     void run(app).then(
       (value) => {
-        // Sent through JSON's own rules rather than relying on the structured
-        // clone of whatever a plugin returned: a function, a DOM node or a
-        // cyclic object would otherwise throw inside postMessage, where the
-        // failure has nothing to do with the message it was.
+        // Through JSON rather than structured clone, so a returned function or cyclic object cannot throw inside
+        // postMessage.
         opts.port.postMessage({ t: "done", value: jsonSafe(value) } satisfies ToHost);
       },
       (e) => {
@@ -190,7 +143,7 @@ export function serveGuest(opts: GuestOptions): () => void {
   };
 }
 
-/** Whatever survives a JSON round trip, or a description of why it did not. */
+/** Whatever survives a JSON round trip, or null. */
 function jsonSafe(v: unknown): unknown {
   try {
     return JSON.parse(JSON.stringify(v ?? null));
