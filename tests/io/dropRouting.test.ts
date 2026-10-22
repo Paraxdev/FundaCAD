@@ -61,7 +61,7 @@ const confText = Object.values(
   }),
 )[0] as string;
 
-const engine = { store: {}, sketch: { hasUncommittedEdits: false }, geometry: {} } as never;
+const engine = { store: { onOpen: () => () => {} }, sketch: { hasUncommittedEdits: false }, geometry: {} } as never;
 
 beforeEach(() => {
   calls.length = 0;

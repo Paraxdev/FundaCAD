@@ -2,6 +2,7 @@ import type { Engine } from "../app/engine";
 import { mayDiscard, placeImport } from "../app/documentActions";
 import {
   importFileBytes,
+  importInTurn,
   importPath,
   openDocumentAtPath,
   openDocumentBytes,
@@ -37,18 +38,30 @@ export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFil
     // user just chose to discard.
     if (outcome !== "ok") return;
   }
-  const run = async () => {
-    for (const item of plan.imports) {
-      if (item.path) await importPath(e.store, e.geometry, item.path);
-      else if (item.file) await importFileBytes(e.store, e.geometry, item.file);
-    }
-    const env = plan.environments[plan.environments.length - 1];
-    if (env?.file) {
-      const { importEnvironmentFile } = await import("../ui/environmentImport");
-      const refused = await importEnvironmentFile(e.store, env.file);
-      if (refused) await reportError(refused);
-    }
-  };
+  const env = plan.environments[plan.environments.length - 1];
+  const envFile = env?.file;
+  const run = () =>
+    importInTurn(e.store, [
+      ...plan.imports.map((item) => ({
+        name: item.name,
+        run: async () => {
+          if (item.path) return importPath(e.store, e.geometry, item.path, undefined, { batched: true });
+          if (item.file) return importFileBytes(e.store, e.geometry, item.file, undefined, { batched: true });
+        },
+      })),
+      ...(env && envFile
+        ? [
+            {
+              name: env.name,
+              run: async () => {
+                const { importEnvironmentFile } = await import("../ui/environmentImport");
+                const refused = await importEnvironmentFile(e.store, envFile);
+                if (refused) await reportError(refused);
+              },
+            },
+          ]
+        : []),
+    ]);
   // Parts dropped over Home may be meant for a new document. An environment alone is not a part.
   if (!doc && plan.imports.length) {
     if (

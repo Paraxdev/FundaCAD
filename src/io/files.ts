@@ -235,7 +235,7 @@ export async function openDocument(
   store: DocumentStore,
   geometry: GeometryBackend,
   mayReplace: () => Promise<boolean> = async () => true,
-  placeImport: (names: string[], run: () => Promise<void>) => Promise<unknown> = async (_names, run) => {
+  placeImport: (names: string[], run: () => Promise<unknown>) => Promise<unknown> = async (_names, run) => {
     closeHome();
     await run();
   },
@@ -747,10 +747,10 @@ export async function importPath(
   geometry: GeometryBackend,
   path: string,
   unit?: ImportUnit,
-  opts: { source?: string } = {},
-) {
+  opts: { source?: string; batched?: boolean } = {},
+): Promise<ImportEnd> {
   const fmt = extToImportFormat(path);
-  await importWith(store, path, fmt, (onStarted, u) => geometry.importGeometry(path, fmt, onStarted, u), {
+  return importWith(store, path, fmt, (onStarted, u) => geometry.importGeometry(path, fmt, onStarted, u), {
     ...opts,
     unit,
   });
@@ -768,8 +768,8 @@ export async function importFileBytes(
   geometry: GeometryBackend,
   file: File,
   unit?: ImportUnit,
-  opts: { opening?: boolean } = {},
-) {
+  opts: { opening?: boolean; batched?: boolean } = {},
+): Promise<ImportEnd> {
   const fmt = extToImportFormat(file.name);
   const importBytes = geometry.importBytes?.bind(geometry);
   if (!importBytes) {
@@ -782,13 +782,13 @@ export async function importFileBytes(
     );
     return;
   }
-  await importWith(
+  return importWith(
     store,
     file.name,
     fmt,
     async (onStarted, u) =>
       importBytes(file.name, fmt, bytesToBase64(new Uint8Array(await file.arrayBuffer())), onStarted, u),
-    { unit, retryable: false, opening: opts.opening ?? false },
+    { unit, retryable: false, opening: opts.opening ?? false, batched: opts.batched ?? false },
   );
 }
 
@@ -806,8 +806,14 @@ async function importWith(
   path: string,
   fmt: ImportFormat,
   read: (onStarted: (id: string) => void, unit?: ImportUnit) => ReturnType<GeometryBackend["importGeometry"]>,
-  opts: { unit?: ImportUnit | undefined; source?: string; retryable?: boolean; opening?: boolean } = {},
-) {
+  opts: {
+    unit?: ImportUnit | undefined;
+    source?: string;
+    retryable?: boolean;
+    opening?: boolean;
+    batched?: boolean;
+  } = {},
+): Promise<ImportEnd> {
   // Opening is not blocked while a file is read, and a document opened meanwhile must not receive the import.
   let opened = false;
   const offOpen = store.onOpen(() => (opened = true));
@@ -819,8 +825,9 @@ async function importWith(
   })().finally(offOpen);
   if (!res) return;
   if (opened && res.ok) {
-    await importDropped(path);
-    return;
+    // A batch names every file it left out in one warning.
+    if (!opts.batched) await importDropped([fileName(path)]);
+    return "dropped";
   }
   if (!res.ok) {
     if (res.cancelled) {
@@ -874,10 +881,38 @@ async function importWith(
 
 const fileName = (path: string) => path.split(/[\\/]/).pop() ?? "file";
 
-/** Says an import was left out because another document was opened before it landed. */
-export async function importDropped(path: string) {
+/** "dropped" when the file was read but left out, as another document was opened meanwhile. */
+type ImportEnd = "dropped" | undefined;
+
+/** Says imports were left out because another document was opened before they landed. */
+export async function importDropped(names: readonly string[]) {
+  if (!names.length) return;
+  const many = names.length > 1;
+  const list = many ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
   const { toast } = await import("../ui/toast");
-  toast(`${fileName(path)} was not imported, another document was opened while it was read.`, { kind: "warning" });
+  const were = many ? "they were" : "it was";
+  toast(`${list} ${many ? "were" : "was"} not imported, another document was opened while ${were} read.`, {
+    kind: "warning",
+  });
+}
+
+/** Runs a batch of imports in turn and stops at the first document opened meanwhile, as the rest belong to the
+ *  one the batch began in. Each step imports with `batched`, so one warning names every file left out. */
+export async function importInTurn(
+  store: DocumentStore,
+  steps: readonly { name: string; run: () => Promise<ImportEnd | void> }[],
+): Promise<void> {
+  let opened = false;
+  const offOpen = store.onOpen(() => (opened = true));
+  const left: string[] = [];
+  try {
+    for (const step of steps) {
+      if (opened || (await step.run()) === "dropped") left.push(step.name);
+    }
+  } finally {
+    offOpen();
+  }
+  await importDropped(left);
 }
 
 const importSource = (f: Feature) =>
