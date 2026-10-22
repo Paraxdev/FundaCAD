@@ -108,7 +108,7 @@ export function pickPlaneOnScreen(
   minPx: number,
   size: LabelSize,
 ): PlaneHit | null {
-  let best: (PlaneHit & { facing: number }) | null = null;
+  let best: (PlaneHit & { facing: number; rank: number }) | null = null;
   for (const t of planes) {
     const { long, across, halfLong, halfAcross } = tileAxes(t);
     const d = sub(p, t.centre);
@@ -125,11 +125,14 @@ export function pickPlaneOnScreen(
     if (tileD > 0 && !inPad && !inLabelPad) continue;
     const distance = Math.min(tileD, labelD);
     const part: PlaneHitPart = labelD === 0 ? "label" : tileD === 0 ? "tile" : "pad";
-    const hit = { plane: t.plane, distance, part, facing: t.facing };
+    // A name too thin a tile to hold it keeps its full box ahead of a neighbour's drawn tile.
+    const rank = inLabelPad && 2 * halfAcross < minPx / 2 ? 1 : 0;
+    const hit = { plane: t.plane, distance, part, facing: t.facing, rank };
     if (
       !best ||
-      distance < best.distance - 1e-9 ||
-      (Math.abs(distance - best.distance) <= 1e-9 && t.facing > best.facing)
+      rank > best.rank ||
+      (rank === best.rank && distance < best.distance - 1e-9) ||
+      (rank === best.rank && Math.abs(distance - best.distance) <= 1e-9 && t.facing > best.facing)
     )
       best = hit;
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { LABEL_BOX_PX, OriginTiles, TILE_GAP_PX, TILE_SIZE_PX, type ScreenFrame } from "../../src/viewport/originTiles";
+import { LABEL_BOX_PX, OriginTiles, TILE_SIZE_PX, type ScreenFrame } from "../../src/viewport/originTiles";
 import {
   HIT_MIN_COARSE_PX,
   HIT_MIN_PX,
@@ -106,12 +106,12 @@ describe("planeHitMinPx", () => {
 });
 
 describe("hit area on screen", () => {
-  it("gives every plane a 44 px square at the oblique view, less the gap a neighbouring tile may take", () => {
+  it("gives every plane at least a 44 px square at the oblique view, the near edge on tile included", () => {
     const { t, frame, screen, labels } = tilesAt(OBLIQUE);
     const xz = screen.find((s) => s.plane === "XZ")!;
     expect(narrowWidth(xz)).toBeLessThan(12);
     const sq = largestSquare(screen, labels, originOf(frame), HIT_MIN_PX);
-    for (const k of PLANES) expect(sq[k]).toBeGreaterThanOrEqual(HIT_MIN_PX - TILE_GAP_PX);
+    for (const k of PLANES) expect(sq[k]).toBeGreaterThanOrEqual(HIT_MIN_PX);
     t.dispose();
   });
 
@@ -123,7 +123,7 @@ describe("hit area on screen", () => {
       0,
     ]);
     const sq = largestSquare(screen, labels, originOf(frame), HIT_MIN_PX);
-    for (const k of PLANES) expect(sq[k]).toBeGreaterThanOrEqual(HIT_MIN_PX - TILE_GAP_PX);
+    for (const k of PLANES) expect(sq[k]).toBeGreaterThanOrEqual(HIT_MIN_PX);
     t.dispose();
   });
 
@@ -131,7 +131,7 @@ describe("hit area on screen", () => {
     for (const dir of [TOP, OBLIQUE]) {
       const { t, frame, screen, labels } = tilesAt(dir);
       const sq = largestSquare(screen, labels, originOf(frame), HIT_MIN_COARSE_PX);
-      for (const k of PLANES) expect(sq[k]).toBeGreaterThanOrEqual(HIT_MIN_COARSE_PX - TILE_GAP_PX);
+      for (const k of PLANES) expect(sq[k]).toBeGreaterThanOrEqual(HIT_MIN_COARSE_PX);
       t.dispose();
     }
   });

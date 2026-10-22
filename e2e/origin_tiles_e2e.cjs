@@ -1,6 +1,6 @@
 // The origin planes as three small tiles beside the origin: shown only while a
 // tool asks for a plane, a constant size on screen, each picking its own plane by
-// its tile or its name with a 44 px target at any angle, less the gap a neighbour tile may take, in Noir and
+// its tile or its name with a 44 px target at any angle, in Noir and
 // Solarized Light. SC_VARIANTS=1 also writes the corner comparison
 // renders (circular corners against the squircle, close and far).
 //
@@ -269,8 +269,8 @@ const PLANES = ["XY", "XZ", "YZ"];
     }, PLANES);
   const topTargets = await targets();
   check(
-    "top view: every plane, the two edge on ones too, has a 44 px target less the 12 px gap a neighbour may take",
-    PLANES.every((k) => topTargets[k] >= 44 - 12),
+    "top view: every plane, the two edge on ones too, has a 44 px target",
+    PLANES.every((k) => topTargets[k] >= 44),
     JSON.stringify(topTargets),
   );
   await page.mouse.move(labels.XZ.x, labels.XZ.y);
@@ -304,8 +304,8 @@ const PLANES = ["XY", "XZ", "YZ"];
   await page.waitForTimeout(900);
   const obliqueTargets = await targets();
   check(
-    "oblique view: every plane has a 44 px target less the 12 px gap a neighbour may take",
-    PLANES.every((k) => obliqueTargets[k] >= 44 - 12),
+    "oblique view: every plane has a 44 px target",
+    PLANES.every((k) => obliqueTargets[k] >= 44),
     JSON.stringify(obliqueTargets),
   );
   await shot("tiles-oblique-noir", around(await origin(), 170));
