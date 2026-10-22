@@ -583,7 +583,7 @@ export function stressColor(t: number): Vec3 {
 
 /** One sRGB triple per value, mapped over [min, max]. A flat field (max = min)
  *  is all blue rather than a division by zero. */
-export function stressColors(values: readonly number[], min: number, max: number): Float32Array {
+export function stressColors(values: ArrayLike<number>, min: number, max: number): Float32Array {
   const out = new Float32Array(values.length * 3);
   const span = max - min;
   for (let i = 0; i < values.length; i++) {

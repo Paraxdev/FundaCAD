@@ -25,6 +25,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **The stress preview bends smoothly.** The coloured part is drawn from a finer
+  copy of the analysed surface, so curved faces and the bend look smooth and the
+  colours blend instead of jumping. Sharp edges and flat faces stay as they are,
+  and every number and reading still comes from the analysis itself.
+
 - **Stress results play and pause the bend.** A Play button right under the
   result swings the part between still and bent, and Pause holds it where it is,
   so you can stop on any pose without leaving the tool. Going back to Set up or

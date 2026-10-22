@@ -3114,11 +3114,11 @@ export class Viewport {
   setStressOverlay(
     o: {
       bodyId: string;
-      positions: number[];
-      indices: number[];
-      values: number[];
+      positions: ArrayLike<number>;
+      indices: ArrayLike<number>;
+      values: ArrayLike<number>;
       range: { min: number; max: number };
-      displacement?: number[];
+      displacement?: ArrayLike<number>;
       scale?: number;
     } | null,
   ) {

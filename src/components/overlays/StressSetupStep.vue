@@ -77,7 +77,9 @@ function placing(target: StressTarget): boolean {
       />
     </label>
 
-    <div class="rd-head stress-caption">Supports <span class="tree-count">{{ setup.supports.length }}</span></div>
+    <div class="rd-head stress-caption"
+      >Supports <span class="tree-count">{{ setup.supports.length }}</span></div
+    >
     <div v-for="(x, i) in setup.supports" :key="'s' + x.id" class="stress-item">
       <div class="stress-item-head">
         <span class="stress-swatch" :style="{ background: supportColor(x.type) }" />
@@ -141,7 +143,9 @@ function placing(target: StressTarget): boolean {
       <Icon name="plus" :size="14" />Add support
     </button>
 
-    <div class="rd-head stress-caption">Loads <span class="tree-count">{{ setup.loads.length || "" }}</span></div>
+    <div class="rd-head stress-caption"
+      >Loads <span class="tree-count">{{ setup.loads.length || "" }}</span></div
+    >
     <div v-for="(l, i) in setup.loads" :key="l.id" class="stress-item">
       <div class="stress-item-head">
         <span class="stress-swatch" :style="{ background: loadColor }" />

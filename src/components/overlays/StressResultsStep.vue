@@ -138,7 +138,12 @@ function onDeform(e: Event) {
       <span class="measure-v" :class="{ 'stress-yields': r.k === 'Safety factor' && result.yields }">{{ r.v }}</span>
     </div>
 
-    <button type="button" class="stress-more stress-details" :aria-expanded="detailsOpen" @click="detailsOpen = !detailsOpen">
+    <button
+      type="button"
+      class="stress-more stress-details"
+      :aria-expanded="detailsOpen"
+      @click="detailsOpen = !detailsOpen"
+    >
       <Icon :name="detailsOpen ? 'caretDown' : 'caretRight'" :size="12" />Details
     </button>
     <div v-show="detailsOpen" class="stress-fold stress-details-body">

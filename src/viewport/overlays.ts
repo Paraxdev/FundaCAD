@@ -131,7 +131,11 @@ export function buildClashMesh(positions: number[], indices: number[]): THREE.Me
 /** The stress result's surface, one sRGB colour per vertex (`colors`, three
  *  per vertex). Lit and flat shaded, so the part keeps its shape under the
  *  colours; it stands in for the body, which the viewport hides meanwhile. */
-export function buildStressMesh(positions: number[], indices: number[], colors: Float32Array): THREE.Mesh {
+export function buildStressMesh(
+  positions: ArrayLike<number>,
+  indices: ArrayLike<number>,
+  colors: Float32Array,
+): THREE.Mesh {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   // The ramp is authored in sRGB; vertex colours are read as linear.
@@ -144,7 +148,7 @@ export function buildStressMesh(positions: number[], indices: number[], colors: 
     lin[i + 2] = c.b;
   }
   geo.setAttribute("color", new THREE.BufferAttribute(lin, 3));
-  geo.setIndex(indices);
+  geo.setIndex(indices instanceof Uint32Array ? new THREE.Uint32BufferAttribute(indices, 1) : Array.from(indices));
   geo.computeVertexNormals();
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
