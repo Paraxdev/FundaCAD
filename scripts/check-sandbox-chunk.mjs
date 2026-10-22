@@ -1,21 +1,5 @@
-// Does the BUILT plugin sandbox still contain the thing the generated script
-// calls?
-//
-// Nothing else can answer that. The unit tests hold the two source files
-// against each other and pass; the CSP e2e runs an equivalent bootstrap it
-// writes itself and passes; and in between them sits the bundler, which is what
-// actually broke.
-//
-// WHAT BROKE. src/plugins/runner/sandbox.ts is built by Vite as a worker ENTRY.
-// A worker entry has no importers, so Rollup treats every export as unreachable
-// and drops it. The first build of this produced a 0.37 kB chunk holding the
-// op-name array and nothing else, and the blob's first line would have been an
-// import of a name that was not there. It is now registered on the Worker
-// global by a top-level assignment, which a bundler must keep, and this checks
-// that it survived.
-//
-// Usage (after `vite build`, or it will run one):
-//   node scripts/check-sandbox-chunk.mjs
+// Checks the built sandbox chunk still registers START. Rollup treats a worker entry's exports as unreachable and once
+// shipped a 0.37 kB husk, so sandbox.ts registers START on the Worker global by a top level assignment.
 
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -25,8 +9,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ASSETS = join(ROOT, "dist", "assets");
 
-// Read out of the source rather than restated, so renaming it cannot make this
-// test pass against a chunk that no longer matches the script.
+// Read from the source so a rename cannot make this pass against a chunk that no longer matches.
 const PROTOCOL = readFileSync(join(ROOT, "src/plugins/runner/protocol.ts"), "utf8");
 const START = PROTOCOL.match(/export const START = "([^"]+)"/)?.[1];
 
@@ -56,17 +39,14 @@ if (chunks.length !== 1) {
     );
   }
 
-  // The chunk has to be a real module with the guest in it, not the husk
-  // tree-shaking left last time. These are strings the guest protocol uses and
-  // cannot be optimised away while the code that reads them survives.
+  // Strings the guest protocol uses, which survive only while the guest code does.
   for (const needed of ['"ready"', '"call"', '"done"', '"failed"']) {
     if (!src.includes(needed)) {
       fail(`the built sandbox chunk has no ${needed} in it, so the guest was tree-shaken out`);
     }
   }
 
-  // The control for every check above: a chunk that was somehow the whole app
-  // would contain all of it and prove nothing. This one is a few kB.
+  // A chunk holding the whole app would prove nothing, and this one is a few kB.
   if (src.length > 200_000) {
     fail(`the sandbox chunk is ${src.length} bytes, which is not a sandbox`);
   }

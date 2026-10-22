@@ -1,14 +1,6 @@
 #!/usr/bin/env node
-// The `fundacad` entry in .mcp.json: runs a fundacad-mcp that is already
-// built, or exits at once saying how to build it. `cargo run` was the entry
-// before, and a first compile outlasts an MCP host's 30 s connect timeout, which
-// the host reports as a timeout with no hint of the cause.
-//
-// Build once, from the repository root:
-//   cargo build --release -p fundacad-mcp -p fundacad-cli
-// fundacad-cli is the `fundacad-engine` its private mode starts, and needs
-// OpenCASCADE (FUNDACAD_OCCT_ROOT, docs/ENGINE.md). Attaching to a running
-// app needs only fundacad-mcp.
+// Runs an already built fundacad-mcp for .mcp.json, because a first `cargo run` compile outlasts the MCP host's 30 s
+// connect timeout, which the host reports with no hint of the cause.
 
 import { spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
