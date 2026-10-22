@@ -15,7 +15,7 @@
 
 import * as THREE from "three";
 import { pushAll } from "../lib/pushAll";
-import { buildBodyMesh, partitionMesh, resetBodyAppearance } from "./render";
+import { buildBodyMesh, partitionMesh, resetBodyAppearance, reuseUnchanged } from "./render";
 import type { BodyMesh, MeshPartition, ModelView } from "./render";
 import type { EdgeRef } from "./edgeLines";
 import type { RebuildResult } from "../types";
@@ -99,7 +99,7 @@ export class ProgressiveModel {
       const p = keptById.get(m.id);
       if (!p) continue;
       keptById.delete(m.id);
-      if (m.etag !== undefined && p.etag === m.etag) {
+      if (reuseUnchanged(p, m)) {
         // unchanged: keep its GPU objects untouched. It never blinks.
         resetBodyAppearance(p);
         p.mesh.visible = !hidden.has(m.id);

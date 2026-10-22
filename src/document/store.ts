@@ -28,7 +28,10 @@ import {
   type BodyFinish, finishOf, freshMaterialName, isDefaultFinish, type MaterialDef,
   normalizeMaterial, slugId, STARTER_LIBRARY, uniqueId,
 } from "./materials";
-import { faceKey, parseFaceKey } from "./faceMaterials";
+import { faceKey } from "./faceMaterials";
+import {
+  bodyPrints, type FaceRef, type FaceResolution, type FaceTrack, loadFaceRefs, resolveFaceRefs, savedFaceRefs,
+} from "./faceRefs";
 import { documentShapeProblem, UnreadableDocumentError } from "./documentShape";
 import { forgetStaleJoins, joinSignatures } from "./bodyIds";
 import { canonicalMirrorPlanes } from "./mirrorPlane";
@@ -159,7 +162,7 @@ const clone = (d: CadDocument): CadDocument => structuredClone(d);
 export const KNOWN_DOC_KEYS: ReadonlySet<string> = new Set([
   "version", "parameters", "paramDefs", "paramExtras", "features", "viewOverrides", "bodyIds",
   "suppressed", "rollback", "sketchVisibility", "bodyVisibility", "planeVisibility", "bodyNames",
-  "bodyColors", "bodyElement", "bodyMaterial", "faceMaterials", "importColorSource", "elements",
+  "bodyColors", "bodyElement", "bodyMaterial", "faceMaterials", "facePrints", "importColorSource", "elements",
   "materials", "palette", "stress", "environment", "versions", "geometry", "referenceImages",
 ]);
 const ELEMENT_KEYS: ReadonlySet<string> = new Set(["id", "name", "parent"]);
@@ -245,18 +248,23 @@ const DEFAULT_PALETTE: { name: string; color: string }[] = [
 /** A persisted display-only id to value map, stored under one CadDocument field. */
 class Overlay<T> {
   private map = new Map<string, T>();
+  /** Bumped on every write. */
+  rev = 0;
   constructor(readonly jsonKey: string) {}
   get(id: string): T | undefined {
     return this.map.get(id);
   }
   set(id: string, value: T) {
     this.map.set(id, value);
+    this.rev++;
   }
   delete(id: string) {
     this.map.delete(id);
+    this.rev++;
   }
   clear() {
     this.map.clear();
+    this.rev++;
   }
   get size(): number {
     return this.map.size;
@@ -272,6 +280,75 @@ class Overlay<T> {
   loadFrom(parsed: Record<string, unknown>, mapValue?: (v: unknown) => T) {
     const src = (parsed[this.jsonKey] as Record<string, unknown> | undefined) ?? {};
     this.map = new Map(Object.entries(src).map(([k, v]) => [k, mapValue ? mapValue(v) : (v as T)]));
+    this.rev++;
+  }
+}
+
+let faceRefSeq = 0;
+const newFaceRefId = () => `fr${++faceRefSeq}`;
+
+/** Per face materials by opaque id, so an undo step never holds a face number
+ *  a rebuild has since moved (document/faceRefs.ts). Saved as `faceMaterials`
+ *  and `facePrints` at the faces they are on in the build on screen. */
+class FaceRefOverlay extends Overlay<FaceRef> {
+  private track: FaceTrack | null = null;
+  private prior: FaceTrack | null = null;
+  private memo: { result: RebuildResult; rev: number; on: FaceResolution; owners: Map<string, string> } | null = null;
+  constructor(private readonly built: () => RebuildResult | null) {
+    super("faceMaterials");
+  }
+  resolution(): FaceResolution | null {
+    return this.resolved()?.on ?? null;
+  }
+  /** The track the build before the one on screen left: where each ref was on it. */
+  before(): FaceTrack | null {
+    return this.resolved() ? this.prior : this.track;
+  }
+  /** `bodyId#face` to the ref on it, the stored face without a build. */
+  owners(): Map<string, string> {
+    const r = this.resolved();
+    if (r) return r.owners;
+    const out = new Map<string, string>();
+    for (const [id, ref] of this.entries()) out.set(faceKey(ref.body, ref.face), id);
+    return out;
+  }
+  private resolved() {
+    const result = this.built();
+    if (!result?.bodies) return null;
+    if (this.memo?.result === result && this.memo.rev === this.rev) return this.memo;
+    if (this.memo?.result !== result) {
+      // A ref written since the last look at the build before this one joins its track first.
+      if (this.memo && this.memo.rev !== this.rev) this.track = resolveFaceRefs(this.entries(), this.memo.result, this.track).track;
+      this.prior = this.track;
+    }
+    const on = resolveFaceRefs(this.entries(), result, this.track);
+    this.track = on.track;
+    const owners = new Map<string, string>();
+    for (const [id, ref] of this.entries()) for (const f of on.faces.get(id) ?? []) owners.set(faceKey(ref.body, f), id);
+    this.memo = { result, rev: this.rev, on, owners };
+    return this.memo;
+  }
+  /** Refs found on a face earlier in this session that the build on screen has no face for. */
+  hidden(): string[] {
+    const on = this.resolution();
+    if (!on) return [];
+    return [...on.faces].filter(([id, faces]) => !faces.length && on.track.seen.has(id)).map(([id]) => id);
+  }
+  override writeJSON(out: Record<string, unknown>) {
+    if (!this.size) return;
+    const { materials, prints } = savedFaceRefs(this.entries(), this.resolution(), this.built());
+    out["faceMaterials"] = materials;
+    if (Object.keys(prints).length) out["facePrints"] = prints;
+  }
+  override loadFrom(parsed: Record<string, unknown>) {
+    this.clear();
+    for (const ref of loadFaceRefs(parsed["faceMaterials"], parsed["facePrints"])) this.set(newFaceRefId(), ref);
+  }
+  override clear() {
+    super.clear();
+    this.track = null;
+    this.prior = null;
+    this.memo = null;
   }
 }
 
@@ -321,9 +398,7 @@ export class DocumentStore {
   private bodyColors = new Overlay<number>("bodyColors"); // per-body palette-slot assignment (id → slot index)
   private bodyElement = new Overlay<string>("bodyElement"); // per-body element assignment (id → element id)
   private bodyMaterial = new Overlay<string>("bodyMaterial"); // per-body material assignment (id → material id)
-  /** per-FACE material assignment (`bodyId#localFaceIndex` → material id). See
-   *  document/faceMaterials.ts for what that key promises and what it does not. */
-  private faceMaterial = new Overlay<string>("faceMaterials");
+  private faceMaterial = new FaceRefOverlay(() => this.build.result);
   /** import feature id → "faces" for an import whose parts wear their face
    *  colours over their body colours (document/faceColors.ts). Absent is "bodies". */
   private importColors = new Overlay<ImportColorSource>("importColorSource");
@@ -744,8 +819,13 @@ export class DocumentStore {
    *  a visible id is always SET, never deleted, unlike these). False when
    *  nothing actually changed, so the caller can skip its own emit/dirty. */
   private writeOverlayBatch<T>(overlay: Overlay<T>, ids: Iterable<string>, value: T | null): boolean {
+    return this.writeOverlayMap(overlay, new Map([...ids].map((id) => [id, value])));
+  }
+
+  /** writeOverlayBatch with a value per id. */
+  private writeOverlayMap<T>(overlay: Overlay<T>, writes: ReadonlyMap<string, T | null>): boolean {
     const prior = new Map<string, T | undefined>();
-    for (const id of ids) {
+    for (const [id, value] of writes) {
       const was = overlay.get(id);
       if ((was ?? null) === value) continue;
       prior.set(id, was);
@@ -761,7 +841,7 @@ export class DocumentStore {
         this.emitBuild();
       },
       redo: () => {
-        for (const [id] of prior) { if (value === null) overlay.delete(id); else overlay.set(id, value); }
+        for (const [id] of prior) { const value = writes.get(id)!; if (value === null) overlay.delete(id); else overlay.set(id, value); }
         this.markDirty();
         this.emitBuild();
       },
@@ -1681,13 +1761,17 @@ export class DocumentStore {
       if (!seen.has(key)) seen.set(key, overlay.get(key));
       if (value === undefined) overlay.delete(key); else overlay.set(key, value);
     };
-    const faces = new Map<number, string>();
-    for (const [key, material] of this.faceMaterial.entries()) {
-      const parsed = parseFaceKey(key);
-      if (parsed?.body === from) faces.set(parsed.face, material);
-    }
-    if (faces.size && pieces.some((p) => p.faces)) {
-      for (const face of faces.keys()) write(this.faceMaterial, faceKey(from, face), undefined);
+    // The engine's runs number the source's faces as they were before the Separate.
+    const before = this.faceMaterial.before();
+    const prints = before?.bodies.get(from)?.prints;
+    const faces = new Map<number, FaceRef>();
+    for (const [id, ref] of [...this.faceMaterial.entries()]) {
+      if (ref.body !== from) continue;
+      const was = before?.refs.get(id);
+      const on = !before ? [ref.face] : was?.ref === ref ? was.faces : [];
+      if (!on.length) continue;
+      for (const f of on) faces.set(f, ref);
+      if (pieces.some((p) => p.faces)) write(this.faceMaterial, id, undefined);
     }
     for (const piece of pieces) {
       if (piece.id !== from) {
@@ -1701,8 +1785,10 @@ export class DocumentStore {
       const { faces: run } = piece;
       if (!run) continue;
       for (let i = 0; i < run.count; i++) {
-        const material = faces.get(run.from + i);
-        if (material !== undefined) write(this.faceMaterial, faceKey(piece.id, i), material);
+        const ref = faces.get(run.from + i);
+        if (!ref) continue;
+        const at = prints?.[run.from + i] ?? ref.at;
+        write(this.faceMaterial, newFaceRefId(), { body: piece.id, face: i, material: ref.material, ...(at ? { at: { ...at, faces: run.count } } : {}) });
       }
     }
     const changed = [...was].flatMap(([overlay, keys]) =>
@@ -1950,14 +2036,15 @@ export class DocumentStore {
 
   // --- materials on one face (document/faceMaterials.ts) ----------------------
 
-  /** The raw per-face assignment, for a menu that has to show what is there. */
+  /** The material on this face of the build on screen. */
   faceMaterialId(bodyId: string, localFace: number): string | undefined {
-    return this.faceMaterial.get(faceKey(bodyId, localFace));
+    const id = this.faceMaterial.owners().get(faceKey(bodyId, localFace));
+    return id === undefined ? undefined : this.faceMaterial.get(id)?.material;
   }
 
-  /** Every per-face assignment, as the pure resolver wants them. */
+  /** `bodyId#face` to material id for every face of the build on screen that wears one. */
   faceMaterialEntries(): [string, string][] {
-    return [...this.faceMaterial.entries()];
+    return [...this.faceMaterial.owners()].map(([key, id]) => [key, this.faceMaterial.get(id)!.material]);
   }
 
   /** How many faces of this body carry a material of their own. What a browser
@@ -1965,29 +2052,63 @@ export class DocumentStore {
    *  offering at all. */
   faceMaterialCount(bodyId: string): number {
     let n = 0;
-    for (const [k] of this.faceMaterial.entries()) {
-      const p = parseFaceKey(k);
-      if (p && p.body === bodyId) n++;
-    }
+    for (const [, ref] of this.faceMaterial.entries()) if (ref.body === bodyId) n++;
     return n;
+  }
+
+  /** Ids of the face materials whose face the build on screen lost, kept to come back with it. */
+  hiddenFaceMaterials(): string[] {
+    return this.faceMaterial.hidden();
   }
 
   /** Assign a material to faces (null clears them). Batched and emitting once,
    *  for the reason setBodiesMaterial is: a drop can land on a run of faces. */
   setFacesMaterial(faces: Iterable<{ body: string; face: number }>, material: string | null) {
     const target = material !== null && this.materials.some((m) => m.id === material) ? material : null;
-    const keys = [...faces].map(({ body, face }) => faceKey(body, face));
-    this.writeOverlayBatch(this.faceMaterial, keys, target);
+    const overlay = this.faceMaterial;
+    const owners = new Map(overlay.owners());
+    const on = overlay.resolution();
+    const result = this.build.result;
+    const fresh = (body: string, face: number, m: string): FaceRef => {
+      const span = result?.bodies?.find((b) => b.id === body);
+      const at = result && span ? bodyPrints(result, span)[face] : undefined;
+      return at ? { body, face, material: m, at } : { body, face, material: m };
+    };
+    const writes = new Map<string, FaceRef | null>();
+    const now = (id: string) => (writes.has(id) ? writes.get(id) : overlay.get(id));
+    for (const { body, face } of faces) {
+      const key = faceKey(body, face);
+      let id = owners.get(key);
+      let ref = id === undefined ? undefined : now(id);
+      // A ref a split left on several faces becomes one ref per face first.
+      const parts = id !== undefined && on ? on.faces.get(id) ?? [] : [];
+      if (id !== undefined && ref && parts.length > 1) {
+        writes.set(id, null);
+        for (const f of parts) {
+          const part = newFaceRefId();
+          writes.set(part, fresh(body, f, ref.material));
+          owners.set(faceKey(body, f), part);
+        }
+        id = owners.get(key)!;
+        ref = now(id)!;
+      }
+      if (id !== undefined && ref) {
+        if (ref.material !== target) writes.set(id, target === null ? null : { ...ref, ...fresh(body, face, target) });
+      } else if (target !== null) {
+        const added = newFaceRefId();
+        writes.set(added, fresh(body, face, target));
+        owners.set(key, added);
+      }
+    }
+    this.writeOverlayMap(overlay, writes);
   }
 
   /** Drop every per-face assignment on these bodies, so a part that has been
    *  fiddled with can be put back to one material in one gesture. */
   clearFaceMaterials(bodyIds: Iterable<string>) {
     const want = new Set(bodyIds);
-    const keys = [...this.faceMaterial.entries()]
-      .map(([k]) => k)
-      .filter((k) => { const p = parseFaceKey(k); return p && want.has(p.body); });
-    this.writeOverlayBatch(this.faceMaterial, keys, null);
+    const ids = [...this.faceMaterial.entries()].filter(([, ref]) => want.has(ref.body)).map(([id]) => id);
+    this.writeOverlayBatch(this.faceMaterial, ids, null);
   }
 
   /** Add a material and return its id. */
@@ -2080,8 +2201,8 @@ export class DocumentStore {
     for (const [body, held] of [...this.bodyMaterial.entries()]) {
       if (ids.has(held)) { this.bodyMaterial.delete(body); changed = true; }
     }
-    for (const [key, held] of [...this.faceMaterial.entries()]) {
-      if (ids.has(held)) { this.faceMaterial.delete(key); changed = true; }
+    for (const [id, ref] of [...this.faceMaterial.entries()]) {
+      if (ids.has(ref.material)) { this.faceMaterial.delete(id); changed = true; }
     }
     return changed;
   }
