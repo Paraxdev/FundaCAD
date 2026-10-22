@@ -45,7 +45,9 @@ This file starts on 2026-08-03. For anything before that, see the
   Cancel only while it runs. Results opens by itself when a Run finishes and
   shows the safety factor, peak stress and deflection, with the rest under
   Details. When the model or the setup changes after a Run, Results says so and
-  offers Run again. The panel wears the app's own selects, switches and buttons.
+  offers Run again. Closing the panel keeps the last result, so opening it again
+  shows the colours and readings without another Run. The panel wears the app's
+  own selects, switches and buttons.
 
 - **The section is saved with the document.** A cut that is on is saved in the
   file and is back when you open it. New and Open no longer carry a cut over

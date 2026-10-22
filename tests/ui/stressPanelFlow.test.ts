@@ -186,6 +186,10 @@ function rig() {
       study = s;
       docListeners.forEach((f) => f());
     },
+    /** The saved study changed with no model edit, as a later panel session or a file would leave it. */
+    setStudy: (s: StressStudy | null) => {
+      study = s;
+    },
     select: (ids: number[]) => {
       selected = ids;
     },
@@ -1191,6 +1195,106 @@ describe("playing and pausing the deformation", () => {
     r.ui.setStressAnimate(true);
     frame(4000);
     expect(r.deformations.at(-1)).toBe(scale);
+  });
+});
+
+describe("the result through a close", () => {
+  async function ranAndClosed() {
+    const r = rig();
+    setUp(r);
+    await settled(r);
+    const p = usePanelsStore();
+    r.handlers().pinProbe({ tri: 0, weights: [0.2, 0.5, 0.3], point: [0.5, 0.3, 0] });
+    const before = {
+      result: p.stress!.result,
+      pins: p.stress!.pins,
+      overlay: r.overlays.at(-1),
+      weak: r.weakSpots.at(-1),
+    };
+    r.ui.closeStress();
+    expect(r.overlays.at(-1)).toBeNull();
+    return { r, p, before };
+  }
+
+  it("shows the last result again on reopen, with its colours, pins and weakest spot", async () => {
+    const { r, p, before } = await ranAndClosed();
+    expect(before.pins).toHaveLength(1);
+    r.ui.showStress();
+    expect(p.stress!.result).toEqual(before.result);
+    expect(p.stress!.colours).toBe("shown");
+    expect(p.stress!.pins).toEqual(before.pins);
+    expect(r.overlays.at(-1)).toEqual(before.overlay);
+    expect(r.weakSpots.at(-1)).toEqual(before.weak);
+    expect(r.glyphCalls.at(-1)).toBe("pins 1");
+    expect(p.stress!.ranSetup, "nothing changed, so no stale line").toBe(JSON.stringify(p.stress!.setup));
+  });
+
+  it("keeps the colours off on reopen when they were off at the close", async () => {
+    const r = rig();
+    setUp(r);
+    await settled(r);
+    r.ui.setStressColours(false);
+    r.ui.closeStress();
+    r.ui.showStress();
+    const p = usePanelsStore();
+    expect(p.stress!.colours).toBe("hidden");
+    expect(r.overlays.at(-1)).toBeNull();
+    r.ui.setStressColours(true);
+    expect(p.stress!.colours).toBe("shown");
+  });
+
+  it("brings the result back without colours or pins after a model edit while closed", async () => {
+    const { r, p } = await ranAndClosed();
+    r.editDoc();
+    const n = r.weakSpots.length;
+    r.ui.showStress();
+    expect(p.stress!.result).not.toBeNull();
+    expect(p.stress!.colours).toBe("none");
+    expect(p.stress!.pins).toEqual([]);
+    expect(p.stress!.deform).toBeNull();
+    expect(r.overlays.at(-1)).toBeNull();
+    expect(r.weakSpots.slice(n).filter(Boolean)).toEqual([]);
+  });
+
+  it("says the setup changed when the saved study did while closed", async () => {
+    const { r, p } = await ranAndClosed();
+    const s = structuredClone(r.study()!);
+    s.loads[0]!.force = 250;
+    r.setStudy(s);
+    r.ui.showStress();
+    expect(p.stress!.result).not.toBeNull();
+    expect(p.stress!.colours).toBe("shown");
+    expect(p.stress!.ranSetup).not.toBe(JSON.stringify(p.stress!.setup));
+  });
+
+  it("drops it for another body, another document, or a Run stopped by the close", async () => {
+    const a = await ranAndClosed();
+    a.r.setStudy({ ...structuredClone(a.r.study()!), body: "b2" });
+    a.r.ui.showStress();
+    expect(a.p.stress!.result).toBeNull();
+
+    const b = await ranAndClosed();
+    b.r.open();
+    b.r.ui.showStress();
+    expect(b.p.stress!.result).toBeNull();
+    expect(b.r.overlays.at(-1)).toBeNull();
+
+    const c = rig();
+    setUp(c);
+    await settled(c);
+    void c.ui.runStress();
+    c.ui.closeStress();
+    c.ui.showStress();
+    expect(usePanelsStore().stress!.result).toBeNull();
+  });
+
+  it("is kept once: a second close after a reopen keeps the result shown then", async () => {
+    const { r, p, before } = await ranAndClosed();
+    r.ui.showStress();
+    r.ui.closeStress();
+    r.ui.showStress();
+    expect(p.stress!.result).toEqual(before.result);
+    expect(r.overlays.at(-1)).toEqual(before.overlay);
   });
 });
 
