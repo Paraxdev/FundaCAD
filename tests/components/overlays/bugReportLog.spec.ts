@@ -92,7 +92,7 @@ describe("the bug report's app log", () => {
     await open();
     expect(invoke.mock.calls).toEqual([["log_tail"]]);
     expect($<HTMLInputElement>(".bug-log")!.checked).toBe(true);
-    expect(preview()).toContain("app log, last 2 KB");
+    expect(preview()).toContain(`app log (the end, user names hidden):\n${TAIL_A}`);
 
     tick(".bug-doc", true);
     const ticked = await copy();
