@@ -155,8 +155,7 @@ fn tone(hdr: &[[f32; 3]]) -> Vec<f32> {
 }
 
 /// `picture` is the resolved RGBA8 of all samples, `first` and `all` linear means of the first half and of every
-/// sample.
-/// The second half is what is left of `all`, and the two halves differ by twice the noise of `all`.
+/// sample. The second half is what is left of `all`, and the two halves differ by twice the noise of `all`.
 fn judge(picture: &[u8], first: &[[f32; 3]], all: &[[f32; 3]], reference: &Reference) -> (f64, f64) {
     let second: Vec<[f32; 3]> =
         first.iter().zip(all).map(|(a, m)| [0, 1, 2].map(|k| (2.0 * m[k] - a[k]).max(0.0))).collect();

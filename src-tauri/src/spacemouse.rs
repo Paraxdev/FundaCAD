@@ -1,7 +1,7 @@
 //! Native SpaceMouse reader, since WebKitGTK has no WebHID: reports become `spacemouse:motion` and `spacemouse:button`.
 //! Linux reads spacenavd first (see `spnav`); without it the udev rule must target hidraw, see
-//! packaging/99-spacemouse.rules.
-//! FUNDACAD_SPACEMOUSE_DEBUG=1 logs raw reports (the old SINDRICAD_ spelling still works).
+//! packaging/99-spacemouse.rules. FUNDACAD_SPACEMOUSE_DEBUG=1 logs raw reports (the old SINDRICAD_ spelling still
+//! works).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -133,8 +133,8 @@ struct Buttons {
 /// Whether the reader should be running. Written by the commands below,
 /// read by the thread between reports.
 static WANTED: AtomicBool = AtomicBool::new(false);
-/// Separate from WANTED: a thread takes a moment to notice it was stopped, and conflating the two leads to two
-/// readers on one device.
+/// Separate from WANTED: a thread takes a moment to notice it was stopped, and conflating the two leads to two readers
+/// on one device.
 static ALIVE: Mutex<bool> = Mutex::new(false);
 
 fn alive() -> std::sync::MutexGuard<'static, bool> {
@@ -198,8 +198,7 @@ fn start(app: AppHandle) {
             }
         }
         // Taken before the flag is cleared and checked again under it, or a start arriving while this thread winds down
-        // would
-        // see ALIVE true, not spawn, and leave nothing reading.
+        // would see ALIVE true, not spawn, and leave nothing reading.
         let mut is_alive = alive();
         if WANTED.load(Ordering::SeqCst) {
             drop(is_alive);
@@ -323,8 +322,7 @@ fn open_best(api: &HidApi) -> (DeviceInventory, Result<Opened, Blocked>) {
     if let Some(&(score, info)) = ranked.first() {
         let name = info.product_string().unwrap_or("SpaceMouse").to_string();
         // Enumeration needs only the USB node, opening needs the root only hidraw node, so listed but unopenable means
-        // a
-        // missing udev rule or spacenavd holding the device.
+        // a missing udev rule or spacenavd holding the device.
         match api.open_path(info.path()) {
             Err(e) => blocked = Some(Blocked::Unreadable { name, detail: e.to_string() }),
             Ok(dev) => {

@@ -1,6 +1,6 @@
-//! Paths of files dropped on the window. `dragDropEnabled` stays off, since wry would replace in page HTML5 drag.
-//! On Windows WebView2 resolves the page's File objects; WebKitGTK gives the page none (webkit.org/b/271957), so on
-//! Linux GTK's uri list is held for `drop_paths_take`. Either way the reply is the `files-dropped` event.
+//! Paths of files dropped on the window. `dragDropEnabled` stays off, since wry would replace in page HTML5 drag. On
+//! Windows WebView2 resolves the page's File objects; WebKitGTK gives the page none (webkit.org/b/271957), so on Linux
+//! GTK's uri list is held for `drop_paths_take`. Either way the reply is the `files-dropped` event.
 
 #![cfg_attr(not(windows), allow(dead_code, unused_imports))]
 

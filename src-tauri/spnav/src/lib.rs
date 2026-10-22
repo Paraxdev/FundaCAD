@@ -1,6 +1,5 @@
-//! Reads a 3D mouse through `spacenavd` on Linux, so no udev rule is needed and `spnavcfg` settings carry over.
-//! An idle puck sends nothing, so while neither has sent, the device is also read directly and the first to send is
-//! kept.
+//! Reads a 3D mouse through `spacenavd` on Linux, so no udev rule is needed and `spnavcfg` settings carry over. An idle
+//! puck sends nothing, so while neither has sent, the device is also read directly and the first to send is kept.
 
 use std::io::{self, Read};
 use std::time::{Duration, Instant};
@@ -99,8 +98,8 @@ impl Reader {
     }
 }
 
-/// Hands every record to `on_event` until `keep_going`, asked after each read, says stop (`Ok`) or the daemon closes
-/// or fails (`Err`). The source needs a read timeout.
+/// Hands every record to `on_event` until `keep_going`, asked after each read, says stop (`Ok`) or the daemon closes or
+/// fails (`Err`). The source needs a read timeout.
 pub fn pump(mut src: impl Read, keep_going: impl Fn() -> bool, on_event: impl FnMut(Event)) -> io::Result<()> {
     pump_with(&mut Reader::default(), &mut src, keep_going, on_event)
 }

@@ -1,6 +1,5 @@
 //! A plugin's secrets in the OS credential store (Credential Manager, Keychain, Secret Service), never a file. Without
-//! a
-//! store the call fails, it never falls back to plain text.
+//! a store the call fails, it never falls back to plain text.
 
 use keyring::Entry;
 

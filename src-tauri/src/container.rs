@@ -6,9 +6,8 @@ use std::path::PathBuf;
 
 pub use fundacad_format::container::*;
 
-/// Not under the cache dir, where Compute All's purge would delete it. Flat, one blob per import feature.
-/// The app and the engine worker both write here without locks: the path is the content hash and writes publish by
-/// rename.
+/// Not under the cache dir, where Compute All's purge would delete it. Flat, one blob per import feature. The app and
+/// the engine worker both write here without locks: the path is the content hash and writes publish by rename.
 pub fn blob_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("blobs");

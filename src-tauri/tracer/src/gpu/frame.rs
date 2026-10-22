@@ -203,8 +203,7 @@ impl Tracer {
     }
 
     /// Applies pending scene changes, traces for `budget` and resolves. At the cap it hands out the held frame, then
-    /// the
-    /// denoised one; a software band can end mid sample, so the sample count is no sign of a finished picture.
+    /// the denoised one; a software band can end mid sample, so the sample count is no sign of a finished picture.
     pub fn frame(&mut self, w: u32, h: u32, budget: Duration) -> Vec<u8> {
         if self.fault().is_some() {
             return vec![0; w.max(1) as usize * h.max(1) as usize * 4];

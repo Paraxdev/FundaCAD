@@ -1,7 +1,6 @@
 //! Plugin bundle checks that are arithmetic on bytes and text: entry names, download URLs, digests and grants. Tauri
-//! free
-//! so scripts/check-plugin-guards.sh can run these tests on their own. Grants are opaque strings here, their meaning
-//! lives in src/plugins/manifest.ts.
+//! free so scripts/check-plugin-guards.sh can run these tests on their own. Grants are opaque strings here, their
+//! meaning lives in src/plugins/manifest.ts.
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -42,8 +41,8 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     hex_of(&h.finalize())
 }
 
-/// Labels a plugin, never permits one. The prefix test works only because the prefix ends at a path separator,
-/// without it `https://github.com/Paraxdev` would also match `https://github.com/Paraxdev.evil.com/`.
+/// Labels a plugin, never permits one. The prefix test works only because the prefix ends at a path separator, without
+/// it `https://github.com/Paraxdev` would also match `https://github.com/Paraxdev.evil.com/`.
 pub fn is_official_url(url: &str) -> bool {
     if !url.starts_with(BUNDLE_PREFIX) {
         return false;
@@ -211,8 +210,7 @@ pub fn now_secs() -> u64 {
 /// an archive entry: a closed character set, not a sanitiser.
 pub fn safe_id(id: &str) -> Result<&str, String> {
     // `Publisher.Name` or `Name`, mirroring ID in src/plugins/manifest.ts. Every segment must start with a letter,
-    // which
-    // forbids `..` and the dot directories this module creates, like `.staging-x`.
+    // which forbids `..` and the dot directories this module creates, like `.staging-x`.
     fn segment(part: &str) -> bool {
         !part.is_empty()
             && part.len() <= 31

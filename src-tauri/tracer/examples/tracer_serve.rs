@@ -1,8 +1,8 @@
 //! The native tracer without the app, for browser scripts and the e2e: frames over the app's WebSocket transport, the
-//! pt_* and frames_* commands over a second socket behind the same token and Origin rules as the engine's.
-//! Usage: tracer_serve <token> [--port N], prints `LISTENING <port>`. Exits when stdin closes, so spawn it with a piped
-//! stdin as e2e/pathtrace_bloom_e2e.cjs does; from /dev/null, nohup or a shell background job it exits at once.
-//! Commands: text `{"id","cmd","args"}` or binary `[u32 LE id][u16 LE cmd length][cmd][raw body]`, answered by
+//! pt_* and frames_* commands over a second socket behind the same token and Origin rules as the engine's. Usage:
+//! tracer_serve <token> [--port N], prints `LISTENING <port>`. Exits when stdin closes, so spawn it with a piped stdin
+//! as e2e/pathtrace_bloom_e2e.cjs does; from /dev/null, nohup or a shell background job it exits at once. Commands:
+//! text `{"id","cmd","args"}` or binary `[u32 LE id][u16 LE cmd length][cmd][raw body]`, answered by
 //! `{"id","ok":true,"value"}` or `{"id","ok":false,"error"}`. They mirror src-tauri/src/frames.rs and frames/tracer.rs.
 
 use std::io::{self, Read};
