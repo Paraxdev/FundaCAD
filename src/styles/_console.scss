@@ -1,13 +1,3 @@
-/* ============================================================================
-   Console, the app's own log.
-
-   The layout rule that matters and is easy to undo by accident: MESSAGES WRAP,
-   they never clip. This panel exists because the toast and the title-bar pill
-   both end in an ellipsis, and the clipped tail of a kernel error is the part
-   that says what to do about it. Any `text-overflow` or `white-space: nowrap`
-   added below would quietly reintroduce the bug the panel was built to fix.
-   ============================================================================ */
-
 .logcon {
   position: fixed;
   right: var(--s-4);
@@ -45,8 +35,7 @@
   flex: 1 1 auto;
 }
 
-/* Level toggles. Off reads as muted rather than hidden, so it is obvious that
-   entries are being filtered out and not that none exist. */
+/* Off reads as muted, not hidden, so filtered entries do not look absent. */
 .logcon-filter {
   display: inline-flex;
   align-items: center;
@@ -92,8 +81,7 @@
   border-radius: var(--r-sm);
   border: 1px solid transparent;
   background: none;
-  /* Explicit: a <button> does not inherit colour, and these hold an
-     <svg stroke="currentColor">. Without it they draw as empty boxes. */
+  /* A <button> does not inherit colour, and the svg strokes currentColor. */
   color: var(--text-mute);
   cursor: pointer;
 }
@@ -152,7 +140,8 @@
   white-space: nowrap;
 }
 
-/* The load-bearing declaration in this file. */
+/* Messages wrap, never clip: the toast and the title bar pill already ellipsize, and the
+   cut tail of a kernel error is the part that says what to do. */
 .logcon-msg {
   min-width: 0;
   white-space: pre-wrap;

@@ -1,8 +1,5 @@
-/* ============================================================================
-   PREFERENCES, categories down the side and a grid of cards per category
-   (PreferencesDialog.vue). Larger type than the rest of the chrome: a settings
-   screen is read, not glanced at.
-   ============================================================================ */
+/* PreferencesDialog.vue. Larger type than the rest of the chrome: a settings screen is
+   read, not glanced at. */
 .modal-panel.prefs-panel {
   width: min(960px, 94vw);
   height: min(680px, 88vh);
@@ -134,7 +131,6 @@ label.pref-head {
   font-size: 13px;
 }
 
-/* A few named choices as buttons side by side, every option visible. */
 .pref-seg {
   display: inline-flex;
   flex: none;
@@ -174,8 +170,7 @@ label.pref-head {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
-/* The sections that bring their own rows (assistants, plugins), set at the
-   same size as the cards around them. */
+/* Sections with their own rows (assistants, plugins), sized like the cards around them. */
 .prefs-pane-flow {
   display: flex;
   flex-direction: column;
