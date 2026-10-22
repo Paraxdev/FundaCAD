@@ -1,20 +1,9 @@
-//! The native tracer without the app, for browser scripts: the page's
-//! `?tracer=native-dev&port=P&token=T`, the e2e, and later the gap harness.
-//! Frames go over the same loopback WebSocket transport as in the app; the
-//! pt_* and frames_* commands the app takes through Tauri come over a second,
-//! command socket behind the same token and Origin rules as the engine's.
-//!
-//! Usage: tracer_serve <token> [--port N]. Prints `LISTENING <port>`, port 0
-//! (the default) picks a free one. Exits when its stdin closes, so a script
-//! that spawns it with a piped stdin never leaves it running. Started with
-//! stdin from /dev/null, under nohup or as a shell background job it exits at
-//! once: spawn it with a piped stdin, as e2e/pathtrace_bloom_e2e.cjs does.
-//!
-//! The command socket: a text message is `{"id","cmd","args"}`, a binary one
-//! (pt_mesh, pt_colors) is `[u32 LE id][u16 LE cmd length][cmd][raw body]`.
-//! Every request is answered by `{"id","ok":true,"value"}` or
-//! `{"id","ok":false,"error"}`. The commands mirror src-tauri/src/frames.rs
-//! and src-tauri/src/frames/tracer.rs, a new one there needs adding here.
+//! The native tracer without the app, for browser scripts and the e2e: frames over the app's WebSocket transport, the
+//! pt_* and frames_* commands over a second socket behind the same token and Origin rules as the engine's.
+//! Usage: tracer_serve <token> [--port N], prints `LISTENING <port>`. Exits when stdin closes, so spawn it with a piped
+//! stdin as e2e/pathtrace_bloom_e2e.cjs does; from /dev/null, nohup or a shell background job it exits at once.
+//! Commands: text `{"id","cmd","args"}` or binary `[u32 LE id][u16 LE cmd length][cmd][raw body]`, answered by
+//! `{"id","ok":true,"value"}` or `{"id","ok":false,"error"}`. They mirror src-tauri/src/frames.rs and frames/tracer.rs.
 
 use std::io::{self, Read};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -348,7 +337,6 @@ impl Dev {
         })
     }
 
-    /// One request in, its reply out.
     fn answer(&self, msg: &Message) -> Option<String> {
         let (id, cmd, args, body) = match msg {
             Message::Text(t) => match serde_json::from_str::<Value>(t.as_str()) {

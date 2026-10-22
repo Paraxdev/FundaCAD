@@ -1,8 +1,5 @@
-//! Which bodies are traced and what has to be rebuilt when one changes. A mesh
-//! is keyed like blasCache.ts keys a BLAS (owner, etag, geometry, versions), so
-//! an edit arrives as a new key and rebuilds that body's BLAS only; a move or a
-//! hide rebuilds the TLAS only; a colour or material change rebuilds nothing
-//! and restarts the accumulation.
+//! Which bodies are traced and what a change rebuilds. Meshes are keyed like blasCache.ts keys a BLAS, so an edit
+//! rebuilds one BLAS, a move or hide the TLAS, and a colour or material change only restarts the accumulation.
 
 use std::collections::{BTreeMap, BTreeSet};
 
