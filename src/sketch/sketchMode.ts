@@ -727,7 +727,6 @@ export class SketchMode {
     if (this.gizmo?.active) this.gizmo.cancel();
     const store = this.store!;
     this.modifyFlow.reset(); // an offset left mid-placement takes its face-edge projection with it
-    this.mirrorFlow.reset();
     this.patternFlow.flushOnFinish(); // may add patterns, must precede the snapshot
     const sketch = commit ? this.snapshotFeature() : null;
     if (sketch) {
@@ -780,6 +779,7 @@ export class SketchMode {
     setPrompt(null);
     this.viewport.hoverEntity(null); // drop any Project-tool 3D hover highlight
     this.modifyFlow.reset();
+    this.mirrorFlow.reset();
     this.overlay.setPreview([]);
     this.overlay.setSnap(null);
     this.snapTag.hide();
