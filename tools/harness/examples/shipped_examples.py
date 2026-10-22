@@ -1,8 +1,10 @@
 """Every example on Home opens from its card as an untitled, clean copy, builds, and holds the bodies it should,
-and the Box with a lid still fits its lid after its size and clearance change.
+the Box with a lid still fits its lid after its size and clearance change, and the 3D printer imports its STEP.
 
 Run with `python tools/harness/examples/shipped_examples.py`.
 """
+
+import time
 
 from fundacad_harness import Session
 
@@ -14,14 +16,27 @@ EXAMPLES = {
     "Pinned lever": [((-13, -13, 0), (100, 13, 10))],
 }
 
+# What scripts/examples/gen_printer.py printed for src/templates/printer.stpz.
+PRINTER = {
+    "leaves": 100,
+    "bbox": ((-5, -24, 0), (392, 402, 414)),
+    "groups": ["Frame", "Motion", "Bed", "Toolhead", "Electronics"],
+    "motors": [(45, 30, 350), (180, 315, 30), (45, 180, 30), (315, 180, 30)],
+}
+PRINTER_BUDGET_S = 60
+
 INSPECT = "() => window.geometry.session('inspect', { document: window.store.document })"
+PLAIN = "() => window.geometry.session('inspect', { document: window.store.document, detail: false })"
 CLASHES = "() => window.geometry.interference(window.store.document, 0.01)"
 
 
 def open_example(s, name):
+    unsaved = s.status(raw=True)["dirty"]
     if s.bridge.call("startScreen") != "home":
         s.menu("File/Home")
     s.page.click(f'.home-example:has-text("{name}")')
+    if unsaved:
+        s.click("Discard")
     s.settle()
 
 
@@ -86,7 +101,43 @@ def run(s):
     assert near(boxes(found), [((-72.7, -22, 0), (-5, 22, 27)), ((5, -22, 0), (72.7, 22, 7))], 0.05), boxes(found)
     clash = s.page.evaluate(CLASHES)
     assert (clash["ok"], clash.get("pairs", []), clash.get("clearances", [])) == (True, [], []), clash
+    printer(s)
     assert not s.page_errors(), s.page_errors()
+
+
+def items(s):
+    return [(r[1], r[3]) for r in s.screen(region="items", raw=True)["lines"] if r[2] == "row"]
+
+
+def printer(s):
+    t0 = time.monotonic()
+    open_example(s, "3D printer")
+    took = time.monotonic() - t0
+    print(f"3D printer example: imported and built in {took:.1f} s")
+    assert took < PRINTER_BUDGET_S, took
+    st = s.status(raw=True)
+    path = s.page.evaluate("() => window.store.filePath")
+    assert (st["doc"], path, st["dirty"]) == ("3D printer", None, False), (st, path)
+    assert s.last_error() == "none", s.last_error()
+    rows = s.bodies(raw=True)
+    assert len(rows) == PRINTER["leaves"], len(rows)
+    materials = {r["material"] for r in rows if r["material"]}
+    assert len(materials) >= 5, materials
+    box = s.page.evaluate("() => window.store.buildState.result.bbox")
+    assert near([(box["min"], box["max"])], [PRINTER["bbox"]], 0.5), box
+
+    found = s.page.evaluate(PLAIN)
+    motors = [b for b in found["bodies"] if b["name"].startswith("Stepper motor")]
+    volumes = {round(b["volume"], 3) for b in motors}
+    corners = sorted(tuple(round(v, 2) for v in b["bbox"]["min"]) for b in motors)
+    assert (len(motors), len(volumes)) == (4, 1), motors
+    want = sorted((x - 21, y - 21, z) for x, y, z in PRINTER["motors"])
+    assert corners == want, corners
+
+    s.panel("items")
+    s.expand(next(ref for ref, label in items(s) if label == "Printer" and ref.startswith("folder:")))
+    labels = [label for _, label in items(s)]
+    assert [g for g in PRINTER["groups"] if g in labels] == PRINTER["groups"], labels
 
 
 if __name__ == "__main__":

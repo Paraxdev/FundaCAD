@@ -376,6 +376,7 @@ describe("HomeScreen", () => {
     expect($$(".home-example-name").map((n) => n.textContent)).toEqual([
       "Wall bracket",
       "Box with a lid",
+      "3D printer",
       "Plate",
       "Pinned lever",
     ]);
@@ -385,7 +386,7 @@ describe("HomeScreen", () => {
 
   it("starts a document from an example card", async () => {
     const { cb } = open();
-    $$(".home-example")[2]!.click();
+    $$(".home-example")[3]!.click();
     await flushPromises();
     expect(cb.newFromTemplate).toHaveBeenCalledWith("plate");
   });
@@ -415,7 +416,7 @@ describe("HomeScreen", () => {
     ["the browser build", null, "Recent documents appear here in the desktop app."],
   ] as const)("shows the examples with no recent documents in %s", (_where, lib, empty) => {
     open([], {}, lib);
-    expect($$(".home-example")).toHaveLength(4);
+    expect($$(".home-example")).toHaveLength(5);
     expect($(".home-empty")!.textContent).toBe(empty);
   });
 
@@ -763,12 +764,14 @@ describe("Home on a first run", () => {
     ).toEqual([
       ["Wall bracket", "Stress study ready", "stress"],
       ["Box with a lid", "Two parts, 0.2 mm fit", "shell"],
+      ["3D printer", "Imported STEP, 100 parts", "assembly"],
       ["Plate", "Sized by parameters", "box"],
       ["Pinned lever", "Stress study ready", "rotate"],
     ]);
     expect($$(".home-example").map((c) => c.getAttribute("title"))).toEqual([
       "An L bracket with a stress study ready to run",
       "A box and a lid that fits it, sized by parameters, laid out for printing",
+      "A printer frame imported from a STEP file. Hide, isolate and section its parts",
       "A plate with four holes, sized by parameters",
       "A lever on a pin with a stress study ready to run",
     ]);
