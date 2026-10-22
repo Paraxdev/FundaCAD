@@ -252,6 +252,8 @@ export async function openDocument(
   },
 ) {
   if (isTauri()) {
+    // A file picked for a document closed while the dialog was up is not imported into the next one.
+    const session = store.session;
     const { open } = await import("@tauri-apps/plugin-dialog");
     const path = await open({
       multiple: false,
@@ -271,7 +273,7 @@ export async function openDocument(
     if (isDocumentExt(ext)) {
       if (!(await mayReplace())) return;
       await openDocumentAtPath(store, path, geometry);
-    } else {
+    } else if (session.alive) {
       await placeImport([path.split(/[\\/]/).pop() ?? path], () => importPath(store, geometry, path));
     }
   } else {
@@ -566,6 +568,8 @@ export async function exportModel(
   flat: FlatSource | null = null,
   format?: ExportFormat,
 ) {
+  // The dialogs wait on the user; a document closed meanwhile is not exported, nor is the one opened after it.
+  const session = store.session;
   const built = store.buildState.result?.bodies ?? [];
   const bodies = built.map((b) => ({ id: b.id, name: store.bodyName(b.id) ?? b.name }));
   const docName = store.fileName === "Untitled" ? "" : store.fileName.replace(/\.[^.]+$/, "");
@@ -579,7 +583,7 @@ export async function exportModel(
     ...(flat ? { flat: { label: flat.label } } : {}),
     ...(format ? { format } : {}),
   });
-  if (!choice) return;
+  if (!choice || !session.alive) return;
   const { settings, scope } = choice;
   // The dialog offers DXF and SVG only with a 2D source, so the next plain
   // export would drop either for the default rather than the last 3D format.
@@ -626,7 +630,7 @@ export async function exportModel(
     // "separate" derives one file per body as "<base>-<body>.<ext>", so name the base.
     defaultPath: dir ? `${dir}/${name}` : name,
   });
-  if (!path) return;
+  if (!path || !session.alive) return;
   rememberExportDir(path);
   const fmt = settings.format;
   // GLB carries one material per body, so it needs the palette and slots. runBusy as in importPath: an export
@@ -734,6 +738,7 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
     await reportError("Import needs the desktop app: a browser tab has no filesystem path to give the engine to read.");
     return;
   }
+  const session = store.session;
   const { open } = await import("@tauri-apps/plugin-dialog");
   const path = await open({
     multiple: false,
@@ -761,7 +766,7 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
       { name: "3DS (old 3ds Max)", extensions: dialogExts(["3ds"]) },
     ],
   });
-  if (typeof path !== "string") return;
+  if (typeof path !== "string" || !session.alive) return;
   await importPath(store, geometry, path);
 }
 
