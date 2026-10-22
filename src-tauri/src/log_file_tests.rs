@@ -47,9 +47,16 @@ fn in_child(test: &str, dir: &Path) {
         .into_iter()
         .flatten()
         .flatten()
-        .map(|e| format!("--- {}\n{}", e.file_name().to_string_lossy(), fs::read_to_string(e.path()).unwrap_or_default()))
+        .map(|e| {
+            format!("--- {}\n{}", e.file_name().to_string_lossy(), fs::read_to_string(e.path()).unwrap_or_default())
+        })
         .collect();
-    assert!(out.status.success(), "{}{}{logs}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}{}{logs}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 /// The lines this test wrote, without the harness's own lines that followed the redirect.
