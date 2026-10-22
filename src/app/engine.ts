@@ -75,7 +75,7 @@ import { installSketchStateBridge } from "./sketchStateBridge";
 import { createActions } from "./actions";
 import { installKeyboard } from "./keyboard";
 import { installTitlebar } from "./titlebar";
-import { installUnsavedGuard } from "./unsavedGuard";
+import { beforeUpdate, installUnsavedGuard } from "./unsavedGuard";
 import { installContextMenuGuard } from "../ui/contextMenuGuard";
 import { installPointerKind } from "../input/pointerKind";
 import { installLongPress } from "../ui/longPress";
@@ -522,7 +522,7 @@ export function mountUi(e: Engine): void {
 
   if (welcomeOnStartup()) e.ui.home.open();
   installLaunchPaths(e, recoveryAsked);
-  scheduleStartupUpdateCheck();
+  scheduleStartupUpdateCheck(beforeUpdate(e));
 
   installTitlebar(e);
   installUnsavedGuard(e);
