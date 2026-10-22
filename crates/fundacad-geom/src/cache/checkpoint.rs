@@ -53,6 +53,7 @@ pub struct Persist<'a> {
     pub acc_ms: f64,
     pub budget_ms: f64,
     pub written: usize,
+    pub last_saved: Option<usize>,
 }
 
 impl Persist<'_> {
@@ -124,6 +125,7 @@ impl Persist<'_> {
         if self.store.save_checkpoint(chain_key, record).is_ok() {
             self.written += 1;
             self.acc_ms = 0.0;
+            self.last_saved = Some(index);
         }
     }
 }

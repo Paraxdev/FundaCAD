@@ -56,7 +56,7 @@ pub struct RebuildCache {
     pub mesh_persist_after: Duration,
     brep_sigs: HashMap<String, String>,
     proj_quiet: bool,
-    mesh_keys: HashMap<String, String>,
+    stored: Modified,
     payloads: meshes::Payloads,
     pub stats: CacheStats,
 }
@@ -93,7 +93,7 @@ impl RebuildCache {
             mesh_persist_after: meshes::PERSIST_MIN,
             brep_sigs: HashMap::new(),
             proj_quiet: false,
-            mesh_keys: HashMap::new(),
+            stored: HashMap::new(),
             payloads: meshes::Payloads::default(),
             stats: CacheStats::default(),
         }
@@ -189,10 +189,16 @@ impl RebuildCache {
             }
         }
         let start = resume.as_ref().map_or(0, |r| r.0);
+        // An unchanged body keeps the key the last build stored it under, or every checkpoint after a resume
+        // rewrites its blob under a new name (1097 blobs, 438 MB on a big part).
         if source == Source::Ram && start > 0 {
             if let Some((_, snap)) = &resume {
                 for b in &snap.bodies {
-                    modified.insert(b.id.clone(), (b.identity(), keys::blob_key(&keys[start - 1], &b.id)));
+                    let key = match self.stored.get(&b.id) {
+                        Some((ident, key)) if *ident == b.identity() => key.clone(),
+                        _ => keys::blob_key(&keys[start - 1], &b.id),
+                    };
+                    modified.insert(b.id.clone(), (b.identity(), key));
                 }
             }
         }
@@ -224,6 +230,7 @@ impl RebuildCache {
                 acc_ms: 0.0,
                 budget_ms: self.budget_ms,
                 written: 0,
+                last_saved: None,
             }),
         };
         let built = builder::rebuild_from(doc, raw, watch, resume, &mut tap);
@@ -235,7 +242,7 @@ impl RebuildCache {
             let replayed = std::mem::take(&mut tap.replayed);
             drop(tap);
             self.reset();
-            self.mesh_keys.clear();
+            self.stored.clear();
             if let Some(s) = &self.store {
                 s.purge(&keys);
             }
@@ -271,15 +278,16 @@ impl RebuildCache {
 
         let mut written = 0;
         if let Some(mut p) = tap.persist.take() {
-            if elapsed >= self.tip_after || p.acc_ms >= self.tip_after.as_secs_f64() * 1000.0 {
+            let slow = elapsed >= self.tip_after || p.acc_ms >= self.tip_after.as_secs_f64() * 1000.0;
+            if slow && p.last_saved != Some(n - 1) {
                 if let Some(Some(tip)) = ring.last() {
                     p.save(n - 1, tip);
                 }
             }
             written = p.written;
-            self.mesh_keys = p.modified.into_iter().map(|(id, (_, key))| (id, key)).collect();
+            self.stored = p.modified;
         } else {
-            self.mesh_keys.clear();
+            self.stored.clear();
         }
         let replayed = tap.replayed;
         self.proj_quiet = r.projection_updates.is_empty();
@@ -317,7 +325,7 @@ impl RebuildCache {
             .map(|b| {
                 let mut m = crate::reply::mesh_body(b);
                 m.identity = Some(b.identity);
-                m.mesh_key = self.mesh_keys.get(&b.id).cloned();
+                m.mesh_key = self.stored.get(&b.id).map(|(_, key)| key.clone());
                 m
             })
             .collect();
