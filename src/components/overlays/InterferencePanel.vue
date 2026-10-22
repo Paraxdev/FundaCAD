@@ -1,9 +1,5 @@
 <script setup lang="ts">
-// Inspect → Interference: which bodies clash (and by how much), plus an
-// optional clearance pass for pairs that come within a user threshold without
-// actually overlapping. Clicking a row selects the offending pair in the
-// viewport; the overlap solids and clearance lines are drawn by the viewport
-// itself (see ui/panels.ts showInterference / closeInterference).
+// The overlap solids and clearance lines are drawn by the viewport (ui/panels.ts showInterference).
 
 import { ref } from "vue";
 import { useEngine } from "../../app/engineKey";

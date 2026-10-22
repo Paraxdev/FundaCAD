@@ -1,21 +1,6 @@
 <script setup lang="ts">
-// Preferences: one surface for the settings that were scattered across the
-// title bar (theme, icons, units) plus the shell arrangement, which had no
-// surface at all. Categories down the side, each one a grid of cards.
-//
-// A surface over the existing setting modules, NOT a store of its own. Every
-// value here already persists itself and already notifies its own subscribers,
-// ui/theme.ts, ui/icons.ts, ui/units.ts, ui/renderPrefs.ts, so this component
-// holds only the mirror it renders from, and every change is applied live.
-// Copying them into local state and writing back on "OK" would put a second
-// copy of each setting in the app, and the title bar's selects read the first.
-//
-// The mirrors are refs re-read from each module's own subscription rather than
-// bound with v-model, because those modules are deliberately Vue-free (that is
-// what lets the headless suite import them) and so nothing tracks them.
-//
-// Every pane stays in the DOM (v-show), so a control keeps its id whichever
-// category is open.
+// Mirrors the setting modules (ui/theme, icons, units, renderPrefs) with no store of its own, every change applies live.
+// The mirrors re-read on each module's subscription, the modules stay Vue-free so the headless suite can import them.
 
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
@@ -103,11 +88,9 @@ function onKey(e: KeyboardEvent) {
 }
 
 const theme = ref(getTheme());
-// The roster is no longer a constant, uploading and removing a palette grows and
-// shrinks it, so it is mirrored in a ref and re-read whenever the library moves.
+// Uploading and removing a palette changes the roster, so it is mirrored and re-read when the library moves.
 const themeList = ref(themes());
-// The last upload's rejection reason, shown under the picker. Empty when the
-// last upload was fine or there has not been one.
+// The last upload's rejection reason, empty when it was fine.
 const themeError = ref("");
 const fileInput = ref<HTMLInputElement | null>(null);
 const homeBg = ref(getHomeBackground());
@@ -218,7 +201,6 @@ const TOUCHPAD_SCROLL = [
 
 const value = (ev: Event) => (ev.target as HTMLSelectElement).value;
 
-// The pickers take {value,label}; these rosters are all keyed by id.
 const themeOptions = computed(() => themeList.value.map((t) => ({ value: t.id, label: t.label })));
 const packOptions = computed(() => iconPacks().map((p) => ({ value: p.id, label: p.label })));
 const environmentOptions = ENVIRONMENTS_LIST.map((e) => ({ value: e.id, label: e.label, hint: e.note }));
@@ -230,9 +212,7 @@ function onTheme(id: string) {
   if (v) setTheme(v);
 }
 
-// Opening the native file picker from a real button, the <input> itself is
-// hidden: a bare file input reads as a mystery control on a settings screen,
-// and "Upload theme…" says what it is for.
+// A real button opens the native picker, a bare file input reads as a mystery control on a settings screen.
 function pickThemeFile() {
   themeError.value = "";
   fileInput.value?.click();
@@ -241,9 +221,7 @@ function pickThemeFile() {
 async function onUpload(ev: Event) {
   const input = ev.target as HTMLInputElement;
   const file = input.files?.[0];
-  // Reset immediately so choosing the SAME file twice fires change again, the
-  // usual gotcha with a file input, someone re-picks after fixing the file and
-  // nothing happens.
+  // Reset at once so picking the same file again, after fixing it, still fires change.
   input.value = "";
   if (!file) return;
   let parsed: unknown;
@@ -260,16 +238,13 @@ async function onUpload(ev: Event) {
   }
   themeError.value = "";
   themeList.value = themes();
-  // Adding a palette does not switch to it (the module leaves that to us), and a
-  // user who just uploaded one wants to see it, so make it active.
+  // Adding a palette does not switch to it, and a user who just uploaded one wants to see it.
   setTheme(res.theme.id);
 }
 
 function onRemoveTheme() {
   themeError.value = "";
-  // Only the active theme can be the one on screen to remove; removing it falls
-  // back to the built-in palette inside the module, which fires onThemeChange
-  // and refreshes both refs.
+  // Removing the active palette falls back to the built-in one in the module, whose onThemeChange refreshes both refs.
   if (activeIsCustom.value) removeCustomTheme(theme.value);
 }
 function onPack(id: string) {
@@ -383,6 +358,7 @@ function onClassicCamera(ev: Event) {
       </nav>
 
       <div class="prefs-panes">
+        <!-- v-show, so a control keeps its id whichever category is open. -->
         <section v-show="category === 'appearance'" class="prefs-pane">
           <h3 class="prefs-pane-title">Appearance</h3>
           <div class="prefs-grid">

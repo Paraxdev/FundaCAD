@@ -1,7 +1,5 @@
 <script setup lang="ts">
-// The bug-report form. Everything about what a report CONTAINS, the text,
-// the open-sketch snapshot, the clipboard write, is in ui/bugReporter.ts; this
-// is the form and the "what will be copied" preview.
+// The bug-report form and its preview, what a report contains lives in ui/bugReporter.ts.
 
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
@@ -31,18 +29,14 @@ const { connected, crumbs, pipeline, faults } = bugContext(deps);
 
 const desc = useTemplateRef<HTMLTextAreaElement>("desc");
 
-// No esc(): this was innerHTML'd into a <pre> and needed one; {{ }} escapes on
-// its own, and a second pass would show the entities.
+// No esc(): {{ }} escapes already, and a second pass would show the entities.
 const preview = computed(() =>
   [
     `FundaCAD ${version.value} · ${navigator.userAgent.slice(0, 80)}`,
     `geometry engine connected: ${connected}`,
     `recent events (${crumbs.length}):`,
     ...crumbs.slice(-5).map((c) => `  ${c}`),
-    // Said in the preview, not just buried in the attached log: a person who
-    // came here about a doubled or shredded body needs to see that the app
-    // noticed it too, and a person here about something else should not have
-    // to read the trail to learn the renderer is unhappy.
+    // Faults go in the preview, not only the attached log, so a reporter sees the app noticed them too.
     faults
       ? `render pipeline: FAULTS DETECTED, ${pipeline.length} lines attached`
       : `render pipeline: no faults, ${pipeline.length} lines attached`,
@@ -71,8 +65,7 @@ async function copy() {
     logTail: includeLog.value ? logTail.value : null,
   });
   copying.value = false;
-  // A refused clipboard leaves the dialog up rather than closing over text the
-  // user cannot get back.
+  // A refused clipboard leaves the dialog up rather than closing over text the user cannot get back.
   if (ok) close();
 }
 
@@ -87,9 +80,7 @@ function onKey(e: KeyboardEvent) {
 onMounted(async () => {
   window.addEventListener("keydown", onKey, true);
   desc.value?.focus();
-  // The version comes from Tauri, so it lands a tick late. The dialog used to
-  // await it BEFORE painting, which meant the click had no visible effect
-  // until the round-trip finished.
+  // The version comes from Tauri a tick late, so it is fetched after focus rather than awaited before paint.
   const [v, tail] = await Promise.all([appVersion(), appLogTail()]);
   version.value = v;
   logTail.value = tail;
