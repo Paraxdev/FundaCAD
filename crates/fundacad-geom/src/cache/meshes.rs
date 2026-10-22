@@ -228,22 +228,3 @@ pub fn decode(data: &[u8]) -> Option<FullBody> {
     }
     Some(FullBody { fields, positions, normals, indices, face_ids, edges })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn an_artifact_round_trips_and_junk_is_a_miss() {
-        let sphere = crate::kernel::make_sphere(4.0).unwrap();
-        let full = mesh::strip_envelope(&mesh::body_payload(&sphere, "b", "B", 0.1, mesh::viewport_profile(1)));
-        let bytes = encode(&full);
-        let back = decode(&bytes).unwrap();
-        assert_eq!(back, full);
-        assert_eq!(mesh::etag(&back), mesh::etag(&full));
-        assert!(decode(&bytes[..bytes.len() - 1]).is_none());
-        assert!(decode(b"FCMESH01garbage").is_none());
-        let key = artifact_key(&"ab".repeat(16), 0.1, mesh::viewport_profile(1));
-        assert!(key.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-'), "{key}");
-    }
-}

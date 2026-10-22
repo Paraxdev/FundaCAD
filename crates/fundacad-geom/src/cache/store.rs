@@ -514,15 +514,6 @@ mod tests {
     }
 
     #[test]
-    fn a_temp_file_from_a_crash_is_swept() {
-        let root = scratch("tmp");
-        GeomStore::open(&root).unwrap();
-        fs::write(root.join("tmp").join("junk.tmp"), b"x").unwrap();
-        GeomStore::open(&root).unwrap();
-        assert_eq!(fs::read_dir(root.join("tmp")).unwrap().count(), 0);
-    }
-
-    #[test]
     fn eviction_spares_pins_and_referenced_blobs() {
         let s = GeomStore::open(scratch("evict")).unwrap();
         let big = crate::kernel::make_sphere(50.0).unwrap();
@@ -544,18 +535,6 @@ mod tests {
         assert_eq!(s.evict(0), 1);
         assert!(s.read_checkpoint(&key(33)).is_some(), "a pinned checkpoint is never evicted");
         assert_eq!(s.stats().blobs, 2);
-    }
-
-    #[test]
-    fn purge_keeps_blobs_another_checkpoint_needs() {
-        let s = GeomStore::open(scratch("purge")).unwrap();
-        let shape = crate::kernel::make_box(1.0, 2.0, 3.0).unwrap();
-        s.put_blob(&key(1), &shape).unwrap();
-        s.put_blob(&key(2), &shape).unwrap();
-        s.save_checkpoint(&key(40), cp(0, vec![entry("a", &key(1)), entry("b", &key(2))], 1.0)).unwrap();
-        s.save_checkpoint(&key(41), cp(0, vec![entry("a", &key(1))], 1.0)).unwrap();
-        assert_eq!(s.purge(&[key(40)]), 1);
-        assert!(s.has_blob(&key(1)) && !s.has_blob(&key(2)));
     }
 
     #[test]

@@ -1,0 +1,38 @@
+//! The crate's unit tests, in one binary because every file at the top of tests/ links OpenCASCADE again.
+
+mod bench;
+mod cache_keys;
+mod cache_meshes;
+mod cache_store;
+mod cancel;
+mod crate_root;
+mod export;
+mod export_pyfmt;
+mod features_blend_overlap;
+mod features_datum;
+mod features_datum_refs;
+mod features_import;
+mod features_joint;
+mod features_mechanism;
+mod fem_solve;
+mod fem_tetmesh;
+mod heartbeat;
+mod import_blobstore;
+mod import_dxf;
+mod import_mesh;
+mod import_scan;
+mod import_stage;
+mod jobs;
+mod mesh_edges;
+mod mesh_passes;
+mod mesh_profile;
+#[cfg(feature = "plugins")]
+mod plugins;
+mod printcheck;
+mod printcheck_bvh;
+mod projection;
+mod select_entity;
+mod select_eval;
+mod select_tuning;
+mod stress;
+mod trace;
