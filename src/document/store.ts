@@ -577,6 +577,9 @@ export class DocumentStore {
   /** Every runBusy op still running, newest last; the chip shows the newest. */
   private busyOps: { state: BusyState; abort: AbortController | null }[] = [];
   private historyHeld = 0;
+  // Reads begun since the last open: an open drops the ones before it, so only these can land in this document.
+  private readsHere = 0;
+  private opens = 0;
 
   // The last preview-free build and its key: leaving a tool or undoing a refused commit shows it again without a rebuild.
   private committedShown: { key: string; state: RebuildState } | null = null;
@@ -660,14 +663,16 @@ export class DocumentStore {
     return () => this.openListeners.delete(fn);
   }
   private emitOpen() {
+    this.opens++;
+    this.readsHere = 0;
     for (const fn of this.openListeners) fn();
   }
   get busyState(): BusyState {
     return this.busy;
   }
-  /** Only an import's read holds history, so this is true while one is still read. */
+  /** Only an import's read holds history, so this is true while one is still read into this document. */
   get importRunning(): boolean {
-    return this.historyHeld > 0;
+    return this.readsHere > 0;
   }
 
   /** An edit is waiting out the rebuild debounce. */
@@ -692,7 +697,11 @@ export class DocumentStore {
       state: { ...IDLE_BUSY, active: true, label, rebuild: opts.rebuild === true },
       abort: opts.abort ?? null,
     };
-    if (opts.holdHistory) this.historyHeld++;
+    const openedAt = this.opens;
+    if (opts.holdHistory) {
+      this.historyHeld++;
+      this.readsHere++;
+    }
     this.busyOps.push(op);
     this.setBusy(op.state);
     try {
@@ -701,7 +710,10 @@ export class DocumentStore {
         if (this.busyOps.at(-1) === op) this.setBusy(op.state);
       });
     } finally {
-      if (opts.holdHistory) this.historyHeld--;
+      if (opts.holdHistory) {
+        this.historyHeld--;
+        if (openedAt === this.opens) this.readsHere--;
+      }
       this.busyOps.splice(this.busyOps.indexOf(op), 1);
       this.busy = this.busyOps.at(-1)?.state ?? IDLE_BUSY;
       this.emitBusy();
@@ -788,6 +800,12 @@ export class DocumentStore {
     this.path = null;
     this.pathlessName = name;
     this.isDirty = false;
+    this.emitMeta();
+  }
+  // Gives up a name taken without a path, so the document is Untitled again, unsaved work and all.
+  dropPathlessName() {
+    if (this.path || this.pathlessName === null) return;
+    this.pathlessName = null;
     this.emitMeta();
   }
   // A failed rebuild keeps the last result, and a build in flight would hold up the new document's.
