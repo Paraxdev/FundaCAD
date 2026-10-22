@@ -15,7 +15,8 @@ interface Sent extends FrameView {
   after: number | null;
 }
 
-/** About half a second of cameras at 120 Hz with no frame landing. */
+/** About half a second of cameras at 120 Hz with no frame landing. The newest
+ *  answered one stays past it, or the edges would leave the frame on screen. */
 const KEEP = 64;
 
 const isOrtho = (c: THREE.Camera) => (c as THREE.OrthographicCamera).isOrthographicCamera === true;
@@ -31,11 +32,16 @@ export class FrameCameras {
     matrices.set(camera.projectionMatrix.elements, 16);
     const s: Sent = { matrices, ortho: isOrtho(camera), after: null };
     this.sent.push(s);
-    if (this.sent.length > KEEP) this.sent.shift();
+    if (this.sent.length > KEEP) this.sent.splice(this.sent[0] === this.newestAnswered() ? 1 : 0, 1);
     return (reply) => {
       if (typeof reply === "number") s.after = reply;
       else this.unknown = true;
     };
+  }
+
+  private newestAnswered(): Sent | undefined {
+    for (let i = this.sent.length - 1; i >= 0; i--) if (this.sent[i]!.after !== null) return this.sent[i];
+    return undefined;
   }
 
   /** Null when the frame is older than every camera kept, or the native side
