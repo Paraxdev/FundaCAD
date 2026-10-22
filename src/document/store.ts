@@ -26,7 +26,7 @@ import {
 } from "./elements";
 import {
   type BodyFinish, finishOf, freshMaterialName, isDefaultFinish, type MaterialDef,
-  normalizeMaterial, slugId, STARTER_LIBRARY, uniqueId,
+  asHex, normalizeMaterial, slugId, STARTER_LIBRARY, uniqueId,
 } from "./materials";
 import { faceKey } from "./faceMaterials";
 import {
@@ -209,6 +209,21 @@ function readReferenceImages(raw: unknown): Record<string, unknown>[] {
   return out;
 }
 
+const isPlainObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+const isBool = (v: unknown) => typeof v === "boolean";
+const isText = (v: unknown) => typeof v === "string" && v.trim() !== "";
+const isCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
+
+const isVec3 = (v: unknown) => Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n));
+
+const VIEW_SIDES: ReadonlySet<string> = new Set(["front", "back", "left", "right", "top", "bottom"]);
+
+function readViewOverrides(raw: unknown): Pick<CadDocument, "viewOverrides"> {
+  if (!isPlainObject(raw)) return {};
+  const kept = Object.entries(raw).filter(([side, o]) => VIEW_SIDES.has(side) && isPlainObject(o) && isVec3(o["normal"]) && isVec3(o["up"]));
+  return kept.length ? { viewOverrides: Object.fromEntries(kept) } : {};
+}
+
 const isIdMap = (v: unknown): v is Record<string, string> =>
   !!v && typeof v === "object" && !Array.isArray(v) && Object.values(v).every((x) => typeof x === "string");
 
@@ -245,12 +260,28 @@ const DEFAULT_PALETTE: { name: string; color: string }[] = [
   { name: "Blue", color: "#3050c8" },
 ];
 
+// A slot keeps its place when unreadable, since bodies point at slots by index.
+function readPalette(raw: unknown): { name: string; color: string; material?: string }[] {
+  if (!Array.isArray(raw) || !raw.length) return DEFAULT_PALETTE.map((s) => ({ ...s }));
+  return raw.map((slot, i) => {
+    const s = isPlainObject(slot) ? slot : {};
+    const base = DEFAULT_PALETTE[i] ?? { name: `Colour ${i + 1}`, color: "#9a9a9a" };
+    const { material: _m, ...rest } = s;
+    return {
+      ...rest,
+      name: isText(s["name"]) ? (s["name"] as string) : base.name,
+      color: asHex(s["color"]) ?? base.color,
+      ...(typeof s["material"] === "string" ? { material: s["material"] } : {}),
+    };
+  });
+}
+
 /** A persisted display-only id to value map, stored under one CadDocument field. */
 class Overlay<T> {
   private map = new Map<string, T>();
   /** Bumped on every write. */
   rev = 0;
-  constructor(readonly jsonKey: string) {}
+  constructor(readonly jsonKey: string, private readonly accepts: (v: unknown) => boolean = () => true) {}
   get(id: string): T | undefined {
     return this.map.get(id);
   }
@@ -277,9 +308,10 @@ class Overlay<T> {
     if (this.map.size) out[this.jsonKey] = Object.fromEntries(this.map);
   }
   /** rebuild the map from a parsed document's `[jsonKey]` field. */
-  loadFrom(parsed: Record<string, unknown>, mapValue?: (v: unknown) => T) {
-    const src = (parsed[this.jsonKey] as Record<string, unknown> | undefined) ?? {};
-    this.map = new Map(Object.entries(src).map(([k, v]) => [k, mapValue ? mapValue(v) : (v as T)]));
+  loadFrom(parsed: Record<string, unknown>) {
+    const src = parsed[this.jsonKey];
+    const entries = isPlainObject(src) ? Object.entries(src).filter(([, v]) => this.accepts(v)) : [];
+    this.map = new Map(entries as [string, T][]);
     this.rev++;
   }
 }
@@ -401,23 +433,23 @@ export class DocumentStore {
   private isDirty = false; // unsaved changes since last save/open/new
   private rollback: number | null = null; // # of active features (null = all); timeline marker
   private suppressed = new Set<string>(); // feature ids skipped on rebuild (suppress)
-  private sketchVis = new Overlay<boolean>("sketchVisibility"); // explicit per-sketch show/hide overrides
-  private bodyVis = new Overlay<boolean>("bodyVisibility"); // explicit per-body show/hide overrides (id → visible)
+  private sketchVis = new Overlay<boolean>("sketchVisibility", isBool); // explicit per-sketch show/hide overrides
+  private bodyVis = new Overlay<boolean>("bodyVisibility", isBool); // explicit per-body show/hide overrides (id → visible)
   /** True only while the CURRENT hidden set is exactly an isolate/solo (hide
    *  everything but a kept set), so the Isolate indicator doesn't light up for
    *  an ordinary manual body hide. Cleared by any other visibility write. Pure
    *  session state: not persisted, not undo-tracked. */
   private isolate = false;
-  private planeVis = new Overlay<boolean>("planeVisibility"); // explicit per-construction-plane show/hide overrides
-  private bodyNames = new Overlay<string>("bodyNames"); // explicit per-body display-name overrides (id → name)
+  private planeVis = new Overlay<boolean>("planeVisibility", isBool); // explicit per-construction-plane show/hide overrides
+  private bodyNames = new Overlay<string>("bodyNames", isText); // explicit per-body display-name overrides (id → name)
   private palette: { name: string; color: string; material?: string }[] = DEFAULT_PALETTE.map((s) => ({ ...s }));
-  private bodyColors = new Overlay<number>("bodyColors"); // per-body palette-slot assignment (id → slot index)
-  private bodyElement = new Overlay<string>("bodyElement"); // per-body element assignment (id → element id)
-  private bodyMaterial = new Overlay<string>("bodyMaterial"); // per-body material assignment (id → material id)
+  private bodyColors = new Overlay<number>("bodyColors", isCount); // per-body palette-slot assignment (id → slot index)
+  private bodyElement = new Overlay<string>("bodyElement", isText); // per-body element assignment (id → element id)
+  private bodyMaterial = new Overlay<string>("bodyMaterial", isText); // per-body material assignment (id → material id)
   private faceMaterial = new FaceRefOverlay(() => this.build.result);
   /** import feature id → "faces" for an import whose parts wear their face
    *  colours over their body colours (document/faceColors.ts). Absent is "bodies". */
-  private importColors = new Overlay<ImportColorSource>("importColorSource");
+  private importColors = new Overlay<ImportColorSource>("importColorSource", isText);
   /** Left out of the saved file while it is the untouched starter set. */
   private materials: MaterialDef[] = STARTER_LIBRARY.map((m) => ({ ...m }));
   /** The user's folders over the bodies (document/elements.ts). */
@@ -448,12 +480,12 @@ export class DocumentStore {
   carriedSections: CarriedSection[] = [];
   // static descriptor list driving toJSON/load below, in the exact on-disk key
   // order (palette piggybacks on bodyColors' condition, so isn't listed here).
-  private readonly overlays: { overlay: Overlay<any>; mapValue?: (v: unknown) => any }[] = [
+  private readonly overlays: { overlay: Overlay<any> }[] = [
     { overlay: this.sketchVis },
     { overlay: this.bodyVis },
     { overlay: this.planeVis },
     { overlay: this.bodyNames },
-    { overlay: this.bodyColors, mapValue: (v) => Number(v) },
+    { overlay: this.bodyColors },
     { overlay: this.bodyElement },
     { overlay: this.bodyMaterial },
     { overlay: this.faceMaterial },
@@ -2495,7 +2527,7 @@ export class DocumentStore {
       ...(parsed.paramDefs ? { paramDefs: parsed.paramDefs } : {}),
       ...(parsed.paramExtras ? { paramExtras: parsed.paramExtras } : {}),
       features: parsed.features ?? [],
-      ...(parsed.viewOverrides ? { viewOverrides: parsed.viewOverrides } : {}),
+      ...readViewOverrides(parsed.viewOverrides),
       ...(isIdMap(parsed.bodyIds) ? { bodyIds: parsed.bodyIds } : {}),
     };
     // An extrude without hiddenBodies reads the live eye states, so hiding a body
@@ -2520,12 +2552,14 @@ export class DocumentStore {
   private readProjectState(parsed: CadDocument, only?: ReadonlySet<string>) {
     const reads = (key: string) => !only || only.has(key);
     const raw = parsed as unknown as Record<string, unknown>;
-    if (reads("suppressed")) this.suppressed = new Set(parsed.suppressed ?? []);
-    if (reads("rollback")) this.rollback = parsed.rollback ?? null;
-    for (const { overlay, mapValue } of this.overlays) if (reads(overlay.jsonKey)) overlay.loadFrom(raw, mapValue);
+    if (reads("suppressed")) {
+      this.suppressed = new Set(Array.isArray(parsed.suppressed) ? parsed.suppressed.filter((id) => typeof id === "string") : []);
+    }
+    if (reads("rollback")) this.rollback = isCount(parsed.rollback) ? parsed.rollback : null;
+    for (const { overlay } of this.overlays) if (reads(overlay.jsonKey)) overlay.loadFrom(raw);
     if (reads("bodyVisibility")) this.isolate = false; // the hidden set just came from the file, it is not an isolate
     if (reads("palette")) {
-      this.palette = parsed.palette?.length ? parsed.palette.map((s) => ({ ...s })) : DEFAULT_PALETTE.map((s) => ({ ...s }));
+      this.palette = readPalette(parsed.palette);
     }
     if (reads("stress")) {
       this.stress = normalizeStressStudy(parsed.stress);
@@ -2544,11 +2578,10 @@ export class DocumentStore {
     if (reads("referenceImages")) this.setRefImagesQuiet(readReferenceImages(parsed.referenceImages));
     // Elements without an id and materials without a colour are dropped here, not at every reader.
     if (reads("materials")) {
-      this.materials = parsed.materials?.length
-        ? parsed.materials
-            .map((m, i) => normalizeMaterial(m, i))
-            .filter((m): m is MaterialDef => m !== null)
-        : STARTER_LIBRARY.map((m) => ({ ...m }));
+      const rows = Array.isArray(parsed.materials)
+        ? parsed.materials.map((m, i) => normalizeMaterial(m, i)).filter((m): m is MaterialDef => m !== null)
+        : [];
+      this.materials = rows.length ? rows : STARTER_LIBRARY.map((m) => ({ ...m }));
     }
     if (reads("elements")) {
       this.elements = (parsed.elements ?? [])

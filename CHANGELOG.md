@@ -446,6 +446,14 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A damaged file opens with what can be read in it.** A palette slot that was
+  not a colour came back as a slot with no name or colour, a materials list
+  with no readable row left the document with an empty library instead of the
+  starter set, and a body name that was a number, a rollback marker that was
+  not a step count, or a saved view with no direction were carried as they
+  were. Each is now left out, or put back to the default for a palette slot,
+  which keeps its place since bodies point at slots by number.
+
 - **A plugin's edit of the whole document keeps its versions and project state.**
   A plugin that read the document and set it back wiped the saved versions for
   good, and with them the stress study, environment, palette, materials,
