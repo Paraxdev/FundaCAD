@@ -836,6 +836,24 @@ Copy has two patterns, pick by the button:
 - A text action that copies (McpSection's config): `toast("Copied.")`, and on
   failure `toast("Could not copy. Select the text and copy it.", { kind: "error" })`.
 
+### 7.15 Marks in the scene
+
+The origin triad and the origin plane tiles are drawn in the 3D scene, so the
+guard test cannot see them; hold them to these rules by hand.
+
+- Axis colours come from `AXIS_COLOR` (`src/viewport/originTriad.ts`) and are
+  never themed. A plane takes its normal axis colour: XY blue, XZ green, YZ red.
+- Neutral parts read tokens through `themeColor` and are read again on a theme
+  change.
+- Sizes are screen pixels, held through `gizmoScale.ts` at every zoom.
+- The tiles are 40px, 6px off the axes, one per quadrant facing the home view,
+  with an 11px corner whose profile is a conic of rho 0.25
+  (`TILE_CORNER_RADIUS_PX` and `TILE_CORNER_RHO` in `src/viewport/originTiles.ts`).
+- What a body hides draws faint, not gone.
+- A name in the scene is a camera facing sprite, `--ui` 700 at 11px, inked in
+  `--text` or `--viewport-bg`, whichever reads on the ground. It fades out when
+  what it names is seen edge on.
+
 ## 8. Motion
 
 | Token | Value | Use |
