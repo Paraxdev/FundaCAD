@@ -29,11 +29,11 @@ fn a_frame_the_gpu_does_not_finish_in_time_greys_path_traced_with_the_reason() {
         eprintln!("skipped: no native tracer");
         return;
     };
-    t.lock().tracer.set_wait_limit_for_test(Duration::ZERO);
+    t.lock().tracer.stall_gpu_for_test();
     let mut out = vec![1; 256 * 192 * 4];
     t.render(&mut out, 256, 192, 0);
     let fault = pt_status().unwrap().fault.expect("a frame past the wait limit left no fault");
-    assert!(fault.contains("did not finish a frame within 0 s"), "{fault}");
+    assert!(fault.contains("did not finish a frame within 10 s"), "{fault}");
     t.render(&mut out, 256, 192, 1);
     assert!(out.iter().all(|&b| b == 0), "a faulted tracer drew a frame");
     drop(t);
