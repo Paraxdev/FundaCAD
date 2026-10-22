@@ -283,7 +283,7 @@ feature_struct!(Sweep {
 
 feature_struct!(
     /// The reference (`planeId`, else `face`, else `plane`) shifted by `shiftX`, `shiftY` and `offset` along its own
-    /// axes, then turned there: `tiltX` about its x, `tiltY` about the y that leaves, `spin` about the normal, in degrees.
+    /// axes, then turned there: `tiltX` about its x, `tiltY` about the new y, `spin` about the new normal, in degrees.
     DatumPlane {
         plane: PlaneSpec,
         #[serde(default, skip_serializing_if = "Option::is_none")] offset: Option<Num>,
@@ -531,10 +531,10 @@ open_enum! {
 }
 
 feature_struct!(
-    /// A helical groove (`cut`, the default) or ridge (`join`) on a round face found again at every build. Each `profile`
-    /// point is `[into, along]` in mm from the face and the profile's centre line; `pitch` is the axial spacing, the lead
-    /// `pitch * starts`. `axis` only orients the face, `offset` and `length` run from its first end, `clearance` sinks
-    /// the whole thread, and `spec` belongs to the tool that wrote it.
+    /// A helical groove (`cut`, the default) or ridge (`join`) on a round face found again at every build. Each
+    /// `profile` point is `[into, along]` in mm from the face and the profile's centre line; `pitch` is the axial
+    /// spacing, the lead `pitch * starts`. `axis` only orients the face, `offset` and `length` run from its first end,
+    /// `clearance` sinks the whole thread, and `spec` belongs to the tool that wrote it.
     Thread {
         face: Selector,
         profile: Vec<[Real; 2]>,
@@ -612,8 +612,8 @@ feature_struct!(PatternLinear {
     #[serde(default, skip_serializing_if = "Option::is_none")] features: Option<Vec<String>>,
 });
 feature_struct!(
-    /// `axis` is X, Y, Z, a line, or `{datum}` naming a datum axis above the pattern; `axisRef` makes it follow an edge or
-    /// face, with the line in `axis` as the cache.
+    /// `axis` is X, Y, Z, a line, or `{datum}` naming a datum axis above the pattern; `axisRef` makes it follow an edge
+    /// or face, with the line in `axis` as the cache.
     PatternCircular {
         count: Num, angle: Num, axis: PatternAxis,
         #[serde(default, skip_serializing_if = "Option::is_none")] axis_ref: Option<Selector>,
