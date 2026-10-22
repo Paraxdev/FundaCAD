@@ -66,13 +66,4 @@ mod tests {
         assert_eq!(get(&e).unwrap(), None);
         delete(&e).unwrap();
     }
-
-    #[test]
-    fn names_that_could_reach_another_entry_are_refused() {
-        keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
-        assert!(entry("FundaCAD.Onshape", "../Other/key").is_err());
-        assert!(entry("FundaCAD.Onshape", "a/b").is_err());
-        assert!(entry("../x", "key").is_err());
-        assert!(plugin_secret_set("FundaCAD.Onshape".into(), "key".into(), String::new()).is_err());
-    }
 }

@@ -1,4 +1,4 @@
-use crate::builder::{self, NoWatch};
+use fundacad_geom::builder::{self, NoWatch};
 use serde_json::{json, Value};
 
 fn build(doc: Value) -> builder::Rebuild {
@@ -305,7 +305,7 @@ fn an_extrude_up_to_a_followed_datum_point_reaches_where_it_is_now() {
         )
     };
     let r = build(d(80.0));
-    let boxes: Vec<[f64; 6]> = r.bodies.iter().filter_map(|b| crate::kernel::bbox(&b.shape)).collect();
+    let boxes: Vec<[f64; 6]> = r.bodies.iter().filter_map(|b| fundacad_geom::kernel::bbox(&b.shape)).collect();
     let near_end = boxes.iter().filter(|b| b[1] > 25.0).map(|b| b[0]).fold(f64::MAX, f64::min);
     assert!((near_end - 40.0).abs() < 1e-6, "the extrude ends at the moved point: {boxes:?}");
 }

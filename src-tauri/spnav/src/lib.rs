@@ -250,6 +250,3 @@ pub fn connect<P: AsRef<std::path::Path>>(
     }
     Err(why)
 }
-
-#[cfg(test)]
-mod tests;

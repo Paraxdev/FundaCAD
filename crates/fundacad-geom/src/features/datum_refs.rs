@@ -374,7 +374,3 @@ pub fn axis_through(ctx: &mut Ctx, f: &DatumAxis, through: &AxisThrough) -> FRes
         }
     }
 }
-
-#[cfg(test)]
-#[path = "datum_refs_tests.rs"]
-mod tests;
