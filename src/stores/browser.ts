@@ -52,6 +52,10 @@ export const useBrowserStore = defineStore("browser", () => {
   function expand(key: string) {
     overrides.value.set(key, false);
   }
+  // Assembly and element keys are per document ("n:f1/0" names a folder in every import), section folders are not.
+  function forgetDocumentFolders() {
+    for (const key of [...overrides.value.keys()]) if (!key.startsWith("f:")) overrides.value.delete(key);
+  }
 
   return {
     overrides,
@@ -65,6 +69,7 @@ export const useBrowserStore = defineStore("browser", () => {
     isCollapsed,
     toggle,
     expand,
+    forgetDocumentFolders,
     startDrag: (d: BrowserDrag) => {
       drag.value = d;
     },
