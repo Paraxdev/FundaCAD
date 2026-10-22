@@ -66,10 +66,7 @@ impl FullBody {
         fields.insert("id".into(), id.into());
         fields.insert("name".into(), name.into());
         fields.insert("etag".into(), etag.into());
-        FullBody {
-            fields,
-            ..Default::default()
-        }
+        FullBody { fields, ..Default::default() }
     }
 
     pub fn id(&self) -> &Value {
@@ -90,24 +87,15 @@ impl FullBody {
                 m.shift_remove("normals");
             }
         }
-        m.insert(
-            "indices".into(),
-            self.indices.iter().copied().map(Value::from).collect(),
-        );
-        m.insert(
-            "faceIds".into(),
-            self.face_ids.iter().copied().map(Value::from).collect(),
-        );
+        m.insert("indices".into(), self.indices.iter().copied().map(Value::from).collect());
+        m.insert("faceIds".into(), self.face_ids.iter().copied().map(Value::from).collect());
         let id = self.id();
         let edges = self
             .edges
             .iter()
             .map(|e| {
                 let mut em = Map::new();
-                let pts = e
-                    .points
-                    .iter()
-                    .map(|p| Value::Array(p.iter().map(|x| f32_value(*x)).collect()));
+                let pts = e.points.iter().map(|p| Value::Array(p.iter().map(|x| f32_value(*x)).collect()));
                 em.insert("points".into(), Value::Array(pts.collect()));
                 em.insert("body".into(), id.clone());
                 if e.smooth {
@@ -154,18 +142,12 @@ impl WireBody {
         match self {
             WireBody::Stub(_) => 128,
             WireBody::Full(b) => {
-                let mut n = b.positions.len()
-                    + b.indices.len()
-                    + b.face_ids.len()
-                    + b.normals.as_ref().map_or(0, Vec::len);
+                let mut n =
+                    b.positions.len() + b.indices.len() + b.face_ids.len() + b.normals.as_ref().map_or(0, Vec::len);
                 for e in &b.edges {
                     n += 3 * e.points.len() + 1;
                 }
-                let owners = b
-                    .fields
-                    .get("faceOwners")
-                    .and_then(Value::as_array)
-                    .map_or(0, Vec::len);
+                let owners = b.fields.get("faceOwners").and_then(Value::as_array).map_or(0, Vec::len);
                 4 * n + 24 * owners + 256
             }
         }
@@ -191,10 +173,7 @@ impl WireBody {
             }
             WireBody::Full(b) => b,
         };
-        e.insert(
-            "faceCount".into(),
-            f.get("faceCount").cloned().unwrap_or(Value::from(0)),
-        );
+        e.insert("faceCount".into(), f.get("faceCount").cloned().unwrap_or(Value::from(0)));
         e.insert("nVerts3".into(), b.positions.len().into());
         e.insert("nIdx".into(), b.indices.len().into());
         e.insert("nTris".into(), b.face_ids.len().into());
@@ -210,11 +189,7 @@ impl MeshResult {
     /// The whole result as inline JSON, bodies included.
     pub fn to_json(&self) -> Map<String, Value> {
         let mut m = self.fields.clone();
-        let bodies = self
-            .bodies
-            .iter()
-            .map(|b| Value::Object(b.to_json()))
-            .collect();
+        let bodies = self.bodies.iter().map(|b| Value::Object(b.to_json())).collect();
         m.insert("bodies".into(), Value::Array(bodies));
         m
     }
@@ -229,10 +204,7 @@ impl JobResult {
     pub fn body_count(&self) -> usize {
         match self {
             JobResult::Mesh(m) => m.bodies.len(),
-            JobResult::Json(m) => m
-                .get("bodies")
-                .and_then(Value::as_array)
-                .map_or(0, Vec::len),
+            JobResult::Json(m) => m.get("bodies").and_then(Value::as_array).map_or(0, Vec::len),
         }
     }
 

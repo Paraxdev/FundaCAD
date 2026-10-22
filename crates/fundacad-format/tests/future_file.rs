@@ -58,7 +58,12 @@ fn the_binary_sibling_keeps_its_geometry_and_its_unknown_section() {
     let geometry = BTreeMap::from([(HASH.to_string(), blob.clone())]);
     let meshes = BTreeMap::new();
     let mut sections = fnda::document_sections(&info, &cbor, &geometry, &meshes, &[]);
-    sections.push(fnda::SectionSpec { kind: 9, name: "futureIndex".into(), source: fnda::Source::Bytes(&index), layout: fnda::SMALL_LAYOUT });
+    sections.push(fnda::SectionSpec {
+        kind: 9,
+        name: "futureIndex".into(),
+        source: fnda::Source::Bytes(&index),
+        layout: fnda::SMALL_LAYOUT,
+    });
     let sibling = dir.join("v99.fundab");
     fnda::write(&mut std::fs::File::create(&sibling).unwrap(), &sections).unwrap();
 

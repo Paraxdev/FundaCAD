@@ -27,15 +27,8 @@ use std::time::{Duration, Instant};
 
 fn owner_binary() -> PathBuf {
     let exe = std::env::current_exe().expect("a test binary has a path");
-    let profile = exe
-        .parent()
-        .and_then(Path::parent)
-        .expect("target/<profile>/deps");
-    profile.join("examples").join(if cfg!(windows) {
-        "engine_owner.exe"
-    } else {
-        "engine_owner"
-    })
+    let profile = exe.parent().and_then(Path::parent).expect("target/<profile>/deps");
+    profile.join("examples").join(if cfg!(windows) { "engine_owner.exe" } else { "engine_owner" })
 }
 
 fn alive(pid: u32) -> bool {
@@ -58,11 +51,7 @@ fn kill(pid: u32, tree: bool) {
 /// Start an owner, kill it hard, and report whether the engine outlived it.
 fn run_case(job: bool) -> (u32, bool) {
     let owner = owner_binary();
-    assert!(
-        owner.is_file(),
-        "build the example first: {}",
-        owner.display()
-    );
+    assert!(owner.is_file(), "build the example first: {}", owner.display());
     let mut child = Command::new(&owner)
         .arg(if job { "job" } else { "nojob" })
         .stdout(Stdio::piped())
@@ -117,8 +106,5 @@ fn the_control_without_a_job_object_leaks() {
     }
     let (pid, left) = run_case(false);
     kill(pid, true);
-    assert!(
-        left,
-        "{pid} died even with nothing holding it, the test above is not measuring what it claims"
-    );
+    assert!(left, "{pid} died even with nothing holding it, the test above is not measuring what it claims");
 }

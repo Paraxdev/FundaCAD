@@ -1,7 +1,9 @@
 //! A deflated zip written through `output::write` as it is made, so a large
 //! assembly's mesh XML is never held whole, as zipfile streams it in Python.
 
-use miniz_oxide::deflate::core::{compress, create_comp_flags_from_zip_params, CompressorOxide, TDEFLFlush, TDEFLStatus};
+use miniz_oxide::deflate::core::{
+    compress, create_comp_flags_from_zip_params, CompressorOxide, TDEFLFlush, TDEFLStatus,
+};
 
 use crate::fundacad::plugin::output;
 
@@ -42,12 +44,7 @@ fn u32le(v: &mut Vec<u8>, x: u32) {
 
 impl ZipOut {
     pub fn new() -> ZipOut {
-        ZipOut {
-            at: 0,
-            done: Vec::new(),
-            open: None,
-            out: Vec::new(),
-        }
+        ZipOut { at: 0, done: Vec::new(), open: None, out: Vec::new() }
     }
 
     fn emit(&mut self, bytes: &[u8]) -> Result<(), String> {
@@ -86,14 +83,8 @@ impl ZipOut {
         self.emit(&h)?;
         let mut deflate = Box::new(CompressorOxide::new(create_comp_flags_from_zip_params(LEVEL, -15, 0)));
         deflate.reset();
-        self.open = Some(Open {
-            name: name.to_string(),
-            offset,
-            crc: crc32fast::Hasher::new(),
-            csize: 0,
-            usize_: 0,
-            deflate,
-        });
+        self.open =
+            Some(Open { name: name.to_string(), offset, crc: crc32fast::Hasher::new(), csize: 0, usize_: 0, deflate });
         Ok(())
     }
 
@@ -135,13 +126,7 @@ impl ZipOut {
         u32le(&mut d, open.csize as u32);
         u32le(&mut d, open.usize_ as u32);
         self.emit(&d)?;
-        self.done.push(Central {
-            name: open.name,
-            crc,
-            csize: open.csize,
-            usize_: open.usize_,
-            offset: open.offset,
-        });
+        self.done.push(Central { name: open.name, crc, csize: open.csize, usize_: open.usize_, offset: open.offset });
         Ok(())
     }
 

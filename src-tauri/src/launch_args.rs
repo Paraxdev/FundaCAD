@@ -43,11 +43,8 @@ pub fn launch_paths(argv: impl IntoIterator<Item = OsString>, cwd: &Path) -> Vec
             if arg.starts_with('-') {
                 return None;
             }
-            let path = if arg.starts_with("file://") {
-                Url::parse(&arg).ok()?.to_file_path().ok()?
-            } else {
-                cwd.join(&arg)
-            };
+            let path =
+                if arg.starts_with("file://") { Url::parse(&arg).ok()?.to_file_path().ok()? } else { cwd.join(&arg) };
             document(path)
         })
         .collect()
@@ -56,10 +53,7 @@ pub fn launch_paths(argv: impl IntoIterator<Item = OsString>, cwd: &Path) -> Vec
 /// The documents macOS hands a running app (Finder's Open With, a double click,
 /// a drop on the Dock icon), which arrive as URLs rather than in argv.
 pub fn opened_paths<'a>(urls: impl IntoIterator<Item = &'a Url>) -> Vec<String> {
-    urls.into_iter()
-        .filter(|u| u.scheme() == "file")
-        .filter_map(|u| document(u.to_file_path().ok()?))
-        .collect()
+    urls.into_iter().filter(|u| u.scheme() == "file").filter_map(|u| document(u.to_file_path().ok()?)).collect()
 }
 
 /// The local paths a drag's text/uri-list names, in order. Other schemes,
@@ -87,7 +81,14 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn launch_paths_keeps_documents_and_resolves_them_against_the_cwd() {
-        let argv = args(&["/usr/bin/fundacad", "part.funda", "/tmp/Big.FUNDAB", "--flag", "notes.txt", "file:///tmp/a%20b.funda"]);
+        let argv = args(&[
+            "/usr/bin/fundacad",
+            "part.funda",
+            "/tmp/Big.FUNDAB",
+            "--flag",
+            "notes.txt",
+            "file:///tmp/a%20b.funda",
+        ]);
         assert_eq!(
             launch_paths(argv, Path::new("/home/u/cad")),
             vec!["/home/u/cad/part.funda", "/tmp/Big.FUNDAB", "/tmp/a b.funda"]
@@ -97,7 +98,14 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn launch_paths_keeps_documents_and_resolves_them_against_the_cwd() {
-        let argv = args(&["fundacad.exe", "part.funda", r"C:\tmp\Big.FUNDAB", "--flag", "notes.txt", "file:///C:/tmp/a%20b.funda"]);
+        let argv = args(&[
+            "fundacad.exe",
+            "part.funda",
+            r"C:\tmp\Big.FUNDAB",
+            "--flag",
+            "notes.txt",
+            "file:///C:/tmp/a%20b.funda",
+        ]);
         assert_eq!(
             launch_paths(argv, Path::new(r"C:\Users\u\cad")),
             vec![r"C:\Users\u\cad\part.funda", r"C:\tmp\Big.FUNDAB", r"C:\tmp\a b.funda"]
@@ -149,7 +157,10 @@ mod tests {
             .output()
             .unwrap();
         let stdout = String::from_utf8_lossy(&out.stdout);
-        let line = stdout.lines().find_map(|l| Some(l.split_once("PATHS=")?.1)).unwrap_or_else(|| panic!("no PATHS line:\n{stdout}"));
+        let line = stdout
+            .lines()
+            .find_map(|l| Some(l.split_once("PATHS=")?.1))
+            .unwrap_or_else(|| panic!("no PATHS line:\n{stdout}"));
         line.split('|').filter(|p| !p.is_empty()).map(String::from).collect()
     }
 

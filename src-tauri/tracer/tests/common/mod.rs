@@ -119,7 +119,8 @@ fn mesh_for(key: &str) -> Mesh {
 pub fn build(t: &mut Tracer, name: &str, size: Option<(u32, u32)>) {
     let (w, h) = size.unwrap_or_else(|| dims(name));
     t.resize(w, h);
-    let cam = |eye: [f32; 3], target: [f32; 3]| Camera { eye, target, up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() };
+    let cam =
+        |eye: [f32; 3], target: [f32; 3]| Camera { eye, target, up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() };
     let sun = [0.4, -0.3, 1.0];
     let ground = matte([0.7; 3]);
     let (look, camera, bodies) = match name {
@@ -132,11 +133,7 @@ pub fn build(t: &mut Tracer, name: &str, size: Option<(u32, u32)>) {
             ],
         ),
         "studio" => (
-            Look {
-                sun_dir: [0.5, -0.4, 1.0],
-                sun_color: [1.2; 3],
-                ..Look::default()
-            },
+            Look { sun_dir: [0.5, -0.4, 1.0], sun_color: [1.2; 3], ..Look::default() },
             cam([3.6, -5.0, 2.6], [0.0, 0.0, 0.5]),
             vec![
                 place("part", "part.1", 1.0, [0.0, 0.0, 0.5], matte([0.35, 0.5, 0.7])),
@@ -217,11 +214,7 @@ pub fn build(t: &mut Tracer, name: &str, size: Option<(u32, u32)>) {
                 let tint = [0.3 + 0.05 * (i % 7) as f32, 0.4 + 0.04 * (i % 5) as f32, 0.7 - 0.03 * (i % 9) as f32];
                 v.push(place(&format!("dot{i}"), "dot.1", 1.0, [x, y, 0.3], matte(tint)));
             }
-            (
-                Look { sun_dir: sun, sun_color: [1.5; 3], ..Look::default() },
-                cam([0.0, -17.0, 11.0], [0.0, 0.0, 0.0]),
-                v,
-            )
+            (Look { sun_dir: sun, sun_color: [1.5; 3], ..Look::default() }, cam([0.0, -17.0, 11.0], [0.0, 0.0, 0.0]), v)
         }
         other => panic!("unknown scene {other}"),
     };
@@ -257,12 +250,14 @@ pub fn write_ref(name: &str, hdr: &[[f32; 3]], w: u32, h: u32) {
 
 /// The reference as rgb in 0..255 floats, and its size.
 pub fn read_ref(name: &str) -> (Vec<f32>, u32, u32) {
-    let dec = png::Decoder::new(std::fs::File::open(ref_path(name)).expect("reference missing, run with TRACER_REF_WRITE=1"));
+    let dec =
+        png::Decoder::new(std::fs::File::open(ref_path(name)).expect("reference missing, run with TRACER_REF_WRITE=1"));
     let mut r = dec.read_info().unwrap();
     let mut buf = vec![0; r.output_buffer_size()];
     let info = r.next_frame(&mut buf).unwrap();
     assert_eq!((info.color_type, info.bit_depth), (png::ColorType::Rgb, png::BitDepth::Sixteen));
-    let v = buf[..info.buffer_size()].chunks_exact(2).map(|b| u16::from_be_bytes([b[0], b[1]]) as f32 / 257.0).collect();
+    let v =
+        buf[..info.buffer_size()].chunks_exact(2).map(|b| u16::from_be_bytes([b[0], b[1]]) as f32 / 257.0).collect();
     (v, info.width, info.height)
 }
 
@@ -319,7 +314,9 @@ fn unit(a: [f32; 3]) -> [f32; 3] {
 
 /// An equirect `up` laid out, radiance from the direction of each texel's centre.
 pub fn env_of(key: &str, (w, h): (u32, u32), up: Up, f: impl Fn([f32; 3]) -> [f32; 3]) -> Environment {
-    Environment::from_rgb(key, w, h, up, |c, r| f(direction(up, (c as f32 + 0.5) / w as f32, (r as f32 + 0.5) / h as f32)))
+    Environment::from_rgb(key, w, h, up, |c, r| {
+        f(direction(up, (c as f32 + 0.5) / w as f32, (r as f32 + 0.5) / h as f32))
+    })
 }
 
 /// A room as traceEnvironment reads one back (Y up rows): soft grey walls, a

@@ -36,10 +36,7 @@ fn canonical(op: &str) -> &str {
 }
 
 fn need<'a>(entry: &'a Map<String, Value>, key: &str) -> Result<&'a Value, String> {
-    entry
-        .get(key)
-        .filter(|v| !v.is_null())
-        .ok_or_else(|| format!("needs `{key}`"))
+    entry.get(key).filter(|v| !v.is_null()).ok_or_else(|| format!("needs `{key}`"))
 }
 
 fn need_str(entry: &Map<String, Value>, key: &str) -> Result<String, String> {
@@ -75,14 +72,10 @@ pub fn apply(doc: &mut Doc, entry: &Value, notes: &mut Vec<String>) -> Result<Do
     };
     let op = canonical(op);
     let Some(allowed) = takes(op) else {
-        return Err(format!(
-            "no op '{op}', have add, update, remove, move, param and param_remove"
-        ));
+        return Err(format!("no op '{op}', have add, update, remove, move, param and param_remove"));
     };
-    let mut unknown: Vec<&String> = entry
-        .keys()
-        .filter(|k| k.as_str() != "op" && !allowed.contains(&k.as_str()))
-        .collect();
+    let mut unknown: Vec<&String> =
+        entry.keys().filter(|k| k.as_str() != "op" && !allowed.contains(&k.as_str())).collect();
     if !unknown.is_empty() {
         unknown.sort();
         return Err(format!(
@@ -165,11 +158,9 @@ pub fn summary(done: &[Done]) -> String {
     for d in done {
         match d {
             Done::Added(id, kind) => added.push(format!("{id} ({kind})")),
-            Done::Updated(id, keys) => updated.push(if keys.is_empty() {
-                id.clone()
-            } else {
-                format!("{id} ({})", keys.join(", "))
-            }),
+            Done::Updated(id, keys) => {
+                updated.push(if keys.is_empty() { id.clone() } else { format!("{id} ({})", keys.join(", ")) })
+            }
             Done::Replaced(id) => updated.push(format!("{id} (replaced)")),
             Done::Removed(id, kind) => removed.push(format!("{id} ({kind})")),
             Done::Moved(id, to) => moved.push(format!("{id} to {to}")),
@@ -178,23 +169,14 @@ pub fn summary(done: &[Done]) -> String {
         }
     }
     let mut parts = Vec::new();
-    for (label, list) in [
-        ("added", added),
-        ("updated", updated),
-        ("removed", removed),
-        ("moved", moved),
-        ("parameters", params),
-    ] {
+    for (label, list) in
+        [("added", added), ("updated", updated), ("removed", removed), ("moved", moved), ("parameters", params)]
+    {
         if !list.is_empty() {
             parts.push(format!("{label} {}", list.join(", ")));
         }
     }
-    format!(
-        "Applied {} edit{}: {}.",
-        done.len(),
-        if done.len() == 1 { "" } else { "s" },
-        parts.join("; ")
-    )
+    format!("Applied {} edit{}: {}.", done.len(), if done.len() == 1 { "" } else { "s" }, parts.join("; "))
 }
 
 /// The error for a refused entry, numbered from 1 the way a person counts.
@@ -214,9 +196,7 @@ pub fn refused(n: usize, of: usize, entry: &Value, why: &str) -> String {
             }
         })
         .unwrap_or_default();
-    format!(
-        "Edit {n} of {of}{what} refused, so none of the {of} was applied: {why}"
-    )
+    format!("Edit {n} of {of}{what} refused, so none of the {of} was applied: {why}")
 }
 
 #[cfg(test)]

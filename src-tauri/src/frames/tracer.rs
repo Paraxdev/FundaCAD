@@ -8,7 +8,10 @@ use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use fundacad_frames::{FrameSource, Reopen};
-use fundacad_tracer::{decode_colors, decode_env, decode_mesh, denoise, encode_png, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Picture, Quality, Refusal, SelfCheck, Tracer, TracerOptions};
+use fundacad_tracer::{
+    decode_colors, decode_env, decode_mesh, denoise, encode_png, Bloom, BodyDesc, Camera, Denoiser, Look, Path,
+    Picture, Quality, Refusal, SelfCheck, Tracer, TracerOptions,
+};
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request};
 
@@ -248,9 +251,7 @@ fn raw(request: &Request<'_>) -> Result<Vec<u8>, String> {
 /// Replaces the body list; answers the mesh keys to send with pt_mesh.
 #[tauri::command]
 pub async fn pt_scene(bodies: Vec<BodyDesc>) -> Result<Vec<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || with(|t| t.set_bodies(bodies)))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || with(|t| t.set_bodies(bodies))).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

@@ -56,11 +56,7 @@ async fn an_agent_reads_and_edits_the_document_the_app_has_open() {
     let mut mcp = Mcp::start(&engine.mcp_env("auto", true), &std::env::temp_dir());
     let read = mcp.call("doc_get", json!({}));
     assert!(!read.is_error, "{}", read.text);
-    assert!(
-        read.text.contains("from-the-app"),
-        "the agent did not read the app's document: {:.200}",
-        read.text
-    );
+    assert!(read.text.contains("from-the-app"), "the agent did not read the app's document: {:.200}", read.text);
 
     let (_mcp, out) = while_pumping(
         mcp,
@@ -75,14 +71,8 @@ async fn an_agent_reads_and_edits_the_document_the_app_has_open() {
     assert!(!out.is_error, "{}", out.text);
     assert!(out.text.contains("applied in FundaCAD"), "{}", out.text);
     let names = host.feature_names();
-    assert!(
-        names.iter().any(|n| n == "from-the-agent"),
-        "the edit never reached the app: {names:?}"
-    );
-    assert!(
-        names.iter().any(|n| n == "from-the-app"),
-        "the edit replaced the app's own work: {names:?}"
-    );
+    assert!(names.iter().any(|n| n == "from-the-agent"), "the edit never reached the app: {names:?}");
+    assert!(names.iter().any(|n| n == "from-the-app"), "the edit replaced the app's own work: {names:?}");
     assert_eq!(host.rev, 2, "the app did not raise the revision");
 }
 
@@ -109,20 +99,11 @@ async fn an_edit_against_a_stale_revision_is_refused() {
     let res = reply.get("result").cloned().unwrap_or_else(|| json!({}));
     assert_eq!(res["ok"], json!(false), "{res}");
     assert_eq!(res["reason"], json!("stale"), "{res}");
-    assert!(
-        res["message"]
-            .as_str()
-            .unwrap_or_default()
-            .contains(&host.rev.to_string()),
-        "{res}"
-    );
+    assert!(res["message"].as_str().unwrap_or_default().contains(&host.rev.to_string()), "{res}");
 
     host.tick().await;
     let names = host.feature_names();
-    assert!(
-        !names.iter().any(|n| n == "stale"),
-        "a stale edit was applied anyway: {names:?}"
-    );
+    assert!(!names.iter().any(|n| n == "stale"), "a stale edit was applied anyway: {names:?}");
 
     // The control: the SAME edit against the current revision goes through, or
     // "stale" would just be a word for "no".
@@ -154,17 +135,8 @@ async fn a_read_only_window_refuses_by_name_rather_than_by_timeout() {
     .await;
     assert!(out.is_error, "a read-only window accepted an edit: {}", out.text);
     assert!(out.text.to_lowercase().contains("read-only"), "{}", out.text);
-    assert!(
-        !out.text.contains("did not apply"),
-        "refused as a timeout: {}",
-        out.text
-    );
-    assert_eq!(
-        host.doc["features"].as_array().map(Vec::len),
-        Some(1),
-        "{}",
-        host.doc["features"]
-    );
+    assert!(!out.text.contains("did not apply"), "refused as a timeout: {}", out.text);
+    assert_eq!(host.doc["features"].as_array().map(Vec::len), Some(1), "{}", host.doc["features"]);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -178,11 +150,7 @@ async fn with_no_app_advertised_the_agent_works_on_its_own_copy() {
     let mut mcp = Mcp::start(&engine.mcp_env("auto", false), &std::env::temp_dir());
     let out = mcp.call("doc_get", json!({}));
     assert!(!out.is_error, "{}", out.text);
-    assert!(
-        !out.text.contains("from-the-app"),
-        "it found a session it was not told about: {:.200}",
-        out.text
-    );
+    assert!(!out.text.contains("from-the-app"), "it found a session it was not told about: {:.200}", out.text);
     let doc: Value = serde_json::from_str(&out.text).expect("doc_get is JSON");
     assert_eq!(doc["features"], json!([]), "{}", out.text);
 }
@@ -198,14 +166,8 @@ fn attach_mode_refuses_to_start_rather_than_working_on_a_copy() {
     for (k, v) in &env {
         cmd.env(k, v);
     }
-    let out = cmd
-        .stdin(std::process::Stdio::piped())
-        .output()
-        .expect("the MCP binary is built");
-    assert!(
-        !out.status.success(),
-        "attach mode started with no app to attach to"
-    );
+    let out = cmd.stdin(std::process::Stdio::piped()).output().expect("the MCP binary is built");
+    assert!(!out.status.success(), "attach mode started with no app to attach to");
     let said = String::from_utf8_lossy(&out.stderr);
     assert!(said.contains("no FundaCAD window is running"), "{said}");
 }
@@ -233,23 +195,11 @@ async fn the_folder_of_the_file_the_app_has_open_is_one_the_agent_may_write() {
     env.insert("FUNDACAD_MCP_STRICT".into(), "1".into());
     let mcp = Mcp::start(&env, own.path());
     let beside = parts.join("from-the-agent.funda");
-    let (mcp, out) = while_pumping(
-        mcp,
-        &mut host,
-        "doc_save",
-        json!({"path": beside.to_string_lossy()}),
-        5.0,
-    )
-    .await;
+    let (mcp, out) = while_pumping(mcp, &mut host, "doc_save", json!({"path": beside.to_string_lossy()}), 5.0).await;
     assert!(!out.is_error, "{}", out.text);
     assert!(beside.exists());
-    let (_mcp, out) = while_pumping(
-        mcp,
-        &mut host,
-        "doc_save",
-        json!({"path": elsewhere.join("a.funda").to_string_lossy()}),
-        5.0,
-    )
-    .await;
+    let (_mcp, out) =
+        while_pumping(mcp, &mut host, "doc_save", json!({"path": elsewhere.join("a.funda").to_string_lossy()}), 5.0)
+            .await;
     assert!(out.is_error && out.text.contains("outside the folders"), "{}", out.text);
 }

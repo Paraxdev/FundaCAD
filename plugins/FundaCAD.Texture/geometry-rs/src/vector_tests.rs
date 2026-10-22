@@ -54,14 +54,24 @@ fn height_fields_match_the_python_half() {
     assert!(worst <= 1e-12, "{differ} values differ, the worst by {worst}");
     for f in v["triplanar"].as_array().unwrap() {
         let spec = Spec::read(&f["spec"]);
-        let p: Vec<[f64; 3]> = v["P"].as_array().unwrap().iter().map(|r| {
-            let r = floats(r);
-            [r[0], r[1], r[2]]
-        }).collect();
-        let ww: Vec<[f64; 3]> = v["W"].as_array().unwrap().iter().map(|r| {
-            let r = floats(r);
-            [r[0], r[1], r[2]]
-        }).collect();
+        let p: Vec<[f64; 3]> = v["P"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                let r = floats(r);
+                [r[0], r[1], r[2]]
+            })
+            .collect();
+        let ww: Vec<[f64; 3]> = v["W"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                let r = floats(r);
+                [r[0], r[1], r[2]]
+            })
+            .collect();
         let got = triplanar_field(&spec.kind, &spec, &p, &ww, f["offset"].as_f64().unwrap()).unwrap();
         for (a, b) in got.iter().zip(floats(&f["h"])) {
             assert!((a - b).abs() <= 1e-12, "{} triplanar {a} vs {b}", spec.kind);

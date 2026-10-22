@@ -13,11 +13,7 @@ fn substitute(v: &Value, token: &str, value: &str) -> Value {
     match v {
         Value::String(s) => Value::String(s.replace(token, value)),
         Value::Array(a) => Value::Array(a.iter().map(|x| substitute(x, token, value)).collect()),
-        Value::Object(m) => Value::Object(
-            m.iter()
-                .map(|(k, x)| (k.clone(), substitute(x, token, value)))
-                .collect(),
-        ),
+        Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), substitute(x, token, value))).collect()),
         other => other.clone(),
     }
 }
@@ -26,11 +22,7 @@ fn substitute(v: &Value, token: &str, value: &str) -> Value {
 fn prepare_export(ctx: &Ctx, e: &Value, i: usize) -> Result<Value, String> {
     let mut e = e.clone();
     if let Some(files) = e.get("datadir").and_then(Value::as_object).cloned() {
-        let root = ctx
-            .work
-            .join(format!("datadir{i}"))
-            .join("user")
-            .join("app-data");
+        let root = ctx.work.join(format!("datadir{i}")).join("user").join("app-data");
         for (rel, content) in files {
             let path = rel.split('/').fold(root.clone(), |acc, p| acc.join(p));
             if let Some(dir) = path.parent() {
@@ -44,29 +36,18 @@ fn prepare_export(ctx: &Ctx, e: &Value, i: usize) -> Result<Value, String> {
         }
         e = substitute(&e, "$DATADIR", &root.to_string_lossy());
     }
-    Ok(substitute(
-        &e,
-        "$MISSING",
-        &ctx.work.join("no-such-folder").to_string_lossy(),
-    ))
+    Ok(substitute(&e, "$MISSING", &ctx.work.join("no-such-folder").to_string_lossy()))
 }
 
 /// `json.dump` with its default separators, so a plugin reads the bytes the
 /// Python tool wrote.
 fn python_json(v: &Value) -> String {
     match v {
-        Value::Array(a) => format!(
-            "[{}]",
-            a.iter().map(python_json).collect::<Vec<_>>().join(", ")
-        ),
+        Value::Array(a) => format!("[{}]", a.iter().map(python_json).collect::<Vec<_>>().join(", ")),
         Value::Object(m) => format!(
             "{{{}}}",
             m.iter()
-                .map(|(k, x)| format!(
-                    "{}: {}",
-                    ascii_json(&Value::String(k.clone())),
-                    python_json(x)
-                ))
+                .map(|(k, x)| format!("{}: {}", ascii_json(&Value::String(k.clone())), python_json(x)))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
@@ -129,11 +110,7 @@ fn attr_runs<'a>(text: &'a str, names: [&str; 3], digits_only: bool) -> Vec<[&'a
         let mut pos = start;
         let mut vals = [""; 3];
         for (k, name) in names.iter().enumerate() {
-            let lead = if k == 0 {
-                format!("{name}=\"")
-            } else {
-                format!("\" {name}=\"")
-            };
+            let lead = if k == 0 { format!("{name}=\"") } else { format!("\" {name}=\"") };
             if !text[pos..].starts_with(&lead) {
                 continue 'outer;
             }
@@ -168,11 +145,7 @@ fn mesh_measure(vertex_xml: &str, triangle_xml: &str) -> (f64, f64, BTreeSet<(u6
         let [a, b, c] = ids.map(|i| v.get(i as usize).copied().unwrap_or([f64::NAN; 3]));
         let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
         let w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-        let n = [
-            u[1] * w[2] - u[2] * w[1],
-            u[2] * w[0] - u[0] * w[2],
-            u[0] * w[1] - u[1] * w[0],
-        ];
+        let n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
         area += (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() / 2.0;
         vol += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
             + a[2] * (b[0] * c[1] - b[1] * c[0]))
@@ -181,32 +154,20 @@ fn mesh_measure(vertex_xml: &str, triangle_xml: &str) -> (f64, f64, BTreeSet<(u6
             *edges.entry((i.min(j), i.max(j))).or_default() += 1;
         }
     }
-    let boundary = edges
-        .into_iter()
-        .filter(|(_, n)| *n == 1)
-        .map(|(k, _)| k)
-        .collect();
+    let boundary = edges.into_iter().filter(|(_, n)| *n == 1).map(|(k, _)| k).collect();
     (area, vol, boundary)
 }
 
 /// compare_model with the golden's per object record standing in for python's text.
 fn compare_model(text: &str, want: &Value, name: &str) -> (Vec<String>, Vec<String>) {
     if sha256_hex(skeleton(text).as_bytes()) != want["skeletonSha256"].as_str().unwrap_or("") {
-        return (
-            vec![format!(
-                "{name}: the model differs outside its triangle lists"
-            )],
-            vec![],
-        );
+        return (vec![format!("{name}: the model differs outside its triangle lists")], vec![]);
     }
     let tris = blocks(text, "<triangles>", "</triangles>");
     let verts = blocks(text, "<vertices>", "</vertices>");
     let objects = want["objects"].as_array().cloned().unwrap_or_default();
     if tris.len() != objects.len() {
-        return (
-            vec![format!("model: {} meshes vs {}", tris.len(), objects.len())],
-            vec![],
-        );
+        return (vec![format!("model: {} meshes vs {}", tris.len(), objects.len())], vec![]);
     }
     let mut moved = 0;
     for (k, ((_, _, t), o)) in tris.iter().zip(&objects).enumerate() {
@@ -216,34 +177,18 @@ fn compare_model(text: &str, want: &Value, name: &str) -> (Vec<String>, Vec<Stri
         let count = t.matches("<triangle").count() as u64;
         let want_count = o["triangles"].as_u64().unwrap_or(0);
         if count != want_count {
-            return (
-                vec![format!(
-                    "model object {k}: {count} triangles vs {want_count}"
-                )],
-                vec![],
-            );
+            return (vec![format!("model object {k}: {count} triangles vs {want_count}")], vec![]);
         }
         let (area, vol, free) = mesh_measure(verts.get(k).map_or("", |v| v.2), t);
-        let (pa, pv) = (
-            o["area"].as_f64().unwrap_or(0.0),
-            o["volume"].as_f64().unwrap_or(0.0),
-        );
+        let (pa, pv) = (o["area"].as_f64().unwrap_or(0.0), o["volume"].as_f64().unwrap_or(0.0));
         let pfree: BTreeSet<(u64, u64)> = o["freeEdges"]
             .as_array()
             .into_iter()
             .flatten()
             .map(|e| (e[0].as_u64().unwrap_or(0), e[1].as_u64().unwrap_or(0)))
             .collect();
-        if (pa - area).abs() > 1e-9 * pa.max(1.0)
-            || (pv - vol).abs() > 1e-9 * pv.abs().max(1.0)
-            || free != pfree
-        {
-            return (
-                vec![format!(
-                    "model object {k}: area {area:.9e} volume {vol:.9e} vs {pa:.9e} {pv:.9e}"
-                )],
-                vec![],
-            );
+        if (pa - area).abs() > 1e-9 * pa.max(1.0) || (pv - vol).abs() > 1e-9 * pv.abs().max(1.0) || free != pfree {
+            return (vec![format!("model object {k}: area {area:.9e} volume {vol:.9e} vs {pa:.9e} {pv:.9e}")], vec![]);
         }
         moved += 1;
     }
@@ -264,13 +209,7 @@ fn compare_export(ctx: &Ctx, py: &Value, path: &Path, reply: &Value) -> (Vec<Str
     let ok = reply["ok"] == true;
     let error = ctx.normalise_all(&reply["error"]);
     if py["ok"].as_bool() != Some(ok) {
-        return (
-            vec![format!(
-                "ok {ok} vs {}: {error} vs {}",
-                py["ok"], py["error"]
-            )],
-            notes,
-        );
+        return (vec![format!("ok {ok} vs {}: {error} vs {}", py["ok"], py["error"])], notes);
     }
     if !ok {
         if error != py["error"] {
@@ -286,11 +225,7 @@ fn compare_export(ctx: &Ctx, py: &Value, path: &Path, reply: &Value) -> (Vec<Str
         }
     }
     if basename(res["path"].as_str().unwrap_or("")) != basename(&path.to_string_lossy()) {
-        diffs.push(format!(
-            "path {} vs the requested {}",
-            res["path"],
-            path.display()
-        ));
+        diffs.push(format!("path {} vs the requested {}", res["path"], path.display()));
     }
     let file = match std::fs::File::open(path) {
         Ok(f) => f,
@@ -300,23 +235,16 @@ fn compare_export(ctx: &Ctx, py: &Value, path: &Path, reply: &Value) -> (Vec<Str
         Ok(z) => z,
         Err(e) => return (vec![format!("not a zip: {e}")], notes),
     };
-    let names: Vec<String> = (0..zip.len())
-        .filter_map(|i| zip.by_index(i).ok().map(|f| f.name().to_owned()))
-        .collect();
+    let names: Vec<String> = (0..zip.len()).filter_map(|i| zip.by_index(i).ok().map(|f| f.name().to_owned())).collect();
     let entries = py["entries"].as_array().cloned().unwrap_or_default();
-    let want: Vec<&str> = entries
-        .iter()
-        .map(|e| e["name"].as_str().unwrap_or(""))
-        .collect();
+    let want: Vec<&str> = entries.iter().map(|e| e["name"].as_str().unwrap_or("")).collect();
     if names != want {
         diffs.push(format!("entries {names:?} vs {want:?}"));
         return (diffs, notes);
     }
     for (i, e) in entries.iter().enumerate() {
         let mut data = Vec::new();
-        let read = zip
-            .by_index(i)
-            .and_then(|mut f| f.read_to_end(&mut data).map_err(Into::into));
+        let read = zip.by_index(i).and_then(|mut f| f.read_to_end(&mut data).map_err(Into::into));
         if read.is_err() {
             diffs.push("a corrupt zip entry".into());
             continue;
@@ -330,11 +258,7 @@ fn compare_export(ctx: &Ctx, py: &Value, path: &Path, reply: &Value) -> (Vec<Str
             diffs.extend(d);
             notes.extend(n);
         } else {
-            diffs.push(format!(
-                "{name}: {} bytes, not the {} python wrote",
-                data.len(),
-                e["bytes"]
-            ));
+            diffs.push(format!("{name}: {} bytes, not the {} python wrote", data.len(), e["bytes"]));
         }
     }
     (diffs, notes)
@@ -347,20 +271,12 @@ fn sorted_points(mesh: &Value) -> Vec<[f64; 3]> {
     pts
 }
 
-fn compare_shape(
-    ctx: &Ctx,
-    py: &Value,
-    reply: &Value,
-    rebuilt: Option<&Value>,
-) -> Result<Vec<String>, String> {
+fn compare_shape(ctx: &Ctx, py: &Value, reply: &Value, rebuilt: Option<&Value>) -> Result<Vec<String>, String> {
     let mut diffs = Vec::new();
     let ok = reply["ok"] == true;
     let error = ctx.normalise_all(&reply["error"]);
     if py["ok"].as_bool() != Some(ok) {
-        return Ok(vec![format!(
-            "ok {ok} vs {}: {error} vs {}",
-            py["ok"], py["error"]
-        )]);
+        return Ok(vec![format!("ok {ok} vs {}: {error} vs {}", py["ok"], py["error"])]);
     }
     if ok {
         let r = &reply["result"];
@@ -370,10 +286,7 @@ fn compare_shape(
                 diffs.push(format!("{key} {got} vs {}", py[key]));
             }
         }
-        let (rv, pv) = (
-            r["volume"].as_f64().unwrap_or(f64::NAN),
-            py["volume"].as_f64().unwrap_or(f64::NAN),
-        );
+        let (rv, pv) = (r["volume"].as_f64().unwrap_or(f64::NAN), py["volume"].as_f64().unwrap_or(f64::NAN));
         if !((rv - pv).abs() <= ctx.tol("volumeRel") * pv.abs().max(1e-9)) {
             diffs.push(format!("volume {rv:.9e} vs {pv:.9e}"));
         }
@@ -422,43 +335,23 @@ fn compare_shape(
     let prebuilt = py.get("rebuilt");
     if prebuilt.is_some() || rebuilt.is_some() {
         let (rv, rn) = rebuilt.map_or((0.0, 0), |r| {
-            let bodies = r["result"]["bodies"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default();
+            let bodies = r["result"]["bodies"].as_array().cloned().unwrap_or_default();
             (bodies.iter().map(body_volume).sum::<f64>(), bodies.len())
         });
-        let (pv, pn) = prebuilt.map_or((0.0, 0), |p| {
-            (
-                p["volume"].as_f64().unwrap_or(0.0),
-                p["bodies"].as_u64().unwrap_or(0) as usize,
-            )
-        });
+        let (pv, pn) = prebuilt
+            .map_or((0.0, 0), |p| (p["volume"].as_f64().unwrap_or(0.0), p["bodies"].as_u64().unwrap_or(0) as usize));
         if pn != rn || (pv - rv).abs() > ctx.tol("importVolumeRel") * pv.max(1e-9) {
-            diffs.push(format!(
-                "stored blob rebuilt to {rn} bodies {} vs {pn} bodies {}",
-                fx(rv, 4),
-                fx(pv, 4)
-            ));
+            diffs.push(format!("stored blob rebuilt to {rn} bodies {} vs {pn} bodies {}", fx(rv, 4), fx(pv, 4)));
         }
     }
     Ok(diffs)
 }
 
-fn run_export(
-    ctx: &Ctx,
-    session: &mut Session,
-    e: &Value,
-    i: usize,
-) -> Result<(std::path::PathBuf, Value), String> {
+fn run_export(ctx: &Ctx, session: &mut Session, e: &Value, i: usize) -> Result<(std::path::PathBuf, Value), String> {
     let e = prepare_export(ctx, e, i)?;
     let suffix = e["suffix"].as_str().unwrap_or(".3mf");
     let path = ctx.work.join(format!("rs-{i}{suffix}"));
-    let options = e
-        .get("options")
-        .filter(|o| !o.is_null())
-        .cloned()
-        .unwrap_or(json!({}));
+    let options = e.get("options").filter(|o| !o.is_null()).cloned().unwrap_or(json!({}));
     let reply = session.call(
         "exportWith",
         json!({"document": e["document"], "path": path.to_string_lossy(),
@@ -479,10 +372,7 @@ fn run_shape(session: &mut Session, s: &Value) -> (Value, Option<Value>) {
         let doc = json!({"parameters": {}, "features": [{
             "id": "f1", "type": "import", "format": "brep", "name": "generated",
             "geom": reply["result"]["geom"], "solid": true}]});
-        session.call(
-            "rebuild",
-            json!({"document": doc, "tolerance": 0.1, "binary": false}),
-        )
+        session.call("rebuild", json!({"document": doc, "tolerance": 0.1, "binary": false}))
     });
     (reply, rebuilt)
 }
@@ -490,11 +380,8 @@ fn run_shape(session: &mut Session, s: &Value) -> (Value, Option<Value>) {
 /// freeze_goldens.zip_entry on this engine's file.
 fn zip_entry(name: &str, data: &[u8]) -> Value {
     use super::record::object;
-    let mut entry = object(vec![
-        ("bytes", json!(data.len())),
-        ("name", json!(name)),
-        ("sha256", json!(sha256_hex(data))),
-    ]);
+    let mut entry =
+        object(vec![("bytes", json!(data.len())), ("name", json!(name)), ("sha256", json!(sha256_hex(data)))]);
     if name.ends_with(".model") {
         let text = String::from_utf8_lossy(data);
         let verts = blocks(&text, "<vertices>", "</vertices>");
@@ -522,10 +409,7 @@ fn zip_entry(name: &str, data: &[u8]) -> Value {
 pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
     use super::record::{fixed, quantised_columns, sig};
     let mut session = Session::start();
-    let exports = ctx.corpus["exports"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
+    let exports = ctx.corpus["exports"].as_array().cloned().unwrap_or_default();
     if let Some((i, e)) = exports.iter().enumerate().find(|(_, e)| e["name"] == name) {
         let (path, reply) = run_export(ctx, &mut session, e, i)?;
         let mut case = json!({"op": "exportWith", "ok": reply["ok"] == true});
@@ -548,10 +432,7 @@ pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
         return Ok(case);
     }
     let shapes = ctx.corpus["shapes"].as_array().cloned().unwrap_or_default();
-    let s = shapes
-        .iter()
-        .find(|s| s["name"] == name)
-        .ok_or_else(|| format!("the corpus has no case {name}"))?;
+    let s = shapes.iter().find(|s| s["name"] == name).ok_or_else(|| format!("the corpus has no case {name}"))?;
     let (reply, rebuilt) = run_shape(&mut session, s);
     let mut case = json!({"op": "generateShape", "ok": reply["ok"] == true});
     if reply["ok"] != true {
@@ -562,13 +443,8 @@ pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
             case[key] = r.get(key).cloned().unwrap_or(Value::Null);
         }
         case["volume"] = sig(r["volume"].as_f64().unwrap_or(0.0), 15);
-        let corner = |c: &str| {
-            Value::Array(
-                (0..3)
-                    .map(|i| fixed(r["bbox"][c][i].as_f64().unwrap_or(0.0), 9))
-                    .collect(),
-            )
-        };
+        let corner =
+            |c: &str| Value::Array((0..3).map(|i| fixed(r["bbox"][c][i].as_f64().unwrap_or(0.0), 9)).collect());
         case["bbox"] = json!({"max": corner("max"), "min": corner("min")});
         if let Some(m) = r.get("mesh") {
             let points = sorted_points(m);
@@ -581,10 +457,7 @@ pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
         }
     }
     if let Some(r) = rebuilt {
-        let bodies = r["result"]["bodies"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
+        let bodies = r["result"]["bodies"].as_array().cloned().unwrap_or_default();
         let volume: f64 = bodies.iter().map(body_volume).sum();
         case["rebuilt"] = json!({"bodies": bodies.len(), "volume": sig(volume, 10)});
     }
@@ -592,10 +465,7 @@ pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
 }
 
 pub fn check(ctx: &Ctx) -> Result<bool, String> {
-    let exports = ctx.corpus["exports"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
+    let exports = ctx.corpus["exports"].as_array().cloned().unwrap_or_default();
     let shapes = ctx.corpus["shapes"].as_array().cloned().unwrap_or_default();
     let cases = ctx.cases().as_object().ok_or("the golden has no cases")?;
     let mut session = Session::start();
@@ -603,54 +473,32 @@ pub fn check(ctx: &Ctx) -> Result<bool, String> {
     let mut bad = 0;
     for (i, e) in exports.iter().enumerate() {
         let name = e["name"].as_str().unwrap_or("");
-        let py = cases
-            .get(name)
-            .ok_or_else(|| format!("the golden has no case {name}"))?;
+        let py = cases.get(name).ok_or_else(|| format!("the golden has no case {name}"))?;
         let (path, reply) = run_export(ctx, &mut session, e, i)?;
         let (diffs, notes) = compare_export(ctx, py, &path, &reply);
         bad += usize::from(!diffs.is_empty());
         rows.push(vec![
             "exportWith".into(),
             name.into(),
-            if diffs.is_empty() {
-                "match"
-            } else {
-                "MISMATCH"
-            }
-            .into(),
-            if diffs.is_empty() {
-                notes.join("; ")
-            } else {
-                diffs.join("; ")
-            },
+            if diffs.is_empty() { "match" } else { "MISMATCH" }.into(),
+            if diffs.is_empty() { notes.join("; ") } else { diffs.join("; ") },
         ]);
     }
     for s in &shapes {
         let name = s["name"].as_str().unwrap_or("");
-        let py = cases
-            .get(name)
-            .ok_or_else(|| format!("the golden has no case {name}"))?;
+        let py = cases.get(name).ok_or_else(|| format!("the golden has no case {name}"))?;
         let (reply, rebuilt) = run_shape(&mut session, s);
         let diffs = compare_shape(ctx, py, &reply, rebuilt.as_ref())?;
         bad += usize::from(!diffs.is_empty());
         rows.push(vec![
             "generateShape".into(),
             name.into(),
-            if diffs.is_empty() {
-                "match"
-            } else {
-                "MISMATCH"
-            }
-            .into(),
+            if diffs.is_empty() { "match" } else { "MISMATCH" }.into(),
             diffs.join("; "),
         ]);
     }
     if rows.len() != cases.len() {
-        return Err(format!(
-            "the golden has {} cases, the corpus {}",
-            cases.len(),
-            rows.len()
-        ));
+        return Err(format!("the golden has {} cases, the corpus {}", cases.len(), rows.len()));
     }
     table(&rows, &["op", "case", "status", "detail"]);
     Ok(verdict(bad, rows.len()))

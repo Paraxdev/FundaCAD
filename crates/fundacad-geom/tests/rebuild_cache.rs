@@ -81,9 +81,7 @@ fn signature(r: &Rebuild, mesh: &MeshResult) -> Value {
 
 fn cold(raw: &Value) -> Value {
     let r = builder::rebuild(&typed(raw), raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
-    let JobResult::Mesh(m) = reply::mesh_result(&r.bodies, TOL, &Map::new(), &NoWatch) else {
-        panic!("mesh")
-    };
+    let JobResult::Mesh(m) = reply::mesh_result(&r.bodies, TOL, &Map::new(), &NoWatch) else { panic!("mesh") };
     signature(&r, &m)
 }
 
@@ -145,11 +143,7 @@ fn banded_payload(payloads: &mut Payloads, store: Option<&GeomStore>, shape: &op
         ..Default::default()
     };
     payloads.reset_counters();
-    let mut tiered = Tiered {
-        payloads,
-        store,
-        persist_after: Duration::ZERO,
-    };
+    let mut tiered = Tiered { payloads, store, persist_after: Duration::ZERO };
     let m = fundacad_geom::mesh::mesh_result_full(
         std::slice::from_ref(&body),
         TOL,
@@ -175,14 +169,20 @@ fn a_cached_payload_keeps_its_face_bands() {
     assert_eq!((payloads.ram_hits, payloads.disk_hits, payloads.meshed), (0, 0, 1));
 
     let warm = banded_payload(&mut payloads, Some(&store), &shape);
-    assert_eq!((payloads.ram_hits, payloads.disk_hits, payloads.meshed), (1, 0, 0),
-        "a banded payload was meshed again instead of served from memory");
+    assert_eq!(
+        (payloads.ram_hits, payloads.disk_hits, payloads.meshed),
+        (1, 0, 0),
+        "a banded payload was meshed again instead of served from memory"
+    );
     assert_eq!(warm, fresh);
 
     let mut reopened = Payloads::default();
     let from_disk = banded_payload(&mut reopened, Some(&store), &shape);
-    assert_eq!((reopened.ram_hits, reopened.disk_hits, reopened.meshed), (0, 1, 0),
-        "the disk artifact of a banded body was not read back");
+    assert_eq!(
+        (reopened.ram_hits, reopened.disk_hits, reopened.meshed),
+        (0, 1, 0),
+        "the disk artifact of a banded body was not read back"
+    );
     assert_eq!(from_disk, fresh);
 }
 
@@ -203,8 +203,10 @@ fn a_projecting_sketch_is_never_resumed_past() {
     let watch = Replayed::default();
     let again = cache.rebuild(&typed(&raw), &raw, &watch).unwrap();
     assert_eq!(cache.stats.resumed_at, 1, "a resume skipped the projecting sketch");
-    assert_eq!(again.projection_updates, first.projection_updates,
-        "the projection update was cached away, the frontend would never hear it");
+    assert_eq!(
+        again.projection_updates, first.projection_updates,
+        "the projection update was cached away, the frontend would never hear it"
+    );
 
     // The update applied, the sketch stops reporting and a resume may pass it.
     let mut applied = raw.clone();
@@ -376,10 +378,7 @@ fn import_doc(fixture: &str, extra: Value) -> Value {
 
 #[test]
 fn import_metadata_and_diagnostics_survive_a_disk_resume() {
-    let cases = [
-        import_doc("asm_face_colors", json!({})),
-        import_doc("asm_nested", json!({"explode": false})),
-    ];
+    let cases = [import_doc("asm_face_colors", json!({})), import_doc("asm_nested", json!({"explode": false}))];
     let mut mismatch = import_doc("asm_multisolid", json!({}));
     mismatch["features"][0]["parts"][2]["faces"] = json!(999);
     for (i, raw) in cases.iter().chain([&mismatch]).enumerate() {
@@ -591,7 +590,11 @@ fn face_owners_survive_a_disk_resume_of_faces_measuring_on_a_rounding_tie() {
     let resumed = third.rebuild(&typed(&edited), &edited, &NoWatch).unwrap();
     assert_eq!(third.stats.source, Source::Disk);
     assert_eq!(third.stats.replayed, [3]);
-    assert_eq!(face_owners(&resumed), face_owners(&built(&edited)), "a feature replayed on a restored body owns faces it did not make");
+    assert_eq!(
+        face_owners(&resumed),
+        face_owners(&built(&edited)),
+        "a feature replayed on a restored body owns faces it did not make"
+    );
 
     // A checkpoint written from a restored body restores the same way.
     let mut fourth = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));

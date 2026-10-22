@@ -51,13 +51,15 @@ fn tube_cut_to(offset: f64, patterned: bool, s: f64, top: f64) -> Value {
         // the seam.
         features.push(json!({"id": "cutSk", "type": "sketch", "entities": diamond,
             "plane": {"origin": [0, -38.0 * s, 0], "normal": [0, -1, 0], "xdir": [1, 0, 0]}}));
-        features.push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9.0 * s, "operation": "cut"}));
+        features
+            .push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9.0 * s, "operation": "cut"}));
         features.push(json!({"id": "pat", "type": "patternCircular", "count": 4, "angle": 360, "axis": "Z",
             "features": ["cut"]}));
     } else {
         features.push(json!({"id": "cutSk", "type": "sketch", "entities": diamond,
             "plane": {"origin": [38.0 * s, 0, 0], "normal": [1, 0, 0], "xdir": [0, 1, 0]}}));
-        features.push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9.0 * s, "operation": "cut"}));
+        features
+            .push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9.0 * s, "operation": "cut"}));
     }
     json!({"parameters": {}, "features": features})
 }
@@ -97,9 +99,7 @@ fn side_tally<T: Copy + Into<f64>>(positions: &[T], indices: &[u32]) -> (usize, 
 fn mesh_holes(doc: &Value) -> Vec<Value> {
     let mut req = Map::new();
     req.insert("document".into(), doc.clone());
-    let JobResult::Json(r) = printability_result(&req, &NoWatch) else {
-        panic!("expected a JSON result")
-    };
+    let JobResult::Json(r) = printability_result(&req, &NoWatch) else { panic!("expected a JSON result") };
     assert!(r.get("error").is_none(), "{r:?}");
     r["findings"].as_array().unwrap().iter().filter(|f| f["kind"] == "meshHole").cloned().collect()
 }
@@ -128,12 +128,8 @@ fn assert_whole_doc(label: &str, raw: Value) {
     let bare = seen.iter().filter(|s| !**s).count();
     let stl = export::export_mesh(shape, &export::mesh_options(None));
     let stl32: Vec<f32> = stl.0.iter().map(|&v| v as f32).collect();
-    let got = (
-        bare,
-        unpaired_sides(&view.positions, &view.indices),
-        unpaired_sides(&stl32, &stl.1),
-        mesh_holes(&raw).len(),
-    );
+    let got =
+        (bare, unpaired_sides(&view.positions, &view.indices), unpaired_sides(&stl32, &stl.1), mesh_holes(&raw).len());
     assert_eq!(
         got,
         (0, 0, 0, 0),
@@ -204,7 +200,8 @@ fn a_cut_with_a_corner_at_the_rim_beside_the_seam_meshes_closed() {
         let stl = export::export_mesh(shape, &export::mesh_options(None));
         let stl32: Vec<f32> = stl.0.iter().map(|&v| v as f32).collect();
         let got = (side_tally(&view.positions, &view.indices), side_tally(&stl32, &stl.1), mesh_holes(&raw).len());
-        let flat = (soup::flat_triangles(&view.positions, &view.indices).len(), soup::flat_triangles(&stl32, &stl.1).len());
+        let flat =
+            (soup::flat_triangles(&view.positions, &view.indices).len(), soup::flat_triangles(&stl32, &stl.1).len());
         assert_eq!(flat, (0, 0), "patterned {patterned}, corner {offset} mm off the seam: triangles without area in (the viewport mesh, the STL)");
         assert_eq!(
             got,

@@ -30,9 +30,7 @@ const DAMAGED: &str = "This document's embedded geometry is damaged and cannot b
 type Blake2b128 = Blake2b<U16>;
 
 pub fn is_binary_doc_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case(BINARY_DOC_EXT))
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case(BINARY_DOC_EXT))
 }
 
 fn is_hash(s: &str) -> bool {

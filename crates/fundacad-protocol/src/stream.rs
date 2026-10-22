@@ -152,12 +152,7 @@ impl Stream {
             }
             Err(over) => {
                 self.done = true;
-                Some(Message::Text(frame::body_too_large_error(
-                    &self.id,
-                    bodies,
-                    over.size,
-                    &self.limits,
-                )))
+                Some(Message::Text(frame::body_too_large_error(&self.id, bodies, over.size, &self.limits)))
             }
         }
     }
@@ -208,9 +203,7 @@ pub fn send_reply(
             let n_bodies = m.bodies.len();
             match stream_reply(id.clone(), m, new_stream_id(), cancel, limits) {
                 Ok(reply) => reply,
-                Err(over) => single(Message::Text(frame::too_large_error(
-                    &id, over.size, n_bodies, &limits,
-                ))),
+                Err(over) => single(Message::Text(frame::too_large_error(&id, over.size, n_bodies, &limits))),
             }
         }
         other => single(frame::reply_bytes(&id, &other, opts.binary, &limits)),
@@ -218,9 +211,7 @@ pub fn send_reply(
 }
 
 fn single(m: Message) -> Reply {
-    Reply {
-        state: State::One(Some(m)),
-    }
+    Reply { state: State::One(Some(m)) }
 }
 
 #[cfg(test)]
@@ -253,17 +244,11 @@ mod tests {
 
     #[test]
     fn stream_shape() {
-        let res = MeshResult {
-            fields: Map::new(),
-            bodies: vec![full("a", 1), full("b", 1), WireBody::stub("s", "S", "x")],
-        };
-        let limits = Limits {
-            max_frame: 1 << 20,
-            chunk_target: 300,
-        };
-        let msgs: Vec<Message> = stream_reply(json!("r"), res, "sid".into(), None, limits)
-            .map(Iterator::collect)
-            .unwrap_or_default();
+        let res =
+            MeshResult { fields: Map::new(), bodies: vec![full("a", 1), full("b", 1), WireBody::stub("s", "S", "x")] };
+        let limits = Limits { max_frame: 1 << 20, chunk_target: 300 };
+        let msgs: Vec<Message> =
+            stream_reply(json!("r"), res, "sid".into(), None, limits).map(Iterator::collect).unwrap_or_default();
         assert_eq!(msgs.len(), 4);
         let heads: Vec<Value> = msgs
             .iter()
@@ -273,10 +258,7 @@ mod tests {
             })
             .collect();
         assert_eq!(heads[0]["status"], json!("chunk"));
-        assert_eq!(
-            heads[0]["result"]["manifest"].as_array().map(Vec::len),
-            Some(3)
-        );
+        assert_eq!(heads[0]["result"]["manifest"].as_array().map(Vec::len), Some(3));
         assert_eq!(heads[3]["ok"], json!(true));
         assert_eq!(heads[3]["stream"]["seq"], json!(3));
         assert!(heads[3].get("status").is_none());
@@ -288,10 +270,7 @@ mod tests {
         let msgs: Vec<Message> = send_reply(
             json!("r"),
             JobResult::Mesh(res),
-            ReplyOptions {
-                binary: true,
-                chunked: true,
-            },
+            ReplyOptions { binary: true, chunked: true },
             None,
             Limits::default(),
         )
@@ -306,31 +285,19 @@ mod tests {
     #[test]
     fn cancel_between_chunks() {
         let token = CancelToken::new();
-        let res = MeshResult {
-            fields: Map::new(),
-            bodies: vec![full("a", 1), full("b", 1)],
-        };
-        let limits = Limits {
-            max_frame: 1 << 20,
-            chunk_target: 1,
-        };
+        let res = MeshResult { fields: Map::new(), bodies: vec![full("a", 1), full("b", 1)] };
+        let limits = Limits { max_frame: 1 << 20, chunk_target: 1 };
         let mut reply = send_reply(
             json!("r"),
             JobResult::Mesh(res),
-            ReplyOptions {
-                binary: true,
-                chunked: true,
-            },
+            ReplyOptions { binary: true, chunked: true },
             Some(token.clone()),
             limits,
         );
         assert!(matches!(reply.next(), Some(Message::Binary(_))));
         assert!(matches!(reply.next(), Some(Message::Binary(_))));
         token.cancel();
-        assert_eq!(
-            reply.next(),
-            Some(Message::Text(envelope::cancelled(&json!("r"))))
-        );
+        assert_eq!(reply.next(), Some(Message::Text(envelope::cancelled(&json!("r")))));
         assert_eq!(reply.next(), None);
     }
 

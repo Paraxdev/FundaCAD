@@ -134,7 +134,11 @@ fn distinct(normals: impl Iterator<Item = [f32; 3]>) -> Option<usize> {
         any = true;
         let q = n.map(|v| {
             let r = (v * 1000.0).round_ties_even() / 1000.0;
-            if r == 0.0 { 0u32 } else { r.to_bits() }
+            if r == 0.0 {
+                0u32
+            } else {
+                r.to_bits()
+            }
         });
         seen.insert(q);
     }
@@ -602,12 +606,20 @@ pub fn read_gltf(path: &Path, mm_per_unit: Option<f64>) -> Result<(super::Import
     Ok((sew_gltf(&json, &buffers, mm_per_unit)?, gltf_dominant_color(&json)))
 }
 
-fn sew_gltf(json: &serde_json::Value, buffers: &[std::borrow::Cow<'_, [u8]>], mm_per_unit: Option<f64>) -> Result<super::Imported, String> {
+fn sew_gltf(
+    json: &serde_json::Value,
+    buffers: &[std::borrow::Cow<'_, [u8]>],
+    mm_per_unit: Option<f64>,
+) -> Result<super::Imported, String> {
     let (pos, idx) = match mm_per_unit {
         Some(mm) => super::gltf::read_gltf(json, buffers, mm)?,
         None => {
             let metres = super::gltf::read_gltf(json, buffers, 1000.0)?;
-            if super::gltf::max_extent(&metres.0) > GLB_MM_AS_UNITS_ABOVE { super::gltf::read_gltf(json, buffers, 1.0)? } else { metres }
+            if super::gltf::max_extent(&metres.0) > GLB_MM_AS_UNITS_ABOVE {
+                super::gltf::read_gltf(json, buffers, 1.0)?
+            } else {
+                metres
+            }
         }
     };
     sew_or_scan(&pos, &idx)
@@ -897,7 +909,10 @@ mod tests {
         let (pos, idx) = obj_triangles("v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1/1 2/2 3/3 -1\n").unwrap();
         assert_eq!(pos.len(), 12);
         assert_eq!(idx, [0, 1, 2, 0, 2, 3]);
-        assert_eq!(obj_triangles("v 0 0 0\nf 1 2 3\n").unwrap_err(), "the OBJ file references vertices that do not exist");
+        assert_eq!(
+            obj_triangles("v 0 0 0\nf 1 2 3\n").unwrap_err(),
+            "the OBJ file references vertices that do not exist"
+        );
         assert_eq!(obj_triangles("# nothing\n").unwrap_err(), "no triangles found in the OBJ file");
     }
 

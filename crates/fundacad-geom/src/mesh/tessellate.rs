@@ -108,20 +108,15 @@ pub fn tessellate_with(
         let ntri = t.len() / 3;
         let (pos, t) = if params.display {
             let is_plane = access.face_plane_normal(fid).is_some();
-            let face = crate::bench::phase("display_face", || {
-                display_face(tri.nodes, t, &tri.normals, flip, is_plane)
-            });
-            normals
-                .get_or_insert_with(Vec::new)
-                .extend_from_slice(&face.normals);
+            let face = crate::bench::phase("display_face", || display_face(tri.nodes, t, &tri.normals, flip, is_plane));
+            normals.get_or_insert_with(Vec::new).extend_from_slice(&face.normals);
             (face.positions, face.triangles)
         } else {
             (tri.nodes, t)
         };
         out.positions.extend_from_slice(&pos);
         out.indices.extend(t.iter().map(|i| i + base));
-        out.face_ids
-            .extend(std::iter::repeat(fid as u32).take(ntri));
+        out.face_ids.extend(std::iter::repeat(fid as u32).take(ntri));
     }
     out.normals = normals;
     crate::bench::phase("flat_triangles", || super::flat::remove(&mut out));
@@ -232,11 +227,7 @@ fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 }
 
 fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 
 fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
@@ -256,39 +247,21 @@ fn norm(a: [f64; 3]) -> f64 {
 /// average, which is what the client would draw. Coincident nodes (a closed
 /// face's seam copies) merge only when their normals agree, so a cone apex
 /// keeps its copies, and the weld never crosses a face.
-fn display_face(
-    nodes: Vec<f64>,
-    tris: Vec<u32>,
-    surface_normals: &[f64],
-    flip: bool,
-    is_plane: bool,
-) -> DisplayFace {
+fn display_face(nodes: Vec<f64>, tris: Vec<u32>, surface_normals: &[f64], flip: bool, is_plane: bool) -> DisplayFace {
     let n = nodes.len() / 3;
     let p = |i: u32| {
         let i = i as usize * 3;
         [nodes[i], nodes[i + 1], nodes[i + 2]]
     };
-    let facets: Vec<[f64; 3]> = tris
-        .chunks_exact(3)
-        .map(|c| cross(sub(p(c[1]), p(c[0])), sub(p(c[2]), p(c[0]))))
-        .collect();
+    let facets: Vec<[f64; 3]> =
+        tris.chunks_exact(3).map(|c| cross(sub(p(c[1]), p(c[0])), sub(p(c[2]), p(c[0])))).collect();
 
     if is_plane {
-        let s = facets
-            .iter()
-            .fold([0.0; 3], |a, f| [a[0] + f[0], a[1] + f[1], a[2] + f[2]]);
+        let s = facets.iter().fold([0.0; 3], |a, f| [a[0] + f[0], a[1] + f[1], a[2] + f[2]]);
         let ln = norm(s);
-        let unit = if ln > 1e-12 {
-            [s[0] / ln, s[1] / ln, s[2] / ln]
-        } else {
-            [0.0, 0.0, 1.0]
-        };
+        let unit = if ln > 1e-12 { [s[0] / ln, s[1] / ln, s[2] / ln] } else { [0.0, 0.0, 1.0] };
         let normals = unit.iter().copied().cycle().take(3 * n).collect();
-        return DisplayFace {
-            positions: nodes,
-            triangles: tris,
-            normals,
-        };
+        return DisplayFace { positions: nodes, triangles: tris, normals };
     }
 
     let mut acc = vec![[0.0f64; 3]; n];
@@ -308,10 +281,7 @@ fn display_face(
 
     let mut nn: Vec<[f64; 3]> = if surface_normals.len() == 3 * n {
         let sign = if flip { -1.0 } else { 1.0 };
-        surface_normals
-            .chunks_exact(3)
-            .map(|c| [sign * c[0], sign * c[1], sign * c[2]])
-            .collect()
+        surface_normals.chunks_exact(3).map(|c| [sign * c[0], sign * c[1], sign * c[2]]).collect()
     } else {
         acc.clone()
     };
@@ -322,19 +292,14 @@ fn display_face(
         }
     }
     for (v, a) in nn.iter_mut().zip(&acc) {
-        let bad =
-            !v.iter().all(|x| x.is_finite()) || (norm(*v) - 1.0).abs() > 1e-3 || dot(*v, *a) < 0.0;
+        let bad = !v.iter().all(|x| x.is_finite()) || (norm(*v) - 1.0).abs() > 1e-3 || dot(*v, *a) < 0.0;
         if bad {
             *v = *a;
         }
     }
 
     let (positions, triangles, nn) = weld(nodes, tris, nn);
-    DisplayFace {
-        positions,
-        triangles,
-        normals: nn.iter().flatten().copied().collect(),
-    }
+    DisplayFace { positions, triangles, normals: nn.iter().flatten().copied().collect() }
 }
 
 /// numpy's `round(x, 6)`, half to even on the scaled value, with -0.0 folded
@@ -402,9 +367,7 @@ mod tests {
     fn weld_merges_agreeing_copies_only() {
         // Nodes 0 and 2 coincide with the same normal, 1 and 3 coincide with
         // opposite normals, the apex case.
-        let nodes = vec![
-            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
-        ];
+        let nodes = vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0];
         let up = [0.0, 0.0, 1.0];
         let nn = vec![up, up, up, [0.0, 0.0, -1.0], up];
         let (pos, tris, kept) = weld(nodes, vec![0, 1, 4, 2, 3, 4], nn);
@@ -418,9 +381,7 @@ mod tests {
         // Nodes 0 and 3 are one edge point two faces hold 1e-5 apart, the
         // last triangle spans only that gap.
         let mut t = Tessellation {
-            positions: vec![
-                0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1e-5, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0, 0.0,
-            ],
+            positions: vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1e-5, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0, 0.0],
             indices: vec![0, 1, 2, 3, 4, 5, 0, 3, 4],
             face_ids: vec![0, 1, 1],
             normals: None,

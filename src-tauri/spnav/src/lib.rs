@@ -59,14 +59,8 @@ pub fn decode(record: &[u8; RECORD_BYTES]) -> Option<Event> {
     }
     let [kind, a, b, c, d, e, f, _period] = data;
     match kind {
-        0 => Some(Event::Motion {
-            t: [unit(a), -unit(c), -unit(b)],
-            r: [unit(d), -unit(f), -unit(e)],
-        }),
-        1 | 2 => Some(Event::Button {
-            number: a,
-            pressed: kind == 1,
-        }),
+        0 => Some(Event::Motion { t: [unit(a), -unit(c), -unit(b)], r: [unit(d), -unit(f), -unit(e)] }),
+        1 | 2 => Some(Event::Button { number: a, pressed: kind == 1 }),
         _ => None,
     }
 }
@@ -96,10 +90,7 @@ impl Reader {
     /// daemon closed the connection or failed.
     pub fn step(&mut self, src: &mut impl Read) -> io::Result<Option<Event>> {
         match src.read(&mut self.record[self.have..]) {
-            Ok(0) => Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "spacenavd closed the connection",
-            )),
+            Ok(0) => Err(io::Error::new(io::ErrorKind::UnexpectedEof, "spacenavd closed the connection")),
             Ok(n) => {
                 self.have += n;
                 if self.have < RECORD_BYTES {
@@ -111,9 +102,7 @@ impl Reader {
             Err(e)
                 if matches!(
                     e.kind(),
-                    io::ErrorKind::Interrupted
-                        | io::ErrorKind::WouldBlock
-                        | io::ErrorKind::TimedOut
+                    io::ErrorKind::Interrupted | io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
                 ) =>
             {
                 Ok(None)
@@ -126,11 +115,7 @@ impl Reader {
 /// Hands every record to `on_event` until `keep_going` says stop (`Ok`) or the
 /// daemon closes the connection or fails (`Err`). `keep_going` is asked after each
 /// read, so the source needs a read timeout.
-pub fn pump(
-    mut src: impl Read,
-    keep_going: impl Fn() -> bool,
-    on_event: impl FnMut(Event),
-) -> io::Result<()> {
+pub fn pump(mut src: impl Read, keep_going: impl Fn() -> bool, on_event: impl FnMut(Event)) -> io::Result<()> {
     pump_with(&mut Reader::default(), &mut src, keep_going, on_event)
 }
 
@@ -259,9 +244,7 @@ pub enum NoDaemon {
 impl NoDaemon {
     pub fn hint(self) -> &'static str {
         match self {
-            NoDaemon::Absent => {
-                "start spacenavd (sudo systemctl enable --now spacenavd) or install the udev rule"
-            }
+            NoDaemon::Absent => "start spacenavd (sudo systemctl enable --now spacenavd) or install the udev rule",
             NoDaemon::Refused => {
                 "spacenavd is not answering, restart it (sudo systemctl restart spacenavd) or install the udev rule"
             }

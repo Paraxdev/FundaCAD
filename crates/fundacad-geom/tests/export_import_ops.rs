@@ -125,7 +125,9 @@ fn export_one_body_separate_bodies_and_refusals() {
     let c = Client::new();
     let dir = scratch("separate");
     let base = p(&dir, "parts.step");
-    let r = c.call(json!({"id": 1, "op": "export", "document": two_bodies(), "format": "step", "path": base, "separate": true}));
+    let r = c.call(
+        json!({"id": 1, "op": "export", "document": two_bodies(), "format": "step", "path": base, "separate": true}),
+    );
     assert_eq!(r["ok"], true, "{r}");
     let folder = p(&dir, "parts");
     assert_eq!(r["result"]["path"], folder);
@@ -134,7 +136,9 @@ fn export_one_body_separate_bodies_and_refusals() {
     for f in paths {
         assert!(std::fs::metadata(f.as_str().unwrap()).unwrap().len() > 1000);
     }
-    let again = c.call(json!({"id": 2, "op": "export", "document": two_bodies(), "format": "step", "path": base, "separate": true}));
+    let again = c.call(
+        json!({"id": 2, "op": "export", "document": two_bodies(), "format": "step", "path": base, "separate": true}),
+    );
     assert_eq!(
         again,
         json!({"id": 2, "ok": false, "error": {"message":
@@ -142,7 +146,8 @@ fn export_one_body_separate_bodies_and_refusals() {
     );
 
     let one = p(&dir, "one.stl");
-    let r = c.call(json!({"id": 3, "op": "export", "document": two_bodies(), "format": "stl", "path": one, "body": "nope"}));
+    let r = c
+        .call(json!({"id": 3, "op": "export", "document": two_bodies(), "format": "stl", "path": one, "body": "nope"}));
     assert_eq!(r["error"]["message"], "body 'nope' not found to export");
 
     let r = c.call(json!({"id": 4, "op": "export", "document": two_bodies(), "format": "obj", "path": one}));
@@ -203,7 +208,9 @@ fn an_import_sent_as_bytes_reads_like_one_sent_by_path() {
     let r = c.call(json!({"id": 1, "op": "export", "document": two_bodies(), "format": "step", "path": path}));
     assert_eq!(r["ok"], true, "{r}");
     let data = base64::engine::general_purpose::STANDARD.encode(std::fs::read(&path).unwrap());
-    let r = c.call(json!({"id": 2, "op": "import", "format": "step", "name": "Dropped \u{00dc}ber: part.step", "data": data}));
+    let r = c.call(
+        json!({"id": 2, "op": "import", "format": "step", "name": "Dropped \u{00dc}ber: part.step", "data": data}),
+    );
     assert_eq!(r["ok"], true, "{r}");
     let res = &r["result"];
     assert_eq!(res["name"], "Dropped \u{00dc}ber_ part");
@@ -221,7 +228,10 @@ fn an_import_sent_as_bytes_reads_like_one_sent_by_path() {
     assert_eq!(r["ok"], false, "{r}");
     assert!(r["error"]["message"].as_str().unwrap().contains("x.stl"), "{r}");
     let r = c.call(json!({"id": 4, "op": "import", "format": "stl"}));
-    assert_eq!(r, json!({"id": 4, "ok": false, "error": {"message": "import: a request needs a path or data, and a format"}}));
+    assert_eq!(
+        r,
+        json!({"id": 4, "ok": false, "error": {"message": "import: a request needs a path or data, and a format"}})
+    );
 
     let gz = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/asm_colors.step.gz");
     let data = base64::engine::general_purpose::STANDARD.encode(std::fs::read(gz).unwrap());
@@ -262,7 +272,9 @@ fn a_3mf_body_is_one_closed_shell() {
     let dir = scratch("closed3mf");
     for (i, mesh) in [json!({}), json!({"maxEdgeLength": 2})].into_iter().enumerate() {
         let path = p(&dir, &format!("part{i}.3mf"));
-        let r = c.call(json!({"id": i, "op": "export", "document": two_bodies(), "format": "3mf", "path": path, "mesh": mesh}));
+        let r = c.call(
+            json!({"id": i, "op": "export", "document": two_bodies(), "format": "3mf", "path": path, "mesh": mesh}),
+        );
         assert_eq!(r["ok"], true, "{r}");
         let mut z = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
         let mut model = String::new();
@@ -405,7 +417,8 @@ fn a_bodies_list_exports_only_those_bodies_merged_or_separate() {
     assert_eq!(r["error"]["message"], "body 'nope' not found to export");
 
     let all = p(&dir, "all.stl");
-    let r = c.call(json!({"id": 5, "op": "export", "document": three_boxes(), "format": "stl", "path": all, "bodies": []}));
+    let r =
+        c.call(json!({"id": 5, "op": "export", "document": three_boxes(), "format": "stl", "path": all, "bodies": []}));
     assert_eq!(r["ok"], true, "{r}");
     assert_eq!(stl_xs(&all).0, 36, "an empty list is no filter");
 }

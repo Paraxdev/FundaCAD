@@ -166,7 +166,13 @@ impl Tracer {
                 if let Some(mesh) = self.scene.mesh(&inst.body.key) {
                     let first = emitting.len() as u32;
                     let i = rows.len() as u32;
-                    emitting.extend(tri_powers(mesh, &inst.xf, &body).into_iter().enumerate().filter(|e| e.1 > 0.0).map(|(t, p)| (i, t as u32, p)));
+                    emitting.extend(
+                        tri_powers(mesh, &inst.xf, &body)
+                            .into_iter()
+                            .enumerate()
+                            .filter(|e| e.1 > 0.0)
+                            .map(|(t, p)| (i, t as u32, p)),
+                    );
                     if emitting.len() as u32 > first {
                         row.extra[2] |= INST_EMITTERS;
                         row.extra[3] = first;
@@ -233,8 +239,16 @@ mod tests {
 
     #[test]
     fn a_triangle_lights_by_its_world_area() {
-        let mesh = Mesh { positions: vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], indices: vec![0, 1, 2], ..Default::default() };
-        let glow = pack_material(&crate::material::PageMaterial { emissive: Some([1.0; 3]), emissive_intensity: Some(4.0), ..Default::default() });
+        let mesh = Mesh {
+            positions: vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            indices: vec![0, 1, 2],
+            ..Default::default()
+        };
+        let glow = pack_material(&crate::material::PageMaterial {
+            emissive: Some([1.0; 3]),
+            emissive_intensity: Some(4.0),
+            ..Default::default()
+        });
         let xf = [2.0, 0.0, 0.0, 5.0, 0.0, 3.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
         assert!((tri_powers(&mesh, &xf, &[glow])[0] - 0.5 * 6.0 * 4.0).abs() < 1e-4);
         let none = pack_material(&crate::material::PageMaterial { no_light: true, ..Default::default() });

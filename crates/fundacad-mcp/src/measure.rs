@@ -51,11 +51,7 @@ fn axis(v: &Value) -> String {
 
 fn round(item: &Value, out: &mut String) {
     if item.get("radius").is_some() {
-        out.push_str(&format!(
-            ", radius {} mm (diameter {})",
-            n(item.get("radius")),
-            n(item.get("diameter"))
-        ));
+        out.push_str(&format!(", radius {} mm (diameter {})", n(item.get("radius")), n(item.get("diameter"))));
     }
     if let Some(c) = item.get("centre") {
         out.push_str(&format!(", centre {}", point(c)));
@@ -69,7 +65,8 @@ pub fn item_line(item: &Value) -> String {
         Some(b) => format!(" of {b} \"{}\"", s("name")),
         None => String::new(),
     };
-    let index = |label: &str| item.get("index").and_then(Value::as_u64).map_or(String::new(), |i| format!(" {label}{i}"));
+    let index =
+        |label: &str| item.get("index").and_then(Value::as_u64).map_or(String::new(), |i| format!(" {label}{i}"));
     let mut out = String::new();
     match s("kind").as_str() {
         "point" => out.push_str(&format!("point {}", point(&item["at"]))),

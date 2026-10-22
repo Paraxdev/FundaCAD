@@ -39,16 +39,10 @@ struct Session(PathBuf);
 impl Session {
     /// Publish a session file naming `engine`, as the app does while it runs.
     fn published(engine: &FakeEngine) -> Session {
-        let path = std::env::temp_dir().join(format!(
-            "fundacad-test-session-{}-{}.json",
-            std::process::id(),
-            engine.port
-        ));
-        std::fs::write(
-            &path,
-            json!({"port": engine.port, "token": engine.token, "pid": 4242}).to_string(),
-        )
-        .expect("a temp file");
+        let path =
+            std::env::temp_dir().join(format!("fundacad-test-session-{}-{}.json", std::process::id(), engine.port));
+        std::fs::write(&path, json!({"port": engine.port, "token": engine.token, "pid": 4242}).to_string())
+            .expect("a temp file");
         std::env::set_var("FUNDACAD_SESSION_FILE", &path);
         Session(path)
     }
@@ -125,11 +119,7 @@ async fn the_private_engine_is_let_go_of() {
     let (srv, private) = fresh();
     let private_port = private.port;
     srv.probe_for_the_app().await;
-    assert_ne!(
-        srv.engine_port().await,
-        private_port,
-        "the private engine was kept"
-    );
+    assert_ne!(srv.engine_port().await, private_port, "the private engine was kept");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -141,10 +131,7 @@ async fn nothing_happens_when_no_app_is_open() {
     let (srv, _private) = fresh();
     srv.probe_for_the_app().await;
     assert!(!srv.is_live().await);
-    assert_eq!(
-        srv.document().await["features"].as_array().map(Vec::len),
-        Some(0)
-    );
+    assert_eq!(srv.document().await["features"].as_array().map(Vec::len), Some(0));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -159,11 +146,7 @@ async fn work_already_done_here_is_not_thrown_away() {
     srv.set_private_edits(true).await;
     srv.probe_for_the_app().await;
     assert!(!srv.is_live().await, "adopted over work already done");
-    assert_eq!(
-        pings(&app),
-        0,
-        "probed at all, when the answer could not be acted on"
-    );
+    assert_eq!(pings(&app), 0, "probed at all, when the answer could not be acted on");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -192,11 +175,7 @@ async fn a_window_that_is_not_sharing_leaves_a_working_session() {
     let (srv, private) = fresh();
     srv.probe_for_the_app().await;
     assert!(!srv.is_live().await, "kept a live session that cannot be read");
-    assert_eq!(
-        srv.engine_port().await,
-        private.port,
-        "swapped the link anyway"
-    );
+    assert_eq!(srv.engine_port().await, private.port, "swapped the link anyway");
     // and the private engine still answers, which is the half-switch bug
     let out = srv.t_schema(Default::default()).await;
     assert!(out.is_ok());
@@ -215,8 +194,7 @@ async fn a_closed_app_is_not_re_probed_on_every_call() {
         srv.probe_for_the_app().await;
     }
     assert_eq!(pings(&app), 1, "{:?}", app.ops());
-    srv.age_probe(fundacad_mcp::server::REPROBE + Duration::from_secs(1))
-        .await; // time passes
+    srv.age_probe(fundacad_mcp::server::REPROBE + Duration::from_secs(1)).await; // time passes
     srv.probe_for_the_app().await;
     assert_eq!(pings(&app), 2, "{:?}", app.ops());
 }
@@ -231,15 +209,10 @@ async fn an_attached_server_stops_asking() {
     assert!(srv.is_live().await);
     let before = pings(&app);
     for _ in 0..5 {
-        srv.age_probe(fundacad_mcp::server::REPROBE + Duration::from_secs(1))
-            .await;
+        srv.age_probe(fundacad_mcp::server::REPROBE + Duration::from_secs(1)).await;
         srv.probe_for_the_app().await;
     }
-    assert_eq!(
-        pings(&app),
-        before,
-        "kept probing after it was already attached"
-    );
+    assert_eq!(pings(&app), before, "kept probing after it was already attached");
 }
 
 // --- the app going away under a live session ---------------------------------
@@ -250,10 +223,7 @@ async fn an_attached_server_stops_asking() {
 
 fn attached_process(session: &std::path::Path) -> common::Mcp {
     let mut env = std::collections::BTreeMap::new();
-    env.insert(
-        "FUNDACAD_SESSION_FILE".to_string(),
-        session.to_string_lossy().into_owned(),
-    );
+    env.insert("FUNDACAD_SESSION_FILE".to_string(), session.to_string_lossy().into_owned());
     common::Mcp::start(&env, &std::env::temp_dir())
 }
 
@@ -267,25 +237,13 @@ async fn a_closed_app_falls_back_to_a_private_engine() {
     let mut mcp = attached_process(&session.0);
 
     let live = mcp.call("doc_get", json!({}));
-    assert!(
-        live.text.contains("f1"),
-        "did not read the app's document: {}",
-        live.text
-    );
+    assert!(live.text.contains("f1"), "did not read the app's document: {}", live.text);
 
     app.die();
     let _ = std::fs::remove_file(&session.0);
     let after = mcp.call("doc_get", json!({}));
-    assert!(
-        !after.is_error,
-        "kept failing after the window closed: {}",
-        after.text
-    );
-    assert!(
-        mcp.log().contains("working on a private copy"),
-        "never said it had lost the app: {}",
-        mcp.log()
-    );
+    assert!(!after.is_error, "kept failing after the window closed: {}", after.text);
+    assert!(mcp.log().contains("working on a private copy"), "never said it had lost the app: {}", mcp.log());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -302,24 +260,13 @@ async fn the_app_coming_back_is_found_again() {
 
     // A second window, on its own port, publishing the same session file.
     let again = sharing_engine();
-    std::fs::write(
-        &session.0,
-        json!({"port": again.port, "token": again.token, "pid": 77}).to_string(),
-    )
-    .expect("a temp file");
+    std::fs::write(&session.0, json!({"port": again.port, "token": again.token, "pid": 77}).to_string())
+        .expect("a temp file");
     // The re-probe is rate limited, so give it the interval it asks for.
     std::thread::sleep(fundacad_mcp::server::REPROBE + Duration::from_millis(250));
     let back = mcp.call("doc_get", json!({}));
-    assert!(
-        back.text.contains("f1"),
-        "did not re-attach once the app was back: {}",
-        back.text
-    );
-    assert!(
-        again.ops().iter().any(|o| o == "session_state"),
-        "never reached the new window: {:?}",
-        again.ops()
-    );
+    assert!(back.text.contains("f1"), "did not re-attach once the app was back: {}", back.text);
+    assert!(again.ops().iter().any(|o| o == "session_state"), "never reached the new window: {:?}", again.ops());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -393,11 +340,7 @@ async fn a_window_not_sharing_is_not_mistaken_for_a_lost_engine() {
     let mut mcp = attached_process(&session.0);
     let out = mcp.call("doc_get", json!({}));
     assert!(out.is_error, "{}", out.text);
-    assert!(
-        out.text.contains("sharing") || out.text.contains("live editing"),
-        "{}",
-        out.text
-    );
+    assert!(out.text.contains("sharing") || out.text.contains("live editing"), "{}", out.text);
     assert!(
         !mcp.log().contains("working on a private copy"),
         "went private over a setting the user can flip: {}",
@@ -435,10 +378,5 @@ fn the_app_data_directory_is_the_one_tauri_derives() {
     // that platform, silently.
     let _serial = serial();
     let dir = fundacad_mcp::app_session::app_data_dir();
-    assert!(
-        dir.ends_with(fundacad_mcp::app_session::APP_IDENTIFIER),
-        "{}",
-        dir.display()
-    );
+    assert!(dir.ends_with(fundacad_mcp::app_session::APP_IDENTIFIER), "{}", dir.display());
 }
-

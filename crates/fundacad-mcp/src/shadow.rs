@@ -46,17 +46,10 @@ fn shadow_dir() -> PathBuf {
 /// time so a rebuilt binary gets a fresh copy and an unchanged one is reused.
 fn copy_of(exe: &Path) -> std::io::Result<PathBuf> {
     let meta = std::fs::metadata(exe)?;
-    let stamp = meta
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map_or(0, |d| d.as_millis());
+    let stamp =
+        meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis());
     let stem = exe.file_stem().and_then(|s| s.to_str()).unwrap_or("fundacad");
-    let ext = exe
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(|e| format!(".{e}"))
-        .unwrap_or_default();
+    let ext = exe.extension().and_then(|s| s.to_str()).map(|e| format!(".{e}")).unwrap_or_default();
     let dir = shadow_dir();
     std::fs::create_dir_all(&dir)?;
     let name = format!("{stem}-{}-{stamp}{ext}", meta.len());
@@ -99,11 +92,7 @@ fn sweep(stem: &str, keep: &[&Path]) {
 }
 
 fn quoted(parts: &[String]) -> String {
-    parts
-        .iter()
-        .map(|p| format!("\"{p}\""))
-        .collect::<Vec<_>>()
-        .join(" ")
+    parts.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(" ")
 }
 
 /// The engine command the copy should use: the one the original would have
@@ -118,9 +107,7 @@ fn engine_for_copy(exe: &Path, copy: &Path) -> Option<(String, Vec<PathBuf>)> {
     if !program.is_file() {
         return None;
     }
-    let same = |a: &Path, b: &Path| {
-        a.canonicalize().ok().zip(b.canonicalize().ok()).is_some_and(|(a, b)| a == b)
-    };
+    let same = |a: &Path, b: &Path| a.canonicalize().ok().zip(b.canonicalize().ok()).is_some_and(|(a, b)| a == b);
     let (swapped, extra) = if same(&program, exe) {
         (copy.to_path_buf(), Vec::new())
     } else {

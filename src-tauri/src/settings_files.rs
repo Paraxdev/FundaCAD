@@ -6,10 +6,7 @@
 use std::path::{Path, PathBuf};
 
 fn unix_secs() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 /// Rename `path` to `<name>.bad-<unix secs>`, with `-<n>` added when that name
@@ -19,11 +16,7 @@ pub fn back_up(path: &Path) -> std::io::Result<PathBuf> {
 }
 
 fn back_up_at(path: &Path, secs: u64) -> std::io::Result<PathBuf> {
-    let name = path
-        .file_name()
-        .ok_or_else(|| std::io::Error::other("no file name"))?
-        .to_string_lossy()
-        .into_owned();
+    let name = path.file_name().ok_or_else(|| std::io::Error::other("no file name"))?.to_string_lossy().into_owned();
     let base = format!("{name}.bad-{secs}");
     let mut target = path.with_file_name(&base);
     let mut n = 1;

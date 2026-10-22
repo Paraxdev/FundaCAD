@@ -42,10 +42,7 @@ struct Running {
 
 fn start(extra_origins: &str, max_message: Option<usize>) -> Running {
     let peak = Arc::new(AtomicUsize::new(0));
-    let jobs = Slow {
-        now: Arc::default(),
-        peak: peak.clone(),
-    };
+    let jobs = Slow { now: Arc::default(), peak: peak.clone() };
     let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
     let mut server = Server::bind(jobs, addr, Gate::new(TOKEN, extra_origins)).unwrap();
     if let Some(n) = max_message {
@@ -58,12 +55,8 @@ fn start(extra_origins: &str, max_message: Option<usize>) -> Running {
 
 fn connect(port: u16, query: &str, origin: Option<&str>) -> Socket {
     let stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
-    stream
-        .set_read_timeout(Some(Duration::from_secs(10)))
-        .unwrap();
-    let mut req = format!("ws://127.0.0.1:{port}/?{query}")
-        .into_client_request()
-        .unwrap();
+    stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    let mut req = format!("ws://127.0.0.1:{port}/?{query}").into_client_request().unwrap();
     if let Some(o) = origin {
         req.headers_mut().insert("Origin", o.parse().unwrap());
     }
@@ -106,11 +99,7 @@ fn a_wrong_or_missing_token_is_closed_with_1008() {
     let s = start("", None);
     for q in ["token=nope", "", "token=", "other=t0k%2Fen%2Bx"] {
         let mut ws = connect(s.port, q, None);
-        assert_eq!(
-            close_code(&mut ws),
-            Some((CloseCode::Policy, "unauthorized".into())),
-            "query {q:?}"
-        );
+        assert_eq!(close_code(&mut ws), Some((CloseCode::Policy, "unauthorized".into())), "query {q:?}");
     }
 }
 
@@ -118,15 +107,8 @@ fn a_wrong_or_missing_token_is_closed_with_1008() {
 fn a_foreign_origin_is_refused_even_with_the_token() {
     let s = start("http://localhost:4173", None);
     let mut ws = connect(s.port, &good_query(), Some("http://evil.example"));
-    assert_eq!(
-        close_code(&mut ws),
-        Some((CloseCode::Policy, "unauthorized".into()))
-    );
-    for origin in [
-        Some("http://tauri.localhost"),
-        Some("http://localhost:4173"),
-        None,
-    ] {
+    assert_eq!(close_code(&mut ws), Some((CloseCode::Policy, "unauthorized".into())));
+    for origin in [Some("http://tauri.localhost"), Some("http://localhost:4173"), None] {
         let mut ws = connect(s.port, &good_query(), origin);
         let r = call(&mut ws, json!({"id": 1, "op": "ping"}));
         assert_eq!(r["result"]["pong"], true, "origin {origin:?}");
@@ -142,13 +124,8 @@ fn ping_round_trips() {
         json!({"id": "p1", "ok": true, "result": {"pong": true}})
     );
     ws.send(WsMessage::text("{not json")).unwrap();
-    let WsMessage::Text(t) = ws.read().unwrap() else {
-        panic!("expected text")
-    };
-    assert_eq!(
-        serde_json::from_str::<Value>(t.as_str()).unwrap()["ok"],
-        false
-    );
+    let WsMessage::Text(t) = ws.read().unwrap() else { panic!("expected text") };
+    assert_eq!(serde_json::from_str::<Value>(t.as_str()).unwrap()["ok"], false);
 }
 
 #[test]
@@ -164,10 +141,7 @@ fn an_oversize_message_is_closed_with_1009() {
 #[test]
 fn the_default_message_cap_is_the_protocol_frame_cap() {
     let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
-    let jobs = Slow {
-        now: Arc::default(),
-        peak: Arc::default(),
-    };
+    let jobs = Slow { now: Arc::default(), peak: Arc::default() };
     let server = Server::bind(jobs, addr, Gate::new(TOKEN, "")).unwrap();
     assert_eq!(server.shared.max_message, MAX_FRAME);
 }
@@ -187,17 +161,12 @@ fn rejected_connections_give_their_slot_back() {
 #[test]
 fn past_the_cap_a_connection_is_closed_as_too_many() {
     let s = start("", None);
-    let mut held: Vec<Socket> = (0..MAX_CONNS_PER_IP)
-        .map(|_| connect(s.port, &good_query(), None))
-        .collect();
+    let mut held: Vec<Socket> = (0..MAX_CONNS_PER_IP).map(|_| connect(s.port, &good_query(), None)).collect();
     for ws in held.iter_mut() {
         assert_eq!(call(ws, json!({"id": 1, "op": "ping"}))["ok"], true);
     }
     let mut extra = connect(s.port, &good_query(), None);
-    assert_eq!(
-        close_code(&mut extra),
-        Some((CloseCode::Policy, "too many connections".into()))
-    );
+    assert_eq!(close_code(&mut extra), Some((CloseCode::Policy, "too many connections".into())));
 }
 
 #[test]
@@ -206,14 +175,8 @@ fn jobs_from_every_connection_share_one_lock_and_cancel_stays_per_connection() {
     let mut a = connect(s.port, &good_query(), None);
     let mut b = connect(s.port, &good_query(), None);
     let doc = json!({"features": []});
-    a.send(WsMessage::text(
-        json!({"id": "a", "op": "rebuild", "document": doc}).to_string(),
-    ))
-    .unwrap();
-    b.send(WsMessage::text(
-        json!({"id": "b", "op": "rebuild", "document": doc}).to_string(),
-    ))
-    .unwrap();
+    a.send(WsMessage::text(json!({"id": "a", "op": "rebuild", "document": doc}).to_string())).unwrap();
+    b.send(WsMessage::text(json!({"id": "b", "op": "rebuild", "document": doc}).to_string())).unwrap();
     std::thread::sleep(Duration::from_millis(50));
     let miss = call(&mut b, json!({"id": "c", "op": "cancel", "target": "a"}));
     assert_eq!(miss["result"]["cancelled"], false);
@@ -245,9 +208,7 @@ fn the_gate_decodes_the_query_like_parse_qs() {
 fn a_minted_token_looks_like_token_urlsafe_32() {
     let t = mint_token().unwrap();
     assert_eq!(t.len(), 43);
-    assert!(t
-        .bytes()
-        .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_'));
+    assert!(t.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_'));
     assert_ne!(t, mint_token().unwrap());
 }
 
@@ -261,10 +222,7 @@ impl Outbox for Sink {
 
 #[test]
 fn a_guest_beside_the_app_transport_sees_the_document_the_app_hosts() {
-    let jobs = Slow {
-        now: Arc::default(),
-        peak: Arc::default(),
-    };
+    let jobs = Slow { now: Arc::default(), peak: Arc::default() };
     let engine = Arc::new(Engine::start(jobs, Arc::new(Sink)));
     let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
     let server = Server::for_engine(engine.clone(), addr, Gate::new(TOKEN, "")).unwrap();

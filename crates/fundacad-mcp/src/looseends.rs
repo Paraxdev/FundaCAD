@@ -191,7 +191,8 @@ fn read(params: Option<&Map<String, Value>>, e: &Value) -> Option<Ent> {
                     ent.tieable = true;
                 }
                 "arc" => {
-                    let (a, b, m) = (pt(params, cv, "x1", "y1")?, pt(params, cv, "x2", "y2")?, pt(params, cv, "mx", "my")?);
+                    let (a, b, m) =
+                        (pt(params, cv, "x1", "y1")?, pt(params, cv, "x2", "y2")?, pt(params, cv, "mx", "my")?);
                     ent.body = arc_body(a.0, b.0, m.0);
                     ent.ends = vec![end(0, a, false), end(1, b, false)];
                     ent.tieable = true;
@@ -284,7 +285,9 @@ fn tied_ends(f: &Value, ents: &[Ent]) -> BTreeSet<(String, i64)> {
         for x in &e.ends {
             let k = (x.entity.clone(), x.p);
             let r = root(&mut parent, &k);
-            let mate = members.get(&r).is_some_and(|m| m.iter().any(|o| if o.0 == e.id { o.1 != x.p && e.self_closable } else { true }));
+            let mate = members
+                .get(&r)
+                .is_some_and(|m| m.iter().any(|o| if o.0 == e.id { o.1 != x.p && e.self_closable } else { true }));
             let on = on_curve.get(&r).is_some_and(|cs| cs.iter().any(|c| *c != e.id));
             if mate || on {
                 tied.insert(k);
@@ -296,7 +299,12 @@ fn tied_ends(f: &Value, ents: &[Ent]) -> BTreeSet<(String, i64)> {
 
 fn read_all(doc: &Doc, f: &Value) -> Vec<Ent> {
     let params = doc.get("parameters").and_then(Value::as_object);
-    f.get("entities").and_then(Value::as_array).map_or(&[][..], Vec::as_slice).iter().filter_map(|e| read(params, e)).collect()
+    f.get("entities")
+        .and_then(Value::as_array)
+        .map_or(&[][..], Vec::as_slice)
+        .iter()
+        .filter_map(|e| read(params, e))
+        .collect()
 }
 
 /// 1% of the profile's size, about the sketcher's 10 px snap reach when the
@@ -425,7 +433,9 @@ fn move_end(f: &mut Value, entity: &str, p: i64, to: P) -> bool {
     };
     if e["type"] == json!("arc") {
         let other = if p == 0 { ("x2", "y2") } else { ("x1", "y1") };
-        let (Some(ox), Some(oy), Some(mx), Some(my)) = (e[other.0].as_f64(), e[other.1].as_f64(), e["mx"].as_f64(), e["my"].as_f64()) else {
+        let (Some(ox), Some(oy), Some(mx), Some(my)) =
+            (e[other.0].as_f64(), e[other.1].as_f64(), e["mx"].as_f64(), e["my"].as_f64())
+        else {
             return false;
         };
         if circumcenter(to, (mx, my), (ox, oy)).is_none() {
@@ -486,14 +496,21 @@ pub fn tie(doc: &mut Doc, sketch: &str, tolerance: Option<f64>) -> Result<Tied, 
     };
     let movable: BTreeSet<(String, i64)> = {
         let f = sketch_of(doc, sketch)?;
-        read_all(doc, f).iter().flat_map(|e| e.ends.iter()).filter(|x| x.movable).map(|x| (x.entity.clone(), x.p)).collect()
+        read_all(doc, f)
+            .iter()
+            .flat_map(|e| e.ends.iter())
+            .filter(|x| x.movable)
+            .map(|x| (x.entity.clone(), x.p))
+            .collect()
     };
     let at_now = |doc: &Doc, k: &(String, i64)| -> Option<P> {
         let f = sketch_of(doc, sketch).ok()?;
         read_all(doc, f).into_iter().find(|e| e.id == k.0)?.ends.into_iter().find(|x| x.p == k.1).map(|x| x.at)
     };
     let mut out = Tied::default();
-    let Some(idx) = model::find_feature(doc, sketch).map(|(i, _)| i) else { return Err(format!("no feature '{sketch}'")) };
+    let Some(idx) = model::find_feature(doc, sketch).map(|(i, _)| i) else {
+        return Err(format!("no feature '{sketch}'"));
+    };
     for u in le.untied.iter().filter(|u| u.tieable) {
         let me = (u.entity.clone(), u.p);
         let (constraint, mover, to) = match &u.touches {
@@ -504,7 +521,8 @@ pub fn tie(doc: &mut Doc, sketch: &str, tolerance: Option<f64>) -> Result<Tied, 
                     continue;
                 }
                 parent.insert(ra, rb);
-                let (mover, target) = if movable.contains(&me) { (me.clone(), other.clone()) } else { (other.clone(), me.clone()) };
+                let (mover, target) =
+                    if movable.contains(&me) { (me.clone(), other.clone()) } else { (other.clone(), me.clone()) };
                 let Some(to) = at_now(doc, &target) else { continue };
                 (json!({"type": "coincident", "e1": u.entity, "p1": u.p, "e2": e, "p2": p}), mover, to)
             }
@@ -560,7 +578,12 @@ mod tests {
     }
 
     fn square(g: f64) -> Value {
-        json!([line("a", 0.0, 0.0, 10.0, 0.0), line("b", 10.0, 0.0, 10.0, 8.0), line("c", 10.0, 8.0, 0.0, 8.0), line("d", 0.0, 8.0, 0.0, g)])
+        json!([
+            line("a", 0.0, 0.0, 10.0, 0.0),
+            line("b", 10.0, 0.0, 10.0, 8.0),
+            line("c", 10.0, 8.0, 0.0, 8.0),
+            line("d", 0.0, 8.0, 0.0, g)
+        ])
     }
 
     #[test]
@@ -594,15 +617,21 @@ mod tests {
 
     #[test]
     fn constraints_tie_ends_and_parameter_bound_ends_are_reported_but_not_moved() {
-        let tied = doc(square(0.0), json!([
-            {"type": "coincident", "e1": "a", "p1": 1, "e2": "b", "p2": 0},
-            {"type": "coincident", "e1": "b", "p1": 1, "e2": "c", "p2": 0},
-            {"type": "coincident", "e1": "c", "p1": 1, "e2": "d", "p2": 0},
-            {"type": "coincident", "e1": "d", "p1": 1, "e2": "a", "p2": 0}
-        ]));
+        let tied = doc(
+            square(0.0),
+            json!([
+                {"type": "coincident", "e1": "a", "p1": 1, "e2": "b", "p2": 0},
+                {"type": "coincident", "e1": "b", "p1": 1, "e2": "c", "p2": 0},
+                {"type": "coincident", "e1": "c", "p1": 1, "e2": "d", "p2": 0},
+                {"type": "coincident", "e1": "d", "p1": 1, "e2": "a", "p2": 0}
+            ]),
+        );
         let le = find(&tied, "s1", Some(0.1)).unwrap();
         assert!(le.open.is_empty() && le.untied.is_empty());
-        let mut d = doc(json!([line("a", 0.0, 0.0, 10.0, 0.0), {"type": "line", "id": "b", "x1": "w", "y1": 0.05, "x2": 10.0, "y2": 8.0}]), json!([]));
+        let mut d = doc(
+            json!([line("a", 0.0, 0.0, 10.0, 0.0), {"type": "line", "id": "b", "x1": "w", "y1": 0.05, "x2": 10.0, "y2": 8.0}]),
+            json!([]),
+        );
         d.insert("parameters".into(), json!({"w": 10.0}));
         let le = find(&d, "s1", Some(0.1)).unwrap();
         let b0 = le.untied.iter().find(|u| u.entity == "b").unwrap();
@@ -618,7 +647,8 @@ mod tests {
     fn a_tie_onto_construction_geometry_or_an_arc_centre_leaves_the_end_open() {
         let mut k = line("k", 5.0, 0.0, 5.0, 5.0);
         k["construction"] = json!(true);
-        let arc = json!({"type": "arc", "id": "r", "x1": 25.0, "y1": 0.0, "x2": 15.0, "y2": 0.0, "mx": 20.0, "my": 5.0});
+        let arc =
+            json!({"type": "arc", "id": "r", "x1": 25.0, "y1": 0.0, "x2": 15.0, "y2": 0.0, "mx": 20.0, "my": 5.0});
         let d = doc(
             json!([line("a", 0.0, 0.0, 5.0, 0.0), k, line("b", 30.0, 9.0, 20.0, 0.0), arc]),
             json!([

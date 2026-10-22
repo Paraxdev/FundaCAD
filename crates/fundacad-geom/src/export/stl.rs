@@ -23,11 +23,7 @@ pub fn write_binary(positions: &[f64], indices: &[u32], mut out: impl Write) -> 
         let (a, b, c) = (corner(&pos, t[0]), corner(&pos, t[1]), corner(&pos, t[2]));
         let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
         let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-        let n = [
-            u[1] * v[2] - u[2] * v[1],
-            u[2] * v[0] - u[0] * v[2],
-            u[0] * v[1] - u[1] * v[0],
-        ];
+        let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
         let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
         let len = if len < 1e-12 { 1.0 } else { len };
         let n = [n[0] / len, n[1] / len, n[2] / len];
@@ -39,26 +35,13 @@ pub fn write_binary(positions: &[f64], indices: &[u32], mut out: impl Write) -> 
     out.flush()
 }
 
-pub fn write_ascii(
-    positions: &[f64],
-    indices: &[u32],
-    name: &str,
-    mut out: impl Write,
-) -> io::Result<()> {
+pub fn write_ascii(positions: &[f64], indices: &[u32], name: &str, mut out: impl Write) -> io::Result<()> {
     writeln!(out, "solid {name}")?;
     for t in indices.chunks_exact(3) {
-        let (a, b, c) = (
-            corner(positions, t[0]),
-            corner(positions, t[1]),
-            corner(positions, t[2]),
-        );
+        let (a, b, c) = (corner(positions, t[0]), corner(positions, t[1]), corner(positions, t[2]));
         let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
         let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-        let n = [
-            u[1] * v[2] - u[2] * v[1],
-            u[2] * v[0] - u[0] * v[2],
-            u[0] * v[1] - u[1] * v[0],
-        ];
+        let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
         let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
         let len = if len < 1e-12 { 1.0 } else { len };
         let n = [n[0] / len, n[1] / len, n[2] / len];
@@ -81,10 +64,5 @@ pub fn write_binary_file(positions: &[f64], indices: &[u32], path: &Path) -> io:
 }
 
 pub fn write_ascii_file(positions: &[f64], indices: &[u32], path: &Path) -> io::Result<()> {
-    write_ascii(
-        positions,
-        indices,
-        "FundaCAD",
-        BufWriter::new(std::fs::File::create(path)?),
-    )
+    write_ascii(positions, indices, "FundaCAD", BufWriter::new(std::fs::File::create(path)?))
 }

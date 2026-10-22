@@ -97,10 +97,7 @@ pub struct Contour {
 
 impl Contour {
     fn map(&self, f: &impl Fn(P) -> P) -> Contour {
-        Contour {
-            start: f(self.start),
-            segs: self.segs.iter().map(|s| s.map(f)).collect(),
-        }
+        Contour { start: f(self.start), segs: self.segs.iter().map(|s| s.map(f)).collect() }
     }
 
     fn pieces(&self) -> impl Iterator<Item = (P, &Seg)> {
@@ -180,11 +177,7 @@ impl TextSpec {
         Some(TextSpec {
             text,
             size: num(e.get("height")),
-            font: e
-                .get("font")
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty())
-                .map(str::to_owned),
+            font: e.get("font").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned),
             aspect: Aspect::from_style(e.get("style").and_then(Value::as_str).unwrap_or("regular")),
             align: match e.get("align").and_then(Value::as_str) {
                 Some("center") => HAlign::Center,
@@ -227,10 +220,7 @@ impl Outline {
 impl OutlineBuilder for Outline {
     fn move_to(&mut self, x: f32, y: f32) {
         self.close();
-        self.open = Some(Contour {
-            start: self.p(x, y),
-            segs: Vec::new(),
-        });
+        self.open = Some(Contour { start: self.p(x, y), segs: Vec::new() });
     }
 
     fn line_to(&mut self, x: f32, y: f32) {
@@ -284,8 +274,7 @@ fn lay_out(face: &Face<'_>, text: &str, size: f64, synthetic_italic: bool) -> Ve
     let upem = f64::from(face.units_per_em());
     let scale = size / upem;
     let hhea = face.tables().hhea;
-    let spacing =
-        (f64::from(hhea.ascender) - f64::from(hhea.descender) + f64::from(hhea.line_gap)) * scale;
+    let spacing = (f64::from(hhea.ascender) - f64::from(hhea.descender) + f64::from(hhea.line_gap)) * scale;
     let (shear, squeeze) = if synthetic_italic {
         let (s, c) = SYNTHETIC_SLANT.to_radians().sin_cos();
         (s, c)
@@ -314,21 +303,11 @@ fn lay_out(face: &Face<'_>, text: &str, size: f64, synthetic_italic: bool) -> Ve
         let base = -(row as f64) * spacing;
         for (id, x) in ids.iter().zip(pens) {
             let Some(id) = *id else { continue };
-            let mut o = Outline {
-                contours: Vec::new(),
-                open: None,
-                scale,
-                shear,
-                squeeze,
-                dx: x + shift,
-                dy: base,
-            };
+            let mut o = Outline { contours: Vec::new(), open: None, scale, shear, squeeze, dx: x + shift, dy: base };
             face.outline_glyph(id, &mut o);
             o.close();
             if !o.contours.is_empty() {
-                out.push(Glyph {
-                    contours: o.contours,
-                });
+                out.push(Glyph { contours: o.contours });
             }
         }
     }
@@ -348,11 +327,7 @@ impl TextPath<'_> {
     }
 }
 
-fn with_face<T>(
-    lib: &Library,
-    spec: &TextSpec,
-    f: impl FnOnce(&Face<'_>, bool) -> T,
-) -> Option<T> {
+fn with_face<T>(lib: &Library, spec: &TextSpec, f: impl FnOnce(&Face<'_>, bool) -> T) -> Option<T> {
     let resolved = lib.resolve(spec.font.as_deref().unwrap_or("Arial"), spec.aspect)?;
     let synthetic = resolved.synthetic_italic;
     let coords = resolved.face.coords.clone();
@@ -369,11 +344,9 @@ fn ink_width(lib: &Library, spec: &TextSpec, s: &str) -> f64 {
     if s.trim().is_empty() {
         return 0.0;
     }
-    with_face(lib, spec, |face, synth| {
-        bbox_of(&lay_out(face, s, spec.size, synth)).map(|b| b[2] - b[0])
-    })
-    .flatten()
-    .unwrap_or(1e9)
+    with_face(lib, spec, |face, synth| bbox_of(&lay_out(face, s, spec.size, synth)).map(|b| b[2] - b[0]))
+        .flatten()
+        .unwrap_or(1e9)
 }
 
 /// `_wrap_text`: greedy word wrap to `box_w`, explicit newlines kept.
@@ -408,8 +381,7 @@ pub fn glyphs(spec: &TextSpec, path: Option<&TextPath<'_>>) -> Vec<Glyph> {
         Some(w) if path.is_none() => wrap(lib, spec, w),
         _ => spec.text.clone(),
     };
-    let Some(mut out) = with_face(lib, spec, |face, synth| lay_out(face, &text, spec.size, synth))
-    else {
+    let Some(mut out) = with_face(lib, spec, |face, synth| lay_out(face, &text, spec.size, synth)) else {
         return Vec::new();
     };
     let Some(b) = bbox_of(&out) else {
@@ -421,10 +393,7 @@ pub fn glyphs(spec: &TextSpec, path: Option<&TextPath<'_>>) -> Vec<Glyph> {
         HAlign::Right => -b[2],
     };
     let dy = -(b[1] + b[3]) / 2.0;
-    out = out
-        .iter()
-        .map(|g| place(g, &|p| [p[0] + dx, p[1] + dy]))
-        .collect();
+    out = out.iter().map(|g| place(g, &|p| [p[0] + dx, p[1] + dy])).collect();
 
     if let Some(path) = path {
         let length = crate::kernel::length(path.edge);
@@ -453,25 +422,17 @@ pub fn glyphs(spec: &TextSpec, path: Option<&TextPath<'_>>) -> Vec<Glyph> {
     }
     if spec.rotation != 0.0 {
         let (s, c) = spec.rotation.to_radians().sin_cos();
-        out = out
-            .iter()
-            .map(|g| place(g, &|p| [p[0] * c - p[1] * s, p[0] * s + p[1] * c]))
-            .collect();
+        out = out.iter().map(|g| place(g, &|p| [p[0] * c - p[1] * s, p[0] * s + p[1] * c])).collect();
     }
     if path.is_none() && (spec.x != 0.0 || spec.y != 0.0) {
         let (x, y) = (spec.x, spec.y);
-        out = out
-            .iter()
-            .map(|g| place(g, &|p| [p[0] + x, p[1] + y]))
-            .collect();
+        out = out.iter().map(|g| place(g, &|p| [p[0] + x, p[1] + y])).collect();
     }
     out
 }
 
 fn place(g: &Glyph, f: &impl Fn(P) -> P) -> Glyph {
-    Glyph {
-        contours: g.contours.iter().map(|c| c.map(f)).collect(),
-    }
+    Glyph { contours: g.contours.iter().map(|c| c.map(f)).collect() }
 }
 
 fn signed_area(poly: &[P]) -> f64 {
@@ -490,8 +451,7 @@ fn inside(poly: &[P], p: P) -> bool {
     let n = poly.len();
     for i in 0..n {
         let (a, b) = (poly[i], poly[(i + n - 1) % n]);
-        if (a[1] > p[1]) != (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]
-        {
+        if (a[1] > p[1]) != (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0] {
             odd = !odd;
         }
     }
@@ -621,10 +581,7 @@ fn polyline(c: &Contour, reverse: bool) -> Value {
                 Seg::Cubic(c1, c2, _) => Seg::Cubic(c2, c1, start),
             });
         }
-        contour = Contour {
-            start: *pts.last().unwrap_or(&c.start),
-            segs,
-        };
+        contour = Contour { start: *pts.last().unwrap_or(&c.start), segs };
     }
     let mut pts: Vec<Value> = Vec::new();
     for (s, seg) in contour.pieces() {

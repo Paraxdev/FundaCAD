@@ -40,11 +40,7 @@ fn documented() -> BTreeSet<String> {
 }
 
 fn buildable() -> BTreeSet<String> {
-    Feature::KNOWN
-        .iter()
-        .map(|s| (*s).to_string())
-        .chain(PLUGIN_TYPES.iter().map(|s| (*s).to_string()))
-        .collect()
+    Feature::KNOWN.iter().map(|s| (*s).to_string()).chain(PLUGIN_TYPES.iter().map(|s| (*s).to_string())).collect()
 }
 
 #[test]
@@ -68,16 +64,8 @@ fn every_buildable_type_is_documented() {
 #[test]
 fn every_entry_has_a_summary_and_fields() {
     for (kind, e) in s::features() {
-        assert!(
-            e.get("summary").and_then(Value::as_str).is_some_and(|t| !t.is_empty()),
-            "{kind}"
-        );
-        assert!(
-            e.get("fields")
-                .and_then(Value::as_object)
-                .is_some_and(|f| !f.is_empty()),
-            "{kind}"
-        );
+        assert!(e.get("summary").and_then(Value::as_str).is_some_and(|t| !t.is_empty()), "{kind}");
+        assert!(e.get("fields").and_then(Value::as_object).is_some_and(|f| !f.is_empty()), "{kind}");
     }
 }
 
@@ -93,10 +81,7 @@ fn every_example_matches_its_own_type() {
             "{kind} example says type {:?}",
             ex.get("type")
         );
-        assert!(
-            ex.get("id").and_then(Value::as_str).is_some_and(|i| !i.is_empty()),
-            "{kind} example has no id"
-        );
+        assert!(ex.get("id").and_then(Value::as_str).is_some_and(|i| !i.is_empty()), "{kind} example has no id");
         serde_json::to_string(ex).expect("it has to survive the wire");
     }
 }
@@ -110,14 +95,9 @@ fn the_examples_only_use_documented_fields() {
             continue;
         };
         let fields = e.get("fields").and_then(Value::as_object).expect("checked");
-        let extra: Vec<&String> = ex
-            .keys()
-            .filter(|k| !fields.contains_key(*k) && k.as_str() != "id" && k.as_str() != "type")
-            .collect();
-        assert!(
-            extra.is_empty(),
-            "{kind} example uses undocumented fields {extra:?}"
-        );
+        let extra: Vec<&String> =
+            ex.keys().filter(|k| !fields.contains_key(*k) && k.as_str() != "id" && k.as_str() != "type").collect();
+        assert!(extra.is_empty(), "{kind} example uses undocumented fields {extra:?}");
     }
 }
 
@@ -128,10 +108,7 @@ fn the_overview_names_every_type() {
         assert!(body.contains(kind.as_str()), "{kind} is missing from the overview");
     }
     for name in s::sketch_entities().keys() {
-        assert!(
-            body.contains(name.as_str()),
-            "sketch entity {name} is missing from the overview"
-        );
+        assert!(body.contains(name.as_str()), "sketch entity {name} is missing from the overview");
     }
 }
 
@@ -193,10 +170,7 @@ fn the_import_tool_still_says_what_to_do_when_there_is_no_path() {
     // sentence exists to prevent, so it has to be in both.
     let tool = fundacad_mcp::server::FundaCad::with_link(fundacad_mcp::link::EngineLink::private());
     let router = tool.tools();
-    let doc_import = router
-        .iter()
-        .find(|t| t.name == "doc_import")
-        .expect("doc_import is offered");
+    let doc_import = router.iter().find(|t| t.name == "doc_import").expect("doc_import is offered");
     let description = doc_import.description.clone().unwrap_or_default();
     assert!(
         description.contains(fundacad_mcp::upload::ASK_FOR_A_PATH),

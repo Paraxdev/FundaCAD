@@ -68,10 +68,8 @@ fn step_import_matches_python() {
                     break;
                 }
             }
-            let faces = got
-                .face_colors
-                .as_ref()
-                .map_or(Value::Null, |c| Value::Array(c.iter().map(|&x| hex(x)).collect()));
+            let faces =
+                got.face_colors.as_ref().map_or(Value::Null, |c| Value::Array(c.iter().map(|&x| hex(x)).collect()));
             if faces != w["faceColors"] {
                 fail(format!("leaf {i} face colours {faces}"));
             }
@@ -120,10 +118,7 @@ fn brep_import_stores_a_readable_blob() {
     let store = BlobStore::open(scratch("brep")).unwrap();
     let path = root().join("tests/mesh_oracle/box_minus_cylinder.brep");
     let reply = import::import_geometry(path.to_str().unwrap(), "brep", &store).unwrap();
-    assert_eq!(
-        reply.keys().collect::<Vec<_>>(),
-        ["geom", "solid", "faces", "name"]
-    );
+    assert_eq!(reply.keys().collect::<Vec<_>>(), ["geom", "solid", "faces", "name"]);
     assert_eq!(reply["solid"], true);
     assert_eq!(reply["faces"], 7);
     assert_eq!(reply["name"], "box_minus_cylinder");
@@ -174,7 +169,8 @@ fn step_export_keeps_names_colours_and_placement() {
         body("b1", "Red Part", &a, Some("imp/1")),
         body("b2", "Plain 1", &b, Some("imp/2")),
         body("b3", "Plain 2", &c, Some("imp/2")),
-        body("b4", "Loose", &d, Some("nowhere/0")),    ];
+        body("b4", "Loose", &d, Some("nowhere/0")),
+    ];
     step::write_tree(&step::build_export_tree(&doc, &bodies, "asm").unwrap(), &path).unwrap();
     let back = xcaf::read_step_assembly(&path).unwrap();
     let names: Vec<(&str, Option<usize>, Value)> =
@@ -215,8 +211,11 @@ fn step_names_in_a_local_code_page_read_as_written() {
     let a = kernel::make_box(10.0, 10.0, 10.0).unwrap();
     let path = dir.join("named.step");
     let doc = json!({"features": []});
-    step::write_tree(&step::build_export_tree(&doc, &[body("body1", "NAMEHOLDER", &a, None)], "single").unwrap(), &path)
-        .unwrap();
+    step::write_tree(
+        &step::build_export_tree(&doc, &[body("body1", "NAMEHOLDER", &a, None)], "single").unwrap(),
+        &path,
+    )
+    .unwrap();
     let written = std::fs::read(&path).unwrap();
     // The Ender-3 export's raw GBK bytes for a 4040 profile with 4 countersunk holes.
     let gbk: &[u8] = b"4040 profile\xa3\xac4\xb8\xf6\xb3\xc1\xcd\xb7\xbf\xd7";

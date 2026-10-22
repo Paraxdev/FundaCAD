@@ -7,7 +7,10 @@ use common::Mcp;
 use serde_json::{json, Value};
 
 fn start() -> Mcp {
-    Mcp::start(&common::env(&[("FUNDACAD_MCP_MODE", "standalone"), ("FUNDACAD_MCP_SHADOW", "0")]), &std::env::temp_dir())
+    Mcp::start(
+        &common::env(&[("FUNDACAD_MCP_MODE", "standalone"), ("FUNDACAD_MCP_SHADOW", "0")]),
+        &std::env::temp_dir(),
+    )
 }
 
 fn line(id: &str, x1: f64, y1: f64, x2: f64, y2: f64) -> Value {
@@ -25,12 +28,19 @@ fn looses(text: &str) -> Value {
 #[test]
 fn a_square_with_a_hairline_gap_builds_once_its_loose_ends_are_tied() {
     let mut mcp = start();
-    let square = json!([line("a", 0.0, 0.0, 10.0, 0.0), line("b", 10.0, 0.0, 10.0, 8.0),
-                        line("c", 10.0, 8.0, 0.0, 8.0), line("d", 0.0, 8.0, 0.0, 4e-5)]);
-    let r = mcp.call("edit", json!({"ops": [
-        {"op": "add", "feature": {"id": "s1", "type": "sketch", "plane": "XY", "entities": square}},
-        {"op": "add", "feature": {"type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"}}
-    ]}));
+    let square = json!([
+        line("a", 0.0, 0.0, 10.0, 0.0),
+        line("b", 10.0, 0.0, 10.0, 8.0),
+        line("c", 10.0, 8.0, 0.0, 8.0),
+        line("d", 0.0, 8.0, 0.0, 4e-5)
+    ]);
+    let r = mcp.call(
+        "edit",
+        json!({"ops": [
+            {"op": "add", "feature": {"id": "s1", "type": "sketch", "plane": "XY", "entities": square}},
+            {"op": "add", "feature": {"type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"}}
+        ]}),
+    );
     assert!(!r.is_error, "{}", r.text);
     let built = mcp.call("build", json!({}));
     assert!(built.is_error && built.text.contains("closed profile"), "{}", built.text);

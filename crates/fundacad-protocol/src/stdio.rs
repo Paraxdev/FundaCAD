@@ -48,11 +48,7 @@ fn invalid(msg: impl Into<String>) -> io::Error {
 pub fn write_message<W: Write>(w: &mut W, msg: &Message) -> io::Result<()> {
     let payload = msg.payload();
     if payload.len() > MAX_PAYLOAD {
-        return Err(invalid(format!(
-            "message of {} bytes is over the {} byte limit",
-            payload.len(),
-            MAX_PAYLOAD
-        )));
+        return Err(invalid(format!("message of {} bytes is over the {} byte limit", payload.len(), MAX_PAYLOAD)));
     }
     let mut prefix = [0u8; 5];
     prefix[..4].copy_from_slice(&(payload.len() as u32).to_le_bytes());
@@ -74,12 +70,7 @@ pub fn read_message_limited<R: Read>(r: &mut R, max_payload: usize) -> io::Resul
     while got < prefix.len() {
         match r.read(&mut prefix[got..]) {
             Ok(0) if got == 0 => return Ok(None),
-            Ok(0) => {
-                return Err(io::Error::new(
-                    ErrorKind::UnexpectedEof,
-                    "stream ended inside a message header",
-                ))
-            }
+            Ok(0) => return Err(io::Error::new(ErrorKind::UnexpectedEof, "stream ended inside a message header")),
             Ok(n) => got += n,
             Err(e) if e.kind() == ErrorKind::Interrupted => {}
             Err(e) => return Err(e),
@@ -91,24 +82,17 @@ pub fn read_message_limited<R: Read>(r: &mut R, max_payload: usize) -> io::Resul
         return Err(invalid(format!("unknown message kind {kind}")));
     }
     if len > max_payload {
-        return Err(invalid(format!(
-            "message of {len} bytes is over the {max_payload} byte limit"
-        )));
+        return Err(invalid(format!("message of {len} bytes is over the {max_payload} byte limit")));
     }
     // Grown as bytes arrive rather than allocated from the header up front, so
     // a corrupt length cannot reserve the whole cap for a few bytes of input.
     let mut payload = Vec::with_capacity(len.min(1 << 20));
     let read = r.take(len as u64).read_to_end(&mut payload)?;
     if read < len {
-        return Err(io::Error::new(
-            ErrorKind::UnexpectedEof,
-            "stream ended inside a message payload",
-        ));
+        return Err(io::Error::new(ErrorKind::UnexpectedEof, "stream ended inside a message payload"));
     }
     Ok(Some(match kind {
-        KIND_TEXT => Message::Text(
-            String::from_utf8(payload).map_err(|_| invalid("text message is not UTF-8"))?,
-        ),
+        KIND_TEXT => Message::Text(String::from_utf8(payload).map_err(|_| invalid("text message is not UTF-8"))?),
         _ => Message::Binary(payload),
     }))
 }
@@ -132,10 +116,7 @@ pub fn message_id(msg: &Message) -> Option<Value> {
             b.get(4..4usize.checked_add(hl)?)?
         }
     };
-    serde_json::from_slice::<IdOnly>(json)
-        .ok()?
-        .id
-        .filter(|v| !v.is_null())
+    serde_json::from_slice::<IdOnly>(json).ok()?.id.filter(|v| !v.is_null())
 }
 
 #[cfg(test)]
@@ -146,11 +127,8 @@ mod tests {
 
     #[test]
     fn round_trip_and_clean_eof() {
-        let msgs = [
-            Message::Text("{\"id\": \"a\"}".into()),
-            Message::Binary(vec![1, 2, 3]),
-            Message::Text(String::new()),
-        ];
+        let msgs =
+            [Message::Text("{\"id\": \"a\"}".into()), Message::Binary(vec![1, 2, 3]), Message::Text(String::new())];
         let mut buf = Vec::new();
         for m in &msgs {
             write_message(&mut buf, m).expect("write");
@@ -181,9 +159,7 @@ mod tests {
 
     #[test]
     fn ids_from_both_kinds() {
-        let text = Message::Text(
-            r#"{"op": "rebuild", "big": [1, 2, {"id": "inner"}], "id": "r7"}"#.into(),
-        );
+        let text = Message::Text(r#"{"op": "rebuild", "big": [1, 2, {"id": "inner"}], "id": "r7"}"#.into());
         assert_eq!(message_id(&text), Some(json!("r7")));
         let header = br#"{"id": 12, "ok": true}"#;
         let mut frame = (header.len() as u32).to_le_bytes().to_vec();

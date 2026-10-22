@@ -73,11 +73,7 @@ fn two_rims_that_settle_on_one_circle_neither_was_picked_near_are_gone() {
     assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
     let want = 60.0 * 60.0 * 10.0 + PI * 16.0 * 10.0 - 0.5 * 0.25 * 60.0;
     assert!((volume(&r) - want).abs() < 0.5, "volume {} is not one chamfered edge, {want}", volume(&r));
-    assert!(
-        reasons(&r).iter().any(|s| s.starts_with("2 references share one edge")),
-        "{:?}",
-        r.diagnostics
-    );
+    assert!(reasons(&r).iter().any(|s| s.starts_with("2 references share one edge")), "{:?}", r.diagnostics);
 }
 
 #[test]

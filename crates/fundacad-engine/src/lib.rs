@@ -17,9 +17,7 @@ pub mod ws;
 pub use doc_state::DocState;
 pub use supervise::{Budget, Clocks};
 
-use fundacad_protocol::{
-    envelope, import_stage, send_reply, CancelToken, JobResult, Limits, Message, ReplyOptions,
-};
+use fundacad_protocol::{envelope, import_stage, send_reply, CancelToken, JobResult, Limits, Message, ReplyOptions};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::io;
@@ -220,19 +218,17 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 fn spawn_job_thread<J: Jobs>(pool: Arc<Pool<J>>, mut jobs: J) {
-    let spawned = std::thread::Builder::new()
-        .name("engine-jobs".into())
-        .spawn(move || {
-            let mut docs = HashMap::new();
-            let abandoned = Arc::new(AtomicBool::new(false));
-            while !abandoned.load(Ordering::SeqCst) {
-                let Ok(q) = lock(&pool.rx).recv() else { return };
-                if q.closed.load(Ordering::SeqCst) {
-                    continue;
-                }
-                run_one(&pool, &mut jobs, &mut docs, q, &abandoned);
+    let spawned = std::thread::Builder::new().name("engine-jobs".into()).spawn(move || {
+        let mut docs = HashMap::new();
+        let abandoned = Arc::new(AtomicBool::new(false));
+        while !abandoned.load(Ordering::SeqCst) {
+            let Ok(q) = lock(&pool.rx).recv() else { return };
+            if q.closed.load(Ordering::SeqCst) {
+                continue;
             }
-        });
+            run_one(&pool, &mut jobs, &mut docs, q, &abandoned);
+        }
+    });
     if let Err(e) = spawned {
         eprintln!("[engine] cannot start a job thread: {e}");
     }
@@ -240,12 +236,7 @@ fn spawn_job_thread<J: Jobs>(pool: Arc<Pool<J>>, mut jobs: J) {
 
 /// Answers job `serial` between freeing its slot and starting a fresh job thread,
 /// so a later cancel misses it and no queued reply overtakes it (`_kill_pool`, `_new_pool`).
-fn abandon<J: Jobs>(
-    pool: &Arc<Pool<J>>,
-    abandoned: &AtomicBool,
-    serial: u64,
-    answer: impl FnOnce(),
-) {
+fn abandon<J: Jobs>(pool: &Arc<Pool<J>>, abandoned: &AtomicBool, serial: u64, answer: impl FnOnce()) {
     let Some(make) = pool.respawn.clone() else { return answer() };
     abandoned.store(true, Ordering::SeqCst);
     clear_running(pool, serial);
@@ -353,13 +344,7 @@ impl Engine {
         self.handle_for(0, &self.out, &self.never_closed, msg);
     }
 
-    fn handle_for(
-        &self,
-        client: u64,
-        out: &Arc<dyn Outbox>,
-        closed: &Arc<AtomicBool>,
-        msg: Message,
-    ) {
+    fn handle_for(&self, client: u64, out: &Arc<dyn Outbox>, closed: &Arc<AtomicBool>, msg: Message) {
         let reply = |text: String| {
             let _ = out.send(&mut std::iter::once(Message::Text(text)));
         };
@@ -430,10 +415,7 @@ impl Engine {
             let running = lock(&self.running);
             match running.as_ref() {
                 Some(r) if r.client != client => (r.client, r.op.clone()),
-                _ => waiting
-                    .iter()
-                    .find(|w| w.client != client)
-                    .map(|w| (w.client, w.op.clone()))?,
+                _ => waiting.iter().find(|w| w.client != client).map(|w| (w.client, w.op.clone()))?,
             }
         };
         let mut who = lock(&self.live).role_of(&conn_id(other));
@@ -461,9 +443,7 @@ impl Engine {
         };
         let w = waiting.remove(pos);
         drop(waiting);
-        let _ = w
-            .out
-            .send(&mut std::iter::once(Message::Text(envelope::cancelled(&w.id))));
+        let _ = w.out.send(&mut std::iter::once(Message::Text(envelope::cancelled(&w.id))));
         true
     }
 }
@@ -478,8 +458,7 @@ pub struct Client {
 
 impl Client {
     pub fn handle(&self, msg: Message) {
-        self.engine
-            .handle_for(self.id, &self.out, &self.closed, msg);
+        self.engine.handle_for(self.id, &self.out, &self.closed, msg);
     }
 }
 
@@ -495,28 +474,11 @@ impl Drop for Client {
     }
 }
 
-fn run_one<J: Jobs>(
-    pool: &Arc<Pool<J>>,
-    jobs: &mut J,
-    docs: &mut Docs,
-    q: Queued,
-    abandoned: &Arc<AtomicBool>,
-) {
-    let Queued {
-        req,
-        client,
-        out,
-        closed,
-        ticket,
-        announced,
-    } = q;
+fn run_one<J: Jobs>(pool: &Arc<Pool<J>>, jobs: &mut J, docs: &mut Docs, q: Queued, abandoned: &Arc<AtomicBool>) {
+    let Queued { req, client, out, closed, ticket, announced } = q;
     let out = &out;
     let id = req.get("id").cloned().unwrap_or(Value::Null);
-    let op = req
-        .get("op")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
+    let op = req.get("op").and_then(Value::as_str).unwrap_or("").to_string();
     let cancel = CancelToken::new();
     let serial = pool.serial.fetch_add(1, Ordering::SeqCst);
     {
@@ -526,13 +488,7 @@ fn run_one<J: Jobs>(
             return;
         };
         waiting.remove(pos);
-        *lock(&pool.running) = Some(Running {
-            id: id.clone(),
-            client,
-            op: op.clone(),
-            cancel: cancel.clone(),
-            serial,
-        });
+        *lock(&pool.running) = Some(Running { id: id.clone(), client, op: op.clone(), cancel: cancel.clone(), serial });
     }
     if announced {
         let _ = out.send(&mut std::iter::once(Message::Text(envelope::started(&id))));
@@ -540,10 +496,7 @@ fn run_one<J: Jobs>(
 
     let progress = Arc::new(Progress::default());
     progress.reset();
-    let ctx = JobContext {
-        cancel: cancel.clone(),
-        progress: progress.clone(),
-    };
+    let ctx = JobContext { cancel: cancel.clone(), progress: progress.clone() };
     let claimed = Arc::new(AtomicBool::new(false));
     let ticking = Arc::new(AtomicBool::new(true));
     let on_breach = {
@@ -575,10 +528,7 @@ fn run_one<J: Jobs>(
             cancel: cancel.clone(),
             out: out.clone(),
             doing: J::doing,
-            watchdog: supervise::Watchdog::new(
-                pool.opts.clocks.budget(&op, &req),
-                pool.opts.cancel_grace,
-            ),
+            watchdog: supervise::Watchdog::new(pool.opts.clocks.budget(&op, &req), pool.opts.cancel_grace),
         },
         on_breach,
     );
@@ -590,15 +540,9 @@ fn run_one<J: Jobs>(
             let fresh = op == "computeAll";
             // server.py never hands computeAll the client's etags: it resends
             // every body.
-            let known = req
-                .get("known")
-                .and_then(Value::as_object)
-                .filter(|_| !fresh)
-                .unwrap_or(&empty);
+            let known = req.get("known").and_then(Value::as_object).filter(|_| !fresh).unwrap_or(&empty);
             docs.retain(|_, (_, gone)| !gone.load(Ordering::SeqCst));
-            let (held, _) = docs
-                .entry(client)
-                .or_insert_with(|| (DocState::default(), closed.clone()));
+            let (held, _) = docs.entry(client).or_insert_with(|| (DocState::default(), closed.clone()));
             match held.apply(&req, fresh) {
                 Some(doc) => jobs.rebuild(doc, tolerance, known, fresh, &ctx),
                 None => {
@@ -629,10 +573,7 @@ fn run_one<J: Jobs>(
     } else {
         result
     };
-    let opts = ReplyOptions {
-        binary: truthy(req.get("binary")),
-        chunked: truthy(req.get("chunked")),
-    };
+    let opts = ReplyOptions { binary: truthy(req.get("binary")), chunked: truthy(req.get("chunked")) };
     let mut reply = send_reply(id, result, opts, Some(cancel), Limits::default());
     // Frees the slot just before the last message: a stream checks its cancel
     // token between chunks, and a cancel reaches that token only through the slot.
@@ -729,7 +670,8 @@ fn spawn_watchdog(
                 if stage < 0 {
                     continue;
                 }
-                let pct = import_stage::pct(p.stage_done.load(Ordering::Relaxed), p.stage_total.load(Ordering::Relaxed));
+                let pct =
+                    import_stage::pct(p.stage_done.load(Ordering::Relaxed), p.stage_total.load(Ordering::Relaxed));
                 envelope::importing(&job.id, stage, import_stage::label(stage), pct)
             };
             let _ = job.out.send(&mut std::iter::once(Message::Text(frame)));

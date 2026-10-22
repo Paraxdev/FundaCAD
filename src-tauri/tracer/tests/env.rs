@@ -112,14 +112,22 @@ fn nee_only_and_bsdf_only_agree_under_an_environment() {
             [0.08; 3]
         }
     });
-    let m = PageMaterial { color: Some([0.95, 0.75, 0.4]), metalness: Some(1.0), roughness: Some(0.3), ..Default::default() };
+    let m = PageMaterial {
+        color: Some([0.95, 0.75, 0.4]),
+        metalness: Some(1.0),
+        roughness: Some(0.3),
+        ..Default::default()
+    };
     let disc = fundacad_tracer::LightDesc { direction: [-0.5, -0.4, 1.0], color: [0.8; 3], angular_radius: 10.0 };
     let look = Look { lights: Some(fundacad_tracer::Lights::new(&[disc])), ..dark() };
     t.resize(64, 48);
     t.set_camera(Camera { eye: BALL_EYE, target: BALL_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
     t.set_look(look);
     t.set_environment(Some(map));
-    let bodies = vec![place("ball", "ball.1", 1.0, [0.0, 0.0, 1.0], m), place("floor", "floor.1", 1.0, [0.0; 3], matte([0.7; 3]))];
+    let bodies = vec![
+        place("ball", "ball.1", 1.0, [0.0, 0.0, 1.0], m),
+        place("floor", "floor.1", 1.0, [0.0; 3], matte([0.7; 3])),
+    ];
     for key in t.set_bodies(bodies) {
         t.add_mesh(&key, if key.starts_with("floor") { floor(20.0) } else { sphere(1.0, 48, 24) });
     }
@@ -135,8 +143,16 @@ fn nee_only_and_bsdf_only_agree_under_an_environment() {
     }
     for (e, m, b) in &runs[1..] {
         let rel = b.iter().zip(&runs[0].2).map(|(x, y)| (x - y).abs() / y.max(1e-3)).sum::<f64>() / b.len() as f64;
-        println!("{e:?} against Mis: mean luminance {m:.4} and {:.4}, 8x8 blocks differ by {:.2} percent on average", runs[0].1, rel * 100.0);
-        assert!((m / runs[0].1 - 1.0).abs() < 0.01 && rel < 0.03, "{e:?} differs from Mis: {m} against {}, blocks {rel}", runs[0].1);
+        println!(
+            "{e:?} against Mis: mean luminance {m:.4} and {:.4}, 8x8 blocks differ by {:.2} percent on average",
+            runs[0].1,
+            rel * 100.0
+        );
+        assert!(
+            (m / runs[0].1 - 1.0).abs() < 0.01 && rel < 0.03,
+            "{e:?} differs from Mis: {m} against {}, blocks {rel}",
+            runs[0].1
+        );
     }
 }
 
@@ -165,7 +181,10 @@ fn a_small_bright_disc_converges_with_the_light_sample() {
         t.render_samples(64);
         rmse.push(rmse_to_ref(&t.resolve(), "hdr-sun"));
     }
-    println!("hdr-sun at 64 spp: rmse {:.2} of 255 with the light sample, {:.2} with bounce rays alone", rmse[0], rmse[1]);
+    println!(
+        "hdr-sun at 64 spp: rmse {:.2} of 255 with the light sample, {:.2} with bounce rays alone",
+        rmse[0], rmse[1]
+    );
     assert!(rmse[0] < 5.0, "the light sample leaves {:.2}", rmse[0]);
     assert!(rmse[1] > 4.0 * rmse[0], "bounce rays alone reach {:.2}", rmse[1]);
 }

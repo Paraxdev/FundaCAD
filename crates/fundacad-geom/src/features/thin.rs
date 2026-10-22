@@ -49,7 +49,11 @@ fn len(a: P) -> f64 {
 }
 fn unit(a: P) -> P {
     let l = len(a);
-    if l > 0.0 { mul(a, 1.0 / l) } else { a }
+    if l > 0.0 {
+        mul(a, 1.0 / l)
+    } else {
+        a
+    }
 }
 fn left(t: P) -> P {
     [-t[1], t[0]]
@@ -91,7 +95,11 @@ impl El {
             El::Line { a, b } => unit(sub(b, a)),
             El::Arc { c, ccw, .. } => {
                 let t = left(unit(sub(p, c)));
-                if ccw { t } else { mul(t, -1.0) }
+                if ccw {
+                    t
+                } else {
+                    mul(t, -1.0)
+                }
             }
         }
     }
@@ -107,7 +115,11 @@ impl El {
             El::Arc { a, b, c, ccw, .. } => {
                 let d = if ccw { ang(b, c) - ang(a, c) } else { ang(a, c) - ang(b, c) };
                 let s = d.rem_euclid(TAU);
-                if s < 1e-12 { TAU } else { s }
+                if s < 1e-12 {
+                    TAU
+                } else {
+                    s
+                }
             }
         }
     }
@@ -140,7 +152,13 @@ impl El {
     fn turn(&self) -> f64 {
         match *self {
             El::Line { .. } => 0.0,
-            El::Arc { ccw, .. } => if ccw { self.sweep() } else { -self.sweep() },
+            El::Arc { ccw, .. } => {
+                if ccw {
+                    self.sweep()
+                } else {
+                    -self.sweep()
+                }
+            }
         }
     }
 }
@@ -212,7 +230,11 @@ fn chains<'a>(links: Vec<Link<'a>>, tol: f64) -> Vec<Chain<'a>> {
         let k = out.len();
         let gap = |j: usize| {
             let g = out[(j + 1) % k].0 - out[j].0;
-            if j + 1 == k { g + std::f64::consts::TAU } else { g }
+            if j + 1 == k {
+                g + std::f64::consts::TAU
+            } else {
+                g
+            }
         };
         let mitred = |j: usize| {
             let between = std::f64::consts::TAU - gap(j);
@@ -509,7 +531,12 @@ pub fn wall_faces(ctx: &Ctx, f: &Extrude, entry: &SketchEntry) -> FResult<Shape>
                 Piece::Seg { a, b } => {
                     scale = scale.max(len(a)).max(len(b));
                     if len(sub(b, a)) > 1e-12 {
-                        links.push(Link { el: El::Line { a, b }, curve: &names[i], order: links.len(), flipped: false });
+                        links.push(Link {
+                            el: El::Line { a, b },
+                            curve: &names[i],
+                            order: links.len(),
+                            flipped: false,
+                        });
                     }
                 }
                 Piece::Arc { a, m, b } => {

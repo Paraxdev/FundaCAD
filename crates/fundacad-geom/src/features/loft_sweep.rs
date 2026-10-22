@@ -39,15 +39,7 @@ pub fn loft(ctx: &mut Ctx, f: &Loft) -> FResult {
             e.0
         ))
     })?;
-    combine(
-        ctx,
-        &f.id,
-        solid,
-        f.operation.as_ref(),
-        f.targets.as_deref(),
-        None,
-        None,
-    )
+    combine(ctx, &f.id, solid, f.operation.as_ref(), f.targets.as_deref(), None, None)
 }
 
 pub fn sweep(ctx: &mut Ctx, f: &Sweep) -> FResult {
@@ -58,13 +50,5 @@ pub fn sweep(ctx: &mut Ctx, f: &Sweep) -> FResult {
         return Err(Fail::msg("sweep path sketch has no curve to follow"));
     };
     let solid = kernel::sweep(&profile, &path)?;
-    combine(
-        ctx,
-        &f.id,
-        solid,
-        Some(&f.operation),
-        f.targets.as_deref(),
-        None,
-        None,
-    )
+    combine(ctx, &f.id, solid, Some(&f.operation), f.targets.as_deref(), None, None)
 }

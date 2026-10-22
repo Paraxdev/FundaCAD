@@ -29,8 +29,7 @@ pub fn cube_brep(edit: Edit) -> String {
     let text = std::fs::read_to_string(&path).expect("read");
     let _ = std::fs::remove_dir_all(&dir);
     // The writer heads the file with a DBRep line the importer does not take.
-    let mut lines: Vec<String> =
-        text.lines().skip_while(|l| !l.starts_with("CASCADE")).map(str::to_owned).collect();
+    let mut lines: Vec<String> = text.lines().skip_while(|l| !l.starts_with("CASCADE")).map(str::to_owned).collect();
     let record = |lines: &[String], tag: &str| {
         let at = lines.iter().position(|l| l == tag).unwrap_or_else(|| panic!("no {tag} record"));
         at + lines[at + 1..].iter().position(|l| l.ends_with('*')).expect("its parts") + 1

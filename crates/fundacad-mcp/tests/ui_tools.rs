@@ -15,25 +15,15 @@ const UI: [&str; 5] = ["ui_open", "ui_do", "ui_read", "ui_shot", "ui_close"];
 
 fn fake() -> PathBuf {
     let exe = std::env::current_exe().expect("a test binary has a path");
-    let profile = exe
-        .parent()
-        .and_then(Path::parent)
-        .expect("target/<profile>/deps");
-    let fake = profile.join("examples").join(if cfg!(windows) {
-        "fake_harness.exe"
-    } else {
-        "fake_harness"
-    });
+    let profile = exe.parent().and_then(Path::parent).expect("target/<profile>/deps");
+    let fake = profile.join("examples").join(if cfg!(windows) { "fake_harness.exe" } else { "fake_harness" });
     assert!(fake.is_file(), "build the example first: {}", fake.display());
     fake
 }
 
 fn standalone(extra: &[(&str, &str)]) -> Mcp {
     let python = fake().to_string_lossy().into_owned();
-    let mut vars = env(&[
-        ("FUNDACAD_MCP_MODE", "standalone"),
-        ("FUNDACAD_HARNESS_PYTHON", &python),
-    ]);
+    let mut vars = env(&[("FUNDACAD_MCP_MODE", "standalone"), ("FUNDACAD_HARNESS_PYTHON", &python)]);
     for (k, v) in extra {
         vars.insert((*k).into(), (*v).into());
     }
@@ -41,10 +31,7 @@ fn standalone(extra: &[(&str, &str)]) -> Mcp {
 }
 
 fn names(tools: &[Value]) -> Vec<String> {
-    tools
-        .iter()
-        .filter_map(|t| t["name"].as_str().map(String::from))
-        .collect()
+    tools.iter().filter_map(|t| t["name"].as_str().map(String::from)).collect()
 }
 
 fn pid_in(text: &str) -> u32 {
@@ -60,10 +47,7 @@ fn standalone_lists_the_five_ui_tools_and_auto_does_not() {
     let mut on = standalone(&[]);
     let tools = on.tools();
     for want in UI {
-        let tool = tools
-            .iter()
-            .find(|t| t["name"] == want)
-            .unwrap_or_else(|| panic!("{want} is not offered"));
+        let tool = tools.iter().find(|t| t["name"] == want).unwrap_or_else(|| panic!("{want} is not offered"));
         assert_eq!(tool["inputSchema"]["type"], json!("object"), "{want}");
         assert!(tool["description"].as_str().is_some_and(|d| !d.is_empty()));
     }
@@ -78,12 +62,7 @@ fn only_with_ui_adds_them() {
     let server = FundaCad::with_link(EngineLink::private());
     let plain: Vec<String> = server.tools().iter().map(|t| t.name.to_string()).collect();
     assert!(!plain.iter().any(|n| n.starts_with("ui_")), "{plain:?}");
-    let with: Vec<String> = server
-        .with_ui()
-        .tools()
-        .iter()
-        .map(|t| t.name.to_string())
-        .collect();
+    let with: Vec<String> = server.with_ui().tools().iter().map(|t| t.name.to_string()).collect();
     assert_eq!(with.len(), plain.len() + UI.len());
 }
 
@@ -107,16 +86,11 @@ fn ui_do_relays_steps_and_a_failing_step_is_an_error() {
     let before = mcp.call("ui_do", json!({"steps": [{"do": "undo"}]}));
     assert!(before.is_error && before.text.contains("ui_open"), "{}", before.text);
     mcp.call("ui_open", json!({}));
-    let ok = mcp.call(
-        "ui_do",
-        json!({"steps": [{"do": "click", "target": "Extrude"}, {"do": "press", "keys": "Escape"}]}),
-    );
+    let ok =
+        mcp.call("ui_do", json!({"steps": [{"do": "click", "target": "Extrude"}, {"do": "press", "keys": "Escape"}]}));
     assert!(!ok.is_error, "{}", ok.text);
     assert!(ok.text.contains("1. did click") && ok.text.contains("2. did press"), "{}", ok.text);
-    let bad = mcp.call(
-        "ui_do",
-        json!({"steps": [{"do": "undo"}, {"do": "fail"}, {"do": "redo"}]}),
-    );
+    let bad = mcp.call("ui_do", json!({"steps": [{"do": "undo"}, {"do": "fail"}, {"do": "redo"}]}));
     assert!(bad.is_error, "{}", bad.text);
     assert!(bad.text.contains("2. failed") && !bad.text.contains("did redo"), "{}", bad.text);
     let read = mcp.call("ui_read", json!({"what": ["history", "status"]}));

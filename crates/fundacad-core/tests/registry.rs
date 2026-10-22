@@ -51,10 +51,7 @@ fn the_app_and_the_engine_write_the_same_document_version() {
         .lines()
         .find(|l| l.starts_with("export const FORMAT_VERSION = "))
         .expect("FORMAT_VERSION in src/document/migrate.ts");
-    let ts: u32 = line["export const FORMAT_VERSION = ".len()..]
-        .trim_end_matches(';')
-        .trim()
-        .parse()
-        .expect("a number");
+    let ts: u32 =
+        line["export const FORMAT_VERSION = ".len()..].trim_end_matches(';').trim().parse().expect("a number");
     assert_eq!(ts, DOCUMENT_VERSION);
 }

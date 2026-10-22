@@ -25,16 +25,7 @@ fn tan30() -> f64 {
 
 /// build123d's `+`, `-` and `&`.
 pub fn op(kind: BooleanOp, a: &Shape, b: &Shape) -> R<Shape> {
-    kernel::boolean_with(
-        kind,
-        a,
-        &[b],
-        BooleanOptions {
-            parallel: true,
-            fuzzy: Fuzzy::Exact,
-            clean: true,
-        },
-    )
+    kernel::boolean_with(kind, a, &[b], BooleanOptions { parallel: true, fuzzy: Fuzzy::Exact, clean: true })
 }
 
 /// A solid of revolution about Z from a closed (r, z) outline.
@@ -270,11 +261,7 @@ pub fn torx_prism(a: f64, z0: f64, height: f64) -> R<Shape> {
         let lobe = circle_face(dist * ang.cos(), dist * ang.sin(), ri)?;
         shape = op(BooleanOp::Cut, &shape, &lobe)?;
     }
-    let face = shape
-        .faces()
-        .into_iter()
-        .next()
-        .ok_or("Fastener: the hexalobular outline came out empty")?;
+    let face = shape.faces().into_iter().next().ok_or("Fastener: the hexalobular outline came out empty")?;
     let solid = kernel::prism(&face, (0.0, 0.0, height))?;
     kernel::translate(&solid, (0.0, 0.0, z0))
 }
@@ -294,12 +281,8 @@ pub fn cross_recess(m: f64, depth: f64, z_top: f64, above: f64, pozi: bool) -> R
         (0.0, z_top + above),
     ])?;
     let mut tool = intersect(&arms, &taper)?;
-    let centre = revolve_rz(&[
-        (0.0, z_top - depth),
-        (m * 0.24, z_top),
-        (m * 0.24, z_top + above),
-        (0.0, z_top + above),
-    ])?;
+    let centre =
+        revolve_rz(&[(0.0, z_top - depth), (m * 0.24, z_top), (m * 0.24, z_top + above), (0.0, z_top + above)])?;
     tool = fuse(&[tool, centre])?;
     if pozi {
         let tick = make_box(-half * 0.8, half * 0.8, -w * 0.18, w * 0.18, z_top - depth * 0.45, z_top + above)?;

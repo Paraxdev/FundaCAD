@@ -88,7 +88,9 @@ pub fn plane_of(args: &serde_json::Map<String, Value>) -> Result<Plane, String> 
     let pick = if n[0].abs() < 0.9 { [1.0, 0.0, 0.0] } else { [0.0, 1.0, 0.0] };
     let u = unit(cross(cross(n, pick), n)).expect("pick is not parallel to n");
     let v = cross(n, u);
-    let r = |a: [f64; 3]| format!("({}, {}, {})", g_format(round(a[0], 6)), g_format(round(a[1], 6)), g_format(round(a[2], 6)));
+    let r = |a: [f64; 3]| {
+        format!("({}, {}, {})", g_format(round(a[0], 6)), g_format(round(a[1], 6)), g_format(round(a[2], 6)))
+    };
     // `at` slides the plane along its normal; the label and every number
     // in the reply are measured from where it ends up.
     let origin = match at {
@@ -108,7 +110,11 @@ pub fn plane_of(args: &serde_json::Map<String, Value>) -> Result<Plane, String> 
 fn round(x: f64, places: i32) -> f64 {
     let k = 10f64.powi(places);
     let r = (x * k).round() / k;
-    if r == 0.0 { 0.0 } else { r }
+    if r == 0.0 {
+        0.0
+    } else {
+        r
+    }
 }
 
 /// The cut through one body: closed loops in (u, v), counter-clockwise for
@@ -481,7 +487,8 @@ pub fn report(id: &str, name: &str, plane: &Plane, cut: &Cut, outline: bool) -> 
     if outline {
         for (i, l) in cut.loops.iter().enumerate() {
             let kind = if signed_area(l) < 0.0 { "hole" } else { "outline" };
-            let pts: Vec<String> = l.iter().map(|q| format!("[{},{}]", g_format(round(q[0], 4)), g_format(round(q[1], 4)))).collect();
+            let pts: Vec<String> =
+                l.iter().map(|q| format!("[{},{}]", g_format(round(q[0], 4)), g_format(round(q[1], 4)))).collect();
             out.push(format!("  loop {} ({kind}, {} points): [{}]", i + 1, l.len(), pts.join(",")));
         }
     }

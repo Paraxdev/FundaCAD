@@ -25,10 +25,7 @@ fn on() -> bool {
     READ.get_or_init(|| {
         let set = std::env::var_os("FUNDACAD_BENCH_PHASES").is_some_and(|v| v != "0");
         ON.store(set, Ordering::Relaxed);
-        TRACE.store(
-            set && std::env::var_os("FUNDACAD_BENCH_TRACE").is_some_and(|v| v != "0"),
-            Ordering::Relaxed,
-        );
+        TRACE.store(set && std::env::var_os("FUNDACAD_BENCH_TRACE").is_some_and(|v| v != "0"), Ordering::Relaxed);
     });
     ON.load(Ordering::Relaxed)
 }
@@ -105,14 +102,7 @@ pub fn report() -> serde_json::Value {
         return serde_json::Value::Null;
     };
     serde_json::Value::Object(
-        t.iter()
-            .map(|(k, (s, n))| {
-                (
-                    (*k).to_string(),
-                    serde_json::json!([(s * 1000.0).round() / 1000.0, n]),
-                )
-            })
-            .collect(),
+        t.iter().map(|(k, (s, n))| ((*k).to_string(), serde_json::json!([(s * 1000.0).round() / 1000.0, n]))).collect(),
     )
 }
 

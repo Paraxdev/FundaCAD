@@ -98,9 +98,7 @@ pub fn scan_shape(pos: &[f64], idx: &[u32]) -> Result<Shape, String> {
 /// Every object of a scene file in one scan, with the colour most of its
 /// triangles carry.
 pub fn scan_objects(objs: Vec<MeshObject>) -> Result<super::Imported, String> {
-    let color = super::mesh::dominant_color(
-        objs.iter().flat_map(|o| std::iter::repeat_n(o.color, o.idx.len() / 3)),
-    );
+    let color = super::mesh::dominant_color(objs.iter().flat_map(|o| std::iter::repeat_n(o.color, o.idx.len() / 3)));
     let mut pos = Vec::new();
     let mut idx = Vec::new();
     for o in objs {
@@ -141,7 +139,10 @@ mod tests {
 
     #[test]
     fn weld_merges_shared_corners_and_drops_collapsed_triangles() {
-        let pos = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0];
+        let pos = [
+            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 1.0, 1.0, 0.0,
+        ];
         let idx: Vec<u32> = (0..9).collect();
         let (p, i) = weld(&pos, &idx);
         assert_eq!(p.len() / 3, 4);

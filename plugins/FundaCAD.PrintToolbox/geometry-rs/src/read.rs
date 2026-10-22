@@ -58,9 +58,7 @@ pub fn holes_from_faces(shape: &Shape, faces: &[Shape], label: &str) -> Result<V
     let mut holes: Vec<Hole> = Vec::new();
     for fc in faces {
         let Some(c) = cylinder_of(fc) else {
-            return Err(format!(
-                "{label}: pick the inside face of a round hole, this face is not cylindrical"
-            ));
+            return Err(format!("{label}: pick the inside face of a round hole, this face is not cylindrical"));
         };
         let (o, a, r, t0, t1) = (c.origin, c.axis, c.radius, c.t0, c.t1);
         let mid = g::lin(o, &[((t0 + t1) / 2.0, a)]);

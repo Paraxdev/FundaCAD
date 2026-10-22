@@ -49,15 +49,9 @@ fn runs_of(args: &[String], fallback: usize) -> usize {
 /// exactly as diff_engines.py seeds it, so an import document is comparable.
 fn corpus_documents(path: &str) -> Vec<(String, Value)> {
     let corpus = read_json(path);
-    let dir = std::path::Path::new(path)
-        .parent()
-        .and_then(|p| p.parent())
-        .map(|p| p.to_path_buf())
-        .unwrap_or_default();
-    let store = fundacad_geom::import::blobstore::BlobStore::open(
-        fundacad_geom::import::blobstore::default_root(),
-    )
-    .expect("a blob store");
+    let dir = std::path::Path::new(path).parent().and_then(|p| p.parent()).map(|p| p.to_path_buf()).unwrap_or_default();
+    let store = fundacad_geom::import::blobstore::BlobStore::open(fundacad_geom::import::blobstore::default_root())
+        .expect("a blob store");
     let mut out = Vec::new();
     for entry in corpus["documents"].as_array().cloned().unwrap_or_default() {
         let name = entry["name"].as_str().unwrap_or_default().to_string();
@@ -66,11 +60,7 @@ fn corpus_documents(path: &str) -> Vec<(String, Value)> {
             let file = dir.join(spec["path"].as_str().unwrap_or_default());
             let fmt = spec.get("format").and_then(Value::as_str).unwrap_or("step");
             let want = spec["feature"].as_str().unwrap_or_default();
-            let Ok(result) = fundacad_geom::import::import_geometry(
-                &file.to_string_lossy(),
-                fmt,
-                &store,
-            ) else {
+            let Ok(result) = fundacad_geom::import::import_geometry(&file.to_string_lossy(), fmt, &store) else {
                 continue;
             };
             for f in doc["features"].as_array_mut().into_iter().flatten() {
@@ -202,13 +192,10 @@ fn imported_document(path: &str, fmt: &str) -> (Value, f64, std::path::PathBuf) 
     // The import FEATURE reads the blob back from the default root, so the
     // bench store has to be that root, not a store opened beside it.
     std::env::set_var("FUNDACAD_BLOB_DIR", &root);
-    let store = fundacad_geom::import::blobstore::BlobStore::open(
-        fundacad_geom::import::blobstore::default_root(),
-    )
-    .expect("a blob store");
+    let store = fundacad_geom::import::blobstore::BlobStore::open(fundacad_geom::import::blobstore::default_root())
+        .expect("a blob store");
     let began = Instant::now();
-    let mut feature = fundacad_geom::import::import_geometry(path, fmt, &store)
-        .expect("the import runs");
+    let mut feature = fundacad_geom::import::import_geometry(path, fmt, &store).expect("the import runs");
     let took = ms(began.elapsed());
     feature.insert("id".into(), json!("im"));
     feature.insert("type".into(), json!("import"));
@@ -219,17 +206,13 @@ fn imported_document(path: &str, fmt: &str) -> (Value, f64, std::path::PathBuf) 
 /// store, rebuild the one-feature document, then the payload loop.
 fn stage_import(args: &[String]) {
     let path = args.first().expect("bench_suite import <file>");
-    let fmt = args
-        .get(1)
-        .filter(|a| !a.starts_with("--"))
-        .cloned()
-        .unwrap_or_else(|| {
-            std::path::Path::new(path)
-                .extension()
-                .map(|e| e.to_string_lossy().to_lowercase())
-                .filter(|e| e != "stp")
-                .unwrap_or_else(|| "step".into())
-        });
+    let fmt = args.get(1).filter(|a| !a.starts_with("--")).cloned().unwrap_or_else(|| {
+        std::path::Path::new(path)
+            .extension()
+            .map(|e| e.to_string_lossy().to_lowercase())
+            .filter(|e| e != "stp")
+            .unwrap_or_else(|| "step".into())
+    });
     let (doc, import_ms, root) = imported_document(path, &fmt);
 
     let t = Instant::now();
@@ -250,11 +233,7 @@ fn stage_import(args: &[String]) {
             }
         }
         let t = Instant::now();
-        let bytes = fundacad_protocol::frame::encode_binary_reply(
-            &json!(1),
-            m,
-            &fundacad_protocol::Limits::default(),
-        );
+        let bytes = fundacad_protocol::frame::encode_binary_reply(&json!(1), m, &fundacad_protocol::Limits::default());
         frame_ms = ms(t.elapsed());
         frame_mib = bytes.map_or(0, |b| b.len()) as f64 / (1024.0 * 1024.0);
     }
@@ -297,16 +276,11 @@ fn stage_import(args: &[String]) {
 fn stage_export(args: &[String]) {
     let path = args.first().expect("bench_suite export <document> [format...]");
     let runs = runs_of(args, 3);
-    let formats: Vec<String> = match args
-        .iter()
-        .skip(1)
-        .take_while(|a| !a.starts_with("--"))
-        .cloned()
-        .collect::<Vec<_>>()
-    {
-        f if f.is_empty() => ["stl", "3mf", "step", "glb"].iter().map(|s| s.to_string()).collect(),
-        f => f,
-    };
+    let formats: Vec<String> =
+        match args.iter().skip(1).take_while(|a| !a.starts_with("--")).cloned().collect::<Vec<_>>() {
+            f if f.is_empty() => ["stl", "3mf", "step", "glb"].iter().map(|s| s.to_string()).collect(),
+            f => f,
+        };
     let doc = read_json(path);
     let built = builder::rebuild(&typed(&doc), &doc, &NoWatch).ok().expect("not cancelled");
     let out = std::env::temp_dir().join(format!("fundacad-bench-export-{}", std::process::id()));
@@ -390,23 +364,18 @@ fn stage_digest(args: &[String]) {
     } else {
         read_json(path)
     };
-    let docs: Vec<(String, Value)> = if raw.get("documents").is_some() {
-        corpus_documents(path)
-    } else {
-        vec![(path.clone(), raw)]
-    };
+    let docs: Vec<(String, Value)> =
+        if raw.get("documents").is_some() { corpus_documents(path) } else { vec![(path.clone(), raw)] };
     let known = Map::new();
     let mut digests = Map::new();
     for (name, doc) in &docs {
         let built = builder::rebuild(&typed(doc), doc, &NoWatch).ok().expect("not cancelled");
         let meshed = reply::mesh_result(&built.bodies, 0.1, &known, &NoWatch);
         let bytes = match &meshed {
-            fundacad_protocol::JobResult::Mesh(m) => fundacad_protocol::frame::encode_binary_reply(
-                &json!(1),
-                m,
-                &fundacad_protocol::Limits::default(),
-            )
-            .unwrap_or_default(),
+            fundacad_protocol::JobResult::Mesh(m) => {
+                fundacad_protocol::frame::encode_binary_reply(&json!(1), m, &fundacad_protocol::Limits::default())
+                    .unwrap_or_default()
+            }
             other => serde_json::to_vec(&json!(format!("{other:?}"))).unwrap_or_default(),
         };
         digests.insert(name.clone(), json!(digest(&bytes)));
@@ -453,9 +422,7 @@ fn stage_smooth(args: &[String]) {
             let access = fundacad_geom::opencascade::mesh_access::MeshAccess::new(&b.shape);
             for e in 0..access.edge_count() {
                 edges += 1;
-                if fundacad_geom::mesh::edges::meets_smoothly(&access, e)
-                    != access.edge_smooth(e, cos_tol)
-                {
+                if fundacad_geom::mesh::edges::meets_smoothly(&access, e) != access.edge_smooth(e, cos_tol) {
                     differ += 1;
                 }
             }

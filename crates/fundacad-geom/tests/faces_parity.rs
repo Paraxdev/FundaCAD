@@ -14,10 +14,7 @@ fn dir() -> PathBuf {
 fn load(name: &str) -> (Shape, Value) {
     let text = std::fs::read_to_string(dir().join(format!("{name}.brep"))).unwrap();
     let want = std::fs::read_to_string(dir().join(format!("{name}.json"))).unwrap();
-    (
-        mesh_access::read_brep_str(&text).expect("fixture BREP reads"),
-        serde_json::from_str(&want).unwrap(),
-    )
+    (mesh_access::read_brep_str(&text).expect("fixture BREP reads"), serde_json::from_str(&want).unwrap())
 }
 
 fn names() -> Vec<String> {

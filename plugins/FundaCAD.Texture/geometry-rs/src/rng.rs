@@ -81,11 +81,7 @@ impl Pcg64 {
         let word = |i: usize| u64::from(w[i]) | (u64::from(w[i + 1]) << 32);
         let initstate = (u128::from(word(0)) << 64) | u128::from(word(2));
         let initseq = (u128::from(word(4)) << 64) | u128::from(word(6));
-        let mut r = Pcg64 {
-            state: 0,
-            inc: (initseq << 1) | 1,
-            half: None,
-        };
+        let mut r = Pcg64 { state: 0, inc: (initseq << 1) | 1, half: None };
         r.step();
         r.state = r.state.wrapping_add(initstate);
         r.step();

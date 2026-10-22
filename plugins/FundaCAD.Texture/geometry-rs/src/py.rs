@@ -73,10 +73,7 @@ pub fn str_of(v: &Value) -> String {
         Value::Array(a) => format!("[{}]", a.iter().map(repr).collect::<Vec<_>>().join(", ")),
         Value::Object(o) => format!(
             "{{{}}}",
-            o.iter()
-                .map(|(k, v)| format!("{}: {}", repr_str(k), repr(v)))
-                .collect::<Vec<_>>()
-                .join(", ")
+            o.iter().map(|(k, v)| format!("{}: {}", repr_str(k), repr(v))).collect::<Vec<_>>().join(", ")
         ),
     }
 }
@@ -129,10 +126,7 @@ pub fn float(v: &Value) -> Result<f64, String> {
                 _ => Err(format!("could not convert string to float: {}", repr_str(s))),
             }
         }
-        other => Err(format!(
-            "float() argument must be a string or a real number, not '{}'",
-            type_name(other)
-        )),
+        other => Err(format!("float() argument must be a string or a real number, not '{}'", type_name(other))),
     }
 }
 

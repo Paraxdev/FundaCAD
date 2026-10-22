@@ -28,9 +28,6 @@ fn a_line_ending_just_off_a_corner_divides_the_face_at_that_corner() {
     assert!(r.errors.is_empty(), "{:?}", r.errors);
     let shape = &r.bodies[0].shape;
     assert_eq!(kernel::count(shape, Kind::Face), 7, "the top face is divided in two");
-    let shortest = kernel::subshapes(shape, Kind::Edge)
-        .iter()
-        .map(kernel::length)
-        .fold(f64::INFINITY, f64::min);
+    let shortest = kernel::subshapes(shape, Kind::Edge).iter().map(kernel::length).fold(f64::INFINITY, f64::min);
     assert!(shortest > 1.0, "the shortest edge is {shortest}mm");
 }

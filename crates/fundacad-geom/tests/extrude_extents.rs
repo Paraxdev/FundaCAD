@@ -23,11 +23,7 @@ fn ok(r: &Rebuild) {
 }
 
 fn err_with(r: &Rebuild, part: &str) {
-    assert!(
-        errors(r).iter().any(|e| e.contains(part)),
-        "wanted an error with {part:?}, got {:?}",
-        errors(r)
-    );
+    assert!(errors(r).iter().any(|e| e.contains(part)), "wanted an error with {part:?}, got {:?}", errors(r));
 }
 
 fn bbox(r: &Rebuild, i: usize) -> [f64; 6] {
@@ -127,11 +123,17 @@ fn a_start_face_follows_the_face() {
 #[test]
 fn a_start_plane_and_a_start_point() {
     let dp = json!({"id": "dp", "type": "datumPlane", "plane": "XY", "offset": "po"});
-    let r = build(json!({"po": 6}), vec![dp, small_sketch_at(0.0), extrude(json!({"startType": "plane", "startPlane": "dp"}))]);
+    let r = build(
+        json!({"po": 6}),
+        vec![dp, small_sketch_at(0.0), extrude(json!({"startType": "plane", "startPlane": "dp"}))],
+    );
     ok(&r);
     near(bbox(&r, 0)[2], 6.0, "plane start");
     let pt = json!({"id": "pt", "type": "datumPoint", "point": [3, 1, 8]});
-    let r = build(json!({}), vec![pt, small_sketch_at(0.0), extrude(json!({"startType": "point", "startPoint": "pt", "startOffset": 1}))]);
+    let r = build(
+        json!({}),
+        vec![pt, small_sketch_at(0.0), extrude(json!({"startType": "point", "startPoint": "pt", "startOffset": 1}))],
+    );
     ok(&r);
     near(bbox(&r, 0)[2], 9.0, "point start");
     near(bbox(&r, 0)[5], 11.0, "point end");
@@ -157,12 +159,14 @@ fn up_to_a_datum_plane_with_an_offset_follows_the_plane() {
 #[test]
 fn up_to_a_datum_point_or_a_vertex() {
     let pt = json!({"id": "pt", "type": "datumPoint", "point": [9, 9, 7]});
-    let r = build(json!({}), vec![pt, small_sketch_at(0.0), extrude(json!({"endType": "upToPoint", "upToPoint": "pt"}))]);
+    let r =
+        build(json!({}), vec![pt, small_sketch_at(0.0), extrude(json!({"endType": "upToPoint", "upToPoint": "pt"}))]);
     ok(&r);
     near(bbox(&r, 0)[5], 7.0, "datum point end");
     let bx = json!({"id": "bx", "type": "box", "length": 40, "width": 20, "height": 10});
     let vx = json!({"point": [19.9, 9.9, 4.9], "body": "body1"});
-    let r = build(json!({}), vec![bx, small_sketch_at(-20.0), extrude(json!({"endType": "upToPoint", "upToPoint": vx}))]);
+    let r =
+        build(json!({}), vec![bx, small_sketch_at(-20.0), extrude(json!({"endType": "upToPoint", "upToPoint": vx}))]);
     ok(&r);
     let b = bbox(&r, 1);
     near(b[2], -20.0, "vertex start");
@@ -174,7 +178,11 @@ fn through_all_opens_both_faces() {
     let bx = json!({"id": "bx", "type": "box", "length": 40, "width": 20, "height": 30});
     let r = build(
         json!({}),
-        vec![bx, sketch_at(20.0), extrude(json!({"distance": -1, "operation": "cut", "targets": ["body1"], "endType": "throughAll"}))],
+        vec![
+            bx,
+            sketch_at(20.0),
+            extrude(json!({"distance": -1, "operation": "cut", "targets": ["body1"], "endType": "throughAll"})),
+        ],
     );
     ok(&r);
     near(vol(&r, 0), 40.0 * 20.0 * 30.0 - 4.0 * 20.0 * 30.0, "volume");
@@ -184,7 +192,8 @@ fn through_all_opens_both_faces() {
 
 #[test]
 fn two_sided_takes_each_side_on_its_own() {
-    let r = build(json!({}), vec![small_sketch_at(0.0), extrude(json!({"distance": 3, "twoSided": true, "distance2": 5}))]);
+    let r =
+        build(json!({}), vec![small_sketch_at(0.0), extrude(json!({"distance": 3, "twoSided": true, "distance2": 5}))]);
     ok(&r);
     let b = bbox(&r, 0);
     near(b[2], -5.0, "side two");
@@ -237,7 +246,10 @@ fn two_sided_through_all_on_side_two_goes_the_other_way() {
     let bare = slot(0.0, json!({"distance": 1, "twoSided": true, "endType": "distance", "endType2": "throughAll"}));
     ok(&bare);
     near(vol(&bare, 0), kept, "distance2 omitted");
-    let set = slot(0.0, json!({"distance": 1, "twoSided": true, "endType": "distance", "endType2": "throughAll", "distance2": 0.5}));
+    let set = slot(
+        0.0,
+        json!({"distance": 1, "twoSided": true, "endType": "distance", "endType2": "throughAll", "distance2": 0.5}),
+    );
     ok(&set);
     near(vol(&set, 0), kept, "distance2 set");
 }
@@ -257,7 +269,8 @@ fn a_target_on_the_start_still_takes_its_offset() {
 
 #[test]
 fn unreachable_targets_are_errors_never_empty_bodies() {
-    let side = build(json!({}), vec![small_sketch_at(0.0), extrude(json!({"endType": "upToPlane", "upToPlane": "XZ"}))]);
+    let side =
+        build(json!({}), vec![small_sketch_at(0.0), extrude(json!({"endType": "upToPlane", "upToPlane": "XZ"}))]);
     err_with(&side, "never reached");
     let on = build(json!({}), vec![small_sketch_at(0.0), extrude(json!({"endType": "upToPlane", "upToPlane": "XY"}))]);
     err_with(&on, "lies on the start");
@@ -266,11 +279,14 @@ fn unreachable_targets_are_errors_never_empty_bodies() {
     let gone = json!({"kind": "face", "by": "tracked", "point": [0, 0, -5], "normal": [0, 0, -1], "body": "body9"});
     f.push(extrude(json!({"operation": "cut", "endType": "upToFace", "upToFace": gone})));
     err_with(&build(json!({"h": 10, "dz": 0}), f), "no longer exists");
-    let both = build(json!({}), vec![small_sketch_at(0.0), extrude(json!({"symmetric": true, "twoSided": true, "distance2": 1}))]);
+    let both = build(
+        json!({}),
+        vec![small_sketch_at(0.0), extrude(json!({"symmetric": true, "twoSided": true, "distance2": 1}))],
+    );
     err_with(&both, "cannot both");
     let back = build(
         json!({}),
-        vec![small_sketch_at(0.0), extrude(json!({"endType": "upToPlane", "upToPlane": "dp", "endOffset": -12})),],
+        vec![small_sketch_at(0.0), extrude(json!({"endType": "upToPlane", "upToPlane": "dp", "endOffset": -12}))],
     );
     assert!(!back.errors.is_empty(), "a missing datum plane is an error");
 }
@@ -338,7 +354,8 @@ fn a_press_pull_offset_from_a_target_on_the_face_still_pushes() {
 
 #[test]
 fn a_press_pull_that_empties_its_body_errors() {
-    let own_bottom = json!({"kind": "face", "by": "tracked", "point": [0, 0, -5], "normal": [0, 0, -1], "body": "body1"});
+    let own_bottom =
+        json!({"kind": "face", "by": "tracked", "point": [0, 0, -5], "normal": [0, 0, -1], "body": "body1"});
     let r = build(json!({"z2": 20}), two_blocks(json!({"upTo": own_bottom})));
     assert!(!r.errors.is_empty(), "an emptied body must be an error");
 }

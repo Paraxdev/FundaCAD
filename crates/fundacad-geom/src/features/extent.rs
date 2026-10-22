@@ -14,10 +14,7 @@ use crate::select::entity::FaceEnt;
 use crate::select::{Resolver, REFERENCE_NOT_FOUND};
 
 pub fn missing(message: impl Into<String>) -> Fail {
-    Fail::Value {
-        message: message.into(),
-        code: Some(REFERENCE_NOT_FOUND),
-    }
+    Fail::Value { message: message.into(), code: Some(REFERENCE_NOT_FOUND) }
 }
 
 fn v3(a: [f64; 3]) -> DVec3 {
@@ -51,10 +48,7 @@ pub fn face(ctx: &mut Ctx, fid: &str, label: &str, sel: &Selector, fallback: Opt
             None => fallback.ok_or_else(|| missing(format!("{label}: the target face names no body")))?,
         };
         let part = ctx.bodies[idx].shape().clone();
-        Resolver::new(Some(&mut ctx.diagnostics), Some(fid))
-            .faces(&part, &value)?
-            .into_iter()
-            .next()
+        Resolver::new(Some(&mut ctx.diagnostics), Some(fid)).faces(&part, &value)?.into_iter().next()
     };
     found.ok_or_else(|| missing(format!("{label}: the target face was not found")))
 }

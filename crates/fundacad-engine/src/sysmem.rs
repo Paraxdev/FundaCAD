@@ -11,9 +11,7 @@ use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 /// cache), free plus reclaimable pages on macOS and `ullAvailPhys` on Windows,
 /// the same sources sysmem.py reads.
 pub fn available_bytes() -> Option<u64> {
-    let sys = System::new_with_specifics(
-        RefreshKind::nothing().with_memory(MemoryRefreshKind::nothing().with_ram()),
-    );
+    let sys = System::new_with_specifics(RefreshKind::nothing().with_memory(MemoryRefreshKind::nothing().with_ram()));
     if sys.total_memory() == 0 {
         return None;
     }

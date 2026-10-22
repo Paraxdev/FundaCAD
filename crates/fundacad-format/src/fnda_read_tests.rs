@@ -38,7 +38,12 @@ fn tiny_file(dir: &Path) -> (PathBuf, Vec<u8>, Entry) {
     let cbor = json_to_cbor(r#"{"features":[]}"#).unwrap();
     let sections = vec![
         SectionSpec { kind: KIND_INFO, name: "info".into(), source: Source::Bytes(&info), layout: SMALL_LAYOUT },
-        SectionSpec { kind: KIND_DOCUMENT, name: "document".into(), source: Source::Bytes(&cbor), layout: SMALL_LAYOUT },
+        SectionSpec {
+            kind: KIND_DOCUMENT,
+            name: "document".into(),
+            source: Source::Bytes(&cbor),
+            layout: SMALL_LAYOUT,
+        },
         SectionSpec { kind: KIND_GEOMETRY, name: hash_hex(&geometry), source: Source::Bytes(&geometry), layout: TINY },
     ];
     let path = dir.join("tiny.fundab");
@@ -194,7 +199,9 @@ fn a_truncated_file_is_an_error_and_publishes_nothing() {
     let (path, _, e) = tiny_file(&dir);
     let bytes = std::fs::read(&path).unwrap();
     let table_a = parse_header(&bytes[..HEADER_LEN as usize], MAGIC).unwrap().table_a as usize;
-    for (i, cut) in [HEADER_LEN as usize + 10, (e.offset + e.stored_len / 2) as usize, table_a + 6].into_iter().enumerate() {
+    for (i, cut) in
+        [HEADER_LEN as usize + 10, (e.offset + e.stored_len / 2) as usize, table_a + 6].into_iter().enumerate()
+    {
         let short = dir.join(format!("short{i}.fundab"));
         std::fs::write(&short, &bytes[..cut]).unwrap();
         let blobs = dir.join(format!("blobs{i}"));

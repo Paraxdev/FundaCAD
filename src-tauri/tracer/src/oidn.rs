@@ -42,7 +42,11 @@ const WINDOWS: Release = Release {
     installed: 51_840_672,
     zip: true,
     files: &[
-        Pinned { member: "bin/tbb12.dll", file: "bin/tbb12.dll", sha256: "454ea95817cd33b837540bbfe21f6bf415f6fbf2ad712c2353896d17492e763d" },
+        Pinned {
+            member: "bin/tbb12.dll",
+            file: "bin/tbb12.dll",
+            sha256: "454ea95817cd33b837540bbfe21f6bf415f6fbf2ad712c2353896d17492e763d",
+        },
         Pinned {
             member: "bin/OpenImageDenoise_core.dll",
             file: "bin/OpenImageDenoise_core.dll",
@@ -70,7 +74,11 @@ const LINUX: Release = Release {
     installed: 55_941_192,
     zip: false,
     files: &[
-        Pinned { member: "lib/libtbb.so.12.19", file: "lib/libtbb.so.12", sha256: "2c1fcbc65a33771a5e02a201734774252528e10f57cef9e2f902fe209c0319e1" },
+        Pinned {
+            member: "lib/libtbb.so.12.19",
+            file: "lib/libtbb.so.12",
+            sha256: "2c1fcbc65a33771a5e02a201734774252528e10f57cef9e2f902fe209c0319e1",
+        },
         Pinned {
             member: "lib/libOpenImageDenoise_core.so.2.5.1",
             file: "lib/libOpenImageDenoise_core.so.2.5.1",
@@ -92,7 +100,9 @@ const LINUX: Release = Release {
 /// The release for this platform, or why there is none to download.
 pub fn release() -> Result<&'static Release, String> {
     if cfg!(target_os = "macos") {
-        return Err("the high quality denoise is not offered on macOS yet, the edge aware filter cleans the picture".into());
+        return Err(
+            "the high quality denoise is not offered on macOS yet, the edge aware filter cleans the picture".into()
+        );
     }
     if cfg!(all(windows, target_arch = "x86_64")) {
         return Ok(&WINDOWS);
@@ -147,7 +157,8 @@ fn open_lib(path: &Path) -> Result<libloading::Library, String> {
     #[cfg(windows)]
     let lib = unsafe {
         use libloading::os::windows::{Library, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR};
-        Library::load_with_flags(path, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS).map(Into::into)
+        Library::load_with_flags(path, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)
+            .map(Into::into)
     };
     #[cfg(not(windows))]
     let lib = unsafe { libloading::Library::new(path) };
@@ -165,7 +176,9 @@ impl Api {
         let lib = libs.last().ok_or("an empty file set")?;
         macro_rules! sym {
             ($name:literal) => {
-                *unsafe { lib.get($name) }.map_err(|e| format!("{} is missing from the library ({e})", String::from_utf8_lossy(&$name[..$name.len() - 1])))?
+                *unsafe { lib.get($name) }.map_err(|e| {
+                    format!("{} is missing from the library ({e})", String::from_utf8_lossy(&$name[..$name.len() - 1]))
+                })?
             };
         }
         let api = Api {
@@ -193,7 +206,8 @@ impl Api {
         if code == 0 {
             return Ok(());
         }
-        let text = if msg.is_null() { String::new() } else { unsafe { CStr::from_ptr(msg) }.to_string_lossy().into_owned() };
+        let text =
+            if msg.is_null() { String::new() } else { unsafe { CStr::from_ptr(msg) }.to_string_lossy().into_owned() };
         Err(format!("Open Image Denoise error {code}: {text}"))
     }
 
@@ -229,13 +243,19 @@ impl Api {
                 self.error(d).and(Err("no RT filter".into()))
             } else {
                 let (w, h) = (input.width, input.height);
-                for (name, buf) in [("color", &mut color), ("albedo", &mut albedo), ("normal", &mut normal), ("output", &mut out)] {
+                for (name, buf) in
+                    [("color", &mut color), ("albedo", &mut albedo), ("normal", &mut normal), ("output", &mut out)]
+                {
                     (self.set_image)(f, c(name).as_ptr(), buf.as_mut_ptr().cast(), FORMAT_FLOAT3, w, h, 0, 0, 0);
                 }
                 (self.set_bool)(f, c("hdr").as_ptr(), true);
                 (self.set_bool)(f, c("srgb").as_ptr(), false);
                 (self.set_bool)(f, c("cleanAux").as_ptr(), true);
-                (self.set_int)(f, c("quality").as_ptr(), if quality == Quality::High { QUALITY_HIGH } else { QUALITY_BALANCED });
+                (self.set_int)(
+                    f,
+                    c("quality").as_ptr(),
+                    if quality == Quality::High { QUALITY_HIGH } else { QUALITY_BALANCED },
+                );
                 (self.commit_filter)(f);
                 (self.execute_filter)(f);
                 let r = self.error(d);
@@ -293,7 +313,8 @@ pub fn install(archive: &[u8], rel: &Release, dest: &Path) -> Result<(), String>
     let _ = std::fs::remove_dir_all(&tmp);
     let r = unpack(archive, rel, &tmp).and_then(|_| verify(&tmp, rel.files)).and_then(|_| {
         if dest.exists() {
-            std::fs::remove_dir_all(dest).map_err(|e| format!("the old {} could not be replaced ({e})", dest.display()))?;
+            std::fs::remove_dir_all(dest)
+                .map_err(|e| format!("the old {} could not be replaced ({e})", dest.display()))?;
         }
         std::fs::rename(&tmp, dest).map_err(|e| format!("{} could not be written ({e})", dest.display()))
     });

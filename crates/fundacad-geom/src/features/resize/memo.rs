@@ -112,7 +112,8 @@ pub(super) fn whole_surface(face: &Shape, size: f64, make: impl FnOnce(f64) -> O
     // Sizes are kept in steps of a power of two, so a drag reuses the one it made first.
     let step = 2f64.powi(size.max(1.0).log2().ceil() as i32);
     let key = step.to_bits();
-    let hit = SURFACES.with(|m| m.borrow().iter().find(|((f, k), _)| *k == key && f.is_same(face)).map(|e| e.1.clone()));
+    let hit =
+        SURFACES.with(|m| m.borrow().iter().find(|((f, k), _)| *k == key && f.is_same(face)).map(|e| e.1.clone()));
     if hit.is_some() {
         return hit;
     }

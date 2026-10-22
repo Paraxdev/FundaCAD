@@ -4,22 +4,22 @@
 
 // `pub` so tests/container_seam.rs can drive the engine environment and the
 // container the way the app does.
-pub mod engine;
 pub mod container;
+pub mod engine;
 pub use fundacad_format::{fnda, json_doc};
-pub mod plugins;
-pub mod session_file;
-pub mod library;
-mod home_commands;
-pub mod thumbs;
-mod spacemouse;
 mod drop_paths;
+pub mod frames;
+mod home_commands;
 mod launch;
 pub mod launch_args;
-pub mod frames;
-pub mod safe_mode;
-pub mod settings_files;
+pub mod library;
 mod log_file;
+pub mod plugins;
+pub mod safe_mode;
+pub mod session_file;
+pub mod settings_files;
+mod spacemouse;
+pub mod thumbs;
 // WebKitGTK only exists on Linux; macOS and Windows use WKWebView and WebView2.
 #[cfg(target_os = "linux")]
 mod webkit;
@@ -71,11 +71,7 @@ fn restart_for_update(app: tauri::AppHandle) {
 // directory under app_data_dir()/recovery/. Writes are atomic (tmp + rename).
 
 fn recovery_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("recovery");
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("recovery");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
@@ -276,9 +272,8 @@ fn safe_mode_decide() -> SafeMode {
         safe_mode::has_flag(std::env::args_os()),
         std::env::var(safe_mode::ENV).ok().as_deref(),
     );
-    let set_compositing = cfg!(target_os = "linux")
-        && reason.is_some()
-        && std::env::var_os(safe_mode::COMPOSITING).is_none();
+    let set_compositing =
+        cfg!(target_os = "linux") && reason.is_some() && std::env::var_os(safe_mode::COMPOSITING).is_none();
     if set_compositing {
         // Issue #6: with it off WebKitGTK came up on GPUs the DMABUF rule misses.
         std::env::set_var(safe_mode::COMPOSITING, "1");
@@ -304,10 +299,8 @@ fn watch_frontend_load(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         std::thread::sleep(FRONTEND_READY_TIMEOUT);
 
-        let ready = app
-            .try_state::<FrontendReady>()
-            .map(|s| s.0.load(std::sync::atomic::Ordering::Relaxed))
-            .unwrap_or(false);
+        let ready =
+            app.try_state::<FrontendReady>().map(|s| s.0.load(std::sync::atomic::Ordering::Relaxed)).unwrap_or(false);
         if ready {
             return;
         }
@@ -316,12 +309,9 @@ fn watch_frontend_load(app: tauri::AppHandle) {
         let lines = [
             format!("[ui] WARNING: the interface has not loaded after {secs}s."),
             "[ui] The window opened but the page never started, so this is NOT a geometry".to_string(),
-            "[ui] engine problem, the engine's own status is logged separately above."
-                .to_string(),
-            "[ui] Either the document failed to load, or a script threw while loading it."
-                .to_string(),
-            "[ui] Please report this log at https://github.com/Paraxdev/fundacad/issues"
-                .to_string(),
+            "[ui] engine problem, the engine's own status is logged separately above.".to_string(),
+            "[ui] Either the document failed to load, or a script threw while loading it.".to_string(),
+            "[ui] Please report this log at https://github.com/Paraxdev/fundacad/issues".to_string(),
         ];
         lines.iter().for_each(|l| eprintln!("{l}"));
     });

@@ -44,10 +44,9 @@ impl MeshBody {
         let indices = numbers(info.get("indices"), |x| x as u32);
         let face_ids = numbers(info.get("faceIds"), |x| x as u32);
         let edges = match info.get("edges") {
-            Some(Value::Array(list)) => list
-                .iter()
-                .map(|e| numbers(e.get("points").or(Some(e)), |x| x as f32))
-                .collect(),
+            Some(Value::Array(list)) => {
+                list.iter().map(|e| numbers(e.get("points").or(Some(e)), |x| x as f32)).collect()
+            }
             _ => Vec::new(),
         };
         for k in ARRAYS.iter().chain(&["edges"]) {
@@ -92,10 +91,7 @@ impl MeshBody {
                     at = end;
                 }
             } else if let Value::Array(list) = &packed {
-                edges = list
-                    .iter()
-                    .map(|e| numbers(e.get("points").or(Some(e)), |x| x as f32))
-                    .collect();
+                edges = list.iter().map(|e| numbers(e.get("points").or(Some(e)), |x| x as f32)).collect();
             }
         }
         MeshBody { info, positions, indices, face_ids, edges }

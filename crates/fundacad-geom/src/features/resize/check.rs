@@ -42,7 +42,13 @@ fn one_solid(before: &Shape, out: &Shape, cut: bool, cone: bool, known: Option<(
     Ok(out)
 }
 
-pub(super) fn checked(before: &Shape, out: &Shape, cut: bool, known: Option<(f64, f64)>, e: &Expect) -> Result<Shape, Bad> {
+pub(super) fn checked(
+    before: &Shape,
+    out: &Shape,
+    cut: bool,
+    known: Option<(f64, f64)>,
+    e: &Expect,
+) -> Result<Shape, Bad> {
     let out = one_solid(before, out, cut, matches!(e.surf, Surf::Cone { .. }), known)?;
     let tol = tol_apart(e.delta);
     if area_at(&out, e.surf, e.delta, tol) < 1e-9 {

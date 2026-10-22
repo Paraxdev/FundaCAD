@@ -45,25 +45,14 @@ fn point_triangle_distance(p: P3, a: P3, b: P3, c: P3) -> f64 {
         denom = 1e-300;
     }
     let (v, w) = (vb / denom, vc / denom);
-    let q = [
-        a[0] + ab[0] * v + ac[0] * w,
-        a[1] + ab[1] * v + ac[1] * w,
-        a[2] + ab[2] * v + ac[2] * w,
-    ];
+    let q = [a[0] + ab[0] * v + ac[0] * w, a[1] + ab[1] * v + ac[1] * w, a[2] + ab[2] * v + ac[2] * w];
     let seg = |p0: P3, p1: P3| {
         let d = sub(p1, p0);
         let t = (dot(sub(p, p0), d) / dot(d, d).max(1e-300)).clamp(0.0, 1.0);
-        norm(sub(
-            p,
-            [p0[0] + d[0] * t, p0[1] + d[1] * t, p0[2] + d[2] * t],
-        ))
+        norm(sub(p, [p0[0] + d[0] * t, p0[1] + d[1] * t, p0[2] + d[2] * t]))
     };
     let inside = va >= 0.0 && vb >= 0.0 && vc >= 0.0;
-    let dist = if inside {
-        norm(sub(p, q))
-    } else {
-        f64::INFINITY
-    };
+    let dist = if inside { norm(sub(p, q)) } else { f64::INFINITY };
     dist.min(seg(a, b).min(seg(b, c).min(seg(c, a))))
 }
 
@@ -71,11 +60,7 @@ fn centroids(p: &[P3], tris: &[[usize; 3]]) -> Vec<P3> {
     tris.iter()
         .map(|t| {
             let (a, b, c) = (p[t[0]], p[t[1]], p[t[2]]);
-            [
-                (a[0] + b[0] + c[0]) / 3.0,
-                (a[1] + b[1] + c[1]) / 3.0,
-                (a[2] + b[2] + c[2]) / 3.0,
-            ]
+            [(a[0] + b[0] + c[0]) / 3.0, (a[1] + b[1] + c[1]) / 3.0, (a[2] + b[2] + c[2]) / 3.0]
         })
         .collect()
 }
@@ -88,11 +73,7 @@ fn centroids(p: &[P3], tris: &[[usize; 3]]) -> Vec<P3> {
 /// cap, which the same disk triangulated the other way round.
 fn surface_gap(p: &[P3], i: &[[usize; 3]], q: &[P3], j: &[[usize; 3]], k: usize, tol: f64) -> f64 {
     if i.is_empty() || j.is_empty() {
-        return if i.len() == j.len() {
-            0.0
-        } else {
-            f64::INFINITY
-        };
+        return if i.len() == j.len() { 0.0 } else { f64::INFINITY };
     }
     let cen = centroids(p, i);
     let tree = KdTree::new(&centroids(q, j));
@@ -100,11 +81,7 @@ fn surface_gap(p: &[P3], i: &[[usize; 3]], q: &[P3], j: &[[usize; 3]], k: usize,
     let to = |c: P3, t: &[usize; 3]| point_triangle_distance(c, q[t[0]], q[t[1]], q[t[2]]);
     cen.iter()
         .map(|c| {
-            let near = tree
-                .knn(*c, k)
-                .into_iter()
-                .map(|t| to(*c, &j[t]))
-                .fold(f64::INFINITY, f64::min);
+            let near = tree.knn(*c, k).into_iter().map(|t| to(*c, &j[t])).fold(f64::INFINITY, f64::min);
             if near > tol {
                 j.iter().map(|t| to(*c, t)).fold(f64::INFINITY, f64::min)
             } else {
@@ -116,11 +93,7 @@ fn surface_gap(p: &[P3], i: &[[usize; 3]], q: &[P3], j: &[[usize; 3]], k: usize,
 
 fn vertex_gap(p: &[P3], q: &[P3]) -> f64 {
     if p.is_empty() || q.is_empty() {
-        return if p.len() == q.len() {
-            0.0
-        } else {
-            f64::INFINITY
-        };
+        return if p.len() == q.len() { 0.0 } else { f64::INFINITY };
     }
     let (tp, tq) = (KdTree::new(p), KdTree::new(q));
     let a = p.iter().map(|x| tq.nearest(*x).0).fold(0.0, f64::max);
@@ -142,11 +115,7 @@ fn unmatched(p: &[P3], i: &[[usize; 3]], q: &[P3], j: &[[usize; 3]], tol: f64) -
             let near = j[tree.nearest(**c).1];
             let gap = t
                 .iter()
-                .map(|a| {
-                    near.iter()
-                        .map(|b| norm(sub(p[*a], q[*b])))
-                        .fold(f64::INFINITY, f64::min)
-                })
+                .map(|a| near.iter().map(|b| norm(sub(p[*a], q[*b]))).fold(f64::INFINITY, f64::min))
                 .fold(0.0, f64::max);
             gap > tol
         })
@@ -163,29 +132,20 @@ fn compare_mesh(
 ) -> (Vec<String>, Vec<String>) {
     let (mut diffs, mut notes) = (Vec::new(), Vec::new());
     if i.len() != j.len() {
-        return (
-            vec![format!("{what}: {} triangles vs {}", j.len(), i.len())],
-            notes,
-        );
+        return (vec![format!("{what}: {} triangles vs {}", j.len(), i.len())], notes);
     }
     let gap = vertex_gap(p, q);
     if gap > tol.vertex {
-        diffs.push(format!(
-            "{what}: a vertex {gap:.3e} from the other engine's nearest"
-        ));
+        diffs.push(format!("{what}: a vertex {gap:.3e} from the other engine's nearest"));
     }
-    let s = surface_gap(p, i, q, j, tol.neighbours, tol.surface)
-        .max(surface_gap(q, j, p, i, tol.neighbours, tol.surface));
+    let s =
+        surface_gap(p, i, q, j, tol.neighbours, tol.surface).max(surface_gap(q, j, p, i, tol.neighbours, tol.surface));
     if s > tol.surface {
-        diffs.push(format!(
-            "{what}: a triangle {s:.3e} off the other engine's surface"
-        ));
+        diffs.push(format!("{what}: a triangle {s:.3e} off the other engine's surface"));
     }
     let moved = unmatched(p, i, q, j, tol.vertex);
     if moved > 0 {
-        notes.push(format!(
-            "{what}: {moved} triangle(s) on the other diagonal, same surface"
-        ));
+        notes.push(format!("{what}: {moved} triangle(s) on the other diagonal, same surface"));
     }
     (diffs, notes)
 }
@@ -199,9 +159,7 @@ fn tris(v: &[usize]) -> Vec<[usize; 3]> {
 }
 
 fn golden_tris(v: &Value) -> Result<Vec<[usize; 3]>, String> {
-    Ok(tris(
-        &ivec(v)?.into_iter().map(|x| x as usize).collect::<Vec<_>>(),
-    ))
+    Ok(tris(&ivec(v)?.into_iter().map(|x| x as usize).collect::<Vec<_>>()))
 }
 
 fn bodies(reply: &Value) -> BTreeMap<String, Value> {
@@ -232,12 +190,7 @@ fn read_stl(path: &std::path::Path) -> (Vec<P3>, Vec<[usize; 3]>) {
         .map(str::trim)
         .filter(|l| l.starts_with("vertex"))
         .map(|l| {
-            let v: Vec<f64> = l
-                .split_whitespace()
-                .skip(1)
-                .take(3)
-                .map(|x| x.parse().unwrap_or(f64::NAN))
-                .collect();
+            let v: Vec<f64> = l.split_whitespace().skip(1).take(3).map(|x| x.parse().unwrap_or(f64::NAN)).collect();
             [v[0], v[1], v[2]]
         })
         .collect();
@@ -266,12 +219,7 @@ struct Rust {
     stl: std::path::PathBuf,
 }
 
-fn compare_doc(
-    ctx: &Ctx,
-    tol: &Tols,
-    py: &Value,
-    rs: &Rust,
-) -> Result<(Vec<String>, Vec<String>), String> {
+fn compare_doc(ctx: &Ctx, tol: &Tols, py: &Value, rs: &Rust) -> Result<(Vec<String>, Vec<String>), String> {
     let (mut diffs, mut notes) = (Vec::new(), Vec::new());
     let ok = rs.first["ok"] == true;
     if py["ok"].as_bool() != Some(ok) {
@@ -281,11 +229,7 @@ fn compare_doc(
     let rb = bodies(&rs.first);
     if pb.keys().ne(rb.keys()) {
         return Ok((
-            vec![format!(
-                "bodies {:?} vs {:?}",
-                rb.keys().collect::<Vec<_>>(),
-                pb.keys().collect::<Vec<_>>()
-            )],
+            vec![format!("bodies {:?} vs {:?}", rb.keys().collect::<Vec<_>>(), pb.keys().collect::<Vec<_>>())],
             notes,
         ));
     }
@@ -294,12 +238,8 @@ fn compare_doc(
     for (bid, want) in &pb {
         let got = &rb[bid];
         let hp: Vec<u64> = {
-            let mut h: Vec<u64> = want["faceTriangles"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .map(|x| x.as_u64().unwrap_or(0))
-                .collect();
+            let mut h: Vec<u64> =
+                want["faceTriangles"].as_array().into_iter().flatten().map(|x| x.as_u64().unwrap_or(0)).collect();
             while h.last() == Some(&0) {
                 h.pop();
             }
@@ -310,12 +250,7 @@ fn compare_doc(
             let n = hp.len().max(hr.len());
             let at = |h: &Vec<u64>, k: usize| h.get(k).copied().unwrap_or(0);
             let bad: Vec<usize> = (0..n).filter(|k| at(&hp, *k) != at(&hr, *k)).collect();
-            let mut msg = format!(
-                "{bid}: face {} has {} triangles vs {}",
-                bad[0],
-                at(&hr, bad[0]),
-                at(&hp, bad[0])
-            );
+            let mut msg = format!("{bid}: face {} has {} triangles vs {}", bad[0], at(&hr, bad[0]), at(&hp, bad[0]));
             if bad.len() > 1 {
                 msg.push_str(&format!(" ({} faces differ)", bad.len()));
             }
@@ -332,8 +267,7 @@ fn compare_doc(
         let nrm = ivec_rows(&want["normals"], nq)?;
         let m = rows3(&floats(&got["normals"]));
         if !nrm.is_empty() && !m.is_empty() && nrm.len() == p.len() && m.len() == q.len() {
-            let flat: std::collections::BTreeSet<usize> =
-                indices(&want["flatVertices"]).into_iter().collect();
+            let flat: std::collections::BTreeSet<usize> = indices(&want["flatVertices"]).into_iter().collect();
             let tree = KdTree::new(&p);
             let mut worst: f64 = 0.0;
             for (k, qk) in q.iter().enumerate() {
@@ -343,14 +277,7 @@ fn compare_doc(
                 let best = tree
                     .within(*qk, tol.vertex)
                     .into_iter()
-                    .map(|c| {
-                        (
-                            (0..3)
-                                .map(|a| (nrm[c][a] - m[k][a]).abs())
-                                .fold(0.0, f64::max),
-                            c,
-                        )
-                    })
+                    .map(|c| ((0..3).map(|a| (nrm[c][a] - m[k][a]).abs()).fold(0.0, f64::max), c))
                     .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 if let Some((gap, c)) = best {
                     if !flat.contains(&c) {
@@ -366,17 +293,12 @@ fn compare_doc(
         }
         let slots = got.get("faceColorSlots").cloned().unwrap_or(Value::Null);
         if slots != want["faceColorSlots"] {
-            diffs.push(format!(
-                "{bid}: faceColorSlots {slots} vs {}",
-                want["faceColorSlots"]
-            ));
+            diffs.push(format!("{bid}: faceColorSlots {slots} vs {}", want["faceColorSlots"]));
         }
     }
     let (a, b) = (bodies(&rs.first), bodies(&rs.again));
     let etags = |m: &BTreeMap<String, Value>| -> BTreeMap<String, Value> {
-        m.iter()
-            .map(|(k, v)| (k.clone(), v.get("etag").cloned().unwrap_or(Value::Null)))
-            .collect()
+        m.iter().map(|(k, v)| (k.clone(), v.get("etag").cloned().unwrap_or(Value::Null))).collect()
     };
     if etags(&a) != etags(&b) {
         diffs.push("rust: an etag changed on an identical rebuild".into());
@@ -393,9 +315,7 @@ fn compare_doc(
             .map(|(k, _)| k)
             .collect();
         if !kept.is_empty() {
-            diffs.push(format!(
-                "rust: {kept:?} kept its etag with a deeper texture"
-            ));
+            diffs.push(format!("rust: {kept:?} kept its etag with a deeper texture"));
         }
     }
     let pe = &py["export"];
@@ -434,11 +354,7 @@ fn flat_vertices(p: &[P3], i: &[[usize; 3]], degenerate: f64) -> Vec<usize> {
     for t in i {
         let (a, b, c) = (p[t[0]], p[t[1]], p[t[2]]);
         let (u, w) = (sub(b, a), sub(c, a));
-        let n = [
-            u[1] * w[2] - u[2] * w[1],
-            u[2] * w[0] - u[0] * w[2],
-            u[0] * w[1] - u[1] * w[0],
-        ];
+        let n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
         if norm(n) / 2.0 < degenerate {
             for v in t {
                 flat[*v] = true;
@@ -453,10 +369,7 @@ fn mesh_golden(p: &[P3], i: &[[usize; 3]], quantum: f64) -> serde_json::Map<Stri
     let mut m = serde_json::Map::new();
     m.insert("vertices".into(), json!(p.len()));
     m.insert("triangles".into(), json!(i.len()));
-    m.insert(
-        "positions".into(),
-        json!(super::record::quantised_columns(p, quantum)),
-    );
+    m.insert("positions".into(), json!(super::record::quantised_columns(p, quantum)));
     m.insert("indices".into(), json!(super::record::ivec(&flat)));
     m
 }
@@ -464,11 +377,7 @@ fn mesh_golden(p: &[P3], i: &[[usize; 3]], quantum: f64) -> serde_json::Map<Stri
 /// freeze_goldens.indexed_stl: coincident corners shared, the rows sorted.
 fn indexed(p: &[P3]) -> (Vec<P3>, Vec<[usize; 3]>) {
     let mut order: Vec<usize> = (0..p.len()).collect();
-    order.sort_by(|a, b| {
-        p[*a]
-            .partial_cmp(&p[*b])
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    order.sort_by(|a, b| p[*a].partial_cmp(&p[*b]).unwrap_or(std::cmp::Ordering::Equal));
     let mut uniq: Vec<P3> = Vec::new();
     let mut inverse = vec![0usize; p.len()];
     for k in order {
@@ -520,42 +429,24 @@ pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
         body.insert("faceTriangles".into(), json!(h));
         body.insert(
             "normals".into(),
-            json!(if n.is_empty() {
-                String::new()
-            } else {
-                super::record::quantised_columns(&n, nq)
-            }),
+            json!(if n.is_empty() { String::new() } else { super::record::quantised_columns(&n, nq) }),
         );
-        body.insert(
-            "flatVertices".into(),
-            json!(flat_vertices(&p, &i, degenerate)),
-        );
-        body.insert(
-            "faceColorSlots".into(),
-            b.get("faceColorSlots").cloned().unwrap_or(Value::Null),
-        );
+        body.insert("flatVertices".into(), json!(flat_vertices(&p, &i, degenerate)));
+        body.insert("faceColorSlots".into(), b.get("faceColorSlots").cloned().unwrap_or(Value::Null));
         bodies_out.insert(bid, Value::Object(body));
     }
     let etags = |m: &BTreeMap<String, Value>| -> BTreeMap<String, Value> {
-        m.iter()
-            .map(|(k, v)| (k.clone(), v.get("etag").cloned().unwrap_or(Value::Null)))
-            .collect()
+        m.iter().map(|(k, v)| (k.clone(), v.get("etag").cloned().unwrap_or(Value::Null))).collect()
     };
     out.insert("ok".into(), json!(first["ok"] == true));
     out.insert("bodies".into(), Value::Object(bodies_out));
-    out.insert(
-        "pythonEtagsStable".into(),
-        json!(etags(&bodies(&first)) == etags(&bodies(&again))),
-    );
+    out.insert("pythonEtagsStable".into(), json!(etags(&bodies(&first)) == etags(&bodies(&again))));
     let mut ex = serde_json::Map::new();
     ex.insert("ok".into(), json!(export["ok"] == true));
     if export["ok"] != true {
         ex.insert("error".into(), ctx.normalise_all(&export["error"]));
     } else {
-        ex.insert(
-            "warnings".into(),
-            ctx.normalise_all(&export["result"]["warnings"]),
-        );
+        ex.insert("warnings".into(), ctx.normalise_all(&export["result"]["warnings"]));
         let (p, _) = read_stl(&stl);
         let (u, i) = indexed(&p);
         ex.extend(mesh_golden(&u, &i, pq));
@@ -565,16 +456,10 @@ pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
 }
 
 pub fn check(ctx: &Ctx) -> Result<bool, String> {
-    let docs = ctx.corpus["documents"]
-        .as_array()
-        .ok_or("the corpus has no documents")?;
+    let docs = ctx.corpus["documents"].as_array().ok_or("the corpus has no documents")?;
     let cases = ctx.cases().as_object().ok_or("the golden has no cases")?;
     if docs.len() != cases.len() {
-        return Err(format!(
-            "the golden has {} cases, the corpus {}",
-            cases.len(),
-            docs.len()
-        ));
+        return Err(format!("the golden has {} cases, the corpus {}", cases.len(), docs.len()));
     }
     let tolerance = ctx.header()["rebuildTolerance"].as_f64().unwrap_or(0.1);
     let tol = Tols {
@@ -617,34 +502,15 @@ pub fn check(ctx: &Ctx) -> Result<bool, String> {
     }
     let mut rows = Vec::new();
     let mut bad = 0;
-    for (((name, _), (first, again, changed)), (export, stl)) in
-        prepared.iter().zip(runs).zip(exports)
-    {
-        let py = cases
-            .get(name)
-            .ok_or_else(|| format!("the golden has no case {name}"))?;
-        let rs = Rust {
-            first,
-            again,
-            changed,
-            export,
-            stl,
-        };
+    for (((name, _), (first, again, changed)), (export, stl)) in prepared.iter().zip(runs).zip(exports) {
+        let py = cases.get(name).ok_or_else(|| format!("the golden has no case {name}"))?;
+        let rs = Rust { first, again, changed, export, stl };
         let (diffs, notes) = compare_doc(ctx, &tol, py, &rs)?;
         bad += usize::from(!diffs.is_empty());
         rows.push(vec![
             name.clone(),
-            if diffs.is_empty() {
-                "match"
-            } else {
-                "MISMATCH"
-            }
-            .into(),
-            if diffs.is_empty() {
-                notes.join("; ")
-            } else {
-                diffs.join("; ")
-            },
+            if diffs.is_empty() { "match" } else { "MISMATCH" }.into(),
+            if diffs.is_empty() { notes.join("; ") } else { diffs.join("; ") },
         ]);
     }
     table(&rows, &["document", "status", "detail"]);
