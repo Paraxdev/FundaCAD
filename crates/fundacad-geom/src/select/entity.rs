@@ -1,5 +1,4 @@
-//! Edges and faces measured once, with the fingerprint readings, keys and costs
-//! of the Python engine's `geom_select.py`.
+//! Edges and faces measured once, with the fingerprint readings, keys and costs selectors match on.
 
 use std::cmp::Ordering;
 
@@ -136,7 +135,7 @@ impl EdgeEnt {
         self.curve.name()
     }
 
-    /// `_edge_dir`: the unit tangent at the middle, else the chord, sign-normalized.
+    /// The unit tangent at the middle, else the chord, sign-normalized.
     pub fn dir(&self) -> DVec3 {
         match (self.tangent, self.ends) {
             (Some(t), _) => sign_normalize(unit(t)),
@@ -204,12 +203,12 @@ impl FaceEnt {
         self.surface.name()
     }
 
-    /// `_face_centroid`, the origin where `center()` raises.
+    /// The origin where `center()` raises.
     pub fn centroid(&self) -> DVec3 {
         self.centre.unwrap_or(DVec3::ZERO)
     }
 
-    /// `_face_normal`, zero where `normal_at()` raises.
+    /// Zero where `normal_at()` raises.
     pub fn normal(&self) -> DVec3 {
         self.normal.map_or(DVec3::ZERO, unit)
     }
@@ -243,7 +242,7 @@ pub fn faces_of(shape: &Shape) -> FResult<Vec<FaceEnt>> {
     sa::items(shape, ItemKind::Face).into_iter().map(FaceEnt::new).collect()
 }
 
-/// `_circle_center_groups`: (rank, group size) per edge, circles only.
+/// (rank, group size) per edge, circles only.
 pub fn circle_groups(edges: &[EdgeEnt], tol: f64) -> Vec<Option<(usize, usize)>> {
     let circles: Vec<(usize, DVec3, f64)> = edges
         .iter()
@@ -273,7 +272,7 @@ pub fn type_differs(fp: &Map<String, Value>, key: &str, name: &str) -> bool {
     truthy(fp.get(key)) && fp.get(key).and_then(Value::as_str) != Some(name)
 }
 
-/// `_edge_cost`, lower is better.
+/// Lower is better.
 pub fn edge_cost(
     t: &Tuning,
     e: &EdgeEnt,
@@ -327,8 +326,7 @@ pub fn edge_cost(
     Ok(cost)
 }
 
-/// `_face_cost`, lower is better. The normal term is signed, so the inward twin
-/// of a thin wall loses.
+/// Lower is better. The normal term is signed, so the inward twin of a thin wall loses.
 pub fn face_cost(t: &Tuning, f: &FaceEnt, fp: &Map<String, Value>, tol_pos: f64) -> FResult<f64> {
     let mut cost = t.w_pos * (f.centroid() - vector(need(fp, "centroid")?)?).length() / tol_pos;
     if let Some(n) = fp_vec(fp, "normal")? {

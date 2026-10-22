@@ -1,5 +1,4 @@
-//! Face-anchored sketch and datum planes, the Python engine's `geom_select.py`
-//! `resolve_face_on_plane` and its fallback prose.
+//! Face-anchored sketch and datum planes and their fallback prose.
 
 use glam::DVec3;
 use opencascade::primitives::Shape;
@@ -33,8 +32,8 @@ pub fn plane_fallback_reason(code: &str, label: &str, detail: Option<&str>) -> S
     format!("{label}: the face this {noun} sits on is gone, so the {stayed}")
 }
 
-/// `push_plane_fallback`: lossy stays false, no match was taken at all, and a
-/// lossy entry would make a projection refuse an unrelated source.
+/// Lossy stays false: no match was taken at all, and a lossy entry would make a projection refuse an
+/// unrelated source.
 fn push_plane_fallback(r: &mut Resolver, code: &'static str, label: &str, sel: &Value, detail: Option<&str>) {
     let reason = plane_fallback_reason(code, label, detail);
     let at = sel.as_object().and_then(|m| m.get("point"));
@@ -91,9 +90,8 @@ pub(super) fn resolve_face_on_plane(
     super::stable_sort_by_cost(&mut scored);
     let (mut best_d, mut best_i) = scored[0];
 
-    // A pick that contains the point but left the saved plane is either the
-    // anchored face moved there or the floor of a cut under the point; an
-    // unmoved face nearer in-plane than that travel is the better story.
+    // A pick containing the point that left the saved plane is the anchored face moved there or a cut's
+    // floor under the point, so an unmoved face nearer in-plane than that travel is the better story.
     let win_travel = travel(cands[best_i]);
     if best_d <= PLANE_COPLANAR_TOL && win_travel > PLANE_COPLANAR_TOL {
         let stayed: Vec<(f64, usize)> = scored

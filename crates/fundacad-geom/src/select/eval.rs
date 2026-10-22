@@ -1,10 +1,5 @@
-//! The selector survival eval, the Python engine's `eval_selector_survival.py` over the
-//! frozen corpus of the Python engine's `gen_selector_corpus.py`, scored by this engine.
-//!
-//! Each case rebuilds its mutated part, checks the frozen key still names one
-//! entity (else the case is invalid and counts nowhere), resolves the stored
-//! `by:"match"` selector and scores survival when the resolved entity's key is
-//! the frozen one. The metric JSON has the Python's keys and arithmetic.
+//! The selector survival eval over the frozen corpus: a case survives when its stored `by:"match"`
+//! selector resolves to the frozen key's entity. A case whose key no longer names one entity is invalid.
 
 use opencascade::primitives::Shape;
 use serde_json::{json, Map, Value};
@@ -28,7 +23,6 @@ fn p(params: &Value, key: &str) -> FResult<f64> {
     params.get(key).and_then(Value::as_f64).ok_or_else(|| Fail::Missing(key.to_owned()))
 }
 
-/// `gen_selector_corpus.build_part`.
 pub fn build_part(spec: &Value) -> FResult<Shape> {
     let params = spec.get("params").ok_or_else(|| Fail::Missing("params".into()))?;
     match spec.get("archetype").and_then(Value::as_str) {
@@ -68,7 +62,7 @@ fn rnd3(v: glam::DVec3) -> Value {
     json!([py_round(v.x, 4), py_round(v.y, 4), py_round(v.z, 4)])
 }
 
-/// `gen_selector_corpus.edge_key`: circles by centre and radius, else midpoint and length.
+/// Circles by centre and radius, else midpoint and length.
 pub fn edge_key(e: &EdgeEnt) -> Value {
     let curve = e.curve_name();
     if curve == "circle" {
@@ -82,7 +76,6 @@ pub fn edge_key(e: &EdgeEnt) -> Value {
     json!(["edge", curve, rnd3(e.mid), py_round(e.length, 4)])
 }
 
-/// `gen_selector_corpus.face_key`.
 pub fn face_key(f: &FaceEnt) -> Value {
     json!([
         "face",
@@ -102,7 +95,7 @@ pub fn py_eq(a: &Value, b: &Value) -> bool {
     }
 }
 
-/// `score_case`. A case that cannot be built is invalid, not a miss.
+/// A case that cannot be built is invalid, not a miss.
 pub fn score_case(case: &Value, tuning: &Tuning) -> (Outcome, Option<String>) {
     match try_score(case, tuning) {
         Ok(o) => (o, None),
@@ -147,8 +140,8 @@ fn rate(num: usize, den: usize) -> f64 {
     }
 }
 
-/// `aggregate`: invalid cases leave numerator and denominator alike, an empty
-/// denominator rates 0.0. `tests_pass` is added by the caller.
+/// Invalid cases leave numerator and denominator alike, an empty denominator rates 0.0. The caller
+/// adds `tests_pass`.
 pub fn aggregate(outcomes: &[(&str, Outcome)]) -> Map<String, Value> {
     let mut survive = [0usize; 6];
     let mut valid = [0usize; 6];
@@ -237,8 +230,7 @@ fn radius_of(shapes: &[Shape], i: usize) -> Result<f64, String> {
     EdgeEnt::new(s.clone()).map_err(kerr)?.radius().ok_or_else(|| "not a circle".into())
 }
 
-/// the Python engine's `test_selector_v2.py`, the eval's `tests_pass` guardrail, run on
-/// this engine under the tuning being scored.
+/// The eval's `tests_pass` guardrail, run on this engine under the tuning being scored.
 pub fn selector_v2_checks(tuning: &Tuning) -> Result<(), String> {
     use super::{edge_fingerprint_with, face_fingerprint};
     let r = || Resolver::new(None, None).with_tuning(tuning);
