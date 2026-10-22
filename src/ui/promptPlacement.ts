@@ -1,7 +1,5 @@
-// Where the viewport prompt may sit: the span along its row that no floating
-// card covers. The viewport runs full bleed under the left and right columns,
-// so centring on the viewport alone slid the prompt under the tool rail as soon
-// as the Render panel narrowed the view.
+// The span of the prompt's row no floating card covers: the viewport runs full bleed, so centring alone slid the
+// prompt under the tool rail once the Render panel narrowed the view.
 
 export interface Box {
   left: number;
@@ -15,12 +13,8 @@ export interface Insets {
   right: number;
 }
 
-/** Insets from `area`'s sides that keep a row spanning `band` clear of the
- *  left and right columns' cards, `gap` from each. The side comes from the
- *  column, not from where a card lies: in a narrow view the rail's labels reach
- *  past the middle. A card that misses the band vertically is ignored, so a
- *  column that ends above the row does not squeeze it. When less than
- *  `minWidth` would be left, the right inset gives way first, then the left. */
+/** The side comes from the column, not the card position, since in a narrow view the rail labels reach past the
+ *  middle. Cards missing the band are ignored. Below `minWidth` the right inset gives way first, then the left. */
 export function promptInsets(
   area: Box,
   band: { top: number; bottom: number },

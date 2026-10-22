@@ -1,9 +1,5 @@
-// In-app updates via tauri-plugin-updater: the packaged app checks the rolling
-// release's latest.json baked into its config (beta/latest.json) and offers a
-// one-click restart-and-update.
-// Only meaningful where the updater can actually replace the install, the NSIS
-// install on Windows, the .app on macOS, the AppImage on Linux, so the Rust
-// `updates_supported` command gates deb, rpm and Flatpak installs (and plain-browser dev) out.
+// In-app updates via tauri-plugin-updater from the rolling release's latest.json. The Rust `updates_supported` command
+// gates out deb, rpm, Flatpak and browser dev, where the updater cannot replace the install.
 
 import { choose } from "./choice";
 import { toast } from "./toast";
@@ -64,20 +60,15 @@ export async function checkForUpdates(interactive: boolean): Promise<void> {
     if (pick !== "install") return;
     toast("Downloading the update…");
     await update.downloadAndInstall();
-    // NOT the process plugin's relaunch(): it restarts without releasing the
-    // single-instance lock, and the replacement process can start while this one
-    // is still exiting, find the lock held, and quit on the spot. This command
-    // drops the lock first (see restart_for_update in src-tauri/src/lib.rs).
+    // Not the process plugin's relaunch(): it keeps the single-instance lock, so the new process can find it held and
+    // quit. This command drops the lock first (restart_for_update in src-tauri/src/lib.rs).
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("restart_for_update");
   } catch (err) {
     console.error("[updates] check/install failed:", err);
     if (interactive) {
-      // The commonest cause is not a fault at all: a build published without a
-      // signing key carries no latest.json, so the feed is a 404 and the plugin
-      // reports it the same way it reports a broken network. Saying what to do
-      // instead covers both, without guessing which one happened from the text
-      // of an error message.
+      // Most often a build published without a signing key has no latest.json, a 404 that reads as a network fault, so
+      // the message says what to do instead of guessing from the error text.
       const why = err instanceof Error ? err.message : String(err);
       toast(`Could not check for updates. Download the newest build from the releases page. (${why})`, {
         kind: "error",
