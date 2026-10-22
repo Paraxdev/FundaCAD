@@ -44,6 +44,7 @@ function fakeGl(withExt = true) {
       return p === 1 ? s.ns !== null : s.ns;
     },
     getParameter: (p: number) => (p === DISJOINT ? disjoint : null),
+    isContextLost: () => false,
     fenceSync: () => ({}),
     deleteSync: () => {},
     getSyncParameter: () => (signaled ? 5 : 0),
