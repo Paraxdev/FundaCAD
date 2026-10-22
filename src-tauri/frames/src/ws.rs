@@ -41,9 +41,8 @@ struct Shared {
     notes: Option<Notes>,
 }
 
-/// Frames over a loopback WebSocket. The page pulls: each text message "next"
-/// is answered by one binary message, the header then the pixels, so the page
-/// decides how many frames are in flight.
+/// Frames over a loopback WebSocket. The page pulls: each "next" text message gets one binary reply, header then
+/// pixels, so the page decides how many frames are in flight.
 pub struct WebSocketTransport {
     shared: Arc<Shared>,
     addr: SocketAddr,

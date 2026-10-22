@@ -1,15 +1,6 @@
-//! Reading a 3D mouse through `spacenavd` on Linux.
-//!
-//! The daemon owns the device, so no udev rule is needed and what the user set in
-//! `spnavcfg` (swapped or inverted axes, dead zones) carries over. It sends fixed
-//! 32 byte records over its socket: eight native-endian `i32`, the first the kind
-//! (0 motion, 1 button press, 2 button release). Motion is then x y z rx ry rz and
-//! the milliseconds since the last record, a button record carries its number.
-//!
-//! An idle puck sends nothing, so a connected daemon is never given up for being
-//! silent. A daemon can still run without supporting the device, so while neither
-//! has sent anything the device is read directly as well, and the first of the two
-//! to send is kept.
+//! Reads a 3D mouse through `spacenavd` on Linux, so no udev rule is needed and `spnavcfg` settings carry over.
+//! An idle puck sends nothing, so while neither has sent, the device is also read directly and the first to send is
+//! kept.
 
 use std::io::{self, Read};
 use std::time::{Duration, Instant};
@@ -19,9 +10,7 @@ pub const RECORD_BYTES: usize = 32;
 /// Where the daemon listens, `/var/run` is a link to `/run` on current systems.
 pub const SOCKETS: [&str; 2] = ["/var/run/spnav.sock", "/run/spnav.sock"];
 
-/// What the daemon reports at full deflection with its default sensitivity, and
-/// what the HID reports of the same device reach, so both paths feed the plugin
-/// the same range.
+/// The daemon's full deflection at default sensitivity, which the HID reports of the same device also reach.
 const DAEMON_FULL_SCALE: i64 = 500;
 const HID_FULL_SCALE: i64 = 350;
 
@@ -41,17 +30,15 @@ pub enum Event {
     Button { number: i32, pressed: bool },
 }
 
-/// A daemon value in the units of the HID path. It is input from another process,
-/// so it is clamped symmetrically inside what an `i16` axis can carry, which also
-/// keeps the sign flips in `decode` inside it.
+/// Daemon values come from another process, so they are clamped symmetrically inside an `i16` axis, which also keeps
+/// the sign flips in `decode` inside it.
 fn unit(value: i32) -> f32 {
     let scaled = i64::from(value) * HID_FULL_SCALE / DAEMON_FULL_SCALE;
     scaled.clamp(-i64::from(i16::MAX), i64::from(i16::MAX)) as f32
 }
 
-/// The daemon swaps the device's y and z (and ry, rz) and then negates them, so its
-/// y is the lift and its z the push or pull, while the HID report has x right, y
-/// towards the user and z down. Back to that frame the two swap again and change sign.
+/// A record is eight native endian i32: kind (0 motion, 1 press, 2 release), then x y z rx ry rz and ms, or the button.
+/// The daemon swaps y and z (and ry, rz) and negates them; the HID frame has x right, y towards the user, z down.
 pub fn decode(record: &[u8; RECORD_BYTES]) -> Option<Event> {
     let mut data = [0i32; 8];
     for (slot, bytes) in data.iter_mut().zip(record.as_chunks::<4>().0) {
@@ -112,9 +99,8 @@ impl Reader {
     }
 }
 
-/// Hands every record to `on_event` until `keep_going` says stop (`Ok`) or the
-/// daemon closes the connection or fails (`Err`). `keep_going` is asked after each
-/// read, so the source needs a read timeout.
+/// Hands every record to `on_event` until `keep_going`, asked after each read, says stop (`Ok`) or the daemon closes
+/// or fails (`Err`). The source needs a read timeout.
 pub fn pump(mut src: impl Read, keep_going: impl Fn() -> bool, on_event: impl FnMut(Event)) -> io::Result<()> {
     pump_with(&mut Reader::default(), &mut src, keep_going, on_event)
 }
@@ -161,13 +147,8 @@ pub enum Served<D> {
     Device(D, Vec<u8>),
 }
 
-/// Streams the daemon's events to `on_event` for as long as it is connected,
-/// however long it stays silent. While nothing has come from either, the device
-/// from `open_device` (`None` when it is missing or not readable, tried again
-/// every `REOPEN`) is read in turns with the socket. The daemon is read first in
-/// each turn, so when both have something the daemon is preferred over the device
-/// and its `spnavcfg` settings apply. Whichever sends first is kept and the other
-/// let go, so no motion reaches the page twice.
+/// Streams daemon events however long it stays silent. Until either sends, the device from `open_device` is read in
+/// turns with the socket, daemon first so `spnavcfg` applies; the first to send is kept, so no motion arrives twice.
 pub fn serve<S: Read + Wait, D: Device>(
     mut daemon: S,
     mut open_device: impl FnMut() -> Option<D>,
