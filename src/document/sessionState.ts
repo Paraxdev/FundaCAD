@@ -4,6 +4,8 @@ import type { DocumentSession } from "./session";
 import type { BusyState, RebuildState } from "./store";
 
 export interface BusyOp {
+  // Stable while the op runs, so History's row for it can cancel it and no other.
+  key: number;
   state: BusyState;
   abort: AbortController;
   // The caller passed its own abort, so a cancel is its to carry out; no engine cancel is sent for it.

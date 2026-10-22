@@ -167,6 +167,15 @@ export interface BusyState {
   waiting: EngineWait | null;
 }
 
+/** A runBusy op as History lists it, one row each. */
+export interface RunningOp {
+  key: number;
+  label: string;
+  stage: string | null;
+  pct: number | null;
+  rebuild: boolean;
+}
+
 type DocListener = (doc: CadDocument) => void;
 type BuildListener = (state: RebuildState) => void;
 const IDLE_BUSY: BusyState = {
@@ -495,6 +504,13 @@ const quietWhenEnded = (e: unknown) => {
   if (!isSessionEnded(e)) throw e;
 };
 
+const emptyResult = (): RebuildResult => ({
+  mesh: { positions: [], indices: [], faceIds: [] },
+  edges: [],
+  bbox: { min: [0, 0, 0], max: [0, 0, 0] },
+  bodies: [],
+});
+
 export class DocumentStore {
   readonly sessions = new SessionHost();
   private doc: CadDocument;
@@ -693,6 +709,7 @@ export class DocumentStore {
     opts: { rebuild?: boolean; abort?: AbortController; holdHistory?: boolean } = {},
   ): Promise<T> {
     const op: BusyOp = {
+      key: ++this.opKeys,
       state: { ...IDLE_BUSY, active: true, label, rebuild: opts.rebuild === true },
       abort: opts.abort ?? new AbortController(),
       external: opts.abort !== undefined,
@@ -721,6 +738,27 @@ export class DocumentStore {
         this.emitBusy();
       }
     }
+  }
+
+  private opKeys = 0;
+
+  /** This document's running ops, oldest first. */
+  get runningOps(): RunningOp[] {
+    return this.st.busyOps.map((o) => ({
+      key: o.key,
+      label: o.state.label,
+      stage: o.state.stage,
+      pct: o.state.pct,
+      rebuild: o.state.rebuild,
+    }));
+  }
+
+  /** History's own Cancel on one op's row: that op stops, whatever else runs. */
+  async cancelRunningOp(key: number): Promise<boolean> {
+    const op = this.st.busyOps.find((o) => o.key === key);
+    if (!op) return false;
+    if (op.state.rebuild && this.st.inflight) this.st.inflight.byUser = true;
+    return this.cancelOp(op);
   }
 
   private stateFor(session: DocumentSession): SessionState {
@@ -2903,6 +2941,7 @@ export class DocumentStore {
   async rebuildNow(): Promise<void> {
     const st = this.st;
     if (this.restoreCommitted()) return;
+    if (this.settleEmptyLocally(st)) return;
     if (st.rebuilding) {
       st.rebuildQueued = true;
       this.supersede();
@@ -2966,6 +3005,34 @@ export class DocumentStore {
       st.rebuilding = false; // belt and braces if runBusy throws before the callback
       st.rebuildDrain = null;
     }
+  }
+
+  // An empty model needs no engine. Sent while this document's engine work ran, it queued behind a long import and the
+  // deleted body stayed drawn and pickable, so the view clears now and any older build still on its way is dropped.
+  private settleEmptyLocally(st: SessionState): boolean {
+    if (!st.inflight && !st.busyOps.length) return false;
+    if (this.preview || this.editPreview || this.effectiveDoc().features.length) return false;
+    this.staleThrough = this.sendGen;
+    st.rebuildQueued = false;
+    this.supersede();
+    if (this.build.streamed !== null) this.emitBuildAbort();
+    this.committedFailures = new Set();
+    this.build = {
+      building: false,
+      progress: null,
+      meshed: null,
+      meshTotal: null,
+      streamed: null,
+      streamTotal: null,
+      previewBuilt: null,
+      cancelled: false,
+      result: emptyResult(),
+      errorFeatureId: null,
+      errorMessage: null,
+      heldRefusal: null,
+    };
+    this.emitBuild();
+    return true;
   }
 
   // Covers a build in flight or one an edit is waiting to start. Unlike rebuildNow it never re-sends the same document.

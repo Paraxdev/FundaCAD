@@ -207,13 +207,14 @@ describe("New and Open stand every tool down", () => {
       await store.rebuildNow();
       store.setPreview({ id: "pv", type: "box", width: 60, depth: 60, height: 5 } as never);
       store.beginEditPreview("f1", null);
+      const before = sent.length;
       if (how === "New") store.newDocument();
       else store.load(JSON.stringify({ parameters: {}, features: [] }));
       expect(store.hasPreview).toBe(false);
       expect(store.editPreviewId).toBeNull();
-      sent.length = 0;
       await store.rebuildNow();
-      expect(sent.at(-1)).toBe("");
+      // The next document's own build went out empty; the second ask settled empty here, with its build still out.
+      expect({ sent: sent.slice(before), bodies: store.buildState.result?.bodies }).toEqual({ sent: [""], bodies: [] });
     });
   }
 

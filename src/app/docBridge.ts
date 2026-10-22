@@ -1,5 +1,5 @@
 import { isProxy, ref, shallowRef, type Ref, type ShallowRef } from "vue";
-import type { DocumentStore, BusyState } from "../document/store";
+import type { DocumentStore, BusyState, RunningOp } from "../document/store";
 
 export interface DocBridge {
   docVersion: Ref<number>;
@@ -9,6 +9,8 @@ export interface DocBridge {
   editPreviewVersion: Ref<number>;
   /** BusyState is replaced on each emit, so its identity is the change signal. */
   busy: ShallowRef<BusyState>;
+  /** Every op of the document still running, each a History row with its own Cancel. */
+  ops: ShallowRef<RunningOp[]>;
   metaVersion: Ref<number>;
   dispose(): void;
 }
@@ -21,6 +23,7 @@ export function createDocBridge(store: DocumentStore): DocBridge {
   const editPreviewVersion = ref(0);
   const metaVersion = ref(0);
   const busy = shallowRef(store.busyState);
+  const ops = shallowRef(store.runningOps);
 
   // Not onBuildChunk: its one subscriber is app/rebuildBridge.ts, a partial model must never reach a panel.
   const offs = [
@@ -35,6 +38,7 @@ export function createDocBridge(store: DocumentStore): DocBridge {
     }),
     store.onBusy((b) => {
       busy.value = b;
+      ops.value = store.runningOps;
     }),
     store.onMeta(() => {
       metaVersion.value++;
@@ -59,6 +63,7 @@ export function createDocBridge(store: DocumentStore): DocBridge {
     buildVersion,
     editPreviewVersion,
     busy,
+    ops,
     metaVersion,
     dispose: () => offs.forEach((off) => off()),
   };

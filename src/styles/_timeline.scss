@@ -292,6 +292,25 @@
   opacity: 0.9;
   cursor: default;
 }
+.timeline-node.running {
+  width: auto;
+  gap: var(--s-2);
+  padding: 0 var(--s-3);
+  cursor: default;
+}
+.timeline-node .t-op-cancel {
+  padding: 0 var(--s-2);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.timeline-node .t-op-cancel:hover {
+  border-color: var(--error);
+  color: var(--error);
+}
 .timeline-node .t-build {
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;

@@ -9,7 +9,14 @@ import { useShellStore } from "../../stores/shell";
 import { featureMeta, stepName } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
-import { buildProgress, busyLine, CANCEL_DELAY_MS, historyShowsBusy, historyShowsEmpty } from "../../ui/buildProgress";
+import {
+  buildProgress,
+  busyLine,
+  CANCEL_DELAY_MS,
+  historyShowsBusy,
+  historyShowsEmpty,
+  runningRows,
+} from "../../ui/buildProgress";
 import { featureFailures, featureNotes, featurePlaceholders, placeholderNote } from "../../ui/featureNotes";
 import { gapIndexIn } from "../../ui/trackGaps";
 import { getUnit, onUnitChange } from "../../ui/units";
@@ -128,6 +135,8 @@ const progress = useBuildValue((b) => ({ progress: b.progress, meshed: b.meshed,
 // Busy is timed from the transition, not each emission: an op emits busy frames throughout, and re-arming would never
 // elapse. The delay keeps a fast op from flashing a button.
 const busy = engine.bridge.busy;
+const ops = engine.bridge.ops;
+const rows = computed(() => runningRows(ops.value));
 const busySince = ref(0);
 const delayElapsed = ref(false);
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -175,8 +184,8 @@ async function cancelBusy() {
 }
 
 // An import into an empty document is the most common long op, without the busy check the empty hint shows for 90+ s.
-const showEmpty = computed(() => historyShowsEmpty(features.value.length, busy.value));
-const showCancel = computed(() => delayElapsed.value && historyShowsBusy(features.value.length, busy.value));
+const showEmpty = computed(() => historyShowsEmpty(features.value.length, ops.value));
+const showCancel = computed(() => delayElapsed.value && historyShowsBusy(features.value.length, busy.value, ops.value));
 
 // Chips read the whole feature, not the type: a boolean is named after its operation (ui/featureMeta.ts). Unknown types
 // still render, a newer document would otherwise throw mid-draw and make File, Open silently do nothing.
@@ -554,6 +563,13 @@ function openMenu(e: MouseEvent, id: string, i: number) {
             ><span class="marker-grip"></span
           ></div>
 
+          <!-- An import shows here from the moment it starts, not only once its file is read. -->
+          <div v-for="op in rows" :key="op.key" class="timeline-node running" :data-op="op.key">
+            <span class="t-build" :title="op.label">{{ op.stage ? `${op.label}, ${op.stage}` : op.label }}</span>
+            <button class="t-op-cancel" :title="`Stop ${op.label}`" @click="store.cancelRunningOp(op.key)"
+              >Cancel</button
+            >
+          </div>
           <div v-if="building" class="timeline-node building">
             <span class="t-build">{{ chip.label }}</span>
             <span class="t-bar"><i :style="{ width: `${chip.pct}%` }"></i></span>
