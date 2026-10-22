@@ -132,3 +132,25 @@ describe("SessionHost", () => {
     expect(calls).toBe(1);
   });
 });
+
+describe("OpenOp", () => {
+  it("lives until a later open or any begun document, and names the session it started in", () => {
+    const host = new SessionHost();
+    const first = host.current;
+    const a = host.opening();
+    const live = () => ({ live: a.live, superseded: a.superseded, sameSession: a.session === first });
+    expect(live()).toEqual({ live: true, superseded: false, sameSession: true });
+    const b = host.opening();
+    expect({ ...live(), b: b.live }).toEqual({ live: false, superseded: true, sameSession: true, b: true });
+    host.begin("new");
+    expect({ ...live(), b: b.live, bSuperseded: b.superseded }).toEqual({
+      live: false,
+      superseded: true,
+      sameSession: true,
+      b: false,
+      bSuperseded: false,
+    });
+    const c = host.opening();
+    expect({ live: c.live, session: c.session === host.current }).toEqual({ live: true, session: true });
+  });
+});
