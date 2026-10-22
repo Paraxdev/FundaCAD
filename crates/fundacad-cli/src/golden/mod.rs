@@ -1,9 +1,5 @@
-//! `golden-check`: the Rust engine against the Python engine's frozen answers.
-//!
-//! tests/golden/*.golden.json hold what the Python engine's `freeze_goldens.py` recorded
-//! from the Python engine, reduced to what each differential tool compared. Each
-//! kind here rebuilds the corpus on this engine, in process, and compares with
-//! that tool's rules and tolerances, which the golden's header restates.
+//! `golden-check`: rebuilds the tests/golden corpus on this engine, in process, and compares it with the Python
+//! engine's frozen answers under each differential tool's rules and tolerances, restated in the golden's header.
 
 mod coverage;
 mod evals;
@@ -95,9 +91,8 @@ pub fn run(args: &[String]) -> ExitCode {
     }
 }
 
-/// `--warm`: the check twice, each in its own engine process, against one disk
-/// cache that every build checkpoints into. The first pass fills it, the
-/// second reopens every document from it, as the app does after a restart.
+/// `--warm`: the check twice, each in its own engine process, sharing one disk cache. The first pass fills it,
+/// the second reopens every document from it, as the app does after a restart.
 fn run_warm(golden_path: &str, corpus_path: Option<&str>) -> ExitCode {
     let exe = match std::env::current_exe() {
         Ok(e) => e,

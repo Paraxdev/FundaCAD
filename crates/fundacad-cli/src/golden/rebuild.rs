@@ -229,9 +229,8 @@ pub fn check(ctx: &Ctx) -> Result<bool, String> {
     Ok(verdict(bad, rows.len() - skipped.len()))
 }
 
-/// The fonts a document's text draws with that this machine does not have.
-/// Outlines come from the system's fonts, so a case frozen with a font that is
-/// missing here can only be compared with whatever stands in for it.
+/// The fonts a document's text uses that this machine lacks. Outlines come from the system's fonts, so such a
+/// case can only be compared with whatever stands in for the missing font.
 fn missing_fonts(doc: &Value) -> Vec<String> {
     let lib = fundacad_geom::text::fonts::library();
     let mut out: Vec<String> = Vec::new();
