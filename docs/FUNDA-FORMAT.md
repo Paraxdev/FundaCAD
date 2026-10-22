@@ -48,8 +48,10 @@ document has imported bodies, one more top-level key comes last:
   along `normal` to the cut), `side` (1 keeps the half `normal` points into, -1
   the other) and `ghost` (`hidden`, `faint`, `soft` or `strong`, how the removed
   half is drawn). It is a view: the engine never reads it, undo leaves it alone
-  and versions leave it out. Unknown fields are kept, and a version without the
-  key carries it as an unknown top level key.
+  and versions leave it out. Restoring a version, or an assistant's or a
+  plugin's edit of the open document, keeps the cut on screen whatever cut the
+  edit holds. Unknown fields are kept, and a version without the key carries it
+  as an unknown top level key.
 
 The reference writer and reader is `crates/fundacad-format/src/json_doc.rs`.
 The browser build has no Rust to call, so `src/io/files.ts` writes and reads the

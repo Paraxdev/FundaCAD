@@ -4,7 +4,7 @@ The Environment tab sets the room the part sits in, and the Camera tab sets the 
 
 ![The Camera tab of the Render workspace with the Field of view slider](../img/render-camera-tab.png)
 
-Studio offers six lighting setups. A metal part reflects its room, so with none it looks nearly black, and Flat shows the shape most clearly. Bloom lets light spill off bright parts, and Shadows switches cast shadows.
+Studio offers six lighting setups. A metal part reflects its room, so with none it looks nearly black, and Flat shows the shape most clearly. Bloom lets light spill off faces with Emission turned up, and Shadows switches cast shadows.
 
 Under Ground, Shadow puts a soft shadow under the model, set apart for the Model and the Render workspace. It is off by default and is not drawn on the lightweight render. Path traced shows the Ground shadow too.
 

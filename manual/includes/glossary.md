@@ -65,7 +65,7 @@
 *[overhang]: A face that leans too far to print without support.
 *[Stress]: An analysis of how one body bends and where it is strained.
 *[stress]: An analysis of how one body bends and where it is strained.
-*[Bloom]: A soft halo around bright areas that does not light other objects.
+*[Bloom]: A soft halo around faces with Emission turned up that does not light other objects. The path traced view also spills bright highlights.
 *[Emission]: A material setting that makes a body give off light.
 *[Node editor]: The graph where you build a surface finish from connected patterns.
 *[node editor]: The graph where you build a surface finish from connected patterns.

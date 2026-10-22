@@ -136,7 +136,7 @@ const check = (name, ok, detail) => {
     await page.evaluate(() => window.__fundacad.setRenderPref("bloom", 0));
     await wait(600);
     await grab("std");
-    await page.evaluate(() => { window.__fundacad.setRenderPref("bloom", 0.4); window.viewport.scene.post.bloomable = true; });
+    await page.evaluate(() => { window.__fundacad.setRenderPref("bloom", 0.4); window.viewport.scene.post.bloomable = true; window.viewport.scene.post.glows = true; });
     await wait(600);
     await grab("stdBloom");
     await page.evaluate(() => window.__fundacad.setRenderPref("bloom", 0));

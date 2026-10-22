@@ -90,6 +90,21 @@ const maxDelta = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
     await page.waitForTimeout(1200);
     await page.evaluate(() => window.store.setBodiesMaterial(["body1", "body3"], "m-glass"));
     await page.waitForTimeout(800);
+    // Realtime bloom runs only when something glows. The cube is added after the
+    // fit and far off screen, so the composer runs while no glow reaches the view.
+    await page.evaluate(async () => {
+      const s = window.store;
+      s.addFeature({ id: s.nextId(), type: "box", length: 8, width: 8, height: 8 });
+      s.addFeature({ id: s.nextId(), type: "move", bodies: ["body4"], dx: 1500, dy: 1500, dz: 0, rx: 0, ry: 0, rz: 0 });
+      await s.rebuildNow();
+      for (let i = 0; i < 300; i++) {
+        const b = s.buildState;
+        if (!b.building && b.result?.bodies?.length === 3) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      s.setBodiesMaterial(["body4"], s.addMaterialPreset({ id: "g", name: "glow", color: "#d9f2b4", metalness: 0, roughness: 0.6, emissive: 0.35, castsLight: false }));
+    });
+    await page.waitForTimeout(800);
 
     const setPref = (k, v) => page.evaluate(async ([k, v]) => {
       (await import("/src/ui/renderPrefs.ts")).setRenderPref(k, v);

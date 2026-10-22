@@ -129,15 +129,15 @@ describe("the section cut in the document", () => {
     expect(store.sectionView).toBeNull();
   });
 
-  it("keeps the cut for a replacing load of the same document unless that brings its own", () => {
+  it("keeps the cut for a replacing load sharing a feature, whatever cut it brings, and turns it off for another document", () => {
     const store = fresh();
     store.setSectionView(structuredClone(CUT));
     store.load(doc([box("a1", 3), box("a2", 4)]), { replace: true });
     expect(store.sectionView).toEqual(CUT);
-    store.load(doc([box("a1", 3)], { sectionView: CUT_C }), { replace: true });
-    expect(store.sectionView).toEqual(CUT_C);
-    store.load(doc([box("z9", 2)]), { replace: true });
-    expect(store.sectionView).toBeNull();
+    store.load(doc([box("y7", 6), box("a2", 4.5)], { sectionView: CUT_C }), { replace: true });
+    expect([store.sectionView, saved(store).sectionView]).toEqual([CUT, CUT]);
+    store.load(doc([box("z9", 2)], { sectionView: CUT_C }), { replace: true });
+    expect([store.sectionView, "sectionView" in saved(store)]).toEqual([null, false]);
   });
 
   it("stays where it is through an undo and a redo of a replacing load, also one that brought a cut", () => {
@@ -146,7 +146,8 @@ describe("the section cut in the document", () => {
     const before = saved(store).palette;
     store.setSectionView(structuredClone(CUT));
     store.load(doc([box("a1", 3), box("a2", 4)], { sectionView: CUT_C, palette }), { replace: true });
-    expect(store.sectionView).toEqual(CUT_C);
+    expect(store.sectionView).toEqual(CUT);
+    store.setSectionView(structuredClone(CUT_C));
     store.undo();
     expect(store.document.features.map((f) => f.id)).toEqual(["a1"]);
     expect(saved(store).palette).toEqual(before);
@@ -171,6 +172,27 @@ describe("the section cut in the document", () => {
     store.restoreVersion(first);
     expect(store.document.features.map((f) => f.id)).toEqual(["a1"]);
     expect(store.sectionView).toEqual(CUT);
+  });
+
+  it("keeps the cut and the carried sections through a restore of a version sharing no feature, and its undo and redo", () => {
+    const store = new DocumentStore(stub().backend, { parameters: {}, features: [] });
+    const empty = store.saveVersion("empty")!;
+    store.addFeature(box("a1", 3));
+    store.addFeature(box("a2", 4.5));
+    store.saveVersion("two");
+    const carried = [{ kind: 7, name: "thumb", hash: "c0ffee" }] as never;
+    store.carriedSections = carried;
+    store.setSectionView(structuredClone(CUT));
+    const state = () => [store.document.features.map((f) => f.id), store.sectionView, saved(store).sectionView, store.carriedSections];
+    store.restoreVersion(empty.id);
+    expect(state()).toEqual([[], CUT, CUT, carried]);
+    store.undo();
+    expect(state()).toEqual([["a1", "a2"], CUT, CUT, carried]);
+    store.redo();
+    expect(state()).toEqual([[], CUT, CUT, carried]);
+    expect(store.versionRepo!.versions.map((v) => v.message)).toEqual(["empty", "two"]);
+    store.load(doc([box("b1", 1)]));
+    expect([store.sectionView, store.versionRepo, store.carriedSections]).toEqual([null, null, []]);
   });
 
   // An older app keeps the cut as a key it does not know, and its versions record such keys.
@@ -218,6 +240,15 @@ describe("the section cut in the document", () => {
     expect(saved(store).sectionView).toEqual(CUT_C);
     store.setSectionView(null);
     expect("sectionView" in saved(store)).toBe(false);
+  });
+
+  it("drops a cut it cannot read for a replacing load of another document, and keeps the versions", () => {
+    const store = fresh();
+    const newer = [CUT, CUT_C];
+    store.load(doc([box("a1", 3)], { sectionView: newer as unknown as SectionView }));
+    store.saveVersion("one");
+    store.load(doc([box("z9", 2)], { sectionView: CUT_C }), { replace: true });
+    expect([store.sectionView, "sectionView" in saved(store), store.versionRepo!.versions.map((v) => v.message)]).toEqual([null, false, ["one"]]);
   });
 
   it("keeps fields a newer version wrote through save, reopen and a move, and drops them with Off", () => {

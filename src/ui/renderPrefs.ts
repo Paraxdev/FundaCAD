@@ -93,10 +93,9 @@ export const ENVIRONMENTS_LIST: readonly {
  *  rather than at the app. */
 export type Background = "theme" | "dark" | "grey" | "light";
 
-/** How much light spills off glowing faces. Only a face with an emission
- *  blooms (GlowMask in realtimePipeline.ts), whatever its brightness. */
 /** Bloom amount, 0 (off) to 1 (full). A continuous slider rather than named
- *  levels: "subtle" and "strong" were only two points on this line. */
+ *  levels: "subtle" and "strong" were only two points on this line. Realtime
+ *  blooms only faces with an Emission (GlowMask in realtimePipeline.ts). */
 export type Bloom = number;
 
 export const DEFAULT_BLOOM = 0.4;
@@ -111,8 +110,8 @@ export function bloomSettings(amount: number): { strength: number; radius: numbe
   return { strength: 0.7 * a * a, radius: 0.3 + a * 0.3, threshold: 2.0 - a * 1.2 };
 }
 
-/** Whether the frame goes through the composer. The bright pass itself is
- *  skipped on a frame where nothing glows. */
+/** Whether the path tracer's frame gets a bloom pass, which is not masked to glowing faces.
+ *  Realtime asks PostChain.glows instead. */
 export function bloomWanted(amount: number, bloomable: boolean): boolean {
   if (!(amount > 0)) return false;
   return bloomable || bloomSettings(amount).threshold < 1;
