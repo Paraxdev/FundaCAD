@@ -48,7 +48,8 @@ export function pitchFromRise(rise: number, angleDeg: number): number | null {
 }
 
 /** Past a full turn a climb shorter than the profile collides with the last turn, and OCCT returns a self-intersecting
- *  solid that measures fine, so the drag stops there. 0 stays reachable; typed values are refused with a reason. */
+ *  solid that measures fine, so the drag stops there. 0 stays reachable; typed values are refused with a reason.
+ *  A `minPitch` of 0 means not measured and clamps nothing. */
 export function clampDragPitch(pitch: number, minPitch: number, angleDeg: number): number {
   if (!(minPitch > 0) || Math.abs(turnsOf(angleDeg)) <= 1) return pitch;
   if (Math.abs(pitch) < 1e-9) return 0;

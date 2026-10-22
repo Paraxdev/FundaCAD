@@ -131,8 +131,8 @@ export class SelectionNudge {
     e.preventDefault();
     e.stopImmediatePropagation();
     const grab = this.want.grab;
-    // Unmount before handing over, or the tool's identical handle would z-fight. unmount(), not hide(): `want`
-    // survives, so the offer comes straight back when the tool ends.
+    // Unmount first, or the tool's identical handle z-fights. Not hide(): `want` survives, so the offer returns when
+    // the tool ends, and a rebuild meanwhile is safe since setModel keeps the selection and replaces `want`.
     this.unmount();
     grab(e.clientX, e.clientY);
   }

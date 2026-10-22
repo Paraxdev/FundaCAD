@@ -15,8 +15,8 @@ export interface AxisLineValue {
 export interface PickedAxis extends AxisLineValue {
   ref: Selector;
 }
-/** Features turn about their body, whole bodies about the origin: a copy about its own middle sits on itself. */
-/** Features turn about their body. Whole bodies turn about the origin, since a copy about its own middle sits on itself. */
+
+/** Features turn about their body, whole bodies about the origin, since a copy about its own middle sits on itself. */
 export function defaultAxisPlace(featuresMode: boolean): AxisPlace {
   return featuresMode ? "centre" : "origin";
 }
