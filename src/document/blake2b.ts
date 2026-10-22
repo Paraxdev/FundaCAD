@@ -1,9 +1,5 @@
-// BLAKE2b with a 16 byte digest, the name the engine's blob store gives a blob
-// (crates/fundacad-geom/src/import/blobstore.rs). Neither Node nor the browser
-// ships it: Node's blake2b512 fixes the digest length in the parameter block,
-// so a truncated 512 bit digest is a different hash.
-//
-// Each 64 bit word is a (lo, hi) pair in a Uint32Array.
+// BLAKE2b with a 16 byte digest, the engine's blob name (fundacad-geom import/blobstore.rs). Node's blake2b512 fixes the
+// digest length in the parameter block, so truncating it gives a different hash. 64 bit words are (lo, hi) u32 pairs.
 
 const IV = new Uint32Array([
   0xf3bcc908, 0x6a09e667, 0x84caa73b, 0xbb67ae85, 0xfe94f82b, 0x3c6ef372, 0x5f1d36f1, 0xa54ff53a, 0xade682d1,
@@ -92,7 +88,6 @@ function compress(h: Uint32Array, block: Uint8Array, t: number, last: boolean) {
   for (let i = 0; i < 16; i++) h[i] = h[i]! ^ v[i]! ^ v[i + 16]!;
 }
 
-/** The 32 hex digit blob name of `data`. */
 export function blake2b128Hex(data: Uint8Array): string {
   const outlen = 16;
   const h = new Uint32Array(IV);
