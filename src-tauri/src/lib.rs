@@ -40,8 +40,7 @@ pub fn run_engine_worker() -> ! {
 #[tauri::command]
 fn restart_for_update(app: tauri::AppHandle) {
     // exit() runs no destructors and the worker only sees its stdin close after its current kernel call, so stop it
-    // here.
-    // `Engine::stop` waits, so the replacement never meets the old worker.
+    // here. `Engine::stop` waits, so the replacement never meets the old worker.
     if let Some(engine) = app.try_state::<engine::Engine>() {
         engine.stop();
     }
@@ -143,8 +142,8 @@ fn updates_supported() -> bool {
     }
 }
 
-// A webview that never loads shows a blank window and says nothing (issue #3), so the frontend reports in and Rust
-// logs when it does not.
+// A webview that never loads shows a blank window and says nothing (issue #3), so the frontend reports in and Rust logs
+// when it does not.
 
 /// Set by `frontend_ready`. The watchdog asks one yes or no question, so no channel.
 struct FrontendReady(std::sync::atomic::AtomicBool);
@@ -154,8 +153,7 @@ struct FrontendReady(std::sync::atomic::AtomicBool);
 const FRONTEND_READY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(12);
 
 /// Called by `src/boot.ts` as the document loads, and by `src/main.ts` with `stage: "mounted"` once the interface is
-/// up,
-/// which is what counts as a finished start. The boot ping runs too early to prove that.
+/// up, which is what counts as a finished start. The boot ping runs too early to prove that.
 #[tauri::command]
 fn frontend_ready(state: tauri::State<'_, FrontendReady>, safe: tauri::State<'_, SafeMode>, stage: Option<String>) {
     state.0.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -250,8 +248,8 @@ fn safe_mode_decide() -> SafeMode {
     SafeMode { reason, dir, set_compositing }
 }
 
-/// Writes a diagnosis if the frontend never checks in. It rules the engine out by name: the loudest thing in the log,
-/// a healthy engine above a blank window reads as an engine problem, and it is not.
+/// Writes a diagnosis if the frontend never checks in. It rules the engine out by name: the loudest thing in the log, a
+/// healthy engine above a blank window reads as an engine problem, and it is not.
 fn watch_frontend_load(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         std::thread::sleep(FRONTEND_READY_TIMEOUT);
@@ -284,8 +282,7 @@ pub fn run() {
 
     let builder = tauri::Builder::default()
         // Must be registered before every other plugin (Tauri's requirement). A second launch focuses the open window
-        // and
-        // hands it its documents (launch.rs).
+        // and hands it its documents (launch.rs).
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.unminimize(); // a minimized window would otherwise just blink
@@ -390,8 +387,7 @@ pub fn run() {
         .manage(launch::LaunchPaths::default())
         .manage(drop_paths::Held::default())
         // Files a person handed to a plugin this session, never on disk, so a plugin cannot come back tomorrow holding
-        // a
-        // token for a file somebody forgot they offered.
+        // a token for a file somebody forgot they offered.
         .manage(plugins::files::Handles::default())
         .manage(safe)
         .setup(|app| {
@@ -430,8 +426,7 @@ pub fn run() {
                 frames::denoiser::load_installed(app.handle());
             }
             // Started here rather than before the builder, so the clock runs from the window existing and the work
-            // above, which
-            // the frontend waits for anyway, does not eat into the timeout.
+            // above, which the frontend waits for anyway, does not eat into the timeout.
             app.manage(FrontendReady(std::sync::atomic::AtomicBool::new(false)));
             watch_frontend_load(app.handle().clone());
             if let Some(w) = app.get_webview_window("main") {

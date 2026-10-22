@@ -26,8 +26,8 @@ pub struct Slot {
     pub generation: u32,
 }
 
-/// Three buffers the page reads while the next frames are written. A slot is written only while the page does not
-/// hold it, so with two requests in flight the page never reads a half written frame.
+/// Three buffers the page reads while the next frames are written. A slot is written only while the page does not hold
+/// it, so with two requests in flight the page never reads a half written frame.
 pub struct FrameRing {
     state: Mutex<State>,
     changed: Condvar,

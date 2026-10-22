@@ -1,8 +1,7 @@
 //! Installing plugins: download a bundle, prove it is the one the user agreed to, and unpack it where it can only be
-//! itself.
-//! In Rust because widening `connect-src` would open the releases host to every script. Grants are opaque strings here.
-//! A bundle may come from any HTTPS URL or a local zip. The link that is never optional: the unpacked bundle's grants
-//! equal the ones on the consent screen. Signatures and revocation are a later phase.
+//! itself. In Rust because widening `connect-src` would open the releases host to every script. Grants are opaque
+//! strings here. A bundle may come from any HTTPS URL or a local zip. The link that is never optional: the unpacked
+//! bundle's grants equal the ones on the consent screen. Signatures and revocation are a later phase.
 
 pub mod bundle;
 pub mod data;
@@ -37,8 +36,7 @@ pub struct Installed {
     pub dir: String,
     pub consented: Consented,
     /// Decided once at install, so the frontend needs no copy of the prefix. Carries no permission. Defaults to false
-    /// for
-    /// older records, the safer wrong label.
+    /// for older records, the safer wrong label.
     #[serde(default)]
     pub official: bool,
     /// Whether the files on disk hold the geometry component the manifest
@@ -200,8 +198,7 @@ fn install_bytes(
 #[serde(rename_all = "camelCase")]
 pub struct Inspected {
     /// Verbatim and unparsed, for the frontend's `parseManifest`, the same function that validates at install and
-    /// renders
-    /// the screen, so two parsers never disagree.
+    /// renders the screen, so two parsers never disagree.
     pub manifest: serde_json::Value,
     pub sha256: String,
     pub source: String,
@@ -259,8 +256,7 @@ async fn fetch_bundle(url: &str) -> Result<Vec<u8>, String> {
     }
 
     // Every hop is checked: reqwest follows redirects, so an approved host could 302 to plain HTTP. The hop limit
-    // restates
-    // reqwest's default, since a custom policy replaces it.
+    // restates reqwest's default, since a custom policy replaces it.
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .redirect(reqwest::redirect::Policy::custom(|attempt| {
@@ -314,8 +310,7 @@ pub async fn plugin_install(
 }
 
 /// Install a zip the user has. The same pipeline: the grant comparison is the only gate a local file has, so skipping
-/// it
-/// would make picking a file the way around consent. Never official, a file cannot prove where it came from.
+/// it would make picking a file the way around consent. Never official, a file cannot prove where it came from.
 #[tauri::command]
 pub fn plugin_install_file(
     app: AppHandle,
@@ -361,8 +356,7 @@ pub fn plugin_code(app: AppHandle, id: String) -> Result<String, String> {
     let record = read_record(&dir).ok_or("that plugin is not installed")?;
 
     // Only `builtin` and `process`, whose consent notes already promise no containment. `compute` and `panel` promise
-    // no
-    // network or files, which app side code would make false; build-plugins.py refuses to package one too.
+    // no network or files, which app side code would make false; build-plugins.py refuses to package one too.
     if !matches!(record.consented.kind.as_str(), "builtin" | "process") {
         return Err(format!(
             "a {} plugin is described to the person as contained, so it may not run code in              the app's own context",

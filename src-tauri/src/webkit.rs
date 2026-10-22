@@ -11,9 +11,8 @@ const OPT_OUT: &str = "FUNDACAD_NO_GPU_WORKAROUND";
 const OPT_OUT_LEGACY: &str = "SINDRICAD_NO_GPU_WORKAROUND";
 
 /// Not `WEBKIT_DISABLE_COMPOSITING_MODE`, which turns off accelerated compositing in a WebGL app (and saw pointer
-/// capture
-/// stick in issue #6). This only disables the DMA-BUF path, so GTK3 paints each frame through the CPU, a smoothness
-/// cost. WebKit calls it a transitional escape hatch, so revisit this module when it goes.
+/// capture stick in issue #6). This only disables the DMA-BUF path, so GTK3 paints each frame through the CPU, a
+/// smoothness cost. WebKit calls it a transitional escape hatch, so revisit this module when it goes.
 const DMABUF: &str = "WEBKIT_DISABLE_DMABUF_RENDERER";
 
 /// The reason goes to the startup log, since a silent environment change makes later field reports unreadable.
@@ -98,8 +97,7 @@ mod tests {
     }
 
     /// A variable a human already set wins over the probe, on Nvidia and off, so the configuration they reported
-    /// against
-    /// stays.
+    /// against stays.
     #[test]
     fn an_existing_setting_is_never_overridden() {
         assert!(matches!(decide(true, true, false), Decision::Skip(_)));

@@ -310,8 +310,7 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
                     }
                 }
                 // Never eprintln: with no reader on our stderr it panics, this thread stops draining the worker's, and
-                // the worker
-                // blocks on its next log line mid job.
+                // the worker blocks on its next log line mid job.
                 let _ = writeln!(std::io::stderr(), "[engine] {line}");
                 remember(&tail, line, STDERR_KEEP);
             }

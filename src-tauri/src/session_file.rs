@@ -61,8 +61,8 @@ fn restrict(path: &Path) -> std::io::Result<()> {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
 }
 
-/// Windows: the file inherits the per user AppData ACL, which already excludes other accounts, and an explicit ACL
-/// edit would only be a way to get it wrong.
+/// Windows: the file inherits the per user AppData ACL, which already excludes other accounts, and an explicit ACL edit
+/// would only be a way to get it wrong.
 #[cfg(not(unix))]
 fn restrict(_path: &Path) -> std::io::Result<()> {
     Ok(())

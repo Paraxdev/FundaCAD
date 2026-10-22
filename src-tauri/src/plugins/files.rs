@@ -1,8 +1,6 @@
 //! The ops a plugin cannot serve itself: picking, reading and writing files the person chooses, and the app info. A
-//! path
-//! never leaves, a plugin gets a handle (rules in ./handed.rs). Grants are checked by the broker in
-//! src/plugins/broker/,
-//! not here, and a dismissed dialog is `None`, not an error.
+//! path never leaves, a plugin gets a handle (rules in ./handed.rs). Grants are checked by the broker in
+//! src/plugins/broker/, not here, and a dismissed dialog is `None`, not an error.
 
 use base64::Engine;
 use serde::Serialize;
