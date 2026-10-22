@@ -1,7 +1,5 @@
-//! The Tauri-free half of launch.rs: which documents a launch names, and the
-//! queue they wait in for the page. No Tauri here, so
-//! scripts/check-launch-args.sh can run these tests on Windows, where the
-//! app's own test binary cannot start.
+//! The Tauri free half of launch.rs: which documents a launch names and the queue they wait in. Tauri free so
+//! scripts/check-launch-args.sh can run these tests on Windows, where the app's test binary cannot start.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -31,10 +29,8 @@ fn document(path: PathBuf) -> Option<String> {
     crate::library::is_document(&path.file_name()?.to_string_lossy()).then(|| path.to_string_lossy().into_owned())
 }
 
-/// The documents in `argv`, absolute. argv[0] and flags are skipped, a
-/// `file://` URI is decoded, and anything that is not a document is left out.
-/// Leaving out what is not a document also drops the pieces of an install path
-/// with spaces, which the NSIS installer registers unquoted.
+/// The documents in `argv`, absolute: flags skipped, `file://` decoded, anything else left out, which also drops the
+/// pieces of an install path with spaces that the NSIS installer registers unquoted.
 pub fn launch_paths(argv: impl IntoIterator<Item = OsString>, cwd: &Path) -> Vec<String> {
     argv.into_iter()
         .skip(1)
@@ -141,10 +137,8 @@ mod tests {
         println!("PATHS={}", launch_paths(std::env::args_os(), Path::new(&cwd)).join("|"));
     }
 
-    /// The paths after the program in a Windows command line, as the launched
-    /// process reads them: this test binary started again with that line, running
-    /// only `argv_child`. The document arguments also count as libtest name
-    /// filters, which --exact keeps from matching anything.
+    /// Restarts this test binary with a Windows command line, running only `argv_child`, to see the paths as launched.
+    /// The documents also count as libtest name filters, which --exact keeps from matching anything.
     #[cfg(windows)]
     fn through_a_windows_command_line(tail: &str, cwd: &str) -> Vec<String> {
         use std::os::windows::process::CommandExt;
@@ -231,10 +225,8 @@ mod tests {
         assert!(q.take().is_empty());
     }
 
-    /// Open With on Windows and macOS comes from bundle.fileAssociations: the
-    /// NSIS and WiX installers and the app's Info.plist are written from it. The
-    /// MIME types are the ones the Linux packages register, so a file has one
-    /// type on every platform.
+    /// Open With comes from bundle.fileAssociations, which the NSIS and WiX installers and Info.plist are written from.
+    /// Its MIME types are the ones the Linux packages register, so a file has one type on every platform.
     #[test]
     fn the_installers_register_both_document_types() {
         let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();

@@ -1,6 +1,4 @@
-//! The frames' content until the native tracer lands: a moving pattern drawn
-//! by a wgpu compute pass and read back, so the GPU readback is in the measured
-//! path the way the tracer's will be.
+//! A moving test pattern drawn by a wgpu compute pass and read back, so the GPU readback is in the measured path.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

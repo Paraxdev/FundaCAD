@@ -1,9 +1,5 @@
-//! A released app's stdout and stderr reach no one: a Finder or launcher start
-//! has nowhere to show them, and a Windows GUI subsystem process has no std
-//! handles at all, so Rust drops its writes without an error. The app sends
-//! them to fundacad.log in its log dir instead. Each start appends, so a crash
-//! loop keeps every run, and a log that reached `CAP` moves to fundacad.1.log,
-//! the one before to fundacad.2.log, so at most `KEEP` files remain.
+//! A release app's stdout and stderr reach no one (a GUI subsystem process has no std handles), so they go to
+//! fundacad.log. Each start appends, and at `CAP` it rotates to fundacad.1.log and on, keeping at most `KEEP` files.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, IsTerminal, Read, Seek, SeekFrom, Write};
@@ -41,9 +37,7 @@ pub fn open(dir: &Path, cap: u64) -> io::Result<(PathBuf, File)> {
     Ok((path, file))
 }
 
-/// Points stdout and stderr at the log, unless stderr is a terminal: then
-/// whoever started the app from it reads them there. The engine relay and
-/// the [frames] lines are stderr.
+/// Unless stderr is a terminal, where whoever started the app reads it. The engine relay and [frames] lines are stderr.
 pub fn redirect(dir: &Path) -> io::Result<Option<PathBuf>> {
     if io::stderr().is_terminal() {
         return Ok(None);
@@ -177,9 +171,8 @@ fn point_std_at(path: &Path, file: File) -> io::Result<()> {
     let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
     let mode: Vec<u16> = "ab".encode_utf16().chain([0]).collect();
     let crt = OpenOptions::new().append(true).open(path)?.into_raw_handle();
-    // SAFETY: the CRT's own standard streams and descriptors. The Rust side
-    // handle is leaked on purpose: a writer may still hold it from
-    // GetStdHandle when the next rotation replaces it.
+    // SAFETY: the CRT's own standard streams and descriptors. The Rust side handle is leaked on purpose, as a writer
+    // may still hold it from GetStdHandle when the next rotation replaces it.
     unsafe {
         let fd = _open_osfhandle(crt as isize, O_APPEND_BINARY);
         if fd < 0 {

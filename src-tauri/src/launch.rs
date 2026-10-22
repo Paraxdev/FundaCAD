@@ -1,10 +1,5 @@
-//! Documents handed to FundaCAD by the system: a double click or Open With in a
-//! file manager. Linux and Windows start `fundacad <path>`, so the first launch
-//! reads its own argv and a second launch hands its argv to the running
-//! instance through the single-instance plugin. macOS keeps one app and sends
-//! it the files as an Opened event, at start and later. All of them land in one
-//! queue the page drains, so a path that arrives before the page listens is
-//! kept rather than lost. The parsing is in launch_args.rs.
+//! Documents the system hands over by double click or Open With: argv on first launch, the single instance plugin on
+//! later ones, Opened events on macOS. All go to one queue the page drains, so a path that arrives early is kept.
 
 use std::ffi::OsString;
 use std::path::Path;
