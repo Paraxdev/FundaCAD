@@ -103,6 +103,9 @@ const check = (name, ok, detail) => {
 
   // --- 2. G2 from the heads-up box -------------------------------------------
   const other = "Math.abs(p[0] + 4.242) < 0.3 && Math.abs(p[1] + 49.82) < 0.3 && p[2] > -0.1 && p[2] < 20.1";
+  // This junction is on the far side of the leg from the first one's camera.
+  await page.evaluate(() => { const v = window.viewport; const V = v.camera.position.constructor; v.rig.lookAtPlane(new V(-4, -50, 10), new V(-0.6, -0.8, 0.3).normalize(), new V(0, 0, 1)); v.rig.moveTo(new V(-4.242, -50, 10)); v.requestRender(); });
+  await page.waitForTimeout(800);
   const ok2 = await filletTyped([-4.242, -49.82, 10], other, 2, true);
   check("the other junction is pickable", ok2);
   fs1 = await blends();
