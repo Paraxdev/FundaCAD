@@ -108,6 +108,27 @@ function closeTo(a: ArrayLike<number>, b: ArrayLike<number>, tol: number): boole
   return true;
 }
 
+// A flat patch of a skewed triangle lattice, 7 x 7 vertices: inside it every vertex has six neighbours and every edge two
+// triangles across a parallelogram, where Loop moves nothing off the plane's linear layout. `lift` raises one vertex.
+const LATTICE = 7;
+function lattice(lift?: { at: number; by: number }): EngineSurface {
+  const pts: Vec3[] = [];
+  for (let j = 0; j < LATTICE; j++)
+    for (let i = 0; i < LATTICE; i++) pts.push([i * 10 + j * 4.2, i * 0.7 + j * 8.9, 0]);
+  if (lift) pts[lift.at]![2] = lift.by;
+  const indices: number[] = [];
+  for (let j = 0; j + 1 < LATTICE; j++)
+    for (let i = 0; i + 1 < LATTICE; i++) {
+      const v = j * LATTICE + i;
+      indices.push(v, v + 1, v + LATTICE, v + 1, v + LATTICE + 1, v + LATTICE);
+    }
+  return surface(pts, indices);
+}
+
+function point(p: ArrayLike<number>, idx: ArrayLike<number>, tri: number, w: Vec3): Vec3 {
+  return [0, 1, 2].map((c) => w.reduce((sum, wk, k) => sum + wk * p[idx[tri * 3 + k]! * 3 + c]!, 0)) as Vec3;
+}
+
 describe("refineSurface", () => {
   it("quadruples the triangles each level and adds one vertex per edge", () => {
     const s = tetra();
@@ -156,6 +177,14 @@ describe("refineSurface", () => {
       expect(off).toEqual([]);
       expect(closeTo(d.positions.subarray(0, 24), s.positions, 1e-5)).toBe(true);
     }
+  });
+
+  it("pulls a raised inner vertex toward its six neighbours, and them toward it, by Loop's weights", () => {
+    const centre = 3 * LATTICE + 3;
+    const d = refineSurface(lattice({ at: centre, by: 1.2 }), 1);
+    const heights = [centre, centre + 1, centre - LATTICE, 0].map((v) => unplace(d.positions, v * 3)[2]);
+    // Six neighbours weigh 3 / 48 each: the vertex keeps 5 / 8 of its rise and passes 1 / 16 of it to each neighbour.
+    expect(closeTo(heights, [0.75, 0.075, 0.075, 0], 1e-5)).toBe(true);
   });
 
   it("rounds a faceted tube: its long edges are smooth and the folds between facets get gentler", () => {
@@ -285,6 +314,32 @@ describe("engineHit and drawnCorner", () => {
       expect(e.tri).toBe(d.parent[h.tri]);
       expect(Math.abs(e.weights[0] + e.weights[1] + e.weights[2] - 1)).toBeLessThan(1e-6);
       expect(e.weights.every((w) => w > -1e-6 && w < 1 + 1e-6)).toBe(true);
+    }
+  });
+
+  it("maps a hit to the engine point at the same place, on a flat lattice where the drawn surface keeps its layout", () => {
+    const s = lattice();
+    // The lower triangle of the middle cell, all three corners well inside.
+    const middle = 2 * (3 * (LATTICE - 1) + 3);
+    const weights: Vec3[] = [
+      [1, 0, 0],
+      [0, 0.5, 0.5],
+      [0.2, 0.5, 0.3],
+      [0.05, 0.15, 0.8],
+    ];
+    for (const level of [1, 2] as const) {
+      const d = refineSurface(s, level);
+      const children = [...d.parent.keys()].filter((t) => d.parent[t] === middle);
+      expect(children).toHaveLength(4 ** level);
+      for (const t of children) {
+        for (const w of weights) {
+          const e = engineHit(d, t, w)!;
+          expect(e.tri).toBe(middle);
+          const drawn = point(d.positions, d.indices, t, w);
+          const engine = point(s.positions, s.indices, e.tri, e.weights);
+          expect(closeTo(drawn, engine, 1e-4), `level ${level}, child ${t}, ${w}`).toBe(true);
+        }
+      }
     }
   });
 
