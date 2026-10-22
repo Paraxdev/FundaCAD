@@ -8,7 +8,7 @@ import { stickyFact } from "../diagnostics/breadcrumbs";
 import { gridStep } from "../sketch/planeGrid";
 import { isRenderLowPower, setRenderLowPower } from "./render";
 import { composerClearColor, DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer, setComposing, thresholdAboveGround } from "./composerColor";
-import { BACKGROUND_COLOR, bloomSettings, bloomWanted, renderPrefs } from "../ui/renderPrefs";
+import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs";
 import { GlassBackPass, glassBodyCount } from "./glassThickness";
 import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
 import { EdgeBatches, type EdgeFrame } from "./edgeBatches";
@@ -489,9 +489,11 @@ export class PostChain {
    *  the view is ABOUT: whatever you have centred is what stays in focus, which
    *  needs no control of its own and is never wrong. */
   focusDistance = 1;
-  /** Something on the model glows or is shiny, so bloom takes the composer.
+  /** Something on the model glows or is shiny, which the path tracer's bloom reads.
    *  Written by the viewport with each finish pass. */
   bloomable = true;
+  /** Something on the model glows, which is all Realtime bloom reads. */
+  glows = true;
   private quality: RealtimeQuality = "standard";
   private prepass: ModelPrepass | null = null;
   private overlayCompose: OverlayCompose | null = null;
@@ -635,7 +637,7 @@ export class PostChain {
    *  never leaves the canvas, and never pays the full-screen copy. */
   private wanted(): { bloom: boolean; blur: boolean } {
     const p = renderPrefs();
-    return { bloom: bloomWanted(p.bloom, this.bloomable), blur: p.focusBlur > 0 };
+    return { bloom: p.bloom > 0 && this.glows, blur: p.focusBlur > 0 };
   }
 
   /** `motion` is a camera frame on a machine that cannot keep up. On a low power
