@@ -389,13 +389,16 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     move: new MoveTool(e.viewport, e.store),
     pattern: new PatternTool(e.viewport, e.store),
     measure: new MeasureTool(e.viewport),
-    // Both deps are late-bound through `e` for the usual reason, and both are
-    // load-bearing: without `toolBusy` the section's handle and its bare F/G keys
-    // stay live underneath every other tool (two grabbable glyphs on screen, and
-    // an Escape fight), and without `datumDef` clicking a construction plane
-    // while aiming the cut falls through to the body behind it.
+    // Without `toolBusy` the handle and its F and G keys stay live under every other tool, without `datumDef` a
+    // click on a construction plane while aiming falls through to the body behind it.
     section: new SectionTool(e.viewport, {
       toolBusy: () => e.toolBusy(),
+      afterEdit: () => e.restoreBodyGizmo(),
+      saved: {
+        get: () => e.store.sectionView,
+        set: (v) => e.store.setSectionView(v),
+        onChange: (fn) => e.store.onSectionViewChange(fn),
+      },
       datumDef: (id) => {
         const f = asFeature(e.store.document.features.find((x) => x.id === id), "datumPlane");
         return f ? e.datumPlaneDef(f) : null;

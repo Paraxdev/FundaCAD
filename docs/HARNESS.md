@@ -178,7 +178,8 @@ refs; refs never change with wording. `#n` picks the n-th of several.
   plane `offset`, draft `angle`, joint `offset` and `angle`, mechanism `offset` or `angle`, revolve
   pitch `pitch`, section `section`, selection nudge `nudge`, taper arcs `taper`, datum `arrow`,
   `tilt x`, `tilt y`, `spin`, Move `arrow x|y|z`, `plane xy|yz|xz`, `ring x|y|z`, `size x|y|z`,
-  `origin`. `s.handles()` lists the ones on screen.
+  `origin`. `s.handles()` lists the ones on screen. The `section` handle is there only while a
+  section is being edited, a confirmed cut stays on without it.
 
 Every canvas point is checked with the app's own picker before the click, and points under a
 panel or a handle are skipped. When no point works the call fails with `Occluded` and suggests a

@@ -16,15 +16,10 @@ const palette = useSketchPaletteStore();
 
 <style scoped>
 .normal-to-sketch {
-  position: absolute;
-  top: var(--s-4);
-  left: 50%;
-  transform: translateX(-50%);
   padding: var(--s-1) var(--s-3);
   font: 600 12px/1.4 var(--ui);
   color: var(--text);
   cursor: pointer;
-  z-index: 16;
 }
 .normal-to-sketch:hover {
   border-color: var(--accent);

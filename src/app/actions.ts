@@ -285,10 +285,7 @@ export function createActions(e: Engine): (action: string) => void {
         openParamsDialog();
         break;
       case "section":
-        // The button is the way OUT of the mode as well as in, including out of
-        // the aiming step, which would otherwise be a state you could only leave
-        // with Escape (pressing Section again during a pick did nothing at all,
-        // because start() refuses to re-enter).
+        // The button is the way out of every phase too, start() refuses to re-enter.
         if (e.tools.section.active || e.tools.section.picking) {
           e.tools.section.stop();
           break;
@@ -297,10 +294,12 @@ export function createActions(e: Engine): (action: string) => void {
           e.setStatus("Section: create or import a body first", "");
           break;
         }
-        // "Pick" leads, and is what the user's own words asked for: cut along a
-        // face or a datum plane they choose. The three world axes stay because
-        // they need no aiming at all, on a part with no face facing the way you
-        // want to look, Z is one click away and a pick is not.
+        // Its handle, box and keys would stay live beside the other tool's until that ends.
+        if (e.toolAtWork()) {
+          e.setStatus("Section: finish the active tool first (Esc cancels it)", "");
+          break;
+        }
+        // The world axes need no aiming, for a part with no face turned the way you want to look.
         void (async () => {
           const src = await choose<"pick" | "X" | "Y" | "Z">("Section, cut along what?", [
             { value: "pick", label: "Face or plane", hint: "click one" },
@@ -308,8 +307,9 @@ export function createActions(e: Engine): (action: string) => void {
             { value: "X", label: "X" },
             { value: "Y", label: "Y" },
           ]);
-          if (src === "pick") e.tools.section.start({ kind: "pick" });
-          else if (src) e.tools.section.start(src);
+          if (!src) return;
+          e.dropBodyGizmo();
+          e.tools.section.start(src === "pick" ? { kind: "pick" } : src);
         })();
         break;
       case "component-colors":

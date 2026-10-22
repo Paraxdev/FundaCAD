@@ -343,6 +343,7 @@ needs a larger radius to look the same size. Always pair a float radius with
 | `.toast` | `ToastStack.vue` through `ui/toast.ts` | Short confirmations |
 | `.rail-tile`, `.rail-pill` | `components/ui/RailButton.vue` | Tool buttons on the rail |
 | `#viewport .prompt` | `PromptBanner.vue` | The tool prompt pill |
+| `.section-chip` | `SectionChip.vue`, in `#viewport .vp-top` | A state that stays on over the model, with its word buttons |
 
 ### 4.3 A new surface
 
@@ -711,6 +712,8 @@ and the whole row flips the switch.
 | `.rd-chip` | padding `3px var(--s-2)`, `--panel-2`, `--line`, chip radius, 11px `--text-dim`; hover `--raised`, `--text`; `.active` border `--accent`, fill `--accent-tint-2`, `--accent-hot`; disabled opacity 0.55 |
 | `#context-tab` | 10px, 700, uppercase, letter-spacing 0.8px, padding `var(--s-1) var(--s-3)`; `.sketch` turns it accent (`--accent-hot`, border `--accent`, fill `--accent-tint`) |
 | `.tree-count` | 10px, 600, `--text-mute`, `--panel-2` pill, hidden when empty |
+| `.section-chip` (`SectionChip.vue`) | glass A, chip radius, no rim, padding `var(--s-1) var(--s-1) var(--s-1) var(--s-3)`, gap `--s-2`, 600 12px `--text`, the section icon in `--accent`, `pop-in`; `role="toolbar"`; shown only while a cut is on, absent otherwise; under 560px, or when the top row is too narrow for them, the words hide and the icon's `title` says them |
+| `.section-chip-btn` | white ink of `.pop-wide`, chip radius, padding `var(--s-1) var(--s-3)`, 600 12px `--text-dim`; hover `--text`; `.active` (Edit while editing, `aria-pressed`) as `.dim-btn.dim-toggle.on`; `.disabled` with `aria-disabled` opacity 0.45, no hover; shared focus ring; a 40px hit area on touch |
 
 ### 7.9 Rows
 
@@ -737,6 +740,7 @@ currently uses hard coded reds; new destructive rows use `--error`.
 | `.measure-panel` | see [7.13](#713-tool-and-readout-panels-measure-panel) |
 | `.toast` | glass B, `--float-tile-radius`, padding `var(--s-3) var(--s-4)`, 12.5px, bottom centre in `.toast-stack`; `.toast-error` and `.toast-warning` tint the fill; `.toast-action` accent chip |
 | `#viewport .prompt` | glass A, pill, padding `var(--s-3) var(--s-5)`, 12px, a 6px accent dot with `0 0 8px var(--accent-glow)`, `prompt-in` entrance |
+| `#viewport .vp-top` | the top middle stack of the Section chip and Normal to Sketch: absolute, top `--s-4`, a column with gap `--s-2`, centred in the span the cards leave free (`useClearOfCards.ts` sets `--row-left` and `--row-right`, as PromptBanner does); when that span is too narrow it sets `data-narrow` (the chip drops its words), and when that is not enough it moves the stack down to the first row with room (`--row-top`), `z-index: calc(var(--z-float) - 4)`, pointer events only on its children |
 
 ![A context menu and the selection state of the shell](design/context-menu-dark.png)
 

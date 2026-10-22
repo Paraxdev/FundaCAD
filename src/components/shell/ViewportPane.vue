@@ -6,12 +6,16 @@ import FpsReadout from "./FpsReadout.vue";
 import RoundTripReadout from "./RoundTripReadout.vue";
 import SelectionReadout from "./SelectionReadout.vue";
 import NormalToSketch from "./NormalToSketch.vue";
+import SectionChip from "./SectionChip.vue";
+import { useClearOfCards } from "../../composables/useClearOfCards";
 import {
   draggingMaterial, dropScopeFor, endMaterialDrag, MATERIAL_MIME, type DropScope,
 } from "../../ui/materialDrag";
 
 const engine = useEngine();
 const host = useTemplateRef<HTMLDivElement>("host");
+const top = useTemplateRef<HTMLDivElement>("top");
+useClearOfCards(top);
 
 // The <canvas> is created imperatively in main.ts and handed to the Viewport
 // before Vue exists, because Viewport, DocumentStore, SketchMode and all ten
@@ -143,7 +147,10 @@ function onDrop(e: DragEvent) {
     <FpsReadout />
     <RoundTripReadout />
     <SelectionReadout />
-    <NormalToSketch />
+    <div ref="top" class="vp-top">
+      <SectionChip />
+      <NormalToSketch />
+    </div>
   </div>
 
   <Teleport to="body">

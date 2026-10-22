@@ -88,22 +88,25 @@ describe("New and Open stand every tool down", () => {
     ]) t[n] = tool(n, n === "extrude" || n === "pressPull");
     t.move = tool("move", false);
     t.measure = { active: true, stop: () => calls.push("measure.stop") };
-    t.section = { active: true, picking: false, stop: () => calls.push("section.stop") };
+    t.section = { picking: false, editing: false, endEdit: () => calls.push("section.endEdit") };
     return t as unknown as EngineTools;
   }
 
-  it("cancels the armed tools and leaves idle ones and a standing section alone", () => {
+  it("cancels the armed tools and leaves idle ones alone", () => {
     const calls: string[] = [];
     cancelActiveTools(tools(calls));
     expect(calls.sort()).toEqual(["extrude.cancel", "measure.stop", "move.cancel", "pressPull.cancel"]);
   });
 
-  it("ends a section still aiming", () => {
-    const calls: string[] = [];
-    const t = tools(calls);
-    Object.assign(t.section, { active: false, picking: true });
-    cancelActiveTools(t);
-    expect(calls).toContain("section.stop");
+  // A cut that is on, or none, is the store's to replace with the next document's own.
+  it("ends a section aiming or editing and leaves one that is on or off alone", () => {
+    for (const [picking, editing, ends] of [[true, false, true], [false, true, true], [false, false, false]] as const) {
+      const calls: string[] = [];
+      const t = tools(calls);
+      Object.assign(t.section, { picking, editing });
+      cancelActiveTools(t);
+      expect(calls.includes("section.endEdit")).toBe(ends);
+    }
   });
 
   for (const how of ["New", "Open"] as const) {
