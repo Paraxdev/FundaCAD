@@ -1,5 +1,5 @@
 // The origin planes as small tiles, one per quadrant so they never cross. A press is matched
-// on screen by planeHit.ts, so a tile seen edge on is still found by its pad or its name.
+// on screen by planeHit.ts, so a tile seen edge on is still found by its pad or its name box.
 
 import * as THREE from "three";
 import { glyphScale, glyphWorldScale } from "./gizmoScale";
@@ -34,15 +34,15 @@ export interface TilePose {
 }
 
 // The app's own squircle tiles scaled up from a 40 px rail tile with its 17 px corner and 6 px gap.
-export const TILE_SIZE_PX = 68;
-export const TILE_GAP_PX = 10;
-export const TILE_CORNER_RADIUS_PX = 29;
+export const TILE_SIZE_PX = 85;
+export const TILE_GAP_PX = 12;
+export const TILE_CORNER_RADIUS_PX = 36;
 /** The octant the home view looks into, so no tile hides another from there.
  *  { x: -1, y: 1, z: -1 } is the same corner seen from outside. */
 export const TILE_OCTANT: Octant = { x: 1, y: -1, z: 1 };
 export const TILE_EXTENT_PX = TILE_GAP_PX + TILE_SIZE_PX;
 /** The tiles are click targets, so they stop shrinking at 41 px, about a rail tile. */
-export const MIN_TILE_SCALE = 0.6;
+export const MIN_TILE_SCALE = 0.48;
 export const CORNER_SEGMENTS = 24;
 export const RIM_PX = 1.5;
 export const RIM_INK_MIX = 0.4;
@@ -51,11 +51,13 @@ export const TILE_LOOK: Record<TileState, { fill: number; rim: number; label: nu
   dim: { fill: 0.12, rim: 0.45, label: 0.6 },
   hot: { fill: 0.32, rim: 1, label: 1 },
 };
-export const LABEL_FONT_PX = 11;
-export const LABEL_BOX_PX = { w: 28, h: 16 } as const;
+export const LABEL_FONT_PX = 15;
+export const LABEL_BOX_PX = { w: 38, h: 22 } as const;
 /** The hovered name grows by this much, so hover shows which plane a press takes even edge on. */
 export const LABEL_HOT_SCALE = 1.2;
 const LABEL_DPR = 4;
+// Space Grotesk stops at 700, so the glyphs are also stroked to thicken them.
+const LABEL_STROKE_PX = 0.8;
 const LABEL_FONT = `700 ${LABEL_FONT_PX * LABEL_DPR}px "Space Grotesk", Inter, system-ui, sans-serif`;
 /** What a body hides keeps this share of the fill. */
 export const GHOST_SHARE = 0.4;
@@ -299,7 +301,7 @@ export class OriginTiles {
 
   /** Where each name is drawn, in client pixels. */
   labelsOnScreen(frame: ScreenFrame, tiles = this.onScreen(frame)): Record<string, P2> {
-    return placeLabels(tiles, LABEL_BOX_PX);
+    return placeLabels(tiles);
   }
 
   /** The plane a press at client (`x`, `y`) takes, null while the tiles are hidden. */
@@ -392,6 +394,10 @@ export class OriginTiles {
       ctx.font = LABEL_FONT;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = LABEL_STROKE_PX * LABEL_DPR;
+      ctx.strokeText(k, w / 2, h / 2);
       ctx.fillText(k, w / 2, h / 2);
       tex.image = canvas;
       tex.needsUpdate = true;
