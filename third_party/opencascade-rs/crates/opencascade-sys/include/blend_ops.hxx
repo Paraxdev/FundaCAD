@@ -217,34 +217,54 @@ inline int bl_segs_meet(const gp_XY &a, const gp_XY &b, const gp_XY &c, const gp
   return cross ? 2 : 0;
 }
 
-// A chamfer's trace on a plane is each edge moved in by its setback: 0 when every moved edge keeps
-// its length and stays clear of those it does not meet, 1 when some just touch, 2 when they cross.
+// Each edge moved in by its setback, an unchamfered one a trace runs past cut away whole: 0 when every
+// moved edge keeps its length clear of those it does not meet, 1 when some just touch, 2 when they cross.
 inline int bl_face_fit(const BlFace &f, const std::vector<double> &off, double tol) {
   size_t n = f.segs.size();
   std::vector<gp_XY> x0(n), x1(n), dir(n);
-  for (size_t i = 0; i < n; ++i) dir[i] = (f.segs[i].b - f.segs[i].a).Normalized();
+  std::vector<std::array<int, 2>> nb(n);
+  std::vector<char> gone(n, 0);
   for (size_t i = 0; i < n; ++i) {
-    gp_XY p = f.segs[i].a + f.segs[i].in * off[i];
-    for (int k = 0; k < 2; ++k) {
-      int j = f.segs[i].nb[k];
-      double c = dir[i].Crossed(dir[j]);
-      gp_XY q = f.segs[j].a + f.segs[j].in * off[j];
-      (k == 0 ? x0 : x1)[i] = std::abs(c) < 1e-9 ? (k == 0 ? f.segs[i].a : f.segs[i].b)
-                                                 : p + dir[i] * ((q - p).Crossed(dir[j]) / c);
+    dir[i] = (f.segs[i].b - f.segs[i].a).Normalized();
+    nb[i] = {f.segs[i].nb[0], f.segs[i].nb[1]};
+  }
+  for (;;) {
+    for (size_t i = 0; i < n; ++i) {
+      if (gone[i]) continue;
+      gp_XY p = f.segs[i].a + f.segs[i].in * off[i];
+      for (int k = 0; k < 2; ++k) {
+        int j = nb[i][k];
+        double c = dir[i].Crossed(dir[j]);
+        gp_XY q = f.segs[j].a + f.segs[j].in * off[j];
+        if (std::abs(c) < 1e-9 && j != f.segs[i].nb[k]) return 2;
+        (k == 0 ? x0 : x1)[i] = std::abs(c) < 1e-9 ? (k == 0 ? f.segs[i].a : f.segs[i].b)
+                                                   : p + dir[i] * ((q - p).Crossed(dir[j]) / c);
+      }
     }
+    int drop = -1;
+    for (size_t i = 0; i < n && drop < 0; ++i)
+      if (!gone[i] && off[i] <= 0 && (x1[i] - x0[i]).Dot(dir[i]) < -tol) drop = (int)i;
+    if (drop < 0) break;
+    gone[drop] = 1;
+    int a = nb[drop][0], b = nb[drop][1];
+    if (a == b) return 2;
+    nb[a][nb[a][0] == drop ? 0 : 1] = b;
+    nb[b][nb[b][0] == drop ? 0 : 1] = a;
+    if (nb[a][0] == nb[a][1]) return 2;
   }
   int worst = 0;
   for (size_t i = 0; i < n; ++i) {
+    if (gone[i]) continue;
     double len = (x1[i] - x0[i]).Dot(dir[i]);
     if (len < -tol) return 2;
     if (len <= tol) worst = 1;
   }
   std::vector<char> moved(n);
-  for (size_t i = 0; i < n; ++i) moved[i] = off[i] > 0 || off[f.segs[i].nb[0]] > 0 || off[f.segs[i].nb[1]] > 0;
+  for (size_t i = 0; i < n; ++i) moved[i] = !gone[i] && (off[i] > 0 || off[nb[i][0]] > 0 || off[nb[i][1]] > 0);
   for (size_t i = 0; i < n; ++i) {
     if (!moved[i]) continue;
     for (size_t k = 0; k < n; ++k) {
-      if (k == i || (moved[k] && k < i) || (int)k == f.segs[i].nb[0] || (int)k == f.segs[i].nb[1]) continue;
+      if (k == i || gone[k] || (moved[k] && k < i) || (int)k == nb[i][0] || (int)k == nb[i][1]) continue;
       int got = bl_segs_meet(x0[i], x1[i], x0[k], x1[k], tol);
       if (got == 2) return 2;
       worst = std::max(worst, got);
