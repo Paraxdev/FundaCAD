@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { computeBoundsTree, acceleratedRaycast } from "three-mesh-bvh";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { applyKeptSpan, keptPoint, keptSpan } from "../../src/viewport/sectionPick";
 
 const n = new THREE.Vector3(3, -4, 12).divideScalar(13);
@@ -103,6 +104,24 @@ describe("applyKeptSpan on a real raycast", () => {
   it("a BVH raycast finds the kept box behind a removed one", () => {
     expect(hitNames(true, cut)).toEqual(["far"]);
     expect(hitNames(true, null)).toEqual(["near", "far"]);
+  });
+
+  // The case the span exists for: one body, one BVH, whose first hit is its removed near part.
+  it("a first-hit BVH raycast on one body finds its kept part behind its removed one", () => {
+    const parts = [box("near", ray.at(100, new THREE.Vector3()), false), box("far", ray.at(300, new THREE.Vector3()), false)];
+    const alone = parts.map((m) => Math.round(new THREE.Raycaster(ray.origin, ray.direction).intersectObject(m)[0]!.distance));
+    const geo = mergeGeometries(parts.map((m) => m.geometry.clone().applyMatrix4(m.matrixWorld)))!;
+    computeBoundsTree.call(geo);
+    const body = new THREE.Mesh(geo, new THREE.MeshBasicMaterial());
+    body.raycast = acceleratedRaycast;
+    const cast = (clip: THREE.Plane | null) => {
+      const rc = Object.assign(new THREE.Raycaster(ray.origin, ray.direction), { firstHitOnly: true });
+      applyKeptSpan(rc, clip, SLACK);
+      return rc.intersectObject(body, false).map((h) => Math.round(h.distance));
+    };
+    expect(cast(cut)).toEqual([alone[1]]);
+    expect(cast(null)).toEqual([alone[0]]);
+    expect(alone[0]! < 200 && alone[1]! > 200).toBe(true);
   });
 
   it("a plain mesh raycast does the same", () => {

@@ -171,11 +171,25 @@ function modelDoc() {
     const dot = (p, n) => p[0] * n[0] + p[1] * n[1] + p[2] * n[2];
     check("the cut first keeps the side the face points into", dot(s.plane, face.normal) > 0.999, s.plane);
 
-    await clickEmpty();
+    // The Offset box holds the focus from the start, and F and G still reach the tool until a value is typed.
+    const boxText = () => page.evaluate(() => ({
+      focused: document.activeElement?.closest(".dim-input") != null,
+      value: document.querySelector(".dim-input input")?.value,
+    }));
+    const before = await boxText();
     await page.keyboard.press("f");
     await page.waitForTimeout(200);
     s = await state();
-    check("F while editing keeps the bulk", s.phase === "editing" && dot(s.plane, face.normal) < -0.999, s.plane);
+    const after = await boxText();
+    check("F in the Offset box flips and keeps the bulk, and types nothing",
+      before.focused && after.focused && after.value === before.value && s.phase === "editing" && dot(s.plane, face.normal) < -0.999,
+      { before, after, plane: s.plane });
+    await clickEmpty();
+    await page.keyboard.press("f");
+    await page.keyboard.press("f");
+    await page.waitForTimeout(200);
+    s = await state();
+    check("F on the canvas flips too", s.phase === "editing" && dot(s.plane, face.normal) < -0.999, s.plane);
 
     await typeOffset("-9.5");
     s = await state();
@@ -379,7 +393,13 @@ function modelDoc() {
             back = { id: e.id, p, d: depth(p) };
       const bs = back && at(back.p);
       const fh = v.pickFaceForPressPull(face.x, face.y);
+      // A click, a hover and Measure go through pickEntity, the Picker's own ray, not bodyRay.
+      const en = v.pickEntity(face.x, face.y);
+      const entity = en && (en.kind === "face"
+        ? { kind: "face", d: depth(en.point), sameFace: en.faceId === fh?.faceId }
+        : { kind: "edge", d: Math.max(...en.edge.points.map(depth)) });
       return {
+        entity,
         gone: gone && { id: gone.id, now: goneNow ? { id: goneNow.edge.id, d: depth(goneNow.point.toArray()) } : null },
         rim: back && { id: back.id, d: back.d, got: v.pickEdgeAt(bs.x, bs.y)?.edge.id ?? null },
         face: { before: depth(face.point), now: fh && depth(fh.anchor.toArray()), sameAsHover: v.faceIdAt(face.x, face.y) === (fh?.faceId ?? null) },
@@ -391,6 +411,8 @@ function modelDoc() {
     check("a pocket rim edge the cut keeps still picks", !!picks.rim && picks.rim.d > 1 && picks.rim.got === picks.rim.id, picks.rim);
     check("a pick on the removed half lands on what the cut keeps, or nothing",
       picks.face.before < -1 && (picks.face.now === null || picks.face.now >= -0.01) && picks.face.sameAsHover, picks.face);
+    check("a click on the removed half selects what the cut keeps, or nothing",
+      picks.entity === null || (picks.entity.d >= -0.01 && picks.entity.sameFace !== false), picks.entity);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
     s = await state();
