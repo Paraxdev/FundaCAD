@@ -437,6 +437,8 @@ export interface GeometryBackend {
   onOpProgress?(fn: OpProgressListener): () => void;
   /** Ties every later request to the document session current when it is made. */
   bindSessions?(host: SessionHost): void;
+  /** Ending a session already stops its engine jobs, so its ops need no cancel of their own. */
+  readonly endsSessions?: boolean;
   /** Our request waits behind another client's job on the same engine: `behind` says whose, null once ours starts. */
   onQueue?(fn: (id: string, behind: EngineWait | null) => void): () => void;
   /** One live-session op (live_session.py): publish what this window has open, collect what an assistant asked
@@ -675,6 +677,10 @@ export class Geometry implements GeometryBackend {
     // Does not connect: init() lets the transport pick IPC or the WebSocket before its first open.
   }
 
+  get endsSessions(): boolean {
+    return this.sessions !== null;
+  }
+
   /** Every request then belongs to the document session current when it was made, and ends with it. */
   bindSessions(host: SessionHost) {
     this.sessions = host;
@@ -683,11 +689,13 @@ export class Geometry implements GeometryBackend {
     host.onBegin(watch);
   }
 
-  // Its calls reject with SessionEnded, unsent ones never go out, and any late frame finds no pending id.
+  // Its calls reject with SessionEnded, unsent ones never go out, and any late frame finds no pending id. One doc_end
+  // stops its queued and running jobs in the engine and frees what the engine held for it.
   private endScope(s: DocumentSession) {
     this.wire = new SessionWire();
     const mine = this.owned.get(s);
     this.owned.delete(s);
+    if (mine && this.connected) void this.call("doc_end", { doc: s.id }).catch(() => {});
     if (!mine?.size) return;
     const raws = new Set<string>();
     for (const [id, { raw, reject }] of mine) {
@@ -1019,8 +1027,9 @@ export class Geometry implements GeometryBackend {
 
   private call<T>(op: string, extra: object, onId?: (id: string) => void): Promise<RawReply<T>> {
     const id = crypto.randomUUID();
-    const raw = JSON.stringify({ id, op, ...extra });
     const session = appScoped(op) ? null : (this.sessions?.current ?? null);
+    // `doc` third: the desktop relay reads id, op and doc from the first bytes of a multi megabyte request.
+    const raw = JSON.stringify(session ? { id, op, doc: session.id, ...extra } : { id, op, ...extra });
     // A part standing down while its session ends may still ask; the request would only feed a closed document.
     if (session && !session.alive) return Promise.reject(new SessionEnded());
     return new Promise((resolve, reject) => {

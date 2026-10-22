@@ -24,6 +24,11 @@ pub fn install(token: Option<CancelToken>) -> Installed {
     Installed(TOKEN.with(|t| std::mem::replace(&mut *t.borrow_mut(), token)))
 }
 
+/// The token installed on this thread, for work this thread hands to others.
+pub fn token() -> Option<CancelToken> {
+    TOKEN.with(|t| t.borrow().clone())
+}
+
 pub fn requested() -> bool {
     TOKEN.with(|t| t.borrow().as_ref().is_some_and(CancelToken::is_cancelled))
 }

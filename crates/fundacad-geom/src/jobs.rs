@@ -248,4 +248,8 @@ impl Jobs for GeomJobs {
     fn doing() -> Option<String> {
         crate::bench::doing()
     }
+
+    fn release(&mut self) {
+        cache::global().lock().unwrap_or_else(|p| p.into_inner()).release();
+    }
 }

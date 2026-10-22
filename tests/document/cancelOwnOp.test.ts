@@ -122,4 +122,39 @@ describe("Cancel and the op it belongs to", () => {
       importRunning: false,
     });
   });
+
+  it("a New ends every sent op of the document with one doc_end instead of a cancel each", async () => {
+    const r = rig();
+    await flush();
+    r.sent.splice(0);
+    const docA = r.store.session.id;
+    const outcome = (p: Promise<unknown>) => p.then(() => "resolved").catch((e: Error) => e.name);
+    const plate = outcome(
+      r.store.runBusy("Importing plate.step", (on) => r.g.importGeometry("plate.step", "step", on)),
+    );
+    const sv08 = outcome(r.store.runBusy("Importing sv08.step", (on) => r.g.importGeometry("sv08.step", "step", on)));
+    r.store.newDocument();
+    const docB = r.store.session.id;
+    await flush();
+    const first = { ops: r.sent.map((s) => s.op), outcomes: await Promise.all([plate, sv08]) };
+    const endA = r.sent.find((s) => s.op === "doc_end")!;
+
+    r.sent.splice(0);
+    const gear = outcome(r.store.runBusy("Gear", (on) => r.g.importGeometry("gear.step", "step", on)));
+    r.store.newDocument();
+    await flush();
+    expect({
+      first,
+      endA: endA.id !== undefined,
+      second: { ops: r.sent.map((s) => s.op), outcome: await gear },
+      docs: [docA !== docB, r.store.session.id !== docB],
+      busy: r.store.busyState.active && !r.store.busyState.rebuild,
+    }).toEqual({
+      first: { ops: ["import", "import", "doc_end", "rebuild"], outcomes: ["SessionEnded", "SessionEnded"] },
+      endA: true,
+      second: { ops: ["import", "doc_end", "rebuild"], outcome: "SessionEnded" },
+      docs: [true, true],
+      busy: false,
+    });
+  });
 });

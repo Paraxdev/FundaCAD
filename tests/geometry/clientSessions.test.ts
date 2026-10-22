@@ -70,11 +70,14 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 describe("engine requests and document sessions", () => {
   it("ending a session rejects exactly its calls, and late frames of them reach no listener", async () => {
     const r = rig();
+    const docA = r.host.current.id;
     const a1 = outcome(r.g.generateShape("gear", { teeth: 12 }));
     const a2 = outcome(r.g.rebuild(doc));
     const appCancel = outcome(r.g.cancel("rq-x"));
     const [idA1, idA2, idCancel] = r.sent.map((s) => s.id);
     r.host.begin("new");
+    const docB = r.host.current.id;
+    const idEnd = r.sent.at(-1)!.id;
     const b1 = outcome(r.g.generateShape("gear", { teeth: 8 }));
     const idB1 = r.sent.at(-1)!.id;
     const afterSwap = r.inFlight();
@@ -91,17 +94,28 @@ describe("engine requests and document sessions", () => {
 
     r.text({ id: idB1, status: "queued", behind: null });
     r.text({ id: idCancel, ok: true, result: { cancelled: true } });
+    r.text({ id: idEnd, ok: true, result: { ended: 2 } });
     r.text({ id: idB1, ok: false, error: { message: "no such generator" } });
     expect({
       ops: r.sent.map((s) => s.op),
+      heads: r.sent.map((s) => Object.keys(JSON.parse(s.raw) as object).slice(0, 3)),
+      docs: r.sent.map((s) => (JSON.parse(s.raw) as { doc?: string }).doc),
       afterSwap,
       results: await Promise.all([a1, a2, appCancel, b1]),
       heardFromA,
       heardFromB: r.heard,
       left: r.inFlight(),
     }).toEqual({
-      ops: ["generateShape", "rebuild", "cancel", "generateShape"],
-      afterSwap: 2,
+      ops: ["generateShape", "rebuild", "cancel", "doc_end", "generateShape"],
+      heads: [
+        ["id", "op", "doc"],
+        ["id", "op", "doc"],
+        ["id", "op", "target"],
+        ["id", "op", "doc"],
+        ["id", "op", "doc"],
+      ],
+      docs: [docA, docA, undefined, docA, docB],
+      afterSwap: 3,
       results: ["SessionEnded", "SessionEnded", "resolved", "resolved"],
       heardFromA: [],
       heardFromB: [`queue:${idB1}`],
@@ -114,6 +128,35 @@ describe("engine requests and document sessions", () => {
     const c1 = outcome(r.g.generateShape("gear", { teeth: 10 }));
     r.text({ id: r.sent.at(-1)!.id, ok: true, result: {} });
     expect(await Promise.all([b2, c1])).toEqual(["SessionEnded", "resolved"]);
+  });
+
+  it("only a session that asked the engine for something ends in the engine, and only while connected", async () => {
+    const r = rig();
+    const quiet = r.host.current.id;
+    r.host.begin("new");
+    const busy = r.host.current.id;
+    const a = outcome(r.g.generateShape("gear", { teeth: 12 }));
+    r.text({ id: r.sent.at(-1)!.id, ok: true, result: {} });
+    await a;
+    r.host.begin("open");
+    const offline = rig(false);
+    const b = outcome(offline.g.generateShape("gear", { teeth: 8 }));
+    offline.host.begin("close");
+    offline.connect();
+    expect({
+      online: r.sent.map((s) => [s.op, (JSON.parse(s.raw) as { doc?: string }).doc]),
+      offline: offline.sent.map((s) => s.op),
+      b: await b,
+      quietEnded: r.sent.some((s) => s.raw.includes(quiet)),
+    }).toEqual({
+      online: [
+        ["generateShape", busy],
+        ["doc_end", busy],
+      ],
+      offline: [],
+      b: "SessionEnded",
+      quietEnded: false,
+    });
   });
 
   it("a request of an ended session still in the outbox never goes out on reconnect", async () => {
@@ -141,12 +184,13 @@ describe("engine requests and document sessions", () => {
     const r = rig();
     const one: CadDocument = { parameters: {}, features: [{ id: "f1", type: "box" } as never] };
     const two: CadDocument = { parameters: {}, features: [...one.features, { id: "f2", type: "box" } as never] };
+    const rebuilds = () => r.sent.filter((s) => s.op === "rebuild");
     const shape = (i: number) => {
-      const m = JSON.parse(r.sent[i]!.raw) as Record<string, unknown>;
+      const m = JSON.parse(rebuilds()[i]!.raw) as Record<string, unknown>;
       return { whole: "document" in m, delta: "baseRevision" in m, known: m.known };
     };
     const answer = async (p: Promise<unknown>) => {
-      r.text({ id: r.sent.at(-1)!.id, ok: true, result: { mesh: null } });
+      r.text({ id: rebuilds().at(-1)!.id, ok: true, result: { mesh: null } });
       await p;
     };
     await answer(r.g.rebuild(one));
