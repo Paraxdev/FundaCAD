@@ -1,19 +1,5 @@
-// Which faces a per face material is on after a rebuild. A rebuild that changes
-// topology (a fillet, a slot) reorders OCCT's face list, so a stored index alone
-// lands on another face. Each assignment carries a print of its face, and each
-// build is matched against the one before it, with the engine selector's
-// tolerances (select/tuning.rs) where they apply.
-//
-// The rules, per body: an unchanged etag keeps every face. Otherwise an old face
-// stays on every new face that is the nearest one to some of its sample points,
-// so a split face keeps its material on each part; with the face count unchanged, an unmatched face
-// keeps its index if the face there looks like it; a face still unmatched takes
-// the nearest new face nobody stayed on with the same kind and normal. A new face
-// nothing maps to (a fillet, a slot floor) stays uncoloured, a face with no
-// match is deleted and its assignment draws nothing until an undo brings it back.
-// A ref the track does not hold resolves from the last place it was seen, or
-// from its own print: on the faces it lies on, else by index when the face count
-// and that face's look are unchanged.
+// Keeps per face materials on their faces across rebuilds: topology changes reorder OCCT's face list, so each
+// assignment carries a print of its face and each build is matched against the last (select/tuning.rs tolerances).
 
 import type { RebuildResult, Vec3 } from "../types";
 import { faceKey, parseFaceKey } from "./faceMaterials";
@@ -114,7 +100,6 @@ function byFace(F: ArrayLike<number>): { order: Int32Array; start: Int32Array } 
   return { order, start };
 }
 
-/** Every face of `body` in `result`, as a print. */
 export function bodyPrints(result: RebuildResult, body: BodySpan): FacePrint[] {
   return bodyGeom(result, body).faces.map((f) => f.print);
 }
@@ -193,8 +178,7 @@ function measure(result: RebuildResult, body: BodySpan, r: ResultGeom): BodyGeom
   return { faces, diag };
 }
 
-/** Farthest point sampling over triangle centroids and their midpoints towards
- *  each corner, all strictly inside the face. */
+// Farthest point sampling over triangle centroids and their midpoints towards each corner, all inside the face.
 function sample(tris: Float64Array, centroid: Vec3): number[] {
   const count = tris.length / 9;
   const step = Math.max(1, Math.floor(count / MAX_CANDIDATE_TRIS));
@@ -415,7 +399,9 @@ function mapBody(old: FacePrint[], g: BodyGeom): Claim[][] {
   return map;
 }
 
-/** Where each ref is on `result`, given the track the previous resolution handed back. */
+// Per body: an unchanged etag keeps every face. Otherwise an old face stays on each new face nearest to some of its
+// points, then keeps its index if that face still looks alike, then takes the nearest free face of the same kind and
+// normal. Unmatched refs draw nothing until an undo; refs the track lacks resolve from where they were last seen.
 export function resolveFaceRefs(
   refs: Iterable<readonly [string, FaceRef]>,
   result: RebuildResult,

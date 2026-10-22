@@ -1,72 +1,36 @@
-// A material on ONE FACE rather than on a whole body.
-//
-// WHY THIS EXISTS SEPARATELY FROM `bodyMaterial`. A body is one lump of one
-// stuff most of the time, and that is the assignment worth having: it is one
-// choice for a part, it survives every edit, and it is what an imported
-// assembly's own colours land in. But a great deal of what gets modelled is not
-// like that. A knob with a chrome ring, a panel with a brushed insert, a lens on
-// a printed housing: one solid, several surfaces. Without this the only way to
-// say so is to cut the part in two, which changes the geometry to describe the
-// picture.
-//
-// HOW A FACE IS NAMED. `bodyId#localFaceIndex`, the face's position in its
-// body's face list in the build on screen, the same name an imported STEP's face
-// colours travel under (document/faceColors.ts). A fillet or a cut reorders that
-// list, so the store keeps each assignment as a ref that follows its face from
-// build to build (document/faceRefs.ts) and hands this module the keys it
-// resolved to.
-//
-// Pure: no store, no Vue, no renderer. What a key is, and how a set of
-// assignments plus a build result becomes the two maps the viewport wants.
+// Materials on single faces, keyed `bodyId#localFaceIndex` like imported face colours. The store keeps a ref per
+// assignment that follows its face across builds (faceRefs.ts) and hands this module the resolved keys.
 
 import { finishOf, type BodyFinish, type MaterialDef } from "./materials";
 
-/** Between the body id and the face index. "#" rather than ":" because a body id
- *  is a slug and may contain a colon in a document somebody hand-edited, while
- *  "#" is not produced by any id generator here. */
+// "#" rather than ":" because a hand-edited body id may contain a colon, while no id generator here produces "#".
 export const FACE_KEY_SEP = "#";
 
 export function faceKey(body: string, localFace: number): string {
   return `${body}${FACE_KEY_SEP}${localFace}`;
 }
 
-/** The inverse, or null when the string is not one of ours. Tolerant because it
- *  reads a saved file: a hand-edited document must not be able to throw here. */
+// Tolerant: it reads saved files, and a hand-edited document must not throw here.
 export function parseFaceKey(k: string): { body: string; face: number } | null {
   const at = k.lastIndexOf(FACE_KEY_SEP);
   if (at <= 0) return null;
   const body = k.slice(0, at);
   const tail = k.slice(at + 1);
-  // Explicitly, because `Number("")` is 0 and 0 is a perfectly good face index:
-  // without this, "body1#" reads as the first face of body1 rather than as the
-  // malformed key it is.
+  // `Number("")` is 0, a valid face index, so "body1#" would read as body1's first face without this.
   if (!/^\d+$/.test(tail)) return null;
   const face = Number(tail);
   if (!Number.isSafeInteger(face)) return null;
   return { body, face };
 }
 
-/** What a build result says about where one body's faces start. The subset of
- *  the body metadata this module needs, so it can be tested without one. */
 export interface BodyFaceSpan {
   id: string;
   faceStart: number;
   faceCount: number;
 }
 
-/** Assignments, plus the model they are against, as GLOBAL face ids.
- *
- *  Global because that is the only face number the renderer has: the viewport
- *  paints by the id a pick returns, which is body-independent. Doing the
- *  arithmetic here, once, is what keeps the render bridge from having to know
- *  what a face key is.
- *
- *  Three ways an entry is dropped, all silent and all deliberate:
- *   * the body is gone (deleted, or renamed by a Join),
- *   * the face index is past the end of the body's list (the part got simpler),
- *   * the material has been deleted from the library.
- *  Each is the same situation as a body assignment naming a deleted material:
- *  nothing to draw, and the face goes back to what its body says. */
+// Global ids because the viewport paints by the id a pick returns. Entries for a gone body, a face index past the end
+// or a deleted material are dropped silently, so the face falls back to its body's material.
 export function resolveFaceMaterials(
   assigned: Iterable<readonly [string, string]>,
   bodies: readonly BodyFaceSpan[] | undefined,
@@ -87,25 +51,19 @@ export function resolveFaceMaterials(
   return out;
 }
 
-/** Global face id → colour, the map the viewport paints per vertex. */
 export function faceMaterialPaint(resolved: Map<number, MaterialDef>): Record<number, string> {
   const out: Record<number, string> = {};
   for (const [fid, m] of resolved) out[fid] = m.color;
   return out;
 }
 
-/** Global face id → finish, the map that becomes a second material on the body's
- *  mesh. Sparse against the app's DEFAULT finish rather than against the body's:
- *  a face whose material only says "this colour" needs no material of its own,
- *  and the colour has already travelled through the paint map above. */
+// Sparse against the default finish, not the body's: a colour-only material travels through the paint map already.
 export function faceMaterialFinishes(resolved: Map<number, MaterialDef>): Record<number, BodyFinish> {
   const out: Record<number, BodyFinish> = {};
   for (const [fid, m] of resolved) out[fid] = finishOf(m);
   return out;
 }
 
-/** Every face key that names a body no longer in the model, so a document does
- *  not accumulate assignments to bodies that were deleted five edits ago. */
 export function staleFaceKeys(
   assigned: Iterable<readonly [string, string]>,
   bodies: readonly BodyFaceSpan[] | undefined,
