@@ -1,10 +1,5 @@
-// Where a zoom, a pan or an orbit takes hold of the world.
-//
-// A zoom anchor over empty space used to be a ground hit up to twenty target
-// distances away, or a point on a sphere around the camera; zooming toward
-// either carried the target off the model for good. The order here never
-// reaches further than twice the eye distance and never casts more than 17
-// rays into the scene.
+// Where a zoom, a pan or an orbit takes hold of the world. The order never reaches past twice the eye distance or casts
+// more than 17 rays, so a zoom over empty space cannot carry the target off the model.
 
 import * as THREE from "three";
 import type { NavScene } from "../cameras";
@@ -40,9 +35,8 @@ export interface Anchor {
   depth: number;
 }
 
-/** Probe offsets in pixels, as fractions of the viewport height: two rings of
- *  eight, the outer one turned half a step so together they cover sixteen
- *  directions. */
+/** Probe offsets as fractions of the viewport height: two rings of eight, the outer turned half a step, sixteen
+ *  directions in all. */
 const RING: readonly [number, number][] = (() => {
   const out: [number, number][] = [];
   for (let i = 0; i < 8; i++) {
@@ -79,9 +73,8 @@ const fwdV = new THREE.Vector3();
 const rightV = new THREE.Vector3();
 const upV = new THREE.Vector3();
 
-/** Least depth at which any of `boxes` is inside the perspective frustum, NaN
- *  when none is. A box wholly in front of the eye counts from its nearest
- *  corner, which may lie off screen, so the answer never passes a part. */
+/** Least depth at which any box is inside the perspective frustum, NaN for none. A box wholly in front counts from its
+ *  nearest corner, which may be off screen, so the answer never passes a part. */
 export function visibleNearDepth(p: Pose, aspect: number, boxes: readonly THREE.Box3[]): number {
   forwardOf(p, fwdV);
   rightOf(p, rightV);
@@ -117,9 +110,8 @@ export function visibleNearDepth(p: Pose, aspect: number, boxes: readonly THREE.
 // six faces and the frustum's four sides and eye plane.
 type Half = [number, number, number, number];
 
-/** Least depth of the part of `box` inside the frustum, Infinity if none: a
- *  three variable LP, solved at the vertices of the eleven half-spaces. Only
- *  boxes reaching behind the eye get here, a tall part beside the camera. */
+/** Least depth of the part of `box` inside the frustum, Infinity if none: a three variable LP solved at the vertices of
+ *  the eleven half-spaces. Only boxes reaching behind the eye get here. */
 function nearestInFrustum(box: THREE.Box3, tx: number, ty: number): number {
   const hs: Half[] = [
     [1, 0, -tx, 0],
@@ -220,8 +212,7 @@ function boxEntryDepth(p: Pose, ctx: AnchorContext, ray: Ray): number | null {
   return depth;
 }
 
-/** The zoom anchor under a pixel: the model, then the sketch plane or the
- *  ground within 2·d, then the depth of the nearest model surface around the
+/** The model under the pixel, then the sketch plane or ground within 2·d, then the nearest model surface around the
  *  cursor, then where the ray enters the content box, then the target's depth. */
 export function zoomAnchor(p: Pose, ctx: AnchorContext, x: number, y: number): Anchor {
   const ray = castRay(p, ctx, x, y);
@@ -261,9 +252,8 @@ function probeRing(p: Pose, ctx: AnchorContext, x: number, y: number): ProbeResu
   return nearest ? { minDepth, nearest } : null;
 }
 
-/** The point a drag starting at this pixel orbits about: the model under it,
- *  then the nearest model surface around it, then the content's centre while
- *  that is on screen, then the target. */
+/** The model under the pixel, then the nearest model surface around it, then the content's centre while on screen,
+ *  then the target. */
 export function orbitPivot(p: Pose, ctx: AnchorContext, x: number, y: number): THREE.Vector3 {
   const ray = castRay(p, ctx, x, y);
   const m = modelDepth(p, ctx, ray);

@@ -115,9 +115,8 @@ export class OrbitChannel {
   }
 }
 
-/** A grab: world point G is eased onto the cursor pixel. The error is measured
- *  from the pose on screen every frame, so whatever else moved the view (a
- *  wheel mid-pan), the pan still ends with G exactly under the cursor. */
+/** World point G eased onto the cursor pixel, the error measured from the pose on screen each frame, so the pan ends
+ *  with G exactly under the cursor whatever else moved the view. */
 export class PanChannel {
   readonly grab: THREE.Vector3;
   cx: number;

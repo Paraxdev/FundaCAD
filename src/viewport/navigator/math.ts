@@ -1,12 +1,5 @@
-// Small exact pieces the navigator is built from: the turntable orientation,
-// its decomposition, and a critically damped spring.
-//
-// Orientation convention: three.js cameras look down their local -Z with local
-// +Y up. The level (turntable) orientations are q = Rz(yaw)·Rx(elev): elev 0
-// looks straight down with +Y up on screen (Top, exactly), elev π/2 looks
-// horizontally along +Y rotated by yaw, elev π looks straight up. Pitch, as the
-// user sees it, is elev - 90°. Camera right is Rz(yaw)·X, so it never leaves the
-// XY plane and the horizon cannot roll.
+// Level camera orientations are q = Rz(yaw)·Rx(elev), the camera looking down local -Z: elev 0 is Top with +Y up, pi/2
+// horizontal, pi straight up, pitch is elev - 90 deg. Camera right stays in XY, so the horizon cannot roll.
 
 import * as THREE from "three";
 
@@ -30,10 +23,8 @@ export interface Turntable {
   roll: number;
 }
 
-/** The level orientation looking the same way as `q`, and the roll between
- *  them: q = turntableQuat(yaw, elev)·Rz(roll). At the poles, where any yaw
- *  looks the same way, the yaw is taken from the camera's own right vector so
- *  the roll comes out 0 and the picture does not turn. */
+/** q = turntableQuat(yaw, elev)·Rz(roll). At the poles the yaw comes from the camera's own right vector, so the roll is
+ *  0 and the picture does not turn. */
 export function decompose(q: THREE.Quaternion, out: Turntable = { yaw: 0, elev: 0, roll: 0 }): Turntable {
   const fwd = va.set(0, 0, -1).applyQuaternion(q);
   const elev = Math.acos(Math.max(-1, Math.min(1, -fwd.z)));
@@ -66,10 +57,8 @@ export function wrapAngle(a: number): number {
   return r;
 }
 
-/** A critically damped spring on one number, integrated exactly, so the path
- *  it takes does not depend on how time is sliced into frames. `tau` is the
- *  smooth time: about how long it takes to cover most of the way (the same
- *  meaning as camera-controls' smoothTime). tau 0 lands at once. */
+/** Critically damped and integrated exactly, so the path does not depend on frame slicing. `tau` is the smooth time,
+ *  like camera-controls' smoothTime; 0 lands at once. */
 export class Spring {
   x = 0;
   v = 0;
