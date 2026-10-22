@@ -1,4 +1,6 @@
-use super::*;
+use std::io::{self, Read};
+
+use fundacad_spnav::*;
 
 fn record(data: [i32; 8]) -> [u8; RECORD_BYTES] {
     let mut bytes = [0u8; RECORD_BYTES];
@@ -94,6 +96,7 @@ mod socket {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{mpsc, Arc};
     use std::thread;
+    use std::time::{Duration, Instant};
 
     fn socket_path(name: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!("fundacad-spnav-{}-{name}.sock", std::process::id()));
