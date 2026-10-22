@@ -1,7 +1,5 @@
-//! The server runs from a copy of its executable, so a build can replace the
-//! original while a host holds the server open. On by default on Windows only,
-//! where a running executable cannot be overwritten; `FUNDACAD_MCP_SHADOW=1`
-//! turns it on here.
+//! The server runs from a copy of its executable, so a build can replace the original. On by default
+//! on Windows only; `FUNDACAD_MCP_SHADOW=1` turns it on here.
 
 mod common;
 

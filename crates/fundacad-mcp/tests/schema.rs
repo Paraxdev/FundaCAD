@@ -1,15 +1,5 @@
-//! The schema, held to the engine. A port of
-//! the Python MCP server's `test_schema.py`.
-//!
-//! `schema.json` is hand-written, because the authority, `src/types.ts`, is a
-//! TypeScript union whose value is in its comments, and no generator turns that
-//! into prose worth reading. Hand-written documentation rots, and this is the
-//! test that stops it: every type documented there must be one the document
-//! schema knows, and every type it knows must be documented.
-//!
-//! Without this, a new feature type ships and the agent that could have used it
-//! never hears about it. The failure mode is silence, which is the kind no
-//! end-to-end test finds.
+//! `schema.json` is hand-written from `src/types.ts`, so this holds it to the engine: every documented type must
+//! be one the document schema knows and every known type documented, or a new type ships silently.
 
 use std::collections::BTreeSet;
 
@@ -17,11 +7,8 @@ use fundacad_core::schema::Feature;
 use fundacad_mcp::schema as s;
 use serde_json::Value;
 
-/// Types a PLUGIN owns outright, geometry included (docs/PLUGINS.md). The core
-/// schema carries them as unknown features and the engine hands them to the
-/// plugin host, so they are not in `Feature::KNOWN` and must not be: an entry
-/// here is a claim that this build ships that plugin, which is worth failing on
-/// if it ever stops being true.
+/// Types a PLUGIN owns outright (docs/PLUGINS.md): unknown to the core schema, so not in `Feature::KNOWN`.
+/// An entry claims this build ships that plugin, worth failing on if it stops being true.
 const PLUGIN_TYPES: &[&str] = &[
     "counterboreBridge",
     "elephantFootChamfer",
@@ -153,9 +140,7 @@ fn an_unknown_type_is_answered_with_the_list_rather_than_nothing() {
 
 #[test]
 fn the_working_order_says_the_things_that_are_easy_to_get_wrong() {
-    // Three facts that cost a build each if the agent has to discover them: Z
-    // is up, primitives are centred on the origin, and body ids are not feature
-    // ids.
+    // Three facts that cost a build each to discover: Z is up, primitives are centred, body ids are not feature ids.
     let how = s::how_to();
     assert!(how.contains("Z is up"));
     assert!(how.contains("CENTRED ON THE ORIGIN"));
@@ -164,10 +149,8 @@ fn the_working_order_says_the_things_that_are_easy_to_get_wrong() {
 
 #[test]
 fn the_import_tool_still_says_what_to_do_when_there_is_no_path() {
-    // The description is a literal in the tool attribute and the refusals quote
-    // a constant, so the two can drift. An agent that decides a part cannot be
-    // sent models against something it made up, which is the failure the
-    // sentence exists to prevent, so it has to be in both.
+    // The tool description is a literal and the refusals quote a constant, so the two can drift,
+    // and the sentence that stops an agent modelling against a made up part must be in both.
     let tool = fundacad_mcp::server::FundaCad::with_link(fundacad_mcp::link::EngineLink::private());
     let router = tool.tools();
     let doc_import = router.iter().find(|t| t.name == "doc_import").expect("doc_import is offered");
@@ -180,11 +163,8 @@ fn the_import_tool_still_says_what_to_do_when_there_is_no_path() {
 
 #[test]
 fn every_documented_field_of_a_core_type_is_one_the_feature_reads() {
-    // The other half of keeping the reference honest: a field the schema
-    // documents and the feature does not have is refused by feature_add, so an
-    // agent following the reference to the letter is told it is wrong. Each
-    // documented field is set to null on the type's example, which a field the
-    // feature has reads as absent and a field it lacks keeps as unread.
+    // A field the schema documents that the feature lacks is refused by feature_add. Each documented field is set to
+    // null on the example, which a real field reads as absent and a missing one keeps as unread.
     for (kind, e) in s::features() {
         if !Feature::is_core_type(kind) {
             continue;
@@ -206,8 +186,7 @@ fn every_documented_field_of_a_core_type_is_one_the_feature_reads() {
 
 #[test]
 fn every_plugin_feature_type_is_listed_here() {
-    // PLUGIN_TYPES is what the two coverage tests above trust, so a plugin
-    // shipping a type it does not list (as `organic` once did) went unnoticed.
+    // PLUGIN_TYPES is what the coverage tests above trust, so a plugin shipping a type it does not list fails here.
     let plugins = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins");
     let mut shipped = BTreeSet::new();
     for entry in std::fs::read_dir(&plugins).expect("the plugins directory") {
@@ -224,9 +203,7 @@ fn every_plugin_feature_type_is_listed_here() {
 
 #[test]
 fn the_server_instructions_survive_a_host_that_keeps_2048_characters() {
-    // Claude Code cuts server instructions off at 2048 characters. The old
-    // instructions were the whole working order and lost every rule after
-    // "Use `move` to place the" to it.
+    // Claude Code cuts server instructions off at 2048 characters.
     use fundacad_mcp::server::instructions_for;
     for live in [false, true] {
         let text = instructions_for(live);

@@ -1,6 +1,5 @@
-//! The `stress` tool: a cantilever against the real engine, with its report
-//! and its picture, arguments refused before the engine is asked anything,
-//! and a body that is not there named alongside the features that failed.
+//! The `stress` tool on a cantilever against the real engine: report, picture, arguments refused before
+//! the engine is asked, and a missing body named with the features that failed.
 
 mod common;
 

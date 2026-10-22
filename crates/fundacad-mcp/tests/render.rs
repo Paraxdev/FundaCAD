@@ -1,9 +1,4 @@
-//! The rasteriser `view` draws with. A port of
-//! the Python MCP server's `test_render.py`.
-//!
-//! Everything here is arrays in, array out, so the whole of it is testable by
-//! counting pixels, which is the reason the renderer is pure of the wire and of
-//! files.
+//! The rasteriser `view` draws with, tested by counting pixels since it is pure of the wire and of files.
 
 use fundacad_mcp::render::{self as r, Canvas, Drawable, Rgb, Vec3, ViewRequest};
 use serde_json::{json, Value};
@@ -83,8 +78,6 @@ fn channel_sum(c: &Canvas, rows: std::ops::Range<u32>, channel: usize) -> i64 {
     rows.flat_map(|y| (0..c.w).map(move |x| (x, y))).map(|(x, y)| i64::from(c.pixel(x, y)[channel])).sum()
 }
 
-// --- the camera --------------------------------------------------------------
-
 #[test]
 fn the_basis_is_orthonormal_for_every_named_view() {
     for (name, _) in r::NAMED_VIEWS {
@@ -101,9 +94,8 @@ fn the_basis_is_orthonormal_for_every_named_view() {
 
 #[test]
 fn looking_straight_down_does_not_collapse() {
-    // The control for the up-vector fallback. World up is +Z, so a top view has
-    // it parallel to the view direction and the obvious cross product is zero,
-    // without the fallback the whole image is one pixel wide.
+    // The control for the up-vector fallback: in a top view world up +Z is parallel to the view direction,
+    // and without the fallback the image is one pixel wide.
     for name in ["top", "bottom"] {
         let canvas = draw(&[cube("b1")], &request(120, 120, name));
         assert!(painted(&canvas) > 5000, "{name} view painted {} pixels", painted(&canvas));
@@ -112,9 +104,7 @@ fn looking_straight_down_does_not_collapse() {
 
 #[test]
 fn world_up_lands_in_the_upper_half_of_the_image() {
-    // Screen y runs down and world up runs up, so the projection negates. Get
-    // that wrong and every render is upside down, which nothing else here would
-    // notice: a box looks the same either way.
+    // The projection negates y; get it wrong and every render is upside down, which a box alone never shows.
     let tall = box_mesh([20.0, 20.0, 6.0], [0.0, 0.0, 30.0], "b1");
     let flat = box_mesh([20.0, 20.0, 6.0], [0.0, 0.0, -30.0], "b2");
     let canvas = draw(&[tall, flat], &request(200, 200, "front"));
@@ -152,8 +142,6 @@ fn focus_frames_the_size_it_was_asked_for() {
     assert!(painted(&wide) < 200 * 200, "the fitted view should leave a margin");
     assert_eq!(painted(&close), 200 * 200, "a 20mm window on a 200mm box must fill the frame");
 }
-
-// --- the raster --------------------------------------------------------------
 
 #[test]
 fn nothing_in_gives_a_clean_background() {
@@ -229,8 +217,6 @@ fn the_inside_of_a_surface_is_drawn_darker() {
     assert!(f64::from(inside) < f64::from(out) * 0.8);
 }
 
-// --- sections ----------------------------------------------------------------
-
 fn rows_painted(c: &Canvas) -> usize {
     (0..c.h).filter(|y| (0..c.w).any(|x| off_background(c.pixel(x, *y)))).count()
 }
@@ -284,13 +270,8 @@ fn the_default_cut_is_through_the_middle_wherever_the_part_sits() {
 
 #[test]
 fn the_two_sides_of_a_cut_are_different_pictures() {
-    // The half that survives has to depend on which half was asked for.
-    //
-    // The vocabulary was "above"/"over"/"+" against everything else, so `max`,
-    // the word `at`, `min` and `max` elsewhere invite, silently meant `below`.
-    // Both sides rendered identical images and the reply said "keeping max"
-    // over a picture of the other half. Asserting on the PAIR is what catches
-    // that; a test of one side alone passes either way.
+    // The kept half must depend on the word asked for. Asserting on the PAIR is what catches a vocabulary where
+    // `max` silently meant `below`; a test of one side alone passes either way.
     let shot = |word: &str| {
         let mut req = request(160, 160, "front");
         req.section = json!({"axis": "Y", "at": 0, "keep": word});
@@ -308,9 +289,7 @@ fn the_two_sides_of_a_cut_are_different_pictures() {
 
 #[test]
 fn a_keep_word_that_is_not_a_side_is_refused() {
-    // Guessing is what made the bug above invisible: the picture was wrong and
-    // nothing said so. A word this does not know has no safe reading, so it has
-    // to stop rather than pick one.
+    // A word this does not know has no safe reading, so it stops rather than picking one.
     let mut req = request(80, 80, "front");
     req.section = json!({"axis": "Y", "keep": "middle"});
     let out = r::render(&[cube("b1")], &req);
@@ -348,8 +327,6 @@ fn clipping_a_segment() {
     assert!(r::clip_segment(a, b, [1.0, 0.0, 0.0], -1.0).is_none());
 }
 
-// --- input shapes ------------------------------------------------------------
-
 #[test]
 fn a_polyline_is_read_flat_nested_or_wrapped() {
     let flat = r::polyline_points(&json!([0, 0, 0, 1, 1, 1]));
@@ -385,8 +362,6 @@ fn only_the_named_bodies_are_drawn() {
     let mid = one.pixel(100, 100);
     assert!(mid[2] > mid[0], "the kept body should keep its own colour");
 }
-
-// --- per-vertex colour and the colour bar ------------------------------------
 
 /// A cube that brings a colour for each of its corners, as a stress surface does.
 struct Painted {
