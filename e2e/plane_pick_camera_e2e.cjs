@@ -63,11 +63,16 @@ const check = (name, ok, detail) => {
   // --- planes over the model ---------------------------------------------------
   await page.evaluate(() => window.__fundacad.handleAction("sketch"));
   await page.waitForTimeout(500);
-  const state = await page.evaluate(() => ({
-    onTop: window.viewport.constructionOnTop,
-    depthTest: window.viewport.scene.planes.XY.material.depthTest,
-  }));
-  check("the planes draw over the model while a tool asks for one", state.onTop && state.depthTest === false, JSON.stringify(state));
+  const state = await page.evaluate(() => {
+    const xy = window.viewport.scene.planes.XY;
+    return {
+      onTop: window.viewport.constructionOnTop,
+      fill: xy.material.depthTest,
+      ghost: xy.children.find((c) => c.userData.role === "ghost")?.material.depthTest,
+    };
+  });
+  check("the planes take a click before the model while a tool asks for one, drawn faint where it hides them",
+    state.onTop && state.fill === true && state.ghost === false, JSON.stringify(state));
 
   // A 5 x 5 grid inside each origin tile, for a point where a body face lies behind the tile.
   const scanTiles = () => page.evaluate(() => {

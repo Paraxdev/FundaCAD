@@ -47,7 +47,9 @@ export const LABEL_FONT_PX = 11;
 export const LABEL_BOX_PX = { w: 28, h: 16 } as const;
 const LABEL_DPR = 4;
 const LABEL_FONT = `700 ${LABEL_FONT_PX * LABEL_DPR}px "Space Grotesk", Inter, system-ui, sans-serif`;
-export const TILE_ORDER = { fill: 951, rim: 952, label: 953 } as const;
+/** What a body hides keeps this share of the fill. */
+export const GHOST_SHARE = 0.4;
+export const TILE_ORDER = { ghost: 950, fill: 951, rim: 952, label: 953 } as const;
 
 export const TILE_SHAPE: TileShape = {
   sizePx: TILE_SIZE_PX,
@@ -138,13 +140,16 @@ function rimGeometry(shape: TileShape): THREE.BufferGeometry {
 
 interface Tile {
   fill: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+  ghost: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   rim: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   label: THREE.Sprite;
 }
 
-function tileMaterial(color: number): THREE.MeshBasicMaterial {
+function tileMaterial(color: number, depthTest: boolean): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({
-    color, transparent: true, side: THREE.DoubleSide, depthTest: false, depthWrite: false,
+    color, transparent: true, side: THREE.DoubleSide, depthTest, depthWrite: false,
+    // The XY tile lies in the plane of a part's floor, seen from below; the offset wins it that tie.
+    ...(depthTest ? { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 } : {}),
   });
 }
 
@@ -159,11 +164,15 @@ export class OriginTiles {
   constructor(scene: THREE.Scene, shape: Partial<TileShape> = {}) {
     this.shape = { ...TILE_SHAPE, ...shape };
     const make = (k: Plane3): Tile => {
-      const fill = new THREE.Mesh(fillGeometry(this.shape), tileMaterial(TILE_COLOR[k]));
+      const fill = new THREE.Mesh(fillGeometry(this.shape), tileMaterial(TILE_COLOR[k], true));
       fill.userData.plane = k;
       fill.renderOrder = TILE_ORDER.fill;
       fill.visible = false;
-      const rim = new THREE.Mesh(rimGeometry(this.shape), tileMaterial(TILE_COLOR[k]));
+      // Drawn through whatever is in front, so a tile inside or behind a part is still found.
+      const ghost = new THREE.Mesh(fill.geometry, tileMaterial(TILE_COLOR[k], false));
+      ghost.userData.role = "ghost";
+      ghost.renderOrder = TILE_ORDER.ghost;
+      const rim = new THREE.Mesh(rimGeometry(this.shape), tileMaterial(TILE_COLOR[k], true));
       rim.userData.role = "rim";
       rim.renderOrder = TILE_ORDER.rim;
       const label = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -173,9 +182,9 @@ export class OriginTiles {
       label.userData.role = "label";
       label.renderOrder = TILE_ORDER.label;
       label.scale.set(LABEL_BOX_PX.w, LABEL_BOX_PX.h, 1);
-      fill.add(rim, label);
+      fill.add(ghost, rim, label);
       this.group.add(fill);
-      return { fill, rim, label };
+      return { fill, ghost, rim, label };
     };
     this.tiles = { XY: make("XY"), XZ: make("XZ"), YZ: make("YZ") };
     this.planes = { XY: this.tiles.XY.fill, XZ: this.tiles.XZ.fill, YZ: this.tiles.YZ.fill };
@@ -192,6 +201,7 @@ export class OriginTiles {
       t.fill.geometry.dispose();
       t.rim.geometry.dispose();
       t.fill.geometry = fillGeometry(this.shape);
+      t.ghost.geometry = t.fill.geometry;
       t.rim.geometry = rimGeometry(this.shape);
     }
     this.pose();
@@ -231,6 +241,7 @@ export class OriginTiles {
       const t = this.tiles[k];
       t.fill.geometry.dispose();
       t.fill.material.dispose();
+      t.ghost.material.dispose();
       t.rim.geometry.dispose();
       t.rim.material.dispose();
       t.label.material.map?.dispose();
@@ -255,6 +266,7 @@ export class OriginTiles {
       const look = TILE_LOOK[this.states[k]];
       const t = this.tiles[k];
       t.fill.material.opacity = look.fill;
+      t.ghost.material.opacity = look.fill * GHOST_SHARE;
       t.rim.material.opacity = look.rim;
       t.label.material.opacity = look.label;
     }

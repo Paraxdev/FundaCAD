@@ -170,8 +170,41 @@ const PLANES = ["XY", "XZ", "YZ"];
   check("one held at the 24 px floor", sizes.some((s) => Math.abs(s.want - 24) < 1e-6), JSON.stringify(sizes));
   await escape();
   await page.evaluate(async () => {
-    window.store.removeFeature?.("TM");
-    window.store.removeFeature?.("TB");
+    window.store.removeFeature("TM");
+    window.store.removeFeature("TB");
+    await window.store.rebuildNow();
+  });
+  await settle();
+
+  console.log("\n[a body around the origin]");
+  await home([0, 0, 0], 60);
+  // A cube a little larger than the tiles, so part of each tile is inside it and part outside.
+  const cube = await page.evaluate(() => 1.2 * 46 * window.viewport.pixelWorldSize(new (window.viewport.camera.position.constructor)(0, 0, 0)));
+  await page.evaluate(async (s) => {
+    window.store.addFeature({ id: "TC", type: "box", length: s, width: s, height: s });
+    await window.store.rebuildNow();
+  }, Math.round(cube * 100) / 100);
+  await settle();
+  await home([0, 0, 0], 60);
+  await askPlane();
+  const depth = await page.evaluate((planes) => Object.fromEntries(planes.map((k) => {
+    const m = window.viewport.scene.planes[k];
+    const role = (r) => m.children.find((c) => c.userData.role === r);
+    return [k, { fill: m.material.depthTest, ghost: role("ghost").material.depthTest, rim: role("rim").material.depthTest, label: role("label").material.depthTest }];
+  })), PLANES);
+  check("fill and rim are depth tested, the ghost and the name are not",
+    PLANES.every((k) => depth[k].fill && depth[k].rim && !depth[k].ghost && !depth[k].label), JSON.stringify(depth));
+  t = await tiles();
+  const behind = await page.evaluate((t) => Object.fromEntries(Object.entries(t).map(([k, p]) => {
+    const c = window.viewport.pickConstructionAt(p.x, p.y);
+    return [k, { plane: c?.kind === "base" ? c.plane : null, face: !!window.viewport.pickFaceForPressPull(p.x, p.y) }];
+  })), t);
+  check("a tile inside the body still picks its plane", PLANES.every((k) => behind[k].plane === k) && PLANES.some((k) => behind[k].face),
+    JSON.stringify(behind));
+  await shot("depth-box-noir", around(await origin(), 170));
+  await escape();
+  await page.evaluate(async () => {
+    window.store.removeFeature("TC");
     await window.store.rebuildNow();
   });
   await settle();
@@ -276,8 +309,8 @@ const PLANES = ["XY", "XZ", "YZ"];
       await reshape(DEFAULT);
       await escape();
       await page.evaluate(async () => {
-        window.store.removeFeature?.("RM");
-        window.store.removeFeature?.("RB");
+        window.store.removeFeature("RM");
+        window.store.removeFeature("RB");
         await window.store.rebuildNow();
       });
       await settle();
