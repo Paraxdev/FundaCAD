@@ -87,7 +87,13 @@ function rig(o: { dirty?: boolean } = {}) {
   store.markSaved("D:/jigs/Bracket.funda");
   if (o.dirty) store.addFeature({ id: "sk2", type: "sketch", plane: "XY", entities: [] } as unknown as Feature);
   const resetCamera = vi.fn();
-  const e = { store, sketch: { hasUncommittedEdits: false }, viewport: { resetCamera }, geometry } as unknown as Engine;
+  const e = {
+    store,
+    sketch: { hasUncommittedEdits: false },
+    viewport: { resetCamera },
+    geometry,
+    frameNextModel: vi.fn(),
+  } as unknown as Engine;
   return { e, store, resetCamera };
 }
 

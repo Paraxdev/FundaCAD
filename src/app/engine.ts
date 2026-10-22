@@ -170,6 +170,7 @@ export interface Engine {
   featureForFace(faceId: number): string | null;
   deleteSelectedFace(): boolean;
   noteCommitted(id: string | null): void;
+  frameNextModel(): void;
 
   isSketchConsumed(id: string): boolean;
   isSketchVisible(id: string): boolean;
