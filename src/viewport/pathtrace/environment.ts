@@ -1,6 +1,5 @@
-// The room the model reflects, as the equirect the tracer samples. Rendered by
-// the viewport's WebGL renderer into a cube and unwrapped on the GPU, then read
-// back so the tracer's own device can take it as plain data.
+// Rendered by the WebGL renderer into a cube and unwrapped on the GPU, then read back so the tracer's
+// own device can take it as plain data.
 
 import * as THREE from "three";
 import type { HdrImage } from "../hdrImage";
@@ -166,9 +165,8 @@ export function backgroundTexture(c: THREE.Color): THREE.DataTexture {
   return t;
 }
 
-/** How an equirect's rows lie in the world, tests/fixtures/env_directions.json:
- *  "y" the readback above, row 0 at -Y; "z" an HDR as hdrRoom places it, row 0
- *  at +Z, azimuth -2 pi u. v counts rows from row 0. */
+/** tests/fixtures/env_directions.json: "y" is the readback, row 0 at -Y; "z" an HDR as hdrRoom places it,
+ *  row 0 at +Z, azimuth -2 pi u. v counts rows from row 0. */
 export type EnvLayout = "y" | "z";
 
 export function equirectDirection(layout: EnvLayout, u: number, v: number): [number, number, number] {
@@ -195,9 +193,8 @@ export function hemiAt(dir: readonly number[], h: TraceHemi | null): [number, nu
   ];
 }
 
-/** An imported panorama in the "z" layout, half float RGBA top row first:
- *  turned by `rotationDeg` as a column shift, times 2^exposure as hdrRoom
- *  bakes it, with the hemisphere added as FRAGMENT adds it to a room. */
+/** Half float RGBA, top row first, turned by `rotationDeg` as a column shift, times 2^exposure as hdrRoom
+ *  bakes it, plus the hemisphere as FRAGMENT adds it to a room. */
 export function hdrEnvironment(
   img: HdrImage,
   rotationDeg: number,

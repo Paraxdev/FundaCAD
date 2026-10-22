@@ -1,5 +1,4 @@
-// How much work the path tracer is handed per frame, at what resolution, and
-// where it stops. Pure, so the controller is tested without a GPU.
+// Pure, so the per frame budget controller is tested without a GPU.
 
 /** GPU time per traced frame that leaves the UI near 60 fps. */
 export const TARGET_MS = 12;
@@ -90,9 +89,8 @@ export function costProfile(p: { discharging: boolean }): CostProfile {
   return p.discharging ? { cap: 64, budgetScale: 0.5 } : { cap: 256, budgetScale: 1 };
 }
 
-/** The tracer's renderScale, against a canvas drawn at CSS size (pixel ratio
- *  at most 1), so the trace lands at 0.75 of the device pixels, or 0.5 on a
- *  dense or very large screen or on battery. */
+/** Against a canvas drawn at CSS size (pixel ratio at most 1), the trace lands at 0.75 of the device
+ *  pixels, or 0.5 on a dense or very large screen or on battery. */
 export function renderScaleFor(p: { cssHeight: number; dpr: number; discharging: boolean }): number {
   const dpr = p.dpr > 0 ? p.dpr : 1;
   const device = p.discharging || dpr > 1.5 || p.cssHeight * dpr > 1440 ? 0.5 : 0.75;
@@ -109,10 +107,8 @@ export function tracedPictureScale(w: number, h: number, scale: number, maxDimen
   return Math.floor(k * 1000) / 1000;
 }
 
-/** The library's preview of a restart is one frame of a few wavefront steps,
- *  and a pixel past the frame's path slots waits in a queue those steps never
- *  reach, so a preview with more pixels than slots is a band on black. This
- *  scale keeps its ceil(scale * w) by ceil(scale * h) pixels within `slots`. */
+/** The library previews a restart in one frame of a few wavefront steps, and pixels past the path slots
+ *  never get traced, so a preview with more pixels than slots is a band on black. */
 export function previewScale(slots: number, w: number, h: number, most: number): number {
   const px = (s: number) => Math.ceil(s * w) * Math.ceil(s * h);
   let s = Math.min(most, Math.sqrt(slots / Math.max(1, w * h)));
@@ -127,9 +123,8 @@ export interface PreviewTracer {
   lowResScale: number;
 }
 
-/** Sizes the preview of the frame the tracer is about to draw, only on a
- *  restart's first frame: the switch to full resolution sizes its copy of the
- *  preview from lowResScale, so a change after the first frame cuts it. */
+/** Only on a restart's first frame: the switch to full resolution sizes its copy of the preview
+ *  from lowResScale, so a change after the first frame cuts it. */
 export function fitPreview(t: PreviewTracer, buffer: { x: number; y: number }, most: number) {
   if (t._resetTime !== -1) return;
   const w = Math.max(1, Math.floor(t.renderScale * buffer.x));

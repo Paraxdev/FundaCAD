@@ -1,10 +1,5 @@
-// How far the realtime view is from the path traced one, as numbers. No imports,
-// so vitest and an e2e script that injects the compiled source read the same
-// code. Both images are 8 bit sRGB RGBA, the mask is one byte per pixel and
-// pixels with a zero byte are left out of every number and drawn clear in the
-// heat map. The SSIM windows are weighted by the mask too, so a masked out pixel
-// never reaches a masked in score. It is an offline check, about 300 ms and 160 MB
-// at 1080p, not something to run per frame.
+// No imports, so vitest and an e2e script that injects the compiled source read the same code. A zero mask byte
+// leaves a pixel out of every number, SSIM windows too. Offline only, about 300 ms and 160 MB at 1080p.
 
 export interface GapImage {
   width: number;

@@ -1,6 +1,4 @@
-// Battery and a minimised window, the two things the page's visibility state
-// does not tell the tracer. Both are best effort: getBattery is missing outside
-// Chromium, and a desktop without a battery reports charging.
+// Best effort: getBattery is missing outside Chromium, and a desktop without a battery reports charging.
 
 export interface PowerState {
   discharging: boolean;

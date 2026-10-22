@@ -1,5 +1,4 @@
-// When the path tracer may spend GPU time. Pure, so the switching rules are
-// tested without a GPU.
+// Pure, so the rules for when the tracer may spend GPU time are tested without a GPU.
 
 import type { ViewMode } from "../../ui/renderPrefs";
 
