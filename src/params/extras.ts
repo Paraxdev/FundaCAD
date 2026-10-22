@@ -1,7 +1,5 @@
-// Evaluation over `paramExtras` and the per-parameter controls: which checks
-// fail, what a value clamps to, what a configuration would change. Pure, so the
-// store's commits and the FundaCAD.ExtraParameters panels agree by construction.
-// Nothing here writes a document; engine.ts owns rename/delete through extras.
+// Pure evaluation over `paramExtras` and parameter controls (failing checks, clamps, configuration effects), so
+// store commits and the ExtraParameters panels agree. engine.ts owns rename and delete through extras.
 
 import type { CadDocument, ParamCheck, ParamConfiguration, ParamControl, ParamDef, ParamExtras } from "../types";
 import { evalExpr } from "./eval";
