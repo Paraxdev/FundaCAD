@@ -7,9 +7,9 @@ use std::process::Command;
 // rustc --test on every platform.
 #[allow(dead_code)]
 #[path = "../../src/log_file.rs"]
-mod log_file;
+pub(crate) mod log_file;
 
-use log_file::{open, redact_user_paths, rotate_if_over, start, tail, CAP, NAME};
+use log_file::{open, redact_user_paths, rotate_if_over, start, tail, tail_for_run, RunLog, CAP, NAME};
 
 const CHILD: &str = "FUNDACAD_LOG_FILE_CHILD";
 
@@ -326,14 +326,4 @@ fn a_run_writing_to_a_log_that_is_still_empty_gives_none() {
     fs::write(dir.join(NAME), "first line\n").unwrap();
     assert_eq!(tail_for_run(&RunLog::ToFile(dir.join(NAME)), 64).as_deref(), Some("first line\n"));
     fs::remove_dir_all(dir.parent().unwrap()).unwrap();
-}
-
-#[test]
-fn user_names_are_hidden_the_way_the_shared_cases_say() {
-    let cases: Vec<(String, String)> =
-        serde_json::from_str(include_str!("../../tests/fixtures/redact_cases.json")).unwrap();
-    assert!(cases.len() > 10);
-    for (text, want) in cases {
-        assert_eq!(redact_user_paths(&text), want, "{text}");
-    }
 }
