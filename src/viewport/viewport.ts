@@ -57,6 +57,7 @@ import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods } from 
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { flushRaycastIndex } from "./raycastIndex";
 import { applyKeptSpan, SECTION_PICK_SLACK } from "./sectionPick";
+import { clipSelectionOverlays } from "./selectionGlow";
 import { GhostLayer, type BlendGhostEdge } from "./ghosts";
 import type { BlendKind } from "../features/blendGhost";
 import { hideFlushSeams } from "./flushSeams";
@@ -3404,6 +3405,7 @@ export class Viewport {
     this.scene.renderer.localClippingEnabled = on;
     const planes = on ? [this.sectionPlane] : null;
     this.picker.setClip(on ? this.sectionPlane : null);
+    clipSelectionOverlays(planes);
     if (this.model) {
       for (const b of this.model.bodies) {
         for (const mat of bodyMaterials(b)) mat.clippingPlanes = planes;

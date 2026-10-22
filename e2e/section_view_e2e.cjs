@@ -51,6 +51,8 @@ function modelDoc() {
   try {
     const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+    const shaderErrors = [];
+    page.on("console", (m) => { if (/Shader Error|WebGLProgram/.test(m.text())) shaderErrors.push(m.text().slice(0, 300)); });
     await page.addInitScript((port) => {
       const N = window.WebSocket;
       class P extends N {
@@ -386,6 +388,20 @@ function modelDoc() {
     s = await state();
     check("Esc ends Fillet and the cut stays on", !s.fillet && s.phase === "on" && s.sectioned, s);
     await shot("04_picks");
+
+    console.log("\n[part 5: the glow stops at the cut]");
+    const glow = await page.evaluate((h) => {
+      const v = window.viewport;
+      const s = v.projectToScreen(new v.camera.position.constructor(88, 22, h));
+      v.selectBodyAt(s.x, s.y);
+      const glows = [];
+      v.scene.scene.traverse((o) => { if (o.name === "selection-glow") glows.push(o.material.clippingPlanes); });
+      return { selected: v.highlighter.getSelectedBodies(), glows: glows.length, clipped: glows.every((p) => p?.length === 1 && p[0] === v.sectionPlane) };
+    }, HEIGHT);
+    await page.waitForTimeout(500);
+    check("a selected body's glow is clipped by the cut", glow.selected.length === 1 && glow.glows >= 1 && glow.clipped, glow);
+    check("the clipped glow shader compiles", shaderErrors.length === 0, shaderErrors);
+    await shot("05_glow");
   } catch (err) {
     console.error(err);
     failures++;
