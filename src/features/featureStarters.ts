@@ -419,10 +419,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
-  // Datum Axis on an edge: pick a straight model edge and the axis becomes its
-  // line, and STAYS its line, the engine re-resolves the edge every rebuild so
-  // the axis follows the part (the datumPlane-on-a-face story, for an axis). The
-  // baked origin/dir written here are the cache the follow falls back to.
+  // Datum Axis on an edge: the engine re-resolves the edge every rebuild so the axis follows the part. The baked
+  // origin and dir written here are the cache the follow falls back to.
   function createDatumAxisOnEdge() {
     pickEdgeInteractive("Select a straight edge for the datum axis", (sel, points) => {
       const line = axisFromEdge(points as Vec3[]);
@@ -447,8 +445,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     return refs.every((r): r is PointAt => r !== null) ? refs : null;
   }
 
-  /** One preselected edge (the edge right-click selects it first) is taken
-   *  as the pick, else the edge is picked. */
+  /** A preselected edge (right-click selects it first) is taken as the pick, otherwise the edge is picked. */
   function withEdge(promptText: string, onPick: (sel: Selector, points: readonly Vec3[]) => void) {
     const pre = viewport.selectedEdgeLines();
     const only = pre.length === 1 ? pre[0] : undefined;
@@ -463,9 +460,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     return edgeMatchSelectorFrom({ points: points as Vec3[], body }) ?? sel;
   }
 
-  // Plane normal to an edge: at the middle of the edge, its `t` editable in the
-  // values panel afterwards (0 one end, 1 the other). The engine re-resolves the
-  // edge every rebuild, so a longer edge keeps the plane at the same fraction.
+  // Plane normal to an edge, starting at its middle; `t` is the fraction along it (0 one end, 1 the other). The
+  // engine re-resolves the edge every rebuild, so a longer edge keeps the plane at the same fraction.
   function createPlaneNormalToEdge() {
     withEdge("Select an edge or path for the plane normal to it", (sel, points) => {
       const at = alongPolyline(points, 0.5);
@@ -512,9 +508,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
-  // Plane at an angle: a straight edge as the hinge, then the face or plane the
-  // angle is measured from. Starts at 45 degrees, edited in the values panel;
-  // the engine places it, this first placement is only the cache.
+  // Plane at an angle: a straight edge as the hinge, then the face or plane the angle is measured from, 45 degrees
+  // to start. The engine places it, this first placement is only the cache.
   function createPlaneAtAngle() {
     withEdge("Select a straight edge to turn the plane about", (sel, points) => {
       const line = axisFromEdge(points as Vec3[]);
@@ -581,7 +576,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     selectFeature(id, false);
   }
 
-  // Axis where two planes meet.
   function createAxisFromPlanes() {
     pickPlaneInteractive("Select the first plane or flat face", (a, fa, da) => {
       requestAnimationFrame(() => {
@@ -608,13 +602,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
-  /** Collect `n` points on the model, snapping to what it actually has.
-   *
-   *  Every point taken so far is drawn, and so is the one under the cursor, so
-   *  the pick is visible rather than remembered, three clicks with no feedback
-   *  is a gesture nobody can recover from a mistake in. Escape drops the last
-   *  point, and drops the whole pick when there is none left, which is the same
-   *  stack Escape means everywhere else in the app. */
+  /** Every point taken so far and the one under the cursor are drawn. Escape drops the last point, or the whole pick
+   *  when none is left. */
   function pickPointsInteractive(
     n: number,
     promptText: string,
@@ -691,34 +680,27 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     window.addEventListener("keydown", onEsc, true);
   }
 
-  // Right-click → "Offset plane from face": same as Datum Plane but the source is
-  // the right-clicked face (no separate pick step).
+  // Right-click "Offset plane from face": Datum Plane with the right-clicked face as source, no pick step.
   function offsetPlaneFromFace(face: PlaneDef, parentId?: string) {
     if (toolBusy()) return;
     placeNewDatum(face, parentId ? { planeId: parentId } : {}, (id) => selectFeature(id, false));
   }
 
-  /** The face reference a datum keeps, or nothing when the source was a
-   *  construction quad. `at` rides along only for a round face, where the
-   *  tangent plane differs at every point and the pick location is therefore
-   *  part of the definition. One function because three routes create a datum
-   *  and a route that forgot the selector would silently produce the old frozen
-   *  behaviour, which looks identical until something upstream moves. */
+  /** None for a construction quad. `at` rides along only for a round face, whose tangent plane depends on the pick
+   *  point. All three datum routes share this, a route that dropped the selector would silently freeze the datum. */
   function faceRef(face: FacePlanePick | null): { face?: Selector; at?: Vec3 } {
     if (!face) return {};
     return { face: face.selector, ...(face.kind === "tangent" ? { at: face.at } : {}) };
   }
 
-  // Split Body: choose which side(s) to keep, then pick + position a cutting plane.
-  // Reuses the plane picker + offset gizmo so the cut lands exactly where you want.
+  // Split Body: choose the side to keep, then pick and place the cutting plane with the plane picker and offset gizmo.
   async function startSplit() {
     if (toolBusy()) return;
     if (!hasBody()) {
       setStatus("Split: create or import a body first", "");
       return;
     }
-    // "select that plane and cut": a selected construction plane cuts ALL visible
-    // bodies by id (startCutByPlane handles the keep-side prompt).
+    // A selected construction plane cuts all visible bodies (startCutByPlane asks for the side to keep).
     const selId = getSelectedFeature();
     const sel = selId ? store.document.features.find((f) => f.id === selId) : null;
     if (sel?.type === "datumPlane") return void startCutByPlane(sel.id);
@@ -766,10 +748,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     carryLookToSeparated(id, before, sources);
   }
 
-  // The engine names the pieces "Name 2", "Name 3", and the look of a body (palette
-  // slot, material, folder, visibility, a rename) lives in the app, so each new piece
-  // is matched to its source by the engine's face note (its name as a fallback) and takes
-  // the look, and the per face materials of its faces, once the build lands.
+  // A body's look (palette slot, material, folder, visibility, rename) lives in the app, so each piece the engine
+  // splits off is matched to its source by face note, name as fallback, and takes its look once the build lands.
   function carryLookToSeparated(
     featureId: string,
     before: Map<string, string>,
@@ -821,9 +801,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
-  // Cut ALL visible bodies by a construction plane (right-click a plane → Cut, or
-  // select a plane + Split Body). Reuses the split feature with `planeId` + the list
-  // of currently-visible body ids.
+  // Cut all visible bodies by a construction plane, through the split feature with `planeId` and the visible body ids.
   async function startCutByPlane(planeId: string) {
     if (toolBusy()) return;
     if (!hasBody()) {
@@ -840,31 +818,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     store.addFeature({ id: store.nextId(), type: "split", planeId, keep, bodies: ids, groupSides: true } as Feature);
   }
 
-  // Union / Subtract / Intersect: one starter, three commands. The operation is
-  // an ARGUMENT here rather than a question, because each command already knows
-  // which boolean it is, that is the whole difference from the single Combine
-  // command it replaces, which opened on a dialog before it would look at the
-  // selection.
-  //
-  // With bodies already selected it runs on them: the FIRST is the kept target
-  // and the rest are tools, which is what makes the direction of a subtract
-  // unambiguous without asking. With none selected it falls back to picking the
-  // target (when there is more than one candidate) and a checklist of tools.
-  /** Union / Subtract / Intersect.
-   *
-   *  Two clicks in the viewport: the body to KEEP, then the body to do it with.
-   *  The order is the operation, for a subtract the first body is the one left
-   *  standing and the second is the one that goes away, so it has to be asked
-   *  in that order, out loud, with the prompt saying which answer it wants. It
-   *  used to be a body-selection gesture followed by a modal list of names, and
-   *  a list of names is the wrong place to answer "which of these two solids":
-   *  the answer is in the viewport, and so is the question.
-   *
-   *  A selection made beforehand is still honoured, because that gesture is the
-   *  only way to give ONE boolean more than one tool body: two or more selected
-   *  bodies commit straight away, first kept and the rest consumed. One selected
-   *  body answers the first question and the tool asks the second.
-   */
+  // The click order is the operation: first the body kept, then the tool. Two or more preselected bodies commit at
+  // once, first kept and the rest consumed, the only way to give one boolean several tools.
   function startBoolean(op: BooleanOp) {
     if (toolBusy()) return;
     const bodies = store.buildState.result?.bodies ?? [];
@@ -881,10 +836,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     }
 
     const verb = BOOLEAN_LABEL[op].toLowerCase();
-    // Asked even when only one candidate is left. Two bodies is the ordinary
-    // case, and having the second one taken automatically means a single click
-    // makes a body disappear, the same gesture that, one body later, does not.
-    // A step that is always there is a step you can learn.
+    // Asked even with one candidate left, so the gesture is the same whatever the body count and one click never
+    // removes a body.
     const withTarget = (target: string) => {
       pickBodyInteractive(
         `Click the body to ${verb} with · Esc cancels`,
@@ -910,16 +863,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     store.addFeature({ id: store.nextId(), type: "boolean", operation: op, target, tools } as Feature);
   }
 
-  /** Point at a body on the model. The same shape as pickRegionInteractive and
-   *  pickAxisInteractive: suspend ordinary picking, light what is under the
-   *  cursor, take a left click, and treat empty space as a miss rather than a
-   *  cancel, so a click that lands beside the part does not throw away the
-   *  half-finished operation.
-   *
-   *  `exclude` are bodies already spoken for by this operation. They stay
-   *  clickable-looking but do not light and do not answer, because a body that
-   *  vanished from the model while it was being pointed at would be a worse
-   *  answer to "why did nothing happen" than one that simply does not respond. */
+  /** Empty space is a miss rather than a cancel, so a click beside the part keeps the operation. Bodies in `exclude`
+   *  are already used by this operation and neither light nor answer. */
   function pickBodyInteractive(promptText: string, exclude: readonly string[], onPick: (bodyId: string) => void) {
     if (toolBusy()) return;
     const bodyUnder = (cx: number, cy: number): string | null => {
@@ -972,9 +917,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     window.addEventListener("keydown", onEsc, true);
   }
 
-  /** Pick one body by name from the rebuild's body list (returns its id). Labels use
-   *  the sidebar rename override (store.bodyName) so the picker matches the browser
-   *  tree, otherwise a renamed "Bracket" shows as the default "Body1" here. */
+  /** Labels use the sidebar rename (store.bodyName) so the picker matches the browser tree. */
   function chooseBody(title: string, bodies: { id: string; name: string }[]): Promise<string | null> {
     return choose<string>(
       title,
@@ -982,9 +925,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     );
   }
 
-  // Simplify Mesh: merge near-coplanar facets of the active (imported) body into
-  // fewer, larger faces. Tune the angular tolerance in the value rows (higher =
-  // fewer faces, but coarsens curved regions).
+  // Simplify Mesh merges near-coplanar facets of the active (imported) body; a higher angular tolerance gives fewer
+  // faces but coarsens curved regions.
   function startSimplifyMesh() {
     if (toolBusy()) return;
     if (!hasBody()) {
@@ -994,12 +936,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     store.addFeature({ id: store.nextId(), type: "simplifyMesh", tolerance: 1 } as Feature);
   }
 
-  // Clean Up: repair boolean rot on all bodies at this point in the timeline,
-  // unify glued/overlapping solids, then collapse facet debris (slivers +
-  // near-coplanar staircases). Booleans on ragged imports re-manufacture debris,
-  // so run it again after a heavy Press/Pull or boolean session to keep Delete
-  // Face and downstream booleans reliable. Best-effort in the engine: a body it
-  // can't confidently clean passes through unchanged.
+  // Clean Up repairs boolean rot on all bodies up to here. Booleans on ragged imports make new debris, so it is meant
+  // to be run again after heavy editing; a body the engine cannot clean passes through unchanged.
   function startCleanUp() {
     if (toolBusy()) return;
     if (!hasBody()) {
@@ -1010,8 +948,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     setStatus("Clean Up added, bodies unified from here on", "");
   }
 
-  // Scale: resize the active body about the origin (handy for fixing the units of
-  // an import). Default factor 1, set it in the value rows.
+  // Scale is about the origin, mostly to fix the units of an import.
   function startScale() {
     if (toolBusy()) return;
     if (!hasBody()) {
@@ -1019,13 +956,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       return;
     }
     store.addFeature({ id: store.nextId(), type: "scale", factor: 1 } as Feature);
-    // Factor 1 is a visual no-op by design (the value row is where you set it),
-    // which means a silent add looks exactly like the tool doing nothing. Say so,
-    // the way Clean Up does.
+    // Factor 1 is a visual no-op, so say the feature was added, the way Clean Up does.
     setStatus("Scale added, set the factor in the value rows", "");
   }
 
-  // Move: translate / rotate the selected bodies and sketches with the gizmo.
   function startMove() {
     if (toolBusy()) return;
     let ids = viewport.getSelectedBodies();
@@ -1066,9 +1000,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     moveTool.start(ids, committed);
   }
 
-  // Mirror: the selected bodies, the only body, or the one clicked, each fused
-  // with its reflection across the chosen plane. The targets are written into
-  // the feature, since the active body it would otherwise fall back to changes
+  // Mirror: the targets are written into the feature, since the active body it would otherwise fall back to changes
   // as the timeline grows.
   function startMirror() {
     if (toolBusy()) return;
@@ -1097,28 +1029,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     pickBodyInteractive("Click the body to mirror · Esc cancels", [], (id) => void commit([id]));
   }
 
-  // Revolve: spin the selected sketch profiles around an axis POINTED AT in the
-  // viewport, into a new body, all the way round. Falls back to the only profile
-  // when the sketch has just one.
-  //
-  // The two questions this used to ask first are both answered by defaults that
-  // stay editable. The operation is New Body, which is what nearly every revolve
-  // is and what the Operation row on the feature can change in one click. The
-  // angle is a full turn, which the Angle row and the pitch arrow can change. A
-  // modal that has to be dismissed before anything appears asks the user to
-  // decide with nothing yet to look at; a default they can see and correct does
-  // not.
-  /** One-shot sketch-PROFILE picker: the closed areas of every visible sketch are
-   *  live, the one under the cursor highlights, and a click returns it.
-   *
-   *  The twin of pickFaceInteractive, and it exists because Revolve and Sweep used
-   *  to refuse to start without a pre-selection: "select a sketch profile to
-   *  revolve first" is a dead end for anyone who reached for the tool before the
-   *  profile, which, since the tool is the thing on the ribbon and the profile is
-   *  a region of a sketch nobody has been told is clickable, is most people the
-   *  first time. Loft never had that problem because it asks in the viewport, so
-   *  ask the same way. The hit test is Loft's (features/loftTool.ts regionUnder):
-   *  front-most region whose material, holes excluded, is under the cursor. */
+  /** One-shot sketch profile picker, so Revolve and Sweep ask in the viewport like Loft instead of requiring a
+   *  preselection. The hit test is Loft's regionUnder (features/loftTool.ts). */
   function pickRegionInteractive(promptText: string, onPick: (wr: WorldRegion) => void) {
     if (toolBusy()) return;
     const scratch = new THREE.Vector3();
@@ -1190,6 +1102,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     window.addEventListener("keydown", onEsc, true);
   }
 
+  // Revolve opens as a New Body and a full turn rather than asking first, both editable on the feature afterwards.
   function startRevolve() {
     if (toolBusy()) return;
     const selected = overlay.selectedRegions();
@@ -1204,8 +1117,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         setStatus("Revolve needs a closed sketch profile, draw one first", "");
         return;
       }
-      // More than one profile is showing and none is selected. Ask in the
-      // viewport, where the answer is, rather than refusing.
+      // Several profiles show and none is selected: ask in the viewport rather than refuse.
       pickRegionInteractive("Click the profile to revolve · Esc", (r) => revolveFrom([r]));
       return;
     }
@@ -1215,32 +1127,17 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   function revolveFrom(picked: readonly WorldRegion[]) {
     const wr = picked[0];
     if (!wr) return;
-    // Areas from OTHER sketches cannot join this one revolve, a feature names a
-    // single sketch. Spinning them silently as if they had been part of it is how
-    // the whole-sketch fallback used to go wrong; drop them instead.
+    // A feature names a single sketch, so areas from other sketches are dropped rather than spun with it.
     const areas = picked.filter((r) => r.sketchId === wr.sketchId);
     pickAxisInteractive((axis, edge) => addRevolve(wr, areas, axis, "new", edge));
   }
 
-  /** Point at the line to spin about: one of the three arrows at the origin, or
-   *  a straight edge on the model.
-   *
-   *  This was a list reading "X axis / Y axis / Z axis / an edge", put up in front
-   *  of a viewport that was already drawing three labelled arrows, and answering
-   *  "an edge" then asked the same question again, in the viewport, where it could
-   *  have been asked once. The arrows ARE the drawing of this question, so they
-   *  are the control. Hovering lights the one under the cursor in the colour an
-   *  edge takes under the cursor, because the two are the same act.
-   *
-   *  Unlike pickEdgeInteractive this does not require a body. The first revolve in
-   *  a document has nothing to pick an edge from, and the origin arrows are drawn
-   *  whether or not anything has been built yet. */
+  /** One of the origin arrows or a straight model edge. Unlike pickEdgeInteractive it needs no body, the first
+   *  revolve in a document has no edge to pick. */
   function pickAxisInteractive(onPick: (axis: AxisSpec, edge?: Selector) => void) {
     if (toolBusy()) return;
-    // A selected DATUM AXIS is already the answer to "which line", so use it and
-    // skip the pick, exactly as a selected datum plane feeds Split (startSplit).
-    // Its baked origin/dir are an AxisLine as-is, the same inline shape the
-    // revolve records for an arbitrary axis.
+    // A selected datum axis already answers which line, as a selected datum plane does for Split. Its baked origin
+    // and dir are an AxisLine as is.
     const selId = getSelectedFeature();
     const selAxis = selId
       ? store.document.features.find(
@@ -1253,8 +1150,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       return;
     }
     const triad = viewport.scene.triad;
-    // The hit lands on a shaft, a head or the arm's undrawn hit sleeve, so walk
-    // up to whichever ancestor carries the tag rather than assuming a depth.
+    // The hit may be a shaft, a head or the undrawn hit sleeve, so walk up to the ancestor carrying the tag.
     const axisAt = (x: number, y: number): Axis3 | null =>
       viewport.probe(x, y, (rc): Axis3 | null => {
         const hit = rc.intersectObjects(triad.arms, true)[0];
@@ -1269,9 +1165,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     viewport.emphasizeEdges(true);
     setPrompt("Click an axis arrow at the origin, or a straight edge on the model, to spin around. Esc cancels.");
     const onMove = (e: PointerEvent) => {
-      // An arrow is preferred over an edge behind it. The arrows are small, deliberately
-      // aimed at, and drawn in front of everything; an edge that happens to lie
-      // under one is not what the cursor is on.
+      // An arrow wins over an edge behind it: arrows are small, drawn in front and deliberately aimed at.
       const axis = axisAt(e.clientX, e.clientY);
       triad.highlight(axis);
       viewport.hoverEdge(axis ? null : (viewport.pickEdgeAt(e.clientX, e.clientY)?.edge ?? null));
@@ -1325,9 +1219,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     window.addEventListener("keydown", onEsc, true);
   }
 
-  /** Write the revolve. `axisEdge` present means `axis` is the resolved line kept
-   *  as a cache beside the reference, not the axis of record, see the Feature
-   *  type for why both are stored. */
+  /** With `axisEdge`, `axis` is only the resolved line cached beside the reference, see the Feature type. */
   function addRevolve(
     wr: WorldRegion,
     areas: readonly WorldRegion[],
@@ -1347,16 +1239,13 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     } as Feature);
   }
 
-  // Loft: interactive Fusion-style tool, click profiles in order, the loft
-  // previews live once two are picked (see LoftTool). Any profiles already
-  // selected in the model view seed the tool.
+  // Loft: profiles already selected in the model view seed the tool.
   function startLoft() {
     if (toolBusy()) return;
     loftTool.start(committed);
   }
 
-  // Sweep: select a closed profile region, then pick a second (open) sketch as the
-  // path. The profile should sit at the start of the path, roughly perpendicular.
+  // Sweep: the profile should sit at the start of the open path sketch, roughly perpendicular to it.
   async function startSweep() {
     if (toolBusy()) return;
     const regions = overlay.selectedRegions();
@@ -1400,9 +1289,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     } as Feature);
   }
 
-  // Primitive: drop a Box / Cylinder / Cone / Sphere / Torus body at the origin
-  // (edit its size in the value rows). Useful as a starting block or a boolean
-  // tool body.
   async function startPrimitive() {
     if (toolBusy()) return;
     const shape = await choose<"box" | "cylinder" | "cone" | "sphere" | "torus">("Create primitive", [
@@ -1422,9 +1308,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     else store.addFeature({ id, type: "sphere", radius: 10 } as Feature);
   }
 
-  // One-shot face picker: highlight the face under the cursor, return its selector
-  // on click (Esc cancels). Reused by Shell (open face) and Draft (taper face).
-  // False when it could not open.
+  // Also used by Shell and Draft. False when it could not open.
   function pickFaceInteractive(
     promptText: string,
     onPick: (sel: Selector, normal: Vec3 | null) => void,
@@ -1446,10 +1330,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       e.preventDefault();
       e.stopImmediatePropagation();
       cleanup();
-      // Stamp the body that owns the clicked face. Without it the engine falls
-      // back to the active (last-created) body and the face selector resolves
-      // against the wrong shape, so on a multi-body model the shell/draft would
-      // land on a body the user never touched (same fault as the texture bug).
+      // Stamp the owning body, or the engine resolves the selector against the active body and on a multi body model
+      // the shell or draft lands on a body the user never touched.
       const sel: Selector = hit.bodyId ? { ...hit.selector, body: hit.bodyId } : hit.selector;
       const n = viewport.planarFace(hit.faceId)?.normal;
       const normal: Vec3 | null = n ? [n.x, n.y, n.z] : null;
@@ -1479,10 +1361,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     return true;
   }
 
-  // One-shot EDGE picker, the twin of pickFaceInteractive above. Every model edge
-  // lights up, the one under the cursor highlights, and a click returns its
-  // selector, and its polyline, for callers that have to write down what the
-  // edge WAS as well as how to find it again (revolve's axis cache).
+  // The edge twin of pickFaceInteractive; it also returns the polyline for callers that cache the edge (revolve axis).
   function pickEdgeInteractive(
     promptText: string,
     onPick: (sel: Selector, points: readonly Vec3[]) => void,
@@ -1533,19 +1412,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     return true;
   }
 
-  // Repair an ambiguous saved reference: the rebuild refused to guess between two
-  // equally-close candidates, so ask which one was meant and swap that ONE
-  // selector. Everything else about the feature is left alone.
-  //
-  // `kind` is the engine's own word for what went ambiguous, and it decides what
-  // is picked. This used to pick a face unconditionally, so repairing a fillet
-  // put a FACE selector into its `edges` field, where the resolver read the face's
-  // pick point as an edge point and rounded whichever edge sat nearest it.
-  //
-  // Only the selector the engine named is touched, located by its stored point,
-  // not by index (see repickReference.ts). If it can't be found the feature has
-  // moved on since the failed build (already re-picked, or edited), which is not
-  // an error: say so and do nothing rather than "repairing" the wrong reference.
+  // Swap the one ambiguous selector the engine named, located by its stored point (repickReference.ts); `kind` says
+  // whether a face or an edge is picked. If it is gone the feature changed since the failed build, so do nothing.
   function repickReference(featureId: string, at: readonly number[], kind?: string) {
     const feature = store.document.features.find((f) => f.id === featureId);
     if (!feature) return;
@@ -1576,8 +1444,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (store.editPreviewId === featureId) store.endEditPreview();
     }
     const apply = (sel: Selector, normal: Vec3 | null, edgePoints?: readonly Vec3[]) => {
-      // Re-read the feature: the pick is async, and the doc may have moved under
-      // us (undo, another edit). Re-locating also re-validates the site.
+      // The pick is async and the doc may have moved under us (undo, another edit), so re-read and re-locate.
       const cur = store.document.features.find((f) => f.id === featureId);
       const site2 = cur ? findSelectorAt(cur, at) : null;
       if (!cur || !site2) {
@@ -1596,9 +1463,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         : pickFaceInteractive("Pick the face to use · Esc", apply, end);
       if (!opened) end();
     };
-    // The saved selector resolves where the feature sits in the history, so the
-    // pick has to be taken on the model rolled back to it. The finished model
-    // carries every later move and boolean, and a point taken there can be far off.
+    // The selector resolves where the feature sits in history, so pick on the model rolled back to it; the finished
+    // model carries every later move and boolean.
     const shown = store.buildState.result;
     let started = false;
     waiting = store.onBuild((s) => {
@@ -1655,14 +1521,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     if (done) off();
   }
 
-  // Shell: pick a face to open, hollow the body to a 2mm wall (edit thickness in
-  // the value rows).
-
-  // Joint: pick a face on the body to MOVE, then the face to mate it against. The
-  // first body is re-placed so its face sits flush on the second, and it FOLLOWS,
-  // both connectors are re-resolved every rebuild, so editing either part carries
-  // the joined body along. Offset/angle tune it in the value rows; the two faces
-  // must be on different bodies (mating a body to itself is not a move).
+  // Joint: the first picked face's body moves flush onto the second face, and both connectors are re-resolved every
+  // rebuild so the joined body follows edits to either part.
   function startJoint() {
     if (toolBusy()) return;
     if (!hasBody()) {
@@ -1693,11 +1553,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
-  /** One-shot pick of a line on a body for a mechanism joint: a face (a round
-   *  face's axis, a flat face's normal) or an edge (a circle's axis, a straight
-   *  edge), whichever the cursor is on, gated the way selection is. Resolves to
-   *  the body and its selector, or null on Esc. A body in `exclude` does not
-   *  answer: a joint's two sides are on different bodies. */
+  /** A face (round face axis, flat face normal) or an edge (circle axis, straight edge) for a mechanism joint. A body
+   *  in `exclude` does not answer, a joint's two sides are on different bodies. Null on Esc. */
   function pickAxisConnectorInteractive(
     promptText: string,
     exclude: string | null,
@@ -1758,13 +1615,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
-  // Mechanism: a linkage the engine closes. Pick the ground body, then each joint
-  // as a kind and two lines, one on the part that moves and one on the part it
-  // joins (a pin's round face or its circular edge, a slot's straight edge), then
-  // which revolute or slider joint the drive turns or slides. The engine moves
-  // every other body until all the joints are met; the drive value is edited in
-  // the rows or with the handle a double-click raises. Esc at any step cancels
-  // the whole mechanism, nothing is written until the drive is chosen.
+  // Mechanism: the engine moves every other body until all joints are met. Esc at any step cancels the whole
+  // mechanism, nothing is written until the drive is chosen.
   async function startMechanism() {
     if (toolBusy()) return;
     if (!hasBody()) {
@@ -1821,24 +1673,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     committed(id);
   }
 
-  // Draft: pick a face to taper by 5° about the body's base (pull +Z; edit the
-  // angle in the value rows).
-  // Pattern: repeat the selected bodies along an axis or around one, set up in
-  // the viewport. It used to ask which kind in a modal and then drop a feature
-  // with invented numbers into the timeline for the value rows to correct,
-  // which is the whole gesture done twice, in the wrong order, with none of it
-  // where the geometry is.
-  //
-  // Which kind is still a decision, and it is still made before the tool opens:
-  // linear and circular are different gestures (pull an arrow vs sweep around
-  // one), not two settings of the same one. But it is made by pressing the
-  // button you meant, not by answering a dialog the button raised.
-  /** What Pattern is being pointed at, when it is being pointed at a FEATURE
-   *  rather than a body: the owners of any selected faces (several holes select
-   *  several owners), else a feature selected in the timeline/history. A
-   *  selected body means body-pattern regardless of what the history still
-   *  happens to have highlighted, that selection is stale for this purpose the
-   *  moment a body is picked instead. */
+  /** The features Pattern targets: owners of selected faces, else the feature selected in the timeline. A selected
+   *  body wins, the history highlight is stale once a body is picked. */
   function patternFeatureCandidates(): PatternCandidates {
     if (viewport.getSelectedBodies().length) return { ids: [], picked: false, explicit: true };
     const faceIds = viewport.getSelectedFaceIds();
@@ -1850,6 +1686,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     return { ids: selected ? [selected] : [], picked: false, explicit: getSelectedFeatureExplicit() };
   }
 
+  // Linear or circular comes from the button pressed: they are different gestures, not settings of one.
   function startPattern(kind: PatternKind) {
     if (toolBusy()) return;
     if (!hasBody()) {
@@ -1885,17 +1722,11 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   function startExtrude() {
     if (toolBusy()) return;
-    // A SELECTED FACE is preferred: extrude-a-face = Press/Pull it (drag out to join, in to
-    // cut). This takes priority over region extrude so a visible sketch never hijacks
-    // "extrude this face" (was: a shown sketch forced region-extrude, so face cut did
-    // nothing).
+    // A selected face is preferred and Press/Pulled, so a visible sketch never hijacks extruding a face.
     const sel = viewport.selectedFacesForPressPull();
     if (sel) {
-      // …EXCEPT when the selected face sits ON or BEHIND a visible sketch's
-      // plane (same-direction normals): faces are preferred on general picks, so a click
-      // aimed at a sketch profile lying on that face selects the face instead,
-      // and hijacking to Press/Pull forced users to hide the body to extrude a
-      // sketch. The sketch has priority when it's on or above the face.
+      // Except when the face lies on or behind a visible sketch's plane: a click on a profile there selects the
+      // face, so the sketch wins.
       const underSketch = overlay.regions.some((wr) => {
         if (wr.plane.n.dot(sel.normal) < 0.99) return false; // same-facing planes only
         return wr.plane.plane.distanceToPoint(sel.anchor) <= 0.01; // face on/behind the sketch plane
@@ -2002,10 +1833,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     return `, ${n} loose end${n === 1 ? "" : "s"}`;
   }
 
-  /** A sketch the user picked in the tree that shows no areas, the usual case
-   *  being one an earlier extrude consumed and hid. Its profile cannot be
-   *  clicked, so Extrude takes the sketch itself as the choice. An area already
-   *  picked in the viewport is preferred over it. */
+  /** A sketch picked in the tree that shows no areas, usually one an earlier extrude hid. An area picked in the
+   *  viewport wins over it. */
   function hiddenChosenSketch(): string | null {
     const id = getSelectedFeature();
     if (!id || !getSelectedFeatureExplicit()) return null;
@@ -2015,21 +1844,14 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     return overlay.regions.some((wr) => wr.sketchId === id) ? null : id;
   }
 
-  /** The handle offered on a selected sketch profile (features/regionNudge.ts)
-   *  was pressed: arm Extrude on that pre-selection, already holding the arrow.
-   *
-   *  Unlike startExtrude this does NOT arbitrate between a face and a profile.
-   *  That arbitration exists because the `E` key is one command aimed at
-   *  whatever you had selected, and it has to guess which you meant. A press on
-   *  a specific arrow standing on a specific profile is not a guess. */
+  /** The handle on a selected profile (features/regionNudge.ts) arms Extrude holding the arrow. Unlike startExtrude
+   *  it does not choose between face and profile, a press on a profile's arrow is not a guess. */
   const grabRegionHandle = (x: number, y: number) => {
     if (toolBusy()) return;
     extrude.start(committed, { grabAt: { x, y } });
   };
 
-  /** The handle left standing on an extrude that was just committed was pressed:
-   *  reopen that same feature already holding its arrow, so a second pull edits
-   *  it rather than stacking a new one. */
+  /** The handle on a just committed extrude reopens that feature, so a second pull edits it instead of adding one. */
   const grabExtrudeEdit = (id: string, x: number, y: number) => {
     if (toolBusy()) return;
     extrude.startEdit(id, committed, { grabAt: { x, y } });
