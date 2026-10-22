@@ -16,6 +16,13 @@ export const TEMPLATES: TemplateInfo[] = [
     icon: "stress",
   },
   {
+    id: "box-with-lid",
+    name: "Box with a lid",
+    caption: "Two parts, 0.2 mm fit",
+    hint: "A box and a lid that fits it, sized by parameters, laid out for printing",
+    icon: "shell",
+  },
+  {
     id: "plate",
     name: "Plate",
     caption: "Sized by parameters",
