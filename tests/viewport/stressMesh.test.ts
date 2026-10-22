@@ -11,10 +11,12 @@ function strip(vertices: number) {
 }
 
 describe("buildStressMesh", () => {
-  it("keeps a Uint32 index for a drawn surface past 65 535 vertices", () => {
+  it("uses a drawn surface's Uint32 index as it is, past 65 535 vertices, without a copy", () => {
     const s = strip(70_001);
-    const mesh = buildStressMesh(s.positions, Uint32Array.from(s.indices), s.colors);
+    const indices = Uint32Array.from(s.indices);
+    const mesh = buildStressMesh(s.positions, indices, s.colors);
     const index = mesh.geometry.getIndex()!;
+    expect(index.array).toBe(indices);
     expect({ array: index.array.constructor, count: index.count, last: index.getX(index.count - 1) }).toEqual({
       array: Uint32Array,
       count: s.indices.length,
