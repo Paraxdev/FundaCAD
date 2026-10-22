@@ -81,6 +81,7 @@ import { installContextMenuGuard } from "../ui/contextMenuGuard";
 import { installPointerKind } from "../input/pointerKind";
 import { installLongPress } from "../ui/longPress";
 import { useUiStore } from "../stores/ui";
+import { useBrowserStore } from "../stores/browser";
 import { createDocBridge, type DocBridge } from "./docBridge";
 import { wireDocumentSwap } from "./documentSwap";
 import { LiveSessionHost } from "../live/liveSession";
@@ -412,6 +413,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
       e.tools.extrude.lastCommit = null;
     },
     viewport: e.viewport,
+    browser: useBrowserStore(),
   });
   installEnvironmentSync(e.store);
 
