@@ -1,7 +1,7 @@
 .param-row {
   display: grid;
   /* A track's automatic minimum is min-content, so a long label or value would push the
-     row past the panel instead of ellipsing. */
+     row past the panel instead of ellipsing, as the side-mounted history did at 195px. */
   grid-template-columns: minmax(0, 1fr) minmax(0, 120px);
   gap: var(--s-3);
   align-items: center;

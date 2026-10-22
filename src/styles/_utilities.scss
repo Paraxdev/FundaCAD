@@ -75,8 +75,8 @@ button.finish:hover {
   flex-wrap: wrap;
   max-width: calc(100vw - 2 * var(--s-3));
 }
-/* The engine's reason, by the cursor, since a tooltip needs a hover the dragging hand
-   cannot spare. Hung under the row so a long one wraps instead of widening the box. */
+/* The engine's reason sits by the cursor, not in the far status bar or a tooltip the dragging hand cannot
+   hover. Never truncate it, the cut leaves the half that says "cannot". Hung under the row so it wraps. */
 .dim-problem {
   position: absolute;
   top: calc(100% + var(--s-1));

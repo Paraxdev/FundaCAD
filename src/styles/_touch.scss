@@ -33,9 +33,11 @@ textarea,
   touch-action: none;
 }
 
-/* Small targets grow to about 40px through a transparent pseudo element with a negative
-   inset, held back from scroller edges so no scrollbar appears and nothing reflows. */
+/* Small targets grow to about 40px through a transparent pseudo element with a negative inset, held back
+   from scroller edges so nothing reflows. The kind flips after hit testing, so the first touch tap stays small. */
 :root[data-pointer="touch"] {
+  // Hosts get position: relative here only, so the mouse layout is untouched. None of them may hold an
+  // absolute child placed against an outer box, check that before adding one.
   .tree-caret,
   .tree-eye,
   .tl-btn,
@@ -80,7 +82,7 @@ textarea,
   .section-chip-btn::before,
   .sketch-dim::before,
   .sketch-glyph::before,
-  // ::before already draws the marker line and the track rail, so these take ::after.
+  // ::before already draws the marker line and the track rail, so these take ::after, the grip too to match.
   .timeline-marker::after,
   .timeline-marker .marker-grip::after,
   .profile-track::after {
@@ -88,8 +90,8 @@ textarea,
     position: absolute;
   }
 
-  // The 12px caret is the only way to open a head that selects on click. Both stay inside
-  // the card body's padding, so the tree never scrolls.
+  // Items tree: the 12px caret is the only way to open a head that selects on click. Both stay
+  // inside the card body's padding, so the tree never scrolls.
   .tree-caret::before {
     inset: -13px -14px;
   }
@@ -101,15 +103,15 @@ textarea,
     opacity: 0.9;
   }
 
-  // Each reaches the full 36px bar and no further, never over the model.
+  // Title bar: each reaches the full 36px bar and no further, never over the model.
   .tb-btn::before {
     inset: -6px -7px;
   }
   .menu-btn::before {
     inset: -8px -1px;
   }
-  // The segment's clip would clip the hit area too, so the end buttons take the group's
-  // round inner radius instead. The two buttons already touch.
+  // The segment's clip would clip the hit area too, so the end buttons take the group's inner radius,
+  // round like its border rather than the glass squircle. The two buttons already touch.
   #workspace-toggle.segmented {
     overflow: visible;
   }
@@ -133,7 +135,7 @@ textarea,
     right: -6px;
   }
 
-  // A card's foot is 4px from its clipped edge, so this grows less downwards.
+  // Floating cards: a card's foot is 4px from its clipped edge, so the button there grows less downwards.
   .float-card-close::before {
     inset: -6px;
   }
@@ -148,7 +150,7 @@ textarea,
     inset: -8px -4px;
   }
 
-  // The transport buttons sit 2px apart, so they grow sideways only into the gap, and
+  // History: the transport buttons sit 2px apart, so they grow sideways only into the gap, and
   // outwards at the two ends.
   .tl-btn::before {
     inset: -5px -1px;
@@ -164,8 +166,8 @@ textarea,
   .timeline-related::before {
     inset: -7px 0;
   }
-  // A short strip so the chips around keep their taps, and a square on the grip. Both sit
-  // over the next chip, which would cover their lower half.
+  // A short strip so nearby chips keep their taps, and a square on the grip, both over the next chip
+  // that would cover their lower half. A tap that never moves leaves the marker in its own gap.
   .timeline-marker::after {
     inset: 0 -6px;
     z-index: 1;
@@ -209,7 +211,7 @@ textarea,
     margin-bottom: -8px;
   }
 
-  // The delete cross only appears under a hovering mouse, out of a finger's reach.
+  // Sketch palette: the delete cross only appears under a hovering mouse, out of a finger's reach.
   .rel-del {
     visibility: visible;
   }
