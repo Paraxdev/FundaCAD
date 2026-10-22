@@ -200,8 +200,11 @@ fn sample_env() -> vec3f {
 }
 fn vcol(i: u32) -> vec3f { return unpack4x8unorm(cols[i]).rgb; }
 fn mis(a: f32, b: f32) -> f32 { return a * a / (a * a + b * b); }
-fn add(c: vec3f, clamped: bool) -> vec3f {
-  let l = lum(c);
+// A dispersed path carries one channel at three times its weight, so it is held to the
+// light it stands for, else green, the brightest by luminance, is clamped most and glass turns purple.
+fn add(c: vec3f, clamped: bool, channel: u32) -> vec3f {
+  var l = lum(c);
+  if (channel < 3u) { l = c[channel] / 3.0; }
   if (clamped && l > FIREFLY) { return c * (FIREFLY / l); }
   return c;
 }
@@ -468,7 +471,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
         }
         c += lc.rgb * w;
       }
-      col += add(thr * c, b >= 2u && clamp_on);
+      col += add(thr * c, b >= 2u && clamp_on, channel);
       break;
     }
     let it = insts[h.inst];
@@ -508,7 +511,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
       if (last_pdf > 0.0 && (it.extra.z & 2u) != 0u && lum(m.emission.rgb) > 0.0) {
         if (est == EST_NEE) { we = 0.0; } else if (est != EST_BSDF) { we = mis(last_pdf, n_samples() * em_pdf(m, h.t, abs(dot(ng, d)))); }
       }
-      col += add(thr * m.emission.rgb * we, b >= 2u && clamp_on);
+      col += add(thr * m.emission.rgb * we, b >= 2u && clamp_on, channel);
     }
     if (rnd() > m.base.a) {
       o = p + d * eps;
@@ -574,7 +577,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
             if (any(f.rgb > vec3f(0.0)) && !trace(p + ng * eps, ls.l, ls.t, true).ok) {
               var w = 1.0;
               if (ls.pdf > 0.0 && est != EST_NEE) { w = mis(n * ls.pdf, f.w); }
-              col += add(thr * f.rgb * ls.e * (w / n), b >= 1u && clamp_on);
+              col += add(thr * f.rgb * ls.e * (w / n), b >= 1u && clamp_on, channel);
             }
           }
         }
