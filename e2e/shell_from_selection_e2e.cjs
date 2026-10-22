@@ -3,7 +3,8 @@
 //   1. Shell with a face selected opens straight on that face with a thickness
 //      handle, no second pick, and the rail steps back to that one tool.
 //   2. Dragging the wall thicker than the body can take is refused: the handle
-//      turns red, the prompt says why, and letting go adds nothing.
+//      turns red, the prompt says which size it keeps, and letting go commits
+//      that size, not the refused one.
 //   3. Dragging back to a wall that builds and letting go commits one shell of
 //      that thickness on that face.
 //
@@ -91,6 +92,8 @@ const check = (name, ok, detail) => {
   await page.mouse.move(grabAt.x, grabAt.y);
   await page.waitForTimeout(150);
   await page.mouse.down();
+  // A wall that builds first, so there is a size to keep once the next one is refused.
+  await dragTo(10);
   await dragTo(40);
   const refused = await prompt();
   check("a wall thicker than the body is refused on screen", /refused/i.test(refused), JSON.stringify(refused));
@@ -98,16 +101,32 @@ const check = (name, ok, detail) => {
   await page.mouse.up();
   await page.waitForTimeout(800);
   await idle();
-  check("letting go on a refused wall adds no shell", (await shells()).length === 0, JSON.stringify(await shells()));
-  check("and the tool stays open to drag back", (await busy()) === true);
+  const kept = Number(/keeping ([\d.]+)/.exec(refused)?.[1]);
+  const held = await shells();
+  check("letting go on a refused wall commits the size that was on screen",
+    held.length === 1 && Number.isFinite(kept) && Math.abs(held[0].thickness - kept) < 0.05 && held[0].thickness < 25,
+    JSON.stringify({ kept, held }));
+  check("and the tool is done", (await busy()) === false);
+
+  await page.evaluate(() => window.store.undo());
+  await idle();
+  await page.evaluate(() => {
+    window.viewport.selectFaces([window.viewport.faceIdNear([0, 0, 30])]);
+    window.__fundacad.handleAction("shell");
+  });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.dispatchEvent(new PointerEvent("pointerup")));
+  await page.waitForTimeout(300);
+  check("the shell is gone and Shell opens again", (await shells()).length === 0 && (await busy()) === true);
 
   await page.mouse.move(grabAt.x, grabAt.y);
   await page.waitForTimeout(150);
   await page.mouse.down();
-  await dragTo(-36);
-  await page.waitForTimeout(300);
+  await dragTo(40);
+  check("the thick wall is refused again", /refused/i.test(await prompt()));
+  await dragTo(8);
   const back = await prompt();
-  check("dragging back clears the refusal", !/refused/i.test(back), JSON.stringify(back));
+  check("dragging back to a wall that builds clears the refusal", !/refused/i.test(back), JSON.stringify(back));
   await page.mouse.up();
   await page.waitForTimeout(1000);
   await idle();

@@ -147,10 +147,11 @@ const check = (name, ok, detail) => {
   };
   const setBloom = async (level) => {
     await page.keyboard.press("Control+Comma");
-    await page.waitForSelector("#prefs-bloom", { timeout: 5000 });
-    await page.selectOption("#prefs-bloom", level);
+    await page.click('[data-category="viewport"]');
+    await page.waitForSelector("#prefs-bloom", { state: "visible", timeout: 5000 });
+    await page.fill("#prefs-bloom", String(level));
     await page.waitForTimeout(200);
-    // The close BUTTON, not Escape: the focus is in the select that was just
+    // The close BUTTON, not Escape: the focus is in the slider that was just
     // used, which swallows it, and a dialog left standing over the viewport
     // means every screenshot below is a picture of the dialog. (It was, and
     // three of them "differed" only in which option the Bloom row was showing.)
@@ -160,9 +161,9 @@ const check = (name, ok, detail) => {
   };
 
   await shot("1-bloom-subtle");
-  await setBloom("strong");
+  await setBloom(1);
   await shot("2-bloom-strong");
-  await setBloom("off");
+  await setBloom(0);
   await shot("3-bloom-off");
 
   const md5 = (n) => require("crypto").createHash("md5")
@@ -171,7 +172,7 @@ const check = (name, ok, detail) => {
   check("each bloom level draws a different picture",
     new Set(hashes).size === 3, hashes.map((h) => h.slice(0, 8)).join(" "));
 
-  await setBloom("subtle");
+  await setBloom(0.4);
   check("the dialog closed again",
     await page.evaluate(() => document.querySelector("#prefs-bloom") === null));
 
