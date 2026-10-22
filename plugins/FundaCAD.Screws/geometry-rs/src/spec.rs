@@ -1,8 +1,5 @@
-//! scr_spec.py: checking a fastener spec and bringing it to millimetres.
-//!
-//! The required fields come from catalogue/fields.json, the same file the
-//! window's form and its check (spec.ts) read. `sanity` mirrors spec.ts
-//! `sanityProblems`.
+//! Port of scr_spec.py. The required fields come from catalogue/fields.json, which the form and spec.ts read too, and
+//! `sanity` mirrors spec.ts `sanityProblems`.
 
 use std::sync::OnceLock;
 

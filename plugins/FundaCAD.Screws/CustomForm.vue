@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// The form for a fastener of your own. Which numbers it asks for follows the kind and the part
-// types chosen, from catalogue/fields.json, the same list the geometry checks against.
+// The fields asked for follow the kind and part types, from catalogue/fields.json, the list the geometry checks against.
 
 import { computed, reactive, ref } from "vue";
 import FastenerPreview from "./FastenerPreview.vue";
