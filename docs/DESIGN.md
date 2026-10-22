@@ -704,6 +704,10 @@ and the whole row flips the switch.
 | `.rd-tab` (Render dock) | 11.5px, `--text-mute`, 2px transparent bottom border | `--raised`, `--text-dim` | `.active`: `--accent-hot` and an `--accent` bottom border (a bar, not a fill) | the shared ring |
 | `.prefs-nav-btn` | 14px | `--raised` | `.active`: `--accent-tint`, border `--accent-tint-2`, `--accent-hot`, 600 | `0 0 0 2px var(--accent)` |
 
+A tab that cannot be chosen yet (the Stress panel's Results before a Run) passes `disabled` and a `title` saying why
+to `Tabs.vue`: opacity 0.45, `cursor: default`, no hover. Keep it in the bar rather than hiding it, a bar of one tab
+reads as a title.
+
 ### 7.8 Chips and key caps
 
 | Class | Recipe |
