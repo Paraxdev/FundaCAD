@@ -1,11 +1,3 @@
-// What the current selection is and which tools can act on it, for the tool rail.
-//
-// Read by LOOKING once a frame while something is selected rather than by
-// subscribing: onSelectionChange is a single-slot callback owned by
-// app/viewportWiring.ts, and profile-area selection notifies nothing at all. The
-// loop stops on the first empty frame and is woken by the things that can create
-// a selection (pointer release, key release, document change, build).
-
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import type { Engine } from "../app/engine";
 import {
@@ -23,7 +15,6 @@ import type { SelectionCounts } from "../features/toolCapabilities";
 import { shippedPluginName } from "../plugins/shipped";
 import { describeSelection, exactRound, type Pt3, type RoundSize } from "../ui/selectionMeasure";
 
-/** A plugin's tools, grouped under its own heading in the selection rail. */
 export interface PluginToolGroup {
   pluginId: string;
   name: string;
@@ -55,9 +46,7 @@ export function useSelectionOffers(engine: Engine) {
 
   const kind = computed(() => primaryKind(counts.value));
   const offers = computed(() => toolbarOffers(counts.value));
-  // The app's own tools sit flat at the top; a plugin's tools fold under its
-  // name (see the rail). `offers` stays the full flat list so run() can resolve
-  // any tool id, plugin or not, from the one place.
+  // Plugin tools fold under their plugin's name in the rail, `offers` stays flat so run() resolves any tool id.
   const appOffers = computed(() => offers.value.filter((o) => !o.pluginId));
   const pluginGroups = computed<PluginToolGroup[]>(() => {
     const byPlugin = new Map<string, ToolOffer[]>();
@@ -92,9 +81,8 @@ export function useSelectionOffers(engine: Engine) {
     return mesh && exact?.faceId === mesh.faceId ? exact : mesh;
   };
   const summary = computed(() => describe(false));
-  // A body selection alone gives no hint that a second click, or a pause,
-  // reaches the face/edge under the cursor (see viewport/clickIntent.ts), so
-  // spell it out here where the selection is already being read back.
+  // A body selection gives no hint that a second click or a pause reaches the face or edge under the cursor
+  // (viewport/clickIntent.ts), so the readout spells it out.
   const readout = computed(() => {
     const base = describe(true);
     if (base && kind.value === "body" && engine.viewport.policy === "auto") {
@@ -120,6 +108,8 @@ export function useSelectionOffers(engine: Engine) {
     return Object.keys(next.counts).length > 0;
   }
 
+  // Polled each frame while something is selected: onSelectionChange is a single slot owned by app/viewportWiring.ts
+  // and profile-area selection notifies nothing. It stops on an empty frame, pointer, key, document and build wake it.
   let raf = 0;
   function tick() {
     raf = 0;
@@ -154,8 +144,7 @@ export function useSelectionOffers(engine: Engine) {
     else if (o.tool === "delete-face") engine.deleteSelectedFace();
   }
 
-  /** Material, Hide and Isolate write the display overlays directly; none of
-   *  them is a command, so none goes through handleAction. */
+  /** Material, Hide and Isolate write the display overlays directly, they are not commands and skip handleAction. */
   function look(o: AppearanceOffer, at: { x: number; y: number }) {
     if (engine.toolOwnsScreen()) return;
     const ids = engine.viewport.getSelectedBodies();
