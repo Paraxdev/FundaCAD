@@ -294,7 +294,7 @@ pub struct Tracer {
     denoise_error: Option<String>,
     fault: Arc<Mutex<Fault>>,
     buffer_limit: u64,
-    wait_limit: Duration,
+    stalled: bool,
 }
 
 /// The first loss and the first uncaptured error. Not behind the frames
@@ -456,7 +456,7 @@ impl Tracer {
             denoise_error: None,
             fault,
             buffer_limit,
-            wait_limit: WAIT_LIMIT,
+            stalled: false,
         };
         t.resize(64, 64);
         Ok(t)
@@ -477,9 +477,10 @@ impl Tracer {
         self.instance_uploads
     }
 
+    /// Fakes a GPU that never finishes: every later wait times out without asking it.
     #[doc(hidden)]
-    pub fn set_wait_limit_for_test(&mut self, limit: Duration) {
-        self.wait_limit = limit;
+    pub fn stall_gpu_for_test(&mut self) {
+        self.stalled = true;
     }
 
     #[doc(hidden)]
@@ -745,7 +746,7 @@ mod tests {
         };
         t.resize(w, h);
         t.set_cap(64);
-        t.set_wait_limit_for_test(Duration::ZERO);
+        t.stall_gpu_for_test();
         Some(t)
     }
 
@@ -757,7 +758,7 @@ mod tests {
         assert!(start.elapsed() < Duration::from_secs(1), "the readback waited {:?}", start.elapsed());
         assert!(px.iter().all(|&b| b == 0));
         let f = t.fault().expect("a readback past the limit is a fault");
-        assert!(f.contains("did not finish a frame within 0 s"), "{f}");
+        assert!(f.contains("did not finish a frame within 10 s"), "{f}");
         t.render_samples(64);
         assert_eq!(t.samples(), 0, "a faulted tracer traced on");
     }
@@ -772,6 +773,26 @@ mod tests {
         let f = t.fault().expect("a band past the limit is a fault");
         assert!(f.contains("did not finish a frame"), "{f}");
         assert_eq!(t.frame(512, 512, Duration::from_millis(50)), vec![0; 512 * 512 * 4]);
+    }
+
+    #[test]
+    fn a_stalled_gpu_times_out_even_when_its_work_is_long_done() {
+        let Ok(mut t) = Tracer::new(TracerOptions { software: true, ..Default::default() }) else {
+            eprintln!("skipped: no adapter");
+            return;
+        };
+        t.resize(96, 40);
+        t.set_cap(64);
+        t.render_samples(3);
+        assert_eq!((t.samples(), t.fault()), (3, None));
+        assert!(t.resolve().iter().any(|&b| b != 0), "an answering GPU read back black");
+        t.stall_gpu_for_test();
+        assert!(t.step());
+        std::thread::sleep(Duration::from_millis(50));
+        let e = t.wait().expect_err("a stalled GPU answered");
+        assert!(e.contains("did not finish a frame within 10 s"), "{e}");
+        assert!(t.resolve().iter().all(|&b| b == 0), "a stalled GPU read back a frame");
+        assert_eq!(t.fault(), Some(e));
     }
 
     #[test]
