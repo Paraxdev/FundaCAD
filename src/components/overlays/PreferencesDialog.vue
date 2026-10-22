@@ -266,7 +266,7 @@ function onEnvironment(id: string) { const v = asEnvironment(id); if (v) setRend
 function pickBackground(id: string) { const v = asBackground(id); if (v) setRenderPref("background", v); }
 function onBrightness(ev: Event) { setRenderPref("brightness", Number.parseFloat(value(ev))); }
 function onDwell(ev: Event) { setHoverDwellMs(Number.parseFloat(value(ev))); }
-function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v !== null) setRenderPref("bloom", v); }
+function onBloom(ev: Event) { const v = asBloom(Number.parseFloat(value(ev))); if (v !== null) setRenderPref("bloom", v); }
 function pickTracer(id: string) { const v = asTracerPref(id); if (v) setRenderPref("tracer", v); }
 function pickTangent(id: string) { const v = asTangentEdges(id); if (v) setRenderPref("tangentEdges", v); }
 function onPerformanceMode(ev: Event) { setRenderPref("performanceMode", (ev.target as HTMLInputElement).checked); }
