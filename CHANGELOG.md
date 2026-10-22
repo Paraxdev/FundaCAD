@@ -486,6 +486,18 @@ This file starts on 2026-08-03. For anything before that, see the
   plugin or assistant edit changes the versions, so one saved while an
   assistant's edit was on its way stays too.
 
+- **A two distance chamfer puts each distance on the face where it fits.** On
+  the vertical edges of a 20 mm box, 3/12 was refused although 12 at one
+  corner of each face and 3 at the other fits, and 1/12 came back carved one
+  edge at a time without a word. A two distance chamfer that fits no way round,
+  or that only the fallback build could make and would leave stepped where its
+  edge ends on a slanted or rounded face, is now refused, and so is one that
+  fits or just meets across a face with an inside corner but that only the
+  fallback build could make, like the top of an L with 5 + 5 on its 10 mm arm
+  or 2/8 where that corner turns 225 degrees: the fallback build left a wedge
+  standing in the corner without a word. Some of these used to build with a
+  warning about another corner while a concave fill was clipped without one.
+
 - **One Undo takes back an import and the colours its file carried.** Each
   colour used to be an undo step of its own, so a coloured assembly took many
   Undos, and one with more than 49 colours could not be undone at all. An

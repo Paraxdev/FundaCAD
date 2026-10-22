@@ -7,15 +7,20 @@
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepClass_FaceClassifier.hxx>
 #include <BRepFilletAPI_MakeChamfer.hxx>
 #include <BRepFilletAPI_MakeFillet.hxx>
+#include <BRepGProp_Face.hxx>
 #include <BRepLib.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepTools.hxx>
 #include <BRepTools_ReShape.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
+#include <ElSLib.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
+#include <GeomAbs_CurveType.hxx>
+#include <GeomAbs_SurfaceType.hxx>
 #include <Geom_Surface.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Standard_Failure.hxx>
@@ -24,17 +29,23 @@
 #include <TopExp_Explorer.hxx>
 #include <TopLoc_Location.hxx>
 #include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <TopTools_MapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Iterator.hxx>
 #include <TopoDS_Vertex.hxx>
+#include <gp_Pln.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Pnt2d.hxx>
 #include <gp_Vec.hxx>
+#include <gp_XY.hxx>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <functional>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -155,7 +166,321 @@ inline BlShape blend_fillet(const TopoDS_Shape &shape, const TopoDS_Shape &edges
   return BlShape(new TopoDS_Shape(out));
 }
 
-// d1 along the first face the ancestor map lists for each edge, d2 along the other.
+// --- the faces a two distance chamfer puts d1 on -------------------------------
+
+// The ancestor map lists each Z edge of a box with its X face first, so d1 there put 12 + 12 on
+// both 20 mm Y faces at 3/12, where 12 at one corner of each face and 3 at the other fits.
+enum BlSidesKind { BL_SIDES_MAP, BL_SIDES_MAP_FITS, BL_SIDES_FIT, BL_SIDES_TOUCH, BL_SIDES_NONE };
+
+// `unseen`: with no fit, an edge the section build would get wrong in map order: a concave fill on a
+// face it runs past, clamped or crossed, or a chamfer at an inside corner while setbacks just meet.
+// `cornered`: a chamfered edge meeting another at an inside corner of a face.
+struct BlSides {
+  int kind = BL_SIDES_MAP;
+  std::vector<char> second;
+  int unseen = -1;
+  int cornered = -1;
+};
+
+struct BlSeg {
+  gp_XY a, b, in;
+  int nb[2] = {-1, -1};
+  int edge = -1;
+  bool first = false;
+};
+
+struct BlFace {
+  std::vector<BlSeg> segs;
+  std::vector<int> edges;
+  bool convex = true;
+};
+
+inline gp_XY bl_on(const gp_Pln &pln, const gp_Pnt &p) {
+  double u, v;
+  ElSLib::Parameters(pln, p, u, v);
+  return gp_XY(u, v);
+}
+
+inline double bl_point_seg(const gp_XY &p, const gp_XY &a, const gp_XY &b) {
+  gp_XY ab = b - a;
+  double l2 = ab.SquareModulus();
+  double t = l2 > 0 ? std::min(1.0, std::max(0.0, (p - a).Dot(ab) / l2)) : 0.0;
+  return (p - (a + ab * t)).Modulus();
+}
+
+// 0 apart, 1 within tol, 2 crossing deeper than tol.
+inline int bl_segs_meet(const gp_XY &a, const gp_XY &b, const gp_XY &c, const gp_XY &d, double tol) {
+  double gap = std::min(std::min(bl_point_seg(a, c, d), bl_point_seg(b, c, d)),
+                        std::min(bl_point_seg(c, a, b), bl_point_seg(d, a, b)));
+  if (gap <= tol) return 1;
+  double o1 = (b - a).Crossed(c - a), o2 = (b - a).Crossed(d - a);
+  double o3 = (d - c).Crossed(a - c), o4 = (d - c).Crossed(b - c);
+  bool cross = ((o1 > 0 && o2 < 0) || (o1 < 0 && o2 > 0)) && ((o3 > 0 && o4 < 0) || (o3 < 0 && o4 > 0));
+  return cross ? 2 : 0;
+}
+
+// Each edge moved in by its setback, an unchamfered one a trace runs past cut away whole: 0 when every
+// moved edge keeps its length clear of those it does not meet, 1 when some just touch, 2 when they cross.
+inline int bl_face_fit(const BlFace &f, const std::vector<double> &off, double tol) {
+  size_t n = f.segs.size();
+  std::vector<gp_XY> x0(n), x1(n), dir(n);
+  std::vector<std::array<int, 2>> nb(n);
+  std::vector<char> gone(n, 0);
+  for (size_t i = 0; i < n; ++i) {
+    dir[i] = (f.segs[i].b - f.segs[i].a).Normalized();
+    nb[i] = {f.segs[i].nb[0], f.segs[i].nb[1]};
+  }
+  for (;;) {
+    for (size_t i = 0; i < n; ++i) {
+      if (gone[i]) continue;
+      gp_XY p = f.segs[i].a + f.segs[i].in * off[i];
+      for (int k = 0; k < 2; ++k) {
+        int j = nb[i][k];
+        double c = dir[i].Crossed(dir[j]);
+        gp_XY q = f.segs[j].a + f.segs[j].in * off[j];
+        if (std::abs(c) < 1e-9 && j != f.segs[i].nb[k]) return 2;
+        (k == 0 ? x0 : x1)[i] = std::abs(c) < 1e-9 ? (k == 0 ? f.segs[i].a : f.segs[i].b)
+                                                   : p + dir[i] * ((q - p).Crossed(dir[j]) / c);
+      }
+    }
+    int drop = -1;
+    for (size_t i = 0; i < n && drop < 0; ++i)
+      if (!gone[i] && off[i] <= 0 && (x1[i] - x0[i]).Dot(dir[i]) < -tol) drop = (int)i;
+    if (drop < 0) break;
+    gone[drop] = 1;
+    int a = nb[drop][0], b = nb[drop][1];
+    if (a == b) return 2;
+    nb[a][nb[a][0] == drop ? 0 : 1] = b;
+    nb[b][nb[b][0] == drop ? 0 : 1] = a;
+    if (nb[a][0] == nb[a][1]) return 2;
+  }
+  int worst = 0;
+  for (size_t i = 0; i < n; ++i) {
+    if (gone[i]) continue;
+    double len = (x1[i] - x0[i]).Dot(dir[i]);
+    if (len < -tol) return 2;
+    if (len <= tol) worst = 1;
+  }
+  std::vector<char> moved(n);
+  for (size_t i = 0; i < n; ++i) moved[i] = !gone[i] && (off[i] > 0 || off[nb[i][0]] > 0 || off[nb[i][1]] > 0);
+  for (size_t i = 0; i < n; ++i) {
+    if (!moved[i]) continue;
+    for (size_t k = 0; k < n; ++k) {
+      if (k == i || gone[k] || (moved[k] && k < i) || (int)k == nb[i][0] || (int)k == nb[i][1]) continue;
+      int got = bl_segs_meet(x0[i], x1[i], x0[k], x1[k], tol);
+      if (got == 2) return 2;
+      worst = std::max(worst, got);
+    }
+  }
+  return worst;
+}
+
+// `second` puts d1 on the map's last face. Map order stays wherever it fits; only straight edged planes are judged.
+// Setbacks may just meet unless a concave fill meets another chamfer, which the section build never checks,
+// or two chamfers meet at an inside corner, where it ends each square and leaves their mitre standing.
+inline BlSides bl_chamfer_sides(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &es,
+                                const std::vector<double> &d1, const std::vector<double> &d2) {
+  BlSides out;
+  size_t m = es.size();
+  out.second.assign(m, 0);
+  if (d1.size() < m || d2.size() < m) return out;
+  bool uneven = false;
+  for (size_t i = 0; i < m; ++i) uneven = uneven || d1[i] != d2[i];
+  if (!uneven) return out;
+  try {
+    TopTools_IndexedDataMapOfShapeListOfShape anc;
+    TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, anc);
+    TopTools_IndexedMapOfShape face_ids;
+    std::vector<std::array<int, 2>> on(m), seg_at(m, std::array<int, 2>{-1, -1});
+    int cornered = -1;
+    double tol = 1e-6;
+    for (size_t i = 0; i < m; ++i) {
+      int idx = anc.FindIndex(es[i]);
+      if (idx == 0) return out;
+      const TopTools_ListOfShape &l = anc.FindFromIndex(idx);
+      if (l.Size() != 2 || l.First().IsSame(l.Last())) return out;
+      if (BRepAdaptor_Curve(TopoDS::Edge(es[i])).GetType() != GeomAbs_Line) return out;
+      on[i] = {face_ids.Add(l.First()) - 1, face_ids.Add(l.Last()) - 1};
+      tol = std::max(tol, 10 * BRep_Tool::Tolerance(TopoDS::Edge(es[i])));
+    }
+    std::vector<BlFace> faces(face_ids.Extent());
+    std::vector<gp_Pln> plns;
+    for (int fi = 0; fi < face_ids.Extent(); ++fi) {
+      const TopoDS_Face &F = TopoDS::Face(face_ids(fi + 1));
+      BRepAdaptor_Surface sf(F);
+      if (sf.GetType() != GeomAbs_Plane) return out;
+      plns.push_back(sf.Plane());
+      BlFace &f = faces[fi];
+      TopTools_IndexedMapOfShape seen;
+      std::vector<std::array<TopoDS_Vertex, 2>> vs;
+      for (TopExp_Explorer ex(F, TopAbs_EDGE); ex.More(); ex.Next()) {
+        const TopoDS_Edge &E = TopoDS::Edge(ex.Current());
+        if (seen.Contains(E) || BRep_Tool::Degenerated(E)) return out;
+        seen.Add(E);
+        if (BRepAdaptor_Curve(E).GetType() != GeomAbs_Line) return out;
+        TopoDS_Vertex v0, v1;
+        TopExp::Vertices(E, v0, v1);
+        if (v0.IsNull() || v1.IsNull() || v0.IsSame(v1)) return out;
+        BlSeg s;
+        s.a = bl_on(plns.back(), BRep_Tool::Pnt(v0));
+        s.b = bl_on(plns.back(), BRep_Tool::Pnt(v1));
+        if ((s.b - s.a).Modulus() <= tol) return out;
+        for (size_t i = 0; i < m; ++i)
+          if (es[i].IsSame(E)) {
+            s.edge = (int)i;
+            s.first = on[i][0] == fi;
+            seg_at[i][s.first ? 0 : 1] = (int)f.segs.size();
+          }
+        f.segs.push_back(s);
+        vs.push_back({v0, v1});
+      }
+      size_t n = f.segs.size();
+      if (n > 256) return out;
+      for (size_t i = 0; i < n; ++i)
+        for (int k = 0; k < 2; ++k) {
+          for (size_t j = 0; j < n; ++j) {
+            if (j == i || !(vs[j][0].IsSame(vs[i][k]) || vs[j][1].IsSame(vs[i][k]))) continue;
+            if (f.segs[i].nb[k] >= 0) return out;
+            f.segs[i].nb[k] = (int)j;
+          }
+          int j = f.segs[i].nb[k];
+          if (j < 0) return out;
+          gp_XY u = (f.segs[i].b - f.segs[i].a).Normalized(), w = (f.segs[j].b - f.segs[j].a).Normalized();
+          if (std::abs(u.Crossed(w)) < 1e-9 && (f.segs[i].edge >= 0 || f.segs[j].edge >= 0)) return out;
+        }
+      double step = std::max(1e-4, 20 * tol);
+      for (BlSeg &s : f.segs) {
+        if (s.edge < 0) continue;
+        f.edges.push_back(s.edge);
+        gp_XY d = (s.b - s.a).Normalized(), in(-d.Y(), d.X()), mid = (s.a + s.b) * 0.5;
+        auto inside = [&](const gp_XY &p) {
+          return BRepClass_FaceClassifier(F, gp_Pnt2d(p), tol).State() == TopAbs_IN;
+        };
+        if (inside(mid + in * step)) s.in = in;
+        else if (inside(mid - in * step)) s.in = -in;
+        else return out;
+      }
+      for (const BlSeg &s : f.segs)
+        for (int k = 0; k < 2 && s.edge >= 0; ++k) {
+          const BlSeg &o = f.segs[s.nb[k]];
+          gp_XY at = k ? s.b : s.a;
+          gp_XY away = (o.a - at).SquareModulus() < (o.b - at).SquareModulus() ? o.b - o.a : o.a - o.b;
+          if (o.edge >= 0 && away.Dot(s.in) < 0) cornered = s.edge;
+        }
+    }
+    out.cornered = cornered;
+    std::vector<char> concave(m, 0);
+    for (size_t i = 0; i < m; ++i) {
+      if (seg_at[i][0] < 0 || seg_at[i][1] < 0) return out;
+      const gp_Pln &pa = plns[on[i][0]];
+      const BlSeg &sa = faces[on[i][0]].segs[seg_at[i][0]];
+      gp_Vec in3 = gp_Vec(pa.XAxis().Direction()) * sa.in.X() + gp_Vec(pa.YAxis().Direction()) * sa.in.Y();
+      gp_XY mid = (sa.a + sa.b) * 0.5;
+      gp_Pnt at = ElSLib::Value(mid.X(), mid.Y(), pa), p;
+      gp_XY uv = bl_on(plns[on[i][1]], at);
+      gp_Vec nb;
+      BRepGProp_Face(TopoDS::Face(face_ids(on[i][1] + 1))).Normal(uv.X(), uv.Y(), p, nb);
+      concave[i] = in3.Dot(nb) >= 0;
+      if (concave[i]) faces[on[i][0]].convex = faces[on[i][1]].convex = false;
+    }
+
+    std::vector<double> off;
+    auto fit = [&](size_t fi, const std::vector<char> &sec) {
+      const BlFace &f = faces[fi];
+      off.assign(f.segs.size(), 0.0);
+      for (size_t k = 0; k < f.segs.size(); ++k) {
+        int e = f.segs[k].edge;
+        if (e >= 0) off[k] = f.segs[k].first != (sec[e] != 0) ? d1[e] : d2[e];
+      }
+      return bl_face_fit(f, off, tol);
+    };
+    auto passes = [&](size_t fi, const std::vector<char> &sec, bool touch) {
+      int got = fit(fi, sec);
+      return got == 0 || (got == 1 && touch && cornered < 0 && (faces[fi].convex || faces[fi].edges.size() == 1));
+    };
+    bool map_fits = true;
+    for (size_t fi = 0; fi < faces.size() && map_fits; ++fi) map_fits = passes(fi, out.second, true);
+    if (map_fits) {
+      out.kind = BL_SIDES_MAP_FITS;
+      return out;
+    }
+
+    // Edges that share a face are searched together, so a misfit is found
+    // before the rest is enumerated again.
+    std::vector<int> vars, pos(m, -1);
+    for (size_t s0 = 0; s0 < m; ++s0) {
+      if (pos[s0] >= 0 || d1[s0] == d2[s0]) continue;
+      pos[s0] = (int)vars.size();
+      vars.push_back((int)s0);
+      for (size_t q = vars.size() - 1; q < vars.size(); ++q)
+        for (int side : on[vars[q]])
+          for (int e : faces[side].edges)
+            if (pos[e] < 0 && d1[e] != d2[e]) {
+              pos[e] = (int)vars.size();
+              vars.push_back(e);
+            }
+    }
+    std::vector<std::vector<int>> done_at(vars.size());
+    std::vector<int> fixed;
+    for (size_t fi = 0; fi < faces.size(); ++fi) {
+      int last = -1;
+      for (int e : faces[fi].edges) last = std::max(last, pos[e]);
+      (last < 0 ? fixed : done_at[last]).push_back((int)fi);
+    }
+    long steps = 0;
+    auto search = [&](bool touch) {
+      std::vector<char> sec(m, 0);
+      auto ok = [&](int fi) { return passes(fi, sec, touch); };
+      for (int fi : fixed)
+        if (!ok(fi)) return 0;
+      std::function<int(size_t)> go = [&](size_t p) -> int {
+        if (p == vars.size()) {
+          out.second = sec;
+          return 1;
+        }
+        for (char c = 0; c < 2; ++c) {
+          if (++steps > 100000) return -1;
+          sec[vars[p]] = c;
+          bool all = true;
+          for (int fi : done_at[p]) all = all && ok(fi);
+          int r = all ? go(p + 1) : 0;
+          if (r != 0) return r;
+        }
+        sec[vars[p]] = 0;
+        return 0;
+      };
+      return go(0);
+    };
+    int got = search(false);
+    if (got == 1) {
+      out.kind = BL_SIDES_FIT;
+      return out;
+    }
+    if (got == 0 && cornered < 0 && (got = search(true)) == 1) {
+      out.kind = BL_SIDES_TOUCH;
+      return out;
+    }
+    out.second.assign(m, 0);
+    out.kind = got < 0 ? BL_SIDES_MAP : BL_SIDES_NONE;
+    for (size_t fi = 0; fi < faces.size() && got == 0 && out.unseen < 0; ++fi)
+      if (!faces[fi].convex && !passes(fi, out.second, true))
+        for (int e : faces[fi].edges)
+          if (concave[e] && out.unseen < 0) out.unseen = e;
+    if (got == 0 && out.unseen < 0 && cornered >= 0) {
+      int worst = 0;
+      for (size_t fi = 0; fi < faces.size(); ++fi) worst = std::max(worst, fit(fi, out.second));
+      if (worst == 1) out.unseen = cornered;
+    }
+    return out;
+  } catch (const Standard_Failure &) {
+    out.second.assign(m, 0);
+    out.kind = BL_SIDES_MAP;
+    return out;
+  }
+}
+
+// A two distance chamfer that fits no way round is not handed to the kernel:
+// built one edge at a time it came back carved with no word said.
 inline BlShape blend_chamfer(const TopoDS_Shape &shape, const TopoDS_Shape &edges,
                              rust::Slice<const double> d1, rust::Slice<const double> d2,
                              int32_t &status) {
@@ -163,9 +488,18 @@ inline BlShape blend_chamfer(const TopoDS_Shape &shape, const TopoDS_Shape &edge
   TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, map);
   BRepFilletAPI_MakeChamfer mk(shape);
   std::vector<TopoDS_Shape> es = bl_children(edges);
-  for (size_t i = 0; i < es.size() && i < d1.size() && i < d2.size(); ++i) {
+  size_t n = std::min(es.size(), std::min(d1.size(), d2.size()));
+  es.resize(n);
+  BlSides sides = bl_chamfer_sides(shape, es, std::vector<double>(d1.begin(), d1.begin() + n),
+                                   std::vector<double>(d2.begin(), d2.begin() + n));
+  if (sides.kind == BL_SIDES_NONE || sides.kind == BL_SIDES_TOUCH) {
+    status = 1;
+    return BlShape(new TopoDS_Shape());
+  }
+  for (size_t i = 0; i < n; ++i) {
     const TopoDS_Edge &e = TopoDS::Edge(es[i]);
-    mk.Add(d1[i], d2[i], e, TopoDS::Face(map.FindFromKey(e).First()));
+    const TopTools_ListOfShape &faces = map.FindFromKey(e);
+    mk.Add(d1[i], d2[i], e, TopoDS::Face(sides.second[i] ? faces.Last() : faces.First()));
   }
   mk.Build();
   if (!mk.IsDone()) {
