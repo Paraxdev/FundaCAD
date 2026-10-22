@@ -501,6 +501,8 @@ export class DocumentStore {
   private path: string | null = null; // current file path (null = unsaved)
   private pathlessName: string | null = null;
   private isDirty = false; // unsaved changes since last save/open/new
+  private edits = 0;
+  private keepClean = 0;
   private rollback: number | null = null; // # of active features (null = all); timeline marker
   private suppressed = new Set<string>(); // feature ids skipped on rebuild (suppress)
   private sketchVis = new Overlay<boolean>("sketchVisibility", isBool); // explicit per-sketch show/hide overrides
@@ -870,8 +872,29 @@ export class DocumentStore {
     for (const fn of this.metaListeners) fn();
   }
   private markDirty() {
-    if (this.isDirty) return;
+    this.edits++;
+    if (this.isDirty || this.keepClean) return;
     this.isDirty = true;
+    this.emitMeta();
+  }
+
+  // Counts every change, saved or not, so a caller can tell nothing else changed between two of its own steps.
+  get editCount(): number {
+    return this.edits;
+  }
+  // For the writes that open a document: a clean one stays clean through them, a dirty one stays dirty.
+  keepingClean<T>(fn: () => T): T {
+    this.keepClean++;
+    try {
+      return fn();
+    } finally {
+      this.keepClean--;
+    }
+  }
+  // Back to what the last save or open left, as when a cancelled import was the only change.
+  markClean() {
+    if (!this.isDirty) return;
+    this.isDirty = false;
     this.emitMeta();
   }
 

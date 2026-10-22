@@ -42,12 +42,18 @@ export function isBlankDocument(e: Pick<Engine, "store" | "sketch">): boolean {
 
 type HomeImportEngine = Pick<Engine, "store" | "sketch" | "viewport">;
 
+// A cancelled import is still on the redo stack, so the document keeps its history and gives up only the name.
+function backToBlank(store: Engine["store"]): void {
+  if (store.document.features.length || store.dirty) return;
+  if (store.canRedo) store.markOpenedWithoutPath("Untitled");
+  else store.newDocument();
+}
+
 async function importNamed(e: HomeImportEngine, name: string, run: () => Promise<void>): Promise<void> {
   e.store.markOpenedWithoutPath(name);
   closeHome();
   await run();
-  const landed = e.store.document.features.some((f) => f.type === "import");
-  if (!landed && !e.store.document.features.length && !e.store.dirty) e.store.newDocument();
+  backToBlank(e.store);
 }
 
 /** A blank document takes the files, anything else asks whether they join it or start a new one. `run` is the
@@ -100,30 +106,22 @@ export async function newFromTemplate(e: ExampleEngine, id: string): Promise<voi
   e.store.markOpenedWithoutPath(info.name);
 }
 
-/** The import a maker's own STEP takes, into a new document that ends clean when the import is all it holds. */
+/** The import a maker's own STEP takes, into a new document that stays clean until the maker changes it. */
 async function importExample(e: ExampleEngine, info: TemplateInfo): Promise<void> {
   e.store.newDocument();
   e.viewport.resetCamera(false);
   e.store.markOpenedWithoutPath(info.name);
   closeHome();
-  // An edit made while the file is read turns the document dirty before the import lands.
-  let importFirst: boolean | null = null;
   let replaced = false;
-  const offMeta = e.store.onMeta(() => {
-    if (importFirst === null && e.store.dirty) importFirst = e.store.document.features.some((f) => f.type === "import");
-  });
   const offOpen = e.store.onOpen(() => (replaced = true));
   try {
-    await importFileBytes(e.store, e.geometry, await templateFile(info.id));
+    await importFileBytes(e.store, e.geometry, await templateFile(info.id), undefined, { opening: true });
   } catch (err) {
     await reportError(`Couldn't open the ${info.name} example: ${err instanceof Error ? err.message : String(err)}`);
   } finally {
-    offMeta();
     offOpen();
   }
-  const features = e.store.document.features;
-  const onlyImport = features.length > 0 && features.every((f) => f.type === "import");
-  if (importFirst && !replaced && onlyImport && !e.sketch.hasUncommittedEdits) e.store.markOpenedWithoutPath(info.name);
+  if (!replaced) backToBlank(e.store);
 }
 
 type VersionEngine = Pick<Engine, "store" | "sketch" | "geometry" | "toolAtWork" | "setStatus">;
