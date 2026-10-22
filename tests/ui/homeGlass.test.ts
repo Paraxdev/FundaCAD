@@ -70,7 +70,15 @@ const NOIR: Record<string, string> = Object.fromEntries(
 const SOLARIZED_LIGHT: Record<string, string> =
   (themes().find((t) => t.id === "solarized-light") as ShippedTheme | undefined)?.palette ?? {};
 
-const glass = [".home-side", ".home-tools", ".home-card", ".home-example", ".home-new-card", ".home-drawer"];
+const glass = [
+  ".home-side",
+  ".home-tools",
+  ".home-card",
+  ".home-example",
+  ".home-new-card",
+  ".home-drawer",
+  ".home-news",
+];
 
 describe("Home wears the app's glass", () => {
   it.each(glass)("%s has the floating panels' fill, blur, border and shadow", (sel) => {

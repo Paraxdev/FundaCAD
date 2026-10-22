@@ -10,6 +10,8 @@
 # the main build publishes the beta once its own gating jobs are green.
 # The beta page opens with docs/release-notes/beta.md, which is written by hand
 # on dev before a promotion, and the script says when it did not change.
+# Its "What's new" section is also the card Home shows after an update, so
+# keep it short and written for makers.
 # --stable also tags the merge v1.<minor>.<patch>, pushed atomically with main,
 # and the tag's build publishes a stable release.
 #

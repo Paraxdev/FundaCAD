@@ -42,6 +42,7 @@ import HomeSidebar from "./HomeSidebar.vue";
 import VersionsDrawer from "./VersionsDrawer.vue";
 import { liveSummary } from "../../ui/homeVersions";
 import NewStrip from "./NewStrip.vue";
+import WhatsNewCard from "./WhatsNewCard.vue";
 import logoDarkUrl from "../../../assets/brand/fundacad-lockup-app.svg";
 import logoLightUrl from "../../../assets/brand/fundacad-lockup-app-light.svg";
 
@@ -352,6 +353,7 @@ onUnmounted(() => {
         Showing the first 2000 documents
       </p>
       <div class="home-scroll">
+        <WhatsNewCard />
         <div v-if="lib && entries.length" class="home-grid">
           <DocCard
             v-for="e in entries"

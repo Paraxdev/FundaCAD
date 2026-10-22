@@ -134,6 +134,46 @@
   overflow-y: auto;
   overflow-x: hidden;
 }
+.home-news {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-width: 720px;
+  margin: var(--s-3) var(--s-5) 0;
+  padding: var(--s-4);
+}
+.home-news-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.home-news-body {
+  max-height: 240px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+.home-news-group {
+  margin: var(--s-3) 0 var(--s-1);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.home-news-group:first-child {
+  margin-top: 0;
+}
+.home-news-list {
+  display: grid;
+  gap: var(--s-1);
+  margin: 0;
+  padding-left: var(--s-5);
+}
+.home-news-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
 .home-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
