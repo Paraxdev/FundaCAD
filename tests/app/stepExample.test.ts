@@ -49,7 +49,6 @@ const importOf = (doc: CadDocument) => doc.features.find((f) => f.type === "impo
 const geometry = {
   async rebuild(doc: CadDocument) {
     const imp = importOf(doc);
-    if (imp && h.cancel) return { ok: false as const, cancelled: true, error: { message: "cancelled" } };
     const edit = imp ? h.building : null;
     if (edit) {
       // The maker's input comes in a later task than the import's own writes, as the engine reply does.
@@ -57,6 +56,7 @@ const geometry = {
       h.building = null;
       edit(h.store!);
     }
+    if (imp && h.cancel) return { ok: false as const, cancelled: true, error: { message: "cancelled" } };
     const result: RebuildResult = {
       mesh: { positions: [], indices: [], faceIds: [] },
       edges: [],
@@ -310,5 +310,36 @@ describe("a cancelled import", () => {
     h.reading = environment;
     await importFileBytes(store, geometry, motor());
     expect(seen(store)).toMatchObject({ features: ["sketch", "extrude"], dirty: true });
+  });
+
+  it.each([
+    ["the environment", environment],
+    ["the material library", material],
+  ])("keeps the document unsaved when the maker changed %s after the import landed", async (_what, edit) => {
+    const { store } = rig();
+    h.cancel = true;
+    h.building = edit;
+    await importFileBytes(store, geometry, motor());
+    expect(h.building).toBeNull();
+    expect(seen(store)).toEqual({
+      features: ["sketch", "extrude"],
+      name: "Bracket.funda",
+      path: "D:/jigs/Bracket.funda",
+      dirty: true,
+      home: true,
+      imported: ["motor.step"],
+      reported: [],
+    });
+  });
+
+  it.each([
+    ["the environment", environment],
+    ["the material library", material],
+  ])("keeps the 3D printer example unsaved when the maker changed %s after it landed", async (_what, edit) => {
+    const { e, store } = rig();
+    h.cancel = true;
+    h.building = edit;
+    await newFromTemplate(e, "printer");
+    expect(seen(store)).toMatchObject({ features: [], name: "3D printer", dirty: true, reported: [] });
   });
 });
