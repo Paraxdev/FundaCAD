@@ -1,15 +1,6 @@
-//! Binary reply frames and the size limits around them.
-//!
-//! Replaces `_pack_edges`, `_taker`, `_pack_bodies`, `_frame_bytes`,
-//! `_encode_binary_reply`, `_too_large_error` and `_reply_bytes` in
-//! the Python engine's `wire.py`.
-//!
-//! Layout, all integers little-endian:
-//! `[u32 header_len][header_len bytes UTF-8 JSON header][pad to 4][buf0][buf1]...`
-//! Each mesh array in the header is `{"$buf": i}`, indexing
-//! `result.$buffers[i] = {"dtype", "len"}` with `len` an element count, in
-//! on-wire order. Both dtypes are 4 bytes wide, so the one header pad aligns
-//! every buffer; a wider dtype would need per-buffer padding.
+//! Binary reply frames, integers little-endian: `[u32 header_len][UTF-8 JSON header][pad to 4][buf0][buf1]...`.
+//! A mesh array in the header is `{"$buf": i}`, indexing `result.$buffers[i] = {"dtype", "len"}`, len in elements.
+//! Both dtypes are 4 bytes wide so the one header pad aligns every buffer, a wider one needs per-buffer padding.
 
 use crate::body::{Edge, FullBody, JobResult, MeshResult, WireBody, F32, U32};
 use crate::envelope;
@@ -137,9 +128,8 @@ fn pack_edges<'a>(body: &'a FullBody, p: &mut Packer<'a>) -> Value {
     Value::Object(out)
 }
 
-/// `_pack_bodies`: each full body's arrays become `$buf` refs, stubs pass
-/// through. Shared by the single-frame and chunked encoders so a body's
-/// payload is identical either way.
+/// `_pack_bodies`: each full body's arrays become `$buf` refs, stubs pass through. Shared by the single-frame and
+/// chunked encoders so a body's payload is identical either way.
 fn pack_bodies<'a>(bodies: &'a [WireBody], p: &mut Packer<'a>) -> Vec<Value> {
     bodies
         .iter()
@@ -328,9 +318,8 @@ fn label_of(f: &Map<String, Value>) -> String {
     "a body".into()
 }
 
-/// `_reply_bytes`: a binary frame when the client opted in and the result is a
-/// successful mesh reply, the JSON text reply otherwise, either one refused
-/// with an error when it would reach the cap.
+/// `_reply_bytes`: a binary frame when the client opted in and the result is a successful mesh reply, the JSON text
+/// reply otherwise, either one refused with an error when it would reach the cap.
 pub fn reply_bytes(id: &Value, res: &JobResult, binary: bool, limits: &Limits) -> Message {
     let n_bodies = res.body_count();
     let text = match res {
@@ -355,9 +344,8 @@ pub enum Buf {
     U32(Vec<u32>),
 }
 
-/// A binary frame's envelope with every `$buf` reference left in place, and
-/// the buffers they index. For a client that keeps a large mesh as arrays
-/// rather than as one JSON number per coordinate.
+/// A binary frame's envelope with every `$buf` reference left in place, plus the buffers they index, for a client
+/// that keeps a large mesh as arrays rather than one JSON number per coordinate.
 pub fn decode_frame_raw(bytes: &[u8]) -> Result<(Value, Vec<Buf>), String> {
     let word = |at: usize| -> Result<[u8; 4], String> {
         bytes.get(at..at + 4).and_then(|b| b.try_into().ok()).ok_or_else(|| "the frame ends early".to_string())
@@ -387,9 +375,8 @@ pub fn decode_frame_raw(bytes: &[u8]) -> Result<(Value, Vec<Buf>), String> {
     Ok((env, bufs))
 }
 
-/// A binary mesh frame read back into the envelope the text reply carries,
-/// every `$buf` inlined the way [`FullBody::to_json`] writes it, so a Rust
-/// client can take the streamed reply and keep its JSON handling.
+/// A binary mesh frame read back into the text reply's envelope, every `$buf` inlined as [`FullBody::to_json`]
+/// writes it, so a Rust client can take the streamed reply and keep its JSON handling.
 pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
     let (mut env, raw) = decode_frame_raw(bytes)?;
     let Some(result) = env.get_mut("result").and_then(Value::as_object_mut) else {

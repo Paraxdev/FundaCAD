@@ -1,9 +1,5 @@
-//! The mesh result a rebuild hands to the wire.
-//!
-//! Replaces the result dicts the Python engine's `server.py` passes to the Python engine's `wire.py`:
-//! the top-level result (`protocol`, `bbox`, `diagnostics`, ...) and its
-//! per-body payloads. The mesh arrays are typed, at the width they travel in,
-//! everything else stays JSON so a new field needs no protocol change.
+//! The mesh result a rebuild hands to the wire. Mesh arrays are typed at the width they travel in, everything else
+//! stays JSON so a new field needs no protocol change.
 
 use crate::pyjson;
 use serde_json::{Map, Value};
@@ -16,13 +12,8 @@ pub struct Edge {
     pub smooth: bool,
 }
 
-/// A body whose mesh the client does not hold, sent in full.
-///
-/// `fields` carries every non-array field (`id`, `name`, `etag`, `faceOwners`,
-/// `faceCount`, `bbox`, ...) in the order they are written. The mesh keys
-/// (`positions`, `normals`, `indices`, `faceIds`, `edges`) are written where
-/// `fields` already has them, whatever their placeholder value, and appended in
-/// that order otherwise, which is how the Python dict update behaves.
+/// A body the client does not hold, sent in full. `fields` keeps every non-array field in write order; the mesh keys
+/// go where `fields` already has them and are appended in order otherwise, as a Python dict update does.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct FullBody {
     pub fields: Map<String, Value>,
@@ -186,7 +177,6 @@ impl WireBody {
 }
 
 impl MeshResult {
-    /// The whole result as inline JSON, bodies included.
     pub fn to_json(&self) -> Map<String, Value> {
         let mut m = self.fields.clone();
         let bodies = self.bodies.iter().map(|b| Value::Object(b.to_json())).collect();
