@@ -1,7 +1,4 @@
-// The app's generic native commands, typed for this plugin. None of them knows
-// what a printer or a slicer is: a request to a device on the local network, a
-// file in this plugin's own data directory, a program started with arguments,
-// and a file the person picked.
+// The app's generic native commands, typed for this plugin. None of them knows what a printer or a slicer is.
 
 import { invoke } from "fundacad";
 

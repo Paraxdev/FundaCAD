@@ -1,11 +1,6 @@
 <script setup lang="ts">
-// Live printer camera. Snapshots are fetched through the app's local-network
-// request and arrive as JPEG data: URLs (CSP img-src already allows data:), so
-// this only ever sets img.src.
-//
-// The subscriptions and the poller are tied to the component's lifetime.
-// Previously they hung off FloatingPanel's onClose hook precisely because every
-// dismissal path had to stop the poll; onUnmounted cannot be missed.
+// Snapshots come through the app's local-network request as JPEG data: URLs (CSP img-src allows data:), so this only
+// ever sets img.src. The poller is tied to the component's lifetime, since onUnmounted cannot be missed.
 
 import { ref, watch } from "vue";
 import { cameraPanel } from "./state";
@@ -49,8 +44,7 @@ function detach(id: string) {
   offline.value = false;
 }
 
-// One watcher covers open, close AND switching printers while open, the old
-// code could only handle the first two because open() built the DOM.
+// One watcher covers open, close AND switching printers while open.
 watch(
   () => cameraPanel.value,
   (id, prevId) => {

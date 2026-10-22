@@ -1,11 +1,6 @@
-//! print_project3mf.py: the Orca project 3MF, one object per body, a per
-//! object extruder (the palette slot) and the palette's colours as filament
-//! slots.
-//!
-//! Indexing, which is easy to get wrong: palette slots and the
-//! project_settings filament_colour array are 0-based, the model_settings
-//! "extruder" metadata is 1-based. A body with no palette slot prints on
-//! extruder 1.
+//! print_project3mf.py: the Orca project 3MF, one object per body with its palette slot as extruder. Indexing is easy
+//! to get wrong: palette slots and filament_colour are 0-based, model_settings "extruder" is 1-based, and a body with
+//! no palette slot prints on extruder 1.
 
 use std::collections::HashMap;
 
@@ -75,9 +70,8 @@ fn as_map(v: Option<&Value>) -> Map<String, Value> {
     }
 }
 
-/// `sanitize_inputs`: untrusted request fields clamped to what the writer
-/// expects, colours normalised, names capped and slot indices kept to the
-/// palette (an index out of range is unassigned).
+/// `sanitize_inputs`: untrusted request fields clamped to what the writer expects, colours normalised, names capped
+/// and slot indices kept to the palette (an index out of range is unassigned).
 pub fn sanitize_inputs(
     palette: Option<&Value>,
     body_colors: Option<&Value>,

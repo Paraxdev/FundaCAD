@@ -1,12 +1,5 @@
-// Filament-mapping dialog for "Send to Printer": for each colored slot the job
-// uses (logical gcode tool Tn = palette slot index), pick which physical U1
-// toolhead is loaded with that filament. Pre-matched by material type, then
-// nearest color, the same client-side reconciliation Snapmaker Orca does.
-//
-// choice.ts's chooseMulti can't express per-row dropdowns, so this is a bespoke
-// modal built on the shared .choice-* styles. The markup is
-// ./FilamentMappingDialog.vue; the reconciliation below is pure and stays
-// here, where printFlow.ts's other pure helpers are.
+// Each slot the job uses (logical gcode tool Tn) is pre-matched to a physical U1 toolhead by material, then nearest
+// color, the same client-side reconciliation Snapmaker Orca does.
 
 import { openFilamentMapping } from "./state";
 import type { StartOpts, ToolheadFilament } from "./printerClient";
