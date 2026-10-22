@@ -254,8 +254,25 @@ describe("MirrorFlow commit and cancel", () => {
     expect(JSON.stringify(r.entities)).toBe(before);
     expect(r.log.previews.at(-1)).toEqual({ copies: [], line: null, hover: null });
     expect(r.panel()).toBeNull();
-    expect([...r.selected]).toEqual([]);
+    expect([...r.selected]).toEqual(["c1"]);
     expect(r.log.armSelect).toBe(1);
+  });
+
+  it("cancel gives back what was selected before, not what was picked since", () => {
+    const r = rig(["c1", "pr", "l1"]);
+    r.flow.begin();
+    r.flow.clear("objects");
+    r.flow.click(ON.a1, true);
+    r.flow.cancel();
+    expect([...r.selected]).toEqual(["l1", "c1"]);
+  });
+
+  it("cancel with nothing selected before leaves nothing selected", () => {
+    const r = rig();
+    r.flow.begin();
+    r.flow.click(ON.l1, false);
+    r.flow.cancel();
+    expect([...r.selected]).toEqual([]);
   });
 
   it("starts a second run clean after the first", () => {

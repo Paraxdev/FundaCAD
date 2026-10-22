@@ -183,6 +183,8 @@ describe("sketch Mirror inside SketchMode", () => {
     expect(s.mirrorFlow.running).toBe(false);
     expect(panel()).toBeNull();
     expect(s.entities).toEqual(sketch());
+    expect([...s.selected]).toEqual(["l1"]);
+    expect(s.tool).toBe("select");
   });
 
   it("Delete is not a delete in the Mirror tool, the objects stay picked", () => {
