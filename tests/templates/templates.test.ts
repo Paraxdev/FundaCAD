@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TEMPLATES, templateFile, templateText } from "../../src/templates";
+import { TEMPLATES, templateText } from "../../src/templates";
 import { documentShapeProblem } from "../../src/document/documentShape";
 import { migrateDocument } from "../../src/document/migrate";
 import { commitParamExpr, recompute } from "../../src/params/engine";
@@ -16,16 +16,16 @@ describe("built-in templates", () => {
   });
 
   it("are each a document, in the order Home shows them", () => {
-    expect(TEMPLATES.map((t) => [t.id, t.source])).toEqual([
-      ["wall-bracket", "document"],
-      ["box-with-lid", "document"],
-      ["capsule-holder", "document"],
-      ["plate", "document"],
-      ["pinned-lever", "document"],
+    expect(TEMPLATES.map((t) => t.id)).toEqual([
+      "wall-bracket",
+      "box-with-lid",
+      "capsule-holder",
+      "plate",
+      "pinned-lever",
     ]);
   });
 
-  for (const t of TEMPLATES.filter((x) => x.source === "document")) {
+  for (const t of TEMPLATES) {
     it(`${t.name} is a current document with no history and no imports`, async () => {
       const doc = (await load(t.id)) as CadDocument & { versions?: unknown };
       expect(documentShapeProblem(doc)).toBeNull();
@@ -51,7 +51,6 @@ describe("built-in templates", () => {
 
   it("refuses an unknown id", async () => {
     await expect(templateText("nope")).rejects.toThrow();
-    await expect(templateFile("nope")).rejects.toThrow("no example file called nope");
   });
 });
 
