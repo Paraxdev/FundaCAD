@@ -140,23 +140,30 @@ export function planePoint(h: PickHost, name: string, onCanvas: CanvasTest = can
   if (!g.boundingBox) g.computeBoundingBox();
   const box = g.boundingBox ?? new THREE.Box3(new THREE.Vector3(-1, -1, 0), new THREE.Vector3(1, 1, 0));
   const want = base ? name.trim().toUpperCase() : name.trim();
-  for (const [u, v] of [
-    [0.5, 0.5],
-    [0.3, 0.3],
-    [0.7, 0.3],
-    [0.3, 0.7],
-    [0.7, 0.7],
-    [0.15, 0.5],
-    [0.85, 0.5],
-    [0.5, 0.15],
-    [0.5, 0.85],
-  ] as const) {
-    const local = new THREE.Vector3(
+  const at = (u: number, v: number) =>
+    new THREE.Vector3(
       box.min.x + u * (box.max.x - box.min.x),
       box.min.y + v * (box.max.y - box.min.y),
       (box.min.z + box.max.z) / 2,
-    );
-    const p = h.viewport.projectToScreen(local.applyMatrix4(obj.matrixWorld));
+    ).applyMatrix4(obj.matrixWorld);
+  const points = (
+    [
+      [0.5, 0.5],
+      [0.3, 0.3],
+      [0.7, 0.3],
+      [0.3, 0.7],
+      [0.7, 0.7],
+      [0.15, 0.5],
+      [0.85, 0.5],
+      [0.5, 0.15],
+      [0.5, 0.85],
+    ] as const
+  ).map(([u, v]) => at(u, v));
+  // An origin tile seen edge on is still picked by its name, drawn beside it.
+  const label = obj.children.find((c) => c.userData.role === "label");
+  if (label) points.push(label.getWorldPosition(new THREE.Vector3()));
+  for (const world of points) {
+    const p = h.viewport.projectToScreen(world);
     if (!onCanvas(p.x, p.y)) continue;
     const hit = h.viewport.pickConstructionAt(p.x, p.y);
     const got = hit?.kind === "base" ? hit.plane : hit?.kind === "datum" ? hit.id : null;
