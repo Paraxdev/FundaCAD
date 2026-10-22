@@ -1,6 +1,5 @@
-//! Whether a body is material an analysis can judge: closed solids whose
-//! faces point outward. A boolean, a volume or a section of anything else
-//! comes back without an error and wrong, so each analysis asks here first.
+//! Whether a body is closed solids with faces pointing outward. A boolean, volume or section of
+//! anything else comes back wrong without an error, so each analysis asks here first.
 
 use std::borrow::Cow;
 
@@ -82,9 +81,8 @@ impl Soundness {
 /// What being inside out is, worded to follow the body's name.
 pub const INSIDE_OUT: &str = "is inside out, its faces point into the material";
 
-/// The shape an analysis of material can work on: the body itself when it is
-/// sound, a copy turned outward when being inside out is all that is wrong
-/// with it, else why it cannot be judged, worded to follow the body's name.
+/// The body itself when sound, a copy turned outward when inside out is all that is wrong, else
+/// why it cannot be judged, worded to follow the body's name.
 pub fn material(shape: &Shape) -> Result<Cow<'_, Shape>, String> {
     let s = of(shape);
     if let Some(why) = s.fault() {

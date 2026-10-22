@@ -1,16 +1,4 @@
-//! FundaCAD geometry engine: the Rust replacement for the Python engine.
-//!
-//! This crate is the first brick of the Rust pivot (docs/ENGINE.md). It
-//! links OpenCASCADE statically through the vendored `opencascade` bindings and
-//! exposes the pieces the app consumes: a solid built from the document, a
-//! viewport mesh in the wire format the frontend already speaks
-//! (docs/PROTOCOL.md, protocol v2 body payload), measurements, and export.
-//!
-//! What is here today is deliberately small and fully tested: measurement and
-//! tessellation over shapes the bindings can already build. The feature
-//! builder that replays a `.funda` document lands module by module, each one
-//! moving a Python engine `*.py` file across; the conversion targets are listed in
-//! the plan.
+//! FundaCAD geometry engine over a statically linked OpenCASCADE.
 
 pub mod bench;
 pub mod builder;
@@ -42,11 +30,7 @@ pub mod trace;
 
 pub use opencascade;
 
-/// The OpenCASCADE version this engine links, as "major.minor.patch".
-///
-/// The static kernel comes from the `occt-sys` crate the bindings pull in, so
-/// this is a build-time constant rather than a runtime lookup; it is the one
-/// number to quote in a bug report about the Rust geometry path.
+/// Build time constant from the `occt-sys` crate, the number to quote in a geometry bug report.
 pub const OCCT_VERSION: &str = "7.8.1";
 
 #[cfg(test)]
@@ -55,8 +39,6 @@ mod tests {
     use glam::dvec3;
     use opencascade::primitives::Shape;
 
-    /// A 20 x 20 x 10 box, the same part the spike's tests and the Python engine's
-    /// smallest fixtures use.
     fn box_20_20_10() -> Shape {
         Shape::box_with_dimensions(20.0, 20.0, 10.0)
     }
@@ -74,7 +56,6 @@ mod tests {
     #[test]
     fn boolean_cut_removes_the_cylinder_volume() {
         let b = box_20_20_10();
-        // A through-hole of radius 3 down Z, centred on the box.
         let hole = Shape::cylinder(dvec3(10.0, 10.0, -1.0), 3.0, dvec3(0.0, 0.0, 1.0), 12.0);
         let cut = b.subtract(&hole);
         let expected = 4000.0 - std::f64::consts::PI * 9.0 * 10.0;
