@@ -30,7 +30,8 @@ function host(over: Partial<{ roll: number; suppressed: string[]; hidden: string
       rollbackIndex: over.roll ?? 4,
       isSuppressed: (id: string) => (over.suppressed ?? []).includes(id),
       isBodyVisible: (id: string) => !(over.hidden ?? []).includes(id),
-      bodyMaterialId: (id: string) => (id === "body1" ? "m-brass" : undefined),
+      // an assignment to a deleted material resolves to nothing, as bodyMaterialOf does
+      bodyMaterialOf: (id: string) => (id === "body1" ? { id: "m-brass", name: "Brass" } : undefined),
       bodyColorSlot: (id: string) => (id === "body2" ? 2 : undefined),
       busyState: { active: false, label: "", id: null, pct: null, stage: null, rebuild: false, waiting: null, ...over.busy },
       previewError: null,
@@ -71,7 +72,7 @@ describe("history", () => {
 describe("bodies and selection", () => {
   it("lists bodies with their face counts, visibility, material, colour and faults", () => {
     expect(read.bodies(host({ hidden: ["body2"] }))).toEqual([
-      { id: "body1", name: "Plate", faces: 6, visible: true, material: "m-brass", slot: null, fault: null },
+      { id: "body1", name: "Plate", faces: 6, visible: true, material: "Brass", slot: null, fault: null },
       { id: "body2", name: "Boss", faces: 3, visible: false, material: null, slot: 2, fault: "open shell" },
     ]);
   });
