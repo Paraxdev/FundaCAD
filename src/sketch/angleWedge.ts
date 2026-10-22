@@ -32,8 +32,7 @@ export function crossingOf(s1: Seg, s2: Seg): V | null {
   );
 }
 
-/** The wedge holding `cursor`: of the four wedges the two lines cut, the one the cursor
- *  sits in, or its 360 complement when `reflex`. */
+/** Of the four wedges the two lines cut, the one holding `cursor`, or its 360 complement when `reflex`. */
 export function wedgeAt(s1: Seg, s2: Seg, cursor: V, reflex = false): Wedge | null {
   const x = crossingOf(s1, s2);
   if (!x) return null;
@@ -65,7 +64,6 @@ export function solverAngleDeg(value: number, rays?: [AngleRay, AngleRay]): numb
   return d > 180 ? d - 360 : d;
 }
 
-/** what an angle dim reads for the lines as they are now */
 export function measuredAngleDeg(s1: Seg, s2: Seg, rays?: [AngleRay, AngleRay]): number {
   if (!rays) return signedAngleDeg(s1, s2);
   return ccwDeg(unit(s1).multiplyScalar(rays[0]), unit(s2).multiplyScalar(rays[1]));

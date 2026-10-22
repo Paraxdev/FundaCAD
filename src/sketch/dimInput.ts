@@ -1,10 +1,5 @@
-// On-canvas heads-up dimension input, the signature mainstream MCAD interaction.
-// A small floating cluster of <input>s positioned near the cursor. Fields that
-// are "tracking" update live from the cursor; typing makes a field hold your
-// value; Tab locks the field and moves to the next; Enter commits everything.
-//
-// Values cross this boundary in MILLIMETRES (the tools work in mm); length
-// fields are shown/parsed in the user's display unit, angles always in degrees.
+// On-canvas heads-up dimension input: tracking fields follow the cursor, typing holds, Tab locks, Enter commits.
+// Values cross this boundary in MILLIMETRES; length fields show and parse the display unit, angles are degrees.
 
 import { iconElement } from "../ui/icons";
 import { isHistoryKey } from "../ui/focus";
@@ -20,47 +15,32 @@ export interface DimFieldDef extends ValueRule {
   label: string;
   icon?: string;
   kind?: "length" | "angle" | "count"; // default length; count = raw number, no unit
-  /** The tool reads the raw text itself (a size name, a parameter expression),
-   *  so the box does not judge it. */
+  /** The tool reads the raw text itself (a size name, a parameter expression), so the box does not judge it. */
   free?: boolean;
-  /** What the field reads, picked from a menu on its name. `label` and `icon`
-   *  are the chosen one's. */
+  /** What the field reads, picked from a menu on its name; `label` and `icon` are the chosen one's. */
   choices?: DimChoices;
 }
 
-/** One of the things a field can read, a radius or a diameter say. */
 export interface DimChoice {
   id: string;
   /** the name tag, or its tooltip when `icon` is given */
   label: string;
   icon?: string;
-  /** the menu row */
   word: string;
 }
 
-/** The tool stays the owner of the choice, as with the toggle: this reports a
- *  pick and follows with `setChoice` when it changes some other way. */
+/** The tool owns the choice, as with the toggle: this reports a pick, and `setChoice` follows other changes. */
 export interface DimChoices {
   options: DimChoice[];
   chosen: string;
-  /** A choice written ahead of the number ("r2.5") and the number's own text,
-   *  null when the text names none. */
+  /** Splits a choice written ahead of the number ("r2.5") from the number's text, null when the text names none. */
   read?: (raw: string) => { choice: string; text: string } | null;
   /** `typed` when the text picked it, so the tool leaves the text as it is. */
   onChoose: (id: string, typed: boolean) => void;
 }
 
-/** An on/off switch in the box, beside Confirm and Cancel.
- *
- *  For the mode a tool has to offer WHILE the value is being set, where a
- *  keyboard shortcut alone will not do. Extrude's Symmetric is the first: the
- *  field is focused for the whole drag and it takes "1 1/2 in" and the
- *  spelled-out unit names, so a bare letter cannot be claimed, and "millimeters"
- *  and "inches" both contain the obvious one.
- *
- *  The tool stays the owner of the state. This reports a press and follows with
- *  `setToggle` when the state changes some other way (a shortcut, re-opening on
- *  a saved feature), so the button and the tool cannot disagree. */
+/** A switch for a mode the tool must offer while the value is set (Extrude's Symmetric): the focused field takes
+ *  "1 1/2 in" and unit names, so no bare letter is free. The tool owns the state and syncs it with `setToggle`. */
 export interface DimToggleDef {
   label: string;
   title: string;
@@ -71,42 +51,34 @@ export interface DimToggleDef {
 interface Field {
   def: DimFieldDef;
   input: HTMLInputElement;
-  /** The unit this field is SHOWING. Starts at the document's, follows the user
-   *  if they type one, and can be picked from the chip. Per field rather than
-   *  global: a value the user chose to enter in inches should go on reading in
-   *  inches without changing what every other field in the app shows. */
+  /** The unit this field is SHOWING: the document's at first, then whatever the user types or picks on the chip.
+   *  Per field, so a value entered in inches goes on reading in inches without changing the rest of the app. */
   unit: UnitDef | null;
   /** the clickable unit chip, or null for a count (which has no unit) */
   chip: HTMLButtonElement | null;
-  /** the name tag, a button when the field has choices */
   tag: HTMLElement;
   choice: string | null;
-  // false = follows the cursor; true = holds the user's typed/locked value
   userDriven: boolean;
-  /** Set only by a keystroke. userDriven is not enough, an edit tool seeds and
-   *  locks every field before the user has touched any of them. */
+  /** Set only by a keystroke: an edit tool seeds and locks every field before the user touches any. */
   typed?: boolean;
   hidden?: boolean;
 }
 
 const shownBoxes = new Set<DimInput>();
 
-/** The heads-up box holding a value the user typed and has not entered yet, or
- *  null. `confirm` enters it as Enter would, false when the box refused it. */
+/** The box holding a typed value not yet entered, or null. `confirm` enters it as Enter would, false when refused. */
 export function typedDimBox(): { confirm(): boolean } | null {
   for (const box of shownBoxes) if (box.hasTyped()) return { confirm: () => box.confirmTyped() };
   return null;
 }
 
-/** The unit a field opens in. */
 function initialUnit(kind: DimFieldDef["kind"]): UnitDef | null {
   if (kind === "count") return null;
   return unitById(kind === "angle" ? "deg" : getUnit());
 }
 
-/** Confirm and cancel act on the press and the box goes with it, so the release
- *  lands on the canvas behind it, where it read as a click and selected the
- *  body under the button. That one release, and its click, go nowhere. */
+/** Confirm and cancel act on the press and the box goes with it, so the release landed on the canvas and selected
+ *  the body under the button. That one release and its click go nowhere. */
 export function swallowRelease(pointerId: number | undefined): void {
   const opts = { capture: true } as const;
   const stop = (ev: Event) => {
@@ -142,13 +114,11 @@ export interface ScreenRect {
   bottom: number;
 }
 
-/** Clear space between an arrow's tip and the box, in px. */
+/** px */
 const PAST_GAP = 10;
 
-/** Where a box of `size` goes past an arrow's tip: beyond the tip along the
- *  arrow, else beside the tip, else behind the arrow's base, whichever first
- *  fits in `bounds`; clamped into them when none does. `dir` runs from the
- *  base to the tip in px. */
+/** Past the tip along the arrow, else beside the tip, else behind the base, whichever first fits in `bounds`,
+ *  clamped when none does. `dir` runs from base to tip in px. */
 export function pastTip(
   tip: ScreenPoint,
   dir: ScreenPoint,
@@ -160,8 +130,7 @@ export function pastTip(
   // An arrow end on to the view has no direction on screen, so the box goes where the cursor's would.
   const [dx, dy] = n > 1 ? [dir.x / n, dir.y / n] : [Math.SQRT1_2, Math.SQRT1_2];
   const { w, h } = size;
-  // Out along the arrow only until the nearest edge clears the tip by `gap`, so
-  // a wide box does not slide far off a slanted arrow.
+  // Out along the arrow only until the nearest edge clears the tip by `gap`, so a wide box does not slide far off.
   const place = (from: ScreenPoint, sx: number, sy: number) => {
     const reach = Math.min(
       Math.abs(sx) > 1e-9 ? (w / 2 + gap) / Math.abs(sx) : Infinity,
@@ -182,11 +151,8 @@ export function pastTip(
   );
 }
 
-/** Where a box of `size` goes beside a model that fills `model` on screen,
- *  anchored at `anchor`: past its right side, else its left, else above, else
- *  below, whichever first fits in `bounds`; clamped into them when none does.
- *  The face under the box is where the next click goes, so over the model is
- *  the last place for it. */
+/** Past the model's right side, else left, else above, else below, whichever first fits, clamped when none does.
+ *  The face under the box is where the next click goes, so over the model is the last resort. */
 export function placeBeside(
   model: ScreenRect,
   anchor: ScreenPoint,
@@ -214,20 +180,13 @@ export class DimInput {
   private fields: Field[] = [];
   private onCommit: ((values: Record<string, number>) => void) | null = null;
   private onCancel: (() => void) | null = null;
-  /** Fired on every keystroke, after userDriven is set, for a tool whose preview
-   *  or prompt reads the field but only ever refreshes on a pointer move: a typed
-   *  value with no drag in between would otherwise leave that stale. Optional,
-   *  most tools have nothing time-sensitive enough to need it. */
+  /** Fired on every keystroke, for a tool whose preview only refreshes on a pointer move and would go stale. */
   private onInput: (() => void) | null = null;
   private active = false;
-  /** The kernel's refusal of what the boxes currently say, drawn under them.
-   *  Its own element rather than a title attribute: a tooltip needs a hover the
-   *  hand cannot spare mid-drag, and the whole point is that the answer be
-   *  where the eye already is. */
+  /** The kernel's refusal, drawn under the boxes: a tooltip needs a hover the hand cannot spare mid-drag. */
   private problem: HTMLDivElement | null = null;
   private unsubscribeError: (() => void) | null = null;
-  /** The kernel's or the tool's complaint, and the box's own about what was
-   *  typed. The typed one is shown first, it is the one the user can act on. */
+  /** The kernel's or tool's complaint; the box's own about typed text is shown first, the user can act on it. */
   private external: string | null = null;
   private typedProblem: string | null = null;
   private focusName: string | null = null;
@@ -237,36 +196,18 @@ export class DimInput {
     this.root.className = "dim-input";
     this.root.style.display = "none";
     document.body.appendChild(this.root);
-    // Capture phase, on the window, for the lifetime of the box, see
-    // onForeignPress for what it is protecting.
     window.addEventListener("pointerdown", this.boundForeignDown, true);
   }
 
-  /** Drop the box out of hit testing for the duration of a drag that began
-   *  somewhere else.
-   *
-   *  The box hangs over the canvas near what is being dragged, and it is a
-   *  sibling of the canvas rather than a child, so the moment the cursor
-   *  crossed it, pointermove went to the box and the tool listening on the
-   *  canvas simply stopped hearing about the drag. It read as the model sticking
-   *  and then jumping, and on a short drag as the value refusing to move at all.
-   *
-   *  Keyed on where the press LANDED rather than on any tool state: a press on
-   *  the box is someone using the box, a press anywhere else is a gesture the
-   *  box has no business intercepting, and that rule needs nothing from the
-   *  eleven tools that show one. */
+  /** Takes the box out of hit testing during a drag that began elsewhere: the box is a sibling of the canvas, so
+   *  crossing it stole pointermove from the tool. Keyed on where the press landed, so no tool has to opt in. */
   private boundForeignDown = (e: PointerEvent) => this.onForeignPress(e);
   private boundForeignUp = () => this.endForeignPress();
-  /** Tool-driven, via setClickThrough. */
   private clickThrough = false;
-  /** A drag that started outside the box is in flight. */
   private foreignPress = false;
 
   private onForeignPress(e: PointerEvent) {
-    // Deliberately NOT gated on `active`. The press that arms a tool is the same
-    // press that drags it, the box is shown from inside that pointerdown, long
-    // after this capture listener has already run, so a gate here would miss
-    // the one gesture that needs it most, the grab-the-handle-and-pull entry.
+    // Not gated on `active`: the press that arms a tool also drags it, and shows the box after this listener ran.
     if (this.foreignPress) return;
     // A finger tap is replayed after it lifted, so no release would end it.
     if (replayedPress(e) === "tap") return;
@@ -288,9 +229,7 @@ export class DimInput {
     this.root.style.pointerEvents = this.clickThrough || this.foreignPress ? "none" : "";
   }
 
-  /** Free the window listeners. Tools hold one DimInput for their own lifetime
-   *  and never disposed one before, so this exists for tests and for any future
-   *  tool that is torn down with the document. */
+  /** Frees the window listeners; tools keep one DimInput for life, so this is for tests and document teardown. */
   dispose() {
     this.hide();
     this.endForeignPress();
@@ -302,18 +241,13 @@ export class DimInput {
     return this.active;
   }
 
-  /** true when `el` is one of THIS dim box's inputs, lets the owning tool's
-   *  capture-phase key handler act on Escape for its own box without stealing
-   *  Esc from other editors (e.g. a dimension label's inline value input). */
+  /** Lets the owning tool's capture-phase handler take Escape for its own box, not from other editors. */
   ownsTarget(el: EventTarget | null): boolean {
     return el instanceof Node && this.root.contains(el);
   }
 
-  /** While a tool is still deciding WHERE to drop something, the box is a
-   *  heads-up readout sitting over the canvas, not a widget, a click aimed at
-   *  the canvas underneath must reach it instead of hitting confirm. Typing is
-   *  unaffected: keystrokes go to the focused input regardless of pointer-events.
-   *  Turn it back off once the click-to-place is done, or confirm/cancel become unclickable. */
+  /** While a tool decides where to drop something, a click aimed at the canvas must pass through the box rather than
+   *  hit confirm. Keystrokes are unaffected. Turn it off after the placing click, or confirm and cancel go dead. */
   setClickThrough(on: boolean) {
     this.clickThrough = on;
     this.applyHitTesting();
@@ -376,8 +310,7 @@ export class DimInput {
       }
 
       if (field.unit) {
-        // The unit is a BUTTON, not a caption: clicking it is how you change
-        // what the field is showing without retyping the number.
+        // The unit is a button: clicking it changes what the field shows without retyping the number.
         const chip = document.createElement("button");
         chip.type = "button";
         chip.className = "dim-unit";
@@ -409,8 +342,7 @@ export class DimInput {
       return field;
     });
     if (extra) this.root.appendChild(extra);
-    // The tool's own switch, ahead of confirm/cancel: it changes what is about
-    // to be committed, so it belongs with the value rather than with the verbs.
+    // The tool's switch sits ahead of confirm and cancel: it changes what is about to be committed.
     if (toggle) {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -428,9 +360,7 @@ export class DimInput {
       this.toggleBtn = btn;
       this.toggleOn = toggle.initial;
     }
-    // Visible confirm/cancel, Enter/Esc equivalents for mouse-first work (the
-    // Enter-only flow read as "no way to confirm"). pointerdown+preventDefault
-    // so pressing them never blurs the input first.
+    // Visible confirm and cancel for mouse-first work; pointerdown with preventDefault so they never blur the input.
     const ok = document.createElement("button");
     ok.className = "dim-btn dim-ok";
     ok.title = "Confirm (Enter)";
@@ -457,22 +387,16 @@ export class DimInput {
       });
       this.root.appendChild(no);
     }
-    // focus first field so typing goes straight to it. show() is often called from
-    // a pointerdown handler (e.g. extrude's pick→drag), where the browser moves
-    // focus to the click target AFTER this handler returns, so re-focus next frame
-    // too, or the field silently never holds focus and typing/Tab do nothing.
+    // show() is often called from a pointerdown, and the browser moves focus to the click target after it returns,
+    // so focus again next frame too or typing and Tab go nowhere.
     this.focus();
     requestAnimationFrame(() => this.focus());
-    // Subscribed per showing, not once for the life of the box: a tool that
-    // opens while a previous preview is still refused would otherwise inherit
-    // the last tool's complaint. onPreviewError fires immediately, so a box
-    // that opens onto an already-failing preview shows it rather than waiting
-    // for a build that may never be asked for.
+    // Subscribed per showing, or a tool would inherit the last tool's refusal. onPreviewError fires at once, so a box
+    // opening onto an already failing preview shows it.
     this.unsubscribeError = onPreviewError((m) => this.setProblem(m));
   }
 
-  /** Why what is typed in `f` cannot be used, or null. Judged only once the
-   *  user has typed: a value the cursor wrote is the tool's own. */
+  /** Judged only once the user has typed: a value the cursor wrote is the tool's own. */
   private fieldProblem(f: Field): string | null {
     if (f.hidden || !f.userDriven || f.def.free) return null;
     const raw = this.numberText(f).trim();
@@ -490,9 +414,7 @@ export class DimInput {
     return valueProblem(def.label, def, v);
   }
 
-  /** Judge the named field the way Tab and Enter do, for a tool that acts on
-   *  a key before the box sees it. Says why and keeps the text when it cannot
-   *  be used. */
+  /** Judges the field as Tab and Enter do, for a tool that acts on a key before the box sees it. */
   accepts(name: string): boolean {
     const f = this.fields.find((x) => x.def.name === name);
     const problem = f ? this.fieldProblem(f) : null;
@@ -505,20 +427,16 @@ export class DimInput {
 
   private parse(f: Field): number | null {
     const text = this.numberText(f);
-    // Parsed against THIS field's unit, not the document's: a field the user put
-    // into inches must read a bare "2" as two inches.
+    // Parsed against THIS field's unit: a field the user put into inches reads a bare "2" as two inches.
     if (!f.unit) return parseField(text, f.def.kind);
     return tryParseMeasure(text, f.unit)?.value ?? null;
   }
 
-  /** The text without a choice written ahead of the number. */
   private numberText(f: Field): string {
     return f.def.choices?.read?.(f.input.value)?.text ?? f.input.value;
   }
 
-  /** Refuse the confirm and say why, for a tool that has its own reason, such
-   *  as a typed distance with no direction picked to apply it along. Cleared by
-   *  the next keystroke. */
+  /** Refuses the confirm with the tool's own reason (a distance with no direction). Cleared by the next keystroke. */
   flag(message: string) {
     this.setTypedProblem(message);
   }
@@ -528,14 +446,10 @@ export class DimInput {
     this.renderProblem();
   }
 
-  /** The switch, when the tool asked for one. Null the rest of the time, which
-   *  is every tool but Extrude so far. */
   private toggleBtn: HTMLButtonElement | null = null;
   private toggleOn = false;
 
-  /** Put the switch in a state without pressing it, for a tool that changed the
-   *  same state from a shortcut or seeded it from a saved feature. Does NOT call
-   *  back: the caller already knows, and a callback here would be a loop. */
+  /** Sets the switch without pressing it. Does NOT call back: the caller already knows and it would loop. */
   setToggle(on: boolean) {
     this.toggleOn = on;
     this.toggleBtn?.classList.toggle("on", on);
@@ -546,14 +460,12 @@ export class DimInput {
     if (this.toggleBtn) this.toggleBtn.textContent = label;
   }
 
-  /** For a switch that only applies once the tool has learned more, such as
-   *  an engine answer that lands after the box is up. */
+  /** For a switch that applies only once the tool learns more, such as an engine answer that lands later. */
   setToggleHidden(hidden: boolean) {
     if (this.toggleBtn) this.toggleBtn.style.display = hidden ? "none" : "";
   }
 
-  /** Rename a field in place, keeping what is typed in it. Problems name the
-   *  field by this label too. */
+  /** Keeps what is typed; problems name the field by this label too. */
   setFieldLabel(name: string, label: string, icon?: string) {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f || (f.def.label === label && f.def.icon === icon)) return;
@@ -562,8 +474,7 @@ export class DimInput {
     this.paintName(f);
   }
 
-  /** Put a field's choice in a state without picking it, for a tool that
-   *  changed it some other way. Does NOT call back, as with setToggle. */
+  /** Sets a field's choice without picking it. Does NOT call back, as with setToggle. */
   setChoice(name: string, id: string) {
     const f = this.fields.find((x) => x.def.name === name);
     const c = f?.def.choices?.options.find((o) => o.id === id);
@@ -572,7 +483,6 @@ export class DimInput {
     this.setFieldLabel(name, c.label, c.icon);
   }
 
-  /** The choice a field is reading, null when it has none. */
   choiceOf(name: string): string | null {
     return this.fields.find((x) => x.def.name === name)?.choice ?? null;
   }
@@ -597,8 +507,7 @@ export class DimInput {
     f.def.choices?.onChoose(id, typed);
   }
 
-  /** Takes a field out of the box without rebuilding it, so what the user has
-   *  typed in the others survives. */
+  /** Hides a field without rebuilding the box, so what is typed in the others survives. */
   setFieldHidden(name: string, hidden: boolean) {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return;
@@ -607,10 +516,8 @@ export class DimInput {
     if (wrap) wrap.style.display = hidden ? "none" : "";
   }
 
-  /** Focus + select the first field, or the one `focusField` chose. show()
-   *  calls it; tools whose flow keeps clicking the canvas while the box stays
-   *  open must call it again after each click (the click blurs the input, and
-   *  typing would silently go nowhere). */
+  /** show() calls it; a tool that keeps clicking the canvas with the box open must call it after each click,
+   *  since the click blurs the input and typing would go nowhere. */
   focus() {
     const f = this.fields.find((x) => x.def.name === this.focusName && !x.hidden) ?? this.fields[0];
     if (f && this.active) {
@@ -619,7 +526,6 @@ export class DimInput {
     }
   }
 
-  /** Make `name` the field typing goes to for this showing. */
   focusField(name: string) {
     this.focusName = name;
     this.focus();
@@ -627,9 +533,8 @@ export class DimInput {
 
   private onKey(e: KeyboardEvent, field: Field) {
     if (isHistoryKey(e)) {
-      // Undo and redo are the document's, not this box's text: the tool is put
-      // away and the key goes on to the window keymap. Stopped here, a box a
-      // tool had focused swallowed every Ctrl+Z and Ctrl+Y after it (FI-2).
+      // Undo and redo belong to the document: put the tool away and let the key reach the window keymap.
+      // Stopped here, a box swallowed every Ctrl+Z and Ctrl+Y after it (FI-2).
       this.onCancel?.();
       field.input.blur();
       return;
@@ -653,17 +558,13 @@ export class DimInput {
     e.stopPropagation(); // never let drawing shortcuts fire while typing
   }
 
-  /** The field grows with what is in it, so a formula is not typed into a box
-   *  sized for three digits. Floored so the box does not collapse while empty
-   *  and does not twitch on every keystroke of a short value. */
+  /** Grows with its content so a formula fits; floored so it neither collapses empty nor twitches on short values. */
   private sizeToContent(f: Field) {
     f.input.style.width = `${Math.max(5, f.input.value.length + 1)}ch`;
   }
 
-  /** A unit in the TEXT changes what the field is showing. This is the whole
-   *  point of the field being unit agnostic: it says mm, you type "1 inch", and
-   *  it should not answer by showing you 25.4 mm. The number is left exactly as
-   *  typed, only the chip moves. */
+  /** A unit in the text changes what the field shows: type "1 inch" into a mm field and the chip moves, the number
+   *  stays exactly as typed. */
   private adoptTypedUnit(f: Field) {
     if (!f.unit) return;
     const m = tryParseMeasure(this.numberText(f), f.unit);
@@ -672,14 +573,12 @@ export class DimInput {
     if (f.chip) f.chip.textContent = m.unit.label;
   }
 
-  /** A choice typed ahead of the number picks it, the text left as typed. */
   private adoptTypedChoice(f: Field) {
     const got = f.def.choices?.read?.(f.input.value);
     if (got) this.choose(f, got.choice, true);
   }
 
-  /** The chip's menu: pick a unit and the value is CONVERTED, not reinterpreted.
-   *  10 mm shown as inches is 0.3937 in, not 10 in. */
+  /** A unit picked from the chip CONVERTS the value: 10 mm shown as inches is 0.3937 in, not 10 in. */
   private openUnitMenu(f: Field) {
     if (!f.unit || !f.chip) return;
     this.openMenu(
@@ -699,7 +598,7 @@ export class DimInput {
     );
   }
 
-  /** The name's menu. The tool rewrites the value in the new terms. */
+  /** The tool rewrites the value in the new terms. */
   private openChoiceMenu(f: Field) {
     const choices = f.def.choices;
     if (!choices) return;
@@ -752,23 +651,20 @@ export class DimInput {
     this.menu = null;
   }
 
-  /** tool pushes cursor-derived values in MM; only tracking fields accept them */
+  /** values in MM; only tracking fields accept them */
   updateFromCursor(values: Record<string, number>) {
     for (const f of this.fields) {
       const v = values[f.def.name];
       if (!f.userDriven && v != null) {
         f.input.value = String(f.def.kind === "count" ? Math.round(v) : toUnit(v, f.unit));
         this.sizeToContent(f);
-        // Keep the live value SELECTED while it tracks the cursor (Fusion-style), so
-        // typing a number at any moment replaces it instead of appending.
+        // Keep the live value selected while it tracks the cursor, so typing replaces it instead of appending.
         if (document.activeElement === f.input) f.input.select();
       }
     }
   }
 
-  /** Pre-fill a field AND lock it (userDriven) so cursor tracking can't clobber
-   *  the value, used when re-opening a feature for editing, where the saved
-   *  value must hold until the user deliberately retypes or drags a handle. */
+  /** Fills and locks a field so cursor tracking cannot clobber it, for a saved value on re-opening a feature. */
   seed(name: string, value: number) {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return;
@@ -777,7 +673,7 @@ export class DimInput {
     this.sizeToContent(f);
   }
 
-  /** `seed` for a value that is not a number, a size name or a word. */
+  /** `seed` for a value that is not a number, such as a size name. */
   seedText(name: string, text: string) {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return;
@@ -786,30 +682,15 @@ export class DimInput {
     this.sizeToContent(f);
   }
 
-  /** A DRAG takes a field back from the keyboard.
-   *
-   *  Typing freezes a field against cursor tracking, and `seed` freezes it from
-   *  the start, which is what stops a hand that happens to be moving from
-   *  overwriting a value somebody meant. A deliberate drag on the handle that
-   *  OWNS the field is the exception `seed` already promises in as many words:
-   *  it is every bit as explicit as typing and it is more recent, so the box
-   *  follows it.
-   *
-   *  Without this the handle moves, the geometry follows, and the number beside
-   *  it goes on reading what was typed a moment ago, which is the one
-   *  arrangement where the user has no way to tell which of the two is true. */
+  /** A drag on the handle that owns the field takes it back from the keyboard: it is as explicit as typing and more
+   *  recent, and otherwise the number beside the moving handle would go on reading the stale typed value. */
   takeOver(name: string) {
     const f = this.fields.find((x) => x.def.name === name);
     if (f) f.userDriven = false;
   }
 
-  /** Say that what the boxes read cannot be built, or take it back.
-   *
-   *  Every field turns, not just one, because the engine refuses a FEATURE and
-   *  not a field: "the profile is 3 mm tall but climbs only 1 mm each turn" is
-   *  about the pitch and the angle together, and reddening whichever box was
-   *  touched last would point at the wrong number half the time. The user is the
-   *  one who knows which of the two they would rather move. */
+  /** Every field turns red, not one: the engine refuses a feature, not a field (pitch and angle together), and the
+   *  user knows which one they would rather move. */
   private setProblem(message: string | null) {
     if (!this.active) return;
     this.external = message;
@@ -834,10 +715,7 @@ export class DimInput {
     this.problem.textContent = message;
   }
 
-  /** For a tool that judges its own values: stop following the shared preview
-   *  channel for this showing and show `message` instead. The channel only hears
-   *  about values that were sent to the kernel, and such a tool refuses some
-   *  without sending them. */
+  /** For a tool that judges its own values: the preview channel only hears about values sent to the kernel. */
   showOwnProblem(message: string | null) {
     this.unsubscribeError?.();
     this.unsubscribeError = null;
@@ -849,8 +727,7 @@ export class DimInput {
     return !!f && f.userDriven;
   }
 
-  /** returns the field value in MM (length fields converted from display unit),
-   *  or null when the text is not a value or one the field refuses */
+  /** in MM (length fields converted from the display unit), or null when the text is no value or is refused */
   getValue(name: string): number | null {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return null;
@@ -859,16 +736,13 @@ export class DimInput {
     return v;
   }
 
-  /** The unit a field is currently showing, so a tool can label its own prompt
-   *  with it. Null for a count. */
+  /** Null for a count. */
   unitOf(name: string): UnitDef | null {
     return this.fields.find((x) => x.def.name === name)?.unit ?? null;
   }
 
-  /** the field's RAW text, untouched, for callers that route input through the
-   *  expression evaluator (`w/2`, `name=expr`) instead of a bare parseField, and
-   *  that must be able to tell "empty" from "unparseable". "" when there is no
-   *  such field. */
+  /** The RAW text, for callers using the expression evaluator that must tell "empty" from "unparseable"; "" when
+   *  there is no such field. */
   getRaw(name: string): string {
     return this.fields.find((x) => x.def.name === name)?.input.value ?? "";
   }
@@ -878,8 +752,7 @@ export class DimInput {
     this.root.style.top = `${screenY + 16}px`;
   }
 
-  /** Stand the box clear past an arrow's tip, `dir` being the arrow from base
-   *  to tip on screen, kept inside `bounds`. */
+  /** `dir` is the arrow from base to tip on screen; the box is kept inside `bounds`. */
   positionPast(tip: ScreenPoint, dir: ScreenPoint, bounds: ScreenRect) {
     const p = this.problem;
     const size = {
@@ -891,26 +764,22 @@ export class DimInput {
     this.root.style.top = `${Math.round(at.top)}px`;
   }
 
-  /** Let the fields wrap rather than run past the window edge. */
   fitToWindow() {
     this.root.classList.add("fits-window");
   }
 
-  /** The box's size at its natural width, which is what it has wherever there
-   *  is room for it. */
+  /** The size at natural width, which is what it has wherever there is room. */
   naturalSize(): { w: number; h: number } {
     this.root.style.left = "0px";
     return { w: this.root.offsetWidth, h: this.root.offsetHeight };
   }
 
-  /** Stand the box beside a model on screen, see `placeBeside`. */
   positionBeside(model: ScreenRect, anchor: ScreenPoint, bounds: ScreenRect) {
     const at = placeBeside(model, anchor, this.naturalSize(), bounds);
     this.root.style.left = `${Math.round(at.left)}px`;
     this.root.style.top = `${Math.round(at.top)}px`;
   }
 
-  /** Centre the box on a screen point rather than beside the cursor. */
   positionCentred(screenX: number, screenY: number) {
     this.root.style.left = `${Math.round(screenX - this.root.offsetWidth / 2)}px`;
     this.root.style.top = `${Math.round(screenY - this.root.offsetHeight / 2)}px`;
@@ -944,9 +813,8 @@ export class DimInput {
   }
 
   hide() {
-    // The button belongs to ONE showing: the next tool to open the box may not
-    // want one, and a stale reference would have it toggling a mode nobody is
-    // in. root.innerHTML is cleared below, so this is the pointer, not the DOM.
+    // The button belongs to one showing, or the next tool would toggle a mode nobody is in. innerHTML is cleared below,
+    // so this drops the pointer, not the DOM.
     this.toggleBtn = null;
     this.toggleOn = false;
     this.active = false;
