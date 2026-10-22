@@ -6,7 +6,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { Plane3, PlaneDef, SectionView, Vec3 } from "../types";
 import { SECTION_GHOSTS, sameSectionView } from "../document/sectionView";
 import { DimInput } from "../sketch/dimInput";
-import { setPrompt } from "../ui/prompt";
+import { clearPrompt, setPrompt } from "../ui/prompt";
 import { isEditableTarget } from "../ui/focus";
 import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, nameHandle, HANDLE_UP, type DragHandle } from "./manipulator";
@@ -81,6 +81,7 @@ export class SectionTool {
   private writing = false;
   /** The cut as the store holds it, normalised, so the echo of a write is not mistaken for a change. */
   private savedCut: Readonly<SectionView> | null = null;
+  private editPrompt = "";
 
   private dim = new DimInput();
   private pointV = new THREE.Vector3();
@@ -155,7 +156,7 @@ export class SectionTool {
   confirm() {
     if (this.state !== "editing") return;
     this.applyTypedOffset();
-    this.finishEdit(true);
+    this.finishEdit();
     this.deps.afterEdit?.();
   }
 
@@ -186,7 +187,7 @@ export class SectionTool {
     else {
       if (was === "editing") {
         this.dropChrome();
-        setPrompt(null);
+        clearPrompt(this.editPrompt);
       }
       this.viewport.setSectionView(null);
     }
@@ -238,7 +239,7 @@ export class SectionTool {
       this.endPick();
       this.setPhase("off");
       this.finishDone();
-    } else if (this.state === "editing") this.finishEdit(true);
+    } else if (this.state === "editing") this.finishEdit();
   }
 
   private finishDone() {
@@ -358,10 +359,9 @@ export class SectionTool {
     this.viewport.requestRender();
   }
 
-  /** `ownPrompt` is false when another tool took over and has already written its own line. */
-  private finishEdit(ownPrompt: boolean) {
+  private finishEdit() {
     this.dropChrome();
-    if (ownPrompt) setPrompt(null);
+    clearPrompt(this.editPrompt);
     this.setPhase("on");
   }
 
@@ -461,7 +461,7 @@ export class SectionTool {
     // Another tool taking the screen confirms the edit, on a rise only: a flag already up when editing began
     // (a chooser closing, a Move gizmo) must not end it on its first frame.
     if (this.deps.toolBusy?.()) {
-      if (this.sawIdle) return this.finishEdit(false);
+      if (this.sawIdle) return this.finishEdit();
     } else this.sawIdle = true;
     this.gesture.frame();
     this.place();
@@ -504,10 +504,10 @@ export class SectionTool {
   }
 
   private prompt() {
-    setPrompt(
-      `Drag the handle or type an offset · F flips the kept side · G changes the ghost (${ghostLabel(this.ghost)}) · ` +
-        `Enter or Esc keeps the cut`,
-    );
+    this.editPrompt =
+      "Drag the handle or type an offset · F flips the kept side · " +
+      `G changes the ghost (${ghostLabel(this.ghost)}) · Enter or Esc keeps the cut`;
+    setPrompt(this.editPrompt);
   }
 
   private hitGizmo(x: number, y: number): boolean {
