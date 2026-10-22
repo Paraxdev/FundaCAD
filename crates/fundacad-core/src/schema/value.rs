@@ -8,9 +8,8 @@ use serde_json::{Map, Number, Value};
 /// Unknown keys of an open object, kept verbatim for the next save.
 pub type Extra = Map<String, Value>;
 
-/// A JSON number kept exactly as it was read. `5` and `5.0` are different
-/// documents to a byte comparison, and Python writes the second where the app
-/// writes the first, so the integer or float spelling survives a round trip.
+/// A JSON number kept exactly as read. Python writes `5.0` where the app writes `5` and a byte comparison tells them
+/// apart, so the integer or float spelling survives a round trip.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Real(pub Number);
@@ -42,10 +41,8 @@ impl From<i64> for Real {
 
 pub type Vec3 = [Real; 3];
 
-/// A numeric field that may name a parameter instead: `number | string` in TS.
-/// The string is a parameter name on the legacy path; the app evaluates
-/// expressions before a build, so the engine resolves names only
-/// (the Python engine's `handler_util.py` `_make_val`).
+/// A numeric field that may name a parameter instead, `number | string` in TS. The app evaluates expressions before a
+/// build, so the string is only ever a legacy parameter name for the engine to resolve.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Num {
     Number(Real),
@@ -202,20 +199,16 @@ macro_rules! open_enum {
 }
 pub(crate) use open_enum;
 
-/// A member of a known form that does not fit it: a required field missing, a
-/// value of the wrong type. The Python engine loads such a document and fails
-/// that one feature with a message, so the document must load here too; the
-/// raw object is written back as it was and `error` says what did not fit.
+/// A known form that does not fit it, such as a missing field or a wrong type. The document still loads and only that
+/// feature fails: the raw object is written back as it was and `error` says what did not fit.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Invalid {
     pub error: String,
     pub raw: Value,
 }
 
-/// An object union discriminated by one string key (`type` or `kind`). Known
-/// tags deserialize into their struct, whose `extra` keeps unknown keys; an
-/// unknown tag (a plugin's feature, an entity from a newer build) is kept whole
-/// as `Unknown`, and a known tag that does not fit its struct as `Invalid`.
+/// An object union keyed by `type` or `kind`. A known tag deserializes into its struct, whose `extra` keeps unknown
+/// keys; an unknown tag (a plugin's feature, a newer entity) is kept whole as `Unknown`, a misfit as `Invalid`.
 macro_rules! tagged_enum {
     (
         $(#[$meta:meta])* $vis:vis enum $name:ident, tag = $tag:literal, first = [$($first:literal),*] {

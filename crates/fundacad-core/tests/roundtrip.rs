@@ -332,12 +332,8 @@ fn a_circular_pattern_axis_is_a_name_a_line_a_datum_or_a_reference() {
     assert_eq!(serde_json::to_value(&doc).expect("save"), raw);
 }
 
-/// What a build from before placed axes (main at 286c7c8e) makes of each form.
-/// Its `patternCircular` was this struct; a known type that does not fit its
-/// struct loads as `Feature::Invalid` and builds as an error naming the
-/// feature, so every form but X, Y and Z is refused there, never turned about
-/// world Z. A bare datum id is what it would misread, which is why a datum
-/// axis is `{datum}`.
+/// What a build from before placed axes (main at 286c7c8e) makes of each form: anything but X, Y and Z loads as
+/// `Feature::Invalid` and fails naming the feature, while a bare datum id it would turn about world Z, hence `{datum}`.
 #[test]
 fn a_build_before_placed_axes_refuses_every_new_axis_form() {
     use fundacad_core::schema::{Axis3, Extra, Num};
@@ -394,10 +390,8 @@ fn a_mirror_plane_is_a_name_or_a_name_object_with_bodies() {
     assert_eq!(serde_json::to_value(&doc).expect("save"), raw);
 }
 
-/// A build from before targeted mirrors (main at 040f9ea5) had this `mirror`.
-/// `bodies` it would carry in `extra` and reflect the active body instead, so a
-/// mirror that names bodies writes `{name}`, which it loads as `Invalid` and
-/// builds as an error naming the feature.
+/// A build from before targeted mirrors (main at 040f9ea5) would keep `bodies` in `extra` and reflect the active body,
+/// so a mirror naming bodies writes `{name}`, which that build loads as `Invalid` and fails naming the feature.
 #[test]
 fn a_build_before_targeted_mirrors_refuses_a_mirror_that_names_bodies() {
     use fundacad_core::schema::{Extra, Num, Plane3};
@@ -435,10 +429,8 @@ fn features_of(v: &Value, out: &mut Vec<Value>) {
     }
 }
 
-/// A build names the fields a built-in feature ignores, so an ordinary
-/// document must carry none or every build of it would warn. The Python
-/// engine's test fixtures keep fields it ignored too, and app_shapes carries
-/// one on purpose to show it round trips.
+/// A build names the fields a built-in feature ignores, so an ordinary document carries none or every build warns.
+/// The Python engine's fixtures keep ignored fields too, and app_shapes carries one on purpose to show it round trips.
 #[test]
 fn no_ordinary_document_carries_a_field_a_build_ignores() {
     let mut docs: Vec<(String, Value)> =
