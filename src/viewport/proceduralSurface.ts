@@ -1,20 +1,5 @@
-// Procedural surface detail on a body's material: noise, scratches, brushed
-// streaks, cellular wear, computed in the fragment shader and driving roughness,
-// a bump (perturbed normal) and a colour tint. No texture, no UVs, everything is
-// sampled TRIPLANAR in world space, because a CAD tessellation carries positions
-// and normals but no texture coordinates to hang a map on.
-//
-// Injected as a shaderPatches patch rather than a whole custom material, so the body
-// keeps the physical PBR shader (metalness, clearcoat, the lights, the
-// environment) and this only edits roughness, normal and colour on the way
-// through. Off (spec null) leaves the shader byte-identical to the stock one.
-//
-// TWO ways in. `applySurface` takes ONE generator with live uniforms (the
-// material-editor picker, so a slider drag does not recompile). `applySurfaceGraph`
-// takes a NODE GRAPH, compiles it to GLSL with the params baked in (the node
-// editor), and recompiles when the graph changes. Both share the generator
-// functions below, so a graph's generator node and the picker draw the same
-// pattern.
+// Sampled triplanar in world space, since a CAD tessellation has no UVs. A shaderPatches patch, not a custom
+// material, so the body keeps the physical PBR shader; off leaves the shader byte identical to the stock one.
 
 import * as THREE from "three";
 import type { SurfaceGraph, SurfaceNode, SurfaceSpec } from "../document/materials";
@@ -41,8 +26,7 @@ export function graphKey(g: SurfaceGraph | undefined): string {
   return "g:" + JSON.stringify({ output: g.output, nodes });
 }
 
-// --- shared GLSL: the generator functions, parameterised so the picker (via
-// uniforms) and the graph (via baked literals) both call the same code. -------
+// Parameterised so the picker (via uniforms) and the graph (via baked literals) call the same code.
 const SURF_FUNCS = /* glsl */ `
 float sHash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float sNoise(vec3 x){
@@ -158,7 +142,7 @@ export function cloneWithoutSurface<T extends THREE.Material>(mat: T): T {
   return c;
 }
 
-// --- the picker path: one generator, live uniforms --------------------------
+// Live uniforms, so a slider drag in the material editor does not recompile.
 export function applySurface(mat: THREE.Material, spec: SurfaceSpec | undefined): void {
   const m = mat as Physical;
   const key = surfaceKey(spec);
@@ -186,7 +170,7 @@ export function applySurface(mat: THREE.Material, spec: SurfaceSpec | undefined)
   m.userData.surfUniforms = setPatch(m, { ...PICK_PATCH, uniforms }).uniforms;
 }
 
-// --- the graph path: compile the node graph, bake the params ----------------
+// Params are baked into the GLSL, so the node graph recompiles when it changes.
 export function applySurfaceGraph(mat: THREE.Material, graph: SurfaceGraph | undefined): void {
   const m = mat as Physical;
   const key = graphKey(graph);
@@ -255,9 +239,7 @@ const STRUCT_GLSL = /* glsl */ `
 struct SurfOut { float rough; float roughAmt; float bump; float bumpAmt; vec3 tint; float tintAmt; };
 `;
 
-// Perturb the (view-space) normal from a height gradient. `heightExpr` samples
-// the height at world point `P`; `amtExpr` is the strength. Shared shape, two
-// callers (the picker's single generator, the graph's bump port).
+// Perturbs the view space normal from a height gradient; `heightExpr` samples the height at world point `P`.
 function bumpGLSL(heightExpr: string, amtExpr: string): string {
   return /* glsl */ `
   {
@@ -287,13 +269,10 @@ function writeUniforms(u: Record<string, THREE.IUniform>, spec: SurfaceSpec): vo
   u["uSurfColorAmt"]!.value = spec.colorAmount ?? 0;
 }
 
-// --- the compiler -----------------------------------------------------------
 const GEN_KIND: Record<string, number> = { noise: 0, scratches: 1, brushed: 2, voronoi: 3, wave: 4 };
 
-/** A colorramp's stops live as a "pos:hex;pos:hex;..." string. Parse and sort
- *  them, then emit a piecewise-linear evaluation at `tExpr`: start at the first
- *  stop's colour and, for each later stop, mix toward it across its segment. A
- *  malformed or empty string falls back to a plain black-to-white ramp. */
+/** Stops live as "pos:hex;pos:hex;...", evaluated piecewise linear at `tExpr`. A malformed or empty
+ *  string falls back to a plain black to white ramp. */
 function colorRampGLSL(raw: unknown, tExpr: string): string {
   const glslCol = (hex: string) => {
     const c = new THREE.Color(hex);
@@ -331,10 +310,8 @@ export function parseStops(raw: unknown): { pos: number; hex: string }[] {
   return out.sort((a, b) => a.pos - b.pos);
 }
 
-/** Walk the graph from its output, emit one GLSL statement per node in
- *  dependency order, and return the `SurfOut sGraph(vec3 wp, vec3 wn)` function.
- *  Params are baked as literals (so a graph change recompiles); a missing wire
- *  or param falls back to a default rather than failing to compile. */
+/** Params are baked as literals, so a graph change recompiles; a missing wire or param falls back to a
+ *  default rather than failing to compile. */
 export function compileGraph(graph: SurfaceGraph): string {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const order: SurfaceNode[] = [];
@@ -365,10 +342,8 @@ export function compileGraph(graph: SurfaceGraph): string {
   for (const n of order) {
     const p = n.params ?? {};
     if (n.type === "noise") {
-      // The richer noise node: detail (octaves), roughness (per-octave falloff)
-      // and distortion, over the shared parameterised fBm. Sampled in world space
-      // and scaled the same way sGen does, so it lines up with the other
-      // generators. lacunarity is fixed at 2 (the usual doubling).
+      // Over the shared fBm, sampled in world space and scaled as sGen does so it lines up with the other
+      // generators. Lacunarity is fixed at 2.
       lines.push(
         `float ${varOf(n.id)} = sFbmP(wp / max(${flt(p["scale"], 6)}, 0.001), ${int(p["detail"], 4, 1, 8)}, ${flt(p["roughness"], 0.5)}, 2.0, ${flt(p["distortion"], 0)});`,
       );

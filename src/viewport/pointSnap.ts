@@ -1,17 +1,5 @@
-// "Which point on the model did I just aim at?", the choice, without the
-// camera.
-//
-// The sketcher has had this since it was written (sketch/snap.ts): candidates
-// compared in SCREEN PIXELS so the reach is the same at every zoom, ranked by
-// what kind of point they are so the specific is preferred over the vague where two land on
-// the same pixel. Nothing in 3D had it, which is why the transform gizmo's
-// origin could sit anywhere except somewhere meaningful.
-//
-// The ranking is the content. A corner is a point somebody put there; the middle
-// of an edge is derived from two of those; the centre of a face is derived from
-// its whole boundary; and a bare point on a surface is wherever the cursor
-// happened to be. Under the pixel tolerance they are frequently all available at
-// once, and the order is which of them the user meant.
+// Candidates are compared in screen pixels, as in sketch/snap.ts, so the reach is the same at every zoom, and
+// ranked by kind: a placed corner beats a derived midpoint or centre, which beat a bare surface point.
 
 /** What kind of point this is, which is also how strongly it is meant. */
 export type ModelPointKind = "vertex" | "midpoint" | "center" | "surface";
@@ -28,9 +16,7 @@ export const POINT_PRIORITY: Record<ModelPointKind, number> = {
   vertex: 100,
   midpoint: 80,
   center: 70,
-  // Not a snap at all: the bare surface under the cursor, offered so that
-  // aiming at the middle of a big face still lands ON the model rather than
-  // nowhere. Anything else in reach is preferred over it.
+  // Not a snap: offered so that aiming at the middle of a big face still lands on the model.
   surface: 10,
 };
 
@@ -38,12 +24,7 @@ export const POINT_PRIORITY: Record<ModelPointKind, number> = {
  *  Matching the sketcher's, so aiming feels the same in both places. */
 export const POINT_SNAP_PX = 10;
 
-/** The point the cursor means, or null when nothing is in reach.
- *
- *  `toScreen` may return null for a candidate behind the camera; such a
- *  candidate is skipped rather than guessed at, exactly as the area box skips a
- *  vertex it cannot project.
- */
+/** A candidate `toScreen` cannot project (behind the camera) is skipped rather than guessed at. */
 export function pickPoint(
   candidates: readonly PointCandidate[],
   toScreen: (p: readonly [number, number, number]) => { x: number; y: number } | null,
@@ -59,10 +40,8 @@ export function pickPoint(
     const d = Math.hypot(s.x - at.x, s.y - at.y);
     if (d > pixelTol) continue;
     const rank = POINT_PRIORITY[c.kind];
-    // Priority first, then distance. Two candidates of the same kind on the
-    // same pixel is a genuine tie and the nearer one is as good an answer as
-    // there is; a vertex 9px away is still preferred over a surface point under the cursor,
-    // because the surface point is not a point anyone chose.
+    // Priority first, then distance: a vertex 9px away beats a surface point under the cursor, because
+    // the surface point is not a point anyone chose.
     if (rank > bestRank || (rank === bestRank && d < bestDist)) {
       best = c;
       bestRank = rank;
@@ -72,10 +51,8 @@ export function pickPoint(
   return best;
 }
 
-/** The midpoint of a polyline BY ARC LENGTH, so a curved edge's middle is on
- *  the curve rather than on the chord. Null for a polyline with no length,
- *  a closed edge's ends coincide, and the middle of a zero-length run is not a
- *  point worth aiming at. */
+/** By arc length, so a curved edge's middle is on the curve, not the chord. Null for a polyline with
+ *  no length, such as a zero length run. */
 export function polylineMidpoint3(
   pts: readonly (readonly [number, number, number])[],
 ): [number, number, number] | null {

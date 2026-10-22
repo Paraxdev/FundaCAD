@@ -1,14 +1,5 @@
-// Fine parallel ridges across a body, shaded through its normal, colour and
-// roughness only. The same functions run here (tests), in the GLSL below and in
-// the tracer, all checked against tests/fixtures/relief_profile.json.
-//
-// Per point p, axis a, origin o, pitch h: s = (dot(p, a) - o) / h, ridge k = floor(s),
-// phase f = fract(s), c = dot(n, a) with n the smooth normal, t the axis projected
-// on the surface. Each ridge is a rounded bead tilting the normal about cross(n, t);
-// on slopes part of every ridge is a flat step facing along the axis, which fills
-// the ridge as |c| reaches 1, so a face across the axis shows nothing. Where a pixel
-// spans more than about half a ridge the tilt, seam and colour fade to their means
-// and the slope variance they carried moves into roughness.
+// The same spec runs here, in the GLSL below and in the tracer, checked against tests/fixtures/relief_profile.json.
+// Past about half a ridge per pixel the tilt, seam and colour fade to their means and the slope moves into roughness.
 
 import * as THREE from "three";
 import type { Relief, ReliefMap } from "../plugins/contrib";
