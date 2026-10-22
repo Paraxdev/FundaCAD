@@ -1,3 +1,5 @@
+import examples from "./examples.json";
+
 export interface TemplateInfo {
   id: string;
   name: string;
@@ -5,43 +7,30 @@ export interface TemplateInfo {
   caption: string;
   hint: string;
   icon: string;
+  /** A document opens as an untitled copy, a STEP is imported into a new document. */
+  source: "document" | "step";
 }
 
-export const TEMPLATES: TemplateInfo[] = [
-  {
-    id: "wall-bracket",
-    name: "Wall bracket",
-    caption: "Stress study ready",
-    hint: "An L bracket with a stress study ready to run",
-    icon: "stress",
-  },
-  {
-    id: "box-with-lid",
-    name: "Box with a lid",
-    caption: "Two parts, 0.2 mm fit",
-    hint: "A box and a lid that fits it, sized by parameters, laid out for printing",
-    icon: "shell",
-  },
-  {
-    id: "plate",
-    name: "Plate",
-    caption: "Sized by parameters",
-    hint: "A plate with four holes, sized by parameters",
-    icon: "box",
-  },
-  {
-    id: "pinned-lever",
-    name: "Pinned lever",
-    caption: "Stress study ready",
-    hint: "A lever on a pin with a stress study ready to run",
-    icon: "rotate",
-  },
-];
+// The cards in Home's order. Kept as data beside the files they open, since a model's name is content.
+export const TEMPLATES = examples as TemplateInfo[];
 
 const files = import.meta.glob<string>("./*.funda", { query: "?raw", import: "default" });
+// A URL, so the STEP stays out of the JS chunk and loads only when its card is clicked.
+const assets = import.meta.glob<string>("./*.stpz", { query: "?url", import: "default" });
 
 export async function templateText(id: string): Promise<string> {
+  const info = TEMPLATES.find((t) => t.id === id);
+  if (info?.source === "step") throw new Error(`the ${info.name} example is a STEP file to import, not a document`);
   const load = files[`./${id}.funda`];
   if (!load) throw new Error(`no template called ${id}`);
   return load();
+}
+
+export async function templateFile(id: string, fetchFn: typeof fetch = fetch): Promise<File> {
+  const load = assets[`./${id}.stpz`];
+  if (!load) throw new Error(`no example file called ${id}`);
+  const fail = `the example file ${id}.stpz could not be read`;
+  const res = await fetchFn(await load()).catch(() => null);
+  if (!res?.ok) throw new Error(fail);
+  return new File([await res.arrayBuffer()], `${id}.stpz`);
 }

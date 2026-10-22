@@ -1,0 +1,42 @@
+[
+  {
+    "id": "wall-bracket",
+    "name": "Wall bracket",
+    "caption": "Stress study ready",
+    "hint": "An L bracket with a stress study ready to run",
+    "icon": "stress",
+    "source": "document"
+  },
+  {
+    "id": "box-with-lid",
+    "name": "Box with a lid",
+    "caption": "Two parts, 0.2 mm fit",
+    "hint": "A box and a lid that fits it, sized by parameters, laid out for printing",
+    "icon": "shell",
+    "source": "document"
+  },
+  {
+    "id": "printer",
+    "name": "3D printer",
+    "caption": "Imported STEP, 100 parts",
+    "hint": "A printer frame imported from a STEP file. Hide, isolate and section its parts",
+    "icon": "assembly",
+    "source": "step"
+  },
+  {
+    "id": "plate",
+    "name": "Plate",
+    "caption": "Sized by parameters",
+    "hint": "A plate with four holes, sized by parameters",
+    "icon": "box",
+    "source": "document"
+  },
+  {
+    "id": "pinned-lever",
+    "name": "Pinned lever",
+    "caption": "Stress study ready",
+    "hint": "A lever on a pin with a stress study ready to run",
+    "icon": "rotate",
+    "source": "document"
+  }
+]

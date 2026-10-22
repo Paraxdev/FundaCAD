@@ -40,3 +40,7 @@ def test_big_model_orbit(s, tmp_path):
 
 def test_shipped_examples(s):
     example("shipped_examples").run(s)
+
+
+def test_big_printer_import(s):
+    example("big_printer_import").run(s)

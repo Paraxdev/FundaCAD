@@ -232,9 +232,11 @@ that waited it out is written with a timeout long enough for the whole wait.
 `tools/harness/examples/` holds ports of e2e scripts, each a `run(s)` function plus a `__main__`
 that opens its own session: `assembly_tree.py` (a dropped STEP assembly in Items, a subassembly
 eye, save and reopen), `refused_commit.py` (a refused draft keeps the tool open),
-`extrude_reedit.py` (reopening a whole sketch extrude), and `shipped_examples.py` (every Home
-example opens untitled, builds and holds its bodies, and the box keeps its lid's fit when its
-parameters change). `tests/browser/test_examples.py` runs them in the smoke set. The fixtures they
+`extrude_reedit.py` (reopening a whole sketch extrude), `shipped_examples.py` (every Home
+example opens untitled, builds and holds its bodies, the box keeps its lid's fit when its parameters
+change, and the printer card imports its STEP), and `big_printer_import.py` (a 3,000 part printer
+STEP dropped on a blank document, its import, first frame and orbit times printed to the test log).
+`tests/browser/test_examples.py` runs them in the smoke set. The fixtures they
 open are described in `tools/harness/fixtures/README.md`.
 
 ## serve

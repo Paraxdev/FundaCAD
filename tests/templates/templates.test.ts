@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { TEMPLATES, templateText } from "../../src/templates";
+import { TEMPLATES, templateFile, templateText } from "../../src/templates";
 import { documentShapeProblem } from "../../src/document/documentShape";
 import { migrateDocument } from "../../src/document/migrate";
 import { commitParamExpr, recompute } from "../../src/params/engine";
 import type { CadDocument } from "../../src/types";
+import printerInline from "../../src/templates/printer.stpz?inline";
+import printer3000Inline from "../fixtures/printer_3000.stpz?inline";
 
 async function load(id: string): Promise<CadDocument> {
   return JSON.parse(await templateText(id)) as CadDocument;
@@ -14,7 +16,17 @@ describe("built-in templates", () => {
     expect(new Set(TEMPLATES.map((t) => t.id)).size).toBe(TEMPLATES.length);
   });
 
-  for (const t of TEMPLATES) {
+  it("are each a document or a STEP, and only the printer is a STEP", () => {
+    expect(TEMPLATES.map((t) => [t.id, t.source])).toEqual([
+      ["wall-bracket", "document"],
+      ["box-with-lid", "document"],
+      ["printer", "step"],
+      ["plate", "document"],
+      ["pinned-lever", "document"],
+    ]);
+  });
+
+  for (const t of TEMPLATES.filter((x) => x.source === "document")) {
     it(`${t.name} is a current document with no history and no imports`, async () => {
       const doc = (await load(t.id)) as CadDocument & { versions?: unknown };
       expect(documentShapeProblem(doc)).toBeNull();
@@ -40,6 +52,81 @@ describe("built-in templates", () => {
 
   it("refuses an unknown id", async () => {
     await expect(templateText("nope")).rejects.toThrow();
+    await expect(templateFile("nope")).rejects.toThrow("no example file called nope");
+  });
+
+  it("will not open a STEP example as a document", async () => {
+    await expect(templateText("printer")).rejects.toThrow("3D printer example is a STEP file");
+  });
+
+  it("reads a STEP example into a file named after it", async () => {
+    const asked: string[] = [];
+    const bytes = new Uint8Array([0x1f, 0x8b, 8, 0, 7, 3]);
+    const file = await templateFile("printer", async (url) => {
+      asked.push(String(url));
+      return new Response(bytes);
+    });
+    expect(asked).toEqual([expect.stringMatching(/printer\.stpz/)]);
+    expect([file.name, [...new Uint8Array(await file.arrayBuffer())]]).toEqual(["printer.stpz", [...bytes]]);
+  });
+
+  it("says plainly when a STEP example cannot be read", async () => {
+    const missing = async () => new Response("", { status: 404 });
+    const offline = async () => Promise.reject(new TypeError("Failed to fetch"));
+    await expect(templateFile("printer", missing)).rejects.toThrow("the example file printer.stpz could not be read");
+    await expect(templateFile("printer", offline)).rejects.toThrow("the example file printer.stpz could not be read");
+  });
+});
+
+describe("the printer STEP files", () => {
+  const VENDORS =
+    /prusa|creality|ender|voron|bambu|anycubic|elegoo|ultimaker|artillery|sovol|qidi|flashforge|makerbot|ratrig/i;
+  const GROUPS = ["Printer", "Frame", "Motion", "Bed", "Toolhead", "Electronics"];
+
+  const bytesOf = (inline: string) => Uint8Array.from(atob(inline.split(",")[1]!), (c) => c.charCodeAt(0));
+
+  async function facts(gz: Uint8Array<ArrayBuffer>) {
+    const plain = new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"));
+    const text = await new Response(plain).text();
+    const products = new Set([...text.matchAll(/PRODUCT\('([^']*)'/g)].map((m) => m[1]!));
+    return {
+      gzip: [gz[0], gz[1]],
+      header: text.slice(0, 13),
+      groups: GROUPS.filter((g) => products.has(g)),
+      vendor: [...products].filter((p) => VENDORS.test(p)),
+      colours: new Set([...text.matchAll(/COLOUR_RGB\('',([^)]*)\)/g)].map((m) => m[1])).size >= 5,
+    };
+  }
+
+  it("ships a gzipped AP214 printer with named parts in subassemblies and at most 512 KB", async () => {
+    const gz = bytesOf(printerInline);
+    expect(gz.length).toBeLessThanOrEqual(512 * 1024);
+    expect(await facts(gz)).toEqual({
+      gzip: [0x1f, 0x8b],
+      header: "ISO-10303-21;",
+      groups: GROUPS,
+      vendor: [],
+      colours: true,
+    });
+  });
+
+  it("keeps a 3,000 part printer for the big import at most 1 MB", async () => {
+    const gz = bytesOf(printer3000Inline);
+    expect(gz.length).toBeLessThanOrEqual(1024 * 1024);
+    expect(await facts(gz)).toEqual({
+      gzip: [0x1f, 0x8b],
+      header: "ISO-10303-21;",
+      groups: GROUPS,
+      vendor: [],
+      colours: true,
+    });
+  });
+
+  it("finds a vendor word in a product name", () => {
+    expect(["Frame", "Toolhead", "Ender style bed", "VORON frame"].filter((p) => VENDORS.test(p))).toEqual([
+      "Ender style bed",
+      "VORON frame",
+    ]);
   });
 });
 
