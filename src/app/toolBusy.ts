@@ -19,6 +19,7 @@ function modalTools(t: EngineTools) {
     t.datumPose,
     t.lightAim,
     t.pattern,
+    t.mirror,
     t.targetEdit,
     t.revolvePitch,
     t.joint,
