@@ -240,7 +240,9 @@ export class AtrousFilter {
 
   private setup(device: GpuDevice) {
     const tex = (binding: number) => ({
-      binding, visibility: SHADER_COMPUTE, texture: { sampleType: "unfilterable-float" },
+      binding,
+      visibility: SHADER_COMPUTE,
+      texture: { sampleType: "unfilterable-float" },
     });
     this.layout = device.createBindGroupLayout({
       entries: [
