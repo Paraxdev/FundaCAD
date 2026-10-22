@@ -2147,8 +2147,8 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
   if (chamfer && !std::isnan(size2) && size2 != 0) {
     std::vector<double> d1(sizes.begin(), sizes.begin() + std::min(sizes.size(), edges.size()));
     BlSides bs = bl_chamfer_sides(shape, edges, d1, std::vector<double>(d1.size(), size2));
-    if (bs.concave >= 0) {
-      BRepAdaptor_Curve crv(TopoDS::Edge(edges[bs.concave]));
+    if (bs.unseen >= 0) {
+      BRepAdaptor_Curve crv(TopoDS::Edge(edges[bs.unseen]));
       throw TooLarge(Misfit::Overlap, FITS_UNKNOWN, crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter())));
     }
     second = bs.second;

@@ -445,3 +445,55 @@ fn a_two_distance_chamfer_the_section_build_would_leave_a_step_on_is_never_silen
     ]);
     assert!(!r.errors.is_empty() || !warnings(&r, "c").is_empty(), "built {} with no word", volume(&r));
 }
+
+const L_TOP: [(f64, f64); 6] = [(0.0, 0.0), (30.0, 0.0), (30.0, 10.0), (12.0, 10.0), (12.0, 24.0), (0.0, 24.0)];
+const T_TOP: [(f64, f64); 8] =
+    [(0.0, 0.0), (30.0, 0.0), (30.0, 10.0), (20.0, 10.0), (20.0, 24.0), (10.0, 24.0), (10.0, 10.0), (0.0, 10.0)];
+const BAR_TOP: [(f64, f64); 4] = [(0.0, 0.0), (30.0, 0.0), (30.0, 10.0), (0.0, 10.0)];
+
+/// The outline turned by atan(3/4) and moved off the origin, its top edges chamfered d on one face, d2 on the other.
+fn top_ring(corners: &[(f64, f64)], d: f64, d2: f64) -> Rebuild {
+    let turned: Vec<(f64, f64)> = corners.iter().map(|&(x, y)| (7.0 + 0.8 * x - 0.6 * y, -3.0 + 0.6 * x + 0.8 * y)).collect();
+    let top = json!({"kind": "edge", "by": "ofFace", "body": "body1",
+        "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}});
+    prism_chamfer(&turned, 10.0, d, d2, top, json!({}))
+}
+
+fn outcome(r: &Rebuild) -> (usize, Vec<&str>, f64) {
+    (r.errors.len(), warnings(r, "c"), (volume(r) * 100.0).round() / 100.0)
+}
+
+/// 5 + 5 just meets across the 10 mm arms, 10 runs down the 10 mm walls. Either
+/// sent the chamfer to the section build, which ends each chamfer square at the
+/// inside corner and left the 9 x 5 x 5 / 3 mitre standing there: the L came
+/// back 2625 for 2550, the T 2420 for 2270, with no word, and 5.01 offered 5.
+#[test]
+fn two_distance_setbacks_that_just_meet_past_an_inside_corner_are_refused() {
+    let sizes = [(5.0, 9.0, 4.99), (9.0, 5.0, 8.99), (5.01, 9.0, 4.99), (4.0, 10.0, 3.99), (10.0, 4.0, 9.99)];
+    for (corners, whole) in [(&L_TOP[..], 4680.0), (&T_TOP[..], 4400.0)] {
+        for (d, d2, fits) in sizes {
+            let r = top_ring(corners, d, d2);
+            let got = (outcome(&r), messages(&r).first().and_then(|m| offered(m)));
+            assert_eq!(got, ((1, vec![], whole), Some(fits)), "{corners:?} at {d}/{d2}: {:?}", messages(&r));
+            let again = top_ring(corners, fits, d2 * fits / d);
+            assert_eq!((again.errors.len(), warnings(&again, "c").len()), (0, 0), "{corners:?} at {d}/{d2} offered {fits}");
+        }
+    }
+}
+
+/// A hair short of meeting OCCT cuts the mitre, and a bar with no inside corner
+/// still takes setbacks that just meet.
+#[test]
+fn two_distance_setbacks_short_of_an_inside_corner_or_meeting_on_a_bar_build() {
+    let cases = [
+        (&L_TOP[..], 4.99, 9.0, 2620.23),
+        (&L_TOP[..], 9.0, 4.99, 2553.66),
+        (&T_TOP[..], 4.99, 9.0, 2373.51),
+        (&BAR_TOP[..], 5.0, 9.0, 1566.67),
+        (&BAR_TOP[..], 9.0, 5.0, 1500.0),
+    ];
+    for (corners, d, d2, want) in cases {
+        let r = top_ring(corners, d, d2);
+        assert_eq!(outcome(&r), (0, vec![], want), "{corners:?} at {d}/{d2}: {:?}", messages(&r));
+    }
+}
