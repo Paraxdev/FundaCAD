@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// The document's reference images as a folder of the browser: show or hide,
-// rename, lock, delete, and a click opens the image's panel.
+// The reference images as a folder of the browser, a click opens the image's panel.
 
 import { computed, onUnmounted, ref } from "vue";
 import { useBrowserStore, useEngine } from "fundacad";

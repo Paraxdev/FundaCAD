@@ -1,6 +1,5 @@
-// The images in the view: one textured quad each, on the "references" overlay
-// layer, so the Display popover switches them and a picture leaves them out
-// unless it asks.
+// One textured quad per image on the "references" overlay layer, so the Display popover switches them and a picture
+// leaves them out unless it asks.
 
 import * as THREE from "three";
 import { SketchPlane } from "fundacad";

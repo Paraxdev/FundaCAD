@@ -1,5 +1,4 @@
-// Inserting an image, calibrating it from two points and a distance, and
-// dragging it along its plane.
+// Inserting an image, calibrating it from two points and a distance, and dragging it along its plane.
 
 import * as THREE from "three";
 import { fieldNumber, setPrompt, toast } from "fundacad";
@@ -147,8 +146,6 @@ export class RefImageTool {
     return id;
   }
 
-  // --- calibrate ---------------------------------------------------------------
-
   startCalibrate(id: string) {
     const r = this.image(id);
     if (!r) return;
@@ -242,8 +239,6 @@ export class RefImageTool {
     ev.stopImmediatePropagation();
     this.cancel();
   };
-
-  // --- drag to move -------------------------------------------------------------
 
   /** A Shift drag on the selected, unlocked image moves it along its plane, one undo step. */
   readonly onDragDown = (ev: PointerEvent) => {
