@@ -5,8 +5,8 @@ import { usePanelsStore } from "../../stores/panels";
 import Icon from "../shell/Icon.vue";
 import StressVerdict from "./StressVerdict.vue";
 import { plainWarning } from "../../ui/stressWarnings";
-import { deformLabel, legendGradient, setupSummary, type StressResultView } from "../../ui/stress";
-import { displayRound, getUnit } from "../../ui/units";
+import { deformLabel, legendEnds, legendGradient, setupSummary, type StressResultView } from "../../ui/stress";
+import { getUnit } from "../../ui/units";
 
 const props = defineProps<{ result: StressResultView }>();
 
@@ -27,11 +27,8 @@ const ranWith = computed(() => {
   return ran ? setupSummary(JSON.parse(ran)) : setupSummary(stress.value.setup);
 });
 const keyRows = computed(() => props.result.rows);
+const ends = computed(() => legendEnds(props.result.legend));
 const detailsOpen = ref(false);
-
-function fmt(v: number): string {
-  return String(displayRound(v));
-}
 
 function onDeform(e: Event) {
   engine.ui.panels.setStressDeformation(Number((e.target as HTMLInputElement).value));
@@ -39,16 +36,7 @@ function onDeform(e: Event) {
 </script>
 
 <template>
-  <div class="stress-step stress-results">
-    <StressVerdict
-      :input="result.verdict"
-      :marked="stress.colours === 'shown'"
-      :scale="deform?.scale ?? null"
-      :max-deflection="result.maxDeflection"
-      :unit="unit"
-    />
-    <div class="measure-k stress-ran-with">{{ ranWith }}</div>
-
+  <div class="stress-step stress-results" :class="{ stale: modelChanged || setupChanged }">
     <div v-if="modelChanged || setupChanged" class="stress-stale">
       <span>{{ modelChanged ? "The model changed since this Run." : "The setup changed since this Run." }}</span>
       <button
@@ -59,6 +47,15 @@ function onDeform(e: Event) {
         >Run again</button
       >
     </div>
+
+    <StressVerdict
+      :input="result.verdict"
+      :marked="stress.colours === 'shown'"
+      :scale="deform?.scale ?? null"
+      :max-deflection="result.maxDeflection"
+      :unit="unit"
+    />
+    <div class="measure-k stress-ran-with">{{ ranWith }}</div>
 
     <template v-if="deform && !modelChanged">
       <div class="measure-row">
@@ -81,7 +78,7 @@ function onDeform(e: Event) {
           type="range"
           min="0"
           :max="deform.max"
-          :step="deform.max / 200"
+          step="any"
           :value="deform.scale"
           aria-label="Exaggeration"
           @input="onDeform"
@@ -136,12 +133,14 @@ function onDeform(e: Event) {
       </button>
     </div>
 
-    <div class="stress-legend" :style="{ background: gradient }" />
-    <div class="measure-row stress-legend-labels">
-      <span class="measure-v">{{ fmt(result.legend.min) }} MPa</span>
-      <span class="measure-k">Stress (von Mises)</span>
-      <span class="measure-v">{{ fmt(result.legend.max) }} MPa</span>
-    </div>
+    <template v-if="stress.colours === 'shown'">
+      <div class="stress-legend" :style="{ background: gradient }" />
+      <div class="measure-row stress-legend-labels">
+        <span class="measure-v">{{ ends[0] }} MPa</span>
+        <span class="measure-k">Stress</span>
+        <span class="measure-v">{{ ends[1] }} MPa</span>
+      </div>
+    </template>
 
     <div v-for="r in keyRows" :key="r.k" class="measure-row stress-key-row">
       <span class="measure-k">{{ r.k }}</span>

@@ -9,6 +9,7 @@ import {
   intoDirection,
   defaultSpotRadius,
   faceCountLabel,
+  legendEnds,
   legendGradient,
   newLoad,
   newSetup,
@@ -338,6 +339,24 @@ describe("colour map", () => {
   it("ranges over finite values only", () => {
     expect(valueRange([3, NaN, -1, 8])).toEqual({ min: -1, max: 8 });
     expect(valueRange([])).toEqual({ min: 0, max: 0 });
+  });
+
+  it("labels the legend's ends, a minimum under a thousandth of the peak as 0", () => {
+    expect(
+      [
+        { min: 0.000656, max: 51.11 },
+        { min: 0.0509, max: 51 },
+        { min: 0.051, max: 51 },
+        { min: 2, max: 31.25 },
+        { min: 0, max: 0 },
+      ].map(legendEnds),
+    ).toEqual([
+      ["0", "51.11"],
+      ["0", "51"],
+      ["0.051", "51"],
+      ["2", "31.25"],
+      ["0", "0"],
+    ]);
   });
 
   it("draws the legend from the same stops", () => {
