@@ -131,3 +131,25 @@ describe("resolveFaceRefs on an unchanged build", () => {
     expect(resolved(list, base, null)).toEqual({ gone: [0], late: [], lost: [] });
   });
 });
+
+// The hole scenarios add a 3.5 hole 8 deep at local (11, -4) on the lower top.
+// hole: 8 lower top, 9 wall, 10 floor. holeFillet (the fillet above as well):
+// 0 +Y side, 2 FILLET, 7 lower top, 10 wall, 11 floor. holeRim (an r1 round on
+// the hole's rim): 0 lower top, 1 ROUND, 6 wall, 11 floor.
+describe("resolveFaceRefs on curved faces", () => {
+  const hole = reply("hole");
+
+  it("a hole's wall and floor follow an unrelated fillet, whose curved face takes none", () => {
+    const list = refs(hole, { wall: ["body1", 9], floor: ["body1", 10], lowerTop: ["body1", 8], plusY: ["body1", 1] });
+    const want = { wall: [10], floor: [11], lowerTop: [7], plusY: [0] };
+    expect(resolved(list, reply("holeFillet"), trackOf(hole, list))).toEqual(want);
+    expect(resolved(list, reply("holeFillet"), null)).toEqual(want);
+  });
+
+  it("a round on the hole's rim leaves the shortened wall its material and takes none itself", () => {
+    const list = refs(hole, { wall: ["body1", 9], floor: ["body1", 10], lowerTop: ["body1", 8] });
+    const want = { wall: [6], floor: [11], lowerTop: [0] };
+    expect(resolved(list, reply("holeRim"), trackOf(hole, list))).toEqual(want);
+    expect(resolved(list, reply("holeRim"), null)).toEqual(want);
+  });
+});
