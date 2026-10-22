@@ -1,7 +1,5 @@
-//! A document's versions and branches without opening it: the rows of its
-//! `versions` key, never what a version holds (`objects`) and never the geometry.
-//! A `.fundab` costs its document section, a `.funda` one streaming parse that
-//! skips every other key without building it.
+//! A document's versions and branches without opening it, never the objects or the geometry: a `.fundab` costs its
+//! document section, a `.funda` one streaming parse that skips every other key.
 
 use crate::fnda::{self, KIND_DOCUMENT};
 use serde::de::IgnoredAny;

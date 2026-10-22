@@ -1,6 +1,5 @@
-//! The binary twin of the newest document version fixture opens as the same
-//! document, so a reader change that alters how an existing `.fundab` opens fails
-//! here.
+//! The binary twin of the newest document version fixture opens as the same document, so a reader change that alters
+//! how an existing `.fundab` opens fails here.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
