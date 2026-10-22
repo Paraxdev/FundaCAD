@@ -1,7 +1,5 @@
-//! The native tracer behind the frame transport, and the pt_* commands the
-//! page feeds it the scene with. Commands only change the scene; the frame
-//! loop applies the changes before it traces, so a burst of pt_mesh calls
-//! builds the TLAS once.
+//! The native tracer behind the frame transport and the pt_* scene commands. Commands only change the scene and the
+//! frame loop applies them before it traces, so a burst of pt_mesh calls builds the TLAS once.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::{mpsc, Arc, Mutex, MutexGuard};
@@ -18,9 +16,8 @@ use tauri::ipc::{InvokeBody, Request};
 /// GPU time per frame; the resolve and readback come on top.
 const TRACE_BUDGET: Duration = Duration::from_millis(12);
 
-/// The device and the pipeline compile together. A driver that never answers
-/// keeps its thread, and Path traced greys with the reason instead of the
-/// frames thread waiting on it for good.
+/// Device and pipeline creation together. A driver that never answers keeps its thread, and Path traced greys with the
+/// reason instead of the frames thread waiting for good.
 const CREATE_LIMIT: Duration = Duration::from_secs(60);
 
 /// GPU time a picture holds the tracer for at once, so pt_status and the
@@ -77,9 +74,8 @@ static TRACER: Reopen<TracerSource> = Reopen::new();
 /// only the text.
 static REFUSED: Mutex<Option<Refusal>> = Mutex::new(None);
 
-/// FUNDACAD_TRACER=software keeps the BVH path on a ray query adapter, off
-/// leaves the test pattern, both for measuring. A fresh tracer starts with no
-/// fault, so a released one comes back clean.
+/// FUNDACAD_TRACER=software keeps the BVH path on a ray query adapter and off leaves the test pattern, both for
+/// measuring. A fresh tracer starts with no fault, so a released one comes back clean.
 pub fn tracer() -> Result<Arc<TracerSource>, String> {
     TRACER.get(|| {
         let mode = std::env::var("FUNDACAD_TRACER").unwrap_or_default();
@@ -362,9 +358,8 @@ pub fn pt_status() -> Result<Status, String> {
     })
 }
 
-/// A still of the current scene and camera at `width` x `height`, traced to
-/// `samples` beside the viewport's accumulation, denoised once at the end and
-/// bloomed like the viewport. Answers the PNG file's bytes.
+/// A still of the current scene and camera traced to `samples` beside the viewport's accumulation, denoised once at the
+/// end and bloomed like the viewport. Answers the PNG file's bytes.
 #[tauri::command]
 pub async fn pt_picture(width: u32, height: u32, samples: u32) -> Result<tauri::ipc::Response, String> {
     tauri::async_runtime::spawn_blocking(move || picture(width, height, samples).map(tauri::ipc::Response::new))

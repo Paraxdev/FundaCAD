@@ -1,26 +1,14 @@
-//! The app's side of the document files: where the blob and mesh stores live,
-//! and the commands the webview saves and opens through. The formats themselves
-//! are the fundacad-format crate.
+//! The app's side of document files: the blob and mesh stores and the save and open commands. The formats are in
+//! fundacad-format.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 pub use fundacad_format::container::*;
 
-/// The durable blob store: content-addressed geometry, one file per hash.
-///
-/// Under `app_data_dir()`, deliberately NOT the cache dir: geomstore's `evict()`
-/// drops any blob with refcount 0 and `purge()` is wired to the Compute All
-/// button, so a container blob there would be deleted by a button press.
-///
-/// This directory is the SEAM between the app and its engine worker: the app
-/// writes it when opening a container, the engine writes it at import, both read
-/// it (tests/container_seam.rs). Safe with no
-/// locking because the path is a pure function of the content hash: two writers
-/// racing on the same hash write byte-identical data, and each publishes by rename.
-///
-/// Flat, not sharded: geomstore holds one blob per BODY (3,060 for the reference
-/// assembly), this one holds one per IMPORT FEATURE.
+/// Not under the cache dir, where Compute All's purge would delete it. Flat, one blob per import feature.
+/// The app and the engine worker both write here without locks: the path is the content hash and writes publish by
+/// rename.
 pub fn blob_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("blobs");
@@ -28,9 +16,7 @@ pub fn blob_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-/// Packed viewport meshes carried alongside the blobs. Purely a reopen-speed
-/// cache, losing this costs re-tessellation time, never data, but it lives
-/// next to the blobs rather than in geomstore so a container can seed it.
+/// Packed viewport meshes, only a reopen speed cache, kept beside the blobs so a container can seed it.
 pub fn mesh_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Manager;
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("meshes");
@@ -80,10 +66,7 @@ pub fn save_document(
             missing.push(h);
         }
     }
-    // Refuse rather than write a document whose geometry is not in it. The
-    // atomic publish means the user still has their previous file, and the
-    // in-memory document is untouched, both strictly better than a saved file
-    // that opens with missing bodies somewhere else.
+    // Refuse rather than save a document missing geometry. The atomic publish leaves the previous file intact.
     if !missing.is_empty() {
         return Err(format!(
             "{} of this document's imported bodies could not be found in local storage, \
@@ -121,20 +104,11 @@ pub fn save_document(
     write_document(path, document_json, &blobs, &meshes, &carried, app_version)
 }
 
-// ---------------------------------------------------------------------------
-// Tauri commands. Privileged IPC, the same pattern as `recovery_write`, the
-// webview holds only `fs:allow-read-text-file` / `fs:allow-write-text-file`, so
-// it could not read or write a ZIP itself even if we wanted it to. Widening that
-// to the binary APIs would reopen the post-XSS persistence channel the security
-// round deliberately closed.
+// Privileged IPC like `recovery_write`: the webview may only read and write text files, and widening that to binary
+// would reopen the post XSS persistence channel.
 
-/// Write the document and the geometry it references to `path`, atomically.
-///
-/// `hashes` are the content hashes the document's import features carry; the
-/// frontend collects them because it owns the document. `optional_hashes` are
-/// the other hash shaped strings in it, embedded when the store has them. Deliberately does NOT
-/// consult the engine, so a save never waits on a worker that crashed or is
-/// restarting.
+/// Writes the document and its geometry to `path` atomically, without asking the engine, so a save never waits on a
+/// crashed worker. `optional_hashes` are other hash shaped strings in the document, embedded when the store has them.
 #[tauri::command]
 pub async fn container_save(
     app: tauri::AppHandle,
@@ -159,9 +133,7 @@ pub async fn container_save(
     )
 }
 
-/// Read a document at `path`, binary or JSON: extract its geometry into the blob
-/// store and return the document JSON. The blobs land before this returns, so the
-/// rebuild the frontend kicks off on load can resolve them immediately.
+/// Opens a binary or JSON document. Its blobs land in the store before this returns, so the rebuild on load finds them.
 #[tauri::command]
 pub async fn container_open(app: tauri::AppHandle, path: String) -> Result<String, String> {
     let blobs = blob_dir(&app)?;
@@ -204,9 +176,8 @@ pub struct OpenedDroppedDocument {
     pub carried: Vec<fundacad_format::fnda::Carried>,
 }
 
-/// `container_open_checked` for a document dropped on a webview that does not
-/// say where it lives, so the page has its bytes only. They arrive as the raw
-/// IPC body, a large binary document would not survive a JSON array.
+/// `container_open_checked` for a drop that gives the page bytes but no path. They arrive as the raw IPC body, as a
+/// large document would not survive a JSON array.
 #[tauri::command]
 pub async fn container_open_bytes(
     app: tauri::AppHandle,
