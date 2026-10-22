@@ -13,12 +13,8 @@ fn close_rel(a: f64, b: f64) -> bool {
     (a - b).abs() <= VOLUME_REL * a.abs().max(b.abs()) + 1e-9
 }
 
-/// Python built these on a 20 x 20 x 10 box with rounds or chamfers whose
-/// setbacks pass each other on a shared face, carving the faces away: r = 12
-/// on the Z edges left a lens of bbox +-9.832 = sqrt(12^2 - 2^2) - 2, chamfer 6
-/// on all edges of the 10 mm high sides a bbox of +-9, and 3 x 12 on the Z
-/// edges one of y +-9.5, the two 12 setbacks crossing on the 20 wide faces.
-/// They are refused now, the box left whole.
+/// Python built these blends whose setbacks pass each other on a shared face, carving it away (r = 12 on
+/// the Z edges left a lens of bbox +-9.832). They are refused now, the box left whole.
 const PYTHON_OVERLAP: [&str; 4] =
     ["chamfer_section_huge_all", "chamfer_section_two_distance", "fillet_section_draft", "fillet_section_huge"];
 

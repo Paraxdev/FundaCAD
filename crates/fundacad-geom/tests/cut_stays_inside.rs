@@ -1,6 +1,5 @@
-//! A cut only takes material away. The kernel can hand back the body with the
-//! whole tool as a loose solid beside it, and the two sum to the body's own
-//! volume, so by volume alone it passes for a cut that removed next to nothing.
+//! A cut only takes material away. The kernel can hand back the body with the whole tool as a loose solid
+//! beside it, which by volume alone passes for a cut that removed next to nothing.
 
 use fundacad_geom::kernel::{self, BoolKind, Kind};
 

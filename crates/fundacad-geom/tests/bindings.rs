@@ -1,6 +1,5 @@
-//! Kernel tests for the OpenCASCADE classes added to the vendored bindings for
-//! the Rust engine port (docs/ENGINE.md section 2.2). Each asserts on what
-//! the kernel computed, never only that a call returned.
+//! Kernel tests for the OpenCASCADE classes added to the vendored bindings, each asserting on what the
+//! kernel computed, never only that a call returned.
 
 use glam::{dvec3, DVec3};
 use opencascade::{
@@ -33,11 +32,8 @@ fn solid_from_shell(shell: &Shape) -> Shape {
     Shape::from_raw_ref(make.pin_mut().Shape())
 }
 
-// Two ways a solid ends up inside out: a REVERSED flag on the solid, or a
-// FORWARD solid around a reversed shell (what sewing an inward shell gives).
-// ShapeFix rights both, but ShapeFix_Solid::Perform only records the flip in
-// its status (DONE2) and returns false, so `modified` stays false. BRepCheck
-// calls both valid, which is why the Python engine tests the volume sign instead.
+// ShapeFix rights a REVERSED solid and a FORWARD solid around a reversed shell, but only records the flip
+// in its status (DONE2), so `modified` stays false. BRepCheck calls both valid, hence the volume sign test.
 #[test]
 fn shape_fix_turns_an_inside_out_solid_the_right_way() {
     let cube = Shape::box_with_dimensions(10.0, 10.0, 10.0);
