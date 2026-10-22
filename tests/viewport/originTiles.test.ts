@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import {
-  CORNER_SEGMENTS, LABEL_BOX_PX, MIN_TILE_SCALE, OriginTiles, RIM_INK_MIX, RIM_PX, TILE_LOOK, TILE_ORDER, TILE_SHAPE,
-  labelInk, mixHex, tilePose, tileStates, type TilePose,
+  CORNER_SEGMENTS, GHOST_SHARE, LABEL_BOX_PX, MIN_TILE_SCALE, OriginTiles, RIM_INK_MIX, RIM_PX, TILE_LOOK, TILE_ORDER, TILE_SHAPE,
+  labelInk, mixHex, tilePose, tileStates, type TilePose, type TileState,
 } from "../../src/viewport/originTiles";
 import { AXIS_COLOR } from "../../src/viewport/originTriad";
 import { roundedSquare } from "../../src/viewport/cornerProfile";
@@ -17,13 +17,16 @@ const matOf = (o: THREE.Object3D) => (o as THREE.Mesh).material as Mat;
 const child = (o: THREE.Object3D, role: string) => o.children.find((c) => c.userData.role === role)!;
 
 function opacities(t: OriginTiles) {
-  const out: Record<string, { fill: number; rim: number; label: number }> = {};
+  const out: Record<string, { fill: number; ghost: number; rim: number; label: number }> = {};
   for (const k of PLANES) {
     const fill = t.planes[k];
-    out[k] = { fill: matOf(fill).opacity, rim: matOf(child(fill, "rim")).opacity, label: matOf(child(fill, "label")).opacity };
+    const of = (role: string) => matOf(child(fill, role)).opacity;
+    out[k] = { fill: matOf(fill).opacity, ghost: of("ghost"), rim: of("rim"), label: of("label") };
   }
   return out;
 }
+
+const look = (s: TileState) => ({ ...TILE_LOOK[s], ghost: TILE_LOOK[s].fill * GHOST_SHARE });
 
 /** The axis aligned box a placed tile fills, in the group's pixel frame. */
 function tileBox(p: TilePose, size: number) {
@@ -110,9 +113,9 @@ describe("OriginTiles", () => {
       parent: t.planes[k].parent === t.group,
       roles: t.planes[k].children.map((c) => c.userData.role),
     }))).toEqual([
-      { plane: "XY", color: AXIS_COLOR.z, visible: false, parent: true, roles: ["rim", "label"] },
-      { plane: "XZ", color: AXIS_COLOR.y, visible: false, parent: true, roles: ["rim", "label"] },
-      { plane: "YZ", color: AXIS_COLOR.x, visible: false, parent: true, roles: ["rim", "label"] },
+      { plane: "XY", color: AXIS_COLOR.z, visible: false, parent: true, roles: ["ghost", "rim", "label"] },
+      { plane: "XZ", color: AXIS_COLOR.y, visible: false, parent: true, roles: ["ghost", "rim", "label"] },
+      { plane: "YZ", color: AXIS_COLOR.x, visible: false, parent: true, roles: ["ghost", "rim", "label"] },
     ]);
     const layers = new Set<number>();
     t.group.traverse((o) => layers.add(o.layers.mask));
@@ -125,17 +128,23 @@ describe("OriginTiles", () => {
     expect(t.group.parent).toBe(null);
   });
 
-  it("draws over everything in fill, rim, name order, below the manipulators", () => {
+  it("draws a faint ghost through bodies, then the depth tested fill and rim, then the name", () => {
     const t = new OriginTiles(new THREE.Scene());
     const fill = t.planes.XZ;
-    const flags = (o: THREE.Object3D) => ({
-      order: o.renderOrder, depthTest: matOf(o).depthTest, depthWrite: matOf(o).depthWrite, transparent: matOf(o).transparent,
-    });
-    expect([flags(fill), flags(child(fill, "rim")), flags(child(fill, "label"))]).toEqual([
-      { order: TILE_ORDER.fill, depthTest: false, depthWrite: false, transparent: true },
-      { order: TILE_ORDER.rim, depthTest: false, depthWrite: false, transparent: true },
-      { order: TILE_ORDER.label, depthTest: false, depthWrite: false, transparent: true },
+    const flags = (o: THREE.Object3D) => {
+      const m = matOf(o);
+      return {
+        order: o.renderOrder, depthTest: m.depthTest, depthWrite: m.depthWrite, transparent: m.transparent,
+        offset: m.polygonOffset ? [m.polygonOffsetFactor, m.polygonOffsetUnits] : null,
+      };
+    };
+    expect([flags(child(fill, "ghost")), flags(fill), flags(child(fill, "rim")), flags(child(fill, "label"))]).toEqual([
+      { order: 950, depthTest: false, depthWrite: false, transparent: true, offset: null },
+      { order: 951, depthTest: true, depthWrite: false, transparent: true, offset: [-1, -4] },
+      { order: 952, depthTest: true, depthWrite: false, transparent: true, offset: [-1, -4] },
+      { order: 953, depthTest: false, depthWrite: false, transparent: true, offset: null },
     ]);
+    expect((child(fill, "ghost") as THREE.Mesh).geometry).toBe(fill.geometry);
     expect(Math.max(...Object.values(TILE_ORDER))).toBeLessThan(998);
     t.dispose();
   });
@@ -143,15 +152,15 @@ describe("OriginTiles", () => {
   it("sets each part's opacity from the hover state, and a show starts idle", () => {
     const t = new OriginTiles(new THREE.Scene());
     t.setShown(true);
-    expect(opacities(t)).toEqual({ XY: TILE_LOOK.idle, XZ: TILE_LOOK.idle, YZ: TILE_LOOK.idle });
+    expect(opacities(t)).toEqual({ XY: look("idle"), XZ: look("idle"), YZ: look("idle") });
     t.hover("XZ");
-    expect(opacities(t)).toEqual({ XY: TILE_LOOK.dim, XZ: TILE_LOOK.hot, YZ: TILE_LOOK.dim });
+    expect(opacities(t)).toEqual({ XY: look("dim"), XZ: look("hot"), YZ: look("dim") });
     t.hover(null);
-    expect(opacities(t)).toEqual({ XY: TILE_LOOK.idle, XZ: TILE_LOOK.idle, YZ: TILE_LOOK.idle });
+    expect(opacities(t)).toEqual({ XY: look("idle"), XZ: look("idle"), YZ: look("idle") });
     t.hover("YZ");
     t.setShown(false);
     t.setShown(true);
-    expect(opacities(t)).toEqual({ XY: TILE_LOOK.idle, XZ: TILE_LOOK.idle, YZ: TILE_LOOK.idle });
+    expect(opacities(t)).toEqual({ XY: look("idle"), XZ: look("idle"), YZ: look("idle") });
     t.dispose();
   });
 
@@ -252,6 +261,7 @@ describe("OriginTiles", () => {
     expect(PLANES.map((k) => t.planes[k])).toEqual(meshes);
     PLANES.forEach((k, i) => expect(t.planes[k]).toBe(meshes[i]));
     expect(spies.map((s) => s.mock.calls.length)).toEqual([1, 1, 1, 1, 1, 1]);
+    expect(PLANES.map((k) => (child(t.planes[k], "ghost") as THREE.Mesh).geometry === t.planes[k].geometry)).toEqual([true, true, true]);
     const box = (m: THREE.Mesh) => {
       m.geometry.computeBoundingBox();
       const b = m.geometry.boundingBox!;
