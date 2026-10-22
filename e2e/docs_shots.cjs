@@ -36,6 +36,15 @@ const H = 900;
 // ------------------------------------------------------------------ helpers --
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Click the middle of an origin plane tile, which a plane pick shows beside the origin.
+async function clickTile(page, plane) {
+  const p = await page.evaluate((k) => {
+    const m = window.viewport.scene.planes[k];
+    return window.viewport.projectToScreen(m.getWorldPosition(m.position.clone()));
+  }, plane);
+  await page.mouse.click(p.x, p.y);
+}
 const P = (origin, normal, xdir) => ({ origin, normal, xdir });
 
 async function openPage(browser) {
@@ -296,7 +305,7 @@ async function drawPlate(ctx, { stills }) {
   await page.mouse.move(800, 500);
   await page.keyboard.press("s");
   await sleep(700);
-  await page.mouse.click(762, 602); // the XY label
+  await clickTile(page, "XY");
   await page.waitForFunction(() => window.sketch.active, null, { timeout: 15000 });
   await sleep(2000);
   await page.keyboard.press("r");
@@ -642,7 +651,7 @@ const GIFS = {
     await page.mouse.move(800, 500);
     await page.keyboard.press("s");
     await sleep(700);
-    await page.mouse.click(762, 602);
+    await clickTile(page, "XY");
     await page.waitForFunction(() => window.sketch.active, null, { timeout: 15000 });
     await sleep(2000);
     await page.keyboard.press("r");
@@ -766,7 +775,7 @@ async function startSketch(ctx) {
   await page.mouse.move(800, 500);
   await page.keyboard.press("s");
   await sleep(700);
-  await page.mouse.click(762, 602);
+  await clickTile(page, "XY");
   await page.waitForFunction(() => window.sketch.active, null, { timeout: 15000 });
   await sleep(2000);
 }

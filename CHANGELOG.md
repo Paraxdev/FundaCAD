@@ -397,6 +397,12 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **The origin planes are three small tiles that no longer cross.** While Sketch
+  or another tool asks for a plane, XY, XZ and YZ show as small rounded tiles
+  beside the origin, each in its own quadrant with its name inside, instead of
+  three large squares through each other. They keep the same size on screen at
+  any zoom, so they no longer cover the grid or the part.
+
 - **Saving a .fundab with a big import is several times faster on a computer
   with several cores.** A 69 MB imported STEP assembly saves in about 0.4
   seconds instead of about 1.8, or 0.6 seconds on four cores. On one core it

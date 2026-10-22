@@ -2,7 +2,7 @@
 // the click through it, and that Reset camera and New put the view back home.
 //
 // Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
-//   SC_TOKEN=<token> SC_CHROME=<browser> node e2e/plane_pick_camera_e2e.cjs
+//   SC_TOKEN=<token> SC_CHROME=<browser> [SC_URL=http://localhost:5952/ SC_ENGINE_PORT=8952] //     node e2e/plane_pick_camera_e2e.cjs
 const { chromium } = require("playwright-core");
 const path = require("path");
 const os = require("os");
@@ -11,6 +11,8 @@ const TOKEN = process.env.SC_TOKEN || "";
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 const FIXTURE = path.resolve(__dirname, "../tests/fixtures/asm_nested.step");
 const OUT = process.env.SC_OUT || path.join(os.tmpdir(), "plane_pick_camera_shots");
+const URL = process.env.SC_URL || "http://localhost:5173/";
+const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -25,18 +27,18 @@ const check = (name, ok, detail) => {
   });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
-  await page.addInitScript((t) => {
+  await page.addInitScript(({ t, port }) => {
     const N = window.WebSocket;
     class P extends N {
       constructor(u, p) {
-        const s = String(u).replace(/([?&])token=[^&]*/, `$1token=${t}`);
+        const s = String(u).replace(":8765", `:${port}`).replace(/([?&])token=[^&]*/, `$1token=${t}`);
         super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
       }
     }
     window.WebSocket = P;
-  }, TOKEN);
+  }, { t: TOKEN, port: ENGINE_PORT });
 
-  await page.goto("http://localhost:5173/");
+  await page.goto(URL);
   await page.waitForTimeout(3500);
   const modal = await page.$(".modal-close");
   if (modal) { await modal.click(); await page.waitForTimeout(400); }
@@ -67,19 +69,44 @@ const check = (name, ok, detail) => {
   }));
   check("the planes draw over the model while a tool asks for one", state.onTop && state.depthTest === false, JSON.stringify(state));
 
-  const through = await page.evaluate(() => {
-    const r = window.viewport.domElement.getBoundingClientRect();
-    for (let x = r.left + 320; x < r.right - 120; x += 4) {
-      for (let y = r.top + 80; y < r.bottom - 80; y += 4) {
-        if (document.elementFromPoint(x, y) !== window.viewport.domElement) continue;
-        const c = window.viewport.pickConstructionAt(x, y);
-        if (c?.kind !== "base") continue;
-        if (!window.viewport.pickFaceForPressPull(x, y)) continue;
-        return { x, y, plane: c.plane };
+  // A 5 x 5 grid inside each origin tile, for a point where a body face lies behind the tile.
+  const scanTiles = () => page.evaluate(() => {
+    const vp = window.viewport;
+    for (const k of ["XY", "XZ", "YZ"]) {
+      const m = vp.scene.planes[k];
+      m.geometry.computeBoundingBox();
+      const b = m.geometry.boundingBox;
+      for (let i = 0; i < 5; i++) {
+        for (let j = 0; j < 5; j++) {
+          const local = new b.min.constructor(
+            b.min.x + (0.1 + 0.2 * i) * (b.max.x - b.min.x),
+            b.min.y + (0.1 + 0.2 * j) * (b.max.y - b.min.y),
+            0,
+          );
+          const { x, y } = vp.projectToScreen(local.applyMatrix4(m.matrixWorld));
+          if (document.elementFromPoint(x, y) !== vp.domElement) continue;
+          const c = vp.pickConstructionAt(x, y);
+          if (c?.kind !== "base") continue;
+          if (!vp.pickFaceForPressPull(x, y)) continue;
+          return { x, y, plane: c.plane };
+        }
       }
     }
     return null;
   });
+  let through = await scanTiles();
+  if (!through) {
+    console.log("  (no fixture face behind a tile, adding a 100 mm box on the origin)");
+    await page.keyboard.press("Escape");
+    await page.evaluate(async () => {
+      window.store.addFeature({ id: "PPBOX", type: "box", length: 100, width: 100, height: 100 });
+      await window.store.rebuildNow();
+    });
+    await page.waitForFunction(() => !window.store.buildState.building, null, { timeout: 60000 });
+    await page.evaluate(() => window.__fundacad.handleAction("sketch"));
+    await page.waitForTimeout(500);
+    through = await scanTiles();
+  }
   check("found a plane in front of a body face", !!through, JSON.stringify(through));
   await page.screenshot({ path: path.join(OUT, "1-planes-on-top.png") });
   if (through) {
@@ -96,9 +123,9 @@ const check = (name, ok, detail) => {
   }
   const after = await page.evaluate(() => ({
     onTop: window.viewport.constructionOnTop,
-    depthTest: window.viewport.scene.planes.XY.material.depthTest,
+    shown: ["XY", "XZ", "YZ"].filter((k) => window.viewport.scene.planes[k].visible),
   }));
-  check("the planes go back behind the model afterwards", !after.onTop && after.depthTest === true, JSON.stringify(after));
+  check("the planes hide again afterwards", !after.onTop && after.shown.length === 0, JSON.stringify(after));
 
   // --- reset camera ---------------------------------------------------------------
   const dirOf = () => page.evaluate(() => {
