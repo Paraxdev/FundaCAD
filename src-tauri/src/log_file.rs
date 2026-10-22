@@ -98,6 +98,24 @@ pub fn tail(dir: &Path, max: u64) -> Option<String> {
     (!bytes.is_empty()).then(|| redact_user_paths(&String::from_utf8_lossy(&bytes)))
 }
 
+/// Where this run's output went, kept at setup so a report never passes off the last run's log as this one's.
+pub enum RunLog {
+    ToFile(PathBuf),
+    Terminal,
+    Off,
+    Failed(String),
+}
+
+pub fn tail_for_run(run: &RunLog, max: u64) -> Option<String> {
+    let line = match run {
+        RunLog::ToFile(path) => return tail(path.parent()?, max),
+        RunLog::Terminal => "No log file for this run, it writes to the terminal it was started from.".to_string(),
+        RunLog::Off => "No log file for this run, this build does not keep one.".to_string(),
+        RunLog::Failed(e) => redact_user_paths(&format!("No log file for this run, it could not be opened: {e}")),
+    };
+    Some(line)
+}
+
 /// Hides the name in `\Users\<name>`, `/Users/<name>` and `/home/<name>`, from
 /// any machine, since a log can carry a path someone else pasted.
 pub fn redact_user_paths(text: &str) -> String {
