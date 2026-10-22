@@ -6,7 +6,7 @@ Home is where FundaCAD starts. It shows the documents you worked on, starts new 
 
 Click a card to open the document. Each card shows a picture of the model from its last save, the folder it is in and when it was last edited. A card marked Not found points to a file that was moved or deleted, click it to take it off the list.
 
-Blank starts an empty document and Open… finds a file on disk. The Examples under your documents start one that already has parameters and a few steps, and Save then asks where to keep it. The 3D printer example imports a STEP file into a new document instead. [Examples](../start/examples.md) says what each one shows.
+Blank starts an empty document and Open… finds a file on disk. The Examples under your documents start one that already has parameters and a few steps, and Save then asks where to keep it. [Examples](../start/examples.md) says what each one shows.
 
 Type in the search field, or press Ctrl+F, to find a document by name or folder, or an example by name, and pick the order next to it. Esc in the search field clears it.
 

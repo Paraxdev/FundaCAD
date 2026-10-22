@@ -1,10 +1,9 @@
 """Every example on Home opens from its card as an untitled, clean copy, builds, and holds the bodies it should,
-the Box with a lid still fits its lid after its size and clearance change, and the 3D printer imports its STEP.
+the Box with a lid still fits its lid after its size and clearance change, and the Capsule holder's cap screws on
+without touching the tube.
 
 Run with `python tools/harness/examples/shipped_examples.py`.
 """
-
-import time
 
 from fundacad_harness import Session
 
@@ -14,19 +13,11 @@ EXAMPLES = {
     "Box with a lid": [((-69, -22, 0), (-5, 22, 27)), ((5, -22, 0), (69, 22, 7))],
     "Plate": [((-40, -25, 0), (40, 25, 6))],
     "Pinned lever": [((-13, -13, 0), (100, 13, 10))],
+    "Capsule holder": [((-15.05, -15.05, 0), (15.05, 15.05, 42.4)), ((23.05, -15.05, 0), (53.15, 15.05, 16.65))],
 }
-
-# What scripts/examples/gen_printer.py printed for src/templates/printer.stpz.
-PRINTER = {
-    "leaves": 100,
-    "bbox": ((-5, -24, 0), (392, 402, 414)),
-    "groups": ["Frame", "Motion", "Bed", "Toolhead", "Electronics"],
-    "motors": [(45, 30, 350), (180, 315, 30), (45, 180, 30), (315, 180, 30)],
-}
-PRINTER_BUDGET_S = 60
+SCREWED_ON = [((-15.05, -15.05, 0), (15.05, 15.05, 42.4)), ((-15.05, -15.05, 30.525), (15.05, 15.05, 47.175))]
 
 INSPECT = "() => window.geometry.session('inspect', { document: window.store.document })"
-PLAIN = "() => window.geometry.session('inspect', { document: window.store.document, detail: false })"
 CLASHES = "() => window.geometry.interference(window.store.document, 0.01)"
 WATCH_OPEN = """() => {
   window.__exampleOpened = false;
@@ -47,7 +38,7 @@ def open_example(s, name):
     if unsaved:
         s.click("Discard")
     # The card fetches the example's file before anything is busy, settle alone can return during that fetch.
-    s.page.wait_for_function(OPENED, timeout=PRINTER_BUDGET_S * 1000, polling=100)
+    s.page.wait_for_function(OPENED, timeout=60_000, polling=100)
     s.settle()
 
 
@@ -112,43 +103,31 @@ def run(s):
     assert near(boxes(found), [((-72.7, -22, 0), (-5, 22, 27)), ((5, -22, 0), (72.7, 22, 7))], 0.05), boxes(found)
     clash = s.page.evaluate(CLASHES)
     assert (clash["ok"], clash.get("pairs", []), clash.get("clearances", [])) == (True, [], []), clash
-    printer(s)
+    capsule(s)
     assert not s.page_errors(), s.page_errors()
 
 
-def items(s):
-    return [(r[1], r[3]) for r in s.screen(region="items", raw=True)["lines"] if r[2] == "row"]
+def capsule(s):
+    open_example(s, "Capsule holder")
+    clash = s.page.evaluate(CLASHES)
+    assert (clash["ok"], clash.get("pairs", []), clash.get("clearances", [])) == (True, [], []), clash
 
-
-def printer(s):
-    t0 = time.monotonic()
-    open_example(s, "3D printer")
-    took = time.monotonic() - t0
-    print(f"3D printer example: imported and built in {took:.1f} s")
-    assert took < PRINTER_BUDGET_S, took
-    st = s.status(raw=True)
-    path = s.page.evaluate("() => window.store.filePath")
-    assert (st["doc"], path, st["dirty"]) == ("3D printer", None, False), (st, path)
+    set_params(s, {"screwedOn": "1"})
     assert s.last_error() == "none", s.last_error()
-    rows = s.bodies(raw=True)
-    assert len(rows) == PRINTER["leaves"], len(rows)
-    materials = {r["material"] for r in rows if r["material"]}
-    assert len(materials) >= 5, materials
-    box = s.page.evaluate("() => window.store.buildState.result.bbox")
-    assert near([(box["min"], box["max"])], [PRINTER["bbox"]], 0.5), box
+    found = s.page.evaluate(INSPECT)
+    assert near(boxes(found), SCREWED_ON, 0.05), boxes(found)
+    clash = s.page.evaluate(CLASHES)
+    assert (clash["ok"], clash.get("pairs", []), clash.get("clearances", [])) == (True, [], []), clash
 
-    found = s.page.evaluate(PLAIN)
-    motors = [b for b in found["bodies"] if b["name"].startswith("Stepper motor")]
-    volumes = {round(b["volume"], 3) for b in motors}
-    corners = sorted(tuple(round(v, 2) for v in b["bbox"]["min"]) for b in motors)
-    assert (len(motors), len(volumes)) == (4, 1), motors
-    want = sorted((x - 21, y - 21, z) for x, y, z in PRINTER["motors"])
-    assert corners == want, corners
+    set_params(s, {"innerDiameter": "24.6", "pitch": "2.5", "clearance": "0.3", "wall": "2.2"})
+    assert s.last_error() == "none", s.last_error()
+    clash = s.page.evaluate(CLASHES)
+    assert (clash["ok"], clash.get("pairs", []), clash.get("clearances", [])) == (True, [], []), clash
 
-    s.panel("items")
-    s.expand(next(ref for ref, label in items(s) if label == "Printer" and ref.startswith("folder:")))
-    labels = [label for _, label in items(s)]
-    assert [g for g in PRINTER["groups"] if g in labels] == PRINTER["groups"], labels
+    # A cap turned a third of a turn from where its thread meets the tube's must be reported.
+    set_params(s, {"seatAngle": "300"})
+    clash = s.page.evaluate(CLASHES)
+    assert (clash["ok"], len(clash.get("pairs", []))) == (True, 1), clash
 
 
 if __name__ == "__main__":
