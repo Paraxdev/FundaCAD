@@ -154,8 +154,18 @@ const PLANES = ["XY", "XZ", "YZ"];
   check("top view names only the XY tile, the two seen edge on hide theirs", names.XY > 0.5 && names.XZ === 0 && names.YZ === 0,
     JSON.stringify(names));
   await shot("tiles-top-noir", around(await origin(), 170));
+  const xyAt = (await tiles()).XY;
+  const pickAt = () => page.evaluate((p) => {
+    const c = window.viewport.pickConstructionAt(p.x, p.y);
+    return { construction: c?.kind === "base" ? c.plane : c?.kind ?? null, plane: window.viewport.pickPlane(p.x, p.y) };
+  }, xyAt);
+  const shownPick = await pickAt();
   await escape();
   check("Escape hides the tiles", Object.values(await tiles()).every((x) => !x.visible));
+  const hiddenPick = await pickAt();
+  check("the XY tile's middle picks XY while shown and nothing once hidden",
+    shownPick.construction === "XY" && shownPick.plane === "XY" && hiddenPick.construction === null && hiddenPick.plane === null,
+    JSON.stringify({ xyAt, shownPick, hiddenPick }));
 
   console.log("\n[a small part shrinks them, never below 24 px]");
   await page.evaluate(async () => {
