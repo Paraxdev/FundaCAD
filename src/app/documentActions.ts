@@ -81,10 +81,11 @@ function openingImport(store: Engine["store"]) {
 
 type HomeImportEngine = Pick<Engine, "store" | "sketch" | "viewport">;
 
-// A cancelled import is still on the redo stack, so the document keeps its history and gives up only the name.
+// A cancelled import is still on the redo stack, and a new document would cancel an import added during the read,
+// so either way the document keeps everything and gives up only the name.
 function backToBlank(store: Engine["store"]): void {
   if (store.document.features.length || store.dirty) return;
-  if (store.canRedo) store.markOpenedWithoutPath("Untitled");
+  if (store.canRedo || store.importRunning) store.markOpenedWithoutPath("Untitled");
   else store.newDocument();
 }
 
