@@ -12,7 +12,9 @@ import { endPickSession, resetTreePicks, routeTreeClick, treePickWaiting, type T
 import type { FacePlanePick, PlanePickTarget } from "../../src/features/facePlanePick";
 import type { PlaneDef } from "../../src/types";
 import type { Viewport } from "../../src/viewport/viewport";
-import type { DocumentStore } from "../../src/document/store";
+import { DocumentStore } from "../../src/document/store";
+import type { GeometryBackend } from "../../src/geometry/client";
+import type { Feature, RebuildReply } from "../../src/types";
 
 const DATUM: PlaneDef = { origin: [4, -2.5, 9], normal: [0.6, 0, 0.8], xdir: [0, 1, 0] };
 
@@ -440,5 +442,58 @@ describe("keys and the end of a run", () => {
       ready: false,
     });
     expect(r.log.ghost).toBeNull();
+  });
+});
+
+describe("store undo and redo", () => {
+  const backend = {
+    async rebuild(): Promise<RebuildReply> {
+      return { ok: false, error: { message: "stub" } };
+    },
+    async init() {},
+    onStatus: () => () => {},
+    connected: true,
+  } as unknown as GeometryBackend;
+
+  // The engine ends the Items pick session on every rewind, as src/app/engine.ts wires it.
+  function real() {
+    const store = new DocumentStore(backend, {
+      parameters: {},
+      features: [
+        { id: "s1", type: "sketch", plane: "XY", entities: [] },
+        { id: "f2", type: "datumPlane", plane: DATUM, offset: 3.5 },
+      ] as Feature[],
+    });
+    store.onRewind(endPickSession);
+    const r = rig();
+    const tool = new MirrorTool(r.viewport, store, (_vp, x) => PLANE_AT[x] ?? null);
+    return { store, tool, r };
+  }
+
+  it("an undo mid run stands the tool down before the picks go stale", () => {
+    const { store, tool, r } = real();
+    store.addFeature({ id: "f3", type: "datumPlane", plane: DATUM, offset: -6.25 } as Feature);
+    tool.start(["body2"], r.done);
+    click(r.canvas, 140);
+    expect(summary()!.ready).toBe(true);
+    store.undo();
+    expect(tool.active).toBe(false);
+    expect(panel()).toBeNull();
+    expect(r.done.mock.calls).toEqual([[null]]);
+    expect(tool.commit()).toBe(false);
+    expect(store.document.features.map((f) => f.id)).toEqual(["s1", "f2"]);
+  });
+
+  it("a redo mid run stands it down too, and with nothing to undo the run goes on", () => {
+    const { store, tool, r } = real();
+    store.addFeature({ id: "f3", type: "datumPlane", plane: DATUM, offset: -6.25 } as Feature);
+    store.undo();
+    tool.start(["body1"], r.done);
+    store.redo();
+    expect(tool.active).toBe(false);
+    tool.start(["body1"], r.done);
+    store.redo();
+    expect(tool.active).toBe(true);
+    tool.cancel();
   });
 });
