@@ -52,9 +52,8 @@ fn a_bundle_identity_moves_with_its_version_and_its_component() {
     assert_ne!(base, id_of("idd", "1.0.0", b"two"));
 }
 
-/// A bundle built for the retired Python engine: it declares
-/// what it owns and names no component. It owns those names all the same, so
-/// every sentence names the plugin and says an update fixes it.
+/// A bundle for the retired Python engine declares what it owns and names no component. It still owns
+/// those names, so every sentence names the plugin and says an update fixes it.
 #[test]
 fn a_plugin_without_a_component_owns_its_names() {
     let root = temp_root("owner");

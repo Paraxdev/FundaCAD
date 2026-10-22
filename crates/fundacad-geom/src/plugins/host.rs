@@ -32,7 +32,6 @@ use wit::{DisplaceOptions, Plugin, PluginPre, Registration};
 
 use super::kernel_ext as kx;
 
-/// A kernel shape held for a plugin.
 pub struct HostShape(pub Shape);
 
 // The store, and every shape in it, lives and dies on the job thread that made
@@ -817,7 +816,7 @@ fn body_index(ctx: &Ctx, body: u32) -> Result<usize, String> {
     }
 }
 
-/// ptb_read.py `picked_faces`: selectors grouped by body, then resolved.
+/// Selectors grouped by body, then resolved.
 fn pick(
     ctx: &mut Ctx,
     raw: &Value,
