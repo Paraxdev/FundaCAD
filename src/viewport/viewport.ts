@@ -1337,6 +1337,7 @@ export class Viewport {
   /** A sketch dims the model to a backdrop, so nothing on it is worth a glow. */
   private syncBloomable() {
     this.scene.post.bloomable = this.finish.bloomable && !this.sketchDimmed;
+    this.scene.post.glows = this.finish.glows && !this.sketchDimmed;
   }
 
   /** The model projected once per box drag (the camera cannot move during one),

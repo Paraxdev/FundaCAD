@@ -140,6 +140,8 @@ export class BodyFinishLayer {
   faceFinish: Record<number, BodyFinish> = {};
   /** Something on the model is shiny or glows, so bloom takes the composer. */
   bloomable = false;
+  /** A face has an Emission, whether or not it lights its neighbours. Realtime bloom runs on this alone. */
+  glows = false;
 
   /** `sig` covers the base material's identity, because a rebuild hands back a
    *  fresh one and clones of the old one would keep its settings. */
@@ -194,6 +196,7 @@ export class BodyFinishLayer {
     }
     const glowing: GlowingBody[] = [];
     let shiny = false;
+    let glows = false;
     for (const b of model.bodies) {
       const own = this.host.savedMats().get(b.id) ?? b.mesh.material;
       const mat = (Array.isArray(own) ? own[0] : own);
@@ -211,6 +214,7 @@ export class BodyFinishLayer {
       // White for an unpainted body: emissive black would make the glow do nothing.
       // A ghost never glows, or x-ray would light the model up instead of fading it.
       const glow = ghost ? 0 : (f?.emissive ?? FINISH.emissive);
+      if (glow > 0) glows = true;
       const paint = this.bodyPaint[b.id] ?? 0xffffff;
       mat.emissive.set(glow > 0 ? paint : 0x000000);
       mat.emissiveIntensity = glow * MAX_EMISSIVE_INTENSITY;
@@ -241,6 +245,7 @@ export class BodyFinishLayer {
           fm.roughness = ff.roughness;
           if (!ghost && isShiny(ff)) shiny = true;
           const fglow = ghost ? 0 : ff.emissive;
+          if (fglow > 0) glows = true;
           if (fglow > 0 && ff.castsLight) faceGlow = true;
           markNoLight(fm, fglow > 0 && !ff.castsLight);
           fm.emissive.set(fglow > 0 ? (extra.colors[i] ?? 0xffffff) : 0x000000);
@@ -271,6 +276,7 @@ export class BodyFinishLayer {
     }
     this.startEmitters(model, glowing);
     this.bloomable = shiny || glowing.length > 0;
+    this.glows = glows;
     if (cold.length) this.warmRelief(cold);
   }
 
@@ -375,6 +381,7 @@ export class BodyFinishLayer {
     this.fitProgress = null;
     this.syncEmitterLights([]);
     this.bloomable = false;
+    this.glows = false;
   }
 
   /** Let go of the per-face materials of every body `gone` says is gone. They are
