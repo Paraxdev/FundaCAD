@@ -548,10 +548,9 @@ const STILLS = {
         side: "inside",
       },
     ]);
-    await ctx.view("iso", 1);
-    await ctx.centre();
+    await showModel(ctx, -1);
     await sleep(800);
-    await ctx.still("extrude-thin", { x: 400, y: 200, width: 760, height: 600 });
+    await ctx.still("extrude-thin", { x: 420, y: 220, width: 640, height: 520 });
   },
 
   async "presspull-face"(ctx) {
