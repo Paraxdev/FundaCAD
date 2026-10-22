@@ -24,6 +24,7 @@ function bridge() {
     materialPaint: () => ({}),
     materialFinishes: () => ({}),
     faceMaterialEntries: () => [],
+    hiddenFaceMaterials: () => [],
     materialLibrary: [],
     importColorSource: () => undefined,
     isBodyVisible: () => true,
