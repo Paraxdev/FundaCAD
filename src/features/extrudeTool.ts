@@ -1,6 +1,5 @@
-// Interactive Extrude: pick profile areas (Ctrl-click adds, Enter confirms) and drag the depth along the normal; a
-// ring extrudes as a tube and several areas union. The operation is decided, never asked (extrudeOperation.ts): the
-// prompt names it while you drag and Properties edits it afterwards.
+// Interactive Extrude: pick profile areas (Ctrl-click adds, Enter confirms) and drag the depth along the normal. The
+// operation is decided, never asked (extrudeOperation.ts); the prompt names it and Properties edits it afterwards.
 
 import * as THREE from "three";
 import { asFeature } from "../types";
@@ -565,7 +564,8 @@ export class ExtrudeTool {
   private peekKey = "";
 
   /** See through the bodies the preview passes into, or a pocket hides inside opaque material. A cut counts every
-   *  body its sweep box reaches, since a tapered cut previews the pocket where a parity probe finds no material. */
+   *  body its sweep box reaches: a tapered cut previews the pocket where a parity probe finds no material, and an
+   *  edit starts on a model that may still hold the pocket. Anything else needs the probe to land in material. */
   private syncPeek() {
     const op = this.shownOp ?? this.plannedOperation();
     const key = `${op}:${this.distance.toFixed(1)}:${this.symmetric}:${this.selectionIds()}`;

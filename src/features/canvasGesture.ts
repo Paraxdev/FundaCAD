@@ -1,6 +1,5 @@
 // The canvas listeners and animation frame a modal tool holds, added and removed in one place so none is left behind.
-// pointerdown is captured so a tool can claim a click before viewport selection; keydown is on window since focus may
-// be anywhere. Extrude does not use this: its uncaptured pointerdown lets the viewport pick change the profile first.
+// Extrude does not use this: its uncaptured pointerdown lets the viewport pick change the profile first.
 
 import { escapeClaimed } from "../ui/escapeClaim";
 
@@ -38,7 +37,9 @@ export class CanvasGesture {
     };
   }
 
-  /** Idempotent: a tool re-entering its pick phase calls it again, and addEventListener ignores the repeat. */
+  /** Idempotent, for a tool re-entering its pick phase. pointerdown is captured so a tool claims a click before the
+   *  viewport selects; move and up are not, a tool wants them only once it has. keydown is on window, focus may be
+   *  anywhere. */
   attach() {
     this.el.addEventListener("pointermove", this.move);
     this.el.addEventListener("pointerdown", this.down, true);

@@ -22,7 +22,8 @@ export interface ValueBounds {
 export const MIN_EDGE_VALUE = 0.001;
 
 /** A runaway guard so a flick cannot run the number to 10^4 mm and fire doomed rebuilds; the kernel decides what
- *  builds (blendVerdict). Half the diagonal is past a full round on a cube. Typed values are not clamped. */
+ *  builds (blendVerdict). Half the diagonal is past a full round on a cube. Typed values are not clamped.
+ *  Never the neighbourhood clearance: as a wall it stopped a drag at 0.11 mm on a part that blends at 20x that. */
 export const MAX_DIAGONAL_FRACTION = 0.5;
 
 export function treatmentField(kind: EdgeTreatment): TreatmentField {

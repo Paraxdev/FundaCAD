@@ -1,6 +1,5 @@
-// Interactive Fillet / Chamfer: drag a handle off a picked edge for the radius or setback. A real blend needs OCCT,
-// so the preview is engine driven via store.setPreview. The drag is a swipe (edgeSwipe.ts): `value` is a magnitude,
-// `signed` the side reached, and `kind` a reading of that sign, except at the origin where the last one stands.
+// Interactive Fillet / Chamfer, previewed by the engine (store.setPreview) since a real blend needs OCCT. The drag is
+// a swipe (edgeSwipe.ts): `value` its size, `signed` its side, `kind` read from that side, kept at the origin.
 
 import * as THREE from "three";
 import { asFeature } from "../types";

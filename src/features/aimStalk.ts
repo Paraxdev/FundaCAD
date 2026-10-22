@@ -9,7 +9,8 @@ export const STALK_PX = 88;
 const BALL_R = 8;
 const UP = new THREE.Vector3(0, 1, 0);
 
-/** A ray that misses lands on the sphere's outline under it, so an aim dragged off the ball keeps following. */
+/** The hit on the side facing the camera; a ray that misses lands on the sphere's outline under it, so an aim
+ *  dragged off the ball keeps following. */
 export function aimPoint(ray: THREE.Ray, centre: THREE.Vector3, r: number): THREE.Vector3 {
   const hit = ray.intersectSphere(new THREE.Sphere(centre, r), new THREE.Vector3());
   if (hit) return hit;

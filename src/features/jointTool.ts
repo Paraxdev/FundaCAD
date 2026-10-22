@@ -1,7 +1,5 @@
 // Joint handles on the model: an arrow slides the moving body along the mate axis (offset), a dial turns it about it
-// (angle); the value boxes stay authoritative. Only the engine places the axis, in the build's datumMarks keyed by the
-// joint id (builder._handle_joint); with no mark the value rows take over. A joint is a rigid relocate, so the
-// preview is live.
+// (angle); the value boxes stay authoritative. A joint is a rigid relocate, so the preview is live.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -76,8 +74,8 @@ export class JointTool {
     });
   }
 
-  /** False sends the caller to the value rows: a parameter drives the numbers, or the engine could not place the
-   *  mate axis this build. */
+  /** False sends the caller to the value rows: a parameter drives the numbers, or the engine placed no mate axis this
+   *  build. Only it places the axis, in the build's datumMarks keyed by the joint id (builder._handle_joint). */
   startEdit(featureId: string, onDone: (id: string | null) => void): boolean {
     if (this.active) return false;
     const f = this.store.document.features.find((x) => x.id === featureId);
