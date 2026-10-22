@@ -142,6 +142,24 @@ function reflect(x, y) {
     JSON.stringify([st.objects, st.line]),
   );
   check("Mirror is disabled while the line is empty", !st.ready && st.line && !st.line.clearable);
+  const look = await page.evaluate(() => {
+    const b = document.querySelector(".mirror-panel .mirror-actions .btn-primary");
+    return { opacity: Number(getComputedStyle(b).opacity), title: b.title };
+  });
+  check(
+    "the disabled Mirror button is dim and says what is missing",
+    look.opacity < 0.6 && /mirror line/.test(look.title),
+    JSON.stringify(look),
+  );
+
+  const onAxis = await scr(6.5, 2.125);
+  await page.mouse.move(onAxis.x, onAxis.y, { steps: 3 });
+  await page.waitForTimeout(250);
+  st = await state();
+  check("the line under the pointer is lit before the click", st.preview === 1, `preview ${st.preview}`);
+  await awayFromAll();
+  st = await state();
+  check("moving off it drops the light", st.preview === 0, `preview ${st.preview}`);
 
   await clickAt(21.5, 14);
   st = await state();
@@ -231,6 +249,30 @@ function reflect(x, y) {
     JSON.stringify(st),
   );
   check("the sketch stays open after Esc", await page.evaluate(() => window.sketch.active));
+
+  // 4 (run before 3, which adds a copy): the row label toggles the field, Esc gives the selection back
+  await clickAt(18, 6.25);
+  await clickAt(20.5, -1.25, ["Shift"]);
+  await page.evaluate(() => window.sketch.setTool("mirror"));
+  await page.waitForTimeout(300);
+  await page.click('.mirror-panel .mirror-field[data-field="objects"] .mirror-field-k');
+  await page.waitForTimeout(200);
+  st = await state();
+  check(
+    "a click on the row label makes Objects active",
+    st.objects.active && !st.line.active,
+    JSON.stringify([st.objects, st.line]),
+  );
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+  st = await state();
+  check(
+    "Esc gives the selection back",
+    st.selected.join() === "a,b" && !st.panel && st.tool === "select" && st.ids.length === 4,
+    JSON.stringify({ sel: st.selected, panel: st.panel, tool: st.tool, ids: st.ids }),
+  );
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
 
   // 3: a plain click moves on by itself, the panel button applies
   await page.evaluate(() => window.sketch.setTool("mirror"));
