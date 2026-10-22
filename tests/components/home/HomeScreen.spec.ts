@@ -777,10 +777,20 @@ describe("Home on a first run", () => {
     ]);
   });
 
-  it("says what Open takes", () => {
+  it("says what Open takes in a browser tab, documents only", () => {
     open([], {}, fakeLibrary());
-    expect($(".home-open .home-new-line")!.textContent).toBe("Documents, STEP, STL, 3MF");
+    expect($(".home-open .home-new-line")!.textContent).toBe("FundaCAD documents");
     expect($(".home-new-blank .home-new-line")).toBeNull();
+  });
+
+  it("says what Open takes in the desktop app, model files too", () => {
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    try {
+      open([], {}, fakeLibrary());
+      expect($(".home-open .home-new-line")!.textContent).toBe("Documents, STEP, STL, 3MF");
+    } finally {
+      delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    }
   });
 
   it("opens the manual from the welcome", async () => {
