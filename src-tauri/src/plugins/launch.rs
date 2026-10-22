@@ -1,15 +1,6 @@
-//! Starting another program on this machine, for a plugin that hands its output
-//! to one. The native half of the `process.spawn` grant.
-//!
-//! No shell is involved: the program is an absolute path to a file that exists,
-//! and every argument reaches it as one argument, so nothing a plugin passes is
-//! ever parsed as a command line. Detached, the app does not wait for it.
-//!
-//! The first time a plugin starts a given program the user is asked, natively,
-//! and the answer is remembered. The grant check lives in the window, so without
-//! this any script that got into the window could start any program on the
-//! machine. The approvals file sits outside plugin-data, where a plugin could
-//! otherwise write its own.
+//! The native half of the `process.spawn` grant. No shell: an absolute path to an existing file, each argument passed
+//! as one, detached. Each program is approved natively once, since the grant check lives in the window, and the
+//! approvals file sits outside plugin-data where a plugin could write its own.
 
 use serde::Serialize;
 use std::collections::BTreeMap;

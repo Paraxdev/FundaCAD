@@ -1,7 +1,5 @@
-//! Settings files Rust reads from the app data directory. Read leniently, a
-//! corrupt one would read as empty and the next save would overwrite what was
-//! in it, so one that does not parse is moved aside first and kept for a bug
-//! report.
+//! Settings files Rust reads from the app data dir. One that does not parse is moved aside first, since read as empty
+//! the next save would overwrite it.
 
 use std::path::{Path, PathBuf};
 

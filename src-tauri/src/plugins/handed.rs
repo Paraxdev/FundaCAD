@@ -1,29 +1,10 @@
-//! Which files a plugin has been handed, and what it is allowed to be told
-//! about them.
-//!
-//! Split from ./files.rs next door for the same reason bundle.rs is split from
-//! mod.rs: everything in here is a refusal, and the crate's own test binary
-//! cannot start on the development machine (a webview DLL fault that has
-//! nothing to do with these lines). So the interesting half is written without
-//! Tauri, and scripts/check-plugin-guards.sh compiles it on its own and runs
-//! the tests below. The half that opens a dialog and touches the disk stays
-//! next door, where there is nothing to assert that a test could reach.
-//!
-//! THE IDEA IS THAT A PLUGIN NEVER LEARNS A PATH. It asks the person for a
-//! file, and gets back a random handle, a file NAME, and a length. To read the
-//! file it gives the handle back. So the answer to "which files may this plugin
-//! read" needs no rule and no configured directory: it is the ones somebody
-//! picked, this session, for this plugin.
+//! Which files a plugin was handed and what it may be told about them. A plugin never learns a path: it gets a random
+//! handle, a file name and a length. Tauri free so scripts/check-plugin-guards.sh can run these tests.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// How many files one plugin may be holding at once.
-///
-/// A cap rather than an expiry. The natural lifetime is "while the app is
-/// open", which is what a person means when they pick a file for something;
-/// what has to be bounded is a plugin that asks in a loop, and a count bounds
-/// that without ever taking away a file somebody chose on purpose.
+/// A cap rather than an expiry: it bounds a plugin asking in a loop without taking away a file somebody chose.
 pub const MAX_HELD: usize = 64;
 
 /// A file the person handed to a plugin, and nothing else.
@@ -36,19 +17,13 @@ pub struct Handed {
     pub at: u64,
 }
 
-/// Everything handed out this session.
-///
-/// In memory only. Nothing is written to disk, so a plugin cannot come back
-/// tomorrow holding a token for a file somebody has forgotten they offered it.
+/// In memory only, so a plugin cannot come back tomorrow holding a token for a file somebody forgot they offered.
 #[derive(Default)]
 pub struct Table(HashMap<String, Handed>);
 
 impl Table {
-    /// Remember that this plugin may read this file.
-    ///
-    /// Evicts this plugin's own oldest when it is at the cap, and ONLY its own.
-    /// One plugin asking in a loop must not take away the file another one is
-    /// part way through reading.
+    /// At the cap evicts this plugin's own oldest and only its own, so one plugin asking in a loop cannot take
+    /// another's file.
     pub fn remember(&mut self, handle: String, plugin: String, path: PathBuf, at: u64) {
         let mut mine: Vec<(String, u64)> =
             self.0.iter().filter(|(_, h)| h.plugin == plugin).map(|(k, h)| (k.clone(), h.at)).collect();
@@ -61,12 +36,7 @@ impl Table {
         self.0.insert(handle, Handed { plugin, path, at });
     }
 
-    /// The path behind a handle, if it is this plugin's handle.
-    ///
-    /// ONE ANSWER for "no such handle" and for "that is not yours". Telling
-    /// them apart would let a plugin discover that a handle exists and belongs
-    /// to somebody else, which is a small leak with no upside: neither answer
-    /// changes what the plugin should do.
+    /// One answer for "no such handle" and "not yours", so a plugin cannot learn that another plugin's handle exists.
     pub fn path_for(&self, plugin: &str, handle: &str) -> Option<&Path> {
         self.0.get(handle).filter(|h| h.plugin == plugin).map(|h| h.path.as_path())
     }
@@ -80,29 +50,14 @@ impl Table {
     }
 }
 
-/// The last component of a name, splitting on BOTH separators whatever this
-/// was compiled for.
-///
-/// Deliberately not `Path::file_name`, which knows only the separators of its
-/// own platform: a Windows path handed to a Linux build comes back whole, so
-/// the very thing the callers below promise not to leak leaks. Taking a `&str`
-/// rather than a `Path` is what makes that testable on either platform, since
-/// the interesting input is the string a foreign `Path` would have yielded.
+/// Splits on both separators whatever this was compiled for: `Path::file_name` would return a Windows path whole on
+/// Linux and leak it. Takes `&str` so the foreign case is testable on either platform.
 fn last_component(raw: &str) -> &str {
     raw.rsplit(['/', '\\']).next().unwrap_or("")
 }
 
-/// The file name, and never the directory.
-///
-/// A plugin saying "reading part.step" is helpful. One that could say
-/// "reading C:\Users\alice\Documents\work\part.step" has been told the person's
-/// name and the shape of their disk in exchange for nothing it needed.
-///
-/// A path can reach this from somewhere other than this machine's own dialog,
-/// and the promise is a guarantee rather than a tidy-up, so `last_component`
-/// finishes the job `file_name` starts. The cost is that a Linux file whose
-/// name genuinely contains a backslash is shown shortened: a cosmetic loss on
-/// a pathological name, against a privacy promise on an ordinary one.
+/// The file name, never the directory, which would tell a plugin the person's name and disk layout. A Linux name that
+/// contains a backslash is shown shortened, a cosmetic loss against a privacy promise.
 pub fn name_of(path: &Path) -> String {
     let whole = path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
     match last_component(&whole) {
@@ -111,16 +66,8 @@ pub fn name_of(path: &Path) -> String {
     }
 }
 
-/// Extensions as a dialog filter, from what a plugin asked for.
-///
-/// ADVISORY, deliberately: a filter narrows what is easy to pick, never what is
-/// allowed. The person can always choose otherwise, so a plugin that copes with
-/// only one kind of file has to say so when it reads rather than trusting the
-/// dialog to have enforced it.
-///
-/// Cleaned rather than trusted because this is text a plugin author wrote going
-/// into a native dialog, and "*.exe" or "../.." in a filter list is at best a
-/// dialog that behaves strangely.
+/// Advisory only: a filter narrows what is easy to pick, never what is allowed. Cleaned because "*.exe" or "../.." in a
+/// native dialog filter is at best a dialog that behaves strangely.
 pub fn clean_extensions(exts: &[String]) -> Vec<String> {
     exts.iter()
         .map(|e| e.trim().trim_start_matches('.').to_ascii_lowercase())
@@ -129,13 +76,8 @@ pub fn clean_extensions(exts: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// A plugin's words, made safe to put in a dialog title.
-///
-/// The title is the ONLY place a plugin's own words reach the person, and it is
-/// why asking for a file takes a `purpose` at all: a bare "Open" over a dialog
-/// nobody asked for is how somebody clicks yes without knowing who asked. The
-/// plugin's id is prepended here rather than by the plugin, so a plugin cannot
-/// claim to be another one.
+/// The title is the only place a plugin's words reach the person. The id is prepended here, not by the plugin, so a
+/// plugin cannot claim to be another one.
 pub fn dialog_title(plugin: &str, purpose: &str, fallback: &str) -> String {
     let mut said = purpose.trim().replace(['\r', '\n', '\t'], " ");
     // Truncated on a char boundary, because `String::truncate` panics in the
@@ -156,10 +98,7 @@ pub fn dialog_title(plugin: &str, purpose: &str, fallback: &str) -> String {
     }
 }
 
-/// A plugin's suggested save name, reduced to a file name.
-///
-/// A "suggestion" carrying a path would be a plugin choosing the directory the
-/// dialog opens in, which is most of the way to choosing the file.
+/// A suggestion carrying a path would let a plugin choose the dialog's directory, most of the way to the file.
 pub fn suggested_name(raw: &str) -> Option<String> {
     let name = last_component(raw).trim();
     if name.is_empty() || name == "." || name == ".." {
@@ -179,8 +118,7 @@ mod tests {
         t.remember("h1".into(), "A.One".into(), PathBuf::from("/tmp/a.step"), 1);
         t.remember("h2".into(), "B.Two".into(), PathBuf::from("/tmp/b.step"), 2);
 
-        // Its own, which is the control: without this the test passes against a
-        // table that hands back nothing at all.
+        // Its own, the control: a table that hands back nothing would pass otherwise.
         assert_eq!(
             t.path_for("A.One", "h1"),
             Some(Path::new("/tmp/a.step")),
@@ -192,9 +130,7 @@ mod tests {
         assert_eq!(t.path_for("B.Two", "h1"), None, "read another plugin's file");
         assert_eq!(t.path_for("A.One", "nope"), None);
         assert_eq!(t.path_for("A.One", ""), None);
-        // Case is not a way in: ids are compared exactly here, and the frontend
-        // treats two spellings as one plugin, so a mismatch means it is not the
-        // holder.
+        // Ids are compared exactly here, and the frontend treats two spellings as one plugin, so case is not a way in.
         assert_eq!(t.path_for("a.one", "h1"), None);
     }
 
@@ -222,9 +158,8 @@ mod tests {
         );
     }
 
-    // `name_of` alone cannot be held to this from Windows, where `file_name`
-    // has already done the splitting before the rule is reached. So the rule is
-    // asked directly, with the exact string a Linux `file_name` hands over.
+    // On Windows `file_name` splits before the rule is reached, so the rule is asked directly with the string a Linux
+    // `file_name` hands over.
     #[test]
     fn a_windows_path_is_split_on_this_platform_too() {
         assert_eq!(last_component("C:\\Users\\alice\\Documents\\part.step"), "part.step");
@@ -239,11 +174,7 @@ mod tests {
 
     #[test]
     fn a_name_is_a_name_and_not_a_path() {
-        // Both of these on BOTH platforms. The Windows one used to be checked
-        // by `Path::file_name`, which splits on the separators of whatever it
-        // was compiled for: it passed on Windows and failed on Linux, where the
-        // whole path came back as the "name" and carried the account name with
-        // it.
+        // Both on both platforms: `Path::file_name` alone passes on Windows and leaks the whole path on Linux.
         for (path, want) in [
             ("/home/alice/private/work/part.step", "part.step"),
             ("C:\\Users\\alice\\Documents\\part.step", "part.step"),
