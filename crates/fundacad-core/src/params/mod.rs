@@ -1,12 +1,5 @@
-//! Parameters and their expression language, the Rust twin of `src/params/`
-//! (`parse.ts`, `eval.ts`, and the evaluation half of `engine.ts` and `extras.ts`).
-//!
-//! What is ported is what a headless engine needs: evaluating the table in
-//! dependency order, validating an expression, running checks, and writing
-//! values back into the feature fields they drive (`targets`), which a headless
-//! editor needs for a parameter to move anything the app has bound. Garbage
-//! collecting dangling model parameters, renames and deletes stay in the app,
-//! which owns document edits.
+//! Parameters and their expression language, the Rust twin of `src/params/`: what a headless engine needs, evaluation,
+//! validation, checks and writing values into the fields they drive. Cleanup, renames and deletes stay in the app.
 
 pub mod eval;
 pub mod parse;
@@ -32,10 +25,8 @@ pub struct Resolution {
     pub issues: IndexMap<String, String>,
 }
 
-/// Evaluates `defs` in dependency order (Kahn, table order among equals). A
-/// member of a cycle, or anything depending on one, keeps its cached value with
-/// a "circular reference" issue; so do an unparsable expression, an evaluation
-/// error and a non-finite result, each with its own message.
+/// Evaluates `defs` in dependency order (Kahn, table order among equals). A cycle member or anything depending on one,
+/// an unparsable expression, an evaluation error and a non-finite result each keep the cached value with an issue.
 pub fn resolve(defs: &IndexMap<String, ParamDef>) -> Resolution {
     let nodes: Vec<Option<Expr>> = defs.values().map(|d| parse_expr(&d.expr).ok()).collect();
     let deps: Vec<Vec<usize>> = nodes
