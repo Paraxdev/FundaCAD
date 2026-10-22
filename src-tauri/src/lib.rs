@@ -19,7 +19,6 @@ pub mod launch_args;
 pub mod frames;
 pub mod safe_mode;
 pub mod settings_files;
-#[cfg(any(target_os = "macos", test))]
 mod log_file;
 // WebKitGTK only exists on Linux; macOS and Windows use WKWebView and WebView2.
 #[cfg(target_os = "linux")]
@@ -208,6 +207,21 @@ fn frontend_ready(state: tauri::State<'_, FrontendReady>, safe: tauri::State<'_,
     }
 }
 
+/// What a bug report attaches of the log: the report reaches a GitHub issue
+/// through the clipboard, and an issue body holds 65,536 characters.
+const LOG_TAIL: u64 = 16 << 10;
+
+#[tauri::command]
+fn log_tail(app: tauri::AppHandle) -> Option<String> {
+    log_file::tail(&app.path().app_log_dir().ok()?, LOG_TAIL)
+}
+
+/// A crumb from the page, kept in the log where it outlives the window.
+#[tauri::command]
+fn log_line(line: String) {
+    println!("[crumb] {line}");
+}
+
 /// Why this session runs in safe mode, if it does (safe_mode.rs).
 struct SafeMode {
     reason: Option<safe_mode::Reason>,
@@ -356,6 +370,8 @@ pub fn run() {
         restart_for_update,
         updates_supported,
         frontend_ready,
+        log_tail,
+        log_line,
         safe_mode_exit,
         launch::take_launch_paths,
         drop_paths::drop_paths_take,
@@ -434,8 +450,9 @@ pub fn run() {
         .manage(plugins::files::Handles::default())
         .manage(safe)
         .setup(|app| {
-            #[cfg(target_os = "macos")]
-            if let Ok(dir) = app.path().app_log_dir() {
+            // A Windows or Linux debug build runs in a dev's terminal, which `tauri dev` may pipe.
+            let to_file = cfg!(target_os = "macos") || !cfg!(debug_assertions);
+            if let Some(dir) = app.path().app_log_dir().ok().filter(|_| to_file) {
                 match log_file::redirect(&dir) {
                     Ok(Some(path)) => {
                         println!("[log] FundaCAD {} started, logs to {}", env!("CARGO_PKG_VERSION"), path.display());
