@@ -1324,11 +1324,13 @@ export class Viewport {
     return new Set(this.model && this.peekAt ? this.peekAt() : []);
   }
 
-  private applyBodyFinish() {
+  /** `only` is a stream chunk's new bodies, which skips the whole model passes the commit runs once. */
+  private applyBodyFinish(only?: ReadonlySet<BodyMesh>) {
     if (!this.model) return;
     this.peek = this.resolvePeek();
-    this.finish.apply({ xray: this.xray, stale: this.stale, wireframe: this.wireframe, peek: this.peek });
+    this.finish.apply({ xray: this.xray, stale: this.stale, wireframe: this.wireframe, peek: this.peek }, only);
     if (this.wireframe && !this.edgesEmphasized) this.highlighter?.setEdgeBase(EDGE_WIRE);
+    if (only) return;
     this.syncBloomable();
     this.scene.frameShadows();
   }
@@ -2534,6 +2536,8 @@ export class Viewport {
     );
     const view = this.progressive.begin(epoch, manifest, result, box, this.model, new Set(hiddenBodies));
     this.adoptProgressiveView(view);
+    // Bodies held from the previous model wear the finish that model had, not the one the toggles say now.
+    this.applyBodyFinish();
     this.targetGridZ = box.min.z;
     this.rig.setContentBox(box);
     if (fit) this.rig.fit(box, true);
@@ -2572,7 +2576,10 @@ export class Viewport {
     this.adoptProgressiveView(view);
     // Only what just arrived, so streamed bodies show their colour rather than popping from grey at the commit.
     const fresh = view.bodies.filter((b) => !before.has(b));
-    if (fresh.length) this.applyAnalysis(fresh);
+    if (fresh.length) {
+      this.applyAnalysis(fresh);
+      this.applyBodyFinish(new Set(fresh));
+    }
     this.requestRender();
   }
 
