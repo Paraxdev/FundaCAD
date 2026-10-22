@@ -89,6 +89,16 @@ describe("File New after a busy document", () => {
     expect([a.versionRepo, a.stressStudy, a.documentEnvironment]).toEqual([null, null, null]);
     expect(a.carriedSections).toEqual([]);
   });
+
+  it("saves none of the unreadable sections of the document before it", () => {
+    const a = opened({ stress: { future: true }, environment: { name: "future", sky: 3 }, versions: { v: 2 } });
+    expect(a.hasUnreadVersions()).toBe(true);
+    a.newDocument();
+    const fresh = opened({});
+    fresh.newDocument();
+    expect(saved(a)).toEqual(saved(fresh));
+    expect(a.hasUnreadVersions()).toBe(false);
+  });
 });
 
 describe("a replacing load of the same document", () => {
