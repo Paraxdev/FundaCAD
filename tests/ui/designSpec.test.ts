@@ -36,7 +36,6 @@ const GLASS = "src/styles/_glass.scss";
 const COLOUR_BASELINE: Record<string, number> = {
   "src/components/overlays/PluginSettingsForm.vue": 2,
   "src/components/overlays/RadialMenuHost.vue": 2,
-  "src/components/overlays/StressPanel.vue": 2,
   "src/components/shell/LiveSessionPill.vue": 4,
   "src/components/shell/NumberBox.vue": 2,
   "src/components/shell/SurfaceNodeEditor.vue": 12,

@@ -156,7 +156,8 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(200);
   check("the field sets it back", (await state()).spots?.[0]?.radius === 3);
 
-  await page.selectOption(".measure-row:has(.stress-force) + .measure-row select", "-Z");
+  await page.click(".stress-direction");
+  await page.click('.select-pop .opt-row:has(.opt-label:text-is("-Z"))');
   await page.fill(".stress-force", "40");
   await page.click(".stress-run");
   await page.waitForFunction(() => !document.querySelector(".stress-run")?.disabled, null, { timeout: 180000 });
