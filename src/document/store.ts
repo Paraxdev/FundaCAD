@@ -91,6 +91,7 @@ import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
 import { featureMeta } from "../ui/featureMeta";
+import { SessionHost, type DocumentSession } from "./session";
 
 /** A section of a `.fundab` this version does not read (docs/FUNDA-FORMAT.md). */
 export interface CarriedSection {
@@ -489,6 +490,7 @@ function restText({ features: _, sectionView: _cut, ...rest }: Partial<Snapshot>
 }
 
 export class DocumentStore {
+  readonly sessions = new SessionHost();
   private doc: CadDocument;
   private undoStack: UndoEntry[] = [];
   private redoStack: UndoEntry[] = [];
@@ -660,6 +662,9 @@ export class DocumentStore {
   private emitOpen() {
     for (const fn of this.openListeners) fn();
   }
+  get session(): DocumentSession {
+    return this.sessions.current;
+  }
   get busyState(): BusyState {
     return this.busy;
   }
@@ -824,6 +829,7 @@ export class DocumentStore {
   }
 
   newDocument() {
+    this.sessions.begin("new");
     this.emitOpen();
     this.emitRewind();
     this.undoStack = [];
@@ -2484,7 +2490,10 @@ export class DocumentStore {
     if (problem) throw new UnreadableDocumentError(problem.reason, problem.detail);
     const parsed = raw as CadDocument;
     for (const w of migrateDocument(parsed)) this.onWarning?.(w);
-    if (!replace) this.emitOpen();
+    if (!replace) {
+      this.sessions.begin("open");
+      this.emitOpen();
+    }
     this.emitRewind();
     const replaced = replace ? { entry: this.pushUndo(), before: this.stateSections(true) } : null;
     if (!replaced) this.undoStack = [];
