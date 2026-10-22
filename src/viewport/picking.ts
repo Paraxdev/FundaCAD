@@ -134,10 +134,14 @@ export class Picker {
       if (px > nearPx) near = this.occludersNear((nearPx = Math.max(px, 2 * nearPx, 4)), camera, rect, view);
       return near;
     };
+    const sight = sightBudget();
     const i = preferredEdge(
       cands.map((c) => ({
         screenDist: c.screenDist,
-        occluded: () => !this.pointVisible(c.point, camera, occluders(c.screenDist + 1), scale),
+        occluded: () => {
+          const meshes = occluders(c.screenDist + 1);
+          return !sight(meshes.length) || !this.pointVisible(c.point, camera, meshes, scale);
+        },
         bandPx: () =>
           edgeBandForPx(
             faceBand,
@@ -166,7 +170,8 @@ export class Picker {
     if (!opts?.visibleOnly) return cands[0] ?? null;
     const scale = modelScale(view);
     const near = this.occludersNear(farthestPx(cands), camera, rect, view);
-    return cands.find((c) => this.pointVisible(c.point, camera, near, scale)) ?? null;
+    const sight = sightBudget();
+    return cands.find((c) => sight(near.length) && this.pointVisible(c.point, camera, near, scale)) ?? null;
   }
 
   /** The candidates whose nearest point is in plain view. */
@@ -211,7 +216,14 @@ export class Picker {
     (this.raycaster as any).camera = camera;
     // edgeTargets skips hidden lines, since the raycaster tests invisible objects too. LineMaterial.resolution
     // is synced on resize and at creation (render.ts), not per move.
-    const eHits = this.raycaster.intersectObjects(this.edgeTargets(view), false);
+    const targets = legibleEdgeTargets(
+      this.edgeTargets(view),
+      this.raycaster.ray,
+      camera,
+      rect.height,
+      EDGE_PICK_THRESHOLD * hitScale(),
+    );
+    const eHits = this.raycaster.intersectObjects(targets, false);
     if (!eHits.length) return [];
     // Line2 ignores the raycaster's near and far, so an edge is kept or dropped by its point nearest the ray.
     const slack = SECTION_PICK_SLACK * modelScale(view);
@@ -259,6 +271,34 @@ function farthestPx(cands: readonly EdgeCandidate[]): number {
 const _sphere = new THREE.Sphere();
 const _onRay = new THREE.Vector3();
 
+/** World size of one screen pixel, `fixed` plus `perDepth` times the depth. Null for a camera of neither kind. */
+function pixelSize(camera: THREE.Camera, viewHeightPx: number): { fixed: number; perDepth: number } | null {
+  const persp = camera as THREE.PerspectiveCamera;
+  const ortho = camera as THREE.OrthographicCamera;
+  if (persp.isPerspectiveCamera) {
+    return {
+      fixed: 0,
+      perDepth: (2 * Math.tan(THREE.MathUtils.degToRad(persp.fov) / 2)) / (persp.zoom * viewHeightPx),
+    };
+  }
+  if (ortho.isOrthographicCamera)
+    return { fixed: (ortho.top - ortho.bottom) / (ortho.zoom * viewHeightPx), perDepth: 0 };
+  return null;
+}
+
+// Returns the shared scratch sphere, overwritten by the next call.
+function worldSphere(o: THREE.Object3D & { geometry: THREE.BufferGeometry }): THREE.Sphere {
+  const g = o.geometry;
+  if (!g.boundingSphere) g.computeBoundingSphere();
+  return _sphere.copy(g.boundingSphere!).applyMatrix4(o.matrixWorld);
+}
+
+function sphereNearRay(s: THREE.Sphere, ray: THREE.Ray, px: { fixed: number; perDepth: number }, radiusPx: number) {
+  const away = ray.closestPointToPoint(s.center, _onRay).distanceTo(s.center);
+  const reach = radiusPx * (px.fixed + px.perDepth * (ray.origin.distanceTo(s.center) + s.radius));
+  return away <= s.radius + reach;
+}
+
 /** Conservative: a point drawn that close to the pointer lies within that screen distance per unit of
  *  ray depth (perspective) or a fixed world distance (orthographic), and depth never exceeds distance. */
 export function meshesNearRay(
@@ -268,26 +308,56 @@ export function meshesNearRay(
   viewHeightPx: number,
   radiusPx: number,
 ): THREE.Mesh[] {
-  const persp = camera as THREE.PerspectiveCamera;
-  const ortho = camera as THREE.OrthographicCamera;
-  let fixed = 0;
-  let perDepth = 0;
-  if (persp.isPerspectiveCamera) {
-    perDepth = (radiusPx * 2 * Math.tan(THREE.MathUtils.degToRad(persp.fov) / 2)) / (persp.zoom * viewHeightPx);
-  } else if (ortho.isOrthographicCamera) {
-    fixed = (radiusPx * (ortho.top - ortho.bottom)) / (ortho.zoom * viewHeightPx);
-  } else {
-    return [...meshes];
-  }
-  const out: THREE.Mesh[] = [];
-  for (const m of meshes) {
-    const g = m.geometry;
-    if (!g.boundingSphere) g.computeBoundingSphere();
-    _sphere.copy(g.boundingSphere!).applyMatrix4(m.matrixWorld);
-    const r = _sphere.radius;
-    const away = ray.closestPointToPoint(_sphere.center, _onRay).distanceTo(_sphere.center);
-    const reach = fixed + perDepth * (ray.origin.distanceTo(_sphere.center) + r);
-    if (away <= r + reach) out.push(m);
+  const px = pixelSize(camera, viewHeightPx);
+  if (!px) return [...meshes];
+  return meshes.filter((m) => sphereNearRay(worldSphere(m), ray, px, radiusPx));
+}
+
+/** Body tests the sight rays of one pick may spend, 5 to 12 ms on the SV08. Zoomed out there all 1097 bodies lie near
+ *  every sight ray, and a hover cast up to 152 rays, 31 ms. */
+export const SIGHT_TEST_BUDGET = 24_000;
+
+/** Grants sight rays until their body tests reach `budget`. The ray that crosses it is still cast, so one always is. */
+export function sightBudget(budget = SIGHT_TEST_BUDGET): (meshes: number) => boolean {
+  let spent = 0;
+  return (meshes) => {
+    if (spent >= budget) return false;
+    spent += meshes;
+    return true;
+  };
+}
+
+/** Edge segments per pixel of a body's drawn disc above which a pick skips its edges. Past one segment a pixel the
+ *  nearest one is a matter of rounding, and a zoomed out 12 M triangle assembly put 117k segment hits under the grab
+ *  radius, a hover of up to 1.1 s per pointer move. */
+export const EDGE_PICK_MAX_DENSITY = 1;
+
+/** The edge objects a pick at `ray` tests: those within `radiusPx` of it on screen whose segments are drawn far enough
+ *  apart to tell one from the next. A body skipped here is still hovered and picked by its faces. */
+export function legibleEdgeTargets(
+  targets: readonly THREE.Object3D[],
+  ray: THREE.Ray,
+  camera: THREE.Camera,
+  viewHeightPx: number,
+  radiusPx: number,
+): THREE.Object3D[] {
+  const px = pixelSize(camera, viewHeightPx);
+  if (!px) return [...targets];
+  const out: THREE.Object3D[] = [];
+  for (const o of targets) {
+    const g = (o as THREE.Object3D & { geometry?: THREE.BufferGeometry }).geometry;
+    if (!g) {
+      out.push(o);
+      continue;
+    }
+    const s = worldSphere(o as THREE.Object3D & { geometry: THREE.BufferGeometry });
+    if (!sphereNearRay(s, ray, px, radiusPx)) continue;
+    const segments = (g.getAttribute("instanceStart") as THREE.BufferAttribute | undefined)?.count;
+    const depth = ray.origin.distanceTo(s.center);
+    const pxPerWorld = 1 / (px.fixed + px.perDepth * depth);
+    // A camera inside the sphere sees the body fill the view.
+    const discPx = depth <= s.radius && px.perDepth > 0 ? Infinity : Math.PI * (s.radius * pxPerWorld) ** 2;
+    if (segments === undefined || segments <= EDGE_PICK_MAX_DENSITY * discPx) out.push(o);
   }
   return out;
 }
