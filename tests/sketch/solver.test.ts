@@ -41,7 +41,7 @@ async function solverWith(impl: () => Promise<unknown>) {
 }
 
 const refuses = () => Promise.reject(new EvalError(CSP_MESSAGE));
-const works = () => Promise.resolve({ GcsSystem: class {} });
+const works = () => Promise.resolve({ GcsSystem: class {}, HEAPU8: new Uint8Array(16) });
 
 describe("constraint solver warm-up", () => {
   it("resolves false instead of rejecting when the WASM will not compile", async () => {

@@ -19,7 +19,7 @@ import type { ResolvedEntity } from "./snap";
 import { solveSketch, type SConstraint, type SPoint, type SLine, type SCircle, type SArc } from "./solver";
 import { circumcenter } from "./arc";
 import { rectCorners, rectFromThreePoints } from "./region";
-import { asRound, lineOperand, refPoint, rimNesting, type Round } from "./entityDims";
+import { asRound, lineOperand, refPoint, rimNesting, RIM_EPS, type Round } from "./entityDims";
 import type { SketchConstraint } from "../types";
 import { isDriven, projEndSamples } from "../types";
 import { poleOfRef } from "./bspline";
@@ -409,10 +409,12 @@ export async function compileAndSolve(
       if (p) fixedPts.add(p);
     }
     else if (c.type === "collinear") {
-      if (isLine(c.l1) && isLine(c.l2)) {
-        cons.push({ id: `${id}p`, type: "parallel", l1: c.l1, l2: c.l2 });
-        const e2 = ends.get(c.l2);
-        if (e2) cons.push({ id: `${id}o`, type: "pointOnLine", p: e2[0], line: c.l1 });
+      const e1 = ends.get(c.l1), e2 = ends.get(c.l2);
+      if (isLine(c.l1) && isLine(c.l2) && e1 && e2) {
+        // Lines sharing a point need only their far end on l1, a parallel on top of it is redundant.
+        const far = e2.filter((p) => !e1.includes(p));
+        if (far.length === 2) cons.push({ id: `${id}p`, type: "parallel", l1: c.l1, l2: c.l2 });
+        if (far[0] !== undefined) cons.push({ id: `${id}o`, type: "pointOnLine", p: far[0], line: c.l1 });
       }
     }
     else if (c.type === "equalRadius") {
@@ -634,6 +636,9 @@ export async function compileAndSolve(
         // box below cannot do it: for a 10x4 turned 37.5 degrees that box is
         // 10.4 x 9.3, so every solve would inflate the shape while leaving the
         // angle field saying 37.5.
+        // Its corners are pinned, re-deriving unmoved ones only adds float noise (200 degrees became -160.00000000000003).
+        const was = rectCorners(e.x, e.y, e.width, e.height, e.angle);
+        if (pts.every((p, k) => p!.x === was[k]?.x && p!.y === was[k]?.y)) return e;
         const rec = rectFromThreePoints(pts[0]!, pts[1]!, pts[2]!);
         return rec ? { ...e, ...rec } : e; // degenerate solve: keep what we had
       }
@@ -694,10 +699,10 @@ export async function compileAndSolve(
   // "keep last good on conflict" path paints a red chip instead of a broken part.
   const badGeom = new Set<string>();
   for (const [eid, rad] of Object.entries(r.circles)) {
-    if (!(rad > 0) || !Number.isFinite(rad)) badGeom.add(eid);
+    if (!(rad > RIM_EPS) || !Number.isFinite(rad)) badGeom.add(eid);
   }
   for (const [eid, a] of Object.entries(r.arcs)) {
-    if (!(a.radius > 0) || !Number.isFinite(a.radius)) badGeom.add(eid);
+    if (!(a.radius > RIM_EPS) || !Number.isFinite(a.radius)) badGeom.add(eid);
   }
   const guardIds = new Set<string>();
   if (badGeom.size) {
@@ -714,7 +719,7 @@ export async function compileAndSolve(
     constraints.forEach((c, i) => {
       if (isDriven(c) || !isRimDim(c)) return;
       const cls = rimBranch(c, beforeById);
-      if (cls !== null && cls !== rimBranch(c, afterById)) guardIds.add(constraintKey(i));
+      if (cls !== null && !sameBranch(cls, rimBranch(c, afterById))) guardIds.add(constraintKey(i));
     });
   }
   if (guardIds.size || badGeom.size) {
@@ -784,9 +789,9 @@ function rimBranch(c: SketchConstraint, byId: Map<string, ResolvedEntity>): stri
     const seg = lineOperand(byId, c.line);
     if (!cc || !seg) return null;
     const dx = seg.x2 - seg.x1, dy = seg.y2 - seg.y1;
-    const cross = (cc.x - seg.x1) * dy - (cc.y - seg.y1) * dx; // which side of the line
-    const len = Math.hypot(dx, dy) || 1;
-    return `side:${cross >= 0 ? "+" : "-"}:${Math.abs(cross) / len >= cc.r ? "out" : "in"}`;
+    const dist = ((cc.x - seg.x1) * dy - (cc.y - seg.y1) * dx) / (Math.hypot(dx, dy) || 1);
+    const side = Math.abs(dist) < RIM_EPS ? "on" : dist > 0 ? "+" : "-";
+    return `side:${side}:${Math.abs(dist) >= cc.r ? "out" : "in"}`;
   }
   if (c.type === "offset") {
     // Which side of each SOURCE line its copy sits on. Only line pairs can flip:
@@ -804,4 +809,10 @@ function rimBranch(c: SketchConstraint, byId: Map<string, ResolvedEntity>): stri
     return sides.length ? `off:${sides.join("")}` : null;
   }
   return null;
+}
+
+// A centre on the line is on neither side, so it may leave it for either and still be the same configuration.
+function sameBranch(before: string, after: string | null): boolean {
+  const a = before.split(":"), b = after?.split(":") ?? [];
+  return a.length === b.length && a.every((s, k) => s === b[k] || s === "on" || b[k] === "on");
 }
