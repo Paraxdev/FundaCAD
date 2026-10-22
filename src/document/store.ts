@@ -274,12 +274,17 @@ const newFaceRefId = () => `fr${++faceRefSeq}`;
  *  and `facePrints` at the faces they are on in the build on screen. */
 class FaceRefOverlay extends Overlay<FaceRef> {
   private track: FaceTrack | null = null;
+  private prior: FaceTrack | null = null;
   private memo: { result: RebuildResult; rev: number; on: FaceResolution; owners: Map<string, string> } | null = null;
   constructor(private readonly built: () => RebuildResult | null) {
     super("faceMaterials");
   }
   resolution(): FaceResolution | null {
     return this.resolved()?.on ?? null;
+  }
+  /** The track the build before the one on screen left: where each ref was on it. */
+  before(): FaceTrack | null {
+    return this.resolved() ? this.prior : this.track;
   }
   /** `bodyId#face` to the ref on it, the stored face without a build. */
   owners(): Map<string, string> {
@@ -293,6 +298,11 @@ class FaceRefOverlay extends Overlay<FaceRef> {
     const result = this.built();
     if (!result?.bodies) return null;
     if (this.memo?.result === result && this.memo.rev === this.rev) return this.memo;
+    if (this.memo?.result !== result) {
+      // A ref written since the last look at the build before this one joins its track first.
+      if (this.memo && this.memo.rev !== this.rev) this.track = resolveFaceRefs(this.entries(), this.memo.result, this.track).track;
+      this.prior = this.track;
+    }
     const on = resolveFaceRefs(this.entries(), result, this.track);
     this.track = on.track;
     const owners = new Map<string, string>();
@@ -319,6 +329,7 @@ class FaceRefOverlay extends Overlay<FaceRef> {
   override clear() {
     super.clear();
     this.track = null;
+    this.prior = null;
     this.memo = null;
   }
 }
@@ -1711,14 +1722,16 @@ export class DocumentStore {
       if (!seen.has(key)) seen.set(key, overlay.get(key));
       if (value === undefined) overlay.delete(key); else overlay.set(key, value);
     };
-    const on = this.faceMaterial.resolution();
-    const result = this.build.result;
-    const span = result?.bodies?.find((b) => b.id === from);
-    const prints = result && span ? bodyPrints(result, span) : undefined;
+    // The engine's runs number the source's faces as they were before the Separate.
+    const before = this.faceMaterial.before();
+    const prints = before?.bodies.get(from)?.prints;
     const faces = new Map<number, FaceRef>();
     for (const [id, ref] of [...this.faceMaterial.entries()]) {
       if (ref.body !== from) continue;
-      for (const f of on ? on.faces.get(id) ?? [] : [ref.face]) faces.set(f, ref);
+      const was = before?.refs.get(id);
+      const on = !before ? [ref.face] : was?.ref === ref ? was.faces : [];
+      if (!on.length) continue;
+      for (const f of on) faces.set(f, ref);
       if (pieces.some((p) => p.faces)) write(this.faceMaterial, id, undefined);
     }
     for (const piece of pieces) {
