@@ -1,21 +1,12 @@
-// Presentation of the two in-canvas sketch annotation layers, dimension badges
-// and constraint glyphs, as pure functions of a badge's state.
-//
-// Extracted when sketchDimensions.ts / sketchGlyphs.ts handed their DOM to
-// components/overlays/Sketch{Dim,Glyph}Layer.vue. The split is deliberate: the
-// text, class list and tooltip of a badge only ever change when the sketch is
-// rebuilt, so they are computed once, here, and rendered declaratively. Where a
-// badge SITS changes every frame the camera moves and is written straight onto
-// the element by a rAF loop, screenTransform() below is the only part of that
-// path a test can reach, because happy-dom has no layout and no WebGL camera.
+// Text, classes and tooltips of the sketch dim badges and constraint glyphs, computed once per sketch rebuild.
+// Badge position changes every camera frame and is written by a rAF loop; screenTransform is its testable part.
 
 import { displayValue, fmtLength, isPlainNumber } from "../ui/units";
 import type { ConstraintDiagnosis } from "./glyphs";
 
 export type DimKind = "length" | "angle";
 
-/** format a dim value for display: length in the display unit, angle in degrees;
- *  driven (reference) dims are wrapped in brackets, param-driven get fx:. */
+/** Length in the display unit, angle in degrees; driven dims in brackets, param driven ones get fx:. */
 export function fmtDim(
   mm: number,
   kind?: DimKind | undefined,
@@ -26,19 +17,13 @@ export function fmtDim(
   return driven ? `(${s})` : fx ? `fx: ${s}` : s;
 }
 
-/** True when a dim's driving expression is a real formula rather than a bare
- *  literal, that is what earns the `fx:` prefix and reopens the EXPRESSION
- *  (not the value) when the label is clicked. */
+/** A real formula, not a bare literal, earns the `fx:` prefix, and a click reopens the expression. */
 export function isFormula(expr?: string | undefined): boolean {
   return !!expr && !isPlainNumber(expr);
 }
 
-/** conflict is preferred over over-defined, matching diagnosisOf() in glyphs.ts, the two
- *  layers must never disagree about red vs amber.
- *
- *  The `| undefined` on every field is not noise: the project runs with
- *  exactOptionalPropertyTypes, so without it a caller cannot forward an
- *  already-optional flag through. */
+/** Conflict wins over over-defined, as in diagnosisOf() in glyphs.ts, so the two layers agree on red vs amber.
+ *  `| undefined` on each field is for exactOptionalPropertyTypes, so callers can forward optional flags. */
 export function dimClass(d: {
   driven?: boolean | undefined;
   fx?: boolean | undefined;
@@ -74,10 +59,7 @@ export function glyphTitle(st: ConstraintDiagnosis | null): string {
       : "Click to delete this constraint";
 }
 
-/** A projected badge's position, as a `transform` value. Both layers centre
- *  themselves on the projected point, and the -50% pair has to stay in the
- *  transform (not in the stylesheet) because the translate that precedes it
- *  overwrites the whole property. */
+/** The -50% centring stays in the transform, not the stylesheet: this translate overwrites the whole property. */
 export function screenTransform(x: number, y: number): string {
   return `translate(${x}px, ${y}px) translate(-50%, -50%)`;
 }

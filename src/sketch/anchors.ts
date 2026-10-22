@@ -1,29 +1,12 @@
-// The middle of the face you are sketching on.
-//
-// Enter a sketch on a face and the plane's origin is the world origin projected
-// onto it (planeMath), which is a defensible choice for coordinates and a poor
-// one for drawing: on a boss 20mm out along the part, the grid's origin and the
-// axis arrows sit off in space with nothing under them, and the face itself
-// offers no point to start from. A rectangle centred on the face, the commonest
-// thing anyone draws on one, had nothing to aim at.
-//
-// So the face contributes ANCHORS: its own centre, and the centre of every hole
-// in it. They are snap targets like any other, and the alignment guides in
-// snap.ts run off them too, which is what makes "centred on this face" and
-// "lined up with that hole" gestures rather than arithmetic.
-//
-// The outline itself is already computed for region detection (faceFootprint),
-// so this is one pass over loops that were walked anyway.
+// Snap anchors from the model's outline on the sketch plane: face and hole centres, corners and side midpoints.
+// The plane origin is the world origin projected, often off the face, so these give the user something to aim at.
 
 import * as THREE from "three";
 
-/** A loop smaller than this in area is a seam or a sliver, not a face worth
- *  offering a centre for. Relative to the loop's own bounding box, so it means
- *  the same thing on a 2mm hole and a 2m panel. */
+/** Below this fraction of its bounding box a loop is a seam or sliver; relative, so 2mm and 2m behave alike. */
 const DEGENERATE_AREA_FRACTION = 1e-6;
 
-/** Twice the signed area of a closed polygon. Sign is orientation, which is how
- *  a hole is told from an outline; magnitude is what the centroid divides by. */
+/** Twice the signed area; the sign is orientation, which tells a hole from an outline. */
 export function signedArea2(loop: readonly THREE.Vector2[]): number {
   const n = loop.length;
   if (n < 3) return 0;
@@ -36,19 +19,8 @@ export function signedArea2(loop: readonly THREE.Vector2[]): number {
   return a;
 }
 
-/** The centroid of the AREA a closed polygon encloses, not the average of its
- *  vertices.
- *
- *  The distinction is the whole point of doing it properly. A tessellated round
- *  face arrives with a hundred vertices along its arc and four down a straight
- *  side, so the vertex average is dragged toward the curve; the area centroid of
- *  a circle is its centre however it was sampled, which is what the user means
- *  by "the middle of this face".
- *
- *  Falls back to the vertex average only when the loop encloses no area at all
- *  (a degenerate or open chain), where there is nothing better and the average
- *  is at least somewhere on it.
- */
+/** Area centroid, not vertex average: a tessellated arc brings far more vertices than a straight side.
+ *  Falls back to the vertex average only for a loop that encloses no area. */
 export function loopCentroid(loop: readonly THREE.Vector2[]): THREE.Vector2 | null {
   const n = loop.length;
   if (!n) return null;
@@ -75,9 +47,6 @@ export function loopCentroid(loop: readonly THREE.Vector2[]): THREE.Vector2 | nu
   return new THREE.Vector2(sx / n, sy / n);
 }
 
-/** True when the loop encloses so little of its own bounding box that its
- *  "centre" would be meaningless, a seam traced out and back, or three points
- *  in a line. */
 export function isDegenerateLoop(loop: readonly THREE.Vector2[]): boolean {
   if (loop.length < 3) return true;
   let minx = Infinity;
@@ -96,15 +65,8 @@ export function isDegenerateLoop(loop: readonly THREE.Vector2[]): boolean {
   return Math.abs(signedArea2(loop)) / 2 < box * DEGENERATE_AREA_FRACTION;
 }
 
-/** One anchor per loop of the model's outline on this sketch plane: the face's
- *  centre, and the centre of each hole through it.
- *
- *  Deliberately NOT deduplicated against the sketch's own snap candidates. A
- *  circle drawn concentric with a hole leaves two anchors in the same place,
- *  which costs one comparison during a snap and keeps this a function of the
- *  MODEL alone, a face anchor that disappeared because a sketch entity happened
- *  to sit on it would be a snap target that came and went as you drew.
- */
+/** Not deduplicated against the sketch's own snap candidates, so the anchors depend on the model alone
+ *  and do not come and go as entities are drawn on top of them. */
 export function footprintAnchors(loops: readonly (readonly THREE.Vector2[])[]): THREE.Vector2[] {
   const out: THREE.Vector2[] = [];
   for (const loop of loops) {
@@ -115,42 +77,17 @@ export function footprintAnchors(loops: readonly (readonly THREE.Vector2[])[]): 
   return out;
 }
 
-// --- the edge of the face itself ---------------------------------------
-//
-// The centre answers "in the middle of this face". The two things people reach
-// for next are its CORNERS and the middle of each SIDE, "level with that
-// corner", "centred on this edge", and neither had anything to aim at, so both
-// were arithmetic.
-//
-// Taken from the plane's edges BEFORE they are chained into loops
-// (faceFootprint.planeEdgePolys), because a B-rep edge already knows where it
-// starts and stops. Recovering the same thing from a chained loop means judging
-// turn angles, and a 90-degree arc tessellated into four samples turns 22 degrees
-// at each of them: indistinguishable from a real corner by any threshold that
-// does not also throw real corners away.
-
-/** Two boundary points closer than this, relative to the outline's own size,
- *  are the same corner. Relative so it means the same on a 2mm tab and a 2m
- *  panel; a shared corner arrives twice, once from each edge that ends there,
- *  and the two copies are the same point up to the rounding the wire applied. */
+/** Two boundary points closer than this, relative to the outline's size, are the same corner. */
 const SAME_CORNER_FRACTION = 1e-6;
 
-/** True when a polyline comes back to where it started, a whole circle or
- *  closed spline, arriving as ONE edge.
- *
- *  Such an edge has no corners: the point where its ends meet is the surface's
- *  seam, which is a fact about how the kernel parameterised it and not about the
- *  shape. Offering it as an anchor would put a snap target at three o'clock on
- *  every hole for no reason anyone could see. */
+/** A closed edge (whole circle, closed spline) has no corners: its ends meet at the kernel's seam. */
 export function isClosedPoly(poly: readonly THREE.Vector2[], tol: number): boolean {
   const a = poly[0];
   const b = poly[poly.length - 1];
   return !!a && !!b && poly.length > 2 && a.distanceTo(b) <= tol;
 }
 
-/** The point half way along a polyline BY ARC LENGTH, so a curved side's
- *  midpoint sits on the curve rather than on the chord. Null for a polyline
- *  with no length. */
+/** By arc length, so a curved side's midpoint sits on the curve rather than the chord. */
 export function polylineMidpoint(poly: readonly THREE.Vector2[]): THREE.Vector2 | null {
   if (poly.length < 2) return null;
   let total = 0;
@@ -174,9 +111,7 @@ export function polylineMidpoint(poly: readonly THREE.Vector2[]): THREE.Vector2 
   return poly[poly.length - 1]!.clone();
 }
 
-/** The scale the corner tolerance is measured against: the diagonal of
- *  everything in the plane. Zero (a single point, or nothing) leaves the
- *  tolerance at its floor rather than collapsing it to exact equality. */
+/** The diagonal of everything in the plane, which the corner tolerance is relative to. */
 function outlineScale(polys: readonly (readonly THREE.Vector2[])[]): number {
   let minx = Infinity,
     miny = Infinity,
@@ -196,20 +131,12 @@ function outlineScale(polys: readonly (readonly THREE.Vector2[])[]): number {
 }
 
 export interface BoundaryAnchors {
-  /** where two boundary edges meet */
   corners: THREE.Vector2[];
-  /** the middle of each boundary edge */
   sides: THREE.Vector2[];
 }
 
-/** The corners and the side midpoints of the model's outline on a sketch plane.
- *
- *  `polys` is one polyline per in-plane B-rep edge, un-chained. Corners are
- *  deduplicated (a corner belongs to two edges and arrives twice); side
- *  midpoints are not, because two edges with the same midpoint are two edges
- *  lying on top of each other, which is a fact about the model rather than
- *  something to hide.
- */
+/** From the unchained B-rep edges (faceFootprint.planeEdgePolys): on a chained loop a tessellated arc turns
+ *  like a real corner. Corners are deduplicated, coincident side midpoints are overlapping edges and stay. */
 export function boundaryAnchors(polys: readonly (readonly THREE.Vector2[])[]): BoundaryAnchors {
   const tol = Math.max(1e-9, outlineScale(polys) * SAME_CORNER_FRACTION);
   const corners: THREE.Vector2[] = [];

@@ -1,6 +1,4 @@
-// Editing a control-point spline in the open sketch: inserting and removing a
-// pole with the constraints on its poles following along, and turning a
-// fit-point spline into one.
+// Inserting and removing spline poles with their constraints following, and fit-point to control-point conversion.
 
 import * as THREE from "three";
 import type { SketchConstraint } from "../types";
@@ -27,9 +25,7 @@ import { distToSeg } from "./geom2d";
 export type BsplineEntity = Extract<ResolvedEntity, { type: "bspline" }>;
 type SplineEntity = Extract<ResolvedEntity, { type: "spline" }>;
 
-/** Rewrite the pole references constraints make to entity `id` after its poles
- *  changed: `map` sends an old pole index to its new one, or -1 when the pole is
- *  gone, which drops the constraint. */
+/** `map` sends an old pole index to its new one, or -1 when the pole is gone, which drops the constraint. */
 export function remapPoleRefs(
   constraints: SketchConstraint[],
   id: string,
@@ -72,8 +68,6 @@ export function remapPoleRefs(
   return out;
 }
 
-/** The poles of entity `id` (with `n` poles) that a constraint or dimension
- *  holds, in pole order. */
 export function constrainedPoles(constraints: SketchConstraint[], id: string, n: number): number[] {
   const out = new Set<number>();
   const take = (e: string, p: number) => {
@@ -124,8 +118,8 @@ function copiedPoles(before: Pt[], after: Pt[]): (k: number) => number {
   return (k) => to.get(k) ?? -1;
 }
 
-/** The parameter a click on the control polygon stands for: the matching point
- *  between the two poles' Greville abscissae. Null when no leg is within `tol`. */
+/** The parameter a click on the control polygon stands for, between the two poles' Greville abscissae.
+ *  Null when no leg is within `tol`. */
 export function polygonParam(e: BsplineEntity, click: Pt, tol: number): number | null {
   const g = bsplineGreville(e);
   const [a, b] = bsplineRange(e);
@@ -152,9 +146,8 @@ export function polygonParam(e: BsplineEntity, click: Pt, tol: number): number |
   return best;
 }
 
-/** Insert a pole where `click` lands on the curve or its control polygon, without
- *  moving the curve. Returns the new entity, its constraints and the new pole
- *  nearest the click; null when nothing is under the click or a knot is already there. */
+/** Adds a pole where `click` lands on the curve or control polygon, without moving the curve.
+ *  Null when nothing is under the click or a knot is already there. */
 export function insertPole(
   e: BsplineEntity,
   click: Pt,
@@ -191,9 +184,7 @@ export function insertPole(
   return { entity, constraints: remapPoleRefs(constraints, e.id, e.poles.length, entity.poles.length, map), pole };
 }
 
-/** The Degree entries of the splines' menu: the degree one spline is built with
- *  checked, and those a spline's pole count cannot carry disabled, saying how
- *  many poles they need. */
+/** Degree menu entries: the built degree checked, those the pole count cannot carry disabled with poles needed. */
 export function degreeChoices(
   es: BsplineEntity[],
 ): { degree: number; label: string; checked: boolean; disabled: boolean }[] {
@@ -221,12 +212,8 @@ export function deletePole(
   return { entity, constraints: remapPoleRefs(constraints, e.id, e.poles.length, entity.poles.length, map) };
 }
 
-/** A fit-point spline as a control-point one, keeping its id. The poles are a
- *  least-squares fit to the spline as the sketch draws it, with more poles until
- *  it is within 0.2% of the curve's size, so it is close but not exact. An open
- *  spline keeps both ends exactly, and the constraints on them. A closed spline
- *  (its first point on its last) becomes a closed curve, which has no ends, so
- *  the constraints on its points are dropped. */
+/** Least-squares poles, added until within 0.2% of the curve's size, so close but not exact. An open spline keeps
+ *  its ends and their constraints; a closed one becomes a closed curve and drops the constraints on its points. */
 export function splineToBspline(
   e: SplineEntity,
   constraints: SketchConstraint[],
