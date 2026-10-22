@@ -1,7 +1,5 @@
 <script setup lang="ts">
-// Parameter setup: how each parameter is edited, the groups it is filed in, the
-// named configurations, and the checks. Everything here edits the DOCUMENT
-// (ParamDef.control/group/hidden and paramExtras), so it saves with the file,
+// Everything here edits the document (ParamDef.control/group/hidden and paramExtras), so it saves with the file,
 // undoes like any edit, and survives the plugin being switched off.
 
 import { computed, ref } from "vue";
@@ -34,8 +32,6 @@ const KINDS: { kind: ParamControl["kind"]; label: string }[] = [
   { kind: "choice", label: "Choice" },
 ];
 
-// --- controls ------------------------------------------------------------------
-
 function setKind(name: string, kind: ParamControl["kind"], value: number, current?: ParamControl) {
   store.setParamMeta(name, { control: kind === "number" && !current ? null : convertControl(current, kind, value) });
 }
@@ -66,8 +62,6 @@ function setChoices(name: string, raw: string) {
   store.setParamMeta(name, { control: { kind: "choice", choices: parsed } });
 }
 
-// --- groups --------------------------------------------------------------------
-
 const newGroup = ref("");
 function addGroup() {
   const name = newGroup.value.trim();
@@ -94,8 +88,6 @@ function renameGroup(id: string, name: string) {
 function removeGroup(id: string) {
   store.updateParamExtras((x) => void (x.groups = (x.groups ?? []).filter((g) => g.id !== id)));
 }
-
-// --- configurations --------------------------------------------------------------
 
 const newConfig = ref("");
 function saveConfig() {
@@ -136,8 +128,6 @@ function applyConfig(id: string) {
   const err = store.applyConfiguration(id);
   if (err) toast(err, { kind: "error" });
 }
-
-// --- checks ----------------------------------------------------------------------
 
 const newCheck = ref({ expr: "", message: "", level: "warning" as ParamCheck["level"] });
 

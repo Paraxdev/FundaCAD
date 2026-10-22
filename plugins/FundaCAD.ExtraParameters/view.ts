@@ -1,6 +1,4 @@
-// What the two panels show, worked out from a document with no DOM, so the rules
-// are testable in the node suite: which parameters a person tunes, in which
-// group, through which control, and what a typed list of choices means.
+// What the two panels show, worked out from a document with no DOM so the node suite can test the rules.
 
 import { controlProblem } from "fundacad";
 import type { CadDocument, ParamControl, ParamDef } from "fundacad";
@@ -33,9 +31,8 @@ export function unitLabel(def: ParamDef): string {
   return def.unit === "mm" ? "mm" : def.unit === "deg" ? "°" : "";
 }
 
-/** The user parameters, grouped in the document's group order with the
- *  ungrouped ones first. Model parameters (bound to one field) and hidden
- *  helpers are left out: this is the list of knobs, not the table. */
+/** The user parameters in the document's group order, ungrouped first. Model parameters (bound to one field) and
+ *  hidden helpers are left out: this is the list of knobs, not the table. */
 export function tuneGroups(doc: CadDocument): TuneGroup[] {
   const defs = doc.paramDefs ?? {};
   const groups = doc.paramExtras?.groups ?? [];

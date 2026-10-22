@@ -1,12 +1,4 @@
 <script setup lang="ts">
-// The knobs of the model, as a section of the browser: a configuration picker,
-// the checks that do not hold, and every user parameter through the control it
-// was given, in its group.
-//
-// A slider commits when it is let go, not on every step of the drag. Each commit
-// is an undo step and a rebuild, and forty of them for one gesture would bury
-// the change somebody wants to undo under the positions they dragged through.
-
 import { computed, ref } from "vue";
 import {
   checkResults,
@@ -37,7 +29,8 @@ const count = computed(() => groups.value.reduce((n, g) => n + g.rows.length, 0)
 const shown = computed(() => count.value > 0 || configs.value.length > 0);
 const collapsed = computed(() => browser.isCollapsed("Parameters"));
 
-/** A slider's position while it is held, by parameter name. */
+// A held slider's position by parameter name. A slider commits only on release, since each commit is an undo step
+// and a rebuild, and forty of them would bury the change somebody wants to undo.
 const dragging = ref<Record<string, number>>({});
 
 function commit(row: TuneRow, value: number) {

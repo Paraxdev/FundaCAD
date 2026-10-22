@@ -1,30 +1,11 @@
-// Game controller support: the bindings, the stored settings, and the arithmetic
-// that turns one frame of sticks and triggers into camera motion.
-//
-// Nothing in here touches the DOM or the Gamepad API, so the suite can drive it
-// with plain arrays. ./main.ts does the polling and the dispatching.
-//
-// The pad is read through the browser's Gamepad API in its "standard" layout,
-// which is what an Xbox or PlayStation pad reports, and what a Steam Deck
-// reports when Steam Input presents it as a controller:
-//
-//   buttons  0 A   1 B   2 X   3 Y   4 LB   5 RB   6 LT   7 RT
-//            8 View/Back   9 Menu/Start   10 L3   11 R3
-//            12 up   13 down   14 left   15 right   16 Guide
-//   axes     0 left X   1 left Y   2 right X   3 right Y   (down and right +)
-//
-// The triggers are analog and drive zoom, so they are not bindable. Every other
-// button is, to a command id from the palette, to a key, or to the cursor.
+// No DOM or Gamepad API in here, so the suite drives it with plain arrays. ./main.ts polls and dispatches.
 
 import { definePluginSettings, readSetting, type SettingsSchema } from "fundacad";
 
 export const PLUGIN_ID = "FundaCAD.Gamepad";
 
-/** What a button does, as one string so a <select> can hold it:
- *  ""            nothing
- *  "cursor"      turn the on-screen cursor on or off
- *  "key:<Key>"   a key press, e.g. "key:Enter", "key:Ctrl+K"
- *  anything else a command id, run through the app's dispatcher */
+/** One string so a <select> can hold it: "" nothing, "cursor" toggles the on-screen cursor, "key:<Key>" a key press
+ *  such as "key:Ctrl+K", anything else a command id run through the app's dispatcher. */
 export type Binding = string;
 
 export const CURSOR = "cursor";
@@ -45,10 +26,11 @@ export const BUTTON_LABELS: Record<number, string> = {
   14: "D-pad left",
   15: "D-pad right",
 };
-/** The buttons a binding can be set for, in the order the settings list them. */
+// Gamepad API "standard" layout (Xbox, PlayStation, Steam Deck under Steam Input). Buttons 0 A, 1 B, 2 X, 3 Y, 4 LB,
+// 5 RB, 6 LT, 7 RT, 8 View, 9 Menu, 10 L3, 11 R3, 12 to 15 dpad up down left right, 16 Guide. Axes 0 left X, 1 left Y,
+// 2 right X, 3 right Y, down and right positive. The analog triggers drive zoom, so they are not bindable.
 export const BINDABLE = [0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15];
 
-/** The keys offered in the settings, beside the commands. */
 export const KEY_CHOICES: { value: Binding; label: string }[] = [
   { value: "key:Enter", label: "Enter (confirm)" },
   { value: "key:Escape", label: "Escape (cancel)" },
@@ -60,9 +42,8 @@ export const KEY_CHOICES: { value: Binding; label: string }[] = [
 export interface GamepadConfig {
   /** Stick travel ignored around the centre, as a fraction of full deflection. */
   deadzone: number;
-  /** Half view heights per second at full deflection. Proportional to the view,
-   *  like the 3D mouse, so it feels the same zoomed in to a screw or out to a
-   *  whole assembly. */
+  /** Half view heights per second at full deflection. Proportional to the view like the 3D mouse, so it feels the
+   *  same on a screw or a whole assembly. */
   panSens: number;
   /** Radians per second at full deflection. */
   orbitSens: number;
@@ -72,7 +53,6 @@ export interface GamepadConfig {
   cursorSpeed: number;
   invertOrbitX: boolean;
   invertOrbitY: boolean;
-  /** Button index -> what it does. */
   buttons: Record<number, Binding>;
 }
 
@@ -224,8 +204,7 @@ export function resetGamepadConfig() {
   settings.reset();
 }
 
-/** A stick with a radial deadzone, rescaled so motion starts at zero just past
- *  it instead of jumping to the deadzone's value. Radial rather than per axis,
+/** A stick with a radial deadzone, rescaled so motion starts at zero just past it. Radial rather than per axis,
  *  so a diagonal is not pulled onto the nearest straight line. */
 export function stick(x: number, y: number, deadzone: number): [number, number] {
   const mag = Math.hypot(x, y);
@@ -247,11 +226,8 @@ export interface Motion {
   cursorY: number;
 }
 
-/** One frame of pad state as camera and cursor velocities.
- *
- *  With the cursor on, the left stick moves the cursor instead of panning; the
- *  right stick and the triggers keep driving the camera either way, so a face
- *  can be lined up and clicked without leaving cursor mode. */
+/** One frame of pad state as camera and cursor velocities. With the cursor on, the left stick moves the cursor
+ *  instead of panning, the right stick and triggers still drive the camera so a face can be lined up and clicked. */
 export function motionOf(
   axes: readonly number[],
   triggers: [number, number],
