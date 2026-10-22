@@ -1,8 +1,9 @@
 // A fillet dragged past what the kernel can build stops at the largest radius
 // that worked, in a real browser.
 //
-// The model is a 5 degree tapered R50 x 60 cylinder with an R40 pocket cut 40
-// deep, and the fillet goes on the pocket's floor edge: 39.9 builds, 40 does not.
+// The model is an R80 boss 40 tall on an R240 plate, and the fillet goes on the
+// boss's top rim: 40 builds, a fillet past the boss would cut into the plate and
+// is refused from about 40.4. (A fillet inside a concave pocket is clamped now.)
 // Past that the drag carries on, the handle and the value box turn red with a
 // plain reason, the model keeps the last radius that built, coming back under
 // the limit clears it at once, and confirming commits the last good radius (or
@@ -52,10 +53,10 @@ const check = (name, ok, detail) => {
 
   await page.evaluate(async () => {
     const s = window.store;
-    s.addFeature({ id: "s1", type: "sketch", plane: "XY", entities: [{ type: "circle", radius: 50, x: 0, y: 0 }] });
-    s.addFeature({ id: "e1", type: "extrude", sketch: "s1", distance: 60, operation: "new", taper: 5 });
-    s.addFeature({ id: "s2", type: "sketch", plane: { origin: [0, 0, 60], normal: [0, 0, 1], xdir: [1, 0, 0] }, entities: [{ type: "circle", radius: 40, x: 0, y: 0 }] });
-    s.addFeature({ id: "e2", type: "extrude", sketch: "s2", distance: -40, operation: "cut" });
+    s.addFeature({ id: "s1", type: "sketch", plane: "XY", entities: [{ type: "circle", radius: 240, x: 0, y: 0 }] });
+    s.addFeature({ id: "e1", type: "extrude", sketch: "s1", distance: 80, operation: "new" });
+    s.addFeature({ id: "s2", type: "sketch", plane: { origin: [0, 0, 80], normal: [0, 0, 1], xdir: [1, 0, 0] }, entities: [{ type: "circle", radius: 80, x: 0, y: 0 }] });
+    s.addFeature({ id: "e2", type: "extrude", sketch: "s2", distance: 40, operation: "join" });
     await s.rebuildNow();
     // Every document sent to the kernel, as the radius it previews (null for none).
     const g = window.geometry;
@@ -97,9 +98,9 @@ const check = (name, ok, detail) => {
     const V = v.camera.position.constructor;
     for (let a = 0; a < 360; a += 5) {
       const r = (a * Math.PI) / 180;
-      const sp = v.projectToScreen(new V(40 * Math.cos(r), 40 * Math.sin(r), 20));
+      const sp = v.projectToScreen(new V(80 * Math.cos(r), 80 * Math.sin(r), 120));
       const hit = v.pickEdgeAt(sp.x, sp.y);
-      if (hit && hit.edge.points.every((p) => Math.abs(p[2] - 20) < 0.5 && Math.abs(Math.hypot(p[0], p[1]) - 40) < 0.5)) return { x: sp.x, y: sp.y };
+      if (hit && hit.edge.points.every((p) => Math.abs(p[2] - 120) < 0.5 && Math.abs(Math.hypot(p[0], p[1]) - 80) < 0.5)) return { x: sp.x, y: sp.y };
     }
     return null;
   });
@@ -147,8 +148,8 @@ const check = (name, ok, detail) => {
   check("the handle turns red", far.refusal !== null && far.handle !== good.handle, far.handle);
   check("the value box is refused with a plain reason", far.boxBad && /^Radius too large for the faces around this edge$/.test(far.problem ?? ""), far.problem);
   check("the prompt says what will be kept", /too large.*keeping/i.test(far.prompt), far.prompt);
-  check("the model keeps the last radius that built", far.shown !== null && far.shown < 40 && far.onScreen && !far.stale, { shown: far.shown, stale: far.stale });
-  check("the refusal starts at 40", far.range.refused >= 39.9 && far.range.refused <= 40.5, far.range);
+  check("the model keeps the last radius that built", far.shown !== null && far.shown <= 40 && far.onScreen && !far.stale, { shown: far.shown, stale: far.stale });
+  check("the refusal starts just past 40", far.range.refused > 40 && far.range.refused <= 41, far.range);
   await page.screenshot({ path: `${OUT}/1-refused.png` });
   const sentBefore = far.sent;
   await sweep(at, 46, 55, 0.5, 40);
@@ -161,7 +162,7 @@ const check = (name, ok, detail) => {
   check("coming back under the limit clears the refusal at once", instant.refusal === null && !instant.boxBad, instant);
   await settle();
   const backed = await state();
-  check("and the preview follows it", backed.shown === backed.value && backed.value < 40, backed);
+  check("and the preview follows it", backed.shown === backed.value && backed.value <= 40, backed);
   await sweep(at, 30, 39.5, 0.5, 80);
   await settle();
   await sweep(at, 39.5, 48, 1, 40);
@@ -219,8 +220,8 @@ const check = (name, ok, detail) => {
   const sent = await page.evaluate((n) => window.__sent.slice(n), sent0);
   check("40 pointermoves do not queue 40 kernel calls", sent.length <= 12, `${sent.length} rebuilds: ${JSON.stringify(sent)}`);
   const flingR = fling.feats.length ? Number(fling.feats[0].split("=")[1]) : null;
-  check("what it commits is a radius that built, never 60", !fling.active && (flingR === null || (flingR < 40 && fling.error === null)), fling.feats);
-  await page.evaluate(() => window.store.undo());
+  check("what it commits is a radius that built, never 60", !fling.active && (flingR === null || (flingR <= 40 && fling.error === null)), fling.feats);
+  if (fling.feats.length) await page.evaluate(() => window.store.undo());
   await settle();
 
   // --- 4. typed values --------------------------------------------------------
@@ -276,7 +277,7 @@ const check = (name, ok, detail) => {
   await sweep(at, 39, 48, 1, 80);
   await settle();
   const e5 = await state();
-  check("editing refuses past the limit the same way", e5.refusal !== null && e5.shown !== null && e5.shown < 40, e5);
+  check("editing refuses past the limit the same way", e5.refusal !== null && e5.shown !== null && e5.shown <= 40, e5);
   await page.mouse.up();
   await page.keyboard.press("Enter");
   await settle();
