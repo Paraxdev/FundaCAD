@@ -96,11 +96,16 @@ export function commit(repo: VersionRepo, snapshot: Snapshot, message: string, t
   return version;
 }
 
+/** All a version holds beside its features, which a version that lost a feature still has. */
+export function restOf(repo: VersionRepo, v: Version): Omit<Snapshot, "features"> {
+  return JSON.parse(repo.objects[v.tree.rest] ?? "{}") as Omit<Snapshot, "features">;
+}
+
 /** The document a version holds. */
 export function snapshotOf(repo: VersionRepo, id: string): Snapshot {
   const v = versionById(repo, id);
   if (!v) throw new Error(`no version ${id}`);
-  const rest = JSON.parse(repo.objects[v.tree.rest] ?? "{}") as Snapshot;
+  const rest = restOf(repo, v);
   const features = v.tree.features.map((h) => {
     const text = repo.objects[h];
     if (text === undefined) throw new Error(`version ${id} is missing a feature`);

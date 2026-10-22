@@ -8,6 +8,7 @@ import {
   emptyRepo,
   headOf,
   normalizeRepo,
+  restOf,
   snapshotOf,
   switchBranch as switchVersionBranch,
   type Snapshot,
@@ -426,8 +427,8 @@ function versionSnapshot(repo: VersionRepo, id: string): Snapshot {
   return doc;
 }
 
-function restText(snapshot: Snapshot): string {
-  const { features: _, ...rest } = snapshot;
+/** Without the cut, which an older app recorded in a version. */
+function restText({ features: _, sectionView: _cut, ...rest }: Partial<Snapshot>): string {
   return JSON.stringify(rest);
 }
 
@@ -2501,7 +2502,7 @@ export class DocumentStore {
     if (!repo || !head) return null;
     const working = this.workingSnapshot();
     const diff = diffAgainstWorking(repo, head.id, working);
-    if (diff.settings && restText(versionSnapshot(repo, head.id)) === restText(working)) diff.settings = false;
+    if (diff.settings && restText(restOf(repo, head)) === restText(working)) diff.settings = false;
     return diff;
   }
 

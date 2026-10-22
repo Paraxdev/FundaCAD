@@ -1,5 +1,6 @@
 // Restore in the Versions panel: a version that cannot be read says so and leaves
-// the document as it was, and a good one after it still restores.
+// the document as it was, and a good one after it still restores. A damaged newest
+// version still lets the panel open.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
@@ -42,6 +43,17 @@ async function restoreRow(w: ReturnType<typeof mountPanel>, message: string) {
 }
 
 describe("Restore in the Versions panel", () => {
+  it("opens over a newest version that lost a feature object, with a setting changed since", async () => {
+    const { store, two } = twoVersions();
+    delete (store.versionRepo as VersionRepo).objects[two.tree.features[1]!];
+    store.load(JSON.stringify({ parameters: { w: 3.5 }, features: [box("f1", 10.5), box("f2", 4.25)] }), { replace: true });
+    const w = mountPanel(store);
+    expect(w.findAll(".versions-row .versions-msg").map((m) => m.text())).toEqual(["two", "one"]);
+    expect(w.find(".pop-note").text()).toMatch(/^1 change .*"two"/);
+    await restoreRow(w, "one");
+    expect(store.document.features).toEqual([box("f1", 10.5)]);
+  });
+
   it("says a version that is missing a feature cannot be restored, and leaves the document alone", async () => {
     const { store, two } = twoVersions();
     const repo = store.versionRepo as VersionRepo;
