@@ -465,10 +465,9 @@ export async function compileAndSolve(
         } else if (isRound(pr.src) && isRound(pr.cpy) && pr.src !== pr.cpy) {
           const a = centerPoint(pr.src), b = centerPoint(pr.cpy);
           if (a && b) cons.push({ id: `${id}c${n}`, type: "coincident", a, b });
-          // `difference` is param2 − param1, i.e. cpy.r − src.r = value. SIGNED,
-          // so an inward offset shrinks the copy with no branch ambiguity, the
-          // same property that makes radialGap safe against an inside-out annulus.
-          cons.push({ id: `${id}r${n}`, type: "radiusDifference", inner: pr.src, outer: pr.cpy, value: c.value });
+          // cpy.r − src.r, SIGNED, so the copy cannot cross its source the way a
+          // p2l_distance can; flip is set per arc by offsetChain (see types.ts).
+          cons.push({ id: `${id}r${n}`, type: "radiusDifference", inner: pr.src, outer: pr.cpy, value: pr.flip ? -c.value : c.value });
         }
       });
     }
