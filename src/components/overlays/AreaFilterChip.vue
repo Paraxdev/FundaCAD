@@ -72,10 +72,13 @@ function refresh(): boolean {
 }
 
 let raf = 0;
+let held = false;
 
+// The loop outlives the press, not just the box: a drag starts frames after the
+// button goes down, and a loop that ended on the first empty frame never showed it.
 function tick() {
   raf = 0;
-  if (refresh()) raf = requestAnimationFrame(tick);
+  if (refresh() || held) raf = requestAnimationFrame(tick);
 }
 
 function wake() {
@@ -86,12 +89,24 @@ function wake() {
 // that has to wake the loop. Capture phase, because the viewport's own handler
 // may stop propagation, and passive because this never wants the event.
 const onDown = (e: PointerEvent) => {
-  if (e.button === 0) wake();
+  if (e.button !== 0) return;
+  held = true;
+  wake();
+};
+const onUp = () => {
+  held = false;
 };
 
-onMounted(() => window.addEventListener("pointerdown", onDown, { capture: true, passive: true }));
+const OPTS = { capture: true, passive: true } as const;
+onMounted(() => {
+  window.addEventListener("pointerdown", onDown, OPTS);
+  window.addEventListener("pointerup", onUp, OPTS);
+  window.addEventListener("pointercancel", onUp, OPTS);
+});
 onUnmounted(() => {
-  window.removeEventListener("pointerdown", onDown, { capture: true });
+  window.removeEventListener("pointerdown", onDown, OPTS);
+  window.removeEventListener("pointerup", onUp, OPTS);
+  window.removeEventListener("pointercancel", onUp, OPTS);
   if (raf) cancelAnimationFrame(raf);
 });
 </script>
