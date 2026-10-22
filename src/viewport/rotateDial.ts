@@ -1,7 +1,4 @@
-// The protractor a ring drag shows: a dashed circle in the ring's plane with a
-// tick per step, the swept wedge from where the ring was grabbed, and the angle
-// in a badge at the leading edge. Built in gizmo units (screen pixels), so it is
-// added to the gizmo group and scales with it.
+// Built in gizmo units (screen pixels), so it is added to the gizmo group and scales with it.
 
 import * as THREE from "three";
 import { rotationFrame, type RotationFrame } from "../features/transformGizmo";

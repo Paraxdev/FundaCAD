@@ -1,12 +1,5 @@
-// Potato mode's draw. For the length of one render every PBR material is swapped
-// for a Lambert twin, every fat line (LineSegments2, Line2) for a plain 1px
-// LineSegments twin, and the emitter lights are hidden, then everything is put
-// back. The real materials and objects are never written to, so turning potato
-// mode off restores them exactly, and picking still raycasts the real objects.
-//
-// The frame is drawn into a target with no multisampling and copied to the
-// canvas, because the canvas was created with antialias and that cannot be
-// turned off on a live context.
+// For one render, PBR materials, fat lines and emitter lights are swapped for twins and put back, so the real
+// objects are never written to. Drawn via a target without MSAA, since a live context's antialias is fixed.
 
 import * as THREE from "three";
 
@@ -158,12 +151,8 @@ export class PotatoDraw {
         stencilBuffer: true,
         colorSpace: THREE.SRGBColorSpace,
       });
-      // Note: three only tone maps and encodes to sRGB when drawing to the canvas
-      // or to an XR target. Flagged as one, and stored as plain RGBA8, this target
-      // gets the same encoded values and the same blending the canvas would, so
-      // the grid and the see-through planes keep their brightness.
-      // Note: isXRRenderTarget is an internal three flag upstream plans to remove
-      // (three.js #23278), so every three upgrade has to re-verify this path.
+      // Note: three only tone maps and encodes sRGB for the canvas or an XR target, so this RGBA8 target is
+      // flagged as XR. That flag is internal and slated for removal (three.js #23278), recheck on upgrades.
       this.target.texture.internalFormat = "RGBA8";
       (this.target as { isXRRenderTarget?: boolean }).isXRRenderTarget = true;
       const material = new THREE.ShaderMaterial({

@@ -1,6 +1,5 @@
-// Picking: raycast the mesh (faces) and the fat edge lines (edges), then turn a
-// hit into a *selector descriptor*, never a raw index. Axis-aligned geometry
-// becomes a robust axis/normal selector; otherwise a nearest-to-point selector.
+// A hit becomes a selector descriptor, never a raw index: an axis or normal selector for axis aligned
+// geometry, else a nearest to point selector.
 
 import * as THREE from "three";
 import type { Selector } from "../types";
@@ -26,7 +25,6 @@ import {
 
 export interface EdgeHit {
   kind: "edge";
-  /** the edge itself, a stable reference, not the object that draws it */
   edge: EdgeRef;
   selector: Selector;
 }
@@ -35,18 +33,14 @@ export interface FaceHit {
   kind: "face";
   faceId: number;
   selector: Selector;
-  /** world-space raycast intersection, a point guaranteed ON the face's
-   *  material (its centroid may not be: annular/holed faces). */
+  /** World space raycast hit, which is ON the face (a holed face's centroid may not be). */
   point: [number, number, number];
 }
 
 export type Hit = EdgeHit | FaceHit;
 
-/** What the modifier keys meant, once, so every consumer reads the same rule.
- *
- *  `additive` and `exact` are not the same flag even though Shift sets both:
- *  Ctrl adds without meaning "no tangent chain", and reducing the pair to one
- *  boolean at the call site is how the two came to disagree. */
+/** Shift sets both, but Ctrl adds without meaning "no tangent chain"; reducing the pair to one boolean at
+ *  the call site is how the two came to disagree. */
 export interface PickMods {
   /** Ctrl / Cmd / Shift: add to the selection instead of replacing it. */
   additive: boolean;
@@ -54,12 +48,8 @@ export interface PickMods {
   exact: boolean;
 }
 
-/** One edge the cursor could have meant, with how far off it landed.
- *
- *  pickEdge answers "which edge" and throws the runners-up away; this keeps
- *  them, because when two edges are the same distance from the cursor the
- *  runner-up is not a worse answer, it is the other half of a question. See
- *  viewport/edgeTies.ts. */
+/** Keeps the runners up pickEdge throws away: when two edges are the same distance from the cursor, the
+ *  runner up is the other half of a question (viewport/edgeTies.ts). */
 export interface EdgeCandidate extends EdgeHit {
   /** distance from the cursor to this edge, in screen px */
   screenDist: number;
@@ -77,19 +67,13 @@ function edgeLayer<T extends THREE.Raycaster>(r: T): T {
 }
 
 export class Picker {
-  // firstHitOnly is read by three-mesh-bvh: every mesh query here wants only the
-  // nearest face, and collecting every hit along the ray through a whole
-  // assembly only to sort and drop them was most of a pick's cost. Line picks
-  // ignore the flag.
-  // The edges' layer is always tested, so an outline hidden from the view
-  // still selects its edge.
+  // firstHitOnly (three-mesh-bvh, ignored by line picks) skips sorting every hit through an assembly, most of a
+  // pick's cost. The edges' layer is always tested, so an outline hidden from the view still selects its edge.
   private raycaster = edgeLayer(Object.assign(new THREE.Raycaster(), { firstHitOnly: true }));
   private ndc = new THREE.Vector2();
   private scratch = new THREE.Vector3();
-  // Raycast targets: ONE merged object per body now, so this list is ~3k long
-  // instead of ~348k and the per-move filter is cheap. Hidden edges are not in
-  // the geometry at all (BodyEdges rebuilds without them), so there is nothing
-  // per-edge left to filter here, only whole-body visibility.
+  // One merged object per body (~3k targets, not ~348k), and hidden edges are not in the geometry
+  // (BodyEdges rebuilds without them), so only whole body visibility is filtered here.
   private targetCache: { view: ModelView; targets: THREE.Object3D[] } | null = null;
   private edgeTargets(view: ModelView): THREE.Object3D[] {
     if (this.targetCache?.view !== view) {
@@ -118,14 +102,11 @@ export class Picker {
     return edgeObjects(view).flatMap((d) => d.visibleRefs());
   }
 
-  /** General selection: a face is preferred over an edge unless the cursor is right on
-   *  the edge line (within EDGE_NEAR_PX). The dedicated edge tools call
-   *  pickEdgeAt() directly and keep the generous EDGE_PICK_THRESHOLD radius. */
+  /** A face is preferred over an edge unless the cursor is right on the edge line (EDGE_NEAR_PX). The
+   *  edge tools call pickEdgeAt() directly and keep the generous EDGE_PICK_THRESHOLD radius. */
   pick(clientX: number, clientY: number, rect: DOMRect, camera: THREE.Camera, view: ModelView): Hit | null {
-    // Body BVHs are built after the first paint, not during setModel (see
-    // raycastIndex.ts). If a pick arrives before that, build them now: three-mesh-bvh
-    // would otherwise fall back to a brute-force scan of every triangle. Free
-    // once the queue has drained, which is the normal case.
+    // Body BVHs are built after the first paint (raycastIndex.ts); a pick before that would make
+    // three-mesh-bvh brute force every triangle. Free once the queue has drained.
     flushRaycastIndex();
     const cands = this.pickEdgeCandidates(clientX, clientY, rect, camera, view);
 
@@ -142,14 +123,8 @@ export class Picker {
     }
 
     if (!cands.length) return face;
-    // An edge only when the cursor is on its line (or there is no face under the
-    // cursor at all), and never one round the back of the body. The band
-    // shrinks with the face under the cursor, so a small or shallowly-angled
-    // face keeps an interior to click, widens for an edge foreshortened toward
-    // a point, and all but closes for a smooth edge. See edgeBand.ts.
-    // The band is scaled after it is measured, not by raising EDGE_NEAR_PX, so the
-    // extent walk's early exit at BAND_CAP_EXTENT_PX still means "capped" and a
-    // finger simply gets the same shape of band at fingertip size.
+    // Never an edge round the back of the body. The band follows the face under the cursor (edgeBand.ts) and is
+    // scaled after it is measured, so the early exit at BAND_CAP_EXTENT_PX still means "capped" for a finger.
     const faceBand = edgeBandPx(face ? faceScreenExtentPx(view, face.faceId, camera, rect) : null) * hitScale();
     // Over a face only candidates within a few px of the pointer get a sight
     // ray, so the bodies near the ray are gathered for the radius asked so far.
@@ -176,11 +151,8 @@ export class Picker {
     return edge ? { kind: "edge", edge: edge.edge, selector: edge.selector } : face;
   }
 
-  /** Edge-only pick, the edge tools' (fillet, chamfer, an axis pick): the
-   *  best-ranked edge within the whole grab radius, faces never compete.
-   *  `visibleOnly` drops edges round the back of the body, off in see-through
-   *  views where those edges are drawn. Also sets this.ndc for a follow-up
-   *  face pick. */
+  /** For the edge tools: the best ranked edge within the whole grab radius, faces never compete. `visibleOnly`
+   *  is off in see through views, where back edges are drawn. Also sets this.ndc for a follow up face pick. */
   pickEdge(
     clientX: number,
     clientY: number,
@@ -204,10 +176,8 @@ export class Picker {
     return cands.filter((c) => this.pointVisible(c.point, camera, near, scale));
   }
 
-  /** The visible bodies a sight ray to a point drawn within `radiusPx` of the
-   *  pointer can pass through. Each sight ray otherwise walks every body,
-   *  0.29 ms on a 1310 body assembly against 0.05 ms through the 78 within 5 px,
-   *  and a pick over a dense one asks over a thousand of them. */
+  /** A sight ray otherwise walks every body: 0.29 ms on a 1310 body assembly against 0.05 ms through the 78
+   *  within 5 px, and a pick over a dense one asks over a thousand of them. */
   private occludersNear(radiusPx: number, camera: THREE.Camera, rect: DOMRect, view: ModelView): THREE.Mesh[] {
     return meshesNearRay(visibleBodyMeshes(view), this.raycaster.ray, camera, rect.height, radiusPx);
   }
@@ -215,10 +185,8 @@ export class Picker {
   private sightRay = Object.assign(new THREE.Raycaster(), { firstHitOnly: true });
   private sightNdc = new THREE.Vector2();
 
-  /** Whether nothing solid stands between the camera and `point`. Asked at the
-   *  edge's own point rather than under the cursor: across a wide grab radius
-   *  the face under the cursor can sit well in front of an edge on it, as
-   *  beside a silhouette, and would hide an edge that is in plain view. */
+  /** Asked at the edge's own point, not under the cursor: across a wide grab radius, as beside a silhouette,
+   *  the face under the cursor can sit in front of an edge that is in plain view. */
   private pointVisible(point: THREE.Vector3, camera: THREE.Camera, meshes: THREE.Mesh[], scale: number): boolean {
     const p = this.scratch.copy(point).project(camera);
     this.sightRay.setFromCamera(this.sightNdc.set(p.x, p.y), camera);
@@ -226,18 +194,8 @@ export class Picker {
     return !occludedEdge(this.sightRay.ray.origin.distanceTo(point), kept?.distance ?? null, scale);
   }
 
-  /** Every edge the cursor could have meant, nearest first in SCREEN space,
-   *  a smooth edge pushed back (edgeRankPx).
-   *
-   *  Screen space rather than depth: the raycaster sorts by distance from the
-   *  camera, which would rank a front edge above one the cursor is visually
-   *  sitting on. Among edges you can see, "nearest the pointer" is the question
-   *  being asked.
-   *
-   *  Distinct EDGES, not raycast hits. One edge is many line segments and a wide
-   *  threshold catches several of them, so the raw hit list is mostly the same
-   *  edge over and over; a chooser built on that would offer the same entry six
-   *  times. Each edge keeps its own closest approach. */
+  /** Ranked in screen space, not by depth, so the edge the cursor sits on beats a nearer one, and a smooth
+   *  edge is pushed back (edgeRankPx). One entry per edge, not per segment hit, at its closest approach. */
   pickEdgeCandidates(
     clientX: number,
     clientY: number,
@@ -247,17 +205,12 @@ export class Picker {
   ): EdgeCandidate[] {
     this.ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(this.ndc, camera);
-    // Wide candidate threshold (three.js Line2 threshold is ~0.5× screen px, so
-    // this is a forgiving grab radius).
-    // A finger gets a grab radius to match its size; set per pick because the
-    // pointer in use can change between two moves.
+    // Line2's threshold is ~0.5x screen px, so this is a forgiving grab radius. Set per pick because the
+    // pointer in use, and so the finger size, can change between two moves.
     this.raycaster.params.Line2 = { threshold: EDGE_PICK_THRESHOLD * hitScale() };
     (this.raycaster as any).camera = camera;
-    // NOTE: each LineMaterial's .resolution is kept in sync by
-    // setEdgeResolution() on resize, and set at creation time in buildBodyMesh()
-    // (render.ts), no per-move sync needed here.
-    // skip hidden lines (flush-seam-hidden contact rims, hidden bodies), the
-    // raycaster tests invisible objects too, which would give ghost edge picks
+    // edgeTargets skips hidden lines, since the raycaster tests invisible objects too. LineMaterial.resolution
+    // is synced on resize and at creation (render.ts), not per move.
     const eHits = this.raycaster.intersectObjects(this.edgeTargets(view), false);
     if (!eHits.length) return [];
     // Line2 ignores the raycaster's near and far, so an edge is kept or dropped by its point nearest the ray.
@@ -277,9 +230,8 @@ export class Picker {
       const sy = (-this.scratch.y * 0.5 + 0.5) * rect.height + rect.top;
       const d = Math.hypot(sx - clientX, sy - clientY);
       const seen = byEdge.get(edge);
-      // Within a pixel, the stretch nearer the camera: a circle seen edge-on
-      // draws its front and back halves on the same line, and only the front
-      // one can be what the cursor is on.
+      // Within a pixel, the stretch nearer the camera: a circle seen edge on draws its front and back
+      // halves on the same line, and only the front one can be under the cursor.
       if (seen && (seen.screenDist < d - 1 || (seen.screenDist <= d + 1 && seen.depth <= h.distance))) continue;
       const selector = seen?.selector ?? edgeSelectorFrom({ points: edge.points, body: edge.body });
       if (!selector) continue;
@@ -307,11 +259,8 @@ function farthestPx(cands: readonly EdgeCandidate[]): number {
 const _sphere = new THREE.Sphere();
 const _onRay = new THREE.Vector3();
 
-/** The meshes whose bounding sphere comes within `radiusPx` on screen of `ray`,
- *  the pointer ray. Conservative: any point drawn that close to the pointer lies
- *  within that screen distance per unit of depth of the ray (perspective), or
- *  within a fixed world distance of it (orthographic), and depth is never more
- *  than the distance from the camera. */
+/** Conservative: a point drawn that close to the pointer lies within that screen distance per unit of
+ *  ray depth (perspective) or a fixed world distance (orthographic), and depth never exceeds distance. */
 export function meshesNearRay(
   meshes: readonly THREE.Mesh[],
   ray: THREE.Ray,
@@ -343,53 +292,22 @@ export function meshesNearRay(
   return out;
 }
 
-/** How far behind the visible surface an edge may sit and still count as being ON
- *  it, as a fraction of the model's size.
- *
- *  Relative because it exists to absorb tessellation error: a curved face's
- *  triangles sit up to a chord's sagitta inside the true surface, so an edge on
- *  that surface can measure marginally behind them, and that error scales with
- *  the geometry that produced it. Small enough that it stays well under the
- *  thickness of a thin plate, on a 100x100x2 plate (141mm diagonal) this is
- *  0.28mm against 2mm of material, so the plate's own back edges are still
- *  rejected. */
+/** Relative, because it absorbs tessellation error, which scales with the geometry. A 100x100x2 plate gets
+ *  0.28mm against 2mm of material, so the plate's own back edges are still rejected. */
 export const EDGE_DEPTH_FRACTION = 0.002;
 
-/** Is the best edge candidate round the BACK of the body?
- *
- *  pickEdge deliberately ranks edges by screen distance rather than by depth, so
- *  that a fat line the cursor is visually nearest is preferred over one that merely
- *  happens to be closer to the camera. That is right among edges you can see and
- *  wrong the moment an edge you cannot see projects near the cursor: hovering
- *  anywhere near the silhouette, an edge on the far side of the solid lands a
- *  couple of pixels from the pointer and takes the pick from the face you are
- *  actually looking at. That is the "it selected through the object" report.
- *
- *  `faceDist` is the first surface on the sight line to the edge's own nearest
- *  point (Picker.pointVisible), so an edge further than that (plus the
- *  tolerance above) is behind material and cannot have been what the user
- *  aimed at. Asked at the edge rather than under the cursor: beside a
- *  silhouette the face under the cursor sits in front of the edge it ends at.
- *  With no surface on that line there is nothing to be occluded BY, and an
- *  edge picked against empty space must keep working. */
+/** Edges rank by screen distance, so near a silhouette an edge behind the solid could take the pick ("it
+ *  selected through the object"). With no surface on its sight line an edge against empty space still counts. */
 export function occludedEdge(edgeDist: number, faceDist: number | null, modelScale: number): boolean {
   if (faceDist == null || !Number.isFinite(edgeDist)) return false;
   const s = Number.isFinite(modelScale) && modelScale > 0 ? modelScale : 0;
   return edgeDist > faceDist + Math.max(1e-6, s * EDGE_DEPTH_FRACTION);
 }
 
-/** How many triangles of a face to look at. Generous, because the samples are
- *  spread and the early exit fires long before this on anything large: it is a
- *  ceiling for the pathological case, not a typical cost. One hex-textured face
- *  in this app owns over 50,000 triangles. */
+/** A ceiling for the pathological case, not a typical cost: one hex textured face owns over 50,000 triangles. */
 const FACE_SAMPLE_BUDGET = 256;
 
-/** The smaller on-screen side of a face, in px, or null if it cannot be
- *  measured.
- *
- *  Reads the precomputed faceId -> triangle map rather than re-deriving one, and
- *  SAMPLES across it rather than taking a prefix: see sampleIndices for why that
- *  distinction decides whether a large face measures as large. */
+/** Samples across the faceId to triangle map rather than taking a prefix, see sampleIndices. */
 function faceScreenExtentPx(view: ModelView, faceId: number, camera: THREE.Camera, rect: DOMRect): number | null {
   const body = bodyOfFace(view, faceId);
   const tris = body?.faceTriangles.get(faceId);
@@ -421,14 +339,8 @@ function faceScreenExtentPx(view: ModelView, faceId: number, camera: THREE.Camer
   return box.measured ? box.min : null;
 }
 
-/** The larger on-screen side of one edge's own bounding box, in px, or null if
- *  it has no points. An edge foreshortened toward a point, viewed nearly
- *  end-on, projects to a tiny box in both directions; an ordinary one does not,
- *  so this stays large and shortEdgeBoostPx leaves it alone. The larger side,
- *  because an edge running straight across or down the screen has a box of
- *  zero width however long it is. Transformed through the drawing object's own
- *  matrixWorld, the same one the raycast that found it was tested against,
- *  rather than assuming edge.points is world-space. */
+/** The larger side, since an edge straight across the screen has a zero width box; both are tiny only for an
+ *  edge seen nearly end on. Through the drawing object's matrixWorld, as the raycast that found it was. */
 function edgeScreenLengthPx(edge: EdgeRef, camera: THREE.Camera, rect: DOMRect): number | null {
   if (!edge.points.length) return null;
   const world = edge.draw.object.matrixWorld;
@@ -450,15 +362,10 @@ export function modelScale(view: ModelView): number {
   return Number.isFinite(d) ? d : 0;
 }
 
-// three.js Line2 raycast threshold is ~0.5× the on-screen pixel radius, so this
-// is a comfortable grab radius of EDGE_GRAB_PX either side of the line, in
-// screen px at any zoom. Candidates are then ranked by screen distance (see
-// pickEdgeCandidates), so a wide value stays precise.
+// Line2's raycast threshold is ~0.5x the on screen pixel radius, so this grabs EDGE_GRAB_PX either side
+// of the line at any zoom. Candidates are ranked by screen distance, so a wide value stays precise.
 const EDGE_PICK_THRESHOLD = 2 * EDGE_GRAB_PX;
-// The edge-vs-face band lives in edgeBand.ts: it is no longer one number, but
-// a fraction of the face being aimed at, capped at EDGE_NEAR_PX so ordinary
-// faces pick exactly as before. Fillet/Chamfer (pickEdgeAt) ignore it entirely
-// and keep the wide grab radius.
+// The edge versus face band lives in edgeBand.ts; Fillet and Chamfer (pickEdgeAt) ignore it.
 
 function faceSelector(normal: THREE.Vector3, hit: THREE.Vector3): Selector {
   const n = normal.clone().normalize();
