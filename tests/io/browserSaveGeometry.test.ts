@@ -2,11 +2,19 @@
 // in between, so it has to embed and publish the geometry itself, through the
 // engine's blob store, or a reopened file names an import nobody has.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { DocumentStore } from "../../src/document/store";
 import { blake2b128Hex } from "../../src/document/blake2b";
 import type { GeometryBackend } from "../../src/geometry/client";
+
+// Mocked once for the file: a doMock or doUnmock per test is applied by whichever
+// import resolves mocks next, so it can land in the middle of another test.
+const ui = vi.hoisted(() => ({ toasts: [] as { message: string; kind: string | undefined }[] }));
+vi.mock("../../src/ui/toast", () => ({
+  toast: (message: string, o?: { kind?: string }) => { ui.toasts.push({ message, kind: o?.kind }); return null; },
+  dismissToast() {},
+}));
 
 const BREP = new Uint8Array([0x44, 0x42, 0x52, 0x45, 0x50, 0x00, 0xff, 0x10, 0x7f, 0x80]);
 const HASH = blake2b128Hex(BREP);
@@ -32,11 +40,10 @@ function importDoc(extra: Record<string, unknown> = {}) {
 
 describe("a document with an imported body in the browser build", () => {
   let downloads: { name: string; text: string }[];
-  let toasts: { message: string; kind: string | undefined }[];
 
   beforeEach(() => {
     downloads = [];
-    toasts = [];
+    ui.toasts = [];
     (globalThis as unknown as Record<string, unknown>).window = { addEventListener() {}, removeEventListener() {} };
     let pending: Blob | null = null;
     (globalThis as unknown as Record<string, unknown>).document = {
@@ -47,17 +54,6 @@ describe("a document with an imported body in the browser build", () => {
     };
     URL.createObjectURL = (b: Blob) => { pending = b; return "blob:x"; };
     URL.revokeObjectURL = () => {};
-    vi.doMock("../../src/ui/toast", () => ({
-      toast: (message: string, o?: { kind?: string }) => { toasts.push({ message, kind: o?.kind }); return null; },
-      dismissToast() {},
-    }));
-    vi.doMock("../../src/app/documentActions", () => ({ mayDiscard: async () => true }));
-  });
-
-  afterEach(() => {
-    vi.doUnmock("../../src/ui/toast");
-    vi.doUnmock("../../src/app/documentActions");
-    vi.resetModules();
   });
 
   function engine(blobs: Map<string, Uint8Array>, withBlobs = true) {
@@ -102,7 +98,7 @@ describe("a document with an imported body in the browser build", () => {
       expect(downloads[0]!.text.startsWith(store.toJSON().trimEnd().slice(0, -1).trimEnd())).toBe(true);
       expect(store.dirty).toBe(false);
     }
-    expect(toasts).toEqual([]);
+    expect(ui.toasts).toEqual([]);
   });
 
   it("reopens on an engine that never saw the import, with the geometry and the colours", async () => {
@@ -115,7 +111,8 @@ describe("a document with an imported body in the browser build", () => {
     const blank = new Map<string, Uint8Array>();
     const second = engine(blank);
     const store = new DocumentStore(second.geometry, { parameters: {}, features: [] });
-    expect(await openDocumentText(store, "bracket.funda", downloads[0]!.text)).toBe("ok");
+    const outcome = await openDocumentText(store, "bracket.funda", downloads[0]!.text);
+    expect({ outcome, toasts: ui.toasts }).toEqual({ outcome: "ok", toasts: [] });
     expect(second.puts.map((b) => Array.from(b))).toEqual([Array.from(BREP)]);
     expect(blank.get(HASH)).toEqual(BREP);
     const reopened = store.toObject();
@@ -123,7 +120,7 @@ describe("a document with an imported body in the browser build", () => {
     expect(reopened).toEqual(saved.toObject());
     expect(reopened.bodyMaterial).toEqual({ body1: "m1" });
     expect(reopened.faceMaterials).toEqual({ "body1#2": "m1" });
-    expect(toasts).toEqual([]);
+    expect(ui.toasts).toEqual([]);
   });
 
   it("embeds a picture or an unknown feature's blob the engine has, and skips one it lacks", async () => {
@@ -141,14 +138,14 @@ describe("a document with an imported body in the browser build", () => {
     const geom = (JSON.parse(downloads[0]!.text) as { geometry: Record<string, string> }).geometry;
     expect(Object.keys(geom).sort()).toEqual([HASH, PICTURE_HASH].sort());
     expect(geom[PICTURE_HASH]).toBe(b64(PICTURE));
-    expect(toasts).toEqual([]);
+    expect(ui.toasts).toEqual([]);
   });
 
   it("refuses to download a file that would open without an import, and says which one", async () => {
     const { saveDocumentAs, saveDocument } = await import("../../src/io/files");
     for (const withBlobs of [true, false]) {
       for (const save of [saveDocumentAs, saveDocument]) {
-        toasts = [];
+        ui.toasts = [];
         downloads = [];
         const { geometry } = engine(new Map(), withBlobs);
         const store = storeWith(importDoc(), geometry);
@@ -160,9 +157,9 @@ describe("a document with an imported body in the browser build", () => {
         expect(downloads).toEqual([]);
         expect(store.dirty).toBe(true);
         expect(store.fileName).toBe(name);
-        expect(toasts).toHaveLength(1);
-        expect(toasts[0]!.kind).toBe("error");
-        expect(toasts[0]!.message).toContain("bracket.step");
+        expect(ui.toasts).toHaveLength(1);
+        expect(ui.toasts[0]!.kind).toBe("error");
+        expect(ui.toasts[0]!.message).toContain("bracket.step");
       }
     }
   });
@@ -174,7 +171,7 @@ describe("a document with an imported body in the browser build", () => {
     await saveDocumentAs(store);
     await settle();
     expect(downloads).toEqual([{ name: "Untitled.funda", text: store.toJSON() }]);
-    expect(toasts).toEqual([]);
+    expect(ui.toasts).toEqual([]);
   });
 
   it("refuses to open a file whose geometry does not match its hash, and publishes nothing", async () => {
@@ -186,8 +183,8 @@ describe("a document with an imported body in the browser build", () => {
     expect(await openDocumentText(store, "bad.funda", text)).toBe("unreadable");
     expect(puts).toEqual([]);
     expect(store.document.parameters).toEqual({ kept: 1 });
-    expect(toasts).toHaveLength(1);
-    expect(toasts[0]!.kind).toBe("error");
+    expect(ui.toasts).toHaveLength(1);
+    expect(ui.toasts[0]!.kind).toBe("error");
   });
 
   it("opens a dropped file's embedded geometry through the same path", async () => {
@@ -196,7 +193,8 @@ describe("a document with an imported body in the browser build", () => {
     const { geometry } = engine(blank);
     const store = new DocumentStore(geometry, { parameters: {}, features: [] });
     const text = JSON.stringify({ ...importDoc(), geometry: { [HASH]: b64(BREP) } }, null, 2);
-    expect(await openDocumentBytes(store, new File([text], "bracket.funda"), geometry)).toBe("ok");
+    const outcome = await openDocumentBytes(store, new File([text], "bracket.funda"), geometry);
+    expect({ outcome, toasts: ui.toasts }).toEqual({ outcome: "ok", toasts: [] });
     expect(blank.get(HASH)).toEqual(BREP);
   });
 });
