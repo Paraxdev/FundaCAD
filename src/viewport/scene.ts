@@ -308,7 +308,8 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const post = new PostChain(renderer, scene, potatoOn);
 
   const frameShadows = () => {
-    key.castShadow = renderPrefs().shadows;
+    // With no key light (an imported panorama lights alone) a shadow map would still darken the catcher.
+    key.castShadow = renderPrefs().shadows && key.intensity > 0;
     if (key.castShadow) frameKeyShadow(key, modelGroup);
   };
 
