@@ -96,7 +96,7 @@ describe("New and Open clear the view at once", () => {
   });
 });
 
-// Every import's top node is "n:f1/0", so the 3D printer example opened with its folders as an earlier document's
+// Every import's top node is "n:f1/0", so a STEP example opened with its folders as an earlier document's
 // assembly was left.
 describe("New and Open start the next document's folders from their defaults", () => {
   const open = (b: ReturnType<typeof useBrowserStore>) =>

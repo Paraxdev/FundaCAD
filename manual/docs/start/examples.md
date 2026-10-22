@@ -16,13 +16,16 @@ A box and a lid laid flat side by side, ready to print. The lid has a lip that f
 
 See [Parameters](../model/parameters.md).
 
-## 3D printer
+## Capsule holder
 
-A printer frame imported from a STEP file, about 100 parts in named groups: Frame, Motion, Bed, Toolhead and Electronics. It takes the same import your own STEP files take, with its colours and its parts tree, so it shows what to expect when you open your own printer.
+A tube and a screw-on cap laid side by side, ready to print. Both threads are modelled, a revolve that climbs one `pitch` each turn, and the cap's thread leaves `clearance` of play on both flanks, 0.25 mm to start with.
 
-- Open the Items panel and expand Printer to see the groups. The eye on a group hides every part in it, and Alt+click on an eye shows only that one. See [Items](../model/items.md).
-- Turn on a section to look inside the frame. See [Section](../inspect/section.md).
-- Click a part to select it and read its size and weight in Properties. See [Properties](../inspect/properties.md).
+- Change `innerDiameter`, `innerLength`, `wall` or `pitch` and both parts follow, the cap still screws on.
+- Set `screwedOn` to 1 to put the cap on the tube and see the fit, and back to 0 to lay both out again. Run [Interference](../inspect/interference.md) with it on to check that the parts do not touch.
+- If your printer makes the thread too tight, raise `clearance` to 0.3 or 0.4 and print again.
+- `threadLength` sets how far the thread runs down the tube.
+
+See [Parameters](../model/parameters.md).
 
 ## Plate
 

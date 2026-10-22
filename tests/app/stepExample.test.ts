@@ -37,11 +37,18 @@ vi.mock("../../src/ui/choice", () => ({
 vi.mock("../../src/ui/toast", () => ({
   toast: (msg: string, o: { kind?: string } = {}) => void (o.kind === "error" ? h.reported : h.told).push(msg),
 }));
-vi.mock("../../src/templates", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../src/templates")>()),
-  templateFile: (id: string) =>
-    h.file ? h.file() : Promise.resolve(new File([new Uint8Array([31, 139])], `${id}.stpz`)),
-}));
+vi.mock("../../src/templates", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../src/templates")>();
+  return {
+    ...original,
+    TEMPLATES: [
+      ...original.TEMPLATES,
+      { id: "printer", name: "3D printer", caption: "", hint: "", icon: "assembly", source: "step" },
+    ],
+    templateFile: (id: string) =>
+      h.file ? h.file() : Promise.resolve(new File([new Uint8Array([31, 139])], `${id}.stpz`)),
+  };
+});
 
 import { hasUnsavedWork, importFromHome, isBlankDocument, newFromTemplate } from "../../src/app/documentActions";
 
@@ -164,7 +171,7 @@ beforeEach(() => {
   });
 });
 
-describe("the 3D printer example", () => {
+describe("a STEP example", () => {
   it("imports printer.stpz once into a new document named after the card, coloured, and ends clean", async () => {
     const { e, store, resetCamera } = rig();
     await newFromTemplate(e, "printer");
@@ -322,19 +329,16 @@ describe("a document opened while an import reads", () => {
     opened.flatMap(([what, dirty, features]) =>
       replies.map(([r, stops]) => [what, r, dirty, features, stops] as const),
     ),
-  )(
-    "keeps the 3D printer example out of an opened document %s, its read %s",
-    async (_what, _r, dirty, features, stops) => {
-      const { e, store } = rig();
-      h.stopsOnCancel = stops;
-      h.reading = opens("D:/jigs/Gear.funda", { dirty });
-      await newFromTemplate(e, "printer");
-      expect(seen(store)).toEqual({ ...gear, features, dirty, imported: ["printer.stpz"] });
-      expect(h.told).toEqual([dropped("printer.stpz")]);
-    },
-  );
+  )("keeps a STEP example out of an opened document %s, its read %s", async (_what, _r, dirty, features, stops) => {
+    const { e, store } = rig();
+    h.stopsOnCancel = stops;
+    h.reading = opens("D:/jigs/Gear.funda", { dirty });
+    await newFromTemplate(e, "printer");
+    expect(seen(store)).toEqual({ ...gear, features, dirty, imported: ["printer.stpz"] });
+    expect(h.told).toEqual([dropped("printer.stpz")]);
+  });
 
-  it("keeps the 3D printer example out of a document opened while its file is fetched", async () => {
+  it("keeps a STEP example out of a document opened while its file is fetched", async () => {
     const { e, store } = rig();
     h.file = async () => {
       opens("D:/jigs/Gear.funda")(h.store!);
@@ -474,16 +478,13 @@ describe("a cancelled import", () => {
   it.each([
     ["the environment", environment],
     ["the material library", material],
-  ])(
-    "keeps the 3D printer example's document unsaved when the maker changed %s after it landed",
-    async (_what, edit) => {
-      const { e, store } = rig();
-      h.cancel = true;
-      h.building = edit;
-      await newFromTemplate(e, "printer");
-      expect(seen(store)).toMatchObject({ features: [], name: "Untitled", dirty: true, reported: [] });
-    },
-  );
+  ])("keeps a STEP example's document unsaved when the maker changed %s after it landed", async (_what, edit) => {
+    const { e, store } = rig();
+    h.cancel = true;
+    h.building = edit;
+    await newFromTemplate(e, "printer");
+    expect(seen(store)).toMatchObject({ features: [], name: "Untitled", dirty: true, reported: [] });
+  });
 });
 
 const flush = async () => {
@@ -563,7 +564,7 @@ describe("a STEP dropped on a blank Home", () => {
   });
 });
 
-describe("the 3D printer example while its file is read", () => {
+describe("a STEP example while its file is read", () => {
   it("is not a blank document", async () => {
     const { e } = rig();
     const blank: boolean[] = [];
@@ -619,7 +620,7 @@ describe("an opening import that fails while a file added to its document is sti
     importFromHome(e, [name], () => importFileBytes(e.store, geometry, new File([new Uint8Array([73])], name)));
 
   const openings = [
-    ["the 3D printer example", "printer.stpz", (e: Engine) => newFromTemplate(e, "printer")],
+    ["a STEP example", "printer.stpz", (e: Engine) => newFromTemplate(e, "printer")],
     ["a STEP dropped on a blank Home", "a.step", (e: Engine) => (e.store.newDocument(), dropStep(e, "a.step"))],
   ] as const;
 

@@ -234,7 +234,7 @@ that opens its own session: `assembly_tree.py` (a dropped STEP assembly in Items
 eye, save and reopen), `refused_commit.py` (a refused draft keeps the tool open),
 `extrude_reedit.py` (reopening a whole sketch extrude), `shipped_examples.py` (every Home
 example opens untitled, builds and holds its bodies, the box keeps its lid's fit when its parameters
-change, and the printer card imports its STEP), and `big_printer_import.py` (a 3,000 part printer
+change, and the capsule holder's cap screws on without touching the tube), and `big_printer_import.py` (a 3,000 part printer
 STEP dropped on a blank document, its import, first frame and orbit times printed to the test log).
 `tests/browser/test_examples.py` runs them in the smoke set. The fixtures they
 open are described in `tools/harness/fixtures/README.md`.

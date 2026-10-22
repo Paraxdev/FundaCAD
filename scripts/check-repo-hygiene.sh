@@ -68,8 +68,8 @@ done
 # models that ship with vendored code. The stress samples in examples/stress
 # are allowed too: small parts modelled from parameters so the Stress panel has
 # something to open, and Home's templates in src/templates, the same two
-# parts plus a parametric plate and box. So are the generic printer STEP files
-# (src/templates/printer.stpz, tests/fixtures/printer_3000.stpz) written by
+# parts plus a parametric plate, box and capsule holder. So is the generic printer STEP file
+# (tests/fixtures/printer_3000.stpz) written by
 # scripts/examples/gen_printer.py, and the hand written files in tests/fixtures/versions
 # (one per document version, plus segmented.fundab for the segmented geometry format) and tests/fixtures/future. Add to this list only for files that are genuinely
 # synthetic or already public.
