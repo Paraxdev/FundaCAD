@@ -57,10 +57,12 @@ function referencedHashes(store: DocumentStore): string[] {
  *  Goes through the app, not the engine, so a save works while the engine worker is down. */
 async function writeContainer(store: DocumentStore, path: string): Promise<string | null> {
   const picture = captureThumbnail();
+  // Read before the first await: a document opened meanwhile must never be written under this one's path.
+  const doc = store.toObject();
+  const hashes = referencedHashes(store);
+  const carried = store.carriedSections;
   const { invoke } = await import("@tauri-apps/api/core");
   try {
-    const doc = store.toObject();
-    const hashes = referencedHashes(store);
     const optionalHashes = [...hashShapedStrings(doc)].filter((h) => !hashes.includes(h));
     await invoke("container_save", {
       path,
@@ -68,10 +70,10 @@ async function writeContainer(store: DocumentStore, path: string): Promise<strin
       hashes,
       optionalHashes,
       meshKeys: [],
-      carried: store.carriedSections,
+      carried,
     });
     void storeThumbnail(path, picture);
-    const left = leftOutSectionsNotice(path, store.carriedSections);
+    const left = leftOutSectionsNotice(path, carried);
     if (left) void import("../ui/toast").then(({ toast }) => toast(left, { kind: "info", timeout: 12000 }));
     return null;
   } catch (e) {
@@ -82,14 +84,18 @@ async function writeContainer(store: DocumentStore, path: string): Promise<strin
 /** Save: write to the current path if known, else behave like Save As. */
 export async function saveDocument(store: DocumentStore) {
   if (isTauri() && store.filePath) {
-    const err = await writeContainer(store, store.filePath);
+    const session = store.session;
+    const path = store.filePath;
+    const err = await writeContainer(store, path);
     if (err) {
-      await reportError(`Couldn't save ${store.filePath}: ${err}`);
+      await reportError(`Couldn't save ${path}: ${err}`);
       return;
     }
-    store.markSaved(store.filePath);
-    noteRecent(store.filePath);
-    void clearRecovery(store.filePath); // the on-disk file is now the truth
+    // The file holds the document as it was when the save began, so another document opened meanwhile is not saved.
+    if (!session.alive) return;
+    store.markSaved(path);
+    noteRecent(path);
+    void clearRecovery(path); // the on-disk file is now the truth
   } else {
     await saveDocumentAs(store);
   }
@@ -97,6 +103,7 @@ export async function saveDocument(store: DocumentStore) {
 
 /** Save As: always prompt for a path (or download in a plain browser). */
 export async function saveDocumentAs(store: DocumentStore) {
+  const session = store.session;
   if (isTauri()) {
     const { save } = await import("@tauri-apps/plugin-dialog");
     const path = await save({
@@ -109,12 +116,14 @@ export async function saveDocumentAs(store: DocumentStore) {
         isDocumentExt(store.fileName.split(".").pop()?.toLowerCase()) ? store.fileName : `${store.fileName}.${DOC_EXT}`,
       ),
     });
-    if (path) {
+    // A path picked for a document that was closed meanwhile is not where the next one goes.
+    if (path && session.alive) {
       const err = await writeContainer(store, path);
       if (err) {
         await reportError(`Couldn't save ${path}: ${err}`);
         return;
       }
+      if (!session.alive) return;
       store.markSaved(path);
       noteRecent(path);
       void clearRecovery(path);
@@ -127,6 +136,7 @@ export async function saveDocumentAs(store: DocumentStore) {
       await reportError(built.refused);
       return;
     }
+    if (!session.alive) return;
     downloadText(name, built.text);
     // No real path, but without this the title bar read "Untitled*" forever, as if the save had failed.
     store.markSaved(name);
@@ -369,8 +379,7 @@ async function warnAboutOpen(store: DocumentStore) {
   const ids = notices.map((n) =>
     toast(n.message, { kind: n.kind, timeout: 12000, ...(n.detail ? { detail: n.detail } : {}) }),
   );
-  const off = store.onOpen(() => {
-    off();
+  store.session.own(() => {
     for (const id of ids) if (id !== null) dismissToast(id);
   });
 }
@@ -912,17 +921,24 @@ export async function importInTurn(
   store: DocumentStore,
   steps: readonly { name: string; run: () => Promise<ImportEnd | void> }[],
 ): Promise<void> {
-  let opened = false;
-  const offOpen = store.onOpen(() => (opened = true));
+  const session = store.session;
   const left: string[] = [];
-  try {
-    for (const step of steps) {
-      if (opened || (await step.run()) === "dropped") left.push(step.name);
-    }
-  } finally {
-    offOpen();
+  for (const step of steps) {
+    if (!session.alive || (await step.run()) === "dropped") left.push(step.name);
   }
   await importDropped(left);
+}
+
+// False when the document's session ended first: what was waited for belongs to a document that is gone.
+async function builtInSession(store: DocumentStore): Promise<boolean> {
+  const session = store.session;
+  try {
+    await session.step(store.whenBuilt());
+    return true;
+  } catch (e) {
+    if (isSessionEnded(e)) return false;
+    throw e;
+  }
 }
 
 const importSource = (f: Feature) =>
@@ -937,10 +953,7 @@ async function cancelledImport(
   res: Parameters<typeof adoptImportedColors>[2],
   cleanAt: number | null = null,
 ) {
-  let opened = false;
-  const offOpen = store.onOpen(() => (opened = true));
-  await store.whenBuilt().finally(offOpen);
-  if (opened) return true;
+  if (!(await builtInSession(store))) return true;
   const still = store.document.features.find((f) => f.id === imported.id);
   if (!store.buildState.cancelled || !still || importSource(still) !== importSource(imported)) return false;
   const has = (d: { features: { id: string }[] }) => d.features.some((f) => f.id === imported.id);
@@ -1029,10 +1042,7 @@ export async function adoptImportedColors(
   const { add, byColor } = materialsForColors(wanted, store.materialLibrary);
   if (add.length) own(() => store.importMaterials(add));
 
-  let opened = false;
-  const offOpen = store.onOpen(() => (opened = true));
-  await store.whenBuilt().finally(offOpen);
-  if (opened) return true;
+  if (!(await builtInSession(store))) return true;
   const bodies = store.buildState.result?.bodies ?? [];
   // Note: after an undo nextId() hands this id to the next feature drawn, so the
   // id alone does not say the import is still there.
