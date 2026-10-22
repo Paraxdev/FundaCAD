@@ -789,6 +789,21 @@ export interface CadDocument {
   stress?: StressStudy;
   /** document/docEnvironment.ts, only for a custom environment. */
   environment?: import("./document/docEnvironment").DocEnvironment;
+  /** The section cut that is on (document/sectionView.ts), absent when none is. */
+  sectionView?: SectionView;
+}
+
+/** How the half a section removes is drawn, the rungs of the ghost dial. */
+export type SectionGhost = "hidden" | "faint" | "soft" | "strong";
+
+/** A section cut as the document saves it: `offset` mm along `normal` from `origin`, keeping the half `normal`
+ *  points into when `side` is 1 (features/sectionMath.ts clipPlaneAt). */
+export interface SectionView {
+  origin: Vec3;
+  normal: Vec3;
+  offset: number;
+  side: 1 | -1;
+  ghost: SectionGhost;
 }
 
 /** The six world axes a direction can be picked from in the Stress panel. */

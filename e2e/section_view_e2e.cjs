@@ -297,6 +297,37 @@ function modelDoc() {
     s = await state();
     c = await chip();
     check("Off removes the cut and the chip", s.phase === "off" && !s.sectioned && c === null, { s, c });
+
+    console.log("\n[part 3: saved with the document]");
+    const f3 = await makeCut();
+    const savedCut = () => page.evaluate(() => {
+      const v = window.store.sectionView;
+      return v && JSON.parse(JSON.stringify(v));
+    });
+    const sv = await savedCut();
+    const near = (a, b, tol) => a.length === b.length && a.every((x, i) => Math.abs(x - b[i]) < tol);
+    const onPlane = sv && Math.abs(dot(sv.origin.map((x, i) => x - f3.point[i]), f3.normal));
+    check("the store holds the cut: the face's plane, 9.5 in, the bulk kept, soft ghost",
+      !!sv && near(sv.normal, f3.normal, 1e-4) && onPlane < 1e-3 && sv.offset === -9.5 && sv.side === -1 &&
+        sv.ghost === "soft" && Object.keys(sv).sort().join() === "ghost,normal,offset,origin,side", { sv, onPlane });
+    const json = await page.evaluate(() => window.store.toJSON());
+    await page.evaluate(() => window.store.newDocument());
+    await settle();
+    s = await state();
+    check("New turns it off", s.phase === "off" && !s.sectioned && (await chip()) === null && (await savedCut()) === null, s);
+    await page.evaluate((j) => window.store.load(j), json);
+    await settle();
+    s = await state();
+    check("opening the saved file puts the same cut back on, with its chip",
+      s.phase === "on" && s.sectioned && (await chip()) !== null && JSON.stringify(await savedCut()) === JSON.stringify(sv) &&
+        near(s.plane, kept, 2e-3), { s, kept });
+    await page.evaluate(async () => {
+      window.store.loadDocument({ parameters: {}, features: [{ id: "k1", type: "box", length: 30, width: 20, height: 10 }] });
+      await window.store.rebuildNow();
+    });
+    await settle();
+    s = await state();
+    check("opening a document saved without a cut turns it off", s.phase === "off" && !s.sectioned && (await chip()) === null, s);
   } catch (err) {
     console.error(err);
     failures++;
