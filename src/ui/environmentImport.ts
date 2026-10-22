@@ -82,15 +82,24 @@ export async function storeHdr(img: HdrImage, name: string, library = envLibrary
   return rec;
 }
 
-/** Light the viewport with an .hdr or .exr. Returns the refusal, or null. */
+/** Light the viewport with an .hdr or .exr. Returns the refusal, or null. `leftOut` is asked once the panorama is
+ *  stored, and true leaves the look as it was. */
 export async function importEnvironmentBytes(
   store: DocumentStore | null,
   bytes: Uint8Array,
   name: string,
   library = envLibrary(),
+  opts: { leftOut?: () => boolean } = {},
 ): Promise<string | null> {
   try {
     const rec = await storeHdr(await decodeHdr(bytes, name), name, library);
+    if (opts.leftOut) {
+      // Ready before the look changes, so the document write that follows has no library read for an open to slip
+      // into. Held only once the look is taken, the cache keeps the open document's panorama.
+      const embed = store ? (embedded.get(rec.hash) ?? (await readEmbed(rec.hash, library))) : null;
+      if (opts.leftOut()) return null;
+      if (embed) holdEmbed(embed);
+    }
     setActiveSaved(null);
     setRenderPref("environment", `hdr:${rec.hash}`);
     if (store) await syncDocumentEnvironment(store, library);
@@ -101,8 +110,12 @@ export async function importEnvironmentBytes(
   }
 }
 
-export async function importEnvironmentFile(store: DocumentStore | null, file: File): Promise<string | null> {
-  return importEnvironmentBytes(store, new Uint8Array(await file.arrayBuffer()), file.name);
+export async function importEnvironmentFile(
+  store: DocumentStore | null,
+  file: File,
+  opts: { leftOut?: () => boolean } = {},
+): Promise<string | null> {
+  return importEnvironmentBytes(store, new Uint8Array(await file.arrayBuffer()), file.name, envLibrary(), opts);
 }
 
 /** Make sure the panorama the settings name is decoded, then redraw. */
@@ -122,9 +135,15 @@ const embedded = new Map<string, EmbeddedHdr>();
 async function embedFor(hash: string, library: EnvLibrary): Promise<EmbeddedHdr | null> {
   const held = embedded.get(hash);
   if (held) return held;
+  const e = await readEmbed(hash, library);
+  if (e) holdEmbed(e);
+  return e;
+}
+
+async function readEmbed(hash: string, library: EnvLibrary): Promise<EmbeddedHdr | null> {
   const rec = await library.getHdr(hash);
   if (!rec) return null;
-  const e: EmbeddedHdr = {
+  return {
     name: rec.name,
     width: rec.width,
     height: rec.height,
@@ -132,9 +151,11 @@ async function embedFor(hash: string, library: EnvLibrary): Promise<EmbeddedHdr 
     sha256: rec.hash,
     data: deflateBase64(rec.rgbe),
   };
+}
+
+function holdEmbed(e: EmbeddedHdr) {
   embedded.clear();
-  embedded.set(hash, e);
-  return e;
+  embedded.set(e.sha256, e);
 }
 
 /** What the document should carry for the current look: an imported panorama

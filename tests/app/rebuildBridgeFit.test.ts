@@ -12,6 +12,7 @@ function bridge() {
   const builds = new Set<(s: RebuildState) => void>();
   const opens = new Set<() => void>();
   const fits: boolean[] = [];
+  const resets: unknown[][] = [];
   const store = {
     document: { features: [] as unknown[] },
     buildState: { result: null },
@@ -30,7 +31,12 @@ function bridge() {
     isBodyVisible: () => true,
   };
   const viewport = new Proxy({} as Record<string, unknown>, {
-    get: (_t, k) => (k === "setModel" ? (_r: unknown, fit: boolean) => fits.push(fit) : () => {}),
+    get: (_t, k) =>
+      k === "setModel"
+        ? (_r: unknown, fit: boolean) => fits.push(fit)
+        : k === "resetCamera"
+          ? (...a: unknown[]) => resets.push(a)
+          : () => {},
   });
   const e = {
     store,
@@ -47,7 +53,7 @@ function bridge() {
     const result = { mesh: { positions: solid ? [0, 0, 0] : [], indices: [], faceIds: [] }, edges: [], bodies: [] };
     for (const fn of builds) fn({ building: false, result } as unknown as RebuildState);
   };
-  return { show, open: () => opens.forEach((fn) => fn()), fits };
+  return { show, open: () => opens.forEach((fn) => fn()), fits, resets, e };
 }
 
 describe("the camera after an import", () => {
@@ -72,6 +78,17 @@ describe("the camera after an import", () => {
     b.show([box], true);
     b.show([box, imp], true);
     expect(b.fits).toEqual([true, false]);
+  });
+
+  it("frames the next model from the home view when asked, once, even with a part on screen", () => {
+    const b = bridge();
+    b.show([box], true);
+    b.show([box], true);
+    b.e.frameNextModel();
+    b.open();
+    b.show([{ id: "plate", type: "extrude" }], true);
+    b.show([{ id: "plate", type: "extrude" }], true);
+    expect([b.fits, b.resets]).toEqual([[true, false, true, false], [[false]]]);
   });
 
   it("leaves the camera alone for a part drawn into an emptied view", () => {

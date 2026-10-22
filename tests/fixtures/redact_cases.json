@@ -1,0 +1,15 @@
+[
+  ["spawn: C:\\Users\\jrabi\\AppData\\Local\\x.exe", "spawn: C:\\Users\\[REDACTED]\\AppData\\Local\\x.exe"],
+  ["\\\\HOST\\Users\\someone\\share", "\\\\HOST\\Users\\[REDACTED]\\share"],
+  ["path /home/alice/proj/x.py and /Users/bob/y", "path /home/[REDACTED]/proj/x.py and /Users/[REDACTED]/y"],
+  ["log at \"C:\\Users\\name\" end", "log at \"C:\\Users\\[REDACTED]\" end"],
+  ["open '/home/me/part.step' failed", "open '/home/[REDACTED]/part.step' failed"],
+  ["c:\\users\\John Smith\\Documents\\bracket.funda", "c:\\users\\[REDACTED]\\Documents\\bracket.funda"],
+  ["İstanbul C:\\Users\\Ümit\\x and C:/Users/user/y", "İstanbul C:\\Users\\[REDACTED]\\x and C:/Users/[REDACTED]/y"],
+  ["home C:\\Users\\bob\nnext /home/carol", "home C:\\Users\\[REDACTED]\nnext /home/[REDACTED]"],
+  ["crlf C:\\Users\\eve\r\nnext /Users/frank\tx", "crlf C:\\Users\\[REDACTED]\r\nnext /Users/[REDACTED]\tx"],
+  ["C:\\Users\\\\x and C:\\Users\\", "C:\\Users\\\\x and C:\\Users\\"],
+  ["/HOME/Grace/x and /home/", "/HOME/[REDACTED]/x and /home/"],
+  ["no paths here", "no paths here"],
+  ["", ""]
+]

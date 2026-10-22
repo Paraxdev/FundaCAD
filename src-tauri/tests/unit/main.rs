@@ -1,6 +1,7 @@
 mod launch_args;
 mod library;
 mod log_file;
+mod log_redact;
 mod plugins;
 mod safe_mode;
 mod session_file;

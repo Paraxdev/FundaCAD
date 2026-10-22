@@ -33,7 +33,7 @@ function engine() {
 const settle = async () => {
   for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
 };
-const WARNING = "sv08.step was not imported, its document was closed while it was read.";
+const WARNING = "sv08.step was not imported, another document was opened while it was read.";
 const fullRead = { ok: true, result: { geom: "h1", name: "sv08", solid: true, faces: 6 } };
 
 const ends: Record<string, (s: DocumentStore) => void> = {

@@ -55,6 +55,8 @@ interface Opts {
   sketch?: { editing: string | null };
   suppressed?: string[];
   features?: object[];
+  /** what the engine is busy with: an import, or a rebuild */
+  busy?: "import" | "rebuild";
 }
 
 function mountBar(o: Opts = {}) {
@@ -97,7 +99,7 @@ function mountBar(o: Opts = {}) {
       docVersion: ref(0),
       buildVersion: ref(0),
       editPreviewVersion: ref(0),
-      busy: ref({ active: false, waiting: false }),
+      busy: ref({ active: !!o.busy, waiting: false, rebuild: o.busy === "rebuild" }),
     },
     tools,
     sketch,
@@ -294,5 +296,30 @@ describe("an import's chip", () => {
     expect(m.chip("i1").find(".t-name").text()).toBe("Housing");
     expect(m.chip("i2").find(".t-name").text()).toBe("gear-box");
     expect(m.chip("i2").attributes("title")).not.toContain("File:");
+  });
+});
+
+describe("History's empty line", () => {
+  const sketch = { id: "sk1", type: "sketch", plane: "XZ", entities: [] };
+
+  it("names a sketch and a dropped file as the ways to start", () => {
+    const m = mountBar({ features: [] });
+    const line = m.w.find(".timeline-empty").text();
+    expect(line).toContain("Start with a Sketch");
+    expect(line).toContain("drop a STEP, STL or 3MF file");
+  });
+
+  it("is gone once there is a feature, one or many", () => {
+    expect(
+      mountBar({ features: [sketch] })
+        .w.find(".timeline-empty")
+        .exists(),
+    ).toBe(false);
+    expect(mountBar().w.find(".timeline-empty").exists()).toBe(false);
+  });
+
+  it("stays away while the first import runs, and shows during an empty rebuild", () => {
+    expect(mountBar({ features: [], busy: "import" }).w.find(".timeline-empty").exists()).toBe(false);
+    expect(mountBar({ features: [], busy: "rebuild" }).w.find(".timeline-empty").exists()).toBe(true);
   });
 });

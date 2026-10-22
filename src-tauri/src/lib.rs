@@ -18,6 +18,7 @@ pub mod safe_mode;
 pub mod session_file;
 pub mod settings_files;
 mod spacemouse;
+mod system_info;
 pub mod thumbs;
 #[cfg(target_os = "linux")]
 mod webkit;
@@ -169,8 +170,8 @@ fn frontend_ready(state: tauri::State<'_, FrontendReady>, safe: tauri::State<'_,
 const LOG_TAIL: u64 = 16 << 10;
 
 #[tauri::command]
-fn log_tail(app: tauri::AppHandle) -> Option<String> {
-    log_file::tail(&app.path().app_log_dir().ok()?, LOG_TAIL)
+fn log_tail(run: tauri::State<'_, log_file::RunLog>) -> Option<String> {
+    log_file::tail_for_run(&run, LOG_TAIL)
 }
 
 /// A crumb from the page, kept in the log where it outlives the window.
@@ -314,6 +315,7 @@ pub fn run() {
         frontend_ready,
         log_tail,
         log_line,
+        system_info::system_info,
         safe_mode_exit,
         launch::take_launch_paths,
         drop_paths::drop_paths_take,
@@ -393,19 +395,25 @@ pub fn run() {
         .setup(|app| {
             // A Windows or Linux debug build runs in a dev's terminal, which `tauri dev` may pipe.
             let to_file = cfg!(target_os = "macos") || !cfg!(debug_assertions);
-            if let Some(dir) = app.path().app_log_dir().ok().filter(|_| to_file) {
-                match log_file::redirect(&dir) {
+            let run = match app.path().app_log_dir().ok().filter(|_| to_file) {
+                None => log_file::RunLog::Off,
+                Some(dir) => match log_file::redirect(&dir) {
                     Ok(Some(path)) => {
                         println!("[log] FundaCAD {} started, logs to {}", env!("CARGO_PKG_VERSION"), path.display());
                         // Printed before the log took over, so repeated where a report will find it.
                         if let Some(r) = app.state::<SafeMode>().reason {
                             println!("[safe-mode] starting in safe mode because {}", r.describe());
                         }
+                        log_file::RunLog::ToFile(path)
                     }
-                    Ok(None) => {}
-                    Err(e) => eprintln!("[log] no log file in {}: {e}", dir.display()),
-                }
-            }
+                    Ok(None) => log_file::RunLog::Terminal,
+                    Err(e) => {
+                        eprintln!("[log] no log file in {}: {e}", dir.display());
+                        log_file::RunLog::Failed(e.to_string())
+                    }
+                },
+            };
+            app.manage(run);
             let (reason, dir) = {
                 let safe = app.state::<SafeMode>();
                 (safe.reason, safe.dir.clone())
