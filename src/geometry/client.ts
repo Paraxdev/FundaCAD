@@ -444,7 +444,7 @@ export interface GeometryBackend {
   /** One live-session op (live_session.py): publish what this window has open, collect what an assistant asked
    *  for. One untyped passthrough on purpose, since it is not geometry. Null when unsupported or failed, so
    *  "no session" and "no backend" share one path. */
-  session?(op: string, payload?: object): Promise<Record<string, unknown> | null>;
+  session?(op: `session_${string}`, payload?: object): Promise<Record<string, unknown> | null>;
   /** Put bytes in the engine's content addressed blob store, resolving to the
    *  hash a document names them by. Rejects with the engine's message. */
   blobPut?(bytes: Uint8Array): Promise<string>;
@@ -631,14 +631,31 @@ function engineWait(v: unknown): EngineWait | null {
   };
 }
 
+// Every op this client sends for a document. call() takes only these or an app op, so a new op has to be named here,
+// and the session leak test then fails until it has a row that proves the op ends with its document.
+export const ENGINE_OPS = [
+  "rebuild",
+  "computeAll",
+  "import",
+  "export",
+  "exportWith",
+  "generateShape",
+  "interference",
+  "stress",
+  "printability",
+  "blobWrite",
+  "blobRead",
+  "faceAxis",
+  "faceAnchor",
+  "profileCuts",
+  "patternAxis",
+  "projectGeometry",
+  "migrateGeometry",
+] as const;
 // Ops that serve the app, not one document, so ending a document never rejects them.
-const appScoped = (op: string) =>
-  op === "ping" ||
-  op === "cancel" ||
-  op === "doc_end" ||
-  op === "listFonts" ||
-  op === "tessellateText" ||
-  op.startsWith("session_");
+export const APP_OPS = ["ping", "cancel", "doc_end", "listFonts", "tessellateText"] as const;
+type EngineOp = (typeof ENGINE_OPS)[number] | (typeof APP_OPS)[number] | `session_${string}`;
+const appScoped = (op: EngineOp) => (APP_OPS as readonly string[]).includes(op) || op.startsWith("session_");
 
 export class Geometry implements GeometryBackend {
   private readonly transport: GeometryTransport;
@@ -1020,7 +1037,7 @@ export class Geometry implements GeometryBackend {
 
   /** See GeometryBackend.session. Answered on the engine's read path, so it never queues behind a rebuild
    *  and the host keeps publishing during its own build. */
-  async session(op: string, payload: object = {}): Promise<Record<string, unknown> | null> {
+  async session(op: `session_${string}`, payload: object = {}): Promise<Record<string, unknown> | null> {
     const msg = await this.call<Record<string, unknown>>(op, payload);
     return msg.ok ? msg.result : null;
   }
@@ -1035,7 +1052,7 @@ export class Geometry implements GeometryBackend {
   }
 
   private call<T>(
-    op: string,
+    op: EngineOp,
     extra: object,
     onId?: (id: string) => void,
     scope: DocumentSession | null = this.scope(),
@@ -1471,15 +1488,21 @@ export class Geometry implements GeometryBackend {
   async blobPut(bytes: Uint8Array): Promise<string> {
     const hash = blake2b128Hex(bytes);
     const total = bytes.length;
+    const scope = this.scope();
     let offset = 0;
     do {
       const piece = bytes.subarray(offset, offset + BLOB_PUT_CHUNK);
-      const msg = await this.call<{ stored: boolean; received?: number }>("blobWrite", {
-        hash,
-        offset,
-        total,
-        data: bytesToBase64(piece),
-      });
+      const msg = await this.call<{ stored: boolean; received?: number }>(
+        "blobWrite",
+        {
+          hash,
+          offset,
+          total,
+          data: bytesToBase64(piece),
+        },
+        undefined,
+        scope,
+      );
       if (!msg.ok) throw new Error(msg.error?.message ?? "the engine refused the bytes");
       if (msg.result.stored) return hash;
       offset += piece.length;
@@ -1491,8 +1514,14 @@ export class Geometry implements GeometryBackend {
     const parts: Uint8Array[] = [];
     let offset = 0;
     let size = 0;
+    const scope = this.scope();
     do {
-      const msg = await this.call<{ missing?: boolean; size: number; data: string }>("blobRead", { hash, offset });
+      const msg = await this.call<{ missing?: boolean; size: number; data: string }>(
+        "blobRead",
+        { hash, offset },
+        undefined,
+        scope,
+      );
       if (!msg.ok || msg.result.missing) return null;
       const piece = base64ToBytes(msg.result.data);
       if (!piece.length && offset < msg.result.size) return null;
