@@ -48,9 +48,14 @@ export class CanvasGesture {
     this.move = (e) => handlers.move(e);
     this.down = (e) => handlers.down(e);
     this.up = (e) => handlers.up?.(e);
-    this.key = (e) => { if (e.key !== "Escape" || !escapeClaimed()) handlers.key(e); };
+    this.key = (e) => {
+      if (e.key !== "Escape" || !escapeClaimed()) handlers.key(e);
+    };
     // raf is cleared BEFORE the pass runs, so a re-arm from inside it takes
-    this.tick = () => { this.raf = 0; handlers.frame?.(); };
+    this.tick = () => {
+      this.raf = 0;
+      handlers.frame?.();
+    };
   }
 
   /** Idempotent: a tool that re-enters its own pick phase calls this again, and

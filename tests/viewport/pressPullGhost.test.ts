@@ -12,10 +12,20 @@ function layer(tris: THREE.Vector3[][], normals?: (p: THREE.Vector3) => THREE.Ve
   const positions = tris.flat().flatMap((p) => p.toArray());
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  if (normals) geo.setAttribute("normal", new THREE.Float32BufferAttribute(tris.flat().flatMap((p) => normals(p).toArray()), 3));
+  if (normals)
+    geo.setAttribute(
+      "normal",
+      new THREE.Float32BufferAttribute(
+        tris.flat().flatMap((p) => normals(p).toArray()),
+        3,
+      ),
+    );
   geo.setIndex(Array.from({ length: tris.length * 3 }, (_, i) => i));
   const body: BodyMesh = {
-    id: "b", name: "b", faceStart: 0, faceCount: 1,
+    id: "b",
+    name: "b",
+    faceStart: 0,
+    faceCount: 1,
     mesh: new THREE.Mesh(geo),
     faceIds: tris.map(() => 0),
     edges: {} as BodyEdges,
@@ -46,10 +56,17 @@ describe("press/pull ghost on curved faces", () => {
     // An octant of a ball of radius 5 about (1, 2, 3), as two facets.
     const c = V(1, 2, 3);
     const on = (x: number, y: number, z: number) => V(x, y, z).normalize().multiplyScalar(5).add(c);
-    const { ghosts, cap } = layer([[on(1, 0, 0), on(0, 1, 0), on(1, 1, 1)], [on(0, 1, 0), on(0, 0, 1), on(1, 1, 1)]]);
+    const { ghosts, cap } = layer([
+      [on(1, 0, 0), on(0, 1, 0), on(1, 1, 1)],
+      [on(0, 1, 0), on(0, 0, 1), on(1, 1, 1)],
+    ]);
     const ball: RoundFace = {
       cylinder: { axis: [0, 0, 1], point: [1, 2, 3], radius: 5 },
-      radius: 5, solidInside: true, radial: V(1, 0, 0), full: false, centre: [1, 2, 3],
+      radius: 5,
+      solidInside: true,
+      radial: V(1, 0, 0),
+      full: false,
+      centre: [1, 2, 3],
     };
     ghosts.setPressPullGhost([0], 1.5, ball);
     const pts = cap();
@@ -60,8 +77,18 @@ describe("press/pull ghost on curved faces", () => {
   it("offsets a cone patch along its own normals", () => {
     // Two facets of a cone round Z, apex up, normals tilted 45 degrees.
     const on = (a: number, z: number) => V((4 - z) * Math.cos(a), (4 - z) * Math.sin(a), z);
-    const normal = (p: THREE.Vector3) => V(p.x, p.y, 0).normalize().add(V(0, 0, 1)).normalize();
-    const { ghosts, cap } = layer([[on(0, 0), on(0.4, 0), on(0, 2)], [on(0.4, 0), on(0.4, 2), on(0, 2)]], normal);
+    const normal = (p: THREE.Vector3) =>
+      V(p.x, p.y, 0)
+        .normalize()
+        .add(V(0, 0, 1))
+        .normalize();
+    const { ghosts, cap } = layer(
+      [
+        [on(0, 0), on(0.4, 0), on(0, 2)],
+        [on(0.4, 0), on(0.4, 2), on(0, 2)],
+      ],
+      normal,
+    );
     ghosts.setPressPullGhost([0], -0.5, "normal");
     const pts = cap();
     expect(pts).toHaveLength(6);

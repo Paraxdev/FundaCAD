@@ -164,8 +164,8 @@ fn carved(base: &Shape, inner: [f64; 2], centre: [f64; 2], r: f64) -> f64 {
     let ring = kernel::polygon_face(&[[x0, 0.0, z0], [x1, 0.0, z0], [x1, 0.0, z1], [x0, 0.0, z1]])
         .and_then(|f| kernel::revolve(&f, [0.0; 3], [0.0, 0.0, 1.0], 360.0))
         .expect("ring");
-    let ball = kernel::translated(&kernel::make_torus(centre[0], r).expect("torus"), [0.0, 0.0, centre[1]])
-        .expect("moved");
+    let ball =
+        kernel::translated(&kernel::make_torus(centre[0], r).expect("torus"), [0.0, 0.0, centre[1]]).expect("moved");
     let tool = kernel::boolean_op(&ring, &[&ball], BoolKind::Cut).expect("tool");
     kernel::volume(&kernel::boolean_op(base, &[&tool], BoolKind::Cut).expect("carve"))
 }
@@ -199,11 +199,8 @@ fn check_rim(features: &[Value], rim: [f64; 3], outer: f64, bend: [f64; 2], radi
 /// the top face's outer edge it carves the rim away.
 #[test]
 fn a_rim_next_to_a_concave_torus_rounds_and_carves() {
-    let features = turned(
-        &[[0.0, 0.0], [30.0, 0.0], [30.0, 20.0], [20.0, 20.0], [12.0, 12.0], [0.0, 12.0]],
-        3,
-        [12.0, 20.0],
-    );
+    let features =
+        turned(&[[0.0, 0.0], [30.0, 0.0], [30.0, 20.0], [20.0, 20.0], [12.0, 12.0], [0.0, 12.0]], 3, [12.0, 20.0]);
     for r in [4.0, 18.0] {
         check_rim(&features, [20.0, 0.0, 20.0], 30.0, [12.0, 20.0], 8.0, r);
     }
@@ -257,9 +254,10 @@ fn a_seat_round_past_the_post_foot_refuses() {
     }
     // At the size offered the plate round the post is whole.
     let (out, _) = built(&doc(features, Some(fillet([11.25, 0.0, 7.0], 14.4))));
-    let ring = kernel::polygon_face(&[[foot + 0.01, 0.0, 1.0], [15.0, 0.0, 1.0], [15.0, 0.0, 3.99], [foot + 0.01, 0.0, 3.99]])
-        .and_then(|f| kernel::revolve(&f, [0.0; 3], [0.0, 0.0, 1.0], 360.0))
-        .expect("ring");
+    let ring =
+        kernel::polygon_face(&[[foot + 0.01, 0.0, 1.0], [15.0, 0.0, 1.0], [15.0, 0.0, 3.99], [foot + 0.01, 0.0, 3.99]])
+            .and_then(|f| kernel::revolve(&f, [0.0; 3], [0.0, 0.0, 1.0], 360.0))
+            .expect("ring");
     let kept = kernel::volume(&kernel::boolean_op(&out, &[&ring], BoolKind::Common).expect("common"));
     assert!((kept - kernel::volume(&ring)).abs() < 1e-6 * kernel::volume(&ring), "plate under the foot {kept}");
 }
@@ -275,8 +273,18 @@ fn neck_plate() -> Vec<Value> {
 fn shouldered_neck(lean: f64) -> Vec<Value> {
     let (a, b) = (10.0 + lean, 10.0);
     let plan = [
-        [-30.0, -10.0], [-a, -10.0], [-b, -2.0], [b, -2.0], [a, -10.0], [30.0, -10.0],
-        [30.0, 10.0], [a, 10.0], [b, 2.0], [-b, 2.0], [-a, 10.0], [-30.0, 10.0],
+        [-30.0, -10.0],
+        [-a, -10.0],
+        [-b, -2.0],
+        [b, -2.0],
+        [a, -10.0],
+        [30.0, -10.0],
+        [30.0, 10.0],
+        [a, 10.0],
+        [b, 2.0],
+        [-b, 2.0],
+        [-a, 10.0],
+        [-30.0, 10.0],
     ];
     let entities: Vec<Value> =
         (0..plan.len()).map(|i| line(&format!("l{i}"), plan[i], plan[(i + 1) % plan.len()])).collect();

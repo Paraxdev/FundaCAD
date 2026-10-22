@@ -13,7 +13,10 @@ function bridge() {
   const sketch = new Proxy(state, { get: (t, k) => (k in t ? t[k as string] : () => {}) });
   const none = new Proxy({}, { get: () => () => {} });
   installSketchStateBridge({ sketch, overlay: none, selectFeature() {} } as never);
-  const to = (tool: string) => { state.tool = tool; (state.onState as () => void)(); };
+  const to = (tool: string) => {
+    state.tool = tool;
+    (state.onState as () => void)();
+  };
   return { to };
 }
 

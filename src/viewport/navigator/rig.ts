@@ -3,9 +3,7 @@
 // taken from the pose on screen.
 
 import * as THREE from "three";
-import type {
-  CameraRig, CameraState, FitOptions, NavLimits, ProjectionMode, StandardView,
-} from "../cameras";
+import type { CameraRig, CameraState, FitOptions, NavLimits, ProjectionMode, StandardView } from "../cameras";
 import { cameraFlightsOn } from "../../ui/motion";
 import { orthoClip, perspClip, NEAR_AT_REST } from "../clipPlanes";
 import { boxDepthRange, visibleNearDepth } from "./anchor";

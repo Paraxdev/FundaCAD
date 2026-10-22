@@ -79,7 +79,10 @@ fn drawn(doc: &Value) -> (usize, f64, f64) {
     let mut worst = 0.0f64;
     for line in &lines {
         let p = &line.points;
-        assert!(p.len() == 2 || p.len() % 2 == 1, "a curve keeps an odd point count, its middle point the parametric midpoint");
+        assert!(
+            p.len() == 2 || p.len() % 2 == 1,
+            "a curve keeps an odd point count, its middle point the parametric midpoint"
+        );
         let middle = if p.len() == 2 {
             [(p[0][0] + p[1][0]) / 2.0, (p[0][1] + p[1][1]) / 2.0, (p[0][2] + p[1][2]) / 2.0]
         } else {

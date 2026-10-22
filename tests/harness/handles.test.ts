@@ -4,7 +4,8 @@ import { handleList, handlePoint, overHandle, type HandleHost } from "../../src/
 import { createDragHandle, createRotationArc, nameHandle } from "../../src/features/manipulator";
 import { HarnessError } from "../../src/harness/locate";
 
-const W = 800, H = 600;
+const W = 800,
+  H = 600;
 
 /** One world unit is one pixel, looking down -Z, so +Y is up the screen. */
 function rig() {
@@ -34,7 +35,12 @@ function rig() {
 const all = () => true;
 
 function err(fn: () => unknown): HarnessError {
-  try { fn(); } catch (e) { if (e instanceof HarnessError) return e; throw e; }
+  try {
+    fn();
+  } catch (e) {
+    if (e instanceof HarnessError) return e;
+    throw e;
+  }
   throw new Error("expected a harness error");
 }
 

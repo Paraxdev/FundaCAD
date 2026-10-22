@@ -48,7 +48,11 @@ function reply(status: number, body?: unknown, extra: Partial<WebResponse> = {})
 function fakeStore() {
   const aborts: (AbortController | undefined)[] = [];
   const store = {
-    runBusy: (_label: string, fn: (onStarted: (id: string) => void) => Promise<unknown>, opts?: { abort?: AbortController }) => {
+    runBusy: (
+      _label: string,
+      fn: (onStarted: (id: string) => void) => Promise<unknown>,
+      opts?: { abort?: AbortController },
+    ) => {
       aborts.push(opts?.abort);
       return fn(() => {});
     },
@@ -60,8 +64,10 @@ function onshape(state: () => string, savedAt: string) {
   h.route = (req) => {
     const path = new URL(req.url).pathname;
     if (path.endsWith("/elements")) return reply(200, [{ id: E, name: "Part Studio 1", elementType: "PARTSTUDIO" }]);
-    if (path.endsWith("/translations")) return reply(200, { id: "t1", requestState: state(), resultExternalDataIds: ["x1"] });
-    if (path.startsWith("/api/translations/")) return reply(200, { id: "t1", requestState: state(), resultExternalDataIds: ["x1"] });
+    if (path.endsWith("/translations"))
+      return reply(200, { id: "t1", requestState: state(), resultExternalDataIds: ["x1"] });
+    if (path.startsWith("/api/translations/"))
+      return reply(200, { id: "t1", requestState: state(), resultExternalDataIds: ["x1"] });
     if (path.includes("/externaldata/")) return reply(200, undefined, { path: savedAt, len: 10 });
     return reply(404);
   };
@@ -77,7 +83,10 @@ afterEach(() => vi.useRealTimers());
 
 describe("importing from an Onshape link", () => {
   it.each([
-    ["Windows", "C:\\Users\\me\\AppData\\Roaming\\fundacad\\plugin-data\\FundaCAD.Onshape\\downloads\\Part_Studio_1.step"],
+    [
+      "Windows",
+      "C:\\Users\\me\\AppData\\Roaming\\fundacad\\plugin-data\\FundaCAD.Onshape\\downloads\\Part_Studio_1.step",
+    ],
     ["Linux", "/home/me/.local/share/fundacad/plugin-data/FundaCAD.Onshape/downloads/Part_Studio_1.step"],
   ])("deletes the downloaded STEP by its file name on %s", async (_os, savedAt) => {
     onshape(() => "DONE", savedAt);

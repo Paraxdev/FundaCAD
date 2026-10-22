@@ -43,7 +43,10 @@ export class RadialSession {
   private closed = false;
 
   constructor(
-    x: number, y: number, items: CtxItem[], gesture: RadialTrigger | null,
+    x: number,
+    y: number,
+    items: CtxItem[],
+    gesture: RadialTrigger | null,
     private readonly onChange: (s: RadialState | null) => void,
   ) {
     this.state = { x, y, items: items.filter((it) => !it.separator), hot: null, gesture };
@@ -56,7 +59,7 @@ export class RadialSession {
 
   private setHot(hot: number | null) {
     if (hot === this.state.hot) return;
-    const it = hot === null ? null : this.state.items[hot] ?? null;
+    const it = hot === null ? null : (this.state.items[hot] ?? null);
     if (it !== this.hovered) {
       this.hovered?.onHover?.(false);
       this.hovered = it;
@@ -81,8 +84,12 @@ export class RadialSession {
     const hot = this.hit(x, y);
     this.setHot(hot);
     const it = hot === null ? null : this.state.items[hot];
-    if (this.state.gesture && it?.children?.length && !it.disabled
-      && Math.hypot(x - this.state.x, y - this.state.y) >= RADIAL_SUBMENU_PX) {
+    if (
+      this.state.gesture &&
+      it?.children?.length &&
+      !it.disabled &&
+      Math.hypot(x - this.state.x, y - this.state.y) >= RADIAL_SUBMENU_PX
+    ) {
       this.ring(x, y, it.children, this.state.gesture);
     }
   }

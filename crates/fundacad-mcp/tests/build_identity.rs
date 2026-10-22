@@ -23,10 +23,7 @@ async fn an_engine_says_which_commit_it_was_built_from() {
     let engine = common::RealEngine::start();
     engine.hide();
     let mut socket = engine.socket().await;
-    let reply = socket
-        .request("p", &json!({"op": "ping"}))
-        .await
-        .expect("a reply");
+    let reply = socket.request("p", &json!({"op": "ping"})).await.expect("a reply");
     let _ = socket.close().await;
     assert_eq!(reply["result"]["pong"], json!(true), "{reply}");
     assert_eq!(

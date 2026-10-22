@@ -24,7 +24,10 @@ const URL = process.env.SC_URL || "http://localhost:5173/";
 const WS = process.env.SC_WS || "";
 const NAV = process.env.SC_NAV || "v2";
 const OUT = path.resolve(process.argv[2] || "navigation_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail !== undefined ? `, ${JSON.stringify(detail)}` : ""}`);
@@ -35,7 +38,10 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   if (WS) {
     // The frontend always dials the default engine port; a second engine on
     // another port needs the URL rewritten before the app loads.
@@ -52,7 +58,10 @@ const check = (name, ok, detail) => {
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
   await page.waitForTimeout(1500);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(300); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(300);
+  }
 
   const idle = async () => {
     await page.waitForTimeout(300);
@@ -60,12 +69,15 @@ const check = (name, ok, detail) => {
     await page.waitForTimeout(400);
   };
   await page.evaluate(async () => {
-    window.store.loadDocument({ parameters: {}, features: [
-      { id: "s1", type: "sketch", plane: "XY", entities: [{ type: "rectangle", width: 40, height: 30, x: 0, y: 0 }] },
-      { id: "e1", type: "extrude", sketch: "s1", distance: 20, operation: "new" },
-      { id: "s2", type: "sketch", plane: "XY", entities: [{ type: "circle", x: 45, y: 0, radius: 6 }] },
-      { id: "e2", type: "extrude", sketch: "s2", distance: 35, operation: "new" },
-    ] });
+    window.store.loadDocument({
+      parameters: {},
+      features: [
+        { id: "s1", type: "sketch", plane: "XY", entities: [{ type: "rectangle", width: 40, height: 30, x: 0, y: 0 }] },
+        { id: "e1", type: "extrude", sketch: "s1", distance: 20, operation: "new" },
+        { id: "s2", type: "sketch", plane: "XY", entities: [{ type: "circle", x: 45, y: 0, radius: 6 }] },
+        { id: "e2", type: "extrude", sketch: "s2", distance: 35, operation: "new" },
+      ],
+    });
     await window.store.rebuildNow();
   });
   await idle();
@@ -82,24 +94,35 @@ const check = (name, ok, detail) => {
     return { c: c.toArray(), r: b.min.distanceTo(b.max) / 2 };
   });
 
-  const pose = () => page.evaluate(([c]) => {
-    const rig = window.viewport.rig;
-    const V = rig.getTarget().constructor;
-    const t = rig.getTarget();
-    const e = rig.getPosition();
-    const d = rig.viewDirection();
-    const cam = rig.active;
-    cam.updateMatrixWorld();
-    const right = new V().setFromMatrixColumn(cam.matrixWorld, 0);
-    const centre = new V(...c);
-    // how far the model's centre is from the view axis: containment moves the
-    // target only along the axis, so it cannot be nearer than this
-    const off = centre.clone().sub(e).cross(d).length();
-    return {
-      t: t.toArray(), e: e.toArray(), d: d.toArray(), rightZ: right.z, scale: rig.viewScale(),
-      ortho: rig.isOrtho(), mode: rig.projectionMode(), toCentre: t.distanceTo(centre), off,
-    };
-  }, [model.c]);
+  const pose = () =>
+    page.evaluate(
+      ([c]) => {
+        const rig = window.viewport.rig;
+        const V = rig.getTarget().constructor;
+        const t = rig.getTarget();
+        const e = rig.getPosition();
+        const d = rig.viewDirection();
+        const cam = rig.active;
+        cam.updateMatrixWorld();
+        const right = new V().setFromMatrixColumn(cam.matrixWorld, 0);
+        const centre = new V(...c);
+        // how far the model's centre is from the view axis: containment moves the
+        // target only along the axis, so it cannot be nearer than this
+        const off = centre.clone().sub(e).cross(d).length();
+        return {
+          t: t.toArray(),
+          e: e.toArray(),
+          d: d.toArray(),
+          rightZ: right.z,
+          scale: rig.viewScale(),
+          ortho: rig.isOrtho(),
+          mode: rig.projectionMode(),
+          toCentre: t.distanceTo(centre),
+          off,
+        };
+      },
+      [model.c],
+    );
   const sane = async (label) => {
     const p = await pose();
     const nums = [...p.t, ...p.e, ...p.d, p.scale, p.rightZ];
@@ -109,10 +132,11 @@ const check = (name, ok, detail) => {
     return p;
   };
   const shot = (name) => page.screenshot({ path: path.join(OUT, name) });
-  const screenOf = (p) => page.evaluate((q) => {
-    const V = window.viewport.rig.getTarget().constructor;
-    return window.viewport.projectToScreen(new V(...q));
-  }, p);
+  const screenOf = (p) =>
+    page.evaluate((q) => {
+      const V = window.viewport.rig.getTarget().constructor;
+      return window.viewport.projectToScreen(new V(...q));
+    }, p);
   // Mouse and wheel events carry whole pixels, so the cursor goes on one.
   const pixelOf = async (p) => {
     const s = await screenOf(p);
@@ -144,10 +168,17 @@ const check = (name, ok, detail) => {
   check("40 notches at the edge keep the point under the cursor within 1 px", worst < 1, { worst });
   await shot("02_zoomed_at_edge.png");
   const p1 = await sane("after 40 notches");
-  check("and the camera is still outside the box", !(Math.abs(p1.e[0]) < 20 && Math.abs(p1.e[1]) < 15 && p1.e[2] > 0 && p1.e[2] < 20), p1.e);
+  check(
+    "and the camera is still outside the box",
+    !(Math.abs(p1.e[0]) < 20 && Math.abs(p1.e[1]) < 15 && p1.e[2] > 0 && p1.e[2] < 20),
+    p1.e,
+  );
 
   // --- 2. back out and orbit about the model --------------------------------------
-  for (let i = 0; i < 36; i++) { await page.mouse.wheel(0, 100); await page.waitForTimeout(20); }
+  for (let i = 0; i < 36; i++) {
+    await page.mouse.wheel(0, 100);
+    await page.waitForTimeout(20);
+  }
   await settle();
   await shot("03_back_out.png");
   await sane("back out");
@@ -171,12 +202,22 @@ const check = (name, ok, detail) => {
   // --- 3. zoom out a long way, off the model -----------------------------------
   // bottom right: the top right corner is under the History card
   await page.mouse.move(canvas.left + canvas.width - 200, canvas.top + canvas.height - 80);
-  for (let i = 0; i < 30; i++) { await page.mouse.wheel(0, 150); await page.waitForTimeout(20); }
+  for (let i = 0; i < 30; i++) {
+    await page.mouse.wheel(0, 150);
+    await page.waitForTimeout(20);
+  }
   await settle();
   await shot("05_zoomed_out.png");
   await sane("zoomed out");
   const seen = await screenOf(model.c);
-  check("the model is still on screen", seen.x > canvas.left && seen.x < canvas.left + canvas.width && seen.y > canvas.top && seen.y < canvas.top + canvas.height, seen);
+  check(
+    "the model is still on screen",
+    seen.x > canvas.left &&
+      seen.x < canvas.left + canvas.width &&
+      seen.y > canvas.top &&
+      seen.y < canvas.top + canvas.height,
+    seen,
+  );
   await page.evaluate(() => window.viewport.fitView());
   await settle();
   await shot("06_fit.png");
@@ -210,7 +251,12 @@ const check = (name, ok, detail) => {
   await shot("08_off_top.png");
 
   // --- 5. projection cycling --------------------------------------------------------------
-  const corners = [[-20, -15, 0], [20, 15, 20], [45, 0, 35], [-20, 15, 20]];
+  const corners = [
+    [-20, -15, 0],
+    [20, 15, 20],
+    [45, 0, 35],
+    [-20, 15, 20],
+  ];
   const printOf = async () => Promise.all(corners.map((c) => screenOf(c)));
   const before = await printOf();
   const modes = [];
@@ -240,7 +286,10 @@ const check = (name, ok, detail) => {
   check("a sketch opened", await page.evaluate(() => !!window.sketch.active));
   const sk = await sane("in sketch");
   check("the sketch view looks straight down on the top face", Math.abs(sk.d[2] + 1) < 1e-6, sk.d);
-  check("entering the sketch keeps the scale", Math.abs(sk.scale - scaleBefore) / scaleBefore < 0.05, { before: scaleBefore, after: sk.scale });
+  check("entering the sketch keeps the scale", Math.abs(sk.scale - scaleBefore) / scaleBefore < 0.05, {
+    before: scaleBefore,
+    after: sk.scale,
+  });
   await shot("10_sketch.png");
   await page.evaluate(() => window.sketch.cancel());
   await settle();
@@ -256,7 +305,11 @@ const check = (name, ok, detail) => {
   await settle();
   const home = await sane("reset");
   const want = [-80, 120, -90].map((v) => v / Math.hypot(80, 120, 90));
-  check("reset looks in from the home corner", home.d.every((v, i) => Math.abs(v - want[i]) < 1e-3), { d: home.d, want });
+  check(
+    "reset looks in from the home corner",
+    home.d.every((v, i) => Math.abs(v - want[i]) < 1e-3),
+    { d: home.d, want },
+  );
   await shot("12_reset.png");
 
   // --- 8. a right click with a few pixels of hand jitter --------------------------------
@@ -268,26 +321,42 @@ const check = (name, ok, detail) => {
   await page.mouse.move(onTop.x + 3, onTop.y + 3);
   await page.mouse.up({ button: "right" });
   await settle();
-  check("a jittery right click opens the menu", await page.evaluate(() => document.querySelectorAll(".ctx-item").length > 0));
+  check(
+    "a jittery right click opens the menu",
+    await page.evaluate(() => document.querySelectorAll(".ctx-item").length > 0),
+  );
   check("and does not turn the view", (await page.evaluate(() => window.viewport.rig.poseVersion())) === v0);
   await shot("13_jitter_menu.png");
   await page.keyboard.press("Escape");
 
   // --- 9. a two finger pinch, with frames between the fingers landing and spreading ----
   const cdp = await page.context().newCDPSession(page);
-  const touch = (type, pts) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+  const touch = (type, pts) =>
+    cdp.send("Input.dispatchTouchEvent", { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
   const m = await pixelOf([0, 0, 20]);
   const d0 = (await pose()).e;
   const mid9 = [0, 0, 20];
   const dist = (e) => Math.hypot(e[0] - mid9[0], e[1] - mid9[1], e[2] - mid9[2]);
   const under = await page.evaluate(([x, y]) => window.viewport.orbitPivotAt(x, y)?.toArray(), [m.x, m.y]);
-  await touch("touchStart", [[m.x - 40, m.y], [m.x + 40, m.y]]);
+  await touch("touchStart", [
+    [m.x - 40, m.y],
+    [m.x + 40, m.y],
+  ]);
   await page.waitForTimeout(100);
-  for (let i = 1; i <= 10; i++) { await touch("touchMove", [[m.x - 40 - i * 8, m.y], [m.x + 40 + i * 8, m.y]]); await page.waitForTimeout(16); }
+  for (let i = 1; i <= 10; i++) {
+    await touch("touchMove", [
+      [m.x - 40 - i * 8, m.y],
+      [m.x + 40 + i * 8, m.y],
+    ]);
+    await page.waitForTimeout(16);
+  }
   await touch("touchEnd", []);
   await settle();
   const pinched = await sane("after a pinch");
-  check("spreading two fingers zooms in", dist(pinched.e) < 0.6 * dist(d0), { before: dist(d0), after: dist(pinched.e) });
+  check("spreading two fingers zooms in", dist(pinched.e) < 0.6 * dist(d0), {
+    before: dist(d0),
+    after: dist(pinched.e),
+  });
   const mq = await screenOf(under);
   check("about their midpoint", Math.hypot(mq.x - m.x, mq.y - m.y) < 1, mq);
   await shot("14_pinch.png");
@@ -306,7 +375,10 @@ const check = (name, ok, detail) => {
   }, detail);
   await settle();
   await page.mouse.move(mid.x, mid.y);
-  for (let i = 0; i < 40; i++) { await page.mouse.wheel(0, -100); await page.waitForTimeout(20); }
+  for (let i = 0; i < 40; i++) {
+    await page.mouse.wheel(0, -100);
+    await page.waitForTimeout(20);
+  }
   await settle();
   const deep = await pose();
   await shot("15_deep_iso.png");
@@ -315,7 +387,10 @@ const check = (name, ok, detail) => {
     await settle();
     const p = await pose();
     const at = await screenOf(detail);
-    check(`${view} while zoomed in deep keeps the scale`, Math.abs(p.scale / deep.scale - 1) < 0.01, { before: deep.scale, after: p.scale });
+    check(`${view} while zoomed in deep keeps the scale`, Math.abs(p.scale / deep.scale - 1) < 0.01, {
+      before: deep.scale,
+      after: p.scale,
+    });
     check(`${view} keeps the detail at the centre`, Math.hypot(at.x - mid.x, at.y - mid.y) < 2, at);
     await shot(`${16 + i}_deep_${view}.png`);
   }
@@ -323,25 +398,35 @@ const check = (name, ok, detail) => {
   // --- 11. zooming all the way out keeps a small or a large part visible -------------
   for (const [i, size] of [2, 500].entries()) {
     await page.evaluate(async (w) => {
-      window.store.loadDocument({ parameters: {}, features: [
-        { id: "s1", type: "sketch", plane: "XY", entities: [{ type: "rectangle", width: w, height: w, x: 0, y: 0 }] },
-        { id: "e1", type: "extrude", sketch: "s1", distance: w, operation: "new" },
-      ] });
+      window.store.loadDocument({
+        parameters: {},
+        features: [
+          { id: "s1", type: "sketch", plane: "XY", entities: [{ type: "rectangle", width: w, height: w, x: 0, y: 0 }] },
+          { id: "e1", type: "extrude", sketch: "s1", distance: w, operation: "new" },
+        ],
+      });
       await window.store.rebuildNow();
     }, size);
     await idle();
     await page.evaluate(() => window.viewport.fitView());
     await settle();
     await page.mouse.move(mid.x, mid.y);
-    for (let k = 0; k < 80; k++) { await page.mouse.wheel(0, 240); await page.waitForTimeout(10); }
+    for (let k = 0; k < 80; k++) {
+      await page.mouse.wheel(0, 240);
+      await page.waitForTimeout(10);
+    }
     await settle();
     const span = await page.evaluate(() => {
       const b = window.viewport.model.box;
       const V = b.min.constructor;
-      const xs = [], ys = [];
+      const xs = [],
+        ys = [];
       for (let k = 0; k < 8; k++) {
-        const s = window.viewport.projectToScreen(new V(k & 1 ? b.max.x : b.min.x, k & 2 ? b.max.y : b.min.y, k & 4 ? b.max.z : b.min.z));
-        xs.push(s.x); ys.push(s.y);
+        const s = window.viewport.projectToScreen(
+          new V(k & 1 ? b.max.x : b.min.x, k & 2 ? b.max.y : b.min.y, k & 4 ? b.max.z : b.min.z),
+        );
+        xs.push(s.x);
+        ys.push(s.y);
       }
       return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
     });

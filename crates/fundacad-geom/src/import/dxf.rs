@@ -66,7 +66,8 @@ fn ascii_pairs(data: &[u8]) -> Result<Vec<Pair>, String> {
         if code.is_empty() {
             continue;
         }
-        let code: i32 = code.parse().map_err(|_| format!("this is not a readable DXF file (a group code reads \"{code}\")"))?;
+        let code: i32 =
+            code.parse().map_err(|_| format!("this is not a readable DXF file (a group code reads \"{code}\")"))?;
         let value = lines.next().unwrap_or("").trim_end_matches('\r');
         out.push((code, V::S(value.to_string())));
         if code == 0 && value.trim() == "EOF" {
@@ -101,7 +102,9 @@ fn binary_kind(code: i32) -> Kind {
 fn binary_pairs(data: &[u8]) -> Result<Vec<Pair>, String> {
     let body = &data[BINARY_SENTINEL.len()..];
     if body.len() >= 2 && body[1] != 0 {
-        return Err("this binary DXF is older than R13, save it from the source app as ASCII DXF or a newer binary DXF".into());
+        return Err(
+            "this binary DXF is older than R13, save it from the source app as ASCII DXF or a newer binary DXF".into(),
+        );
     }
     let damaged = || "this binary DXF is damaged, it ends inside an entity".to_string();
     let mut at = 0usize;
@@ -357,7 +360,11 @@ fn unit(a: [f64; 3]) -> [f64; 3] {
 /// axis algorithm.
 fn ocs(n: [f64; 3]) -> Mat {
     let n = unit(n);
-    let ax = unit(if n[0].abs() < 1.0 / 64.0 && n[1].abs() < 1.0 / 64.0 { cross([0.0, 1.0, 0.0], n) } else { cross([0.0, 0.0, 1.0], n) });
+    let ax = unit(if n[0].abs() < 1.0 / 64.0 && n[1].abs() < 1.0 / 64.0 {
+        cross([0.0, 1.0, 0.0], n)
+    } else {
+        cross([0.0, 0.0, 1.0], n)
+    });
     let ay = unit(cross(n, ax));
     [[ax[0], ay[0], n[0], 0.0], [ax[1], ay[1], n[1], 0.0], [ax[2], ay[2], n[2], 0.0]]
 }
@@ -422,7 +429,17 @@ impl Out {
     /// a circle or arc when the image stays round, else a B-spline ellipse or a
     /// fit spline through samples. `ends` are the exact end points of a bulge.
     #[allow(clippy::too_many_arguments)]
-    fn conic(&mut self, layer: &str, m: &Mat, c: [f64; 3], u: [f64; 3], v: [f64; 3], t0: f64, sweep: f64, ends: Option<([f64; 3], [f64; 3])>) {
+    fn conic(
+        &mut self,
+        layer: &str,
+        m: &Mat,
+        c: [f64; 3],
+        u: [f64; 3],
+        v: [f64; 3],
+        t0: f64,
+        sweep: f64,
+        ends: Option<([f64; 3], [f64; 3])>,
+    ) {
         let (cw, uw, vw) = (apply(m, c), dir(m, u), dir(m, v));
         let size = norm(uw).max(norm(vw));
         if size <= 0.0 || !size.is_finite() {
@@ -631,7 +648,12 @@ impl Walker<'_> {
                     pts.push(apply(m, v.p(10)));
                 } else if vf & 128 != 0 {
                     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                    let f: Vec<usize> = [71, 72, 73, 74].iter().map(|&c| v.i(c, 0).unsigned_abs() as usize).filter(|&i| i > 0).map(|i| i - 1).collect();
+                    let f: Vec<usize> = [71, 72, 73, 74]
+                        .iter()
+                        .map(|&c| v.i(c, 0).unsigned_abs() as usize)
+                        .filter(|&i| i > 0)
+                        .map(|i| i - 1)
+                        .collect();
                     faces.push(f);
                 }
             }
@@ -653,7 +675,8 @@ impl Walker<'_> {
             }
             out.triangles(layer, &pts, &faces);
         } else if flags & 8 != 0 {
-            let pts: Vec<[f64; 3]> = e.subs.iter().filter(|v| v.i(70, 0) & 16 == 0).map(|v| apply(m, v.p(10))).collect();
+            let pts: Vec<[f64; 3]> =
+                e.subs.iter().filter(|v| v.i(70, 0) & 16 == 0).map(|v| apply(m, v.p(10))).collect();
             let n = if flags & 1 != 0 { pts.len() } else { pts.len().saturating_sub(1) };
             for i in 0..n {
                 out.line(layer, pts[i], pts[(i + 1) % pts.len()]);
@@ -661,8 +684,12 @@ impl Walker<'_> {
         } else {
             let mo = mul(m, &ocs(e.normal()));
             let z = e.f(30, 0.0);
-            let verts: Vec<([f64; 3], f64)> =
-                e.subs.iter().filter(|v| v.i(70, 0) & 16 == 0).map(|v| ([v.f(10, 0.0), v.f(20, 0.0), z], v.f(42, 0.0))).collect();
+            let verts: Vec<([f64; 3], f64)> = e
+                .subs
+                .iter()
+                .filter(|v| v.i(70, 0) & 16 == 0)
+                .map(|v| ([v.f(10, 0.0), v.f(20, 0.0), z], v.f(42, 0.0)))
+                .collect();
             polyline(out, layer, &mo, &verts, flags & 1 != 0);
         }
     }
@@ -850,7 +877,10 @@ fn spline(out: &mut Out, layer: &str, m: &Mat, e: &Ent) {
     let weights = e.all_f(41);
     let ctrl: Vec<[f64; 3]> = e.points(10).into_iter().map(|q| apply(m, q)).collect();
     let fit: Vec<[f64; 3]> = e.points(11).into_iter().map(|q| apply(m, q)).collect();
-    let usable = ctrl.len() > p && knots.len() == ctrl.len() + p + 1 && knots.windows(2).all(|w| w[1] >= w[0]) && knots[p] < knots[ctrl.len()];
+    let usable = ctrl.len() > p
+        && knots.len() == ctrl.len() + p + 1
+        && knots.windows(2).all(|w| w[1] >= w[0])
+        && knots[p] < knots[ctrl.len()];
     if !usable {
         if fit.len() >= 2 {
             out.flat_ends(&fit);
@@ -953,7 +983,9 @@ fn weld(ents: Vec<E>) -> Welded {
     let mut seen: HashSet<Vec<u64>> = HashSet::new();
     let mut out = Vec::new();
     let mut dropped = 0;
-    let key = |tag: u64, pts: &[P2]| -> Vec<u64> { std::iter::once(tag).chain(pts.iter().flat_map(|p| [p[0].to_bits(), p[1].to_bits()])).collect() };
+    let key = |tag: u64, pts: &[P2]| -> Vec<u64> {
+        std::iter::once(tag).chain(pts.iter().flat_map(|p| [p[0].to_bits(), p[1].to_bits()])).collect()
+    };
     for e in ents {
         let mut ends = Vec::new();
         let e = match e {
@@ -1037,7 +1069,9 @@ fn entity_json(e: &E, id: usize) -> Value {
     let id = format!("e{id}");
     match e {
         E::Line(a, b) => json!({"id": id, "type": "line", "x1": a[0], "y1": a[1], "x2": b[0], "y2": b[1]}),
-        E::Arc(s, e, m) => json!({"id": id, "type": "arc", "x1": s[0], "y1": s[1], "x2": e[0], "y2": e[1], "mx": m[0], "my": m[1]}),
+        E::Arc(s, e, m) => {
+            json!({"id": id, "type": "arc", "x1": s[0], "y1": s[1], "x2": e[0], "y2": e[1], "mx": m[0], "my": m[1]})
+        }
         E::Circle(c, r) => json!({"id": id, "type": "circle", "x": c[0], "y": c[1], "radius": r}),
         E::Bsp { poles, degree, knots, closed } => {
             let mut v = json!({"id": id, "type": "bspline", "poles": poles.iter().map(|p| pt(*p)).collect::<Vec<_>>(), "degree": degree});
@@ -1085,7 +1119,10 @@ pub fn read_dxf(data: &[u8]) -> Result<DxfRead, String> {
         let w = weld(ents);
         dropped += w.dropped;
         if w.open_ends > 0 {
-            notes.push(format!("layer {name} has {} and will not extrude until they meet", plural(w.open_ends, "open end", "open ends")));
+            notes.push(format!(
+                "layer {name} has {} and will not extrude until they meet",
+                plural(w.open_ends, "open end", "open ends")
+            ));
         }
         if !w.ents.is_empty() {
             sketches.push((name, w.ents.iter().enumerate().map(|(i, e)| entity_json(e, i + 1)).collect()));
@@ -1105,7 +1142,10 @@ pub fn read_dxf(data: &[u8]) -> Result<DxfRead, String> {
         notes.push(format!("{} not parallel to the XY plane were skipped", plural(o.tilted, "entity", "entities")));
     }
     if o.flattened > 0 {
-        notes.push(format!("{} with varying height were flattened onto the XY plane", plural(o.flattened, "entity", "entities")));
+        notes.push(format!(
+            "{} with varying height were flattened onto the XY plane",
+            plural(o.flattened, "entity", "entities")
+        ));
     }
     if dropped > 0 {
         notes.push(format!("{} of zero length or drawn twice were left out", plural(dropped, "entity", "entities")));
@@ -1114,7 +1154,10 @@ pub fn read_dxf(data: &[u8]) -> Result<DxfRead, String> {
         notes.push(format!("{} were not loaded", plural(o.xrefs, "external reference", "external references")));
     }
     if o.loops > 0 {
-        notes.push(format!("{} nested too deep or in a loop were left out", plural(o.loops, "block reference", "block references")));
+        notes.push(format!(
+            "{} nested too deep or in a loop were left out",
+            plural(o.loops, "block reference", "block references")
+        ));
     }
     for (kind, n) in &o.acis {
         notes.push(format!("{n} {kind} (ACIS) could not be read, export them from the source app as STEP"));
@@ -1140,13 +1183,16 @@ mod tests {
 
     fn dxf(insunits: i64, block: &str, entities: &str) -> Vec<u8> {
         let mut t = format!("0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n{insunits}\n0\nENDSEC\n");
-        t += &format!("0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n8\n0\n2\nB\n70\n0\n10\n0\n20\n0\n30\n0\n{block}0\nENDBLK\n0\nENDSEC\n");
+        t += &format!(
+            "0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n8\n0\n2\nB\n70\n0\n10\n0\n20\n0\n30\n0\n{block}0\nENDBLK\n0\nENDSEC\n"
+        );
         t += &format!("0\nSECTION\n2\nENTITIES\n{entities}0\nENDSEC\n0\nEOF\n");
         t.into_bytes()
     }
 
     const UNIT_LINE: &str = "0\nLINE\n8\n0\n10\n0\n20\n0\n30\n0\n11\n1\n21\n0\n31\n0\n";
-    const UNIT_FACE: &str = "0\n3DFACE\n8\n0\n10\n0\n20\n0\n30\n0\n11\n1\n21\n0\n31\n0\n12\n0\n22\n1\n32\n0\n13\n0\n23\n1\n33\n0\n";
+    const UNIT_FACE: &str =
+        "0\n3DFACE\n8\n0\n10\n0\n20\n0\n30\n0\n11\n1\n21\n0\n31\n0\n12\n0\n22\n1\n32\n0\n13\n0\n23\n1\n33\n0\n";
     const HUGE_ARRAY: &str = "0\nINSERT\n8\nL\n2\nB\n10\n0\n20\n0\n30\n0\n70\n30000\n71\n30000\n44\n2\n45\n2\n";
 
     #[test]
@@ -1161,7 +1207,17 @@ mod tests {
 
     #[test]
     fn every_length_unit_code_reads() {
-        for (code, mm) in [(3, 1_609_344.0), (7, 1e6), (11, 1e-7), (12, 1e-6), (15, 1e4), (16, 1e5), (22, 25.400_050_800_101_6), (23, 914.401_828_803_657_6), (24, 1_609_347.218_694_437_4)] {
+        for (code, mm) in [
+            (3, 1_609_344.0),
+            (7, 1e6),
+            (11, 1e-7),
+            (12, 1e-6),
+            (15, 1e4),
+            (16, 1e5),
+            (22, 25.400_050_800_101_6),
+            (23, 914.401_828_803_657_6),
+            (24, 1_609_347.218_694_437_4),
+        ] {
             let got = unit_scale(Some(code)).unwrap_or_else(|e| panic!("code {code}: {e}")).0;
             assert!((got - mm).abs() < mm * 1e-12, "code {code}: {got}");
         }

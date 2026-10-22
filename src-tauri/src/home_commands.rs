@@ -5,16 +5,12 @@ use tauri::Manager;
 
 #[tauri::command]
 pub async fn library_stat(paths: Vec<String>) -> Result<Vec<FileStat>, String> {
-    tauri::async_runtime::spawn_blocking(move || stat_all(&paths))
-        .await
-        .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || stat_all(&paths)).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn library_list(dir: String) -> Result<ListResult, String> {
-    tauri::async_runtime::spawn_blocking(move || list_dir(&dir))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || list_dir(&dir)).await.map_err(|e| e.to_string())?
 }
 
 /// None for the old ZIP container, which Home asks the user to open instead.
@@ -32,9 +28,7 @@ fn thumbs_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 #[tauri::command]
 pub async fn thumb_get(app: tauri::AppHandle, paths: Vec<String>) -> Result<Vec<Option<String>>, String> {
     let dir = thumbs_dir(&app)?;
-    tauri::async_runtime::spawn_blocking(move || crate::thumbs::get_all(&dir, &paths))
-        .await
-        .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || crate::thumbs::get_all(&dir, &paths)).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

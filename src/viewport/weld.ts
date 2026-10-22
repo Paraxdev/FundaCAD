@@ -55,9 +55,13 @@ export function weldByFace(
       if (e === 0) break;
       const o = (e - 1) * KEY;
       if (
-        same(keys[o]!, k0) && same(keys[o + 1]!, k1) && same(keys[o + 2]!, k2)
-        && same(keys[o + 3]!, k3) && same(keys[o + 4]!, k4) && same(keys[o + 5]!, k5)
-        && same(keys[o + 6]!, k6)
+        same(keys[o]!, k0) &&
+        same(keys[o + 1]!, k1) &&
+        same(keys[o + 2]!, k2) &&
+        same(keys[o + 3]!, k3) &&
+        same(keys[o + 4]!, k4) &&
+        same(keys[o + 5]!, k5) &&
+        same(keys[o + 6]!, k6)
       ) {
         found = e - 1;
         break;
@@ -73,11 +77,20 @@ export function weldByFace(
         grown.set(keys);
         keys = grown;
       }
-      keys[o] = k0; keys[o + 1] = k1; keys[o + 2] = k2;
-      keys[o + 3] = k3; keys[o + 4] = k4; keys[o + 5] = k5; keys[o + 6] = k6;
+      keys[o] = k0;
+      keys[o + 1] = k1;
+      keys[o + 2] = k2;
+      keys[o + 3] = k3;
+      keys[o + 4] = k4;
+      keys[o + 5] = k5;
+      keys[o + 6] = k6;
       const w = found * 3;
-      outP[w] = positions[b]!; outP[w + 1] = positions[b + 1]!; outP[w + 2] = positions[b + 2]!;
-      outN[w] = normals[b]!; outN[w + 1] = normals[b + 1]!; outN[w + 2] = normals[b + 2]!;
+      outP[w] = positions[b]!;
+      outP[w + 1] = positions[b + 1]!;
+      outP[w + 2] = positions[b + 2]!;
+      outN[w] = normals[b]!;
+      outN[w + 1] = normals[b + 1]!;
+      outN[w + 2] = normals[b + 2]!;
     }
     indices[t] = found;
   }

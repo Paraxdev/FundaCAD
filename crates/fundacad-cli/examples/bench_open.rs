@@ -115,8 +115,11 @@ fn stage_scan(args: &[String]) {
         for c in 0..=cols {
             let phi = 2.0 * std::f64::consts::PI * c as f64 / cols as f64;
             let rr = radius + 0.4 * noise() + 2.0 * (5.0 * theta).sin() * (7.0 * phi).cos();
-            grid[r * (cols + 1) + c] =
-                [(rr * theta.sin() * phi.cos()) as f32, (rr * theta.sin() * phi.sin()) as f32, (rr * theta.cos()) as f32];
+            grid[r * (cols + 1) + c] = [
+                (rr * theta.sin() * phi.cos()) as f32,
+                (rr * theta.sin() * phi.sin()) as f32,
+                (rr * theta.cos()) as f32,
+            ];
         }
     }
     let t = Instant::now();
@@ -242,7 +245,12 @@ fn file_layer(path: &Path, blob_dir: &Path, repeat: usize, refill: bool) -> Stri
         let opened = container::open_document_full(path, blob_dir, None, None).expect("the open");
         (t.elapsed(), opened.document)
     });
-    emit(if refill { "open_file_empty_store" } else { "open_file_filled_store" }, took, size, json!({"stored": dir_bytes(blob_dir)}));
+    emit(
+        if refill { "open_file_empty_store" } else { "open_file_filled_store" },
+        took,
+        size,
+        json!({"stored": dir_bytes(blob_dir)}),
+    );
     let (took, _) = median_of(repeat, || {
         let t = Instant::now();
         let v: Value = serde_json::from_str(&doc).unwrap();
@@ -318,6 +326,8 @@ fn main() {
         Some("pack") => stage_pack(rest),
         Some("open") => stage_open(rest, true),
         Some("reopen") => stage_open(rest, false),
-        _ => eprintln!("bench_open scan|pack|open|reopen, see the header of crates/fundacad-cli/examples/bench_open.rs"),
+        _ => {
+            eprintln!("bench_open scan|pack|open|reopen, see the header of crates/fundacad-cli/examples/bench_open.rs")
+        }
     }
 }

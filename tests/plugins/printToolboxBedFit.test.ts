@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryStorage } from "./memoryStorage";
 import {
-  bedFit, bedFitMessage, bedSizeOf, parseCustomBedSize, BED_PRESETS,
+  bedFit,
+  bedFitMessage,
+  bedSizeOf,
+  parseCustomBedSize,
+  BED_PRESETS,
 } from "../../plugins/FundaCAD.PrintToolbox/bedFit";
 
 describe("bedFit", () => {

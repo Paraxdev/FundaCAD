@@ -38,26 +38,35 @@ describe("readsBodyVisibility", () => {
 
 describe("an eye toggle", () => {
   let rebuilds: CadDocument[];
-  const backend = () => ({
-    async rebuild(doc: CadDocument): Promise<RebuildReply> {
-      rebuilds.push(doc);
-      return { ok: false, error: { message: "stub" } };
-    },
-    async init() {},
-    onStatus() { return () => {}; },
-    connected: true,
-  }) as unknown as GeometryBackend;
+  const backend = () =>
+    ({
+      async rebuild(doc: CadDocument): Promise<RebuildReply> {
+        rebuilds.push(doc);
+        return { ok: false, error: { message: "stub" } };
+      },
+      async init() {},
+      onStatus() {
+        return () => {};
+      },
+      connected: true,
+    }) as unknown as GeometryBackend;
   const base = [
     { id: "s1", type: "sketch", plane: "XY", entities: [] },
     { id: "e1", type: "extrude", sketch: "s1", distance: 10, operation: "new", hiddenBodies: [] },
   ];
   const storeOf = async (extra: Record<string, unknown>[]) => {
-    const store = new DocumentStore(backend(), { parameters: {}, features: [...base, ...extra] as unknown as Feature[] });
+    const store = new DocumentStore(backend(), {
+      parameters: {},
+      features: [...base, ...extra] as unknown as Feature[],
+    });
     await vi.runAllTimersAsync();
     rebuilds = [];
     return store;
   };
-  beforeEach(() => { vi.useFakeTimers(); rebuilds = []; });
+  beforeEach(() => {
+    vi.useFakeTimers();
+    rebuilds = [];
+  });
   afterEach(() => void vi.useRealTimers());
 
   it("is display only when nothing reads the eye states", async () => {

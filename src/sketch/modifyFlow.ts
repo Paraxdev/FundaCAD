@@ -24,8 +24,18 @@ import type { DimInput } from "./dimInput";
 import type { SketchTool } from "./sketchMode";
 import type { ResolvedEntity } from "./snap";
 import {
-  pickEntity, trimEntity, filletCorner, filletTangents, chamferCorner, offsetEntity, offsetChain,
-  signedOffsetAt, breakAt, extendLine, breakLink, PROJECTED_FIXED_MSG,
+  pickEntity,
+  trimEntity,
+  filletCorner,
+  filletTangents,
+  chamferCorner,
+  offsetEntity,
+  offsetChain,
+  signedOffsetAt,
+  breakAt,
+  extendLine,
+  breakLink,
+  PROJECTED_FIXED_MSG,
   type OffsetResult,
 } from "./modify";
 import { newEntityId } from "./id";
@@ -92,12 +102,20 @@ export class ModifyFlow {
   constructor(private readonly host: ModifyHost) {}
 
   /** is a fillet/chamfer waiting for its second line? */
-  get filletArmed(): boolean { return this.filletFirst != null; }
+  get filletArmed(): boolean {
+    return this.filletFirst != null;
+  }
   /** is an offset mid-placement? it owns the preview and the Escape stack */
-  get offsetting(): boolean { return this.offsetPick != null; }
+  get offsetting(): boolean {
+    return this.offsetPick != null;
+  }
   /** the armed line's index, for the hover preview and the constraint tools */
-  getFilletFirst(): number | null { return this.filletFirst; }
-  setFilletFirst(v: number | null) { this.filletFirst = v; }
+  getFilletFirst(): number | null {
+    return this.filletFirst;
+  }
+  setFilletFirst(v: number | null) {
+    this.filletFirst = v;
+  }
 
   /** drop every half-finished gesture: a tool change, Escape and undo all land
    *  here, and any one of these left set would act on geometry that has moved */
@@ -115,7 +133,10 @@ export class ModifyFlow {
     // branch and it runs on every move, so without this it would overwrite the
     // offset's live preview with a plain hover highlight one frame later.
     this.lastMove = e;
-    if (this.offsetPick) { this.offsetMove(e); return; }
+    if (this.offsetPick) {
+      this.offsetMove(e);
+      return;
+    }
     const p = this.host.planePoint(e);
     if (!p) return;
     const idx = pickEntity(this.host.entities(), p, this.host.pickTol());
@@ -156,20 +177,32 @@ export class ModifyFlow {
     const pick = this.offsetPick;
     contextMenu(e.clientX, e.clientY, [
       {
-        label: "Chain Selection", checked: this.offsetChainMode,
+        label: "Chain Selection",
+        checked: this.offsetChainMode,
         onClick: () => {
           this.offsetChainMode = !this.offsetChainMode;
-          setPrompt(this.offsetChainMode
-            ? "Chain Selection on, the whole connected profile offsets as a unit"
-            : "Chain Selection off, only the clicked curve offsets");
+          setPrompt(
+            this.offsetChainMode
+              ? "Chain Selection on, the whole connected profile offsets as a unit"
+              : "Chain Selection off, only the clicked curve offsets",
+          );
         },
       },
       {
-        label: "Flip", disabled: !pick,
-        onClick: () => { if (pick) pick.side = -pick.side; },
+        label: "Flip",
+        disabled: !pick,
+        onClick: () => {
+          if (pick) pick.side = -pick.side;
+        },
       },
       { separator: true, label: "" },
-      { label: "OK", disabled: !pick, onClick: () => { if (pick) this.commitOffset(); } },
+      {
+        label: "OK",
+        disabled: !pick,
+        onClick: () => {
+          if (pick) this.commitOffset();
+        },
+      },
       { label: "Cancel", disabled: !pick, onClick: () => this.cancelOffset() },
     ]);
   }
@@ -203,9 +236,9 @@ export class ModifyFlow {
     if (idx === this.filletFirst) return;
     const second = idx;
     const first = this.filletFirst;
-    this.host.dim().show([{ name: "radius", label: "R", kind: "length", positive: true }], () =>
-      this.applyFillet(first, second),
-    );
+    this.host
+      .dim()
+      .show([{ name: "radius", label: "R", kind: "length", positive: true }], () => this.applyFillet(first, second));
   }
   private applyFillet(iA: number, iB: number) {
     const r = this.host.dim().getValue("radius") ?? 2;
@@ -230,9 +263,9 @@ export class ModifyFlow {
     if (idx === this.filletFirst) return;
     const second = idx;
     const first = this.filletFirst;
-    this.host.dim().show([{ name: "distance", label: "D", kind: "length", positive: true }], () =>
-      this.applyChamfer(first, second),
-    );
+    this.host
+      .dim()
+      .show([{ name: "distance", label: "D", kind: "length", positive: true }], () => this.applyChamfer(first, second));
   }
   private applyChamfer(iA: number, iB: number) {
     const d = this.host.dim().getValue("distance") ?? 2;
@@ -254,7 +287,10 @@ export class ModifyFlow {
   /** ids of the currently-selected projected (linked reference) entities. */
   selectedProjectedIds(): Set<string> {
     return new Set(
-      this.host.entities().filter((e) => e.type === "projected" && this.host.selected().has(e.id)).map((e) => e.id),
+      this.host
+        .entities()
+        .filter((e) => e.type === "projected" && this.host.selected().has(e.id))
+        .map((e) => e.id),
     );
   }
 
@@ -278,7 +314,10 @@ export class ModifyFlow {
     const projected = this.warnSelectedProjected();
     for (const e of this.host.entities()) {
       if (this.host.selected().has(e.id) && !projected.has(e.id)) {
-        for (const m of map(e)) { next.push(m); sel.add(m.id); }
+        for (const m of map(e)) {
+          next.push(m);
+          sel.add(m.id);
+        }
       } else {
         next.push(e);
         if (projected.has(e.id)) sel.add(e.id);
@@ -317,9 +356,17 @@ export class ModifyFlow {
   /** Move/Copy: click a base point, then a destination, translate the whole
    *  selection. Move mutates in place; Copy leaves the originals and selects the copies. */
   moveClick(p: THREE.Vector2) {
-    if (!this.host.selected().size) { toast("Select entities first, then Move/Copy"); return; }
-    if (!this.moveBase) { this.moveBase = p.clone(); toast("Click the destination point"); return; }
-    const dx = p.x - this.moveBase.x, dy = p.y - this.moveBase.y;
+    if (!this.host.selected().size) {
+      toast("Select entities first, then Move/Copy");
+      return;
+    }
+    if (!this.moveBase) {
+      this.moveBase = p.clone();
+      toast("Click the destination point");
+      return;
+    }
+    const dx = p.x - this.moveBase.x,
+      dy = p.y - this.moveBase.y;
     this.moveBase = null;
     if (this.host.tool() === "copy") {
       const copies: ResolvedEntity[] = [];
@@ -341,8 +388,12 @@ export class ModifyFlow {
 
   /** Rotate the selection about a clicked center by a typed angle (degrees). */
   rotateClick(p: THREE.Vector2) {
-    if (!this.host.selected().size) { toast("Select entities first, then Rotate"); return; }
-    const cx = p.x, cy = p.y;
+    if (!this.host.selected().size) {
+      toast("Select entities first, then Rotate");
+      return;
+    }
+    const cx = p.x,
+      cy = p.y;
     this.host.dim().show([{ name: "angle", label: "Angle", icon: "angle", kind: "angle" }], () => {
       const ang = ((this.host.dim().getValue("angle") ?? 0) * Math.PI) / 180;
       this.host.dim().hide();
@@ -353,8 +404,12 @@ export class ModifyFlow {
 
   /** Scale the selection about a clicked base point by a typed factor. */
   scaleClick(p: THREE.Vector2) {
-    if (!this.host.selected().size) { toast("Select entities first, then Scale"); return; }
-    const cx = p.x, cy = p.y;
+    if (!this.host.selected().size) {
+      toast("Select entities first, then Scale");
+      return;
+    }
+    const cx = p.x,
+      cy = p.y;
     this.host.dim().show([{ name: "factor", label: "Factor", icon: "scale", kind: "count", positive: true }], () => {
       const f = this.host.dim().getValue("factor") ?? 1;
       this.host.dim().hide();
@@ -378,7 +433,10 @@ export class ModifyFlow {
   private lastMove: PointerEvent | null = null;
 
   offsetClick(p: THREE.Vector2) {
-    if (this.offsetPick) { this.commitOffset(); return; } // second click applies
+    if (this.offsetPick) {
+      this.commitOffset();
+      return;
+    } // second click applies
     if (this.edgePickPending) return;
     const idx = pickEntity(this.host.entities(), p, this.host.pickTol());
     if (idx < 0) {
@@ -390,8 +448,14 @@ export class ModifyFlow {
     if (!e) return;
     // Nothing may end in silence here: the user is mid-gesture, and a tool that
     // does nothing without saying why reads as broken.
-    if (e.type === "text") { toast("Offset doesn't apply to sketch text"); return; }
-    if (e.type === "point") { toast("Offset needs a curve, not a point"); return; }
+    if (e.type === "text") {
+      toast("Offset doesn't apply to sketch text");
+      return;
+    }
+    if (e.type === "point") {
+      toast("Offset needs a curve, not a point");
+      return;
+    }
     this.beginOffset(idx, []);
   }
 
@@ -489,12 +553,18 @@ export class ModifyFlow {
     // an untouched field silently produced a 1 mm offset nobody asked for.
     if (this.host.dim().isUserDriven("offset")) {
       const typed = this.host.dim().getValue("offset");
-      if (typed === null) { toast("Offset: type a distance, or Esc to cancel"); return; }
+      if (typed === null) {
+        toast("Offset: type a distance, or Esc to cancel");
+        return;
+      }
       // same rule as the live preview: a typed sign is the side (see offsetMove)
       pick.mag = Math.abs(typed);
       if (typed !== 0) pick.side = typed < 0 ? -1 : 1;
     }
-    if (pick.mag < 1e-6) { toast("Offset: type a distance, or Esc to cancel"); return; }
+    if (pick.mag < 1e-6) {
+      toast("Offset: type a distance, or Esc to cancel");
+      return;
+    }
     const res = this.offsetResultFor(pick.idx, pick.side * pick.mag);
     if (!res) {
       toast("Offset: that distance collapses the geometry");

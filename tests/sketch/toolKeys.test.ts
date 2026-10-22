@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import { sketchToolKey } from "../../src/sketch/toolKeys";
 import { SHORTCUTS } from "../../src/input/shortcuts";
 
-const press = (key: string, mods: Partial<{ shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean }> = {}) =>
-  ({ key, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, ...mods });
+const press = (
+  key: string,
+  mods: Partial<{ shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean }> = {},
+) => ({ key, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, ...mods });
 
 describe("sketchToolKey", () => {
   it("arms the drawing tools on bare letters", () => {

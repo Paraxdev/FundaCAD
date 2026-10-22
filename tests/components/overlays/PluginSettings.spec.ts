@@ -21,7 +21,16 @@ beforeEach(() => {
     version: 1,
     props: [
       { key: "gap", type: "number", label: "Gap", unit: "length", default: 2, min: 0, max: 100 },
-      { key: "mode", type: "enum", label: "Mode", default: "a", options: [{ id: "a", label: "A" }, { id: "b", label: "B" }] },
+      {
+        key: "mode",
+        type: "enum",
+        label: "Mode",
+        default: "a",
+        options: [
+          { id: "a", label: "A" },
+          { id: "b", label: "B" },
+        ],
+      },
       { key: "extra", type: "boolean", label: "Extra", default: false, visibleWhen: (v) => v.mode === "b" },
     ],
   });

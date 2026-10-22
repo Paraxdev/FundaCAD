@@ -95,8 +95,7 @@ fn decide(nvidia_present: bool, dmabuf_already_set: bool, opted_out: bool) -> De
 ///
 /// Takes a root so a test can point it at a fixture; production passes "/".
 fn nvidia_driver_present_under(root: &Path) -> bool {
-    root.join("proc/driver/nvidia/version").exists()
-        || root.join("sys/module/nvidia/version").exists()
+    root.join("proc/driver/nvidia/version").exists() || root.join("sys/module/nvidia/version").exists()
 }
 
 /// Apply the workaround. MUST run before the webview is created: WebKit reads
@@ -174,17 +173,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
 
         std::fs::create_dir_all(tmp.join("sys/module/nvidia")).unwrap();
-        assert!(
-            !nvidia_driver_present_under(&tmp),
-            "an empty module directory must not count as the driver"
-        );
+        assert!(!nvidia_driver_present_under(&tmp), "an empty module directory must not count as the driver");
 
         std::fs::create_dir_all(tmp.join("proc/driver/nvidia")).unwrap();
         std::fs::write(tmp.join("proc/driver/nvidia/version"), "NVRM version …").unwrap();
-        assert!(
-            nvidia_driver_present_under(&tmp),
-            "/proc/driver/nvidia/version is the canonical marker"
-        );
+        assert!(nvidia_driver_present_under(&tmp), "/proc/driver/nvidia/version is the canonical marker");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

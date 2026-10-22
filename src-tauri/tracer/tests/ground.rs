@@ -17,7 +17,8 @@ fn tracers() -> Vec<Tracer> {
 const W: u32 = 160;
 const H: u32 = 120;
 const BG: f32 = 0.5;
-const CAMERA: Camera = Camera { eye: [-6.0, 8.0, 6.0], target: [0.0, 0.0, 0.5], up: [0.0, 0.0, 1.0], fov: 35.0, ortho: None, lens: None };
+const CAMERA: Camera =
+    Camera { eye: [-6.0, 8.0, 6.0], target: [0.0, 0.0, 0.5], up: [0.0, 0.0, 1.0], fov: 35.0, ortho: None, lens: None };
 
 /// The rig of a page: a strong key from above and a weak low fill, 1 degree discs.
 fn page_look(ground: &str) -> Look {
@@ -39,7 +40,11 @@ fn render(t: &mut Tracer, look: Look, at: [f32; 3], spp: u32) -> Vec<[f32; 3]> {
 fn render_bodies(t: &mut Tracer, look: Look, bodies: &[(&str, [f32; 3])], spp: u32) -> Vec<[f32; 3]> {
     t.resize(W, H);
     t.set_look(look);
-    let descs = bodies.iter().enumerate().map(|(i, (key, at))| common::place(&format!("b{i}"), key, 1.0, *at, common::matte([0.8; 3]))).collect();
+    let descs = bodies
+        .iter()
+        .enumerate()
+        .map(|(i, (key, at))| common::place(&format!("b{i}"), key, 1.0, *at, common::matte([0.8; 3])))
+        .collect();
     for key in t.set_bodies(descs) {
         let mesh = if key == "slab" { common::cuboid(4.0, 4.0, 0.1) } else { common::cuboid(1.0, 1.0, 1.0) };
         t.add_mesh(&key, mesh);
@@ -54,7 +59,8 @@ fn render_bodies(t: &mut Tracer, look: Look, bodies: &[(&str, [f32; 3])], spp: u
 fn pixel(p: [f32; 3]) -> usize {
     let sub = |a: [f32; 3], b: [f32; 3]| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
     let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-    let cross = |a: [f32; 3], b: [f32; 3]| [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    let cross =
+        |a: [f32; 3], b: [f32; 3]| [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
     let norm = |a: [f32; 3]| a.map(|x| x / dot(a, a).sqrt());
     let c = CAMERA;
     let f = norm(sub(c.target, c.eye));
@@ -99,7 +105,13 @@ fn a_box_darkens_the_plane_where_the_contact_shadow_is() {
     for mut t in tracers() {
         let img = render(&mut t, page_look(CATCHER), [0.0, 0.0, 1.0], 64);
         let at = |p: [f32; 3]| img[pixel(p)][1] / BG;
-        let (contact, key, side, open, outside) = (at([0.0, 1.1, 0.0]), at([0.0, 1.4, 0.0]), at([-1.1, 0.0, 0.0]), at([-1.55, -1.55, 0.0]), at([-2.5, -1.0, 0.0]));
+        let (contact, key, side, open, outside) = (
+            at([0.0, 1.1, 0.0]),
+            at([0.0, 1.4, 0.0]),
+            at([-1.1, 0.0, 0.0]),
+            at([-1.55, -1.55, 0.0]),
+            at([-2.5, -1.0, 0.0]),
+        );
         eprintln!("{:?}: contact {contact} key shadow {key} -x side {side} open {open} outside {outside}", t.path());
         assert!(contact < 0.8 && key < 0.8, "{:?}: no shadow at the box's foot, {contact} {key}", t.path());
         assert!((open - 1.0).abs() < 0.06, "{:?}: the open catcher is {open} of the background", t.path());
@@ -117,7 +129,11 @@ fn the_room_alone_darkens_the_plane_at_the_box() {
         let at = |p: [f32; 3]| img[pixel(p)][1] / BG;
         let (contact, open, outside) = (at([0.0, 1.1, 0.0]), at([-1.55, -1.55, 0.0]), at([-2.5, -1.0, 0.0]));
         eprintln!("{:?}: room alone, contact {contact} open {open} outside {outside}", t.path());
-        assert!(contact < 0.8 && contact < open, "{:?}: the room casts no shadow at the box's foot, {contact} against {open}", t.path());
+        assert!(
+            contact < 0.8 && contact < open,
+            "{:?}: the room casts no shadow at the box's foot, {contact} against {open}",
+            t.path()
+        );
         assert_eq!(outside, 1.0, "{:?}: past the square the plane still shows", t.path());
     }
 }
@@ -126,7 +142,12 @@ fn the_room_alone_darkens_the_plane_at_the_box() {
 fn ground_none_changes_nothing() {
     for mut t in tracers() {
         let plain = render(&mut t, page_look(""), [0.0, 0.0, 1.0], 16);
-        let none = render(&mut t, page_look(r#","ground":{"mode":"none","z":0,"centre":[0,0],"extent":3.2}"#), [0.0, 0.0, 1.0], 16);
+        let none = render(
+            &mut t,
+            page_look(r#","ground":{"mode":"none","z":0,"centre":[0,0],"extent":3.2}"#),
+            [0.0, 0.0, 1.0],
+            16,
+        );
         assert!(plain == none, "{:?}: mode none changed the picture", t.path());
     }
 }
@@ -182,7 +203,8 @@ fn the_sky_gradient_lights_the_plane_too() {
         let lit = render(&mut t, sky_look(1.0, PAGE_LIGHTS), [0.0, 0.0, 1.0], 64);
         let sky = render(&mut t, sky_look(1.0, ""), [0.0, 0.0, 1.0], 64);
         // Inside the fade band's start, 0.75 of the half side.
-        let (dark, lit, sky) = (around(&dark, [0.0, 1.15, 0.0]), around(&lit, [0.0, 1.15, 0.0]), around(&sky, [0.0, 1.1, 0.0]));
+        let (dark, lit, sky) =
+            (around(&dark, [0.0, 1.15, 0.0]), around(&lit, [0.0, 1.15, 0.0]), around(&sky, [0.0, 1.1, 0.0]));
         eprintln!("{:?}: key shadow sky 0 {dark} sky 1 {lit}, contact of the sky alone {sky}", t.path());
         assert!(dark < 0.15, "{:?}: with no sky the key shadow is {dark}", t.path());
         assert!(lit > 0.3, "{:?}: the sky leaves the key shadow at {lit}", t.path());
@@ -193,7 +215,12 @@ fn the_sky_gradient_lights_the_plane_too() {
 #[test]
 fn a_low_light_shadow_fades_before_the_catcher_edge() {
     for mut t in tracers() {
-        let img = render(&mut t, sky_look(0.0, r#"{"direction":[0,-1,0.3],"color":[2,2,2],"angularRadius":1}"#), [0.0, 0.0, 1.0], 64);
+        let img = render(
+            &mut t,
+            sky_look(0.0, r#"{"direction":[0,-1,0.3],"color":[2,2,2],"angularRadius":1}"#),
+            [0.0, 0.0, 1.0],
+            64,
+        );
         let at = |p: [f32; 3]| img[pixel(p)][1] / BG;
         let (shadow, rim, outside) = (at([0.0, 1.2, 0.0]), at([0.0, 1.58, 0.0]), at([0.0, 1.65, 0.0]));
         eprintln!("{:?}: low light shadow {shadow} at the rim {rim} past it {outside}", t.path());
@@ -211,7 +238,13 @@ fn a_grazing_sun_is_not_lit_by_giving_up() {
     let radiance = 20.0 / (2.0 * std::f32::consts::PI * (1.0 - cos_r));
     let hdr = common::env_of("grazing", (512, 256), fundacad_tracer::Up::Z, |d| {
         let c = d[0] * sun[0] + d[1] * sun[1] + d[2] * sun[2];
-        [if c > cos_r { radiance } else if d[2] > 0.0 { 0.02 } else { 0.0 }; 3]
+        [if c > cos_r {
+            radiance
+        } else if d[2] > 0.0 {
+            0.02
+        } else {
+            0.0
+        }; 3]
     });
     for mut t in tracers() {
         t.set_environment(Some(hdr.clone()));

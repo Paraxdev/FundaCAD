@@ -82,12 +82,7 @@ pub enum Mode {
 /// MCP host, where a refusal reaches the user as "the server exited" with the
 /// reason in a log they may never open.
 pub fn mode_from_env() -> Mode {
-    match std::env::var("FUNDACAD_MCP_MODE")
-        .unwrap_or_default()
-        .trim()
-        .to_ascii_lowercase()
-        .as_str()
-    {
+    match std::env::var("FUNDACAD_MCP_MODE").unwrap_or_default().trim().to_ascii_lowercase().as_str() {
         "attach" => Mode::Attach,
         "standalone" => Mode::Standalone,
         _ => Mode::Auto,
@@ -141,21 +136,11 @@ pub fn engine_command() -> Vec<String> {
             return parts;
         }
     }
-    let beside = std::env::current_exe()
-        .ok()
-        .and_then(|e| e.parent().map(PathBuf::from));
-    if let Some(p) = beside
-        .as_ref()
-        .map(|d| d.join(exe_name()))
-        .filter(|p| p.is_file())
-    {
+    let beside = std::env::current_exe().ok().and_then(|e| e.parent().map(PathBuf::from));
+    if let Some(p) = beside.as_ref().map(|d| d.join(exe_name())).filter(|p| p.is_file()) {
         return vec![p.to_string_lossy().into_owned()];
     }
-    if let Some(app) = beside
-        .as_ref()
-        .map(|d| d.join(app_name()))
-        .filter(|p| is_rust_engine_app(p))
-    {
+    if let Some(app) = beside.as_ref().map(|d| d.join(app_name())).filter(|p| is_rust_engine_app(p)) {
         return vec![app.to_string_lossy().into_owned(), "--engine".into()];
     }
     let mut here = std::env::current_exe()
@@ -229,16 +214,11 @@ fn mint_token() -> String {
     if getrandom::fill(&mut bytes).is_err() {
         // Only reachable when the OS has no entropy source at all; a private
         // engine on loopback is still better than refusing to start.
-        let n = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos() as u64);
+        let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);
         bytes[..8].copy_from_slice(&n.to_le_bytes());
     }
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    bytes
-        .iter()
-        .map(|b| ALPHABET[(*b % 64) as usize] as char)
-        .collect()
+    bytes.iter().map(|b| ALPHABET[(*b % 64) as usize] as char).collect()
 }
 
 // --- the socket --------------------------------------------------------------
@@ -283,16 +263,10 @@ impl Socket {
         payload.insert("chunked".into(), json!(true));
         let mut streamed: Option<(Map<String, Value>, Vec<MeshBody>)> = None;
         let text = Value::Object(payload).to_string();
-        self.ws
-            .send(Message::Text(text.into()))
-            .await
-            .map_err(closed)?;
+        self.ws.send(Message::Text(text.into())).await.map_err(closed)?;
         loop {
             let Some(msg) = self.ws.next().await else {
-                return Err(io::Error::new(
-                    io::ErrorKind::BrokenPipe,
-                    "the engine closed the connection",
-                ));
+                return Err(io::Error::new(io::ErrorKind::BrokenPipe, "the engine closed the connection"));
             };
             let msg = msg.map_err(closed)?;
             let text = match msg {
@@ -329,10 +303,7 @@ impl Socket {
                     return Ok((json!({"id": value.get("id"), "ok": true, "result": fields}), all));
                 }
                 Message::Close(_) => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::BrokenPipe,
-                        "the engine closed the connection",
-                    ))
+                    return Err(io::Error::new(io::ErrorKind::BrokenPipe, "the engine closed the connection"))
                 }
                 _ => continue,
             };
@@ -414,9 +385,7 @@ impl EngineLink {
     pub fn from_env() -> EngineLink {
         match engine_env("TOKEN").filter(|t| !t.is_empty()) {
             Some(token) => {
-                let port = engine_env("PORT")
-                    .and_then(|p| p.parse().ok())
-                    .unwrap_or(8765);
+                let port = engine_env("PORT").and_then(|p| p.parse().ok()).unwrap_or(8765);
                 EngineLink::attach(port, token)
             }
             None => EngineLink::private(),
@@ -441,8 +410,7 @@ impl EngineLink {
             return Ok((EngineLink::from_env(), None));
         }
         if mode != Mode::Standalone {
-            let found =
-                crate::app_session::find_running_app(None, crate::app_session::PROBE_TIMEOUT).await;
+            let found = crate::app_session::find_running_app(None, crate::app_session::PROBE_TIMEOUT).await;
             if let Some(app) = found {
                 log(&format!(
                     "[mcp] FundaCAD is open (pid {}), attaching to its engine on port {}",
@@ -456,12 +424,10 @@ impl EngineLink {
                 // Loud, and by request: this mode exists for a host meant to
                 // work on the open document, where silently working on a
                 // private copy would look like the edits are being ignored.
-                return Err(
-                    "FUNDACAD_MCP_MODE=attach, but no FundaCAD window is running (no live \
+                return Err("FUNDACAD_MCP_MODE=attach, but no FundaCAD window is running (no live \
                      session file, or the engine it names is gone). Open FundaCAD, or use \
                      FUNDACAD_MCP_MODE=auto to work on a private copy when it is closed."
-                        .into(),
-                );
+                    .into());
             }
             log(&format!(
                 "[mcp] no FundaCAD window is open, starting a private engine (looked for {})",
@@ -511,10 +477,7 @@ impl EngineLink {
         // looks like it worked. Not forced: an explicit FUNDACAD_BLOB_DIR is
         // someone pointing this at a store on purpose.
         if appenv("BLOB_DIR").is_none() {
-            cmd.env(
-                "FUNDACAD_BLOB_DIR",
-                crate::app_session::app_data_dir().join("blobs"),
-            );
+            cmd.env("FUNDACAD_BLOB_DIR", crate::app_session::app_data_dir().join("blobs"));
         }
         // The app's installed plugins, as the app tells its own worker, so a
         // private engine runs the same plugin geometry the window does.
@@ -572,16 +535,11 @@ impl EngineLink {
             }
             Ok(false) => {
                 let _ = child.kill().await;
-                Err(io::Error::other(
-                    "the geometry engine exited before it was ready",
-                ))
+                Err(io::Error::other("the geometry engine exited before it was ready"))
             }
             Err(_) => {
                 let _ = child.kill().await;
-                Err(io::Error::other(format!(
-                    "the geometry engine did not start within {}s",
-                    START_TIMEOUT.as_secs()
-                )))
+                Err(io::Error::other(format!("the geometry engine did not start within {}s", START_TIMEOUT.as_secs())))
             }
         }
     }
@@ -717,9 +675,8 @@ pub mod job {
 
     use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
     use windows_sys::Win32::System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
-        JOBOBJECTINFOCLASS, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject, JOBOBJECTINFOCLASS,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE};
 
@@ -741,8 +698,7 @@ pub mod job {
                 if job.is_null() {
                     return;
                 }
-                let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION =
-                    unsafe { std::mem::zeroed() };
+                let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
                 info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
                 let ok = unsafe {
                     SetInformationJobObject(

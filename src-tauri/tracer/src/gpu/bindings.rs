@@ -105,7 +105,9 @@ impl Tracer {
                     "shading.cols" => s.cols.as_entire_binding(),
                     "insts" => self.insts.as_entire_binding(),
                     "mats" => self.mats.as_entire_binding(),
-                    "scene.accel.tlas" => self.scene.accel.tlas.as_ref().expect("Tracer::new builds a tlas for ray queries").as_binding(),
+                    "scene.accel.tlas" => {
+                        self.scene.accel.tlas.as_ref().expect("Tracer::new builds a tlas for ray queries").as_binding()
+                    }
                     "shading.nodes" => s.nodes.as_entire_binding(),
                     "shading.order" => s.order.as_entire_binding(),
                     "env.texture" => wgpu::BindingResource::TextureView(&self.env.texture),
@@ -114,7 +116,11 @@ impl Tracer {
                 },
             })
             .collect();
-        let b = self.device.create_bind_group(&wgpu::BindGroupDescriptor { label: None, layout: &self.pipes.trace_bgl, entries: &e });
+        let b = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &self.pipes.trace_bgl,
+            entries: &e,
+        });
         self.bind = Some(b.clone());
         b
     }
@@ -135,7 +141,9 @@ mod tests {
                 let slot = g.binding.as_ref()?.binding;
                 let kind = match g.space {
                     naga::AddressSpace::Uniform => Kind::Uniform,
-                    naga::AddressSpace::Storage { access } => Kind::Storage { write: access.contains(naga::StorageAccess::STORE) },
+                    naga::AddressSpace::Storage { access } => {
+                        Kind::Storage { write: access.contains(naga::StorageAccess::STORE) }
+                    }
                     _ => match m.types[g.ty].inner {
                         naga::TypeInner::Image { .. } => Kind::Texture,
                         _ => Kind::Accel,

@@ -42,13 +42,7 @@ import { isEditableTarget } from "../ui/focus";
 import { logError } from "../ui/logStore";
 import { snap } from "../ui/units";
 import { axisDragDistance } from "./manipulator";
-import {
-  circularAngles,
-  clampCount,
-  describePattern,
-  linearOffsets,
-  MIN_COUNT,
-} from "./patternMath";
+import { circularAngles, clampCount, describePattern, linearOffsets, MIN_COUNT } from "./patternMath";
 import { facesOwnedByFeatures, featureLabel, spansBody } from "./patternSources";
 import {
   axisLine,
@@ -131,12 +125,7 @@ export class PatternTool {
     });
   }
 
-  start(
-    kind: PatternKind,
-    bodies: string[],
-    onDone: (id: string | null) => void,
-    features?: string[],
-  ) {
+  start(kind: PatternKind, bodies: string[], onDone: (id: string | null) => void, features?: string[]) {
     if (this.active) return;
     this.active = true;
     this.kind = kind;
@@ -147,9 +136,7 @@ export class PatternTool {
     this.onDone = onDone;
     this.count = START_COUNT;
     this.centroid.copy(
-      this.features.length
-        ? this.viewport.facesCentroid(this.faceIds)
-        : this.viewport.bodiesCentroid(bodies),
+      this.features.length ? this.viewport.facesCentroid(this.faceIds) : this.viewport.bodiesCentroid(bodies),
     );
     const box = this.viewport.bodiesBox(this.features.length ? this.bodiesOfFaces() : bodies);
     if (box) box.getCenter(this.middle);
@@ -231,9 +218,7 @@ export class PatternTool {
    *  own span in body mode; in features mode the patterned FACES' span, a hole
    *  in a large plate opens on a gap the size of the hole, not the plate. */
   private span(dir: THREE.Vector3): number {
-    const box = this.features.length
-      ? this.viewport.facesBox(this.faceIds)
-      : this.viewport.bodiesBox(this.bodies);
+    const box = this.features.length ? this.viewport.facesBox(this.faceIds) : this.viewport.bodiesBox(this.bodies);
     if (!box) return 0;
     const size = box.getSize(new THREE.Vector3());
     return Math.abs(size.dot(dir));
@@ -309,7 +294,10 @@ export class PatternTool {
     const to = new THREE.Matrix4().makeTranslation(origin.x, origin.y, origin.z);
     const from = new THREE.Matrix4().makeTranslation(-origin.x, -origin.y, -origin.z);
     return circularAngles(this.count, this.value).map((deg) =>
-      to.clone().multiply(new THREE.Matrix4().makeRotationAxis(about, (deg * Math.PI) / 180)).multiply(from),
+      to
+        .clone()
+        .multiply(new THREE.Matrix4().makeRotationAxis(about, (deg * Math.PI) / 180))
+        .multiply(from),
     );
   }
 
@@ -356,7 +344,10 @@ export class PatternTool {
     // a DIFFERENCE from where it was grabbed, so the basis cancels out.
     const u = new THREE.Vector3(1, 0, 0);
     if (Math.abs(u.dot(dir)) > 0.9) u.set(0, 1, 0);
-    const e1 = u.clone().sub(dir.clone().multiplyScalar(u.dot(dir))).normalize();
+    const e1 = u
+      .clone()
+      .sub(dir.clone().multiplyScalar(u.dot(dir)))
+      .normalize();
     const e2 = new THREE.Vector3().crossVectors(dir, e1);
     const r = p.clone().sub(this.anchor);
     return (Math.atan2(r.dot(e2), r.dot(e1)) * 180) / Math.PI;
@@ -395,8 +386,7 @@ export class PatternTool {
       this.viewport.domElement.style.cursor = this.hoverAxis >= 0 ? "grab" : "default";
       return;
     }
-    const moved =
-      Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.downOnGizmo || moved) return;
     // A circular pattern's click on the model picks the axis; off the model it
     // applies, as it always did.
@@ -405,9 +395,13 @@ export class PatternTool {
       this.commitSoon();
       return;
     }
-    const p = this.pickAxis(hit, e.clientX, e.clientY).catch((err: unknown) => { logError(err, { source: "pattern" }); });
+    const p = this.pickAxis(hit, e.clientX, e.clientY).catch((err: unknown) => {
+      logError(err, { source: "pattern" });
+    });
     this.pending = p;
-    void p.finally(() => { if (this.pending === p) this.pending = null; });
+    void p.finally(() => {
+      if (this.pending === p) this.pending = null;
+    });
   }
 
   /** The axis an edge or face names, asked of the engine so the preview turns
@@ -496,11 +490,17 @@ export class PatternTool {
     if (body === this.promptKey) return;
     this.promptKey = body;
     if (this.kind === "linear") {
-      setPrompt(`${this.promptPrefix}${body} · drag an arrow · [ and ] change the count · Enter or click to apply · Esc`);
+      setPrompt(
+        `${this.promptPrefix}${body} · drag an arrow · [ and ] change the count · Enter or click to apply · Esc`,
+      );
       return;
     }
     const where =
-      this.place === "picked" ? "the picked axis" : this.place === "centre" ? "through the part's middle" : "through the origin";
+      this.place === "picked"
+        ? "the picked axis"
+        : this.place === "centre"
+          ? "through the part's middle"
+          : "through the origin";
     setPrompt(
       `${this.promptPrefix}${this.pickNote}${body}, ${where} · click an edge or face to turn about it · C origin or middle · [ ] count · Enter or click off the part to apply · Esc`,
     );

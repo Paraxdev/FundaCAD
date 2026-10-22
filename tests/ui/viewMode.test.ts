@@ -2,9 +2,23 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_RENDER, renderPrefs, setRenderPref } from "../../src/ui/renderPrefs";
 import { setWorkspace } from "../../src/ui/workspace";
 import {
-  PATH_TRACING_AUTO, PATH_TRACING_CPU, PATH_TRACING_NO_ADAPTER, PATH_TRACING_NO_GPU, PATH_TRACING_OFF,
-  PATH_TRACING_SELF_CHECK, asViewMode, pathTracingLimits, bootViewMode, chooseViewMode,
-  effectiveViewMode, nextViewMode, pathTracedBlock, requestPathTraced, resetPathTracedOverride, savedGround, savedViewMode,
+  PATH_TRACING_AUTO,
+  PATH_TRACING_CPU,
+  PATH_TRACING_NO_ADAPTER,
+  PATH_TRACING_NO_GPU,
+  PATH_TRACING_OFF,
+  PATH_TRACING_SELF_CHECK,
+  asViewMode,
+  pathTracingLimits,
+  bootViewMode,
+  chooseViewMode,
+  effectiveViewMode,
+  nextViewMode,
+  pathTracedBlock,
+  requestPathTraced,
+  resetPathTracedOverride,
+  savedGround,
+  savedViewMode,
   setGround,
 } from "../../src/ui/viewMode";
 
@@ -83,7 +97,8 @@ describe("Path traced", () => {
   it("is greyed only where neither WebGPU nor a native tracer exists", () => {
     const none = { ...noGpu, native: { available: false } };
     expect(pathTracedBlock(none)).toEqual({
-      reason: "nogpu", tooltip: "Path tracing needs a GPU tracer, which this system does not have",
+      reason: "nogpu",
+      tooltip: "Path tracing needs a GPU tracer, which this system does not have",
     });
     expect(PATH_TRACING_NO_GPU).toBe("Path tracing needs a GPU tracer, which this system does not have");
     expect(chooseViewMode("pathtraced", none)).toBe(false);
@@ -105,9 +120,14 @@ describe("Path traced", () => {
     }
     const cpu = { ...noGpu, native: { available: false, class: "cpu" as const } };
     expect(pathTracedBlock({ ...cpu, lowPower: true })!.tooltip).toBe(PATH_TRACING_OFF);
-    expect(pathTracedBlock({ ...cpu, lowPower: true, auto: true })!.tooltip).toBe(`${PATH_TRACING_OFF} ${PATH_TRACING_AUTO}`);
+    expect(pathTracedBlock({ ...cpu, lowPower: true, auto: true })!.tooltip).toBe(
+      `${PATH_TRACING_OFF} ${PATH_TRACING_AUTO}`,
+    );
     expect(requestPathTraced({ ...cpu, lowPower: true }, 0)).toEqual({ result: "blocked", message: PATH_TRACING_OFF });
-    expect(requestPathTraced({ ...cpu, lowPower: true }, 1000)).toEqual({ result: "blocked", message: PATH_TRACING_OFF });
+    expect(requestPathTraced({ ...cpu, lowPower: true }, 1000)).toEqual({
+      result: "blocked",
+      message: PATH_TRACING_OFF,
+    });
     expect(requestPathTraced(cpu, 2000)).toEqual({ result: "blocked", message: PATH_TRACING_CPU });
   });
 
@@ -148,8 +168,8 @@ describe("Path traced", () => {
       "To avoid crashes or unintentional freezes path tracing has been turned off. To re-enable, turn off performance mode.",
     );
     expect(pathTracedBlock(weak)!.tooltip).toBe(
-      "To avoid crashes or unintentional freezes path tracing has been turned off. To re-enable, turn off performance mode."
-      + " This computer was detected as low powered, so turning off performance mode may not lift it.",
+      "To avoid crashes or unintentional freezes path tracing has been turned off. To re-enable, turn off performance mode." +
+        " This computer was detected as low powered, so turning off performance mode may not lift it.",
     );
     expect(pathTracedBlock(weak)!.tooltip).toBe(`${PATH_TRACING_OFF} ${PATH_TRACING_AUTO}`);
     expect(pathTracedBlock({ lowPower: true, auto: false, webgpu: false })!.tooltip).toBe(PATH_TRACING_OFF);
@@ -172,13 +192,20 @@ describe("crash guard", () => {
     expect(bootViewMode("pathtraced", () => true)).toEqual({ mode: "realtime", notice: true });
     expect(bootViewMode("pathtraced", () => false)).toEqual({ mode: "pathtraced", notice: false });
     expect(bootViewMode("matcap", () => true)).toEqual({ mode: "matcap", notice: false });
-    expect(bootViewMode("pathtraced", () => { throw new Error("no storage"); })).toEqual({ mode: "pathtraced", notice: false });
+    expect(
+      bootViewMode("pathtraced", () => {
+        throw new Error("no storage");
+      }),
+    ).toEqual({ mode: "pathtraced", notice: false });
   });
 });
 
 describe("the session override of the performance block", () => {
   it("warns on the first click and enables on a second click while the warning shows", () => {
-    expect(requestPathTraced(perf, 1000)).toEqual({ result: "warn", message: expect.stringContaining(PATH_TRACING_OFF) });
+    expect(requestPathTraced(perf, 1000)).toEqual({
+      result: "warn",
+      message: expect.stringContaining(PATH_TRACING_OFF),
+    });
     expect(pathTracedBlock(perf)?.reason).toBe("perf");
     expect(requestPathTraced(perf, 2000).result).toBe("enabled");
     expect(pathTracedBlock(perf)).toBeNull();

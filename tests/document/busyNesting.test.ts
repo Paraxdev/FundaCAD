@@ -11,8 +11,13 @@ function backend() {
   const cancels: (string | undefined)[] = [];
   const be = {
     async init() {},
-    onStatus() { return () => {}; },
-    async cancel(target?: string) { cancels.push(target); return true; },
+    onStatus() {
+      return () => {};
+    },
+    async cancel(target?: string) {
+      cancels.push(target);
+      return true;
+    },
     connected: true,
   } as unknown as GeometryBackend;
   return { be, cancels };
@@ -24,7 +29,9 @@ function op(store: DocumentStore, label: string, id: string) {
   let finish: () => void = () => {};
   const done = store.runBusy(label, (onStarted) => {
     onStarted(id);
-    return new Promise<void>((r) => { finish = r; });
+    return new Promise<void>((r) => {
+      finish = r;
+    });
   });
   return { done, finish: () => finish() };
 }

@@ -40,8 +40,7 @@ pub fn drop_paths_take(app: tauri::AppHandle, held: tauri::State<'_, Held>, id: 
 #[cfg(windows)]
 pub fn install<R: Runtime>(window: &WebviewWindow<R>) {
     use webview2_com::Microsoft::Web::WebView2::Win32::{
-        ICoreWebView2File, ICoreWebView2ObjectCollectionView,
-        ICoreWebView2WebMessageReceivedEventArgs2,
+        ICoreWebView2File, ICoreWebView2ObjectCollectionView, ICoreWebView2WebMessageReceivedEventArgs2,
     };
     use webview2_com::{take_pwstr, WebMessageReceivedEventHandler};
     use windows_core::{Interface, PWSTR};

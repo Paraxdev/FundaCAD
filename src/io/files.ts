@@ -11,8 +11,18 @@ import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat, PlaneDef } from "../types";
 import { clearRecovery } from "./recovery";
 import {
-  clampTolerance, exportFileName, exportScopeFromSelection, FORMATS, isFlatFormat, isMeshFormat, lastExportDir, meshWire,
-  loadExportSettings, rememberExportDir, saveExportSettings, type FlatSource,
+  clampTolerance,
+  exportFileName,
+  exportScopeFromSelection,
+  FORMATS,
+  isFlatFormat,
+  isMeshFormat,
+  lastExportDir,
+  meshWire,
+  loadExportSettings,
+  rememberExportDir,
+  saveExportSettings,
+  type FlatSource,
 } from "./exportSettings";
 import { buildBodyTree, importTrees } from "../ui/browserTree";
 import { referencedGeometry } from "../document/versions";
@@ -26,9 +36,7 @@ import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt, leftOutSection
 import { announceImportedBody } from "../plugins/contrib";
 import { askImportUnit, asksForUnit, type ImportUnit } from "./importUnit";
 import { importFeatures } from "./importSketches";
-import {
-  asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary,
-} from "../document/materials";
+import { asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary } from "../document/materials";
 import { importedBodyColors } from "../document/faceColors";
 import { openNotices } from "../document/openNotice";
 import type { FaceColorRuns } from "../types";
@@ -179,7 +187,9 @@ async function browserDocumentText(store: DocumentStore): Promise<{ text: string
     total += bytes?.length ?? 0;
   }
   if (total > MAX_BROWSER_GEOMETRY_BYTES) {
-    return { refused: `Couldn't save: its imported geometry is ${Math.round(total / 1048576)} MB, more than the browser can put in one file. Save it in the desktop app.` };
+    return {
+      refused: `Couldn't save: its imported geometry is ${Math.round(total / 1048576)} MB, more than the browser can put in one file. Save it in the desktop app.`,
+    };
   }
   const geometry: Record<string, string> = {};
   for (const h of [...blobs.keys()].sort()) geometry[h] = bytesToBase64(blobs.get(h)!);
@@ -211,7 +221,10 @@ async function publishEmbeddedGeometry(store: DocumentStore, text: string): Prom
       throw damaged(`geometry ${hash} is not base64`);
     }
     if (blake2b128Hex(bytes) !== hash) {
-      throw new UnreadableDocumentError("its geometry does not match its hash, so it was changed or damaged", `geometry ${hash} does not match its bytes`);
+      throw new UnreadableDocumentError(
+        "its geometry does not match its hash, so it was changed or damaged",
+        `geometry ${hash} does not match its bytes`,
+      );
     }
     blobs.push(bytes);
   }
@@ -247,7 +260,10 @@ export async function openDocument(
       // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
       // body), routed by extension below, so users can just "open" an STL.
       filters: [
-        { name: "All supported", extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS]) },
+        {
+          name: "All supported",
+          extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS]),
+        },
         { name: "FundaCAD Document", extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"]) },
         { name: "Mesh / CAD", extensions: dialogExts(IMPORT_EXTS) },
       ],
@@ -282,19 +298,29 @@ export async function openDocumentText(store: DocumentStore, name: string, text:
   // open and drop the unsaved marker, same as a Tauri Open does.
   store.markSaved(name);
   await warnAboutOpen(store);
-  if (unpublished) await reportError(`Opened ${name}, but its embedded geometry could not be handed to the engine, so its imports will not build: ${unpublished}.`);
+  if (unpublished)
+    await reportError(
+      `Opened ${name}, but its embedded geometry could not be handed to the engine, so its imports will not build: ${unpublished}.`,
+    );
   return "ok";
 }
 
 /** Open a dropped document the app has as a File with no path. The desktop app
  *  reads it in Rust like an Open does, so embedded geometry reaches the blob
  *  store and a binary .fundab opens; a plain browser reads it as text. */
-export async function openDocumentBytes(store: DocumentStore, file: File, geometry?: GeometryBackend): Promise<OpenOutcome> {
+export async function openDocumentBytes(
+  store: DocumentStore,
+  file: File,
+  geometry?: GeometryBackend,
+): Promise<OpenOutcome> {
   if (!isTauri()) return openDocumentText(store, file.name, await file.text());
   const { invoke } = await import("@tauri-apps/api/core");
   let opened: OpenedDocument;
   try {
-    const r = await invoke<RustOpened & { wasContainer: boolean }>("container_open_bytes", new Uint8Array(await file.arrayBuffer()));
+    const r = await invoke<RustOpened & { wasContainer: boolean }>(
+      "container_open_bytes",
+      new Uint8Array(await file.arrayBuffer()),
+    );
     opened = {
       text: r.document,
       wasContainer: r.wasContainer,
@@ -338,14 +364,11 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
   try {
     const doc = JSON.parse(text) as CadDocument;
     const legacy = (doc.features ?? []).filter(
-      (f): f is Extract<Feature, { type: "import" }> =>
-        f.type === "import" && typeof f.brep === "string" && !f.geom,
+      (f): f is Extract<Feature, { type: "import" }> => f.type === "import" && typeof f.brep === "string" && !f.geom,
     );
     if (!legacy.length) return text;
 
-    const migrated = await geometry.migrateGeometry(
-      legacy.map((f) => ({ id: f.id, brep: f.brep as string })),
-    );
+    const migrated = await geometry.migrateGeometry(legacy.map((f) => ({ id: f.id, brep: f.brep as string })));
     if (!migrated.length) return text;
 
     const byId = new Map(migrated.map((m) => [m.id, m.geom]));
@@ -395,7 +418,9 @@ async function warnAboutOpen(store: DocumentStore) {
   const notices = openNotices(store.document, store.openedVersion);
   if (!notices.length) return;
   const { dismissToast, toast } = await import("../ui/toast");
-  const ids = notices.map((n) => toast(n.message, { kind: n.kind, timeout: 12000, ...(n.detail ? { detail: n.detail } : {}) }));
+  const ids = notices.map((n) =>
+    toast(n.message, { kind: n.kind, timeout: 12000, ...(n.detail ? { detail: n.detail } : {}) }),
+  );
   const off = store.onOpen(() => {
     off();
     for (const id of ids) if (id !== null) dismissToast(id);
@@ -415,7 +440,12 @@ export async function openDocumentAtPath(
     // JSON goes through Rust too: it carries embedded geometry that has to reach
     // the blob store before the first rebuild asks for it.
     const r = await invoke<RustOpened>("container_open_checked", { path });
-    opened = { text: r.document, wasContainer, repaired: r.repairedShards > 0 || r.usedBackupIndex, carried: r.carried ?? [] };
+    opened = {
+      text: r.document,
+      wasContainer,
+      repaired: r.repairedShards > 0 || r.usedBackupIndex,
+      carried: r.carried ?? [],
+    };
   } catch (e) {
     // Rust's container errors are already user-facing sentences (a newer
     // container format, a damaged archive, geometry that does not match its
@@ -499,7 +529,11 @@ interface ExportViewport {
 }
 
 /** The selected sketch, else the selected flat face, as what a DXF or SVG export draws. */
-export function flatSourceOf(store: DocumentStore, viewport: ExportViewport, featureId: string | null): FlatSource | null {
+export function flatSourceOf(
+  store: DocumentStore,
+  viewport: ExportViewport,
+  featureId: string | null,
+): FlatSource | null {
   const f = featureId ? store.document.features.find((x) => x.id === featureId) : undefined;
   if (f?.type === "sketch") return sketchFlatSource(store, f.id);
   const face = viewport.selectedFaceSketchPlane();
@@ -517,7 +551,12 @@ export function sketchFlatSource(store: DocumentStore, sketchId: string): FlatSo
 /** File, Export: the selected bodies, or a selected sketch or flat face for DXF and SVG. */
 export async function exportSelection(store: DocumentStore, geometry: GeometryBackend, viewport: ExportViewport) {
   const { useSelectionStore } = await import("../stores/selection");
-  return exportModel(store, geometry, viewport.selectionBodyIds(), flatSourceOf(store, viewport, useSelectionStore().featureId));
+  return exportModel(
+    store,
+    geometry,
+    viewport.selectionBodyIds(),
+    flatSourceOf(store, viewport, useSelectionStore().featureId),
+  );
 }
 
 /** `selected` is the viewport's selection as body ids, where the picker starts.
@@ -536,8 +575,11 @@ export async function exportModel(
   const start = exportScopeFromSelection(selected, bodies, groups, docName);
   const { useExportDialogStore } = await import("../stores/exportDialog");
   const choice = await useExportDialogStore().open({
-    bodies, scope: start.scope, selected: start.selected,
-    ...(flat ? { flat: { label: flat.label } } : {}), ...(format ? { format } : {}),
+    bodies,
+    scope: start.scope,
+    selected: start.selected,
+    ...(flat ? { flat: { label: flat.label } } : {}),
+    ...(format ? { format } : {}),
   });
   if (!choice) return;
   const { settings, scope } = choice;
@@ -549,12 +591,19 @@ export async function exportModel(
     // header), a plain browser has no such path to hand it and no protocol for
     // getting the bytes back instead, so this needs the desktop app rather than
     // a fallback that would quietly produce nothing, as it did before.
-    await reportError("Export needs the desktop app: a browser tab has no filesystem path to give the engine to write to.");
+    await reportError(
+      "Export needs the desktop app: a browser tab has no filesystem path to give the engine to write to.",
+    );
     return;
   }
   const opts: {
-    body?: string; bodies?: string[]; separate?: boolean;
-    sketch?: string; face?: unknown; plane?: PlaneDef; tolerance?: number;
+    body?: string;
+    bodies?: string[];
+    separate?: boolean;
+    sketch?: string;
+    face?: unknown;
+    plane?: PlaneDef;
+    tolerance?: number;
   } = {};
   const drawn = isFlatFormat(settings.format) ? flat : null;
   if (drawn) {
@@ -571,8 +620,8 @@ export async function exportModel(
   const base = drawn
     ? drawn.label
     : opts.body
-    ? store.bodyName(opts.body) ?? docName
-    : (opts.bodies ? start.base : docName) || (opts.separate || opts.bodies ? "parts" : "part");
+      ? (store.bodyName(opts.body) ?? docName)
+      : (opts.bodies ? start.base : docName) || (opts.separate || opts.bodies ? "parts" : "part");
   const name = exportFileName(base, kind.ext);
   const dir = lastExportDir();
   const { save } = await import("@tauri-apps/plugin-dialog");
@@ -592,14 +641,19 @@ export async function exportModel(
   // for Cancel to attach to. onStarted hands back the request id so a cancel
   // targets THIS export, the document stays editable meanwhile, so any rebuild
   // the user triggers would otherwise be the "most recent" op.
-  const res = await store.runBusy(
-    `Exporting ${path.split(/[\\/]/).pop() ?? "file"}`,
-    (onStarted) => geometry.export(store.document, fmt, path, {
-      ...opts,
-      palette: store.colorPalette,
-      bodyColors: store.bodyColorsMap(),
-      ...(isMeshFormat(fmt) ? { mesh: meshWire(settings) } : {}),
-    }, onStarted),
+  const res = await store.runBusy(`Exporting ${path.split(/[\\/]/).pop() ?? "file"}`, (onStarted) =>
+    geometry.export(
+      store.document,
+      fmt,
+      path,
+      {
+        ...opts,
+        palette: store.colorPalette,
+        bodyColors: store.bodyColorsMap(),
+        ...(isMeshFormat(fmt) ? { mesh: meshWire(settings) } : {}),
+      },
+      onStarted,
+    ),
   );
   if (!res.ok) {
     // The user stopped it: they know, so say nothing. Reporting their own
@@ -644,7 +698,35 @@ export function extToFormat(path: string): ExportFormat {
 
 /** Lower case only, every lookup lower-cases the name first (dropRouting, the
  *  two mappers above). */
-export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "3dm", "ifc", "dxf", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz", "fbx", "3ds", "svg"];
+export const IMPORT_EXTS = [
+  "stl",
+  "3mf",
+  "step",
+  "stp",
+  "stpz",
+  "gz",
+  "xbf",
+  "iges",
+  "igs",
+  "brep",
+  "fcstd",
+  "3dm",
+  "ifc",
+  "dxf",
+  "obj",
+  "ply",
+  "off",
+  "amf",
+  "glb",
+  "gltf",
+  "wrl",
+  "wrz",
+  "x3d",
+  "x3dz",
+  "fbx",
+  "3ds",
+  "svg",
+];
 
 // FreeCAD writes .FCStd.
 const MIXED_CASE_EXTS = ["FCStd"];
@@ -743,7 +825,6 @@ export function importedBodyCount(res: { parts?: { node: number; faces: number }
   return res.parts?.length ?? 1;
 }
 
-
 /** Import the file at `path`: read it, add the feature, adopt what it looked
  *  like. The whole of an import except choosing the file, which is why the
  *  dialog above and the Open dialog both end here.
@@ -758,7 +839,10 @@ export async function importPath(
   opts: { source?: string } = {},
 ) {
   const fmt = extToImportFormat(path);
-  await importWith(store, path, fmt, (onStarted, u) => geometry.importGeometry(path, fmt, onStarted, u), { ...opts, unit });
+  await importWith(store, path, fmt, (onStarted, u) => geometry.importGeometry(path, fmt, onStarted, u), {
+    ...opts,
+    unit,
+  });
 }
 
 /** Files above this cannot reach the engine as one base64 message, its frame
@@ -775,14 +859,17 @@ export async function importFileBytes(store: DocumentStore, geometry: GeometryBa
     return;
   }
   if (file.size > MAX_DROPPED_IMPORT_BYTES) {
-    await reportError(`Couldn't import ${file.name}: it is ${Math.round(file.size / 1048576)} MB, a dropped file can be 90 MB at most here. Use File > Import in the desktop app.`);
+    await reportError(
+      `Couldn't import ${file.name}: it is ${Math.round(file.size / 1048576)} MB, a dropped file can be 90 MB at most here. Use File > Import in the desktop app.`,
+    );
     return;
   }
   await importWith(
     store,
     file.name,
     fmt,
-    async (onStarted, u) => importBytes(file.name, fmt, bytesToBase64(new Uint8Array(await file.arrayBuffer())), onStarted, u),
+    async (onStarted, u) =>
+      importBytes(file.name, fmt, bytesToBase64(new Uint8Array(await file.arrayBuffer())), onStarted, u),
     { unit, retryable: false },
   );
 }
@@ -831,7 +918,11 @@ async function importWith(
     return;
   }
   lastCancelledImport = null;
-  const features = importFeatures(res, { format: fmt, source: opts.source ?? path, taken: store.document.features.map((f) => f.id) });
+  const features = importFeatures(res, {
+    format: fmt,
+    source: opts.source ?? path,
+    taken: store.document.features.map((f) => f.id),
+  });
   store.addFeatures(features);
   const imported = features.find((f) => f.type === "import");
   if (!imported) {
@@ -886,7 +977,11 @@ const importSource = (f: Feature) =>
  *  takes the import back as one undo step, which Redo builds again, and says so.
  *  True when nothing is left for the import to do: it was cancelled, or a
  *  document open replaced the one it went into. */
-async function cancelledImport(store: DocumentStore, imported: Feature, res: Parameters<typeof adoptImportedColors>[2]) {
+async function cancelledImport(
+  store: DocumentStore,
+  imported: Feature,
+  res: Parameters<typeof adoptImportedColors>[2],
+) {
   let opened = false;
   const offOpen = store.onOpen(() => (opened = true));
   await store.whenBuilt().finally(offOpen);
@@ -1029,7 +1124,9 @@ export async function adoptImportedColors(
   }
   const has = (d: { features: { id: string }[] }) => d.features.some((f) => f.id === featureId);
   store.undoAsOne(
-    () => { for (const [material, ids] of byMaterial) store.setBodiesMaterial(ids, material); },
+    () => {
+      for (const [material, ids] of byMaterial) store.setBodiesMaterial(ids, material);
+    },
     opts.joinImport ? (before) => !has(before) && has(store.document) : undefined,
     { only: !!opts.only },
   );
@@ -1089,7 +1186,7 @@ export function extToImportFormat(path: string): ImportFormat {
   if (ext === "x3d" || ext === "x3dz") return "x3d";
   if (ext === "fbx") return "fbx";
   if (ext === "3ds") return "3ds";
-  return "step";  // TOTAL, like extToFormat above, see the note there
+  return "step"; // TOTAL, like extToFormat above, see the note there
 }
 
 // --- material library ---

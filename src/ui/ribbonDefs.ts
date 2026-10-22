@@ -299,20 +299,22 @@ export const SKETCH: Group[] = [
       {
         label: "Constrain",
         // the hint is read from the keymap, as for the booleans, since some carry Shift
-        children: ([
-          ["horizontal", "Horizontal"],
-          ["vertical", "Vertical"],
-          ["parallel", "Parallel"],
-          ["perpendicular", "Perpendic."],
-          ["equal", "Equal"],
-          ["tangent", "Tangent"],
-          ["coincident", "Coincident"],
-          ["concentric", "Concentric"],
-          ["midpoint", "Midpoint"],
-          ["collinear", "Collinear"],
-          ["symmetric", "Symmetric"],
-          ["fix", "Fix"],
-        ] as const).map(([action, label]) => {
+        children: (
+          [
+            ["horizontal", "Horizontal"],
+            ["vertical", "Vertical"],
+            ["parallel", "Parallel"],
+            ["perpendicular", "Perpendic."],
+            ["equal", "Equal"],
+            ["tangent", "Tangent"],
+            ["coincident", "Coincident"],
+            ["concentric", "Concentric"],
+            ["midpoint", "Midpoint"],
+            ["collinear", "Collinear"],
+            ["symmetric", "Symmetric"],
+            ["fix", "Fix"],
+          ] as const
+        ).map(([action, label]) => {
           const key = keyHint(action);
           return { action, label, iconName: action, ...(key !== undefined ? { key } : {}) };
         }),

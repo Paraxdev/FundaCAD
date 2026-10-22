@@ -89,7 +89,11 @@ export interface TargetField {
  *  a body changes what it builds. Naming the bodies here ends that, which is
  *  the remedy the engine's own refusal offers ("name it as the target"). */
 const ACTS_ON: TargetField = {
-  field: "targets", label: "Bodies acted on", kind: "body", shape: "bodyId", arity: "many",
+  field: "targets",
+  label: "Bodies acted on",
+  kind: "body",
+  shape: "bodyId",
+  arity: "many",
   whenEmpty: "every shown body it reaches",
 };
 
@@ -101,21 +105,42 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
   chamfer: [{ field: "edges", label: "Edges", kind: "edge", shape: "selector", arity: "many" }],
   "press-pull": [
     { field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" },
-    { field: "upTo", label: "Up to face", kind: "face", shape: "selector", arity: "one", whenEmpty: "the distance", tracked: true },
+    {
+      field: "upTo",
+      label: "Up to face",
+      kind: "face",
+      shape: "selector",
+      arity: "one",
+      whenEmpty: "the distance",
+      tracked: true,
+    },
     ACTS_ON,
   ],
   deleteFace: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
   // Shell's empty set is not "no faces", it is a sealed hollow, a legitimate
   // and quite different part.
-  shell: [{
-    field: "faces", label: "Faces to open", kind: "face", shape: "selector", arity: "many",
-    whenEmpty: "sealed hollow",
-  }],
+  shell: [
+    {
+      field: "faces",
+      label: "Faces to open",
+      kind: "face",
+      shape: "selector",
+      arity: "many",
+      whenEmpty: "sealed hollow",
+    },
+  ],
   offsetFace: [{ field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many" }],
-  thicken: [{
-    field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many",
-    whenEmpty: "the whole body",
-  }, ACTS_ON],
+  thicken: [
+    {
+      field: "faces",
+      label: "Faces",
+      kind: "face",
+      shape: "selector",
+      arity: "many",
+      whenEmpty: "the whole body",
+    },
+    ACTS_ON,
+  ],
   draft: [{ field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many" }],
   hole: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
   textOnFace: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
@@ -126,42 +151,84 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
     { field: "target", label: "Body kept", kind: "body", shape: "bodyId", arity: "one" },
     { field: "tools", label: "Bodies used", kind: "body", shape: "bodyId", arity: "many" },
   ],
-  move: [{
-    field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many",
-    whenEmpty: "the active body",
-  }],
-  mirror: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" }],
+  move: [
+    {
+      field: "bodies",
+      label: "Bodies",
+      kind: "body",
+      shape: "bodyId",
+      arity: "many",
+      whenEmpty: "the active body",
+    },
+  ],
+  mirror: [
+    { field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" },
+  ],
   removeBody: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many" }],
   // The body that holds still while the rest of the linkage moves about it.
   mechanism: [{ field: "ground", label: "Ground", kind: "body", shape: "bodyId", arity: "one" }],
-  patternRect: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" }],
-  patternLinear: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" }],
-  patternCircular: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" }],
-  split: [{
-    field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many",
-    whenEmpty: "the active body", alsoReads: "body",
-  }],
-  separate: [{
-    field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many",
-    whenEmpty: "the active body", alsoReads: "body",
-  }],
+  patternRect: [
+    { field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" },
+  ],
+  patternLinear: [
+    { field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" },
+  ],
+  patternCircular: [
+    { field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" },
+  ],
+  split: [
+    {
+      field: "bodies",
+      label: "Bodies",
+      kind: "body",
+      shape: "bodyId",
+      arity: "many",
+      whenEmpty: "the active body",
+      alsoReads: "body",
+    },
+  ],
+  separate: [
+    {
+      field: "bodies",
+      label: "Bodies",
+      kind: "body",
+      shape: "bodyId",
+      arity: "many",
+      whenEmpty: "the active body",
+      alsoReads: "body",
+    },
+  ],
   // The half of an extrude that was never shown. It is the FIRST thing about the
   // feature, which areas of the sketch became solid, and until now the panel
   // opened on "Distance" as though the profile were settled at creation and
   // beyond discussion. Empty is legal and means the whole sketch, which is a
   // different statement from "no areas" and has to be spelled out.
-  extrude: [{
-    field: "regions", label: "Profile", kind: "area", shape: "regionPoint",
-    arity: "many", whenEmpty: "the whole sketch", alsoReads: "region",
-  },
-  { field: "startFace", label: "Start face", kind: "face", shape: "selector", arity: "one", tracked: true },
-  { field: "upToFace", label: "Up to face", kind: "face", shape: "selector", arity: "one", tracked: true },
-  { field: "upToFace2", label: "Up to face 2", kind: "face", shape: "selector", arity: "one", tracked: true },
-  ACTS_ON],
-  revolve: [{
-    field: "regions", label: "Profile", kind: "area", shape: "regionPoint",
-    arity: "many", whenEmpty: "the whole sketch",
-  }, ACTS_ON],
+  extrude: [
+    {
+      field: "regions",
+      label: "Profile",
+      kind: "area",
+      shape: "regionPoint",
+      arity: "many",
+      whenEmpty: "the whole sketch",
+      alsoReads: "region",
+    },
+    { field: "startFace", label: "Start face", kind: "face", shape: "selector", arity: "one", tracked: true },
+    { field: "upToFace", label: "Up to face", kind: "face", shape: "selector", arity: "one", tracked: true },
+    { field: "upToFace2", label: "Up to face 2", kind: "face", shape: "selector", arity: "one", tracked: true },
+    ACTS_ON,
+  ],
+  revolve: [
+    {
+      field: "regions",
+      label: "Profile",
+      kind: "area",
+      shape: "regionPoint",
+      arity: "many",
+      whenEmpty: "the whole sketch",
+    },
+    ACTS_ON,
+  ],
   sweep: [ACTS_ON],
   loft: [ACTS_ON],
 };
@@ -195,21 +262,21 @@ export type TargetEntry = Selector | string | [number, number, number];
 export function targetsFor(f: Feature): readonly TargetField[] {
   const all = targetsOf(f.type);
   const { features: repeats, operation, mode } = f as { features?: string[]; operation?: string; mode?: string };
-  const how = f.type === "press-pull" ? mode ?? "auto" : operation ?? "new";
+  const how = f.type === "press-pull" ? (mode ?? "auto") : (operation ?? "new");
   const combines = how !== "auto" && how !== "new";
   const values = f as unknown as Record<string, unknown>;
-  return all.filter((t) =>
-    (t.field !== "bodies" || !repeats?.length) && (t !== ACTS_ON || combines) && fieldApplies(f.type, t.field, values));
+  return all.filter(
+    (t) =>
+      (t.field !== "bodies" || !repeats?.length) &&
+      (t !== ACTS_ON || combines) &&
+      fieldApplies(f.type, t.field, values),
+  );
 }
 
 export function readTarget(feature: Feature, t: TargetField): TargetEntry[] {
   const raw = (feature as unknown as Record<string, unknown>)[t.field];
-  const fallback = t.alsoReads
-    ? (feature as unknown as Record<string, unknown>)[t.alsoReads]
-    : undefined;
-  const val = raw === undefined || raw === null || (Array.isArray(raw) && raw.length === 0)
-    ? fallback
-    : raw;
+  const fallback = t.alsoReads ? (feature as unknown as Record<string, unknown>)[t.alsoReads] : undefined;
+  const val = raw === undefined || raw === null || (Array.isArray(raw) && raw.length === 0) ? fallback : raw;
   if (val === undefined || val === null) return [];
   const arr = isOneEntry(val, t) ? [val] : Array.isArray(val) ? val : [val];
   return arr.filter((v): v is TargetEntry => v !== null && v !== undefined) as TargetEntry[];
@@ -235,10 +302,7 @@ function isOneEntry(val: unknown, t: TargetField): boolean {
  *  instead of writing `[]`: several of these mean something specific when
  *  absent, and every writer in the document keeps the omit-when-empty
  *  discipline that makes two identical models compare identical. */
-export function writeTarget(
-  t: TargetField,
-  entries: readonly TargetEntry[],
-): Partial<Feature> {
+export function writeTarget(t: TargetField, entries: readonly TargetEntry[]): Partial<Feature> {
   const patch: Record<string, unknown> = {};
   if (t.arity === "one") {
     patch[t.field] = entries[0];

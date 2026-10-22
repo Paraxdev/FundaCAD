@@ -17,8 +17,10 @@ const tTo = (o: THREE.Vector3, d: THREE.Vector3) => new THREE.Ray(o, d).distance
 
 describe("keptSpan", () => {
   it("a ray from the kept half toward the cut ends at the cut", () => {
-    expect(keptSpan(new THREE.Ray(keptOrigin, intoRemoved), plane, SLACK))
-      .toEqual({ near: 0, far: expect.closeTo(tTo(keptOrigin, intoRemoved), 9) });
+    expect(keptSpan(new THREE.Ray(keptOrigin, intoRemoved), plane, SLACK)).toEqual({
+      near: 0,
+      far: expect.closeTo(tTo(keptOrigin, intoRemoved), 9),
+    });
   });
 
   it("a ray from the kept half away from the cut is kept whole", () => {
@@ -26,8 +28,10 @@ describe("keptSpan", () => {
   });
 
   it("a ray from the removed half toward the cut starts at the cut", () => {
-    expect(keptSpan(new THREE.Ray(removedOrigin, intoKept), plane, SLACK))
-      .toEqual({ near: expect.closeTo(tTo(removedOrigin, intoKept), 9), far: Infinity });
+    expect(keptSpan(new THREE.Ray(removedOrigin, intoKept), plane, SLACK)).toEqual({
+      near: expect.closeTo(tTo(removedOrigin, intoKept), 9),
+      far: Infinity,
+    });
   });
 
   it("a ray from the removed half away from the cut keeps nothing", () => {
@@ -50,8 +54,10 @@ describe("keptSpan", () => {
 
   it("from a point on the cut, a ray into the removed half reaches the slack and no further", () => {
     const on = plane.projectPoint(keptOrigin, new THREE.Vector3());
-    expect(keptSpan(new THREE.Ray(on, intoRemoved), plane, SLACK))
-      .toEqual({ near: 0, far: expect.closeTo(SLACK / Math.abs(n.dot(intoRemoved)), 9) });
+    expect(keptSpan(new THREE.Ray(on, intoRemoved), plane, SLACK)).toEqual({
+      near: 0,
+      far: expect.closeTo(SLACK / Math.abs(n.dot(intoRemoved)), 9),
+    });
   });
 
   it("from exactly the slack's depth the span is a single point, a little deeper it is empty", () => {
@@ -96,7 +102,10 @@ describe("applyKeptSpan on a real raycast", () => {
   const cut = new THREE.Plane().setFromNormalAndCoplanarPoint(n.clone().negate(), ray.at(200, new THREE.Vector3()));
   const hitNames = (bvh: boolean, clip: THREE.Plane | null) => {
     const rc = Object.assign(new THREE.Raycaster(ray.origin, ray.direction), { firstHitOnly: true });
-    const meshes = [box("near", ray.at(100, new THREE.Vector3()), bvh), box("far", ray.at(300, new THREE.Vector3()), bvh)];
+    const meshes = [
+      box("near", ray.at(100, new THREE.Vector3()), bvh),
+      box("far", ray.at(300, new THREE.Vector3()), bvh),
+    ];
     expect(applyKeptSpan(rc, clip, SLACK)).toBe(true);
     return rc.intersectObjects(meshes, false).map((h) => h.object.name);
   };
@@ -108,8 +117,13 @@ describe("applyKeptSpan on a real raycast", () => {
 
   // The case the span exists for: one body, one BVH, whose first hit is its removed near part.
   it("a first-hit BVH raycast on one body finds its kept part behind its removed one", () => {
-    const parts = [box("near", ray.at(100, new THREE.Vector3()), false), box("far", ray.at(300, new THREE.Vector3()), false)];
-    const alone = parts.map((m) => Math.round(new THREE.Raycaster(ray.origin, ray.direction).intersectObject(m)[0]!.distance));
+    const parts = [
+      box("near", ray.at(100, new THREE.Vector3()), false),
+      box("far", ray.at(300, new THREE.Vector3()), false),
+    ];
+    const alone = parts.map((m) =>
+      Math.round(new THREE.Raycaster(ray.origin, ray.direction).intersectObject(m)[0]!.distance),
+    );
     const geo = mergeGeometries(parts.map((m) => m.geometry.clone().applyMatrix4(m.matrixWorld)))!;
     computeBoundsTree.call(geo);
     const body = new THREE.Mesh(geo, new THREE.MeshBasicMaterial());
@@ -131,7 +145,10 @@ describe("applyKeptSpan on a real raycast", () => {
 
   it("a ray wholly in the removed half hits nothing", () => {
     const rc = new THREE.Raycaster(removedOrigin, intoRemoved);
-    const meshes = [box("a", rc.ray.at(60, new THREE.Vector3()), true), box("b", rc.ray.at(140, new THREE.Vector3()), false)];
+    const meshes = [
+      box("a", rc.ray.at(60, new THREE.Vector3()), true),
+      box("b", rc.ray.at(140, new THREE.Vector3()), false),
+    ];
     expect(applyKeptSpan(rc, plane, SLACK)).toBe(false);
     expect(rc.intersectObjects(meshes, false)).toEqual([]);
   });
@@ -171,10 +188,17 @@ describe("firstKeptHit on a closed body cut through its middle", () => {
     return k && { cap: k.cap, distance: k.distance, wall: k.hit.distance };
   };
   // From the removed half, crossing the cut at 7 mm from C, which is inside the box.
-  const intoCap = new THREE.Ray(C.clone().addScaledVector(m, -150).addScaledVector(u, 7), m.clone().addScaledVector(u, 0.02).normalize());
+  const intoCap = new THREE.Ray(
+    C.clone().addScaledVector(m, -150).addScaledVector(u, 7),
+    m.clone().addScaledVector(u, 0.02).normalize(),
+  );
 
   it("a ray that enters the kept half inside the body is on the cap, at the cut", () => {
-    for (const [bvh, halfTurn] of [[false, false], [true, false], [false, true]]) {
+    for (const [bvh, halfTurn] of [
+      [false, false],
+      [true, false],
+      [false, true],
+    ]) {
       const got = cast(intoCap, cut, [body(bvh!, halfTurn)], bvh)!;
       expect(got).toEqual({ cap: true, distance: expect.closeTo(crossing(intoCap), 9), wall: expect.any(Number) });
       expect(got.wall - got.distance).toBeGreaterThan(5);
@@ -198,7 +222,10 @@ describe("firstKeptHit on a closed body cut through its middle", () => {
   });
 
   it("a ray from inside the body in the kept half sees its wall from inside, which is no cap", () => {
-    const r = new THREE.Ray(C.clone().addScaledVector(m, 4).addScaledVector(u, -3), m.clone().addScaledVector(u, 0.3).normalize());
+    const r = new THREE.Ray(
+      C.clone().addScaledVector(m, 4).addScaledVector(u, -3),
+      m.clone().addScaledVector(u, 0.3).normalize(),
+    );
     const got = cast(r, cut, [body(false)])!;
     expect(got).toEqual({ cap: false, distance: got.wall, wall: expect.any(Number) });
     expect(got.wall).toBeLessThan(25);
@@ -248,14 +275,22 @@ describe("firstKeptHit takes the cap only where a body holds the crossing", () =
     return k && { cap: k.cap, distance: k.distance, body: k.hit.object.name, past: k.hit.distance - crossing(r) };
   };
   // From the removed half, crossing the cut 7 mm off C along u, a little slanted.
-  const ray = new THREE.Ray(C.clone().addScaledVector(m, -140).addScaledVector(u, 7), m.clone().addScaledVector(u, 0.02).normalize());
+  const ray = new THREE.Ray(
+    C.clone().addScaledVector(m, -140).addScaledVector(u, 7),
+    m.clone().addScaledVector(u, 0.02).normalize(),
+  );
   const at = (x: number, z: number) => new THREE.Vector3(x, -2, z);
 
   it("an open sheet in the kept half is picked from either side, in front of it or behind", () => {
     for (const bvh of [false, true]) {
       for (const halfTurn of [false, true]) {
         const sheet = mesh("sheet", new THREE.PlaneGeometry(30, 26), at(4, 11), bvh, halfTurn);
-        expect(cast(ray, [sheet], bvh)).toEqual({ cap: false, distance: expect.closeTo(crossing(ray) + 11, 1), body: "sheet", past: expect.closeTo(11, 1) });
+        expect(cast(ray, [sheet], bvh)).toEqual({
+          cap: false,
+          distance: expect.closeTo(crossing(ray) + 11, 1),
+          body: "sheet",
+          past: expect.closeTo(11, 1),
+        });
       }
     }
   });
@@ -263,33 +298,71 @@ describe("firstKeptHit takes the cap only where a body holds the crossing", () =
   it("a closed box cut through is on the cap, the same box open on its removed end is not", () => {
     for (const bvh of [false, true]) {
       const closed = cast(ray, [mesh("box", box([40, 30, 36]), at(0, 0), bvh)], bvh);
-      expect(closed).toEqual({ cap: true, distance: expect.closeTo(crossing(ray), 6), body: "box", past: expect.closeTo(18, 0) });
+      expect(closed).toEqual({
+        cap: true,
+        distance: expect.closeTo(crossing(ray), 6),
+        body: "box",
+        past: expect.closeTo(18, 0),
+      });
       const open = cast(ray, [mesh("box", box([40, 30, 36], { drop: 5 }), at(0, 0), bvh)], bvh);
-      expect(open).toEqual({ cap: false, distance: expect.closeTo(crossing(ray) + 18, 0), body: "box", past: expect.closeTo(18, 0) });
+      expect(open).toEqual({
+        cap: false,
+        distance: expect.closeTo(crossing(ray) + 18, 0),
+        body: "box",
+        past: expect.closeTo(18, 0),
+      });
     }
   });
 
   it("a box wound inside out, with a doubled face where the ray leaves, or with a two sided fin inside is on the cap", () => {
     const flipped = cast(ray, [mesh("box", box([40, 30, 36], { flip: true }), at(0, 0), false)], false);
-    expect(flipped).toEqual({ cap: true, distance: expect.closeTo(crossing(ray), 6), body: "box", past: expect.closeTo(18, 0) });
+    expect(flipped).toEqual({
+      cap: true,
+      distance: expect.closeTo(crossing(ray), 6),
+      body: "box",
+      past: expect.closeTo(18, 0),
+    });
     const doubled = cast(ray, [mesh("box", box([40, 30, 36], { dup: 4 }), at(0, 0), false)], false);
-    expect(doubled).toEqual({ cap: true, distance: expect.closeTo(crossing(ray), 6), body: "box", past: expect.closeTo(18, 0) });
+    expect(doubled).toEqual({
+      cap: true,
+      distance: expect.closeTo(crossing(ray), 6),
+      body: "box",
+      past: expect.closeTo(18, 0),
+    });
     // The fin's two faces lie back to back, so the ray meets a front and a back at one distance, as on a grazed edge.
     const face = new THREE.PlaneGeometry(12, 10).translate(7, 2, 8);
     const back = face.clone();
     back.setIndex(Array.from(face.getIndex()!.array).map((_, i, a) => a[i - (i % 3) + [0, 2, 1][i % 3]!]!));
     const finned = cast(ray, [mesh("box", mergeGeometries([box([40, 30, 36]), face, back]), at(0, 0), false)], false);
-    expect(finned).toEqual({ cap: true, distance: expect.closeTo(crossing(ray), 6), body: "box", past: expect.closeTo(8, 0) });
+    expect(finned).toEqual({
+      cap: true,
+      distance: expect.closeTo(crossing(ray), 6),
+      body: "box",
+      past: expect.closeTo(8, 0),
+    });
   });
 
   it("a body inside a cut body is hidden by that body's cap, and picked once the outer body is gone", () => {
     for (const bvh of [false, true]) {
       const outer = mesh("outer", box([40, 30, 36]), at(0, 0), bvh);
       const inner = mesh("inner", box([9, 8, 6]), at(6, 7), bvh);
-      for (const meshes of [[outer, inner], [inner, outer]]) {
-        expect(cast(ray, meshes, bvh)).toEqual({ cap: true, distance: expect.closeTo(crossing(ray), 6), body: "outer", past: expect.closeTo(18, 0) });
+      for (const meshes of [
+        [outer, inner],
+        [inner, outer],
+      ]) {
+        expect(cast(ray, meshes, bvh)).toEqual({
+          cap: true,
+          distance: expect.closeTo(crossing(ray), 6),
+          body: "outer",
+          past: expect.closeTo(18, 0),
+        });
       }
-      expect(cast(ray, [inner], bvh)).toEqual({ cap: false, distance: expect.closeTo(crossing(ray) + 4, 1), body: "inner", past: expect.closeTo(4, 1) });
+      expect(cast(ray, [inner], bvh)).toEqual({
+        cap: false,
+        distance: expect.closeTo(crossing(ray) + 4, 1),
+        body: "inner",
+        past: expect.closeTo(4, 1),
+      });
     }
   });
 
@@ -297,6 +370,11 @@ describe("firstKeptHit takes the cap only where a body holds the crossing", () =
     const beside = new THREE.Ray(ray.origin.clone().addScaledVector(u, 30), ray.direction.clone());
     const outer = mesh("outer", box([40, 30, 36]), at(0, 0), true);
     const sheet = mesh("sheet", new THREE.PlaneGeometry(30, 26), at(31, 11), true);
-    expect(cast(beside, [outer, sheet], true)).toEqual({ cap: false, distance: expect.closeTo(crossing(beside) + 11, 1), body: "sheet", past: expect.closeTo(11, 1) });
+    expect(cast(beside, [outer, sheet], true)).toEqual({
+      cap: false,
+      distance: expect.closeTo(crossing(beside) + 11, 1),
+      body: "sheet",
+      past: expect.closeTo(11, 1),
+    });
   });
 });

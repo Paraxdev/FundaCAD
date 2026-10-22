@@ -71,9 +71,7 @@ fn channels(hex: &str) -> [i32; 3] {
 }
 
 fn is_color(hex: Option<&str>, want: [f64; 3]) -> bool {
-    hex.is_some_and(|h| {
-        channels(h).iter().zip(want).all(|(got, w)| (f64::from(*got) - w * 255.0).abs() <= 1.0)
-    })
+    hex.is_some_and(|h| channels(h).iter().zip(want).all(|(got, w)| (f64::from(*got) - w * 255.0).abs() <= 1.0))
 }
 
 fn is_closed_solid(shape: &Shape) -> Result<(), String> {

@@ -17,7 +17,9 @@ function makeEngine(start: SectionPhase) {
     onChange(fn: (p: SectionPhase) => void) {
       listeners.add(fn);
       fn(section.phase);
-      return () => { listeners.delete(fn); };
+      return () => {
+        listeners.delete(fn);
+      };
     },
     confirm: () => calls.push("confirm"),
     edit: () => calls.push("edit"),
@@ -58,7 +60,10 @@ describe("the section chip", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     frames = [];
-    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => { frames.push(fn); return frames.length; });
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+      frames.push(fn);
+      return frames.length;
+    });
     vi.stubGlobal("cancelAnimationFrame", () => {});
   });
   afterEach(() => {

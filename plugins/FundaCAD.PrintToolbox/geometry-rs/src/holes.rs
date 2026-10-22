@@ -79,10 +79,7 @@ pub fn teardrop(f: &F) -> Result<(), String> {
     let label = "Teardrop";
     let angle = f.num("angle", 45.0)?;
     if !(10.0..=80.0).contains(&angle) {
-        return Err(format!(
-            "{label}: the roof angle must be between 10 and 80 degrees (got {})",
-            py_g(angle)
-        ));
+        return Err(format!("{label}: the roof angle must be between 10 and 80 degrees (got {})", py_g(angle)));
     }
     let roof = f.text("roof", "pointed");
     if roof != "pointed" && roof != "flat" {
@@ -93,9 +90,7 @@ pub fn teardrop(f: &F) -> Result<(), String> {
         return Err(format!("{label}: the flat roof cannot sit below the top of the hole"));
     }
     let flat = roof == "flat";
-    apply(f, label, &|center, up, side, r| {
-        teardrop_section(center, up, side, r, angle, flat.then_some(r + extra))
-    })
+    apply(f, label, &|center, up, side, r| teardrop_section(center, up, side, r, angle, flat.then_some(r + extra)))
 }
 
 pub fn roof_bridge(f: &F) -> Result<(), String> {

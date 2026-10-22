@@ -13,15 +13,31 @@ class MockHost implements ConstraintHost {
   _cons: SketchConstraint[] = [];
   _fillet: number | null = null;
   solves = 0;
-  tool() { return this._tool; }
-  entities() { return this._ents; }
-  constraints() { return this._cons; }
-  pickTol() { return 1; }
-  getFilletFirst() { return this._fillet; }
-  setFilletFirst(i: number | null) { this._fillet = i; }
-  requestSolve() { this.solves++; }
+  tool() {
+    return this._tool;
+  }
+  entities() {
+    return this._ents;
+  }
+  constraints() {
+    return this._cons;
+  }
+  pickTol() {
+    return 1;
+  }
+  getFilletFirst() {
+    return this._fillet;
+  }
+  setFilletFirst(i: number | null) {
+    this._fillet = i;
+  }
+  requestSolve() {
+    this.solves++;
+  }
   warnings: string[] = [];
-  warn(msg: string) { this.warnings.push(msg); }
+  warn(msg: string) {
+    this.warnings.push(msg);
+  }
 }
 
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
@@ -48,7 +64,7 @@ describe("constraintTools click flows (Tier 1 additions)", () => {
     ];
     h._tool = "equal";
     const ct = new ConstraintTools(h);
-    ct.click(v(5, 0));  // on c1 rim
+    ct.click(v(5, 0)); // on c1 rim
     ct.click(v(23, 0)); // on c2 rim
     expect(h._cons).toEqual([{ type: "equalRadius", a: "c1", b: "c2" }]);
   });
@@ -125,11 +141,18 @@ describe("constraintTools click flows (Tier 1 additions)", () => {
 
   it("fix on projected geometry adds nothing and warns (it is already fixed)", () => {
     const h = new MockHost();
-    h._ents = [{
-      type: "projected", id: "p1",
-      source: { kind: "edge", body: "body1", sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } } },
-      curve: { kind: "line", x1: 0, y1: 0, x2: 10, y2: 0 },
-    }];
+    h._ents = [
+      {
+        type: "projected",
+        id: "p1",
+        source: {
+          kind: "edge",
+          body: "body1",
+          sel: { kind: "edge", by: "match", fp: { mid: [0, 0, 0], dir: [1, 0, 0] } },
+        },
+        curve: { kind: "line", x1: 0, y1: 0, x2: 10, y2: 0 },
+      },
+    ];
     h._tool = "fix";
     const ct = new ConstraintTools(h);
     ct.click(v(10, 0));

@@ -21,11 +21,19 @@ afterEach(() => {
 });
 
 const backend = {
-  async rebuild() { return new Promise<never>(() => {}); },
+  async rebuild() {
+    return new Promise<never>(() => {});
+  },
   async init() {},
-  onStatus() { return () => {}; },
-  onProgress() { return () => {}; },
-  async cancel() { return true; },
+  onStatus() {
+    return () => {};
+  },
+  onProgress() {
+    return () => {};
+  },
+  async cancel() {
+    return true;
+  },
 } as unknown as GeometryBackend;
 
 function fidget(): CadDocument {
@@ -33,7 +41,13 @@ function fidget(): CadDocument {
     parameters: {},
     paramDefs: {
       solidCore: { expr: "1", value: 1, unit: "count", group: "g1", control: { kind: "toggle" } },
-      joinedRings: { expr: "2", value: 2, unit: "count", group: "g1", control: { kind: "slider", min: 0, max: 22, step: 1 } },
+      joinedRings: {
+        expr: "2",
+        value: 2,
+        unit: "count",
+        group: "g1",
+        control: { kind: "slider", min: 0, max: 22, step: 1 },
+      },
       gap: { expr: "0.5", value: 0.5, unit: "mm", control: { kind: "number", min: 0.3, step: 0.1 } },
       pitch: { expr: "gap * 2", value: 1, unit: "mm" },
       helper: { expr: "7", value: 7, unit: "mm", hidden: true },
@@ -54,7 +68,9 @@ async function render() {
   setActivePinia(createPinia());
   const store = new DocumentStore(backend, fidget());
   const docVersion = ref(0);
-  store.onDocChange(() => { docVersion.value++; });
+  store.onDocChange(() => {
+    docVersion.value++;
+  });
   const engine = { store, bridge: { docVersion, buildVersion: ref(0), metaVersion: ref(0) } } as unknown as Engine;
   const w = mount(ParametersSection, { global: { provide: { [ENGINE as symbol]: engine } }, attachTo: document.body });
   await nextTick();

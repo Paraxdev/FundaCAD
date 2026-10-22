@@ -130,9 +130,7 @@ interface Face2 {
 
 /** What a face is to the ball's centre: a line `size` off a flat face, a
  *  circle `size` off a curved one. */
-type Offset =
-  | { line: true; point: V2; dir: V2 }
-  | { line: false; center: V2; radius: number; faceRadius: number };
+type Offset = { line: true; point: V2; dir: V2 } | { line: false; center: V2; radius: number; faceRadius: number };
 
 function offsetOf(f: Face2, size: number): Offset | null {
   if (Math.abs(f.bend * size) < 1e-4) return { line: true, point: scale2(f.side, size), dir: f.dir };
@@ -201,10 +199,12 @@ function rollingBall(f1: Face2, f2: Face2, alpha: number, size: number): { cente
 }
 
 function distanceToSegment(ax: number, ay: number, bx: number, by: number): number {
-  const ex = bx - ax, ey = by - ay;
+  const ex = bx - ax,
+    ey = by - ay;
   const l = ex * ex + ey * ey;
   const t = l > 0 ? Math.max(0, Math.min(1, -(ax * ex + ay * ey) / l)) : 0;
-  const x = ax + ex * t, y = ay + ey * t;
+  const x = ax + ex * t,
+    y = ay + ey * t;
   return Math.sqrt(x * x + y * y);
 }
 
@@ -217,10 +217,12 @@ function turnOf(x: number, y: number): number {
 
 /** The `k`th smallest of `a`, reordering it. */
 function nthSmallest(a: Float64Array, k: number): number {
-  let lo = 0, hi = a.length - 1;
+  let lo = 0,
+    hi = a.length - 1;
   while (lo < hi) {
     const pivot = a[(lo + hi) >> 1]!;
-    let i = lo, j = hi;
+    let i = lo,
+      j = hi;
     while (i <= j) {
       while (a[i]! < pivot) i++;
       while (a[j]! > pivot) j--;
@@ -251,7 +253,12 @@ const roomOf = (s: EdgeSample) => Math.min(s.reach1 ?? Infinity, s.reach2 ?? Inf
 /** The body's section across the edge at `sample`, from `count` segments
  *  x0,y0,x1,y1 in the sample's frame, kept only as far out as the `keep`
  *  segments nearest the edge reach. Null when the sample has no wedge. */
-export function sectionOutline(sample: EdgeSample, segs: Float64Array, count: number, keep = Infinity): SectionOutline | null {
+export function sectionOutline(
+  sample: EdgeSample,
+  segs: Float64Array,
+  count: number,
+  keep = Infinity,
+): SectionOutline | null {
   const w = wedgeOf(sample);
   if (!w) return null;
   const ref = probePoint(w.alpha, roomOf(sample));
@@ -259,7 +266,10 @@ export function sectionOutline(sample: EdgeSample, segs: Float64Array, count: nu
   let refInside = false;
   const dist = new Float64Array(count);
   for (let i = 0; i < count; i++) {
-    const ax = segs[i * 4]!, ay = segs[i * 4 + 1]!, bx = segs[i * 4 + 2]!, by = segs[i * 4 + 3]!;
+    const ax = segs[i * 4]!,
+      ay = segs[i * 4 + 1]!,
+      bx = segs[i * 4 + 2]!,
+      by = segs[i * 4 + 3]!;
     if (ay > ry !== by > ry && rx < ax + ((ry - ay) * (bx - ax)) / (by - ay)) refInside = !refInside;
     dist[i] = distanceToSegment(ax, ay, bx, by);
   }
@@ -270,11 +280,15 @@ export function sectionOutline(sample: EdgeSample, segs: Float64Array, count: nu
   const sectors = Math.min(MAX_SECTORS, Math.max(8, Math.ceil(kept / 2)));
   const width = 4 / sectors;
   const local = new Float64Array(kept * 4);
-  const first = new Int32Array(kept), last = new Int32Array(kept);
+  const first = new Int32Array(kept),
+    last = new Int32Array(kept);
   const sectorStart = new Int32Array(sectors + 1);
   for (let i = 0, k = 0; i < count; i++) {
     if (!(dist[i]! < radius)) continue;
-    const ax = segs[i * 4]! - rx, ay = segs[i * 4 + 1]! - ry, bx = segs[i * 4 + 2]! - rx, by = segs[i * 4 + 3]! - ry;
+    const ax = segs[i * 4]! - rx,
+      ay = segs[i * 4 + 1]! - ry,
+      bx = segs[i * 4 + 2]! - rx,
+      by = segs[i * 4 + 3]! - ry;
     local[k * 4] = ax;
     local[k * 4 + 1] = ay;
     local[k * 4 + 2] = bx;
@@ -284,7 +298,8 @@ export function sectionOutline(sample: EdgeSample, segs: Float64Array, count: nu
     if (d > 2) d -= 4;
     else if (d < -2) d += 4;
     const lo = (d < 0 ? ta + d : ta) - SECTOR_PAD;
-    let f = Math.floor(lo / width), l = Math.floor((lo + Math.abs(d) + 2 * SECTOR_PAD) / width);
+    let f = Math.floor(lo / width),
+      l = Math.floor((lo + Math.abs(d) + 2 * SECTOR_PAD) / width);
     if (!(l - f + 1 < sectors)) [f, l] = [0, sectors - 1];
     first[k] = f;
     last[k] = l;
@@ -312,18 +327,24 @@ export interface TrimBudget {
  *  when `q` lies past the kept outline or the budget runs out. */
 export function insideOutline(o: SectionOutline, q: V2, budget?: TrimBudget): boolean | null {
   if (len2(q) >= o.radius) return null;
-  const vx = q[0] - o.ref[0], vy = q[1] - o.ref[1];
+  const vx = q[0] - o.ref[0],
+    vy = q[1] - o.ref[1];
   if (vx === 0 && vy === 0) return o.refInside;
   const sectors = o.sectorStart.length - 1;
   const b = Math.min(sectors - 1, Math.floor((turnOf(vx, vy) * sectors) / 4));
-  const from = o.sectorStart[b]!, to = o.sectorStart[b + 1]!;
+  const from = o.sectorStart[b]!,
+    to = o.sectorStart[b + 1]!;
   if (budget && (budget.left -= to - from + 1) < 0) return null;
   const s = o.segs;
   let odd = false;
   for (let k = from; k < to; k++) {
     const i = o.sectorSegs[k]! * 4;
-    const ax = s[i]!, ay = s[i + 1]!, bx = s[i + 2]!, by = s[i + 3]!;
-    const s0 = vx * ay - vy * ax, s1 = vx * by - vy * bx;
+    const ax = s[i]!,
+      ay = s[i + 1]!,
+      bx = s[i + 2]!,
+      by = s[i + 3]!;
+    const s0 = vx * ay - vy * ax,
+      s1 = vx * by - vy * bx;
     if (s0 > 0 === s1 > 0) continue;
     const t = (ax * by - ay * bx) / (s1 - s0);
     if (t >= 0 && t < 1) odd = !odd;
@@ -358,8 +379,7 @@ export function trimToSide(
   }
   if (!runs.length) return null;
   const mid = CLIP_STEPS / 2;
-  const run = runs.find(([a, b]) => a <= mid && mid <= b)
-    ?? runs.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a));
+  const run = runs.find(([a, b]) => a <= mid && mid <= b) ?? runs.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a));
   const refine = (good: number, bad: number) => {
     for (let k = 0; k < 8; k++) {
       const m = (good + bad) / 2;
@@ -411,13 +431,11 @@ function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind, budge
   const P = sample.point;
   const to3 = (p: V2): Vec3 => add(P, add(scale(d1, p[0]), scale(e2, p[1])));
   const room = roomOf(sample);
-  const outline = budget ? sample.outline ?? null : null;
+  const outline = budget ? (sample.outline ?? null) : null;
   // A small ball tucked into the corner is in the material on a convex edge
   // and in the air on a concave one.
   const convex = outline?.refInside ?? false;
-  const size = convex
-    ? wanted
-    : Math.min(wanted, kind === "chamfer" ? room : room * Math.tan(alpha / 2));
+  const size = convex ? wanted : Math.min(wanted, kind === "chamfer" ? room : room * Math.tan(alpha / 2));
   if (size < EPS) return null;
 
   const f1: Face2 = { dir: [1, 0], side: [0, 1], bend: sample.bend1 ?? 0 };
@@ -427,7 +445,8 @@ function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind, budge
   let inner: V2;
   let unsure = false;
   if (kind === "chamfer") {
-    const a = alongFace(f1, size), b = alongFace(f2, size);
+    const a = alongFace(f1, size),
+      b = alongFace(f2, size);
     curve = (s) => add2(scale2(a, 1 - s), scale2(b, s));
     inner = add2(a, b);
   } else {
@@ -446,9 +465,10 @@ function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind, budge
     const sweep = Math.acos(Math.max(-1, Math.min(1, dot2(u, v))));
     const sinSweep = Math.sin(sweep);
     curve = (s) => {
-      const dir = sinSweep < EPS
-        ? u
-        : add2(scale2(u, Math.sin((1 - s) * sweep) / sinSweep), scale2(v, Math.sin(s * sweep) / sinSweep));
+      const dir =
+        sinSweep < EPS
+          ? u
+          : add2(scale2(u, Math.sin((1 - s) * sweep) / sinSweep), scale2(v, Math.sin(s * sweep) / sinSweep));
       return add2(center, scale2(dir, size));
     };
   }
@@ -507,9 +527,16 @@ export function sweepBlendGhost(
     const a = sections[i]!;
     const b = sections[i + 1]!;
     for (let j = 0; j + 1 < a.length; j++) {
-      const a0 = a[j]!, a1 = a[j + 1]!, b0 = b[j]!, b1 = b[j + 1]!;
-      push3(a0); push3(a1); push3(b1);
-      push3(a0); push3(b1); push3(b0);
+      const a0 = a[j]!,
+        a1 = a[j + 1]!,
+        b0 = b[j]!,
+        b1 = b[j + 1]!;
+      push3(a0);
+      push3(a1);
+      push3(b1);
+      push3(a0);
+      push3(b1);
+      push3(b0);
     }
   }
   return positions.length ? { positions, unsure: unsure >= samples.length * UNSURE_SHARE } : null;

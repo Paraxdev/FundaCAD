@@ -39,7 +39,8 @@ export function bloomSide(width: number, height: number): number {
 export interface FadeMaterial {
   opacity: number;
   transition: number;
-  fromTexture: THREE.Texture | null; texture: THREE.Texture | null;
+  fromTexture: THREE.Texture | null;
+  texture: THREE.Texture | null;
   colorNode: unknown;
   _toneMapping: unknown;
   needsUpdate: boolean;

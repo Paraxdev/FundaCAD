@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { circleDiameter, describeSelection, polylineLength, roundFacePrompt, type Pt3 } from "../../src/ui/selectionMeasure";
+import {
+  circleDiameter,
+  describeSelection,
+  polylineLength,
+  roundFacePrompt,
+  type Pt3,
+} from "../../src/ui/selectionMeasure";
 
 const circle = (r: number, n = 64, z = 5): Pt3[] =>
   Array.from({ length: n + 1 }, (_, i) => {
@@ -9,7 +15,13 @@ const circle = (r: number, n = 64, z = 5): Pt3[] =>
 
 describe("selection measure", () => {
   it("sums a polyline's length", () => {
-    expect(polylineLength([[0, 0, 0], [3, 4, 0], [3, 4, 12]])).toBe(17);
+    expect(
+      polylineLength([
+        [0, 0, 0],
+        [3, 4, 0],
+        [3, 4, 12],
+      ]),
+    ).toBe(17);
   });
 
   it("reads a closed tessellated circle's diameter", () => {
@@ -17,7 +29,13 @@ describe("selection measure", () => {
   });
 
   it("refuses shapes that are not circles", () => {
-    const square: Pt3[] = [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0], [0, 0, 0]];
+    const square: Pt3[] = [
+      [0, 0, 0],
+      [10, 0, 0],
+      [10, 10, 0],
+      [0, 10, 0],
+      [0, 0, 0],
+    ];
     expect(circleDiameter(square)).toBeNull();
     const ellipse = circle(20).map(([x, y, z]) => [x, y * 0.5, z] as Pt3);
     expect(circleDiameter(ellipse)).toBeNull();
@@ -30,19 +48,28 @@ describe("selection measure", () => {
   });
 
   it("gives several edges their total length and no diameter", () => {
-    const line: Pt3[] = [[0, 0, 0], [10, 0, 0]];
+    const line: Pt3[] = [
+      [0, 0, 0],
+      [10, 0, 0],
+    ];
     expect(describeSelection({ count: 2, noun: "edge", plural: "edges", edges: [line, line] })).toBe("2 edges · 20 mm");
   });
 
   it("counts faces and adds a round face's diameter", () => {
     expect(describeSelection({ count: 3, noun: "face", plural: "faces" })).toBe("3 faces");
-    expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 25, full: true } })).toBe("1 face · ⌀50 mm");
+    expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 25, full: true } })).toBe(
+      "1 face · ⌀50 mm",
+    );
     expect(describeSelection({ count: 0, noun: "face", plural: "faces" })).toBe("");
   });
 
   it("gives a partial arc its radius, not a diameter", () => {
-    expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 2, full: false } })).toBe("1 face · R2 mm");
-    expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 2, full: true } })).toBe("1 face · ⌀4 mm");
+    expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 2, full: false } })).toBe(
+      "1 face · R2 mm",
+    );
+    expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 2, full: true } })).toBe(
+      "1 face · ⌀4 mm",
+    );
   });
 
   it("prompts a partial arc by its radius and offers removal only on a full wrap", () => {

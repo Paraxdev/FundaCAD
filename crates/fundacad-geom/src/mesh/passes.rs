@@ -32,24 +32,14 @@ pub fn append(out: &mut Tessellation, fid: u32, m: &FaceMesh, display: bool) {
         }
     }
     out.indices.extend(m.indices.iter().map(|i| base + i));
-    out.face_ids
-        .extend(std::iter::repeat(fid).take(m.indices.len() / 3));
+    out.face_ids.extend(std::iter::repeat(fid).take(m.indices.len() / 3));
 }
 
 /// `faceColorSlots`: the `colorSlot` of the spec that claimed each face, in
 /// face order, `None` when no claimed face carries one.
-pub fn face_color_slots<'a>(
-    face_count: usize,
-    spec_of: impl Fn(usize) -> Option<&'a Value>,
-) -> Option<Vec<Value>> {
-    let slots: Vec<Value> = (0..face_count)
-        .map(|k| {
-            spec_of(k)
-                .and_then(|s| s.get("colorSlot"))
-                .cloned()
-                .unwrap_or(Value::Null)
-        })
-        .collect();
+pub fn face_color_slots<'a>(face_count: usize, spec_of: impl Fn(usize) -> Option<&'a Value>) -> Option<Vec<Value>> {
+    let slots: Vec<Value> =
+        (0..face_count).map(|k| spec_of(k).and_then(|s| s.get("colorSlot")).cloned().unwrap_or(Value::Null)).collect();
     slots.iter().any(|v| !v.is_null()).then_some(slots)
 }
 
@@ -82,9 +72,6 @@ mod tests {
         let a = json!({"pass": "p"});
         let b = json!({"pass": "p", "colorSlot": 2});
         assert_eq!(face_color_slots(3, |k| (k == 1).then_some(&a)), None);
-        assert_eq!(
-            face_color_slots(3, |k| (k == 2).then_some(&b)),
-            Some(vec![Value::Null, Value::Null, json!(2)])
-        );
+        assert_eq!(face_color_slots(3, |k| (k == 2).then_some(&b)), Some(vec![Value::Null, Value::Null, json!(2)]));
     }
 }

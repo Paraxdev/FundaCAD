@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { applySurface, applySurfaceGraph, cloneWithoutSurface, compileGraph, graphKey } from "../../src/viewport/proceduralSurface";
+import {
+  applySurface,
+  applySurfaceGraph,
+  cloneWithoutSurface,
+  compileGraph,
+  graphKey,
+} from "../../src/viewport/proceduralSurface";
 import type { SurfaceGraph } from "../../src/document/materials";
 
 // The compiler turns a node graph into the GLSL `sGraph` function. These check
@@ -14,7 +20,12 @@ const graph: SurfaceGraph = {
     { id: "n1", type: "noise", params: { scale: 6 } },
     { id: "s1", type: "scratches", params: { scale: 5, angle: 0.5 } },
     { id: "r1", type: "ramp", params: { colorA: "#000000", colorB: "#ffffff" }, in: { t: "n1" } },
-    { id: "out", type: "output", params: { roughAmount: 0.6, bumpAmount: 0.8, colorAmount: 0.5 }, in: { roughness: "n1", bump: "s1", color: "r1" } },
+    {
+      id: "out",
+      type: "output",
+      params: { roughAmount: 0.6, bumpAmount: 0.8, colorAmount: 0.5 },
+      in: { roughness: "n1", bump: "s1", color: "r1" },
+    },
   ],
 };
 
@@ -142,7 +153,10 @@ describe("program cache key", () => {
   const empty: SurfaceGraph = { output: "out", nodes: [{ id: "out", type: "output" }] };
   const wired: SurfaceGraph = {
     output: "out",
-    nodes: [{ id: "n", type: "noise" }, { id: "out", type: "output", in: { bump: "n" } }],
+    nodes: [
+      { id: "n", type: "noise" },
+      { id: "out", type: "output", in: { bump: "n" } },
+    ],
   };
   const stockKey = new THREE.MeshPhysicalMaterial().customProgramCacheKey();
 
@@ -184,7 +198,9 @@ describe("program cache key", () => {
   it("releases the superseded graph program on an edit", () => {
     const m = new THREE.MeshPhysicalMaterial();
     let disposed = 0;
-    m.addEventListener("dispose", () => { disposed++; });
+    m.addEventListener("dispose", () => {
+      disposed++;
+    });
     applySurfaceGraph(m, empty);
     expect(disposed).toBe(0);
     applySurfaceGraph(m, wired);

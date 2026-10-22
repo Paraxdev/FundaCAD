@@ -8,9 +8,7 @@ import SelectionReadout from "./SelectionReadout.vue";
 import NormalToSketch from "./NormalToSketch.vue";
 import SectionChip from "./SectionChip.vue";
 import { useClearOfCards } from "../../composables/useClearOfCards";
-import {
-  draggingMaterial, dropScopeFor, endMaterialDrag, MATERIAL_MIME, type DropScope,
-} from "../../ui/materialDrag";
+import { draggingMaterial, dropScopeFor, endMaterialDrag, MATERIAL_MIME, type DropScope } from "../../ui/materialDrag";
 
 const engine = useEngine();
 const host = useTemplateRef<HTMLDivElement>("host");
@@ -46,7 +44,12 @@ onMounted(() => host.value!.prepend(engine.canvas));
  *  answer is about the thing under the pointer and reading it means looking
  *  away from the pointer otherwise. */
 const chip = ref<{
-  x: number; y: number; name: string; color: string; scope: DropScope; hit: boolean;
+  x: number;
+  y: number;
+  name: string;
+  color: string;
+  scope: DropScope;
+  hit: boolean;
 } | null>(null);
 
 function carrying(e: DragEvent): boolean {
@@ -85,8 +88,12 @@ function aim() {
   lastAim = key;
   const target = engine.viewport.dropTargetAt(p.x, p.y, p.scope);
   chip.value = {
-    x: p.x, y: p.y, name: held.name, color: held.color,
-    scope: p.scope, hit: !!target,
+    x: p.x,
+    y: p.y,
+    name: held.name,
+    color: held.color,
+    scope: p.scope,
+    hit: !!target,
   };
 }
 
@@ -128,21 +135,13 @@ function onDrop(e: DragEvent) {
   // The whole RUN the pick would have taken, so a cylinder the kernel split in
   // two is dressed as the one face it looks like.
   const band = engine.viewport.localFaceBand(target.faceId);
-  const faces = (band?.faces.length ? band.faces : [target.localFace])
-    .map((f) => ({ body: target.bodyId, face: f }));
+  const faces = (band?.faces.length ? band.faces : [target.localFace]).map((f) => ({ body: target.bodyId, face: f }));
   engine.store.setFacesMaterial(faces, held.id);
 }
 </script>
 
 <template>
-  <div
-    id="viewport"
-    ref="host"
-    @dragenter="onDragOver"
-    @dragover="onDragOver"
-    @dragleave="onDragLeave"
-    @drop="onDrop"
-  >
+  <div id="viewport" ref="host" @dragenter="onDragOver" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
     <PromptBanner />
     <FpsReadout />
     <RoundTripReadout />
@@ -154,11 +153,7 @@ function onDrop(e: DragEvent) {
   </div>
 
   <Teleport to="body">
-    <div
-      v-if="chip"
-      class="dropchip"
-      :style="{ left: `${chip.x + 16}px`, top: `${chip.y + 18}px` }"
-    >
+    <div v-if="chip" class="dropchip" :style="{ left: `${chip.x + 16}px`, top: `${chip.y + 18}px` }">
       <span class="dot" :style="{ background: chip.color }"></span>
       <span>{{ chip.name }}</span>
       <span class="scope">{{ chip.hit ? (chip.scope === "body" ? "whole body" : "this face") : "nothing here" }}</span>

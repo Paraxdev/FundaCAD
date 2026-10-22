@@ -33,7 +33,9 @@ describe("crumbs in the app log", () => {
     inApp(true);
     crumb("[toast] Exported bracket.step");
     await flushPromises();
-    expect(logged()).toEqual([["log_line", expect.stringMatching(/^\d\d:\d\d:\d\d \[toast\] Exported bracket\.step$/)]]);
+    expect(logged()).toEqual([
+      ["log_line", expect.stringMatching(/^\d\d:\d\d:\d\d \[toast\] Exported bracket\.step$/)],
+    ]);
 
     invoke.mockReset();
     invoke.mockResolvedValue(undefined);

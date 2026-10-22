@@ -15,6 +15,7 @@ const emit = defineEmits<{ "update:modelValue": [T] }>();
       :class="{ active: t.value === modelValue }"
       :aria-selected="t.value === modelValue"
       @click="emit('update:modelValue', t.value)"
-    >{{ t.label }}</button>
+      >{{ t.label }}</button
+    >
   </div>
 </template>

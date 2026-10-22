@@ -64,7 +64,13 @@ watch(
 
 // A new glyph set is at the same camera as the old one, so the pose check would
 // skip it forever. flush: "post" so the :ref functions have run.
-watch(() => s.glyphItems, () => { lastPose = -1; }, { flush: "post" });
+watch(
+  () => s.glyphItems,
+  () => {
+    lastPose = -1;
+  },
+  { flush: "post" },
+);
 
 onUnmounted(stop);
 
@@ -100,11 +106,7 @@ function onWheel(e: WheelEvent) {
        containing block. Inside #app's grid it would inherit a stacking context
        and land behind the canvas. -->
   <Teleport to="body">
-    <div
-      class="sketch-glyphs"
-      :class="{ 'glyphs-passive': s.glyphsPassive }"
-      @wheel="onWheel"
-    >
+    <div class="sketch-glyphs" :class="{ 'glyphs-passive': s.glyphsPassive }" @wheel="onWheel">
       <div
         v-for="(g, i) in s.glyphItems"
         :key="i"
@@ -113,7 +115,8 @@ function onWheel(e: WheelEvent) {
         :title="g.title"
         @pointerdown="onDown"
         @click="onClick($event, g)"
-      ><Icon :name="g.icon" :size="12" /></div>
+        ><Icon :name="g.icon" :size="12"
+      /></div>
     </div>
   </Teleport>
 </template>

@@ -12,11 +12,7 @@ import { themeColor } from "../viewport/themeColors";
 /** Signed distance along `dir` (unit) of the closest point on the axis
  *  (through `origin`) to the cursor `ray`. Ill-conditioned when the camera
  *  looks down the axis, use axisDragDistance for interactive drags. */
-export function distanceAlongAxis(
-  ray: THREE.Ray,
-  origin: THREE.Vector3,
-  dir: THREE.Vector3,
-): number {
+export function distanceAlongAxis(ray: THREE.Ray, origin: THREE.Vector3, dir: THREE.Vector3): number {
   const w0 = ray.origin.clone().sub(origin);
   const b = ray.direction.dot(dir);
   const d = ray.direction.dot(w0);
@@ -130,9 +126,7 @@ export function screenPlaneOrientation(
   if (right.lengthSq() < 1e-9) right.set(0, 1, 0).projectOnPlane(fwd);
   right.normalize();
   const up = new THREE.Vector3().crossVectors(back, right).normalize();
-  return new THREE.Quaternion().setFromRotationMatrix(
-    new THREE.Matrix4().makeBasis(right, up, back),
-  );
+  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, back));
 }
 
 /** Smallest share of a handle's length that must survive projection, as the sine
@@ -161,8 +155,7 @@ export function leanOutOfView(
   const flat = a.clone().addScaledVector(fwd, -along); // the part that shows on screen
   if (flat.length() >= minScreen) return a;
   // Dead-on: there is no screen direction to preserve, so borrow the camera's.
-  const dir =
-    flat.lengthSq() > 1e-12 ? flat.normalize() : fallbackRight.clone().projectOnPlane(fwd);
+  const dir = flat.lengthSq() > 1e-12 ? flat.normalize() : fallbackRight.clone().projectOnPlane(fwd);
   if (dir.lengthSq() < 1e-12) return a; // nothing to lean towards; leave it be
   dir.normalize();
   const depth = Math.sqrt(Math.max(0, 1 - minScreen * minScreen)) * (along < 0 ? -1 : 1);
@@ -182,11 +175,7 @@ export type FluentRelease = "commit" | "cancel" | "stay";
  *  stays armed, which doubles as the way in to the full tool.
  *  `meaningful`: a drag that ended back at zero cancels, because staying armed
  *  would strand exactly the user who was backing out. */
-export function fluentRelease(opts: {
-  fluent: boolean;
-  moved: boolean;
-  meaningful: boolean;
-}): FluentRelease {
+export function fluentRelease(opts: { fluent: boolean; moved: boolean; meaningful: boolean }): FluentRelease {
   if (!opts.fluent || !opts.moved) return "stay";
   return opts.meaningful ? "commit" : "cancel";
 }
@@ -320,10 +309,7 @@ export const MIN_HANDLE_SCALE = 0.45;
  *  hanging off it. So the pixel scale stands until the handle would exceed a
  *  fraction of the model's on-screen size, and from there they shrink together.
  *  Returns 1 when there is nothing to measure against, never 0. */
-export function handleScale(
-  modelDiagonal: number | null,
-  pixelWorldSize: number | null,
-): number {
+export function handleScale(modelDiagonal: number | null, pixelWorldSize: number | null): number {
   return glyphScale(HANDLE_LENGTH, modelDiagonal, pixelWorldSize, MIN_HANDLE_SCALE);
 }
 
@@ -337,15 +323,15 @@ export function handleScale(
  *  and the handle's top landed on the same pixel: no clearance at all, so the
  *  arrow read as a stalk hanging off the toolbar rather than as a control
  *  standing on the face. */
-export function handleReachPx(
-  modelDiagonal: number | null,
-  pixelWorldSize: number | null,
-): number {
+export function handleReachPx(modelDiagonal: number | null, pixelWorldSize: number | null): number {
   return HANDLE_LENGTH * handleScale(modelDiagonal, pixelWorldSize);
 }
 
 function lathe(profile: [number, number][]): THREE.LatheGeometry {
-  return new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), 28);
+  return new THREE.LatheGeometry(
+    profile.map(([r, y]) => new THREE.Vector2(r, y)),
+    28,
+  );
 }
 
 export function createDragHandle(tone: HandleTone = "idle"): DragHandle {
@@ -392,10 +378,7 @@ export function createDragHandle(tone: HandleTone = "idle"): DragHandle {
   const hidden = new THREE.MeshBasicMaterial({ visible: false, depthTest: false });
   const grabHead = new THREE.Mesh(new THREE.SphereGeometry(GRAB_HEAD, 10, 8), hidden);
   grabHead.position.y = 38;
-  const grabStem = new THREE.Mesh(
-    new THREE.CylinderGeometry(GRAB_STEM, GRAB_STEM, 30, 8),
-    hidden,
-  );
+  const grabStem = new THREE.Mesh(new THREE.CylinderGeometry(GRAB_STEM, GRAB_STEM, 30, 8), hidden);
   grabStem.position.y = 19;
 
   group.add(outline, blob, grabHead, grabStem);
@@ -484,8 +467,13 @@ export function createRotationArc(
   const start = Math.PI / 2 - sweep / 2;
 
   const body = new THREE.MeshLambertMaterial({
-    color: idleColor(), emissive: idleColor(), emissiveIntensity: 0.5,
-    depthTest: false, depthWrite: false, transparent: true, opacity: 1,
+    color: idleColor(),
+    emissive: idleColor(),
+    emissiveIntensity: 0.5,
+    depthTest: false,
+    depthWrite: false,
+    transparent: true,
+    opacity: 1,
   });
   const arcGeo = new THREE.TorusGeometry(r, ARC_TUBE, 10, 40, sweep);
   const arc = new THREE.Mesh(arcGeo, body);

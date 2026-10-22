@@ -1,9 +1,7 @@
 // The library list: one entry per catalogue family and size, and one per user fastener, with the
 // search and the filters over them.
 
-import {
-  CATEGORY_ORDER, FAMILIES, drivesOf, headLabel, lengthsFor, unitsOf, type Family,
-} from "./catalogue";
+import { CATEGORY_ORDER, FAMILIES, drivesOf, headLabel, lengthsFor, unitsOf, type Family } from "./catalogue";
 import { PARTS, type FastenerSpec } from "./spec";
 import type { UserFastener } from "./library";
 
@@ -54,8 +52,19 @@ function catalogueEntries(f: Family): ListEntry[] {
     drives,
     head,
     lengths: lengthsFor(f, row),
-    haystack: [f.name, f.standard, ...f.aka, f.category, head, ...drives.map((d) => PARTS.drive[d]?.label ?? d), row.size, row.label ?? "", system]
-      .join(" ").toLowerCase(),
+    haystack: [
+      f.name,
+      f.standard,
+      ...f.aka,
+      f.category,
+      head,
+      ...drives.map((d) => PARTS.drive[d]?.label ?? d),
+      row.size,
+      row.label ?? "",
+      system,
+    ]
+      .join(" ")
+      .toLowerCase(),
   }));
 }
 
@@ -84,8 +93,18 @@ export function customEntry(item: UserFastener): ListEntry {
     drives,
     head: specHead(spec),
     lengths: typeof spec.length === "number" ? [spec.length] : [],
-    haystack: [spec.name, spec.standard ?? "", spec.notes ?? "", CUSTOM_CATEGORY, specHead(spec), ...drives, size, system]
-      .join(" ").toLowerCase(),
+    haystack: [
+      spec.name,
+      spec.standard ?? "",
+      spec.notes ?? "",
+      CUSTOM_CATEGORY,
+      specHead(spec),
+      ...drives,
+      size,
+      system,
+    ]
+      .join(" ")
+      .toLowerCase(),
   };
 }
 
@@ -128,7 +147,8 @@ export function filterEntries(entries: ListEntry[], filters: Filters): ListEntry
     if (filters.standard && e.standard !== filters.standard) return false;
     if (filters.drive && !e.drives.includes(filters.drive)) return false;
     if (filters.head && e.head !== filters.head) return false;
-    if (q.size !== undefined && e.size.toUpperCase() !== q.size && !e.size.toUpperCase().startsWith(`${q.size}-`)) return false;
+    if (q.size !== undefined && e.size.toUpperCase() !== q.size && !e.size.toUpperCase().startsWith(`${q.size}-`))
+      return false;
     if (q.length !== undefined && !e.lengths.some((l) => Math.abs(l - q.length!) < 1e-9)) return false;
     return q.words.every((w) => e.haystack.includes(w));
   });
@@ -143,9 +163,7 @@ export interface Facets {
 
 export function facets(entries: ListEntry[]): Facets {
   const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))];
-  const categories = uniq(entries.map((e) => e.category)).sort(
-    (a, b) => rank(a) - rank(b),
-  );
+  const categories = uniq(entries.map((e) => e.category)).sort((a, b) => rank(a) - rank(b));
   return {
     categories,
     standards: uniq(entries.map((e) => e.standard)).sort(),

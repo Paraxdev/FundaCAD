@@ -17,8 +17,7 @@ use serde::{Deserialize, Serialize};
 pub use feature::*;
 pub use selector::*;
 pub use sketch::{
-    DimPlace, PlaceOffset, ProjectedCurve, ProjectedSource, SketchConstraint, SketchEntity,
-    SketchPattern, Text,
+    DimPlace, PlaceOffset, ProjectedCurve, ProjectedSource, SketchConstraint, SketchEntity, SketchPattern, Text,
 };
 pub use value::{Extra, Invalid, Num, OneOrMany, Real, UnresolvedNum, Vec3};
 
@@ -36,24 +35,10 @@ open_enum! {
     pub enum ParamUnit { Mm = "mm", Deg = "deg", Count = "count" }
 }
 
-plain_struct!(TargetFeature {
-    feature: String,
-    field: String
-});
-plain_struct!(TargetConstraint {
-    sketch: String,
-    constraint: String
-});
-plain_struct!(TargetEntity {
-    sketch: String,
-    entity: String,
-    field: String
-});
-plain_struct!(TargetPattern {
-    sketch: String,
-    pattern: String,
-    field: String
-});
+plain_struct!(TargetFeature { feature: String, field: String });
+plain_struct!(TargetConstraint { sketch: String, constraint: String });
+plain_struct!(TargetEntity { sketch: String, entity: String, field: String });
+plain_struct!(TargetPattern { sketch: String, pattern: String, field: String });
 
 tagged_enum! {
     /// Where a model parameter's value is written, by stable id.
@@ -76,10 +61,7 @@ plain_struct!(ControlSlider {
     #[serde(default, skip_serializing_if = "Option::is_none")] step: Option<Real>,
 });
 plain_struct!(ControlToggle {});
-plain_struct!(Choice {
-    label: String,
-    value: Real
-});
+plain_struct!(Choice { label: String, value: Real });
 plain_struct!(ControlChoice { choices: Vec<Choice> });
 
 tagged_enum! {
@@ -109,20 +91,12 @@ plain_struct!(
     }
 );
 
-plain_struct!(ParamGroup {
-    id: String,
-    name: String
-});
+plain_struct!(ParamGroup { id: String, name: String });
 plain_struct!(ParamConfiguration { id: String, name: String, values: IndexMap<String, String> });
 open_enum! {
     pub enum CheckLevel { Warning = "warning", Error = "error" }
 }
-plain_struct!(ParamCheck {
-    id: String,
-    expr: String,
-    message: String,
-    level: CheckLevel
-});
+plain_struct!(ParamCheck { id: String, expr: String, message: String, level: CheckLevel });
 plain_struct!(ParamExtras {
     #[serde(default, skip_serializing_if = "Option::is_none")] groups: Option<Vec<ParamGroup>>,
     #[serde(default, skip_serializing_if = "Option::is_none")] configurations: Option<Vec<ParamConfiguration>>,
@@ -130,10 +104,7 @@ plain_struct!(ParamExtras {
     #[serde(default, skip_serializing_if = "Option::is_none")] checks: Option<Vec<ParamCheck>>,
 });
 
-plain_struct!(ViewOverride {
-    normal: Vec3,
-    up: Vec3
-});
+plain_struct!(ViewOverride { normal: Vec3, up: Vec3 });
 
 plain_struct!(VersionTree {
     /// Object hash per feature, in history order.

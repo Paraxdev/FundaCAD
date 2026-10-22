@@ -51,7 +51,11 @@ fn previews_leave_the_body_before_them_as_it_was() {
     for (point, d) in [(BOTTOM, 2.05), (BOTTOM, -0.3), (FLOOR, 2.05), (FLOOR, 1.0), (BOTTOM, 1.2)] {
         let raw = with_push(&base, point, d);
         let r = cache.rebuild(&doc(&raw), &raw, &NoWatch).unwrap();
-        assert!(r.errors.is_empty(), "push {d} at {point:?}: {:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+        assert!(
+            r.errors.is_empty(),
+            "push {d} at {point:?}: {:?}",
+            r.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
+        );
     }
     let after = brep(&held);
     assert!(after == before, "the body grew from {} to {} bytes of BREP", before.len(), after.len());

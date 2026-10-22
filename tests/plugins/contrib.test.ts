@@ -109,8 +109,17 @@ describe("what a plugin adds, and what it takes away again", () => {
 
   it("lists material presets by group, skips malformed groups and a plugin that throws", () => {
     const red = { id: "r", name: "Red", color: "#ff0000" };
-    contribute("A.One", { materialPresets: () => [{ group: "Metals", materials: [red] }, { group: "Empty", materials: [] }] });
-    contribute("B.Bad", { materialPresets: () => { throw new Error("boom"); } });
+    contribute("A.One", {
+      materialPresets: () => [
+        { group: "Metals", materials: [red] },
+        { group: "Empty", materials: [] },
+      ],
+    });
+    contribute("B.Bad", {
+      materialPresets: () => {
+        throw new Error("boom");
+      },
+    });
     const off = contribute("C.Three", { materialPresets: () => [{ group: "Paints", materials: [red] }] });
     expect(contributedMaterialPresets().map((g) => g.group)).toEqual(["Metals", "Paints"]);
     off();
@@ -136,7 +145,9 @@ describe("what a plugin adds, and what it takes away again", () => {
 describe("telling the surfaces to redraw", () => {
   it("says so when a plugin starts and when one stops", () => {
     let heard = 0;
-    const unsub = onContribChange(() => { heard++; });
+    const unsub = onContribChange(() => {
+      heard++;
+    });
     const off = contribute("A.One", {});
     expect(heard).toBe(1);
     off();
@@ -150,7 +161,13 @@ describe("telling the surfaces to redraw", () => {
 describe("actions", () => {
   it("hands an id to whoever claimed it", () => {
     let ran = "";
-    contribute("A.One", { actions: { go: () => { ran = "A"; } } });
+    contribute("A.One", {
+      actions: {
+        go: () => {
+          ran = "A";
+        },
+      },
+    });
     contributedAction("go")!();
     expect(ran).toBe("A");
   });
@@ -165,8 +182,20 @@ describe("actions", () => {
 
   it("gives the id to the first claim, not the last", () => {
     let ran = "";
-    contribute("A.One", { actions: { go: () => { ran = "A"; } } });
-    contribute("B.Two", { actions: { go: () => { ran = "B"; } } });
+    contribute("A.One", {
+      actions: {
+        go: () => {
+          ran = "A";
+        },
+      },
+    });
+    contribute("B.Two", {
+      actions: {
+        go: () => {
+          ran = "B";
+        },
+      },
+    });
     contributedAction("go")!();
     expect(ran).toBe("A");
   });
@@ -257,7 +286,11 @@ describe("an imported mesh with a colour of its own", () => {
         order.push(`A ${id} ${color}`);
       },
     });
-    contribute("B.Two", { importedBody: (id) => { order.push(`B ${id}`); } });
+    contribute("B.Two", {
+      importedBody: (id) => {
+        order.push(`B ${id}`);
+      },
+    });
     await announceImportedBody("f1", "#ff0000");
     // Both ran, and the awaited one finished before the call returned, an
     // import that reported itself done while a listener was still rebuilding

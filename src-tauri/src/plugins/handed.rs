@@ -50,12 +50,8 @@ impl Table {
     /// One plugin asking in a loop must not take away the file another one is
     /// part way through reading.
     pub fn remember(&mut self, handle: String, plugin: String, path: PathBuf, at: u64) {
-        let mut mine: Vec<(String, u64)> = self
-            .0
-            .iter()
-            .filter(|(_, h)| h.plugin == plugin)
-            .map(|(k, h)| (k.clone(), h.at))
-            .collect();
+        let mut mine: Vec<(String, u64)> =
+            self.0.iter().filter(|(_, h)| h.plugin == plugin).map(|(k, h)| (k.clone(), h.at)).collect();
         if mine.len() >= MAX_HELD {
             mine.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
             for (key, _) in mine.iter().take(mine.len() + 1 - MAX_HELD) {
@@ -72,10 +68,7 @@ impl Table {
     /// to somebody else, which is a small leak with no upside: neither answer
     /// changes what the plugin should do.
     pub fn path_for(&self, plugin: &str, handle: &str) -> Option<&Path> {
-        self.0
-            .get(handle)
-            .filter(|h| h.plugin == plugin)
-            .map(|h| h.path.as_path())
+        self.0.get(handle).filter(|h| h.plugin == plugin).map(|h| h.path.as_path())
     }
 
     pub fn len(&self) -> usize {
@@ -111,10 +104,7 @@ fn last_component(raw: &str) -> &str {
 /// name genuinely contains a backslash is shown shortened: a cosmetic loss on
 /// a pathological name, against a privacy promise on an ordinary one.
 pub fn name_of(path: &Path) -> String {
-    let whole = path
-        .file_name()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_default();
+    let whole = path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
     match last_component(&whole) {
         "" => "the file".to_string(),
         name => name.to_string(),
@@ -213,12 +203,7 @@ mod tests {
         let mut t = Table::default();
         t.remember("keep".into(), "B.Two".into(), PathBuf::from("/tmp/keep"), 0);
         for i in 0..MAX_HELD + 10 {
-            t.remember(
-                format!("h{i}"),
-                "A.One".into(),
-                PathBuf::from(format!("/tmp/{i}")),
-                i as u64 + 1,
-            );
+            t.remember(format!("h{i}"), "A.One".into(), PathBuf::from(format!("/tmp/{i}")), i as u64 + 1);
         }
 
         // The other plugin's file is untouched, which is the whole point of the
@@ -278,10 +263,7 @@ mod tests {
         assert_eq!(clean_extensions(&["  json ".into()]), vec!["json"]);
 
         for bad in ["", "  ", "*", "*.exe", "a/b", "a\\b", "with space", "..", "toolongextensionname"] {
-            assert!(
-                clean_extensions(&[bad.to_string()]).is_empty(),
-                "should not become a filter: {bad:?}"
-            );
+            assert!(clean_extensions(&[bad.to_string()]).is_empty(), "should not become a filter: {bad:?}");
         }
 
         // Capped, so a plugin cannot hand the dialog a thousand filters.
@@ -298,10 +280,7 @@ mod tests {
         assert!(t.contains("pick a profile to trace"));
 
         // Nothing to say still names the plugin.
-        assert_eq!(
-            dialog_title("A.One", "   ", "Choose a file for"),
-            "Choose a file for A.One"
-        );
+        assert_eq!(dialog_title("A.One", "   ", "Choose a file for"), "Choose a file for A.One");
 
         // No newlines: a title is one line, and a plugin should not be able to
         // push the part naming it off the top of a dialog.

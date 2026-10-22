@@ -42,10 +42,7 @@ impl Reason {
 }
 
 pub fn env_on(value: Option<&str>) -> bool {
-    matches!(
-        value.map(|v| v.trim().to_ascii_lowercase()).as_deref(),
-        Some("1" | "true" | "yes" | "on")
-    )
+    matches!(value.map(|v| v.trim().to_ascii_lowercase()).as_deref(), Some("1" | "true" | "yes" | "on"))
 }
 
 /// An explicit request is preferred over the count, so the banner names what

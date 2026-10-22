@@ -25,15 +25,10 @@ pub fn default_root() -> PathBuf {
     if let Some(dir) = std::env::var_os("FUNDACAD_BLOB_DIR").filter(|d| !d.is_empty()) {
         return PathBuf::from(dir);
     }
-    let base = std::env::var_os("XDG_DATA_HOME")
-        .filter(|d| !d.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let home = std::env::var_os("HOME")
-                .or_else(|| std::env::var_os("USERPROFILE"))
-                .unwrap_or_default();
-            PathBuf::from(home).join(".local").join("share")
-        });
+    let base = std::env::var_os("XDG_DATA_HOME").filter(|d| !d.is_empty()).map(PathBuf::from).unwrap_or_else(|| {
+        let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).unwrap_or_default();
+        PathBuf::from(home).join(".local").join("share")
+    });
     base.join("fundacad").join("blobs")
 }
 
@@ -85,9 +80,7 @@ fn atomic_write(dir: &Path, dest: &Path, data: &[u8]) -> std::io::Result<()> {
     // The clock alone names two writes of the same tick alike, and one then
     // publishes the other's bytes under its own hash.
     static NTH: AtomicU64 = AtomicU64::new(0);
-    let nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos());
+    let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
     let nth = NTH.fetch_add(1, Ordering::Relaxed);
     let tmp = dir.join(format!("{:032x}{}-{nth}.tmp", nonce, std::process::id()));
     let written = (|| {
@@ -264,11 +257,8 @@ mod tests {
         let to = scratch("bad");
         let h = hash_bytes(b"the real bytes");
         let b64 = base64::engine::general_purpose::STANDARD;
-        let r = blob_op(
-            "blobWrite",
-            &req(json!({"hash": h, "offset": 0, "total": 5, "data": b64.encode(b"forge")})),
-            &to,
-        );
+        let r =
+            blob_op("blobWrite", &req(json!({"hash": h, "offset": 0, "total": 5, "data": b64.encode(b"forge")})), &to);
         assert!(r.is_err());
         assert!(to.get_bytes(&h).is_none());
         let r = blob_op("blobRead", &req(json!({"hash": h})), &to).unwrap();

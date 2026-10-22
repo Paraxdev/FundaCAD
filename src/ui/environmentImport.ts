@@ -4,14 +4,30 @@
 import type { DocumentStore } from "../document/store";
 import type { DocEnvironment, EmbeddedHdr } from "../document/docEnvironment";
 import {
-  decodeHdr, deflateBase64, downscaleEquirect, encodeRgbe, HdrRefusal, inflateBase64, sha256Hex,
-  STORED_HDR_WIDTH, thumbnailPixels, type HdrImage,
+  decodeHdr,
+  deflateBase64,
+  downscaleEquirect,
+  encodeRgbe,
+  HdrRefusal,
+  inflateBase64,
+  sha256Hex,
+  STORED_HDR_WIDTH,
+  thumbnailPixels,
+  type HdrImage,
 } from "../viewport/hdrImage";
 import { heldHdr, registerHdr } from "../viewport/hdrRegistry";
 import { createEnvLibrary, indexedDbKv, type EnvEntry, type EnvLibrary, type StoredHdr } from "./environmentLibrary";
 import {
-  applyEnvSettings, asEnvSettings, ENVIRONMENTS_LIST, envSettingsOf, hdrHashOf, onRenderPrefsChange,
-  refreshRenderPrefs, renderPrefs, setRenderPref, type EnvSettings,
+  applyEnvSettings,
+  asEnvSettings,
+  ENVIRONMENTS_LIST,
+  envSettingsOf,
+  hdrHashOf,
+  onRenderPrefsChange,
+  refreshRenderPrefs,
+  renderPrefs,
+  setRenderPref,
+  type EnvSettings,
 } from "./renderPrefs";
 
 let lib: EnvLibrary | null = null;
@@ -68,7 +84,10 @@ export async function storeHdr(img: HdrImage, name: string, library = envLibrary
 
 /** Light the viewport with an .hdr or .exr. Returns the refusal, or null. */
 export async function importEnvironmentBytes(
-  store: DocumentStore | null, bytes: Uint8Array, name: string, library = envLibrary(),
+  store: DocumentStore | null,
+  bytes: Uint8Array,
+  name: string,
+  library = envLibrary(),
 ): Promise<string | null> {
   try {
     const rec = await storeHdr(await decodeHdr(bytes, name), name, library);
@@ -106,8 +125,12 @@ async function embedFor(hash: string, library: EnvLibrary): Promise<EmbeddedHdr 
   const rec = await library.getHdr(hash);
   if (!rec) return null;
   const e: EmbeddedHdr = {
-    name: rec.name, width: rec.width, height: rec.height,
-    encoding: "rgbe-deflate-base64", sha256: rec.hash, data: deflateBase64(rec.rgbe),
+    name: rec.name,
+    width: rec.width,
+    height: rec.height,
+    encoding: "rgbe-deflate-base64",
+    sha256: rec.hash,
+    data: deflateBase64(rec.rgbe),
   };
   embedded.clear();
   embedded.set(hash, e);
@@ -117,7 +140,9 @@ async function embedFor(hash: string, library: EnvLibrary): Promise<EmbeddedHdr 
 /** What the document should carry for the current look: an imported panorama
  *  embedded, a saved environment by name, or nothing for a plain built in room. */
 export async function documentEnvironmentFor(
-  settings: EnvSettings, savedName: string | null, library = envLibrary(),
+  settings: EnvSettings,
+  savedName: string | null,
+  library = envLibrary(),
 ): Promise<DocEnvironment | null> {
   const hash = hdrHashOf(settings.environment);
   if (!hash && !savedName) return null;
@@ -135,7 +160,9 @@ let syncing: Promise<void> = Promise.resolve();
 /** Serialised, and the look is read when its turn comes, so an embed still
  *  being prepared can never land after a newer one. */
 export function syncDocumentEnvironment(
-  store: DocumentStore, library = envLibrary(), opts: { quiet?: boolean } = {},
+  store: DocumentStore,
+  library = envLibrary(),
+  opts: { quiet?: boolean } = {},
 ): Promise<void> {
   const run = syncing.then(async () => {
     const env = await documentEnvironmentFor(envSettingsOf(renderPrefs()), activeSaved?.name ?? null, library);
@@ -148,7 +175,10 @@ export function syncDocumentEnvironment(
 let applying = false;
 
 /** Light the viewport the way an opened document was saved. */
-export async function applyDocumentEnvironment(env: Readonly<DocEnvironment> | null, library = envLibrary()): Promise<void> {
+export async function applyDocumentEnvironment(
+  env: Readonly<DocEnvironment> | null,
+  library = envLibrary(),
+): Promise<void> {
   if (!env) return;
   const settings = asEnvSettings(env.settings, renderPrefs());
   const hash = hdrHashOf(settings.environment);
@@ -177,7 +207,8 @@ export async function applyDocumentEnvironment(env: Readonly<DocEnvironment> | n
 
 function canvasThumb(img: HdrImage): string {
   try {
-    const w = 96, h = 48;
+    const w = 96,
+      h = 48;
     const c = document.createElement("canvas");
     c.width = w;
     c.height = h;
@@ -199,7 +230,11 @@ export function thumbFor(settings: EnvSettings): string {
   return ENVIRONMENTS_LIST.find((e) => e.id === settings.environment)?.swatch ?? "";
 }
 
-export async function saveEnvironmentAs(store: DocumentStore | null, name: string, library = envLibrary()): Promise<EnvEntry> {
+export async function saveEnvironmentAs(
+  store: DocumentStore | null,
+  name: string,
+  library = envLibrary(),
+): Promise<EnvEntry> {
   const settings = envSettingsOf(renderPrefs());
   const entry = await library.save(name, settings, thumbFor(settings));
   setActiveSaved({ id: entry.id, name: entry.name });
@@ -238,7 +273,9 @@ export function installEnvironmentSync(store: DocumentStore): () => void {
     // A panorama gone from this machine's library, or unreadable, lights with the default room.
     void ensureHdrLoaded(hash)
       .catch(() => false)
-      .then((ok) => { if (!ok) setRenderPref("environment", "studio"); });
+      .then((ok) => {
+        if (!ok) setRenderPref("environment", "studio");
+      });
   }
   let look = JSON.stringify(envSettingsOf(renderPrefs()));
   const offPrefs = onRenderPrefsChange(() => {
@@ -253,10 +290,13 @@ export function installEnvironmentSync(store: DocumentStore): () => void {
       const env = store.documentEnvironment;
       const done = env
         ? applyDocumentEnvironment(env)
-        // Carried quietly: opening a document is not an edit, but its next save keeps this light.
-        : syncDocumentEnvironment(store, envLibrary(), { quiet: true });
+        : // Carried quietly: opening a document is not an edit, but its next save keeps this light.
+          syncDocumentEnvironment(store, envLibrary(), { quiet: true });
       void done.catch(() => {});
     });
   });
-  return () => { offPrefs(); offOpen(); };
+  return () => {
+    offPrefs();
+    offOpen();
+  };
 }

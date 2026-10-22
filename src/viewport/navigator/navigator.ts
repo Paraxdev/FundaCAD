@@ -6,23 +6,33 @@
 
 import * as THREE from "three";
 import type { NavScene, ProjectionMode } from "../cameras";
-import {
-  centreDepth, orbitPivot, zoomAnchor, type AnchorContext,
-} from "./anchor";
+import { centreDepth, orbitPivot, zoomAnchor, type AnchorContext } from "./anchor";
 import { stepAngles, type StepDir } from "../viewStep";
 import { OrbitChannel, PanChannel, ZoomChannel } from "./channels";
 import { makeFlight, stepFlight, type Flight } from "./flight";
-import {
-  clampScale, contentLimits, defaultLimits, elevRange, minScaleOf, type Limits,
-} from "./limits";
+import { clampScale, contentLimits, defaultLimits, elevRange, minScaleOf, type Limits } from "./limits";
 import { decompose, turntableQuat, wrapAngle } from "./math";
+import { rotateAbout, rotateWorldAbout, reseat, scaleAbout, truck, turntableAbout } from "./motions";
 import {
-  rotateAbout, rotateWorldAbout, reseat, scaleAbout, truck, turntableAbout,
-} from "./motions";
-import {
-  aspectOf, boxOffScreen, clonePose, copyPose, depthOf, distanceOf, eyeOf, forwardOf, halfTan, makePose,
-  poseFinite, project, rightOf, setOrientation, setTurntable, upOf, worldPerPixel,
-  type Frame, type Pose,
+  aspectOf,
+  boxOffScreen,
+  clonePose,
+  copyPose,
+  depthOf,
+  distanceOf,
+  eyeOf,
+  forwardOf,
+  halfTan,
+  makePose,
+  poseFinite,
+  project,
+  rightOf,
+  setOrientation,
+  setTurntable,
+  upOf,
+  worldPerPixel,
+  type Frame,
+  type Pose,
 } from "./pose";
 
 /** One wheel pixel of zoom, as a log factor: 100px (a notch) is 1.17x. */
@@ -58,7 +68,11 @@ export interface NavigatorOptions {
   preferredPivot: (() => THREE.Vector3 | null) | null;
 }
 
-type Gesture = { kind: "orbit"; x: number; y: number; vx: number; vy: number; started: boolean } | { kind: "pan" } | { kind: "zoom"; x: number; y: number; ly: number } | null;
+type Gesture =
+  | { kind: "orbit"; x: number; y: number; vx: number; vy: number; started: boolean }
+  | { kind: "pan" }
+  | { kind: "zoom"; x: number; y: number; ly: number }
+  | null;
 
 export class Navigator {
   readonly pose: Pose = makePose();
@@ -93,7 +107,10 @@ export class Navigator {
   private version = 0;
   private stamp = makePose();
   private listeners: Record<NavigatorEvent, Set<() => void>> = {
-    inputstart: new Set(), inputend: new Set(), change: new Set(), rest: new Set(),
+    inputstart: new Set(),
+    inputend: new Set(),
+    change: new Set(),
+    rest: new Set(),
   };
 
   constructor() {
@@ -159,8 +176,12 @@ export class Navigator {
     if (this.box) {
       const r = this.box.getBoundingSphere(new THREE.Sphere()).radius;
       const m = Math.max(
-        Math.abs(this.box.min.x), Math.abs(this.box.min.y), Math.abs(this.box.min.z),
-        Math.abs(this.box.max.x), Math.abs(this.box.max.y), Math.abs(this.box.max.z),
+        Math.abs(this.box.min.x),
+        Math.abs(this.box.min.y),
+        Math.abs(this.box.min.z),
+        Math.abs(this.box.max.x),
+        Math.abs(this.box.max.y),
+        Math.abs(this.box.max.z),
       );
       base = contentLimits(base, r, m, this.pose.fov, this.frame.height);
     }
@@ -203,8 +224,14 @@ export class Navigator {
     return this.flight !== null;
   }
   isBusy(): boolean {
-    return this.flight !== null || this.gesture !== null || this.zooms.length > 0
-      || this.orbit !== null || this.pan !== null || this.wheelAt !== null;
+    return (
+      this.flight !== null ||
+      this.gesture !== null ||
+      this.zooms.length > 0 ||
+      this.orbit !== null ||
+      this.pan !== null ||
+      this.wheelAt !== null
+    );
   }
   pixelOf(point: THREE.Vector3): { x: number; y: number; depth: number } {
     return project(this.pose, this.frame, point);
@@ -393,8 +420,11 @@ export class Navigator {
       if (this.flight?.hard) return;
       this.flight = null;
     } else if (!this.takeInput()) return;
-    const same = !fresh && this.scrollPivot !== null
-      && Math.abs(this.scrollPivot.x - x) < 2 && Math.abs(this.scrollPivot.y - y) < 2;
+    const same =
+      !fresh &&
+      this.scrollPivot !== null &&
+      Math.abs(this.scrollPivot.x - x) < 2 &&
+      Math.abs(this.scrollPivot.y - y) < 2;
     if (!same) this.scrollPivot = { x, y, pivot: this.pivotAt(x, y) };
     if (!ours || !same) {
       this.endGesture(true);
@@ -629,7 +659,15 @@ export class Navigator {
 
   /** Go to a pose, flying when asked. Input cancels a soft flight where it
    *  stands; a hard one lands first. */
-  flyTo(to: Pose, opts: { animate?: boolean | undefined; hard?: boolean; onArrive?: (() => void) | undefined; duration?: number } = {}) {
+  flyTo(
+    to: Pose,
+    opts: {
+      animate?: boolean | undefined;
+      hard?: boolean;
+      onArrive?: (() => void) | undefined;
+      duration?: number;
+    } = {},
+  ) {
     this.stopAll();
     this.flight = null;
     const target = clonePose(to);
@@ -735,7 +773,8 @@ export class Navigator {
     this.reseatAndContain();
     const up = upOf(this.pose, new THREE.Vector3());
     const right = rightOf(this.pose, new THREE.Vector3());
-    const r = new THREE.Quaternion().setFromAxisAngle(up, az)
+    const r = new THREE.Quaternion()
+      .setFromAxisAngle(up, az)
       .multiply(new THREE.Quaternion().setFromAxisAngle(right, pol));
     rotateWorldAbout(this.pose, this.orbitPoint ?? this.pose.target.clone(), r);
     this.moved();
@@ -836,7 +875,13 @@ export class Navigator {
     this.flyTo(p, { animate });
   }
 
-  lookAtPlane(origin: THREE.Vector3, normal: THREE.Vector3, up: THREE.Vector3, animate: boolean, onArrive?: () => void) {
+  lookAtPlane(
+    origin: THREE.Vector3,
+    normal: THREE.Vector3,
+    up: THREE.Vector3,
+    animate: boolean,
+    onArrive?: () => void,
+  ) {
     const n = normal.clone().normalize();
     const q = lookQuatUp(n, up);
     this.flyTo(this.poseWith(q, origin, this.pose.scale), { animate, hard: true, onArrive });
@@ -852,7 +897,6 @@ export class Navigator {
     if (!keepScale && !p.ortho) p.scale = this.pose.scale * (halfTan(want) / halfTan(this.pose.fov));
     this.flyTo(p, { animate });
   }
-
 }
 
 /** Where a fresh window's camera sits, relative to what it looks at. */

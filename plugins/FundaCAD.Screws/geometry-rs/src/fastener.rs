@@ -16,10 +16,7 @@ use crate::{kernel, py_repr, Shape, P};
 fn single_solid(shape: &Shape, name: &str) -> R<Shape> {
     let solids = shape.solids();
     if solids.len() != 1 {
-        return Err(format!(
-            "Fastener: {name} came out as {} pieces instead of one solid",
-            solids.len()
-        ));
+        return Err(format!("Fastener: {name} came out as {} pieces instead of one solid", solids.len()));
     }
     Ok(solids.into_iter().next().expect("one solid"))
 }
@@ -130,10 +127,7 @@ fn screw(spec: &P) -> R<Shape> {
         }
     };
 
-    let room = head
-        .truthy_f("acrossFlats")
-        .or_else(|| head.truthy_f("diameter"))
-        .unwrap_or(d);
+    let room = head.truthy_f("acrossFlats").or_else(|| head.truthy_f("diameter")).unwrap_or(d);
     let tool = s::drive_tool(&drive, z_top, room)?;
     if let (Some(tl), Some(b)) = (&tool, &body) {
         if htype != "none" {

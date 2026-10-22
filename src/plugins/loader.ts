@@ -121,8 +121,7 @@ export function evaluatePlugin(id: string, code: string, modules: HostModules): 
 
   if (!exported || typeof exported !== "object") {
     throw new Error(
-      `${id}: its code defined no ${EXPORT_NAME}. It was probably not built by ` +
-      "scripts/build-plugin-code.mjs.",
+      `${id}: its code defined no ${EXPORT_NAME}. It was probably not built by ` + "scripts/build-plugin-code.mjs.",
     );
   }
   return exported as PluginModule;

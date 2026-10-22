@@ -26,9 +26,5 @@ export function planeOf(
   // follow and only the drawing stay behind, the same split, one indirection
   // further out. A datum's entry already has its offset applied, which is
   // exactly the plane the sketch sits on.
-  return (
-    sketchPlanes?.[f.id]
-    ?? (f.planeId ? datumPlanes?.[f.planeId] : undefined)
-    ?? f.plane
-  );
+  return sketchPlanes?.[f.id] ?? (f.planeId ? datumPlanes?.[f.planeId] : undefined) ?? f.plane;
 }

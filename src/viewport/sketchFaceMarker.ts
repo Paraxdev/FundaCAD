@@ -41,7 +41,12 @@ export function buildFaceMarker(tris: readonly THREE.Triangle[]): THREE.Group {
   // A flat face's triangles are coplanar, so the angle threshold leaves only the boundary.
   const outline = new THREE.LineSegments(
     new THREE.EdgesGeometry(geom, 1),
-    new THREE.LineBasicMaterial({ color: themeColor("--accent", 0xff7a3c), transparent: true, opacity: 0.85, depthTest: false }),
+    new THREE.LineBasicMaterial({
+      color: themeColor("--accent", 0xff7a3c),
+      transparent: true,
+      opacity: 0.85,
+      depthTest: false,
+    }),
   );
   outline.renderOrder = 3;
   group.add(outline);

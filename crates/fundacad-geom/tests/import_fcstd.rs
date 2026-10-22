@@ -77,8 +77,10 @@ fn a_document_without_a_solid_says_so() {
     let file = std::fs::File::create(&path).unwrap();
     let mut zip = zip::ZipWriter::new(file);
     zip.start_file("Document.xml", zip::write::SimpleFileOptions::default()).unwrap();
-    zip.write_all(br#"<?xml version="1.0"?><Document SchemaVersion="4"><Objects Count="0"/><ObjectData Count="0"/></Document>"#)
-        .unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0"?><Document SchemaVersion="4"><Objects Count="0"/><ObjectData Count="0"/></Document>"#,
+    )
+    .unwrap();
     zip.finish().unwrap();
     let e = import_path(&path).unwrap_err();
     let _ = std::fs::remove_file(&path);

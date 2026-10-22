@@ -5,8 +5,15 @@
 
 import { computed, onUnmounted, ref } from "vue";
 import {
-  SHORTCUTS, activeShortcuts, allCommands, bindingRows, checkShortcut, describeShortcutProblem, formatShortcut,
-  type Shortcut, type ShortcutOverride,
+  SHORTCUTS,
+  activeShortcuts,
+  allCommands,
+  bindingRows,
+  checkShortcut,
+  describeShortcutProblem,
+  formatShortcut,
+  type Shortcut,
+  type ShortcutOverride,
 } from "fundacad";
 import { RADIAL_ACTION, RADIAL_CONTEXTS, RING_SLOTS, keymapFor, tableFor, type RadialContext } from "./navigation";
 import { navState, updateConfig } from "./state";
@@ -43,7 +50,12 @@ const keyRows = computed(() => {
   }
   if (cfg.value.radial && !seen.has(RADIAL_ACTION)) {
     const k = keymapFor(cfg.value).find((o) => o.action === RADIAL_ACTION);
-    out.unshift({ action: RADIAL_ACTION, label: "Radial menu", context: "global", key: k ? formatShortcut({ ...k, context: "global", label: "" }) : "" });
+    out.unshift({
+      action: RADIAL_ACTION,
+      label: "Radial menu",
+      context: "global",
+      key: k ? formatShortcut({ ...k, context: "global", label: "" }) : "",
+    });
   }
   return out;
 });
@@ -101,7 +113,10 @@ const moved = (action: string) => cfg.value.keys.some((k) => k.action === action
   <div class="prefs-grid" data-navigation-prefs>
     <div class="pref-card wide">
       <p class="pref-hint" data-nav-bindings>
-        <template v-for="(r, i) in rows" :key="i"><b>{{ r.key }}</b>: {{ r.label.toLowerCase() }}. </template>
+        <template v-for="(r, i) in rows" :key="i"
+          ><b>{{ r.key }}</b
+          >: {{ r.label.toLowerCase() }}.
+        </template>
       </p>
     </div>
 
@@ -111,8 +126,14 @@ const moved = (action: string) => cfg.value.keys.some((k) => k.action === action
       <details v-for="c in RADIAL_CONTEXTS" :key="c.id">
         <summary>{{ c.label }}</summary>
         <div v-for="slot in RING_SLOTS + 2" :key="slot" class="pref-head">
-          <label class="pref-title" :for="`nav-${c.id}-${slot}`">{{ slot <= RING_SLOTS ? `Slot ${slot}` : `More ${slot - RING_SLOTS}` }}</label>
-          <select :id="`nav-${c.id}-${slot}`" :value="cfg.items[c.id][slot - 1] ?? ''" @change="setItem(c.id, slot - 1, ($event.target as HTMLSelectElement).value)">
+          <label class="pref-title" :for="`nav-${c.id}-${slot}`">{{
+            slot <= RING_SLOTS ? `Slot ${slot}` : `More ${slot - RING_SLOTS}`
+          }}</label>
+          <select
+            :id="`nav-${c.id}-${slot}`"
+            :value="cfg.items[c.id][slot - 1] ?? ''"
+            @change="setItem(c.id, slot - 1, ($event.target as HTMLSelectElement).value)"
+          >
             <option value="">Nothing</option>
             <option v-for="cmd in commands" :key="cmd.id" :value="cmd.id">{{ cmd.label }}</option>
           </select>
@@ -123,11 +144,13 @@ const moved = (action: string) => cfg.value.keys.some((k) => k.action === action
     <div class="pref-card wide">
       <div class="pref-head"><span class="pref-title">Keyboard shortcuts</span></div>
       <p class="pref-hint">
-        Click a key, then press the new one. Undo, save, Escape, Tab and ? stay where they are, and Alt is left to the tools.
-        The pattern tool reads the arrow keys itself while it is open, wherever the view steps are.
+        Click a key, then press the new one. Undo, save, Escape, Tab and ? stay where they are, and Alt is left to the
+        tools. The pattern tool reads the arrow keys itself while it is open, wherever the view steps are.
       </p>
       <div v-for="r in keyRows" :key="r.action" class="pref-head" style="flex-wrap: wrap; gap: 6px">
-        <span class="pref-title">{{ r.label }}<small v-if="r.context !== 'global'"> ({{ r.context }})</small></span>
+        <span class="pref-title"
+          >{{ r.label }}<small v-if="r.context !== 'global'"> ({{ r.context }})</small></span
+        >
         <button type="button" class="btn" :aria-pressed="listening === r.action" @click="listen(r.action)">
           {{ listening === r.action ? "Press a key" : r.key || "None" }}
         </button>
@@ -140,4 +163,3 @@ const moved = (action: string) => cfg.value.keys.some((k) => k.action === action
     </div>
   </div>
 </template>
-

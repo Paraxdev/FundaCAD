@@ -42,7 +42,14 @@ const Mine = defineComponent({
     h(RenderSection, { title: "Mine", hint: "plugin hint" }, () => [
       h(RenderSlider, { label: "Amount", value: 0.5, min: 0, max: 1 }),
       h(RenderSwitch, { label: "Flag", value: true }),
-      h(RenderChoices, { label: "Mode", value: "a", options: [{ id: "a", label: "A" }, { id: "b", label: "B" }] }),
+      h(RenderChoices, {
+        label: "Mode",
+        value: "a",
+        options: [
+          { id: "a", label: "A" },
+          { id: "b", label: "B" },
+        ],
+      }),
     ]),
 });
 

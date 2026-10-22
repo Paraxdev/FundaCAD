@@ -7,15 +7,18 @@ import { choiceFieldsFor, choiceValue } from "../../src/document/optionFields";
 import type { CadDocument, Feature, RebuildReply } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 
-const backend = (rebuilds: CadDocument[]) => ({
-  async rebuild(doc: CadDocument): Promise<RebuildReply> {
-    rebuilds.push(doc);
-    return { ok: false, error: { message: "stub" } };
-  },
-  async init() {},
-  onStatus() { return () => {}; },
-  connected: true,
-}) as unknown as GeometryBackend;
+const backend = (rebuilds: CadDocument[]) =>
+  ({
+    async rebuild(doc: CadDocument): Promise<RebuildReply> {
+      rebuilds.push(doc);
+      return { ok: false, error: { message: "stub" } };
+    },
+    async init() {},
+    onStatus() {
+      return () => {};
+    },
+    connected: true,
+  }) as unknown as GeometryBackend;
 
 const box = { id: "b1", type: "box", length: 1, width: 1, height: 1 } as Feature;
 
@@ -49,7 +52,13 @@ describe("mirror plane form", () => {
   });
 
   it("opens a file with the bare form and bodies in the { name } form", () => {
-    store.load(JSON.stringify({ version: 9, parameters: {}, features: [box, { id: "m1", type: "mirror", plane: "YZ", bodies: ["body1"] }] }));
+    store.load(
+      JSON.stringify({
+        version: 9,
+        parameters: {},
+        features: [box, { id: "m1", type: "mirror", plane: "YZ", bodies: ["body1"] }],
+      }),
+    );
     expect(mirror("m1").plane).toEqual({ name: "YZ" });
   });
 

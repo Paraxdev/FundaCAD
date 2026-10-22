@@ -41,20 +41,13 @@ export type RefusalCode =
   | "failed";
 
 export type BrokerResponse =
-  | { ok: true; value: unknown }
-  | { ok: false; code: RefusalCode; why: string; missing?: Grant[] };
+  { ok: true; value: unknown } | { ok: false; code: RefusalCode; why: string; missing?: Grant[] };
 
 /** Told about every call after it settles. For the audit line in the UI, and
  *  for a test that wants to assert a plugin did not quietly call `view` forty
  *  times. Deliberately not able to refuse anything: a hook that could veto
  *  would be a second permission model. */
-export type CallObserver = (entry: {
-  plugin: string;
-  op: string;
-  ok: boolean;
-  code?: RefusalCode;
-  ms: number;
-}) => void;
+export type CallObserver = (entry: { plugin: string; op: string; ok: boolean; code?: RefusalCode; ms: number }) => void;
 
 /** A refusal, as an exception, for plugin code that would rather write straight
  *  lines than check a flag after every call. Carries the same three fields the

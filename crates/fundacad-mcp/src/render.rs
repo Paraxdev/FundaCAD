@@ -33,14 +33,8 @@ pub const EDGE_COLOR: Rgb = [16, 18, 22];
 
 /// One colour per body, cycled. Distinct in hue rather than in brightness,
 /// because brightness is what the shading is already saying.
-pub const BODY_COLORS: &[Rgb] = &[
-    [158, 176, 196],
-    [196, 158, 158],
-    [158, 196, 168],
-    [196, 188, 148],
-    [176, 158, 196],
-    [148, 188, 196],
-];
+pub const BODY_COLORS: &[Rgb] =
+    &[[158, 176, 196], [196, 158, 158], [158, 196, 168], [196, 188, 148], [176, 158, 196], [148, 188, 196]];
 
 /// What a highlighted face is painted. Chosen to survive the shading multiply
 /// and to be a hue no body colour uses.
@@ -65,13 +59,7 @@ pub const NAMED_VIEWS: &[(&str, Vec3)] = &[
 /// The stress scale, low to high: blue, cyan, green, yellow, red. Bright enough
 /// to survive the shading multiply, and the order every analysis package uses,
 /// so nobody has to read a legend to know red is the worry.
-pub const STRESS_STOPS: &[Rgb] = &[
-    [40, 70, 225],
-    [40, 175, 230],
-    [60, 200, 95],
-    [240, 210, 45],
-    [225, 50, 40],
-];
+pub const STRESS_STOPS: &[Rgb] = &[[40, 70, 225], [40, 175, 230], [60, 200, 95], [240, 210, 45], [225, 50, 40]];
 
 /// The frame around the colour bar, light so it reads on the background.
 pub const BAR_FRAME: Rgb = [200, 204, 210];
@@ -88,11 +76,7 @@ pub fn stress_color(t: f64) -> Rgb {
 }
 
 /// Which way a named section axis points. `at` is then a coordinate on it.
-pub const SECTION_AXES: &[(&str, Vec3)] = &[
-    ("x", [1.0, 0.0, 0.0]),
-    ("y", [0.0, 1.0, 0.0]),
-    ("z", [0.0, 0.0, 1.0]),
-];
+pub const SECTION_AXES: &[(&str, Vec3)] = &[("x", [1.0, 0.0, 0.0]), ("y", [0.0, 1.0, 0.0]), ("z", [0.0, 0.0, 1.0])];
 
 /// Which side of the section plane survives, as true for the high side.
 ///
@@ -118,10 +102,7 @@ pub const KEEP_WORDS: &[(&str, bool)] = &[
 ];
 
 pub fn keep_word(word: &str) -> Option<bool> {
-    KEEP_WORDS
-        .iter()
-        .find(|(w, _)| *w == word)
-        .map(|(_, high)| *high)
+    KEEP_WORDS.iter().find(|(w, _)| *w == word).map(|(_, high)| *high)
 }
 
 fn dot(a: Vec3, b: Vec3) -> f64 {
@@ -129,11 +110,7 @@ fn dot(a: Vec3, b: Vec3) -> f64 {
 }
 
 fn cross(a: Vec3, b: Vec3) -> Vec3 {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 
 fn norm(a: Vec3) -> f64 {
@@ -173,10 +150,7 @@ pub fn direction_for(view: Option<&str>, azimuth: Option<f64>, elevation: Option
         [el.cos() * az.cos(), el.cos() * az.sin(), el.sin()]
     } else {
         let name = view.unwrap_or("iso").to_ascii_lowercase();
-        NAMED_VIEWS
-            .iter()
-            .find(|(n, _)| *n == name)
-            .map_or(NAMED_VIEWS[0].1, |(_, v)| *v)
+        NAMED_VIEWS.iter().find(|(n, _)| *n == name).map_or(NAMED_VIEWS[0].1, |(_, v)| *v)
     };
     if norm(v) > 1e-12 {
         unit(v)
@@ -193,11 +167,7 @@ pub fn direction_for(view: Option<&str>, azimuth: Option<f64>, elevation: Option
 /// fallback is +Y, without which a top view collapses to one pixel.
 pub fn view_basis(direction: Vec3) -> [Vec3; 3] {
     let back = unit(direction);
-    let up_world = if dot(back, [0.0, 0.0, 1.0]).abs() > 0.999 {
-        [0.0, 1.0, 0.0]
-    } else {
-        [0.0, 0.0, 1.0]
-    };
+    let up_world = if dot(back, [0.0, 0.0, 1.0]).abs() > 0.999 { [0.0, 1.0, 0.0] } else { [0.0, 0.0, 1.0] };
     let right = unit(cross(up_world, back));
     let up = cross(back, right);
     [right, up, back]
@@ -236,11 +206,7 @@ pub fn fit_scale(pts_view: &[Vec3], width: u32, height: u32, margin: f64) -> ([f
 /// up, hence the negation: getting it wrong flips every render upside down and
 /// nothing else about the image looks wrong.
 pub fn project(v: Vec3, centre: [f64; 2], scale: f64, width: u32, height: u32) -> Vec3 {
-    [
-        (v[0] - centre[0]) * scale + f64::from(width) / 2.0,
-        f64::from(height) / 2.0 - (v[1] - centre[1]) * scale,
-        v[2],
-    ]
+    [(v[0] - centre[0]) * scale + f64::from(width) / 2.0, f64::from(height) / 2.0 - (v[1] - centre[1]) * scale, v[2]]
 }
 
 /// An edge polyline as points, whatever shape it arrived in: the engine sends
@@ -284,8 +250,7 @@ pub fn section_plane(spec: &Value, bounds: Option<(Vec3, Vec3)>) -> Result<Optio
         Value::String(name) => {
             let key = name.to_ascii_lowercase();
             let Some((_, v)) = SECTION_AXES.iter().find(|(a, _)| *a == key) else {
-                let names: Vec<String> =
-                    SECTION_AXES.iter().map(|(a, _)| a.to_ascii_uppercase()).collect();
+                let names: Vec<String> = SECTION_AXES.iter().map(|(a, _)| a.to_ascii_uppercase()).collect();
                 return Err(format!(
                     "section axis='{name}' is not one of {}. Use one of those, or a [x,y,z] \
                      direction vector.",
@@ -302,9 +267,7 @@ pub fn section_plane(spec: &Value, bounds: Option<(Vec3, Vec3)>) -> Result<Optio
             v
         }
         other => {
-            return Err(format!(
-                "section axis={other} is not a side name (X, Y, Z) or a [x,y,z] direction vector."
-            ));
+            return Err(format!("section axis={other} is not a side name (X, Y, Z) or a [x,y,z] direction vector."));
         }
     };
     if norm(n) < 1e-12 {
@@ -314,11 +277,7 @@ pub fn section_plane(spec: &Value, bounds: Option<(Vec3, Vec3)>) -> Result<Optio
     let at = match spec.get("at").and_then(Value::as_f64) {
         Some(at) => at,
         None => match bounds {
-            Some((lo, hi)) => dot(n, [
-                (lo[0] + hi[0]) / 2.0,
-                (lo[1] + hi[1]) / 2.0,
-                (lo[2] + hi[2]) / 2.0,
-            ]),
+            Some((lo, hi)) => dot(n, [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, (lo[2] + hi[2]) / 2.0]),
             None => 0.0,
         },
     };
@@ -342,11 +301,7 @@ pub fn section_plane(spec: &Value, bounds: Option<(Vec3, Vec3)>) -> Result<Optio
     };
     // The kept half is always "n . p <= d"; asking to keep the far side flips
     // the plane, which keeps the clipper down to one case.
-    Ok(Some(if high {
-        (scaled(n, -1.0), -at)
-    } else {
-        (n, at)
-    }))
+    Ok(Some(if high { (scaled(n, -1.0), -at) } else { (n, at) }))
 }
 
 /// The part of a triangle on the kept side of a plane, as 0, 1 or 2 triangles.
@@ -379,9 +334,7 @@ pub fn clip_triangle(p0: Vec3, p1: Vec3, p2: Vec3, normal: Vec3, offset: f64) ->
     if poly.len() < 3 {
         return Vec::new();
     }
-    (1..poly.len() - 1)
-        .map(|k| [poly[0], poly[k], poly[k + 1]])
-        .collect()
+    (1..poly.len() - 1).map(|k| [poly[0], poly[k], poly[k + 1]]).collect()
 }
 
 /// The kept part of a line segment, or None.
@@ -440,12 +393,7 @@ impl Canvas {
         for _ in 0..n {
             color.extend_from_slice(&background);
         }
-        Canvas {
-            w: width,
-            h: height,
-            color,
-            depth: vec![f64::NEG_INFINITY; n],
-        }
+        Canvas { w: width, h: height, color, depth: vec![f64::NEG_INFINITY; n] }
     }
 
     pub fn pixel(&self, x: u32, y: u32) -> Rgb {
@@ -525,11 +473,7 @@ impl Canvas {
             return; // a line this long is off-screen garbage, not geometry
         }
         for k in 0..n {
-            let t = if n > 1 {
-                k as f64 / (n - 1) as f64
-            } else {
-                0.0
-            };
+            let t = if n > 1 { k as f64 / (n - 1) as f64 } else { 0.0 };
             let x = (a[0] + (b[0] - a[0]) * t).round();
             let y = (a[1] + (b[1] - a[1]) * t).round();
             if x < 0.0 || y < 0.0 || x >= f64::from(self.w) || y >= f64::from(self.h) {
@@ -573,12 +517,7 @@ impl Drawable for Value {
         floats(self.get("faceIds"))
     }
     fn polylines(&self) -> Vec<Vec<Vec3>> {
-        self.get("edges")
-            .and_then(Value::as_array)
-            .map_or(&[][..], Vec::as_slice)
-            .iter()
-            .map(polyline_points)
-            .collect()
+        self.get("edges").and_then(Value::as_array).map_or(&[][..], Vec::as_slice).iter().map(polyline_points).collect()
     }
 }
 
@@ -712,11 +651,7 @@ fn mix(w: [f64; 3], rgb: &[Rgb; 3]) -> Rgb {
 /// being drawn.
 pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, String> {
     let mut canvas = Canvas::new(req.width, req.height, BACKGROUND);
-    let basis = view_basis(direction_for(
-        req.view.as_deref(),
-        req.azimuth,
-        req.elevation,
-    ));
+    let basis = view_basis(direction_for(req.view.as_deref(), req.azimuth, req.elevation));
     let drawn: Vec<(usize, &M)> = meshes
         .iter()
         .enumerate()
@@ -750,11 +685,7 @@ pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, St
         let idx = m.indices();
         let face_ids = m.face_ids();
         let id = m.body_id().unwrap_or_default();
-        let want = req
-            .highlight
-            .as_ref()
-            .filter(|(body, _)| body == id)
-            .map(|(_, faces)| faces);
+        let want = req.highlight.as_ref().filter(|(body, _)| body == id).map(|(_, faces)| faces);
         let base = BODY_COLORS[bi % BODY_COLORS.len()];
         let painted = m.vertex_colors().filter(|c| c.len() * 3 >= pos.len());
         let point = |i: usize| -> Vec3 { [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]] };
@@ -777,11 +708,8 @@ pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, St
                 None => tris.push(([a, b, c], corners)),
                 Some((n, d)) => {
                     for piece in clip_triangle(a, b, c, n, d) {
-                        let rgb = if painted.is_some() {
-                            piece.map(|p| blend_at(p, &[a, b, c], &corners))
-                        } else {
-                            corners
-                        };
+                        let rgb =
+                            if painted.is_some() { piece.map(|p| blend_at(p, &[a, b, c], &corners)) } else { corners };
                         tris.push((piece, rgb));
                     }
                 }
@@ -815,11 +743,7 @@ pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, St
         return Ok(canvas);
     }
     // The model is framed in what the colour bar leaves.
-    let plot_w = if req.color_bar {
-        color_bar_box(req.width, req.height).0.max(1)
-    } else {
-        req.width
-    };
+    let plot_w = if req.color_bar { color_bar_box(req.width, req.height).0.max(1) } else { req.width };
     let (centre, scale) = match req.focus.get("at").filter(|v| !v.is_null()) {
         Some(at) => {
             let mut world = [0.0; 3];
@@ -829,32 +753,21 @@ pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, St
                 }
             }
             let v = to_view(world, &basis);
-            let size = req
-                .focus
-                .get("size")
-                .and_then(Value::as_f64)
-                .filter(|s| *s > 0.0)
-                .unwrap_or(10.0);
-            (
-                [v[0], v[1]],
-                f64::from(plot_w.min(req.height)) / size.max(1e-6),
-            )
+            let size = req.focus.get("size").and_then(Value::as_f64).filter(|s| *s > 0.0).unwrap_or(10.0);
+            ([v[0], v[1]], f64::from(plot_w.min(req.height)) / size.max(1e-6))
         }
         None => fit_scale(&pool, plot_w, req.height, 0.06),
     };
     // The outline bias is a fixed fraction of the model's own depth range, so
     // it is the same visual nudge on a 2 mm part and a 2 m one.
     let zs: Vec<f64> = pool.iter().map(|p| p[2]).collect();
-    let span_z = zs.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
-        - zs.iter().cloned().fold(f64::INFINITY, f64::min);
+    let span_z =
+        zs.iter().cloned().fold(f64::NEG_INFINITY, f64::max) - zs.iter().cloned().fold(f64::INFINITY, f64::min);
     let bias = if span_z == 0.0 { 1.0 } else { span_z } * 1e-3;
 
     for (tri, colours) in &tris {
         let v: Vec<Vec3> = tri.iter().map(|p| to_view(*p, &basis)).collect();
-        let scr: Vec<Vec3> = v
-            .iter()
-            .map(|p| project(*p, centre, scale, plot_w, req.height))
-            .collect();
+        let scr: Vec<Vec3> = v.iter().map(|p| project(*p, centre, scale, plot_w, req.height)).collect();
         let n = cross(sub(v[1], v[0]), sub(v[2], v[0]));
         if colours[1] == colours[0] && colours[2] == colours[0] {
             canvas.triangle(scr[0], scr[1], scr[2], shade(colours[0], n));

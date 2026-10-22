@@ -1,11 +1,28 @@
 import { describe, expect, it } from "vitest";
 import {
-  freshNodeId, halfExtent, link, nodeNumFields, nodesBox, roundSize, sizeLabel, unlinkNode,
+  freshNodeId,
+  halfExtent,
+  link,
+  nodeNumFields,
+  nodesBox,
+  roundSize,
+  sizeLabel,
+  unlinkNode,
   type NodeValues,
 } from "../../plugins/FundaCAD.Organic/nodeForm";
 
 const node = (id: string, over: Partial<NodeValues> = {}): NodeValues => ({
-  id, x: 0, y: 0, z: 0, sx: 5, sy: 5, sz: 5, rx: 0, ry: 0, rz: 0, ...over,
+  id,
+  x: 0,
+  y: 0,
+  z: 0,
+  sx: 5,
+  sy: 5,
+  sz: 5,
+  rx: 0,
+  ry: 0,
+  rz: 0,
+  ...over,
 });
 
 describe("node body form", () => {
@@ -22,14 +39,28 @@ describe("node body form", () => {
     expect(link([], "a", "b")).toEqual([["a", "b"]]);
     expect(link([["a", "b"]], "b", "c")).toEqual([["a", "b", "c"]]);
     expect(link([["a", "b"]], "a", "c")).toEqual([["c", "a", "b"]]);
-    expect(link([["a", "b", "c"]], "b", "d")).toEqual([["a", "b", "c"], ["b", "d"]]);
+    expect(link([["a", "b", "c"]], "b", "d")).toEqual([
+      ["a", "b", "c"],
+      ["b", "d"],
+    ]);
     expect(link([["a", "b"]], "b", "a")).toEqual([["a", "b"]]);
   });
 
   it("splits a chain where a node leaves it", () => {
-    expect(unlinkNode([["a", "b", "c", "d", "e"]], "c")).toEqual([["a", "b"], ["d", "e"]]);
+    expect(unlinkNode([["a", "b", "c", "d", "e"]], "c")).toEqual([
+      ["a", "b"],
+      ["d", "e"],
+    ]);
     expect(unlinkNode([["a", "b", "c"]], "b")).toEqual([]);
-    expect(unlinkNode([["a", "b"], ["b", "c", "d"]], "a")).toEqual([["b", "c", "d"]]);
+    expect(
+      unlinkNode(
+        [
+          ["a", "b"],
+          ["b", "c", "d"],
+        ],
+        "a",
+      ),
+    ).toEqual([["b", "c", "d"]]);
   });
 
   it("names nodes without reusing an id", () => {

@@ -17,15 +17,26 @@
 // copies of "which kinds have an angle" is exactly how a tool panel and the rows
 // that edit the same feature afterwards come to disagree about it.
 
-import type {
-  ChoiceField, Feature, FieldKind, FileField, Num, Selector, TargetField, ToggleField,
-} from "fundacad";
+import type { ChoiceField, Feature, FieldKind, FileField, Num, Selector, TargetField, ToggleField } from "fundacad";
 import { fieldError, fieldNumber } from "fundacad";
 
 export type TextureKind =
-  | "knurl" | "hex" | "waves" | "ribs" | "voronoi" | "noise" | "image"
-  | "stripes" | "grid" | "dots" | "brick" | "basket" | "carbon"
-  | "isogrid" | "grip" | "leather";
+  | "knurl"
+  | "hex"
+  | "waves"
+  | "ribs"
+  | "voronoi"
+  | "noise"
+  | "image"
+  | "stripes"
+  | "grid"
+  | "dots"
+  | "brick"
+  | "basket"
+  | "carbon"
+  | "isogrid"
+  | "grip"
+  | "leather";
 export type TextureMode = "faces" | "body";
 export type TextureProjection = "auto" | "triplanar" | "box";
 
@@ -63,22 +74,29 @@ export const TEXTURE_KIND_GROUPS: { label: string; kinds: { value: TextureKind; 
 ];
 
 /** The flat pattern list, derived from the groups so the two cannot drift. */
-export const TEXTURE_KINDS: { value: TextureKind; label: string }[] =
-  TEXTURE_KIND_GROUPS.flatMap((g) => g.kinds);
+export const TEXTURE_KINDS: { value: TextureKind; label: string }[] = TEXTURE_KIND_GROUPS.flatMap((g) => g.kinds);
 
 /** Kinds with a lattice or wave orientation to rotate. The others are isotropic
  *  or seed-driven (voronoi, noise, leather) or carry their own orientation in the
  *  file (image), so an Angle on them would be a control that does nothing. */
-export const ANGLE_KINDS: ReadonlySet<TextureKind> =
-  new Set<TextureKind>([
-    "knurl", "hex", "waves", "ribs",
-    "stripes", "grid", "dots", "brick", "basket", "carbon", "isogrid", "grip",
-  ]);
+export const ANGLE_KINDS: ReadonlySet<TextureKind> = new Set<TextureKind>([
+  "knurl",
+  "hex",
+  "waves",
+  "ribs",
+  "stripes",
+  "grid",
+  "dots",
+  "brick",
+  "basket",
+  "carbon",
+  "isogrid",
+  "grip",
+]);
 
 /** Kinds generated from a pseudo-random field, and so the only ones a Seed
  *  changes. */
-export const SEED_KINDS: ReadonlySet<TextureKind> =
-  new Set<TextureKind>(["voronoi", "noise", "leather"]);
+export const SEED_KINDS: ReadonlySet<TextureKind> = new Set<TextureKind>(["voronoi", "noise", "leather"]);
 
 /** The projection selector, and its seam controls, mean something only for a
  *  procedural pattern on a freeform face. A heightmap carries its own
@@ -87,8 +105,9 @@ export const SEED_KINDS: ReadonlySet<TextureKind> =
  *  doing nothing. plane/cylinder/cone faces keep their exact chart in every
  *  mode, but the tool cannot know which faces are selected, so the control shows
  *  for every non-image kind and simply has no effect where the chart is exact. */
-export const PROJECTION_KINDS: ReadonlySet<TextureKind> =
-  new Set<TextureKind>(TEXTURE_KINDS.map((k) => k.value).filter((v) => v !== "image"));
+export const PROJECTION_KINDS: ReadonlySet<TextureKind> = new Set<TextureKind>(
+  TEXTURE_KINDS.map((k) => k.value).filter((v) => v !== "image"),
+);
 
 /** Does this field mean anything, given what the feature's other fields say?
  *
@@ -180,7 +199,11 @@ export const TEXTURE_NUM_FIELDS: readonly [string, string, FieldKind][] = [
  *  src/features/selectionTargets.ts for the same reason as the rows above. */
 export const TEXTURE_TARGETS: readonly TargetField[] = [
   {
-    field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many",
+    field: "faces",
+    label: "Faces",
+    kind: "face",
+    shape: "selector",
+    arity: "many",
     whenEmpty: "the whole body",
   },
 ];
@@ -201,9 +224,10 @@ export const TEXTURE_CHOICE_FIELDS: ChoiceField[] = [
       { value: "round", label: "Smooth" },
     ],
     fallback: "facet",
-    title: "Faceted gives planar facets and real creases, which is what survives "
-      + "a print, a printer rounds a sub-millimetre sinusoid into mush. Smooth "
-      + "keeps the continuous field.",
+    title:
+      "Faceted gives planar facets and real creases, which is what survives " +
+      "a print, a printer rounds a sub-millimetre sinusoid into mush. Smooth " +
+      "keeps the continuous field.",
   },
   {
     field: "direction",
@@ -214,8 +238,7 @@ export const TEXTURE_CHOICE_FIELDS: ChoiceField[] = [
       { value: "both", label: "Symmetric" },
     ],
     fallback: "out",
-    title: "Whether the pattern stands out of the surface, is cut into it, or is "
-      + "centred on it.",
+    title: "Whether the pattern stands out of the surface, is cut into it, or is " + "centred on it.",
   },
   {
     field: "projection",
@@ -226,18 +249,17 @@ export const TEXTURE_CHOICE_FIELDS: ChoiceField[] = [
       { value: "auto", label: "Planar" },
     ],
     fallback: "triplanar",
-    title: "How a curved (freeform) face lays out the pattern. Triplanar blends "
-      + "three world planes so the pattern keeps one size where the face curves; "
-      + "Box favours the nearest axis; Planar projects along one mean direction "
-      + "and foreshortens where the face turns away. Flat, cylindrical and "
-      + "conical faces use their exact chart regardless.",
+    title:
+      "How a curved (freeform) face lays out the pattern. Triplanar blends " +
+      "three world planes so the pattern keeps one size where the face curves; " +
+      "Box favours the nearest axis; Planar projects along one mean direction " +
+      "and foreshortens where the face turns away. Flat, cylindrical and " +
+      "conical faces use their exact chart regardless.",
   },
 ];
 
 /** The switch a committed texture offers. */
-export const TEXTURE_TOGGLE_FIELDS: ToggleField[] = [
-  { field: "invert", label: "Invert heights", fallback: false },
-];
+export const TEXTURE_TOGGLE_FIELDS: ToggleField[] = [{ field: "invert", label: "Invert heights", fallback: false }];
 
 /** The heightmap, in the value rows as well as in the panel.
  *
@@ -411,8 +433,22 @@ function clampOr(s: string, def: number, lo: number, hi: number): number {
 }
 
 const NUMBER_FIELDS = [
-  "depth", "scale", "angle", "sharpness", "seed", "offset", "edgeBlend", "grime", "smooth",
-  "seamBlend", "seamBand", "amplitude", "slopeMin", "slopeMax", "targetEdge", "triBudget",
+  "depth",
+  "scale",
+  "angle",
+  "sharpness",
+  "seed",
+  "offset",
+  "edgeBlend",
+  "grime",
+  "smooth",
+  "seamBlend",
+  "seamBand",
+  "amplitude",
+  "slopeMin",
+  "slopeMax",
+  "targetEdge",
+  "triBudget",
 ] as const satisfies readonly (keyof TextureForm)[];
 
 /** The message for each number box whose text the shared parser rejects. */
@@ -461,9 +497,7 @@ export function toTextureValues(f: TextureForm): TextureValues {
  *  field itself (out = h, in = h-1, both = centred), so EVERY kind honours it.
  *  Gating it behind ANGLE_KINDS left noise/voronoi/image able only to GROW the
  *  part, changing its dimensions instead of texturing the surface it sits on. */
-export function textureRows(
-  f: Pick<TextureForm, "kind" | "profile"> & { projection?: TextureProjection },
-) {
+export function textureRows(f: Pick<TextureForm, "kind" | "profile"> & { projection?: TextureProjection }) {
   const applies = (field: string) => textureFieldApplies(field, f);
   return {
     angle: applies("angle"),

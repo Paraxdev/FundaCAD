@@ -18,14 +18,7 @@
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
-import {
-  createDragHandle,
-  nameHandle,
-  HANDLE_UP,
-  handleScale,
-  leanOutOfView,
-  type DragHandle,
-} from "./manipulator";
+import { createDragHandle, nameHandle, HANDLE_UP, handleScale, leanOutOfView, type DragHandle } from "./manipulator";
 
 // Dimmer than an armed tool's handle: this is an offer, not a live control,
 // and it must not compete with the selection itself for attention.

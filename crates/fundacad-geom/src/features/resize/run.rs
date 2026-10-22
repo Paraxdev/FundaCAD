@@ -64,7 +64,13 @@ pub(super) fn closed(body: &Shape, run: &[Shape], face: &Shape) -> bool {
 
 /// The run moved so `face` changes size by `delta`; None when the run is not
 /// closed and prismatic.
-pub(super) fn run_offset(body: &Shape, run: &[Shape], face: &Shape, delta: f64, cut: bool) -> Option<Result<Shape, Bad>> {
+pub(super) fn run_offset(
+    body: &Shape,
+    run: &[Shape],
+    face: &Shape,
+    delta: f64,
+    cut: bool,
+) -> Option<Result<Shape, Bad>> {
     let s = surf(face);
     let Surf::Cyl { dir, .. } = s else { return None };
     crate::bench::phase("resize_run", || {
@@ -73,7 +79,15 @@ pub(super) fn run_offset(body: &Shape, run: &[Shape], face: &Shape, delta: f64, 
     })
 }
 
-fn offset_swept(body: &Shape, run: &[Shape], old: &Shape, s: &Surf, dir: DVec3, delta: f64, cut: bool) -> Result<Shape, Bad> {
+fn offset_swept(
+    body: &Shape,
+    run: &[Shape],
+    old: &Shape,
+    s: &Surf,
+    dir: DVec3,
+    delta: f64,
+    cut: bool,
+) -> Result<Shape, Bad> {
     let of = old.as_face().ok_or(Bad::Failed)?;
     // The section is the cutout's void or the boss's material, either way it
     // grows with the radius.

@@ -16,16 +16,17 @@ import type { SketchConstraint } from "../../src/types";
 // the toast store times its rows with window.setTimeout
 (globalThis as Record<string, unknown>).window ??= globalThis;
 
-const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity =>
-  ({ type: "line", id, x1, y1, x2, y2 });
+const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({
+  type: "line",
+  id,
+  x1,
+  y1,
+  x2,
+  y2,
+});
 
 // a notched bottom edge well away from the Origin, so no pick lands on it
-const notch = [
-  line("l1", 0, 5, 7, 5),
-  line("l2", 7, 5, 10, 8),
-  line("l3", 10, 8, 13, 5),
-  line("l4", 13, 5, 20, 5),
-];
+const notch = [line("l1", 0, 5, 7, 5), line("l2", 7, 5, 10, 8), line("l3", 10, 8, 13, 5), line("l4", 13, 5, 20, 5)];
 
 function makeFlow() {
   const entities = notch.map((e) => ({ ...e }));
@@ -33,8 +34,12 @@ function makeFlow() {
   const plane = new SketchPlane("XY");
   const dim = {
     isActive: false,
-    show() { this.isActive = true; },
-    hide() { this.isActive = false; },
+    show() {
+      this.isActive = true;
+    },
+    hide() {
+      this.isActive = false;
+    },
     updateFromCursor() {},
     position() {},
     setClickThrough() {},
@@ -91,7 +96,11 @@ describe("FR-1: a point pick asks for the second one in the prompt", () => {
 
   it("three dimensions in a row leave no toast behind and each opens its box", () => {
     const { flow, dim } = makeFlow();
-    for (const [a, b] of [[0, 20], [0, 7], [7, 13]] as const) {
+    for (const [a, b] of [
+      [0, 20],
+      [0, 7],
+      [7, 13],
+    ] as const) {
       click(flow, a, 5);
       click(flow, b, 5);
       expect(flow.plan?.kind).toBe("distance");

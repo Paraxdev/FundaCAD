@@ -83,10 +83,8 @@ impl Registry {
         self.entries = found
             .into_iter()
             .map(|declared| {
-                let (loaded, identity) = old
-                    .iter()
-                    .position(|e| e.declared == declared)
-                    .map_or((Loaded::NotYet, None), |i| {
+                let (loaded, identity) =
+                    old.iter().position(|e| e.declared == declared).map_or((Loaded::NotYet, None), |i| {
                         let e = old.swap_remove(i);
                         (e.loaded, e.identity)
                     });
@@ -104,8 +102,7 @@ impl Registry {
         }
         self.checked = Some(Instant::now());
         let found = discover();
-        let same = found.len() == self.entries.len()
-            && found.iter().zip(&self.entries).all(|(a, b)| *a == b.declared);
+        let same = found.len() == self.entries.len() && found.iter().zip(&self.entries).all(|(a, b)| *a == b.declared);
         if !same {
             self.replace(found);
         }
@@ -114,9 +111,7 @@ impl Registry {
 
 fn registry() -> MutexGuard<'static, Registry> {
     static REG: OnceLock<Mutex<Registry>> = OnceLock::new();
-    REG.get_or_init(Mutex::default)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+    REG.get_or_init(Mutex::default).lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// The registry, having looked for plugins installed or removed since.
@@ -201,9 +196,8 @@ fn discover_in(roots: &[PathBuf]) -> Vec<Declared> {
         let mut dirs: Vec<PathBuf> = rd.filter_map(|e| e.ok()).map(|e| e.path()).collect();
         dirs.sort();
         for dir in dirs.into_iter().filter(|d| d.is_dir()) {
-            let Some(man) = std::fs::read(dir.join("manifest.json"))
-                .ok()
-                .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+            let Some(man) =
+                std::fs::read(dir.join("manifest.json")).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok())
             else {
                 continue;
             };
@@ -253,11 +247,7 @@ fn declares(d: &Declared, claim: Claim, name: &str) -> bool {
 
 /// The loaded component that claims `name`, or why there is none.
 fn component_for(reg: &mut Registry, claim: Claim, name: &str) -> Result<usize, Missing> {
-    let Some(i) = reg
-        .entries
-        .iter()
-        .position(|e| declares(&e.declared, claim, name))
-    else {
+    let Some(i) = reg.entries.iter().position(|e| declares(&e.declared, claim, name)) else {
         return Err(Missing::Unknown);
     };
     let entry = &mut reg.entries[i];
@@ -324,24 +314,12 @@ fn compile(d: &Declared) -> Loaded {
                 .iter()
                 .filter(|t| !d.types.contains(t))
                 .chain(c.registration.exporters.iter().filter(|t| !d.exporters.contains(t)))
-                .chain(
-                    c.registration
-                        .shape_generators
-                        .iter()
-                        .filter(|t| !d.generators.contains(t)),
-                )
+                .chain(c.registration.shape_generators.iter().filter(|t| !d.generators.contains(t)))
                 .collect();
             if let Some(first) = undeclared.first() {
-                return Loaded::Broken(format!(
-                    "it registers {first:?}, which its manifest does not declare"
-                ));
+                return Loaded::Broken(format!("it registers {first:?}, which its manifest does not declare"));
             }
-            eprintln!(
-                "[plugin-geometry] {}: loaded {} in {} ms",
-                d.id,
-                path.display(),
-                started.elapsed().as_millis()
-            );
+            eprintln!("[plugin-geometry] {}: loaded {} in {} ms", d.id, path.display(), started.elapsed().as_millis());
             Loaded::Ready(Arc::new(c))
         }
         Err(e) => {
@@ -371,10 +349,7 @@ fn missing(claim: Claim, name: &str, m: Missing) -> String {
         Missing::Broken(owner, why) => (owner, why),
         Missing::NotRegistered(owner) => (owner, "its component does not register it".to_owned()),
     };
-    format!(
-        "{subject} needs the \"{}\" plugin, which is installed but would not load: {}",
-        why.0, why.1
-    )
+    format!("{subject} needs the \"{}\" plugin, which is installed but would not load: {}", why.0, why.1)
 }
 
 /// Whether a plugin on disk declares the feature type, running or not: exactly
@@ -390,12 +365,7 @@ pub fn declares_feature(type_name: &str) -> bool {
 
 /// The feature type's plugin handler, run against `ctx`. `None` when no
 /// plugin on disk declares the type.
-pub fn run_feature(
-    ctx: &mut Ctx,
-    type_name: &str,
-    raw: &Value,
-    cancel: Option<CancelToken>,
-) -> Option<FResult> {
+pub fn run_feature(ctx: &mut Ctx, type_name: &str, raw: &Value, cancel: Option<CancelToken>) -> Option<FResult> {
     let mut reg = current();
     let i = match lookup(&mut reg, Claim::Feature, type_name) {
         Ok(i) => i,
@@ -461,16 +431,13 @@ fn exporter_call(
     let Loaded::Ready(c) = &reg.entries[i].loaded else {
         return Err(format!("no installed plugin provides the {} export", host::py_repr(exporter)));
     };
-    c.write_export(exporter, bodies, options, path, cancel)
-        .map_err(|e| format!("{exporter}: {e}"))
+    c.write_export(exporter, bodies, options, path, cancel).map_err(|e| format!("{exporter}: {e}"))
 }
 
 /// Whether an exporter is declared by any plugin on disk, before the rebuild.
 fn exporter_declared(exporter: &str) -> Result<(), String> {
     let mut reg = current();
-    lookup(&mut reg, Claim::Exporter, exporter)
-        .map(|_| ())
-        .map_err(|m| missing(Claim::Exporter, exporter, m))
+    lookup(&mut reg, Claim::Exporter, exporter).map(|_| ()).map_err(|m| missing(Claim::Exporter, exporter, m))
 }
 
 /// A bundle's identity for the rebuild caches: its manifest and component
@@ -481,11 +448,7 @@ fn identity(entry: &mut Entry) -> String {
     }
     let d = &entry.declared;
     let manifest = std::fs::read(d.dir.join("manifest.json")).unwrap_or_default();
-    let wasm = d
-        .wasm
-        .as_deref()
-        .and_then(|rel| std::fs::read(wasm_path(&d.dir, rel)).ok())
-        .unwrap_or_default();
+    let wasm = d.wasm.as_deref().and_then(|rel| std::fs::read(wasm_path(&d.dir, rel)).ok()).unwrap_or_default();
     let id = crate::cache::keys::hash_hex(&[d.id.as_bytes(), b"\0", &manifest, b"\0", &wasm]);
     entry.identity = Some(id.clone());
     id
@@ -566,10 +529,7 @@ pub struct PassFailure {
 
 impl PassFailure {
     fn of(spec: &Value, message: String) -> PassFailure {
-        PassFailure {
-            feature_id: spec.get("feature_id").and_then(Value::as_str).map(str::to_owned),
-            message,
-        }
+        PassFailure { feature_id: spec.get("feature_id").and_then(Value::as_str).map(str::to_owned), message }
     }
 }
 
@@ -597,13 +557,7 @@ pub fn claim_faces(
             Ok(hits) => {
                 for (hit, tag) in hits {
                     if let Some(k) = faces.iter().position(|f| kernel_api::is_same(f, &hit)) {
-                        out.insert(
-                            k,
-                            PassClaim {
-                                spec: spec.clone(),
-                                tag,
-                            },
-                        );
+                        out.insert(k, PassClaim { spec: spec.clone(), tag });
                     }
                 }
             }
@@ -640,11 +594,7 @@ pub fn displace_face(
         loaded.ok_or_else(|| fail(format!("no loaded plugin serves the {name:?} mesh pass")))?
     };
     c.displace(name, face, &claim.spec, &claim.tag, density_cap, split_creases)
-        .map(|m| FaceMesh {
-            positions: m.positions,
-            indices: m.indices,
-            normals: m.normals,
-        })
+        .map(|m| FaceMesh { positions: m.positions, indices: m.indices, normals: m.normals })
         .map_err(fail)
 }
 

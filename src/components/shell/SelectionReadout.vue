@@ -17,7 +17,12 @@ const sel = useSelectionOffers(useEngine());
   left: calc(50% + 64px);
   bottom: var(--s-4);
   padding: var(--s-0) var(--s-3);
-  font: 11px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font:
+    11px/1.4 ui-monospace,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace;
   font-variant-numeric: tabular-nums;
   color: var(--text);
   white-space: nowrap;

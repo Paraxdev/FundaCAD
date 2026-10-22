@@ -38,7 +38,11 @@ const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 describe("planeXDir", () => {
   it("gives an x axis that lies IN the plane", () => {
-    for (const n of [[0, 0, 1], [1, 0, 0], [0.3, -0.5, 0.81]] as Vec3[]) {
+    for (const n of [
+      [0, 0, 1],
+      [1, 0, 0],
+      [0.3, -0.5, 0.81],
+    ] as Vec3[]) {
       const x = planeXDir(n)!;
       expect(dot(x, unit(n)!)).toBeCloseTo(0, 10);
       expect(Math.hypot(...x)).toBeCloseTo(1, 10);
@@ -81,12 +85,23 @@ describe("planeFromPointNormal", () => {
 
 describe("isPlanarFace", () => {
   it("accepts facet normals that agree and rejects a swept one", () => {
-    expect(isPlanarFace([[0, 0, 1], [0, 0, 1], [0, 0, 1]])).toBe(true);
+    expect(
+      isPlanarFace([
+        [0, 0, 1],
+        [0, 0, 1],
+        [0, 0, 1],
+      ]),
+    ).toBe(true);
     expect(isPlanarFace(cylinderMesh(5).normals)).toBe(false);
   });
 
   it("tolerates the numerical noise a real tessellation carries", () => {
-    expect(isPlanarFace([[0, 0, 1], [1e-6, -2e-6, 1]])).toBe(true);
+    expect(
+      isPlanarFace([
+        [0, 0, 1],
+        [1e-6, -2e-6, 1],
+      ]),
+    ).toBe(true);
   });
 });
 
@@ -104,7 +119,12 @@ describe("axisFromNormals", () => {
   });
 
   it("has no axis for a flat face", () => {
-    expect(axisFromNormals([[0, 0, 1], [0, 0, 1]])).toBeNull();
+    expect(
+      axisFromNormals([
+        [0, 0, 1],
+        [0, 0, 1],
+      ]),
+    ).toBeNull();
   });
 });
 
@@ -123,8 +143,20 @@ describe("fitCircle2D", () => {
   });
 
   it("refuses collinear points instead of returning a centre at infinity", () => {
-    expect(fitCircle2D([[0, 0], [1, 0], [2, 0], [3, 0]])).toBeNull();
-    expect(fitCircle2D([[0, 0], [1, 1]])).toBeNull();
+    expect(
+      fitCircle2D([
+        [0, 0],
+        [1, 0],
+        [2, 0],
+        [3, 0],
+      ]),
+    ).toBeNull();
+    expect(
+      fitCircle2D([
+        [0, 0],
+        [1, 1],
+      ]),
+    ).toBeNull();
   });
 });
 
@@ -154,11 +186,7 @@ describe("cylinderFromFace", () => {
       for (let j = 0; j < 8; j++) {
         const th = (i / 8) * Math.PI;
         const ph = (j / 8) * Math.PI * 2;
-        const n: Vec3 = [
-          Math.sin(th) * Math.cos(ph),
-          Math.sin(th) * Math.sin(ph),
-          Math.cos(th),
-        ];
+        const n: Vec3 = [Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph), Math.cos(th)];
         normals.push(n);
         points.push([n[0] * 6, n[1] * 6, n[2] * 6]);
       }
@@ -224,7 +252,11 @@ describe("solidInsideCylinder", () => {
   });
 
   it("has no opinion about a flat face that happens to be handed to it", () => {
-    const points: Vec3[] = [[0, 0, 9], [1, 0, 9], [0, 1, 9]];
+    const points: Vec3[] = [
+      [0, 0, 9],
+      [1, 0, 9],
+      [0, 1, 9],
+    ];
     expect(solidInsideCylinder(cyl, points, [[0, 0, 1]])).toBeNull(); // all grazing
   });
 });
@@ -273,8 +305,16 @@ describe("tangentPlaneOnCylinder", () => {
 describe("planeFromPickedFace", () => {
   it("takes a flat face at its own plane", () => {
     const r = planeFromPickedFace(
-      [[0, 0, 4], [10, 0, 4], [10, 10, 4]],
-      [[0, 0, 1], [0, 0, 1], [0, 0, 1]],
+      [
+        [0, 0, 4],
+        [10, 0, 4],
+        [10, 10, 4],
+      ],
+      [
+        [0, 0, 1],
+        [0, 0, 1],
+        [0, 0, 1],
+      ],
       [3, 3, 4],
       [0, 0, 1],
     )!;
@@ -293,8 +333,18 @@ describe("planeFromPickedFace", () => {
   it("declines a face it can recognise as neither", () => {
     // a spline-ish scatter: not flat, not one cylinder, better no datum than a
     // plane through a surface that has no tangent frame worth the name.
-    const points: Vec3[] = [[0, 0, 0], [1, 0, 0.3], [2, 0, 1.4], [3, 0, 3.9]];
-    const normals: Vec3[] = [[0, 0, 1], [0, 0.3, 1], [0, 0.9, 1], [0, 2, 1]];
+    const points: Vec3[] = [
+      [0, 0, 0],
+      [1, 0, 0.3],
+      [2, 0, 1.4],
+      [3, 0, 3.9],
+    ];
+    const normals: Vec3[] = [
+      [0, 0, 1],
+      [0, 0.3, 1],
+      [0, 0.9, 1],
+      [0, 2, 1],
+    ];
     expect(planeFromPickedFace(points, normals, [1, 0, 0.3], [0, 0.3, 1])).toBeNull();
   });
 });
@@ -303,7 +353,10 @@ describe("axisFromEdge", () => {
   const near = (a: number, b: number) => expect(a).toBeCloseTo(b, 9);
 
   it("reads the line off a two-point edge", () => {
-    const ax = axisFromEdge([[1, 2, 3], [1, 2, 9]]);
+    const ax = axisFromEdge([
+      [1, 2, 3],
+      [1, 2, 9],
+    ]);
     expect(ax).not.toBeNull();
     near(ax!.origin[2], 3);
     near(ax!.dir[2], 1);
@@ -329,12 +382,29 @@ describe("axisFromEdge", () => {
     // The control for the test above: a 90° arc bulges by 0.29 of its chord, so
     // rejecting one proves nothing about where the line actually is. This bulges
     // by 1e-3 of the chord, ten times the tolerance and invisible on screen.
-    expect(axisFromEdge([[0, 0, 0], [50, 0.1, 0], [100, 0, 0]])).toBeNull();
-    expect(axisFromEdge([[0, 0, 0], [50, 1e-3, 0], [100, 0, 0]])).not.toBeNull();
+    expect(
+      axisFromEdge([
+        [0, 0, 0],
+        [50, 0.1, 0],
+        [100, 0, 0],
+      ]),
+    ).toBeNull();
+    expect(
+      axisFromEdge([
+        [0, 0, 0],
+        [50, 1e-3, 0],
+        [100, 0, 0],
+      ]),
+    ).not.toBeNull();
   });
 
   it("has no answer for a zero-length edge or a single point", () => {
-    expect(axisFromEdge([[1, 1, 1], [1, 1, 1]])).toBeNull();
+    expect(
+      axisFromEdge([
+        [1, 1, 1],
+        [1, 1, 1],
+      ]),
+    ).toBeNull();
     expect(axisFromEdge([[1, 1, 1]])).toBeNull();
     expect(axisFromEdge([])).toBeNull();
   });
@@ -349,16 +419,18 @@ const plane = (origin: Vec3, normal: Vec3) => {
 };
 /** signed distance of a point from a plane */
 const off = (p: { origin: Vec3; normal: Vec3 }, q: Vec3) =>
-  p.normal[0] * (q[0] - p.origin[0])
-  + p.normal[1] * (q[1] - p.origin[1])
-  + p.normal[2] * (q[2] - p.origin[2]);
+  p.normal[0] * (q[0] - p.origin[0]) + p.normal[1] * (q[1] - p.origin[1]) + p.normal[2] * (q[2] - p.origin[2]);
 
 describe("planeThroughPoints", () => {
   it("passes through all three, whichever way they were picked", () => {
     const a: Vec3 = [3, 1, 0];
     const b: Vec3 = [9, 2, 4];
     const c: Vec3 = [1, 8, -2];
-    for (const [p, q, r] of [[a, b, c], [c, a, b], [b, c, a]] as const) {
+    for (const [p, q, r] of [
+      [a, b, c],
+      [c, a, b],
+      [b, c, a],
+    ] as const) {
       const pl = planeThroughPoints(p, q, r)!;
       expect(pl, `${p}/${q}/${r}`).not.toBeNull();
       for (const pt of [a, b, c]) expect(Math.abs(off(pl, pt))).toBeLessThan(1e-9);
@@ -440,10 +512,7 @@ describe("midPlane", () => {
     // plate's do. The answer has to be nearly parallel to both, not the plane
     // perpendicular to them through the far-off apex.
     const t = (10 * Math.PI) / 180;
-    const m = midPlane(
-      plane([0, 0, 5], [0, 0, 1]),
-      plane([0, 0, 0], [Math.sin(t), 0, -Math.cos(t)]),
-    )!;
+    const m = midPlane(plane([0, 0, 5], [0, 0, 1]), plane([0, 0, 0], [Math.sin(t), 0, -Math.cos(t)]))!;
     expect(Math.abs(m.normal[2])).toBeGreaterThan(0.99);
   });
 
@@ -463,9 +532,6 @@ describe("midPlane", () => {
   });
 
   it("has nothing to say about a degenerate plane", () => {
-    expect(midPlane(
-      { origin: [0, 0, 0], normal: [0, 0, 0], xdir: [1, 0, 0] },
-      plane([0, 0, 1], [0, 0, 1]),
-    )).toBeNull();
+    expect(midPlane({ origin: [0, 0, 0], normal: [0, 0, 0], xdir: [1, 0, 0] }, plane([0, 0, 1], [0, 0, 1]))).toBeNull();
   });
 });

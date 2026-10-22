@@ -29,7 +29,11 @@ pub fn face_down(n: [f64; 3]) -> (f64, f64) {
 
 fn round6(v: f64) -> f64 {
     let r = (v * 1e6).round() / 1e6;
-    if r == 0.0 { 0.0 } else { r }
+    if r == 0.0 {
+        0.0
+    } else {
+        r
+    }
 }
 
 fn vec3(v: Option<&Value>) -> Option<[f64; 3]> {
@@ -53,10 +57,7 @@ fn pick_face(body: &Value, asked: Option<i64>) -> Result<Option<(i64, [f64; 3], 
             return Err(format!("{} has no face {i}, `inspect` lists its faces", id_of(body)));
         };
         if f.get("surface").and_then(Value::as_str) != Some("plane") {
-            return Err(format!(
-                "face {i} of {} is not flat, a part can only sit on a flat face",
-                id_of(body)
-            ));
+            return Err(format!("face {i} of {} is not flat, a part can only sit on a flat face", id_of(body)));
         }
         return Ok(as_pick(f));
     }
@@ -77,9 +78,7 @@ fn add_move(doc: &mut Doc, id: &str, turn: (f64, f64), shift: [f64; 3]) -> Resul
     m.insert("dy".into(), json!(shift[1]));
     m.insert("dz".into(), json!(shift[2]));
     m.insert("bodies".into(), json!([id]));
-    model::add_feature(doc, &Value::Object(m), None)
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    model::add_feature(doc, &Value::Object(m), None).map(|_| ()).map_err(|e| e.to_string())
 }
 
 /// The face each part goes down on, as `export {layFlat}` picks it: the one
@@ -163,7 +162,8 @@ pub async fn lay_flat(
     for (id, turn) in &turns {
         let Some(b) = after.iter().find(|b| &id_of(b) == id) else { continue };
         let bbox = b.get("bbox");
-        let (Some(lo), Some(hi)) = (vec3(bbox.and_then(|v| v.get("min"))), vec3(bbox.and_then(|v| v.get("max")))) else {
+        let (Some(lo), Some(hi)) = (vec3(bbox.and_then(|v| v.get("min"))), vec3(bbox.and_then(|v| v.get("max"))))
+        else {
             continue;
         };
         let at = if apart { 0.0 } else { x };
@@ -175,10 +175,7 @@ pub async fn lay_flat(
     if notes.is_empty() {
         line = String::from("Laid flat: none of the bodies has a flat face.");
     } else if !unflat.is_empty() {
-        line.push_str(&format!(
-            " No flat face on {}, set on the bed as modelled.",
-            unflat.join(", ")
-        ));
+        line.push_str(&format!(" No flat face on {}, set on the bed as modelled.", unflat.join(", ")));
     }
     Ok(line)
 }
@@ -211,7 +208,10 @@ mod tests {
         ] {
             let r = turned(n, face_down(n));
             let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
-            assert!((r[0] / len).abs() < 1e-6 && (r[1] / len).abs() < 1e-6 && (r[2] / len + 1.0).abs() < 1e-6, "{n:?} -> {r:?}");
+            assert!(
+                (r[0] / len).abs() < 1e-6 && (r[1] / len).abs() < 1e-6 && (r[2] / len + 1.0).abs() < 1e-6,
+                "{n:?} -> {r:?}"
+            );
         }
     }
 }

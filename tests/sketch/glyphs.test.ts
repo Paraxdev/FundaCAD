@@ -37,10 +37,13 @@ describe("constraintGlyphs", () => {
   });
 
   it("keeps the constraint index so a glyph can delete the right constraint", () => {
-    const g = constraintGlyphs([line], [
-      { type: "distance", line: "l", value: 10 }, // index 0, no glyph
-      { type: "horizontal", line: "l" }, // index 1
-    ]);
+    const g = constraintGlyphs(
+      [line],
+      [
+        { type: "distance", line: "l", value: 10 }, // index 0, no glyph
+        { type: "horizontal", line: "l" }, // index 1
+      ],
+    );
     expect(g.length).toBe(1);
     expect(g[0]!.cIndex).toBe(1); // points at the horizontal, not the dim
   });

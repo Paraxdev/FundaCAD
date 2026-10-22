@@ -2,7 +2,15 @@
 // the user's Stop. Commands arrive through the live session (src/live/liveSession.ts)
 // and the state goes back the same way. No Vue import, so the headless suite drives it.
 
-import { WAIT_KINDS, describeEvent, diffSnapshot, matchWait, type GuideEvent, type Snapshot, type WaitKind } from "./wait";
+import {
+  WAIT_KINDS,
+  describeEvent,
+  diffSnapshot,
+  matchWait,
+  type GuideEvent,
+  type Snapshot,
+  type WaitKind,
+} from "./wait";
 
 export interface GuideTarget {
   ui?: string | undefined;
@@ -161,13 +169,27 @@ export class GuideSession {
 
   private clear(): void {
     const w = this.s.wait;
-    this.s = { ...this.s, step: null, wait: w && !w.done ? { ...w, done: "cleared", what: "the guide was cleared" } : w };
+    this.s = {
+      ...this.s,
+      step: null,
+      wait: w && !w.done ? { ...w, done: "cleared", what: "the guide was cleared" } : w,
+    };
   }
 
   private arm(c: Command, seq: number): void {
     const asked = Array.isArray(c.until) ? c.until : [c.until ?? "next"];
     const until = asked.filter((k): k is WaitKind => (WAIT_KINDS as readonly unknown[]).includes(k));
-    this.s = { ...this.s, wait: { seq, until: until.length ? until : ["next"], tool: str(c.tool), field: str(c.field), done: null, what: null } };
+    this.s = {
+      ...this.s,
+      wait: {
+        seq,
+        until: until.length ? until : ["next"],
+        tool: str(c.tool),
+        field: str(c.field),
+        done: null,
+        what: null,
+      },
+    };
     this.last = this.snapshot();
     if (this.s.step?.next) this.decide({ kind: "next" });
   }

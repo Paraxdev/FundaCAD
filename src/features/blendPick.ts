@@ -14,8 +14,10 @@ export function screenPolylineDist(pts: readonly ScreenPt[], p: ScreenPt): numbe
   if (pts.length === 1) return Math.hypot(pts[0]!.x - p.x, pts[0]!.y - p.y);
   let best = Infinity;
   for (let k = 0; k + 1 < pts.length; k++) {
-    const a = pts[k]!, b = pts[k + 1]!;
-    const dx = b.x - a.x, dy = b.y - a.y;
+    const a = pts[k]!,
+      b = pts[k + 1]!;
+    const dx = b.x - a.x,
+      dy = b.y - a.y;
     const len2 = dx * dx + dy * dy;
     const t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
     best = Math.min(best, Math.hypot(a.x + dx * t - p.x, a.y + dy * t - p.y));
@@ -34,7 +36,11 @@ export const MEMBER_PREFERENCE_PX = 6;
 /** Which of a member ghost and a model edge the pointer is on, each given as
  *  its screen distance (the edge's rank, picking.EdgeCandidate.rankPx) or null
  *  when none is in reach. */
-export function blendClickTarget(memberDist: number | null, edgeRankPx: number | null, radiusPx: number): BlendClickTarget {
+export function blendClickTarget(
+  memberDist: number | null,
+  edgeRankPx: number | null,
+  radiusPx: number,
+): BlendClickTarget {
   const m = memberDist != null && memberDist <= radiusPx ? memberDist : null;
   if (m != null && (edgeRankPx == null || m <= edgeRankPx + MEMBER_PREFERENCE_PX)) return "member";
   if (edgeRankPx != null) return "edge";

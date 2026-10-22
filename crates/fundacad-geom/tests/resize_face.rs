@@ -121,13 +121,18 @@ fn growing_a_slot_end_gives_a_bigger_round_end_and_trims_the_walls_back() {
     assert!(close(v0, 15234.336, 1e-3), "{v0}");
     let out = built(run(&body, &[face_at(&body, SLOT_END)], -1.0, true));
     let (r, big_r, h) = (2.0f64, 3.0f64, 10.0);
-    let want = -h * (PI * big_r * big_r - PI * r * r / 2.0 - r * (big_r * big_r - r * r).sqrt() - big_r * big_r * (r / big_r).asin());
+    let want = -h
+        * (PI * big_r * big_r
+            - PI * r * r / 2.0
+            - r * (big_r * big_r - r * r).sqrt()
+            - big_r * big_r * (r / big_r).asin());
     let dv = kernel::volume(&out) - v0;
     assert!(close(dv, want, 1e-2), "{dv} against {want}");
     assert_eq!(radii_on_axis(&out, 8.0, 0.0), vec![3.0]);
-    let radial = faces(&out).iter().map(surface).any(|(k, n, l, _)| {
-        k == 0 && n.dot(DVec3::Z).abs() < 1e-9 && (dvec3(8.0, 0.0, l.z) - l).dot(n).abs() < 1e-4
-    });
+    let radial = faces(&out)
+        .iter()
+        .map(surface)
+        .any(|(k, n, l, _)| k == 0 && n.dot(DVec3::Z).abs() < 1e-9 && (dvec3(8.0, 0.0, l.z) - l).dot(n).abs() < 1e-4);
     assert!(!radial, "a wall square to the slot end");
     for y in [-2.0, 2.0] {
         let wall = faces(&out).into_iter().find(|f| {
@@ -235,7 +240,10 @@ fn a_d_hole_keeps_its_flat_until_the_round_wall_passes_it() {
         let want = -10.0 * (disc_short_of(r, 2.0) - disc_short_of(3.0, 2.0));
         let dv = kernel::volume(&out) - v0;
         assert!(close(dv, want, 1e-2), "{d}: {dv} against {want}");
-        let has_flat = faces(&out).iter().map(surface).any(|(k, n, l, _)| k == 0 && n.cross(DVec3::X).length() < 1e-9 && close(l.x, 2.0, 1e-9));
+        let has_flat = faces(&out)
+            .iter()
+            .map(surface)
+            .any(|(k, n, l, _)| k == 0 && n.cross(DVec3::X).length() < 1e-9 && close(l.x, 2.0, 1e-9));
         assert_eq!(has_flat, flat, "{d}");
         assert_eq!(radii_on_axis(&out, 0.0, 0.0), vec![r], "{d}");
     }
@@ -375,7 +383,8 @@ fn filleted_block() -> Shape {
     cut(&block, &corner)
 }
 
-const ROUND: [f64; 3] = [25.0 + 5.0 * std::f64::consts::FRAC_1_SQRT_2, 0.0, 15.0 + 5.0 * std::f64::consts::FRAC_1_SQRT_2];
+const ROUND: [f64; 3] =
+    [25.0 + 5.0 * std::f64::consts::FRAC_1_SQRT_2, 0.0, 15.0 + 5.0 * std::f64::consts::FRAC_1_SQRT_2];
 
 #[test]
 fn a_lone_round_edge_shrunk_is_refused_since_its_faces_do_not_close_a_loop() {

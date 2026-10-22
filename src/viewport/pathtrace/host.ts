@@ -12,8 +12,17 @@ import { armGuard, clearGuard } from "./guard";
 import { BlasCache, type BlasBuilder } from "./blasCache";
 import { createBlasBuilder } from "./blasPool";
 import {
-  colorSignature, collectAllBodies, collectBodies, countTriangles, countVertices, materialSignature, sceneSignature,
-  storageBytes, transformSignature, TRIANGLE_BUDGET, type SurfaceBaker,
+  colorSignature,
+  collectAllBodies,
+  collectBodies,
+  countTriangles,
+  countVertices,
+  materialSignature,
+  sceneSignature,
+  storageBytes,
+  transformSignature,
+  TRIANGLE_BUDGET,
+  type SurfaceBaker,
 } from "./mirror";
 import { STILL_MS, TraceGeneration, traceState, type TraceInputs, type TraceState } from "./state";
 import { bloomKey, traceBloom } from "./tracePost";
@@ -51,13 +60,25 @@ export interface TraceFrame {
 }
 
 export function lookSignature(l: TraceLook): string {
-  const lights = l.lights.map((x) => [x.color.getHex(), x.intensity, ...x.position.toArray(), ...x.target.toArray()].join(","));
-  const rig = (l.rig?.lights ?? []).map((x) => [...x.direction, x.colour, x.intensity, x.angularRadius, x.realtimeOnly ? 1 : 0].join(","));
+  const lights = l.lights.map((x) =>
+    [x.color.getHex(), x.intensity, ...x.position.toArray(), ...x.target.toArray()].join(","),
+  );
+  const rig = (l.rig?.lights ?? []).map((x) =>
+    [...x.direction, x.colour, x.intensity, x.angularRadius, x.realtimeOnly ? 1 : 0].join(","),
+  );
   const g = l.rig?.ground;
   const ground = g ? [g.mode, g.z, ...g.centre, g.extent, g.albedo].join(",") : "";
   return [
-    lights.join(";"), rig.join(";"), ground, l.background.toArray().join(","), l.environment.uuid, l.environment.version, l.environmentBehind ? 1 : 0,
-    l.brightness, l.toneMapping, l.exposure,
+    lights.join(";"),
+    rig.join(";"),
+    ground,
+    l.background.toArray().join(","),
+    l.environment.uuid,
+    l.environment.version,
+    l.environmentBehind ? 1 : 0,
+    l.brightness,
+    l.toneMapping,
+    l.exposure,
   ].join("|");
 }
 
@@ -408,7 +429,10 @@ export class PathTraceHost {
         this.hasScene = false;
         this.size = { w: 0, h: 0, ratio: 0 };
       } catch (e) {
-        this.fault(`Path tracing could not start: ${e instanceof Error ? e.message : String(e)}`, !(e instanceof TracerRefused));
+        this.fault(
+          `Path tracing could not start: ${e instanceof Error ? e.message : String(e)}`,
+          !(e instanceof TracerRefused),
+        );
       } finally {
         this.starting = false;
       }
@@ -428,7 +452,11 @@ export class PathTraceHost {
     this.show(false);
     this.size = { w, h, ratio };
     b.setSize(Math.max(1, w), Math.max(1, h), ratio);
-    const scale = renderScaleFor({ cssHeight: h, dpr: globalThis.devicePixelRatio || 1, discharging: this.power.discharging });
+    const scale = renderScaleFor({
+      cssHeight: h,
+      dpr: globalThis.devicePixelRatio || 1,
+      discharging: this.power.discharging,
+    });
     if (scale !== this.renderScale) {
       this.renderScale = scale;
       b.setRenderScale(scale);
@@ -519,7 +547,8 @@ export class PathTraceHost {
       return;
     }
     if (!this.traceSince) this.traceSince = now;
-    else if (now - this.traceSince > FIRST_SAMPLE_TIMEOUT_MS) this.fault("Path tracing gathered no sample in 10 seconds");
+    else if (now - this.traceSince > FIRST_SAMPLE_TIMEOUT_MS)
+      this.fault("Path tracing gathered no sample in 10 seconds");
   }
 
   private fault(why: string, counts = true) {
@@ -534,7 +563,9 @@ export class PathTraceHost {
     this.show(false);
     try {
       b?.dispose();
-    } catch { /* already gone with the device */ }
+    } catch {
+      /* already gone with the device */
+    }
     this.disarm();
     this.onFault?.(why, this.disabled);
   }

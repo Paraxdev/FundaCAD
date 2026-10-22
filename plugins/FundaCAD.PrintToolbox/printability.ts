@@ -6,7 +6,12 @@
 
 import { displayRound } from "fundacad";
 import type {
-  PrintabilityCheck, PrintabilityFinding, PrintabilityKind, PrintabilityOptions, PrintabilityReply, PrintabilityUp,
+  PrintabilityCheck,
+  PrintabilityFinding,
+  PrintabilityKind,
+  PrintabilityOptions,
+  PrintabilityReply,
+  PrintabilityUp,
 } from "fundacad";
 
 export interface PrintabilitySetup {
@@ -272,7 +277,10 @@ export function findingMarks(
       byKind.set(x.kind, set);
     }
   }
-  const marks = KIND_ORDER.filter((k) => byKind.has(k)).map((k) => ({ faceIds: [...byKind.get(k)!], color: KIND_COLORS[k] }));
+  const marks = KIND_ORDER.filter((k) => byKind.has(k)).map((k) => ({
+    faceIds: [...byKind.get(k)!],
+    color: KIND_COLORS[k],
+  }));
   if (forward.size) marks.push({ faceIds: [...forward], color: emphasisColor });
   return marks;
 }

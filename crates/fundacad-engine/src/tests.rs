@@ -85,13 +85,7 @@ impl Jobs for Fake {
 fn engine(gate: Option<Receiver<()>>) -> (Engine, Receiver<Message>, Arc<AtomicI64>) {
     let (tx, rx) = channel();
     let rebuilds = Arc::new(AtomicI64::new(0));
-    let e = Engine::start(
-        Fake {
-            gate,
-            rebuilds: rebuilds.clone(),
-        },
-        Arc::new(Collect(Mutex::new(tx))),
-    );
+    let e = Engine::start(Fake { gate, rebuilds: rebuilds.clone() }, Arc::new(Collect(Mutex::new(tx))));
     (e, rx, rebuilds)
 }
 
@@ -114,10 +108,7 @@ fn send(e: &Engine, v: Value) {
 fn ping_answers_on_the_read_path() {
     let (e, rx, _) = engine(None);
     send(&e, json!({"id": "p", "op": "ping"}));
-    assert_eq!(
-        text(next(&rx)),
-        json!({"id": "p", "ok": true, "result": {"pong": true}})
-    );
+    assert_eq!(text(next(&rx)), json!({"id": "p", "ok": true, "result": {"pong": true}}));
 }
 
 #[test]
@@ -130,9 +121,7 @@ fn a_rebuild_replies_with_a_binary_stream_when_asked() {
     );
     let mut frames = 0;
     loop {
-        let Message::Binary(b) = next(&rx) else {
-            panic!("expected a binary frame")
-        };
+        let Message::Binary(b) = next(&rx) else { panic!("expected a binary frame") };
         frames += 1;
         let n = u32::from_le_bytes(b[0..4].try_into().unwrap()) as usize;
         let h: Value = serde_json::from_slice(&b[4..4 + n]).unwrap();
@@ -147,10 +136,7 @@ fn a_rebuild_replies_with_a_binary_stream_when_asked() {
 #[test]
 fn a_delta_patches_the_held_document_and_a_gap_asks_for_a_resync() {
     let (e, rx, rebuilds) = engine(None);
-    send(
-        &e,
-        json!({"id": "a", "op": "rebuild", "revision": 1, "document": {"features": [{"id": "f1"}]}}),
-    );
+    send(&e, json!({"id": "a", "op": "rebuild", "revision": 1, "document": {"features": [{"id": "f1"}]}}));
     let a = text(next(&rx));
     assert_eq!(a["result"]["bodies"].as_array().unwrap().len(), 1);
 
@@ -162,19 +148,10 @@ fn a_delta_patches_the_held_document_and_a_gap_asks_for_a_resync() {
     let b = text(next(&rx));
     assert_eq!(b["result"]["bodies"].as_array().unwrap().len(), 2);
 
-    send(
-        &e,
-        json!({"id": "c", "op": "rebuild", "baseRevision": 7, "revision": 8, "ops": {}}),
-    );
-    assert_eq!(
-        text(next(&rx)),
-        json!({"id": "c", "ok": true, "result": {"resync": true}})
-    );
+    send(&e, json!({"id": "c", "op": "rebuild", "baseRevision": 7, "revision": 8, "ops": {}}));
+    assert_eq!(text(next(&rx)), json!({"id": "c", "ok": true, "result": {"resync": true}}));
 
-    send(
-        &e,
-        json!({"id": "d", "op": "rebuild", "baseRevision": 2, "revision": 3, "ops": {"length": 3}}),
-    );
+    send(&e, json!({"id": "d", "op": "rebuild", "baseRevision": 2, "revision": 3, "ops": {"length": 3}}));
     assert_eq!(text(next(&rx))["result"], json!({"resync": true}));
     assert_eq!(rebuilds.load(Ordering::SeqCst), 2);
 }
@@ -183,19 +160,13 @@ fn a_delta_patches_the_held_document_and_a_gap_asks_for_a_resync() {
 fn cancel_stops_the_running_job_and_only_that_one() {
     let (gate_tx, gate_rx) = channel();
     let (e, rx, _) = engine(Some(gate_rx));
-    send(
-        &e,
-        json!({"id": "long", "op": "rebuild", "document": {"features": []}}),
-    );
+    send(&e, json!({"id": "long", "op": "rebuild", "document": {"features": []}}));
     let t0 = Instant::now();
     while e.running.lock().unwrap().is_none() {
         assert!(t0.elapsed() < Duration::from_secs(5));
         std::thread::sleep(Duration::from_millis(5));
     }
-    send(
-        &e,
-        json!({"id": "c1", "op": "cancel", "target": "someone-else"}),
-    );
+    send(&e, json!({"id": "c1", "op": "cancel", "target": "someone-else"}));
     assert_eq!(text(next(&rx))["result"], json!({"cancelled": false}));
     send(&e, json!({"id": "c2", "op": "cancel", "target": "long"}));
     assert_eq!(text(next(&rx))["result"], json!({"cancelled": true}));
@@ -210,10 +181,7 @@ fn cancel_stops_the_running_job_and_only_that_one() {
 fn a_long_job_reports_progress_before_its_reply() {
     let (gate_tx, gate_rx) = channel();
     let (e, rx, _) = engine(Some(gate_rx));
-    send(
-        &e,
-        json!({"id": "slow", "op": "rebuild", "document": {"features": []}}),
-    );
+    send(&e, json!({"id": "slow", "op": "rebuild", "document": {"features": []}}));
     let frame = text(next(&rx));
     assert_eq!(frame["status"], "building");
     assert_eq!(frame["id"], "slow");
@@ -230,10 +198,7 @@ fn a_long_job_reports_progress_before_its_reply() {
 fn first_import_frame(stage: i64, done: i64, total: i64) -> Value {
     let (gate_tx, gate_rx) = channel();
     let (e, rx, _) = engine(Some(gate_rx));
-    send(
-        &e,
-        json!({"id": "imp", "op": "import", "stage": stage, "done": done, "total": total}),
-    );
+    send(&e, json!({"id": "imp", "op": "import", "stage": stage, "done": done, "total": total}));
     let frame = text(next(&rx));
     gate_tx.send(()).unwrap();
     let reply = text(next(&rx));
@@ -268,10 +233,7 @@ fn a_closed_client_loses_its_queued_jobs_and_its_running_one() {
     let rebuilds = Arc::new(AtomicI64::new(0));
     let (tx, _rx) = channel();
     let engine = Arc::new(Engine::start(
-        Fake {
-            gate: Some(gate_rx),
-            rebuilds: rebuilds.clone(),
-        },
+        Fake { gate: Some(gate_rx), rebuilds: rebuilds.clone() },
         Arc::new(Collect(Mutex::new(tx))),
     ));
     let (a_tx, a_rx) = channel();
@@ -279,28 +241,20 @@ fn a_closed_client_loses_its_queued_jobs_and_its_running_one() {
     let a = engine.client(Arc::new(Collect(Mutex::new(a_tx))));
     let b = engine.client(Arc::new(Collect(Mutex::new(b_tx))));
     let doc = json!({"features": []});
-    a.handle(Message::Text(
-        json!({"id": "a1", "op": "rebuild", "document": doc}).to_string(),
-    ));
+    a.handle(Message::Text(json!({"id": "a1", "op": "rebuild", "document": doc}).to_string()));
     let t0 = Instant::now();
     while engine.running.lock().unwrap().is_none() {
         assert!(t0.elapsed() < Duration::from_secs(5));
         std::thread::sleep(Duration::from_millis(5));
     }
-    a.handle(Message::Text(
-        json!({"id": "a2", "op": "rebuild", "document": doc}).to_string(),
-    ));
-    b.handle(Message::Text(
-        json!({"id": "bc", "op": "cancel"}).to_string(),
-    ));
+    a.handle(Message::Text(json!({"id": "a2", "op": "rebuild", "document": doc}).to_string()));
+    b.handle(Message::Text(json!({"id": "bc", "op": "cancel"}).to_string()));
     assert_eq!(text(next(&b_rx))["result"], json!({"cancelled": false}));
     drop(a);
     let a_first = text(next(&a_rx));
     assert_eq!(a_first["id"], "a1");
     assert_eq!(a_first["cancelled"], true);
-    b.handle(Message::Text(
-        json!({"id": "b1", "op": "rebuild", "document": doc}).to_string(),
-    ));
+    b.handle(Message::Text(json!({"id": "b1", "op": "rebuild", "document": doc}).to_string()));
     gate_tx.send(()).unwrap();
     loop {
         let m = text(next(&b_rx));
@@ -329,10 +283,7 @@ fn the_live_session_answers_while_a_job_runs_and_follows_the_connection() {
     let (gate_tx, gate_rx) = channel();
     let (tx, _rx) = channel();
     let engine = Arc::new(Engine::start(
-        Fake {
-            gate: Some(gate_rx),
-            rebuilds: Arc::new(AtomicI64::new(0)),
-        },
+        Fake { gate: Some(gate_rx), rebuilds: Arc::new(AtomicI64::new(0)) },
         Arc::new(Collect(Mutex::new(tx))),
     ));
     let (app_tx, app_rx) = channel();
@@ -344,9 +295,7 @@ fn the_live_session_answers_while_a_job_runs_and_follows_the_connection() {
         text(next(rx))
     };
     let doc = json!({"features": [{"id": "f0", "type": "box"}]});
-    agent.handle(Message::Text(
-        json!({"id": "busy", "op": "rebuild", "document": doc}).to_string(),
-    ));
+    agent.handle(Message::Text(json!({"id": "busy", "op": "rebuild", "document": doc}).to_string()));
     let t0 = Instant::now();
     while engine.running.lock().unwrap().is_none() {
         assert!(t0.elapsed() < Duration::from_secs(5));
@@ -359,15 +308,8 @@ fn the_live_session_answers_while_a_job_runs_and_follows_the_connection() {
         json!({"id": 1, "op": "session_host", "document": doc, "revision": 12,
             "title": "spool.funda", "status": {"canEdit": true}}),
     );
-    assert_eq!(
-        r,
-        json!({"id": 1, "ok": true, "result": {"ok": true, "guests": [], "proposals": []}})
-    );
-    let st = call(
-        &agent,
-        &agent_rx,
-        json!({"id": 2, "op": "session_state", "name": "an assistant"}),
-    );
+    assert_eq!(r, json!({"id": 1, "ok": true, "result": {"ok": true, "guests": [], "proposals": []}}));
+    let st = call(&agent, &agent_rx, json!({"id": 2, "op": "session_state", "name": "an assistant"}));
     assert_eq!(st["result"]["attached"], true);
     assert_eq!(st["result"]["revision"], 12);
     assert_eq!(st["result"]["guests"], json!(["an assistant"]));
@@ -378,24 +320,13 @@ fn the_live_session_answers_while_a_job_runs_and_follows_the_connection() {
             "note": "feature_add: cylinder", "name": "an assistant"}),
     );
     assert_eq!(p["result"], json!({"ok": true, "proposal": "p1", "revision": 12}));
-    let stale = call(
-        &agent,
-        &agent_rx,
-        json!({"id": 4, "op": "session_propose", "document": doc, "baseRevision": 11}),
-    );
+    let stale = call(&agent, &agent_rx, json!({"id": 4, "op": "session_propose", "document": doc, "baseRevision": 11}));
     assert_eq!(stale["result"]["reason"], "stale");
-    let got = call(
-        &app,
-        &app_rx,
-        json!({"id": 5, "op": "session_host", "document": doc, "revision": 12}),
-    );
+    let got = call(&app, &app_rx, json!({"id": 5, "op": "session_host", "document": doc, "revision": 12}));
     assert_eq!(got["result"]["guests"], json!(["an assistant"]));
     assert_eq!(got["result"]["proposals"][0]["note"], "feature_add: cylinder");
     let not_host = call(&agent, &agent_rx, json!({"id": 6, "op": "session_release"}));
-    assert_eq!(
-        not_host["result"],
-        json!({"ok": false, "reason": "not the host"})
-    );
+    assert_eq!(not_host["result"], json!({"ok": false, "reason": "not the host"}));
 
     // A guest that leaves takes its uncollected edit with it.
     let (other_tx, other_rx) = channel();
@@ -408,11 +339,7 @@ fn the_live_session_answers_while_a_job_runs_and_follows_the_connection() {
     theirs.insert("id".into(), json!(8));
     call(&other, &other_rx, Value::Object(theirs));
     call(&agent, &agent_rx, json!({"id": 9, "op": "session_leave"}));
-    let got = call(
-        &app,
-        &app_rx,
-        json!({"id": 10, "op": "session_host", "document": doc, "revision": 12}),
-    );
+    let got = call(&app, &app_rx, json!({"id": 10, "op": "session_host", "document": doc, "revision": 12}));
     let pending = got["result"]["proposals"].as_array().unwrap();
     assert_eq!(pending.len(), 1, "the wrong guest's edit was withdrawn");
     assert_eq!(pending[0]["guest"], "c3");
@@ -424,20 +351,12 @@ fn the_live_session_answers_while_a_job_runs_and_follows_the_connection() {
     gate_tx.send(()).unwrap();
 }
 
-
 /// Never looks at its cancel token, like a kernel call that cannot be stopped.
 #[derive(Default)]
 struct Deaf;
 
 impl Jobs for Deaf {
-    fn rebuild(
-        &mut self,
-        doc: &Value,
-        _t: f64,
-        _k: &Map<String, Value>,
-        _f: bool,
-        _ctx: &JobContext,
-    ) -> JobResult {
+    fn rebuild(&mut self, doc: &Value, _t: f64, _k: &Map<String, Value>, _f: bool, _ctx: &JobContext) -> JobResult {
         let secs = doc["sleep"].as_f64().unwrap_or(0.0);
         std::thread::sleep(Duration::from_secs_f64(secs));
         let mut m = Map::new();
@@ -454,12 +373,8 @@ fn respawning(opts: EngineOptions) -> (Engine, Receiver<Message>) {
 /// between the reply and the slot clearing behind it.
 fn respawning_after(opts: EngineOptions, lag: Duration) -> (Engine, Receiver<Message>) {
     let (tx, rx) = channel();
-    let e = Engine::start_with(
-        Deaf,
-        Some(Arc::new(Deaf::default)),
-        opts,
-        Arc::new(Lagging(Collect(Mutex::new(tx)), lag)),
-    );
+    let e =
+        Engine::start_with(Deaf, Some(Arc::new(Deaf::default)), opts, Arc::new(Lagging(Collect(Mutex::new(tx)), lag)));
     (e, rx)
 }
 
@@ -484,17 +399,8 @@ fn reply_to(rx: &Receiver<Message>, id: &str) -> Value {
 
 #[test]
 fn a_silent_job_is_reaped_and_the_queue_behind_it_still_runs() {
-    let clocks = Clocks {
-        stall: Duration::from_millis(400),
-        job: Duration::from_secs(25),
-    };
-    let (e, rx) = respawning_after(
-        EngineOptions {
-            clocks,
-            ..EngineOptions::default()
-        },
-        Duration::from_millis(300),
-    );
+    let clocks = Clocks { stall: Duration::from_millis(400), job: Duration::from_secs(25) };
+    let (e, rx) = respawning_after(EngineOptions { clocks, ..EngineOptions::default() }, Duration::from_millis(300));
     let t0 = Instant::now();
     send(&e, json!({"id": "wedged", "op": "rebuild", "document": {"sleep": 30}}));
     send(&e, json!({"id": "next", "op": "rebuild", "document": {"sleep": 0}}));
@@ -510,10 +416,8 @@ fn a_silent_job_is_reaped_and_the_queue_behind_it_still_runs() {
 
 #[test]
 fn a_cancel_the_job_ignores_is_answered_after_the_grace() {
-    let (e, rx) = respawning(EngineOptions {
-        cancel_grace: Some(Duration::from_millis(300)),
-        ..EngineOptions::default()
-    });
+    let (e, rx) =
+        respawning(EngineOptions { cancel_grace: Some(Duration::from_millis(300)), ..EngineOptions::default() });
     send(&e, json!({"id": "long", "op": "rebuild", "document": {"sleep": 30}}));
     let t0 = Instant::now();
     while e.running.lock().unwrap().is_none() {
@@ -533,15 +437,8 @@ fn a_cancel_the_job_ignores_is_answered_after_the_grace() {
 
 #[test]
 fn a_bounded_op_is_held_to_its_wall_clock_even_while_it_beats() {
-    let clocks = Clocks {
-        stall: Duration::from_secs(60),
-        job: Duration::from_millis(500),
-    };
-    let (e, rx) = respawning(EngineOptions {
-        clocks,
-        test_ops: true,
-        ..EngineOptions::default()
-    });
+    let clocks = Clocks { stall: Duration::from_secs(60), job: Duration::from_millis(500) };
+    let (e, rx) = respawning(EngineOptions { clocks, test_ops: true, ..EngineOptions::default() });
     send(&e, json!({"id": "w", "op": "testSleep", "seconds": 20, "tick": true, "wall": true, "deaf": true}));
     let w = reply_to(&rx, "w");
     assert_eq!(w["error"]["message"], "operation timed out, geometry too complex or degenerate");
@@ -581,10 +478,7 @@ type Peer = (Client, Receiver<Message>);
 fn two_clients(gate: Receiver<()>) -> (Arc<Engine>, Peer, Peer) {
     let (tx, _rx) = channel();
     let engine = Arc::new(Engine::start(
-        Fake {
-            gate: Some(gate),
-            rebuilds: Arc::new(AtomicI64::new(0)),
-        },
+        Fake { gate: Some(gate), rebuilds: Arc::new(AtomicI64::new(0)) },
         Arc::new(Collect(Mutex::new(tx))),
     ));
     let (a_tx, a_rx) = channel();
@@ -633,10 +527,7 @@ fn a_request_behind_another_clients_job_is_told_so_and_can_only_withdraw_itself(
     let next_reply = reply_to(&app_rx, "next");
     assert_eq!(next_reply["ok"], true);
     assert!(app_rx.try_recv().is_err(), "the withdrawn request still ran");
-    assert!(
-        agent_rx.try_recv().is_err(),
-        "a frame of the app's job reached the assistant"
-    );
+    assert!(agent_rx.try_recv().is_err(), "a frame of the app's job reached the assistant");
 }
 
 /// The status frames `id` got before its reply.
@@ -672,10 +563,7 @@ fn a_clients_own_queue_and_an_idle_engine_send_no_queued_frame() {
 fn a_delta_patches_its_own_clients_document_not_the_last_one_sent() {
     let (tx, _rx) = channel();
     let engine = Arc::new(Engine::start(
-        Fake {
-            gate: None,
-            rebuilds: Arc::new(AtomicI64::new(0)),
-        },
+        Fake { gate: None, rebuilds: Arc::new(AtomicI64::new(0)) },
         Arc::new(Collect(Mutex::new(tx))),
     ));
     let (a_tx, a_rx) = channel();
@@ -687,8 +575,11 @@ fn a_delta_patches_its_own_clients_document_not_the_last_one_sent() {
     let four = json!({"features": [{"id": "x"}, {"id": "y"}, {"id": "z"}, {"id": "w"}]});
     say(&agent, json!({"id": "b1", "op": "rebuild", "revision": 1, "document": four}));
     assert_eq!(reply_to(&b_rx, "b1")["result"]["bodies"].as_array().unwrap().len(), 4);
-    say(&app, json!({"id": "a2", "op": "rebuild", "baseRevision": 1, "revision": 2,
-        "ops": {"set": [[0, {"id": "f1b"}]]}}));
+    say(
+        &app,
+        json!({"id": "a2", "op": "rebuild", "baseRevision": 1, "revision": 2,
+        "ops": {"set": [[0, {"id": "f1b"}]]}}),
+    );
     assert_eq!(reply_to(&a_rx, "a2")["result"]["bodies"].as_array().unwrap().len(), 1);
 }
 
@@ -699,10 +590,7 @@ fn ack(id: &str, cancelled: bool) -> Value {
 #[test]
 fn a_cancel_sent_after_the_grace_answer_finds_nothing_running() {
     let (e, rx) = respawning_after(
-        EngineOptions {
-            cancel_grace: Some(Duration::from_millis(300)),
-            ..EngineOptions::default()
-        },
+        EngineOptions { cancel_grace: Some(Duration::from_millis(300)), ..EngineOptions::default() },
         Duration::from_millis(300),
     );
     send(&e, json!({"id": "long", "op": "rebuild", "document": {"sleep": 30}}));
@@ -728,13 +616,7 @@ fn a_cancel_sent_after_an_answer_finds_nothing_running() {
 }
 
 fn fake_engine(out: Arc<dyn Outbox>) -> Engine {
-    Engine::start(
-        Fake {
-            gate: None,
-            rebuilds: Arc::new(AtomicI64::new(0)),
-        },
-        out,
-    )
+    Engine::start(Fake { gate: None, rebuilds: Arc::new(AtomicI64::new(0)) }, out)
 }
 
 fn streamed_rebuild(id: &str, bodies: usize) -> Value {
@@ -800,10 +682,7 @@ fn a_cancel_between_the_frames_of_a_streamed_answer_ends_it_cancelled() {
     send(&e, json!({"id": "c", "op": "cancel", "target": "r"}));
     assert_eq!(text(next(&rx)), ack("c", true));
     gate_tx.send(()).unwrap();
-    assert_eq!(
-        text(next(&rx)),
-        json!({"id": "r", "ok": false, "cancelled": true, "error": {"message": "cancelled"}})
-    );
+    assert_eq!(text(next(&rx)), json!({"id": "r", "ok": false, "cancelled": true, "error": {"message": "cancelled"}}));
     assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
 }
 

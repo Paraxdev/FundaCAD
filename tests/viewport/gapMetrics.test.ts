@@ -12,9 +12,16 @@ function image(w: number, h: number, pixel: (x: number, y: number) => [number, n
   return { width: w, height: h, data };
 }
 
-const pattern = (x: number, y: number): [number, number, number] => [(x * 37 + y * 11) % 256, (x * 5 + y * 71) % 256, (x * 13 + y * 29) % 256];
+const pattern = (x: number, y: number): [number, number, number] => [
+  (x * 37 + y * 11) % 256,
+  (x * 5 + y * 71) % 256,
+  (x * 13 + y * 29) % 256,
+];
 const flat = (v: number) => (): [number, number, number] => [v, v, v];
-const stripes = (alongX: boolean) => (x: number, y: number): [number, number, number] => ((alongX ? x : y) % 2 ? [255, 255, 255] : [0, 0, 0]);
+const stripes =
+  (alongX: boolean) =>
+  (x: number, y: number): [number, number, number] =>
+    (alongX ? x : y) % 2 ? [255, 255, 255] : [0, 0, 0];
 
 describe("gapMetrics", () => {
   it("scores identical images as no difference and full similarity", () => {
@@ -33,7 +40,10 @@ describe("gapMetrics", () => {
 
   it("matches the CIE76 value of one known pair", () => {
     // sRGB red is Lab (53.2408, 80.0925, 67.2032), black is (0, 0, 0).
-    const m = gapMetrics(image(4, 4, () => [255, 0, 0]), image(4, 4, flat(0)));
+    const m = gapMetrics(
+      image(4, 4, () => [255, 0, 0]),
+      image(4, 4, flat(0)),
+    );
     expect(m.deltaE).toBeCloseTo(Math.hypot(53.2408, 80.0925, 67.2032), 2);
   });
 

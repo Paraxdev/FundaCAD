@@ -31,7 +31,14 @@ export class ShadowWatch {
       if ((o as THREE.Light).isLight) {
         const shadow = (o as THREE.Light & { shadow?: THREE.LightShadow }).shadow;
         if (!o.castShadow || !shadow) return;
-        v.push(o.id, ...o.matrixWorld.elements, shadow.mapSize.x, shadow.bias, shadow.radius, ...shadow.camera.projectionMatrix.elements);
+        v.push(
+          o.id,
+          ...o.matrixWorld.elements,
+          shadow.mapSize.x,
+          shadow.bias,
+          shadow.radius,
+          ...shadow.camera.projectionMatrix.elements,
+        );
         const target = (o as THREE.DirectionalLight).target;
         if (target) v.push(...target.matrixWorld.elements);
         return;
@@ -41,9 +48,22 @@ export class ShadowWatch {
       const geo = mesh.geometry as THREE.BufferGeometry | undefined;
       const pos = geo?.getAttribute("position") as THREE.BufferAttribute | undefined;
       const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-      v.push(o.id, o.layers.mask, ...o.matrixWorld.elements, geo?.id ?? -1, pos?.version ?? -1, geo?.index?.version ?? -1,
-        geo?.drawRange.start ?? 0, geo?.drawRange.count ?? 0, geo?.groups.length ?? 0,
-        (mat as { id?: number } | undefined)?.id ?? -1, mat?.side ?? 0, mat?.shadowSide ?? -1, mat?.alphaTest ?? 0, mat?.clippingPlanes?.length ?? 0);
+      v.push(
+        o.id,
+        o.layers.mask,
+        ...o.matrixWorld.elements,
+        geo?.id ?? -1,
+        pos?.version ?? -1,
+        geo?.index?.version ?? -1,
+        geo?.drawRange.start ?? 0,
+        geo?.drawRange.count ?? 0,
+        geo?.groups.length ?? 0,
+        (mat as { id?: number } | undefined)?.id ?? -1,
+        mat?.side ?? 0,
+        mat?.shadowSide ?? -1,
+        mat?.alphaTest ?? 0,
+        mat?.clippingPlanes?.length ?? 0,
+      );
     });
     const same = v.length === this.last.length && v.every((x, i) => x === this.last[i]);
     this.now = this.last;

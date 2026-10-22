@@ -139,9 +139,7 @@ fn build(features: Vec<Value>) -> Rebuild {
 }
 
 fn payloads(r: &Rebuild) -> Vec<fundacad_protocol::FullBody> {
-    let JobResult::Mesh(m) = reply::mesh_result(&r.bodies, 0.1, &Map::new(), &NoWatch) else {
-        panic!("a mesh reply")
-    };
+    let JobResult::Mesh(m) = reply::mesh_result(&r.bodies, 0.1, &Map::new(), &NoWatch) else { panic!("a mesh reply") };
     m.bodies
         .into_iter()
         .map(|b| match b {
@@ -258,9 +256,15 @@ fn assert_each_refuses(reply: &Map<String, Value>, ntri: usize, cases: impl Into
             failed.push(format!("{kind}: bodies {}, error {text:?}", r.bodies.len()));
         }
     }
-    assert!(failed.is_empty(), "not refused by name:
-{}", failed.join("
-"));
+    assert!(
+        failed.is_empty(),
+        "not refused by name:
+{}",
+        failed.join(
+            "
+"
+        )
+    );
 }
 
 #[test]
@@ -313,10 +317,8 @@ fn an_unnamed_cleanup_passes_over_a_scan() {
 fn a_copy_of_a_scan_is_a_scan() {
     let (path, ntri) = dense_stl();
     let reply = import_file(path, "stl").unwrap();
-    let r = build(vec![
-        scan_feature(&reply),
-        json!({"id": "dup", "type": "duplicate", "dx": 300, "bodies": ["body1"]}),
-    ]);
+    let r =
+        build(vec![scan_feature(&reply), json!({"id": "dup", "type": "duplicate", "dx": 300, "bodies": ["body1"]})]);
     assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| e.wire()).collect::<Vec<_>>());
     assert_eq!(r.bodies.len(), 2);
     assert!(r.bodies.iter().all(|b| b.scan), "the copy keeps the scan flag");
@@ -368,9 +370,7 @@ fn the_chunked_manifest_carries_the_scan_flag() {
     let (path, _) = dense_stl();
     let reply = import_file(path, "stl").unwrap();
     let r = build(vec![scan_feature(&reply)]);
-    let JobResult::Mesh(m) = reply::mesh_result(&r.bodies, 0.1, &Map::new(), &NoWatch) else {
-        panic!("a mesh reply")
-    };
+    let JobResult::Mesh(m) = reply::mesh_result(&r.bodies, 0.1, &Map::new(), &NoWatch) else { panic!("a mesh reply") };
     assert_eq!(m.bodies[0].manifest_entry().get("scan"), Some(&json!(true)));
 }
 

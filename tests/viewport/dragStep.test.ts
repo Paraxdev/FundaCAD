@@ -1,12 +1,7 @@
 // The drag lattice, and the defect it was: a whole millimetre per step.
 
 import { describe, expect, it } from "vitest";
-import {
-  DRAG_GRANULARITY_PX,
-  FINE_DIVISOR,
-  MIN_STEP,
-  dragStep,
-} from "../../src/viewport/dragStep";
+import { DRAG_GRANULARITY_PX, FINE_DIVISOR, MIN_STEP, dragStep } from "../../src/viewport/dragStep";
 import { niceStep, snap } from "../../src/ui/units";
 
 /** What the rule used to be, kept as the control. Every claim below about the

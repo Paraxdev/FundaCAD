@@ -11,10 +11,7 @@ impl KdTree {
     pub fn new(pts: &[[f64; 3]]) -> KdTree {
         let mut order: Vec<usize> = (0..pts.len()).collect();
         build(pts, &mut order, 0);
-        KdTree {
-            pts: pts.to_vec(),
-            order,
-        }
+        KdTree { pts: pts.to_vec(), order }
     }
 
     /// (distance, index) of the nearest point.
@@ -36,11 +33,7 @@ impl KdTree {
             *best = (d, idx);
         }
         let delta = q[axis] - p[axis];
-        let (near, far) = if delta < 0.0 {
-            ((lo, mid), (mid + 1, hi))
-        } else {
-            ((mid + 1, hi), (lo, mid))
-        };
+        let (near, far) = if delta < 0.0 { ((lo, mid), (mid + 1, hi)) } else { ((mid + 1, hi), (lo, mid)) };
         let next = (axis + 1) % 3;
         self.nearest_in(near.0, near.1, next, q, best);
         if delta * delta <= best.0 {
@@ -56,15 +49,7 @@ impl KdTree {
         heap.into_iter().map(|(_, i)| i).collect()
     }
 
-    fn knn_in(
-        &self,
-        lo: usize,
-        hi: usize,
-        axis: usize,
-        q: [f64; 3],
-        k: usize,
-        heap: &mut Vec<(f64, usize)>,
-    ) {
+    fn knn_in(&self, lo: usize, hi: usize, axis: usize, q: [f64; 3], k: usize, heap: &mut Vec<(f64, usize)>) {
         if lo >= hi {
             return;
         }
@@ -85,21 +70,13 @@ impl KdTree {
             let at = heap
                 .iter()
                 .enumerate()
-                .max_by(|a, b| {
-                    a.1 .0
-                        .partial_cmp(&b.1 .0)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
+                .max_by(|a, b| a.1 .0.partial_cmp(&b.1 .0).unwrap_or(std::cmp::Ordering::Equal))
                 .map(|(i, _)| i)
                 .unwrap_or(0);
             heap[at] = (d, idx);
         }
         let delta = q[axis] - p[axis];
-        let (near, far) = if delta < 0.0 {
-            ((lo, mid), (mid + 1, hi))
-        } else {
-            ((mid + 1, hi), (lo, mid))
-        };
+        let (near, far) = if delta < 0.0 { ((lo, mid), (mid + 1, hi)) } else { ((mid + 1, hi), (lo, mid)) };
         let next = (axis + 1) % 3;
         self.knn_in(near.0, near.1, next, q, k, heap);
         if delta * delta <= worst(heap) {
@@ -115,15 +92,7 @@ impl KdTree {
         out
     }
 
-    fn within_in(
-        &self,
-        lo: usize,
-        hi: usize,
-        axis: usize,
-        q: [f64; 3],
-        r: f64,
-        out: &mut Vec<usize>,
-    ) {
+    fn within_in(&self, lo: usize, hi: usize, axis: usize, q: [f64; 3], r: f64, out: &mut Vec<usize>) {
         if lo >= hi {
             return;
         }
@@ -155,9 +124,7 @@ fn build(pts: &[[f64; 3]], order: &mut [usize], axis: usize) {
     }
     let mid = order.len() / 2;
     order.select_nth_unstable_by(mid, |a, b| {
-        pts[*a][axis]
-            .partial_cmp(&pts[*b][axis])
-            .unwrap_or(std::cmp::Ordering::Equal)
+        pts[*a][axis].partial_cmp(&pts[*b][axis]).unwrap_or(std::cmp::Ordering::Equal)
     });
     let (left, right) = order.split_at_mut(mid);
     build(pts, left, (axis + 1) % 3);
@@ -169,11 +136,7 @@ mod tests {
     use super::*;
 
     fn brute_knn(pts: &[[f64; 3]], q: [f64; 3], k: usize) -> Vec<usize> {
-        let mut all: Vec<(f64, usize)> = pts
-            .iter()
-            .enumerate()
-            .map(|(i, p)| (dist2(*p, q), i))
-            .collect();
+        let mut all: Vec<(f64, usize)> = pts.iter().enumerate().map(|(i, p)| (dist2(*p, q), i)).collect();
         all.sort_by(|a, b| a.partial_cmp(b).unwrap());
         all.into_iter().take(k).map(|(_, i)| i).collect()
     }
@@ -193,9 +156,7 @@ mod tests {
             let q = [rnd(), rnd(), rnd()];
             assert_eq!(tree.knn(q, 7), brute_knn(&pts, q, 7));
             assert_eq!(tree.nearest(q).1, brute_knn(&pts, q, 1)[0]);
-            let mut within: Vec<usize> = (0..pts.len())
-                .filter(|i| dist2(pts[*i], q).sqrt() <= 1.5)
-                .collect();
+            let mut within: Vec<usize> = (0..pts.len()).filter(|i| dist2(pts[*i], q).sqrt() <= 1.5).collect();
             within.sort_unstable();
             assert_eq!(tree.within(q, 1.5), within);
         }

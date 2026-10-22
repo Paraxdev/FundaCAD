@@ -3,8 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { INFER_TOL_DEG, inferLineDirection, onLattice } from "../../src/sketch/inferLine";
 
-const infer = (x1: number, y1: number, x2: number, y2: number, step = 0) =>
-  inferLineDirection(x1, y1, x2, y2, step);
+const infer = (x1: number, y1: number, x2: number, y2: number, step = 0) => inferLineDirection(x1, y1, x2, y2, step);
 
 describe("inferLineDirection", () => {
   describe("with no grid to go on", () => {
@@ -27,8 +26,8 @@ describe("inferLineDirection", () => {
     });
 
     it("uses the stated tolerance and not one either side of it", () => {
-      const just = Math.tan((INFER_TOL_DEG - 0.01) * Math.PI / 180) * 100;
-      const past = Math.tan((INFER_TOL_DEG + 0.01) * Math.PI / 180) * 100;
+      const just = Math.tan(((INFER_TOL_DEG - 0.01) * Math.PI) / 180) * 100;
+      const past = Math.tan(((INFER_TOL_DEG + 0.01) * Math.PI) / 180) * 100;
       expect(infer(0, 0, 100, just)).toBe("horizontal");
       expect(infer(0, 0, 100, past)).toBeNull();
     });
@@ -81,8 +80,14 @@ describe("inferLineDirection", () => {
       // So this change can only ever record FEWER constraints, and cannot
       // introduce one that fights an existing constraint.
       const cases: [number, number, number, number][] = [
-        [0, 0, 100, 0], [0, 0, 0, 100], [5, 5, 105, 5], [10, 0, 10, 60],
-        [0, 0, 200, 5], [0, 0, 5, 5], [0, 0, 100, 25], [0, 0, 35, 5],
+        [0, 0, 100, 0],
+        [0, 0, 0, 100],
+        [5, 5, 105, 5],
+        [10, 0, 10, 60],
+        [0, 0, 200, 5],
+        [0, 0, 5, 5],
+        [0, 0, 100, 25],
+        [0, 0, 35, 5],
       ];
       for (const [x1, y1, x2, y2] of cases) {
         const withGrid = infer(x1, y1, x2, y2, STEP);

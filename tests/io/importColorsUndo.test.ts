@@ -15,15 +15,23 @@ function backend(): GeometryBackend {
     async rebuild(doc: CadDocument) {
       const ours = doc.features.some((f) => f.id === IMP);
       const result: RebuildResult = {
-        mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: { min: [0, 0, 0], max: [0, 0, 0] },
+        mesh: { positions: [], indices: [], faceIds: [] },
+        edges: [],
+        bbox: { min: [0, 0, 0], max: [0, 0, 0] },
         bodies: ours ? [{ id: "body9", name: "Part", faceStart: 0, faceCount: 1, faceOwners: [IMP] }] : [],
       };
       return { ok: true as const, result };
     },
     async init() {},
-    onStatus() { return () => {}; },
-    onProgress() { return () => {}; },
-    async cancel() { return true; },
+    onStatus() {
+      return () => {};
+    },
+    onProgress() {
+      return () => {};
+    },
+    async cancel() {
+      return true;
+    },
   } as unknown as GeometryBackend;
 }
 
@@ -187,7 +195,12 @@ describe("one undo after a whole import", () => {
       async rebuild(doc: CadDocument) {
         const own = doc.features.find((f) => f.type === "import");
         const bodies = own ? [{ id: "body9", name: "Part", faceStart: 0, faceCount: 1, faceOwners: [own.id] }] : [];
-        const result: RebuildResult = { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: { min: [0, 0, 0], max: [0, 0, 0] }, bodies };
+        const result: RebuildResult = {
+          mesh: { positions: [], indices: [], faceIds: [] },
+          edges: [],
+          bbox: { min: [0, 0, 0], max: [0, 0, 0] },
+          bodies,
+        };
         return { ok: true as const, result };
       },
       async importGeometry() {

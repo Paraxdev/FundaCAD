@@ -17,11 +17,7 @@ use serde_json::Value;
 pub fn fmt(x: Option<&Value>, places: i32) -> String {
     match x {
         None | Some(Value::Null) => "?".into(),
-        Some(Value::Array(items)) => items
-            .iter()
-            .map(|v| fmt(Some(v), places))
-            .collect::<Vec<_>>()
-            .join(", "),
+        Some(Value::Array(items)) => items.iter().map(|v| fmt(Some(v), places)).collect::<Vec<_>>().join(", "),
         Some(v) => match v.as_f64() {
             None => "?".into(),
             Some(f) => g_format(round_half_even(f, places)),
@@ -56,9 +52,7 @@ fn s(v: &Value, key: &str) -> String {
 }
 
 fn list_of<'a>(v: &'a Value, key: &str) -> &'a [Value] {
-    v.get(key)
-        .and_then(Value::as_array)
-        .map_or(&[][..], Vec::as_slice)
+    v.get(key).and_then(Value::as_array).map_or(&[][..], Vec::as_slice)
 }
 
 fn index(v: &Value) -> i64 {
@@ -98,45 +92,26 @@ pub fn body_line(body: &Value) -> String {
     let mut bits = vec![format!("{id} \"{}\"", s(body, "name"))];
     let bbox = body.get("bbox").cloned().unwrap_or(Value::Null);
     if let Some(size) = bbox.get("size").and_then(Value::as_array) {
-        bits.push(format!(
-            "{} x {} x {} mm",
-            fmt(size.first(), 3),
-            fmt(size.get(1), 3),
-            fmt(size.get(2), 3)
-        ));
+        bits.push(format!("{} x {} x {} mm", fmt(size.first(), 3), fmt(size.get(1), 3), fmt(size.get(2), 3)));
     }
     if body.get("volume").is_some_and(|v| !v.is_null()) {
         bits.push(format!("vol {} mm3", fmt(body.get("volume"), 1)));
     }
-    bits.push(format!(
-        "{} faces, {} edges",
-        s(body, "faceCount"),
-        s(body, "edgeCount")
-    ));
+    bits.push(format!("{} faces, {} edges", s(body, "faceCount"), s(body, "edgeCount")));
     let solids = body.get("solidCount").and_then(Value::as_i64).unwrap_or(1);
     if solids > 1 {
         bits.push(format!("{solids} disjoint solids"));
     }
     let census = surface_census(body);
     if !census.is_empty() {
-        bits.push(
-            census
-                .iter()
-                .map(|(k, n)| format!("{n} {k}"))
-                .collect::<Vec<_>>()
-                .join(", "),
-        );
+        bits.push(census.iter().map(|(k, n)| format!("{n} {k}")).collect::<Vec<_>>().join(", "));
     }
     bits.join(" | ")
 }
 
 fn few(items: &[i64], prefix: char) -> String {
     let shown: Vec<String> = items.iter().take(6).map(|i| format!("{prefix}{i}")).collect();
-    format!(
-        "{}{}",
-        shown.join(", "),
-        if items.len() > 6 { "..." } else { "" }
-    )
+    format!("{}{}", shown.join(", "), if items.len() > 6 { "..." } else { "" })
 }
 
 /// The things about a body that will bite a LATER feature. Not errors, every
@@ -150,11 +125,7 @@ pub fn warnings_for(body: &Value) -> Vec<String> {
         if let Some(Value::Array(ix)) = body.get(summary) {
             return ix.iter().filter_map(Value::as_i64).collect();
         }
-        list_of(body, list)
-            .iter()
-            .filter(|e| e.get(key).and_then(Value::as_bool).unwrap_or(false))
-            .map(index)
-            .collect()
+        list_of(body, list).iter().filter(|e| e.get(key).and_then(Value::as_bool).unwrap_or(false)).map(index).collect()
     };
     let seams = flagged("seam", "edges", "seams");
     if !seams.is_empty() {
@@ -176,10 +147,7 @@ pub fn warnings_for(body: &Value) -> Vec<String> {
     }
     let open = flagged("openBoundary", "edges", "openEdges");
     if !open.is_empty() {
-        out.push(format!(
-            "{} edge(s) bound only ONE face, this body is a surface, not a closed solid",
-            open.len()
-        ));
+        out.push(format!("{} edge(s) bound only ONE face, this body is a surface, not a closed solid", open.len()));
     }
     // An open body has its line above.
     if let Some(why) = body.get("fault").and_then(Value::as_str).filter(|_| open.is_empty()) {
@@ -207,10 +175,7 @@ pub fn warnings_for(body: &Value) -> Vec<String> {
 }
 
 pub fn face_line(f: &Value) -> String {
-    let mut bits = vec![
-        format!("F{} {}", index(f), s(f, "surface")),
-        format!("area {}", fmt(f.get("area"), 2)),
-    ];
+    let mut bits = vec![format!("F{} {}", index(f), s(f, "surface")), format!("area {}", fmt(f.get("area"), 2))];
     if f.get("radius").is_some_and(|v| !v.is_null()) {
         bits.push(format!("r {}", fmt(f.get("radius"), 3)));
     }
@@ -225,19 +190,13 @@ pub fn face_line(f: &Value) -> String {
 }
 
 pub fn edge_line(e: &Value) -> String {
-    let mut bits = vec![
-        format!("E{} {}", index(e), s(e, "curve")),
-        format!("len {}", fmt(e.get("length"), 2)),
-    ];
+    let mut bits = vec![format!("E{} {}", index(e), s(e, "curve")), format!("len {}", fmt(e.get("length"), 2))];
     if e.get("radius").is_some_and(|v| !v.is_null()) {
         bits.push(format!("r {}", fmt(e.get("radius"), 3)));
     }
     bits.push(format!("mid ({})", fmt(e.get("mid"), 3)));
     let faces = list_of(e, "faces");
-    let mut between = format!(
-        "between F{}",
-        faces.first().map_or("?".into(), |v| fmt(Some(v), 3))
-    );
+    let mut between = format!("between F{}", faces.first().map_or("?".into(), |v| fmt(Some(v), 3)));
     if faces.len() > 1 {
         between.push_str(&format!(" and F{}", fmt(faces.get(1), 3)));
     }

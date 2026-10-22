@@ -22,11 +22,33 @@ class FakeEvent {
   stopped = false;
   [k: string]: unknown;
   constructor(type: string, init: Record<string, unknown> = {}) {
-    Object.assign(this, { pointerId: 1, pointerType: "mouse", button: -1, buttons: 0, clientX: 0, clientY: 0, screenX: 0, screenY: 0, shiftKey: false, ctrlKey: false, deltaX: 0, deltaY: 0, deltaMode: 0 }, init);
+    Object.assign(
+      this,
+      {
+        pointerId: 1,
+        pointerType: "mouse",
+        button: -1,
+        buttons: 0,
+        clientX: 0,
+        clientY: 0,
+        screenX: 0,
+        screenY: 0,
+        shiftKey: false,
+        ctrlKey: false,
+        deltaX: 0,
+        deltaY: 0,
+        deltaMode: 0,
+      },
+      init,
+    );
     this.type = type;
   }
-  preventDefault() { this.defaultPrevented = true; }
-  stopImmediatePropagation() { this.stopped = true; }
+  preventDefault() {
+    this.defaultPrevented = true;
+  }
+  stopImmediatePropagation() {
+    this.stopped = true;
+  }
 }
 
 function stubCanvas() {
@@ -36,14 +58,21 @@ function stubCanvas() {
   const presses: ("tap" | "drag" | null)[] = [];
   const el = {
     style: {} as Record<string, string>,
-    addEventListener: (t: string, f: Listener) => { (listeners[t] ??= []).push(f); },
-    removeEventListener: (t: string, f: Listener) => { listeners[t] = (listeners[t] ?? []).filter((g) => g !== f); },
+    addEventListener: (t: string, f: Listener) => {
+      (listeners[t] ??= []).push(f);
+    },
+    removeEventListener: (t: string, f: Listener) => {
+      listeners[t] = (listeners[t] ?? []).filter((g) => g !== f);
+    },
     getBoundingClientRect: () => ({ left: 0, top: 0, right: W, bottom: H, width: W, height: H, x: 0, y: 0 }),
     setPointerCapture: () => {},
     releasePointerCapture: () => {},
     hasPointerCapture: () => false,
     dispatchEvent: (e: FakeEvent) => {
-      for (const f of listeners[e.type] ?? []) { f(e); if (e.stopped) break; }
+      for (const f of listeners[e.type] ?? []) {
+        f(e);
+        if (e.stopped) break;
+      }
       return !e.defaultPrevented;
     },
   };
@@ -53,7 +82,12 @@ function stubCanvas() {
   const bindApp = () => {
     for (const t of ["pointerdown", "pointermove", "pointerup", "contextmenu", "dblclick"]) {
       el.addEventListener(t, (e) => {
-        seen.push({ type: e.type, replayed: !(e instanceof Native), x: e.clientX, ...(t === "dblclick" || t === "pointerdown" ? { detail: e.detail } : {}) });
+        seen.push({
+          type: e.type,
+          replayed: !(e instanceof Native),
+          x: e.clientX,
+          ...(t === "dblclick" || t === "pointerdown" ? { detail: e.detail } : {}),
+        });
         if (t === "pointerdown") presses.push(replayedPress(e as unknown as Event));
         if (t === "pointerdown" && app.claim) e.preventDefault();
       });
@@ -66,7 +100,14 @@ function stubCanvas() {
     return e;
   };
   const touch = (type: string, id: number, x: number, y = 300) =>
-    fire(type, { pointerType: "touch", pointerId: id, button: type === "pointermove" ? -1 : 0, buttons: type === "pointerup" ? 0 : 1, clientX: x, clientY: y });
+    fire(type, {
+      pointerType: "touch",
+      pointerId: id,
+      button: type === "pointermove" ? -1 : 0,
+      buttons: type === "pointerup" ? 0 : 1,
+      clientX: x,
+      clientY: y,
+    });
   return { el, fire, touch, seen, presses, app, bindApp };
 }
 
@@ -147,7 +188,10 @@ describe("touch", () => {
     touch("pointerup", 3, 403);
     steady(rig);
     expect(rig.poseVersion()).toBe(v0);
-    expect(seen.map((s) => [s.type, s.replayed, s.x])).toEqual([["pointerdown", true, 403], ["pointerup", false, 403]]);
+    expect(seen.map((s) => [s.type, s.replayed, s.x])).toEqual([
+      ["pointerdown", true, 403],
+      ["pointerup", false, 403],
+    ]);
     expect(presses).toEqual(["tap"]);
   });
 
@@ -278,7 +322,12 @@ describe("wheel", () => {
       wheel(rig, { deltaX: 9.5, deltaY: 0.5, clientX: 420, clientY: 310 });
       steady(rig);
       vi.advanceTimersByTime(0);
-      pivots.add(nav.scrollPivot!.pivot.toArray().map((v) => v.toFixed(9)).join());
+      pivots.add(
+        nav
+          .scrollPivot!.pivot.toArray()
+          .map((v) => v.toFixed(9))
+          .join(),
+      );
     }
     expect(pivots.size).toBe(1);
   });

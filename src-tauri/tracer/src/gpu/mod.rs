@@ -16,11 +16,11 @@ use crate::denoise::{self, Denoiser, Quality};
 use crate::scene::{BodyDesc, Commit, Mesh, Scene};
 
 use accel::{make_tlas, GpuAccel};
-use envmap::EnvMap;
 pub use adapter::{adapter_label, choose, Candidate, Refusal};
+use envmap::EnvMap;
 pub use picture::{encode_png, picture_refusal, Picture};
-use pipelines::Pipelines;
 pub(crate) use pipelines::pipeline_at;
+use pipelines::Pipelines;
 use upload::Shading;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -333,7 +333,6 @@ struct Job {
     key: FrameKey,
     rx: mpsc::Receiver<Result<Denoised, String>>,
 }
-
 
 impl Tracer {
     pub fn new(opts: TracerOptions) -> Result<Tracer, Refusal> {
@@ -670,7 +669,12 @@ impl Tracer {
         let spawned = std::thread::Builder::new().name("denoise".into()).spawn(move || {
             let (c, by, note) = denoise::run(&input, quality);
             let rgb: Vec<[f32; 3]> = c.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect();
-            let d = Denoised { plain: denoise::tone_map(&rgb), hdr: rgb.iter().map(|p| [p[0] / e, p[1] / e, p[2] / e, 1.0]).collect(), by, note };
+            let d = Denoised {
+                plain: denoise::tone_map(&rgb),
+                hdr: rgb.iter().map(|p| [p[0] / e, p[1] / e, p[2] / e, 1.0]).collect(),
+                by,
+                note,
+            };
             let _ = tx.send(Ok(d));
         });
         match spawned {
@@ -816,7 +820,13 @@ mod tests {
                 ..Default::default()
             },
         );
-        t.set_camera(Camera { eye: [0.0, 0.0, 12.0], target: [0.0; 3], up: [0.0, 1.0, 0.0], fov: 50.0, ..Default::default() });
+        t.set_camera(Camera {
+            eye: [0.0, 0.0, 12.0],
+            target: [0.0; 3],
+            up: [0.0, 1.0, 0.0],
+            fov: 50.0,
+            ..Default::default()
+        });
         t.set_look(Look { exposure: 1.7, sky_top: [0.1; 3], sky_bottom: [0.05; 3], ..Look::default() });
         t.set_denoise(Quality::Off);
         t.set_cap(1);

@@ -54,8 +54,18 @@ fn a_rhino_file_imports_breps_extrusions_surfaces_and_meshes() {
     assert_eq!(
         names,
         [
-            "Boxes", "Surfaces", "Trimmed", "Meshes", "box10x20x30", "cyl", "sphere", "plate_with_hole",
-            "cyl_extrusion", "bump_surface", "disc", "tetra"
+            "Boxes",
+            "Surfaces",
+            "Trimmed",
+            "Meshes",
+            "box10x20x30",
+            "cyl",
+            "sphere",
+            "plate_with_hole",
+            "cyl_extrusion",
+            "bump_surface",
+            "disc",
+            "tetra"
         ]
     );
     let parent = |name: &str| {

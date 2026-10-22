@@ -46,7 +46,19 @@ describe("resolveFaceRefs across a fillet", () => {
     named["b2a"] = ["body2", 1];
     named["b2b"] = ["body2", 4];
     const list = refs(base, named);
-    const want = { b1f0: [5], b1f1: [0], b1f2: [9], b1f3: [6], b1f4: [4], b1f5: [8], b1f6: [3], b1f7: [7], b1f8: [1], b2a: [1], b2b: [4] };
+    const want = {
+      b1f0: [5],
+      b1f1: [0],
+      b1f2: [9],
+      b1f3: [6],
+      b1f4: [4],
+      b1f5: [8],
+      b1f6: [3],
+      b1f7: [7],
+      b1f8: [1],
+      b2a: [1],
+      b2b: [4],
+    };
     expect(resolved(list, fillet, trackOf(base, list))).toEqual(want);
     expect(resolved(list, fillet, null)).toEqual(want);
   });
@@ -75,15 +87,31 @@ describe("resolveFaceRefs when faces split, vanish or move", () => {
   });
 
   it("faces a cut removes drop their material while the faces left keep theirs", () => {
-    const list = refs(base, { upperTop: ["body1", 3], upperSide: ["body1", 2], riser: ["body1", 4], lowerTop: ["body1", 7], end: ["body1", 0] });
+    const list = refs(base, {
+      upperTop: ["body1", 3],
+      upperSide: ["body1", 2],
+      riser: ["body1", 4],
+      lowerTop: ["body1", 7],
+      end: ["body1", 0],
+    });
     const want = { upperTop: [], upperSide: [], riser: [], lowerTop: [4], end: [0] };
     expect(resolved(list, reply("unstep"), trackOf(base, list))).toEqual(want);
     expect(resolved(list, reply("unstep"), null)).toEqual(want);
   });
 
   it("faces a dimension edit moves follow through the previous build even as two of them merge", () => {
-    const list = refs(base, { plusY: ["body1", 1], lowerSide: ["body1", 5], lowerTop: ["body1", 7], end: ["body1", 0] });
-    expect(resolved(list, reply("deep"), trackOf(base, list))).toEqual({ plusY: [1], lowerSide: [2], lowerTop: [6], end: [0] });
+    const list = refs(base, {
+      plusY: ["body1", 1],
+      lowerSide: ["body1", 5],
+      lowerTop: ["body1", 7],
+      end: ["body1", 0],
+    });
+    expect(resolved(list, reply("deep"), trackOf(base, list))).toEqual({
+      plusY: [1],
+      lowerSide: [2],
+      lowerTop: [6],
+      end: [0],
+    });
   });
 
   it("a ref the build lost resumes from where it was last found, not from its first print", () => {
@@ -99,10 +127,14 @@ describe("resolveFaceRefs when faces split, vanish or move", () => {
 
   it("a body turned and moved with its face count unchanged keeps every index", () => {
     const [c, s] = [Math.cos(0.6), Math.sin(0.6)];
-    const turn = (p: number[]) => p.map((_, i) => {
-      const k = i - (i % 3), [x, y, z] = [p[k]! - 40, p[k + 1]! + 5, p[k + 2]! - 7];
-      return [x * c - y * s + 53, x * s * 0.8 + y * c * 0.8 + z * 0.6 - 9, -x * s * 0.6 - y * c * 0.6 + z * 0.8 + 13][i % 3]!;
-    });
+    const turn = (p: number[]) =>
+      p.map((_, i) => {
+        const k = i - (i % 3),
+          [x, y, z] = [p[k]! - 40, p[k + 1]! + 5, p[k + 2]! - 7];
+        return [x * c - y * s + 53, x * s * 0.8 + y * c * 0.8 + z * 0.6 - 9, -x * s * 0.6 - y * c * 0.6 + z * 0.8 + 13][
+          i % 3
+        ]!;
+      });
     const named: Record<string, [string, number]> = {};
     for (let f = 0; f < 9; f++) named["f" + f] = ["body1", f];
     const list = refs(base, named);
@@ -127,7 +159,10 @@ describe("resolveFaceRefs on an unchanged build", () => {
 
   it("leaves a ref on a body the build no longer has, or a face past its end, on nothing", () => {
     const list = refs(base, { gone: ["body1", 0] }, true);
-    list.push(["late", { body: "body2", face: 6, material: "m-late" }], ["lost", { body: "body9", face: 0, material: "m-lost" }]);
+    list.push(
+      ["late", { body: "body2", face: 6, material: "m-late" }],
+      ["lost", { body: "body9", face: 0, material: "m-lost" }],
+    );
     expect(resolved(list, base, null)).toEqual({ gone: [0], late: [], lost: [] });
   });
 });
@@ -158,19 +193,36 @@ describe("resolveFaceRefs on curved faces", () => {
  *  each about 0.39 wide, so narrower than the position tolerance, by 2 rings,
  *  every face a 2 x 2 grid of quads, face numbers given by `perm`. */
 function tube(perm: (f: number) => number, etag: string): RebuildResult {
-  const P: number[] = [], I: number[] = [], F: number[] = [];
-  const U = 48, V = 4, axis = [0.36, 0.48, 0.8], u = [0.8, -0.6, 0], w = [0.48, 0.64, -0.6];
-  for (let j = 0; j <= V; j++) for (let i = 0; i <= U; i++) {
-    const t = (i / U) * 2 * Math.PI, h = j * 1.5;
-    P.push(...[0, 1, 2].map((a) => [12, -7, 4][a]! + h * axis[a]! + 1.5 * (Math.cos(t) * u[a]! + Math.sin(t) * w[a]!)));
-  }
-  for (let j = 0; j < V; j++) for (let i = 0; i < U; i++) {
-    const a = j * (U + 1) + i, c = a + U + 1, f = perm(Math.floor(j / 2) * 24 + Math.floor(i / 2));
-    I.push(a, c, a + 1, a + 1, c, c + 1);
-    F.push(f, f);
-  }
-  return { mesh: { positions: P, indices: I, faceIds: F }, edges: [], bbox: { min: [0, 0, 0], max: [1, 1, 1] },
-    bodies: [{ id: "body1", name: "body1", faceStart: 0, faceCount: 48, etag }] };
+  const P: number[] = [],
+    I: number[] = [],
+    F: number[] = [];
+  const U = 48,
+    V = 4,
+    axis = [0.36, 0.48, 0.8],
+    u = [0.8, -0.6, 0],
+    w = [0.48, 0.64, -0.6];
+  for (let j = 0; j <= V; j++)
+    for (let i = 0; i <= U; i++) {
+      const t = (i / U) * 2 * Math.PI,
+        h = j * 1.5;
+      P.push(
+        ...[0, 1, 2].map((a) => [12, -7, 4][a]! + h * axis[a]! + 1.5 * (Math.cos(t) * u[a]! + Math.sin(t) * w[a]!)),
+      );
+    }
+  for (let j = 0; j < V; j++)
+    for (let i = 0; i < U; i++) {
+      const a = j * (U + 1) + i,
+        c = a + U + 1,
+        f = perm(Math.floor(j / 2) * 24 + Math.floor(i / 2));
+      I.push(a, c, a + 1, a + 1, c, c + 1);
+      F.push(f, f);
+    }
+  return {
+    mesh: { positions: P, indices: I, faceIds: F },
+    edges: [],
+    bbox: { min: [0, 0, 0], max: [1, 1, 1] },
+    bodies: [{ id: "body1", name: "body1", faceStart: 0, faceCount: 48, etag }],
+  };
 }
 
 describe("resolveFaceRefs on curved faces narrower than the tolerance", () => {

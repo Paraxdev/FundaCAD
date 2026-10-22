@@ -57,25 +57,16 @@ fn check_tessellation(name: &str, case: &Value) -> Vec<String> {
     let glyphs = text::glyphs(&spec, path.as_ref().map(|edge| TextPath { edge }).as_ref());
     let got = text::tessellate(&glyphs);
     let faces = got["faces"].as_array().cloned().unwrap_or_default();
-    let want = case["expect"]["tessellated"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
+    let want = case["expect"]["tessellated"].as_array().cloned().unwrap_or_default();
     let mut bad = Vec::new();
     if faces.len() != want.len() {
-        bad.push(format!(
-            "{name}: {} tessellated faces, expected {}",
-            faces.len(),
-            want.len()
-        ));
+        bad.push(format!("{name}: {} tessellated faces, expected {}", faces.len(), want.len()));
         return bad;
     }
     let holes = |f: &Value| f["holes"].as_array().map_or(0, Vec::len);
     let mut got_holes: Vec<usize> = faces.iter().map(holes).collect();
-    let mut want_holes: Vec<usize> = want
-        .iter()
-        .map(|f| usize::try_from(f["holes"].as_u64().unwrap_or(0)).unwrap_or(0))
-        .collect();
+    let mut want_holes: Vec<usize> =
+        want.iter().map(|f| usize::try_from(f["holes"].as_u64().unwrap_or(0)).unwrap_or(0)).collect();
     got_holes.sort_unstable();
     want_holes.sort_unstable();
     if got_holes != want_holes {
@@ -95,11 +86,7 @@ fn check(name: &str, case: &Value) -> Vec<String> {
     let got = measured(name, case);
     let want = case["expect"]["faces"].as_array().cloned().unwrap_or_default();
     if got.len() != want.len() {
-        bad.push(format!(
-            "{name}: {} glyph faces, expected {}",
-            got.len(),
-            want.len()
-        ));
+        bad.push(format!("{name}: {} glyph faces, expected {}", got.len(), want.len()));
         return bad;
     }
     let size = text::num_or_zero(case["entity"].get("height")).abs().max(1.0);
@@ -112,10 +99,7 @@ fn check(name: &str, case: &Value) -> Vec<String> {
             bad.push(format!("{name}: {} holes != {}", g["holes"], w["holes"]));
         }
         for k in 0..4 {
-            let (gb, wb) = (
-                g["bbox"][k].as_f64().unwrap_or(0.0),
-                w["bbox"][k].as_f64().unwrap_or(0.0),
-            );
+            let (gb, wb) = (g["bbox"][k].as_f64().unwrap_or(0.0), w["bbox"][k].as_f64().unwrap_or(0.0));
             if (gb - wb).abs() > BOX_REL * size {
                 bad.push(format!("{name}: bbox {} != {}", g["bbox"], w["bbox"]));
                 break;
@@ -127,18 +111,14 @@ fn check(name: &str, case: &Value) -> Vec<String> {
 
 #[test]
 fn glyph_faces_match_the_python_engine() {
-    let families = text::list_fonts()["families"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
+    let families = text::list_fonts()["families"].as_array().cloned().unwrap_or_default();
     let has = |n: &str| families.iter().any(|f| f.as_str() == Some(n));
     if !(has("Arial") && has("Times New Roman") && has("Consolas") && has("Segoe UI")) {
         eprintln!("skipped: this machine does not have the Windows fonts the oracle uses");
         return;
     }
     let text = include_str!("text/fixtures.json");
-    let fixtures: serde_json::Map<String, Value> =
-        serde_json::from_str(text).expect("fixtures parse");
+    let fixtures: serde_json::Map<String, Value> = serde_json::from_str(text).expect("fixtures parse");
     let only = std::env::var("TEXT_CASE").ok();
     let mut bad = Vec::new();
     for (name, case) in &fixtures {
@@ -147,12 +127,7 @@ fn glyph_faces_match_the_python_engine() {
         }
         bad.extend(check(name, case));
     }
-    assert!(
-        bad.is_empty(),
-        "{} mismatches:\n{}",
-        bad.len(),
-        bad.join("\n")
-    );
+    assert!(bad.is_empty(), "{} mismatches:\n{}", bad.len(), bad.join("\n"));
 }
 
 #[test]
@@ -172,22 +147,13 @@ fn font_families_are_found_and_an_unknown_name_falls_back() {
         return;
     }
     let spec = |font: &str| {
-        TextSpec::from_json(
-            &serde_json::json!({"text": "A", "height": 10, "font": font}),
-            &text::num_or_zero,
-        )
-        .expect("a spec")
+        TextSpec::from_json(&serde_json::json!({"text": "A", "height": 10, "font": font}), &text::num_or_zero)
+            .expect("a spec")
     };
     // A name nothing matches draws in Arial, the way Font_FontMgr falls back.
-    assert_eq!(
-        text::glyphs(&spec("NoSuchFontAnywhere"), None),
-        text::glyphs(&spec("Arial"), None)
-    );
+    assert_eq!(text::glyphs(&spec("NoSuchFontAnywhere"), None), text::glyphs(&spec("Arial"), None));
     // And the aliases OCCT ships.
-    assert_eq!(
-        text::glyphs(&spec("sans-serif"), None),
-        text::glyphs(&spec("Arial"), None)
-    );
+    assert_eq!(text::glyphs(&spec("sans-serif"), None), text::glyphs(&spec("Arial"), None));
 }
 
 /// Regular outlines of any installed plain TrueType font, to dress up as other families.
@@ -214,16 +180,10 @@ fn plain_truetype() -> Option<Vec<u8>> {
 /// The same font under another family: a new name table appended and the directory pointed at it.
 fn renamed(font: &[u8], family: &str) -> Vec<u8> {
     let be16 = |at: usize| usize::from(u16::from_be_bytes([font[at], font[at + 1]]));
-    let entry = (0..be16(4))
-        .map(|i| 12 + 16 * i)
-        .find(|&at| &font[at..at + 4] == b"name")
-        .expect("the font has a name table");
-    let strings = [
-        (1u16, family.to_owned()),
-        (2, "Regular".to_owned()),
-        (4, family.to_owned()),
-        (6, family.replace(' ', "")),
-    ];
+    let entry =
+        (0..be16(4)).map(|i| 12 + 16 * i).find(|&at| &font[at..at + 4] == b"name").expect("the font has a name table");
+    let strings =
+        [(1u16, family.to_owned()), (2, "Regular".to_owned()), (4, family.to_owned()), (6, family.replace(' ', ""))];
     let mut table = vec![0, 0, 0, strings.len() as u8, 0, 6 + 12 * strings.len() as u8];
     let mut blob = Vec::new();
     for (id, text) in &strings {
@@ -265,18 +225,12 @@ fn a_windows_document_keeps_its_font_where_only_the_liberation_set_is_installed(
         eprintln!("skipped: no plain TrueType font to build the test families from");
         return;
     };
-    let lib = library_of(
-        &font,
-        &["DejaVu Sans", "Liberation Mono", "Liberation Sans", "Liberation Serif"],
-    );
+    let lib = library_of(&font, &["DejaVu Sans", "Liberation Mono", "Liberation Sans", "Liberation Serif"]);
     let sans = found(&lib, "Liberation Sans").expect("liberation sans");
     let serif = found(&lib, "Liberation Serif").expect("liberation serif");
     let mono = found(&lib, "Liberation Mono").expect("liberation mono");
     let dejavu = found(&lib, "DejaVu Sans").expect("dejavu sans");
-    assert_eq!(
-        [sans, serif, mono, dejavu].iter().collect::<std::collections::HashSet<_>>().len(),
-        4
-    );
+    assert_eq!([sans, serif, mono, dejavu].iter().collect::<std::collections::HashSet<_>>().len(), 4);
     let asked = [
         ("Arial", sans),
         ("ARIAL", sans),
@@ -306,10 +260,7 @@ fn a_linux_document_in_liberation_opens_with_the_windows_family() {
         eprintln!("skipped: no plain TrueType font to build the test families from");
         return;
     };
-    let lib = library_of(
-        &font,
-        &["Arial", "Courier New", "DejaVu Sans", "Times New Roman"],
-    );
+    let lib = library_of(&font, &["Arial", "Courier New", "DejaVu Sans", "Times New Roman"]);
     let arial = found(&lib, "Arial").expect("arial");
     let times = found(&lib, "Times New Roman").expect("times new roman");
     let courier = found(&lib, "Courier New").expect("courier new");
@@ -333,10 +284,7 @@ fn each_family_keeps_its_own_face_where_the_windows_and_liberation_sets_are_both
         eprintln!("skipped: no plain TrueType font to build the test families from");
         return;
     };
-    let lib = library_of(
-        &font,
-        &["Arial", "Liberation Mono", "Liberation Sans", "Times New Roman"],
-    );
+    let lib = library_of(&font, &["Arial", "Liberation Mono", "Liberation Sans", "Times New Roman"]);
     let arial = found(&lib, "Arial").expect("arial");
     let sans = found(&lib, "Liberation Sans").expect("liberation sans");
     let times = found(&lib, "Times New Roman").expect("times new roman");
@@ -353,9 +301,7 @@ fn a_machine_without_arial_still_draws_text() {
     let stand_ins: Vec<fontdb::ID> = db
         .faces()
         .filter(|f| {
-            f.families.iter().any(|(n, _)| {
-                n.eq_ignore_ascii_case("arial") || n.eq_ignore_ascii_case("liberation sans")
-            })
+            f.families.iter().any(|(n, _)| n.eq_ignore_ascii_case("arial") || n.eq_ignore_ascii_case("liberation sans"))
         })
         .map(|f| f.id)
         .collect();

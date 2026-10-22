@@ -66,9 +66,7 @@ const style = computed(() => ({
   ...(props.dim ? { opacity: "0.7" } : {}),
 }));
 
-const labelStyle = computed(() =>
-  props.toggleVis && props.visible === false ? { opacity: ".45" } : undefined,
-);
+const labelStyle = computed(() => (props.toggleVis && props.visible === false ? { opacity: ".45" } : undefined));
 
 const swatchStyle = {
   display: "inline-block",

@@ -46,24 +46,14 @@ pub fn run(args: &[String]) -> ExitCode {
             },
             "--corpus" => corpus_path = it.next().cloned(),
             "--record" => match it.next() {
-                Some(names) => record.extend(
-                    names
-                        .split(',')
-                        .filter(|n| !n.is_empty())
-                        .map(str::to_owned),
-                ),
+                Some(names) => record.extend(names.split(',').filter(|n| !n.is_empty()).map(str::to_owned)),
                 None => {
                     eprintln!("fundacad-engine: --record needs comma separated case names");
                     return ExitCode::from(2);
                 }
             },
             "--record-platform" => match it.next() {
-                Some(names) => record_platform.extend(
-                    names
-                        .split(',')
-                        .filter(|n| !n.is_empty())
-                        .map(str::to_owned),
-                ),
+                Some(names) => record_platform.extend(names.split(',').filter(|n| !n.is_empty()).map(str::to_owned)),
                 None => {
                     eprintln!("fundacad-engine: --record-platform needs comma separated case names");
                     return ExitCode::from(2);
@@ -173,19 +163,14 @@ impl Ctx {
     }
 
     pub fn tol(&self, key: &str) -> f64 {
-        self.header()["tolerances"][key]
-            .as_f64()
-            .unwrap_or_else(|| panic!("the golden header has no tolerances.{key}"))
+        self.header()["tolerances"][key].as_f64().unwrap_or_else(|| panic!("the golden header has no tolerances.{key}"))
     }
 
     /// The machine's own paths in a text, as freeze_goldens.normalise writes them.
     pub fn normalise(&self, text: &str) -> String {
         normalise(
             text,
-            &[
-                (self.work.to_string_lossy().into_owned(), "$WORK"),
-                (self.repo.to_string_lossy().into_owned(), "$REPO"),
-            ],
+            &[(self.work.to_string_lossy().into_owned(), "$WORK"), (self.repo.to_string_lossy().into_owned(), "$REPO")],
         )
     }
 
@@ -193,11 +178,7 @@ impl Ctx {
         match v {
             Value::String(s) => Value::String(self.normalise(s)),
             Value::Array(a) => Value::Array(a.iter().map(|x| self.normalise_all(x)).collect()),
-            Value::Object(m) => Value::Object(
-                m.iter()
-                    .map(|(k, x)| (k.clone(), self.normalise_all(x)))
-                    .collect(),
-            ),
+            Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), self.normalise_all(x))).collect()),
             other => other.clone(),
         }
     }
@@ -220,14 +201,9 @@ fn check(
         _ => {
             let path = match corpus_path {
                 Some(p) => p.to_path_buf(),
-                None => repo.join(
-                    header["corpus"]
-                        .as_str()
-                        .ok_or("the golden names no corpus")?,
-                ),
+                None => repo.join(header["corpus"].as_str().ok_or("the golden names no corpus")?),
             };
-            let bytes =
-                std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+            let bytes = std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
             corpus_file = Some(path.clone());
             let want = header["corpusSha256"].as_str().unwrap_or("");
             let got = sha256_hex(&fold_crlf(&bytes));
@@ -240,18 +216,14 @@ fn check(
             if kind == "mcp" {
                 Value::Null
             } else {
-                serde_json::from_slice(&bytes)
-                    .map_err(|e| format!("{} is not JSON: {e}", path.display()))?
+                serde_json::from_slice(&bytes).map_err(|e| format!("{} is not JSON: {e}", path.display()))?
             }
         }
     };
     let work = std::env::temp_dir().join(format!("fundacad-golden-{}", std::process::id()));
-    std::fs::create_dir_all(work.join("blobs"))
-        .map_err(|e| format!("cannot create {}: {e}", work.display()))?;
+    std::fs::create_dir_all(work.join("blobs")).map_err(|e| format!("cannot create {}: {e}", work.display()))?;
     if warm {
-        let mut cache = fundacad_geom::cache::global()
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut cache = fundacad_geom::cache::global().lock().unwrap_or_else(|e| e.into_inner());
         cache.budget_ms = 0.0;
         cache.tip_after = std::time::Duration::ZERO;
         cache.mesh_persist_after = std::time::Duration::ZERO;
@@ -263,15 +235,8 @@ fn check(
     if std::env::var_os("FUNDACAD_BLOB_DIR").is_none() {
         std::env::set_var("FUNDACAD_BLOB_DIR", work.join("blobs"));
     }
-    let work = std::fs::canonicalize(&work)
-        .map(strip_verbatim)
-        .unwrap_or(work);
-    let mut ctx = Ctx {
-        golden,
-        corpus,
-        repo,
-        work: work.clone(),
-    };
+    let work = std::fs::canonicalize(&work).map(strip_verbatim).unwrap_or(work);
+    let mut ctx = Ctx { golden, corpus, repo, work: work.clone() };
     if !record.is_empty() {
         let corpus_file = corpus_file.ok_or("this golden has no corpus to record from")?;
         record::record(&mut ctx, golden_path, &corpus_file, record)?;
@@ -299,9 +264,7 @@ fn check(
         println!(
             "{} case(s) are held to this platform's own answer, recorded beside the python one because {}: {}\n",
             own.len(),
-            ctx.golden["platformVariants"][std::env::consts::OS]["reason"]
-                .as_str()
-                .unwrap_or("?"),
+            ctx.golden["platformVariants"][std::env::consts::OS]["reason"].as_str().unwrap_or("?"),
             own.join(", ")
         );
     }
@@ -312,9 +275,7 @@ fn check(
         "fillet" => evals::fillet(&ctx),
         "selectors" => evals::selectors(&ctx),
         "coverage" => coverage::check(&ctx),
-        "mcp" => Err(
-            "the MCP transcript is checked by crates/fundacad-mcp/tests/parity_golden.rs".into(),
-        ),
+        "mcp" => Err("the MCP transcript is checked by crates/fundacad-mcp/tests/parity_golden.rs".into()),
         other => Err(format!("no checker for a golden of kind {other}")),
     };
     let _ = std::fs::remove_dir_all(&work);
@@ -361,10 +322,7 @@ pub fn fold_crlf(bytes: &[u8]) -> Vec<u8> {
 }
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// freeze_goldens.normalise: each root in its plain, forward slash, backslash and
@@ -374,12 +332,7 @@ pub fn normalise(text: &str, roots: &[(String, &str)]) -> String {
     let mut text = text.to_owned();
     for (real, token) in roots {
         let back = real.replace('/', "\\");
-        let mut forms = vec![
-            back.replace('\\', "\\\\"),
-            real.clone(),
-            real.replace('\\', "/"),
-            back,
-        ];
+        let mut forms = vec![back.replace('\\', "\\\\"), real.clone(), real.replace('\\', "/"), back];
         forms.sort_by_key(|f| std::cmp::Reverse(f.len()));
         forms.dedup();
         for form in forms {
@@ -390,17 +343,11 @@ pub fn normalise(text: &str, roots: &[(String, &str)]) -> String {
     }
     let mut out = String::with_capacity(text.len());
     let mut rest = text.as_str();
-    while let Some(at) = ["$WORK", "$REPO"]
-        .iter()
-        .filter_map(|t| rest.find(t).map(|i| (i, t.len())))
-        .min()
-    {
+    while let Some(at) = ["$WORK", "$REPO"].iter().filter_map(|t| rest.find(t).map(|i| (i, t.len()))).min() {
         let (i, n) = at;
         out.push_str(&rest[..i + n]);
         rest = &rest[i + n..];
-        let end = rest
-            .find(|c: char| c.is_whitespace() || c == '\'' || c == '"')
-            .unwrap_or(rest.len());
+        let end = rest.find(|c: char| c.is_whitespace() || c == '\'' || c == '"').unwrap_or(rest.len());
         let mut path = String::new();
         let mut in_run = false;
         for c in rest[..end].chars() {
@@ -477,15 +424,11 @@ pub fn mesh_volume(positions: &[f64], indices: &[usize]) -> f64 {
 }
 
 pub fn floats(v: &Value) -> Vec<f64> {
-    v.as_array()
-        .map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect())
-        .unwrap_or_default()
+    v.as_array().map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect()).unwrap_or_default()
 }
 
 pub fn indices(v: &Value) -> Vec<usize> {
-    v.as_array()
-        .map(|a| a.iter().map(|x| x.as_u64().unwrap_or(0) as usize).collect())
-        .unwrap_or_default()
+    v.as_array().map(|a| a.iter().map(|x| x.as_u64().unwrap_or(0) as usize).collect()).unwrap_or_default()
 }
 
 pub fn body_volume(b: &Value) -> f64 {
@@ -530,43 +473,19 @@ pub fn ivec_rows(text: &Value, quantum: f64) -> Result<Vec<[f64; 3]>, String> {
     let flat = ivec(text)?;
     let n = flat.len() / 3;
     Ok((0..n)
-        .map(|i| {
-            [
-                flat[i] as f64 * quantum,
-                flat[n + i] as f64 * quantum,
-                flat[2 * n + i] as f64 * quantum,
-            ]
-        })
+        .map(|i| [flat[i] as f64 * quantum, flat[n + i] as f64 * quantum, flat[2 * n + i] as f64 * quantum])
         .collect())
 }
 
 pub fn table(rows: &[Vec<String>], headers: &[&str]) {
     let widths: Vec<usize> = (0..headers.len())
-        .map(|i| {
-            rows.iter()
-                .map(|r| r[i].chars().count())
-                .chain([headers[i].len()])
-                .max()
-                .unwrap_or(0)
-        })
+        .map(|i| rows.iter().map(|r| r[i].chars().count()).chain([headers[i].len()]).max().unwrap_or(0))
         .collect();
     let line = |r: &[String]| {
-        r.iter()
-            .zip(&widths)
-            .map(|(c, w)| format!("{c:<w$}"))
-            .collect::<Vec<_>>()
-            .join("  ")
-            .trim_end()
-            .to_owned()
+        r.iter().zip(&widths).map(|(c, w)| format!("{c:<w$}")).collect::<Vec<_>>().join("  ").trim_end().to_owned()
     };
-    println!(
-        "{}",
-        line(&headers.iter().map(|h| h.to_string()).collect::<Vec<_>>())
-    );
-    println!(
-        "{}",
-        line(&widths.iter().map(|w| "-".repeat(*w)).collect::<Vec<_>>())
-    );
+    println!("{}", line(&headers.iter().map(|h| h.to_string()).collect::<Vec<_>>()));
+    println!("{}", line(&widths.iter().map(|w| "-".repeat(*w)).collect::<Vec<_>>()));
     for r in rows {
         println!("{}", line(r));
     }
@@ -578,9 +497,7 @@ pub fn absolute_image_paths(doc: &mut Value, repo: &Path) {
     for f in doc["features"].as_array_mut().into_iter().flatten() {
         if let Some(p) = f.get("imagePath").and_then(Value::as_str) {
             if !p.is_empty() && !p.starts_with('/') && !Path::new(p).is_absolute() {
-                let abs = p
-                    .split('/')
-                    .fold(repo.to_path_buf(), |acc, part| acc.join(part));
+                let abs = p.split('/').fold(repo.to_path_buf(), |acc, part| acc.join(part));
                 f["imagePath"] = Value::String(abs.to_string_lossy().into_owned());
             }
         }
@@ -593,8 +510,7 @@ impl Outbox for Channel {
     fn send(&self, msgs: &mut dyn Iterator<Item = Message>) -> io::Result<()> {
         let tx = self.0.lock().unwrap_or_else(|p| p.into_inner());
         for m in msgs {
-            tx.send(m)
-                .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
+            tx.send(m).map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
         }
         Ok(())
     }
@@ -612,11 +528,7 @@ impl Session {
     pub fn start() -> Session {
         let (tx, rx) = channel();
         let engine = Engine::start(GeomJobs, Arc::new(Channel(Mutex::new(tx))));
-        Session {
-            engine,
-            rx,
-            next: 0,
-        }
+        Session { engine, rx, next: 0 }
     }
 
     /// The reply to one op, interim frames skipped as harness_util.ws_call does.
@@ -629,8 +541,7 @@ impl Session {
         };
         req.insert("id".into(), json!(id));
         req.insert("op".into(), json!(op));
-        self.engine
-            .handle(Message::Text(Value::Object(req).to_string()));
+        self.engine.handle(Message::Text(Value::Object(req).to_string()));
         loop {
             let Ok(msg) = self.rx.recv() else {
                 return json!({"ok": false, "error": {"message": "the engine stopped without a reply"}});

@@ -62,7 +62,9 @@ impl Window {
                             self.state["stopped"] = json!({"n": n, "step": at["step"], "of": at["of"]});
                             self.state["wait"]["done"] = json!("stopped");
                             self.state["wait"]["what"] = json!(format!(
-                                "the user stopped the guide at step {} of {}, everything is cleared", at["step"], at["of"]));
+                                "the user stopped the guide at step {} of {}, everything is cleared",
+                                at["step"], at["of"]
+                            ));
                             self.state["step"] = Value::Null;
                         }
                         User::Watches => {}
@@ -138,8 +140,13 @@ async fn a_private_server_refuses_because_no_window_shares() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_highlight_returns_once_the_window_has_taken_it() {
     let (_engine, mut window, mcp) = attached(User::Watches).await;
-    let (mcp, out) = call(mcp, &mut window, "guide_highlight",
-        json!({"ui": "pick:fillet", "caption": "Open Fillet", "step": 1, "of": 3})).await;
+    let (mcp, out) = call(
+        mcp,
+        &mut window,
+        "guide_highlight",
+        json!({"ui": "pick:fillet", "caption": "Open Fillet", "step": 1, "of": 3}),
+    )
+    .await;
     assert!(!out.is_error, "{}", out.text);
     assert_eq!(out.text, "step 1 of 3 is up on family:cat:MODIFY: pick:fillet is folded inside it, the ring moves there once the user opens it");
     assert_eq!(window.state["step"]["seq"], window.state["ack"]);
@@ -152,7 +159,9 @@ async fn a_highlight_returns_once_the_window_has_taken_it() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_wait_says_next_was_pressed() {
     let (_engine, mut window, mcp) = attached(User::PressesNext).await;
-    let (mcp, _) = call(mcp, &mut window, "guide_highlight", json!({"ui": "#browser", "caption": "Items", "step": 1, "of": 2})).await;
+    let (mcp, _) =
+        call(mcp, &mut window, "guide_highlight", json!({"ui": "#browser", "caption": "Items", "step": 1, "of": 2}))
+            .await;
     let (mcp, out) = call(mcp, &mut window, "guide_wait", json!({"until": "next"})).await;
     assert_eq!((out.is_error, out.text.as_str()), (false, "Next pressed"));
     let (_mcp, out) = call(mcp, &mut window, "guide_clear", json!({})).await;
@@ -163,7 +172,9 @@ async fn a_wait_says_next_was_pressed() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_stop_clears_and_is_told_once() {
     let (_engine, mut window, mcp) = attached(User::PressesStop).await;
-    let (mcp, _) = call(mcp, &mut window, "guide_highlight", json!({"ui": "#browser", "caption": "Items", "step": 2, "of": 3})).await;
+    let (mcp, _) =
+        call(mcp, &mut window, "guide_highlight", json!({"ui": "#browser", "caption": "Items", "step": 2, "of": 3}))
+            .await;
     let (mcp, out) = call(mcp, &mut window, "guide_wait", json!({"until": ["next", "tool"]})).await;
     assert_eq!(out.text, "the user stopped the guide at step 2 of 3, everything is cleared");
     assert!(window.state["step"].is_null());

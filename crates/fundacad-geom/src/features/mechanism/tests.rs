@@ -152,16 +152,16 @@ fn slider_crank(drive: &str, field: &str, value: f64) -> Value {
     f.push(json!({"id": "sm", "type": "move", "bodies": ["body4"], "dx": p.x}));
     let x60 = polar(1.0, 60.0);
     f.push(json!({"id": "m", "type": "mechanism", "ground": "body1", "drive": drive, (field): value,
-        "joints": [
-            {"id": "crank", "mode": "revolute",
-             "a": {"body": "body2", "origin": [0, 0, 0], "zdir": [0, 0, 1], "xdir": [x60.x, x60.y, 0.0]},
-             "b": {"body": "body1", "origin": [0, 0, 0], "zdir": [0, 0, 1]}},
-            pin("c1", "body3", "body2", a),
-            pin("c2", "body4", "body3", p),
-            {"id": "slide", "mode": "slider",
-             "a": {"body": "body4", "origin": [p.x, 0, 0], "zdir": [1, 0, 0]},
-             "b": {"body": "body1", "origin": [0, 0, 0], "zdir": [1, 0, 0]}},
-        ]}));
+    "joints": [
+        {"id": "crank", "mode": "revolute",
+         "a": {"body": "body2", "origin": [0, 0, 0], "zdir": [0, 0, 1], "xdir": [x60.x, x60.y, 0.0]},
+         "b": {"body": "body1", "origin": [0, 0, 0], "zdir": [0, 0, 1]}},
+        pin("c1", "body3", "body2", a),
+        pin("c2", "body4", "body3", p),
+        {"id": "slide", "mode": "slider",
+         "a": {"body": "body4", "origin": [p.x, 0, 0], "zdir": [1, 0, 0]},
+         "b": {"body": "body1", "origin": [0, 0, 0], "zdir": [1, 0, 0]}},
+    ]}));
     Value::Array(f)
 }
 
@@ -281,16 +281,17 @@ fn a_ground_no_joint_holds_is_refused() {
     let mut doc = slider_crank("crank", "angle", 90.0);
     doc.as_array_mut().unwrap().insert(0, json!({"id": "x", "type": "box", "length": 2, "width": 2, "height": 2}));
     // The new box takes body1, so every body id shifts up by one.
-    let text = doc.to_string().replace("body4", "body5").replace("body3", "body4").replace("body2", "body3").replace("body1", "body2");
+    let text = doc
+        .to_string()
+        .replace("body4", "body5")
+        .replace("body3", "body4")
+        .replace("body2", "body3")
+        .replace("body1", "body2");
     let mut doc: Value = serde_json::from_str(&text).unwrap();
     doc.as_array_mut().unwrap().last_mut().unwrap()["ground"] = json!("body1");
     let r = build(doc);
     assert_eq!(r.errors.len(), 1, "{:?}", r.errors);
-    assert!(
-        r.errors[0].message.contains("no joint holds the ground body1"),
-        "{}",
-        r.errors[0].message
-    );
+    assert!(r.errors[0].message.contains("no joint holds the ground body1"), "{}", r.errors[0].message);
 }
 
 #[test]

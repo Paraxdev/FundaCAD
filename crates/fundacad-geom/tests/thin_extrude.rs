@@ -23,11 +23,7 @@ fn ok(r: &Rebuild) {
 }
 
 fn err_with(r: &Rebuild, part: &str) {
-    assert!(
-        errors(r).iter().any(|e| e.contains(part)),
-        "wanted an error with {part:?}, got {:?}",
-        errors(r)
-    );
+    assert!(errors(r).iter().any(|e| e.contains(part)), "wanted an error with {part:?}, got {:?}", errors(r));
 }
 
 fn bbox(r: &Rebuild, i: usize) -> [f64; 6] {
@@ -89,11 +85,9 @@ fn an_l_of_two_lines_is_a_wall_with_a_mitred_corner() {
 
 #[test]
 fn the_sides_of_an_l() {
-    for (side, extra, v) in [
-        ("inside", json!({}), 1360.0),
-        ("outside", json!({}), 1440.0),
-        ("twoSides", json!({"thickness2": 1}), 2070.0),
-    ] {
+    for (side, extra, v) in
+        [("inside", json!({}), 1360.0), ("outside", json!({}), 1440.0), ("twoSides", json!({"thickness2": 1}), 2070.0)]
+    {
         let e = with(json!({"curves": ["a", "b"], "side": side}), &extra);
         let r = build(json!({}), vec![ell(), thin(e)]);
         ok(&r);

@@ -4,8 +4,12 @@ function fakeStorage(seed: Record<string, string> = {}) {
   const m = new Map(Object.entries(seed));
   return {
     getItem: (k: string) => m.get(k) ?? null,
-    setItem: (k: string, v: string) => { m.set(k, String(v)); },
-    removeItem: (k: string) => { m.delete(k); },
+    setItem: (k: string, v: string) => {
+      m.set(k, String(v));
+    },
+    removeItem: (k: string) => {
+      m.delete(k);
+    },
     map: m,
   };
 }

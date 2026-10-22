@@ -19,8 +19,7 @@ fn main() {
         eprintln!("usage: corpus_volumes <corpus.json> <document name>");
         std::process::exit(2);
     };
-    let corpus: Value =
-        serde_json::from_str(&std::fs::read_to_string(path).expect("corpus")).expect("json");
+    let corpus: Value = serde_json::from_str(&std::fs::read_to_string(path).expect("corpus")).expect("json");
     let raw = corpus["documents"]
         .as_array()
         .expect("documents")
@@ -29,9 +28,7 @@ fn main() {
         .map(|d| d["document"].clone())
         .expect("a document of that name");
     let doc: CadDocument = serde_json::from_value(raw.clone()).expect("the document types");
-    let r = builder::rebuild(&doc, &raw, &NoWatch)
-        .ok()
-        .expect("not cancelled");
+    let r = builder::rebuild(&doc, &raw, &NoWatch).ok().expect("not cancelled");
     for b in &r.bodies {
         println!(
             "{} {} vol {:.4} faces {} solids {}",

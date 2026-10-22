@@ -54,7 +54,11 @@ export interface RoundFace {
 /** The round face the engine describes, standing at `at`: a cylinder about its
  *  exact axis, or a sphere about its centre. Null for a cone or a torus, which
  *  have no one size to read, and for a point on the axis or at the centre. */
-export function roundFromResize(r: OfferedResize, axis: { origin: Vec3; dir: Vec3 } | null, at: Vec3): RoundFace | null {
+export function roundFromResize(
+  r: OfferedResize,
+  axis: { origin: Vec3; dir: Vec3 } | null,
+  at: Vec3,
+): RoundFace | null {
   let cylinder: Cylinder;
   let radial: Vec3 | null;
   if (r.kind === "cylinder" && axis) {
@@ -98,7 +102,10 @@ export function facetNormalAt(tris: readonly THREE.Triangle[], at: THREE.Vector3
   for (const t of tris) {
     if (t.getArea() < 1e-12) continue;
     const d = t.closestPointToPoint(at, p).distanceToSquared(at);
-    if (d < bestD) { bestD = d; best = t; }
+    if (d < bestD) {
+      bestD = d;
+      best = t;
+    }
   }
   if (!best) return null;
   const own = best.getNormal(new THREE.Vector3());

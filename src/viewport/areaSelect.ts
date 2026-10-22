@@ -72,10 +72,7 @@ export function areaFilterIcon(f: AreaFilter): string {
  *  box has to answer this before it can select anything, and the answer for
  *  `all` is "whatever you are already picking". Pure, because the rule is the
  *  thing worth pinning, the mode switch that follows from it is not. */
-export function areaSelectionMode(
-  f: AreaFilter,
-  current: "faces" | "bodies",
-): "faces" | "bodies" {
+export function areaSelectionMode(f: AreaFilter, current: "faces" | "bodies"): "faces" | "bodies" {
   if (f === "bodies") return "bodies";
   if (f === "all") return current;
   return "faces";
@@ -95,7 +92,12 @@ export interface ScreenRect {
  *  The MODE reads the horizontal direction only. Vertical direction carries no
  *  meaning (a box dragged up and one dragged down are the same box), and using
  *  both would give four meanings to a gesture that has two. */
-export function dragBox(ax: number, ay: number, bx: number, by: number): {
+export function dragBox(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): {
   rect: ScreenRect;
   mode: AreaMode;
 } {
@@ -121,8 +123,7 @@ export function isAreaDrag(ax: number, ay: number, bx: number, by: number): bool
 }
 
 export function pointInRect(x: number, y: number, r: ScreenRect): boolean {
-  return Number.isFinite(x) && Number.isFinite(y)
-    && x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
+  return Number.isFinite(x) && Number.isFinite(y) && x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
 }
 
 /** True when every point given lies in the rectangle. The `window` half of the
@@ -181,7 +182,12 @@ function spansOverlap(pts: readonly number[], nx: number, ny: number, r: ScreenR
   }
   let rlo = Infinity;
   let rhi = -Infinity;
-  for (const [x, y] of [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]] as const) {
+  for (const [x, y] of [
+    [r.x0, r.y0],
+    [r.x1, r.y0],
+    [r.x1, r.y1],
+    [r.x0, r.y1],
+  ] as const) {
     const d = x * nx + y * ny;
     if (d < rlo) rlo = d;
     if (d > rhi) rhi = d;
@@ -208,7 +214,10 @@ export type ScreenBox = readonly [number, number, number, number] | null;
 /** The extent of flat x,y pairs, or null if any of them is not finite. */
 export function boxOf(pts: readonly number[]): ScreenBox {
   if (pts.length < 2) return null;
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity;
   for (let i = 0; i + 1 < pts.length; i += 2) {
     const x = pts[i] as number;
     const y = pts[i + 1] as number;
@@ -235,11 +244,7 @@ export function unionBox(a: ScreenBox, b: ScreenBox): ScreenBox {
  *  A null box is not taken by a window (a point behind the camera is not inside
  *  anything) and is "look" for a crossing (the part of it that IS on screen may
  *  well touch, and the per-triangle tests already refuse non-finite points). */
-export function boxVerdict(
-  b: ScreenBox,
-  r: ScreenRect,
-  mode: AreaMode,
-): boolean | "look" {
+export function boxVerdict(b: ScreenBox, r: ScreenRect, mode: AreaMode): boolean | "look" {
   if (mode === "window") {
     return b !== null && b[0] >= r.x0 && b[1] >= r.y0 && b[2] <= r.x1 && b[3] <= r.y1;
   }
@@ -254,11 +259,7 @@ export function boxVerdict(
  *  each SEGMENT is tested, so a long edge that merely passes through the box
  *  with no sample in it still counts, and that is most of what crossing is for.
  */
-export function polylineInBox(
-  pts: readonly number[],
-  r: ScreenRect,
-  mode: AreaMode,
-): boolean {
+export function polylineInBox(pts: readonly number[], r: ScreenRect, mode: AreaMode): boolean {
   if (pts.length < 2) return false;
   if (mode === "window") return allInsideRect(pts, r);
   if (pts.length === 2) return pointInRect(pts[0] as number, pts[1] as number, r);
@@ -269,11 +270,7 @@ export function polylineInBox(
 }
 
 /** Does one projected triangle fall in the box? */
-export function triangleInBox(
-  tri: readonly number[],
-  r: ScreenRect,
-  mode: AreaMode,
-): boolean {
+export function triangleInBox(tri: readonly number[], r: ScreenRect, mode: AreaMode): boolean {
   return mode === "window" ? allInsideRect(tri, r) : convexTouchesRect(tri, r);
 }
 
@@ -288,11 +285,7 @@ export function triangleInBox(
  *  nothing by the caller's own visibility filter looks like, and a face with no
  *  visible part of it is not one the box can have meant.
  */
-export function faceInBox(
-  tris: Iterable<readonly number[]>,
-  r: ScreenRect,
-  mode: AreaMode,
-): boolean {
+export function faceInBox(tris: Iterable<readonly number[]>, r: ScreenRect, mode: AreaMode): boolean {
   let any = false;
   for (const t of tris) {
     any = true;

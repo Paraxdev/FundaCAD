@@ -6,10 +6,7 @@
 import { resolveShortcut } from "./shortcuts";
 import { isEditableTarget, isLiveFocusTarget } from "../ui/focus";
 
-export function installKeymap(
-  onAction: (a: string) => void,
-  context: () => "model" | "sketch",
-) {
+export function installKeymap(onAction: (a: string) => void, context: () => "model" | "sketch") {
   window.addEventListener("keydown", (e) => {
     if (isEditableTarget(e.target)) {
       // A ghost field (see ui/focus.ts): free it and fall through to the
@@ -20,9 +17,9 @@ export function installKeymap(
     const k = e.key.toLowerCase();
 
     if (e.ctrlKey || e.metaKey) {
-      if (k === "z" && !e.shiftKey) return onAction("undo"), e.preventDefault();
-      if (k === "z" && e.shiftKey) return onAction("redo"), e.preventDefault();
-      if (k === "y") return onAction("redo"), e.preventDefault();
+      if (k === "z" && !e.shiftKey) return (onAction("undo"), e.preventDefault());
+      if (k === "z" && e.shiftKey) return (onAction("redo"), e.preventDefault());
+      if (k === "y") return (onAction("redo"), e.preventDefault());
       // Ctrl combos the table binds, the booleans. Resolved through the same
       // function as the bare keys, so the cheat sheet, the ribbon hints and the
       // dispatcher still have one source between them.

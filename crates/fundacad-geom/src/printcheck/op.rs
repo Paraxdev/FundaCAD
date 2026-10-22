@@ -41,7 +41,12 @@ pub fn printability_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobRe
     }
 }
 
-fn check(args: &Map<String, Value>, s: &Settings, built: &[BuiltBody], watch: &dyn Watch) -> Result<Map<String, Value>, String> {
+fn check(
+    args: &Map<String, Value>,
+    s: &Settings,
+    built: &[BuiltBody],
+    watch: &dyn Watch,
+) -> Result<Map<String, Value>, String> {
     let wanted: Vec<String> = args
         .get("bodies")
         .and_then(Value::as_array)
@@ -170,7 +175,8 @@ fn check(args: &Map<String, Value>, s: &Settings, built: &[BuiltBody], watch: &d
         let faces = match detail {
             Some(d) => Some(d),
             None => {
-                let some: Vec<&BuiltBody> = chosen.iter().copied().filter(|b| flagged.contains(b.id.as_str())).collect();
+                let some: Vec<&BuiltBody> =
+                    chosen.iter().copied().filter(|b| flagged.contains(b.id.as_str())).collect();
                 inspect(&some, Level::Detail).ok()
             }
         };
@@ -205,7 +211,10 @@ fn check(args: &Map<String, Value>, s: &Settings, built: &[BuiltBody], watch: &d
                 .collect(),
         ),
     );
-    m.insert("findings".into(), Value::Array(ordered(&findings).into_iter().map(|f| finding_json(f, &bodies)).collect()));
+    m.insert(
+        "findings".into(),
+        Value::Array(ordered(&findings).into_iter().map(|f| finding_json(f, &bodies)).collect()),
+    );
     Ok(m)
 }
 
@@ -227,7 +236,8 @@ fn id_of(b: &Value) -> String {
 fn inspect(bodies: &[&BuiltBody], level: Level) -> Result<Vec<Value>, String> {
     let live: Vec<InspectBody<'_>> =
         bodies.iter().map(|b| InspectBody { id: json!(b.id), name: json!(b.name), shape: Some(&b.shape) }).collect();
-    inspect_bodies_at(&live, level, MAX_FACES, MAX_EDGES).map_err(|e| format!("Could not measure the bodies: {}", crate::inspect::fail_text(&e)))
+    inspect_bodies_at(&live, level, MAX_FACES, MAX_EDGES)
+        .map_err(|e| format!("Could not measure the bodies: {}", crate::inspect::fail_text(&e)))
 }
 
 /// Each body meshed on a copy of its shape. The live shape keeps the

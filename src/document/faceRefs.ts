@@ -121,7 +121,11 @@ export function bodyPrints(result: RebuildResult, body: BodySpan): FacePrint[] {
 
 const sub = (a: ArrayLike<number>, b: ArrayLike<number>): Vec3 => [a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!];
 const dot = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const cross = (a: Vec3, b: Vec3): Vec3 => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
 const len = (a: ArrayLike<number>) => Math.sqrt(dot(a, a));
 const round = (v: number) => Math.round(v * 1e4) / 1e4;
 
@@ -166,7 +170,8 @@ function measure(result: RebuildResult, body: BodySpan, r: ResultGeom): BodyGeom
       hi[a] = Math.max(hi[a]!, fhi[a]!);
     }
     const nl = len(n);
-    const centroid: Vec3 = area > 0 ? [c[0] / area, c[1] / area, c[2] / area] : [tris[0] ?? 0, tris[1] ?? 0, tris[2] ?? 0];
+    const centroid: Vec3 =
+      area > 0 ? [c[0] / area, c[1] / area, c[2] / area] : [tris[0] ?? 0, tris[1] ?? 0, tris[2] ?? 0];
     // A closed or half round face's area vectors cancel, its mean normal says nothing.
     const normal: Vec3 = nl > 0.05 * area && nl > 0 ? [n[0] / nl, n[1] / nl, n[2] / nl] : [0, 0, 0];
     const plane = len(normal) > 0 && units.every((u) => 1 - dot(u, normal) <= PLANE_ANG);
@@ -212,7 +217,10 @@ function sample(tris: Float64Array, centroid: Vec3): number[] {
     let far = 1e-9;
     cand.forEach((q, i) => {
       gap[i] = Math.min(gap[i]!, len(sub(q, p)));
-      if (gap[i]! > far) { far = gap[i]!; best = i; }
+      if (gap[i]! > far) {
+        far = gap[i]!;
+        best = i;
+      }
     });
     pick = best;
   }
@@ -221,24 +229,38 @@ function sample(tris: Float64Array, centroid: Vec3): number[] {
 
 /** Squared distance from `p` to the triangle at `o` in `t` (Ericson, closest point on triangle). */
 function triDist2(p: Vec3, t: Float64Array, o: number): number {
-  const a = t.subarray(o, o + 3), b = t.subarray(o + 3, o + 6), c = t.subarray(o + 6, o + 9);
-  const ab = sub(b, a), ac = sub(c, a), ap = sub(p, a);
-  const d1 = dot(ab, ap), d2 = dot(ac, ap);
-  const at = (q: ArrayLike<number>) => { const d = sub(p, q); return dot(d, d); };
-  const along = (s: ArrayLike<number>, e: Vec3, v: number) => at([s[0]! + v * e[0], s[1]! + v * e[1], s[2]! + v * e[2]]);
+  const a = t.subarray(o, o + 3),
+    b = t.subarray(o + 3, o + 6),
+    c = t.subarray(o + 6, o + 9);
+  const ab = sub(b, a),
+    ac = sub(c, a),
+    ap = sub(p, a);
+  const d1 = dot(ab, ap),
+    d2 = dot(ac, ap);
+  const at = (q: ArrayLike<number>) => {
+    const d = sub(p, q);
+    return dot(d, d);
+  };
+  const along = (s: ArrayLike<number>, e: Vec3, v: number) =>
+    at([s[0]! + v * e[0], s[1]! + v * e[1], s[2]! + v * e[2]]);
   if (d1 <= 0 && d2 <= 0) return at(a);
-  const bp = sub(p, b), d3 = dot(ab, bp), d4 = dot(ac, bp);
+  const bp = sub(p, b),
+    d3 = dot(ab, bp),
+    d4 = dot(ac, bp);
   if (d3 >= 0 && d4 <= d3) return at(b);
   const vc = d1 * d4 - d3 * d2;
   if (vc <= 0 && d1 >= 0 && d3 <= 0) return along(a, ab, d1 / (d1 - d3));
-  const cp = sub(p, c), d5 = dot(ab, cp), d6 = dot(ac, cp);
+  const cp = sub(p, c),
+    d5 = dot(ab, cp),
+    d6 = dot(ac, cp);
   if (d6 >= 0 && d5 <= d6) return at(c);
   const vb = d5 * d2 - d1 * d6;
   if (vb <= 0 && d2 >= 0 && d6 <= 0) return along(a, ac, d2 / (d2 - d6));
   const va = d3 * d6 - d5 * d4;
   if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) return along(b, sub(c, b), (d4 - d3) / (d4 - d3 + (d5 - d6)));
   const den = 1 / (va + vb + vc);
-  const v = vb * den, w = vc * den;
+  const v = vb * den,
+    w = vc * den;
   return at([a[0]! + ab[0] * v + ac[0] * w, a[1]! + ab[1] * v + ac[1] * w, a[2]! + ab[2] * v + ac[2] * w]);
 }
 
@@ -272,10 +294,16 @@ function gridOf(g: BodyGeom): FaceGrid {
   const cell = Math.max(1e-9, ...[0, 1, 2].map((a) => (hi[a]! - lo[a]!) / n));
   const grid: FaceGrid = { lo, cell, n, cells: new Map() };
   g.faces.forEach((f, face) => {
-    eachCell(grid, f.lo.map((v) => v - pad), f.hi.map((v) => v + pad), (key) => {
-      const list = grid.cells.get(key);
-      if (list) list.push(face); else grid.cells.set(key, [face]);
-    });
+    eachCell(
+      grid,
+      f.lo.map((v) => v - pad),
+      f.hi.map((v) => v + pad),
+      (key) => {
+        const list = grid.cells.get(key);
+        if (list) list.push(face);
+        else grid.cells.set(key, [face]);
+      },
+    );
   });
   return grid;
 }
@@ -294,7 +322,9 @@ function nearby(g: BodyGeom, lo: number[], hi: number[]): number[] {
   if (!g.faces.length || !lo.every(Number.isFinite)) return [];
   const grid = (g.grid ??= gridOf(g));
   const out = new Set<number>();
-  eachCell(grid, lo, hi, (key) => { for (const f of grid.cells.get(key) ?? []) out.add(f); });
+  eachCell(grid, lo, hi, (key) => {
+    for (const f of grid.cells.get(key) ?? []) out.add(f);
+  });
   return [...out].sort((a, b) => a - b);
 }
 
@@ -306,8 +336,13 @@ function stayPut(o: FacePrint, g: BodyGeom, tol: Tol): Claim[] {
   for (const face of nearby(g, lo, hi)) {
     const f = g.faces[face]!;
     const n = f.print;
-    if (n.surface !== o.surface || [0, 1, 2].some((a) => hi[a]! < f.lo[a]! - near || lo[a]! > f.hi[a]! + near)) continue;
-    if (o.surface === "plane" && (1 - dot(o.normal, n.normal) > PLANE_ANG || Math.abs(dot(n.normal, sub(o.centroid, n.centroid))) > tol.plane)) continue;
+    if (n.surface !== o.surface || [0, 1, 2].some((a) => hi[a]! < f.lo[a]! - near || lo[a]! > f.hi[a]! + near))
+      continue;
+    if (
+      o.surface === "plane" &&
+      (1 - dot(o.normal, n.normal) > PLANE_ANG || Math.abs(dot(n.normal, sub(o.centroid, n.centroid))) > tol.plane)
+    )
+      continue;
     cands.push(face);
   }
   // Each point counts for the nearest face only: a face narrower than the
@@ -319,7 +354,10 @@ function stayPut(o: FacePrint, g: BodyGeom, tol: Tol): Claim[] {
     let bestD = near * near;
     for (const face of cands) {
       const d = dist2(p, g.faces[face]!, near);
-      if (d <= bestD) { bestD = d; best = face; }
+      if (d <= bestD) {
+        bestD = d;
+        best = face;
+      }
       if (bestD <= ON2) break;
     }
     if (best >= 0) hits.set(best, (hits.get(best) ?? 0) + 1);
@@ -351,7 +389,10 @@ function mapBody(old: FacePrint[], g: BodyGeom): Claim[][] {
     old.forEach((o, i) => {
       if (map[i]!.length || taken.has(i)) return;
       const c = byIndex(o, i, g);
-      if (c.length) { map[i] = c; taken.add(i); }
+      if (c.length) {
+        map[i] = c;
+        taken.add(i);
+      }
     });
   }
   old.forEach((o, i) => {
@@ -364,7 +405,10 @@ function mapBody(old: FacePrint[], g: BodyGeom): Claim[][] {
       const bothAim = len(o.normal) > 0 && len(n.normal) > 0;
       if ((o.surface === "plane" || bothAim) && 1 - dot(o.normal, n.normal) > ANG_TOL) return;
       const d = len(sub(o.centroid, n.centroid));
-      if (d <= bestD) { bestD = d; best = face; }
+      if (d <= bestD) {
+        bestD = d;
+        best = face;
+      }
     });
     if (best >= 0) map[i] = [{ face: best, rank: 2, hits: 0 }];
   });
@@ -381,7 +425,8 @@ export function resolveFaceRefs(
   const byBody = new Map<string, [string, FaceRef][]>();
   for (const [id, ref] of refs) {
     const list = byBody.get(ref.body);
-    if (list) list.push([id, ref]); else byBody.set(ref.body, [[id, ref]]);
+    if (list) list.push([id, ref]);
+    else byBody.set(ref.body, [[id, ref]]);
   }
   const faces = new Map<string, number[]>();
   const next: FaceTrack = { bodies: new Map(), refs: new Map(), seen: new Map() };
@@ -429,7 +474,11 @@ export function resolveFaceRefs(
       const on = faces.get(id)!.sort((a, b) => a - b);
       if (!on.length) continue;
       next.refs.set(id, { ref, faces: on });
-      next.seen.set(id, { ref, face: on[0]!, at: { ...prints[on[0]!]!, points: on.flatMap((f) => prints[f]!.points) } });
+      next.seen.set(id, {
+        ref,
+        face: on[0]!,
+        at: { ...prints[on[0]!]!, points: on.flatMap((f) => prints[f]!.points) },
+      });
     }
     next.bodies.set(bodyId, { etag: span.etag, prints });
   }
@@ -462,7 +511,8 @@ export function savedFaceRefs(
   const prints: Record<string, FacePrint> = {};
   for (const [key, material, at] of [...lost, ...found]) {
     materials[key] = material;
-    if (at) prints[key] = at; else delete prints[key];
+    if (at) prints[key] = at;
+    else delete prints[key];
   }
   return { materials, prints };
 }
@@ -471,9 +521,17 @@ const isVec3 = (v: unknown): v is Vec3 => Array.isArray(v) && v.length === 3 && 
 
 function isPrint(v: unknown): v is FacePrint {
   const p = v as Partial<FacePrint> | null;
-  return !!p && typeof p === "object" && isVec3(p.centroid) && isVec3(p.normal) && Number.isFinite(p.area)
-    && (p.surface === "plane" || p.surface === "curved") && Array.isArray(p.points) && p.points.every(Number.isFinite)
-    && Number.isSafeInteger(p.faces);
+  return (
+    !!p &&
+    typeof p === "object" &&
+    isVec3(p.centroid) &&
+    isVec3(p.normal) &&
+    Number.isFinite(p.area) &&
+    (p.surface === "plane" || p.surface === "curved") &&
+    Array.isArray(p.points) &&
+    p.points.every(Number.isFinite) &&
+    Number.isSafeInteger(p.faces)
+  );
 }
 
 /** The refs a saved `faceMaterials` and `facePrints` hold. A key or print that is

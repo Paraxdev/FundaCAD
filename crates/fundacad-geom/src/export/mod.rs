@@ -60,10 +60,7 @@ pub fn mesh_options(mesh: Option<&Value>) -> MeshOptions {
         Some(v) if v.is_finite() => v.max(lo).min(hi),
         _ => default,
     };
-    let unit = UNITS
-        .iter()
-        .find(|u| mesh.get("unit").and_then(Value::as_str) == Some(u.0))
-        .unwrap_or(&UNITS[0]);
+    let unit = UNITS.iter().find(|u| mesh.get("unit").and_then(Value::as_str) == Some(u.0)).unwrap_or(&UNITS[0]);
     MeshOptions {
         tol: num("surfaceDeviation", EXPORT_TOL, 1e-4, 10.0),
         ang: num("normalDeviation", EXPORT_ANG_TOL.to_degrees(), 0.5, 90.0).to_radians(),
@@ -84,8 +81,7 @@ pub fn budget_refusal(ntri: usize) -> Option<String> {
 }
 
 pub fn budget_warning(ntri: usize) -> Option<String> {
-    (ntri > EXPORT_TRIANGLE_WARN)
-        .then(|| format!("export is very dense ({} triangles)", pyfmt::thousands(ntri)))
+    (ntri > EXPORT_TRIANGLE_WARN).then(|| format!("export is very dense ({} triangles)", pyfmt::thousands(ntri)))
 }
 
 /// Export grade triangles of one shape: absolute deflection, the kernel's own
@@ -102,13 +98,7 @@ pub fn export_mesh_with(shape: &Shape, opts: &MeshOptions, passes: &[Value]) -> 
     let t = claims.tessellate(
         shape,
         &access,
-        MeshParams {
-            linear: opts.tol,
-            angular: opts.ang,
-            relative: false,
-            display: false,
-            force_remesh: false,
-        },
+        MeshParams { linear: opts.tol, angular: opts.ang, relative: false, display: false, force_remesh: false },
         EXPORT_DENSITY_CAP_PER_FACE as u32,
     );
     if opts.max_edge > 0.0 {
@@ -277,9 +267,7 @@ impl Exporter<'_> {
                 Some(Value::Number(n)) => n.as_i64(),
                 Some(_) => None,
             };
-            let entry = slot
-                .and_then(|s| usize::try_from(s).ok())
-                .and_then(|s| palette.get(s));
+            let entry = slot.and_then(|s| usize::try_from(s).ok()).and_then(|s| palette.get(s));
             let color = entry.map(|e| {
                 glb::norm_color(&match e.get("color") {
                     Some(Value::String(s)) => s.clone(),
@@ -403,11 +391,8 @@ fn export_inner(
         let mut written = Vec::new();
         let mut used = std::collections::HashSet::new();
         for b in bodies {
-            let label = names
-                .and_then(|n| n.get(b.id))
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty())
-                .unwrap_or(b.name);
+            let label =
+                names.and_then(|n| n.get(b.id)).and_then(Value::as_str).filter(|s| !s.is_empty()).unwrap_or(b.name);
             let name = names::safe_part_filename(label, b.id);
             let mut cand = name.clone();
             let mut i = 2;
@@ -458,10 +443,9 @@ pub fn export_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     let Some(doc) = req.get("document") else {
         return error_result("export: a request needs a document");
     };
-    let (Some(format), Some(path)) = (
-        req.get("format").and_then(Value::as_str),
-        req.get("path").and_then(Value::as_str),
-    ) else {
+    let (Some(format), Some(path)) =
+        (req.get("format").and_then(Value::as_str), req.get("path").and_then(Value::as_str))
+    else {
         return error_result("export: a request needs a format and a path");
     };
     let typed: CadDocument = match CadDocument::from_value_lenient(doc) {

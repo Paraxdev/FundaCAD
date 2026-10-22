@@ -78,7 +78,9 @@ describe("the preview picture", () => {
   it("a capture that throws does not stop the save", async () => {
     const lib = fakeLib();
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    setThumbnailSource(() => { throw new Error("no gpu"); });
+    setThumbnailSource(() => {
+      throw new Error("no gpu");
+    });
     const store = fakeStore();
     await saveDocument(store as any);
     expect(store.markSaved).toHaveBeenCalled();
@@ -91,7 +93,14 @@ describe("the preview picture", () => {
     const source = vi.fn(() => "data:image/jpeg;base64,AA");
     setThumbnailSource(source);
     let changed = () => {};
-    const store = { ...fakeStore(), dirty: true, onDocChange: (fn: () => void) => { changed = fn; }, onMeta: () => {} };
+    const store = {
+      ...fakeStore(),
+      dirty: true,
+      onDocChange: (fn: () => void) => {
+        changed = fn;
+      },
+      onMeta: () => {},
+    };
     installAutosave(store as any);
     changed();
     await vi.advanceTimersByTimeAsync(60_000);
@@ -116,8 +125,12 @@ describe("the picture after an open", () => {
         open.add(fn);
         return () => open.delete(fn);
       },
-      built(result: unknown = {}) { for (const fn of [...build]) fn({ building: false, result }); },
-      opened() { for (const fn of [...open]) fn(); },
+      built(result: unknown = {}) {
+        for (const fn of [...build]) fn({ building: false, result });
+      },
+      opened() {
+        for (const fn of [...open]) fn();
+      },
     };
   }
   const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));

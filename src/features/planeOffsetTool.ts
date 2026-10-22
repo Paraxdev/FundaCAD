@@ -64,13 +64,15 @@ export class PlaneOffsetTool {
 
     this.buildGizmo();
     this.buildGhost();
-    this.dim.show([{ name: "offset", label: "Offset", kind: "length" }], () => this.commit(), () => this.cancel());
+    this.dim.show(
+      [{ name: "offset", label: "Offset", kind: "length" }],
+      () => this.commit(),
+      () => this.cancel(),
+    );
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ offset: 0 });
-    setPrompt(
-      "Drag or type an offset · Enter to sketch on it · Esc",
-    );
+    setPrompt("Drag or type an offset · Enter to sketch on it · Esc");
     this.gesture.frame();
     this.updateGhost();
   }
@@ -111,8 +113,7 @@ export class PlaneOffsetTool {
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       return;
     }
-    const moved =
-      Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (!this.downOnGizmo && !moved) this.commit();
   }
 

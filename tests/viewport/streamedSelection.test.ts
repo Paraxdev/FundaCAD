@@ -18,9 +18,7 @@
 // about. Everything else about the fix is drawing.
 
 import { describe, it, expect, vi } from "vitest";
-import {
-  MAX_GEOMETRIC_REMATCH, remapStreamedSelection, shouldAnnounce,
-} from "../../src/viewport/selectionMemo";
+import { MAX_GEOMETRIC_REMATCH, remapStreamedSelection, shouldAnnounce } from "../../src/viewport/selectionMemo";
 
 /** A captured face: which body it was on, and whether that body has landed in
  *  the installment being restored onto. */
@@ -90,7 +88,14 @@ describe("remapStreamedSelection", () => {
     // entities), the cost the cap was put there to refuse in the first place.
     const many = Array.from({ length: MAX_GEOMETRIC_REMATCH + 1 }, (_, i) => memo(`f${i}`, true));
     const rematch = vi.fn((m: Memo) => m.tag);
-    expect(remapStreamedSelection(many, () => null, rematch, (m) => m.landed)).toEqual([]);
+    expect(
+      remapStreamedSelection(
+        many,
+        () => null,
+        rematch,
+        (m) => m.landed,
+      ),
+    ).toEqual([]);
     expect(rematch).not.toHaveBeenCalled();
   });
 

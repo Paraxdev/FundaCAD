@@ -7,7 +7,10 @@ import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { shallowRef } from "vue";
 import PrintabilityPanel from "../../plugins/FundaCAD.PrintToolbox/PrintabilityPanel.vue";
-import { printabilityPanel, type PrintabilityPanel as Controller } from "../../plugins/FundaCAD.PrintToolbox/printabilityPanel";
+import {
+  printabilityPanel,
+  type PrintabilityPanel as Controller,
+} from "../../plugins/FundaCAD.PrintToolbox/printabilityPanel";
 import { createPrintabilityState } from "../../plugins/FundaCAD.PrintToolbox/printabilityState";
 import { formatPrintabilityResult } from "../../plugins/FundaCAD.PrintToolbox/printability";
 import { useBrowserStore } from "../../src/stores/browser";
@@ -15,7 +18,9 @@ import type { PrintabilityReply } from "fundacad";
 
 enableAutoUnmount(afterEach);
 beforeEach(() => setActivePinia(createPinia()));
-afterEach(() => { printabilityPanel.value = null; });
+afterEach(() => {
+  printabilityPanel.value = null;
+});
 
 /** The real state, with the controller's actions as spies. */
 function makeController() {
@@ -23,7 +28,10 @@ function makeController() {
   const ctl = {
     state,
     data: state.data,
-    bodies: shallowRef([{ id: "body1", name: "Bracket" }, { id: "body2", name: "Lid" }]),
+    bodies: shallowRef([
+      { id: "body1", name: "Bracket" },
+      { id: "body2", name: "Lid" },
+    ]),
     run: vi.fn(),
     cancel: vi.fn(),
     close: vi.fn(),
@@ -54,8 +62,32 @@ const reply: PrintabilityReply = {
     { id: "body3", name: "Pin", up: [0, 0, 1], bed: 0, bedFace: 1, openEdges: 0, solids: 1, insideOut: false },
   ],
   findings: [
-    { kind: "overhang", body: "body1", face: 3, other: null, value: 90, limit: 0, area: 132, low: 5, at: [0, 0, 5], extent: 6, note: "" },
-    { kind: "bridge", body: "body1", face: 4, other: null, value: 14, limit: 10, area: 40, low: 0, at: [0, 0, 8], extent: 14, note: "" },
+    {
+      kind: "overhang",
+      body: "body1",
+      face: 3,
+      other: null,
+      value: 90,
+      limit: 0,
+      area: 132,
+      low: 5,
+      at: [0, 0, 5],
+      extent: 6,
+      note: "",
+    },
+    {
+      kind: "bridge",
+      body: "body1",
+      face: 4,
+      other: null,
+      value: 14,
+      limit: 10,
+      area: 40,
+      low: 0,
+      at: [0, 0, 8],
+      extent: 14,
+      note: "",
+    },
   ],
   errors: [{ feature_id: "f3", message: "fillet failed" }],
 };

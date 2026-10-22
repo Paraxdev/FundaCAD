@@ -25,7 +25,10 @@ const ROOT = path.resolve(__dirname, "..");
 const DOC = fs.readFileSync(path.join(ROOT, "crates/fundacad-geom/tests/press_pull/star_pocket_ring.json"), "utf8");
 const FACE_LIST = JSON.parse(fs.readFileSync(path.join(__dirname, "press_pull_session_faces.json"), "utf8"));
 const FLOOR_INDEX = 61;
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail !== undefined ? `, ${JSON.stringify(detail)}` : ""}`);
@@ -47,78 +50,124 @@ for (let a = 0; a < 360; a += 15) {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   if (PORT !== "8765") {
     await page.addInitScript((port) => {
       const Native = window.WebSocket;
-      window.WebSocket = class extends Native { constructor(u, p) { super(String(u).replace(":8765", `:${port}`), p); } };
+      window.WebSocket = class extends Native {
+        constructor(u, p) {
+          super(String(u).replace(":8765", `:${port}`), p);
+        }
+      };
     }, PORT);
   }
   await page.goto(`${URL}?token=${TOKEN}`);
-  await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, { timeout: 90000 });
+  await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, {
+    timeout: 90000,
+  });
   await page.waitForTimeout(1500);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(300); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(300);
+  }
   const settle = async () => {
     await page.waitForTimeout(600);
     await page.waitForFunction(() => !window.store.buildState.building, null, { timeout: 180000 });
     await page.waitForTimeout(500);
   };
   const volume = () => page.evaluate(() => window.viewport.bodyProperties(null)?.volume ?? null);
-  const tool = () => page.evaluate(() => {
-    const t = window.pressPull;
-    return { active: t.active, value: t.value, faces: t.faces, refusal: t.outcomes?.refusal ?? null, previewError: window.store.previewError ?? null };
-  });
+  const tool = () =>
+    page.evaluate(() => {
+      const t = window.pressPull;
+      return {
+        active: t.active,
+        value: t.value,
+        faces: t.faces,
+        refusal: t.outcomes?.refusal ?? null,
+        previewError: window.store.previewError ?? null,
+      };
+    });
 
   await page.evaluate((text) => window.store.load(text), DOC);
   await settle();
   const v0 = await volume();
-  check("the ring opens with one body", (await page.evaluate(() => window.store.buildState.result?.bodies?.length)) === 1 && v0 > 0, { v0 });
+  check(
+    "the ring opens with one body",
+    (await page.evaluate(() => window.store.buildState.result?.bodies?.length)) === 1 && v0 > 0,
+    { v0 },
+  );
 
   const base = JSON.parse(DOC);
   const reqs = [];
-  for (let round = 0; round < ROUNDS; round++) FACE_LIST.forEach(([index, kind, point], j) => {
-    let d = [0.5, 2.05, 1.2][(j + round) % 3];
-    if (kind === "P" && index !== FLOOR_INDEX && (j + round) % 2 === 1) d = -d;
-    reqs.push({ ...base, features: [...base.features, { id: "f8", type: "press-pull", face: { kind: "face", by: "nearest", point }, distance: d, operation: d > 0 ? "join" : "cut", body: "body1" }] });
-  });
-  const session = await page.evaluate(async ([port, token, reqs]) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/?token=${token}`);
-    await new Promise((r) => (ws.onopen = r));
-    for (let i = 0; i < reqs.length; i++) {
-      const id = `session-${i}`;
-      const done = new Promise((r) => {
-        ws.onmessage = (m) => {
-          if (typeof m.data !== "string") return;
-          const v = JSON.parse(m.data);
-          if (v.id === id && "ok" in v) r(v);
-        };
+  for (let round = 0; round < ROUNDS; round++)
+    FACE_LIST.forEach(([index, kind, point], j) => {
+      let d = [0.5, 2.05, 1.2][(j + round) % 3];
+      if (kind === "P" && index !== FLOOR_INDEX && (j + round) % 2 === 1) d = -d;
+      reqs.push({
+        ...base,
+        features: [
+          ...base.features,
+          {
+            id: "f8",
+            type: "press-pull",
+            face: { kind: "face", by: "nearest", point },
+            distance: d,
+            operation: d > 0 ? "join" : "cut",
+            body: "body1",
+          },
+        ],
       });
-      ws.send(JSON.stringify({ id, op: "rebuild", tolerance: 0.1, document: reqs[i] }));
-      await done;
-    }
-    ws.close();
-    return reqs.length;
-  }, [PORT, TOKEN, reqs]);
+    });
+  const session = await page.evaluate(
+    async ([port, token, reqs]) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/?token=${token}`);
+      await new Promise((r) => (ws.onopen = r));
+      for (let i = 0; i < reqs.length; i++) {
+        const id = `session-${i}`;
+        const done = new Promise((r) => {
+          ws.onmessage = (m) => {
+            if (typeof m.data !== "string") return;
+            const v = JSON.parse(m.data);
+            if (v.id === id && "ok" in v) r(v);
+          };
+        });
+        ws.send(JSON.stringify({ id, op: "rebuild", tolerance: 0.1, document: reqs[i] }));
+        await done;
+      }
+      ws.close();
+      return reqs.length;
+    },
+    [PORT, TOKEN, reqs],
+  );
   console.log(`  sent ${session} press/pull previews on a side socket`);
 
   const select = async (name, additive) => {
     const f = FACES[name];
     await page.evaluate((e) => {
-      const v = window.viewport; const V = v.camera.position.constructor;
-      v.rig.setLookAt(new V(...e), new V(0, 0, 0)); v.requestRender();
+      const v = window.viewport;
+      const V = v.camera.position.constructor;
+      v.rig.setLookAt(new V(...e), new V(0, 0, 0));
+      v.requestRender();
     }, f.eye);
     await page.waitForTimeout(500);
-    const s = await page.evaluate(([pts, t]) => {
-      const v = window.viewport; const V = v.camera.position.constructor;
-      const want = v.faceIdNear(t);
-      for (const p of pts) {
-        const at = v.projectToScreen(new V(...p));
-        const hit = v.pickEntity(at.x, at.y);
-        if (hit?.kind === "face" && hit.faceId === want) return { x: at.x, y: at.y, faceId: want };
-      }
-      return null;
-    }, [f.pts, f.target]);
+    const s = await page.evaluate(
+      ([pts, t]) => {
+        const v = window.viewport;
+        const V = v.camera.position.constructor;
+        const want = v.faceIdNear(t);
+        for (const p of pts) {
+          const at = v.projectToScreen(new V(...p));
+          const hit = v.pickEntity(at.x, at.y);
+          if (hit?.kind === "face" && hit.faceId === want) return { x: at.x, y: at.y, faceId: want };
+        }
+        return null;
+      },
+      [f.pts, f.target],
+    );
     if (!s) return null;
     if (additive) await page.keyboard.down("Shift");
     await page.mouse.click(s.x, s.y);
@@ -133,7 +182,8 @@ for (let a = 0; a < 360; a += 15) {
 
   const drag = async (until) => {
     const grip = await page.evaluate(() => {
-      const t = window.pressPull; const v = window.viewport;
+      const t = window.pressPull;
+      const v = window.viewport;
       const at = t.anchor.clone().addScaledVector(t.axis, t.value);
       const k = v.pixelWorldSize(at);
       const s = v.projectToScreen(at.clone().addScaledVector(t.axis, k * 25 * (t.value < 0 ? -1 : 1)));
@@ -147,7 +197,8 @@ for (let a = 0; a < 360; a += 15) {
     await page.mouse.move(x, y);
     await page.mouse.down();
     for (let i = 0; i < 400; i++) {
-      x += (grip.dx / len) * 1.5 * sign; y += (grip.dy / len) * 1.5 * sign;
+      x += (grip.dx / len) * 1.5 * sign;
+      y += (grip.dy / len) * 1.5 * sign;
       await page.mouse.move(x, y);
       await page.waitForTimeout(40);
       const v = await page.evaluate(() => window.pressPull.value);
@@ -159,7 +210,9 @@ for (let a = 0; a < 360; a += 15) {
   };
 
   const type = async (text) => {
-    const input = await page.evaluateHandle(() => [...document.querySelectorAll(".dim-input")].find((b) => b.style.display !== "none")?.querySelector("input"));
+    const input = await page.evaluateHandle(() =>
+      [...document.querySelectorAll(".dim-input")].find((b) => b.style.display !== "none")?.querySelector("input"),
+    );
     if (!input.asElement()) return false;
     await input.asElement().click({ clickCount: 3 });
     await page.keyboard.type(text);
@@ -176,7 +229,10 @@ for (let a = 0; a < 360; a += 15) {
     { name: "bottom and floor out", faces: ["bottom", "floor"], drag: 1, typed: 2.05 },
   ];
   for (const run of runs) {
-    for (let i = 0; i < 4 && (await page.evaluate(() => window.pressPull.active)); i++) { await page.keyboard.press("Escape"); await page.waitForTimeout(200); }
+    for (let i = 0; i < 4 && (await page.evaluate(() => window.pressPull.active)); i++) {
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(200);
+    }
     await page.keyboard.press("Escape");
     await page.evaluate(() => window.viewport.clearSelection?.());
     await page.waitForTimeout(300);
@@ -185,13 +241,21 @@ for (let a = 0; a < 360; a += 15) {
     await page.evaluate(() => window.__fundacad.handleAction("presspull"));
     await page.waitForTimeout(500);
     const armed = await tool();
-    check(`${run.name}: the faces are picked and press/pull is armed`, armed.active && !picked.includes(null) && armed.faces.length === run.faces.length, { picked, faces: armed.faces });
+    check(
+      `${run.name}: the faces are picked and press/pull is armed`,
+      armed.active && !picked.includes(null) && armed.faces.length === run.faces.length,
+      { picked, faces: armed.faces },
+    );
     if (run.drag !== undefined) await drag(run.drag);
     const typed = await type(String(run.typed));
     const t = await tool();
     const v = await volume();
     await page.screenshot({ path: path.join(OUT, `${run.name.replace(/ /g, "_")}.png`) });
-    check(`${run.name}: ${run.typed} is not refused`, typed && !t.refusal && !t.previewError, { refusal: t.refusal, previewError: t.previewError, value: t.value });
+    check(`${run.name}: ${run.typed} is not refused`, typed && !t.refusal && !t.previewError, {
+      refusal: t.refusal,
+      previewError: t.previewError,
+      value: t.value,
+    });
     check(`${run.name}: the volume moves the right way`, v !== null && (run.typed > 0 ? v > v0 : v < v0), { v0, v });
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
@@ -201,4 +265,7 @@ for (let a = 0; a < 360; a += 15) {
   await browser.close();
   console.log(failures ? `${failures} FAILED` : "all passed");
   process.exit(failures ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

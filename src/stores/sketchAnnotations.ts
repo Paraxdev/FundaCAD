@@ -81,7 +81,20 @@ export const useSketchAnnotationStore = defineStore("sketchAnnotations", () => {
   }
 
   return {
-    dimItems, dimPlane, dimViewport, dimHooks, dimsPassive, dimSelected, showDims, hideDims,
-    glyphItems, glyphPlane, glyphViewport, glyphHooks, glyphsPassive, showGlyphs, hideGlyphs,
+    dimItems,
+    dimPlane,
+    dimViewport,
+    dimHooks,
+    dimsPassive,
+    dimSelected,
+    showDims,
+    hideDims,
+    glyphItems,
+    glyphPlane,
+    glyphViewport,
+    glyphHooks,
+    glyphsPassive,
+    showGlyphs,
+    hideGlyphs,
   };
 });

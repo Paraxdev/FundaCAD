@@ -32,13 +32,7 @@ function ndc(cam: THREE.Vector3, target: THREE.Vector3, p: THREE.Vector3) {
 }
 
 /** Zoom `n` notches toward `pivot`, reporting where the pivot ends up. */
-function sweep(
-  cam: THREE.Vector3,
-  target: THREE.Vector3,
-  pivot: THREE.Vector3,
-  factor: number,
-  n: number,
-) {
+function sweep(cam: THREE.Vector3, target: THREE.Vector3, pivot: THREE.Vector3, factor: number, n: number) {
   let c = cam.clone();
   let t = target.clone();
   const track = [ndc(c, t, pivot)];
@@ -180,9 +174,8 @@ describe("groundAnchor", () => {
       for (let i = 0; i < 20; i++) {
         const d = target.clone().sub(cam).normalize();
         const dist = cam.distanceTo(target);
-        const pivot = aim === "ground"
-          ? groundAnchor(cam, d, 0, dist)!
-          : cam.clone().add(d.clone().multiplyScalar(dist * 0.98));
+        const pivot =
+          aim === "ground" ? groundAnchor(cam, d, 0, dist)! : cam.clone().add(d.clone().multiplyScalar(dist * 0.98));
         const next = anchorDolly(cam, target, pivot, 0.8, 0.02);
         if (!next) break;
         cam = next.position;

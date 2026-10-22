@@ -26,7 +26,10 @@ const URL = process.env.SC_URL || "http://localhost:5173/";
 const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = path.resolve(process.argv[2] || "press_pull_quantity_shots");
 const C1 = path.join(__dirname, "../crates/fundacad-geom/tests/press_pull/c1_slot_end.json");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail !== undefined ? `, ${JSON.stringify(detail)}` : ""}`);
@@ -43,19 +46,29 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
 
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((port) => {
     const N = window.WebSocket;
     class P extends N {
-      constructor(u, p) { super(String(u).replace(":8765", `:${port}`), p); }
+      constructor(u, p) {
+        super(String(u).replace(":8765", `:${port}`), p);
+      }
     }
     window.WebSocket = P;
   }, ENGINE_PORT);
   await page.goto(`${URL}?token=${TOKEN}`);
-  await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, { timeout: 60000 });
+  await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, {
+    timeout: 60000,
+  });
   await page.waitForTimeout(1500);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(300); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(300);
+  }
   const shot = (name) => page.screenshot({ path: path.join(OUT, `${name}.png`) });
   const settle = async () => {
     await page.waitForTimeout(500);
@@ -68,29 +81,33 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   }, JSON.stringify(base));
   await settle();
   await page.evaluate(() => {
-    const v = window.viewport; const V = v.camera.position.constructor;
+    const v = window.viewport;
+    const V = v.camera.position.constructor;
     v.rig.setLookAt(new V(60, -40, 40), new V(0, 6, 20));
     v.requestRender();
   });
   await page.waitForTimeout(500);
 
-  const tool = () => page.evaluate(() => {
-    const t = window.pressPull;
-    const b = [...document.querySelectorAll(".dim-input")].find((x) => x.style.display !== "none");
-    const name = b?.querySelector(".dim-name");
-    return {
-      active: t.active,
-      value: t.value,
-      quantity: t.quantity,
-      tag: name ? name.tagName : null,
-      caret: !!name?.querySelector("[data-icon='caretDown']"),
-      label: name ? (name.title || name.textContent) : null,
-      field: b?.querySelector("input")?.value ?? null,
-      problem: b?.querySelector(".dim-problem")?.textContent ?? null,
-      shown: t.outcomes.shownFeature ? { distance: t.outcomes.shownFeature.distance, followTangent: t.outcomes.shownFeature.followTangent } : null,
-      prompt: document.querySelector("#prompt")?.textContent ?? "",
-    };
-  });
+  const tool = () =>
+    page.evaluate(() => {
+      const t = window.pressPull;
+      const b = [...document.querySelectorAll(".dim-input")].find((x) => x.style.display !== "none");
+      const name = b?.querySelector(".dim-name");
+      return {
+        active: t.active,
+        value: t.value,
+        quantity: t.quantity,
+        tag: name ? name.tagName : null,
+        caret: !!name?.querySelector("[data-icon='caretDown']"),
+        label: name ? name.title || name.textContent : null,
+        field: b?.querySelector("input")?.value ?? null,
+        problem: b?.querySelector(".dim-problem")?.textContent ?? null,
+        shown: t.outcomes.shownFeature
+          ? { distance: t.outcomes.shownFeature.distance, followTangent: t.outcomes.shownFeature.followTangent }
+          : null,
+        prompt: document.querySelector("#prompt")?.textContent ?? "",
+      };
+    });
   const select = async (point) => {
     await page.evaluate((p) => {
       const v = window.viewport;
@@ -104,23 +121,32 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   };
   const typeValue = async (text) => {
     await page.evaluate(() => {
-      const i = [...document.querySelectorAll(".dim-input")].find((b) => b.style.display !== "none").querySelector("input");
+      const i = [...document.querySelectorAll(".dim-input")]
+        .find((b) => b.style.display !== "none")
+        .querySelector("input");
       i.focus();
       i.select();
     });
     await page.keyboard.type(text);
   };
-  const openMenu = () => page.evaluate(() => {
-    const b = [...document.querySelectorAll(".dim-input")].find((x) => x.style.display !== "none");
-    b.querySelector(".dim-name").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
-    return [...document.querySelectorAll(".dim-unit-menu .dim-unit-item")].map((r) => ({ text: r.textContent, active: r.classList.contains("active") }));
-  });
-  const pick = (word) => page.evaluate((w) => {
-    const row = [...document.querySelectorAll(".dim-unit-menu .dim-unit-item")].find((r) => r.textContent === w);
-    row.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
-  }, word);
-  const waitShown = (distance) => page.waitForFunction(
-    (d) => window.pressPull.outcomes.shownFeature?.distance === d, distance, { timeout: 120000 }).catch(() => {});
+  const openMenu = () =>
+    page.evaluate(() => {
+      const b = [...document.querySelectorAll(".dim-input")].find((x) => x.style.display !== "none");
+      b.querySelector(".dim-name").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+      return [...document.querySelectorAll(".dim-unit-menu .dim-unit-item")].map((r) => ({
+        text: r.textContent,
+        active: r.classList.contains("active"),
+      }));
+    });
+  const pick = (word) =>
+    page.evaluate((w) => {
+      const row = [...document.querySelectorAll(".dim-unit-menu .dim-unit-item")].find((r) => r.textContent === w);
+      row.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+    }, word);
+  const waitShown = (distance) =>
+    page
+      .waitForFunction((d) => window.pressPull.outcomes.shownFeature?.distance === d, distance, { timeout: 120000 })
+      .catch(() => {});
 
   // --- 1. the slot end reads R and its name is a menu ---------------------------
   await select(SLOT_END);
@@ -132,9 +158,16 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   // --- 2. the menu shows the same size in other terms ----------------------------
   const rows = await openMenu();
   await page.waitForTimeout(200);
-  check("the menu offers Radius, Diameter and Offset, Radius marked", JSON.stringify(rows) === JSON.stringify([
-    { text: "Radius", active: true }, { text: "Diameter", active: false }, { text: "Offset", active: false },
-  ]), rows);
+  check(
+    "the menu offers Radius, Diameter and Offset, Radius marked",
+    JSON.stringify(rows) ===
+      JSON.stringify([
+        { text: "Radius", active: true },
+        { text: "Diameter", active: false },
+        { text: "Offset", active: false },
+      ]),
+    rows,
+  );
   await shot("02_menu");
   await pick("Diameter");
   t = await tool();
@@ -163,7 +196,11 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   await settle();
   t = await tool();
   check("-0.5 switches to Offset", t.label === "Offset" && t.quantity === "offset", t);
-  check("and previews the end shrunk by 0.5 with the walls following", t.shown && t.shown.distance === 0.5 && t.shown.followTangent === true && t.problem === null, t);
+  check(
+    "and previews the end shrunk by 0.5 with the walls following",
+    t.shown && t.shown.distance === 0.5 && t.shown.followTangent === true && t.problem === null,
+    t,
+  );
   check("with no complaint about a negative", !/negative/.test(t.problem ?? ""), t.problem);
   await shot("04_offset");
 
@@ -179,7 +216,9 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   await page.waitForTimeout(800);
   const after = await page.evaluate(() => {
     const v = window.viewport;
-    const pp = window.store.document.features.filter((f) => f.type === "press-pull" && !["f6", "f7", "f8"].includes(f.id));
+    const pp = window.store.document.features.filter(
+      (f) => f.type === "press-pull" && !["f6", "f7", "f8"].includes(f.id),
+    );
     return {
       active: window.pressPull.active,
       pp: pp.map((f) => f.distance),
@@ -188,8 +227,16 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
       err: window.store.buildState.errorFeatureId ?? null,
     };
   });
-  check("one press/pull is committed at 0.6 out", !after.active && after.pp.length === 1 && after.pp[0] === -0.6 && after.err === null, after);
-  check("and the resized end is selected again", after.selected.length === 1 && after.selected[0] === after.endFace, after);
+  check(
+    "one press/pull is committed at 0.6 out",
+    !after.active && after.pp.length === 1 && after.pp[0] === -0.6 && after.err === null,
+    after,
+  );
+  check(
+    "and the resized end is selected again",
+    after.selected.length === 1 && after.selected[0] === after.endFace,
+    after,
+  );
   await shot("05_committed");
 
   // --- 6. it reopens on the resized face -----------------------------------------

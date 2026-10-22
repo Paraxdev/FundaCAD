@@ -15,8 +15,14 @@ function view(): ModelView {
   const faceTriangles = new Map<number, number[]>();
   faceIds.forEach((f, t) => faceTriangles.set(f, [...(faceTriangles.get(f) ?? []), t]));
   const body = {
-    id: "b1", name: "Body1", faceStart: 0, faceCount: 6, mesh, faceIds,
-    baseColors: new Float32Array(n * 3), faceTriangles,
+    id: "b1",
+    name: "Body1",
+    faceStart: 0,
+    faceCount: 6,
+    mesh,
+    faceIds,
+    baseColors: new Float32Array(n * 3),
+    faceTriangles,
   } as unknown as BodyMesh;
   return { bodies: [body], edges: [] } as unknown as ModelView;
 }

@@ -264,7 +264,7 @@ describe("arcSpanDeg", () => {
   it("spends a fixed number of pixels of arc, whatever the radius", () => {
     // 60px of arrow on a 20mm radius at 0.1mm/px: 6mm of arc.
     const deg = arcSpanDeg(20, 0.1, 60);
-    expect(close((deg * Math.PI) / 180 * 20, 6, 1e-9)).toBe(true);
+    expect(close(((deg * Math.PI) / 180) * 20, 6, 1e-9)).toBe(true);
   });
 
   it("opens wider on a small radius and narrower on a large one", () => {

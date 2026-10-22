@@ -35,11 +35,7 @@ export interface FacePlanePick {
  *  one (or over a face whose surface is neither flat nor cylindrical, a
  *  fillet's blend, a spline, a cone; better no plane than a plausible-looking
  *  wrong one). */
-export function pickFacePlaneAt(
-  viewport: Viewport,
-  clientX: number,
-  clientY: number,
-): FacePlanePick | null {
+export function pickFacePlaneAt(viewport: Viewport, clientX: number, clientY: number): FacePlanePick | null {
   const hit = viewport.pickFaceForPressPull(clientX, clientY);
   return hit ? facePlaneFromHit(viewport, hit) : null;
 }
@@ -65,11 +61,7 @@ function facePlaneFromHit(viewport: Viewport, hit: FaceHit): FacePlanePick | nul
     normals.push([n.x, n.y, n.z]);
   }
   const at: Vec3 = [hit.anchor.x, hit.anchor.y, hit.anchor.z];
-  const found = planeFromPickedFace(points, normals, at, [
-    hit.normal.x,
-    hit.normal.y,
-    hit.normal.z,
-  ]);
+  const found = planeFromPickedFace(points, normals, at, [hit.normal.x, hit.normal.y, hit.normal.z]);
   if (!found) return null;
   return {
     def: found.def,
@@ -131,9 +123,7 @@ export function pickPlaneTarget(viewport: Viewport, clientX: number, clientY: nu
   }
   const c = viewport.pickConstructionAt(clientX, clientY);
   if (!c) return null;
-  return c.kind === "datum"
-    ? { kind: "datum", spec: c.def, id: c.id }
-    : { kind: "base", spec: c.plane };
+  return c.kind === "datum" ? { kind: "datum", spec: c.def, id: c.id } : { kind: "base", spec: c.plane };
 }
 
 /** The plane spec a target yields, or null when there is nothing to take. Sugar

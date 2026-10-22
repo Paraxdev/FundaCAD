@@ -77,12 +77,7 @@ export function ease(t: number): number {
  *  keep the normal they were given: at that angle the side is a coin flip, and a
  *  coin flip is the one thing this must not be, because the answer decides which
  *  way a sketch's +X runs and therefore where every coordinate in it lands. */
-export function viewSideNormal(
-  normal: Vec3,
-  eye: Vec3,
-  origin: Vec3,
-  graze = 1e-6,
-): Vec3 {
+export function viewSideNormal(normal: Vec3, eye: Vec3, origin: Vec3, graze = 1e-6): Vec3 {
   const len = Math.hypot(normal[0], normal[1], normal[2]);
   if (!(len > 1e-12)) return normal;
   const n: Vec3 = [normal[0] / len, normal[1] / len, normal[2] / len];

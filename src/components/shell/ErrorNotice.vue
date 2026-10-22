@@ -31,7 +31,9 @@ let timers: number[] = [];
 let holdTimer = 0;
 let hovered = false;
 
-const later = (ms: number, fn: () => void) => { timers.push(window.setTimeout(fn, ms)); };
+const later = (ms: number, fn: () => void) => {
+  timers.push(window.setTimeout(fn, ms));
+};
 function clearTimers() {
   for (const t of timers) clearTimeout(t);
   timers = [];
@@ -114,8 +116,14 @@ function runAction() {
   finish();
 }
 
-function onEnter() { hovered = true; clearTimeout(holdTimer); }
-function onLeave() { hovered = false; if (phase.value === "text") hold(); }
+function onEnter() {
+  hovered = true;
+  clearTimeout(holdTimer);
+}
+function onLeave() {
+  hovered = false;
+  if (phase.value === "text") hold();
+}
 
 let off: (() => void) | null = null;
 onMounted(() => {
@@ -124,7 +132,10 @@ onMounted(() => {
     if (n && n.seq !== shown.value?.seq) void arrive(n);
   });
 });
-onUnmounted(() => { off?.(); clearTimers(); });
+onUnmounted(() => {
+  off?.();
+  clearTimers();
+});
 </script>
 
 <template>
@@ -152,12 +163,9 @@ onUnmounted(() => { off?.(); clearTimers(); });
         <span class="err-text">{{ shown.message }}</span>
         <span v-if="shown.count > 1" class="err-count">{{ shown.count }}</span>
       </button>
-      <button
-        v-if="shown.action && phase === 'text'"
-        type="button"
-        class="err-action"
-        @click="runAction"
-      >{{ shown.action.label }}</button>
+      <button v-if="shown.action && phase === 'text'" type="button" class="err-action" @click="runAction">{{
+        shown.action.label
+      }}</button>
     </div>
     <!-- The chip's width at rest, measured so the grow has a target. -->
     <span v-if="shown" ref="measure" class="err-notice err-measure" aria-hidden="true">

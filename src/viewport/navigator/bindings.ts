@@ -88,7 +88,11 @@ export function validateBindings(table: readonly PointerBinding[]): string[] {
     for (let i = 0; i < j; i++) {
       const a = table[i]!;
       if (a.button !== b.button || !MODS.every((m) => a[m] === undefined || a[m] === b[m])) continue;
-      const what = (x: PointerBinding) => [x.drag, x.click].filter(Boolean).map((k) => ACTION_NAMES[k!]).join(" and ");
+      const what = (x: PointerBinding) =>
+        [x.drag, x.click]
+          .filter(Boolean)
+          .map((k) => ACTION_NAMES[k!])
+          .join(" and ");
       out.push(`${bindingKeys(b)} is bound twice, to ${what(a)} and to ${what(b)}, and only the first applies`);
       break;
     }
@@ -127,7 +131,7 @@ export function setPointerBindings(table: readonly PointerBinding[] | null, onGe
     if (bad.length) throw new Error(`Mouse bindings refused: ${bad.join("; ")}`);
   }
   active = table ? [...table] : DEFAULT_BINDINGS;
-  gestureHandler = table ? onGesture ?? null : null;
+  gestureHandler = table ? (onGesture ?? null) : null;
   for (const fn of listeners) fn();
 }
 

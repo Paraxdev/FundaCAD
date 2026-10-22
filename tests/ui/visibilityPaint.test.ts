@@ -36,13 +36,26 @@ describe("VisibilityPaint", () => {
     h.paint.begin("s", "a", true);
     h.paint.over("s", "e", h.order("s")); // one frame: a straight to e
     expect(h.writes.at(-1)).toEqual({
-      category: "s", changes: [["b", false], ["c", false], ["d", false], ["e", false]],
+      category: "s",
+      changes: [
+        ["b", false],
+        ["c", false],
+        ["d", false],
+        ["e", false],
+      ],
     });
 
     const up = harness({ s: { a: true, b: true, c: true, d: true, e: true } });
     up.paint.begin("s", "e", true);
     up.paint.over("s", "b", up.order("s"));
-    expect(up.writes.at(-1)).toEqual({ category: "s", changes: [["d", false], ["c", false], ["b", false]] });
+    expect(up.writes.at(-1)).toEqual({
+      category: "s",
+      changes: [
+        ["d", false],
+        ["c", false],
+        ["b", false],
+      ],
+    });
   });
 
   it("leaves rows of another category alone", () => {

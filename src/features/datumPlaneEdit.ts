@@ -7,14 +7,7 @@ import * as THREE from "three";
 import type { DocumentStore } from "../document/store";
 import { asFeature, type Feature, type PlaneSpec } from "../types";
 import { FEATURE_NUM_FIELDS } from "../document/numFields";
-import {
-  placeDatum,
-  poseFromPlaced,
-  poseOf,
-  POSE_FIELDS,
-  type DatumPose,
-  type PoseField,
-} from "../document/datumPose";
+import { placeDatum, poseFromPlaced, poseOf, POSE_FIELDS, type DatumPose, type PoseField } from "../document/datumPose";
 import type { DatumPoseTool } from "./datumPoseTool";
 import type { MoveTarget } from "./moveTarget";
 import { toast } from "../ui/toast";
@@ -28,7 +21,12 @@ export interface DatumEditDeps {
 }
 
 function datum(store: DocumentStore, id: string): Datum | null {
-  return asFeature(store.document.features.find((f) => f.id === id), "datumPlane") ?? null;
+  return (
+    asFeature(
+      store.document.features.find((f) => f.id === id),
+      "datumPlane",
+    ) ?? null
+  );
 }
 
 /** Fields an expression drives: a handle must not write them, the parameter would
@@ -37,8 +35,7 @@ export function lockedPoseFields(store: DocumentStore, id: string): Set<PoseFiel
   return new Set(POSE_FIELDS.filter((field) => store.isParamBound({ kind: "feature", feature: id, field })));
 }
 
-const kindOf = (field: PoseField) =>
-  FEATURE_NUM_FIELDS.datumPlane?.find(([f]) => f === field)?.[2] ?? "length";
+const kindOf = (field: PoseField) => FEATURE_NUM_FIELDS.datumPlane?.find(([f]) => f === field)?.[2] ?? "length";
 
 /** Write the fields that changed. A field bound to a plain parameter updates that
  *  parameter, so the binding survives the drag. */
@@ -158,8 +155,14 @@ export function datumMoveTarget(deps: DatumEditDeps, id: string): MoveTarget | n
     ownsEscape: false,
     centroid: () => origin.clone(),
     box: () => {
-      const corners = [-1, 1].flatMap((a) => [-1, 1].map((b) =>
-        origin.clone().addScaledVector(u, a * QUAD_HALF).addScaledVector(v, b * QUAD_HALF)));
+      const corners = [-1, 1].flatMap((a) =>
+        [-1, 1].map((b) =>
+          origin
+            .clone()
+            .addScaledVector(u, a * QUAD_HALF)
+            .addScaledVector(v, b * QUAD_HALF),
+        ),
+      );
       return new THREE.Box3().setFromPoints(corners);
     },
     begin: () => {},
@@ -173,7 +176,10 @@ export function datumMoveTarget(deps: DatumEditDeps, id: string): MoveTarget | n
       deps.previewPose(id, null);
       if (!r.moved && !r.turned) return { id: null, rebuild: false };
       const { written, refused } = writeDatumPose(deps.store, id, poseAfter(r.matrix));
-      if (refused.length) toast(`${refused.join(", ")} ${refused.length > 1 ? "are" : "is"} driven by an expression and was left as it is`);
+      if (refused.length)
+        toast(
+          `${refused.join(", ")} ${refused.length > 1 ? "are" : "is"} driven by an expression and was left as it is`,
+        );
       return { id, rebuild: written };
     },
     end: (restore) => {

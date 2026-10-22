@@ -23,10 +23,7 @@ const MEASURE_DEFLECTION_MM: f64 = 0.1;
 /// Faces of `after` that `before` does not share by identity.
 pub fn new_faces(before: &Shape, after: &Shape) -> Vec<Shape> {
     let old = before.shape_map(ShapeType::Face);
-    kernel::subshapes(after, Kind::Face)
-        .into_iter()
-        .filter(|f| old.index_of(f) == 0)
-        .collect()
+    kernel::subshapes(after, Kind::Face).into_iter().filter(|f| old.index_of(f) == 0).collect()
 }
 
 /// Anything that cannot be measured is not a fold.
@@ -99,17 +96,12 @@ fn point_to_triangle(q: DVec3, tri: &[DVec3; 3]) -> f64 {
 }
 
 fn near_the_face(point: DVec3, face: &Shape) -> bool {
-    face.distance_to_point(point)
-        .is_ok_and(|d| d <= MEASURE_DEFLECTION_MM)
+    face.distance_to_point(point).is_ok_and(|d| d <= MEASURE_DEFLECTION_MM)
 }
 
 fn cell_of(c: DVec3) -> (i64, i64, i64) {
     const CELL: f64 = 0.25;
-    (
-        (c.x / CELL).floor() as i64,
-        (c.y / CELL).floor() as i64,
-        (c.z / CELL).floor() as i64,
-    )
+    ((c.x / CELL).floor() as i64, (c.y / CELL).floor() as i64, (c.z / CELL).floor() as i64)
 }
 
 /// `doubled_area`, in mm2.
@@ -139,9 +131,7 @@ fn doubled_area_inner(faces: &[Shape]) -> Option<f64> {
                             continue;
                         }
                         if point_to_triangle(t.centre, &o.pts) <= COINCIDENT_MM
-                            && faces
-                                .get(o.face)
-                                .is_some_and(|f| near_the_face(t.centre, f))
+                            && faces.get(o.face).is_some_and(|f| near_the_face(t.centre, f))
                         {
                             hit = true;
                             break 'cells;

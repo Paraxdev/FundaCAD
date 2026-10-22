@@ -14,11 +14,7 @@ pub fn py_g_prec(v: f64, prec: usize) -> String {
         return if v > 0.0 { "inf".into() } else { "-inf".into() };
     }
     if v == 0.0 {
-        return if v.is_sign_negative() {
-            "-0".into()
-        } else {
-            "0".into()
-        };
+        return if v.is_sign_negative() { "-0".into() } else { "0".into() };
     }
     let sig = prec - 1;
     let sci = format!("{v:.sig$e}");
@@ -65,13 +61,7 @@ mod tests {
 
     #[test]
     fn matches_python_four_significant_digits() {
-        for (v, want) in [
-            (1.38, "1.38"),
-            (2.0, "2"),
-            (12345.0, "1.234e+04"),
-            (9999.5, "1e+04"),
-            (0.123456, "0.1235"),
-        ] {
+        for (v, want) in [(1.38, "1.38"), (2.0, "2"), (12345.0, "1.234e+04"), (9999.5, "1e+04"), (0.123456, "0.1235")] {
             assert_eq!(py_g_prec(v, 4), want, "{v}");
         }
     }

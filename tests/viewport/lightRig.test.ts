@@ -59,7 +59,9 @@ describe("light rig", () => {
     expect(rig.environment.key).toBeNull();
     expect(rig.environment.fullKey).toBeNull();
     const lit = buildLightRig(prefs({ environment: `hdr:${HASH}`, envRotation: 90 }), (h) => h === HASH);
-    expect(lit.environment.key).toBe(environmentKeyOf(prefs({ environment: `hdr:${HASH}`, envRotation: 90 }), (h) => h === HASH));
+    expect(lit.environment.key).toBe(
+      environmentKeyOf(prefs({ environment: `hdr:${HASH}`, envRotation: 90 }), (h) => h === HASH),
+    );
     expect(lit.environment.fullKey).toBe(`${lit.environment.key}|${hemisphereKey(lit.hemisphere)}`);
     const other: LightRig = { ...lit, hemisphere: { ...lit.hemisphere, intensity: 0.7 } };
     expect(hemisphereKey(other.hemisphere)).not.toBe(hemisphereKey(lit.hemisphere));
@@ -78,7 +80,13 @@ describe("light rig", () => {
   it("publishes the catcher plane of the workspace whose ground asks for it", () => {
     const floor = { workspace: "render" as const, z: -3, centre: [30, 0] as [number, number], extent: 120 };
     const p = prefs({ groundRender: "shadow" });
-    expect(buildLightRig(p, none, floor).ground).toEqual({ mode: "shadow", z: -3, centre: [30, 0], extent: 120, albedo: GROUND_ALBEDO });
+    expect(buildLightRig(p, none, floor).ground).toEqual({
+      mode: "shadow",
+      z: -3,
+      centre: [30, 0],
+      extent: 120,
+      albedo: GROUND_ALBEDO,
+    });
     expect(buildLightRig(p, none, { ...floor, workspace: "model" }).ground.mode).toBe("none");
     expect(buildLightRig(p, none).ground.mode).toBe("none");
   });

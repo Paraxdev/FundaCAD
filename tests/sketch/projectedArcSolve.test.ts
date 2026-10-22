@@ -22,7 +22,13 @@ const onArc: SketchConstraint[] = [
 
 describe("a projected arc", () => {
   it("on its own is neither over-defined nor in conflict", async () => {
-    expect(await compileAndSolve([Rp], [])).toEqual({ entities: [Rp], dof: 0, ok: true, conflicts: [], overDefined: [] });
+    expect(await compileAndSolve([Rp], [])).toEqual({
+      entities: [Rp],
+      dof: 0,
+      ok: true,
+      conflicts: [],
+      overDefined: [],
+    });
   });
 
   it("holds a point put on it without a conflict", async () => {
@@ -33,25 +39,52 @@ describe("a projected arc", () => {
   it("holds a tangent line without a conflict", async () => {
     // b starts fixed at (140,72) with length 6; tangency to the arc settles its end
     const b = line("b", 140, 72, 146, 70);
-    const r = await compileAndSolve([Rp, b], [{ type: "fix", e: "b", p: 0 }, { type: "distance", line: "b", value: 6 }, { type: "tangent2", a: "b", b: "Rp" }]);
+    const r = await compileAndSolve(
+      [Rp, b],
+      [
+        { type: "fix", e: "b", p: 0 },
+        { type: "distance", line: "b", value: 6 },
+        { type: "tangent2", a: "b", b: "Rp" },
+      ],
+    );
     const s = r.entities[1] as Extract<typeof b, { type: "line" }>;
-    const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
+    const dx = s.x2 - s.x1,
+      dy = s.y2 - s.y1;
     const centreToLine = Math.abs((150 - s.x1) * dy - (60 - s.y1) * dx) / Math.hypot(dx, dy);
-    expect({ ...r, entities: [r.entities[0], { start: [s.x1, s.y1], length: Math.hypot(dx, dy), centreToLine }] }).toEqual(near({
-      entities: [Rp, { start: [140, 72], length: 6, centreToLine: 5 }], dof: 0, ok: true, conflicts: [], overDefined: [],
-    }, 5));
+    expect({
+      ...r,
+      entities: [r.entities[0], { start: [s.x1, s.y1], length: Math.hypot(dx, dy), centreToLine }],
+    }).toEqual(
+      near(
+        {
+          entities: [Rp, { start: [140, 72], length: 6, centreToLine: 5 }],
+          dof: 0,
+          ok: true,
+          conflicts: [],
+          overDefined: [],
+        },
+        5,
+      ),
+    );
   });
 
   it("lets a dragged point slide along it", async () => {
     const r = await compileAndSolve([Rp, pt("q", 154, 63)], [onArc[1]!], { fromX: 154, fromY: 63, toX: 147, toY: 66 });
     const q = r.entities[1] as { x: number; y: number };
-    expect({ ok: r.ok, conflicts: r.conflicts, overDefined: r.overDefined, rim: Math.hypot(q.x - 150, q.y - 60), up: q.y > 63 })
-      .toEqual({ ok: true, conflicts: [], overDefined: [], rim: expect.closeTo(5, 6), up: true });
+    expect({
+      ok: r.ok,
+      conflicts: r.conflicts,
+      overDefined: r.overDefined,
+      rim: Math.hypot(q.x - 150, q.y - 60),
+      up: q.y > 63,
+    }).toEqual({ ok: true, conflicts: [], overDefined: [], rim: expect.closeTo(5, 6), up: true });
   });
 
   it("re-solves a document sketch whose dimension changed", async () => {
     const sketch: Extract<Feature, { type: "sketch" }> = {
-      id: "f1", type: "sketch", plane: "XY",
+      id: "f1",
+      type: "sketch",
+      plane: "XY",
       entities: [Rp as SketchEntity, { type: "point", id: "q", x: 154, y: 64 }],
       constraints: [{ ...onArc[0]!, value: 4 } as SketchConstraint, onArc[1]!],
     };

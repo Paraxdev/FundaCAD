@@ -217,12 +217,17 @@ export function validateExpr(doc: CadDocument, name: string | null, expr: string
 
 function hasUnitLiteral(n: ExprNode): boolean {
   switch (n.t) {
-    case "num": return n.unit !== undefined;
-    case "ref": return false;
-    case "call": return n.args.some(hasUnitLiteral);
-    case "bin": return hasUnitLiteral(n.l) || hasUnitLiteral(n.r);
+    case "num":
+      return n.unit !== undefined;
+    case "ref":
+      return false;
+    case "call":
+      return n.args.some(hasUnitLiteral);
+    case "bin":
+      return hasUnitLiteral(n.l) || hasUnitLiteral(n.r);
     case "neg":
-    case "not": return hasUnitLiteral(n.e);
+    case "not":
+      return hasUnitLiteral(n.e);
   }
 }
 
@@ -237,9 +242,18 @@ export function commitParamExpr(doc: CadDocument, name: string, expr: string, un
 }
 
 const OBJECT_PROTO_NAMES = new Set([
-  "constructor", "toString", "valueOf", "hasOwnProperty",
-  "isPrototypeOf", "propertyIsEnumerable", "toLocaleString",
-  "__proto__", "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__",
+  "constructor",
+  "toString",
+  "valueOf",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+  "toLocaleString",
+  "__proto__",
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
 ]);
 
 /** Reject bad user-parameter names in one place. Returns an error or null. */
@@ -263,10 +277,14 @@ export function boundParam(doc: CadDocument, target: ParamTarget): string | null
 export function sameTarget(a: ParamTarget, b: ParamTarget): boolean {
   if (a.kind !== b.kind) return false;
   switch (a.kind) {
-    case "feature": return b.kind === "feature" && a.feature === b.feature && a.field === b.field;
-    case "constraint": return b.kind === "constraint" && a.sketch === b.sketch && a.constraint === b.constraint;
-    case "entity": return b.kind === "entity" && a.sketch === b.sketch && a.entity === b.entity && a.field === b.field;
-    case "pattern": return b.kind === "pattern" && a.sketch === b.sketch && a.pattern === b.pattern && a.field === b.field;
+    case "feature":
+      return b.kind === "feature" && a.feature === b.feature && a.field === b.field;
+    case "constraint":
+      return b.kind === "constraint" && a.sketch === b.sketch && a.constraint === b.constraint;
+    case "entity":
+      return b.kind === "entity" && a.sketch === b.sketch && a.entity === b.entity && a.field === b.field;
+    case "pattern":
+      return b.kind === "pattern" && a.sketch === b.sketch && a.pattern === b.pattern && a.field === b.field;
   }
 }
 
@@ -307,7 +325,13 @@ export function commitFieldExpr(doc: CadDocument, target: ParamTarget, expr: str
 /** Fusion's on-the-fly `name=expr` in a dim field: the field's model param
  *  gets the CHOSEN name (renaming an existing dN binding). Validate the name
  *  (validateName) and the expr (validateExpr) first, this trusts its input. */
-export function commitNamedFieldExpr(doc: CadDocument, target: ParamTarget, name: string, expr: string, kind: FieldKind): void {
+export function commitNamedFieldExpr(
+  doc: CadDocument,
+  target: ParamTarget,
+  name: string,
+  expr: string,
+  kind: FieldKind,
+): void {
   const defs = defsOf(doc);
   const existing = boundParam(doc, target);
   if (existing) commitRenameParam(doc, existing, name);
@@ -321,9 +345,7 @@ export function splitNameValue(raw: string): { name: string; expr: string } | nu
   return m ? { name: m[1]!, expr: m[2]!.trim() } : null;
 }
 
-export type ExprInput =
-  | { ok: true; value: number; expr: string; name?: string }
-  | { ok: false; error: string };
+export type ExprInput = { ok: true; value: number; expr: string; name?: string } | { ok: false; error: string };
 
 /** Classify raw EXPRESSION input for a bindable field/dim, including Fusion's
  *  on-the-fly `name=expr` form: split, validate the name when it's genuinely
@@ -333,7 +355,13 @@ export type ExprInput =
  *  equal to the current bound/pending one is a no-op rename → plain
  *  re-expression). The plain-number/display-unit fork stays caller-side (it
  *  needs UI units). */
-export function classifyExprInput(doc: CadDocument, raw: string, kind: FieldKind | undefined, boundName: string | null, pendingName?: string | null): ExprInput {
+export function classifyExprInput(
+  doc: CadDocument,
+  raw: string,
+  kind: FieldKind | undefined,
+  boundName: string | null,
+  pendingName?: string | null,
+): ExprInput {
   const nv = splitNameValue(raw);
   const renames = nv !== null && nv.name !== boundName && nv.name !== pendingName;
   if (nv && renames) {

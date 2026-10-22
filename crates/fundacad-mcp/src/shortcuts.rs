@@ -91,7 +91,8 @@ fn polyline(
         }
     }
     // A closed outline written back to its start: that last point is the first.
-    if closed && pts.len() > 3 && pts.first().zip(pts.last()).is_some_and(|(a, b)| same(&a.0, &b.0) && same(&a.1, &b.1)) {
+    if closed && pts.len() > 3 && pts.first().zip(pts.last()).is_some_and(|(a, b)| same(&a.0, &b.0) && same(&a.1, &b.1))
+    {
         pts.pop();
     }
     let need = if closed { 3 } else { 2 };
@@ -166,7 +167,9 @@ fn follow(sid: &str, f: &mut Map<String, Value>, done: &[Expanded], entities: &[
     };
     if let Some(Value::Array(cs)) = f.get("constraints") {
         for (i, c) in cs.iter().enumerate() {
-            let hit = c.as_object().and_then(|o| o.iter().filter(|(k, _)| *k != "type" && *k != "id").find_map(|(_, v)| named(v)));
+            let hit = c
+                .as_object()
+                .and_then(|o| o.iter().filter(|(k, _)| *k != "type" && *k != "id").find_map(|(_, v)| named(v)));
             if let Some(d) = hit {
                 let kind = c.get("type").and_then(Value::as_str).unwrap_or("constraint");
                 return Err(format!(
@@ -235,7 +238,11 @@ fn corners(sid: &str, e: &mut Map<String, Value>) -> Result<Option<String>, Stri
     }
     let r = |v: f64| {
         let r = (v * 1e9).round() / 1e9;
-        if r == 0.0 { 0.0 } else { r }
+        if r == 0.0 {
+            0.0
+        } else {
+            r
+        }
     };
     e.remove("from");
     e.remove("to");
@@ -353,9 +360,11 @@ fn check_entities(sid: &str, entities: &[Value], kept: &[Value]) -> Result<(), S
             }
             _ => {}
         }
-        let unread: Vec<String> = parsed.extra().map(|x| x.keys().map(|k| format!("\"{k}\"")).collect()).unwrap_or_default();
+        let unread: Vec<String> =
+            parsed.extra().map(|x| x.keys().map(|k| format!("\"{k}\"")).collect()).unwrap_or_default();
         if !unread.is_empty() {
-            let doc = crate::schema::sketch_entities().get(kind).map(|d| format!(" A {kind} is {d}.")).unwrap_or_default();
+            let doc =
+                crate::schema::sketch_entities().get(kind).map(|d| format!(" A {kind} is {d}.")).unwrap_or_default();
             return Err(format!(
                 "{sid}: {name} ({kind}) has {} {}, which a build would ignore rather than use.{doc}",
                 if unread.len() == 1 { "the field" } else { "the fields" },
@@ -401,12 +410,17 @@ mod tests {
     fn bad_polylines_and_entities_are_refused() {
         let refuse = |e: Value| expand(&mut sketch(e), Some(&[])).unwrap_err();
         assert!(refuse(json!([{"type": "polyline", "points": [[0, 0]]}])).contains("at least 2 points"));
-        assert!(refuse(json!([{"type": "polyline", "closed": true, "points": [[0, 0], [1, 1]]}])).contains("at least 3"));
+        assert!(
+            refuse(json!([{"type": "polyline", "closed": true, "points": [[0, 0], [1, 1]]}])).contains("at least 3")
+        );
         assert!(refuse(json!([{"type": "polyline", "points": [[0, 0], [0, 0]]}])).contains("the same point"));
         assert!(refuse(json!([{"type": "polylin", "points": []}])).contains("no build draws"));
         assert!(refuse(json!([{"type": "rectangle", "w": 3, "height": 2}])).contains("missing the field \"width\""));
         assert!(refuse(json!([{"type": "circle", "radius": 2, "r": 3}])).contains("\"r\""));
-        assert!(refuse(json!([{"type": "circle", "id": "a", "radius": 2}, {"type": "point", "id": "a", "x": 0, "y": 0}])).contains("two entities"));
+        assert!(refuse(
+            json!([{"type": "circle", "id": "a", "radius": 2}, {"type": "point", "id": "a", "x": 0, "y": 0}])
+        )
+        .contains("two entities"));
     }
 
     #[test]
@@ -419,7 +433,8 @@ mod tests {
         // 1 and 1.0 are one point.
         let refuse = |e: Value| expand(&mut sketch(e), Some(&[])).unwrap_err();
         assert!(refuse(json!([{"type": "polyline", "points": [[1, 0], [1.0, 0], [2, 2]]}])).contains("the same point"));
-        assert!(refuse(json!([{"type": "polyline", "closed": 1, "points": [[0, 0], [1, 0], [1, 1]]}])).contains("true or false"));
+        assert!(refuse(json!([{"type": "polyline", "closed": 1, "points": [[0, 0], [1, 0], [1, 1]]}]))
+            .contains("true or false"));
         assert!(refuse(json!([{"type": "polyline", "id": 7, "points": [[0, 0], [1, 0]]}])).contains("is a string"));
         let unknown = refuse(json!([{"type": "polylin", "points": []}]));
         assert!(unknown.contains("polyline") && unknown.contains("projected"), "{unknown}");
@@ -432,7 +447,8 @@ mod tests {
         f.insert("constraints".into(), json!([{"type": "horizontal", "line": "q"}]));
         assert!(expand(&mut f, Some(&[])).unwrap_err().contains("constraint 0 (horizontal) names polyline q"));
         // What the sketch already held passes as it was; only the rest is checked.
-        let kept = vec![json!({"type": "hyperbola", "a": 1}), json!({"type": "circle", "radius": 1, "futureFlag": 2.5})];
+        let kept =
+            vec![json!({"type": "hyperbola", "a": 1}), json!({"type": "circle", "radius": 1, "futureFlag": 2.5})];
         let mut sent = kept.clone();
         sent.push(json!({"type": "circle", "radius": 2}));
         expand(&mut sketch(Value::Array(sent.clone())), Some(&kept)).unwrap();
@@ -444,7 +460,10 @@ mod tests {
     fn a_rectangle_by_corners_is_stored_by_its_centre() {
         let mut f = sketch(json!([{"type": "rectangle", "id": "r", "from": [10, 0], "to": [-10, 4]}]));
         let notes = expand(&mut f, Some(&[])).unwrap();
-        assert_eq!(f["entities"][0], json!({"type": "rectangle", "id": "r", "width": 20.0, "height": 4.0, "x": 0.0, "y": 2.0}));
+        assert_eq!(
+            f["entities"][0],
+            json!({"type": "rectangle", "id": "r", "width": 20.0, "height": 4.0, "x": 0.0, "y": 2.0})
+        );
         assert_eq!(notes, vec!["r from corners became 20 x 4 centred at (0, 2)"]);
         assert!(expand(&mut sketch(json!([{"type": "rectangle", "from": ["a", 0], "to": [1, 1]}])), Some(&[])).is_err());
     }

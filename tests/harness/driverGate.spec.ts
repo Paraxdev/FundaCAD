@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { Viewport } from "../../src/viewport/viewport";
-import { createBridge, createMethods, harnessWanted, HARNESS_API, installHarness, startScreen, type HarnessHost } from "../../src/harness/driver";
+import {
+  createBridge,
+  createMethods,
+  harnessWanted,
+  HARNESS_API,
+  installHarness,
+  startScreen,
+  type HarnessHost,
+} from "../../src/harness/driver";
 import { HarnessError } from "../../src/harness/locate";
 import { mountApp, rect } from "./fixture";
 
@@ -33,15 +41,25 @@ describe("bridge", () => {
   const bridge = createBridge({
     echo: (a) => a.x,
     later: async () => 5,
-    refuse: () => { throw new HarnessError("nope", "NotFound", ["a"]); },
-    crash: () => { throw new TypeError("boom"); },
+    refuse: () => {
+      throw new HarnessError("nope", "NotFound", ["a"]);
+    },
+    crash: () => {
+      throw new TypeError("boom");
+    },
   });
 
   it("wraps values and errors as plain JSON", async () => {
     expect(await bridge.call("echo", { x: 3 })).toEqual({ ok: true, value: 3 });
     expect(await bridge.call("later")).toEqual({ ok: true, value: 5 });
-    expect(await bridge.call("refuse")).toEqual({ ok: false, error: { kind: "NotFound", message: "nope", candidates: ["a"] } });
-    expect(await bridge.call("crash")).toEqual({ ok: false, error: { kind: "Internal", message: "boom", candidates: [] } });
+    expect(await bridge.call("refuse")).toEqual({
+      ok: false,
+      error: { kind: "NotFound", message: "nope", candidates: ["a"] },
+    });
+    expect(await bridge.call("crash")).toEqual({
+      ok: false,
+      error: { kind: "Internal", message: "boom", candidates: [] },
+    });
     expect((await bridge.call("missing")).ok).toBe(false);
   });
 });
@@ -60,7 +78,10 @@ describe("startScreen", () => {
 describe("opens", () => {
   it("counts the documents the store opened", () => {
     let open = () => {};
-    const m = createMethods({ store: { onOpen: (fn: () => void) => ((open = fn), () => {}) } } as unknown as HarnessHost, document);
+    const m = createMethods(
+      { store: { onOpen: (fn: () => void) => ((open = fn), () => {}) } } as unknown as HarnessHost,
+      document,
+    );
     expect(m.opens!({})).toBe(0);
     open();
     expect(m.opens!({})).toBe(1);
@@ -96,7 +117,9 @@ describe("locate", () => {
   it("refuses to type into a control that is not a value field and names the fields", () => {
     mountApp();
     const m = createMethods(host, document, { rect });
-    expect(() => m.fieldValue!({ target: "sketch" })).toThrow(/^action:sketch "Sketch \(S\)" is not a value field, the value fields are field:angle$/);
+    expect(() => m.fieldValue!({ target: "sketch" })).toThrow(
+      /^action:sketch "Sketch \(S\)" is not a value field, the value fields are field:angle$/,
+    );
     document.querySelectorAll(".dim-input").forEach((e) => e.remove());
     expect(() => m.fieldValue!({ target: "sketch" })).toThrow(/is not a value field, no value box is open/);
     document.body.innerHTML = "";
@@ -104,7 +127,9 @@ describe("locate", () => {
 });
 
 const SOURCES = import.meta.glob(["../../src/main.ts", "../../src/viewport/viewport.ts"], {
-  query: "?raw", import: "default", eager: true,
+  query: "?raw",
+  import: "default",
+  eager: true,
 }) as Record<string, string>;
 const source = (path: string) => SOURCES[`../../${path}`]!;
 
@@ -119,7 +144,14 @@ describe("what the harness relies on outside src/harness", () => {
 
   const idle = Object.getOwnPropertyDescriptor(Viewport.prototype, "renderIdle")!.get!;
   const idleWith = (state: object) =>
-    idle.call({ needsRender: false, lingerFrames: 0, frameMoved: false, edgeBlend: { pending: false }, edgeFrameNow: null, ...state });
+    idle.call({
+      needsRender: false,
+      lingerFrames: 0,
+      frameMoved: false,
+      edgeBlend: { pending: false },
+      edgeFrameNow: null,
+      ...state,
+    });
 
   it("the picture is not idle on a frame the camera moved", () => {
     expect(idleWith({})).toBe(true);

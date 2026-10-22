@@ -5,21 +5,32 @@
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import {
-  TAUS, UNIT_BOX, eye, lineOfSightClear, maxDiff, pixel, probePoints, screenPrint, settle, setup,
-} from "./kit";
+import { TAUS, UNIT_BOX, eye, lineOfSightClear, maxDiff, pixel, probePoints, screenPrint, settle, setup } from "./kit";
 import { depthOf, distanceOf } from "../../../src/viewport/navigator/pose";
 import { zoomAnchor } from "../../../src/viewport/navigator/anchor";
 
 describe("pan", () => {
   for (const tau of TAUS) {
     for (const ortho of [false, true]) {
-      for (const [x0, y0] of [[400, 300], [60, 40]] as const) {
+      for (const [x0, y0] of [
+        [400, 300],
+        [60, 40],
+      ] as const) {
         it(`is 1:1 (tau ${tau}, ${ortho ? "ortho" : "persp"}, grab at ${x0},${y0})`, () => {
           const { nav, scene } = setup({ tau, ortho });
-          const grab = zoomAnchor(nav.pose, { scene, plane: null, box: nav.contentBox(), frame: nav.frame }, x0, y0).point;
+          const grab = zoomAnchor(
+            nav.pose,
+            { scene, plane: null, box: nav.contentBox(), frame: nav.frame },
+            x0,
+            y0,
+          ).point;
           nav.beginPan(x0, y0);
-          const moves: [number, number][] = [[30, 5], [80, -20], [140, 60], [133, 71]];
+          const moves: [number, number][] = [
+            [30, 5],
+            [80, -20],
+            [140, 60],
+            [133, 71],
+          ];
           for (const [x, y] of moves) {
             nav.dragTo(x0 + x, y0 + y);
             nav.update(1 / 60);
@@ -71,7 +82,10 @@ describe("projection", () => {
     const { nav, scene } = setup({ ortho: true });
     const onTop = new THREE.Vector3(3, 2, 20);
     const c = pixel(nav, onTop);
-    for (let i = 0; i < 60; i++) { nav.wheel(c.x, c.y, -100); nav.update(1 / 60); }
+    for (let i = 0; i < 60; i++) {
+      nav.wheel(c.x, c.y, -100);
+      nav.update(1 / 60);
+    }
     settle(nav);
     nav.setProjectionMode("persp");
     settle(nav);

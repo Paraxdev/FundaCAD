@@ -12,14 +12,21 @@ const phase = ref<SectionPhase>(section.phase);
 const pulse = ref(0);
 let raf = 0;
 const bump = () => {
-  if (!raf) raf = requestAnimationFrame(() => { raf = 0; pulse.value++; });
+  if (!raf)
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      pulse.value++;
+    });
 };
 let unsubs: (() => void)[] = [];
 onMounted(() => {
   window.addEventListener("pointerup", bump);
   window.addEventListener("keyup", bump);
   unsubs = [
-    section.onChange((p) => { phase.value = p; bump(); }),
+    section.onChange((p) => {
+      phase.value = p;
+      bump();
+    }),
     engine.store.onDocChange(bump),
     engine.store.onBuild(bump),
   ];
@@ -35,11 +42,17 @@ onUnmounted(() => {
 const shown = computed(() => phase.value === "on" || phase.value === "editing");
 const editing = computed(() => phase.value === "editing");
 // A body selection alone (its Move gizmo) does not block Edit, toolOwnsScreen() leaves it out.
-const blocked = computed(() => { pulse.value; return !editing.value && engine.toolOwnsScreen(); });
+const blocked = computed(() => {
+  pulse.value;
+  return !editing.value && engine.toolOwnsScreen();
+});
 const editTip = computed(() =>
-  editing.value ? "Keep the cut and hide the handle (Enter)"
-    : blocked.value ? "Finish the current tool first"
-    : "Move or flip the cut with its handle");
+  editing.value
+    ? "Keep the cut and hide the handle (Enter)"
+    : blocked.value
+      ? "Finish the current tool first"
+      : "Move or flip the cut with its handle",
+);
 
 function onEdit() {
   if (editing.value) return section.confirm();
@@ -71,20 +84,23 @@ function onEdit() {
       :title="editTip"
       data-testid="section-edit"
       @click="onEdit"
-    >Edit</button>
+      >Edit</button
+    >
     <button
       type="button"
       class="section-chip-btn"
       title="Keep the other side of the cut"
       data-testid="section-flip"
       @click="section.flip()"
-    >Flip</button>
+      >Flip</button
+    >
     <button
       type="button"
       class="section-chip-btn"
       title="Turn the section off"
       data-testid="section-off"
       @click="section.stop()"
-    >Off</button>
+      >Off</button
+    >
   </div>
 </template>

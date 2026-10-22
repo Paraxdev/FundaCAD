@@ -17,7 +17,9 @@ export function installSketchStateBridge(e: Engine): void {
   // Auto-select on exit (so the extrude tool has a profile ready without another
   // click), not a user pick: Delete must not treat this like the user chose it.
   e.sketch.onCommitted = (id) => e.selectFeature(id, false);
-  e.sketch.onViewSquare = (square) => { palette.offNormal = !square; };
+  e.sketch.onViewSquare = (square) => {
+    palette.offNormal = !square;
+  };
 
   let sketchWasActive = false;
   e.sketch.onState = () => {
@@ -52,14 +54,30 @@ export function installSketchStateBridge(e: Engine): void {
   palette.bind({
     onToggle: (key, value) => {
       switch (key) {
-        case "lockView": e.sketch.setViewLocked(value); break;
-        case "construction": e.sketch.setConstruction(value); break;
-        case "reference": e.sketch.setReferenceDim(value); break;
-        case "grid": e.sketch.setGridVisible(value); break;
-        case "snap": e.sketch.setGridSnap(value); break;
-        case "profile": e.overlay.setFillsVisible(value); break;
-        case "dimensions": e.sketch.setDimensionsVisible(value); break;
-        case "constraints": e.sketch.setConstraintsVisible(value); break;
+        case "lockView":
+          e.sketch.setViewLocked(value);
+          break;
+        case "construction":
+          e.sketch.setConstruction(value);
+          break;
+        case "reference":
+          e.sketch.setReferenceDim(value);
+          break;
+        case "grid":
+          e.sketch.setGridVisible(value);
+          break;
+        case "snap":
+          e.sketch.setGridSnap(value);
+          break;
+        case "profile":
+          e.overlay.setFillsVisible(value);
+          break;
+        case "dimensions":
+          e.sketch.setDimensionsVisible(value);
+          break;
+        case "constraints":
+          e.sketch.setConstraintsVisible(value);
+          break;
       }
     },
     onLookAt: () => e.sketch.lookAt(),

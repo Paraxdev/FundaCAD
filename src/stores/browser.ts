@@ -27,9 +27,7 @@ function collapsedByDefault(key: string): boolean {
  *  row asked on `dragover` whether it is a legal target, the exact moment it has
  *  to decide, cannot see what is coming. This never leaves the window, so there
  *  is nothing for dataTransfer to carry anyway. */
-export type BrowserDrag =
-  | { kind: "bodies"; ids: readonly string[] }
-  | { kind: "element"; id: string };
+export type BrowserDrag = { kind: "bodies"; ids: readonly string[] } | { kind: "element"; id: string };
 
 /** View state for the Browser panel, the parts that are neither in the document
  *  nor derivable from a rebuild. */
@@ -102,13 +100,23 @@ export const useBrowserStore = defineStore("browser", () => {
     isCollapsed,
     toggle,
     expand,
-    startDrag: (d: BrowserDrag) => { drag.value = d; },
+    startDrag: (d: BrowserDrag) => {
+      drag.value = d;
+    },
     // Called from dragend, which fires whether the drop landed or was abandoned
     // over the desktop, so a cancelled drag cannot leave every folder still
     // believing something is in flight.
-    endDrag: () => { drag.value = null; },
-    setSelectedBodies: (ids: readonly string[]) => { selectedBodyIds.value = ids; },
-    beginRename: (id: string) => { pendingRenameId.value = id; },
-    bumpView: () => { viewTick.value++; },
+    endDrag: () => {
+      drag.value = null;
+    },
+    setSelectedBodies: (ids: readonly string[]) => {
+      selectedBodyIds.value = ids;
+    },
+    beginRename: (id: string) => {
+      pendingRenameId.value = id;
+    },
+    bumpView: () => {
+      viewTick.value++;
+    },
   };
 });

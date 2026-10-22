@@ -123,7 +123,10 @@ export class LightAimTool {
     this.dim.takeOver("azimuth");
     this.dragging = true;
     this.grab = this.angles;
-    this.from.copy(aimPoint(this.ray(e).ray, this.foot, this.radius())).sub(this.foot).normalize();
+    this.from
+      .copy(aimPoint(this.ray(e).ray, this.foot, this.radius()))
+      .sub(this.foot)
+      .normalize();
     this.viewport.domElement.style.cursor = "grabbing";
   }
 

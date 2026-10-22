@@ -8,13 +8,20 @@ import type { GeometryBackend } from "../../src/geometry/client";
 import type { Engine } from "../../src/app/engine";
 
 const backend = {
-  async rebuild() { return { ok: false, error: { message: "stub" } }; },
+  async rebuild() {
+    return { ok: false, error: { message: "stub" } };
+  },
   async init() {},
-  onStatus() { return () => {}; },
+  onStatus() {
+    return () => {};
+  },
   connected: true,
 } as unknown as GeometryBackend;
 
-const doc = (): CadDocument => ({ parameters: {}, features: [{ id: "s1", type: "sketch", plane: "XY", entities: [] }] as Feature[] });
+const doc = (): CadDocument => ({
+  parameters: {},
+  features: [{ id: "s1", type: "sketch", plane: "XY", entities: [] }] as Feature[],
+});
 
 describe("the title bar Undo and Redo buttons", () => {
   let store: DocumentStore;

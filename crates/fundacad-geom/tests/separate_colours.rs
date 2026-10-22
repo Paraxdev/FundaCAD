@@ -29,11 +29,8 @@ fn colours_of(ctx: &Ctx, at: usize) -> Vec<Option<String>> {
 }
 
 fn separated() -> Ctx {
-    let (shape, runs) = painted(&[
-        ("#ffff00", box_at(200.0, 1e-4)),
-        ("#00ff00", box_at(50.0, 8.0)),
-        ("#ff0000", box_at(0.0, 10.0)),
-    ]);
+    let (shape, runs) =
+        painted(&[("#ffff00", box_at(200.0, 1e-4)), ("#00ff00", box_at(50.0, 8.0)), ("#ff0000", box_at(0.0, 10.0))]);
     let mut ctx = Ctx::detached();
     let meta = ImportedMeta { face_colors: Some(runs), ..Default::default() };
     ctx.new_body_with(shape, Some("Part".into()), None, meta);
@@ -55,11 +52,7 @@ fn a_leading_debris_solid_does_not_shift_the_colours_of_the_pieces() {
 #[test]
 fn the_engine_says_which_faces_each_piece_came_from() {
     let ctx = separated();
-    let note = ctx
-        .diagnostics
-        .iter()
-        .find(|d| d["kind"] == "separateFaces")
-        .expect("a separateFaces diagnostic");
+    let note = ctx.diagnostics.iter().find(|d| d["kind"] == "separateFaces").expect("a separateFaces diagnostic");
     assert_eq!(note["feature_id"], "sep");
     let span = |body: &str| {
         let p = note["pieces"].as_array().expect("pieces").iter().find(|p| p["body"] == body).expect("piece");

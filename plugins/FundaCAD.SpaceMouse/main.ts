@@ -76,7 +76,9 @@ export async function activate(e: Engine): Promise<() => void> {
       ],
       // Async, so three.js and the test cube stay out of the chunk that starts
       // the plugin; the row only builds them when it is expanded.
-      settings: [{ key: "spacemouse", settings, component: defineAsyncComponent(() => import("./SpaceMouseSection.vue")) }],
+      settings: [
+        { key: "spacemouse", settings, component: defineAsyncComponent(() => import("./SpaceMouseSection.vue")) },
+      ],
     }),
   );
 
@@ -94,7 +96,8 @@ async function install(viewport: Viewport): Promise<(() => void)[]> {
 
   stops.push(
     await initSpaceMouse(viewport, (pressed) => {
-      if (pressed & 1) viewport.fitView(); // button 1 → Fit
+      if (pressed & 1)
+        viewport.fitView(); // button 1 → Fit
       else if (pressed & 2) viewport.setStandardView("iso"); // button 2 → Home/ISO
     }),
   );
@@ -119,11 +122,7 @@ async function install(viewport: Viewport): Promise<(() => void)[]> {
   // the SpaceMouse in it. Chunked because a crumb is capped at 300 chars, and
   // sticky so twenty later toasts can't evict it.
   let recorded = ""; // the listener and the pull below can both deliver the same one
-  const recordInventory = (payload: {
-    picked: string | null;
-    seen: string[];
-    note?: string | null;
-  }) => {
+  const recordInventory = (payload: { picked: string | null; seen: string[]; note?: string | null }) => {
     const { picked, seen, note } = payload;
     const fingerprint = `${picked}|${note}|${seen.join(",")}`;
     if (fingerprint === recorded) return;

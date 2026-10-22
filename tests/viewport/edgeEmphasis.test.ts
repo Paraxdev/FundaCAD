@@ -11,14 +11,22 @@ describe("segmentPositions", () => {
   it("turns a polyline into consecutive segment pairs", () => {
     // Three points are two segments, and the middle point appears twice: once
     // as the first segment's end, once as the second's start.
-    expect([...segmentPositions([[0, 0, 0], [1, 2, 3], [4, 5, 6]])]).toEqual([
-      0, 0, 0, 1, 2, 3,
-      1, 2, 3, 4, 5, 6,
-    ]);
+    expect([
+      ...segmentPositions([
+        [0, 0, 0],
+        [1, 2, 3],
+        [4, 5, 6],
+      ]),
+    ]).toEqual([0, 0, 0, 1, 2, 3, 1, 2, 3, 4, 5, 6]);
   });
 
   it("gives a single segment for two points", () => {
-    expect([...segmentPositions([[1, 1, 1], [2, 2, 2]])]).toEqual([1, 1, 1, 2, 2, 2]);
+    expect([
+      ...segmentPositions([
+        [1, 1, 1],
+        [2, 2, 2],
+      ]),
+    ]).toEqual([1, 1, 1, 2, 2, 2]);
   });
 
   it("has no segments for a polyline that is not one", () => {
@@ -36,7 +44,10 @@ describe("segmentPositions", () => {
   it("fills a missing coordinate with zero rather than NaN", () => {
     // A malformed point would otherwise put NaN in a vertex buffer, and a NaN
     // vertex takes the whole draw call with it rather than one segment.
-    const out = segmentPositions([[1, 2], [3, 4, 5]] as unknown as number[][]);
+    const out = segmentPositions([
+      [1, 2],
+      [3, 4, 5],
+    ] as unknown as number[][]);
     expect([...out]).toEqual([1, 2, 0, 3, 4, 5]);
   });
 });

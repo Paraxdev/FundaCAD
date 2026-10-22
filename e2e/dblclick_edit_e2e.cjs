@@ -23,7 +23,10 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "dblclick_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -34,7 +37,10 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -49,13 +55,21 @@ const check = (name, ok, detail) => {
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   // A box, made by a sketch + extrude, so the faces are owned by an edit that
   // has an interactive tool (the extrude).
   await page.evaluate(async () => {
-    window.store.addFeature({ id: "s", type: "sketch", plane: "XY", entities: [{ type: "rectangle", width: 30, height: 30, x: 0, y: 0 }] });
+    window.store.addFeature({
+      id: "s",
+      type: "sketch",
+      plane: "XY",
+      entities: [{ type: "rectangle", width: 30, height: 30, x: 0, y: 0 }],
+    });
     window.store.addFeature({ id: "e", type: "extrude", sketch: "s", distance: 20, operation: "new" });
     await window.store.rebuildNow();
   });
@@ -75,7 +89,8 @@ const check = (name, ok, detail) => {
       }
       return null;
     };
-    const W = window.innerWidth, H = window.innerHeight;
+    const W = window.innerWidth,
+      H = window.innerHeight;
     for (let yy = 180; yy < H - 180; yy += 6) {
       for (let xx = 220; xx < W - 220; xx += 6) {
         const face = window.viewport.faceIdAt(xx, yy);
@@ -85,7 +100,10 @@ const check = (name, ok, detail) => {
     return null;
   });
   check("found a screen point over a face of the extrude", !!spot, JSON.stringify(spot));
-  if (!spot) { await browser.close(); process.exit(1); }
+  if (!spot) {
+    await browser.close();
+    process.exit(1);
+  }
 
   // A canvas point that is over NOTHING (faceIdAt null), for the empty-space
   // control. Found rather than guessed: where the model sits on screen depends
@@ -100,10 +118,16 @@ const check = (name, ok, detail) => {
     return null;
   });
   check("found an empty canvas point", !!empty, JSON.stringify(empty));
-  if (!empty) { await browser.close(); process.exit(1); }
+  if (!empty) {
+    await browser.close();
+    process.exit(1);
+  }
 
   const busy = () => page.evaluate(() => window.__fundacad.extrude.active);
-  const clearSel = async () => { await page.keyboard.press("Escape"); await page.waitForTimeout(300); };
+  const clearSel = async () => {
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+  };
 
   // CONTROL 1: a single click selects the face, it does not edit anything.
   await page.mouse.click(spot.x, spot.y);
@@ -137,7 +161,10 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(500);
   await page.getByText("Sketch1", { exact: true }).first().dblclick();
   await page.waitForTimeout(1500);
-  check("with a body selected, double-clicking a sketch in the tree opens it", await page.evaluate(() => !!window.__fundacad.sketch.active));
+  check(
+    "with a body selected, double-clicking a sketch in the tree opens it",
+    await page.evaluate(() => !!window.__fundacad.sketch.active),
+  );
 
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall checks passed");

@@ -102,7 +102,11 @@ export function buildAssemblyGroups(
     // walk leaf -> root, guarding against a cyclic `parent` in a hand-edited file
     const chain: number[] = [];
     const seen = new Set<number>();
-    for (let i: number | null = leafIndex; i !== null && i >= 0 && i < nodes.length && !seen.has(i); i = nodes[i]!.parent) {
+    for (
+      let i: number | null = leafIndex;
+      i !== null && i >= 0 && i < nodes.length && !seen.has(i);
+      i = nodes[i]!.parent
+    ) {
       seen.add(i);
       chain.unshift(i);
     }
@@ -129,8 +133,7 @@ export function buildAssemblyGroups(
     ancestors.set(b.id, chainKeys);
   }
 
-  const total = (g: AsmGroup): number =>
-    (g.total = g.bodies.length + g.children.reduce((n, c) => n + total(c), 0));
+  const total = (g: AsmGroup): number => (g.total = g.bodies.length + g.children.reduce((n, c) => n + total(c), 0));
   for (const r of roots) total(r);
   return { roots, loose, ancestors };
 }
@@ -334,10 +337,7 @@ export function materialMenu(
 
 /** Where an imported assembly's parts take their colours from, for a file that
  *  styles a part's body one colour and its faces another. */
-export function importColorMenu(
-  current: ImportColorSource,
-  apply: (source: ImportColorSource) => void,
-): CtxItem {
+export function importColorMenu(current: ImportColorSource, apply: (source: ImportColorSource) => void): CtxItem {
   return {
     label: "Imported colors",
     children: [

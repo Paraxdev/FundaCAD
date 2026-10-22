@@ -81,10 +81,15 @@ export async function activate(e: Engine): Promise<() => void> {
       return;
     }
     const size: readonly [number, number, number] = [
-      bbox.max[0] - bbox.min[0], bbox.max[1] - bbox.min[1], bbox.max[2] - bbox.min[2],
+      bbox.max[0] - bbox.min[0],
+      bbox.max[1] - bbox.min[1],
+      bbox.max[2] - bbox.min[2],
     ];
     const setting = loadBedFitSetting();
-    const picked = await choose("Bed size", BED_PRESETS.map((p) => ({ value: p.id, label: p.label })));
+    const picked = await choose(
+      "Bed size",
+      BED_PRESETS.map((p) => ({ value: p.id, label: p.label })),
+    );
     if (!picked) return;
     if (picked === "custom") {
       const customSize = await openCustomBedDialog(setting.customSize);
@@ -114,15 +119,20 @@ export async function activate(e: Engine): Promise<() => void> {
       [BED_FIT_ACTION]: () => void checkBedFit(),
       [PRINTABILITY_ACTION]: () => printability.show(),
     },
-    ribbon: [{
-      group: "PRINT",
-      items: [
-        ...PRINT_TOOLS.map((t) => ({ action: t.id, label: t.label, iconName: t.icon })),
-        { action: BED_FIT_ACTION, label: "Bed Fit Check", iconName: "printBedFit" },
-        { action: PRINTABILITY_ACTION, label: "Printability", iconName: "printPrintability" },
-      ],
-    }],
-    icons: { ...ICONS, printBedFit: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 15L9 10L13 14L20 7"/>' },
+    ribbon: [
+      {
+        group: "PRINT",
+        items: [
+          ...PRINT_TOOLS.map((t) => ({ action: t.id, label: t.label, iconName: t.icon })),
+          { action: BED_FIT_ACTION, label: "Bed Fit Check", iconName: "printBedFit" },
+          { action: PRINTABILITY_ACTION, label: "Printability", iconName: "printPrintability" },
+        ],
+      },
+    ],
+    icons: {
+      ...ICONS,
+      printBedFit: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 15L9 10L13 14L20 7"/>',
+    },
     overlays: [CustomBedHost, PrintabilityPanel],
     settings: [{ key: "bed", settings: bedSettings }],
     features: PRINT_TOOLS.map((t) => ({

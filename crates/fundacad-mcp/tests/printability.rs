@@ -8,7 +8,6 @@ use std::collections::BTreeMap;
 use common::Mcp;
 use serde_json::{json, Value};
 
-
 fn built(ops: Value) -> Mcp {
     let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
     let r = mcp.call("edit", json!({"ops": ops, "build": true}));
@@ -58,7 +57,9 @@ fn a_ledge_hangs_and_a_tunnel_roof_is_a_bridge() {
     for (wide, expect) in [(20, Some("bridge F")), (8, None)] {
         let mut mcp = built(json!([
             add(json!({"type": "box", "length": 30, "width": 10, "height": 10})),
-            add(json!({"type": "box", "length": wide, "width": 20, "height": 6, "operation": "cut", "targets": ["body1"]})),
+            add(
+                json!({"type": "box", "length": wide, "width": 20, "height": 6, "operation": "cut", "targets": ["body1"]})
+            ),
         ]));
         let text = check(&mut mcp, json!({}));
         assert!(!text.contains("overhang F"), "{text}");
@@ -77,7 +78,10 @@ fn a_sideways_hole_says_what_fixes_it() {
         add(json!({"type": "move", "ry": 90, "bodies": ["body1"]}))
     ]));
     let text = check(&mut mcp, json!({}));
-    assert!(text.contains("from 13.5 mm above the bed, a sideways hole: teardropHole or roofBridge fixes it"), "{text}");
+    assert!(
+        text.contains("from 13.5 mm above the bed, a sideways hole: teardropHole or roofBridge fixes it"),
+        "{text}"
+    );
 }
 
 #[test]
@@ -91,11 +95,16 @@ fn walls_floors_and_gaps_are_measured_against_the_nozzle_and_the_layer() {
         add(json!({"type": "box", "length": 20, "width": 20, "height": 0.3, "name": "Plate3", "operation": "new"})),
         add(json!({"type": "move", "dx": 70, "dz": -4.85, "bodies": ["body4"]})),
         add(json!({"type": "box", "length": 20, "width": 20, "height": 10, "name": "Slotted", "operation": "new"})),
-        add(json!({"type": "box", "length": 0.15, "width": 10, "height": 20, "operation": "cut", "targets": ["body5"]})),
+        add(
+            json!({"type": "box", "length": 0.15, "width": 10, "height": 20, "operation": "cut", "targets": ["body5"]})
+        ),
         add(json!({"type": "move", "dy": 40, "bodies": ["body5"]}))
     ]));
     let text = check(&mut mcp, json!({}));
-    assert!(text.contains("wall F0|F1: 0.6 mm over 200 mm2, one perimeter (under 0.8). focus {at: [0, 0, 0]"), "{text}");
+    assert!(
+        text.contains("wall F0|F1: 0.6 mm over 200 mm2, one perimeter (under 0.8). focus {at: [0, 0, 0]"),
+        "{text}"
+    );
     assert!(text.contains("wall F0|F1: 0.3 mm over 200 mm2, will not print (under the 0.4 mm nozzle)"), "{text}");
     assert!(text.contains("body3 \"Plate6\": nothing found"), "{text}");
     assert!(text.contains("floor F4|F5: 0.3 mm over 400 mm2, under two layers (0.4)"), "{text}");
@@ -114,7 +123,10 @@ fn bodies_too_close_print_fused_unless_laid_flat_apart() {
         ]));
         let text = check(&mut mcp, json!({}));
         match expect {
-            Some(e) => assert!(text.contains(&format!("Between bodies:\n  body1 F1 | body2 F0: {e}, will print fused")), "{text}"),
+            Some(e) => assert!(
+                text.contains(&format!("Between bodies:\n  body1 F1 | body2 F0: {e}, will print fused")),
+                "{text}"
+            ),
             None => assert!(!text.contains("Between bodies"), "{text}"),
         }
         let text = check(&mut mcp, json!({"layFlat": true}));
@@ -126,7 +138,8 @@ fn bodies_too_close_print_fused_unless_laid_flat_apart() {
 #[test]
 fn an_open_shell_and_a_wrong_name_are_reported() {
     let q = [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0], [0, 0, 10], [10, 0, 10], [10, 10, 10], [0, 10, 10]];
-    let faces = [[0, 2, 1], [0, 3, 2], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+    let faces =
+        [[0, 2, 1], [0, 3, 2], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
     let mut stl = String::from("solid open\n");
     for f in faces {
         stl.push_str("facet normal 0 0 0\nouter loop\n");
@@ -207,7 +220,10 @@ fn a_body_standing_on_another_is_held_and_a_plate_on_posts_is_a_bridge() {
         add(json!({"type": "move", "dx": 15, "dz": 6, "bodies": ["body3"]}))
     ]));
     let text = check(&mut mcp, json!({}));
-    assert!(text.contains("bridge F") && text.contains(": 25 mm span (over 10)") && !text.contains("overhang F"), "{text}");
+    assert!(
+        text.contains("bridge F") && text.contains(": 25 mm span (over 10)") && !text.contains("overhang F"),
+        "{text}"
+    );
 }
 
 #[test]
@@ -223,7 +239,9 @@ fn walls_and_gaps_at_the_limit_pass_and_a_flat_gap_says_what_it_was_held_to() {
 
     let mut mcp = built(json!([
         add(json!({"type": "box", "length": 20, "width": 20, "height": 10})),
-        add(json!({"type": "box", "length": 30, "width": 10, "height": 0.25, "operation": "cut", "targets": ["body1"]}))
+        add(
+            json!({"type": "box", "length": 30, "width": 10, "height": 0.25, "operation": "cut", "targets": ["body1"]})
+        )
     ]));
     let text = check(&mut mcp, json!({"layer": 0.3, "checks": ["gap"]}));
     assert!(text.contains("will fuse shut (under 0.3, one layer, as it lies flat)"), "{text}");

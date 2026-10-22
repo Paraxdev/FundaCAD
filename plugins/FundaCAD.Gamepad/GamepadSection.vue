@@ -7,7 +7,16 @@
 // adds shows up here the moment that plugin is on.
 
 import { computed, onUnmounted, reactive } from "vue";
-import { BINDABLE, BUTTON_LABELS, CURSOR, KEY_CHOICES, getGamepadConfig, setGamepadConfig, settings, type GamepadConfig } from "./gamepad";
+import {
+  BINDABLE,
+  BUTTON_LABELS,
+  CURSOR,
+  KEY_CHOICES,
+  getGamepadConfig,
+  setGamepadConfig,
+  settings,
+  type GamepadConfig,
+} from "./gamepad";
 import { padState } from "./state";
 import { allCommands } from "fundacad";
 
@@ -43,13 +52,16 @@ const groups = computed(() => {
         <span class="pref-title">Controller</span>
       </div>
       <p class="pref-hint">
-        <template v-if="padState.name">Reading <b>{{ padState.name }}</b>.</template>
+        <template v-if="padState.name"
+          >Reading <b>{{ padState.name }}</b
+          >.</template
+        >
         <template v-else>
-          No controller seen yet. Plug one in and press any button, the webview only reports a
-          pad after its first press.
+          No controller seen yet. Plug one in and press any button, the webview only reports a pad after its first
+          press.
         </template>
-        Left stick pans, right stick rotates, the triggers zoom. On a Steam Deck, start FundaCAD
-        from Steam so the Deck shows up as a controller; its trackpads keep working as a mouse.
+        Left stick pans, right stick rotates, the triggers zoom. On a Steam Deck, start FundaCAD from Steam so the Deck
+        shows up as a controller; its trackpads keep working as a mouse.
       </p>
     </div>
 
@@ -58,8 +70,7 @@ const groups = computed(() => {
         <span class="pref-title">Buttons</span>
       </div>
       <p class="pref-hint">
-        With the cursor on, the left stick moves it and A clicks, so faces can be picked without
-        a mouse.
+        With the cursor on, the left stick moves it and A clicks, so faces can be picked without a mouse.
       </p>
       <div v-for="i in BINDABLE" :key="i" class="pref-head">
         <label class="pref-title" :for="`gp-btn-${i}`">{{ BUTTON_LABELS[i] }}</label>

@@ -76,10 +76,7 @@ pub fn write_float(out: &mut String, f: f64) {
     // Python rounds it to even (-137.79507446289062, an f32 widened). Exact
     // formatting at that precision rounds ties to even, so it is redone that way.
     let shortest = format!("{f:e}");
-    let n_digits = shortest
-        .split('e')
-        .next()
-        .map_or(1, |m| m.bytes().filter(u8::is_ascii_digit).count());
+    let n_digits = shortest.split('e').next().map_or(1, |m| m.bytes().filter(u8::is_ascii_digit).count());
     let sci = format!("{f:.prec$e}", prec = n_digits.saturating_sub(1));
     let (neg, body) = match sci.strip_prefix('-') {
         Some(rest) => (true, rest),
@@ -220,19 +217,14 @@ mod tests {
         let mut s = String::new();
         write_str(&mut s, "a\"b\\c\n\u{1}\u{7f}\u{e9}\u{201c}\u{1f600}");
         let bs = char::from(92u8);
-        let want = format!(
-            "\"a{bs}\"b{bs}{bs}c{bs}n{bs}u0001{bs}u007f{bs}u00e9{bs}u201c{bs}ud83d{bs}ude00\""
-        );
+        let want = format!("\"a{bs}\"b{bs}{bs}c{bs}n{bs}u0001{bs}u007f{bs}u00e9{bs}u201c{bs}ud83d{bs}ude00\"");
         assert_eq!(s, want);
     }
 
     #[test]
     fn containers_use_python_separators() {
         let v = json!({"id": "x", "ok": true, "a": [1, -2, 2.5], "e": {}, "l": [], "n": null});
-        assert_eq!(
-            to_string(&v),
-            r#"{"id": "x", "ok": true, "a": [1, -2, 2.5], "e": {}, "l": [], "n": null}"#
-        );
+        assert_eq!(to_string(&v), r#"{"id": "x", "ok": true, "a": [1, -2, 2.5], "e": {}, "l": [], "n": null}"#);
     }
 
     #[test]

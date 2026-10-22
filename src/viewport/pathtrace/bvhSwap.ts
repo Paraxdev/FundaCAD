@@ -29,7 +29,7 @@ export interface SwappableBvhData {
 }
 
 const layout = (d: SwappableBvhData) => Object.keys(d.attributes).sort().join(",");
-const raw = (p: unknown) => ((p as { proxyNode?: RawNode | null } | null)?.proxyNode ?? null);
+const raw = (p: unknown) => (p as { proxyNode?: RawNode | null } | null)?.proxyNode ?? null;
 
 /** False when the attribute layout changed, so the compiled kernels no longer
  *  match and the caller has to set the scene in full. */

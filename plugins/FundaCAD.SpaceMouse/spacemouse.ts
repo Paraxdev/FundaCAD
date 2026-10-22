@@ -16,22 +16,41 @@ import { definePluginSettings, listen, readSetting, type SettingValues, type Set
 export const PLUGIN_ID = "FundaCAD.SpaceMouse";
 import type { Viewport } from "fundacad";
 
-export interface Motion { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number }
+export interface Motion {
+  tx: number;
+  ty: number;
+  tz: number;
+  rx: number;
+  ry: number;
+  rz: number;
+}
 const ZERO: Motion = { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0 };
 
 export type AxisName = "tx" | "ty" | "tz" | "rx" | "ry" | "rz";
 export const AXIS_NAMES: AxisName[] = ["tx", "ty", "tz", "rx", "ry", "rz"];
 export const AXIS_LABELS: Record<AxisName, string> = {
-  tx: "Slide ←→ (Tx)", ty: "Push/pull (Ty)", tz: "Lift ↑↓ (Tz)",
-  rx: "Tilt/pitch (Rx)", ry: "Tilt sideways/roll (Ry)", rz: "Twist (Rz)",
+  tx: "Slide ←→ (Tx)",
+  ty: "Push/pull (Ty)",
+  tz: "Lift ↑↓ (Tz)",
+  rx: "Tilt/pitch (Rx)",
+  ry: "Tilt sideways/roll (Ry)",
+  rz: "Twist (Rz)",
 };
 
 export type ActionName = "panX" | "panY" | "zoom" | "orbitAz" | "orbitPolar" | "roll";
 export const ACTION_LABELS: Record<ActionName, string> = {
-  panX: "Pan ←→", panY: "Pan ↑↓", zoom: "Zoom", orbitAz: "Rotate ←→", orbitPolar: "Rotate ↑↓", roll: "Roll ↻",
+  panX: "Pan ←→",
+  panY: "Pan ↑↓",
+  zoom: "Zoom",
+  orbitAz: "Rotate ←→",
+  orbitPolar: "Rotate ↑↓",
+  roll: "Roll ↻",
 };
 
-export interface AxisBinding { src: AxisName; invert: boolean }
+export interface AxisBinding {
+  src: AxisName;
+  invert: boolean;
+}
 
 export interface SpaceMouseConfig {
   // "object" = puck manipulates the model (3Dconnexion default); "camera"
@@ -99,7 +118,11 @@ function clampCrossAxis(v: number | undefined): number {
 
 /** A device the native side found but could not read. `hint` is what the user
  *  can do about it there, null where the native side has nothing better. */
-export interface DeviceBlocked { name: string; detail: string; hint?: string | null }
+export interface DeviceBlocked {
+  name: string;
+  detail: string;
+  hint?: string | null;
+}
 
 export function blockedText(b: DeviceBlocked): string {
   const fix = b.hint || "run spacenavd or install the udev rule";
@@ -189,7 +212,17 @@ const PERCENT_MAX = 500;
 const percentOf = (v: number, dflt: number) =>
   Math.min(PERCENT_MAX, Math.max(0, Math.round((v / dflt) * 100 * 1e9) / 1e9));
 const sens = (key: string, label: string) =>
-  ({ key, type: "number", label, group: "Sensitivity", unit: "%", default: 100, min: 0, max: PERCENT_MAX, step: 5 }) as const;
+  ({
+    key,
+    type: "number",
+    label,
+    group: "Sensitivity",
+    unit: "%",
+    default: 100,
+    min: 0,
+    max: PERCENT_MAX,
+    step: 5,
+  }) as const;
 
 function parseBind(v: unknown): Record<ActionName, AxisBinding> {
   const out = structuredClone(DEFAULTS.bind);
@@ -233,14 +266,30 @@ export const SETTINGS: SettingsSchema = {
     sens("zoomPercent", "Zoom"),
     sens("orbitPercent", "Rotate"),
     {
-      key: "deadzone", type: "number", label: "Deadzone", group: "Sensitivity", integer: true,
+      key: "deadzone",
+      type: "number",
+      label: "Deadzone",
+      group: "Sensitivity",
+      integer: true,
       description: "How far the puck has to move before anything happens, in device counts.",
-      default: DEFAULTS.deadzone, min: 0, max: 200, step: 1,
+      default: DEFAULTS.deadzone,
+      min: 0,
+      max: 200,
+      step: 1,
     },
     {
-      key: "crossAxisPercent", type: "number", label: "Cross-axis filter", group: "Sensitivity", unit: "%", integer: true,
-      description: "Ignores a weak axis while another axis is much stronger, so a hard tilt does not also zoom. 0 turns it off.",
-      default: Math.round(DEFAULTS.crossAxis * 100), min: 0, max: Math.round(CROSS_AXIS_MAX * 100), step: 1,
+      key: "crossAxisPercent",
+      type: "number",
+      label: "Cross-axis filter",
+      group: "Sensitivity",
+      unit: "%",
+      integer: true,
+      description:
+        "Ignores a weak axis while another axis is much stronger, so a hard tilt does not also zoom. 0 turns it off.",
+      default: Math.round(DEFAULTS.crossAxis * 100),
+      min: 0,
+      max: Math.round(CROSS_AXIS_MAX * 100),
+      step: 1,
     },
     { key: "bind", type: "data", default: DEFAULTS.bind, parse: parseBind },
   ],
@@ -333,10 +382,7 @@ export function onSpaceMouseMotion(fn: (m: Motion) => void): () => void {
  *  while the app is running: a loop still reading a stale motion vector and
  *  calling rig.panScreen() every frame is not "off", it is a view that drifts
  *  for reasons nobody can find. Calling it twice is safe. */
-export async function initSpaceMouse(
-  viewport: Viewport,
-  onButton: (pressedMask: number) => void,
-): Promise<() => void> {
+export async function initSpaceMouse(viewport: Viewport, onButton: (pressedMask: number) => void): Promise<() => void> {
   if (!("__TAURI_INTERNALS__" in window)) return () => {}; // native desktop app only
 
   let motion: Motion = ZERO;
@@ -345,17 +391,21 @@ export async function initSpaceMouse(
   let stopped = false;
 
   const unlisten: (() => void)[] = [];
-  unlisten.push(await listen<Motion>("spacemouse:motion", (e) => {
-    motion = e.payload;
-    latest = e.payload;
-    lastEvent = performance.now();
-    for (const fn of motionListeners) fn(e.payload);
-  }));
-  unlisten.push(await listen<{ mask: number }>("spacemouse:button", (e) => {
-    const pressed = e.payload.mask & ~prevMask; // rising edge only
-    prevMask = e.payload.mask;
-    if (pressed) onButton(pressed);
-  }));
+  unlisten.push(
+    await listen<Motion>("spacemouse:motion", (e) => {
+      motion = e.payload;
+      latest = e.payload;
+      lastEvent = performance.now();
+      for (const fn of motionListeners) fn(e.payload);
+    }),
+  );
+  unlisten.push(
+    await listen<{ mask: number }>("spacemouse:button", (e) => {
+      const pressed = e.payload.mask & ~prevMask; // rising edge only
+      prevMask = e.payload.mask;
+      if (pressed) onButton(pressed);
+    }),
+  );
 
   // Between the await above and the first frame below, the caller may already
   // have torn this down. Checking here as well as in the loop means a teardown
@@ -366,8 +416,7 @@ export async function initSpaceMouse(
   }
 
   /** signed value of the raw axis a binding points at (0 if unbound) */
-  const val = (b: AxisBinding | undefined, f: Motion) =>
-    b ? (b.invert ? -1 : 1) * f[b.src] : 0;
+  const val = (b: AxisBinding | undefined, f: Motion) => (b ? (b.invert ? -1 : 1) * f[b.src] : 0);
   let last = performance.now();
 
   const loop = () => {
@@ -389,19 +438,18 @@ export async function initSpaceMouse(
     // Pan and zoom are proportional to the view (panScreen works in half view
     // heights, zoomBy multiplies), so the puck moves the view by the same
     // FRACTION of the screen at any zoom level.
-    const px = val(b.panX, m), py = val(b.panY, m);
+    const px = val(b.panX, m),
+      py = val(b.panY, m);
     if (px || py) {
-      viewport.rig.panScreen(
-        modeSign * px * CONFIG.panSens * dt,
-        modeSign * py * CONFIG.panSens * dt,
-      );
+      viewport.rig.panScreen(modeSign * px * CONFIG.panSens * dt, modeSign * py * CONFIG.panSens * dt);
     }
     const z = val(b.zoom, m); // direction is its own preference, not mode-dependent
     // exp(-z): positive axis kept as zoom-IN (old dolly(+z)); zoomBy(>1) = out
     if (z) viewport.rig.zoomBy(Math.exp(-z * CONFIG.zoomSens * dt));
 
     const locked = viewport.rig.orbitLocked();
-    const az = val(b.orbitAz, m), pol = val(b.orbitPolar, m);
+    const az = val(b.orbitAz, m),
+      pol = val(b.orbitPolar, m);
     if (!locked && (az || pol)) {
       // tumble, not the mouse's turntable orbit: the puck rotates freely over
       // the poles, matching the 3Dconnexion driver feel.

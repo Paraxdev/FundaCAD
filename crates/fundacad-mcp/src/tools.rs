@@ -20,10 +20,7 @@ fn object(properties: Value, required: &[&str]) -> JsonObject {
 }
 
 pub fn schema_tool() -> JsonObject {
-    object(
-        json!({"type": {"type": "string", "description": "a feature type, e.g. \"revolve\""}}),
-        &[],
-    )
+    object(json!({"type": {"type": "string", "description": "a feature type, e.g. \"revolve\""}}), &[])
 }
 
 pub fn doc_new() -> JsonObject {
@@ -130,10 +127,7 @@ pub fn feature_remove() -> JsonObject {
 }
 
 pub fn feature_move() -> JsonObject {
-    object(
-        json!({"id": {"type": "string"}, "to": {"type": "integer"}}),
-        &["id", "to"],
-    )
+    object(json!({"id": {"type": "string"}, "to": {"type": "integer"}}), &["id", "to"])
 }
 
 pub fn build() -> JsonObject {

@@ -52,18 +52,34 @@ describe("planeEdgeChain", () => {
   });
 
   it("follows an open path to both of its ends", () => {
-    const polys = [[v(0, 0), v(10, 0)], [v(10, 0), v(10, 10)], [v(10, 10), v(0, 10)]];
+    const polys = [
+      [v(0, 0), v(10, 0)],
+      [v(10, 0), v(10, 10)],
+      [v(10, 10), v(0, 10)],
+    ];
     expect([...planeEdgeChain(polys, 1, 1e-3)].sort()).toEqual([0, 1, 2]);
   });
 });
 
 describe("edgeProbePoint", () => {
   it("lands mid-segment, never on a straight edge's corner", () => {
-    expect(edgeProbePoint([[0, 0, 5], [10, 0, 5]])).toEqual([5, 0, 5]);
+    expect(
+      edgeProbePoint([
+        [0, 0, 5],
+        [10, 0, 5],
+      ]),
+    ).toEqual([5, 0, 5]);
   });
 
   it("stays on a sampled curve's middle segment", () => {
-    expect(edgeProbePoint([[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0]])).toEqual([1.5, 0, 0]);
+    expect(
+      edgeProbePoint([
+        [0, 0, 0],
+        [1, 0, 0],
+        [2, 0, 0],
+        [3, 0, 0],
+      ]),
+    ).toEqual([1.5, 0, 0]);
   });
 
   it("has nothing to offer for an empty edge", () => {
@@ -89,24 +105,84 @@ describe("mesh bodies", () => {
 
   it("offers a curved edge on a mesh body but never its straight facet sides", () => {
     const mesh = new Set(["mesh"]);
-    expect(isExactPlaneEdge({ body: "mesh", points: [[0, 0, 0], [1, 0, 0]] }, mesh)).toBe(false);
-    expect(isExactPlaneEdge({ body: "mesh", points: [[0, 0, 0], [1, 1, 0], [2, 0, 0]] }, mesh)).toBe(true);
-    expect(isExactPlaneEdge({ body: "made", points: [[0, 0, 0], [1, 0, 0]] }, mesh)).toBe(true);
+    expect(
+      isExactPlaneEdge(
+        {
+          body: "mesh",
+          points: [
+            [0, 0, 0],
+            [1, 0, 0],
+          ],
+        },
+        mesh,
+      ),
+    ).toBe(false);
+    expect(
+      isExactPlaneEdge(
+        {
+          body: "mesh",
+          points: [
+            [0, 0, 0],
+            [1, 1, 0],
+            [2, 0, 0],
+          ],
+        },
+        mesh,
+      ),
+    ).toBe(true);
+    expect(
+      isExactPlaneEdge(
+        {
+          body: "made",
+          points: [
+            [0, 0, 0],
+            [1, 0, 0],
+          ],
+        },
+        mesh,
+      ),
+    ).toBe(true);
   });
 
   it("never offers an edge with no body to project it from", () => {
-    expect(isExactPlaneEdge({ body: undefined, points: [[0, 0, 0], [1, 0, 0]] }, new Set())).toBe(false);
+    expect(
+      isExactPlaneEdge(
+        {
+          body: undefined,
+          points: [
+            [0, 0, 0],
+            [1, 0, 0],
+          ],
+        },
+        new Set(),
+      ),
+    ).toBe(false);
   });
 });
 
 describe("planeEdges", () => {
   it("keeps the source edge beside each in-plane polyline", () => {
     const plane = new SketchPlane({ origin: [0, 0, 5], normal: [0, 0, 1], xdir: [1, 0, 0] });
-    const top = { id: "t", points: [[0, 0, 5], [10, 0, 5]] as [number, number, number][] };
-    const side = { id: "s", points: [[0, 0, 5], [0, 0, 0]] as [number, number, number][] };
+    const top = {
+      id: "t",
+      points: [
+        [0, 0, 5],
+        [10, 0, 5],
+      ] as [number, number, number][],
+    };
+    const side = {
+      id: "s",
+      points: [
+        [0, 0, 5],
+        [0, 0, 0],
+      ] as [number, number, number][],
+    };
     const out = planeEdges([top, side], plane, 100);
     expect(out).toHaveLength(1);
     expect(out[0]!.edge).toBe(top);
-    expect(out[0]!.poly.map((p) => [p.x, p.y])).toEqual([[0, 0], [10, 0]]);
+    expect(out[0]!.poly.map((p) => [p.x, p.y])).toEqual([
+      [0, 0],
+      [10, 0],
+    ]);
   });
 });

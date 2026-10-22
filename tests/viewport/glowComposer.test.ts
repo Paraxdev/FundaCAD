@@ -14,7 +14,16 @@ function quad(id: string, fid: number, x: number): BodyMesh {
   geo.setAttribute("position", new THREE.Float32BufferAttribute([x, 1, 0, x + 2, 1, 0, x + 2, 3, 0, x, 3, 0], 3));
   geo.setIndex([0, 1, 2, 0, 2, 3]);
   const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial());
-  return { id, name: id, faceStart: fid, faceCount: 1, mesh, faceIds: [fid, fid], baseColors: new Float32Array(12), faceTriangles: new Map() } as unknown as BodyMesh;
+  return {
+    id,
+    name: id,
+    faceStart: fid,
+    faceCount: 1,
+    mesh,
+    faceIds: [fid, fid],
+    baseColors: new Float32Array(12),
+    faceTriangles: new Map(),
+  } as unknown as BodyMesh;
 }
 
 function layerOf(bodies: BodyMesh[]) {
@@ -83,7 +92,12 @@ function post() {
     getPixelRatio: () => 1,
     getDrawingBufferSize: (v: THREE.Vector2) => v.set(64, 32),
   } as unknown as THREE.WebGLRenderer;
-  return new PostChain(renderer, new THREE.Scene(), () => false, () => false);
+  return new PostChain(
+    renderer,
+    new THREE.Scene(),
+    () => false,
+    () => false,
+  );
 }
 const wanted = (p: PostChain) => (p as unknown as { wanted(): { bloom: boolean } }).wanted().bloom;
 
@@ -92,8 +106,17 @@ describe("PostChain composer rule", () => {
     const p = post();
     p.bloomable = true;
     const rows: [number, boolean, boolean][] = [
-      [0, true, false], [0.05, true, true], [0.4, true, true], [0.83, true, true], [0.9, true, true], [1, true, true],
-      [0.05, false, false], [0.4, false, false], [0.83, false, false], [0.9, false, false], [1, false, false],
+      [0, true, false],
+      [0.05, true, true],
+      [0.4, true, true],
+      [0.83, true, true],
+      [0.9, true, true],
+      [1, true, true],
+      [0.05, false, false],
+      [0.4, false, false],
+      [0.83, false, false],
+      [0.9, false, false],
+      [1, false, false],
       [0, false, false],
     ];
     const got = rows.map(([bloom, glows]) => {

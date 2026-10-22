@@ -137,7 +137,9 @@ fn off() -> Vec<u8> {
 
 fn amf() -> String {
     let mut s = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<amf unit=\"inch\" version=\"1.1\">\n");
-    for (i, (name, off, col)) in [("Left", 0.0, "1</r><g>0</g><b>0"), ("Right", 20.0, "0</r><g>0</g><b>1")].iter().enumerate() {
+    for (i, (name, off, col)) in
+        [("Left", 0.0, "1</r><g>0</g><b>0"), ("Right", 20.0, "0</r><g>0</g><b>1")].iter().enumerate()
+    {
         s += &format!(
             " <object id=\"{i}\">\n  <metadata type=\"name\">{name}</metadata>\n  <color><r>{col}</b></color>\n  <mesh>\n   <vertices>\n"
         );
@@ -282,7 +284,10 @@ fn gltf_text_matches_glb() {
     let want = import_as(&write("cube.glb", &glb()), "glb").unwrap();
     assert_cube(&want, "glb");
     use base64::Engine as _;
-    let data = format!("data:application/octet-stream;base64,{}", base64::engine::general_purpose::STANDARD.encode(gltf_buffer()));
+    let data = format!(
+        "data:application/octet-stream;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(gltf_buffer())
+    );
     write("cube ext.bin", &gltf_buffer());
     for (name, uri) in [("embedded.gltf", data.as_str()), ("external.gltf", "cube%20ext.bin")] {
         let got = import_as(&write(name, &serde_json::to_vec(&gltf_json(uri)).unwrap()), "gltf").unwrap();
@@ -299,7 +304,8 @@ fn gltf_buffers_outside_the_file_folder_are_refused() {
         let e = import_as(&write("escape.gltf", &serde_json::to_vec(&gltf_json(uri)).unwrap()), "gltf").unwrap_err();
         assert!(e.contains("folder"), "{uri}: {e}");
     }
-    let e = import_as(&write("missing.gltf", &serde_json::to_vec(&gltf_json("nope.bin")).unwrap()), "gltf").unwrap_err();
+    let e =
+        import_as(&write("missing.gltf", &serde_json::to_vec(&gltf_json("nope.bin")).unwrap()), "gltf").unwrap_err();
     assert!(e.contains("nope.bin"), "{e}");
 }
 
@@ -349,7 +355,11 @@ fn ply_and_off_answer_as_the_stl_oracle_does() {
             assert_eq!((&reply["solid"], &reply["faces"]), (&w["solid"], &w["faces"]), "{name}.{fmt}");
             let wv = want["volume"].as_f64().unwrap();
             assert!((kernel::volume(&shape) - wv).abs() < 2e-3 * wv.abs(), "{name}.{fmt}");
-            assert_eq!(kernel::count(&shape, kernel::Kind::Solid) as u64, want["solids"].as_u64().unwrap(), "{name}.{fmt}");
+            assert_eq!(
+                kernel::count(&shape, kernel::Kind::Solid) as u64,
+                want["solids"].as_u64().unwrap(),
+                "{name}.{fmt}"
+            );
         }
     }
 }
@@ -428,7 +438,10 @@ fn a_unit_chosen_at_import_scales_gltf_vrml_and_x3d() {
         ("unit.glb", "glb", glb()),
         ("unit.gltf", "gltf", {
             use base64::Engine as _;
-            let uri = format!("data:application/octet-stream;base64,{}", base64::engine::general_purpose::STANDARD.encode(gltf_buffer()));
+            let uri = format!(
+                "data:application/octet-stream;base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(gltf_buffer())
+            );
             serde_json::to_vec(&gltf_json(&uri)).unwrap()
         }),
         ("unit.wrl", "vrml", wrl().into_bytes()),
@@ -476,7 +489,12 @@ fn fbx_mesh_nodes_become_named_coloured_bodies() {
     }
     let rot = 10.0 * (30f64.to_radians().cos() + 30f64.to_radians().sin());
     assert_near(kernel::bbox(&b.bodies[0].shape).unwrap(), [-10.0, -10.0, 0.0, 10.0, 10.0, 20.0], 1e-3, "Left");
-    assert_near(kernel::bbox(&b.bodies[1].shape).unwrap(), [50.0 - rot, -rot, 0.0, 50.0 + rot, rot, 20.0], 1e-3, "Right");
+    assert_near(
+        kernel::bbox(&b.bodies[1].shape).unwrap(),
+        [50.0 - rot, -rot, 0.0, 50.0 + rot, rot, 20.0],
+        1e-3,
+        "Right",
+    );
     let top = kernel::bbox(&b.bodies[2].shape).unwrap();
     assert!((top[2] - 35.0).abs() < 1e-3 && (top[5] - 45.0).abs() < 1e-3, "Top sits in Right's frame: {top:?}");
 }
@@ -490,7 +508,12 @@ fn ascii_fbx_6_and_7_read_their_unit_and_y_up() {
         let b = build(reply, "fbx");
         let vol = kernel::volume(&b.bodies[0].shape);
         assert!((vol / 254f64.powi(3) - 1.0).abs() < 1e-6, "{name}: {vol}");
-        assert_near(kernel::bbox(&b.bodies[0].shape).unwrap(), [lo_x, -254.0, 0.0, lo_x + 254.0, 0.0, 254.0], 1e-3, name);
+        assert_near(
+            kernel::bbox(&b.bodies[0].shape).unwrap(),
+            [lo_x, -254.0, 0.0, lo_x + 254.0, 0.0, 254.0],
+            1e-3,
+            name,
+        );
     }
 }
 
@@ -509,7 +532,9 @@ fn a_file_that_is_not_fbx_says_so() {
 #[test]
 fn fbx_axes_keep_up_up_in_either_handedness() {
     // Legs of 100, 200 and 300 mm along file X, Y and Z: each bbox side names its file axis.
-    for (name, want) in [("tetra_yup74", [0.0, -300.0, 0.0, 100.0, 0.0, 200.0]), ("tetra_lh74", [-100.0, -300.0, 0.0, 0.0, 0.0, 200.0])] {
+    for (name, want) in
+        [("tetra_yup74", [0.0, -300.0, 0.0, 100.0, 0.0, 200.0]), ("tetra_lh74", [-100.0, -300.0, 0.0, 0.0, 0.0, 200.0])]
+    {
         let reply = import_as(&fbx_fixture(name), "fbx").unwrap();
         assert_eq!(reply["solid"], json!(true), "{name}: {reply:?}");
         let b = build(reply, "fbx");
@@ -537,7 +562,12 @@ fn threeds_objects_become_named_coloured_bodies() {
         assert!((kernel::volume(&body.shape) - 1000.0).abs() < 1e-2, "{}", body.name);
     }
     assert_near(kernel::bbox(&b.bodies[0].shape).unwrap(), [0.0, 0.0, 0.0, 10.0, 10.0, 10.0], 1e-3, "Red");
-    assert_near(kernel::bbox(&b.bodies[1].shape).unwrap(), [30.0, 0.0, 0.0, 40.0, 10.0, 10.0], 1e-3, "Blue keeps its stored points, its mirror matrix moves nothing");
+    assert_near(
+        kernel::bbox(&b.bodies[1].shape).unwrap(),
+        [30.0, 0.0, 0.0, 40.0, 10.0, 10.0],
+        1e-3,
+        "Blue keeps its stored points, its mirror matrix moves nothing",
+    );
 }
 
 #[test]
@@ -559,8 +589,15 @@ fn a_broken_3ds_errors_instead_of_reading_past_its_chunks() {
     lie[at + 6..at + 8].copy_from_slice(&u16::MAX.to_le_bytes());
     let e = import_as(&write("lie.3ds", &lie), "3ds").unwrap_err();
     assert!(e.contains("points"), "{e}");
-    let e = import_as(&write("not.3ds", b"solid nothing
+    let e = import_as(
+        &write(
+            "not.3ds",
+            b"solid nothing
 endsolid
-"), "3ds").unwrap_err();
+",
+        ),
+        "3ds",
+    )
+    .unwrap_err();
     assert!(e.contains("3DS"), "{e}");
 }

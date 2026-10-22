@@ -29,8 +29,16 @@ vi.mock("../../src/app/documentActions", () => ({
     return m.outcome;
   },
 }));
-vi.mock("../../src/ui/home", () => ({ closeHome: () => { m.homeClosed++; } }));
-vi.mock("../../src/ui/toast", () => ({ toast: (t: string) => { m.toasts.push(t); } }));
+vi.mock("../../src/ui/home", () => ({
+  closeHome: () => {
+    m.homeClosed++;
+  },
+}));
+vi.mock("../../src/ui/toast", () => ({
+  toast: (t: string) => {
+    m.toasts.push(t);
+  },
+}));
 
 import { drainLaunchPaths, installLaunchPaths } from "../../src/io/launchPaths";
 
@@ -72,7 +80,9 @@ describe("documents FundaCAD is launched with", () => {
     (globalThis as Record<string, unknown>).__TAURI_INTERNALS__ = {};
     try {
       let answer!: () => void;
-      const recovery = new Promise<void>((r) => { answer = r; });
+      const recovery = new Promise<void>((r) => {
+        answer = r;
+      });
       m.queue = ["/first.funda"];
       installLaunchPaths(e, recovery);
       await settle();

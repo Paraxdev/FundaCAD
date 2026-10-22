@@ -63,7 +63,9 @@ export function treeOf(repo: VersionRepo, snapshot: Snapshot): VersionTree {
 }
 
 function sameTree(a: VersionTree, b: VersionTree): boolean {
-  return a.rest === b.rest && a.features.length === b.features.length && a.features.every((h, i) => h === b.features[i]);
+  return (
+    a.rest === b.rest && a.features.length === b.features.length && a.features.every((h, i) => h === b.features[i])
+  );
 }
 
 export function versionById(repo: VersionRepo, id: string): Version | undefined {
@@ -202,18 +204,27 @@ export function normalizeRepo(raw: unknown): VersionRepo | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Partial<VersionRepo>;
   // Only text is kept: referencedGeometry reads every object on each .fundab save.
-  const objects = r.objects && typeof r.objects === "object"
-    ? Object.fromEntries(Object.entries(r.objects).filter(([, text]) => typeof text === "string"))
-    : {};
+  const objects =
+    r.objects && typeof r.objects === "object"
+      ? Object.fromEntries(Object.entries(r.objects).filter(([, text]) => typeof text === "string"))
+      : {};
   const versions = Array.isArray(r.versions)
-    ? r.versions.filter((v): v is Version =>
-        !!v && typeof v.id === "string" && typeof v.branch === "string" && !!v.tree &&
-        Array.isArray(v.tree.features) && typeof v.tree.rest === "string")
+    ? r.versions.filter(
+        (v): v is Version =>
+          !!v &&
+          typeof v.id === "string" &&
+          typeof v.branch === "string" &&
+          !!v.tree &&
+          Array.isArray(v.tree.features) &&
+          typeof v.tree.rest === "string",
+      )
     : [];
   if (!versions.length) return null;
   const ids = new Set(versions.map((v) => v.id));
   const branches: Record<string, string> = {};
-  for (const [name, id] of Object.entries(r.branches ?? {})) if (typeof id === "string" && ids.has(id)) branches[name] = id;
-  const current = typeof r.current === "string" && branches[r.current] ? r.current : Object.keys(branches)[0] ?? MAIN_BRANCH;
+  for (const [name, id] of Object.entries(r.branches ?? {}))
+    if (typeof id === "string" && ids.has(id)) branches[name] = id;
+  const current =
+    typeof r.current === "string" && branches[r.current] ? r.current : (Object.keys(branches)[0] ?? MAIN_BRANCH);
   return { objects, versions, branches, current };
 }

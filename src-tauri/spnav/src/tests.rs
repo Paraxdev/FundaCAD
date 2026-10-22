@@ -12,66 +12,30 @@ fn record(data: [i32; 8]) -> [u8; RECORD_BYTES] {
 fn motion_is_in_the_hid_frame_and_range() {
     assert_eq!(
         decode(&record([0, 500, 500, 500, 250, 250, 250, 8])),
-        Some(Event::Motion {
-            t: [350.0, -350.0, -350.0],
-            r: [175.0, -175.0, -175.0]
-        })
+        Some(Event::Motion { t: [350.0, -350.0, -350.0], r: [175.0, -175.0, -175.0] })
     );
     // The daemon swaps y and z before it sends: its y is a lift, its z a push
     // or pull, the HID report has them the other way round.
     assert_eq!(
         decode(&record([0, 0, 100, 200, 10, 20, 30, 8])),
-        Some(Event::Motion {
-            t: [0.0, -140.0, -70.0],
-            r: [7.0, -21.0, -14.0]
-        })
+        Some(Event::Motion { t: [0.0, -140.0, -70.0], r: [7.0, -21.0, -14.0] })
     );
-    assert_eq!(
-        decode(&record([0, 0, 0, 0, 0, 0, 0, 1200])),
-        Some(Event::Motion {
-            t: [0.0; 3],
-            r: [0.0; 3]
-        })
-    );
+    assert_eq!(decode(&record([0, 0, 0, 0, 0, 0, 0, 1200])), Some(Event::Motion { t: [0.0; 3], r: [0.0; 3] }));
 }
 
 #[test]
 fn extreme_values_stay_inside_an_i16_axis() {
-    let extreme = record([
-        0,
-        i32::MIN,
-        i32::MIN,
-        i32::MAX,
-        i32::MAX,
-        i32::MIN,
-        i32::MIN,
-        -1,
-    ]);
+    let extreme = record([0, i32::MIN, i32::MIN, i32::MAX, i32::MAX, i32::MIN, i32::MIN, -1]);
     assert_eq!(
         decode(&extreme),
-        Some(Event::Motion {
-            t: [-32767.0, -32767.0, 32767.0],
-            r: [32767.0, 32767.0, 32767.0]
-        })
+        Some(Event::Motion { t: [-32767.0, -32767.0, 32767.0], r: [32767.0, 32767.0, 32767.0] })
     );
 }
 
 #[test]
 fn buttons_press_and_release_and_unknown_kinds_are_skipped() {
-    assert_eq!(
-        decode(&record([1, 1, 0, 0, 0, 0, 0, 0])),
-        Some(Event::Button {
-            number: 1,
-            pressed: true
-        })
-    );
-    assert_eq!(
-        decode(&record([2, 1, 0, 0, 0, 0, 0, 0])),
-        Some(Event::Button {
-            number: 1,
-            pressed: false
-        })
-    );
+    assert_eq!(decode(&record([1, 1, 0, 0, 0, 0, 0, 0])), Some(Event::Button { number: 1, pressed: true }));
+    assert_eq!(decode(&record([2, 1, 0, 0, 0, 0, 0, 0])), Some(Event::Button { number: 1, pressed: false }));
     assert_eq!(decode(&record([7, 500, 500, 500, 500, 500, 500, 0])), None);
 }
 
@@ -103,19 +67,7 @@ fn records_split_across_reads_come_out_whole_and_the_end_is_an_error() {
     let mut seen = Vec::new();
     let ended = pump(Trickle(&bytes), || true, |e| seen.push(e));
     assert_eq!(ended.unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
-    assert_eq!(
-        seen,
-        [
-            Event::Motion {
-                t: [70.0, 0.0, 0.0],
-                r: [0.0; 3]
-            },
-            Event::Button {
-                number: 3,
-                pressed: true
-            }
-        ]
-    );
+    assert_eq!(seen, [Event::Motion { t: [70.0, 0.0, 0.0], r: [0.0; 3] }, Event::Button { number: 3, pressed: true }]);
 }
 
 #[test]
@@ -144,8 +96,7 @@ mod socket {
     use std::thread;
 
     fn socket_path(name: &str) -> PathBuf {
-        let path =
-            std::env::temp_dir().join(format!("fundacad-spnav-{}-{name}.sock", std::process::id()));
+        let path = std::env::temp_dir().join(format!("fundacad-spnav-{}-{name}.sock", std::process::id()));
         let _ = std::fs::remove_file(&path);
         path
     }
@@ -204,10 +155,8 @@ mod socket {
         let listener = UnixListener::bind(&path).expect("bind");
         let daemon = thread::spawn(move || {
             let (mut conn, _) = listener.accept().expect("accept");
-            conn.write_all(&record([0, 0, 500, 0, 0, 0, 0, 8]))
-                .expect("write");
-            conn.write_all(&record([2, 0, 0, 0, 0, 0, 0, 0]))
-                .expect("write");
+            conn.write_all(&record([0, 0, 500, 0, 0, 0, 0, 8])).expect("write");
+            conn.write_all(&record([2, 0, 0, 0, 0, 0, 0, 0])).expect("write");
         });
         let stream = UnixStream::connect(&path).expect("connects to the fake daemon");
         let mut seen = Vec::new();
@@ -217,16 +166,7 @@ mod socket {
         assert_eq!(ended.unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
         assert_eq!(
             seen,
-            [
-                Event::Motion {
-                    t: [0.0, 0.0, -350.0],
-                    r: [0.0; 3]
-                },
-                Event::Button {
-                    number: 0,
-                    pressed: false
-                }
-            ]
+            [Event::Motion { t: [0.0, 0.0, -350.0], r: [0.0; 3] }, Event::Button { number: 0, pressed: false }]
         );
         assert!(UnixStream::connect(&path).is_err());
     }
@@ -273,21 +213,9 @@ mod socket {
         assert!(matches!(served, Served::Ended(Ok(()))), "{served:?}");
         assert_eq!(wrote, Ok(()), "the connection was still open at 6 s");
         assert!(!second, "the same connection was kept, no reconnect");
-        assert!(
-            took >= Duration::from_secs(6),
-            "returned at {took:?}, before the record"
-        );
-        assert_eq!(
-            events,
-            [Event::Motion {
-                t: [0.0, -70.0, 0.0],
-                r: [0.0; 3]
-            }]
-        );
-        assert!(
-            opened.load(Ordering::SeqCst) >= 2,
-            "an unreadable device is tried again"
-        );
+        assert!(took >= Duration::from_secs(6), "returned at {took:?}, before the record");
+        assert_eq!(events, [Event::Motion { t: [0.0, -70.0, 0.0], r: [0.0; 3] }]);
+        assert!(opened.load(Ordering::SeqCst) >= 2, "an unreadable device is tried again");
     }
 
     #[test]
@@ -317,15 +245,8 @@ mod socket {
             panic!("the device sent first, got {served:?}");
         };
         assert_eq!(first, kept.report);
-        assert!(
-            !closed.load(Ordering::SeqCst),
-            "the device is handed back open"
-        );
-        assert_eq!(
-            seen.load(Ordering::SeqCst),
-            0,
-            "no daemon event reached the page"
-        );
+        assert!(!closed.load(Ordering::SeqCst), "the device is handed back open");
+        assert_eq!(seen.load(Ordering::SeqCst), 0, "no daemon event reached the page");
     }
 
     #[test]
@@ -336,8 +257,7 @@ mod socket {
         let daemon = thread::spawn(move || {
             let (mut conn, _) = listener.accept().expect("accept");
             thread::sleep(Duration::from_millis(100));
-            conn.write_all(&record([1, 2, 0, 0, 0, 0, 0, 0]))
-                .expect("write");
+            conn.write_all(&record([1, 2, 0, 0, 0, 0, 0, 0])).expect("write");
             let _ = done_rx.recv_timeout(Duration::from_secs(5));
         });
         let (_, stream) = connect(&[&path]).expect("connects");
@@ -358,18 +278,9 @@ mod socket {
         daemon.join().expect("daemon thread");
         let _ = std::fs::remove_file(&path);
         assert!(matches!(served, Served::Ended(Ok(()))), "{served:?}");
-        assert_eq!(
-            events,
-            [Event::Button {
-                number: 2,
-                pressed: true
-            }]
-        );
+        assert_eq!(events, [Event::Button { number: 2, pressed: true }]);
         assert!(closed.load(Ordering::SeqCst), "the device is let go");
-        assert!(
-            reads.load(Ordering::SeqCst) <= 4,
-            "the device is not read once the daemon is kept"
-        );
+        assert!(reads.load(Ordering::SeqCst) <= 4, "the device is not read once the daemon is kept");
     }
 
     #[test]
@@ -378,8 +289,7 @@ mod socket {
         let listener = UnixListener::bind(&path).expect("bind");
         let (_, stream) = connect(&[&path]).expect("connects");
         let (mut conn, _) = listener.accept().expect("accept");
-        conn.write_all(&record([1, 4, 0, 0, 0, 0, 0, 0]))
-            .expect("write");
+        conn.write_all(&record([1, 4, 0, 0, 0, 0, 0, 0])).expect("write");
         let (dev, _, closed) = fake_device(Duration::ZERO);
         let mut dev = Some(dev);
         let seen = AtomicUsize::new(0);
@@ -407,8 +317,7 @@ mod socket {
         let (dev, _, closed) = fake_device(Duration::from_millis(100));
         let daemon = thread::spawn(move || {
             thread::sleep(Duration::from_millis(110));
-            conn.write_all(&record([0, 100, 0, 0, 0, 0, 0, 8]))
-                .expect("write");
+            conn.write_all(&record([0, 100, 0, 0, 0, 0, 0, 8])).expect("write");
             thread::sleep(Duration::from_millis(300));
         });
         let mut dev = Some(dev);
@@ -436,12 +345,7 @@ mod socket {
         drop(listener.accept().expect("accept"));
         drop(listener);
         let seen = AtomicUsize::new(0);
-        let served = serve(
-            stream,
-            || None::<FakeDevice>,
-            until(Duration::from_secs(3), &seen, 1),
-            |_| {},
-        );
+        let served = serve(stream, || None::<FakeDevice>, until(Duration::from_secs(3), &seen, 1), |_| {});
         let Served::Ended(Err(e)) = served else {
             panic!("a closed daemon ends the connection, got {served:?}");
         };
@@ -451,8 +355,7 @@ mod socket {
         let listener = UnixListener::bind(&path).expect("bind again");
         let daemon = thread::spawn(move || {
             let (mut conn, _) = listener.accept().expect("accept");
-            conn.write_all(&record([2, 1, 0, 0, 0, 0, 0, 0]))
-                .expect("write");
+            conn.write_all(&record([2, 1, 0, 0, 0, 0, 0, 0])).expect("write");
             thread::sleep(Duration::from_millis(300));
         });
         let (_, stream) = connect(&[&path]).expect("the restarted daemon answers");
@@ -469,13 +372,7 @@ mod socket {
         daemon.join().expect("daemon thread");
         let _ = std::fs::remove_file(&path);
         assert!(matches!(served, Served::Ended(Ok(()))), "{served:?}");
-        assert_eq!(
-            events,
-            [Event::Button {
-                number: 1,
-                pressed: false
-            }]
-        );
+        assert_eq!(events, [Event::Button { number: 1, pressed: false }]);
     }
 
     #[test]

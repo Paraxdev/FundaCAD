@@ -38,17 +38,13 @@ function open(opts: Partial<Parameters<typeof panel.show>[0]> = {}) {
     onModeChange: vi.fn<(m: TextureMode) => void>(),
   };
   mountPanel();
-  panel.show(
-    { editing: false, mode: "faces", summary: "2 faces", initial: {}, ...opts },
-    handlers,
-  );
+  panel.show({ editing: false, mode: "faces", summary: "2 faces", initial: {}, ...opts }, handlers);
   return { handlers };
 }
 
 const visible = (el: HTMLElement | null) => !!el && el.style.display !== "none";
 const rowOf = (labelText: string) =>
-  [...document.querySelectorAll<HTMLElement>("label")]
-    .find((l) => l.textContent === labelText)?.parentElement ?? null;
+  [...document.querySelectorAll<HTMLElement>("label")].find((l) => l.textContent === labelText)?.parentElement ?? null;
 
 describe("TextureToolPanel", () => {
   beforeEach(() => {
@@ -65,9 +61,15 @@ describe("TextureToolPanel", () => {
     expect(document.body.textContent).not.toContain("Texture");
     expect(panel.isOpen()).toBe(false);
 
-    panel.show({ editing: false, mode: "faces", summary: "2 faces", initial: {} }, {
-      onCommit: vi.fn(), onCancel: vi.fn(), onChange: vi.fn(), onModeChange: vi.fn(),
-    });
+    panel.show(
+      { editing: false, mode: "faces", summary: "2 faces", initial: {} },
+      {
+        onCommit: vi.fn(),
+        onCancel: vi.fn(),
+        onChange: vi.fn(),
+        onModeChange: vi.fn(),
+      },
+    );
     await nextTick();
     expect(document.body.textContent).toContain("2 faces");
   });
@@ -105,9 +107,15 @@ describe("TextureToolPanel", () => {
 
     panel.hide();
     await nextTick();
-    panel.show({ editing: false, mode: "faces", summary: "", initial: { depth: 2.5 } }, {
-      onCommit: vi.fn(), onCancel: vi.fn(), onChange: vi.fn(), onModeChange: vi.fn(),
-    });
+    panel.show(
+      { editing: false, mode: "faces", summary: "", initial: { depth: 2.5 } },
+      {
+        onCommit: vi.fn(),
+        onCancel: vi.fn(),
+        onChange: vi.fn(),
+        onModeChange: vi.fn(),
+      },
+    );
     await nextTick();
     expect(depth().value).toBe("2.5");
   });
@@ -168,7 +176,12 @@ describe("TextureToolPanel", () => {
   });
 
   it("offers one option per palette slot when there is one", async () => {
-    open({ palette: [{ name: "Black", color: "#000" }, { name: "Red", color: "#f00" }] });
+    open({
+      palette: [
+        { name: "Black", color: "#000" },
+        { name: "Red", color: "#f00" },
+      ],
+    });
     await nextTick();
     expect(visible(rowOf("Print color"))).toBe(true);
     expect(document.body.textContent).toContain("Red (slot 2)");
@@ -187,8 +200,7 @@ describe("TextureToolPanel", () => {
   it("commits WITHOUT closing, the tool may refuse and stay active", async () => {
     const { handlers } = open();
     await nextTick();
-    const ok = [...document.querySelectorAll<HTMLButtonElement>("button")]
-      .find((b) => b.textContent!.includes("Add"))!;
+    const ok = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent!.includes("Add"))!;
     ok.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
     await nextTick();
     expect(handlers.onCommit).toHaveBeenCalledOnce();
@@ -198,8 +210,9 @@ describe("TextureToolPanel", () => {
   it("cancels and closes on Cancel", async () => {
     const { handlers } = open();
     await nextTick();
-    const no = [...document.querySelectorAll<HTMLButtonElement>("button")]
-      .find((b) => b.textContent!.includes("Cancel"))!;
+    const no = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) =>
+      b.textContent!.includes("Cancel"),
+    )!;
     no.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
     await nextTick();
     expect(handlers.onCancel).toHaveBeenCalledOnce();

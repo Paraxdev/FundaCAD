@@ -6,9 +6,7 @@ const MAX_NAME_BYTES: usize = 200;
 fn reserved(stem: &str) -> bool {
     let s = stem.to_lowercase();
     matches!(s.as_str(), "con" | "prn" | "aux" | "nul")
-        || ((s.starts_with("com") || s.starts_with("lpt"))
-            && s.len() == 4
-            && matches!(s.as_bytes()[3], b'1'..=b'9'))
+        || ((s.starts_with("com") || s.starts_with("lpt")) && s.len() == 4 && matches!(s.as_bytes()[3], b'1'..=b'9'))
 }
 
 fn word(c: char) -> bool {

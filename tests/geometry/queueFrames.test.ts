@@ -54,7 +54,9 @@ describe("queue frames", () => {
   it("never settles the pending call on a queue frame", () => {
     const { inner, say } = geom([]);
     let settled = false;
-    inner.pending.set("mine", () => { settled = true; });
+    inner.pending.set("mine", () => {
+      settled = true;
+    });
     say({ id: "mine", status: "queued", behind: { who: "session", op: "import" } });
     say({ id: "mine", status: "started" });
     expect(settled).toBe(false);

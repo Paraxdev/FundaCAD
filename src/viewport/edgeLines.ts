@@ -96,13 +96,15 @@ export class BodyEdges {
     // ONE material for the whole body. Its own colour stays white; the per-edge
     // colour arrives as an instance colour and is multiplied by it.
     // An outline, not a body: kept out of what glass refracts.
-    this.material = overlayMaterial(new LineMaterial({
-      color: 0xffffff,
-      vertexColors: true,
-      linewidth: EDGE_IDLE_WIDTH,
-      worldUnits: false,
-      depthTest: true,
-    }));
+    this.material = overlayMaterial(
+      new LineMaterial({
+        color: 0xffffff,
+        vertexColors: true,
+        linewidth: EDGE_IDLE_WIDTH,
+        worldUnits: false,
+        depthTest: true,
+      }),
+    );
     this.material.resolution.copy(resolution);
     this.object = new LineSegments2(new LineSegmentsGeometry(), this.material);
     this.object.name = "edges";
@@ -131,17 +133,31 @@ export class BodyEdges {
 
     let s = 0;
     for (let i = 0; i < this.refs.length; i++) {
-      if (this.hidden[i]) { this.segStart[i] = -1; continue; }
+      if (this.hidden[i]) {
+        this.segStart[i] = -1;
+        continue;
+      }
       this.segStart[i] = s;
       const pts = this.refs[i]!.points;
-      const r = this.rgb[i * 3]!, g = this.rgb[i * 3 + 1]!, b = this.rgb[i * 3 + 2]!;
+      const r = this.rgb[i * 3]!,
+        g = this.rgb[i * 3 + 1]!,
+        b = this.rgb[i * 3 + 2]!;
       for (let k = 0; k + 1 < pts.length; k++, s++) {
-        const a = pts[k]!, c = pts[k + 1]!;
+        const a = pts[k]!,
+          c = pts[k + 1]!;
         const o = s * 6;
-        pos[o] = a[0]; pos[o + 1] = a[1]; pos[o + 2] = a[2];
-        pos[o + 3] = c[0]; pos[o + 4] = c[1]; pos[o + 5] = c[2];
-        col[o] = r; col[o + 1] = g; col[o + 2] = b;
-        col[o + 3] = r; col[o + 4] = g; col[o + 5] = b;
+        pos[o] = a[0];
+        pos[o + 1] = a[1];
+        pos[o + 2] = a[2];
+        pos[o + 3] = c[0];
+        pos[o + 4] = c[1];
+        pos[o + 5] = c[2];
+        col[o] = r;
+        col[o + 1] = g;
+        col[o + 2] = b;
+        col[o + 3] = r;
+        col[o + 4] = g;
+        col[o + 5] = b;
         owner[s] = i;
       }
     }
@@ -174,11 +190,14 @@ export class BodyEdges {
     if (start < 0 || n === 0) return; // hidden, the colour lands on the next flush
     for (let s = start; s < start + n; s++) {
       const o = s * 6;
-      this.colorBuf[o] = color.r; this.colorBuf[o + 1] = color.g; this.colorBuf[o + 2] = color.b;
-      this.colorBuf[o + 3] = color.r; this.colorBuf[o + 4] = color.g; this.colorBuf[o + 5] = color.b;
+      this.colorBuf[o] = color.r;
+      this.colorBuf[o + 1] = color.g;
+      this.colorBuf[o + 2] = color.b;
+      this.colorBuf[o + 3] = color.r;
+      this.colorBuf[o + 4] = color.g;
+      this.colorBuf[o + 5] = color.b;
     }
-    const attr = this.object.geometry.attributes.instanceColorStart as
-      THREE.InterleavedBufferAttribute | undefined;
+    const attr = this.object.geometry.attributes.instanceColorStart as THREE.InterleavedBufferAttribute | undefined;
     if (attr) {
       attr.data.addUpdateRange(start * 6, n * 6);
       attr.data.needsUpdate = true;
@@ -216,12 +235,15 @@ export class BodyEdges {
       if (start < 0) continue;
       for (let s = start; s < start + n; s++) {
         const o = s * 6;
-        this.colorBuf[o] = color.r; this.colorBuf[o + 1] = color.g; this.colorBuf[o + 2] = color.b;
-        this.colorBuf[o + 3] = color.r; this.colorBuf[o + 4] = color.g; this.colorBuf[o + 5] = color.b;
+        this.colorBuf[o] = color.r;
+        this.colorBuf[o + 1] = color.g;
+        this.colorBuf[o + 2] = color.b;
+        this.colorBuf[o + 3] = color.r;
+        this.colorBuf[o + 4] = color.g;
+        this.colorBuf[o + 5] = color.b;
       }
     }
-    const attr = this.object.geometry.attributes.instanceColorStart as
-      THREE.InterleavedBufferAttribute | undefined;
+    const attr = this.object.geometry.attributes.instanceColorStart as THREE.InterleavedBufferAttribute | undefined;
     if (attr) {
       attr.data.clearUpdateRanges(); // whole-buffer rewrite; drop queued sub-ranges
       attr.data.needsUpdate = true;
@@ -247,7 +269,10 @@ export class BodyEdges {
    *  `e.visible` on every edge each rebuild. */
   showAll() {
     for (let i = 0; i < this.hidden.length; i++) {
-      if (this.hidden[i]) { this.hidden[i] = 0; this.dirty = true; }
+      if (this.hidden[i]) {
+        this.hidden[i] = 0;
+        this.dirty = true;
+      }
     }
   }
 

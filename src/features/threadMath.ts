@@ -16,9 +16,26 @@
  *  because a coarse thread is what an unspecified "M6" means on a drawing, in a
  *  hardware drawer and in a print. */
 const ISO_COARSE: readonly (readonly [number, number])[] = [
-  [1.6, 0.35], [2, 0.4], [2.5, 0.45], [3, 0.5], [4, 0.7], [5, 0.8], [6, 1],
-  [8, 1.25], [10, 1.5], [12, 1.75], [14, 2], [16, 2], [20, 2.5], [24, 3],
-  [30, 3.5], [36, 4], [42, 4.5], [48, 5], [56, 5.5], [64, 6],
+  [1.6, 0.35],
+  [2, 0.4],
+  [2.5, 0.45],
+  [3, 0.5],
+  [4, 0.7],
+  [5, 0.8],
+  [6, 1],
+  [8, 1.25],
+  [10, 1.5],
+  [12, 1.75],
+  [14, 2],
+  [16, 2],
+  [20, 2.5],
+  [24, 3],
+  [30, 3.5],
+  [36, 4],
+  [42, 4.5],
+  [48, 5],
+  [56, 5.5],
+  [64, 6],
 ];
 
 /** The coarse pitch for the nearest nominal size to `diameter`, in mm.
@@ -70,7 +87,10 @@ const BREAKOUT_FLOOR = 0.02;
 
 /** One point of the profile, in the meridian plane: `x` from the axis, `y` along
  *  it from the start of the thread. */
-export interface ProfilePoint { x: number; y: number }
+export interface ProfilePoint {
+  x: number;
+  y: number;
+}
 
 /** The triangle to sweep, for a thread of `pitch` on a cylinder of `radius`.
  *
@@ -132,5 +152,10 @@ export function grooveProfile(radius: number, pitch: number, external: boolean):
   const breakout = Math.max(BREAKOUT_FLOOR, depth * BREAKOUT_RATIO);
   const out = floor + (depth + breakout) * tan30;
   const r5 = (v: number) => Math.round(v * 1e5) / 1e5;
-  return [[-breakout, -out], [depth, -floor], [depth, floor], [-breakout, out]].map(([a, b]) => [r5(a!), r5(b!)]);
+  return [
+    [-breakout, -out],
+    [depth, -floor],
+    [depth, floor],
+    [-breakout, out],
+  ].map(([a, b]) => [r5(a!), r5(b!)]);
 }

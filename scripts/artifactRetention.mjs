@@ -79,10 +79,8 @@ export function uploadSteps(text) {
 export function retentionFindings(steps, maxDays = 7) {
   return steps.flatMap((s) => {
     const where = `line ${s.line}${s.name ? ` (${s.name})` : ""}`;
-    if (s.retention === null)
-      return [`${where}: no retention-days, so the artifact is kept for the default 90`];
-    if (s.retention > maxDays)
-      return [`${where}: retention-days ${s.retention} is longer than ${maxDays}`];
+    if (s.retention === null) return [`${where}: no retention-days, so the artifact is kept for the default 90`];
+    if (s.retention > maxDays) return [`${where}: retention-days ${s.retention} is longer than ${maxDays}`];
     return [];
   });
 }

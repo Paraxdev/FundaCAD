@@ -55,10 +55,7 @@ pub fn zip_tie_channel(f: &F) -> Result<(), String> {
             }
 
             let tl = (span - height) / 2.0;
-            let deep: Vec<V> = rect(center, tl)
-                .into_iter()
-                .map(|p| g::lin(p, &[(inset - height, inward)]))
-                .collect();
+            let deep: Vec<V> = rect(center, tl).into_iter().map(|p| g::lin(p, &[(inset - height, inward)])).collect();
             tools.push(g::prism(&deep, g::mul(inward, height))?);
 
             if !allow_breakthrough {

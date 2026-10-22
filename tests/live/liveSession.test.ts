@@ -124,7 +124,11 @@ describe("the window's half of a live session", () => {
     for (const [i, now] of [null, CUT_B].entries()) {
       store.setSectionView(now && structuredClone(now));
       const edited = { ...structuredClone(published), features: [...published.features, { id: `x${i}`, type: "box" }] };
-      geo.reply = { ok: true, guests: ["an assistant"], proposals: [{ id: `p${i}`, name: "an assistant", note: null, document: edited }] };
+      geo.reply = {
+        ok: true,
+        guests: ["an assistant"],
+        proposals: [{ id: `p${i}`, name: "an assistant", note: null, document: edited }],
+      };
       await host.tick();
       expect(store.document.features.map((f) => f.id)).toEqual(["f0", "f1", `x${i}`]);
       expect(store.sectionView).toEqual(now);
@@ -137,9 +141,17 @@ describe("the window's half of a live session", () => {
     const host = new LiveSessionHost(store, geo, () => true);
     host.start();
     await host.tick();
-    const state = () => [store.document.features.map((f) => f.id), store.sectionView, JSON.parse(store.toJSON()).sectionView ?? null];
+    const state = () => [
+      store.document.features.map((f) => f.id),
+      store.sectionView,
+      JSON.parse(store.toJSON()).sectionView ?? null,
+    ];
     const offer = async (id: string, document: CadDocument) => {
-      geo.reply = { ok: true, guests: ["an assistant"], proposals: [{ id, name: "an assistant", note: null, document }] };
+      geo.reply = {
+        ok: true,
+        guests: ["an assistant"],
+        proposals: [{ id, name: "an assistant", note: null, document }],
+      };
       await host.tick();
     };
     for (const [i, now] of [CUT_B, null].entries()) {
@@ -148,7 +160,11 @@ describe("the window's half of a live session", () => {
       expect(state()).toEqual([["f0", "f1", "f2", "f3"].slice(0, 3 + i), now, now]);
     }
     store.setSectionView(structuredClone(CUT_B));
-    await offer("p9", { parameters: {}, features: [{ id: "g0", type: "box" }], sectionView: CUT_A } as unknown as CadDocument);
+    await offer("p9", {
+      parameters: {},
+      features: [{ id: "g0", type: "box" }],
+      sectionView: CUT_A,
+    } as unknown as CadDocument);
     expect(state()).toEqual([["g0"], null, null]);
     await host.stop();
   });
@@ -288,7 +304,9 @@ describe("guide mode over the live session", () => {
 
   it("hands the commands of a session_guide reply to the guide", async () => {
     const { geo, guide, host } = rig();
-    geo.commands = [{ kind: "highlight", seq: 4, target: { ui: "pick:fillet" }, caption: "Open Fillet", step: 1, of: 3 }];
+    geo.commands = [
+      { kind: "highlight", seq: 4, target: { ui: "pick:fillet" }, caption: "Open Fillet", step: 1, of: 3 },
+    ];
     host.start();
     await host.tick();
     await host.guideTick();
@@ -328,7 +346,11 @@ describe("guide mode over the live session", () => {
       const after = count();
       await vi.advanceTimersByTimeAsync(2000);
       expect(count() - after).toBeLessThanOrEqual(3);
-      expect(geo.sent.filter((m) => m.op === "session_guide").some((m) => (m.payload["state"] as { stopped: unknown }).stopped)).toBe(true);
+      expect(
+        geo.sent
+          .filter((m) => m.op === "session_guide")
+          .some((m) => (m.payload["state"] as { stopped: unknown }).stopped),
+      ).toBe(true);
       await host.stop();
     } finally {
       vi.useRealTimers();

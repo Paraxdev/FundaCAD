@@ -46,9 +46,14 @@ describe("similarityIn", () => {
     const sim = similarityIn(plane, m);
     expect(sim.f).toBeCloseTo(2, 9);
     // every sketch point maps where the world matrix sends it
-    for (const [x, y] of [[0, 0], [10, 0], [4, -7]] as const) {
+    for (const [x, y] of [
+      [0, 0],
+      [10, 0],
+      [4, -7],
+    ] as const) {
       const world = plane.to3D(x, y).applyMatrix4(m);
-      const c = Math.cos(sim.angle), s = Math.sin(sim.angle);
+      const c = Math.cos(sim.angle),
+        s = Math.sin(sim.angle);
       const px = sim.f * (x * c - y * s) + sim.tx;
       const py = sim.f * (x * s + y * c) + sim.ty;
       const want = plane.to2D(world);
@@ -78,15 +83,23 @@ describe("transformEntity", () => {
 });
 
 describe("applySketchMove", () => {
-  const doc = (): CadDocument => ({
-    features: [
-      { id: "s1", type: "sketch", plane: "XY", face: { kind: "face" } as never, at: [0, 0, 0], entities: [] },
-      { id: "e1", type: "extrude", sketch: "s1", distance: 5, operation: "new", regions: [[1, 2, 0]] },
-      { id: "e2", type: "extrude", sketch: "other", distance: 5, operation: "new", regions: [[1, 2, 0]] },
-      { id: "lo", type: "loft", profiles: [{ sketch: "s1", region: [0, 0, 0] }, { sketch: "other", region: [0, 0, 9] }] },
-    ] as Feature[],
-    parameters: {},
-  }) as unknown as CadDocument;
+  const doc = (): CadDocument =>
+    ({
+      features: [
+        { id: "s1", type: "sketch", plane: "XY", face: { kind: "face" } as never, at: [0, 0, 0], entities: [] },
+        { id: "e1", type: "extrude", sketch: "s1", distance: 5, operation: "new", regions: [[1, 2, 0]] },
+        { id: "e2", type: "extrude", sketch: "other", distance: 5, operation: "new", regions: [[1, 2, 0]] },
+        {
+          id: "lo",
+          type: "loft",
+          profiles: [
+            { sketch: "s1", region: [0, 0, 0] },
+            { sketch: "other", region: [0, 0, 9] },
+          ],
+        },
+      ] as Feature[],
+      parameters: {},
+    }) as unknown as CadDocument;
 
   it("rewrites the plane, drops the face link, and moves the profile picks on it", () => {
     const d = doc();
@@ -99,7 +112,10 @@ describe("applySketchMove", () => {
     expect(s1.at).toBeUndefined();
     expect(e1.regions).toEqual([[1, 2, 7]]);
     expect(e2.regions).toEqual([[1, 2, 0]]);
-    expect(lo.profiles).toEqual([{ sketch: "s1", region: [0, 0, 7] }, { sketch: "other", region: [0, 0, 9] }]);
+    expect(lo.profiles).toEqual([
+      { sketch: "s1", region: [0, 0, 7] },
+      { sketch: "other", region: [0, 0, 9] },
+    ]);
   });
 
   it("starts from the plane the build resolved, not the cached one", () => {
@@ -118,7 +134,12 @@ describe("sketchEntityTarget", () => {
       selection: () => [text],
       showPreview: () => {},
       apply: () => {},
-      outline: () => [new THREE.Vector2(0, 0), new THREE.Vector2(40, 0), new THREE.Vector2(40, 10), new THREE.Vector2(0, 10)],
+      outline: () => [
+        new THREE.Vector2(0, 0),
+        new THREE.Vector2(40, 0),
+        new THREE.Vector2(40, 10),
+        new THREE.Vector2(0, 10),
+      ],
     });
     expect(target!.centroid().toArray()).toEqual([20, 5, 0]);
   });

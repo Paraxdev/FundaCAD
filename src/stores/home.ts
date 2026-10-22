@@ -9,6 +9,8 @@ export const useHomeStore = defineStore("home", () => {
     visible,
     callbacks,
     shown: computed(() => visible.value && !!callbacks.value),
-    bind: (cb: HomeCallbacks) => { callbacks.value = markRaw(cb); },
+    bind: (cb: HomeCallbacks) => {
+      callbacks.value = markRaw(cb);
+    },
   };
 });

@@ -216,9 +216,8 @@ impl RebuildCache {
 
         // A disk resume at a snapshot is held in RAM from here on, or every
         // later ask of this document reads the checkpoint back again.
-        let restored = (source == Source::Disk)
-            .then(|| resume.as_ref().map(|(at, snap)| (*at, snap.clone())))
-            .flatten();
+        let restored =
+            (source == Source::Disk).then(|| resume.as_ref().map(|(at, snap)| (*at, snap.clone()))).flatten();
 
         let began = Instant::now();
         let mut tap = CacheTap {
@@ -248,12 +247,7 @@ impl RebuildCache {
             if let Some(s) = &self.store {
                 s.purge(&keys);
             }
-            self.stats = CacheStats {
-                source,
-                resumed_at: start,
-                replayed,
-                ..CacheStats::default()
-            };
+            self.stats = CacheStats { source, resumed_at: start, replayed, ..CacheStats::default() };
             return built;
         }
         let r = built?;
@@ -279,11 +273,8 @@ impl RebuildCache {
                 *slot = Some(snap);
             }
         }
-        let beyond: Vec<Snapshot> = ring
-            .iter_mut()
-            .take(n.saturating_sub(self.window))
-            .filter_map(Option::take)
-            .collect();
+        let beyond: Vec<Snapshot> =
+            ring.iter_mut().take(n.saturating_sub(self.window)).filter_map(Option::take).collect();
         reap(beyond);
 
         let mut written = 0;
@@ -294,11 +285,7 @@ impl RebuildCache {
                 }
             }
             written = p.written;
-            self.mesh_keys = p
-                .modified
-                .into_iter()
-                .map(|(id, (_, key))| (id, key))
-                .collect();
+            self.mesh_keys = p.modified.into_iter().map(|(id, (_, key))| (id, key)).collect();
         } else {
             self.mesh_keys.clear();
         }
@@ -306,13 +293,8 @@ impl RebuildCache {
         self.proj_quiet = r.projection_updates.is_empty();
         self.ring = ring;
         self.ring_keys = keys;
-        self.stats = CacheStats {
-            source,
-            resumed_at: start,
-            replayed,
-            checkpoints_written: written,
-            ..CacheStats::default()
-        };
+        self.stats =
+            CacheStats { source, resumed_at: start, replayed, checkpoints_written: written, ..CacheStats::default() };
         Ok(r)
     }
 
@@ -367,9 +349,7 @@ impl RebuildCache {
 
 /// The stored geometry the document's imports name and the blob store lacks.
 fn absent_geometry(raw: &Value) -> BTreeSet<String> {
-    let store = BlobStore {
-        root: blobstore::default_root(),
-    };
+    let store = BlobStore { root: blobstore::default_root() };
     raw.get("features")
         .and_then(Value::as_array)
         .into_iter()
@@ -383,15 +363,12 @@ fn absent_geometry(raw: &Value) -> BTreeSet<String> {
 /// The index of the first sketch holding a projected entity, builder.py's
 /// `proj_cap`.
 fn projection_cap(raw: &Value) -> Option<usize> {
-    raw.get("features")
-        .and_then(Value::as_array)?
-        .iter()
-        .position(|f| {
-            f.get("type").and_then(Value::as_str) == Some("sketch")
-                && f.get("entities")
-                    .and_then(Value::as_array)
-                    .is_some_and(|es| es.iter().any(|e| e.get("type").and_then(Value::as_str) == Some("projected")))
-        })
+    raw.get("features").and_then(Value::as_array)?.iter().position(|f| {
+        f.get("type").and_then(Value::as_str) == Some("sketch")
+            && f.get("entities")
+                .and_then(Value::as_array)
+                .is_some_and(|es| es.iter().any(|e| e.get("type").and_then(Value::as_str) == Some("projected")))
+    })
 }
 
 /// Frees `old` on a background thread. The snapshots of a big build hold every

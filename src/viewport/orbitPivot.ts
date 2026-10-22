@@ -52,11 +52,7 @@ export function frameRotation(before: THREE.Quaternion, after: THREE.Quaternion)
  *  `target` is the target the rotation was applied about, i.e. the one from
  *  BEFORE the frame. Passing the post-rotation target instead gives a shift that
  *  is wrong by exactly the amount the target already moved. */
-export function pivotShift(
-  q: THREE.Quaternion,
-  pivot: THREE.Vector3,
-  target: THREE.Vector3,
-): THREE.Vector3 {
+export function pivotShift(q: THREE.Quaternion, pivot: THREE.Vector3, target: THREE.Vector3): THREE.Vector3 {
   const v = pivot.clone().sub(target);
   return v.clone().sub(v.applyQuaternion(q));
 }

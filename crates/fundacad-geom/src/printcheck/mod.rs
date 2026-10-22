@@ -29,7 +29,11 @@ pub(crate) fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 
 pub fn unit(a: [f64; 3]) -> [f64; 3] {
     let l = dot(a, a).sqrt();
-    if l > 0.0 { [a[0] / l, a[1] / l, a[2] / l] } else { [0.0, 0.0, 0.0] }
+    if l > 0.0 {
+        [a[0] / l, a[1] / l, a[2] / l]
+    } else {
+        [0.0, 0.0, 0.0]
+    }
 }
 
 fn add(a: [f64; 3], b: [f64; 3], k: f64) -> [f64; 3] {
@@ -135,7 +139,17 @@ pub fn settings_of(args: &Map<String, Value>) -> Result<Settings, String> {
             return Err(format!("`layFlat` is true or {{body: face index}}, got {v}"));
         }
     }
-    Ok(Settings { nozzle, layer, overhang, min_gap, max_bridge, checks, all: args.get("all").and_then(Value::as_bool).unwrap_or(false), up, lay_flat })
+    Ok(Settings {
+        nozzle,
+        layer,
+        overhang,
+        min_gap,
+        max_bridge,
+        checks,
+        all: args.get("all").and_then(Value::as_bool).unwrap_or(false),
+        up,
+        lay_flat,
+    })
 }
 
 // --- the bodies ------------------------------------------------------------------
@@ -204,7 +218,11 @@ impl Body {
 
     pub(crate) fn edge_key(&self, i: usize, j: usize) -> EdgeKey {
         let (a, b) = (self.keys[i], self.keys[j]);
-        if a <= b { (a, b) } else { (b, a) }
+        if a <= b {
+            (a, b)
+        } else {
+            (b, a)
+        }
     }
 
     /// Every edge, by where its ends are, and the triangles that use it.
@@ -497,12 +515,21 @@ fn overhangs(
             continue;
         }
         let worst = tris.iter().map(|(_, tilt)| 90.0 - tilt).fold(0.0, f64::max);
-        let low = ids
-            .iter()
-            .flat_map(|&t| b.tris[t].iter().map(|&i| b.height(b.pts[i])))
-            .fold(f64::INFINITY, f64::min);
+        let low = ids.iter().flat_map(|&t| b.tris[t].iter().map(|&i| b.height(b.pts[i]))).fold(f64::INFINITY, f64::min);
         let (at, extent) = spread(b, &ids);
-        out.push(Finding { kind: Kind::Overhang, body: bi, face, other: None, value: worst, area, low, at, extent, note, limit: 0.0 });
+        out.push(Finding {
+            kind: Kind::Overhang,
+            body: bi,
+            face,
+            other: None,
+            value: worst,
+            area,
+            low,
+            at,
+            extent,
+            note,
+            limit: 0.0,
+        });
     }
     out
 }
@@ -621,11 +648,8 @@ fn thickness(
                     if let Some((h, _)) = tree.first_hit(p, d, EPS, wall_ray, index[bi][t], |o| o == bi) {
                         let facing = dot(bodies[h.body].n[h.tri], n) < FACING;
                         if h.body == bi && facing {
-                            let (kind, limit) = if vertical {
-                                (Kind::Floor, 2.0 * s.layer)
-                            } else {
-                                (Kind::Wall, 2.0 * s.nozzle)
-                            };
+                            let (kind, limit) =
+                                if vertical { (Kind::Floor, 2.0 * s.layer) } else { (Kind::Wall, 2.0 * s.nozzle) };
                             if h.t < limit * SLACK {
                                 note(kind, me, (bi, b.face[h.tri]), w, h.t, add(p, d, h.t / 2.0), limit);
                             }
@@ -661,7 +685,19 @@ fn thickness(
                 return None;
             }
             let (value, at, extent, limit) = c.least();
-            Some(Finding { kind, body: a.0, face: a.1, other: Some(b), value, area, low: 0.0, at, extent, note: String::new(), limit })
+            Some(Finding {
+                kind,
+                body: a.0,
+                face: a.1,
+                other: Some(b),
+                value,
+                area,
+                low: 0.0,
+                at,
+                extent,
+                note: String::new(),
+                limit,
+            })
         })
         .collect()
 }
@@ -763,7 +799,11 @@ fn sig4(v: f64) -> String {
 }
 
 fn who(b: &Body) -> String {
-    if b.name.is_empty() || b.name == b.id { b.id.clone() } else { format!("{} \"{}\"", b.id, b.name) }
+    if b.name.is_empty() || b.name == b.id {
+        b.id.clone()
+    } else {
+        format!("{} \"{}\"", b.id, b.name)
+    }
 }
 
 fn focus(f: &Finding) -> String {
@@ -867,7 +907,13 @@ fn line(f: &Finding, bodies: &[Body], s: &Settings) -> String {
 
 /// The whole reply. `header` says how the parts sit; `topo` adds what the
 /// B-rep knows about open shells.
-pub fn report(bodies: &[Body], findings: &[Finding], s: &Settings, header: &str, topo: &HashMap<String, Topology>) -> String {
+pub fn report(
+    bodies: &[Body],
+    findings: &[Finding],
+    s: &Settings,
+    header: &str,
+    topo: &HashMap<String, Topology>,
+) -> String {
     let mut out = vec![format!(
         "Printability, {header}; nozzle {}, layer {}, overhang {} deg, gap {}, bridge {} mm:",
         g_format(s.nozzle),
@@ -895,7 +941,9 @@ pub fn report(bodies: &[Body], findings: &[Finding], s: &Settings, header: &str,
                 // An open shell has its line above, in the words a print is read by.
                 if let Some(why) = t.fault.as_ref().filter(|_| t.open_edges == 0) {
                     counts.push("not a sound solid".into());
-                    lines.push(format!("not a sound solid: it {why}; the findings below are read off its skin and can be wrong"));
+                    lines.push(format!(
+                        "not a sound solid: it {why}; the findings below are read off its skin and can be wrong"
+                    ));
                 }
                 if t.solids > 1 {
                     counts.push(format!("{} pieces", t.solids));
@@ -908,7 +956,9 @@ pub fn report(bodies: &[Body], findings: &[Finding], s: &Settings, header: &str,
             }
         }
         let mine: Vec<&Finding> = findings.iter().filter(|f| f.body == bi && f.kind != Kind::Fused).collect();
-        for kind in [Kind::Overhang, Kind::Bridge, Kind::Wall, Kind::Floor, Kind::Gap, Kind::MeshHole, Kind::FlatTriangle] {
+        for kind in
+            [Kind::Overhang, Kind::Bridge, Kind::Wall, Kind::Floor, Kind::Gap, Kind::MeshHole, Kind::FlatTriangle]
+        {
             let mut of: Vec<&&Finding> = mine.iter().filter(|f| f.kind == kind).collect();
             if of.is_empty() {
                 continue;
@@ -952,7 +1002,10 @@ pub fn report(bodies: &[Body], findings: &[Finding], s: &Settings, header: &str,
         }
     }
     if hidden > 0 {
-        out.push(format!("{hidden} more finding{} not shown; all:true lists them.", if hidden == 1 { "" } else { "s" }));
+        out.push(format!(
+            "{hidden} more finding{} not shown; all:true lists them.",
+            if hidden == 1 { "" } else { "s" }
+        ));
     }
     out.join("\n")
 }
@@ -968,7 +1021,11 @@ mod tests {
 
     fn box_raw(lo: [f64; 3], hi: [f64; 3]) -> Raw {
         let c = |i: usize| -> [f64; 3] {
-            [if i & 1 == 0 { lo[0] } else { hi[0] }, if i & 2 == 0 { lo[1] } else { hi[1] }, if i & 4 == 0 { lo[2] } else { hi[2] }]
+            [
+                if i & 1 == 0 { lo[0] } else { hi[0] },
+                if i & 2 == 0 { lo[1] } else { hi[1] },
+                if i & 4 == 0 { lo[2] } else { hi[2] },
+            ]
         };
         // Outward-wound quads: -X, +X, -Y, +Y, -Z, +Z.
         let quads = [[0, 4, 6, 2], [1, 3, 7, 5], [0, 1, 5, 4], [2, 6, 7, 3], [0, 2, 3, 1], [4, 5, 7, 6]];
@@ -988,7 +1045,10 @@ mod tests {
 
     fn box_body(id: &str, lo: [f64; 3], hi: [f64; 3]) -> Body {
         let (positions, indices, face_ids) = box_raw(lo, hi);
-        Body::new(&Mesh { id, name: "", positions: &positions, indices: &indices, face_ids: &face_ids }, [0.0, 0.0, 1.0])
+        Body::new(
+            &Mesh { id, name: "", positions: &positions, indices: &indices, face_ids: &face_ids },
+            [0.0, 0.0, 1.0],
+        )
     }
 
     fn defaults() -> Settings {
@@ -1047,7 +1107,8 @@ mod tests {
     fn a_mesh_hole_names_its_lowest_face_every_time() {
         // A box without its top: the four side faces each keep an open edge.
         let (positions, indices, face_ids) = box_raw([0.0; 3], [20.0, 20.0, 10.0]);
-        let mesh = Mesh { id: "body1", name: "", positions: &positions, indices: &indices[..30], face_ids: &face_ids[..10] };
+        let mesh =
+            Mesh { id: "body1", name: "", positions: &positions, indices: &indices[..30], face_ids: &face_ids[..10] };
         for _ in 0..20 {
             let b = Body::new(&mesh, [0.0, 0.0, 1.0]);
             let f = run(&[b], &defaults(), true, &HashMap::new(), &|| false);

@@ -34,7 +34,11 @@ fn put_manifest(root: &Path, id: &str, man: Value) {
 fn a_bundle_identity_moves_with_its_version_and_its_component() {
     let id_of = |tag: &str, version: &str, wasm: &[u8]| {
         let root = temp_root(tag);
-        put_manifest(&root, "P", json!({"id": "P", "version": version, MANIFEST_WASM: "p.wasm", "featureTypes": ["t"]}));
+        put_manifest(
+            &root,
+            "P",
+            json!({"id": "P", "version": version, MANIFEST_WASM: "p.wasm", "featureTypes": ["t"]}),
+        );
         std::fs::write(root.join("P").join("p.wasm"), wasm).unwrap();
         let mut reg = Registry::default();
         reg.replace(discover_in(std::slice::from_ref(&root)));
@@ -69,7 +73,10 @@ fn a_plugin_without_a_component_owns_its_names() {
     let why = "which is installed but would not load: the installed copy was made for the previous engine and has no component for FundaCAD 1.0, updating the plugin in Preferences, Plugins fixes it";
     assert_eq!(say(Claim::Feature, "legacyThing"), format!("this needs the \"Some.Plugin\" plugin, {why}"));
     assert_eq!(say(Claim::Generator, "widget"), format!("the shape 'widget' needs the \"Some.Plugin\" plugin, {why}"));
-    assert_eq!(say(Claim::Exporter, "legacy-3mf"), format!("the 'legacy-3mf' export needs the \"Some.Plugin\" plugin, {why}"));
+    assert_eq!(
+        say(Claim::Exporter, "legacy-3mf"),
+        format!("the 'legacy-3mf' export needs the \"Some.Plugin\" plugin, {why}")
+    );
 
     assert_eq!(say(Claim::Feature, "x"), "unknown feature type: x");
     assert_eq!(say(Claim::Generator, "x"), "no plugin that is running offers the shape 'x'");
@@ -129,7 +136,8 @@ fn a_boolean_with_options_cuts_and_cleans() {
     let b = k::make_box((0.0, 0.0, 0.0), (10.0, 10.0, 10.0)).unwrap();
     let c = k::make_cylinder((5.0, 5.0, -1.0), (0.0, 0.0, 1.0), 2.0, 12.0).unwrap();
     for (parallel, fuzzy) in [(true, Fuzzy::Exact), (false, Fuzzy::Picked), (false, Fuzzy::Value(1e-6))] {
-        let out = kx::boolean_with(BooleanOp::Cut, &b, &[&c], &BooleanOptions { parallel, fuzzy, clean: true }).unwrap();
+        let out =
+            kx::boolean_with(BooleanOp::Cut, &b, &[&c], &BooleanOptions { parallel, fuzzy, clean: true }).unwrap();
         assert!(close(kernel::volume(&out), 1000.0 - PI * 40.0, 1e-9));
         assert_eq!(k::kind(&out), host::types::ShapeKind::Solid, "a lone solid is unwrapped");
     }
@@ -149,7 +157,13 @@ fn a_boolean_with_options_cuts_and_cleans() {
     .unwrap();
     assert!(k::items(&raw, k::Items::Faces).len() > k::items(&cleaned, k::Items::Faces).len());
     assert_eq!(k::items(&cleaned, k::Items::Faces).len(), 6);
-    assert!(kx::boolean_with(BooleanOp::Cut, &b, &[], &BooleanOptions { parallel: true, fuzzy: Fuzzy::Exact, clean: true }).is_err());
+    assert!(kx::boolean_with(
+        BooleanOp::Cut,
+        &b,
+        &[],
+        &BooleanOptions { parallel: true, fuzzy: Fuzzy::Exact, clean: true }
+    )
+    .is_err());
 }
 
 #[test]
@@ -222,10 +236,8 @@ fn edges_wires_and_a_rotation() {
 fn a_face_reads_its_surface_and_stored_triangulation() {
     let cyl = k::make_cylinder((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 3.0, 5.0).unwrap();
     let faces = k::items(&cyl, k::Items::Faces);
-    let side = faces
-        .iter()
-        .find(|f| kx::surface_frame(f).is_some_and(|s| s.kind == "cylinder"))
-        .expect("a cylindrical face");
+    let side =
+        faces.iter().find(|f| kx::surface_frame(f).is_some_and(|s| s.kind == "cylinder")).expect("a cylindrical face");
     let frame = kx::surface_frame(side).unwrap();
     assert!((frame.radius - 3.0).abs() < 1e-12 && (frame.z_dir.2 - 1.0).abs() < 1e-12);
     assert!((frame.u_last - frame.u_first - 2.0 * PI).abs() < 1e-9);
@@ -255,9 +267,8 @@ fn a_face_reads_its_surface_and_stored_triangulation() {
 fn face_selectors_resolve_against_a_shape() {
     let b = k::make_box((0.0, 0.0, 0.0), (10.0, 10.0, 10.0)).unwrap();
     assert_eq!(kx::select_faces(&b, r#"{"by": "all"}"#).ok().map(|v| v.len()), Some(6));
-    let top = kx::select_faces(&b, r#"{"kind": "face", "by": "nearest", "point": [5, 5, 10]}"#)
-        .ok()
-        .expect("the top face");
+    let top =
+        kx::select_faces(&b, r#"{"kind": "face", "by": "nearest", "point": [5, 5, 10]}"#).ok().expect("the top face");
     assert_eq!(top.len(), 1);
     assert!(kx::select_faces(&b, "not json").is_err());
 }

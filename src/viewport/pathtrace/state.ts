@@ -25,8 +25,15 @@ export interface TraceInputs {
 }
 
 export type TraceState =
-  | "off" | "hidden" | "moving" | "done" | "trace"
-  | "paused:section" | "paused:xray" | "paused:wireframe" | "paused:sketch";
+  | "off"
+  | "hidden"
+  | "moving"
+  | "done"
+  | "trace"
+  | "paused:section"
+  | "paused:xray"
+  | "paused:wireframe"
+  | "paused:sketch";
 
 export function traceState(i: TraceInputs): TraceState {
   if (i.mode !== "pathtraced") return "off";

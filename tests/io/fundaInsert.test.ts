@@ -26,11 +26,19 @@ const SOURCE = JSON.stringify({
 function backend(opts: { exportFails?: boolean } = {}) {
   const exported: { doc: CadDocument; path: string }[] = [];
   const be = {
-    async rebuild() { return new Promise<never>(() => {}); },
+    async rebuild() {
+      return new Promise<never>(() => {});
+    },
     async init() {},
-    onStatus() { return () => {}; },
-    onProgress() { return () => {}; },
-    async cancel() { return true; },
+    onStatus() {
+      return () => {};
+    },
+    onProgress() {
+      return () => {};
+    },
+    async cancel() {
+      return true;
+    },
     async export(doc: CadDocument, _fmt: string, path: string) {
       exported.push({ doc, path });
       return opts.exportFails ? { ok: false, message: "nothing built" } : { ok: true, path };
@@ -63,7 +71,13 @@ describe("insertFundaDocument", () => {
   it("appends the source's geometry as one import step with no link", async () => {
     const { be, exported } = backend();
     const store = new DocumentStore(be, empty());
-    const res = await insertFundaDocument(store, be, { path: "C:/parts/Bracket.funda", text: SOURCE }, "append", "C:/tmp/a.step");
+    const res = await insertFundaDocument(
+      store,
+      be,
+      { path: "C:/parts/Bracket.funda", text: SOURCE },
+      "append",
+      "C:/tmp/a.step",
+    );
     expect(res.ok).toBe(true);
     expect(exported[0]!.path).toBe("C:/tmp/a.step");
     const f = store.document.features[0] as Feature & { link?: unknown; name: string; geom: string };
@@ -74,7 +88,13 @@ describe("insertFundaDocument", () => {
   it("links it with the file and a stamp, and an update re-reads it in place", async () => {
     const { be } = backend();
     const store = new DocumentStore(be, empty());
-    const res = await insertFundaDocument(store, be, { path: "C:/parts/Bracket.funda", text: SOURCE }, "link", "C:/tmp/a.step");
+    const res = await insertFundaDocument(
+      store,
+      be,
+      { path: "C:/parts/Bracket.funda", text: SOURCE },
+      "link",
+      "C:/tmp/a.step",
+    );
     if (!res.ok) throw new Error(res.message);
     const linked = store.document.features[0] as Feature & { link: { path: string; stamp: string } };
     expect(linked.link).toEqual({ path: "C:/parts/Bracket.funda", stamp: documentStamp(SOURCE) });

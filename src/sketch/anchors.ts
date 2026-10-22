@@ -105,9 +105,7 @@ export function isDegenerateLoop(loop: readonly THREE.Vector2[]): boolean {
  *  MODEL alone, a face anchor that disappeared because a sketch entity happened
  *  to sit on it would be a snap target that came and went as you drew.
  */
-export function footprintAnchors(
-  loops: readonly (readonly THREE.Vector2[])[],
-): THREE.Vector2[] {
+export function footprintAnchors(loops: readonly (readonly THREE.Vector2[])[]): THREE.Vector2[] {
   const out: THREE.Vector2[] = [];
   for (const loop of loops) {
     if (isDegenerateLoop(loop)) continue;
@@ -180,12 +178,17 @@ export function polylineMidpoint(poly: readonly THREE.Vector2[]): THREE.Vector2 
  *  everything in the plane. Zero (a single point, or nothing) leaves the
  *  tolerance at its floor rather than collapsing it to exact equality. */
 function outlineScale(polys: readonly (readonly THREE.Vector2[])[]): number {
-  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  let minx = Infinity,
+    miny = Infinity,
+    maxx = -Infinity,
+    maxy = -Infinity;
   for (const poly of polys) {
     for (const p of poly) {
       if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
-      minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x);
-      miny = Math.min(miny, p.y); maxy = Math.max(maxy, p.y);
+      minx = Math.min(minx, p.x);
+      maxx = Math.max(maxx, p.x);
+      miny = Math.min(miny, p.y);
+      maxy = Math.max(maxy, p.y);
     }
   }
   if (!Number.isFinite(minx) || !Number.isFinite(miny)) return 0;
@@ -207,9 +210,7 @@ export interface BoundaryAnchors {
  *  lying on top of each other, which is a fact about the model rather than
  *  something to hide.
  */
-export function boundaryAnchors(
-  polys: readonly (readonly THREE.Vector2[])[],
-): BoundaryAnchors {
+export function boundaryAnchors(polys: readonly (readonly THREE.Vector2[])[]): BoundaryAnchors {
   const tol = Math.max(1e-9, outlineScale(polys) * SAME_CORNER_FRACTION);
   const corners: THREE.Vector2[] = [];
   const sides: THREE.Vector2[] = [];

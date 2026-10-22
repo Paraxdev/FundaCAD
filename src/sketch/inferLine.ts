@@ -64,10 +64,7 @@ export function inferLineDirection(
 ): InferredDirection {
   if (![x1, y1, x2, y2].every(Number.isFinite)) return null;
 
-  const gridded =
-    step > 0 &&
-    onLattice(x1, step) && onLattice(y1, step) &&
-    onLattice(x2, step) && onLattice(y2, step);
+  const gridded = step > 0 && onLattice(x1, step) && onLattice(y1, step) && onLattice(x2, step) && onLattice(y2, step);
 
   if (gridded) {
     // Exact, and exhaustive: a lattice point is on some line in both axes, so

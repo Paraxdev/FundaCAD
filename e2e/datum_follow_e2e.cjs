@@ -18,7 +18,10 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "datum_follow_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -29,7 +32,10 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -44,15 +50,19 @@ const check = (name, ok, detail) => {
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   // pickDatumAt at the screen projection of a world point: does the axis pass
   // through that world point on screen?
-  const idAtWorld = (w) => page.evaluate((world) => {
-    const s = window.viewport.projectToScreen({ x: world[0], y: world[1], z: world[2] });
-    return window.viewport.pickDatumAt(s.x, s.y);
-  }, w);
+  const idAtWorld = (w) =>
+    page.evaluate((world) => {
+      const s = window.viewport.projectToScreen({ x: world[0], y: world[1], z: world[2] });
+      return window.viewport.pickDatumAt(s.x, s.y);
+    }, w);
 
   // A baked datum axis along Z through the origin.
   await page.evaluate(async () => {
@@ -63,8 +73,11 @@ const check = (name, ok, detail) => {
 
   const FAR = [60, 0, 0]; // far off the baked line (which is the Z axis at x=0)
   // BASELINE: the baked axis does NOT pass through a point 60mm off it.
-  check("CONTROL: the baked axis is not drawn through a point 60mm off it",
-    (await idAtWorld(FAR)) !== "da", JSON.stringify(await idAtWorld(FAR)));
+  check(
+    "CONTROL: the baked axis is not drawn through a point 60mm off it",
+    (await idAtWorld(FAR)) !== "da",
+    JSON.stringify(await idAtWorld(FAR)),
+  );
 
   // Now write a resolved follow mark that moves the axis to x=60, the way a
   // rebuild carrying datumMarks would, and reflect it.
@@ -76,11 +89,17 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(300);
 
   // The axis now passes through x=60 (the resolved line) ...
-  check("with a follow mark, the axis is drawn at the resolved line", (await idAtWorld(FAR)) === "da",
-    JSON.stringify(await idAtWorld(FAR)));
+  check(
+    "with a follow mark, the axis is drawn at the resolved line",
+    (await idAtWorld(FAR)) === "da",
+    JSON.stringify(await idAtWorld(FAR)),
+  );
   // ... and no longer through the baked line at the origin.
-  check("and no longer at the baked line it left behind", (await idAtWorld([0, 0, 0])) !== "da",
-    JSON.stringify(await idAtWorld([0, 0, 0])));
+  check(
+    "and no longer at the baked line it left behind",
+    (await idAtWorld([0, 0, 0])) !== "da",
+    JSON.stringify(await idAtWorld([0, 0, 0])),
+  );
   await page.screenshot({ path: `${OUT}/datum-follow.png` });
 
   await browser.close();

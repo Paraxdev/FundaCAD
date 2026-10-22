@@ -14,10 +14,7 @@ import type { Feature } from "../../src/types";
 const f = (id: string, type: string, extra: Record<string, unknown> = {}) =>
   ({ id, type, ...extra }) as unknown as Feature;
 
-const box = [
-  f("s1", "sketch", { plane: "XY", entities: [] }),
-  f("e1", "extrude", { sketch: "s1", distance: 5 }),
-];
+const box = [f("s1", "sketch", { plane: "XY", entities: [] }), f("e1", "extrude", { sketch: "s1", distance: 5 })];
 
 beforeEach(() => resetContributions());
 
@@ -63,18 +60,9 @@ describe("a document whose plugin is missing", () => {
 
   it("puts the most-used plugin first, so the summary reads as the real problem", () => {
     const doc = {
-      features: [
-        ...box,
-        f("x1", "somebodyElsesThing"),
-        f("t1", "texture"),
-        f("t2", "texture"),
-        f("t3", "texture"),
-      ],
+      features: [...box, f("x1", "somebodyElsesThing"), f("t1", "texture"), f("t2", "texture"), f("t3", "texture")],
     };
-    expect(missingPlugins(doc).map((m) => m.name)).toEqual([
-      "Surface Texture",
-      "somebodyElsesThing",
-    ]);
+    expect(missingPlugins(doc).map((m) => m.name)).toEqual(["Surface Texture", "somebodyElsesThing"]);
   });
 
   describe("the sentence it shows", () => {

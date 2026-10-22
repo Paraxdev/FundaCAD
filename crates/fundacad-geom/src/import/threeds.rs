@@ -88,7 +88,12 @@ fn material(body: &[u8]) -> Result<Option<(String, [u8; 3])>, String> {
     Ok(name.zip(diffuse))
 }
 
-fn read_mesh(name: &str, body: &[u8], scale: f64, colors: &HashMap<String, [u8; 3]>) -> Result<Option<MeshObject>, String> {
+fn read_mesh(
+    name: &str,
+    body: &[u8],
+    scale: f64,
+    colors: &HashMap<String, [u8; 3]>,
+) -> Result<Option<MeshObject>, String> {
     let (mut pos, mut tris, mut groups) = (Vec::new(), Vec::new(), Vec::new());
     for c in chunks(body)? {
         match c.id {
@@ -140,7 +145,9 @@ fn read_mesh(name: &str, body: &[u8], scale: f64, colors: &HashMap<String, [u8; 
     for (mat, faces) in &groups {
         let c = colors.get(mat).copied();
         for &f in faces {
-            *face_color.get_mut(f as usize).ok_or_else(|| bad(&format!("a material group of '{name}' names a face that does not exist")))? = c;
+            *face_color
+                .get_mut(f as usize)
+                .ok_or_else(|| bad(&format!("a material group of '{name}' names a face that does not exist")))? = c;
         }
     }
     Ok(Some(MeshObject {

@@ -27,7 +27,12 @@ describe("shader patch stack", () => {
     const m = new THREE.MeshPhysicalMaterial();
     applySurface(m, noise);
     setGlassAuto(m, mesh(m));
-    setPatch(m, { name: "probe", key: "probe", varyings: ["surfWorld"], after: { aomap_fragment: "  float probeAo = 1.0;" } });
+    setPatch(m, {
+      name: "probe",
+      key: "probe",
+      varyings: ["surfWorld"],
+      after: { aomap_fragment: "  float probeAo = 1.0;" },
+    });
     const s = compiled(m);
     expect(count(s.vertexShader, "varying vec3 vSurfWPos;")).toBe(1);
     expect(count(s.fragmentShader, "varying vec3 vSurfWPos;")).toBe(1);
@@ -49,7 +54,8 @@ describe("shader patch stack", () => {
     applySurface(b, noise);
     expect(b.customProgramCacheKey()).toBe("surf-pick|glass-auto");
     expect(a.customProgramCacheKey()).toBe(b.customProgramCacheKey());
-    const sa = compiled(a), sb = compiled(b);
+    const sa = compiled(a),
+      sb = compiled(b);
     expect(sb.vertexShader).toBe(sa.vertexShader);
     expect(sb.fragmentShader).toBe(sa.fragmentShader);
   });
@@ -165,7 +171,8 @@ describe("cloneWithoutSurface", () => {
     expect(getPatch(c, "surface")).toBeUndefined();
     expect(isGlassAuto(c)).toBe(true);
     expect(c.customProgramCacheKey()).toBe("glass-auto");
-    const s = compiled(c), base = compiled(m);
+    const s = compiled(c),
+      base = compiled(m);
     expect(s.fragmentShader).not.toContain("sPickHeight");
     expect(s.uniforms.fcBodyId).not.toBe(base.uniforms.fcBodyId);
     expect(s.uniforms.fcBodyId!.value).toBe(base.uniforms.fcBodyId!.value);
@@ -174,7 +181,13 @@ describe("cloneWithoutSurface", () => {
 
   it("gives a graph surface back the stock key", () => {
     const m = new THREE.MeshPhysicalMaterial();
-    applySurfaceGraph(m, { output: "out", nodes: [{ id: "n", type: "noise" }, { id: "out", type: "output", in: { bump: "n" } }] });
+    applySurfaceGraph(m, {
+      output: "out",
+      nodes: [
+        { id: "n", type: "noise" },
+        { id: "out", type: "output", in: { bump: "n" } },
+      ],
+    });
     expect(cloneWithoutSurface(m).customProgramCacheKey()).toBe(stockKey);
   });
 });
@@ -185,8 +198,15 @@ describe("three internals the patches rely on", () => {
     const { vertexShader: vs, fragmentShader: fs } = THREE.ShaderLib.physical;
     for (const inc of ["common", "worldpos_vertex"]) expect(count(vs, `#include <${inc}>`)).toBe(1);
     for (const inc of [
-      "common", "color_fragment", "roughnessmap_fragment", "normal_fragment_begin",
-      "transmission_pars_fragment", "transmission_fragment", "aomap_fragment", "lights_fragment_maps",
-    ]) expect(count(fs, `#include <${inc}>`)).toBe(1);
+      "common",
+      "color_fragment",
+      "roughnessmap_fragment",
+      "normal_fragment_begin",
+      "transmission_pars_fragment",
+      "transmission_fragment",
+      "aomap_fragment",
+      "lights_fragment_maps",
+    ])
+      expect(count(fs, `#include <${inc}>`)).toBe(1);
   });
 });

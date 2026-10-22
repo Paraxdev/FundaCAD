@@ -7,7 +7,10 @@ const size = { w: 556, h: 41 };
 describe("placeBeside", () => {
   it("goes past the model's right side when it fits there", () => {
     const model = { left: 300, top: 300, right: 400, bottom: 500 };
-    expect(placeBeside(model, { x: 350, y: 400 }, size, { ...bounds, right: 1400 }, 8)).toEqual({ left: 408, top: 379.5 });
+    expect(placeBeside(model, { x: 350, y: 400 }, size, { ...bounds, right: 1400 }, 8)).toEqual({
+      left: 408,
+      top: 379.5,
+    });
   });
 
   it("goes to the left side when the right one is cut off", () => {

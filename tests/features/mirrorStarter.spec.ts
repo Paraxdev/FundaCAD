@@ -44,7 +44,9 @@ function rig(bodies: { id: string; name: string }[], selected: string[] = []) {
     toolBusy: () => planePick,
     hasBody: () => bodies.length > 0,
     setStatus: vi.fn(),
-    setPlanePick: (v: boolean) => { planePick = v; },
+    setPlanePick: (v: boolean) => {
+      planePick = v;
+    },
   } as unknown as FeatureStartersDeps;
   return { starters: createFeatureStarters(deps), addFeature };
 }
@@ -54,7 +56,10 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
 beforeEach(() => {
   setActivePinia(createPinia());
   frames = [];
-  vi.stubGlobal("requestAnimationFrame", (f: () => void) => { frames.push(f); return frames.length; });
+  vi.stubGlobal("requestAnimationFrame", (f: () => void) => {
+    frames.push(f);
+    return frames.length;
+  });
 });
 afterEach(() => {
   resetTreePicks();
@@ -62,7 +67,10 @@ afterEach(() => {
 });
 
 describe("Mirror names its targets", () => {
-  const two = [{ id: "body1", name: "Rail" }, { id: "body2", name: "Brace" }];
+  const two = [
+    { id: "body1", name: "Rail" },
+    { id: "body2", name: "Brace" },
+  ];
 
   it("mirrors the selected body, not the active one", async () => {
     const r = rig(two, ["body1"]);
@@ -92,23 +100,26 @@ describe("Mirror names its targets", () => {
 describe("body commands with a body selected", () => {
   // Picking a body raises the Move gizmo, which reads as busy, so the ribbon's
   // Mirror and Pattern did nothing at all for a selected body.
-  it.each(["mirror", "pattern-linear", "boolean-union"])("%s stands the selection's gizmo down first, to come back on Escape", (action) => {
-    const order: string[] = [];
-    const act = createActions({
-      sketch: { active: false },
-      starters: {
-        startMirror: () => order.push("start"),
-        startPattern: () => order.push("start"),
-        startBoolean: () => order.push("start"),
-      },
-      tools: { section: { picking: false, active: false } },
-      dropBodyGizmo: () => order.push("drop"),
-      restoreBodyGizmo: () => order.push("restore"),
-      toolBusy: () => false,
-      setStatus: vi.fn(),
-      lastAction: null,
-    } as unknown as Engine);
-    act(action);
-    expect(order).toEqual(["drop", "restore", "start"]);
-  });
+  it.each(["mirror", "pattern-linear", "boolean-union"])(
+    "%s stands the selection's gizmo down first, to come back on Escape",
+    (action) => {
+      const order: string[] = [];
+      const act = createActions({
+        sketch: { active: false },
+        starters: {
+          startMirror: () => order.push("start"),
+          startPattern: () => order.push("start"),
+          startBoolean: () => order.push("start"),
+        },
+        tools: { section: { picking: false, active: false } },
+        dropBodyGizmo: () => order.push("drop"),
+        restoreBodyGizmo: () => order.push("restore"),
+        toolBusy: () => false,
+        setStatus: vi.fn(),
+        lastAction: null,
+      } as unknown as Engine);
+      act(action);
+      expect(order).toEqual(["drop", "restore", "start"]);
+    },
+  );
 });

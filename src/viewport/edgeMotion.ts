@@ -205,7 +205,9 @@ function bezier(x1: number, y1: number, x2: number, y2: number): (x: number) => 
   return (x) => {
     if (x <= 0) return 0;
     if (x >= 1) return 1;
-    let lo = 0, hi = 1, t = x;
+    let lo = 0,
+      hi = 1,
+      t = x;
     for (let i = 0; i < 30; i++) {
       const cx = at(t, x1, x2);
       if (Math.abs(cx - x) < 1e-6) break;

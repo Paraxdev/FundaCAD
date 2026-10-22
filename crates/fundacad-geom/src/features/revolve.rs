@@ -8,8 +8,8 @@
 use fundacad_core::schema::{AxisSpec, Revolve};
 use opencascade::primitives::Shape;
 
-use super::sketch::{region_target, require};
 use super::combine;
+use super::sketch::{region_target, require};
 use crate::builder::{py_g_prec, Ctx, FResult, Fail};
 use crate::kernel::{self, Kind};
 
@@ -37,38 +37,20 @@ fn axis_of(f: &Revolve) -> ([f64; 3], [f64; 3], String) {
 
 pub fn handle(ctx: &mut Ctx, f: &Revolve) -> FResult {
     let entry = require(ctx, &f.sketch, "revolve")?;
-    let pts: Vec<[f64; 3]> = f
-        .regions
-        .iter()
-        .flatten()
-        .map(|p| [p[0].get(), p[1].get(), p[2].get()])
-        .collect();
+    let pts: Vec<[f64; 3]> = f.regions.iter().flatten().map(|p| [p[0].get(), p[1].get(), p[2].get()]).collect();
     let sk = match region_target(ctx, &pts, entry)? {
         Some(s) => s,
-        None => entry
-            .sketch
-            .clone()
-            .ok_or_else(|| Fail::msg("sketch has no closed profile to revolve"))?,
+        None => entry.sketch.clone().ok_or_else(|| Fail::msg("sketch has no closed profile to revolve"))?,
     };
     let mut angle = ctx.val(&f.angle)?;
     if angle == 0.0 {
-        return Err(Fail::msg(
-            "Revolve: angle must not be 0, nothing would be swept",
-        ));
+        return Err(Fail::msg("Revolve: angle must not be 0, nothing would be swept"));
     }
     let pitch = ctx.val_or(f.pitch.as_ref(), 0.0)?;
     let (origin, dir, axis_label) = axis_of(f);
     if pitch != 0.0 {
         let solid = screw_revolve(&sk, origin, dir, angle, pitch)?;
-        return combine(
-            ctx,
-            &f.id,
-            solid,
-            f.operation.as_ref(),
-            f.targets.as_deref(),
-            None,
-            None,
-        );
+        return combine(ctx, &f.id, solid, f.operation.as_ref(), f.targets.as_deref(), None, None);
     }
     angle = angle.clamp(-360.0, 360.0);
     let sign = if angle >= 0.0 { 1.0 } else { -1.0 };
@@ -81,15 +63,7 @@ pub fn handle(ctx: &mut Ctx, f: &Revolve) -> FResult {
             "Revolve failed, the profile probably crosses the axis of revolution ({axis_label}). Move it fully to one side (it may touch the axis, but not cross it). [{name}]"
         ))
     })?;
-    combine(
-        ctx,
-        &f.id,
-        solid,
-        f.operation.as_ref(),
-        f.targets.as_deref(),
-        None,
-        None,
-    )
+    combine(ctx, &f.id, solid, f.operation.as_ref(), f.targets.as_deref(), None, None)
 }
 
 /// How far off the axis a profile vertex or an arc's centre may sit and still
@@ -167,18 +141,14 @@ pub(super) fn screw_revolve(
         if tall > pitch.abs() - clear {
             let hold = dot(o, d) + (zmin + zmax) / 2.0;
             let factor = (pitch.abs() - clear) / tall;
-            faces = faces
-                .iter()
-                .map(|f| kernel::axial_scale(f, factor, d, hold))
-                .collect::<Result<_, _>>()?;
+            faces = faces.iter().map(|f| kernel::axial_scale(f, factor, d, hold)).collect::<Result<_, _>>()?;
         }
     }
     let turns = angle / 360.0;
     let rise = turns * pitch;
     let mut out: Option<Shape> = None;
     for face in &faces {
-        let c = kernel::face_area_centre(face)
-            .ok_or_else(|| Fail::Internal("Standard_Failure".into()))?;
+        let c = kernel::face_area_centre(face).ok_or_else(|| Fail::Internal("Standard_Failure".into()))?;
         let rel = sub([c[1], c[2], c[3]], o);
         let axial = dot(rel, d);
         let radial = sub(rel, mul(d, axial));

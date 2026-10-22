@@ -147,9 +147,7 @@ pub async fn frames_next(release: Vec<(usize, u32)>) -> Result<Next, String> {
             Some(t) => t,
             None => return Err("no shared buffers are open".into()),
         };
-        tauri::async_runtime::spawn_blocking(move || t.next(release))
-            .await
-            .map_err(|e| e.to_string())?
+        tauri::async_runtime::spawn_blocking(move || t.next(release)).await.map_err(|e| e.to_string())?
     }
     #[cfg(not(windows))]
     {
@@ -363,10 +361,13 @@ mod shared {
             let mut p: *mut u8 = std::ptr::null_mut();
             sb.Buffer(&mut p).map_err(e)?;
             *ptr = p as usize;
-            let meta = HSTRING::from(format!(
-                "{{\"frames\":1,\"i\":{i},\"g\":{generation},\"w\":{width},\"h\":{height}}}"
-            ));
-            let posted = core17.PostSharedBufferToScript(&sb, COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_ONLY, PCWSTR(meta.as_ptr()));
+            let meta =
+                HSTRING::from(format!("{{\"frames\":1,\"i\":{i},\"g\":{generation},\"w\":{width},\"h\":{height}}}"));
+            let posted = core17.PostSharedBufferToScript(
+                &sb,
+                COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_ONLY,
+                PCWSTR(meta.as_ptr()),
+            );
             POSTED.with(|list| list.borrow_mut().push(sb));
             posted.map_err(e)?;
         }

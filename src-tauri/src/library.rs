@@ -23,11 +23,7 @@ pub fn stat_one(path: &str) -> FileStat {
         Ok(m) if m.is_file() => FileStat {
             path: path.to_string(),
             exists: true,
-            mtime_ms: m
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                .map(|d| d.as_millis() as u64),
+            mtime_ms: m.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64),
             size: Some(m.len()),
         },
         _ => FileStat { path: path.to_string(), exists: false, mtime_ms: None, size: None },
@@ -133,9 +129,7 @@ mod tests {
     fn names(r: &ListResult, root: &std::path::Path) -> Vec<String> {
         r.files
             .iter()
-            .map(|f| {
-                std::path::Path::new(&f.path).strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/")
-            })
+            .map(|f| std::path::Path::new(&f.path).strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"))
             .collect()
     }
 

@@ -119,10 +119,8 @@ export function missingPlugins(doc: Pick<CadDocument, "features">): MissingPlugi
  *  A type no shipped plugin declares is document/openNotice.ts's to explain.
  */
 export function missingPluginMessage(m: MissingPlugin & { id: string }): string {
-  const what =
-    m.count === 1 ? "One feature in this document is" : `${m.count} features in this document are`;
-  const keep =
-    "Their settings are kept and will build again once it is back; saving will not drop them.";
+  const what = m.count === 1 ? "One feature in this document is" : `${m.count} features in this document are`;
+  const keep = "Their settings are kept and will build again once it is back; saving will not drop them.";
   const fix = m.installable
     ? `Turn "${m.name}" back on in Plugins to build them.`
     : `Install "${m.name}" to build them.`;

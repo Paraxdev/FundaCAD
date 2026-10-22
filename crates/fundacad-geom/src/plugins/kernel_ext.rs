@@ -8,10 +8,8 @@ use opencascade::primitives::Shape;
 use opencascade_sys::plugin_ops as ffi;
 use serde_json::Value;
 
-use super::host::types::{
-    BooleanOp, BooleanOptions, FaceTriangulation, Fuzzy, SurfaceFrame, SurfaceSample, Vec3,
-};
 use super::host::kernel::LoftOptions;
+use super::host::types::{BooleanOp, BooleanOptions, FaceTriangulation, Fuzzy, SurfaceFrame, SurfaceSample, Vec3};
 use super::kernel_api::{finite, nonnull, unit};
 use crate::kernel;
 
@@ -19,10 +17,8 @@ pub fn is_reversed(s: &Shape) -> bool {
     ffi::po_is_reversed(s.raw())
 }
 
-const SURFACE_KINDS: [&str; 11] = [
-    "plane", "cylinder", "cone", "sphere", "torus", "bezier", "bspline", "revolution",
-    "extrusion", "offset", "other",
-];
+const SURFACE_KINDS: [&str; 11] =
+    ["plane", "cylinder", "cone", "sphere", "torus", "bezier", "bspline", "revolution", "extrusion", "offset", "other"];
 
 pub fn surface_frame(face: &Shape) -> Option<SurfaceFrame> {
     let mut o = [0.0; 18];
@@ -75,10 +71,7 @@ pub fn triangulation(face: &Shape) -> Option<FaceTriangulation> {
 pub fn rotate(s: &Shape, o: Vec3, a: Vec3, degrees: f64) -> Result<Shape, String> {
     finite(&[o.0, o.1, o.2, degrees])?;
     let a = unit(a)?;
-    nonnull(
-        ffi::po_rotate(s.raw(), o.0, o.1, o.2, a.0, a.1, a.2, degrees),
-        "a rotated shape",
-    )
+    nonnull(ffi::po_rotate(s.raw(), o.0, o.1, o.2, a.0, a.1, a.2, degrees), "a rotated shape")
 }
 
 pub fn line_edge(a: Vec3, b: Vec3) -> Result<Shape, String> {
@@ -121,12 +114,7 @@ pub fn helical_sweep(profile: &Shape, o: Vec3, a: Vec3, degrees: f64, pitch: f64
     )
 }
 
-pub fn boolean_with(
-    op: BooleanOp,
-    base: &Shape,
-    tools: &[&Shape],
-    options: &BooleanOptions,
-) -> Result<Shape, String> {
+pub fn boolean_with(op: BooleanOp, base: &Shape, tools: &[&Shape], options: &BooleanOptions) -> Result<Shape, String> {
     let (kind, verb) = match op {
         BooleanOp::Fuse => (0, "join"),
         BooleanOp::Cut => (1, "cut"),
@@ -167,7 +155,15 @@ pub fn boolean_with(
 }
 
 extern "C" {
-    fn fc_delaunay_2d(xy: *const f64, n: i32, out: *mut i32, cap: i32, count: *mut i32, err: *mut u8, errlen: i32) -> i32;
+    fn fc_delaunay_2d(
+        xy: *const f64,
+        n: i32,
+        out: *mut i32,
+        cap: i32,
+        count: *mut i32,
+        err: *mut u8,
+        errlen: i32,
+    ) -> i32;
 }
 
 /// scipy.spatial.Delaunay's triangles of 2D points, from the same Qhull run

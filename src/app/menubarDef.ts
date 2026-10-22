@@ -73,8 +73,18 @@ export function buildMenubar(e: Engine): MenuDef[] {
     {
       label: "Edit",
       items: [
-        { label: "Undo", shortcut: "Ctrl+Z", disabled: () => !(e.sketch.active ? e.sketch.canUndoSketch : e.store.canUndo), onClick: () => e.doUndo() },
-        { label: "Redo", shortcut: "Ctrl+Y", disabled: () => !(e.sketch.active ? e.sketch.canRedoSketch : e.store.canRedo), onClick: () => e.doRedo() },
+        {
+          label: "Undo",
+          shortcut: "Ctrl+Z",
+          disabled: () => !(e.sketch.active ? e.sketch.canUndoSketch : e.store.canUndo),
+          onClick: () => e.doUndo(),
+        },
+        {
+          label: "Redo",
+          shortcut: "Ctrl+Y",
+          disabled: () => !(e.sketch.active ? e.sketch.canRedoSketch : e.store.canRedo),
+          onClick: () => e.doRedo(),
+        },
         { separator: true, label: "" },
         {
           label: "Delete",
@@ -102,7 +112,13 @@ export function buildMenubar(e: Engine): MenuDef[] {
         // No ellipsis any more: it opens a workspace, not a window, and the
         // three dots are a promise that something will come up over this.
         { label: "Materials", onClick: () => setWorkspace("render") },
-        { label: "Preferences…", shortcut: "Ctrl+,", onClick: () => { useDialogStore().preferences = true; } },
+        {
+          label: "Preferences…",
+          shortcut: "Ctrl+,",
+          onClick: () => {
+            useDialogStore().preferences = true;
+          },
+        },
       ],
     },
     {

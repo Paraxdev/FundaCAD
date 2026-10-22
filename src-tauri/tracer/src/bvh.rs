@@ -72,7 +72,8 @@ pub fn build(positions: &[[f32; 3]], indices: &[u32]) -> Bvh {
         }
         let mid = if depth >= MEDIAN_DEPTH {
             let ax = (0..3).max_by(|&a, &b| (cb.hi[a] - cb.lo[a]).total_cmp(&(cb.hi[b] - cb.lo[b]))).unwrap_or(0);
-            order[lo..hi].select_nth_unstable_by(count / 2, |a, b| cent[*a as usize][ax].total_cmp(&cent[*b as usize][ax]));
+            order[lo..hi]
+                .select_nth_unstable_by(count / 2, |a, b| cent[*a as usize][ax].total_cmp(&cent[*b as usize][ax]));
             count / 2
         } else {
             let mut best = (f32::MAX, 0usize, 0usize);

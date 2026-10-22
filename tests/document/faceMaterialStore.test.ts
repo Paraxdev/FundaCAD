@@ -17,9 +17,13 @@ const DOC: CadDocument = {
 function opened(json?: string) {
   const box = { result: reply("base") as RebuildResult };
   const be = {
-    async rebuild() { return { ok: true, result: box.result }; },
+    async rebuild() {
+      return { ok: true, result: box.result };
+    },
     async init() {},
-    onStatus() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
     connected: true,
   } as unknown as GeometryBackend;
   const store = new DocumentStore(be, structuredClone(DOC));
@@ -34,20 +38,51 @@ describe("face materials across a fillet", () => {
     const { store, box } = opened();
     await store.rebuildNow();
     store.setFacesMaterial([{ body: "body1", face: 0 }], "m-steel");
-    store.setFacesMaterial([{ body: "body1", face: 4 }, { body: "body2", face: 1 }], "m-brass");
-    store.setFacesMaterial([{ body: "body1", face: 5 }, { body: "body2", face: 4 }], "m-glass");
+    store.setFacesMaterial(
+      [
+        { body: "body1", face: 4 },
+        { body: "body2", face: 1 },
+      ],
+      "m-brass",
+    );
+    store.setFacesMaterial(
+      [
+        { body: "body1", face: 5 },
+        { body: "body2", face: 4 },
+      ],
+      "m-glass",
+    );
     box.result = reply("fillet");
     await store.rebuildNow();
-    expect(entries(store)).toEqual({ "body1#5": "m-steel", "body1#4": "m-brass", "body1#8": "m-glass", "body2#1": "m-brass", "body2#4": "m-glass" });
+    expect(entries(store)).toEqual({
+      "body1#5": "m-steel",
+      "body1#4": "m-brass",
+      "body1#8": "m-glass",
+      "body2#1": "m-brass",
+      "body2#4": "m-glass",
+    });
     expect(store.faceMaterialId("body1", 2)).toBeUndefined();
     expect(store.faceMaterialId("body1", 0)).toBeUndefined();
 
     store.setFacesMaterial([{ body: "body1", face: 2 }], "m-steel");
-    expect(entries(store)).toEqual({ "body1#5": "m-steel", "body1#2": "m-steel", "body1#4": "m-brass", "body1#8": "m-glass", "body2#1": "m-brass", "body2#4": "m-glass" });
+    expect(entries(store)).toEqual({
+      "body1#5": "m-steel",
+      "body1#2": "m-steel",
+      "body1#4": "m-brass",
+      "body1#8": "m-glass",
+      "body2#1": "m-brass",
+      "body2#4": "m-glass",
+    });
     store.undo();
     box.result = reply("base");
     await store.rebuildNow();
-    expect(entries(store)).toEqual({ "body1#0": "m-steel", "body1#4": "m-brass", "body1#5": "m-glass", "body2#1": "m-brass", "body2#4": "m-glass" });
+    expect(entries(store)).toEqual({
+      "body1#0": "m-steel",
+      "body1#4": "m-brass",
+      "body1#5": "m-glass",
+      "body2#1": "m-brass",
+      "body2#4": "m-glass",
+    });
   });
 
   it("a drop on one part of a split face recolours that part only", async () => {
@@ -69,7 +104,13 @@ describe("face materials across a fillet", () => {
   it("saves the faces they are on now, and a reload finds them again before and after its first build", async () => {
     const { store, box } = opened();
     await store.rebuildNow();
-    store.setFacesMaterial([{ body: "body1", face: 0 }, { body: "body1", face: 7 }], "m-steel");
+    store.setFacesMaterial(
+      [
+        { body: "body1", face: 0 },
+        { body: "body1", face: 7 },
+      ],
+      "m-steel",
+    );
     box.result = reply("fillet");
     await store.rebuildNow();
     const saved = JSON.parse(store.toJSON());
@@ -97,8 +138,20 @@ describe("face materials across a fillet", () => {
     const { store, box } = opened();
     await store.rebuildNow();
     expect(store.hiddenFaceMaterials()).toEqual([]);
-    store.setFacesMaterial([{ body: "body1", face: 3 }, { body: "body1", face: 2 }], "m-steel");
-    store.setFacesMaterial([{ body: "body1", face: 7 }, { body: "body2", face: 1 }], "m-brass");
+    store.setFacesMaterial(
+      [
+        { body: "body1", face: 3 },
+        { body: "body1", face: 2 },
+      ],
+      "m-steel",
+    );
+    store.setFacesMaterial(
+      [
+        { body: "body1", face: 7 },
+        { body: "body2", face: 1 },
+      ],
+      "m-brass",
+    );
     box.result = reply("unstep");
     await store.rebuildNow();
     const lost = store.hiddenFaceMaterials();
@@ -113,7 +166,12 @@ describe("face materials across a fillet", () => {
     box.result = reply("base");
     await store.rebuildNow();
     expect(store.hiddenFaceMaterials()).toEqual([]);
-    expect(entries(store)).toEqual({ "body1#3": "m-steel", "body1#2": "m-steel", "body1#7": "m-brass", "body2#1": "m-brass" });
+    expect(entries(store)).toEqual({
+      "body1#3": "m-steel",
+      "body1#2": "m-steel",
+      "body1#7": "m-brass",
+      "body2#1": "m-brass",
+    });
 
     box.result = reply("unstep");
     await store.rebuildNow();
@@ -129,7 +187,9 @@ describe("face materials across a fillet", () => {
   });
 
   it("a file from before prints keeps its indices on its first build and follows a fillet after it", async () => {
-    const { store, box } = opened(JSON.stringify({ ...DOC, version: 10, faceMaterials: { "body1#0": "m-steel", "body1#8": "m-brass" } }));
+    const { store, box } = opened(
+      JSON.stringify({ ...DOC, version: 10, faceMaterials: { "body1#0": "m-steel", "body1#8": "m-brass" } }),
+    );
     await store.rebuildNow();
     expect(entries(store)).toEqual({ "body1#0": "m-steel", "body1#8": "m-brass" });
     box.result = reply("fillet");
@@ -139,14 +199,33 @@ describe("face materials across a fillet", () => {
 });
 
 describe("face materials through a Separate with the build on screen", () => {
-  const lower = [0, 1, 2, 3, 4], upper = [5, 6, 7, 8];
+  const lower = [0, 1, 2, 3, 4],
+    upper = [5, 6, 7, 8];
   const cases: [string, number[], number[], [number, string][], Record<string, string>][] = [
     ["none on the source", lower, upper, [], {}],
     ["one", lower, upper, [[7, "m-glass"]], { "body3#2": "m-glass" }],
-    ["many, the source keeping the first run", lower, upper, [[1, "m-steel"], [6, "m-brass"], [7, "m-glass"]],
-      { "body1#1": "m-steel", "body3#1": "m-brass", "body3#2": "m-glass" }],
-    ["many, the source keeping the last run", upper, lower, [[1, "m-steel"], [6, "m-brass"], [7, "m-glass"]],
-      { "body3#1": "m-steel", "body1#1": "m-brass", "body1#2": "m-glass" }],
+    [
+      "many, the source keeping the first run",
+      lower,
+      upper,
+      [
+        [1, "m-steel"],
+        [6, "m-brass"],
+        [7, "m-glass"],
+      ],
+      { "body1#1": "m-steel", "body3#1": "m-brass", "body3#2": "m-glass" },
+    ],
+    [
+      "many, the source keeping the last run",
+      upper,
+      lower,
+      [
+        [1, "m-steel"],
+        [6, "m-brass"],
+        [7, "m-glass"],
+      ],
+      { "body3#1": "m-steel", "body1#1": "m-brass", "body1#2": "m-glass" },
+    ],
   ];
   for (const [label, keep, take, painted, moved] of cases) {
     for (const readFirst of [false, true]) {
@@ -163,7 +242,9 @@ describe("face materials through a Separate with the build on screen", () => {
         expect(entries(store)).toEqual(want);
         if (!painted.length) return;
         store.undo();
-        expect(entries(store)).toEqual(Object.fromEntries(Object.entries(want).filter(([k]) => !k.startsWith("body3"))));
+        expect(entries(store)).toEqual(
+          Object.fromEntries(Object.entries(want).filter(([k]) => !k.startsWith("body3"))),
+        );
         store.redo();
         expect(entries(store)).toEqual(want);
       });

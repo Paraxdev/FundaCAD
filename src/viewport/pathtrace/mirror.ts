@@ -11,7 +11,10 @@ import { traceMaterialFrom, traceMaterialKey } from "./materials";
  *  1 s at 4 M on a desktop CPU), so past this the mode refuses with a note. */
 export const TRIANGLE_BUDGET = 3_000_000;
 
-interface Owned { baseColors?: Float32Array; baseVersion?: number }
+interface Owned {
+  baseColors?: Float32Array;
+  baseVersion?: number;
+}
 
 export function isTracedBody(o: THREE.Object3D): o is THREE.Mesh {
   return (o as THREE.Mesh).isMesh === true && !!o.userData.owner && o.visible;
@@ -61,7 +64,7 @@ export function copyMirrorColors(mirror: THREE.Mesh, src: THREE.Mesh, bake: Surf
     return;
   }
   const c = g.getAttribute("color") as THREE.BufferAttribute | undefined;
-  const out = c && c.array.length === count * 3 ? c.array as Float32Array : new Float32Array(count * 3);
+  const out = c && c.array.length === count * 3 ? (c.array as Float32Array) : new Float32Array(count * 3);
   if (base) out.set(base);
   else out.fill(1);
   if (bake) composeBake(out, bake, Array.isArray(src.material) ? src.material : [src.material]);
@@ -148,14 +151,18 @@ export function collectAllBodies(root: THREE.Object3D): THREE.Mesh[] {
 }
 
 export function transformSignature(bodies: THREE.Mesh[]): string {
-  return bodies.map((b) => {
-    b.updateWorldMatrix(true, false);
-    return b.matrixWorld.elements.join(",");
-  }).join("|");
+  return bodies
+    .map((b) => {
+      b.updateWorldMatrix(true, false);
+      return b.matrixWorld.elements.join(",");
+    })
+    .join("|");
 }
 
 export function materialSignature(bodies: THREE.Mesh[]): string {
-  return bodies.map((b) => (Array.isArray(b.material) ? b.material : [b.material]).map(traceMaterialKey).join("+")).join("|");
+  return bodies
+    .map((b) => (Array.isArray(b.material) ? b.material : [b.material]).map(traceMaterialKey).join("+"))
+    .join("|");
 }
 
 /** highlight.setBase bumps baseVersion whenever it rewrites the base colours;
@@ -190,12 +197,17 @@ export function sceneSignature(bodies: THREE.Mesh[]): string {
     const g = b.geometry;
     const mats = Array.isArray(b.material) ? b.material : [b.material];
     b.updateWorldMatrix(true, false);
-    parts.push([
-      b.id, g.id, (g.getAttribute("position") as THREE.BufferAttribute).version ?? 0, g.index?.version ?? -1,
-      mats.map(traceMaterialKey).join("+"),
-      sampleSum(b.matrixWorld.elements),
-      sampleSum((b.userData.owner as Owned).baseColors),
-    ].join(":"));
+    parts.push(
+      [
+        b.id,
+        g.id,
+        (g.getAttribute("position") as THREE.BufferAttribute).version ?? 0,
+        g.index?.version ?? -1,
+        mats.map(traceMaterialKey).join("+"),
+        sampleSum(b.matrixWorld.elements),
+        sampleSum((b.userData.owner as Owned).baseColors),
+      ].join(":"),
+    );
   }
   return parts.join("|");
 }

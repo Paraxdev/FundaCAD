@@ -60,9 +60,7 @@ describe("loopCentroid", () => {
     const cw = loopCentroid(circle(3, 4, 2, 64, true))!;
     expect(ccw.x).toBeCloseTo(cw.x, 9);
     expect(ccw.y).toBeCloseTo(cw.y, 9);
-    expect(Math.sign(signedArea2(circle(3, 4, 2)))).toBe(
-      -Math.sign(signedArea2(circle(3, 4, 2, 64, true))),
-    );
+    expect(Math.sign(signedArea2(circle(3, 4, 2)))).toBe(-Math.sign(signedArea2(circle(3, 4, 2, 64, true))));
   });
 
   it("falls back to the vertex average for a loop with no area", () => {
@@ -81,14 +79,9 @@ describe("loopCentroid", () => {
 describe("footprintAnchors", () => {
   it("offers the face centre and every hole centre", () => {
     // A 40x40 face with two holes, the shape the report was made on.
-    const anchors = footprintAnchors([
-      rect(0, 0, 40, 40),
-      circle(-10, 8, 3),
-      circle(12, -6, 2),
-    ]);
+    const anchors = footprintAnchors([rect(0, 0, 40, 40), circle(-10, 8, 3), circle(12, -6, 2)]);
     expect(anchors).toHaveLength(3);
-    const at = (x: number, y: number) =>
-      anchors.some((p) => Math.abs(p.x - x) < 1e-6 && Math.abs(p.y - y) < 1e-6);
+    const at = (x: number, y: number) => anchors.some((p) => Math.abs(p.x - x) < 1e-6 && Math.abs(p.y - y) < 1e-6);
     expect(at(0, 0)).toBe(true);
     expect(at(-10, 8)).toBe(true);
     expect(at(12, -6)).toBe(true);

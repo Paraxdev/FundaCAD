@@ -18,7 +18,10 @@ const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const SHOTS = process.argv[2] || "";
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -28,14 +31,22 @@ const check = (name, ok, detail) => {
 (async () => {
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
   const idle = () => page.waitForFunction(() => !window.store.buildState.building, null, { timeout: 60000 });
-  const shot = async (name) => { if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `${name}.png`) }); };
+  const shot = async (name) => {
+    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `${name}.png`) });
+  };
 
   // A wall hook: a plate, an arm out of its foot along +X and a tip up at the
   // arm's end. The arm's top is one face from the plate to the tip.
@@ -63,23 +74,25 @@ const check = (name, ok, detail) => {
   await page.click(".stress-set-support");
   await page.waitForTimeout(200);
 
-  const screen = (p) => page.evaluate((q) => {
-    const v = window.viewport.camera.position.clone().set(q[0], q[1], q[2]);
-    const s = window.viewport.projectToScreen(v);
-    return { x: s.x, y: s.y };
-  }, p);
-  const state = () => page.evaluate(() => {
-    const study = window.store.stressStudy;
-    return {
-      faces: window.viewport.getSelectedFaceIds().length,
-      bodies: window.viewport.getSelectedBodies().length,
-      label: document.querySelector(".stress-place-load")?.textContent?.trim() ?? "",
-      count: [...document.querySelectorAll(".stress-count")].map((e) => e.textContent.trim()),
-      radius: document.querySelector(".stress-spot-radius")?.value ?? null,
-      cursor: window.viewport.domElement.style.cursor,
-      spots: study?.loads?.[0]?.spots ?? null,
-    };
-  });
+  const screen = (p) =>
+    page.evaluate((q) => {
+      const v = window.viewport.camera.position.clone().set(q[0], q[1], q[2]);
+      const s = window.viewport.projectToScreen(v);
+      return { x: s.x, y: s.y };
+    }, p);
+  const state = () =>
+    page.evaluate(() => {
+      const study = window.store.stressStudy;
+      return {
+        faces: window.viewport.getSelectedFaceIds().length,
+        bodies: window.viewport.getSelectedBodies().length,
+        label: document.querySelector(".stress-place-load")?.textContent?.trim() ?? "",
+        count: [...document.querySelectorAll(".stress-count")].map((e) => e.textContent.trim()),
+        radius: document.querySelector(".stress-spot-radius")?.value ?? null,
+        cursor: window.viewport.domElement.style.cursor,
+        spots: study?.loads?.[0]?.spots ?? null,
+      };
+    });
 
   await page.click(".stress-place-load");
   await page.waitForTimeout(200);
@@ -97,10 +110,17 @@ const check = (name, ok, detail) => {
   const placed = await state();
   const spot = placed.spots?.[0];
   check("a click puts one spot on the load", placed.spots?.length === 1, JSON.stringify(placed.spots));
-  check("where the click landed, on the arm's top",
-    !!spot && Math.abs(spot.at[0] - 12) < 1 && Math.abs(spot.at[1]) < 1 && Math.abs(spot.at[2] + 24) < 0.01, JSON.stringify(spot?.at));
+  check(
+    "where the click landed, on the arm's top",
+    !!spot && Math.abs(spot.at[0] - 12) < 1 && Math.abs(spot.at[1]) < 1 && Math.abs(spot.at[2] + 24) < 0.01,
+    JSON.stringify(spot?.at),
+  );
   check("with the top's normal", !!spot && spot.normal?.[2] > 0.99, JSON.stringify(spot?.normal));
-  check("the click selected nothing in the view", placed.faces === 0 && placed.bodies === 0, `${placed.faces} faces, ${placed.bodies} bodies`);
+  check(
+    "the click selected nothing in the view",
+    placed.faces === 0 && placed.bodies === 0,
+    `${placed.faces} faces, ${placed.bodies} bodies`,
+  );
   check("the row is disarmed after one spot", placed.label === "Place", JSON.stringify(placed.label));
   check("the row counts it", placed.count[1] === "1 spot", JSON.stringify(placed.count));
   await shot("2-placed");
@@ -110,7 +130,10 @@ const check = (name, ok, detail) => {
     const spot = window.store.stressStudy.loads[0].spots[0];
     const cam = window.viewport.camera;
     const right = cam.position.clone().set(1, 0, 0).applyQuaternion(cam.quaternion);
-    const p = cam.position.clone().set(...spot.at).addScaledVector(right, spot.radius);
+    const p = cam.position
+      .clone()
+      .set(...spot.at)
+      .addScaledVector(right, spot.radius);
     const s = window.viewport.projectToScreen(p);
     return { x: s.x, y: s.y, radius: spot.radius };
   });
@@ -123,7 +146,11 @@ const check = (name, ok, detail) => {
   await page.mouse.up();
   await page.waitForTimeout(300);
   const sized = await state();
-  check("a drag of the rim grows the spot", sized.spots?.[0]?.radius > rim.radius, `${rim.radius} to ${sized.spots?.[0]?.radius}`);
+  check(
+    "a drag of the rim grows the spot",
+    sized.spots?.[0]?.radius > rim.radius,
+    `${rim.radius} to ${sized.spots?.[0]?.radius}`,
+  );
   check("and the panel's field follows", Number(sized.radius) === sized.spots?.[0]?.radius, String(sized.radius));
   await page.fill(".stress-spot-radius", "3");
   await page.waitForTimeout(200);
@@ -141,17 +168,26 @@ const check = (name, ok, detail) => {
       const v = r.querySelector(".measure-v")?.textContent?.trim();
       if (k && v) out[k] = v;
     }
-    return { rows: out, error: document.querySelector(".stress-error")?.textContent ?? null, warnings: [...document.querySelectorAll(".stress-warning")].map((e) => e.textContent) };
+    return {
+      rows: out,
+      error: document.querySelector(".stress-error")?.textContent ?? null,
+      warnings: [...document.querySelectorAll(".stress-warning")].map((e) => e.textContent),
+    };
   });
   check("Run gives a result", !rows.error && !!rows.rows["Peak von Mises"], rows.error ?? rows.rows["Peak von Mises"]);
   check("the applied load is the 40 N on the spot", rows.rows["Applied"] === "0, 0, -40 N", rows.rows["Applied"]);
   check("balanced by the reaction at the wall", rows.rows["Reaction"] === "0, 0, 40 N", rows.rows["Reaction"]);
   check("the colours are on the body", await page.evaluate(() => window.viewport.hasStressOverlay()));
-  console.log(`  peak ${rows.rows["Peak von Mises"]}, deflection ${rows.rows["Max deflection"]}, mesh ${rows.rows["Mesh"]}`);
+  console.log(
+    `  peak ${rows.rows["Peak von Mises"]}, deflection ${rows.rows["Max deflection"]}, mesh ${rows.rows["Mesh"]}`,
+  );
   for (const w of rows.warnings) console.log(`  warning: ${w}`);
   await shot("3-result");
 
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");
   process.exit(failures ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

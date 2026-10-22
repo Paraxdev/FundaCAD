@@ -29,7 +29,12 @@ fn imported(name: &str) -> Map<String, Value> {
 }
 
 fn sketch<'a>(reply: &'a Map<String, Value>, layer: &str) -> &'a Value {
-    reply["sketches"].as_array().unwrap().iter().find(|s| s["name"] == layer).unwrap_or_else(|| panic!("no sketch {layer}"))
+    reply["sketches"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["name"] == layer)
+        .unwrap_or_else(|| panic!("no sketch {layer}"))
 }
 
 fn rebuild(doc: Value) -> Rebuild {
@@ -53,7 +58,11 @@ fn near(got: f64, want: f64, rel: f64, what: &str) {
 }
 
 fn notes(reply: &Map<String, Value>) -> Vec<String> {
-    reply.get("notes").and_then(Value::as_array).map(|a| a.iter().map(|n| n.as_str().unwrap().to_string()).collect()).unwrap_or_default()
+    reply
+        .get("notes")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().map(|n| n.as_str().unwrap().to_string()).collect())
+        .unwrap_or_default()
 }
 
 const PLATE_AREA: f64 = 6000.0 - (4.0 - std::f64::consts::PI) * 25.0;
@@ -62,7 +71,11 @@ const PLATE_AREA: f64 = 6000.0 - (4.0 - std::f64::consts::PI) * 25.0;
 fn a_dxf_becomes_one_sketch_per_layer() {
     let r = imported("dxf_shapes.dxf");
     let names: Vec<&str> = r["sketches"].as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap()).collect();
-    assert_eq!(names, ["Plate", "Cam", "Mirror", "Curves", "Spline", "Knots", "Double", "Open", "Half"], "no Notes or Paper layer");
+    assert_eq!(
+        names,
+        ["Plate", "Cam", "Mirror", "Curves", "Spline", "Knots", "Double", "Open", "Half"],
+        "no Notes or Paper layer"
+    );
     assert!(r.get("geom").is_none());
     assert_eq!(r["unit"], "mm");
     let n = notes(&r);
@@ -90,10 +103,14 @@ fn every_layer_extrudes_to_the_area_it_was_drawn_with() {
     // Green's theorem over the Cam outline gen_dxf.py draws: arcs about (0,100)
     // r15 and (40,100) r8 joined at +-t1 by two lines.
     let t1 = pi / 2.0 + (7.0f64 / 40.0).asin();
-    let arc = |cx: f64, r: f64, u0: f64, u1: f64| 0.5 * (r * r * (u1 - u0) + r * (cx * (u1.sin() - u0.sin()) - 100.0 * (u1.cos() - u0.cos())));
+    let arc = |cx: f64, r: f64, u0: f64, u1: f64| {
+        0.5 * (r * r * (u1 - u0) + r * (cx * (u1.sin() - u0.sin()) - 100.0 * (u1.cos() - u0.cos())))
+    };
     let at = |cx: f64, r: f64, t: f64| (cx + r * t.cos(), 100.0 + r * t.sin());
     let line = |p: (f64, f64), q: (f64, f64)| 0.5 * (p.0 * q.1 - q.0 * p.1);
-    let cam = arc(40.0, 8.0, -t1, t1) + line(at(40.0, 8.0, t1), at(0.0, 15.0, t1)) + arc(0.0, 15.0, t1, 2.0 * pi - t1)
+    let cam = arc(40.0, 8.0, -t1, t1)
+        + line(at(40.0, 8.0, t1), at(0.0, 15.0, t1))
+        + arc(0.0, 15.0, t1, 2.0 * pi - t1)
         + line(at(0.0, 15.0, -t1), at(40.0, 8.0, -t1));
     let want = [
         ("Plate", PLATE_AREA),
@@ -216,7 +233,8 @@ fn the_built_spline_edge_is_the_curve_the_dxf_describes() {
     let knots = [0.0, 0.0, 0.0, 0.0, 1.0, 3.0, 4.0, 4.0, 4.0, 4.0];
     let r = imported("dxf_shapes.dxf");
     let e = &sketch(&r, "Knots")["entities"][0];
-    let got: Vec<[f64; 2]> = e["poles"].as_array().unwrap().iter().map(|p| [p["x"].as_f64().unwrap(), p["y"].as_f64().unwrap()]).collect();
+    let got: Vec<[f64; 2]> =
+        e["poles"].as_array().unwrap().iter().map(|p| [p["x"].as_f64().unwrap(), p["y"].as_f64().unwrap()]).collect();
     let stored: Vec<f64> = e["knots"].as_array().unwrap().iter().map(|k| k.as_f64().unwrap()).collect();
     let edge = kernel::edge_bspline(&got, Some(3.0), false, Some(&stored)).unwrap();
     for t in [0.5, 1.0, 2.0, 2.5, 3.5] {
@@ -225,4 +243,3 @@ fn the_built_spline_edge_is_the_curve_the_dxf_describes() {
         assert!((p[0] - want[0]).hypot(p[1] - want[1]) < 1e-9, "t {t}: {p:?}, want {want:?}, range {range:?}");
     }
 }
-

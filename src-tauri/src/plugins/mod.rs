@@ -55,8 +55,8 @@ pub mod localnet;
 pub mod web;
 
 use bundle::{
-    allowed_bundle_url, extract_into, grants_match, is_official_url, now_secs, safe_id, sha256_hex,
-    Consented, MAX_DOWNLOAD,
+    allowed_bundle_url, extract_into, grants_match, is_official_url, now_secs, safe_id, sha256_hex, Consented,
+    MAX_DOWNLOAD,
 };
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -121,11 +121,7 @@ const CODE: &str = "main.js";
 /// for the same reason it does for the blob store. The two must agree exactly, and
 /// only one of them installs anything.
 pub(crate) fn plugins_root(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("no app data directory: {e}"))?
-        .join("plugins");
+    let dir = app.path().app_data_dir().map_err(|e| format!("no app data directory: {e}"))?.join("plugins");
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     Ok(dir)
 }
@@ -206,9 +202,7 @@ fn install_bytes(
     let got = sha256_hex(bytes);
     if let Some(want) = sha256.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         if !got.eq_ignore_ascii_case(want) {
-            return Err(format!(
-                "the download does not match its checksum (expected {want}, got {got})"
-            ));
+            return Err(format!("the download does not match its checksum (expected {want}, got {got})"));
         }
     }
 
@@ -312,12 +306,7 @@ pub struct Inspected {
     pub official: bool,
 }
 
-fn inspect_bytes(
-    app: &AppHandle,
-    bytes: &[u8],
-    source: String,
-    official: bool,
-) -> Result<Inspected, String> {
+fn inspect_bytes(app: &AppHandle, bytes: &[u8], source: String, official: bool) -> Result<Inspected, String> {
     if bytes.len() > MAX_DOWNLOAD {
         return Err(format!("the bundle is {} bytes", bytes.len()));
     }
@@ -342,12 +331,7 @@ fn inspect_bytes(
     // failed to unpack is the one case where the leftovers are attacker-chosen.
     let _ = std::fs::remove_dir_all(&scratch);
 
-    Ok(Inspected {
-        manifest: read?,
-        sha256,
-        source,
-        official,
-    })
+    Ok(Inspected { manifest: read?, sha256, source, official })
 }
 
 /// Download a bundle and read its manifest, installing nothing.
@@ -395,11 +379,7 @@ async fn fetch_bundle(url: &str) -> Result<Vec<u8>, String> {
         .build()
         .map_err(|e| e.to_string())?;
 
-    let resp = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| format!("could not download the plugin: {e}"))?;
+    let resp = client.get(url).send().await.map_err(|e| format!("could not download the plugin: {e}"))?;
     if !resp.status().is_success() {
         return Err(format!("the download answered {}", resp.status()));
     }
@@ -482,8 +462,7 @@ pub fn plugin_entry(app: AppHandle, id: String) -> Result<String, String> {
         other => return Err(format!("a {other} plugin has no entry point to read")),
     };
     let path = dir.join(name);
-    let text = std::fs::read_to_string(&path)
-        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     // The same cap the bundle got. A plugin that grew a 32MB entry point after
     // installation is not one to hand to a parser.
     if text.len() > MAX_DOWNLOAD {

@@ -8,7 +8,14 @@ import { entitySegments, polygonPoints } from "./region";
 import { newEntityId } from "./id";
 import { arcCenterRadius } from "./arc";
 import { coincKey } from "./sketchSolve";
-import { bsplineDegree, bsplineFit, bsplinePolyline, bsplineShape, bsplineValid, DEFAULT_BSPLINE_DEGREE } from "./bspline";
+import {
+  bsplineDegree,
+  bsplineFit,
+  bsplinePolyline,
+  bsplineShape,
+  bsplineValid,
+  DEFAULT_BSPLINE_DEGREE,
+} from "./bspline";
 import {
   segIntersect,
   segCircleIntersect,
@@ -70,9 +77,12 @@ function arcFromSpan(
   return {
     type: "arc",
     id: newEntityId(),
-    x1: C.x + Math.cos(aStart) * R, y1: C.y + Math.sin(aStart) * R,
-    x2: C.x + Math.cos(aEnd) * R, y2: C.y + Math.sin(aEnd) * R,
-    mx: C.x + Math.cos(aMid) * R, my: C.y + Math.sin(aMid) * R,
+    x1: C.x + Math.cos(aStart) * R,
+    y1: C.y + Math.sin(aStart) * R,
+    x2: C.x + Math.cos(aEnd) * R,
+    y2: C.y + Math.sin(aEnd) * R,
+    mx: C.x + Math.cos(aMid) * R,
+    my: C.y + Math.sin(aMid) * R,
     ...constr(src),
   };
 }
@@ -80,18 +90,23 @@ function arcFromSpan(
 /** An arc's center, radius, CCW start angle and CCW sweep (delta>0), from its 3
  *  stored points, oriented so the through-point lies inside the sweep (matches
  *  the reconstruction in sketchSolve). Null for a degenerate/collinear arc. */
-function arcGeom(e: { x1: number; y1: number; x2: number; y2: number; mx: number; my: number }):
-  { C: THREE.Vector2; R: number; aStart: number; delta: number } | null {
+function arcGeom(e: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  mx: number;
+  my: number;
+}): { C: THREE.Vector2; R: number; aStart: number; delta: number } | null {
   const cr = arcCenterRadius(e);
   if (!cr) return null;
-  const C = cr.c, R = cr.r;
+  const C = cr.c,
+    R = cr.r;
   const aS = Math.atan2(e.y1 - C.y, e.x1 - C.x);
   const aE = Math.atan2(e.y2 - C.y, e.x2 - C.x);
   const aT = Math.atan2(e.my - C.y, e.mx - C.x);
   const throughFwd = ccwDelta(aS, aT) <= ccwDelta(aS, aE);
-  return throughFwd
-    ? { C, R, aStart: aS, delta: ccwDelta(aS, aE) }
-    : { C, R, aStart: aE, delta: ccwDelta(aE, aS) };
+  return throughFwd ? { C, R, aStart: aS, delta: ccwDelta(aS, aE) } : { C, R, aStart: aE, delta: ccwDelta(aE, aS) };
 }
 
 /** angles (atan2, unbounded) at which other entities cross the circle (C,R) */
@@ -112,11 +127,7 @@ const constr = (e: { construction?: boolean }) =>
   e.construction === undefined ? {} : { construction: e.construction };
 
 /** index of the entity whose curve is nearest p within tol, else -1 */
-export function pickEntity(
-  ents: ResolvedEntity[],
-  p: THREE.Vector2,
-  tol: number,
-): number {
+export function pickEntity(ents: ResolvedEntity[], p: THREE.Vector2, tol: number): number {
   let best = -1;
   let bestD = tol;
   ents.forEach((e, i) => {
@@ -142,26 +153,29 @@ function distToEntity(e: ResolvedEntity, p: THREE.Vector2): number {
  * Lines split into the outer segments; arcs into the outer sub-arcs; a circle
  * becomes the complementary arc. A curve with no usable crossing is deleted whole.
  */
-export function trimEntity(
-  ents: ResolvedEntity[],
-  index: number,
-  click: THREE.Vector2,
-): ResolvedEntity[] {
+export function trimEntity(ents: ResolvedEntity[], index: number, click: THREE.Vector2): ResolvedEntity[] {
   const e = ents[index];
   if (!e) return ents;
   const del = () => ents.filter((_, i) => i !== index);
 
   if (e.type === "circle") {
-    const C = v(e.x, e.y), R = e.radius;
+    const C = v(e.x, e.y),
+      R = e.radius;
     const norm = (a: number) => ((a % TAU) + TAU) % TAU;
     const angs = [...new Set(circleCrossAngles(ents, index, C, R).map(norm))].sort((a, b) => a - b);
     if (angs.length < 2) return del(); // nothing to trim against
     const tc = norm(Math.atan2(click.y - C.y, click.x - C.x));
     // the CCW span [lo,hi] between adjacent crossings that contains the click
-    let lo = angs[angs.length - 1]!, hi = angs[0]!;
+    let lo = angs[angs.length - 1]!,
+      hi = angs[0]!;
     for (let k = 0; k < angs.length; k++) {
-      const a = angs[k]!, b = angs[(k + 1) % angs.length]!;
-      if (ccwDelta(a, tc) <= ccwDelta(a, b)) { lo = a; hi = b; break; }
+      const a = angs[k]!,
+        b = angs[(k + 1) % angs.length]!;
+      if (ccwDelta(a, tc) <= ccwDelta(a, b)) {
+        lo = a;
+        hi = b;
+        break;
+      }
     }
     const keep = ccwDelta(hi, lo); // complement of the removed span
     if (keep < 1e-3) return del();
@@ -180,32 +194,41 @@ export function trimEntity(
     const sorted = [...params].sort((a, b) => a - b);
     if (sorted.length <= 2) return del();
     const tc = Math.max(0, Math.min(1, ccwDelta(aStart, Math.atan2(click.y - C.y, click.x - C.x)) / delta));
-    let lo = 0, hi = 1;
+    let lo = 0,
+      hi = 1;
     for (let i = 0; i < sorted.length - 1; i++) {
-      const a = sorted[i]!, b = sorted[i + 1]!;
-      if (tc >= a && tc <= b) { lo = a; hi = b; break; }
+      const a = sorted[i]!,
+        b = sorted[i + 1]!;
+      if (tc >= a && tc <= b) {
+        lo = a;
+        hi = b;
+        break;
+      }
     }
     const pieces: ResolvedEntity[] = [];
     const keep = (ta: number, tb: number) => {
       if (tb - ta > 1e-3) pieces.push(arcFromSpan(C, R, aStart + ta * delta, (tb - ta) * delta, e));
     };
-    keep(0, lo); keep(hi, 1);
+    keep(0, lo);
+    keep(hi, 1);
     return ents.flatMap((o, i) => (i === index ? pieces : [o]));
   }
 
   if (e.type !== "line") return del(); // rectangle/spline + rigid polygon/slot: deleted whole
   // defer: trim/break/offset on rigid polygon/slot no-op or explode; revisit when a user hits it
 
-  const p1 = v(e.x1, e.y1), p2 = v(e.x2, e.y2);
+  const p1 = v(e.x1, e.y1),
+    p2 = v(e.x2, e.y2);
   const params = new Set<number>([0, 1]);
   ents.forEach((o, i) => {
     if (i === index) return;
     const hits: THREE.Vector2[] = [];
     if (o.type === "circle") hits.push(...segCircleIntersect(p1, p2, v(o.x, o.y), o.radius));
-    else for (const [a, b] of entitySegments(o)) {
-      const x = segIntersect(p1, p2, a, b);
-      if (x) hits.push(x);
-    }
+    else
+      for (const [a, b] of entitySegments(o)) {
+        const x = segIntersect(p1, p2, a, b);
+        if (x) hits.push(x);
+      }
     for (const h of hits) {
       const t = paramOnSeg(p1, p2, h);
       if (t > 1e-4 && t < 1 - 1e-4) params.add(t);
@@ -216,17 +239,24 @@ export function trimEntity(
   if (sorted.length <= 2) return ents.filter((_, i) => i !== index); // no crossing → delete
 
   const tc = Math.max(0, Math.min(1, paramOnSeg(p1, p2, click)));
-  let lo = 0, hi = 1;
+  let lo = 0,
+    hi = 1;
   for (let i = 0; i < sorted.length - 1; i++) {
-    const a = sorted[i], b = sorted[i + 1];
+    const a = sorted[i],
+      b = sorted[i + 1];
     if (a === undefined || b === undefined) continue;
-    if (tc >= a && tc <= b) { lo = a; hi = b; break; }
+    if (tc >= a && tc <= b) {
+      lo = a;
+      hi = b;
+      break;
+    }
   }
   const at = (t: number) => v(p1.x + (p2.x - p1.x) * t, p1.y + (p2.y - p1.y) * t);
   const pieces: ResolvedEntity[] = [];
   const keep = (ta: number, tb: number) => {
     if (tb - ta < 1e-3) return;
-    const a = at(ta), b = at(tb);
+    const a = at(ta),
+      b = at(tb);
     pieces.push({ type: "line", id: newEntityId(), x1: a.x, y1: a.y, x2: b.x, y2: b.y, ...constr(e) });
   };
   keep(0, lo);
@@ -236,7 +266,11 @@ export function trimEntity(
 
 /** The line cut back to `to` at its corner end, each end keeping its index so
  *  a join or dimension on the far end still names it. */
-function shortenTo(l: Extract<ResolvedEntity, { type: "line" }>, keepStart: boolean, to: THREE.Vector2): ResolvedEntity {
+function shortenTo(
+  l: Extract<ResolvedEntity, { type: "line" }>,
+  keepStart: boolean,
+  to: THREE.Vector2,
+): ResolvedEntity {
   return keepStart ? { ...l, x2: to.x, y2: to.y } : { ...l, x1: to.x, y1: to.y };
 }
 
@@ -244,16 +278,14 @@ function shortenTo(l: Extract<ResolvedEntity, { type: "line" }>, keepStart: bool
  * Fillet the corner where two line entities meet: shorten both to the tangent
  * points and insert a tangent arc of the given radius. Returns null if it can't.
  */
-export function filletCorner(
-  ents: ResolvedEntity[],
-  iA: number,
-  iB: number,
-  radius: number,
-): ResolvedEntity[] | null {
-  const A = ents[iA], B = ents[iB];
+export function filletCorner(ents: ResolvedEntity[], iA: number, iB: number, radius: number): ResolvedEntity[] | null {
+  const A = ents[iA],
+    B = ents[iB];
   if (A?.type !== "line" || B?.type !== "line") return null;
-  const a1 = v(A.x1, A.y1), a2 = v(A.x2, A.y2);
-  const b1 = v(B.x1, B.y1), b2 = v(B.x2, B.y2);
+  const a1 = v(A.x1, A.y1),
+    a2 = v(A.x2, A.y2);
+  const b1 = v(B.x1, B.y1),
+    b2 = v(B.x2, B.y2);
   const corner = lineIntersect(a1, a2, b1, b2);
   if (!corner) return null; // parallel
 
@@ -278,7 +310,16 @@ export function filletCorner(
   // A and B survive (just shortened) → keep their ids + constraints; the arc is new
   const newA = shortenTo(A, aFar === a1, T1);
   const newB = shortenTo(B, bFar === b1, T2);
-  const arc: ResolvedEntity = { type: "arc", id: newEntityId(), x1: T1.x, y1: T1.y, x2: T2.x, y2: T2.y, mx: through.x, my: through.y };
+  const arc: ResolvedEntity = {
+    type: "arc",
+    id: newEntityId(),
+    x1: T1.x,
+    y1: T1.y,
+    x2: T2.x,
+    y2: T2.y,
+    mx: through.x,
+    my: through.y,
+  };
 
   const out = ents.map((o, i) => (i === iA ? newA : i === iB ? newB : o));
   out[iB] = newB;
@@ -288,10 +329,20 @@ export function filletCorner(
 
 /** The two tangencies that keep a fillet a fillet once either line is moved:
  *  `res` is filletCorner's answer, whose last entity is the new arc. */
-export function filletTangents(ents: ResolvedEntity[], iA: number, iB: number, res: ResolvedEntity[]): SketchConstraint[] {
-  const A = ents[iA], B = ents[iB], arc = res[res.length - 1];
+export function filletTangents(
+  ents: ResolvedEntity[],
+  iA: number,
+  iB: number,
+  res: ResolvedEntity[],
+): SketchConstraint[] {
+  const A = ents[iA],
+    B = ents[iB],
+    arc = res[res.length - 1];
   if (!A || !B || arc?.type !== "arc") return [];
-  return [{ type: "tangent2", a: A.id, b: arc.id }, { type: "tangent2", a: B.id, b: arc.id }];
+  return [
+    { type: "tangent2", a: A.id, b: arc.id },
+    { type: "tangent2", a: B.id, b: arc.id },
+  ];
 }
 
 /** Signed offset of a cursor position from an entity, in exactly the terms
@@ -306,7 +357,8 @@ export function filletTangents(ents: ResolvedEntity[], iA: number, iB: number, r
  *  entities that can't be offset. */
 export function signedOffsetAt(e: ResolvedEntity, p: THREE.Vector2): number | null {
   const leftOf = (a: THREE.Vector2, b: THREE.Vector2) => {
-    const dx = b.x - a.x, dy = b.y - a.y;
+    const dx = b.x - a.x,
+      dy = b.y - a.y;
     const len = Math.hypot(dx, dy);
     if (len < 1e-9) return 0;
     return ((p.x - a.x) * -dy + (p.y - a.y) * dx) / len;
@@ -330,7 +382,8 @@ export function signedOffsetAt(e: ResolvedEntity, p: THREE.Vector2): number | nu
     const pts = polygonPoints(e.x, e.y, e.radius, e.sides, (e.angle * Math.PI) / 180);
     let best = -Infinity;
     for (let i = 0; i < pts.length; i++) {
-      const a = pts[i]!, b = pts[(i + 1) % pts.length]!;
+      const a = pts[i]!,
+        b = pts[(i + 1) % pts.length]!;
       // polygonPoints runs CCW, so the OUTWARD normal is the right normal
       best = Math.max(best, -leftOf(a, b));
     }
@@ -343,7 +396,8 @@ export function signedOffsetAt(e: ResolvedEntity, p: THREE.Vector2): number | nu
     const line = e.type === "spline" ? e.points : bsplinePolyline(e);
     let best: number | null = null;
     for (let i = 0; i + 1 < line.length; i++) {
-      const a = v(line[i]!.x, line[i]!.y), b = v(line[i + 1]!.x, line[i + 1]!.y);
+      const a = v(line[i]!.x, line[i]!.y),
+        b = v(line[i + 1]!.x, line[i + 1]!.y);
       const d = distToSeg(a, b, p);
       if (best === null || d < Math.abs(best)) best = Math.sign(leftOf(a, b) || 1) * d;
     }
@@ -370,11 +424,7 @@ export type OffsetResult = {
  *  lines shift to their left normal). Returns null only for entity types that
  *  cannot be offset at all (text, point), the caller toasts a refusal, because
  *  a silent no-op after the user has typed a distance reads as a broken tool. */
-export function offsetEntity(
-  ents: ResolvedEntity[],
-  index: number,
-  dist: number,
-): OffsetResult | null {
+export function offsetEntity(ents: ResolvedEntity[], index: number, dist: number): OffsetResult | null {
   const e = ents[index];
   if (!e) return null;
   let copy: ResolvedEntity | null = null;
@@ -382,16 +432,29 @@ export function offsetEntity(
   let linked = true;
   const id = newEntityId();
   if (e.type === "rectangle") {
-    const w = e.width + 2 * dist, h = e.height + 2 * dist;
+    const w = e.width + 2 * dist,
+      h = e.height + 2 * dist;
     if (w > 1e-3 && h > 1e-3) {
-      copy = { type: "rectangle", id, width: w, height: h, x: e.x, y: e.y, ...(e.angle ? { angle: e.angle } : {}), ...constr(e) };
+      copy = {
+        type: "rectangle",
+        id,
+        width: w,
+        height: h,
+        x: e.x,
+        y: e.y,
+        ...(e.angle ? { angle: e.angle } : {}),
+        ...constr(e),
+      };
       // Both rectangles share a centre and an angle, so edge k of the
       // copy IS edge k of the source (rectCorners' CCW order), the pairing is
       // positional. Four edge pairs, one distance each, is exactly a
       // rectangle's 4 DOF.
       pairs = [0, 1, 2, 3].map((k) => ({ src: `${e.id}~${k}`, cpy: `${id}~${k}` }));
       // A rotated rectangle is rigid in the solver, the same as a polygon.
-      if (e.angle) { pairs = []; linked = false; }
+      if (e.angle) {
+        pairs = [];
+        linked = false;
+      }
     }
   } else if (e.type === "circle") {
     const r = e.radius + dist;
@@ -419,14 +482,18 @@ export function offsetEntity(
     if (pts.length >= 2) {
       // a closed spline's seam point is an interior point too, or the two ends
       // push apart along different normals and the copy opens at the seam
-      const a = pts[0]!, z = pts[pts.length - 1]!;
+      const a = pts[0]!,
+        z = pts[pts.length - 1]!;
       const closed = pts.length > 3 && Math.hypot(a.x - z.x, a.y - z.y) < 1e-9;
       copy = {
-        type: "spline", id, ...constr(e),
+        type: "spline",
+        id,
+        ...constr(e),
         points: pts.map((p, i) => {
           const prev = pts[i - 1] ?? (closed ? pts[pts.length - 2]! : p);
           const next = pts[i + 1] ?? (closed ? pts[1]! : p);
-          const dx = next.x - prev.x, dy = next.y - prev.y;
+          const dx = next.x - prev.x,
+            dy = next.y - prev.y;
           const len = Math.hypot(dx, dy) || 1;
           return { x: p.x + (-dy / len) * dist, y: p.y + (dx / len) * dist };
         }),
@@ -443,7 +510,8 @@ export function offsetEntity(
       const moved = line.map((p, i) => {
         const prev = line[i - 1] ?? (e.closed ? line[n - 1]! : p);
         const next = line[i + 1] ?? (e.closed ? line[0]! : p);
-        const dx = next.x - prev.x, dy = next.y - prev.y;
+        const dx = next.x - prev.x,
+          dy = next.y - prev.y;
         const len = Math.hypot(dx, dy) || 1;
         return { x: p.x + (-dy / len) * dist, y: p.y + (dx / len) * dist };
       });
@@ -451,7 +519,13 @@ export function offsetEntity(
       const fit = bsplineFit(moved, Math.min(60, e.poles.length * 2), !!e.closed, deg);
       if (fit) {
         const degree = e.degree === undefined && deg === DEFAULT_BSPLINE_DEGREE ? undefined : deg;
-        copy = { type: "bspline", id, poles: fit.poles, ...bsplineShape({ ...e, degree, knots: undefined }), ...constr(e) };
+        copy = {
+          type: "bspline",
+          id,
+          poles: fit.poles,
+          ...bsplineShape({ ...e, degree, knots: undefined }),
+          ...constr(e),
+        };
         linked = false;
       }
     }
@@ -490,7 +564,16 @@ type Member = { i: number; e: ChainE; from: THREE.Vector2; to: THREE.Vector2; cc
  *  centre plus the offset radius, and their endpoints ride on that circle. */
 type Off =
   | { kind: "line"; src: string; a: THREE.Vector2; b: THREE.Vector2; dir: THREE.Vector2 }
-  | { kind: "arc"; src: string; a: THREE.Vector2; b: THREE.Vector2; C: THREE.Vector2; R: number; ccw: boolean; flip: boolean };
+  | {
+      kind: "arc";
+      src: string;
+      a: THREE.Vector2;
+      b: THREE.Vector2;
+      C: THREE.Vector2;
+      R: number;
+      ccw: boolean;
+      flip: boolean;
+    };
 
 /** How far a miter may travel from the original corner, as a multiple of |dist|.
  *  Two nearly-collinear offset lines intersect arbitrarily far away, which used
@@ -502,7 +585,11 @@ const MITER_LIMIT = 4;
  *  direction. A CW sweep is emitted as the equivalent CCW arc from the other
  *  end, an arc entity is three points, so it carries no direction of its own. */
 function arcFromEnds(
-  C: THREE.Vector2, R: number, a: THREE.Vector2, b: THREE.Vector2, ccw: boolean,
+  C: THREE.Vector2,
+  R: number,
+  a: THREE.Vector2,
+  b: THREE.Vector2,
+  ccw: boolean,
   src: { construction?: boolean },
 ): ResolvedEntity | null {
   const aS = Math.atan2(a.y - C.y, a.x - C.x);
@@ -526,13 +613,8 @@ function arcFromEnds(
  * Arcs used to be skipped entirely here (only `line` entities entered the
  * adjacency map), so a filleted profile offset as loose, unjoined pieces.
  */
-export function offsetChain(
-  ents: ResolvedEntity[],
-  index: number,
-  dist: number,
-): OffsetResult | null {
-  const isChain = (e: ResolvedEntity | undefined): e is ChainE =>
-    e?.type === "line" || e?.type === "arc";
+export function offsetChain(ents: ResolvedEntity[], index: number, dist: number): OffsetResult | null {
+  const isChain = (e: ResolvedEntity | undefined): e is ChainE => e?.type === "line" || e?.type === "arc";
   if (!isChain(ents[index])) return null;
 
   // endpoint key -> chain-entity indices touching it. coincKey is the solver's
@@ -542,7 +624,8 @@ export function offsetChain(
     if (!isChain(e)) return;
     for (const k of [coincKey(e.x1, e.y1), coincKey(e.x2, e.y2)]) {
       const arr = touch.get(k);
-      if (arr) arr.push(i); else touch.set(k, [i]);
+      if (arr) arr.push(i);
+      else touch.set(k, [i]);
     }
   });
 
@@ -566,25 +649,41 @@ export function offsetChain(
   if (comp.size < 2) return null; // a lone curve, caller handles it
 
   // pick a start: a free end for an open chain, else any member (closed loop)
-  let start = -1, startKey = "";
+  let start = -1,
+    startKey = "";
   for (const i of comp) {
     const e = ents[i] as ChainE;
-    if (touch.get(coincKey(e.x1, e.y1))?.length === 1) { start = i; startKey = coincKey(e.x1, e.y1); break; }
-    if (touch.get(coincKey(e.x2, e.y2))?.length === 1) { start = i; startKey = coincKey(e.x2, e.y2); break; }
+    if (touch.get(coincKey(e.x1, e.y1))?.length === 1) {
+      start = i;
+      startKey = coincKey(e.x1, e.y1);
+      break;
+    }
+    if (touch.get(coincKey(e.x2, e.y2))?.length === 1) {
+      start = i;
+      startKey = coincKey(e.x2, e.y2);
+      break;
+    }
   }
   const closed = start === -1;
-  if (closed) { start = comp.values().next().value as number; const s = ents[start] as ChainE; startKey = coincKey(s.x1, s.y1); }
+  if (closed) {
+    start = comp.values().next().value as number;
+    const s = ents[start] as ChainE;
+    startKey = coincKey(s.x1, s.y1);
+  }
 
   // walk the chain into an ordered, directed path
   const path: Member[] = [];
   const used = new Set<number>();
-  let cur = start, curKey = startKey;
+  let cur = start,
+    curKey = startKey;
   while (cur !== -1 && !used.has(cur)) {
     used.add(cur);
     const e = ents[cur] as ChainE;
-    const p1 = v(e.x1, e.y1), p2 = v(e.x2, e.y2);
+    const p1 = v(e.x1, e.y1),
+      p2 = v(e.x2, e.y2);
     const fromP1 = coincKey(p1.x, p1.y) === curKey;
-    const from = fromP1 ? p1 : p2, to = fromP1 ? p2 : p1;
+    const from = fromP1 ? p1 : p2,
+      to = fromP1 ? p2 : p1;
     // for an arc, does this traversal run along its CCW sweep? arcGeom's
     // aStart is the CCW start, so travelling from that endpoint is CCW.
     let ccw = true;
@@ -710,15 +809,12 @@ export function offsetChain(
 
 /** Break: split the clicked curve at the click point. A line/arc splits into two
  *  pieces; a circle opens into a single arc starting/ending at the click point. */
-export function breakAt(
-  ents: ResolvedEntity[],
-  index: number,
-  click: THREE.Vector2,
-): ResolvedEntity[] {
+export function breakAt(ents: ResolvedEntity[], index: number, click: THREE.Vector2): ResolvedEntity[] {
   const e = ents[index];
   if (!e) return ents;
   if (e.type === "line") {
-    const p1 = v(e.x1, e.y1), p2 = v(e.x2, e.y2);
+    const p1 = v(e.x1, e.y1),
+      p2 = v(e.x2, e.y2);
     let t = paramOnSeg(p1, p2, click);
     t = Math.max(0.02, Math.min(0.98, t));
     const m = v(p1.x + (p2.x - p1.x) * t, p1.y + (p2.y - p1.y) * t);
@@ -728,7 +824,8 @@ export function breakAt(
   }
   if (e.type === "circle") {
     // open the closed loop at the click angle → one arc sweeping (almost) full circle
-    const C = v(e.x, e.y), R = e.radius;
+    const C = v(e.x, e.y),
+      R = e.radius;
     const ac = Math.atan2(click.y - C.y, click.x - C.x);
     const gap = 1e-3; // tiny opening so start ≠ end (a valid arc)
     return ents.flatMap((o, i) => (i === index ? [arcFromSpan(C, R, ac + gap, TAU - 2 * gap, e)] : [o]));
@@ -747,16 +844,13 @@ export function breakAt(
 }
 
 /** Extend: lengthen the clicked end of a line or arc to the nearest crossing. */
-export function extendLine(
-  ents: ResolvedEntity[],
-  index: number,
-  click: THREE.Vector2,
-): ResolvedEntity[] | null {
+export function extendLine(ents: ResolvedEntity[], index: number, click: THREE.Vector2): ResolvedEntity[] | null {
   const e = ents[index];
   if (!e) return null;
   if (e.type === "arc") return extendArc(ents, index, e, click);
   if (e.type !== "line") return null;
-  const p1 = v(e.x1, e.y1), p2 = v(e.x2, e.y2);
+  const p1 = v(e.x1, e.y1),
+    p2 = v(e.x2, e.y2);
   const extendEnd2 = paramOnSeg(p1, p2, click) >= 0.5; // which end is near the click
   const dir = p2.clone().sub(p1).normalize();
   const far = p1.clone().sub(dir.clone().multiplyScalar(1e5)); // a ray well past both ends
@@ -768,23 +862,28 @@ export function extendLine(
     if (i === index) return;
     const hits: THREE.Vector2[] = [];
     if (o.type === "circle") hits.push(...segCircleIntersect(far, farEnd, v(o.x, o.y), o.radius));
-    else for (const [a, b] of entitySegments(o)) {
-      const x = segIntersect(far, farEnd, a, b);
-      if (x) hits.push(x);
-    }
+    else
+      for (const [a, b] of entitySegments(o)) {
+        const x = segIntersect(far, farEnd, a, b);
+        if (x) hits.push(x);
+      }
     for (const h of hits) {
       const t = paramOnSeg(p1, p2, h);
-      if (extendEnd2 && t > 1 + 1e-4 && (!found || t < bestT)) { bestT = t; found = true; }
-      if (!extendEnd2 && t < -1e-4 && (!found || t > bestT)) { bestT = t; found = true; }
+      if (extendEnd2 && t > 1 + 1e-4 && (!found || t < bestT)) {
+        bestT = t;
+        found = true;
+      }
+      if (!extendEnd2 && t < -1e-4 && (!found || t > bestT)) {
+        bestT = t;
+        found = true;
+      }
     }
   });
   if (!found) return null;
   const np = p1.clone().add(p2.clone().sub(p1).multiplyScalar(bestT));
   const out = ents.map((o, i) => {
     if (i !== index || o.type !== "line") return o;
-    return extendEnd2
-      ? { ...o, x2: np.x, y2: np.y }
-      : { ...o, x1: np.x, y1: np.y };
+    return extendEnd2 ? { ...o, x2: np.x, y2: np.y } : { ...o, x1: np.x, y1: np.y };
   });
   return out;
 }
@@ -822,16 +921,14 @@ function extendArc(
  * points and insert a straight bevel line. `dist` is the equal setback along
  * each line. Returns null if it can't (parallel/collinear/too-big).
  */
-export function chamferCorner(
-  ents: ResolvedEntity[],
-  iA: number,
-  iB: number,
-  dist: number,
-): ResolvedEntity[] | null {
-  const A = ents[iA], B = ents[iB];
+export function chamferCorner(ents: ResolvedEntity[], iA: number, iB: number, dist: number): ResolvedEntity[] | null {
+  const A = ents[iA],
+    B = ents[iB];
   if (A?.type !== "line" || B?.type !== "line") return null;
-  const a1 = v(A.x1, A.y1), a2 = v(A.x2, A.y2);
-  const b1 = v(B.x1, B.y1), b2 = v(B.x2, B.y2);
+  const a1 = v(A.x1, A.y1),
+    a2 = v(A.x2, A.y2);
+  const b1 = v(B.x1, B.y1),
+    b2 = v(B.x2, B.y2);
   const corner = lineIntersect(a1, a2, b1, b2);
   if (!corner) return null; // parallel
 

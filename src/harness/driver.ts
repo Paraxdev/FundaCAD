@@ -15,16 +15,23 @@ export { harnessWanted };
 
 export const HARNESS_API = 1;
 
-export type HarnessHost = read.ReadHost & SettleHost & picks.PickHost & HandleHost & { store: Pick<DocumentStore, "onOpen"> };
+export type HarnessHost = read.ReadHost &
+  SettleHost &
+  picks.PickHost &
+  HandleHost & { store: Pick<DocumentStore, "onOpen"> };
 
 type Args = Record<string, unknown>;
 type Method = (args: Args) => unknown;
 
 export interface HarnessBridge {
   api: number;
-  call(method: string, args?: Args): Promise<{ ok: true; value: unknown } | { ok: false; error: { kind: string; message: string; candidates: string[] } }>;
+  call(
+    method: string,
+    args?: Args,
+  ): Promise<
+    { ok: true; value: unknown } | { ok: false; error: { kind: string; message: string; candidates: string[] } }
+  >;
 }
-
 
 const str = (a: Args, k: string): string => {
   const v = a[k];
@@ -40,7 +47,8 @@ const num = (a: Args, k: string): number => {
 
 const since = (a: Args): number => (typeof a.since === "number" ? a.since : 0);
 
-const withBody = (a: Args): string => (typeof a.body === "string" && a.body ? `${a.body}:${str(a, "select")}` : str(a, "select"));
+const withBody = (a: Args): string =>
+  typeof a.body === "string" && a.body ? `${a.body}:${str(a, "select")}` : str(a, "select");
 
 export function startScreen(doc: Document = document): "home" | "welcome" | "none" {
   if (doc.querySelector(".home")) return "home";
@@ -88,7 +96,15 @@ export function createMethods(
     },
     locate: (a) => {
       const c = findControl(walk(), str(a, "target"), { disabled: a.disabled === true });
-      return { marker: stamp(c.el), ref: c.ref, label: c.label, role: c.role, region: c.region, disabled: c.disabled, covered: covered(c.el, doc) };
+      return {
+        marker: stamp(c.el),
+        ref: c.ref,
+        label: c.label,
+        role: c.role,
+        region: c.region,
+        disabled: c.disabled,
+        covered: covered(c.el, doc),
+      };
     },
     toolPath: (a) => ({
       steps: toolPath(walk(), str(a, "label"), doc.querySelector<HTMLElement>("#toolrail")?.dataset.mode ?? "model"),
@@ -97,13 +113,17 @@ export function createMethods(
       const w = walk();
       const c = findControl(w, str(a, "target"));
       if (!(c.el instanceof HTMLInputElement || c.el instanceof HTMLTextAreaElement)) {
-        const fields = w.controls.filter((f) => f.ref.startsWith("field:") || f.ref.startsWith("prop:")).map((f) => f.ref);
+        const fields = w.controls
+          .filter((f) => f.ref.startsWith("field:") || f.ref.startsWith("prop:"))
+          .map((f) => f.ref);
         const listed = fields.length ? `, the value fields are ${fields.slice(0, 8).join(", ")}` : noValueBox(w);
         throw new HarnessError(`${c.ref} "${c.label}" is not a value field${listed}`, "BadArgs", fields.slice(0, 8));
       }
       const box = c.el.closest(".dim-input");
-      const problem = box?.querySelector(".dim-problem")?.textContent
-        ?? c.el.closest(".param-row")?.querySelector(".param-problem")?.textContent ?? "";
+      const problem =
+        box?.querySelector(".dim-problem")?.textContent ??
+        c.el.closest(".param-row")?.querySelector(".param-problem")?.textContent ??
+        "";
       return { ref: c.ref, text: c.el.value, typed: !!c.el.closest(".dim-field.typed"), problem: problem.trim() };
     },
     selection: () => read.selection(h, doc),
@@ -118,10 +138,11 @@ export function createMethods(
       return read.seq();
     },
     lastError: (a) => read.lastError(h, since(a)),
-    settle: (a) => settle(h, {
-      ...(typeof a.timeoutMs === "number" ? { timeoutMs: a.timeoutMs } : {}),
-      ...(typeof a.trace === "number" ? { trace: a.trace } : {}),
-    }),
+    settle: (a) =>
+      settle(h, {
+        ...(typeof a.timeoutMs === "number" ? { timeoutMs: a.timeoutMs } : {}),
+        ...(typeof a.trace === "number" ? { trace: a.trace } : {}),
+      }),
     quiet: () => describeQuiet(probe(h)),
     facePoint: (a) => picks.facePoint(h, withBody(a), clear()),
     edgePoint: (a) => picks.edgePoint(h, withBody(a), a.via === "edge" ? "edge" : "select", clear()),
@@ -142,8 +163,12 @@ export function createBridge(methods: Record<string, Method>): HarnessBridge {
         if (!fn) throw new HarnessError(`the page driver has no method "${method}"`, "BadArgs");
         return { ok: true, value: await fn(args ?? {}) };
       } catch (e) {
-        if (e instanceof HarnessError) return { ok: false, error: { kind: e.kind, message: e.message, candidates: e.candidates } };
-        return { ok: false, error: { kind: "Internal", message: e instanceof Error ? e.message : String(e), candidates: [] } };
+        if (e instanceof HarnessError)
+          return { ok: false, error: { kind: e.kind, message: e.message, candidates: e.candidates } };
+        return {
+          ok: false,
+          error: { kind: "Internal", message: e instanceof Error ? e.message : String(e), candidates: [] },
+        };
       }
     },
   };

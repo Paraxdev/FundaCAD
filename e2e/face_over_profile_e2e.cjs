@@ -20,7 +20,10 @@ const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const PORT = process.env.SC_PORT || "8765";
 const OUT = path.resolve(process.argv[2] || "face_over_profile_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -31,22 +34,33 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-  await page.addInitScript(([t, port]) => {
-    const N = window.WebSocket;
-    class P extends N {
-      constructor(u, p) {
-        let s = String(u).replace(/([?&])token=[^&]*/, `$1token=${t}`).replace(":8765", `:${port}`);
-        s = s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t;
-        super(s, p);
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
+  await page.addInitScript(
+    ([t, port]) => {
+      const N = window.WebSocket;
+      class P extends N {
+        constructor(u, p) {
+          let s = String(u)
+            .replace(/([?&])token=[^&]*/, `$1token=${t}`)
+            .replace(":8765", `:${port}`);
+          s = s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t;
+          super(s, p);
+        }
       }
-    }
-    window.WebSocket = P;
-  }, [TOKEN, PORT]);
+      window.WebSocket = P;
+    },
+    [TOKEN, PORT],
+  );
   await page.goto(URL);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.overlay && !!window.viewport, null, { timeout: 60000 });
 
   await page.evaluate(async () => {
@@ -61,12 +75,16 @@ const check = (name, ok, detail) => {
   const cyW = (minY + maxY) / 2;
   const planeZ = minZ;
 
-  const setSketch = (entities) => page.evaluate(async ([entities, z]) => {
-    if (window.store.document.features.some((f) => f.id === "s1")) window.store.removeFeature("s1");
-    const plane = { origin: [0, 0, z], normal: [0, 0, 1], xdir: [1, 0, 0] };
-    window.store.addFeature({ id: "s1", type: "sketch", plane: z === 0 ? "XY" : plane, entities });
-    await window.store.rebuildNow();
-  }, [entities, planeZ]);
+  const setSketch = (entities) =>
+    page.evaluate(
+      async ([entities, z]) => {
+        if (window.store.document.features.some((f) => f.id === "s1")) window.store.removeFeature("s1");
+        const plane = { origin: [0, 0, z], normal: [0, 0, 1], xdir: [1, 0, 0] };
+        window.store.addFeature({ id: "s1", type: "sketch", plane: z === 0 ? "XY" : plane, entities });
+        await window.store.rebuildNow();
+      },
+      [entities, planeZ],
+    );
   const view = async (v) => {
     await page.evaluate((v) => window.viewport.setStandardView(v), v);
     await page.waitForTimeout(300);
@@ -79,21 +97,27 @@ const check = (name, ok, detail) => {
     await page.mouse.move(740, 90);
     await page.waitForTimeout(700);
   };
-  const screenOf = (x, y, z) => page.evaluate(([x, y, z]) => {
-    const T = window.viewport.rayFrom(0, 0).ray.origin.constructor;
-    return window.viewport.projectToScreen(new T(x, y, z));
-  }, [x, y, z]);
-  const reset = () => page.evaluate(() => {
-    window.overlay.clearRegionSelection();
-    window.viewport.setSelectedBodies([]);
-    window.viewport.clearSelection();
-  });
-  const state = () => page.evaluate(() => ({
-    regions: window.overlay.selectedRegions().length,
-    faces: window.viewport.getSelectedFaceIds().length,
-    bodies: window.viewport.getSelectedBodies().length,
-    prompt: document.querySelector(".prompt")?.textContent?.trim() ?? null,
-  }));
+  const screenOf = (x, y, z) =>
+    page.evaluate(
+      ([x, y, z]) => {
+        const T = window.viewport.rayFrom(0, 0).ray.origin.constructor;
+        return window.viewport.projectToScreen(new T(x, y, z));
+      },
+      [x, y, z],
+    );
+  const reset = () =>
+    page.evaluate(() => {
+      window.overlay.clearRegionSelection();
+      window.viewport.setSelectedBodies([]);
+      window.viewport.clearSelection();
+    });
+  const state = () =>
+    page.evaluate(() => ({
+      regions: window.overlay.selectedRegions().length,
+      faces: window.viewport.getSelectedFaceIds().length,
+      bodies: window.viewport.getSelectedBodies().length,
+      prompt: document.querySelector(".prompt")?.textContent?.trim() ?? null,
+    }));
 
   console.log("\n1. a sketch tracing the whole bottom face");
   await setSketch([{ type: "rectangle", id: "r1", x: cxW, y: cyW, width: maxX - minX, height: maxY - minY }]);
@@ -146,7 +170,11 @@ const check = (name, ok, detail) => {
     await page.mouse.click(q.x, q.y);
     await page.waitForTimeout(400);
     const s2 = await state();
-    check("clicking the face outside the circle does not take the area", s2.regions === 0 && s2.bodies + s2.faces === 1, JSON.stringify(s2));
+    check(
+      "clicking the face outside the circle does not take the area",
+      s2.regions === 0 && s2.bodies + s2.faces === 1,
+      JSON.stringify(s2),
+    );
   }
 
   console.log("\n3. a profile behind the body");
@@ -165,7 +193,11 @@ const check = (name, ok, detail) => {
     await page.mouse.click(p.x, p.y);
     await page.waitForTimeout(400);
     const s = await state();
-    check("clicking over the hidden circle takes the body, not the area", s.regions === 0 && s.bodies + s.faces === 1, JSON.stringify(s));
+    check(
+      "clicking over the hidden circle takes the body, not the area",
+      s.regions === 0 && s.bodies + s.faces === 1,
+      JSON.stringify(s),
+    );
     await page.screenshot({ path: path.join(OUT, "3_hidden_circle.png") });
     await reset();
     const q = await screenOf(maxX + 7, cyW, planeZ);
@@ -180,4 +212,7 @@ const check = (name, ok, detail) => {
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");
   process.exit(failures ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

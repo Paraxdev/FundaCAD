@@ -134,10 +134,7 @@ async fn malformed_arguments_are_refused_before_the_engine_is_asked() {
                    "material": {"E": -1, "nu": 0.3}}),
             "`material.E`",
         ),
-        (
-            json!({"body": "body1", "fixed": face([-1.0, 0.0, 0.0]), "loads": good_load, "size": -2}),
-            "`size`",
-        ),
+        (json!({"body": "body1", "fixed": face([-1.0, 0.0, 0.0]), "loads": good_load, "size": -2}), "`size`"),
         (
             json!({"body": "body1", "fixed": face([-1.0, 0.0, 0.0]), "loads": good_load, "view": "under"}),
             "no view 'under'",

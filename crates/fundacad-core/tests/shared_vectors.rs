@@ -12,9 +12,7 @@ use indexmap::IndexMap;
 use serde_json::Value;
 
 fn vectors(name: &str) -> Value {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/vectors")
-        .join(name);
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/vectors").join(name);
     serde_json::from_str(&std::fs::read_to_string(path).expect("read")).expect("parse")
 }
 
@@ -45,20 +43,12 @@ fn events(v: &Value) -> Vec<Event> {
 fn body_ids() {
     let v = vectors("body_ids.json");
     for pair in v["number"].as_array().expect("number") {
-        assert_eq!(
-            Some(number(pair[0].as_str().expect("id"))),
-            pair[1].as_u64(),
-            "{pair}"
-        );
+        assert_eq!(Some(number(pair[0].as_str().expect("id"))), pair[1].as_u64(), "{pair}");
     }
     for s in v["sessions"].as_array().expect("sessions") {
         let name = s["name"].as_str().expect("name");
         let mut ids = BodyIds::new(recorded(&s["recorded"]));
-        for (step, want) in s["steps"]
-            .as_array()
-            .expect("steps")
-            .iter()
-            .zip(s["results"].as_array().expect("results"))
+        for (step, want) in s["steps"].as_array().expect("steps").iter().zip(s["results"].as_array().expect("results"))
         {
             let arg = step[1].as_str();
             let got = match step[0].as_str().expect("op") {
@@ -90,18 +80,12 @@ fn body_ids() {
             );
         }
         assert_eq!(ids.events(), events(&s["events"]).as_slice(), "{name}");
-        let map: IndexMap<String, String> =
-            serde_json::from_value(s["resultingMap"].clone()).expect("map");
+        let map: IndexMap<String, String> = serde_json::from_value(s["resultingMap"].clone()).expect("map");
         assert_eq!(ids.resulting_map(), map, "{name}");
     }
     for r in v["restore"].as_array().expect("restore") {
         let mut ids = BodyIds::new(recorded(&r["recorded"]));
-        assert_eq!(
-            Some(ids.restore(&events(&r["events"]))),
-            r["expect"].as_bool(),
-            "{}",
-            r["name"]
-        );
+        assert_eq!(Some(ids.restore(&events(&r["events"]))), r["expect"].as_bool(), "{}", r["name"]);
     }
 }
 
@@ -111,12 +95,7 @@ fn face_colors() {
     for c in v["encode"].as_array().expect("encode") {
         let list = colors(&c["colors"]);
         let packed = encode(&list);
-        assert_eq!(
-            serde_json::to_value(&packed).expect("json"),
-            c["packed"],
-            "{}",
-            c["name"]
-        );
+        assert_eq!(serde_json::to_value(&packed).expect("json"), c["packed"], "{}", c["name"]);
         if let Some(p) = &packed {
             assert_eq!(decode(Some(p), list.len()), list, "{}", c["name"]);
         }
@@ -124,23 +103,13 @@ fn face_colors() {
     for c in v["decode"].as_array().expect("decode") {
         let count = usize::try_from(c["count"].as_u64().expect("count")).expect("fits");
         let want = colors(&c["colors"]);
-        assert_eq!(
-            decode_value(Some(&c["packed"]), count),
-            want,
-            "{}",
-            c["packed"]
-        );
+        assert_eq!(decode_value(Some(&c["packed"]), count), want, "{}", c["packed"]);
         if let Ok(typed) = serde_json::from_value::<FaceColorRuns>(c["packed"].clone()) {
             assert_eq!(decode(Some(&typed), count), want, "{}", c["packed"]);
         }
     }
     for c in v["dominant"].as_array().expect("dominant") {
-        assert_eq!(
-            dominant(&colors(&c["colors"])),
-            c["dominant"].as_str().map(str::to_owned),
-            "{}",
-            c["colors"]
-        );
+        assert_eq!(dominant(&colors(&c["colors"])), c["dominant"].as_str().map(str::to_owned), "{}", c["colors"]);
     }
 }
 

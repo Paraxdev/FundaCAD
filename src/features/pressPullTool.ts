@@ -108,7 +108,13 @@ const QUANTITIES: (DimChoice & { id: SizeQuantity })[] = [
 const CURVED = ["cylinder", "sphere", "cone", "torus"] as const;
 
 const MODES: PressPullMode[] = ["auto", "join", "cut", "new", "intersect"];
-const MODE_LABEL: Record<PressPullMode, string> = { auto: "Auto", join: "Join", cut: "Cut", new: "New", intersect: "Intersect" };
+const MODE_LABEL: Record<PressPullMode, string> = {
+  auto: "Auto",
+  join: "Join",
+  cut: "Cut",
+  new: "New",
+  intersect: "Intersect",
+};
 
 export class PressPullTool {
   active = false;
@@ -304,8 +310,14 @@ export class PressPullTool {
       if (!hit) return; // missed the body, let the click orbit
       e.preventDefault();
       e.stopImmediatePropagation();
-      this.beginDrag([hit.selector], [hit.faceId], hit.anchor, hit.normal, hit.bodyId,
-        this.viewport.roundFaceAt(hit.faceId, hit.anchor));
+      this.beginDrag(
+        [hit.selector],
+        [hit.faceId],
+        hit.anchor,
+        hit.normal,
+        hit.bodyId,
+        this.viewport.roundFaceAt(hit.faceId, hit.anchor),
+      );
       return;
     }
     // drag phase: clicking the "up to" target surface (after pressing T).
@@ -397,8 +409,7 @@ export class PressPullTool {
       this.flushPreviewNow();
       const release = fluentRelease({
         fluent: this.fluentGrab,
-        moved:
-          Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3,
+        moved: Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3,
         // Same threshold commit() uses to decide there is nothing to commit,
         // read here so a drag that ended back at the face cancels out of a tool
         // the user never explicitly opened, instead of parking them in it with
@@ -415,8 +426,7 @@ export class PressPullTool {
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       return;
     }
-    const moved =
-      Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.downOnGizmo || moved) return;
     // Clean click on ANOTHER face = extrude UP TO it (mainstream MCAD "to object",
     // no T needed: pick a face, then click the face to meet). Empty space or
@@ -457,7 +467,14 @@ export class PressPullTool {
     }
   }
 
-  private beginDrag(faces: Selector[], faceIds: number[], anchor: THREE.Vector3, normal: THREE.Vector3, bodyId: string | null = null, round: RoundFace | null = null) {
+  private beginDrag(
+    faces: Selector[],
+    faceIds: number[],
+    anchor: THREE.Vector3,
+    normal: THREE.Vector3,
+    bodyId: string | null = null,
+    round: RoundFace | null = null,
+  ) {
     this.faces = faces;
     this.faceIds = faceIds;
     this.upTo = null;
@@ -469,7 +486,8 @@ export class PressPullTool {
     this.curveRound = null;
     this.quantity = defaultQuantity(round?.full !== false);
     this.quantityPicked = false;
-    this.resizing = round !== null || (faceIds.length > 1 && faceIds.some((id) => this.viewport.roundFaceAt(id, anchor) !== null));
+    this.resizing =
+      round !== null || (faceIds.length > 1 && faceIds.some((id) => this.viewport.roundFaceAt(id, anchor) !== null));
     this.anchor.copy(anchor);
     this.axis.copy(round?.radial ?? normal).normalize();
     this.faceAnchor.copy(anchor);
@@ -503,16 +521,26 @@ export class PressPullTool {
    *  resize has none, and its free switch is Tangent faces follow instead of
    *  the boolean mode. */
   private showBox() {
-    const defs: DimFieldDef[] = [{
-      name: "distance",
-      ...this.fieldLabel(),
-      kind: "length",
-      ...(this.round ? { choices: this.quantityChoices() } : {}),
-    }];
+    const defs: DimFieldDef[] = [
+      {
+        name: "distance",
+        ...this.fieldLabel(),
+        kind: "length",
+        ...(this.round ? { choices: this.quantityChoices() } : {}),
+      },
+    ];
     if (!this.resizing) defs.push({ name: "taper", label: "Angle", icon: "angle", kind: "angle" });
     this.toggleKind = !this.resizing ? "mode" : this.round ? "follow" : null;
-    const toggle = this.toggleKind === "mode" ? this.modeToggle() : this.toggleKind === "follow" ? this.followToggle() : undefined;
-    this.dim.show(defs, () => this.commit(), () => this.cancel(), toggle, this.directionButton(), () => this.onTyped());
+    const toggle =
+      this.toggleKind === "mode" ? this.modeToggle() : this.toggleKind === "follow" ? this.followToggle() : undefined;
+    this.dim.show(
+      defs,
+      () => this.commit(),
+      () => this.cancel(),
+      toggle,
+      this.directionButton(),
+      () => this.onTyped(),
+    );
     this.syncToggle();
     // A round face opens showing the size it ALREADY is, not a zero, the field
     // is a size here, and the current one is the number you are about to edit.
@@ -744,7 +772,14 @@ export class PressPullTool {
     const run = !!r && this.faces.length > 1;
     const along = run || (!r && this.slant) ? "normal" : r;
     const k = this.neutral ? null : featureKey(this.buildFeature());
-    if (!along || this.pickingTarget || this.outcomes.shownFeature || this.removing || k === null || this.outcomes.isRefused(k)) {
+    if (
+      !along ||
+      this.pickingTarget ||
+      this.outcomes.shownFeature ||
+      this.removing ||
+      k === null ||
+      this.outcomes.isRefused(k)
+    ) {
       this.viewport.clearPressPullGhost();
       return;
     }
@@ -800,21 +835,26 @@ export class PressPullTool {
       const unusable = this.typedUnusable();
       if (unusable) {
         const why = unusable.reason;
-        return setPrompt(why ? `${why[0]!.toUpperCase()}${why.slice(1)} · type another ${this.quantity} · Esc` : `Type ${ask} · Esc`);
+        return setPrompt(
+          why ? `${why[0]!.toUpperCase()}${why.slice(1)} · type another ${this.quantity} · Esc` : `Type ${ask} · Esc`,
+        );
       }
       // Nothing to ghost once the drag is asking for the face to GO; the
       // readout dropping to 0 and this line are what say so.
       if (this.removing) return setPrompt("Release to remove this face · drag back to keep it · Esc");
       const moves = this.followMoves();
       if (moves > 0) {
-        return setPrompt(`Moves the ${moves === 1 ? "face that runs" : `${moves} faces that run`} smoothly into it · Esc`);
+        return setPrompt(
+          `Moves the ${moves === 1 ? "face that runs" : `${moves} faces that run`} smoothly into it · Esc`,
+        );
       }
-      return setPrompt(this.full
-        ? `Drag or type ${ask} · ${this.removalText(r)} removes it · Esc`
-        : `Drag or type ${ask} · Esc`);
+      return setPrompt(
+        this.full ? `Drag or type ${ask} · ${this.removalText(r)} removes it · Esc` : `Drag or type ${ask} · Esc`,
+      );
     }
     if (this.slant) return setPrompt("Drag or type how far it moves, negative cuts · Esc");
-    if (this.faces.length > 1) return setPrompt(`${this.faces.length} faces · drag or type a distance · click to commit · Esc`);
+    if (this.faces.length > 1)
+      return setPrompt(`${this.faces.length} faces · drag or type a distance · click to commit · Esc`);
     setPrompt("Drag or type a value, negative cuts · click a face to stop at it · Esc");
   }
 
@@ -898,15 +938,25 @@ export class PressPullTool {
     const gizmo = this.gizmo;
     if (!arc && !gizmo) return null;
     return this.viewport.probe(x, y, (rc) =>
-      arc && rc.intersectObjects(arc.group.children, false).length > 0 ? "taper"
-        : gizmo && rc.intersectObjects(gizmo.children, false).length > 0 ? "push" : null);
+      arc && rc.intersectObjects(arc.group.children, false).length > 0
+        ? "taper"
+        : gizmo && rc.intersectObjects(gizmo.children, false).length > 0
+          ? "push"
+          : null,
+    );
   }
 
   /** A taper is offered only where a wall exists to lean: a by-distance push
    *  that slides, with real travel. A resize has no wall, an up-to push lands on
    *  a chosen surface that a lean would miss, and a target-pick is mid-question. */
   private canTaper(): boolean {
-    return !this.resizing && !this.upTo && !this.pickingTarget && this.direction === "normal" && Math.abs(this.value) >= PP_TAPER_MIN;
+    return (
+      !this.resizing &&
+      !this.upTo &&
+      !this.pickingTarget &&
+      this.direction === "normal" &&
+      Math.abs(this.value) >= PP_TAPER_MIN
+    );
   }
 
   /** Float the curved taper arc above the pushed face, swinging in the plane the
@@ -949,7 +999,8 @@ export class PressPullTool {
   private modeToggle(): DimToggleDef {
     return {
       label: MODE_LABEL[this.mode],
-      title: "Auto grows or shrinks the face; Join, Cut, New body and Intersect extrude it and combine with any body it reaches",
+      title:
+        "Auto grows or shrinks the face; Join, Cut, New body and Intersect extrude it and combine with any body it reaches",
       initial: this.mode !== "auto",
       onChange: () => {
         this.mode = MODES[(MODES.indexOf(this.mode) + 1) % MODES.length] ?? "auto";
@@ -963,7 +1014,8 @@ export class PressPullTool {
   private followToggle(): DimToggleDef {
     return {
       label: "Tangent faces follow",
-      title: "On, the faces that run smoothly into this one move with it once it is too small or too big for them to meet it, so a slot narrows as one; off, that size is refused",
+      title:
+        "On, the faces that run smoothly into this one move with it once it is too small or too big for them to meet it, so a slot narrows as one; off, that size is refused",
       initial: this.follow,
       onChange: (on) => {
         this.follow = on;
@@ -1018,7 +1070,8 @@ export class PressPullTool {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "dim-btn dim-direction";
-    btn.title = "Along axis slides the end of a hole down the hole, so the hole gets deeper and its end keeps its shape; Along normal offsets the face";
+    btn.title =
+      "Along axis slides the end of a hole down the hole, so the hole gets deeper and its end keeps its shape; Along normal offsets the face";
     btn.textContent = DIRECTION_LABEL[this.direction];
     btn.classList.toggle("on", this.direction === "axis");
     btn.style.display = this.holeAxis ? "" : "none";
@@ -1210,7 +1263,11 @@ export class PressPullTool {
     }
     if (this.neutral) {
       // keep the tool alive: silently cancelling here read as "nothing happened"
-      setPrompt(this.round ? `The ${this.quantity === "offset" ? "size" : this.quantity} is unchanged` : "Nothing to commit yet");
+      setPrompt(
+        this.round
+          ? `The ${this.quantity === "offset" ? "size" : this.quantity} is unchanged`
+          : "Nothing to commit yet",
+      );
       return;
     }
     const k = featureKey(this.buildFeature());
@@ -1232,9 +1289,10 @@ export class PressPullTool {
       this.store.setPreview(null);
       this.enginePreviewOn = false;
     }
-    const reselect = (this.round || this.slant) && feature.type === "press-pull" && this.faces.length === 1
-      ? this.faceAnchor.clone().addScaledVector(this.axis, this.value)
-      : null;
+    const reselect =
+      (this.round || this.slant) && feature.type === "press-pull" && this.faces.length === 1
+        ? this.faceAnchor.clone().addScaledVector(this.axis, this.value)
+        : null;
     this.store.addFeature(feature);
     if (decision.unverified) this.store.verifyCommit(feature.id, "Press/Pull");
     this.cleanup();
@@ -1249,7 +1307,10 @@ export class PressPullTool {
     let started = false;
     // onBuild replays the current state at once, which is the model before the commit.
     const off = this.store.onBuild((s) => {
-      if (s.building) { started = true; return; }
+      if (s.building) {
+        started = true;
+        return;
+      }
       if (!started || !s.result || s.previewBuilt) return;
       off();
       if (this.active || s.errorFeatureId === id) return;

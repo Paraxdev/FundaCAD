@@ -23,7 +23,13 @@ export async function activate(_e: Engine): Promise<() => void> {
     renderSections: [{ key: "layer-lines", component: LayerLinesSection, tab: "environment" }],
     settings: [{ key: "look", settings }],
     actions: { "layer-lines": toggle },
-    ribbon: [{ group: "PRINT", priority: 50, items: [{ action: "layer-lines", label: "Layer lines", iconName: "layerLines" }] }],
+    ribbon: [
+      {
+        group: "PRINT",
+        priority: 50,
+        items: [{ action: "layer-lines", label: "Layer lines", iconName: "layerLines" }],
+      },
+    ],
     icons: { layerLines: ICON },
   });
 

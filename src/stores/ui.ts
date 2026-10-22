@@ -52,12 +52,20 @@ export const useUiStore = defineStore("ui", () => {
   const shortcutHudOpen = ref(false);
 
   return {
-    docName, dirty,
-    canUndo, canRedo,
+    docName,
+    dirty,
+    canUndo,
+    canRedo,
     sketchActive,
     gridStepMm,
-    projLabel, selMode, xray, wireframe, viewMode, traceState,
-    lowPerformance, lowPerformanceDismissed,
+    projLabel,
+    selMode,
+    xray,
+    wireframe,
+    viewMode,
+    traceState,
+    lowPerformance,
+    lowPerformanceDismissed,
     shortcutHudOpen,
   };
 });

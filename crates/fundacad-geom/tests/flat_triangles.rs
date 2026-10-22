@@ -40,11 +40,15 @@ fn rounded_corner() -> Value {
 fn findings(doc: &Value) -> Vec<Value> {
     let mut req = Map::new();
     req.insert("document".into(), doc.clone());
-    let JobResult::Json(r) = printability_result(&req, &NoWatch) else {
-        panic!("expected a JSON result")
-    };
+    let JobResult::Json(r) = printability_result(&req, &NoWatch) else { panic!("expected a JSON result") };
     assert!(r.get("error").is_none(), "{r:?}");
-    r["findings"].as_array().unwrap().iter().filter(|f| f["kind"] == "meshHole" || f["kind"] == "flatTriangle").cloned().collect()
+    r["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["kind"] == "meshHole" || f["kind"] == "flatTriangle")
+        .cloned()
+        .collect()
 }
 
 fn assert_no_flat_triangle(label: &str, raw: Value) {
@@ -63,8 +67,17 @@ fn assert_no_flat_triangle(label: &str, raw: Value) {
         [("viewport mesh", &view.positions, &view.indices), ("STL", &stl32, &stl.1), ("3MF", &welded32, &welded_idx)]
     {
         let flat = soup::flat_triangles(positions, indices);
-        assert!(flat.is_empty(), "{label}: {} triangles without area in the {what}, the first {:?}", flat.len(), flat[0]);
-        assert_eq!(soup::open_sides(positions, indices), 0, "{label}: sides of the {what} not met twice, once each way");
+        assert!(
+            flat.is_empty(),
+            "{label}: {} triangles without area in the {what}, the first {:?}",
+            flat.len(),
+            flat[0]
+        );
+        assert_eq!(
+            soup::open_sides(positions, indices),
+            0,
+            "{label}: sides of the {what} not met twice, once each way"
+        );
     }
     assert_eq!(soup::lost_in_seven_digits(&stl.0, &stl.1), 0, "{label}: triangles an ASCII STL writes without area");
     assert_eq!(findings(&raw), Vec::<Value>::new(), "{label}: printability mesh findings");

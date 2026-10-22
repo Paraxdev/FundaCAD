@@ -26,8 +26,8 @@ fn build(doc: &Value) -> Rebuild {
 /// sides at x = +-5 touch it along the lines y = 0, from z 2.5 up to the top.
 fn hub_and_blade() -> (Shape, Shape) {
     let hub = kernel::make_cylinder(5.0, 8.0).expect("hub");
-    let blade = kernel::translated(&kernel::make_box(10.0, 30.0, 3.0).expect("blade"), [0.0, 12.0, 4.0])
-        .expect("moved");
+    let blade =
+        kernel::translated(&kernel::make_box(10.0, 30.0, 3.0).expect("blade"), [0.0, 12.0, 4.0]).expect("moved");
     (hub, blade)
 }
 
@@ -115,12 +115,8 @@ fn the_claw_slider_union_inspects_closed() {
         10_000,
     )
     .expect("inspected");
-    let open: Vec<&Value> = report[0]["edges"]
-        .as_array()
-        .expect("edges")
-        .iter()
-        .filter(|e| e["openBoundary"] == json!(true))
-        .collect();
+    let open: Vec<&Value> =
+        report[0]["edges"].as_array().expect("edges").iter().filter(|e| e["openBoundary"] == json!(true)).collect();
     assert!(open.is_empty(), "inspect lists open edges {open:?}");
     assert!(!r.diagnostics.iter().any(|d| d["code"] == "openShell"), "{:?}", r.diagnostics);
 }

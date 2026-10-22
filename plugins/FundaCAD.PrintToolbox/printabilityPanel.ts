@@ -10,7 +10,11 @@
 import { shallowRef } from "vue";
 import type { DocumentStore, GeometryBackend, Viewport } from "fundacad";
 import {
-  buildPrintabilityRequest, findingMarks, findingView, formatPrintabilityResult, problemCount,
+  buildPrintabilityRequest,
+  findingMarks,
+  findingView,
+  formatPrintabilityResult,
+  problemCount,
 } from "./printability";
 import { createPrintabilityState } from "./printabilityState";
 
@@ -25,7 +29,10 @@ export const EMPHASIS_COLOR = 0xffd089;
 
 export interface PrintabilityDeps {
   store: Pick<DocumentStore, "buildState" | "builtDocument" | "isBodyVisible" | "onBuild" | "onDocChange" | "onOpen">;
-  viewport: Pick<Viewport, "frameAround" | "getSelectedBodies" | "onStressOverlayChange" | "setFaceMarks" | "stressOverlayBody">;
+  viewport: Pick<
+    Viewport,
+    "frameAround" | "getSelectedBodies" | "onStressOverlayChange" | "setFaceMarks" | "stressOverlayBody"
+  >;
   geometry: Pick<GeometryBackend, "cancel" | "printability">;
   hasBody: () => boolean;
   setStatus: (text: string, cls: "" | "connected" | "error") => void;
@@ -92,10 +99,21 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     const stressed = viewport.stressOverlayBody();
     const faceOf = (body: string, face: number): number | null => {
       const b = built.get(body);
-      if (!b || body === stressed || !store.isBodyVisible(body) || !Number.isInteger(face) || face < 0 || face >= b.faceCount) return null;
+      if (
+        !b ||
+        body === stressed ||
+        !store.isBodyVisible(body) ||
+        !Number.isInteger(face) ||
+        face < 0 ||
+        face >= b.faceCount
+      )
+        return null;
       return b.faceStart + face;
     };
-    viewport.setFaceMarks(findingMarks(d.result.findings, d.hovered ?? d.picked, EMPHASIS_COLOR, faceOf), PRINTABILITY_MARKS);
+    viewport.setFaceMarks(
+      findingMarks(d.result.findings, d.hovered ?? d.picked, EMPHASIS_COLOR, faceOf),
+      PRINTABILITY_MARKS,
+    );
   }
 
   /** Put a finding forward while the pointer is over its row, null once it leaves. */
@@ -141,14 +159,20 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
     if (seq !== checkSeq || !data.value) return;
     if (!res.ok) {
       state.finished(res.cancelled ? {} : { error: res.message });
-      setStatus(res.cancelled ? "Printability check cancelled" : `Printability check failed: ${res.message}`, res.cancelled ? "" : "error");
+      setStatus(
+        res.cancelled ? "Printability check cancelled" : `Printability check failed: ${res.message}`,
+        res.cancelled ? "" : "error",
+      );
       return;
     }
     const view = formatPrintabilityResult(res.result);
     checkedEpoch = epoch;
     state.finished({ result: view });
     const n = problemCount(view);
-    setStatus(n ? `Printability: ${n} thing${n === 1 ? "" : "s"} to look at` : "Printability: nothing found", n ? "" : "connected");
+    setStatus(
+      n ? `Printability: ${n} thing${n === 1 ? "" : "s"} to look at` : "Printability: nothing found",
+      n ? "" : "connected",
+    );
     refreshMarks();
     if (epoch !== docEpoch) setStatus("Printability: the model changed while it ran, check again to see the faces", "");
   }
@@ -169,9 +193,13 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
   }
 
   const offs = [
-    store.onDocChange(() => { docEpoch++; }),
+    store.onDocChange(() => {
+      docEpoch++;
+    }),
     // Another document took this one's place: the result names its bodies.
-    store.onOpen(() => { if (data.value) close(); }),
+    store.onOpen(() => {
+      if (data.value) close();
+    }),
     // setModel drops every face mark with the old face ids, so tint again on
     // each completed build. The app's rebuild bridge subscribed before any
     // plugin was started (app/engine.ts mountUi installs it, then

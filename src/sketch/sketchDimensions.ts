@@ -85,8 +85,7 @@ export class SketchDimensions {
    *  so their placement lives on the entity. Same contract as
    *  DimLabel.placeCommit; `index` indexes the array passed to show(). */
   onEntityPlace:
-    | ((index: number, field: DimField, ox: number, oy: number, done: boolean) => THREE.Vector2 | null)
-    | null = null;
+    ((index: number, field: DimField, ox: number, oy: number, done: boolean) => THREE.Vector2 | null) | null = null;
   /** Right-click on a label. The owner renders the menu (this class owns no menu
    *  UI); `del` is the label's delete action, or null when the label is an entity
    *  dim and there is nothing to delete. */
@@ -123,15 +122,17 @@ export class SketchDimensions {
         if (skip?.has(`${e.id}:${d.field}`)) continue;
         const expr = this.entityExprOf?.(i, d.field);
         const field = d.field;
-        items.push(present({
-          anchor: d.labelPos,
-          valueMm: d.valueMm,
-          commit: (mm) => this.onEdit(i, field, mm),
-          place: d.place,
-          placeCommit: (ox, oy, done) => this.onEntityPlace?.(i, field, ox, oy, done) ?? null,
-          ...(this.onEditExpr ? { commitExpr: (raw: string) => this.onEditExpr!(i, field, raw) } : {}),
-          ...(expr ? { expr } : {}),
-        }));
+        items.push(
+          present({
+            anchor: d.labelPos,
+            valueMm: d.valueMm,
+            commit: (mm) => this.onEdit(i, field, mm),
+            place: d.place,
+            placeCommit: (ox, oy, done) => this.onEntityPlace?.(i, field, ox, oy, done) ?? null,
+            ...(this.onEditExpr ? { commitExpr: (raw: string) => this.onEditExpr!(i, field, raw) } : {}),
+            ...(expr ? { expr } : {}),
+          }),
+        );
       }
     });
     for (const x of extras) items.push(present(x));

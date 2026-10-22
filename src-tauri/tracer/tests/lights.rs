@@ -161,7 +161,10 @@ fn the_light_sample_carries_the_specular_lobe() {
         }
         let ratio = got_sum / want_sum;
         println!("roughness {:?} metalness {:?}: over {n} highlight pixels the sun adds {got_sum:.1}, the BSDF says {want_sum:.1}, ratio {ratio:.4}", m.roughness, m.metalness);
-        assert!(n > 10 && (ratio - 1.0).abs() < 0.05, "the sun term over the highlight is {ratio:.4} of diffuse plus GGX");
+        assert!(
+            n > 10 && (ratio - 1.0).abs() < 0.05,
+            "the sun term over the highlight is {ratio:.4} of diffuse plus GGX"
+        );
     }
 }
 
@@ -171,8 +174,19 @@ fn the_light_sample_carries_the_specular_lobe() {
 fn white_furnace() {
     let Some(mut t) = tracer() else { return };
     let cases = [
-        ("lambert", PageMaterial { color: Some([1.0; 3]), roughness: Some(1.0), specular_intensity: Some(0.0), ..Default::default() }),
-        ("mirror metal", PageMaterial { color: Some([1.0; 3]), metalness: Some(1.0), roughness: Some(0.05), ..Default::default() }),
+        (
+            "lambert",
+            PageMaterial {
+                color: Some([1.0; 3]),
+                roughness: Some(1.0),
+                specular_intensity: Some(0.0),
+                ..Default::default()
+            },
+        ),
+        (
+            "mirror metal",
+            PageMaterial { color: Some([1.0; 3]), metalness: Some(1.0), roughness: Some(0.05), ..Default::default() },
+        ),
     ];
     for (name, m) in cases {
         furnace(&mut t, m, (W, H));
@@ -207,9 +221,18 @@ fn lit(lights: &[LightDesc], sky: f32) -> Look {
 /// The golden scene's ball and floor, `ball` the ball's material.
 fn on_floor(t: &mut Tracer, look: Look, ball: PageMaterial, spp: u32) -> Vec<[f32; 3]> {
     t.resize(64, 48);
-    t.set_camera(fundacad_tracer::Camera { eye: BALL_EYE, target: BALL_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
+    t.set_camera(fundacad_tracer::Camera {
+        eye: BALL_EYE,
+        target: BALL_TARGET,
+        up: [0.0, 0.0, 1.0],
+        fov: 40.0,
+        ..Default::default()
+    });
     t.set_look(look);
-    let bodies = vec![place("ball", "ball.1", 1.0, [0.0, 0.0, 1.0], ball), place("floor", "floor.1", 1.0, [0.0; 3], matte([0.7; 3]))];
+    let bodies = vec![
+        place("ball", "ball.1", 1.0, [0.0, 0.0, 1.0], ball),
+        place("floor", "floor.1", 1.0, [0.0; 3], matte([0.7; 3])),
+    ];
     for key in t.set_bodies(bodies) {
         t.add_mesh(&key, if key.starts_with("floor") { floor(20.0) } else { sphere(1.0, 48, 24) });
     }
@@ -259,9 +282,18 @@ fn two_lights_equal_the_sum_of_one_light_renders() {
     let fill_share = mean(&b) / mean(&sum);
     let e = relative_rmse(&blocks(&sum, 64, 4), &blocks(&both, 64, 4));
     let mean = (mean(&both), mean(&sum));
-    println!("fill {:.1} percent of the picture; 4x4 blocks differ by {:.2} percent rms, means {:.4} and {:.4}", 100.0 * fill_share, 100.0 * e, mean.0, mean.1);
+    println!(
+        "fill {:.1} percent of the picture; 4x4 blocks differ by {:.2} percent rms, means {:.4} and {:.4}",
+        100.0 * fill_share,
+        100.0 * e,
+        mean.0,
+        mean.1
+    );
     assert!(fill_share > 0.03, "the fill adds {fill_share:.4}");
-    assert!(e < 0.01 && (mean.0 / mean.1 - 1.0).abs() < 0.003, "two lights against the sum: {e:.4} rms, means {mean:?}");
+    assert!(
+        e < 0.01 && (mean.0 / mean.1 - 1.0).abs() < 0.003,
+        "two lights against the sum: {e:.4} rms, means {mean:?}"
+    );
 }
 
 /// Mean of each 8 by 8 block of an RGBA8 picture `w` wide, per channel.
@@ -290,7 +322,12 @@ fn display_blocks(rgba: &[u8], w: usize) -> Vec<f64> {
 #[test]
 fn nee_bsdf_and_mis_agree() {
     let Some(mut t) = tracer() else { return };
-    let m = PageMaterial { color: Some([0.95, 0.75, 0.4]), metalness: Some(1.0), roughness: Some(0.3), ..Default::default() };
+    let m = PageMaterial {
+        color: Some([0.95, 0.75, 0.4]),
+        metalness: Some(1.0),
+        roughness: Some(0.3),
+        ..Default::default()
+    };
     let look = lit(&[light(SUN, 2.0, 10.0), light(FILL, 0.6, 10.0)], 0.05);
     let mut runs = vec![];
     for e in [Estimator::Mis, Estimator::Nee, Estimator::Bsdf] {
@@ -301,7 +338,10 @@ fn nee_bsdf_and_mis_agree() {
     t.set_estimator(Estimator::Default);
     for (e, m, d) in &runs[1..] {
         let mad = d.iter().zip(&runs[0].2).map(|(a, b)| (a - b).abs()).sum::<f64>() / d.len() as f64;
-        println!("{e:?} against Mis: mean luminance {m:.4} and {:.4}, 8x8 blocks differ by {mad:.3} of 255 on average", runs[0].1);
+        println!(
+            "{e:?} against Mis: mean luminance {m:.4} and {:.4}, 8x8 blocks differ by {mad:.3} of 255 on average",
+            runs[0].1
+        );
         assert!(mad < 1.0 && (m / runs[0].1 - 1.0).abs() < 0.005, "{e:?} differs from Mis by {mad:.3} of 255");
     }
 }
@@ -361,7 +401,13 @@ fn on_lamp(i: usize) -> bool {
 
 fn lamp_scene(t: &mut Tracer, bodies: Vec<fundacad_tracer::BodyDesc>, spp: u32) -> Vec<[f32; 3]> {
     t.resize(64, 48);
-    t.set_camera(fundacad_tracer::Camera { eye: LAMP_EYE, target: LAMP_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
+    t.set_camera(fundacad_tracer::Camera {
+        eye: LAMP_EYE,
+        target: LAMP_TARGET,
+        up: [0.0, 0.0, 1.0],
+        fov: 40.0,
+        ..Default::default()
+    });
     t.set_look(Look { sky_top: [0.02; 3], sky_bottom: [0.02; 3], ..Look::default() });
     for key in t.set_bodies(bodies) {
         t.add_mesh(&key, if key.starts_with("floor") { floor(20.0) } else { sphere(0.4, 24, 12) });
@@ -386,8 +432,15 @@ fn emitter_nee_bsdf_and_mis_agree() {
     t.set_estimator(Estimator::Default);
     for (e, m, d) in &runs[1..] {
         let mad = d.iter().zip(&runs[0].2).map(|(a, b)| (a - b).abs()).sum::<f64>() / d.len() as f64;
-        println!("{e:?} against Mis: mean luminance {m:.4} and {:.4}, 8x8 blocks differ by {mad:.3} of 255 on average", runs[0].1);
-        assert!(mad < 1.0 && (m / runs[0].1 - 1.0).abs() < 0.005, "{e:?} differs from Mis by {mad:.3} of 255, means {m:.4} and {:.4}", runs[0].1);
+        println!(
+            "{e:?} against Mis: mean luminance {m:.4} and {:.4}, 8x8 blocks differ by {mad:.3} of 255 on average",
+            runs[0].1
+        );
+        assert!(
+            mad < 1.0 && (m / runs[0].1 - 1.0).abs() < 0.005,
+            "{e:?} differs from Mis by {mad:.3} of 255, means {m:.4} and {:.4}",
+            runs[0].1
+        );
     }
 }
 
@@ -396,7 +449,9 @@ fn emitter_nee_bsdf_and_mis_agree() {
 #[test]
 fn a_no_light_emitter_glows_and_lights_nothing() {
     let Some(mut t) = tracer() else { return };
-    let glow: PageMaterial = serde_json::from_str(r#"{"color":[0,0,0],"emissive":[1,0.9,0.7],"emissiveIntensity":12,"noLight":true}"#).unwrap();
+    let glow: PageMaterial =
+        serde_json::from_str(r#"{"color":[0,0,0],"emissive":[1,0.9,0.7],"emissiveIntensity":12,"noLight":true}"#)
+            .unwrap();
     assert!(glow.no_light);
     let pic = |t: &mut Tracer, m: PageMaterial| {
         lamp_scene(t, lamp_bodies(m, LAMP_AT, 1.0), 64);
@@ -428,7 +483,13 @@ fn a_camera_move_uploads_nothing() {
     let Some(mut t) = tracer() else { return };
     lamp_scene(&mut t, lamp_bodies(glowing([1.0, 0.9, 0.7]), LAMP_AT, 1.0), 4);
     let n = t.instance_uploads();
-    t.set_camera(fundacad_tracer::Camera { eye: [3.5, -4.0, 2.5], target: [0.0, 0.0, 0.5], up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
+    t.set_camera(fundacad_tracer::Camera {
+        eye: [3.5, -4.0, 2.5],
+        target: [0.0, 0.0, 0.5],
+        up: [0.0, 0.0, 1.0],
+        fov: 40.0,
+        ..Default::default()
+    });
     t.apply();
     assert_eq!(t.instance_uploads(), n, "a camera move uploaded the instances");
     let moved = [1.2, 0.6, 0.9];

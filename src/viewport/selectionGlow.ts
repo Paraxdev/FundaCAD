@@ -169,14 +169,23 @@ export function makeFaceHoverOverlay(positions: Float32Array, color: THREE.Color
  *  among it, which is the whole view. */
 export function screenCoverage(box: THREE.Box3, matrixWorld: THREE.Matrix4, camera: THREE.Camera): number {
   if (box.isEmpty()) return 0;
-  const toClip = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(matrixWorld);
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const toClip = new THREE.Matrix4()
+    .multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+    .multiply(matrixWorld);
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   const p = new THREE.Vector4();
   for (let i = 0; i < 8; i++) {
-    p.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z, 1).applyMatrix4(toClip);
+    p.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z, 1).applyMatrix4(
+      toClip,
+    );
     if (p.w <= 1e-9) return 1;
-    minX = Math.min(minX, p.x / p.w); maxX = Math.max(maxX, p.x / p.w);
-    minY = Math.min(minY, p.y / p.w); maxY = Math.max(maxY, p.y / p.w);
+    minX = Math.min(minX, p.x / p.w);
+    maxX = Math.max(maxX, p.x / p.w);
+    minY = Math.min(minY, p.y / p.w);
+    maxY = Math.max(maxY, p.y / p.w);
   }
   const w = Math.max(0, Math.min(1, maxX) - Math.max(-1, minX));
   const h = Math.max(0, Math.min(1, maxY) - Math.max(-1, minY));

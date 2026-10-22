@@ -86,15 +86,8 @@ pub fn feature_sig(f: &Value, brep_sigs: &mut HashMap<String, String>) -> String
         (Some("import"), Some(b)) => {
             let head: String = b.chars().take(64).collect();
             let tail: String = b.chars().rev().take(64).collect();
-            let memo = format!(
-                "{}|{}|{head}|{tail}",
-                f.get("id").map(Value::to_string).unwrap_or_default(),
-                b.len()
-            );
-            let h = brep_sigs
-                .entry(memo)
-                .or_insert_with(|| hash_hex(&[b.as_bytes()]))
-                .clone();
+            let memo = format!("{}|{}|{head}|{tail}", f.get("id").map(Value::to_string).unwrap_or_default(), b.len());
+            let h = brep_sigs.entry(memo).or_insert_with(|| hash_hex(&[b.as_bytes()])).clone();
             let mut g = f.clone();
             g["brep"] = Value::String(h);
             canonical(&g)
@@ -109,10 +102,7 @@ pub fn param_closure(params: &serde_json::Map<String, Value>) -> HashMap<String,
         .iter()
         .map(|(n, v)| {
             let refs = match v {
-                Value::String(s) => identifiers(s)
-                    .into_iter()
-                    .filter(|r| params.contains_key(*r))
-                    .collect(),
+                Value::String(s) => identifiers(s).into_iter().filter(|r| params.contains_key(*r)).collect(),
                 _ => BTreeSet::new(),
             };
             (n.as_str(), refs)
@@ -162,10 +152,8 @@ pub fn feature_scope(
             used.extend(c.iter().cloned());
         }
     }
-    let scoped: serde_json::Map<String, Value> = used
-        .into_iter()
-        .filter_map(|n| params.get(&n).map(|v| (n, v.clone())))
-        .collect();
+    let scoped: serde_json::Map<String, Value> =
+        used.into_iter().filter_map(|n| params.get(&n).map(|v| (n, v.clone()))).collect();
     let mut scope = canonical(&Value::Object(scoped));
     if reads_visibility(f) {
         scope.push('|');
@@ -186,8 +174,7 @@ fn reads_visibility(f: &Value) -> bool {
     if ty == Some("extrude") {
         return f.get("hiddenBodies").map_or(true, Value::is_null);
     }
-    ty == Some("press-pull")
-        || f.get("operation").and_then(Value::as_str).is_some_and(|op| op != "new")
+    ty == Some("press-pull") || f.get("operation").and_then(Value::as_str).is_some_and(|op| op != "new")
 }
 
 /// Bump when a feature, a kernel patch or a default can change the shape a
@@ -241,17 +228,11 @@ fn unvouched_build() -> Option<String> {
 
 /// `None` vouched, `Some(None)` nothing to key on but the binary.
 fn unvouched(build: Option<&Value>) -> Option<Option<String>> {
-    let commit = build
-        .and_then(|b| b.get("commit"))
-        .and_then(Value::as_str)
-        .filter(|c| !c.is_empty());
+    let commit = build.and_then(|b| b.get("commit")).and_then(Value::as_str).filter(|c| !c.is_empty());
     let Some(commit) = commit else {
         return Some(None);
     };
-    build
-        .and_then(|b| b.get("changes"))
-        .and_then(Value::as_str)
-        .map(|changes| Some(format!("{commit}:{changes}")))
+    build.and_then(|b| b.get("changes")).and_then(Value::as_str).map(|changes| Some(format!("{commit}:{changes}")))
 }
 
 fn exe_stamp() -> String {
@@ -291,10 +272,7 @@ pub fn chain_keys(
     brep_sigs: &mut HashMap<String, String>,
 ) -> Vec<String> {
     let empty = serde_json::Map::new();
-    let params = raw
-        .get("parameters")
-        .and_then(Value::as_object)
-        .unwrap_or(&empty);
+    let params = raw.get("parameters").and_then(Value::as_object).unwrap_or(&empty);
     let closure = param_closure(params);
     let hidden: BTreeSet<&str> = raw
         .get("bodyVisibility")
@@ -310,11 +288,7 @@ pub fn chain_keys(
     for f in raw.get("features").and_then(Value::as_array).into_iter().flatten() {
         let sig = feature_sig(f, brep_sigs);
         let scope = feature_scope(f, params, &closure, &hidden_json);
-        let plugin = f
-            .get("type")
-            .and_then(Value::as_str)
-            .and_then(|t| plugins.get(t))
-            .map_or("", String::as_str);
+        let plugin = f.get("type").and_then(Value::as_str).and_then(|t| plugins.get(t)).map_or("", String::as_str);
         let mut parts: Vec<&[u8]> = vec![k.as_bytes(), sig.as_bytes(), scope.as_bytes()];
         if !plugin.is_empty() {
             parts.extend([&b"|plugin:"[..], plugin.as_bytes(), b"|", hidden_json.as_bytes()]);
@@ -375,8 +349,10 @@ mod tests {
         ]});
         let mut memo = HashMap::new();
         let none = chain_keys(&doc, "env", &HashMap::new(), &BTreeSet::new(), &mut memo);
-        let v1 = chain_keys(&doc, "env", &HashMap::from([("texture".into(), "v1".into())]), &BTreeSet::new(), &mut memo);
-        let v2 = chain_keys(&doc, "env", &HashMap::from([("texture".into(), "v2".into())]), &BTreeSet::new(), &mut memo);
+        let v1 =
+            chain_keys(&doc, "env", &HashMap::from([("texture".into(), "v1".into())]), &BTreeSet::new(), &mut memo);
+        let v2 =
+            chain_keys(&doc, "env", &HashMap::from([("texture".into(), "v2".into())]), &BTreeSet::new(), &mut memo);
         assert_eq!(none[0], v1[0]);
         assert!(none[1] != v1[1] && v1[1] != v2[1] && v1[2] != v2[2]);
     }
@@ -438,19 +414,25 @@ mod tests {
         assert!(!reads(json!({"id": "s", "type": "sweep", "operation": "intersect", "targets": named})));
         assert!(!reads(json!({"id": "p", "type": "press-pull", "mode": "cut", "targets": named})));
         assert!(!reads(json!({"id": "e", "type": "extrude", "operation": "cut", "targets": named})));
-        assert!(!reads(json!({"id": "e", "type": "extrude", "operation": "cut", "targets": named, "hiddenBodies": ["body1"]})));
+        assert!(!reads(
+            json!({"id": "e", "type": "extrude", "operation": "cut", "targets": named, "hiddenBodies": ["body1"]})
+        ));
         for none in [json!([]), Value::Null] {
             assert!(reads(json!({"id": "l", "type": "loft", "operation": "cut", "targets": none})), "{none}");
             assert!(reads(json!({"id": "p", "type": "press-pull", "mode": "cut", "targets": none})), "{none}");
             assert!(reads(json!({"id": "e", "type": "extrude", "operation": "cut", "targets": none})), "{none}");
         }
-        let doc = |vis: Value| json!({"bodyVisibility": vis, "features": [
-            {"id": "a", "type": "box"},
-            {"id": "c", "type": "loft", "operation": "cut", "targets": named},
-            {"id": "z", "type": "box"},
-        ]});
+        let doc = |vis: Value| {
+            json!({"bodyVisibility": vis, "features": [
+                {"id": "a", "type": "box"},
+                {"id": "c", "type": "loft", "operation": "cut", "targets": named},
+                {"id": "z", "type": "box"},
+            ]})
+        };
         let mut memo = HashMap::new();
-        let mut keys = |vis: Value, plugins: &HashMap<String, String>| chain_keys(&doc(vis), "env", plugins, &BTreeSet::new(), &mut memo);
+        let mut keys = |vis: Value, plugins: &HashMap<String, String>| {
+            chain_keys(&doc(vis), "env", plugins, &BTreeSet::new(), &mut memo)
+        };
         let none = HashMap::new();
         assert_eq!(keys(json!({"body1": false}), &none), keys(json!({}), &none));
         assert_eq!(keys(json!({"body1": false}), &none), keys(json!({"body1": true}), &none));
@@ -497,10 +479,7 @@ mod tests {
     #[test]
     fn only_a_build_of_committed_source_is_vouched_for() {
         assert_eq!(unvouched(Some(&json!({"commit": "abc", "commitDate": "2026-10-21"}))), None);
-        assert_eq!(
-            unvouched(Some(&json!({"commit": "abc", "changes": "0f"}))),
-            Some(Some("abc:0f".into()))
-        );
+        assert_eq!(unvouched(Some(&json!({"commit": "abc", "changes": "0f"}))), Some(Some("abc:0f".into())));
         assert_eq!(unvouched(Some(&json!({}))), Some(None));
         assert_eq!(unvouched(None), Some(None));
     }

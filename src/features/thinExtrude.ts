@@ -1,7 +1,15 @@
 import type { Feature, SketchEntity } from "../types";
 
 /** The curves a thin wall can follow, the rest the engine refuses with a reason. */
-const WALL_CURVES = new Set<SketchEntity["type"]>(["line", "arc", "circle", "rectangle", "polygon", "slot", "projected"]);
+const WALL_CURVES = new Set<SketchEntity["type"]>([
+  "line",
+  "arc",
+  "circle",
+  "rectangle",
+  "polygon",
+  "slot",
+  "projected",
+]);
 
 export const THIN_DEFAULTS = { distance: 10, thickness: 2 } as const;
 
@@ -16,8 +24,15 @@ export function thinExtrudeOf(features: readonly Feature[], sketchId: string, id
     .map((e) => e.id as string);
   if (!curves.length) return null;
   return {
-    id, type: "extrude", sketch: sketchId, distance: THIN_DEFAULTS.distance, operation: "new",
-    thin: true, curves, thickness: THIN_DEFAULTS.thickness, side: "center",
+    id,
+    type: "extrude",
+    sketch: sketchId,
+    distance: THIN_DEFAULTS.distance,
+    operation: "new",
+    thin: true,
+    curves,
+    thickness: THIN_DEFAULTS.thickness,
+    side: "center",
   };
 }
 

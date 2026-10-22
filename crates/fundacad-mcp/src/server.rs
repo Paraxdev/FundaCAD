@@ -35,10 +35,9 @@ use std::time::{Duration, Instant};
 use base64::Engine as _;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-    JsonObject, ListResourcesResult, PaginatedRequestParams, ReadResourceRequestParams,
-    ReadResourceResponse, ReadResourceResult, Resource, ResourceContents, ServerCapabilities,
-    ServerConfig,
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation, JsonObject,
+    ListResourcesResult, PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult,
+    Resource, ResourceContents, ServerCapabilities, ServerConfig,
 };
 use rmcp::service::RequestContext;
 use rmcp::{tool, tool_router, ErrorData as McpError, RoleServer, ServerHandler};
@@ -49,8 +48,8 @@ use crate::describe;
 use crate::docfile;
 use crate::link::{args as call_args, EngineLink, Mode};
 use crate::live::{LiveError, LiveLink};
-use crate::model::{self, Doc};
 use crate::mesh::MeshBody;
+use crate::model::{self, Doc};
 use crate::render::{self, ViewRequest};
 use crate::schema;
 use crate::scope::PathScope;
@@ -83,9 +82,8 @@ pub const MUTATORS: &[&str] = &[
 
 /// Tools that need no document at all, so they must not be made to wait for
 /// one. `schema` in particular is what an agent reads BEFORE anything exists.
-pub const NO_DOCUMENT: &[&str] = &[
-    "schema", "ui_open", "ui_do", "ui_read", "ui_shot", "ui_close", "guide_highlight", "guide_wait", "guide_clear",
-];
+pub const NO_DOCUMENT: &[&str] =
+    &["schema", "ui_open", "ui_do", "ui_read", "ui_shot", "ui_close", "guide_highlight", "guide_wait", "guide_clear"];
 
 /// What the host puts in front of the model before its first call.
 ///
@@ -259,11 +257,7 @@ fn edit_note(name: &str, args: &JsonObject) -> String {
         .get("id")
         .and_then(Value::as_str)
         .or_else(|| args.get("name").and_then(Value::as_str))
-        .or_else(|| {
-            args.get("feature")
-                .and_then(|f| f.get("type"))
-                .and_then(Value::as_str)
-        });
+        .or_else(|| args.get("feature").and_then(|f| f.get("type")).and_then(Value::as_str));
     match subject {
         Some(s) => format!("{name}: {s}"),
         None => name.to_string(),
@@ -276,11 +270,8 @@ fn edit_note(name: &str, args: &JsonObject) -> String {
 /// unchanged body keeps its print, and a body that only moved does not.
 fn shape_print(b: &MeshBody) -> u64 {
     use std::hash::{Hash, Hasher};
-    let mut points: Vec<[i64; 3]> = b
-        .positions
-        .chunks_exact(3)
-        .map(|p| [0, 1, 2].map(|k| ((p[k] as f64) * 1000.0).round() as i64))
-        .collect();
+    let mut points: Vec<[i64; 3]> =
+        b.positions.chunks_exact(3).map(|p| [0, 1, 2].map(|k| ((p[k] as f64) * 1000.0).round() as i64)).collect();
     points.sort_unstable();
     points.dedup();
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -293,10 +284,7 @@ fn shape_print(b: &MeshBody) -> u64 {
 fn signature(doc: &Doc) -> String {
     let mut m = Map::new();
     m.insert("f".into(), doc.get("features").cloned().unwrap_or(Value::Null));
-    m.insert(
-        "p".into(),
-        doc.get("parameters").cloned().unwrap_or(Value::Null),
-    );
+    m.insert("p".into(), doc.get("parameters").cloned().unwrap_or(Value::Null));
     canonical(&Value::Object(m))
 }
 
@@ -307,16 +295,11 @@ fn canonical(v: &Value) -> String {
         Value::Object(o) => {
             let mut keys: Vec<&String> = o.keys().collect();
             keys.sort();
-            let body: Vec<String> = keys
-                .iter()
-                .map(|k| format!("{}:{}", Value::String((*k).clone()), canonical(&o[*k])))
-                .collect();
+            let body: Vec<String> =
+                keys.iter().map(|k| format!("{}:{}", Value::String((*k).clone()), canonical(&o[*k]))).collect();
             format!("{{{}}}", body.join(","))
         }
-        Value::Array(a) => format!(
-            "[{}]",
-            a.iter().map(canonical).collect::<Vec<_>>().join(",")
-        ),
+        Value::Array(a) => format!("[{}]", a.iter().map(canonical).collect::<Vec<_>>().join(",")),
         other => other.to_string(),
     }
 }
@@ -399,10 +382,7 @@ impl State {
     fn state_line(&mut self, head: &str) -> String {
         let count = model::features(&self.doc).len();
         let problems = model::validate(&mut self.doc);
-        let mut out = format!(
-            "{head} {count} feature{} in the timeline.",
-            if count == 1 { "" } else { "s" }
-        );
+        let mut out = format!("{head} {count} feature{} in the timeline.", if count == 1 { "" } else { "s" });
         if !problems.is_empty() {
             out.push_str("\nproblems (these WILL fail a build):\n  ");
             out.push_str(&problems.join("\n  "));
@@ -534,9 +514,7 @@ impl FundaCad {
                     // state to stay in rather than fail on: the agent still
                     // gets the app's engine, and every tool that needs the
                     // document says why it cannot have it.
-                    log(&format!(
-                        "[mcp] attached to the engine, but not to a document: {e}"
-                    ));
+                    log(&format!("[mcp] attached to the engine, but not to a document: {e}"));
                 }
             }
             st.live = Some(live);
@@ -585,13 +563,7 @@ impl FundaCad {
 
     /// The uploads still arriving, as (id, spool directory).
     pub async fn uploads(&self) -> Vec<(String, PathBuf)> {
-        self.state
-            .lock()
-            .await
-            .uploads
-            .iter()
-            .map(|(k, u)| (k.clone(), u.dir.clone()))
-            .collect()
+        self.state.lock().await.uploads.iter().map(|(k, u)| (k.clone(), u.dir.clone())).collect()
     }
 
     /// Move every open upload's last-touched time back, so a test can reach the
@@ -643,9 +615,7 @@ impl FundaCad {
             st.probed_at = Some(Instant::now());
         }
 
-        let Some(app) =
-            crate::app_session::find_running_app(None, crate::app_session::PROBE_TIMEOUT).await
-        else {
+        let Some(app) = crate::app_session::find_running_app(None, crate::app_session::PROBE_TIMEOUT).await else {
             return;
         };
         self.state.lock().await.app_build = app.build.clone();
@@ -658,9 +628,7 @@ impl FundaCad {
                 // away between the probe and the pull. Staying private is the
                 // honest outcome; saying why is what stops it looking like the
                 // connector is broken.
-                log(&format!(
-                    "[mcp] FundaCAD is open but not sharing a document: {e}"
-                ));
+                log(&format!("[mcp] FundaCAD is open but not sharing a document: {e}"));
                 return;
             }
         };
@@ -693,9 +661,7 @@ impl FundaCad {
     /// restarts this server. Fall back to a private engine, keeping the last
     /// document pulled, and let the re-probe find the app again.
     pub(crate) async fn drop_lost_app(&self, why: &str) {
-        log(&format!(
-            "[mcp] lost FundaCAD's engine ({why}), working on a private copy until it is back"
-        ));
+        log(&format!("[mcp] lost FundaCAD's engine ({why}), working on a private copy until it is back"));
         let lost = {
             let mut st = self.state.lock().await;
             let lost = std::mem::replace(&mut st.link, Arc::new(EngineLink::private()));
@@ -792,10 +758,9 @@ impl FundaCad {
             live.push(&link, &document, &edit_note(name, args)).await
         };
         match pushed {
-            Ok(rev) => Ok(Ok(CallToolResponse::Complete(append(
-                result,
-                &format!("\n(applied in FundaCAD, revision {rev})"),
-            )))),
+            Ok(rev) => {
+                Ok(Ok(CallToolResponse::Complete(append(result, &format!("\n(applied in FundaCAD, revision {rev})")))))
+            }
             Err(e) => {
                 // The local document now holds an edit the app never took. Put
                 // it back, or the next tool would build on a change that does
@@ -860,9 +825,7 @@ impl FundaCad {
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_schema(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
-        Ok(text(schema::schema_text(
-            args.get("type").and_then(Value::as_str),
-        )))
+        Ok(text(schema::schema_text(args.get("type").and_then(Value::as_str))))
     }
 
     #[tool(
@@ -933,11 +896,7 @@ impl FundaCad {
         } else {
             format!(
                 "\nparameter problems: {}",
-                issues
-                    .iter()
-                    .map(|(k, v)| format!("{k}: {v}"))
-                    .collect::<Vec<_>>()
-                    .join("; ")
+                issues.iter().map(|(k, v)| format!("{k}: {v}")).collect::<Vec<_>>().join("; ")
             )
         };
         Ok(text(format!(
@@ -969,15 +928,9 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     )]
     pub async fn t_doc_save(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let mut st = self.state.lock().await;
-        let given = args
-            .get("path")
-            .and_then(Value::as_str)
-            .filter(|p| !p.is_empty())
-            .map(str::to_string);
+        let given = args.get("path").and_then(Value::as_str).filter(|p| !p.is_empty()).map(str::to_string);
         let Some(given) = given.or_else(|| st.path.as_ref().map(|p| p.to_string_lossy().into_owned())) else {
-            return Ok(failure(
-                "No path given and this document has never been saved.",
-            ));
+            return Ok(failure("No path given and this document has never been saved."));
         };
         let path = match self.scoped_in(&st, &given) {
             Ok(p) => p,
@@ -1013,8 +966,7 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
         let embedded = match docfile::write_with(&path, &stamped, Some(&root), &fetched) {
             Ok(n) => n,
             Err(e) => {
-                let why = asking_failed
-                    .map_or_else(String::new, |e| format!("\n{}", crate::blobs::engine_problem(&e)));
+                let why = asking_failed.map_or_else(String::new, |e| format!("\n{}", crate::blobs::engine_problem(&e)));
                 return Ok(failure(format!("{e}{why}")));
             }
         };
@@ -1028,11 +980,8 @@ note: left out of the file, because this build cannot read them and a .funda has
                 std::mem::take(&mut st.unread_sections).join(", ")
             )
         };
-        let geometry = if embedded > 0 {
-            format!(", with {embedded} imported bodies' geometry")
-        } else {
-            String::new()
-        };
+        let geometry =
+            if embedded > 0 { format!(", with {embedded} imported bodies' geometry") } else { String::new() };
         Ok(text(format!(
             "Saved {} features to {}{geometry}.{left_out}",
             model::features(&st.doc).len(),
@@ -1049,23 +998,10 @@ note: left out of the file, because this build cannot read them and a .funda has
     pub async fn t_doc_get(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let st = self.state.lock().await;
         let mut out = Map::new();
-        out.insert(
-            "features".into(),
-            st.doc.get("features").cloned().unwrap_or_else(|| json!([])),
-        );
-        if !args
-            .get("features_only")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        {
-            out.insert(
-                "parameters".into(),
-                st.doc.get("parameters").cloned().unwrap_or_else(|| json!({})),
-            );
-            out.insert(
-                "paramDefs".into(),
-                st.doc.get("paramDefs").cloned().unwrap_or_else(|| json!({})),
-            );
+        out.insert("features".into(), st.doc.get("features").cloned().unwrap_or_else(|| json!([])));
+        if !args.get("features_only").and_then(Value::as_bool).unwrap_or(false) {
+            out.insert("parameters".into(), st.doc.get("parameters").cloned().unwrap_or_else(|| json!({})));
+            out.insert("paramDefs".into(), st.doc.get("paramDefs").cloned().unwrap_or_else(|| json!({})));
             for key in ["bodyIds", "version"] {
                 if let Some(v) = st.doc.get(key) {
                     out.insert(key.into(), v.clone());
@@ -1086,9 +1022,7 @@ note: left out of the file, because this build cannot read them and a .funda has
             Ok(d) => d,
             Err(e) => return Ok(e),
         };
-        let ok = doc
-            .as_object()
-            .is_some_and(|o| o.get("features").is_some_and(Value::is_array));
+        let ok = doc.as_object().is_some_and(|o| o.get("features").is_some_and(Value::is_array));
         if !ok {
             return Ok(failure("`document` needs a `features` list."));
         }
@@ -1110,9 +1044,7 @@ note: left out of the file, because this build cannot read them and a .funda has
         st.doc = next;
         model::fill_defaults(&mut st.doc);
         fundacad_core::body_ids::ensure_map(&mut st.doc);
-        st.doc
-            .entry("version")
-            .or_insert_with(|| json!(model::FORMAT_VERSION));
+        st.doc.entry("version").or_insert_with(|| json!(model::FORMAT_VERSION));
         st.invalidate();
         st.reported = None;
         model::recompute_parameters(&mut st.doc);
@@ -1145,11 +1077,7 @@ note: left out of the file, because this build cannot read them and a .funda has
         // Just this parameter. Printing the whole table on every call turned a
         // twenty-parameter model into twenty pages of the same numbers; anything
         // that wants the table can ask doc_get for it.
-        let count = st
-            .doc
-            .get("parameters")
-            .and_then(Value::as_object)
-            .map_or(0, Map::len);
+        let count = st.doc.get("parameters").and_then(Value::as_object).map_or(0, Map::len);
         Ok(text(format!(
             "{name} = {} -> {} {} ({count} parameters defined)",
             d.get("expr").and_then(Value::as_str).unwrap_or_default(),
@@ -1266,9 +1194,7 @@ note: left out of the file, because this build cannot read them and a .funda has
             return Ok(doc_error(e));
         }
         st.invalidate();
-        Ok(text(
-            st.state_line(&format!("Moved {id} to position {to}.")),
-        ))
+        Ok(text(st.state_line(&format!("Moved {id} to position {to}."))))
     }
 
     #[tool(
@@ -1411,11 +1337,7 @@ note: left out of the file, because this build cannot read them and a .funda has
         // alone: whatever was already at `path` (a previous good export) is
         // never touched, let alone overwritten and then deleted.
         let separate = truthy(args.get("separate"));
-        let wanted = args
-            .get("body")
-            .and_then(Value::as_str)
-            .filter(|b| !b.is_empty())
-            .map(str::to_string);
+        let wanted = args.get("body").and_then(Value::as_str).filter(|b| !b.is_empty()).map(str::to_string);
         if separate && wanted.is_some() {
             return Ok(failure(
                 "Give `body` or `separate`, not both: one body to one file, or every body to a \
@@ -1542,10 +1464,7 @@ note: left out of the file, because this build cannot read them and a .funda has
         let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         if let Some(e) = result.get("error") {
             discard();
-            return Ok(failure(format!(
-                "Export failed: {}",
-                e.get("message").and_then(Value::as_str).unwrap_or("?")
-            )));
+            return Ok(failure(format!("Export failed: {}", e.get("message").and_then(Value::as_str).unwrap_or("?"))));
         }
         // `warnings` mixes a feature failure in with an ordinary export
         // advisory (like a plugin's displacement not surviving STEP); only
@@ -1598,11 +1517,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
 /// Every body the document builds, as `inspect` summarises it: id, name and
 /// box. `only` narrows it, and asks for every face as well.
-pub(crate) async fn engine_bodies(
-    link: &EngineLink,
-    doc: &Doc,
-    only: Option<&[String]>,
-) -> Result<Vec<Value>, String> {
+pub(crate) async fn engine_bodies(link: &EngineLink, doc: &Doc, only: Option<&[String]>) -> Result<Vec<Value>, String> {
     let mut payload = Map::new();
     payload.insert("document".into(), Value::Object(doc.clone()));
     payload.insert("detail".into(), json!(only.is_some()));
@@ -1617,12 +1532,7 @@ pub(crate) async fn engine_bodies(
     if reply.get("ok") != Some(&json!(true)) {
         return Err(format!("Could not measure the bodies: {}", error_message(&reply)));
     }
-    Ok(reply
-        .get("result")
-        .and_then(|r| r.get("bodies"))
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default())
+    Ok(reply.get("result").and_then(|r| r.get("bodies")).and_then(Value::as_array).cloned().unwrap_or_default())
 }
 
 /// A body named by id or by name, as its id.
@@ -1658,18 +1568,11 @@ fn place_files(result: &Value, folder: &Path) -> Result<String, String> {
         .map(|a| a.iter().filter_map(Value::as_str).map(PathBuf::from).collect())
         .unwrap_or_default();
     if folder.exists() && !folder.is_dir() {
-        return Err(format!(
-            "{} is a file, and a separate export writes a folder of that name.",
-            folder.display()
-        ));
+        return Err(format!("{} is a file, and a separate export writes a folder of that name.", folder.display()));
     }
     // Every part checked before the first is moved in, so a name that is
     // taken by a folder refuses the export with the old parts untouched.
-    if let Some(to) = written
-        .iter()
-        .filter_map(|from| Some(folder.join(from.file_name()?)))
-        .find(|to| to.is_dir())
-    {
+    if let Some(to) = written.iter().filter_map(|from| Some(folder.join(from.file_name()?))).find(|to| to.is_dir()) {
         return Err(format!("{} is a folder, so the part of that name cannot be written there.", to.display()));
     }
     std::fs::create_dir_all(folder).map_err(|e| format!("Could not make {}: {e}", folder.display()))?;
@@ -1735,12 +1638,7 @@ fn temp_sibling(path: &Path) -> PathBuf {
 }
 
 fn error_message(reply: &Value) -> String {
-    reply
-        .get("error")
-        .and_then(|e| e.get("message"))
-        .and_then(Value::as_str)
-        .unwrap_or("?")
-        .to_string()
+    reply.get("error").and_then(|e| e.get("message")).and_then(Value::as_str).unwrap_or("?").to_string()
 }
 
 /// What an update changed: the fields the patch named, with the values they
@@ -1787,10 +1685,7 @@ pub(crate) fn py_json(v: &Value) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        Value::Array(a) => format!(
-            "[{}]",
-            a.iter().map(py_json).collect::<Vec<_>>().join(", ")
-        ),
+        Value::Array(a) => format!("[{}]", a.iter().map(py_json).collect::<Vec<_>>().join(", ")),
         other => other.to_string(),
     }
 }
@@ -1844,11 +1739,8 @@ impl FundaCad {
                 .and_then(Value::as_str)
                 .map(|w| format!(" at {w}"))
                 .unwrap_or_default();
-            let err = reply
-                .get("error")
-                .and_then(|e| e.get("message"))
-                .and_then(Value::as_str)
-                .unwrap_or("unknown error");
+            let err =
+                reply.get("error").and_then(|e| e.get("message")).and_then(Value::as_str).unwrap_or("unknown error");
             return Err(failure(format!("Build failed{where_}: {err}{}", open_profile_hint(err))));
         }
         let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
@@ -1889,15 +1781,8 @@ impl FundaCad {
         // 36.57 x 21.45. A number a third too big, on the line an agent reads
         // after every single build, is worth one cache-warm rebuild.
         let mut exact: HashMap<String, Value> = HashMap::new();
-        if let Ok(deep) = link
-            .call(
-                "inspect",
-                call_args([
-                    ("document", Value::Object(document)),
-                    ("detail", json!(false)),
-                ]),
-            )
-            .await
+        if let Ok(deep) =
+            link.call("inspect", call_args([("document", Value::Object(document)), ("detail", json!(false))])).await
         {
             if deep.get("ok") == Some(&json!(true)) {
                 for b in deep
@@ -1926,11 +1811,7 @@ impl FundaCad {
                         (Some(lo), Some(hi)) => lo
                             .iter()
                             .zip(hi.iter())
-                            .map(|(a, b)| {
-                                json!(round3(
-                                    b.as_f64().unwrap_or(0.0) - a.as_f64().unwrap_or(0.0)
-                                ))
-                            })
+                            .map(|(a, b)| json!(round3(b.as_f64().unwrap_or(0.0) - a.as_f64().unwrap_or(0.0))))
                             .collect(),
                         _ => vec![json!(0.0), json!(0.0), json!(0.0)],
                     }
@@ -1941,16 +1822,18 @@ impl FundaCad {
                 None => String::new(),
             };
             let triangles = b.triangles();
-            bodies.push((id.to_string(), format!(
-                "{id} \"{}\": {} x {} x {} mm{vol}, {} faces, {triangles} triangles",
-                b.get("name")
-                    .and_then(Value::as_str)
-                    .map_or("None".into(), str::to_string),
-                py_num(size.first()),
-                py_num(size.get(1)),
-                py_num(size.get(2)),
-                py_num(b.get("faceCount"))
-            ), shape_print(b)));
+            bodies.push((
+                id.to_string(),
+                format!(
+                    "{id} \"{}\": {} x {} x {} mm{vol}, {} faces, {triangles} triangles",
+                    b.get("name").and_then(Value::as_str).map_or("None".into(), str::to_string),
+                    py_num(size.first()),
+                    py_num(size.get(1)),
+                    py_num(size.get(2)),
+                    py_num(b.get("faceCount"))
+                ),
+                shape_print(b),
+            ));
         }
         let mut lines = self.changed_bodies(&bodies, full).await;
         // `featureErrors`, NOT `errors`. A feature that fails is recorded as a
@@ -1958,19 +1841,14 @@ impl FundaCad {
         // carrying the failures beside the geometry that did build. Reading the
         // wrong key made a failed press/pull look like a press/pull that did
         // nothing, which is the single most misleading thing this tool could say.
-        let failures = feature_failure_lines(
-            result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
-        );
+        let failures =
+            feature_failure_lines(result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice));
         let skips = skipped_lines(&result);
         // A skip makes the model incomplete, so it counts as a failure for isError.
         let any_feature_failed = !failures.is_empty() || !skips.is_empty();
         lines.extend(failures);
         lines.extend(skips);
-        for d in result
-            .get("diagnostics")
-            .and_then(Value::as_array)
-            .map_or(&[][..], Vec::as_slice)
-        {
+        for d in result.get("diagnostics").and_then(Value::as_array).map_or(&[][..], Vec::as_slice) {
             // The engine's advisories carry their text as `reason`, the lossy
             // entries are selector match notes an agent cannot act on.
             let advisory = d.get("lossy") == Some(&json!(false));
@@ -2013,9 +1891,7 @@ impl FundaCad {
     async fn changed_bodies(&self, bodies: &[(String, String, u64)], full: bool) -> Vec<String> {
         let previous = {
             let mut st = self.state.lock().await;
-            st.reported.replace(
-                bodies.iter().map(|(id, line, print)| (id.clone(), (line.clone(), *print))).collect(),
-            )
+            st.reported.replace(bodies.iter().map(|(id, line, print)| (id.clone(), (line.clone(), *print))).collect())
         };
         let previous = match previous {
             Some(p) if !full => p,
@@ -2033,8 +1909,7 @@ impl FundaCad {
             }
         }
         let shown = out.len();
-        let mut gone: Vec<&String> =
-            previous.keys().filter(|id| !bodies.iter().any(|(b, _, _)| b == *id)).collect();
+        let mut gone: Vec<&String> = previous.keys().filter(|id| !bodies.iter().any(|(b, _, _)| b == *id)).collect();
         gone.sort();
         if !gone.is_empty() {
             out.push(format!(
@@ -2094,7 +1969,9 @@ impl FundaCad {
             return failure(format!("Inspect failed: {}", error_message(&reply)));
         }
         let mut report = reply.get("result").cloned().unwrap_or_else(|| json!({}));
-        if let Some(wanted) = report.get("unknown").and_then(Value::as_array).and_then(|u| u.first()).and_then(Value::as_str) {
+        if let Some(wanted) =
+            report.get("unknown").and_then(Value::as_array).and_then(|u| u.first()).and_then(Value::as_str)
+        {
             let have = report.get("have").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
             return failure(if have.is_empty() {
                 format!("no body '{wanted}', this build made no bodies")
@@ -2105,9 +1982,8 @@ impl FundaCad {
         // `errors`, inspect's own name for the same thing `rebuild` calls
         // `featureErrors`: a feature that failed mid-build, reported beside
         // the bodies that did build rather than refusing the inspection.
-        let failures = feature_failure_lines(
-            report.get("errors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
-        );
+        let failures =
+            feature_failure_lines(report.get("errors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice));
         if want_faces.is_some() || want_edges.is_some() {
             if let Some(bodies) = report.get_mut("bodies").and_then(Value::as_array_mut) {
                 for b in bodies {
@@ -2123,11 +1999,7 @@ impl FundaCad {
         let mut out = describe::describe(&report, detail);
         if selectors {
             let mut sel = Map::new();
-            for b in report
-                .get("bodies")
-                .and_then(Value::as_array)
-                .map_or(&[][..], Vec::as_slice)
-            {
+            for b in report.get("bodies").and_then(Value::as_array).map_or(&[][..], Vec::as_slice) {
                 let mut faces = Map::new();
                 for f in b.get("faces").and_then(Value::as_array).map_or(&[][..], Vec::as_slice) {
                     faces.insert(
@@ -2143,10 +2015,7 @@ impl FundaCad {
                     );
                 }
                 sel.insert(
-                    b.get("id")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string(),
+                    b.get("id").and_then(Value::as_str).unwrap_or_default().to_string(),
                     json!({"faces": faces, "edges": edges}),
                 );
             }
@@ -2195,31 +2064,17 @@ impl FundaCad {
         if mesh.is_empty() {
             return failure("Nothing to render: the document produced no bodies.");
         }
-        let w = args
-            .get("width")
-            .and_then(Value::as_i64)
-            .filter(|n| *n != 0)
-            .unwrap_or(640)
-            .clamp(64, MAX_IMAGE_PX) as u32;
-        let h = args
-            .get("height")
-            .and_then(Value::as_i64)
-            .filter(|n| *n != 0)
-            .unwrap_or(480)
-            .clamp(64, MAX_IMAGE_PX) as u32;
+        let w =
+            args.get("width").and_then(Value::as_i64).filter(|n| *n != 0).unwrap_or(640).clamp(64, MAX_IMAGE_PX) as u32;
+        let h = args.get("height").and_then(Value::as_i64).filter(|n| *n != 0).unwrap_or(480).clamp(64, MAX_IMAGE_PX)
+            as u32;
         let highlight = match index_set(args.get("highlight_faces")) {
             Some(faces) if !faces.is_empty() => {
                 let body = args
                     .get("highlight_body")
                     .and_then(Value::as_str)
                     .map(str::to_string)
-                    .unwrap_or_else(|| {
-                        mesh[0]
-                            .get("id")
-                            .and_then(Value::as_str)
-                            .unwrap_or_default()
-                            .to_string()
-                    });
+                    .unwrap_or_else(|| mesh[0].get("id").and_then(Value::as_str).unwrap_or_default().to_string());
                 Some((body, faces))
             }
             _ => None,
@@ -2230,14 +2085,9 @@ impl FundaCad {
             .get("bodies")
             .and_then(Value::as_array)
             .filter(|a| !a.is_empty())
-            .map(|a| {
-                a.iter()
-                    .filter_map(|v| v.as_str().map(str::to_string))
-                    .collect::<Vec<_>>()
-            });
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect::<Vec<_>>());
         if let Some(list) = &bodies {
-            let known: Vec<&str> =
-                mesh.iter().map(MeshBody::id).collect();
+            let known: Vec<&str> = mesh.iter().map(MeshBody::id).collect();
             let unknown: Vec<&String> = list.iter().filter(|id| !known.contains(&id.as_str())).collect();
             if !unknown.is_empty() {
                 return failure(format!(
@@ -2247,11 +2097,7 @@ impl FundaCad {
                 ));
             }
         }
-        let section = args
-            .get("section")
-            .filter(|s| truthy(Some(s)))
-            .cloned()
-            .unwrap_or(Value::Null);
+        let section = args.get("section").filter(|s| truthy(Some(s))).cloned().unwrap_or(Value::Null);
         let request = ViewRequest {
             width: w,
             height: h,
@@ -2282,34 +2128,19 @@ impl FundaCad {
             }
             None => camera.view.clone(),
         };
-        let shown: Vec<String> = bodies.unwrap_or_else(|| {
-            mesh.iter().map(|b| b.id().to_string()).collect()
-        });
+        let shown: Vec<String> = bodies.unwrap_or_else(|| mesh.iter().map(|b| b.id().to_string()).collect());
         let cut = if section.is_null() {
             String::new()
         } else {
             // The side actually kept, resolved the way the renderer resolves
             // it, not the word that was passed in: this line used to say
             // "keeping max" over a picture that had kept the other half.
-            let keep = section
-                .get("keep")
-                .and_then(Value::as_str)
-                .unwrap_or("below")
-                .trim()
-                .to_ascii_lowercase();
-            let side = if render::keep_word(&keep).unwrap_or(false) {
-                "above"
-            } else {
-                "below"
-            };
+            let keep = section.get("keep").and_then(Value::as_str).unwrap_or("below").trim().to_ascii_lowercase();
+            let side = if render::keep_word(&keep).unwrap_or(false) { "above" } else { "below" };
             format!(
                 ", cut on {} at {}, keeping {side}",
-                section
-                    .get("axis")
-                    .map_or("X".to_string(), |a| py_num(Some(a))),
-                section
-                    .get("at")
-                    .map_or("the middle".to_string(), |a| py_num(Some(a)))
+                section.get("axis").map_or("X".to_string(), |a| py_num(Some(a))),
+                section.get("at").map_or("the middle".to_string(), |a| py_num(Some(a)))
             )
         };
         let mut caption = format!("{where_} view of {}, {w}x{h}{cut}", shown.join(", "));
@@ -2319,10 +2150,7 @@ impl FundaCad {
         }
         CallToolResult::success(vec![
             ContentBlock::text(caption),
-            ContentBlock::image(
-                base64::engine::general_purpose::STANDARD.encode(&png),
-                "image/png",
-            ),
+            ContentBlock::image(base64::engine::general_purpose::STANDARD.encode(&png), "image/png"),
         ])
     }
 }
@@ -2407,17 +2235,12 @@ fn tolerance_arg(args: &JsonObject) -> Result<Option<f64>, String> {
 }
 
 fn index_set(v: Option<&Value>) -> Option<Vec<i64>> {
-    v.and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(Value::as_i64).collect())
+    v.and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_i64).collect())
 }
 
 fn keep_indices(body: &mut Value, key: &str, want: &[i64]) {
     if let Some(list) = body.get_mut(key).and_then(Value::as_array_mut) {
-        list.retain(|e| {
-            e.get("i")
-                .and_then(Value::as_i64)
-                .is_some_and(|i| want.contains(&i))
-        });
+        list.retain(|e| e.get("i").and_then(Value::as_i64).is_some_and(|i| want.contains(&i)));
     }
 }
 
@@ -2438,9 +2261,7 @@ impl FundaCad {
             for (n, entry) in ops.iter().enumerate() {
                 match crate::edits::apply(&mut doc, entry, &mut notes) {
                     Ok(d) => done.push(d),
-                    Err(why) => {
-                        return failure(crate::edits::refused(n + 1, ops.len(), entry, &why))
-                    }
+                    Err(why) => return failure(crate::edits::refused(n + 1, ops.len(), entry, &why)),
                 }
             }
             st.doc = doc;
@@ -2486,13 +2307,18 @@ impl FundaCad {
         let payload = json!({"document": doc, "sketch": plan.sketch, "entities": plan.ids});
         let outline = match link.call("sketchOutline", payload).await {
             Err(e) => return engine_gone(&e),
-            Ok(r) if r.get("ok") != Some(&json!(true)) => return failure(format!("Could not merge: {}", error_message(&r))),
+            Ok(r) if r.get("ok") != Some(&json!(true)) => {
+                return failure(format!("Could not merge: {}", error_message(&r)))
+            }
             Ok(r) => r.get("result").cloned().unwrap_or_else(|| json!({})),
         };
         let head = {
             let mut st = self.state.lock().await;
             if model::find_feature(&st.doc, &plan.sketch).map(|(_, f)| f.clone()) != before {
-                return failure(format!("{} changed while it was being merged, so nothing was merged. Try again", plan.sketch));
+                return failure(format!(
+                    "{} changed while it was being merged, so nothing was merged. Try again",
+                    plan.sketch
+                ));
             }
             let merged = match crate::sketchmerge::apply(&mut st.doc, &plan, &outline) {
                 Ok(m) => m,
@@ -2522,7 +2348,11 @@ impl FundaCad {
             if !tied.added.is_empty() {
                 st.invalidate();
             }
-            let mut line = format!("tied {} loose end{} in {sketch}", tied.added.len(), if tied.added.len() == 1 { "" } else { "s" });
+            let mut line = format!(
+                "tied {} loose end{} in {sketch}",
+                tied.added.len(),
+                if tied.added.len() == 1 { "" } else { "s" }
+            );
             if !tied.skipped.is_empty() {
                 line.push_str(&format!(", could not move {}", tied.skipped.join(", ")));
             }
@@ -2707,10 +2537,8 @@ impl FundaCad {
         let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         let bodies = meshed_bodies(&result, framed);
         let name_of = |b: &MeshBody| b.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
-        let missing: Vec<&String> = wanted
-            .iter()
-            .filter(|w| !bodies.iter().any(|b| b.id() == w.as_str() || name_of(b) == **w))
-            .collect();
+        let missing: Vec<&String> =
+            wanted.iter().filter(|w| !bodies.iter().any(|b| b.id() == w.as_str() || name_of(b) == **w)).collect();
         if !missing.is_empty() {
             return failure(format!(
                 "no body {} in this build. Check the ids or names against `build`.",
@@ -2742,10 +2570,7 @@ impl FundaCad {
                 ));
             }
         }
-        let mut out = format!(
-            "Section on {}, in-plane axes {} and {}:",
-            plane.label, plane.axes.0, plane.axes.1
-        );
+        let mut out = format!("Section on {}, in-plane axes {} and {}:", plane.label, plane.axes.0, plane.axes.1);
         if parts.is_empty() {
             out.push_str("\nThe plane misses every body.");
         } else {
@@ -2755,9 +2580,8 @@ impl FundaCad {
         if !missed.is_empty() && !wanted.is_empty() {
             out.push_str(&format!("\nThe plane misses {}.", missed.join(", ")));
         }
-        let mut failures = feature_failure_lines(
-            result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
-        );
+        let mut failures =
+            feature_failure_lines(result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice));
         failures.extend(skipped_lines(&result));
         if !failures.is_empty() {
             out.push_str("\nSome features failed, so this cut what did build:\n");
@@ -2802,11 +2626,7 @@ impl FundaCad {
             Err(e) => return e,
         };
         let side = |key: &str, default: i64| {
-            args.get(key)
-                .and_then(Value::as_i64)
-                .filter(|n| *n != 0)
-                .unwrap_or(default)
-                .clamp(64, MAX_IMAGE_PX) as u32
+            args.get(key).and_then(Value::as_i64).filter(|n| *n != 0).unwrap_or(default).clamp(64, MAX_IMAGE_PX) as u32
         };
         let (w, h) = (side("width", 640), side("height", 480));
         let wanted = request.payload.get("body").and_then(Value::as_str).unwrap_or_default().to_string();
@@ -2854,9 +2674,7 @@ impl FundaCad {
             color_bar: true,
             ..ViewRequest::default()
         };
-        let png = match render::render(std::slice::from_ref(&surface), &view)
-            .and_then(|c| crate::png::encode(&c))
-        {
+        let png = match render::render(std::slice::from_ref(&surface), &view).and_then(|c| crate::png::encode(&c)) {
             Ok(p) => p,
             Err(e) => return failure(format!("{out}\nThe picture could not be drawn: {e}")),
         };
@@ -2872,10 +2690,7 @@ impl FundaCad {
         out.push_str(&format!("\n{where_} view of {}, {w}x{h}. {}", surface.id, surface.scale()));
         CallToolResult::success(vec![
             ContentBlock::text(out),
-            ContentBlock::image(
-                base64::engine::general_purpose::STANDARD.encode(&png),
-                "image/png",
-            ),
+            ContentBlock::image(base64::engine::general_purpose::STANDARD.encode(&png), "image/png"),
         ])
     }
 
@@ -3037,10 +2852,7 @@ impl FundaCad {
                 Err(e) => return e,
             };
             if !path.is_file() {
-                return failure(format!(
-                    "No such file: {}\n{ASK_FOR_A_PATH}",
-                    path.display()
-                ));
+                return failure(format!("No such file: {}\n{ASK_FOR_A_PATH}", path.display()));
             }
             let fmt = args
                 .get("format")
@@ -3048,10 +2860,7 @@ impl FundaCad {
                 .map(upload::format_told_as)
                 .unwrap_or_else(|| upload::import_format(&path.to_string_lossy()).to_string());
             if !IMPORT_FORMATS.contains(&fmt.as_str()) {
-                return failure(format!(
-                    "Cannot import '{fmt}' files. Formats: {}.",
-                    IMPORT_FORMATS.join(", ")
-                ));
+                return failure(format!("Cannot import '{fmt}' files. Formats: {}.", IMPORT_FORMATS.join(", ")));
             }
             let source = path.to_string_lossy().into_owned();
             (path, fmt, source)
@@ -3107,9 +2916,7 @@ impl FundaCad {
             import_args.push(("unit", json!(unit)));
         }
         let link = self.engine_link().await;
-        let reply = link
-            .call("import", call_args(import_args))
-            .await;
+        let reply = link.call("import", call_args(import_args)).await;
         if let Some(id) = &upload_id {
             self.state.lock().await.drop_upload(id);
         }
@@ -3121,11 +2928,8 @@ impl FundaCad {
             // The engine refuses for reasons an agent can act on (too large,
             // too many triangles, unreadable), so its message is the whole
             // answer and is passed through rather than summarised.
-            let message = reply
-                .get("error")
-                .and_then(|e| e.get("message"))
-                .and_then(Value::as_str)
-                .unwrap_or("unreadable file");
+            let message =
+                reply.get("error").and_then(|e| e.get("message")).and_then(Value::as_str).unwrap_or("unreadable file");
             return failure(format!("Import failed: {message}"));
         }
         let res = reply.get("result").cloned().unwrap_or_else(|| json!({}));
@@ -3200,20 +3004,12 @@ impl FundaCad {
         }
 
         let mut st = self.state.lock().await;
-        let fid = match model::add_feature(
-            &mut st.doc,
-            &Value::Object(feature),
-            at,
-        ) {
+        let fid = match model::add_feature(&mut st.doc, &Value::Object(feature), at) {
             Ok(fid) => fid,
             Err(e) => return doc_error(e),
         };
         st.invalidate();
-        let kind = if solid {
-            "solid"
-        } else {
-            "surface body (not a solid)"
-        };
+        let kind = if solid { "solid" } else { "surface body (not a solid)" };
         let parts = match res.get("parts").and_then(Value::as_array) {
             Some(p) if !p.is_empty() => format!(", {} parts", p.len()),
             _ => String::new(),
@@ -3222,8 +3018,7 @@ impl FundaCad {
         let head = format!(
             "Imported {source} as {fid}: '{name}', {kind}, {} faces{parts}.{sketch_line}{notes}\nRun `build`, then \
              `inspect` for its sizes and the selectors that address its faces and edges.",
-            res.get("faces")
-                .map_or("?".to_string(), |f| py_num(Some(f)))
+            res.get("faces").map_or("?".to_string(), |f| py_num(Some(f)))
         );
         text(st.state_line(&head))
     }
@@ -3248,12 +3043,10 @@ impl FundaCad {
             (None, None) => (1, 1),
             (Some(a), Some(b)) => {
                 for (label, v) in [("part", &a), ("parts", &b)] {
-                    let ok = matches!(v, Value::Number(n) if n.is_i64() || n.is_u64())
-                        && v.as_i64().is_some_and(|n| n >= 1);
+                    let ok =
+                        matches!(v, Value::Number(n) if n.is_i64() || n.is_u64()) && v.as_i64().is_some_and(|n| n >= 1);
                     if !ok {
-                        return Err(upload::UploadError(format!(
-                            "{label} must be a whole number from 1 up."
-                        )));
+                        return Err(upload::UploadError(format!("{label} must be a whole number from 1 up.")));
                     }
                 }
                 (a.as_i64().unwrap_or(0), b.as_i64().unwrap_or(0))
@@ -3286,11 +3079,7 @@ impl FundaCad {
             st.uploads.insert(id.clone(), up);
             id
         } else {
-            let id = args
-                .get("upload")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string();
+            let id = args.get("upload").and_then(Value::as_str).unwrap_or_default().to_string();
             let Some(up) = st.uploads.get(&id) else {
                 return Err(upload::UploadError(format!(
                     "no upload is in progress under that id. Send part 1 again; every piece \
@@ -3344,14 +3133,9 @@ impl ServerHandler for FundaCad {
         // reads it. `call_live` is what keeps the live rules true afterwards.
         let live = self.state.try_lock().map(|s| s.live.is_some()).unwrap_or(false);
         let instructions = instructions_for(live);
-        ServerConfig::new(
-            ServerCapabilities::builder()
-                .enable_tools()
-                .enable_resources()
-                .build(),
-        )
-        .with_server_info(Implementation::new("fundacad", "0.1.0"))
-        .with_instructions(instructions)
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().enable_resources().build())
+            .with_server_info(Implementation::new("fundacad", "0.1.0"))
+            .with_instructions(instructions)
     }
 
     async fn list_resources(
@@ -3362,10 +3146,7 @@ impl ServerHandler for FundaCad {
         let mut resource = Resource::new("fundacad://schema", "FundaCAD document schema");
         resource.description = Some("Every feature type, its fields and its traps.".into());
         resource.mime_type = Some("text/plain".into());
-        Ok(ListResourcesResult {
-            resources: vec![resource],
-            ..Default::default()
-        })
+        Ok(ListResourcesResult { resources: vec![resource], ..Default::default() })
     }
 
     async fn read_resource(
@@ -3374,19 +3155,14 @@ impl ServerHandler for FundaCad {
         _context: RequestContext<RoleServer>,
     ) -> Result<ReadResourceResponse, McpError> {
         if request.uri != "fundacad://schema" {
-            return Err(McpError::invalid_params(
-                format!("no such resource: {}", request.uri),
-                None,
-            ));
+            return Err(McpError::invalid_params(format!("no such resource: {}", request.uri), None));
         }
-        Ok(ReadResourceResponse::Complete(ReadResourceResult::new(
-            vec![ResourceContents::TextResourceContents {
-                uri: request.uri,
-                mime_type: Some("text/plain".into()),
-                text: schema::schema_text(None),
-                meta: None,
-            }],
-        )))
+        Ok(ReadResourceResponse::Complete(ReadResourceResult::new(vec![ResourceContents::TextResourceContents {
+            uri: request.uri,
+            mime_type: Some("text/plain".into()),
+            text: schema::schema_text(None),
+            meta: None,
+        }])))
     }
 
     /// A tool's own failure is a RESULT with isError, not a JSON-RPC error.
@@ -3404,17 +3180,9 @@ impl ServerHandler for FundaCad {
         let _turn = self.turn.lock().await;
         let name = request.name.to_string();
         if self.router.get(&name).is_none() {
-            let mut have: Vec<String> = self
-                .router
-                .list_all()
-                .iter()
-                .map(|t| t.name.to_string())
-                .collect();
+            let mut have: Vec<String> = self.router.list_all().iter().map(|t| t.name.to_string()).collect();
             have.sort();
-            return Ok(CallToolResponse::Complete(failure(format!(
-                "No tool '{name}'. Have: {}",
-                have.join(", ")
-            ))));
+            return Ok(CallToolResponse::Complete(failure(format!("No tool '{name}'. Have: {}", have.join(", ")))));
         }
         let args = request.arguments.clone().unwrap_or_default();
         if let Some(refusal) = self.router.get(&name).and_then(|t| unknown_arguments(&name, t, &args)) {
@@ -3473,11 +3241,7 @@ impl FundaCad {
     pub async fn shutdown(&self) {
         let (link, live, ids) = {
             let st = self.state.lock().await;
-            (
-                st.link.clone(),
-                st.live.is_some(),
-                st.uploads.keys().cloned().collect::<Vec<_>>(),
-            )
+            (st.link.clone(), st.live.is_some(), st.uploads.keys().cloned().collect::<Vec<_>>())
         };
         self.stop_ui().await;
         {

@@ -12,17 +12,16 @@ import { asFeature, type Feature, type RebuildResult } from "../types";
 type Vec3 = readonly [number, number, number];
 
 /** Index of the polyline nearest `p` within `tol`, else -1. */
-export function pickPlaneEdge(
-  polys: readonly (readonly THREE.Vector2[])[],
-  p: THREE.Vector2,
-  tol: number,
-): number {
+export function pickPlaneEdge(polys: readonly (readonly THREE.Vector2[])[], p: THREE.Vector2, tol: number): number {
   let best = -1;
   let bestD = tol;
   polys.forEach((poly, i) => {
     for (let k = 1; k < poly.length; k++) {
       const d = distToSeg(poly[k - 1]!, poly[k]!, p);
-      if (d < bestD) { bestD = d; best = i; }
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
     }
   });
   return best;
@@ -35,11 +34,7 @@ const isClosed = (poly: readonly THREE.Vector2[], tol: number) =>
  *  loop, `index` first. A closed edge (a whole circle) is its own chain, and a
  *  vertex where three or more edges meet makes the pick ambiguous, so that
  *  answers with the clicked edge alone, the same rule offsetChain uses. */
-export function planeEdgeChain(
-  polys: readonly (readonly THREE.Vector2[])[],
-  index: number,
-  tol: number,
-): number[] {
+export function planeEdgeChain(polys: readonly (readonly THREE.Vector2[])[], index: number, tol: number): number[] {
   const start = polys[index];
   if (!start || start.length < 2) return [];
   if (isClosed(start, tol)) return [index];
@@ -72,17 +67,15 @@ export function planeEdgeChain(
 export function edgeProbePoint(points: readonly Vec3[]): [number, number, number] | null {
   if (!points.length) return null;
   const k = Math.max(0, Math.ceil(points.length / 2) - 1);
-  const a = points[k]!, b = points[Math.min(points.length - 1, k + 1)]!;
+  const a = points[k]!,
+    b = points[Math.min(points.length - 1, k + 1)]!;
   return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
 }
 
 const MESH_FORMATS = new Set(["stl", "3mf", "obj", "glb", "gltf", "ply", "off", "amf", "vrml", "x3d", "fbx", "3ds"]);
 
 /** Bodies carrying faces read in from a mesh file. */
-export function meshBodyIds(
-  bodies: RebuildResult["bodies"],
-  features: readonly Feature[],
-): Set<string> {
+export function meshBodyIds(bodies: RebuildResult["bodies"], features: readonly Feature[]): Set<string> {
   const meshImports = new Set<string>();
   for (const f of features) {
     const imp = asFeature(f, "import");

@@ -4,7 +4,7 @@
 
 mod common;
 
-use common::{build, display16, dims, read_ref, ref_write_wanted_for, rmse_to_ref, write_ref, REF_SCENES, REF_SPP};
+use common::{build, dims, display16, read_ref, ref_write_wanted_for, rmse_to_ref, write_ref, REF_SCENES, REF_SPP};
 use fundacad_tracer::{Tracer, TracerOptions};
 
 const SPP: u32 = 64;

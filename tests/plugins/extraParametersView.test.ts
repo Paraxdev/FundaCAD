@@ -2,13 +2,23 @@ import { describe, it, expect } from "vitest";
 import type { CadDocument, ParamDef } from "../../src/types";
 import { recompute } from "../../src/params/engine";
 import {
-  convertControl, formatChoices, isPlainNumber, nextId, parseChoices, tuneGroups,
+  convertControl,
+  formatChoices,
+  isPlainNumber,
+  nextId,
+  parseChoices,
+  tuneGroups,
 } from "../../plugins/FundaCAD.ExtraParameters/view";
 
 const def = (expr: string, extra: Partial<ParamDef> = {}): ParamDef => ({ expr, value: 0, unit: "count", ...extra });
 
 function doc(defs: Record<string, ParamDef>, groups?: { id: string; name: string }[]): CadDocument {
-  const d: CadDocument = { parameters: {}, paramDefs: defs, features: [], ...(groups ? { paramExtras: { groups } } : {}) };
+  const d: CadDocument = {
+    parameters: {},
+    paramDefs: defs,
+    features: [],
+    ...(groups ? { paramExtras: { groups } } : {}),
+  };
   recompute(d);
   return d;
 }
@@ -25,7 +35,11 @@ describe("Extra Parameters: what the section lists", () => {
         stale: def("3", { group: "gone" }),
         d1: def("4", { unit: "mm", target: { kind: "feature", feature: "f1", field: "distance" } }),
       },
-      [{ id: "g1", name: "Core" }, { id: "g2", name: "Rings" }, { id: "g3", name: "Empty" }],
+      [
+        { id: "g1", name: "Core" },
+        { id: "g2", name: "Rings" },
+        { id: "g3", name: "Empty" },
+      ],
     );
     const groups = tuneGroups(d);
     expect(groups.map((g) => [g.id, g.rows.map((r) => r.name)])).toEqual([
@@ -46,11 +60,18 @@ describe("Extra Parameters: what the section lists", () => {
 
   it("reads and writes a list of choices, and refuses an entry with no number", () => {
     expect(parseChoices("Small = 10, Large=30, 45")).toEqual([
-      { label: "Small", value: 10 }, { label: "Large", value: 30 }, { label: "45", value: 45 },
+      { label: "Small", value: 10 },
+      { label: "Large", value: 30 },
+      { label: "45", value: 45 },
     ]);
     expect(parseChoices("Small, Large = 30")).toMatch(/"Small" needs a number/);
     expect(parseChoices(" , ")).toMatch(/at least one/);
-    expect(formatChoices([{ label: "Small", value: 10 }, { label: "45", value: 45 }])).toBe("Small = 10, 45");
+    expect(
+      formatChoices([
+        { label: "Small", value: 10 },
+        { label: "45", value: 45 },
+      ]),
+    ).toBe("Small = 10, 45");
   });
 
   it("keeps a range across a change of control kind, and invents a usable one for a new slider", () => {

@@ -19,7 +19,8 @@ pub fn read_fbx(data: &[u8]) -> Result<(Vec<MeshObject>, Vec<String>), String> {
         ignore_embedded: true,
         ..Default::default()
     };
-    let scene = ufbx::load_memory(data, opts).map_err(|e| format!("couldn't read this FBX file ({})", e.description.as_ref() as &str))?;
+    let scene = ufbx::load_memory(data, opts)
+        .map_err(|e| format!("couldn't read this FBX file ({})", e.description.as_ref() as &str))?;
 
     // An instanced mesh is baked once per node that places it.
     let total: u64 = scene.nodes.iter().filter_map(|n| n.mesh.as_ref()).map(|m| m.num_triangles as u64).sum();

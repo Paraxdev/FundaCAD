@@ -66,11 +66,7 @@ export interface AppInfo {
  *  without a desktop app and so that `appHost` has one thing to be handed
  *  rather than four. */
 export interface NativeBridge {
-  pick(opts: {
-    plugin: string;
-    purpose: string;
-    extensions: string[];
-  }): Promise<PickedFile | null>;
+  pick(opts: { plugin: string; purpose: string; extensions: string[] }): Promise<PickedFile | null>;
   read(opts: { plugin: string; handle: string }): Promise<FileBody>;
   write(opts: {
     plugin: string;

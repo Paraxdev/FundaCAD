@@ -140,7 +140,13 @@ export function buildLightRig(
     brightness: p.brightness,
     background: p.background,
     ground: floor
-      ? { mode: p[groundKey(floor.workspace)], z: floor.z, centre: [floor.centre[0], floor.centre[1]], extent: floor.extent, albedo: GROUND_ALBEDO }
+      ? {
+          mode: p[groundKey(floor.workspace)],
+          z: floor.z,
+          centre: [floor.centre[0], floor.centre[1]],
+          extent: floor.extent,
+          albedo: GROUND_ALBEDO,
+        }
       : { mode: "none", z: 0, centre: [0, 0], extent: 0, albedo: GROUND_ALBEDO },
   };
 }

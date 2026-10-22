@@ -14,13 +14,7 @@
 // in, computed from the same functions the app uses.
 
 import { describe, expect, it } from "vitest";
-import {
-  FAR_AT_REST,
-  FAR_FACTOR,
-  ORTHO_DEPTH_FACTOR,
-  orthoDepth,
-  perspFar,
-} from "../../src/viewport/clipPlanes";
+import { FAR_AT_REST, FAR_FACTOR, ORTHO_DEPTH_FACTOR, orthoDepth, perspFar } from "../../src/viewport/clipPlanes";
 import { groundGridCells } from "../../src/viewport/scene";
 import { niceStep } from "../../src/ui/units";
 
@@ -82,7 +76,10 @@ describe("perspFar", () => {
   it("is exactly the case the old fixed plane failed", () => {
     // The two measurements from the running app, as a guard against anyone
     // "simplifying" this back to a constant.
-    for (const [dist, reach] of [[2813, 8000], [13054, 37500]] as const) {
+    for (const [dist, reach] of [
+      [2813, 8000],
+      [13054, 37500],
+    ] as const) {
       expect(OLD_FAR).toBeLessThan(dist + reach); // it really was clipped
       expect(perspFar(dist)).toBeGreaterThan(dist + reach);
     }

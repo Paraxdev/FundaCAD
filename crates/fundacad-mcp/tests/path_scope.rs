@@ -20,7 +20,8 @@ fn server_in(own: &Path, cwd: &Path, extra: &[(&str, &str)], args: &[&str]) -> M
     std::fs::create_dir_all(&tmp).unwrap();
     std::fs::create_dir_all(&blobs).unwrap();
     let (t, b) = (tmp.to_string_lossy().into_owned(), blobs.to_string_lossy().into_owned());
-    let mut pairs = vec![("TMP", t.as_str()), ("TEMP", t.as_str()), ("TMPDIR", t.as_str()), ("FUNDACAD_BLOB_DIR", b.as_str())];
+    let mut pairs =
+        vec![("TMP", t.as_str()), ("TEMP", t.as_str()), ("TMPDIR", t.as_str()), ("FUNDACAD_BLOB_DIR", b.as_str())];
     pairs.extend_from_slice(extra);
     Mcp::start_with_args(&env(&pairs), cwd, args)
 }
@@ -104,10 +105,9 @@ fn a_dropped_allow_path_is_said_in_the_refusal() {
 fn allow_path_and_the_env_list_open_a_folder_but_not_its_hidden_ones() {
     let (own, _work, folder) = dirs();
     let given = folder.to_string_lossy().into_owned();
-    for (extra, args) in [
-        (vec![], vec!["--allow-path", given.as_str()]),
-        (vec![("FUNDACAD_MCP_ALLOW_PATHS", given.as_str())], vec![]),
-    ] {
+    for (extra, args) in
+        [(vec![], vec!["--allow-path", given.as_str()]), (vec![("FUNDACAD_MCP_ALLOW_PATHS", given.as_str())], vec![])]
+    {
         let mut mcp = server(own.path(), &extra, &args);
         let file = folder.join("a.funda");
         let _ = std::fs::remove_file(&file);

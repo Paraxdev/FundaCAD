@@ -137,7 +137,8 @@ const EXTRUDE_ENDS: ChoiceOption[] = [
   { value: "throughAll", label: "Through all" },
 ];
 
-const END_TITLE = "Up to a target ignores the distance and goes towards the target; the end offset runs past it, negative stops short";
+const END_TITLE =
+  "Up to a target ignores the distance and goes towards the target; the end offset runs past it, negative stops short";
 
 const THIN_SIDES: ChoiceOption[] = [
   { value: "center", label: "Centered" },
@@ -146,18 +147,21 @@ const THIN_SIDES: ChoiceOption[] = [
   { value: "twoSides", label: "Two sides" },
 ];
 
-const THIN_SIDE_TITLE = "Inside is the enclosed side, of an open chain the side it bends toward, of a straight line its left as drawn; two sides puts Thickness inside and Thickness 2 outside";
+const THIN_SIDE_TITLE =
+  "Inside is the enclosed side, of an open chain the side it bends toward, of a straight line its left as drawn; two sides puts Thickness inside and Thickness 2 outside";
 
 /** The planes and points a document offers a start or end row: the three base
  *  planes and every datum plane, or every datum point, as the row's options. */
 export function datumChoices(field: string, features: readonly Feature[]): ChoiceOption[] | null {
   if (/^(startPlane|upToPlane2?)$/.test(field)) {
-    const datums = features.filter((f) => f.type === "datumPlane")
+    const datums = features
+      .filter((f) => f.type === "datumPlane")
       .map((f) => ({ value: f.id, label: (f as { name?: string }).name || f.id }));
     return [...PLANES, ...datums];
   }
   if (/^(startPoint|upToPoint2?)$/.test(field)) {
-    return features.filter((f) => f.type === "datumPoint")
+    return features
+      .filter((f) => f.type === "datumPoint")
       .map((f) => ({ value: f.id, label: (f as { name?: string }).name || f.id }));
   }
   return null;
@@ -202,26 +206,48 @@ function extrudeFieldApplies(field: string, v: Record<string, unknown>): boolean
   const end2 = (v.endType2 as string) || "distance";
   const two = v.twoSided === true;
   switch (field) {
-    case "startOffset": return start !== "sketch" || v.startOffset !== undefined;
-    case "startFace": return start === "face";
-    case "startPlane": return start === "plane";
-    case "startPoint": return start === "point";
-    case "distance": return !end.startsWith("upTo");
-    case "upToFace": return end === "upToFace";
-    case "upToPlane": return end === "upToPlane";
-    case "upToPoint": return end === "upToPoint";
-    case "endOffset": return end.startsWith("upTo");
-    case "symmetric": return !two;
-    case "twoSided": return v.symmetric !== true;
-    case "distance2": return two && !end2.startsWith("upTo");
-    case "taper2": case "endType2": return two;
-    case "upToFace2": return two && end2 === "upToFace";
-    case "upToPlane2": return two && end2 === "upToPlane";
-    case "upToPoint2": return two && end2 === "upToPoint";
-    case "endOffset2": return two && end2.startsWith("upTo");
-    case "thickness": case "side": return v.thin === true;
-    case "thickness2": return v.thin === true && v.side === "twoSides";
-    default: return true;
+    case "startOffset":
+      return start !== "sketch" || v.startOffset !== undefined;
+    case "startFace":
+      return start === "face";
+    case "startPlane":
+      return start === "plane";
+    case "startPoint":
+      return start === "point";
+    case "distance":
+      return !end.startsWith("upTo");
+    case "upToFace":
+      return end === "upToFace";
+    case "upToPlane":
+      return end === "upToPlane";
+    case "upToPoint":
+      return end === "upToPoint";
+    case "endOffset":
+      return end.startsWith("upTo");
+    case "symmetric":
+      return !two;
+    case "twoSided":
+      return v.symmetric !== true;
+    case "distance2":
+      return two && !end2.startsWith("upTo");
+    case "taper2":
+    case "endType2":
+      return two;
+    case "upToFace2":
+      return two && end2 === "upToFace";
+    case "upToPlane2":
+      return two && end2 === "upToPlane";
+    case "upToPoint2":
+      return two && end2 === "upToPoint";
+    case "endOffset2":
+      return two && end2.startsWith("upTo");
+    case "thickness":
+    case "side":
+      return v.thin === true;
+    case "thickness2":
+      return v.thin === true && v.side === "twoSides";
+    default:
+      return true;
   }
 }
 
@@ -249,28 +275,62 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
     { field: "axis", label: "Axis", options: AXES, fallback: "Z" },
   ],
   thread: [
-    { field: "hand", label: "Hand", options: [{ value: "right", label: "Right" }, { value: "left", label: "Left" }], fallback: "right" },
-    { field: "operation", label: "Operation", options: BOOLEAN_OPS.filter((o) => o.value === "cut" || o.value === "join"), fallback: "cut" },
+    {
+      field: "hand",
+      label: "Hand",
+      options: [
+        { value: "right", label: "Right" },
+        { value: "left", label: "Left" },
+      ],
+      fallback: "right",
+    },
+    {
+      field: "operation",
+      label: "Operation",
+      options: BOOLEAN_OPS.filter((o) => o.value === "cut" || o.value === "join"),
+      fallback: "cut",
+    },
   ],
   textOnFace: [
-    { field: "operation", label: "Operation", options: [{ value: "join", label: "Emboss" }, { value: "cut", label: "Engrave" }], fallback: "join" },
-    { field: "align", label: "Align", options: [{ value: "left", label: "Left" }, { value: "center", label: "Centre" }, { value: "right", label: "Right" }], fallback: "center" },
+    {
+      field: "operation",
+      label: "Operation",
+      options: [
+        { value: "join", label: "Emboss" },
+        { value: "cut", label: "Engrave" },
+      ],
+      fallback: "join",
+    },
+    {
+      field: "align",
+      label: "Align",
+      options: [
+        { value: "left", label: "Left" },
+        { value: "center", label: "Centre" },
+        { value: "right", label: "Right" },
+      ],
+      fallback: "center",
+    },
   ],
   loft: [{ field: "operation", label: "Operation", options: BOOLEAN_OPS, fallback: "new" }],
-  sweep: [{
-    field: "operation",
-    label: "Operation",
-    // A sweep has no intersect path in the builder, so the list is the three it
-    // can actually do rather than the shared four.
-    options: BOOLEAN_OPS.filter((o) => o.value !== "intersect"),
-    fallback: "new",
-  }],
-  thicken: [{
-    field: "operation",
-    label: "Operation",
-    options: BOOLEAN_OPS.filter((o) => o.value === "new" || o.value === "join"),
-    fallback: "join",
-  }],
+  sweep: [
+    {
+      field: "operation",
+      label: "Operation",
+      // A sweep has no intersect path in the builder, so the list is the three it
+      // can actually do rather than the shared four.
+      options: BOOLEAN_OPS.filter((o) => o.value !== "intersect"),
+      fallback: "new",
+    },
+  ],
+  thicken: [
+    {
+      field: "operation",
+      label: "Operation",
+      options: BOOLEAN_OPS.filter((o) => o.value === "new" || o.value === "join"),
+      fallback: "join",
+    },
+  ],
   mirror: [{ field: "plane", label: "Plane", options: PLANES, fallback: "XY" }],
   draft: [{ field: "axis", label: "Pull axis", options: AXES, fallback: "Z" }],
   patternLinear: [{ field: "axis", label: "Direction", options: AXES, fallback: "X" }],
@@ -278,39 +338,75 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
   // Which joint the drive value moves. The options are this mechanism's own
   // revolute and slider joints, so FeatureProperties asks mechanismDriveChoice
   // for them; this entry is what puts the row there at all.
-  mechanism: [{
-    field: "drive", label: "Drive", fallback: NO_DRIVE,
-    options: [{ value: NO_DRIVE, label: "None" }],
-    title: "The joint the drive value moves: a revolute joint turns by the drive angle, a slider slides by the drive offset",
-  }],
-  "press-pull": [{
-    field: "mode", label: "Operation", fallback: "auto",
-    options: [{ value: "auto", label: "Auto" }, ...BOOLEAN_OPS],
-    title: "Auto grows or shrinks the face by the sign of the distance; the others extrude it and combine like an extrude",
-  }, {
-    field: "direction", label: "Direction", fallback: "normal",
-    options: [{ value: "normal", label: "Along normal" }, { value: "axis", label: "Along axis" }],
-    title: "Along axis slides the end of a hole down the hole, so the hole gets deeper or shallower and the end keeps its shape",
-  }],
+  mechanism: [
+    {
+      field: "drive",
+      label: "Drive",
+      fallback: NO_DRIVE,
+      options: [{ value: NO_DRIVE, label: "None" }],
+      title:
+        "The joint the drive value moves: a revolute joint turns by the drive angle, a slider slides by the drive offset",
+    },
+  ],
+  "press-pull": [
+    {
+      field: "mode",
+      label: "Operation",
+      fallback: "auto",
+      options: [{ value: "auto", label: "Auto" }, ...BOOLEAN_OPS],
+      title:
+        "Auto grows or shrinks the face by the sign of the distance; the others extrude it and combine like an extrude",
+    },
+    {
+      field: "direction",
+      label: "Direction",
+      fallback: "normal",
+      options: [
+        { value: "normal", label: "Along normal" },
+        { value: "axis", label: "Along axis" },
+      ],
+      title:
+        "Along axis slides the end of a hole down the hole, so the hole gets deeper or shallower and the end keeps its shape",
+    },
+  ],
   fillet: [
     {
-      field: "sizeType", label: "Size Type", fallback: "radius",
-      options: [{ value: "radius", label: "Radius" }, { value: "chord", label: "Chord Length" }],
+      field: "sizeType",
+      label: "Size Type",
+      fallback: "radius",
+      options: [
+        { value: "radius", label: "Radius" },
+        { value: "chord", label: "Chord Length" },
+      ],
       title: "Chord Length sizes the round by the width across it rather than its radius",
     },
     {
-      field: "continuity", label: "Continuity", fallback: "G1",
-      options: [{ value: "G1", label: "G1" }, { value: "G2", label: "G2" }],
+      field: "continuity",
+      label: "Continuity",
+      fallback: "G1",
+      options: [
+        { value: "G1", label: "G1" },
+        { value: "G2", label: "G2" },
+      ],
       title: "G1 is a circular round; G2 eases into the faces with no jump in curvature",
     },
   ],
-  chamfer: [{
-    field: "chamferType", label: "Type", fallback: "equal",
-    options: [{ value: "equal", label: "Equal Distance" }, { value: "twoDistance", label: "Two-Distance" }],
-  }],
+  chamfer: [
+    {
+      field: "chamferType",
+      label: "Type",
+      fallback: "equal",
+      options: [
+        { value: "equal", label: "Equal Distance" },
+        { value: "twoDistance", label: "Two-Distance" },
+      ],
+    },
+  ],
   hole: [
     {
-      field: "holeType", label: "Hole type", fallback: "simple",
+      field: "holeType",
+      label: "Hole type",
+      fallback: "simple",
       options: [
         { value: "simple", label: "Simple" },
         { value: "counterbore", label: "Counterbore" },
@@ -320,7 +416,9 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
       title: "Heat-set insert sizes the bore for a brass insert of the chosen size",
     },
     {
-      field: "standard", label: "Standard", fallback: "clearance",
+      field: "standard",
+      label: "Standard",
+      fallback: "clearance",
       options: [
         { value: "clearance", label: "Clearance" },
         { value: "tap", label: "Tap drill" },
@@ -330,12 +428,23 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
     },
     { field: "size", label: "Size", fallback: "M3", options: HOLE_SIZES.map((s) => ({ value: s, label: s })) },
     {
-      field: "fit", label: "Fit", fallback: "normal",
-      options: [{ value: "close", label: "Close" }, { value: "normal", label: "Normal" }, { value: "loose", label: "Loose" }],
+      field: "fit",
+      label: "Fit",
+      fallback: "normal",
+      options: [
+        { value: "close", label: "Close" },
+        { value: "normal", label: "Normal" },
+        { value: "loose", label: "Loose" },
+      ],
     },
     {
-      field: "extent", label: "Extent", fallback: "blind",
-      options: [{ value: "blind", label: "Blind" }, { value: "through", label: "Through all" }],
+      field: "extent",
+      label: "Extent",
+      fallback: "blind",
+      options: [
+        { value: "blind", label: "Blind" },
+        { value: "through", label: "Through all" },
+      ],
     },
   ],
 };
@@ -383,11 +492,7 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
  *  to say which rows a knurl reads, showing all of them is preferred over hiding some on a
  *  guess.
  */
-export function fieldApplies(
-  type: FeatureType | string,
-  field: string,
-  values: Record<string, unknown>,
-): boolean {
+export function fieldApplies(type: FeatureType | string, field: string, values: Record<string, unknown>): boolean {
   if (type === "chamfer" && field === "distance2") return values.chamferType === "twoDistance";
   if (type === "fillet" && field === "profile") return values.continuity !== "G2";
   if (type === "hole") return holeFieldApplies(field, values);
@@ -399,9 +504,9 @@ export function fieldApplies(
   // The tool writes followTangent only for a round face with tangent neighbours, so its
   // absence is how a feature says the switch has nothing to act on.
   if ((type === "press-pull" || type === "offsetFace") && field === "followTangent") {
-    return typeof values.followTangent === "boolean" &&
-      (values.mode ?? "auto") === "auto" &&
-      values.direction !== "axis";
+    return (
+      typeof values.followTangent === "boolean" && (values.mode ?? "auto") === "auto" && values.direction !== "axis"
+    );
   }
   return contributedFeature(type)?.fieldApplies?.(field, values) ?? true;
 }
@@ -419,20 +524,12 @@ export function fieldLabel(
 
 /** Every choice row for a feature type: the app's own, then a plugin's. */
 export function choiceFieldsFor(type: FeatureType | string): readonly ChoiceField[] {
-  return (
-    FEATURE_CHOICE_FIELDS[type as FeatureType] ??
-    contributedFeature(type)?.choiceFields ??
-    []
-  );
+  return FEATURE_CHOICE_FIELDS[type as FeatureType] ?? contributedFeature(type)?.choiceFields ?? [];
 }
 
 /** Every toggle row for a feature type: the app's own, then a plugin's. */
 export function toggleFieldsFor(type: FeatureType | string): readonly ToggleField[] {
-  return (
-    FEATURE_TOGGLE_FIELDS[type as FeatureType] ??
-    contributedFeature(type)?.toggleFields ??
-    []
-  );
+  return FEATURE_TOGGLE_FIELDS[type as FeatureType] ?? contributedFeature(type)?.toggleFields ?? [];
 }
 
 /** Every file row for a feature type. The app declares none of its own: no
@@ -454,20 +551,17 @@ export function fileValue(feature: Feature, f: FileField): string {
 /** Whether a feature type has any of these rows, the panel asks before it
  *  decides there is nothing to show. */
 export function hasOptionFields(type: FeatureType | string): boolean {
-  return (
-    choiceFieldsFor(type).length > 0 ||
-    toggleFieldsFor(type).length > 0 ||
-    fileFieldsFor(type).length > 0
-  );
+  return choiceFieldsFor(type).length > 0 || toggleFieldsFor(type).length > 0 || fileFieldsFor(type).length > 0;
 }
 
 /** The value a choice row should show for this feature: what it carries, or the
  *  builder's default when the field is absent. Absent is the common case, most
  *  of these are optional, and a feature saved before the field existed has none. */
 export function choiceValue(feature: Feature, f: ChoiceField): string {
-  const v = feature.type === "mirror" && f.field === "plane"
-    ? mirrorPlaneName((feature as Extract<Feature, { type: "mirror" }>).plane)
-    : (feature as unknown as Record<string, unknown>)[f.field];
+  const v =
+    feature.type === "mirror" && f.field === "plane"
+      ? mirrorPlaneName((feature as Extract<Feature, { type: "mirror" }>).plane)
+      : (feature as unknown as Record<string, unknown>)[f.field];
   if (typeof v !== "string") return f.fallback;
   return f.options.some((o) => o.value === v) ? v : f.fallback;
 }

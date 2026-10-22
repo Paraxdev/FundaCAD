@@ -268,11 +268,12 @@ export function interpretStartReply(v: Record<string, unknown>): PrinterError | 
   if (state === "success") return null;
   if (state === "busy") return fail("Busy", msg || "printer is busy");
   const low = msg.toLowerCase();
-  const code = low.includes("busy") || low.includes("printing") || low.includes("not ready")
-    ? "Busy"
-    : low.includes("nozzle")
-      ? "NozzleMismatch"
-      : "Rejected";
+  const code =
+    low.includes("busy") || low.includes("printing") || low.includes("not ready")
+      ? "Busy"
+      : low.includes("nozzle")
+        ? "NozzleMismatch"
+        : "Rejected";
   return fail(code, msg || "printer rejected the job");
 }
 

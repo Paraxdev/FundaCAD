@@ -130,9 +130,7 @@ export function blendVerdict(range: BlendRange, value: number): BlendVerdict {
 }
 
 export type CommitDecision =
-  | { action: "commit"; value: number; unverified?: true }
-  | { action: "cancel" }
-  | { action: "stay" };
+  { action: "commit"; value: number; unverified?: true } | { action: "cancel" } | { action: "stay" };
 
 /** What confirming the gesture does with the value on the handle.
  *
@@ -160,9 +158,7 @@ export function commitDecision(o: {
   if (o.verdict === "refused") {
     if (o.typed) return { action: "stay" };
     const meaningful = o.meaningful ?? ((v: number) => v >= MIN_EDGE_VALUE);
-    return o.shown != null && meaningful(o.shown)
-      ? { action: "commit", value: o.shown }
-      : { action: "cancel" };
+    return o.shown != null && meaningful(o.shown) ? { action: "commit", value: o.shown } : { action: "cancel" };
   }
   if (o.settled || o.verdict === "builds") return { action: "commit", value: o.value };
   return { action: "commit", value: o.value, unverified: true };
@@ -246,10 +242,7 @@ export function scrubSigned(s: Scrub): number {
  *  exactly 0 the value is 0 and the reported kind is arbitrary; callers keep
  *  showing whichever they had rather than let the label flicker at the
  *  crossing. */
-export function treatmentAt(
-  positive: EdgeTreatment,
-  signed: number,
-): { kind: EdgeTreatment; value: number } {
+export function treatmentAt(positive: EdgeTreatment, signed: number): { kind: EdgeTreatment; value: number } {
   return {
     kind: signed < 0 ? otherTreatment(positive) : positive,
     value: Math.abs(signed),
@@ -280,13 +273,8 @@ export function switchTreatment(
  *  then to the drag bounds, a default nobody can build is worse than a small
  *  one. This is the whole of the clearance measurement's job: it is a good guess
  *  at where to open, and it was never able to be the wall it used to be. */
-export function seedValue(
-  kind: EdgeTreatment,
-  bounds: ValueBounds,
-  localLimit?: number | null,
-): number {
+export function seedValue(kind: EdgeTreatment, bounds: ValueBounds, localLimit?: number | null): number {
   const want = kind === "fillet" ? 2 : 1;
-  const local =
-    localLimit != null && Number.isFinite(localLimit) && localLimit > 0 ? localLimit : Infinity;
+  const local = localLimit != null && Number.isFinite(localLimit) && localLimit > 0 ? localLimit : Infinity;
   return clampValue(Math.min(want, local), bounds);
 }

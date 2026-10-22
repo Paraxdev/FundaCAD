@@ -50,11 +50,7 @@ interface RunArgs {
   /** Replaces the evaluator, for a test about the sandbox rather than about
    *  compiling a string. */
   evaluate?: (source: string) => (app: PluginApp) => Promise<unknown>;
-  answers?: Parameters<typeof testHost>[0] extends infer O
-    ? O extends { answers?: infer A }
-      ? A
-      : never
-    : never;
+  answers?: Parameters<typeof testHost>[0] extends infer O ? (O extends { answers?: infer A } ? A : never) : never;
 }
 
 /** Run a plugin and give back both the outcome and the app it worked on. */
@@ -99,7 +95,7 @@ describe("a plugin that works", () => {
     const { out } = await run({
       source: `app.log("hello", { n: 1 }); app.log("again"); return 1;`,
     });
-    expect(out.log).toEqual(["hello {\"n\":1}", "again"]);
+    expect(out.log).toEqual(['hello {"n":1}', "again"]);
   });
 
   it("gets a refusal as a value from call, and a throw from callOrThrow", async () => {
@@ -191,8 +187,14 @@ describe("a plugin that misbehaves", () => {
       // Never returns. The deadline is the only thing that ends this.
       source: `await new Promise(() => {}); return 1;`,
       port: host,
-      dispose: () => { stopGuest(); close(); },
-      setTimer: (fn) => { fire = fn; return 1; },
+      dispose: () => {
+        stopGuest();
+        close();
+      },
+      setTimer: (fn) => {
+        fire = fn;
+        return 1;
+      },
       clearTimer: () => {},
     });
 
@@ -238,7 +240,10 @@ describe("a plugin that misbehaves", () => {
       `,
       port: host,
       limits: { inFlight: 4 },
-      dispose: () => { stopGuest(); close(); },
+      dispose: () => {
+        stopGuest();
+        close();
+      },
     });
 
     expect(out).toMatchObject({ ok: false, reason: "over-limit" });
@@ -325,8 +330,12 @@ describe("the run is over when it is over", () => {
       postMessage() {
         throw new Error("the worker is gone");
       },
-      addEventListener: (_t, fn) => { listener = fn; },
-      removeEventListener: () => { listener = null; },
+      addEventListener: (_t, fn) => {
+        listener = fn;
+      },
+      removeEventListener: () => {
+        listener = null;
+      },
     };
 
     const promise = runInSandbox({
@@ -358,7 +367,12 @@ describe("messages that are not messages", () => {
     const promise = runInSandbox({
       plugin: "junk",
       grants: ["document.write"],
-      host: { perform: (op, args) => { seen(op); return app.perform(op, args); } },
+      host: {
+        perform: (op, args) => {
+          seen(op);
+          return app.perform(op, args);
+        },
+      },
       source: "unused",
       port: host,
       dispose: () => close(),
@@ -373,11 +387,11 @@ describe("messages that are not messages", () => {
       42,
       "call",
       [],
-      { t: "call" },                              // no id, no op
-      { t: "call", id: "1", op: "doc_new" },      // id is not a number
-      { t: "call", id: -1, op: "doc_new" },       // an id this side never issues
-      { t: "call", id: 1.5, op: "doc_new" },      // nor this one
-      { t: "call", id: 1 },                       // no op
+      { t: "call" }, // no id, no op
+      { t: "call", id: "1", op: "doc_new" }, // id is not a number
+      { t: "call", id: -1, op: "doc_new" }, // an id this side never issues
+      { t: "call", id: 1.5, op: "doc_new" }, // nor this one
+      { t: "call", id: 1 }, // no op
       { t: "nonsense", id: 1, op: "doc_new" },
     ]) {
       port.postMessage(junk);

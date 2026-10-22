@@ -23,7 +23,10 @@ fn payload(edit: Edit) -> Map<String, Value> {
 
 fn fault(edit: Edit) -> String {
     let p = payload(edit);
-    p.get("fault").and_then(Value::as_str).unwrap_or_else(|| panic!("no fault in {:?}", p.keys().collect::<Vec<_>>())).to_owned()
+    p.get("fault")
+        .and_then(Value::as_str)
+        .unwrap_or_else(|| panic!("no fault in {:?}", p.keys().collect::<Vec<_>>()))
+        .to_owned()
 }
 
 #[test]
@@ -33,14 +36,29 @@ fn a_sound_body_carries_no_fault() {
     let keys: Vec<&str> = p.keys().map(String::as_str).collect();
     assert_eq!(
         keys,
-        ["id", "name", "etag", "positions", "indices", "faceIds", "faceOwners", "edges", "faceCount", "bbox", "normals"],
+        [
+            "id",
+            "name",
+            "etag",
+            "positions",
+            "indices",
+            "faceIds",
+            "faceOwners",
+            "edges",
+            "faceCount",
+            "bbox",
+            "normals"
+        ],
         "a sound body's payload keeps its keys"
     );
 }
 
 #[test]
 fn an_open_body_says_it_is_not_closed() {
-    assert_eq!(fault(one_face_missing), "is not a closed solid, 4 of its edges bound only one face, so it has no inside");
+    assert_eq!(
+        fault(one_face_missing),
+        "is not a closed solid, 4 of its edges bound only one face, so it has no inside"
+    );
 }
 
 #[test]

@@ -15,7 +15,10 @@ const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const APP_PORT = process.env.SC_APP_PORT || "5173";
 const WS_PORT = process.env.SC_ENGINE_PORT || "8765";
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 
 let failures = 0;
 const check = (name, ok, detail) => {
@@ -24,8 +27,16 @@ const check = (name, ok, detail) => {
 };
 
 function doc() {
-  const features = [{ id: "s1", type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 24 }] }];
-  for (let i = 0; i < 12; i++) features.push({ id: `e${i}`, type: "extrude", sketch: "s1", distance: 12 + i, operation: i ? "join" : "new" });
+  const features = [
+    {
+      id: "s1",
+      type: "sketch",
+      plane: "XY",
+      entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 24 }],
+    },
+  ];
+  for (let i = 0; i < 12; i++)
+    features.push({ id: `e${i}`, type: "extrude", sketch: "s1", distance: 12 + i, operation: i ? "join" : "new" });
   features.push({ id: "bad", type: "extrude", sketch: "nope", distance: 5, operation: "join" });
   return JSON.stringify({ version: 9, parameters: {}, paramDefs: {}, features });
 }
@@ -34,17 +45,25 @@ function doc() {
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   try {
     const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-    page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-    await page.addInitScript(({ t, ws }) => {
-      const N = window.WebSocket;
-      class P extends N {
-        constructor(u, p) {
-          const s = String(u).replace(":8765", `:${ws}`).replace(/([?&])token=[^&]*/, `$1token=${t}`);
-          super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+    page.on("pageerror", (e) => {
+      console.error("PAGE ERROR:", e.message);
+      failures++;
+    });
+    await page.addInitScript(
+      ({ t, ws }) => {
+        const N = window.WebSocket;
+        class P extends N {
+          constructor(u, p) {
+            const s = String(u)
+              .replace(":8765", `:${ws}`)
+              .replace(/([?&])token=[^&]*/, `$1token=${t}`);
+            super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+          }
         }
-      }
-      window.WebSocket = P;
-    }, { t: TOKEN, ws: WS_PORT });
+        window.WebSocket = P;
+      },
+      { t: TOKEN, ws: WS_PORT },
+    );
 
     await page.goto(`http://localhost:${APP_PORT}/`);
     await page.waitForFunction(() => !!window.store, null, { timeout: 60000 });
@@ -58,18 +77,27 @@ function doc() {
     await page.waitForTimeout(1500);
 
     // Every box from the title bar up to the root, and the canvas host's.
-    const shift = () => page.evaluate(() => {
-      const chain = [];
-      for (let el = document.getElementById("titlebar"); el; el = el.parentElement) chain.push(el);
-      const scrolled = chain.filter((el) => el.scrollTop !== 0 || el.scrollLeft !== 0).map((el) => `${el.tagName.toLowerCase()}#${el.id} ${el.scrollTop}`);
-      return { titleTop: document.getElementById("titlebar").getBoundingClientRect().top, scrolled };
-    });
+    const shift = () =>
+      page.evaluate(() => {
+        const chain = [];
+        for (let el = document.getElementById("titlebar"); el; el = el.parentElement) chain.push(el);
+        const scrolled = chain
+          .filter((el) => el.scrollTop !== 0 || el.scrollLeft !== 0)
+          .map((el) => `${el.tagName.toLowerCase()}#${el.id} ${el.scrollTop}`);
+        return { titleTop: document.getElementById("titlebar").getBoundingClientRect().top, scrolled };
+      });
     const stays = async (what) => {
       await page.waitForTimeout(900);
       const s = await shift();
-      check(`${what}, the shell stays put`, s.titleTop === 0 && s.scrolled.length === 0, `title bar top ${s.titleTop}${s.scrolled.length ? `, scrolled ${s.scrolled.join(", ")}` : ""}`);
+      check(
+        `${what}, the shell stays put`,
+        s.titleTop === 0 && s.scrolled.length === 0,
+        `title bar top ${s.titleTop}${s.scrolled.length ? `, scrolled ${s.scrolled.join(", ")}` : ""}`,
+      );
       // Undo a shift, so each check stands on its own.
-      await page.evaluate(() => { for (const el of [document.getElementById("app"), document.body, document.documentElement]) el.scrollTop = 0; });
+      await page.evaluate(() => {
+        for (const el of [document.getElementById("app"), document.body, document.documentElement]) el.scrollTop = 0;
+      });
     };
 
     await stays("loaded");
@@ -106,4 +134,7 @@ function doc() {
   }
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nall checks passed");
   process.exitCode = failures ? 1 : 0;
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

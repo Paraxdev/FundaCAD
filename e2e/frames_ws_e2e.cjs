@@ -21,8 +21,9 @@ const { pathToFileURL } = require("url");
 
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const target = process.env.CARGO_TARGET_DIR || path.join(__dirname, "..", "src-tauri", "target");
-const SERVE = process.env.SC_FRAMES_SERVE
-  || path.join(target, "release", "examples", process.platform === "win32" ? "frames_serve.exe" : "frames_serve");
+const SERVE =
+  process.env.SC_FRAMES_SERVE ||
+  path.join(target, "release", "examples", process.platform === "win32" ? "frames_serve.exe" : "frames_serve");
 const TOKEN = crypto.randomBytes(16).toString("hex");
 
 (async () => {
@@ -39,14 +40,25 @@ const TOKEN = crypto.randomBytes(16).toString("hex");
       waiters.forEach((w) => w());
     }
   });
-  const line = (test, ms) => new Promise((ok) => {
-    const look = () => { const l = lines.find(test); if (l !== undefined) { waiters = waiters.filter((w) => w !== look); ok(l); } };
-    waiters.push(look);
-    look();
-    setTimeout(() => ok(null), ms);
-  });
+  const line = (test, ms) =>
+    new Promise((ok) => {
+      const look = () => {
+        const l = lines.find(test);
+        if (l !== undefined) {
+          waiters = waiters.filter((w) => w !== look);
+          ok(l);
+        }
+      };
+      waiters.push(look);
+      look();
+      setTimeout(() => ok(null), ms);
+    });
   const port = await line((l) => /^\d+$/.test(l), 10000);
-  if (!port) { console.error("frames_serve printed no port"); srv.kill(); process.exit(1); }
+  if (!port) {
+    console.error("frames_serve printed no port");
+    srv.kill();
+    process.exit(1);
+  }
   const prof = fs.mkdtempSync(path.join(os.tmpdir(), "frames-e2e-"));
   const url = pathToFileURL(path.join(__dirname, "frames_ws_page.html")).href + `?port=${port}&token=${TOKEN}`;
   const args = ["--headless=new", "--no-first-run", "--no-default-browser-check", `--user-data-dir=${prof}`];
@@ -55,7 +67,11 @@ const TOKEN = crypto.randomBytes(16).toString("hex");
   const got = await line((l) => l.startsWith("NOTE RESULT "), 30000);
   chrome.kill();
   srv.kill();
-  setTimeout(() => { try { fs.rmSync(prof, { recursive: true, force: true }); } catch {} }, 1500);
+  setTimeout(() => {
+    try {
+      fs.rmSync(prof, { recursive: true, force: true });
+    } catch {}
+  }, 1500);
   const res = got ? JSON.parse(got.slice("NOTE RESULT ".length)) : { error: "the page never reported" };
   console.log(JSON.stringify(res));
   const fails = [];

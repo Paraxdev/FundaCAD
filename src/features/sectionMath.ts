@@ -24,11 +24,7 @@ export interface ClipPlane {
 export function clipPlaneAt(origin: Vec3, normal: Vec3, offset: number, side: 1 | -1): ClipPlane {
   const len = Math.hypot(normal[0], normal[1], normal[2]);
   const n: Vec3 = len > 1e-12 ? [normal[0] / len, normal[1] / len, normal[2] / len] : [0, 0, 1];
-  const at: Vec3 = [
-    origin[0] + n[0] * offset,
-    origin[1] + n[1] * offset,
-    origin[2] + n[2] * offset,
-  ];
+  const at: Vec3 = [origin[0] + n[0] * offset, origin[1] + n[1] * offset, origin[2] + n[2] * offset];
   const s: Vec3 = [n[0] * side, n[1] * side, n[2] * side];
   return { normal: s, constant: -(s[0] * at[0] + s[1] * at[1] + s[2] * at[2]) };
 }
@@ -55,14 +51,8 @@ export function sectionAnchor(origin: Vec3, normal: Vec3, modelCentre: Vec3): Ve
   if (!(len > 1e-12)) return [...origin];
   const n: Vec3 = [normal[0] / len, normal[1] / len, normal[2] / len];
   const d =
-    (modelCentre[0] - origin[0]) * n[0] +
-    (modelCentre[1] - origin[1]) * n[1] +
-    (modelCentre[2] - origin[2]) * n[2];
-  return [
-    modelCentre[0] - n[0] * d,
-    modelCentre[1] - n[1] * d,
-    modelCentre[2] - n[2] * d,
-  ];
+    (modelCentre[0] - origin[0]) * n[0] + (modelCentre[1] - origin[1]) * n[1] + (modelCentre[2] - origin[2]) * n[2];
+  return [modelCentre[0] - n[0] * d, modelCentre[1] - n[1] * d, modelCentre[2] - n[2] * d];
 }
 
 /** The plane a datum/face definition cuts along, the section only needs a point

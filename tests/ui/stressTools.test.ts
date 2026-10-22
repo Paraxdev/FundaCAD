@@ -1,11 +1,43 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  ARROW_MAX_PX, ARROW_MIN_PX, ARROW_UNIT_PX, AXES, CUSTOM_MATERIAL, FORCE_DRAG_MAX,
-  areaCentre, arrowPxToForce, autoDeformScale, barycentric, buildStressRequest, deformLabel, deformSliderMax,
-  displacedPositions, dragForce, faceCountLabel, forceDragLabel, forceDragPatch, forceDragStart, forceToArrowPx,
-  formatStressResult, gravityVector,
-  newSetup, newSupport, panelMessage, pinAxisSegment, pressureSites, probeLabel, probeValues, roundSig, setupFromStudy,
-  snapDrag, studyFromSetup, swingScale, type SnapCandidate, type StressFaceSet, type StressSetup, type Tri,
+  ARROW_MAX_PX,
+  ARROW_MIN_PX,
+  ARROW_UNIT_PX,
+  AXES,
+  CUSTOM_MATERIAL,
+  FORCE_DRAG_MAX,
+  areaCentre,
+  arrowPxToForce,
+  autoDeformScale,
+  barycentric,
+  buildStressRequest,
+  deformLabel,
+  deformSliderMax,
+  displacedPositions,
+  dragForce,
+  faceCountLabel,
+  forceDragLabel,
+  forceDragPatch,
+  forceDragStart,
+  forceToArrowPx,
+  formatStressResult,
+  gravityVector,
+  newSetup,
+  newSupport,
+  panelMessage,
+  pinAxisSegment,
+  pressureSites,
+  probeLabel,
+  probeValues,
+  roundSig,
+  setupFromStudy,
+  snapDrag,
+  studyFromSetup,
+  swingScale,
+  type SnapCandidate,
+  type StressFaceSet,
+  type StressSetup,
+  type Tri,
 } from "../../src/ui/stress";
 import { setUnit } from "../../src/ui/units";
 import type { StressReply } from "../../src/geometry/client";
@@ -123,7 +155,10 @@ describe("the study the document saves", () => {
     const study = studyFromSetup(s);
     expect(study).toEqual({
       body: "b1",
-      supports: [{ id: 1, type: "fixed", faces: [bottom] }, { id: 4, type: "pinned", faces: [hole] }],
+      supports: [
+        { id: 1, type: "fixed", faces: [bottom] },
+        { id: 4, type: "pinned", faces: [hole] },
+      ],
       loads: [{ id: 1, kind: "force", faces: [top], force: 100, direction: "into", custom: [0, 0, -1], pressure: 0.1 }],
       gravity: { on: true, direction: "-Y" },
       material: "PLA",
@@ -259,7 +294,13 @@ describe("the force arrow", () => {
     const r = snapDrag([1, 0, -1.05], lookingDownY, [...axes, { key: "into", dir: into }])!;
     expect(r.key).toBe("into");
     // +Y and -Y have no screen direction from here: a tiny drag is no snap to them.
-    expect(snapDrag([0.001, 0, 0.001], lookingDownY, axes.filter((a) => a.key.endsWith("Y")))!.key).toBe("custom");
+    expect(
+      snapDrag(
+        [0.001, 0, 0.001],
+        lookingDownY,
+        axes.filter((a) => a.key.endsWith("Y")),
+      )!.key,
+    ).toBe("custom");
   });
 
   it("keeps a direction that leans into the screen when the drag runs along it", () => {
@@ -291,8 +332,16 @@ describe("the force arrow", () => {
 
 describe("where the glyphs stand", () => {
   const square: Tri[] = [
-    [[0, 0, 0], [10, 0, 0], [10, 10, 0]],
-    [[0, 0, 0], [10, 10, 0], [0, 10, 0]],
+    [
+      [0, 0, 0],
+      [10, 0, 0],
+      [10, 10, 0],
+    ],
+    [
+      [0, 0, 0],
+      [10, 10, 0],
+      [0, 10, 0],
+    ],
   ];
 
   it("puts a load's arrow at its faces' area centre", () => {
@@ -306,7 +355,9 @@ describe("where the glyphs stand", () => {
   it("reads a face set as the engine gets it, saying what the view cannot show", () => {
     expect(faceCountLabel(faces(top, [0, 0, 1]))).toBe("1 face");
     expect(faceCountLabel({ ...faces(top, [0, 0, 1], 0, []) })).toBe("1 face (not shown in the view)");
-    expect(faceCountLabel({ ...faces(top, [0, 0, 1], 0, []), missing: 1, unshown: 0 })).toBe("1 face, not found on the current model");
+    expect(faceCountLabel({ ...faces(top, [0, 0, 1], 0, []), missing: 1, unshown: 0 })).toBe(
+      "1 face, not found on the current model",
+    );
     const three = { selectors: [top, bottom, hole], faceIds: [1], normalSum: [0, 0, 1] as Vec3, area: 1 };
     expect(faceCountLabel({ ...three, missing: 1, unshown: 1 })).toBe("3 faces, 1 not found on the current model");
     expect(faceCountLabel({ ...three, missing: 0, unshown: 2 })).toBe("3 faces (2 not shown in the view)");
@@ -314,8 +365,20 @@ describe("where the glyphs stand", () => {
   });
 
   it("spreads pressure arrows over the faces, pointing in", () => {
-    const tris: Tri[] = Array.from({ length: 40 }, (_, i) => [[i, 0, 0], [i + 1, 0, 0], [i, 1, 0]] as Tri);
-    const sites = pressureSites(tris, tris.map(() => [0, 0, 1] as Vec3), 8);
+    const tris: Tri[] = Array.from(
+      { length: 40 },
+      (_, i) =>
+        [
+          [i, 0, 0],
+          [i + 1, 0, 0],
+          [i, 1, 0],
+        ] as Tri,
+    );
+    const sites = pressureSites(
+      tris,
+      tris.map(() => [0, 0, 1] as Vec3),
+      8,
+    );
     expect(sites).toHaveLength(8);
     expect(sites.every((s) => s.dir[2] === -1)).toBe(true);
     expect(sites[0]!.at[0]).toBeLessThan(sites[7]!.at[0]);
@@ -347,8 +410,20 @@ describe("where the glyphs stand", () => {
   });
 
   it("draws no axis for a flat face", () => {
-    const pts: Vec3[] = [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 0, 0], [10, 10, 0], [0, 10, 0]];
-    expect(pinAxisSegment(pts, [[0, 0, 1], [0, 0, 1]])).toBeNull();
+    const pts: Vec3[] = [
+      [0, 0, 0],
+      [10, 0, 0],
+      [10, 10, 0],
+      [0, 0, 0],
+      [10, 10, 0],
+      [0, 10, 0],
+    ];
+    expect(
+      pinAxisSegment(pts, [
+        [0, 0, 1],
+        [0, 0, 1],
+      ]),
+    ).toBeNull();
   });
 });
 
@@ -417,7 +492,11 @@ describe("the probe", () => {
     expect(v.vector).toEqual([0, 0, -2.5]);
     expect(v.deflection).toBeCloseTo(2.5, 12);
     expect(probeValues(surface, 1, [1, 0, 0])).toBeNull();
-    expect(probeValues({ indices: [0, 1, 2], vonMises: [1, 2, 3] }, 0, [0, 1, 0])).toEqual({ vonMises: 2, deflection: null, vector: null });
+    expect(probeValues({ indices: [0, 1, 2], vonMises: [1, 2, 3] }, 0, [0, 1, 0])).toEqual({
+      vonMises: 2,
+      deflection: null,
+      vector: null,
+    });
   });
 
   it("reads stress in MPa and deflection in the display unit", () => {
@@ -440,7 +519,10 @@ describe("weight and reactions in the result", () => {
     applied: [0, 0, -100.5],
     reaction: [0, 0, 100.5],
     weight: [0, 0, -0.5],
-    reactions: [[0, 0, 60], [0, 0, 40.5]],
+    reactions: [
+      [0, 0, 60],
+      [0, 0, 40.5],
+    ],
   };
 
   it("shows the weight and each support's reaction, named by its kind", () => {
@@ -461,17 +543,22 @@ describe("weight and reactions in the result", () => {
 
 describe("an engine refusal in the panel", () => {
   it("names supports and loads the way the panel's rows do", () => {
-    expect(panelMessage(
-      "support 1 (supports[0]) is pinned, which needs cylindrical faces (a hole or a pin), but its face is flat, pick the round face of the hole or the pin",
-    )).toBe(
+    expect(
+      panelMessage(
+        "support 1 (supports[0]) is pinned, which needs cylindrical faces (a hole or a pin), but its face is flat, pick the round face of the hole or the pin",
+      ),
+    ).toBe(
       "Support 1 is pinned, which needs cylindrical faces (a hole or a pin), but its face is flat, pick the round face of the hole or the pin",
     );
-    expect(panelMessage("support 2 (supports[1].faces[0]) matches no face of body1")).toBe("Support 2 matches no face of body1");
+    expect(panelMessage("support 2 (supports[1].faces[0]) matches no face of body1")).toBe(
+      "Support 2 matches no face of body1",
+    );
     expect(panelMessage("load 3 (loads[2]) has no faces")).toBe("Load 3 has no faces");
   });
 
   it("leaves other refusals alone but for the capital", () => {
-    expect(panelMessage("the body can still slide along Z, add a support that holds it that way"))
-      .toBe("The body can still slide along Z, add a support that holds it that way");
+    expect(panelMessage("the body can still slide along Z, add a support that holds it that way")).toBe(
+      "The body can still slide along Z, add a support that holds it that way",
+    );
   });
 });

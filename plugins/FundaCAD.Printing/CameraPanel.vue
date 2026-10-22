@@ -10,9 +10,7 @@
 import { ref, watch } from "vue";
 import { cameraPanel } from "./state";
 import { FloatingPanel } from "fundacad/ui";
-import {
-  printerCameraStart, printerCameraStop, onPrinterCameraFrame, onPrinterCameraOffline,
-} from "./printerClient";
+import { printerCameraStart, printerCameraStop, onPrinterCameraFrame, onPrinterCameraOffline } from "./printerClient";
 
 const frame = ref<string | null>(null);
 const offline = ref(false);

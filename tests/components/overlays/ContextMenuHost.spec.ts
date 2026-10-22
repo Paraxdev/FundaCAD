@@ -24,7 +24,17 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
     const top = parseFloat(this.style.top) || 0;
     const height = this.querySelectorAll(".ctx-item").length * ROW;
-    return { top, bottom: top + height, left: 0, right: 100, width: 100, height, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+    return {
+      top,
+      bottom: top + height,
+      left: 0,
+      right: 100,
+      width: 100,
+      height,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    } as DOMRect;
   });
 });
 

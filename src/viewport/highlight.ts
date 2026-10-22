@@ -10,7 +10,13 @@ import * as THREE from "three";
 import { pushAll } from "../lib/pushAll";
 import { bodyOfFace, edgeObjects, type BodyMesh, type ModelView } from "./render";
 import type { EdgeRef } from "./edgeLines";
-import { disposeFaceHoverOverlay, makeFaceHoverOverlay, makeSelectionGlow, removeSelectionGlows, type GlowKind } from "./selectionGlow";
+import {
+  disposeFaceHoverOverlay,
+  makeFaceHoverOverlay,
+  makeSelectionGlow,
+  removeSelectionGlows,
+  type GlowKind,
+} from "./selectionGlow";
 
 const EDGE_BASE = new THREE.Color(0x1b1f24);
 const HOVER = new THREE.Color(0xffd089); // pale hot amber (under cursor)
@@ -44,8 +50,12 @@ export interface HoverState {
 
 export function sameHover(a: HoverState | undefined, b: HoverState | undefined): boolean {
   if (!a || !b) return a === b;
-  return a.body === b.body && a.edge === b.edge
-    && a.faces.length === b.faces.length && a.faces.every((f, i) => f === b.faces[i]);
+  return (
+    a.body === b.body &&
+    a.edge === b.edge &&
+    a.faces.length === b.faces.length &&
+    a.faces.every((f, i) => f === b.faces[i])
+  );
 }
 
 export class Highlighter {
@@ -100,8 +110,7 @@ export class Highlighter {
     this.edgeBase.copy(color);
     // one whole-buffer write per body rather than one upload per edge, this
     // fires on every fillet/chamfer tool activation, over every edge in the model
-    const skip = (e: EdgeRef) =>
-      e === this.hoveredEdge || this.selectedEdges.has(e) || this.errorEdges.has(e);
+    const skip = (e: EdgeRef) => e === this.hoveredEdge || this.selectedEdges.has(e) || this.errorEdges.has(e);
     for (const draw of edgeObjects(this.view)) draw.setColorAll(this.edgeBase, skip);
   }
 
@@ -124,11 +133,7 @@ export class Highlighter {
 
   hoverEdge(line: EdgeRef | null) {
     if (this.hoveredEdge === line) return;
-    if (
-      this.hoveredEdge &&
-      !this.selectedEdges.has(this.hoveredEdge) &&
-      !this.errorEdges.has(this.hoveredEdge)
-    ) {
+    if (this.hoveredEdge && !this.selectedEdges.has(this.hoveredEdge) && !this.errorEdges.has(this.hoveredEdge)) {
       paintIdle(this.hoveredEdge, this.edgeBase);
     }
     this.hoveredEdge = line;
@@ -480,7 +485,9 @@ export class Highlighter {
     if (!colorAttr || !index) return;
     const base = body.baseColors;
     const range = this.forEachVertex(tris, index, (v) => {
-      const r = base[v * 3], g = base[v * 3 + 1], b = base[v * 3 + 2];
+      const r = base[v * 3],
+        g = base[v * 3 + 1],
+        b = base[v * 3 + 2];
       if (r !== undefined && g !== undefined && b !== undefined) colorAttr.setXYZ(v, r, g, b);
     });
     if (range) this.uploadRange(colorAttr, range);
@@ -493,7 +500,8 @@ export class Highlighter {
     index: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
     fn: (v: number) => void,
   ): [number, number] | null {
-    let lo = Infinity, hi = -Infinity;
+    let lo = Infinity,
+      hi = -Infinity;
     for (const t of tris) {
       for (let k = 0; k < 3; k++) {
         const v = index.getX(t * 3 + k);

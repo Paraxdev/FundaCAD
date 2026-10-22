@@ -29,8 +29,8 @@ use serde_json::{json, Map, Value};
 use crate::builder::{Ctx, FResult, Fail};
 use crate::kernel;
 use entity::{
-    circle_groups, edge_cost, edges_of, face_cost, faces_of, key_bits, key_cmp, need, num,
-    py_round, type_differs, unit, vector, EdgeEnt, FaceEnt, Key,
+    circle_groups, edge_cost, edges_of, face_cost, faces_of, key_bits, key_cmp, need, num, py_round, type_differs,
+    unit, vector, EdgeEnt, FaceEnt, Key,
 };
 pub use plane::plane_fallback_reason;
 pub use tuning::Tuning;
@@ -81,8 +81,7 @@ struct TieBreak {
 }
 
 fn as_object<'v>(sel: &'v Value) -> FResult<&'v Map<String, Value>> {
-    sel.as_object()
-        .ok_or_else(|| Fail::Internal("AttributeError".into()))
+    sel.as_object().ok_or_else(|| Fail::Internal("AttributeError".into()))
 }
 
 /// Python's `repr` of a `by` value in "unknown ... selector: {by}".
@@ -105,8 +104,7 @@ fn nth_of(sel: &Map<String, Value>) -> (bool, Option<i64>) {
 }
 
 fn pick_nth(nth: Option<i64>, len: usize) -> Option<usize> {
-    nth.and_then(|n| usize::try_from(n).ok())
-        .filter(|&n| n < len)
+    nth.and_then(|n| usize::try_from(n).ok()).filter(|&n| n < len)
 }
 
 /// `_finite3(seq, want=3)`: three finite numbers rounded to 6 places.
@@ -138,11 +136,7 @@ fn margin_of(best: f64, runner: f64) -> f64 {
 impl<'a> Resolver<'a> {
     /// The shipped tuning, diagnostics into `diag` tagged with `feature_id`.
     pub fn new(diag: Option<&'a mut Vec<Value>>, feature_id: Option<&'a str>) -> Resolver<'a> {
-        Resolver {
-            tuning: Tuning::shipped(),
-            diag,
-            feature_id,
-        }
+        Resolver { tuning: Tuning::shipped(), diag, feature_id }
     }
 
     pub fn with_tuning(mut self, tuning: &'a Tuning) -> Resolver<'a> {
@@ -151,21 +145,13 @@ impl<'a> Resolver<'a> {
     }
 
     /// Typed selectors from a feature field, resolved to edges.
-    pub fn edge_selectors(
-        &mut self,
-        part: &Shape,
-        sel: &OneOrMany<Selector>,
-    ) -> FResult<Vec<Shape>> {
+    pub fn edge_selectors(&mut self, part: &Shape, sel: &OneOrMany<Selector>) -> FResult<Vec<Shape>> {
         let v = serde_json::to_value(sel).map_err(|_| Fail::Internal("TypeError".into()))?;
         self.edges(part, &v)
     }
 
     /// Typed selectors from a feature field, resolved to faces.
-    pub fn face_selectors(
-        &mut self,
-        part: &Shape,
-        sel: &OneOrMany<Selector>,
-    ) -> FResult<Vec<Shape>> {
+    pub fn face_selectors(&mut self, part: &Shape, sel: &OneOrMany<Selector>) -> FResult<Vec<Shape>> {
         let v = serde_json::to_value(sel).map_err(|_| Fail::Internal("TypeError".into()))?;
         self.faces(part, &v)
     }
@@ -175,11 +161,7 @@ impl<'a> Resolver<'a> {
         if kernel::is_null(part) {
             return Err(Fail::msg("no part to select edges from"));
         }
-        Ok(self
-            .edge_ents(part, sel)?
-            .into_iter()
-            .map(|e| e.shape)
-            .collect())
+        Ok(self.edge_ents(part, sel)?.into_iter().map(|e| e.shape).collect())
     }
 
     /// `resolve_faces`: a selector or a list of them to faces of `part`.
@@ -187,11 +169,7 @@ impl<'a> Resolver<'a> {
         if kernel::is_null(part) {
             return Err(Fail::msg("no part to select faces from"));
         }
-        Ok(self
-            .face_ents(part, sel)?
-            .into_iter()
-            .map(|f| f.shape)
-            .collect())
+        Ok(self.face_ents(part, sel)?.into_iter().map(|f| f.shape).collect())
     }
 
     fn edge_ents(&mut self, part: &Shape, sel: &Value) -> FResult<Vec<EdgeEnt>> {
@@ -225,7 +203,8 @@ impl<'a> Resolver<'a> {
                 !stale
             });
             if gone > 0 {
-                let reason = format!("{gone} references share one edge far from where they were picked, their edges are gone");
+                let reason =
+                    format!("{gone} references share one edge far from where they were picked, their edges are gone");
                 self.push("edge", 0, 0.0, true, Some(Value::from(reason)), None, None, None);
             }
             return Ok(out);
@@ -306,17 +285,10 @@ impl<'a> Resolver<'a> {
                     self.push("edge", 0, 0.0, true, Some(Value::from(GONE)), None, None, None);
                     return Ok(Vec::new());
                 }
-                self.push(
-                    "edge",
-                    usize::from(best.is_some()),
-                    conf,
-                    lossy,
-                    reason.map(Value::from),
-                    None,
-                    None,
-                    None,
-                );
-                if let Some(note) = best.filter(|_| lossy).and_then(|i| self.stale_match(part, &edges[i], sel, fp, reason)) {
+                self.push("edge", usize::from(best.is_some()), conf, lossy, reason.map(Value::from), None, None, None);
+                if let Some(note) =
+                    best.filter(|_| lossy).and_then(|i| self.stale_match(part, &edges[i], sel, fp, reason))
+                {
                     if let Some(Value::Object(last)) = self.diag.as_deref_mut().and_then(|d| d.last_mut()) {
                         last.extend(note);
                     }
@@ -340,38 +312,16 @@ impl<'a> Resolver<'a> {
             Some("tangentChain") => {
                 let fp = as_object(need(m, "seed")?)?;
                 let edges = edges_of(part)?;
-                let (seed, conf, lossy, reason) =
-                    self.match_edge(part, &edges, fp, (false, None))?;
+                let (seed, conf, lossy, reason) = self.match_edge(part, &edges, fp, (false, None))?;
                 let Some(seed) = seed else {
-                    self.push(
-                        "edge",
-                        0,
-                        0.0,
-                        true,
-                        Some(Value::from("tangentChain seed not found")),
-                        None,
-                        None,
-                        None,
-                    );
+                    self.push("edge", 0, 0.0, true, Some(Value::from("tangentChain seed not found")), None, None, None);
                     return Ok(Vec::new());
                 };
                 let chain = tangent_chain(self.tuning, &edges, seed);
-                self.push(
-                    "edge",
-                    chain.len(),
-                    conf,
-                    lossy,
-                    reason.map(Value::from),
-                    None,
-                    None,
-                    None,
-                );
+                self.push("edge", chain.len(), conf, lossy, reason.map(Value::from), None, None, None);
                 Ok(take(edges, &chain))
             }
-            _ => Err(Fail::msg(format!(
-                "unknown edge selector: {}",
-                by_text(m.get("by"))
-            ))),
+            _ => Err(Fail::msg(format!("unknown edge selector: {}", by_text(m.get("by"))))),
         }
     }
 
@@ -401,33 +351,21 @@ impl<'a> Resolver<'a> {
                 let faces = faces_of(part)?;
                 // Bounded distance, or centre distance for every face when any
                 // face cannot be measured, so the margin compares like with like.
-                let bounded: Option<Vec<f64>> =
-                    faces.iter().map(|f| f.distance(p).map(|d| d.0)).collect();
-                let dists = bounded
-                    .unwrap_or_else(|| faces.iter().map(|f| (f.centroid() - p).length()).collect());
+                let bounded: Option<Vec<f64>> = faces.iter().map(|f| f.distance(p).map(|d| d.0)).collect();
+                let dists = bounded.unwrap_or_else(|| faces.iter().map(|f| (f.centroid() - p).length()).collect());
                 let keys: Vec<Key> = faces.iter().map(FaceEnt::canonical_key).collect();
                 let tie_band = self.tuning.nearest_tie_band;
                 let described = |i: usize| faces[i].describe();
-                let pick = self.nearest_one(
-                    Kind::Face,
-                    m,
-                    &dists,
-                    &keys,
-                    described,
-                    |tied: &[usize]| {
-                        slid_out_pick(&faces, tied, p, tie_band)
-                            .map(|(index, margin)| TieBreak { index, reported: Some(margin) })
-                    },
-                )?;
+                let pick = self.nearest_one(Kind::Face, m, &dists, &keys, described, |tied: &[usize]| {
+                    slid_out_pick(&faces, tied, p, tie_band)
+                        .map(|(index, margin)| TieBreak { index, reported: Some(margin) })
+                })?;
                 Ok(take(faces, &[pick.index]))
             }
             Some("all") => faces_of(part),
             Some("tracked") => tracked::resolve(self, part, m),
             Some("match") => self.faces_matching(part, need(m, "fp")?, nth_of(m)),
-            _ => Err(Fail::msg(format!(
-                "unknown face selector: {}",
-                by_text(m.get("by"))
-            ))),
+            _ => Err(Fail::msg(format!("unknown face selector: {}", by_text(m.get("by"))))),
         }
     }
 
@@ -474,40 +412,20 @@ impl<'a> Resolver<'a> {
         let mut note = Map::new();
         note.insert("stale".into(), json!(true));
         note.insert("picked".into(), json!(at(picked)));
-        note.insert(
-            "now".into(),
-            json!({"mid": at(e.mid), "curve": e.curve_name(), "length": py_round(e.length, 3)}),
-        );
+        note.insert("now".into(), json!({"mid": at(e.mid), "curve": e.curve_name(), "length": py_round(e.length, 3)}));
         note.insert("off".into(), json!(py_round(off, 3)));
         Some(note)
     }
 
     /// `_faces_matching`: one face by fingerprint, never a refusal.
-    fn faces_matching(
-        &mut self,
-        part: &Shape,
-        fp: &Value,
-        nth: (bool, Option<i64>),
-    ) -> FResult<Vec<FaceEnt>> {
+    fn faces_matching(&mut self, part: &Shape, fp: &Value, nth: (bool, Option<i64>)) -> FResult<Vec<FaceEnt>> {
         let fp = as_object(fp)?;
         let tol_pos = self.tuning.pos_tol(crate::kernel::bbox_diagonal(part));
         let faces = faces_of(part)?;
-        let costs = faces
-            .iter()
-            .map(|f| face_cost(self.tuning, f, fp, tol_pos))
-            .collect::<FResult<Vec<f64>>>()?;
+        let costs = faces.iter().map(|f| face_cost(self.tuning, f, fp, tol_pos)).collect::<FResult<Vec<f64>>>()?;
         let keys: Vec<Key> = faces.iter().map(FaceEnt::canonical_key).collect();
         let (best, conf, lossy, reason) = resolve_one(self.tuning, &costs, &keys, nth);
-        self.push(
-            "face",
-            usize::from(best.is_some()),
-            conf,
-            lossy,
-            reason.map(Value::from),
-            None,
-            None,
-            None,
-        );
+        self.push("face", usize::from(best.is_some()), conf, lossy, reason.map(Value::from), None, None, None);
         Ok(best.map(|i| take(faces, &[i])).unwrap_or_default())
     }
 
@@ -526,18 +444,13 @@ impl<'a> Resolver<'a> {
     ) -> FResult<Nearest> {
         let name = kind.name();
         if dists.is_empty() {
-            return Err(Fail::Value {
-                message: format!("no {name} to select from"),
-                code: Some(REFERENCE_NOT_FOUND),
-            });
+            return Err(Fail::Value { message: format!("no {name} to select from"), code: Some(REFERENCE_NOT_FOUND) });
         }
         // Candidates no pick could tell apart collapse first: two prisms fused at
         // one corner line carry that edge twice, and it must not tie with itself.
         let mut seen = HashSet::new();
-        let mut scored: Vec<(f64, usize)> = (0..dists.len())
-            .filter(|&i| seen.insert(key_bits(&keys[i])))
-            .map(|i| (dists[i], i))
-            .collect();
+        let mut scored: Vec<(f64, usize)> =
+            (0..dists.len()).filter(|&i| seen.insert(key_bits(&keys[i]))).map(|i| (dists[i], i)).collect();
         stable_sort_by_cost(&mut scored);
         let (best_d, best) = scored[0];
         let runner = scored.get(1).map_or(f64::INFINITY, |s| s.0);
@@ -550,23 +463,11 @@ impl<'a> Resolver<'a> {
             return Ok(Nearest { index: best });
         }
 
-        let mut tied: Vec<usize> = scored
-            .iter()
-            .filter(|(d, _)| (d - best_d) / (runner + 1e-9) < band)
-            .map(|s| s.1)
-            .collect();
+        let mut tied: Vec<usize> =
+            scored.iter().filter(|(d, _)| (d - best_d) / (runner + 1e-9) < band).map(|s| s.1).collect();
         tied.sort_by(|a, b| key_cmp(&keys[*a], &keys[*b]));
         if let Some(n) = pick_nth(nth_of(sel).1, tied.len()) {
-            self.push(
-                name,
-                1,
-                margin,
-                true,
-                Some("tie broken by nth".into()),
-                None,
-                None,
-                None,
-            );
+            self.push(name, 1, margin, true, Some("tie broken by nth".into()), None, None, None);
             return Ok(Nearest { index: tied[n] });
         }
 
@@ -575,43 +476,16 @@ impl<'a> Resolver<'a> {
             let Some(margin) = reported else {
                 return Ok(Nearest { index: pick });
             };
-            self.push(
-                name,
-                1,
-                margin,
-                true,
-                Some(REASON_SLID_OUT.into()),
-                pt,
-                None,
-                Some(AMBIGUOUS_REFERENCE),
-            );
+            self.push(name, 1, margin, true, Some(REASON_SLID_OUT.into()), pt, None, Some(AMBIGUOUS_REFERENCE));
             return Ok(Nearest { index: pick });
         }
 
         let where_ = pt
             .and_then(Value::as_array)
-            .map(|a| {
-                a.iter()
-                    .map(|v| format!("{:.2}", num(v).unwrap_or(f64::NAN)))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            })
+            .map(|a| a.iter().map(|v| format!("{:.2}", num(v).unwrap_or(f64::NAN))).collect::<Vec<_>>().join(", "))
             .unwrap_or_default();
-        let described = tied
-            .iter()
-            .take(3)
-            .map(|&i| describe(i))
-            .collect::<FResult<Vec<String>>>()?;
-        self.push(
-            name,
-            0,
-            margin,
-            true,
-            Some("ambiguous nearest pick".into()),
-            pt,
-            Some(&described),
-            None,
-        );
+        let described = tied.iter().take(3).map(|&i| describe(i)).collect::<FResult<Vec<String>>>()?;
+        self.push(name, 0, margin, true, Some("ambiguous nearest pick".into()), pt, Some(&described), None);
         Err(Fail::Value {
             message: format!(
                 "ambiguous {name} reference at ({where_}): {} are equally close ({best_d:.3}mm vs {runner:.3}mm), re-pick the {name}",
@@ -667,22 +541,14 @@ impl<'a> Resolver<'a> {
 
     /// `resolve_face_on_plane`: the planar face a sketch or datum plane is
     /// anchored to, or `None` with the reason recorded. Never a refusal.
-    pub fn face_on_plane(
-        &mut self,
-        part: Option<&Shape>,
-        sel: &Value,
-        normal: [f64; 3],
-        label: &str,
-    ) -> Option<Shape> {
+    pub fn face_on_plane(&mut self, part: Option<&Shape>, sel: &Value, normal: [f64; 3], label: &str) -> Option<Shape> {
         plane::resolve_face_on_plane(self, part, sel, normal, label)
     }
 }
 
 fn take<T>(items: Vec<T>, idxs: &[usize]) -> Vec<T> {
     let mut slots: Vec<Option<T>> = items.into_iter().map(Some).collect();
-    idxs.iter()
-        .filter_map(|&i| slots.get_mut(i).and_then(Option::take))
-        .collect()
+    idxs.iter().filter_map(|&i| slots.get_mut(i).and_then(Option::take)).collect()
 }
 
 fn union_face_edges(faces: &[FaceEnt]) -> FResult<Vec<EdgeEnt>> {
@@ -738,18 +604,11 @@ fn resolve_one(
     let runner = scored.get(1).map_or(f64::INFINITY, |s| s.0);
     let margin = margin_of(best_cost, runner);
     if margin < t.tie_band {
-        let mut tied: Vec<usize> = scored
-            .iter()
-            .filter(|(c, _)| (c - best_cost) / (runner + 1e-9) < t.tie_band)
-            .map(|s| s.1)
-            .collect();
+        let mut tied: Vec<usize> =
+            scored.iter().filter(|(c, _)| (c - best_cost) / (runner + 1e-9) < t.tie_band).map(|s| s.1).collect();
         tied.sort_by(|a, b| key_cmp(&keys[*a], &keys[*b]));
         let idx = pick_nth(nth.1, tied.len()).unwrap_or(0);
-        let reason = if nth.0 {
-            "tie broken by nth"
-        } else {
-            "tie; canonical-first"
-        };
+        let reason = if nth.0 { "tie broken by nth" } else { "tie; canonical-first" };
         return (Some(tied[idx]), margin, !nth.0, Some(reason));
     }
     let lossy = best_cost > t.accept_max;
@@ -763,21 +622,13 @@ fn slid_out_pick(faces: &[FaceEnt], tied: &[usize], p: DVec3, band: f64) -> Opti
     if tied.len() < 2 {
         return None;
     }
-    let closest: Vec<DVec3> = tied
-        .iter()
-        .map(|&i| faces[i].distance(p).map(|d| d.1))
-        .collect::<Option<_>>()?;
+    let closest: Vec<DVec3> = tied.iter().map(|&i| faces[i].distance(p).map(|d| d.1)).collect::<Option<_>>()?;
     let first = closest[0];
-    if closest[1..]
-        .iter()
-        .any(|c| (*c - first).length() > SHARED_POINT_TOL)
-    {
+    if closest[1..].iter().any(|c| (*c - first).length() > SHARED_POINT_TOL) {
         return None;
     }
-    let mut scored: Vec<(f64, usize)> = tied
-        .iter()
-        .map(|&i| (sa::surface_distance(&faces[i].shape, p.to_array()), i))
-        .collect();
+    let mut scored: Vec<(f64, usize)> =
+        tied.iter().map(|&i| (sa::surface_distance(&faces[i].shape, p.to_array()), i)).collect();
     stable_sort_by_cost(&mut scored);
     let (best_d, best) = scored[0];
     let runner = scored[1].0;
@@ -826,8 +677,7 @@ fn tangent_chain(t: &Tuning, edges: &[EdgeEnt], seed: usize) -> Vec<usize> {
             Some((a, b)) => (a - p).length() < (b - p).length(),
             None => false,
         };
-        e.tangent_at(if at_start { 0.0 } else { 1.0 })
-            .unwrap_or_else(|| e.dir())
+        e.tangent_at(if at_start { 0.0 } else { 1.0 }).unwrap_or_else(|| e.dir())
     };
     let mut seen = HashSet::from([key_bits(&edges[seed].dedup_key())]);
     let mut chain = vec![seed];
@@ -846,9 +696,7 @@ fn tangent_chain(t: &Tuning, edges: &[EdgeEnt], seed: usize) -> Vec<usize> {
             };
             for shared in [a, b] {
                 if (ea - shared).length() < 1e-6 || (eb - shared).length() < 1e-6 {
-                    let dot = tangent_at_point(&edges[cur], shared)
-                        .dot(tangent_at_point(e, shared))
-                        .abs();
+                    let dot = tangent_at_point(&edges[cur], shared).dot(tangent_at_point(e, shared)).abs();
                     if dot > 1.0 - t.ang_tol {
                         seen.insert(k);
                         chain.push(i);
@@ -969,9 +817,9 @@ pub fn group_by_body<'s>(
     let mut groups: Vec<(usize, Vec<&Selector>)> = Vec::new();
     for s in sels.as_slice() {
         let body = match s.body().filter(|b| !b.is_empty()) {
-            Some(id) => ctx
-                .find_body(id)
-                .ok_or_else(|| Fail::msg(format!("{label}: the target body no longer exists")))?,
+            Some(id) => {
+                ctx.find_body(id).ok_or_else(|| Fail::msg(format!("{label}: the target body no longer exists")))?
+            }
             None => ctx.require_active(label)?,
         };
         ctx.editable(body, label)?;

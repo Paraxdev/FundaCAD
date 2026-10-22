@@ -119,8 +119,14 @@ describe("three internals the auto glass relies on", () => {
     expect(shader.fragmentShader).toContain("#include <transmission_fragment>");
     patchGlassShader(shader, { value: 1 });
     expect(shader.fragmentShader).toContain("fcVolumeRefraction(");
-    expect(THREE.ShaderChunk.transmission_pars_fragment).toContain("vec3 getVolumeTransmissionRay( const in vec3 n, const in vec3 v, const in float thickness, const in float ior, const in mat4 modelMatrix )");
-    expect(THREE.ShaderChunk.transmission_pars_fragment).toContain("vec4 getTransmissionSample( const in vec2 fragCoord, const in float roughness, const in float ior )");
-    expect(THREE.ShaderChunk.transmission_pars_fragment).toContain("vec3 volumeAttenuation( const in float transmissionDistance");
+    expect(THREE.ShaderChunk.transmission_pars_fragment).toContain(
+      "vec3 getVolumeTransmissionRay( const in vec3 n, const in vec3 v, const in float thickness, const in float ior, const in mat4 modelMatrix )",
+    );
+    expect(THREE.ShaderChunk.transmission_pars_fragment).toContain(
+      "vec4 getTransmissionSample( const in vec2 fragCoord, const in float roughness, const in float ior )",
+    );
+    expect(THREE.ShaderChunk.transmission_pars_fragment).toContain(
+      "vec3 volumeAttenuation( const in float transmissionDistance",
+    );
   });
 });

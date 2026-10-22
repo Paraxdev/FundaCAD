@@ -65,7 +65,13 @@ describe("ValidatedRow", () => {
 
   it("commits the typed text on change, not on every keystroke", async () => {
     const seen: string[] = [];
-    const w = mountRow({ value: "10", commit: (raw) => { seen.push(raw); return null; } });
+    const w = mountRow({
+      value: "10",
+      commit: (raw) => {
+        seen.push(raw);
+        return null;
+      },
+    });
     const input = await type(w, "42");
 
     expect(seen).toEqual([]); // typing alone must not touch the store

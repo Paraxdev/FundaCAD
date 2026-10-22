@@ -71,8 +71,18 @@ export function facesOf(h: SelectorHost, body: Body): FaceInfo[] {
 }
 
 const NAMED: Record<string, [number, number, number]> = {
-  top: [0, 0, 1], bottom: [0, 0, -1], front: [0, -1, 0], back: [0, 1, 0], left: [-1, 0, 0], right: [1, 0, 0],
-  "+x": [1, 0, 0], "-x": [-1, 0, 0], "+y": [0, 1, 0], "-y": [0, -1, 0], "+z": [0, 0, 1], "-z": [0, 0, -1],
+  top: [0, 0, 1],
+  bottom: [0, 0, -1],
+  front: [0, -1, 0],
+  back: [0, 1, 0],
+  left: [-1, 0, 0],
+  right: [1, 0, 0],
+  "+x": [1, 0, 0],
+  "-x": [-1, 0, 0],
+  "+y": [0, 1, 0],
+  "-y": [0, -1, 0],
+  "+z": [0, 0, 1],
+  "-z": [0, 0, -1],
 };
 
 function vec(text: string, what: string): THREE.Vector3 {
@@ -103,7 +113,12 @@ function splitBody(h: SelectorHost, sel: string): { bodies: Body[]; words: strin
   if (m) {
     const key = m[1]!.toLowerCase();
     const b = all.find((x) => x.id.toLowerCase() === key) ?? all.find((x) => x.name.toLowerCase() === key);
-    if (!b) throw new SelectorError(`no body "${m[1]}"`, "NotFound", all.map((x) => x.id));
+    if (!b)
+      throw new SelectorError(
+        `no body "${m[1]}"`,
+        "NotFound",
+        all.map((x) => x.id),
+      );
     return { bodies: [b], words: m[2]!.trim().toLowerCase(), named: true };
   }
   return { bodies: all, words: sel.trim().toLowerCase(), named: false };
@@ -112,7 +127,11 @@ function splitBody(h: SelectorHost, sel: string): { bodies: Body[]; words: strin
 function onlyBody(bodies: Body[], words: string): Body {
   if (bodies.length === 1) return bodies[0]!;
   if (!bodies.length) throw new SelectorError("there is no body on screen", "NotFound");
-  throw new SelectorError(`${bodies.length} bodies, name one: ${bodies.map((b) => `${b.id}:${words}`).join(", ")}`, "Ambiguous", bodies.map((b) => `${b.id}:${words}`));
+  throw new SelectorError(
+    `${bodies.length} bodies, name one: ${bodies.map((b) => `${b.id}:${words}`).join(", ")}`,
+    "Ambiguous",
+    bodies.map((b) => `${b.id}:${words}`),
+  );
 }
 
 function byDirection(faces: FaceInfo[], dir: THREE.Vector3): FaceInfo | null {
@@ -120,9 +139,7 @@ function byDirection(faces: FaceInfo[], dir: THREE.Vector3): FaceInfo | null {
   const hits = faces.filter((f) => f.planar && f.normal.dot(d) >= MATCH_COS);
   if (!hits.length) return null;
   const top = Math.max(...hits.map((f) => f.area));
-  return hits
-    .filter((f) => f.area >= top * 0.999)
-    .reduce((a, b) => (b.centroid.dot(d) > a.centroid.dot(d) ? b : a));
+  return hits.filter((f) => f.area >= top * 0.999).reduce((a, b) => (b.centroid.dot(d) > a.centroid.dot(d) ? b : a));
 }
 
 export function resolveFace(h: SelectorHost, sel: string): FaceInfo {
@@ -131,10 +148,14 @@ export function resolveFace(h: SelectorHost, sel: string): FaceInfo {
     const p = vec(words.slice(5), "near=");
     let best: FaceInfo | null = null;
     let bestD = Infinity;
-    for (const b of bodies) for (const f of facesOf(h, b)) {
-      const d = triDistance(f.tris, p);
-      if (d < bestD) { bestD = d; best = f; }
-    }
+    for (const b of bodies)
+      for (const f of facesOf(h, b)) {
+        const d = triDistance(f.tris, p);
+        if (d < bestD) {
+          bestD = d;
+          best = f;
+        }
+      }
     if (!best) throw new SelectorError("there is no face on screen", "NotFound");
     return best;
   }
@@ -144,9 +165,13 @@ export function resolveFace(h: SelectorHost, sel: string): FaceInfo {
     const i = Number(words.slice(6));
     const f = faces.find((x) => x.index === i);
     if (!f && Number.isInteger(i) && i >= 0 && i < body.faceCount) {
-      throw new SelectorError(`face ${i} of ${body.id} has nothing drawn, so there is no point on it to pick`, "NotFound");
+      throw new SelectorError(
+        `face ${i} of ${body.id} has nothing drawn, so there is no point on it to pick`,
+        "NotFound",
+      );
     }
-    if (!f) throw new SelectorError(`${body.id} has faces 0 to ${body.faceCount - 1}, not ${words.slice(6)}`, "NotFound");
+    if (!f)
+      throw new SelectorError(`${body.id} has faces 0 to ${body.faceCount - 1}, not ${words.slice(6)}`, "NotFound");
     return f;
   }
   const dirText = words.startsWith("normal=") ? null : NAMED[words];
@@ -227,7 +252,9 @@ export function edgeName(e: Edge): string {
 export function resolveEdge(h: SelectorHost, sel: string): Edge {
   const { bodies, words, named } = splitBody(h, sel);
   const ids = new Set(bodies.map((b) => b.id));
-  const all = (h.store.buildState.result?.edges ?? []).filter((e) => e.points.length && (!named || (e.body != null && ids.has(e.body))));
+  const all = (h.store.buildState.result?.edges ?? []).filter(
+    (e) => e.points.length && (!named || (e.body != null && ids.has(e.body))),
+  );
   if (!all.length) throw new SelectorError("there is no edge on screen", "NotFound");
   if (words.startsWith("near=")) {
     const p = vec(words.slice(5), "near=");
@@ -237,7 +264,15 @@ export function resolveEdge(h: SelectorHost, sel: string): Edge {
     const body = onlyBody(bodies, words);
     const own = all.filter((e) => e.body === body.id);
     if (!own.length) throw new SelectorError(`${body.id} has no edges`, "NotFound");
-    return own.reduce((a, b) => ((words === "longest" ? polyLength(edgePts(b)) > polyLength(edgePts(a)) : polyLength(edgePts(b)) < polyLength(edgePts(a))) ? b : a));
+    return own.reduce((a, b) =>
+      (
+        words === "longest"
+          ? polyLength(edgePts(b)) > polyLength(edgePts(a))
+          : polyLength(edgePts(b)) < polyLength(edgePts(a))
+      )
+        ? b
+        : a,
+    );
   }
   const m = /^between\s+(\S+)\s+(\S+)$/.exec(words);
   if (m) {
@@ -259,8 +294,16 @@ export function resolveEdge(h: SelectorHost, sel: string): Edge {
     };
     const found = all.filter((e) => e.body === body.id && on(e));
     if (!found.length) throw new SelectorError(`no edge between ${m[1]} and ${m[2]} on ${body.id}`, "NotFound");
-    if (found.length > 1) throw new SelectorError(`${found.length} edges between ${m[1]} and ${m[2]}, pick one by near=`, "Ambiguous", found.map(edgeName));
+    if (found.length > 1)
+      throw new SelectorError(
+        `${found.length} edges between ${m[1]} and ${m[2]}, pick one by near=`,
+        "Ambiguous",
+        found.map(edgeName),
+      );
     return found[0]!;
   }
-  throw new SelectorError(`cannot read edge selector "${sel}", use near=x,y,z, between <face> <face>, longest or shortest`, "BadArgs");
+  throw new SelectorError(
+    `cannot read edge selector "${sel}", use near=x,y,z, between <face> <face>, longest or shortest`,
+    "BadArgs",
+  );
 }

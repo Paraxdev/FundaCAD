@@ -114,28 +114,23 @@ fn hex_nearest_site(u: f64, v: f64, a: f64) -> (f64, f64) {
 fn hex_round(u: &[f64], v: &[f64], scale: f64) -> Vec<f64> {
     let root3 = 3f64.sqrt();
     let a = mathx::cos(&u.iter().map(|&x| 2.0 * PI * x / scale).collect::<Vec<_>>());
-    let b = mathx::cos(
-        &u.iter()
-            .zip(v)
-            .map(|(&x, &y)| 2.0 * PI * (x * 0.5 - y * root3 * 0.5) / scale)
-            .collect::<Vec<_>>(),
-    );
-    let c = mathx::cos(
-        &u.iter()
-            .zip(v)
-            .map(|(&x, &y)| 2.0 * PI * (x * 0.5 + y * root3 * 0.5) / scale)
-            .collect::<Vec<_>>(),
-    );
+    let b =
+        mathx::cos(&u.iter().zip(v).map(|(&x, &y)| 2.0 * PI * (x * 0.5 - y * root3 * 0.5) / scale).collect::<Vec<_>>());
+    let c =
+        mathx::cos(&u.iter().zip(v).map(|(&x, &y)| 2.0 * PI * (x * 0.5 + y * root3 * 0.5) / scale).collect::<Vec<_>>());
     (0..u.len()).map(|i| clip01((a[i] + b[i] + c[i]) / 3.0 * 0.5 + 0.5)).collect()
 }
 
 fn hex(u: f64, v: f64, scale: f64, sharp: f64) -> f64 {
     let (sx, sy) = hex_nearest_site(u, v, scale);
     let (du, dv) = (u - sx, v - sy);
-    let d_edge = hex_dirs()
-        .iter()
-        .map(|d| scale * 0.5 - (du * d[0] + dv * d[1]))
-        .fold(f64::INFINITY, |m, x| if x < m || x.is_nan() { x } else { m });
+    let d_edge = hex_dirs().iter().map(|d| scale * 0.5 - (du * d[0] + dv * d[1])).fold(f64::INFINITY, |m, x| {
+        if x < m || x.is_nan() {
+            x
+        } else {
+            m
+        }
+    });
     clip01(d_edge / hex_wall_width(scale, sharp).max(1e-9))
 }
 
@@ -162,10 +157,7 @@ pub fn wave_phases() -> Vec<f64> {
     let lv = wave_levels();
     let n = WAVE_JOINS;
     let d: Vec<f64> = (0..n).map(|i| lv[(i + 1) % n] - lv[i]).collect();
-    (0..n)
-        .filter(|&i| (d[(i + n - 1) % n] - d[i]).abs() > 1e-12)
-        .map(|i| i as f64 / n as f64)
-        .collect()
+    (0..n).filter(|&i| (d[(i + n - 1) % n] - d[i]).abs() > 1e-12).map(|i| i as f64 / n as f64).collect()
 }
 
 fn facet_wave(x: f64, period: f64) -> f64 {
@@ -182,11 +174,7 @@ fn facet_wave(x: f64, period: f64) -> f64 {
 /// `0.5 + 0.5 sin(2 pi u1 / scale)` over the field, the round wave and the
 /// round stripe before sharpening.
 fn sine_bands(u: &[f64], v: &[f64], scale: f64, angle: f64) -> Vec<f64> {
-    let args: Vec<f64> = u
-        .iter()
-        .zip(v)
-        .map(|(&a, &b)| 2.0 * PI * rotate(a, b, angle).0 / scale)
-        .collect();
+    let args: Vec<f64> = u.iter().zip(v).map(|(&a, &b)| 2.0 * PI * rotate(a, b, angle).0 / scale).collect();
     mathx::sin(&args).into_iter().map(|s| 0.5 + 0.5 * s).collect()
 }
 
@@ -363,10 +351,7 @@ fn brick(u: f64, v: f64, scale: f64, angle: f64, sharp: f64, facet: bool) -> f64
 }
 
 fn strands(u1: f64, v1: f64, scale: f64) -> (f64, f64) {
-    (
-        1.0 - (fmod(u1 / scale, 1.0) - 0.5).abs() * 2.0,
-        1.0 - (fmod(v1 / scale, 1.0) - 0.5).abs() * 2.0,
-    )
+    (1.0 - (fmod(u1 / scale, 1.0) - 0.5).abs() * 2.0, 1.0 - (fmod(v1 / scale, 1.0) - 0.5).abs() * 2.0)
 }
 
 fn basket(u: f64, v: f64, scale: f64, angle: f64, facet: bool) -> f64 {
@@ -624,9 +609,7 @@ pub fn triplanar_field(
     let hx = height_field_smoothed(kind, spec, &col(1, offset), &col(2, 0.0), None, None)?;
     let hy = height_field_smoothed(kind, spec, &col(2, offset), &col(0, 0.0), None, None)?;
     let hz = height_field_smoothed(kind, spec, &col(0, offset), &col(1, 0.0), None, None)?;
-    Ok((0..p.len())
-        .map(|i| w[i][0] * hx[i] + w[i][1] * hy[i] + w[i][2] * hz[i])
-        .collect())
+    Ok((0..p.len()).map(|i| w[i][0] * hx[i] + w[i][1] * hy[i] + w[i][2] * hz[i]).collect())
 }
 
 /// `_u_period`: the pattern's period along u, what a full turn has to be a

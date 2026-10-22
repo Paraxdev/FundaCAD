@@ -54,11 +54,7 @@ fn display_name(b: &ExportBody<'_>) -> String {
 
 /// `build_export_tree`: the bodies named, and grouped under the products of
 /// the import manifests their `node_ref`s point into.
-pub fn build_export_tree<'a>(
-    document: &Value,
-    bodies: &[ExportBody<'a>],
-    root_name: &str,
-) -> Option<Tree<'a>> {
+pub fn build_export_tree<'a>(document: &Value, bodies: &[ExportBody<'a>], root_name: &str) -> Option<Tree<'a>> {
     if bodies.is_empty() {
         return None;
     }
@@ -137,10 +133,8 @@ pub fn build_export_tree<'a>(
         leaves_of: &mut HashMap<Key<'k>, Vec<Tree<'a>>>,
     ) -> Option<Tree<'a>> {
         let kids = kids_of.get(&key).cloned().unwrap_or_default();
-        let mut parts: Vec<Tree<'a>> = kids
-            .iter()
-            .filter_map(|k| materialise(*k, spec_of, kids_of, leaves_of))
-            .collect();
+        let mut parts: Vec<Tree<'a>> =
+            kids.iter().filter_map(|k| materialise(*k, spec_of, kids_of, leaves_of)).collect();
         parts.extend(leaves_of.remove(&key).unwrap_or_default());
         if parts.is_empty() {
             return None;
@@ -157,10 +151,8 @@ pub fn build_export_tree<'a>(
         Some(Tree::group(label, parts))
     }
 
-    let mut top: Vec<Tree<'a>> = roots
-        .iter()
-        .filter_map(|k| materialise(*k, &spec_of, &kids_of, &mut leaves_of))
-        .collect();
+    let mut top: Vec<Tree<'a>> =
+        roots.iter().filter_map(|k| materialise(*k, &spec_of, &kids_of, &mut leaves_of)).collect();
     top.extend(loose);
     match top.len() {
         0 => None,

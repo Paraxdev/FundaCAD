@@ -15,7 +15,9 @@ const deps = dialogs.bugDeps as BugReportDeps;
 
 useModalGate();
 
-const close = () => { dialogs.bugReport = false; };
+const close = () => {
+  dialogs.bugReport = false;
+};
 
 const description = ref("");
 const includeDocument = ref(false);

@@ -30,7 +30,10 @@ fn sketches(r: &Map<String, Value>) -> &Vec<Value> {
 }
 
 fn notes(r: &Map<String, Value>) -> Vec<String> {
-    r.get("notes").and_then(Value::as_array).map(|a| a.iter().map(|n| n.as_str().unwrap().to_string()).collect()).unwrap_or_default()
+    r.get("notes")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().map(|n| n.as_str().unwrap().to_string()).collect())
+        .unwrap_or_default()
 }
 
 /// The sketch extruded 2 mm with no regions, as the app's whole sketch extrude does.
@@ -81,7 +84,16 @@ fn an_evenodd_o_keeps_its_hole() {
 
 #[test]
 fn a_nonzero_counter_is_a_hole_only_when_it_runs_the_other_way() {
-    let outer = shoelace(&[(0.0, 20.0), (8.0, 0.0), (12.0, 0.0), (20.0, 20.0), (14.0, 20.0), (12.5, 15.0), (7.5, 15.0), (6.0, 20.0)]);
+    let outer = shoelace(&[
+        (0.0, 20.0),
+        (8.0, 0.0),
+        (12.0, 0.0),
+        (20.0, 20.0),
+        (14.0, 20.0),
+        (12.5, 15.0),
+        (7.5, 15.0),
+        (6.0, 20.0),
+    ]);
     let counter = 9.0;
     let same = imported("svg_letter_a_same.svg");
     near(volume(&extruded(&sketches(&same)[0])), 2.0 * outer, 1e-3, "same way fills the counter");
@@ -126,7 +138,11 @@ fn an_icon_reads_groups_transforms_units_and_layers() {
     let names: Vec<&str> = sketches(&r).iter().map(|s| s["name"].as_str().unwrap()).collect();
     assert_eq!(names, ["Base", "Marks", "Marks strokes"]);
     let n = notes(&r);
-    for want in ["skipped 1 image, 1 text", "ignored 1 clip path, 1 filter, the shapes under them are kept whole", "1 gradient or pattern fill kept as plain fills"] {
+    for want in [
+        "skipped 1 image, 1 text",
+        "ignored 1 clip path, 1 filter, the shapes under them are kept whole",
+        "1 gradient or pattern fill kept as plain fills",
+    ] {
         assert!(n.iter().any(|x| x == want), "{want} in {n:?}");
     }
     assert!(n.iter().any(|x| x.starts_with("1 outline is drawn as strokes only")), "{n:?}");
@@ -139,7 +155,12 @@ fn an_icon_reads_groups_transforms_units_and_layers() {
     near(volume(&base), 2.0 * (5600.0 - (4.0 - PI) * 64.0) / 16.0, 1e-3, "rounded rect");
 
     let marks = &sketches(&r)[1];
-    let circle = marks["entities"].as_array().unwrap().iter().find(|e| e["type"] == "circle").expect("a circle under rotate and scale stays a circle");
+    let circle = marks["entities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["type"] == "circle")
+        .expect("a circle under rotate and scale stays a circle");
     near(circle["radius"].as_f64().unwrap(), 2.5, 1e-9, "radius");
     let b = extruded(marks);
     assert_eq!(solids(&b), 7, "seven separate marks");
@@ -197,7 +218,9 @@ fn a_use_fan_out_is_refused_quickly() {
         }
         defs.push_str("</g>");
     }
-    let svg = format!(r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><defs>{defs}</defs><use href="#u14"/></svg>"##);
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><defs>{defs}</defs><use href="#u14"/></svg>"##
+    );
     let p = blob_dir().join("fan_out.svg");
     std::fs::write(&p, svg).unwrap();
     let store = BlobStore::open(blob_dir()).unwrap();
