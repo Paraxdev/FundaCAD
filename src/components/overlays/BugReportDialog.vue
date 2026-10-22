@@ -6,7 +6,7 @@
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
 import { useModalGate } from "../../composables/useModalGate";
-import { bugContext, submitBugReport, type BugReportDeps } from "../../ui/bugReporter";
+import { appLogTail, bugContext, submitBugReport, type BugReportDeps } from "../../ui/bugReporter";
 import { appVersion } from "../../ui/updates";
 
 const dialogs = useDialogStore();
@@ -19,6 +19,8 @@ const close = () => { dialogs.bugReport = false; };
 
 const description = ref("");
 const includeDocument = ref(false);
+const includeLog = ref(true);
+const logTail = ref<string | null>(null);
 const version = ref("…");
 const copying = ref(false);
 
@@ -42,7 +44,9 @@ const preview = computed(() =>
     faults
       ? `render pipeline: FAULTS DETECTED, ${pipeline.length} lines attached`
       : `render pipeline: no faults, ${pipeline.length} lines attached`,
-    `+ engine log tail (if checked), usernames/paths redacted`,
+    ...(logTail.value === null
+      ? []
+      : [`+ app log, the last ${Math.ceil(logTail.value.length / 1024)} KB, user names hidden (only if checked)`]),
     `+ current document (only if checked)`,
   ].join("\n"),
 );
@@ -62,6 +66,7 @@ async function copy() {
     connected,
     crumbs,
     pipeline,
+    logTail: includeLog.value ? logTail.value : null,
   });
   copying.value = false;
   // A refused clipboard leaves the dialog up rather than closing over text the
@@ -83,7 +88,9 @@ onMounted(async () => {
   // The version comes from Tauri, so it lands a tick late. The dialog used to
   // await it BEFORE painting, which meant the click had no visible effect
   // until the round-trip finished.
-  version.value = await appVersion();
+  const [v, tail] = await Promise.all([appVersion(), appLogTail()]);
+  version.value = v;
+  logTail.value = tail;
 });
 onUnmounted(() => window.removeEventListener("keydown", onKey, true));
 </script>
@@ -103,6 +110,10 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
         <label class="bug-check">
           <input v-model="includeDocument" type="checkbox" class="bug-doc" />
           Include current document (contains your design)
+        </label>
+        <label v-if="logTail !== null" class="bug-check">
+          <input v-model="includeLog" type="checkbox" class="bug-log" />
+          Include the app log (user names hidden)
         </label>
         <details class="bug-preview">
           <summary>What will be copied</summary>

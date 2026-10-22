@@ -198,3 +198,77 @@ fn a_run_past_the_cap_moves_on_to_a_fresh_log_and_keeps_the_last_three() {
     assert_eq!(names, ["fundacad.1.log", "fundacad.2.log", "fundacad.log"]);
     fs::remove_dir_all(dir.parent().unwrap()).unwrap();
 }
+
+fn generations(dir: &Path, older: &str, old: &str, current: &str) {
+    fs::create_dir_all(dir).unwrap();
+    fs::write(dir.join("fundacad.2.log"), older).unwrap();
+    fs::write(dir.join("fundacad.1.log"), old).unwrap();
+    fs::write(dir.join(NAME), current).unwrap();
+}
+
+#[test]
+fn the_tail_is_none_without_a_log_and_whole_when_it_fits() {
+    let dir = scratch("log-tail-fit");
+    assert_eq!(tail(&dir, 64), None);
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join(NAME), "").unwrap();
+    assert_eq!(tail(&dir, 64), None);
+    fs::write(dir.join(NAME), "one run\n").unwrap();
+    assert_eq!(tail(&dir, 64).as_deref(), Some("one run\n"));
+    generations(&dir, "oldest a\noldest b\n", "older a\nolder b\n", "one run\n");
+    assert_eq!(tail(&dir, 64).as_deref(), Some("oldest a\noldest b\nolder a\nolder b\none run\n"));
+    assert_eq!(tail(&dir, 0), None);
+    fs::remove_dir_all(dir.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn the_tail_reaching_into_a_rotated_log_starts_on_a_whole_line() {
+    let dir = scratch("log-tail-cut");
+    generations(&dir, "oldest\n", "older a\nolder b\n", "one run\n");
+    let cases = [
+        (8, "one run\n"),
+        (9, "one run\n"),
+        (15, "one run\n"),
+        (16, "older b\none run\n"),
+        (17, "older b\none run\n"),
+        (24, "older a\nolder b\none run\n"),
+        (25, "older a\nolder b\none run\n"),
+        (31, "oldest\nolder a\nolder b\none run\n"),
+    ];
+    for (max, want) in cases {
+        assert_eq!(tail(&dir, max).as_deref(), Some(want), "max {max}");
+    }
+    fs::remove_dir_all(dir.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn the_tail_drops_a_character_it_cut_through_and_hides_user_names() {
+    let dir = scratch("log-tail-names");
+    let current = "logs to C:\\Users\\Jörg Weiß\\AppData\\Local\\dev.fundacad.app\\logs\n[engine] ready\n";
+    generations(&dir, "", "müde\n", current);
+    let max = current.len() as u64 + 4;
+    assert_eq!(
+        tail(&dir, max).as_deref(),
+        Some("logs to C:\\Users\\[REDACTED]\\AppData\\Local\\dev.fundacad.app\\logs\n[engine] ready\n")
+    );
+    fs::remove_dir_all(dir.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn user_names_in_paths_are_hidden() {
+    let cases = [
+        (r"spawn: C:\Users\jrabi\AppData\Local\x.exe", r"spawn: C:\Users\[REDACTED]\AppData\Local\x.exe"),
+        (r"\\HOST\Users\someone\share", r"\\HOST\Users\[REDACTED]\share"),
+        ("path /home/alice/proj/x.py and /Users/bob/y", "path /home/[REDACTED]/proj/x.py and /Users/[REDACTED]/y"),
+        (r#"log at "C:\Users\name" end"#, r#"log at "C:\Users\[REDACTED]" end"#),
+        (r"c:\users\John Smith\Documents\bracket.funda", r"c:\users\[REDACTED]\Documents\bracket.funda"),
+        ("İstanbul C:\\Users\\Ümit\\x and C:/Users/user/y", "İstanbul C:\\Users\\[REDACTED]\\x and C:/Users/[REDACTED]/y"),
+        ("home C:\\Users\\bob\nnext /home/carol", "home C:\\Users\\[REDACTED]\nnext /home/[REDACTED]"),
+        (r"C:\Users\\x and C:\Users\", r"C:\Users\\x and C:\Users\"),
+        ("no paths here", "no paths here"),
+        ("", ""),
+    ];
+    for (text, want) in cases {
+        assert_eq!(redact_user_paths(text), want, "{text}");
+    }
+}
