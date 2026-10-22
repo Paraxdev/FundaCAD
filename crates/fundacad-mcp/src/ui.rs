@@ -1,10 +1,5 @@
-//! The ui tools: a private copy of the app in a browser, driven the way a
-//! person drives it, through the harness in tools/harness (docs/HARNESS.md).
-//!
-//! The browser is owned by a Python child, `python -m fundacad_harness serve`,
-//! spoken to in JSON lines on its stdin and stdout. It starts on the first
-//! `ui_open` and stops with the server. Standalone only, so the window it
-//! drives is never the user's.
+//! The ui tools: a private copy of the app in a browser, driven through the harness (docs/HARNESS.md) by a
+//! Python child speaking JSON lines on stdio. Standalone only, so the window it drives is never the user's.
 
 use std::collections::VecDeque;
 use std::process::Stdio;
@@ -111,8 +106,7 @@ impl UiBridge {
         })
     }
 
-    /// The reply to one call. An Err means the child is gone or stuck, and
-    /// the bridge is no use any more.
+    /// An Err means the child is gone or stuck and the bridge is no use any more.
     pub async fn request(&mut self, call: &str, args: Value) -> Result<Value, String> {
         self.next_id += 1;
         let id = self.next_id;
@@ -170,8 +164,7 @@ impl UiBridge {
         self.child.id()
     }
 
-    /// Ends stdin, which closes the session and everything it started, and
-    /// kills the child only if that takes too long.
+    /// Ends stdin, which closes the session and all it started, and kills the child only if that takes too long.
     pub async fn stop(mut self) {
         self.stdin = None;
         if tokio::time::timeout(CLOSE_GRACE, self.child.wait()).await.is_err() {

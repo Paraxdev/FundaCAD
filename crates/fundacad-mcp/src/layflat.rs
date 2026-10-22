@@ -1,9 +1,5 @@
-//! `export {layFlat}`: each part turned so a flat face is on the bed.
-//!
-//! Done to a copy of the document, with the `move` features a person would
-//! add by hand: a turn that points the chosen face straight down, then a shift
-//! that puts the part on z = 0 beside the one before it. The document the
-//! agent is working on never sees them.
+//! `export {layFlat}`: on a copy of the document, each part gets the `move`s a person would add by hand,
+//! a turn that puts a flat face down and a shift onto z = 0 beside the part before.
 
 use serde_json::{json, Map, Value};
 
@@ -14,11 +10,8 @@ use crate::server::{engine_bodies, find_body, no_such_body};
 /// Space left between parts laid side by side, in mm.
 const GAP: f64 = 5.0;
 
-/// The intrinsic XYZ angles (degrees, `move`'s rx and ry with rz 0) that
-/// turn the direction `n` to point straight down.
-///
-/// `move` turns by Rx(a) Ry(b) about the origin, which sends n to -Z when
-/// n = (cos a sin b, -sin a, -cos a cos b).
+/// The intrinsic XYZ angles in degrees (`move`'s rx, ry, rz 0) that turn `n` straight down:
+/// Rx(a) Ry(b) sends n to -Z when n = (cos a sin b, -sin a, -cos a cos b).
 pub fn face_down(n: [f64; 3]) -> (f64, f64) {
     let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
     let [x, y, z] = if len > 0.0 { [n[0] / len, n[1] / len, n[2] / len] } else { [0.0, 0.0, -1.0] };
@@ -45,8 +38,7 @@ fn id_of(b: &Value) -> String {
     b.get("id").and_then(Value::as_str).unwrap_or_default().to_string()
 }
 
-/// The face each body goes down on: the one asked for, else its largest
-/// flat face. None for a body with no flat face at all.
+/// The face asked for, else the largest flat face; None for a body with no flat face.
 fn pick_face(body: &Value, asked: Option<i64>) -> Result<Option<(i64, [f64; 3], f64)>, String> {
     let faces = body.get("faces").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
     let as_pick = |f: &Value| -> Option<(i64, [f64; 3], f64)> {
@@ -81,11 +73,8 @@ fn add_move(doc: &mut Doc, id: &str, turn: (f64, f64), shift: [f64; 3]) -> Resul
     model::add_feature(doc, &Value::Object(m), None).map(|_| ()).map_err(|e| e.to_string())
 }
 
-/// The face each part goes down on, as `export {layFlat}` picks it: the one
-/// asked for in {body: face index}, else its largest flat face, None for a
-/// part with no flat face. `only` is the bodies being exported, if not all.
-/// `printability {layFlat}` asks the same, so it checks what export
-/// would write.
+/// The face each part goes down on, as `pick_face` chooses; `only` is the exported bodies, if not all.
+/// `printability {layFlat}` asks this too, so it checks what export would write.
 pub(crate) async fn bed_faces(
     link: &EngineLink,
     doc: &Doc,
@@ -123,10 +112,8 @@ pub(crate) async fn bed_faces(
     Ok(out)
 }
 
-/// Turn and place the bodies in `doc` for printing. `how` is `true` or
-/// {body: face index}; `only` is the bodies being exported, if not all;
-/// `apart` is a separate export, where each part goes at the origin rather
-/// than beside the last. Returns a line saying what went down on what.
+/// `how` is `true` or {body: face index}; `apart` is a separate export, where each part goes at the
+/// origin rather than beside the last. Returns a line saying what went down on what.
 pub async fn lay_flat(
     link: &EngineLink,
     doc: &mut Doc,
@@ -184,8 +171,7 @@ pub async fn lay_flat(
 mod tests {
     use super::face_down;
 
-    /// The turn applied to n, written out the way OCCT's intrinsic XYZ
-    /// composes it, has to come out pointing down.
+    /// n turned the way OCCT composes intrinsic XYZ, which must come out pointing down.
     fn turned(n: [f64; 3], (a, b): (f64, f64)) -> [f64; 3] {
         let (a, b) = (a.to_radians(), b.to_radians());
         // Ry(b) first, then Rx(a): R = Rx(a) * Ry(b).

@@ -1,17 +1,6 @@
-//! Runs the MCP server from a copy of its own executable, so a `cargo build`
-//! can overwrite the original while a host keeps the server running.
-//!
-//! Windows refuses to replace an executable that a process is running from:
-//! with a host holding `fundacad.exe --mcp` open, every `cargo build` of the
-//! app fails with "Access is denied" until the host is closed. The same is
-//! true of the engine the server spawns from beside it. So on Windows the
-//! process the host starts copies itself (and the engine it would start) into
-//! the temp directory, runs the copy with the same arguments and stdio, and
-//! passes its exit code back. The build then writes the original freely, and
-//! the next server the host starts runs the new build.
-//!
-//! `FUNDACAD_MCP_SHADOW=0` turns it off, `=1` turns it on elsewhere, which is
-//! how the tests reach it on Linux.
+//! Runs the server from a temp copy of itself and its engine, since Windows refuses to replace
+//! a running executable and every `cargo build` would fail while a host holds the server open.
+//! FUNDACAD_MCP_SHADOW=0 turns it off, =1 turns it on elsewhere, which is how tests reach it on Linux.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -37,13 +26,11 @@ pub fn original_exe() -> Option<PathBuf> {
     std::env::var_os(RUNNING_COPY).map(PathBuf::from)
 }
 
-/// Where the copies live: one directory under the system temp directory.
 fn shadow_dir() -> PathBuf {
     std::env::temp_dir().join("fundacad-mcp-shadow")
 }
 
-/// A copy of `exe` in the shadow directory, named by its size and modified
-/// time so a rebuilt binary gets a fresh copy and an unchanged one is reused.
+/// Named by size and modified time, so a rebuilt binary gets a fresh copy and an unchanged one is reused.
 fn copy_of(exe: &Path) -> std::io::Result<PathBuf> {
     let meta = std::fs::metadata(exe)?;
     let stamp =
@@ -70,8 +57,7 @@ fn copy_of(exe: &Path) -> std::io::Result<PathBuf> {
     Ok(dest)
 }
 
-/// Removes copies of `stem` other than `keep`. One still running is locked
-/// and stays, which is what should happen to it.
+/// A copy still running is locked and stays, which is what should happen to it.
 fn sweep(stem: &str, keep: &[&Path]) {
     let Ok(entries) = std::fs::read_dir(shadow_dir()) else { return };
     for e in entries.flatten() {
@@ -95,8 +81,7 @@ fn quoted(parts: &[String]) -> String {
     parts.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(" ")
 }
 
-/// The engine command the copy should use: the one the original would have
-/// found, with its program swapped for a copy when it is a file of ours.
+/// The engine the original would have found, swapped for a copy when it is a file of ours.
 /// None leaves the copy to find it, which it would do from the temp directory.
 fn engine_for_copy(exe: &Path, copy: &Path) -> Option<(String, Vec<PathBuf>)> {
     if link::appenv("ENGINE_CMD").is_some_and(|c| !c.trim().is_empty()) {
@@ -118,9 +103,7 @@ fn engine_for_copy(exe: &Path, copy: &Path) -> Option<(String, Vec<PathBuf>)> {
     Some((quoted(&cmd), extra))
 }
 
-/// Runs the server from a copy when that is called for, and returns the
-/// copy's exit code; None means run the server in this process, which is also
-/// the answer whenever making or starting the copy fails.
+/// The copy's exit code, or None to run the server in this process, also when making or starting the copy fails.
 pub fn run_from_copy() -> Option<i32> {
     if !enabled() {
         return None;

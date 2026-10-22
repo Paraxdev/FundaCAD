@@ -1,19 +1,5 @@
-//! What a feature looks like, written for the thing that has to author one. A
-//! port of the Python MCP server's `schema.py`.
-//!
-//! An agent cannot click. Everything it builds it builds by putting a JSON
-//! object into the timeline, so the only thing standing between it and a
-//! working model is knowing what the objects look like. This is that reference,
-//! and it is a first-class part of the server rather than a README: it is
-//! served as an MCP resource and returned by the `schema` tool, so the caller
-//! can read it without leaving the conversation.
-//!
-//! The entries live in `schema.json` beside this file, which is the Python
-//! module's tables carried over verbatim rather than retyped, so the two
-//! servers answer `schema` with the same words while both exist. The rendering
-//! is here, and `tests/schema.rs` holds it to the engine: every documented type
-//! must be one the core schema knows, and every type the core knows must be
-//! documented.
+//! The feature reference an agent reads before it authors JSON, served as an MCP resource and by `schema`.
+//! The entries in `schema.json` are the Python server's tables verbatim; `tests/schema.rs` holds them to the core.
 
 use std::sync::OnceLock;
 
@@ -55,7 +41,6 @@ pub fn how_to() -> &'static str {
     tables().get("howTo").and_then(Value::as_str).unwrap_or_default()
 }
 
-/// The reference entry for one type, or None.
 pub fn describe_feature(kind: &str) -> Option<&'static Value> {
     features().get(kind)
 }
@@ -64,10 +49,7 @@ fn text_of(v: Option<&Value>) -> String {
     v.and_then(Value::as_str).unwrap_or_default().to_string()
 }
 
-/// The whole reference, or one type's entry, as text.
-///
-/// Text rather than JSON deliberately: this is read by a language model, and
-/// the notes are the part that saves it a failed build.
+/// Text rather than JSON: a language model reads it, and the notes are what save it a failed build.
 pub fn schema_text(kind: Option<&str>) -> String {
     if let Some(kind) = kind.filter(|k| !k.is_empty()) {
         if let Some(e) = features().get(kind) {

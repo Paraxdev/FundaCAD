@@ -1,19 +1,9 @@
-//! Turning an `inspect` report into something worth reading. A port of
-//! the Python MCP server's `describe.py`.
-//!
-//! The reply is a few hundred kilobytes of exact numbers. Handed over whole it
-//! costs an agent most of its context to learn that a box is a box, so this is
-//! the summary layer, with the full detail available on request for the one
-//! body that turned out to matter.
-//!
-//! Every line here is derived, none of it is measured, which is the point of
-//! keeping it apart from the engine's `inspect`, which does the measuring and
-//! knows nothing about how anyone wants to read it.
+//! An `inspect` report as a summary an agent can afford, since the whole reply is a few hundred
+//! kilobytes of exact numbers. Every line here is derived, the engine does the measuring.
 
 use serde_json::Value;
 
-/// Python's `f"{round(x, places):g}"`: the rounded value in the shorter of
-/// fixed and exponential, with no trailing zeros.
+/// Python's `f"{round(x, places):g}"`: the shorter of fixed and exponential, no trailing zeros.
 pub fn fmt(x: Option<&Value>, places: i32) -> String {
     match x {
         None | Some(Value::Null) => "?".into(),
@@ -59,9 +49,7 @@ fn index(v: &Value) -> i64 {
     v.get("i").and_then(Value::as_i64).unwrap_or(0)
 }
 
-/// {surface type: how many}, biggest group first. The shape of a body in one
-/// line: "6 plane" is a box, "1 cylinder, 2 plane" is a rod, and anything with
-/// a bspline in it came from a loft or an import.
+/// {surface type: count}, biggest first: "6 plane" is a box, and a bspline means a loft or an import.
 pub fn surface_census(body: &Value) -> Vec<(String, usize)> {
     if let Some(Value::Array(rows)) = body.get("surfaces") {
         return rows
@@ -114,9 +102,7 @@ fn few(items: &[i64], prefix: char) -> String {
     format!("{}{}", shown.join(", "), if items.len() > 6 { "..." } else { "" })
 }
 
-/// The things about a body that will bite a LATER feature. Not errors, every
-/// one of these is a perfectly valid solid: each is a refusal waiting to
-/// happen.
+/// What will bite a LATER feature: not errors, each is a valid solid and a refusal waiting to happen.
 pub fn warnings_for(body: &Value) -> Vec<String> {
     let mut out = Vec::new();
     // A summary carries each flag as a list of indices, a detailed report
@@ -210,8 +196,7 @@ pub fn edge_line(e: &Value) -> String {
     format!("  {}", bits.join(" | "))
 }
 
-/// The whole report as text. `detail` adds the per-face and per-edge lines,
-/// which is what a caller asks for once it knows which body it cares about.
+/// `detail` adds the per-face and per-edge lines, for once a caller knows which body it cares about.
 pub fn describe(report: &Value, detail: bool) -> String {
     let mut lines: Vec<String> = Vec::new();
     let bodies = list_of(report, "bodies");

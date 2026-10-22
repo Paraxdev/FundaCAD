@@ -1,8 +1,5 @@
-//! The canvas as a PNG. Python reached for Pillow here; this is the `png`
-//! crate, which is the same deflate and the same filters.
-//!
-//! Renders go back inline as base64, so the size is a context cost rather than
-//! a disk one, which is why the encoder is asked for its best compression.
+//! Renders go back inline as base64, so their size costs context,
+//! which is why the encoder is asked for its best compression.
 
 use crate::render::Canvas;
 

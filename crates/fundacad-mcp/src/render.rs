@@ -1,38 +1,21 @@
-//! A picture of the model, drawn without a browser. A port of
-//! the Python MCP server's `render.py`.
-//!
-//! An agent that can build geometry but cannot look at it is working blind, and
-//! "looks right" is a question no list of numbers answers. The app's own
-//! renderer is the authority on what a HUMAN sees, but reaching it means a vite
-//! server, a browser binary and a GPU, for a picture. The rebuild reply already
-//! carries triangles and edge polylines, so a z-buffered flat render is a page
-//! of arithmetic, and it runs on a machine with no display at all.
-//!
-//! Deliberately NOT a pretty renderer: a shaded solid, a dark outline, an
-//! orthographic camera and a fixed light, because what it has to answer is "is
-//! there a hole where I asked for a hole". Flat shading is part of that, smooth
-//! normals hide facet-sized mistakes and a facet-sized mistake in CAD is a
-//! mistake.
+//! A picture of the model drawn without a browser, a z-buffered render of the triangles the rebuild already
+//! returns. Flat shading on purpose, since smooth normals hide facet-sized mistakes.
 
 use serde_json::Value;
 
 pub type Vec3 = [f64; 3];
 pub type Rgb = [u8; 3];
 
-/// Where the light is, in VIEW space (x right, y up, z toward the viewer). Just
-/// off the camera axis: dead-on is flat and unreadable, far off leaves half the
-/// model in the dark.
+/// In VIEW space (x right, y up, z toward the viewer), just off the camera axis: dead-on is flat and unreadable.
 pub const LIGHT_RAW: Vec3 = [0.35, 0.45, 1.0];
 
-/// Never fully black. An unlit face still has to show its silhouette against
-/// the background and its edges against itself.
+/// Never fully black, so an unlit face still shows its silhouette and its edges.
 pub const AMBIENT: f64 = 0.28;
 
 pub const BACKGROUND: Rgb = [24, 27, 32];
 pub const EDGE_COLOR: Rgb = [16, 18, 22];
 
-/// One colour per body, cycled. Distinct in hue rather than in brightness,
-/// because brightness is what the shading is already saying.
+/// Distinct in hue rather than brightness, because brightness is what the shading is already saying.
 pub const BODY_COLORS: &[Rgb] =
     &[[158, 176, 196], [196, 158, 158], [158, 196, 168], [196, 188, 148], [176, 158, 196], [148, 188, 196]];
 
@@ -40,12 +23,10 @@ pub const BODY_COLORS: &[Rgb] =
 /// and to be a hue no body colour uses.
 pub const HIGHLIGHT_COLOR: Rgb = [255, 150, 40];
 
-/// How much darker the INSIDE of a surface is drawn. Only ever seen through a
-/// section, and the whole value of a section is telling inside from outside.
+/// How much darker a surface's INSIDE is drawn, which is all that tells inside from outside in a section.
 pub const INSIDE: f64 = 0.55;
 
-/// Named directions to look FROM, in world space. Z-up, Y into the screen on
-/// the front view, the same convention the app's view cube uses.
+/// Directions to look FROM, in world space: Z up and Y into the screen on the front view, as the view cube.
 pub const NAMED_VIEWS: &[(&str, Vec3)] = &[
     ("iso", [1.0, -1.0, 0.8]),
     ("front", [0.0, -1.0, 0.0]),
@@ -56,9 +37,7 @@ pub const NAMED_VIEWS: &[(&str, Vec3)] = &[
     ("bottom", [0.0, 0.0, -1.0]),
 ];
 
-/// The stress scale, low to high: blue, cyan, green, yellow, red. Bright enough
-/// to survive the shading multiply, and the order every analysis package uses,
-/// so nobody has to read a legend to know red is the worry.
+/// Blue to red, the order every analysis package uses, bright enough to survive the shading multiply.
 pub const STRESS_STOPS: &[Rgb] = &[[40, 70, 225], [40, 175, 230], [60, 200, 95], [240, 210, 45], [225, 50, 40]];
 
 /// The frame around the colour bar, light so it reads on the background.
@@ -78,12 +57,8 @@ pub fn stress_color(t: f64) -> Rgb {
 /// Which way a named section axis points. `at` is then a coordinate on it.
 pub const SECTION_AXES: &[(&str, Vec3)] = &[("x", [1.0, 0.0, 0.0]), ("y", [0.0, 1.0, 0.0]), ("z", [0.0, 0.0, 1.0])];
 
-/// Which side of the section plane survives, as true for the high side.
-///
-/// Generous on purpose, and CLOSED on purpose. The vocabulary used to be
-/// "above"/"over"/"+" against everything else, so `keep: "max"`, which is what
-/// `at`/`min`/`max` elsewhere invites, quietly meant "below" and the caller was
-/// told "keeping max" over a picture that kept the other half.
+/// Which side of the section plane survives, true for the high side. Generous and CLOSED on purpose,
+/// so a word like "max" can never quietly fall through to the low side.
 pub const KEEP_WORDS: &[(&str, bool)] = &[
     ("below", false),
     ("under", false),
@@ -138,11 +113,8 @@ fn unit(a: Vec3) -> Vec3 {
     }
 }
 
-/// The unit vector to look FROM, from either a name or a pair of angles.
-///
-/// Angles are preferred when both are given, so a caller can nudge a named view without
-/// working out the vector. Azimuth runs anticlockwise from +X in the XY plane
-/// and elevation up from it, which is how every CAD turntable states it.
+/// Angles win over a name, so a caller can nudge a named view. Azimuth runs anticlockwise from +X in the
+/// XY plane and elevation up from it, as every CAD turntable states it.
 pub fn direction_for(view: Option<&str>, azimuth: Option<f64>, elevation: Option<f64>) -> Vec3 {
     let v = if azimuth.is_some() || elevation.is_some() {
         let az = azimuth.unwrap_or(0.0).to_radians();
@@ -159,12 +131,8 @@ pub fn direction_for(view: Option<&str>, azimuth: Option<f64>, elevation: Option
     }
 }
 
-/// The camera's (right, up, back) as rows that take world to view.
-///
-/// `back` is the direction the camera looks FROM, so a point's view-space z
-/// grows toward the viewer and the depth test is a plain greater-than. World up
-/// is +Z; looking straight down it, +Z is no longer a usable reference, so the
-/// fallback is +Y, without which a top view collapses to one pixel.
+/// Rows (right, up, back) that take world to view; `back` points at the viewer, so depth is a plain
+/// greater-than. Looking straight down Z the up reference falls back to +Y, or a top view is one pixel.
 pub fn view_basis(direction: Vec3) -> [Vec3; 3] {
     let back = unit(direction);
     let up_world = if dot(back, [0.0, 0.0, 1.0]).abs() > 0.999 { [0.0, 1.0, 0.0] } else { [0.0, 0.0, 1.0] };
@@ -177,9 +145,7 @@ pub fn to_view(p: Vec3, basis: &[Vec3; 3]) -> Vec3 {
     [dot(p, basis[0]), dot(p, basis[1]), dot(p, basis[2])]
 }
 
-/// (centre_xy, pixels per mm) that puts every point on screen with a border. An
-/// empty or degenerate set still has to produce a usable camera rather than a
-/// division by zero, so a zero span falls back to one millimetre.
+/// (centre_xy, pixels per mm) that fits every point with a border; a zero span falls back to one millimetre.
 pub fn fit_scale(pts_view: &[Vec3], width: u32, height: u32, margin: f64) -> ([f64; 2], f64) {
     if pts_view.is_empty() {
         return ([0.0, 0.0], 1.0);
@@ -202,16 +168,13 @@ pub fn fit_scale(pts_view: &[Vec3], width: u32, height: u32, margin: f64) -> ([f
     (centre, scale)
 }
 
-/// A view point to (x_px, y_px, depth). Screen y runs DOWN and world up runs
-/// up, hence the negation: getting it wrong flips every render upside down and
-/// nothing else about the image looks wrong.
+/// Screen y runs DOWN and world up runs up, hence the negation: get it wrong and every render is
+/// upside down while nothing else looks off.
 pub fn project(v: Vec3, centre: [f64; 2], scale: f64, width: u32, height: u32) -> Vec3 {
     [(v[0] - centre[0]) * scale + f64::from(width) / 2.0, f64::from(height) / 2.0 - (v[1] - centre[1]) * scale, v[2]]
 }
 
-/// An edge polyline as points, whatever shape it arrived in: the engine sends
-/// `{"points": [...], "body": id}`, a test writes a bare list, and the points
-/// themselves are sometimes flat and sometimes triples.
+/// The engine sends `{"points": [...], "body": id}`, a test a bare list, and the points come flat or as triples.
 pub fn polyline_points(poly: &Value) -> Vec<Vec3> {
     let source = match poly {
         Value::Object(o) => o.get("points").cloned().unwrap_or(Value::Null),
@@ -236,11 +199,8 @@ fn flatten(v: &Value, out: &mut Vec<f64>) {
     }
 }
 
-/// A section request, as (normal, offset), or None when there is no section.
-///
-/// `at` defaults to the middle of the model on that axis, which is what
-/// somebody asking to cut it in half means and the only default that needs no
-/// knowledge of where the part happens to sit.
+/// (normal, offset), or None for no section. `at` defaults to the middle of the model on that axis,
+/// which is what cutting it in half means wherever the part sits.
 pub fn section_plane(spec: &Value, bounds: Option<(Vec3, Vec3)>) -> Result<Option<(Vec3, f64)>, String> {
     if spec.is_null() || spec.as_object().is_some_and(serde_json::Map::is_empty) {
         return Ok(None);
@@ -304,11 +264,8 @@ pub fn section_plane(spec: &Value, bounds: Option<(Vec3, Vec3)>) -> Result<Optio
     Ok(Some(if high { (scaled(n, -1.0), -at) } else { (n, at) }))
 }
 
-/// The part of a triangle on the kept side of a plane, as 0, 1 or 2 triangles.
-///
-/// Sutherland-Hodgman on three vertices. There is no cap: a sectioned solid
-/// renders hollow, showing its own inside surfaces, which is what makes this
-/// worth having, and a capped section would hide exactly that.
+/// Sutherland-Hodgman on three vertices, giving 0 to 2 triangles. No cap: a sectioned solid renders
+/// hollow, showing the inside surfaces a cap would hide.
 pub fn clip_triangle(p0: Vec3, p1: Vec3, p2: Vec3, normal: Vec3, offset: f64) -> Vec<[Vec3; 3]> {
     let pts = [p0, p1, p2];
     let s: Vec<f64> = pts.iter().map(|p| dot(normal, *p) - offset).collect();
@@ -337,7 +294,6 @@ pub fn clip_triangle(p0: Vec3, p1: Vec3, p2: Vec3, normal: Vec3, offset: f64) ->
     (1..poly.len() - 1).map(|k| [poly[0], poly[k], poly[k + 1]]).collect()
 }
 
-/// The kept part of a line segment, or None.
 pub fn clip_segment(a: Vec3, b: Vec3, normal: Vec3, offset: f64) -> Option<(Vec3, Vec3)> {
     let sa = dot(normal, a) - offset;
     let sb = dot(normal, b) - offset;
@@ -352,13 +308,8 @@ pub fn clip_segment(a: Vec3, b: Vec3, normal: Vec3, offset: f64) -> Option<(Vec3
     Some(if sa <= 0.0 { (a, mid) } else { (mid, b) })
 }
 
-/// Lambert against the light, with the normal flipped toward the viewer, and
-/// the back of a surface drawn darker.
-///
-/// Flipping is not cheating: a body whose triangle winding disagrees with its
-/// face normals would otherwise render half black, and the winding is not
-/// something the caller controls. But the flip also erases the one thing a
-/// cutaway is for, so the sign it threw away comes back as the INSIDE factor.
+/// Lambert with the normal flipped toward the viewer, since triangle winding may disagree with face normals;
+/// the sign the flip threw away comes back as the INSIDE factor, so a cutaway still tells inside from out.
 pub fn shade(base: Rgb, normal_view: Vec3) -> Rgb {
     let ln = norm(normal_view);
     if ln < 1e-12 {
@@ -378,7 +329,6 @@ pub fn shade(base: Rgb, normal_view: Vec3) -> Rgb {
     ]
 }
 
-/// A colour buffer and a depth buffer, and the two things that write to them.
 pub struct Canvas {
     pub w: u32,
     pub h: u32,
@@ -407,16 +357,13 @@ impl Canvas {
         self.color[i * 3..i * 3 + 3].copy_from_slice(&rgb);
     }
 
-    /// One flat-shaded triangle, depth-tested per pixel, over its own pixel
-    /// bounding box with barycentric coordinates. Back-facing and degenerate
-    /// triangles are dropped by the sign test on the edge function, so a closed
-    /// solid draws roughly half its triangles.
+    /// Depth-tested per pixel over its bounding box. Back-facing and degenerate triangles fail the edge
+    /// function's sign test, so a closed solid draws roughly half its triangles.
     pub fn triangle(&mut self, p0: Vec3, p1: Vec3, p2: Vec3, rgb: Rgb) {
         self.fill(p0, p1, p2, |_, _| rgb);
     }
 
-    /// A triangle whose colour is blended from one per corner, for a value
-    /// that varies across the surface.
+    /// Colour blended from one per corner, for a value that varies across the surface.
     pub fn triangle_blend(&mut self, p0: Vec3, p1: Vec3, p2: Vec3, rgb: [Rgb; 3]) {
         self.fill(p0, p1, p2, |w0, w1| mix([1.0 - w0 - w1, w1, w0], &rgb));
     }
@@ -458,11 +405,8 @@ impl Canvas {
         }
     }
 
-    /// A one-pixel line, depth-tested with a bias toward the viewer.
-    ///
-    /// The bias is what makes an outline visible at all: an edge polyline lies
-    /// exactly ON the two faces that meet there, so at equal depth it loses the
-    /// test on one of them and the outline comes out dashed.
+    /// Depth-tested with a bias toward the viewer: an edge lies exactly ON its two faces, and at equal
+    /// depth the outline would come out dashed.
     pub fn line(&mut self, a: Vec3, b: Vec3, rgb: Rgb, bias: f64) {
         let steps = (b[0] - a[0]).abs().max((b[1] - a[1]).abs());
         if !steps.is_finite() {
@@ -496,8 +440,7 @@ pub trait Drawable {
     fn indices(&self) -> Vec<usize>;
     fn face_ids(&self) -> Vec<f64>;
     fn polylines(&self) -> Vec<Vec<Vec3>>;
-    /// One colour per vertex, blended across each triangle in place of the
-    /// body's colour. None, an ordinary body, keeps its flat colour.
+    /// One colour per vertex, blended across each triangle in place of the body's; None keeps the flat colour.
     fn vertex_colors(&self) -> Option<Vec<Rgb>> {
         None
     }
@@ -543,7 +486,6 @@ impl Drawable for crate::mesh::MeshBody {
     }
 }
 
-/// (min, max) over every vertex of every mesh, or None when there are none.
 pub fn model_bounds<M: Drawable>(meshes: &[&M]) -> Option<(Vec3, Vec3)> {
     let mut lo = [f64::INFINITY; 3];
     let mut hi = [f64::NEG_INFINITY; 3];
@@ -569,7 +511,6 @@ fn floats(v: Option<&Value>) -> Vec<f64> {
     out
 }
 
-/// What to draw, so `render` reads like the Python call it replaces.
 #[derive(Default)]
 pub struct ViewRequest {
     pub width: u32,
@@ -577,20 +518,17 @@ pub struct ViewRequest {
     pub view: Option<String>,
     pub azimuth: Option<f64>,
     pub elevation: Option<f64>,
-    /// {body id: face indices}, painted in HIGHLIGHT_COLOR instead of the body
-    /// colour, still shaded. It is how a caller asks "which one is face 7".
+    /// {body id: face indices} painted in HIGHLIGHT_COLOR, still shaded: how a caller asks "which one is face 7".
     pub highlight: Option<(String, Vec<i64>)>,
     pub section: Value,
     /// Body ids to draw; everything else is left out.
     pub bodies: Option<Vec<String>>,
-    /// {at, size}: a window that many millimetres across, replacing the
-    /// automatic fit. A 1.5 mm thread on a 200 mm spool is four pixels of a
-    /// fitted view.
+    /// {at, size}: a window that many mm across in place of the fit. A 1.5 mm thread on a 200 mm spool
+    /// is four pixels of a fitted view.
     pub focus: Value,
     pub draw_edges: bool,
-    /// A blue to red bar at the right edge, the scale of a stress picture. The
-    /// model is fitted to the space left of it. There is no font, so its
-    /// numbers go in the caption.
+    /// A blue to red stress scale at the right edge, the model fitted left of it.
+    /// There is no font, so its numbers go in the caption.
     pub color_bar: bool,
 }
 
@@ -621,8 +559,7 @@ fn draw_color_bar(canvas: &mut Canvas) {
     }
 }
 
-/// The colour at `p`, a point on (or clipped from) the triangle `tri`, blended
-/// from its corners' colours by area.
+/// Blended by area from the corners' colours at `p`, a point on or clipped from `tri`.
 fn blend_at(p: Vec3, tri: &[Vec3; 3], rgb: &[Rgb; 3]) -> Rgb {
     let n = cross(sub(tri[1], tri[0]), sub(tri[2], tri[0]));
     let nn = dot(n, n);
@@ -643,12 +580,8 @@ fn mix(w: [f64; 3], rgb: &[Rgb; 3]) -> Rgb {
     })
 }
 
-/// The image, as a canvas. `meshes` is one value per body in the shape the
-/// engine's rebuild reply hands over, so nothing is reshaped on the way in.
-///
-/// The body COLOUR is keyed on a body's position in the full list, not in the
-/// filtered one, so a body is the same colour whether or not its neighbours are
-/// being drawn.
+/// `meshes` is one value per body as the rebuild reply has it. A body's colour is keyed on its place
+/// in the full list, so it stays the same when its neighbours are filtered out.
 pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, String> {
     let mut canvas = Canvas::new(req.width, req.height, BACKGROUND);
     let basis = view_basis(direction_for(req.view.as_deref(), req.azimuth, req.elevation));
@@ -671,10 +604,8 @@ pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, St
         section_plane(&req.section, bounds)?
     };
 
-    // Every triangle that will actually be drawn, in world space, with the
-    // colour it wants. Built up front because the camera has to be fitted to
-    // what SURVIVES the section, not to what was sent: a cutaway fitted to the
-    // whole model wastes half the frame on empty space.
+    // Built up front because the camera is fitted to what SURVIVES the section;
+    // fitted to the whole model, a cutaway wastes half the frame.
     let mut tris: Vec<([Vec3; 3], [Rgb; 3])> = Vec::new();
     let mut segs: Vec<(Vec3, Vec3)> = Vec::new();
     for (bi, m) in &drawn {
