@@ -1,11 +1,5 @@
 <script setup lang="ts">
-// A labelled row whose value is on or off.
-//
-// A switch rather than a checkbox: the row already reads as a setting with a
-// state, and a switch says "this is currently on" at a glance across a column
-// of them, which is the thing a checkbox is worst at. It is still a real
-// <input type="checkbox"> underneath, so it keeps the keyboard behaviour, the
-// label association and the focus ring for free.
+// A switch reads as on at a glance down a column, and a real checkbox underneath keeps keyboard, label and focus ring.
 
 defineProps<{
   label: string;

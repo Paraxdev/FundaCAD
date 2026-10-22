@@ -27,9 +27,7 @@ const MIN_WIDTH = 220;
 
 const rects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
 
-// The toast stack is fixed to the window's bottom centre, the same place this
-// banner sits, so it is told how far up the banner reaches (--prompt-clear) and
-// stacks above it.
+// The toast stack shares this bottom centre spot, so --prompt-clear tells it how far up the banner reaches.
 const root = document.documentElement;
 const clearToasts = () => root.style.removeProperty("--prompt-clear");
 
@@ -96,9 +94,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- `.hidden` rather than v-if: the element stays in the DOM so the CSS
-       transition on .prompt still runs, exactly as when ui/prompt.ts toggled
-       the class by hand. -->
+  <!-- `.hidden` rather than v-if, so the element stays and the CSS transition on .prompt still runs. -->
   <div ref="el" class="prompt" :class="{ hidden: !prompt.text, titled: !!title }">
     <span v-if="title" class="prompt-title" data-testid="prompt-title">
       {{ title.label }}<kbd v-if="title.keys" class="prompt-key">{{ fmtKeys(title.keys) }}</kbd>
