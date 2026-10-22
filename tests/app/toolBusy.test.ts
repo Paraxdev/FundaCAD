@@ -26,6 +26,7 @@ function fakeEngine(
     extrude?: boolean;
     sketch?: boolean;
     pattern?: boolean;
+    mirror?: boolean;
     datumPose?: boolean;
     sectionOn?: boolean;
     sectionAiming?: boolean;
@@ -59,6 +60,7 @@ function fakeEngine(
       datumPose: { active: over.datumPose ?? false },
       lightAim: off,
       pattern: off,
+      mirror: { active: over.mirror ?? false },
       measure: off,
       targetEdit: off,
       revolvePitch: off,
@@ -86,7 +88,7 @@ describe("toolBusy versus toolOwnsScreen", () => {
     // CONTROL on the line above. If toolOwnsScreen ever answered false here,
     // the selection toolbar would draw itself over the middle of a live
     // Press/Pull and take the clicks meant for the drag.
-    for (const started of [{ extrude: true }, { sketch: true }]) {
+    for (const started of [{ extrude: true }, { sketch: true }, { mirror: true }]) {
       const t = createToolBusy(fakeEngine(started).e);
       expect(t.toolBusy()).toBe(true);
       expect(t.toolOwnsScreen()).toBe(true);
