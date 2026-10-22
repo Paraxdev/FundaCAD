@@ -53,6 +53,9 @@ function proposal(id: string, features: number, note: string | null = null) {
   return { id, name: "an assistant", note, document: doc(features) };
 }
 
+const CUT_A: SectionView = { origin: [41.5, -12, 8.25], normal: [0.6, 0.8, 0], offset: 3.5, side: 1, ghost: "soft" };
+const CUT_B: SectionView = { origin: [-7, 22.5, 14], normal: [0, 0.6, -0.8], offset: -2.25, side: -1, ghost: "strong" };
+
 describe("the window's half of a live session", () => {
   let geo: GeometryBackend & StubBackend;
   let store: DocumentStore;
@@ -109,10 +112,8 @@ describe("the window's half of a live session", () => {
   });
 
   it("publishes no section cut, so an edit made against an older publish keeps the cut the user has now", async () => {
-    const cutA: SectionView = { origin: [41.5, -12, 8.25], normal: [0.6, 0.8, 0], offset: 3.5, side: 1, ghost: "soft" };
-    const cutB: SectionView = { origin: [-7, 22.5, 14], normal: [0, 0.6, -0.8], offset: -2.25, side: -1, ghost: "strong" };
     store.loadDocument(doc(2));
-    store.setSectionView(structuredClone(cutA));
+    store.setSectionView(structuredClone(CUT_A));
     const host = new LiveSessionHost(store, geo, () => true);
     host.start();
     await host.tick();
@@ -120,7 +121,7 @@ describe("the window's half of a live session", () => {
     expect("sectionView" in published).toBe(false);
     expect(published.features.map((f) => f.id)).toEqual(["f0", "f1"]);
 
-    for (const [i, now] of [null, cutB].entries()) {
+    for (const [i, now] of [null, CUT_B].entries()) {
       store.setSectionView(now && structuredClone(now));
       const edited = { ...structuredClone(published), features: [...published.features, { id: `x${i}`, type: "box" }] };
       geo.reply = { ok: true, guests: ["an assistant"], proposals: [{ id: `p${i}`, name: "an assistant", note: null, document: edited }] };
@@ -128,6 +129,27 @@ describe("the window's half of a live session", () => {
       expect(store.document.features.map((f) => f.id)).toEqual(["f0", "f1", `x${i}`]);
       expect(store.sectionView).toEqual(now);
     }
+    await host.stop();
+  });
+
+  it("keeps the cut the user has when an assistant's edit brings the one saved in a file, and turns it off for another document", async () => {
+    store.loadDocument({ ...doc(2), sectionView: CUT_A });
+    const host = new LiveSessionHost(store, geo, () => true);
+    host.start();
+    await host.tick();
+    const state = () => [store.document.features.map((f) => f.id), store.sectionView, JSON.parse(store.toJSON()).sectionView ?? null];
+    const offer = async (id: string, document: CadDocument) => {
+      geo.reply = { ok: true, guests: ["an assistant"], proposals: [{ id, name: "an assistant", note: null, document }] };
+      await host.tick();
+    };
+    for (const [i, now] of [CUT_B, null].entries()) {
+      store.setSectionView(now && structuredClone(now));
+      await offer(`p${i}`, { ...doc(3 + i), sectionView: CUT_A });
+      expect(state()).toEqual([["f0", "f1", "f2", "f3"].slice(0, 3 + i), now, now]);
+    }
+    store.setSectionView(structuredClone(CUT_B));
+    await offer("p9", { parameters: {}, features: [{ id: "g0", type: "box" }], sectionView: CUT_A } as unknown as CadDocument);
+    expect(state()).toEqual([["g0"], null, null]);
     await host.stop();
   });
 
