@@ -37,7 +37,7 @@ import { asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary }
 import { importedBodyColors } from "../document/faceColors";
 import { openNotices } from "../document/openNotice";
 import type { FaceColorRuns } from "../types";
-import { isSessionEnded } from "../document/session";
+import { isSessionEnded, type OpenOp } from "../document/session";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -282,10 +282,16 @@ export async function openDocument(
 
 /** Open a document the app has as text with no path, picked in a browser or
  *  dropped on the window. */
-export async function openDocumentText(store: DocumentStore, name: string, text: string): Promise<OpenOutcome> {
+export async function openDocumentText(
+  store: DocumentStore,
+  name: string,
+  text: string,
+  ticket = openTicket(store),
+): Promise<OpenOutcome> {
   let unpublished: string | null;
   try {
     unpublished = await publishEmbeddedGeometry(store, text);
+    if (!(await mayStillReplace(store, ticket, name))) return "dropped";
     store.load(text);
   } catch (e) {
     await reportUnreadable(e);
@@ -309,7 +315,8 @@ export async function openDocumentBytes(
   file: File,
   geometry?: GeometryBackend,
 ): Promise<OpenOutcome> {
-  if (!isTauri()) return openDocumentText(store, file.name, await file.text());
+  const ticket = openTicket(store);
+  if (!isTauri()) return openDocumentText(store, file.name, await file.text(), ticket);
   const { invoke } = await import("@tauri-apps/api/core");
   let opened: OpenedDocument;
   try {
@@ -327,12 +334,46 @@ export async function openDocumentBytes(
     await reportError(`Couldn't open ${file.name}: ${errMsg(e)}`);
     return "unreadable";
   }
-  return finishOpen(store, file.name, opened, geometry, null);
+  return finishOpen(store, file.name, opened, geometry, null, ticket);
 }
 
 /** "unreadable": the file is gone or corrupt, callers may forget it. "newerFormat": this build is too old, and
- *  the recent-files entry must survive as the user's way back to the file after upgrading. */
-export type OpenOutcome = "ok" | "unreadable" | "newerFormat";
+ *  the recent-files entry must survive as the user's way back to the file after upgrading. "dropped": the open
+ *  document changed or was replaced while the file was read, and the user kept it. */
+export type OpenOutcome = "ok" | "unreadable" | "newerFormat" | "dropped";
+
+interface OpenTicket {
+  op: OpenOp;
+  edits: number;
+}
+
+// Taken when the user has agreed to replace the open document, before the file is read.
+function openTicket(store: DocumentStore): OpenTicket {
+  return { op: store.sessions.opening(), edits: store.editCount };
+}
+
+// Right before the swap: what the user agreed to replace must still be what is open (rm4abwsm).
+async function mayStillReplace(store: DocumentStore, ticket: OpenTicket, name: string): Promise<boolean> {
+  for (;;) {
+    if (ticket.op.superseded) return false;
+    if (!ticket.op.session.alive) {
+      const { toast } = await import("../ui/toast");
+      toast(`${name} was not opened, another document was started while it was read.`, { kind: "info" });
+      return false;
+    }
+    if (store.editCount === ticket.edits || !store.dirty) return true;
+    ticket.edits = store.editCount;
+    const { choose } = await import("../ui/choice");
+    const pick = await choose(
+      `${store.fileName} changed while ${name} was read. Discard those changes and open ${name}?`,
+      [
+        { value: "discard", label: "Discard", hint: "lose the changes" },
+        { value: "cancel", label: "Cancel", hint: `keep them, ${name} is not opened` },
+      ],
+    );
+    if (pick !== "discard") return false;
+  }
+}
 
 /** True if `text` is a ZIP, a v5 packaged document this build cannot read. readTextFile's non-fatal decoder keeps
  *  the ASCII "PK" header intact, so no binary read is needed; "PK" alone also catches empty and spanned archives. */
@@ -392,6 +433,7 @@ export async function openDocumentAtPath(
   path: string,
   geometry?: GeometryBackend,
 ): Promise<OpenOutcome> {
+  const ticket = openTicket(store);
   const base = path.split(/[\\/]/).pop() ?? path;
   const { invoke } = await import("@tauri-apps/api/core");
   let opened: OpenedDocument;
@@ -413,7 +455,7 @@ export async function openDocumentAtPath(
     await reportError(`Couldn't open ${base}: ${errMsg(e)}`);
     return "unreadable";
   }
-  return finishOpen(store, base, opened, geometry, path);
+  return finishOpen(store, base, opened, geometry, path, ticket);
 }
 
 interface RustOpened {
@@ -437,10 +479,12 @@ async function finishOpen(
   { text, wasContainer, repaired, carried }: OpenedDocument,
   geometry: GeometryBackend | undefined,
   path: string | null,
+  ticket: OpenTicket,
 ): Promise<OpenOutcome> {
   // One-way v4 to v5 on the parsed text before load(): patching the store after would add an undo entry, dirty the
   // document and rebuild twice. On any failure `text` is untouched and opens with its inline copy.
   if (!wasContainer && geometry) text = await migrateInlineGeometry(text, geometry);
+  if (!(await mayStillReplace(store, ticket, base))) return "dropped";
 
   try {
     // Throws before mutating anything: load() parses first (store.ts), so a

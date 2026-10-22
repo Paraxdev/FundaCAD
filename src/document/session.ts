@@ -115,9 +115,35 @@ export class DocumentSession {
   }
 }
 
+// A document being read to replace the current one. A later open supersedes it, and so does any document begun
+// while it reads, so a slow read never replaces what the user went on to.
+export class OpenOp {
+  constructor(
+    private readonly host: SessionHost,
+    readonly session: DocumentSession,
+    private readonly seq: number,
+  ) {}
+
+  get superseded(): boolean {
+    return this.host.lastOpening !== this.seq;
+  }
+  get live(): boolean {
+    return this.session.alive && !this.superseded;
+  }
+}
+
 export class SessionHost {
   private cur = new DocumentSession();
   private readonly beginListeners = new Set<(s: DocumentSession) => void>();
+  private openings = 0;
+
+  get lastOpening(): number {
+    return this.openings;
+  }
+
+  opening(): OpenOp {
+    return new OpenOp(this, this.cur, ++this.openings);
+  }
 
   get current(): DocumentSession {
     return this.cur;
