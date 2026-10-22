@@ -115,7 +115,7 @@ jobs:
       # The app's log file, rotation and redirect, std only like the above.
       - name: Linux log file tests
         run: |
-          rustc --edition 2021 --test -D warnings src-tauri/src/log_file.rs -o "$RUNNER_TEMP/log_file_test"
+          rustc --edition 2021 --test -D warnings src-tauri/tests/unit/log_file.rs -o "$RUNNER_TEMP/log_file_test"
           "$RUNNER_TEMP/log_file_test"
 
   # What this run builds and where it goes (docs/ENGINE.md section 7). `config`
@@ -245,7 +245,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rustc --edition 2021 --test -D warnings src-tauri/src/log_file.rs -o "$RUNNER_TEMP/log_file_test.exe"
+          rustc --edition 2021 --test -D warnings src-tauri/tests/unit/log_file.rs -o "$RUNNER_TEMP/log_file_test.exe"
           "$RUNNER_TEMP/log_file_test.exe"
 
       # The root workspace too: fundacad-mcp is built there. A cache saved on
@@ -1160,7 +1160,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rustc --edition 2021 --test -D warnings src-tauri/src/log_file.rs -o "$RUNNER_TEMP/log_file_test"
+          rustc --edition 2021 --test -D warnings src-tauri/tests/unit/log_file.rs -o "$RUNNER_TEMP/log_file_test"
           "$RUNNER_TEMP/log_file_test"
 
       - name: Native tracer tests on Metal

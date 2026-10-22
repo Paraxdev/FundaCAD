@@ -1,6 +1,15 @@
-use super::*;
+use std::fs;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+// log_file is private to the app and std only, so its file is compiled in here. CI also builds this file alone with
+// rustc --test on every platform.
+#[allow(dead_code)]
+#[path = "../../src/log_file.rs"]
+mod log_file;
+
+use log_file::{open, redact_user_paths, rotate_if_over, start, tail, CAP, NAME};
 
 const CHILD: &str = "FUNDACAD_LOG_FILE_CHILD";
 
@@ -34,11 +43,11 @@ fn start_run(dir: &Path, cap: u64, line: &str) {
 
 /// Runs one test of this binary again in a child, with `CHILD` naming `dir`.
 fn in_child(test: &str, dir: &Path) {
-    // The harness names a test without the crate: "tests::x" alone, "log_file::tests::x" in the app.
-    let module = module_path!().split_once("::").unwrap().1;
+    // The harness names a test without the crate: "x" alone, "log_file::x" in tests/unit.
+    let name = module_path!().split_once("::").map_or(test.to_string(), |(_, m)| format!("{m}::{test}"));
     // --nocapture, or the harness keeps println from reaching descriptor 1.
     let out = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", &format!("{module}::{test}"), "--nocapture"])
+        .args(["--exact", &name, "--nocapture"])
         .env(CHILD, dir)
         .output()
         .unwrap();

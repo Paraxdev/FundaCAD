@@ -199,7 +199,3 @@ fn point_std_at(path: &Path, file: File) -> io::Result<()> {
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "log_file_tests.rs"]
-mod tests;
