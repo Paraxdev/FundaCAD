@@ -1,9 +1,5 @@
-// Single command registry, the source of truth for the Cmd-K command palette
-// (and a searchable list of everything you can do). Built from the ribbon's tool
-// groups plus the global File/View commands that live in menus / view controls.
-// Key hints come from the shortcut table (src/input/shortcuts.ts) so the palette
-// can never advertise a key the keymap doesn't actually bind (it used to claim
-// Fit was on "F" while F ran Fillet).
+// The command palette registry: the ribbon's tool groups plus File and View commands. Key hints come from
+// src/input/shortcuts.ts so the palette cannot advertise a key the keymap does not bind.
 
 import { modelGroups, SKETCH, leavesOf, type Group } from "./ribbonDefs";
 import { keyHint } from "../input/shortcuts";
@@ -16,12 +12,7 @@ export interface Command {
   key?: string; // display hint
 }
 
-// File + View commands that aren't in the ribbon (menus / floating view
-// controls). NOT IN THE RIBBON is the whole rule: an id written out here that
-// also has a ribbon button is listed twice in the palette, once under File and
-// once under its group, and the second row looks like a second thing. Import
-// Mesh sat in both for as long as the INSERT group has existed; it is the
-// ribbon's now, and ribbonDefs.test.ts holds the list to the rule.
+// Only commands with no ribbon button, or they show twice in the palette. ribbonDefs.test.ts enforces it.
 const GLOBAL: Command[] = [
   { id: "welcome", label: "Home", group: "File", context: "global" },
   { id: "new", label: "New", group: "File", context: "global", key: "Ctrl+N" },
@@ -45,8 +36,7 @@ const GLOBAL: Command[] = [
   { id: "viewmode-cycle", label: "Next View Mode", group: "View", context: "global", key: "Z" },
   { id: "show-all-bodies", label: "Show All Bodies", group: "View", context: "global", key: "Shift+H" },
   { id: "shortcut-help", label: "Keyboard Shortcuts…", group: "Help", context: "global", key: "?" },
-  // pinned ribbon groups (FINISH/PALETTE) live outside the SKETCH const, so the
-  // palette must list them explicitly, "Finish Sketch" was unsearchable before
+  // Pinned ribbon groups (FINISH, PALETTE) live outside SKETCH, so the palette lists them explicitly.
   { id: "finish", label: "Finish Sketch", group: "SKETCH", context: "sketch" },
   { id: "palette", label: "Sketch Palette", group: "SKETCH", context: "sketch" },
 ];
@@ -55,8 +45,7 @@ function fromGroups(groups: Group[], context: "model" | "sketch"): Command[] {
   const out: Command[] = [];
   for (const g of groups) {
     for (const it of g.items) {
-      // a split button's tools live in `children`, flatten via leavesOf or
-      // the palette loses every tool folded into a dropdown
+      // Flatten split buttons via leavesOf, or every tool in a dropdown is lost to the palette.
       for (const leaf of leavesOf(it)) {
         if (leaf.action === "palette" || leaf.kind === "toggle") continue; // not palette commands
         const key = keyHint(leaf.action) ?? leaf.key;
@@ -73,10 +62,7 @@ function fromGroups(groups: Group[], context: "model" | "sketch"): Command[] {
   return out;
 }
 
-/** Every command (model + sketch + global), for the palette to search. */
 export function allCommands(): Command[] {
-  // modelGroups() rather than MODEL: the palette is a way of reaching an
-  // action without knowing where its button is, so an action whose button is
-  // gone because its capability is off must not still be reachable here.
+  // modelGroups(), not MODEL: an action whose capability is off must not be reachable here either.
   return [...fromGroups(modelGroups(), "model"), ...fromGroups(SKETCH, "sketch"), ...GLOBAL];
 }
