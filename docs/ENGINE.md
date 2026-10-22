@@ -317,8 +317,8 @@ the bundle:
   sidecar runtime, so what shipped is a fact about the bytes rather than
   about the arguments.
 - Title: `FundaCAD 1.0 beta, Rust engine (rolling)`.
-- Release notes open with the warning, which is not optional: this is the
-  Funda Engine and the sidecar is retired, anything that builds differently from the sidecar is worth a report, plugin
+- Release notes open with `docs/release-notes/beta.md` when it exists (7.1),
+  then the warning, which is not optional: this is the Funda Engine and the sidecar is retired, anything that builds differently from the sidecar is worth a report, plugin
   geometry runs as WebAssembly components, and the sidecar's documents open
   here.
 
@@ -433,8 +433,12 @@ engine inside the package and checks the volume is 6000 mm3. On `dev` a red
 smoke is an annotation and the build still ships. On `main` it fails the leg,
 which holds the beta, or for the Flatpak leaves the Flatpak out of it. The
 bundle runner has every library `linux-deps` installs, so a `.deb` or
-AppImage with a wrong dependency still starts there; only the Flatpak's clean
-runtime catches that today. A second Linux step opens the AppImage window
+AppImage with a wrong dependency still starts there, so the `deb-install` job
+installs the `.deb` in clean Ubuntu 22.04, Ubuntu 24.04 and Debian 12
+containers and runs the AppImage on a Fedora 40 that has only python3 (it must
+name the missing WebKitGTK, then start once that is installed), each ending
+in the same smoke. It is not in the release job's `needs`, so for now a
+broken `Depends` shows red without holding the beta. A second Linux step opens the AppImage window
 under Xvfb and builds the box through a server attached to it, which proves
 the page loaded; it does not gate anything yet.
 
@@ -475,6 +479,15 @@ not. It then merges the commit into `main` with `--no-ff` in a throwaway
 worktree and prints the push. `--push` pushes `main`, with the tag in the
 same atomic push when there is one. The `main` run tests again and publishes
 the beta.
+
+The beta page opens with `docs/release-notes/beta.md`, which the release job
+puts above its generated part and which replaces the generated commit list.
+It is written by hand, so edit it on `dev` before a promotion: what is new
+since the last beta, what to know before installing, the known limits. The
+job does not overwrite it, and without the file it publishes the generated
+notes alone. `promote.sh` says when the file is the same on the commit it
+promotes as on `main`. A beta installed before the signing key changed cannot
+update itself, so the notes say to install by hand once, until none are left.
 
 `e2e` is not gating, so a flake there does not block a promotion. A dev
 commit that only touches `manual/` starts no build at all, so promote an older

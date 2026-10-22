@@ -196,7 +196,10 @@ export function referencedGeometry(repo: VersionRepo): string[] {
 export function normalizeRepo(raw: unknown): VersionRepo | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Partial<VersionRepo>;
-  const objects = r.objects && typeof r.objects === "object" ? { ...r.objects } : {};
+  // Only text is kept: referencedGeometry reads every object on each .fundab save.
+  const objects = r.objects && typeof r.objects === "object"
+    ? Object.fromEntries(Object.entries(r.objects).filter(([, text]) => typeof text === "string"))
+    : {};
   const versions = Array.isArray(r.versions)
     ? r.versions.filter((v): v is Version =>
         !!v && typeof v.id === "string" && typeof v.branch === "string" && !!v.tree &&

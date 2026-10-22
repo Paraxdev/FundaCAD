@@ -105,6 +105,7 @@ export function installRebuildBridge(e: Engine): void {
   // toast every NEW failure; if it's the feature the user JUST committed from an
   // interactive tool, select it immediately (red chip scrolls into view).
   let prevErrorIds = new Set<string>();
+  let prevHiddenFaces = new Set<string>();
   // Failed fillet/chamfer edges (midpoints per feature id), survives engine
   // cache-hit rebuilds that re-emit the error without its diagnostics.
   const failedEdgeMids = new Map<string, [number, number, number][]>();
@@ -239,6 +240,15 @@ export function installRebuildBridge(e: Engine): void {
         }
         prevErrorIds = ids;
         lastCommittedId = null;
+        const hidden = new Set(e.store.hiddenFaceMaterials());
+        const lost = [...hidden].filter((id) => !prevHiddenFaces.has(id)).length;
+        prevHiddenFaces = hidden;
+        // A rolled back timeline hides later faces on purpose, so it says nothing.
+        if (lost && e.store.rollbackIndex >= e.store.document.features.length) {
+          toast(lost === 1
+            ? "A face material lost its face in this rebuild, it shows again if the face comes back"
+            : `${lost} face materials lost their faces in this rebuild, they show again if the faces come back`, { kind: "warning" });
+        }
       }
     }
     e.syncDatumPlanes();

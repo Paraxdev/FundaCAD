@@ -348,6 +348,38 @@ describe("native environment", () => {
     expect(looks).toBe(2);
   });
 
+  it("cameras queued behind a slow call collapse into the newest, and each caller gets the reply of the call that carried it", async () => {
+    const sent: number[][] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let entered!: () => void;
+    const first = new Promise<void>((r) => { entered = r; });
+    const call = async (cmd: string, args?: unknown) => {
+      if (cmd === "pt_scene") { entered(); await gate; return []; }
+      if (cmd !== "pt_camera") return null;
+      sent.push((args as { camera: { eye: number[] } }).camera.eye);
+      return 40 + sent.length;
+    };
+    const at = (x: number) => {
+      const c = new THREE.PerspectiveCamera(40, 1.3, 0.1, 100);
+      c.position.set(x, -7.5, 3.25);
+      c.lookAt(1.5, 2, -0.5);
+      return c;
+    };
+    const scene = new NativeScene(call, (e) => { throw e; });
+    const alone = scene.camera(at(-4), null);
+    expect(await alone).toBe(41);
+    void scene.setMeshes([]);
+    await first;
+    const merged = [scene.camera(at(1), null), scene.camera(at(2.5), null), scene.camera(at(6), null)];
+    release();
+    expect(await Promise.all(merged)).toEqual([42, 42, 42]);
+    const after = scene.camera(at(9), null);
+    expect(await after).toBe(43);
+    await scene.idle();
+    expect(sent.map((e) => e[0])).toEqual([-4, 6, 9]);
+  });
+
   it("an HDR look sends the panorama's key with its pixels", async () => {
     registerHdr("abc", "sky.hdr", { width: 8, height: 4, data: new Float32Array(8 * 4 * 4).fill(1) });
     const look = { ...roomLook("room"), hdr: { hash: "abc", rotation: 0, exposure: 0, hemi: null, key: "hdr:abc|0.0|0.00|" } };

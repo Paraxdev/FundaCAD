@@ -224,6 +224,8 @@ export class NativeScene {
   private chain: Promise<unknown> = Promise.resolve();
   private pendingLook: { look: ReturnType<typeof nativeLook>; env: ReturnType<typeof envFrame> } | null = null;
   private lookJob: Promise<unknown> = Promise.resolve();
+  private pendingCamera: ReturnType<typeof nativeCamera> | null = null;
+  private cameraJob: Promise<unknown> = Promise.resolve();
 
   constructor(private call: Call, private onError: (e: unknown) => void) {}
 
@@ -285,9 +287,18 @@ export class NativeScene {
     return this.lookJob;
   }
 
+  /** Like look, only the newest camera waits: the page moves the camera every
+   *  display frame, faster than a native side that answers between frames. */
   camera(camera: THREE.Camera, lens: TraceLens | null) {
-    const c = nativeCamera(camera, lens);
-    return this.queue(() => this.call("pt_camera", { camera: c }));
+    const waiting = this.pendingCamera !== null;
+    this.pendingCamera = nativeCamera(camera, lens);
+    if (waiting) return this.cameraJob;
+    this.cameraJob = this.queue(() => {
+      const c = this.pendingCamera!;
+      this.pendingCamera = null;
+      return this.call("pt_camera", { camera: c });
+    });
+    return this.cameraJob;
   }
 
   cap(samples: number) {
