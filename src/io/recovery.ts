@@ -1,6 +1,7 @@
 // Crash-recovery autosave. Rust owns the snapshot files (recovery_* commands) outside the webview's fs scope;
 // this decides when: 30 s after the last edit, at most 2 min behind, only while dirty. A save clears the slot.
 
+import type { DocumentSession } from "../document/session";
 import type { DocumentStore } from "../document/store";
 import { toast } from "../ui/toast";
 import { safeMode } from "../ui/safeMode";
@@ -33,17 +34,18 @@ interface Envelope {
 
 export function installAutosave(store: DocumentStore) {
   if (!isTauri()) return;
-  let idleTimer: number | null = null;
+  let idleTimer: (() => void) | null = null;
   let oldestEdit: number | null = null;
   let writing = false;
   let failCount = 0; // consecutive autosave failures; warn once at 3, reset on success
   let warned = false;
 
   const write = async () => {
-    if (idleTimer != null) window.clearTimeout(idleTimer);
+    idleTimer?.();
     idleTimer = null;
     oldestEdit = null;
     if (!store.dirty || writing) return;
+    const session = store.session;
     writing = true;
     try {
       // One compact stringify, synchronously before any await, so the snapshot cannot see a half-applied edit.
@@ -53,8 +55,12 @@ export function installAutosave(store: DocumentStore) {
         doc: store.toObject(),
       };
       const json = JSON.stringify(env);
+      // The slot is the snapshot's own, even when another document is opened while the module loads.
+      const slot = slotFor(store.filePath);
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("recovery_write", { slot: slotFor(store.filePath), json });
+      // Its document was given up while the module loaded, and the slot was cleared for it.
+      if (!session.alive) return;
+      await invoke("recovery_write", { slot, json });
       failCount = 0;
       warned = false;
     } catch (e) {
@@ -76,11 +82,24 @@ export function installAutosave(store: DocumentStore) {
     if (!store.dirty) return;
     const now = Date.now();
     if (oldestEdit == null) oldestEdit = now;
-    if (idleTimer != null) window.clearTimeout(idleTimer);
+    idleTimer?.();
     // debounce on idle, but a busy session still snapshots every MAX_MS
     const wait = Math.min(IDLE_MS, Math.max(0, oldestEdit + MAX_MS - now));
-    idleTimer = window.setTimeout(() => void write(), wait);
+    // The document's session owns the timer, so an edit of one document never times the next one's snapshot.
+    idleTimer = store.session.timeout(() => void write(), wait);
   };
+  store.sessions.onBegin(() => {
+    idleTimer = null;
+    oldestEdit = null;
+  });
+  // Work the user gave up (Discard, Don't save) is never offered at the next start. A document thrown away without
+  // asking, by a plugin's doc_new, keeps its snapshot. Read while the session ends, before the path is replaced.
+  const forgetOnEnd = (s: DocumentSession) =>
+    s.own(() => {
+      if (s.endedBy !== "reload" && store.dirty && store.givenUp) void clearRecovery(store.filePath);
+    });
+  forgetOnEnd(store.session);
+  store.sessions.onBegin(forgetOnEnd);
 
   store.onDocChange(schedule);
   store.onMeta(schedule);

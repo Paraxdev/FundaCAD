@@ -769,7 +769,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       name.startsWith(`${src.name} `) && /^\d+$/.test(name.slice(src.name.length + 1))
         ? name.slice(src.name.length + 1)
         : null;
-    off = store.onBuild((s) => {
+    off = store.onSessionBuild((s) => {
       if (s.building) return;
       if (s.errorFeatureId === featureId) {
         done();
@@ -1455,7 +1455,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     // model carries every later move and boolean.
     const shown = store.buildState.result;
     let started = false;
-    waiting = store.onBuild((s) => {
+    waiting = store.onSessionBuild((s) => {
       if (s.building) {
         started = true;
         return;
@@ -1491,7 +1491,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       done = true;
       off?.();
     };
-    off = store.onBuild((s) => {
+    off = store.onSessionBuild((s) => {
       if (done) return;
       if (s.building) {
         started = true;

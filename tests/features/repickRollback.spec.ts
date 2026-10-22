@@ -57,6 +57,9 @@ function rig() {
       fn(build);
       return () => listeners.delete(fn);
     },
+    onSessionBuild(fn: (s: RebuildState) => void) {
+      return this.onBuild(fn);
+    },
     beginEditPreview: vi.fn((id: string) => {
       editId = id;
       emit({ building: true });

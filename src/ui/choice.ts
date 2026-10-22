@@ -19,19 +19,26 @@ export function popModal(): void {
   m.depth = Math.max(0, m.depth - 1);
 }
 
-export function choose<T extends string>(title: string, options: ChoiceOption<T>[]): Promise<T | null> {
+/** With `signal`, an abort takes the question down unanswered, as null. */
+export function choose<T extends string>(
+  title: string,
+  options: ChoiceOption<T>[],
+  signal?: AbortSignal,
+): Promise<T | null> {
   const m = useModalStore();
+  if (signal?.aborted) return Promise.resolve(null);
   return new Promise<T | null>((resolve) => {
     m.depth++;
-    m.enqueue({
-      kind: "choose",
-      title,
-      options: options as ChoiceOption[],
-      resolve: (v: string | null) => {
-        m.depth = Math.max(0, m.depth - 1);
-        resolve(v as T | null);
-      },
-    });
+    const answer = (v: string | null) => {
+      signal?.removeEventListener("abort", withdraw);
+      m.depth = Math.max(0, m.depth - 1);
+      resolve(v as T | null);
+    };
+    const id = m.enqueue({ kind: "choose", title, options: options as ChoiceOption[], resolve: answer });
+    const withdraw = () => {
+      if (m.withdraw(id)) answer(null);
+    };
+    signal?.addEventListener("abort", withdraw, { once: true });
   });
 }
 

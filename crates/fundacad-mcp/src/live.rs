@@ -66,13 +66,17 @@ pub struct LiveLink {
     pub base: Option<i64>,
     pub title: Option<String>,
     pub status: Value,
+    /// The app's document session the last pull read, None from an app that names none.
+    pub doc: Option<Value>,
 }
 
 impl Default for LiveLink {
     fn default() -> Self {
-        LiveLink { name: "an assistant".into(), base: None, title: None, status: json!({}) }
+        LiveLink { name: "an assistant".into(), base: None, title: None, status: json!({}), doc: None }
     }
 }
+
+const DOC_CHANGED: &str = "the document in the app changed, nothing was applied";
 
 impl LiveLink {
     pub fn new() -> LiveLink {
@@ -102,11 +106,19 @@ impl LiveLink {
         self.base = Some(st.get("revision").and_then(Value::as_i64).unwrap_or(0));
         self.title = st.get("title").and_then(Value::as_str).map(str::to_string);
         self.status = st.get("status").cloned().unwrap_or_else(|| json!({}));
+        self.doc = st.get("doc").cloned();
         Ok(st.get("document").and_then(Value::as_object).cloned())
     }
 
-    /// Waits for the app to take `document` and returns the revision it landed on.
-    pub async fn push(&mut self, link: &EngineLink, document: &Doc, note: &str) -> Result<i64, LiveError> {
+    /// Waits for the app to take `document` and returns the revision it landed on. `replaces` says it is a whole
+    /// other document, not an edit of the open one, which the app refuses while an import is read into its own.
+    pub async fn push(
+        &mut self,
+        link: &EngineLink,
+        document: &Doc,
+        note: &str,
+        replaces: bool,
+    ) -> Result<i64, LiveError> {
         if self.base.is_none() {
             self.pull(link).await?;
         }
@@ -119,18 +131,19 @@ impl LiveLink {
                     .into(),
             ));
         }
-        let reply = link
-            .call(
-                "session_propose",
-                args([
-                    ("document", Value::Object(document.clone())),
-                    ("baseRevision", json!(self.base)),
-                    ("note", json!(note)),
-                    ("name", json!(self.name)),
-                ]),
-            )
-            .await
-            .map_err(lost)?;
+        let mut request = args([
+            ("document", Value::Object(document.clone())),
+            ("baseRevision", json!(self.base)),
+            ("note", json!(note)),
+            ("name", json!(self.name)),
+        ]);
+        if let (Some(doc), Value::Object(m)) = (&self.doc, &mut request) {
+            m.insert("doc".into(), doc.clone());
+        }
+        if let (true, Value::Object(m)) = (replaces, &mut request) {
+            m.insert("replaces".into(), json!(true));
+        }
+        let reply = link.call("session_propose", request).await.map_err(lost)?;
         if reply.get("ok") != Some(&json!(true)) {
             let message = reply
                 .get("error")
@@ -173,7 +186,20 @@ impl LiveLink {
             if st.get("attached") != Some(&json!(true)) {
                 return Err(LiveError::NoAppOpen("the FundaCAD window closed before the edit was applied".into()));
             }
+            // The app opened another document before taking the edit, which the engine then dropped.
+            if self.doc.is_some() && st.get("doc") != self.doc.as_ref() {
+                self.base = None;
+                return Err(LiveError::Refused(DOC_CHANGED.into()));
+            }
             let status = st.get("status").cloned().unwrap_or_else(|| json!({}));
+            let refused = status
+                .get("refused")
+                .and_then(Value::as_array)
+                .and_then(|r| r.iter().find(|v| v.get("id").and_then(Value::as_str) == Some(proposal)));
+            if let Some(r) = refused {
+                let why = r.get("message").and_then(Value::as_str).unwrap_or("the app refused the edit");
+                return Err(LiveError::Refused(why.into()));
+            }
             let applied = status
                 .get("applied")
                 .and_then(Value::as_array)

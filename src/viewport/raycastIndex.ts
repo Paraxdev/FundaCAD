@@ -22,6 +22,11 @@ export function disposeRaycastIndex(geo: THREE.BufferGeometry) {
   if (geo.boundsTree) geo.disposeBoundsTree();
 }
 
+/** A detached model's trees are never needed, so its idle builds stop before its GPU dispose comes round. */
+export function forgetRaycastIndex(geo: THREE.BufferGeometry) {
+  pending.delete(geo);
+}
+
 // Building every BVH inline in setModel took ~0.7 s of 2.26 s frozen (3,071 bodies), and a lazy build stalls the
 // first mouse move, so trees build after the first paint in idle chunks; flushRaycastIndex covers an early pick.
 const pending = new Set<THREE.BufferGeometry>();

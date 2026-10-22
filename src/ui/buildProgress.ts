@@ -1,5 +1,5 @@
 import type { EngineWait } from "../geometry/client";
-import type { BusyState } from "../document/store";
+import type { BusyState, RunningOp } from "../document/store";
 
 // The timeline's pure helpers, kept apart so they test without a DOM.
 
@@ -62,15 +62,22 @@ export function busyLine(b: Pick<BusyState, "label" | "stage" | "pct" | "waiting
   return { text: b.label, detail: b.pct === null ? b.stage : `${b.stage} ${b.pct}%`, bar: true, pct: b.pct };
 }
 
-/** A rebuild of a featureless document has no steps to show while it waits on the engine; an import into one does. */
-export function historyShowsEmpty(featureCount: number, busy: Pick<BusyState, "active" | "rebuild">): boolean {
-  return featureCount === 0 && (!busy.active || busy.rebuild);
+/** A rebuild of a featureless document has no steps to show while it waits on the engine; an import into one does,
+ *  whichever op started last. */
+export function historyShowsEmpty(featureCount: number, ops: readonly Pick<RunningOp, "rebuild">[]): boolean {
+  return featureCount === 0 && ops.every((o) => o.rebuild);
+}
+
+/** The ops History lists as rows of their own; this document's rebuild has the build chip instead. */
+export function runningRows<T extends Pick<RunningOp, "rebuild">>(ops: readonly T[]): T[] {
+  return ops.filter((o) => !o.rebuild);
 }
 
 /** After the delay. An empty document's rebuild is instant and silent, unless it waits behind another client's job. */
 export function historyShowsBusy(
   featureCount: number,
-  busy: Pick<BusyState, "active" | "rebuild" | "waiting">,
+  busy: Pick<BusyState, "active" | "waiting">,
+  ops: readonly Pick<RunningOp, "rebuild">[],
 ): boolean {
-  return busy.active && (busy.waiting !== null || !historyShowsEmpty(featureCount, busy));
+  return busy.active && (busy.waiting !== null || !historyShowsEmpty(featureCount, ops));
 }

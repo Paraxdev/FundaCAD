@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import type { CadDocument, RebuildReply } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
+import { box } from "./storeKit";
 
 type ProgressFn = (feature: number, meshed: number, meshTotal: number) => void;
 
@@ -101,5 +102,39 @@ describe("a long rebuild is cancellable", () => {
       cancelled = await store.cancelBusy();
     });
     expect(cancelled).toBe(true);
+  });
+});
+
+describe("build progress belongs to the rebuild this document has on the wire", () => {
+  it("takes a status of its own rebuild id and ignores one of any other request", async () => {
+    const listeners: ((f: number, m: number, t: number, id?: string) => void)[] = [];
+    const be = {
+      rebuild(_d: CadDocument, _t?: number, onId?: (id: string) => void) {
+        onId?.("r-own");
+        return new Promise<RebuildReply>(() => {});
+      },
+      async init() {},
+      onStatus: () => () => {},
+      onProgress(fn: (f: number, m: number, t: number, id?: string) => void) {
+        listeners.push(fn);
+        return () => {};
+      },
+      async cancel() {
+        return true;
+      },
+      connected: true,
+    } as unknown as GeometryBackend;
+    const store = new DocumentStore(be, { parameters: {}, features: [box("plate", 40)] });
+    void store.rebuildNow();
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    const seen = () => ({ progress: store.buildState.progress, meshed: store.buildState.meshed });
+    listeners.forEach((fn) => fn(-1, 40, 90, "r-import-of-the-last-document"));
+    const other = seen();
+    listeners.forEach((fn) => fn(-1, 7, 90, "r-own"));
+    expect({ building: store.buildState.building, other, own: seen() }).toEqual({
+      building: true,
+      other: { progress: null, meshed: null },
+      own: { progress: -1, meshed: 7 },
+    });
   });
 });

@@ -641,7 +641,8 @@ impl FundaCad {
         let pushed = {
             let mut st = self.state.lock().await;
             let live = st.live.as_mut().expect("live checked above");
-            live.push(&link, &document, &edit_note(name, args)).await
+            let replaces = matches!(name, "doc_new" | "doc_open" | "doc_set");
+            live.push(&link, &document, &edit_note(name, args), replaces).await
         };
         match pushed {
             Ok(rev) => {

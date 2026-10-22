@@ -190,3 +190,19 @@ pub fn test_sleep(req: &Map<String, Value>, ctx: &JobContext) -> JobResult {
     m.insert("slept".into(), Value::from(seconds));
     JobResult::Json(m)
 }
+
+/// `FUNDACAD_TEST_HOLD="import=20000,rebuild=6000"`: how long a job of `op` is held before it runs, in ms.
+pub fn hold_ms(spec: &str, op: &str) -> Option<u64> {
+    spec.split(',').filter_map(|p| p.trim().split_once('=')).find(|(o, _)| *o == op).and_then(|(_, ms)| ms.parse().ok())
+}
+
+/// Holds a job at its start for the time `FUNDACAD_TEST_HOLD` gives its op, so an end to end check can switch
+/// documents while a long job runs. Beats while it waits and stops on cancel.
+pub fn test_hold(op: &str, ctx: &JobContext) {
+    let Some(ms) = std::env::var("FUNDACAD_TEST_HOLD").ok().and_then(|s| hold_ms(&s, op)) else { return };
+    let end = Instant::now() + Duration::from_millis(ms);
+    while Instant::now() < end && !ctx.cancel.is_cancelled() {
+        std::thread::sleep(Duration::from_millis(50));
+        ctx.progress.tick();
+    }
+}

@@ -10,6 +10,11 @@ pub struct DocState {
 }
 
 impl DocState {
+    /// Whether a document is held, so a delta can apply.
+    pub fn holds(&self) -> bool {
+        self.doc.is_some()
+    }
+
     /// The effective document for this request, or None when it needs a resync.
     /// `computeAll` always carries its document whole.
     pub fn apply(&mut self, req: &Map<String, Value>, _fresh: bool) -> Option<&Value> {

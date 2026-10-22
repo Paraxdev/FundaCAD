@@ -1,5 +1,6 @@
 import { toast } from "../ui/toast";
 import { describe } from "../ui/logStore";
+import { isSessionEnded } from "../document/session";
 
 /** Logs and toasts any uncaught error or rejection, so a failure never leaves just a blank viewport. */
 export function installGlobalErrorHandlers(): void {
@@ -9,6 +10,8 @@ export function installGlobalErrorHandlers(): void {
   };
   const agent = typeof navigator === "undefined" ? "" : `\n\nPlatform: ${navigator.userAgent}`;
   window.addEventListener("unhandledrejection", (e) => {
+    // Work of a closed document is meant to stop this way, it is not a failure.
+    if (isSessionEnded(e.reason)) return;
     console.error("Unhandled rejection:", e.reason);
     toast(headline(e.reason), {
       kind: "error",

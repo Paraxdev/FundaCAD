@@ -226,6 +226,9 @@ use for them).
   `FUNDACAD_ENGINE_TEST_OPS=1` and takes its clocks from
   `FUNDACAD_STALL_TIMEOUT` and `FUNDACAD_JOB_TIMEOUT`, so a cancel test has
   something long to cancel and a reap can be watched without waiting a minute.
+  Under the same switch `FUNDACAD_TEST_HOLD="import=20000,rebuild=6000"` holds
+  every job of the named ops that long before it runs (a cancel ends the hold),
+  so an end to end check can switch documents while a long import runs.
 - **Kernel tests in Rust.** `cargo test -p fundacad-geom` runs real
   OpenCASCADE tests.
 - **Shared vectors.** A TypeScript mirror and its Rust twin both read one file
