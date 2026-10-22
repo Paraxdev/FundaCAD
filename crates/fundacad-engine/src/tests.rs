@@ -451,9 +451,50 @@ impl Jobs for Docked {
         self.0.run(op, req, ctx)
     }
 
-    fn release(&mut self) {
+    fn release(&mut self) -> bool {
         self.1.fetch_add(1, Ordering::SeqCst);
+        true
     }
+}
+
+/// [`Docked`] whose caches are held by an abandoned rebuild for its first `busy` releases, counting every attempt.
+struct Held {
+    docked: Docked,
+    busy: i64,
+    attempts: Arc<AtomicI64>,
+}
+
+impl Jobs for Held {
+    fn rebuild(&mut self, doc: &Value, t: f64, known: &Map<String, Value>, fresh: bool, ctx: &JobContext) -> JobResult {
+        self.docked.rebuild(doc, t, known, fresh, ctx)
+    }
+
+    fn release(&mut self) -> bool {
+        self.attempts.fetch_add(1, Ordering::SeqCst);
+        if self.busy > 0 {
+            self.busy -= 1;
+            return false;
+        }
+        self.docked.release()
+    }
+}
+
+#[test]
+fn a_release_the_held_caches_refuse_is_asked_again_before_the_next_job() {
+    let (tx, rx) = channel();
+    let (releases, attempts) = (Arc::new(AtomicI64::new(0)), Arc::new(AtomicI64::new(0)));
+    let docked = Docked(Fake { gate: None, rebuilds: Arc::new(AtomicI64::new(0)) }, releases.clone());
+    let jobs = Held { docked, busy: 1, attempts: attempts.clone() };
+    let e = Engine::start(jobs, Arc::new(Collect(Mutex::new(tx))));
+    send(&e, json!({"id": "a1", "op": "rebuild", "doc": "A", "document": {"features": []}}));
+    assert_eq!(replies_until(&rx, "a1"), vec![json!(["a1", "ok"])]);
+    send(&e, json!({"id": "end", "op": "doc_end", "doc": "A"}));
+    assert_eq!(replies_until(&rx, "end"), vec![json!(["end", {"ended": 0}])]);
+    until_count(&attempts, 1);
+    assert_eq!(releases.load(Ordering::SeqCst), 0);
+    send(&e, json!({"id": "b1", "op": "rebuild", "doc": "B", "document": {"features": []}}));
+    assert_eq!(replies_until(&rx, "b1"), vec![json!(["b1", "ok"])]);
+    assert_eq!((attempts.load(Ordering::SeqCst), releases.load(Ordering::SeqCst)), (2, 1));
 }
 
 struct DocEngine {

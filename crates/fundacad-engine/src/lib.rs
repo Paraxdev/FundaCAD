@@ -134,8 +134,11 @@ pub trait Jobs: Send + 'static {
         None
     }
 
-    /// No document holds anything here any more: free what was kept for them.
-    fn release(&mut self) {}
+    /// No document holds anything here any more: free what was kept for them. False when that cannot be done now
+    /// without waiting, the engine asks again before its next job.
+    fn release(&mut self) -> bool {
+        true
+    }
 }
 
 pub fn error_result(message: &str) -> JobResult {
@@ -216,10 +219,11 @@ fn spawn_job_thread<J: Jobs>(pool: Arc<Pool<J>>, mut jobs: J) {
     let spawned = std::thread::Builder::new().name("engine-jobs".into()).spawn(move || {
         let mut docs = Docs::new();
         let abandoned = Arc::new(AtomicBool::new(false));
+        let mut owed = false;
         while !abandoned.load(Ordering::SeqCst) {
             let work = lock(&pool.rx).recv();
             // Before any job: a job queued ahead of the End marker must not keep an ended document's memory.
-            forget_ended(&pool, &mut jobs, &mut docs);
+            forget_ended(&pool, &mut jobs, &mut docs, &mut owed);
             match work {
                 Err(_) => return,
                 Ok(Work::End) => {}
@@ -263,14 +267,15 @@ fn ends(ended: &[Ended], client: u64, doc: &str) -> bool {
     ended.iter().any(|(c, d)| *c == client && d.as_deref().map_or(true, |d| d == doc))
 }
 
-fn forget_ended<J: Jobs>(pool: &Pool<J>, jobs: &mut J, docs: &mut Docs) {
+/// `owed` carries a release the jobs could not make yet, until it is made or a document holds something again.
+fn forget_ended<J: Jobs>(pool: &Pool<J>, jobs: &mut J, docs: &mut Docs, owed: &mut bool) {
     let ended = std::mem::take(&mut *lock(&pool.ended));
-    if ended.is_empty() {
-        return;
+    if !ended.is_empty() {
+        docs.retain(|(client, doc), held| held.holds() && !ends(&ended, *client, doc));
+        *owed = docs.is_empty();
     }
-    docs.retain(|(client, doc), held| held.holds() && !ends(&ended, *client, doc));
-    if docs.is_empty() {
-        jobs.release();
+    if *owed {
+        *owed = docs.is_empty() && !jobs.release();
     }
 }
 

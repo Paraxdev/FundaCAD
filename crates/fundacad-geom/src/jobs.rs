@@ -249,7 +249,13 @@ impl Jobs for GeomJobs {
         crate::bench::doing()
     }
 
-    fn release(&mut self) {
-        cache::global().lock().unwrap_or_else(|p| p.into_inner()).release();
+    // Note: an abandoned rebuild can still hold the cache, so this never waits for it.
+    fn release(&mut self) -> bool {
+        match cache::global().try_lock() {
+            Ok(mut cache) => cache.release(),
+            Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner().release(),
+            Err(std::sync::TryLockError::WouldBlock) => return false,
+        }
+        true
     }
 }
