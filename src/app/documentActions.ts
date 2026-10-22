@@ -1,14 +1,7 @@
-import {
-  importDropped,
-  importFileBytes,
-  openDocument,
-  openDocumentAtPath,
-  reportError,
-  type OpenOutcome,
-} from "../io/files";
+import { openDocument, openDocumentAtPath, type OpenOutcome } from "../io/files";
 import { choose } from "../ui/choice";
 import type { Engine } from "./engine";
-import { TEMPLATES, templateFile, templateText, type TemplateInfo } from "../templates";
+import { TEMPLATES, templateText } from "../templates";
 import { copyName } from "../ui/homeVersions";
 import { closeHome, homeIsOpen } from "../ui/home";
 import { displayName } from "../ui/homeList";
@@ -163,32 +156,9 @@ export async function newFromTemplate(e: ExampleEngine, id: string): Promise<voi
   const info = TEMPLATES.find((t) => t.id === id);
   if (!info) return;
   if (!(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return;
-  if (info.source === "step") return importExample(e, info);
   e.store.load(await templateText(id));
   e.store.markOpenedWithoutPath(info.name);
   e.frameNextModel();
-}
-
-/** The import a maker's own STEP takes, into a new document that stays clean until the maker changes it. */
-async function importExample(e: ExampleEngine, info: TemplateInfo): Promise<void> {
-  e.store.newDocument();
-  e.viewport.resetCamera(false);
-  e.store.markOpenedWithoutPath(info.name);
-  closeHome();
-  const opening = openingImport(e.store);
-  const files: string[] = [];
-  try {
-    const file = await e.store.importing(() => templateFile(info.id));
-    files.push(file.name);
-    // importFileBytes watches for an open only from here on, so one during the fetch is caught here.
-    if (opening.replaced) await importDropped([file.name]);
-    else await importFileBytes(e.store, e.geometry, file, undefined, { opening: true });
-  } catch (err) {
-    await reportError(`Couldn't open the ${info.name} example: ${err instanceof Error ? err.message : String(err)}`);
-  } finally {
-    opening.end();
-  }
-  if (!opening.replaced) backToBlank(e.store, info.name, files);
 }
 
 type VersionEngine = Pick<Engine, "store" | "sketch" | "geometry" | "toolAtWork" | "setStatus">;
