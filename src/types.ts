@@ -543,8 +543,8 @@ export type CoreFeature =
       followTangent?: boolean;
     }
   | { id: string; type: "deleteFace"; face: Selector | Selector[]; body?: string }
-  // `plane` is written { name } once `bodies` is set (document/mirrorPlane.ts).
-  | { id: string; type: "mirror"; plane: Plane3 | { name: Plane3 }; bodies?: string[] }
+  // `plane` is XY, XZ, YZ or a datum plane id, written { name } once `bodies` is set (document/mirrorPlane.ts).
+  | { id: string; type: "mirror"; plane: string | { name: string }; bodies?: string[] }
   // `operation` defaults to "new". `regions` are the areas to spin, as for extrude.
   // `axisEdge` makes the axis follow a model edge, with `axis` as the cache. `pitch`
   // (mm per turn) climbs the axis for a thread; without it the angle clamps to 360.

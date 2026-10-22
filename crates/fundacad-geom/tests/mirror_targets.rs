@@ -72,3 +72,37 @@ fn mirror_with_bodies_refuses_a_bare_plane_name() {
     let msg = only_error_of_m(&r);
     assert!(msg.contains(r#"{"name": "YZ"}"#), "{msg}");
 }
+
+fn with_datum(mirror: Value) -> Value {
+    json!({"parameters": {}, "features": [
+        {"id": "a", "type": "box", "length": 10, "width": 6, "height": 4},
+        {"id": "place", "type": "move", "dx": 20, "dy": 3.5, "dz": -1.25, "rx": 0, "ry": 0, "rz": 0, "bodies": ["body1"]},
+        {"id": "b", "type": "box", "length": 4, "width": 4, "height": 4},
+        {"id": "dp1", "type": "datumPlane", "plane": "YZ", "offset": 32.5, "tiltY": 20, "name": "Side"},
+        mirror,
+    ]})
+}
+
+// The datum is x = 32.5 turned 20 degrees about Z, so its normal is (cos 20, sin 20, 0); the corners were reflected by hand.
+#[test]
+fn mirror_across_a_tilted_datum_plane_named_by_id_reflects_the_named_body() {
+    let r = build(&with_datum(json!({"id": "m", "type": "mirror", "plane": {"name": "dp1"}, "bodies": ["body1"]})));
+    assert!(r.errors.is_empty(), "{:?}", r.errors);
+    let b = r.bodies.iter().find(|b| b.id == "body1").expect("body1");
+    let bb = kernel::bbox(&b.shape).expect("a box");
+    let want = [15.0, 0.5, -3.25, 45.584384, 16.228072, 0.75];
+    for (k, (got, w)) in bb.iter().zip(want).enumerate() {
+        assert!((got - w).abs() < 1e-4, "bbox[{k}] {got} want {w}, {bb:?}");
+    }
+    assert!((kernel::volume(&b.shape) - 480.0).abs() < 1e-6);
+    let (v2, _) = volume_and_min_x(&r, "body2");
+    assert!((v2 - 64.0).abs() < 1e-6, "body2 volume {v2}");
+}
+
+#[test]
+fn mirror_across_a_datum_plane_that_does_not_exist_refuses() {
+    let r = build(&with_datum(json!({"id": "m", "type": "mirror", "plane": {"name": "dp9"}, "bodies": ["body1"]})));
+    only_error_of_m(&r);
+    let (v1, x1) = volume_and_min_x(&r, "body1");
+    assert!((v1 - 240.0).abs() < 1e-6 && (x1 - 15.0).abs() < 1e-6, "body1 is left as it was, {v1} {x1}");
+}
