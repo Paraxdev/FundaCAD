@@ -1474,18 +1474,24 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
       over->at = fm.P;
     }
   }
-  set_frame(fm);
+  // A neighbour that closes in on this edge may cross its round at an end only,
+  // the middles still apart (the slanted sides of a trapezoid), so the ends rest too.
   if (rests && s > 0) {
-    Contacts c = contacts(fm.P, fm.T, sides, s, chamfer, size, size2, g2);
-    for (int j = 0; j < 2; ++j) {
-      if (!sides[j]->contains(c.Q[j], fuzz)) continue;
-      gp_Vec out = c.normals[j];
-      if (out.Magnitude() < 1e-12) continue;
-      out.Normalize();
-      if (out.Dot(V(c.Q[1 - j]) - V(c.Q[j])) > 0) out.Reverse();
-      rests->push_back({c.Q[j], out});
+    std::vector<Frame> at = closed ? probes : std::vector<Frame>{frame(t0), fm, frame(t1)};
+    for (const Frame &f : at) {
+      set_frame(f);
+      Contacts c = contacts(f.P, f.T, sides, s, chamfer, size, size2, g2);
+      for (int j = 0; j < 2; ++j) {
+        if (!sides[j]->contains(c.Q[j], fuzz)) continue;
+        gp_Vec out = c.normals[j];
+        if (out.Magnitude() < 1e-12) continue;
+        out.Normalize();
+        if (out.Dot(V(c.Q[1 - j]) - V(c.Q[j])) > 0) out.Reverse();
+        rests->push_back({c.Q[j], out});
+      }
     }
   }
+  set_frame(fm);
 
   if (axis) {
     Frame f0 = frame(t0);
