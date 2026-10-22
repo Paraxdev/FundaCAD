@@ -95,7 +95,7 @@ function close() {
       <div class="measure-hint">
         <template v-if="panels.stress.probe">Hover the body to read it, click to pin, Esc to stop.</template>
         <template v-else-if="panels.stress.placing"
-          >Click the body to place a spot, drag its rim to size it, Esc to stop.</template
+          >Click the body to place a spot, Shift click for more, Esc to stop.</template
         >
         <template v-else-if="step === 'results' && result">Results are linear and approximate.</template>
         <template v-else>Pick faces with Place or Use selected, then Run.</template>

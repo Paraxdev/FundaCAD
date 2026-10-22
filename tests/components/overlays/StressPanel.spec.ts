@@ -283,7 +283,7 @@ describe("StressPanel", () => {
     const text = q(".stress-panel")!.textContent!;
     expect(text).toContain("0.5 MPa");
     expect(text).toContain("62 MPa");
-    expect(q(".stress-warning")?.textContent).toBe("printed parts are weaker across layers");
+    expect(q(".stress-warning")?.textContent).toBe("Printed parts are weaker across layers.");
     expect(q(".stress-yields")?.textContent).toBe("0.8");
     expect(q(".stress-legend")?.getAttribute("style")).toContain("linear-gradient");
     const details = q(".stress-details")!;
