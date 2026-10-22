@@ -45,6 +45,7 @@ export interface MirrorHost {
 }
 
 export const LINE_REFUSED = "Pick a line, arcs and circles cannot be a mirror line";
+export const LINE_LEFT_OBJECTS = "That line is now the mirror line, it is no longer mirrored";
 
 /** A line or a projected straight edge, as a mirror axis. */
 export function axisOf(e: ResolvedEntity): MirrorAxis | null {
@@ -115,8 +116,13 @@ export class MirrorFlow {
     if (f.active === "line" && !keep) {
       if (!hit) return;
       const axis = axisOf(hit);
-      if (axis) this.set(pickLine(f, axis, hit.id));
-      else {
+      if (axis) {
+        this.set(pickLine(f, axis, hit.id));
+        if (f.objects.includes(hit.id)) {
+          this.refusal = LINE_LEFT_OBJECTS;
+          this.update();
+        }
+      } else {
         this.refusal = LINE_REFUSED;
         this.update();
       }
