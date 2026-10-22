@@ -1,12 +1,7 @@
 import { defineStore } from "pinia";
 
-/** The timeline's callbacks into the engine.
- *
- *  These stay handlers rather than becoming store state because each one needs
- *  the live engine, selecting routes through selectFeature (which also
- *  highlights the datum plane), and canRepick reads the LATEST build's
- *  diagnostics on every menu open rather than a cached copy, so a feature
- *  repaired since the build stops offering the repair. */
+/** Handlers rather than state, since each needs the live engine. canRepick reads the latest build's diagnostics on
+ *  every menu open, so a feature repaired since stops offering the repair. */
 export interface TimelineHandlers {
   onSelect: (id: string) => void;
   onEdit: (id: string) => void;
