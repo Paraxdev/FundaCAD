@@ -127,6 +127,18 @@ describe("the section chip", () => {
     expect(t.calls).toEqual(["flip", "stop"]);
   });
 
+  it("a mouse press leaves the focus where it was, so the Offset box keeps its keys", async () => {
+    const t = makeEngine("editing");
+    const w = mountChip(t.engine);
+    const pressed = ["section-edit", "section-flip", "section-off"].map((id) => {
+      const e = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+      w.find(`[data-testid="${id}"]`).element.dispatchEvent(e);
+      return e.defaultPrevented;
+    });
+    expect(pressed).toEqual([true, true, true]);
+    expect(t.calls).toEqual([]);
+  });
+
   it("follows the tool's phase and lets go of it when unmounted", async () => {
     const t = makeEngine("off");
     const w = mountChip(t.engine);
