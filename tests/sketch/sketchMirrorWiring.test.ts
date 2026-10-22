@@ -58,6 +58,7 @@ function makeSketch(pre: string[]) {
     entities: () => s.entities,
     selected: () => s.selected,
     pickTol: () => 0.5,
+    textAt: () => null,
     loopIdsAt: () => [],
     showPreview: (_c, _l, hover) => log.hovers.push(hover?.id ?? null),
     showPanel: showMirrorPanel,
@@ -118,7 +119,12 @@ const panel = () => useToolPanelStore().mirror;
 const values = () => panel()?.fields.map((f) => f.value) ?? null;
 function key(s: Internals, k: string, target: unknown = new FakeElement(false)) {
   let prevented = false;
-  s.onKey({ key: k, target: target as EventTarget, preventDefault: () => void (prevented = true), stopPropagation() {} });
+  s.onKey({
+    key: k,
+    target: target as EventTarget,
+    preventDefault: () => void (prevented = true),
+    stopPropagation() {},
+  });
   return prevented;
 }
 

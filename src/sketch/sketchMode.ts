@@ -502,6 +502,7 @@ export class SketchMode {
       entities: () => this.entities,
       selected: () => this.selected,
       pickTol: () => this.pickTol(),
+      textAt: (p) => this.textEntityAt(p),
       loopIdsAt: (p) => {
         const wr = this.overlay.activeRegionAt(p);
         return wr ? this.entitiesAlongLoop(wr.region.loop) : [];

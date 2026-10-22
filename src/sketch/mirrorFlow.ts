@@ -28,6 +28,8 @@ export interface MirrorHost {
   entities(): ResolvedEntity[];
   selected(): Set<string>;
   pickTol(): number;
+  /** Text is found by its glyph areas, it has no curve segments to pick. */
+  textAt(p: THREE.Vector2): ResolvedEntity | null;
   /** The curves around the closed area under `p`, [] when it is not inside one. */
   loopIdsAt(p: THREE.Vector2): string[];
   /** Copies drawn as the result, the mirror line lit, and the entity under the cursor, if any. */
@@ -109,9 +111,7 @@ export class MirrorFlow {
     const f = this.fields;
     if (!f) return;
     this.refusal = null;
-    const ents = this.host.entities();
-    const idx = pickEntity(ents, p, this.host.pickTol());
-    const hit = idx >= 0 ? ents[idx] : undefined;
+    const hit = this.hitAt(p);
     if (f.active === "line" && !keep) {
       if (!hit) return;
       const axis = axisOf(hit);
@@ -138,9 +138,7 @@ export class MirrorFlow {
   hover(p: THREE.Vector2 | null): void {
     const f = this.fields;
     if (!f) return;
-    const ents = this.host.entities();
-    const idx = p ? pickEntity(ents, p, this.host.pickTol()) : -1;
-    const hit = idx >= 0 ? ents[idx] : undefined;
+    const hit = p ? this.hitAt(p) : undefined;
     const takes = hit && (f.active === "line" ? axisOf(hit) !== null : hit.type !== "projected");
     const id = takes ? hit.id : null;
     if (id === this.hoverId) return;
@@ -192,6 +190,12 @@ export class MirrorFlow {
     for (const id of f.objects) sel.add(id);
     this.host.refreshActive();
     this.update();
+  }
+
+  private hitAt(p: THREE.Vector2): ResolvedEntity | undefined {
+    const ents = this.host.entities();
+    const idx = pickEntity(ents, p, this.host.pickTol());
+    return idx >= 0 ? ents[idx] : (this.host.textAt(p) ?? undefined);
   }
 
   private entity(id: string | null): ResolvedEntity | undefined {

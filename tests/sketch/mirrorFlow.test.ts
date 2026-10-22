@@ -49,6 +49,7 @@ function rig(pre: string[] = []) {
     entities: () => entities,
     selected: () => selected,
     pickTol: () => 0.5,
+    textAt: (p) => entities.find((e) => e.type === "text" && Math.hypot(p.x - e.x, p.y - e.y) < 2) ?? null,
     loopIdsAt: (p) => (p.x > -13 && p.x < -7 && p.y > -8 && p.y < -4 ? ["r1"] : []),
     showPreview: (copies, line, hover) =>
       log.previews.push({ copies, line: line?.id ?? null, hover: hover?.id ?? null }),
@@ -175,6 +176,45 @@ describe("MirrorFlow picking", () => {
     r.flow.activate("objects");
     r.flow.hover(ON.c1);
     expect(r.log.previews.at(-1)!.hover).toBe("c1");
+  });
+});
+
+describe("MirrorFlow text", () => {
+  const text: ResolvedEntity = {
+    type: "text",
+    id: "t1",
+    text: "R2",
+    x: -14,
+    y: 11.5,
+    height: 3.5,
+    angle: 12,
+    font: "Sans",
+  };
+  const ON_TEXT = v(-13.25, 12);
+
+  it("a click on a text adds it to Objects and the copy keeps its glyphs upright", () => {
+    const r = rig();
+    r.entities.push(text);
+    r.flow.begin();
+    r.flow.click(ON_TEXT, false);
+    expect([...r.selected]).toEqual(["t1"]);
+    r.flow.click(ON.ax, false);
+    expect(r.flow.commit()).toBe(true);
+    const copy = r.entities.at(-1)!;
+    expect(round(copy)).toEqual(round({ ...text, id: "n1", x: 21.7351351351, y: -14.4891891892 }));
+  });
+
+  it("hover lights a text in Objects, a text is refused as the mirror line", () => {
+    const r = rig(["c1"]);
+    r.entities.push(text);
+    r.flow.begin();
+    r.flow.hover(ON_TEXT);
+    expect(r.log.previews.at(-1)!.hover).toBe(null);
+    r.flow.click(ON_TEXT, false);
+    expect(r.log.prompts.at(-1)).toBe(LINE_REFUSED);
+    r.flow.activate("objects");
+    r.flow.hover(ON_TEXT);
+    expect(r.log.previews.at(-1)!.hover).toBe("t1");
   });
 });
 
