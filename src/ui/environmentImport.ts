@@ -82,15 +82,20 @@ export async function storeHdr(img: HdrImage, name: string, library = envLibrary
   return rec;
 }
 
-/** Light the viewport with an .hdr or .exr. Returns the refusal, or null. */
+/** Light the viewport with an .hdr or .exr. Returns the refusal, or null. `leftOut` is asked once the panorama is
+ *  stored, and true leaves the look as it was. */
 export async function importEnvironmentBytes(
   store: DocumentStore | null,
   bytes: Uint8Array,
   name: string,
   library = envLibrary(),
+  opts: { leftOut?: () => boolean } = {},
 ): Promise<string | null> {
   try {
     const rec = await storeHdr(await decodeHdr(bytes, name), name, library);
+    // Ready before the look changes, so the document write that follows has no library read for an open to slip into.
+    if (store) await embedFor(rec.hash, library);
+    if (opts.leftOut?.()) return null;
     setActiveSaved(null);
     setRenderPref("environment", `hdr:${rec.hash}`);
     if (store) await syncDocumentEnvironment(store, library);
@@ -101,8 +106,12 @@ export async function importEnvironmentBytes(
   }
 }
 
-export async function importEnvironmentFile(store: DocumentStore | null, file: File): Promise<string | null> {
-  return importEnvironmentBytes(store, new Uint8Array(await file.arrayBuffer()), file.name);
+export async function importEnvironmentFile(
+  store: DocumentStore | null,
+  file: File,
+  opts: { leftOut?: () => boolean } = {},
+): Promise<string | null> {
+  return importEnvironmentBytes(store, new Uint8Array(await file.arrayBuffer()), file.name, envLibrary(), opts);
 }
 
 /** Make sure the panorama the settings name is decoded, then redraw. */
