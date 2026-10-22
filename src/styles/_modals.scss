@@ -497,7 +497,10 @@
   margin-bottom: var(--s-4, 12px);
 }
 .choice-row {
-  display: flex;
+  /* Equal columns as wide as the widest button, a flex split of the summed widths left a long caption spilling out. */
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: var(--s-3, 8px);
 }
 .choice-btn {
