@@ -11,7 +11,6 @@ export function hasUnsavedWork(e: Pick<Engine, "store" | "sketch">): boolean {
   return e.store.dirty || e.sketch.hasUncommittedEdits;
 }
 
-/** Whether the user lets unsaved work go, asked only when there is some. */
 export async function mayDiscard(e: Pick<Engine, "store" | "sketch">, question: string): Promise<boolean> {
   if (!hasUnsavedWork(e)) return true;
   const pick = await choose(question, [
@@ -95,15 +94,8 @@ export function createDocumentActions(e: Engine): Pick<Engine, "newDocument" | "
       );
     },
 
-    // Undo/redo routing: while a sketch is OPEN its geometry lives in SketchMode and
-    // is not in the document yet, so store.undo() can only reach the whole sketch,
-    // which is why Ctrl+Z used to vaporise it. Hand the request to the sketch, which
-    // swallows it whenever it is active (an empty sketch history says so rather than
-    // falling through and eating the sketch).
-    // The Move gizmo is put away first, and with it a re-open still waiting for
-    // a drag's rebuild: left armed, that re-open landed on the undone model and
-    // took focus into its field (FI-2).
-    // Home closes, so an undo from the title bar or a menu is seen on the document it changes.
+    // An open sketch swallows undo, since store.undo() would remove the whole sketch. Move is put away first, or a
+    // re-open waiting on a drag's rebuild lands on the undone model (FI-2). Home closes so the change is seen.
     doUndo() {
       closeHome();
       e.tools.move.cancel();

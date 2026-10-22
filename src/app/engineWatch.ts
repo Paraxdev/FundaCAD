@@ -4,16 +4,10 @@ import { toast } from "../ui/toast";
 interface Death {
   kind: string;
   cause: string;
-  /** The supervisor's crash report, the console entry's detail. */
   detail?: string;
 }
 
-/** What to tell the user when the geometry engine goes away. `kind` separates
- *  a crash the supervisor recovered from and a worker that never started.
- *
- *  The cause is shown rather than swallowed: field reports of this arrive as
- *  screenshots of the toast, so the message itself has to carry enough to
- *  triage from. */
+/** Shows the cause, since field reports arrive as screenshots of this toast. */
 export function deathMessage(p: Partial<Death> | null | undefined): string {
   const cause = p && typeof p.cause === "string" && p.cause ? p.cause : "";
   const why = cause ? ` (${cause})` : "";
@@ -27,9 +21,7 @@ export function deathMessage(p: Partial<Death> | null | undefined): string {
   }
 }
 
-/** The app's engine supervisor (src-tauri/src/engine.rs) reports a worker
- *  that died and was restarted, or could not start. Guarded to Tauri only,
- *  plain `vite` dev has nothing to emit. */
+/** Listens to the engine supervisor in src-tauri/src/engine.rs, which only exists under Tauri. */
 export function installEngineDiedToast(): void {
   if (!("__TAURI_INTERNALS__" in window)) return;
   void listen<Death>("engine:died", (e) => {

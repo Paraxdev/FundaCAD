@@ -1,15 +1,4 @@
-// The composition root, formerly the top 950 lines of main.ts.
-//
-// main.ts was 1363 lines of bare top-level statements: import order and
-// statement order WERE the boot sequence, and ~25 singletons referred to each
-// other through function-declaration hoisting. Moving that across module
-// boundaries loses hoisting, so the mutual references are resolved the way
-// main.ts already resolved getLastAction/setLastAction, late-bound members on
-// one mutable record, assigned in the same order the statements used to run.
-//
-// The ordering constraints that were documented as comments in main.ts are kept
-// as comments HERE, next to the lines they constrain. They are not stylistic:
-// several of them encode bugs that took multiple rounds to find.
+// The composition root. Statement order is the boot sequence, and the ordering notes below encode real bugs.
 
 import { setLeftButtonOwner } from "../viewport/navigator/bindings";
 import { Viewport } from "../viewport/viewport";
@@ -135,87 +124,45 @@ export interface Engine {
   viewport: Viewport;
   geometry: GeometryBackend;
   store: DocumentStore;
-  /** Publishes this window's document to an attached assistant, and applies the
-   *  edits it offers. Always constructed; running only while the live-editing
-   *  setting is on. */
+  /** Shares the document with an attached assistant; always constructed, running only while live editing is on. */
   live: LiveSessionHost;
-  /** Guide mode: the steps an attached assistant points at, carried by `live`. */
   guide: GuideSession;
   overlay: SketchOverlay;
   sketch: SketchMode;
   tools: EngineTools;
-  /** The arrow offered on an edge or face selection. ONE instance, because only
-   *  one thing can be offered at a time and two arrows in the viewport would be
-   *  two things to grab. Deliberately NOT in `tools`: it holds no document
-   *  state and must never appear in toolBusy(), or selecting anything would
-   *  silently disable every command in the app. */
+  /** The arrow on an edge or face selection. Not in `tools`: counted by toolBusy(), any selection would disable every
+   *  command. */
   nudge: SelectionNudge;
   ui: EngineUi;
 
   starters: ReturnType<typeof createFeatureStarters>;
   menus: ReturnType<typeof createContextMenus>;
-  /** DocumentStore's callback channels, mirrored as version refs. See
-   *  app/useDoc.ts for how components must consume it. */
+  /** Components must read it through app/useDoc.ts. */
   bridge: DocBridge;
 
-  /** The single action dispatcher, ribbon, keymap, command palette and every
-   *  context menu funnel through this one function. */
   handleAction(action: string): void;
 
-  /** Guard checked at the top of every start* tool and interactive helper: they
-   *  can't fire mid-sketch / mid-drag. Deliberately a plain function, not
-   *  reactive state, it is only ever read at event time. */
+  /** Checked before every start* tool so nothing fires mid sketch or mid drag; read only at event time. */
   toolBusy(): boolean;
-  /** toolBusy(), minus the Move gizmo.
-   *
-   *  For an AMBIENT affordance, one the app raises off the selection rather
-   *  than one the user started: the selection toolbar, and anything else that
-   *  hides itself while a tool owns the screen.
-   *
-   *  The distinction exists because picking a body raises the Move gizmo by
-   *  itself (viewportWiring.onBodySelectionChange, "picking a body IS reaching
-   *  for it"), so for a body selection toolBusy() is true from the instant
-   *  there is a selection to offer anything about. That is the same kind of
-   *  thing as `nudge`, the handle a selection carries, and the note on `nudge`
-   *  says why such a thing must never read as busy: it is not a mode you
-   *  entered, and hiding the offer for it hides the offer always.
-   *
-   *  Every other entry still counts, including a Move started deliberately over
-   *  a selection that is not a body's, which is a mode. */
+  /** toolBusy() minus the ambient Move gizmo a body selection raises, for affordances that hide while a tool owns the
+   *  screen; otherwise a body selection could never show them. */
   toolOwnsScreen(): boolean;
-  /** toolOwnsScreen(), minus a modal open over the app (Home counts as one), so
-   *  true only while a sketch or tool is at work on the document itself. */
+  /** toolOwnsScreen() minus a modal (Home counts as one): a sketch or tool is at work on the document. */
   toolAtWork(): boolean;
-  /** Stand the ambient Move gizmo down, so a body verb can run.
-   *
-   *  The other half of toolOwnsScreen. Showing an offer over a body is not
-   *  enough: `actions.ts` and every start* helper begin with their own
-   *  `if (toolBusy()) return`, and the gizmo a body selection raises makes that
-   *  true, so Pattern, the booleans and Remove Body were all refused with
-   *  "Finish the active tool first" from a menu that had just offered them.
-   *
-   *  A surface that acts on a body selection calls this first. Nothing is lost:
-   *  a drag that changed anything has already committed on pointerup
-   *  (MoveTool.onUp), so the gizmo this cancels is always an untouched one, and
-   *  cancelling leaves the selection it was raised on alone. */
+  /** A body verb calls this first, or its own toolBusy() check refuses it. The gizmo is always untouched, since a drag
+   *  commits on pointerup. */
   dropBodyGizmo(): void;
-  /** Raise the Move gizmo on the body selection, what picking a body does. */
   raiseBodyGizmo(): void;
-  /** Raise it again once the command dropBodyGizmo made way for is escaped,
-   *  while the same bodies are still selected. */
+  /** Raises it again once the command dropBodyGizmo made way for is escaped, while the same bodies are selected. */
   restoreBodyGizmo(): void;
-  /** True when the current rebuild produced a solid body (something to modify). */
   hasBody(): boolean;
-  /** True while a tool reads Alt on a left press, so an Alt+left orbit binding
-   *  steps aside for it. Narrower than toolBusy on purpose: a body selection or
-   *  an open sketch must still orbit. */
+  /** Lets Alt+left orbit step aside; narrower than toolBusy, since a body selection or open sketch must still orbit. */
   altLeftOwned(): boolean;
   planePick: boolean;
 
-  /** Read-only accessor over the selection store, write it with selectFeature. */
+  /** Write it with selectFeature. */
   readonly selectedFeature: string | null;
-  /** True when selectedFeature was picked by the user rather than set by the
-   *  engine on its own (see stores/selection.ts featureExplicit). */
+  /** Picked by the user rather than set by the engine (stores/selection.ts). */
   readonly selectedFeatureExplicit: boolean;
   selectFeature(id: string | null, explicit?: boolean): void;
   editFeature(id: string): void;
@@ -226,9 +173,8 @@ export interface Engine {
   isSketchConsumed(id: string): boolean;
   isSketchVisible(id: string): boolean;
   datumPlaneDef(f: Extract<Feature, { type: "datumPlane" }>): PlaneDef;
-  /** The reference a datum's pose is measured from, as it stands now. */
   datumSourceOf(f: Extract<Feature, { type: "datumPlane" }>): PlaneSpec;
-  /** Draw a datum (and what hangs off it) at a pose not yet written; null drops it. */
+  /** Draws a datum and its dependents at a pose not yet written; null drops it. */
   previewDatumPose(id: string, pose: DatumPose | null): void;
   syncDatumPlanes(): void;
 
@@ -241,22 +187,16 @@ export interface Engine {
   setStatus(text: string, cls: "" | "connected" | "error"): void;
 }
 
-/** Settled once the restore-on-launch question is answered or was never asked. */
 let recoveryAsked: Promise<void> = Promise.resolve();
 
 export function createEngine(canvas: HTMLCanvasElement): Engine {
-  // Filled top-to-bottom in exactly the order main.ts's statements ran. Members
-  // are read through `e` rather than captured, so a block installed early can
-  // still call one assigned later (what hoisting used to buy).
+  // Members are read through `e` rather than captured, so a block installed early can call one assigned later.
   const e = {} as Engine;
   e.canvas = canvas;
   e.lastAction = null;
   e.planePick = false;
 
-  // There is no status pill any more. A hint ("select a body first") is a short
-  // info toast, a repeat of the one still on screen is dropped; "connected"
-  // needs no word; the rest goes to the console. Build errors have their own
-  // notice (rebuildBridge).
+  // A hint is a short toast, dropped when it repeats the one on screen; errors go to the console.
   let lastHint = { text: "", at: 0 };
   // A reconnect loop repeats its warning every attempt, once a minute is plenty.
   let lastWarning = { text: "", at: -Infinity };
@@ -275,14 +215,9 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   };
 
   e.viewport = new Viewport(canvas);
-  // The grid spacing follows the zoom, so what one square is worth is a fact
-  // about the view that only the view knows and only the chrome can show.
   e.viewport.onGridStep = (mm) => {
     useUiStore().gridStepMm = mm;
   };
-  // See-through has no other tell once the model happens to be see-through for
-  // another reason (a sketch dims it too), so the view bar's button is what
-  // says which mode you are in.
   e.viewport.onXrayChange = (on) => {
     useUiStore().xray = on;
   };
@@ -308,35 +243,20 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   };
 
   e.geometry = new Geometry();
-  void e.geometry.init(); // picks the engine transport and opens it
+  void e.geometry.init();
   installEngineDiedToast();
 
-  // Start on a blank canvas. It used to open a built-in example bracket, which
-  // meant every launch began by rebuilding geometry nobody asked for, and "File →
-  // New" was the first thing most people did. Recovery still restores real work
-  // (checkRecovery below), so the only thing lost is the sample.
   e.store = new DocumentStore(e.geometry, EMPTY_DOCUMENT);
   e.store.onWarning = (msg) => toast(msg);
-  // The Viewport is constructed before the store, and used to reach the store
-  // back through `(window as any).store`, which main.ts only ever set under
-  // import.meta.env.DEV, so the ViewCube's persisted side overrides silently did
-  // nothing in a production build. Both live in this one function now, so hand
-  // it over directly.
   e.viewport.attachStore(e.store);
-  // Subscribe ONCE, here, before any component exists, components read version
-  // refs rather than adding their own store subscriptions.
+  // Once, before any component exists; components read version refs instead of subscribing.
   e.bridge = createDocBridge(e.store);
-  // crash-safety: periodic recovery snapshots + restore-on-launch prompt
   installAutosave(e.store);
   // Safe mode offers no snapshot: one that kills the app would kill every start.
   recoveryAsked = safeMode() ? Promise.resolve() : checkRecovery(e.store);
 
-  // Sharing this window's document with an assistant working through MCP. AFTER
-  // the store exists and before anything can edit it, so the very first publish
-  // carries a document rather than a null. Started only if the setting says so,
-  // and stopped and restarted when it changes, the loop holds a subscription to
-  // the store, so leaving it running in "off" would keep counting revisions for
-  // a session nobody is in.
+  // After the store exists and before anything edits it, so the first publish carries a document.
+  // Runs only while the setting is on, since its store subscription would keep counting revisions.
   e.live = new LiveSessionHost(e.store, e.geometry, liveEditsAllowed);
   e.guide = new GuideSession(
     (t) => resolveTarget(e, t),
@@ -353,9 +273,8 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.overlay = new SketchOverlay();
   e.viewport.addToScene(e.overlay.group, "sketches");
   e.sketch = new SketchMode(e.viewport, e.overlay);
-  // Every sketch's areas split along the lines the engine cuts a consuming
-  // feature's profile with, so a highlighted area is the area that builds. The
-  // build RESULT is the epoch: a visibility toggle re-emits the same one.
+  // Areas split where the engine cuts a consuming feature's profile, so a highlighted area is what builds. The build
+  // result is the epoch, since a visibility toggle re-emits the same one.
   let opened = 0;
   e.store.onOpen(() => opened++);
   const splitAgain = () => {
@@ -388,17 +307,14 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.store.onBuild(() => {
     if (cuts.stale()) splitAgain();
   });
-  // params engine ↔ sketcher plumbing: closed sketches re-solve headlessly after
-  // a parameter edit; the open one refreshes its live dim values itself.
+  // After a parameter edit closed sketches re-solve headlessly; the open one refreshes its own dims.
   e.store.headlessSolve = solveSketchFeature;
   e.store.openSketchId = () => e.sketch.openDocId;
   e.store.onParamsApplied = () => e.sketch.syncParamValues();
-  // projection refresh entries for the OPEN sketch bypass the doc (the session
-  // owns it) and patch the live entities instead
+  // The open sketch's session owns it, so its projection refreshes patch the live entities.
   e.store.onProjectionsApplied = (updates) => e.sketch.syncProjectedCurves(updates);
   e.store.onParamSolveIssue = (id) => toast(`Sketch ${id}: dimensions can't be satisfied, geometry left unchanged`);
-  // Engine owns fonts: glyph outlines arrive async via tessellateText; repaint the
-  // right surface (active sketch or committed overlay) when they land.
+  // Glyph outlines arrive async from the engine, which owns the fonts.
   setTextBackend(e.geometry, () => {
     if (e.sketch.active) e.sketch.redraw();
     else e.overlay.update(e.store.document);
@@ -453,20 +369,14 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     },
   };
 
-  // Reads e.toolBusy, assigned below, hence the thunk, the same late binding
-  // every other block in this file uses.
   e.nudge = new SelectionNudge(e.viewport, { toolBusy: () => e.toolBusy() });
 
-  // Warm up the constraint solver WASM. Deliberately ignores failure: initSolver
-  // resolves false rather than rejecting, so a runtime that cannot compile the
-  // module no longer greets the user with a nameless "Something went wrong" at
-  // startup (field report, 0.1.73 on Windows). The real, specific error is raised
-  // if and when a sketch actually needs to solve.
+  // initSolver resolves false rather than rejecting when the WASM cannot compile (0.1.73 on Windows); the specific
+  // error comes when a sketch needs to solve.
   void initSolver().then((ok) => {
     if (!ok) crumb("[solver] constraint solver unavailable, sketching without constraints");
   });
 
-  // --- predicates the UI wiring below depends on ---
   Object.assign(e, createToolBusy(e));
   const work = { tool: false, sketch: false, planes: false };
   e.viewport.activeWork = () => {
@@ -477,16 +387,9 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   };
   setLeftButtonOwner(() => e.altLeftOwned());
   Object.assign(e, createSketchVisibility(e));
-  // The overlay declared this hook and nothing ever assigned it, so its default
-  // ("everything is visible") stood: a sketch hidden from the browser tree kept
-  // drawing its curves AND kept its region fills in the pick list, so clicking
-  // the face underneath selected the hidden profile instead. Wired here rather
-  // than in the SketchOverlay constructor because isSketchVisible is only
-  // Object.assign'd onto the engine on the line above.
+  // Without this the overlay's default shows every sketch, so a hidden one would still take clicks.
   e.overlay.sketchVisible = (id) => e.isSketchVisible(id);
-  // Wired here for the same reason as the line above: only the engine can see
-  // the build state, and a sketch that follows a face has to be DRAWN where the
-  // build put it or the curves and the geometry cut from them disagree.
+  // A face following sketch is drawn where the build put it, or its curves and geometry disagree.
   e.overlay.resolvedPlanes = () => {
     const r = e.store.buildState.result;
     return {
@@ -513,24 +416,13 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   return e;
 }
 
-/** Everything from main.ts's `// --- UI ---` marker onward.
- *
- *  Split out of createEngine for one reason: the panels that are still
- *  imperative classes take a container element from the shell, and the shell no
- *  longer exists until Vue has mounted. main.ts calls this immediately after
- *  app.mount(), which is synchronous, so the only change to the original boot
- *  sequence is that a mount happens in the middle of it. Relative order within
- *  each half is untouched, which matters: several store subscriptions replay on
- *  subscribe, so who subscribes first is observable. */
+/** Runs right after app.mount(), since the imperative panels need the shell's containers. Subscription order matters:
+ *  several store subscriptions replay on subscribe. */
 export function mountUi(e: Engine): void {
   e.ui = {} as EngineUi;
-  // The tool rail is components/shell/ToolRail.vue; it renders itself from the
-  // store, so all that is left here is handing it the dispatcher.
   useRibbonStore().bind((a) => e.handleAction(a));
 
-  // Cmd/Ctrl-K command palette, search + run any command (discoverability safety net).
-  // The overlay is components/overlays/CommandPalette.vue; this keeps the one
-  // binding that has to be global, because the palette must open from anywhere.
+  // Global, so the palette opens from anywhere.
   const cmdk = useCommandPaletteStore();
   cmdk.bind((a) => e.handleAction(a));
   window.addEventListener("keydown", (ev) => {
@@ -625,12 +517,8 @@ export function mountUi(e: Engine): void {
     stressGlyphs: (handlers) => new StressGlyphs(e.viewport, handlers),
   });
 
-  // handleAction closes over `menus`/`panels`/`starters`, and those close back
-  // over handleAction through the thunks above, assign it once they exist.
+  // After menus, panels and starters, which reach back to it through thunks.
   e.handleAction = createActions(e);
-
-  // (The menubar is components/shell/MenuBar.vue now, TitleBar.vue calls
-  // buildMenubar(engine) itself, so there is nothing to construct here.)
 
   if (welcomeOnStartup()) e.ui.home.open();
   installLaunchPaths(e, recoveryAsked);
@@ -652,10 +540,8 @@ export function mountUi(e: Engine): void {
     geometry: e.geometry,
     viewport: e.viewport,
     sketch: e.sketch,
-  }); // floating bug icon, bottom-right
-  // Whatever capabilities are turned on, started here and restarted whenever
-  // that set changes. The engine deliberately does not know which ones exist:
-  // see plugins/activate.ts.
+  });
+  // The engine does not know which capabilities exist (plugins/activate.ts).
   if (!safeMode()) activatePlugins(e);
 
   e.geometry.onStatus((connected) => {
