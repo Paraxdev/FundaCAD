@@ -2945,7 +2945,7 @@ export class Viewport {
   }
 
   private syncOriginTiles() {
-    this.scene.originTiles.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal());
+    this.scene.originTiles.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal(), this.rig.active);
   }
 
   /** The colour drawn behind the scene, which a fixed render ground keeps apart from the theme. */

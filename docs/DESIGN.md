@@ -851,7 +851,8 @@ guard test cannot see them; hold them to these rules by hand.
   (`TILE_CORNER_RADIUS_PX` and `TILE_CORNER_RHO` in `src/viewport/originTiles.ts`).
 - What a body hides draws faint, not gone.
 - A name in the scene is a camera facing sprite, `--ui` 700 at 11px, inked in
-  `--text` or `--viewport-bg`, whichever reads on the ground.
+  `--text` or `--viewport-bg`, whichever reads on the ground. It fades out when
+  what it names is seen edge on.
 
 ## 8. Motion
 

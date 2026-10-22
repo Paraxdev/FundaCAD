@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import {
   CORNER_SEGMENTS, GHOST_SHARE, LABEL_BOX_PX, MIN_TILE_SCALE, OriginTiles, RIM_INK_MIX, RIM_PX, TILE_LOOK, TILE_ORDER, TILE_SHAPE,
-  labelInk, mixHex, tilePose, tileStates, type TilePose, type TileState,
+  labelInk, mixHex, nameFade, tilePose, tileStates, type TilePose, type TileState,
 } from "../../src/viewport/originTiles";
 import { AXIS_COLOR } from "../../src/viewport/originTriad";
 import { roundedSquare } from "../../src/viewport/cornerProfile";
@@ -25,6 +25,26 @@ function opacities(t: OriginTiles) {
   }
   return out;
 }
+
+function homeCamera(): THREE.PerspectiveCamera {
+  const cam = new THREE.PerspectiveCamera(30, 1.5, 1, 5000);
+  cam.up.set(0, 0, 1);
+  cam.position.set(80, -120, 90);
+  cam.lookAt(12, -7, 3);
+  cam.updateMatrixWorld(true);
+  return cam;
+}
+
+function topCamera(): THREE.OrthographicCamera {
+  const cam = new THREE.OrthographicCamera(-50, 50, 30, -30, 1, 1000);
+  cam.position.set(5, -3, 200);
+  cam.lookAt(5, -3, 0);
+  cam.updateMatrixWorld(true);
+  return cam;
+}
+
+const labelOpacity = (t: OriginTiles) =>
+  Object.fromEntries(PLANES.map((k) => [k, matOf(child(t.planes[k], "label")).opacity]));
 
 const look = (s: TileState) => ({ ...TILE_LOOK[s], ghost: TILE_LOOK[s].fill * GHOST_SHARE });
 
@@ -70,6 +90,15 @@ describe("tilePose", () => {
       const d = [boxDistance(boxes[0]!, boxes[1]!), boxDistance(boxes[0]!, boxes[2]!), boxDistance(boxes[1]!, boxes[2]!)];
       for (const x of d) expect(x).toBeCloseTo(want, 12);
     }
+  });
+});
+
+describe("nameFade", () => {
+  it("ramps from 0.15 to 0.35 of facing", () => {
+    expect([0, 0.1, 0.15, 0.35, 0.9, 1].map(nameFade)).toEqual([0, 0, 0, 1, 1, 1]);
+    expect(nameFade(0.25)).toBeCloseTo(0.5, 12);
+    expect(nameFade(-0.25)).toBeCloseTo(0.5, 12);
+    expect(nameFade(0.2)).toBeCloseTo(0.25, 12);
   });
 });
 
@@ -167,7 +196,7 @@ describe("OriginTiles", () => {
   it("holds the tiles to screen pixels, shrinking with a small part down to the floor", () => {
     const t = new OriginTiles(new THREE.Scene());
     const at = (pws: number | null, diag: number | null) => {
-      t.update(pws, diag);
+      t.update(pws, diag, homeCamera());
       const label = child(t.planes.XY, "label");
       return { scale: t.group.scale.x, label: [label.scale.x, label.scale.y] };
     };
@@ -188,6 +217,21 @@ describe("OriginTiles", () => {
     expectAt(0.37, diagFor(0.2, 0.37), MIN_TILE_SCALE);
     expectAt(1.9, diagFor(0.71, 1.9), 0.71);
     expect(at(null, 250).scale).toBe(0);
+    t.dispose();
+  });
+
+  it("hides the names of tiles seen edge on", () => {
+    const t = new OriginTiles(new THREE.Scene());
+    t.setShown(true);
+    t.update(0.37, null, topCamera());
+    expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.idle.label, XZ: 0, YZ: 0 });
+    t.hover("XZ");
+    expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.dim.label, XZ: 0, YZ: 0 });
+    t.hover(null);
+    t.update(0.37, null, homeCamera());
+    const home = labelOpacity(t);
+    expect(PLANES.map((k) => home[k]! > 0)).toEqual([true, true, true]);
+    expect(PLANES.map((k) => home[k]! <= TILE_LOOK.idle.label)).toEqual([true, true, true]);
     t.dispose();
   });
 

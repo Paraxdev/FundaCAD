@@ -45,6 +45,9 @@ export const TILE_LOOK: Record<TileState, { fill: number; rim: number; label: nu
 };
 export const LABEL_FONT_PX = 11;
 export const LABEL_BOX_PX = { w: 28, h: 16 } as const;
+/** A name fades out between these |normal . eye|, so a tile seen edge on names nothing. */
+export const NAME_FADE_FROM = 0.15;
+export const NAME_FADE_TO = 0.35;
 const LABEL_DPR = 4;
 const LABEL_FONT = `700 ${LABEL_FONT_PX * LABEL_DPR}px "Space Grotesk", Inter, system-ui, sans-serif`;
 /** What a body hides keeps this share of the fill. */
@@ -89,6 +92,11 @@ export function tilePose(plane: Plane3, shape: TileShape): TilePose {
 export function tileStates(hovered: Plane3 | null): Record<Plane3, TileState> {
   const s = (k: Plane3): TileState => (hovered === null ? "idle" : k === hovered ? "hot" : "dim");
   return { XY: s("XY"), XZ: s("XZ"), YZ: s("YZ") };
+}
+
+export function nameFade(facing: number): number {
+  const t = (Math.abs(facing) - NAME_FADE_FROM) / (NAME_FADE_TO - NAME_FADE_FROM);
+  return Math.min(1, Math.max(0, t));
 }
 
 export function mixHex(a: number, b: number, t: number): number {
@@ -160,6 +168,7 @@ export class OriginTiles {
   private readonly tiles: Record<Plane3, Tile>;
   private states = tileStates(null);
   private labelsPainted = false;
+  private fade: Record<Plane3, number> = { XY: 1, XZ: 1, YZ: 1 };
 
   constructor(scene: THREE.Scene, shape: Partial<TileShape> = {}) {
     this.shape = { ...TILE_SHAPE, ...shape };
@@ -220,11 +229,23 @@ export class OriginTiles {
   }
 
   /** `pixelWorldSize` is the world size of one screen pixel at the origin. */
-  update(pixelWorldSize: number | null, modelDiagonal: number | null) {
+  update(pixelWorldSize: number | null, modelDiagonal: number | null, camera: THREE.Camera) {
     const extent = this.shape.gapPx + this.shape.sizePx;
     const k = glyphScale(extent, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE);
-    this.group.scale.setScalar(glyphWorldScale(extent, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE));
-    for (const p of PLANES) this.tiles[p].label.scale.set(LABEL_BOX_PX.w / k, LABEL_BOX_PX.h / k, 1);
+    const scale = glyphWorldScale(extent, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE);
+    this.group.scale.setScalar(scale);
+    const ortho = (camera as THREE.OrthographicCamera).isOrthographicCamera === true;
+    const eye = ortho ? camera.getWorldDirection(new THREE.Vector3()).negate() : camera.getWorldPosition(new THREE.Vector3());
+    const toEye = new THREE.Vector3();
+    const centre = new THREE.Vector3();
+    for (const p of PLANES) {
+      this.tiles[p].label.scale.set(LABEL_BOX_PX.w / k, LABEL_BOX_PX.h / k, 1);
+      const pose = tilePose(p, this.shape);
+      if (ortho) toEye.copy(eye);
+      else toEye.subVectors(eye, centre.set(...pose.centre).multiplyScalar(scale).add(this.group.position)).normalize();
+      this.fade[p] = nameFade(toEye.dot(new THREE.Vector3(...pose.normal)));
+    }
+    this.paintLook();
   }
 
   /** `ground` is the colour actually drawn behind the tiles. */
@@ -268,7 +289,7 @@ export class OriginTiles {
       t.fill.material.opacity = look.fill;
       t.ghost.material.opacity = look.fill * GHOST_SHARE;
       t.rim.material.opacity = look.rim;
-      t.label.material.opacity = look.label;
+      t.label.material.opacity = look.label * this.fade[k];
     }
   }
 

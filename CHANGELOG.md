@@ -402,7 +402,8 @@ This file starts on 2026-08-03. For anything before that, see the
   beside the origin, each in its own quadrant with its name inside, instead of
   three large squares through each other. They keep the same size on screen at
   any zoom, so they no longer cover the grid or the part. A tile inside or
-  behind a body draws faint and can still be clicked.
+  behind a body draws faint and can still be clicked. A tile seen edge on hides
+  its name.
 
 - **Saving a .fundab with a big import is several times faster on a computer
   with several cores.** A 69 MB imported STEP assembly saves in about 0.4

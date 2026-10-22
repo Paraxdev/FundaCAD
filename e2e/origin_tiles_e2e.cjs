@@ -148,6 +148,12 @@ const PLANES = ["XY", "XZ", "YZ"];
     const s = await xySide();
     check(`top view at scale ${scale}: the XY tile is 40 px`, Math.abs(s.px - 40) <= 1, JSON.stringify(s));
   }
+  const names = await page.evaluate((planes) => Object.fromEntries(planes.map((k) => [
+    k, window.viewport.scene.planes[k].children.find((c) => c.userData.role === "label").material.opacity,
+  ])), PLANES);
+  check("top view names only the XY tile, the two seen edge on hide theirs", names.XY > 0.5 && names.XZ === 0 && names.YZ === 0,
+    JSON.stringify(names));
+  await shot("tiles-top-noir", around(await origin(), 170));
   await escape();
   check("Escape hides the tiles", Object.values(await tiles()).every((x) => !x.visible));
 
