@@ -89,7 +89,7 @@ describe("segCircleIntersect", () => {
   });
   it("accepts a crossing up to 1e-6 past either end", () => {
     // the circle about (100,50) with radius 5 crosses y = 50 at x = 95 and 105, a 10 long segment from x0 meets one of them
-    const at = (x0: number) => xy(segCircleIntersect(v(x0, 50), v(x0 + 10, 50), v(100, 50), 5)).map((p) => near(p, 9));
+    const at = (x0: number) => (xy(segCircleIntersect(v(x0, 50), v(x0 + 10, 50), v(100, 50), 5)) as number[][]).map((p) => near(p, 9));
     expect([at(105 + 5e-6), at(85 - 5e-6), at(85 + 5e-6)]).toEqual([[near([105, 50], 9)], [near([95, 50], 9)], [near([95, 50], 9)]]);
     expect([at(105 + 2e-5), at(85 - 2e-5)]).toEqual([[], []]);
   });
