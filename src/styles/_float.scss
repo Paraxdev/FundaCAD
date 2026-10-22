@@ -743,11 +743,16 @@
   font-size: 12.5px;
   font-weight: 600;
 }
-.float-tab:hover {
+.float-tab:hover:not(:disabled) {
   background: none;
   color: var(--text);
 }
+.float-tab:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 .float-tab.active {
+  background: none;
   color: var(--text);
 }
 .float-tab.active::after {

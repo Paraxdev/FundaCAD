@@ -160,7 +160,9 @@ const check = (name, ok, detail) => {
   await page.click('.select-pop .opt-row:has(.opt-label:text-is("-Z"))');
   await page.fill(".stress-force", "40");
   await page.click(".stress-run");
-  await page.waitForFunction(() => !document.querySelector(".stress-run")?.disabled, null, { timeout: 180000 });
+  await page.waitForFunction(() => !!document.querySelector(".stress-key-row, .stress-error"), null, {
+    timeout: 180000,
+  });
   await page.waitForTimeout(500);
   const rows = await page.evaluate(() => {
     const out = {};
@@ -175,12 +177,12 @@ const check = (name, ok, detail) => {
       warnings: [...document.querySelectorAll(".stress-warning")].map((e) => e.textContent),
     };
   });
-  check("Run gives a result", !rows.error && !!rows.rows["Peak von Mises"], rows.error ?? rows.rows["Peak von Mises"]);
+  check("Run gives a result", !rows.error && !!rows.rows["Peak stress"], rows.error ?? rows.rows["Peak stress"]);
   check("the applied load is the 40 N on the spot", rows.rows["Applied"] === "0, 0, -40 N", rows.rows["Applied"]);
   check("balanced by the reaction at the wall", rows.rows["Reaction"] === "0, 0, 40 N", rows.rows["Reaction"]);
   check("the colours are on the body", await page.evaluate(() => window.viewport.hasStressOverlay()));
   console.log(
-    `  peak ${rows.rows["Peak von Mises"]}, deflection ${rows.rows["Max deflection"]}, mesh ${rows.rows["Mesh"]}`,
+    `  peak ${rows.rows["Peak stress"]}, deflection ${rows.rows["Max deflection"]}, mesh ${rows.rows["Mesh"]}`,
   );
   for (const w of rows.warnings) console.log(`  warning: ${w}`);
   await shot("3-result");

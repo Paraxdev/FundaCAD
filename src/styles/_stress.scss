@@ -1,17 +1,102 @@
 // The Stress tool panel. Its glass comes from .measure-panel, these rules only lay out its rows.
 
-// A fixed narrow column, clear of the model and arrows it analyses: hints wrap and a long setup scrolls.
+// A fixed narrow column, clear of the model and arrows it analyses. Only the step scrolls, so the head, the tabs and
+// the Run bar stay put however long the setup grows.
 .stress-panel {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   width: 340px;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 160px);
-  overflow-y: auto;
   overflow-wrap: anywhere;
 }
+.stress-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.stress-head .float-card-close {
+  margin: -4px -4px 0 0;
+}
+.stress-step {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  // Room for the focus rings of the controls at the edges.
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.stress-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--float-line);
+}
+.stress-foot .stress-run {
+  flex: 1 1 auto;
+}
+.stress-busy {
+  flex: 1 1 auto;
+  color: var(--text-dim);
+}
+.stress-caption {
+  margin: var(--s-3) 0 var(--s-1);
+}
+.stress-item + .stress-item {
+  margin-top: var(--s-1);
+  padding-top: var(--s-1);
+  border-top: 1px solid var(--float-line);
+}
+// A disclosure: a caret and a word that fold what most studies leave alone.
+.stress-more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin-top: var(--s-3);
+  padding: var(--s-1) 0;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+}
+.stress-more:hover {
+  background: none;
+  color: var(--text);
+}
+.stress-more:focus-visible {
+  outline: none;
+  border-radius: var(--r-xs);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.stress-fold {
+  padding-left: var(--s-4);
+}
 .stress-panel .btn {
+  min-height: 28px;
+  padding: var(--s-1) var(--s-3);
   overflow-wrap: normal;
   white-space: nowrap;
+}
+.stress-panel .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+// Pressed or armed (Place while placing, Read a point while reading): the accent mixed into an opaque dark, as the
+// section chip's buttons do, so it reads over a pale model too.
+.stress-panel .btn.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
+  color: var(--text);
+}
+.stress-foot .btn {
+  min-height: 32px;
 }
 .stress-panel .sm-select,
 .stress-panel .sm-input {
@@ -118,15 +203,32 @@
 .stress-material-line {
   padding: var(--s-1) 0;
 }
-.stress-setup-folded {
-  align-items: center;
+.stress-weight {
+  margin-top: var(--s-3);
 }
 
-.stress-actions {
-  flex-wrap: wrap;
-  justify-content: flex-start;
+.stress-ran-with {
+  margin-bottom: var(--s-2);
+}
+.stress-stale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--s-2);
-  margin-top: var(--s-2);
+  margin-bottom: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+  color: color-mix(in srgb, var(--warn) 60%, var(--text));
+}
+.stress-view-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  min-height: 32px;
+  margin-top: var(--s-1);
 }
 .stress-deform-row {
   align-items: center;

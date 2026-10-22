@@ -9,6 +9,7 @@ import { ENGINE } from "../../../src/app/engineKey";
 import type { Engine } from "../../../src/app/engine";
 import { usePanelsStore } from "../../../src/stores/panels";
 import type { Selector } from "../../../src/types";
+import type { StressResultView } from "../../../src/ui/stress";
 
 enableAutoUnmount(afterEach);
 beforeEach(() => setActivePinia(createPinia()));
@@ -67,28 +68,63 @@ function optionLabels(): string[] {
   return [...document.body.querySelectorAll(".select-pop .opt-label")].map((e) => e.textContent ?? "");
 }
 
+function view(over: Partial<StressResultView> = {}): StressResultView {
+  return {
+    rows: [
+      { k: "Safety factor", v: "3.3" },
+      { k: "Peak stress", v: "15 MPa" },
+      { k: "Max deflection", v: "0.47 mm" },
+    ],
+    details: [
+      { k: "Material", v: "PLA" },
+      { k: "Mesh", v: "4800 elements, 2.5 mm" },
+    ],
+    warnings: [],
+    legend: { min: 0.5, max: 15 },
+    yields: false,
+    ...over,
+  };
+}
+
+const tab = (t: "setup" | "results") => q(`.float-tab[data-tab="${t}"]`) as HTMLButtonElement;
+const shown = (el: HTMLElement | null) => !!el && el.style.display !== "none";
+
+async function withResult(over: Partial<StressResultView> = {}) {
+  const m = await mounted();
+  const p = usePanelsStore();
+  p.showStress("b1");
+  p.stressStarted();
+  p.stressFinished({ result: view(over) });
+  p.setStressColours("shown");
+  await flushPromises();
+  return { ...m, p };
+}
+
 describe("StressPanel", () => {
   it("renders nothing while closed", async () => {
     await mounted();
     expect(q(".stress-panel")).toBeNull();
   });
 
-  it("shows the setup and hands the face buttons to the facade", async () => {
+  it("shows the setup and hands the face buttons, Run and Close to the facade", async () => {
     const { panels } = await mounted();
     usePanelsStore().showStress("b1");
     await flushPromises();
     expect(q(".stress-panel")?.textContent).toContain("Support 1");
     expect(value(q(".stress-support-type"))).toBe("fixed");
     expect(value(q(".stress-body"))).toBe("b1");
+    expect(q(".stress-set-support")?.textContent).toBe("Use selected");
     q(".stress-set-support")!.click();
     q(".stress-set-load")!.click();
     expect(panels.setStressFacesFromSelection.mock.calls).toEqual([[{ support: 1 }], [{ load: 1 }]]);
+    expect(q(".stress-cancel")).toBeNull();
     q(".stress-run")!.click();
     expect(panels.runStress).toHaveBeenCalledOnce();
-    expect((q(".stress-cancel") as HTMLButtonElement).disabled).toBe(true);
+    q(".stress-close")!.click();
+    expect(panels.closeStress).toHaveBeenCalledOnce();
   });
 
-  it("asks for E, nu and yield only for a custom material, and reads a blank size as automatic", async () => {
+  it("asks for E, nu and yield only for a custom material, and reads a blank mesh size as automatic", async () => {
     await mounted();
     const p = usePanelsStore();
     p.showStress("b1");
@@ -129,47 +165,184 @@ describe("StressPanel", () => {
     expect(density.title).not.toBe("");
   });
 
-  it("keeps the body while a Run is out, sizes in mm, and toggles the colours", async () => {
-    const { panels } = await mounted();
-    const p = usePanelsStore();
-    p.showStress("b1");
-    await flushPromises();
-    expect(q(".stress-colours")).toBeNull();
-    expect(q(".stress-size")?.parentElement?.textContent).toContain("mm");
-    p.stressStarted();
-    await flushPromises();
-    expect((q(".stress-body") as HTMLButtonElement).disabled).toBe(true);
-    p.stressFinished({});
-    p.setStressColours("shown");
-    await flushPromises();
-    expect(q(".stress-colours")?.textContent).toBe("Hide colours");
-    q(".stress-colours")!.click();
-    expect(panels.setStressColours).toHaveBeenCalledWith(false);
-    p.setStressColours("hidden");
-    await flushPromises();
-    q(".stress-colours")!.click();
-    expect(panels.setStressColours).toHaveBeenLastCalledWith(true);
-  });
-
-  it("shows the result rows, the legend's ends and the warnings", async () => {
+  it("folds More options with the mesh size, open at once when a size is set", async () => {
     await mounted();
     const p = usePanelsStore();
     p.showStress("b1");
-    p.stressFinished({
-      result: {
-        rows: [{ k: "Safety factor", v: "0.8" }],
-        warnings: ["printed parts are weaker across layers"],
-        legend: { min: 0.5, max: 62 },
-        yields: true,
-      },
-    });
     await flushPromises();
+    const more = q(".stress-more")!;
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    expect(shown(q(".stress-more-body"))).toBe(false);
+    more.click();
+    await flushPromises();
+    expect(shown(q(".stress-more-body"))).toBe(true);
+    expect(q(".stress-size")?.parentElement?.textContent).toContain("mm");
+    p.stress = null;
+    await flushPromises();
+    p.showStress("b1");
+    p.stress!.setup.size = 7.5;
+    await flushPromises();
+    expect(shown(q(".stress-more-body"))).toBe(true);
+    expect((q(".stress-size") as HTMLInputElement).value).toBe("7.5");
+  });
+
+  it("keeps the body while a Run is out and swaps Run for Cancel until it settles", async () => {
+    const { panels } = await mounted();
+    const p = usePanelsStore();
+    p.showStress("b1");
+    p.stressStarted();
+    await flushPromises();
+    expect((q(".stress-body") as HTMLButtonElement).disabled).toBe(true);
+    expect(q(".stress-run")).toBeNull();
+    expect(q(".stress-foot")?.textContent).toContain("Analysing");
+    q(".stress-cancel")!.click();
+    expect(panels.cancelStress).toHaveBeenCalledOnce();
+    p.stressFinished({});
+    await flushPromises();
+    expect(q(".stress-cancel")).toBeNull();
+    expect(q(".stress-run")).not.toBeNull();
+  });
+
+  it("keeps Results shut until a Run has one, then opens it by itself", async () => {
+    await mounted();
+    const p = usePanelsStore();
+    p.showStress("b1");
+    await flushPromises();
+    expect(tab("results").disabled).toBe(true);
+    expect(tab("results").title).not.toBe("");
+    tab("results").click();
+    await flushPromises();
+    expect(tab("setup").getAttribute("aria-selected")).toBe("true");
+    p.stressStarted();
+    p.stressFinished({ result: view() });
+    await flushPromises();
+    expect(tab("results").disabled).toBe(false);
+    expect(tab("results").getAttribute("aria-selected")).toBe("true");
+    expect(q(".stress-set-support")).toBeNull();
+    expect(q(".stress-run")).toBeNull();
+    expect(q(".stress-legend")).not.toBeNull();
+  });
+
+  it("lets the user go back to the setup and to the results again", async () => {
+    await withResult();
+    tab("setup").click();
+    await flushPromises();
+    expect(q(".stress-set-support")).not.toBeNull();
+    expect(q(".stress-legend")).toBeNull();
+    tab("results").click();
+    await flushPromises();
+    expect(q(".stress-set-support")).toBeNull();
+    expect(q(".stress-legend")).not.toBeNull();
+  });
+
+  it("shows the setup again when the result goes, a Run is refused, or the panel reopens", async () => {
+    const { p } = await withResult();
+    p.clearStressResult();
+    await flushPromises();
+    expect(tab("setup").getAttribute("aria-selected")).toBe("true");
+    p.stressFinished({ result: view() });
+    await flushPromises();
+    expect(tab("results").getAttribute("aria-selected")).toBe("true");
+    p.stressFinished({ result: view(), error: "set the faces of the load from a face selection" });
+    await flushPromises();
+    expect(tab("setup").getAttribute("aria-selected")).toBe("true");
+    expect(q(".stress-error")?.textContent).toContain("set the faces of the load");
+    tab("results").click();
+    await flushPromises();
+    p.stress = null;
+    await flushPromises();
+    p.showStress("b1");
+    await flushPromises();
+    expect(tab("setup").getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("shows the key rows in order, the legend's ends, the folded details and the warnings", async () => {
+    await withResult({
+      rows: [
+        { k: "Safety factor", v: "0.8" },
+        { k: "Peak stress", v: "62 MPa" },
+        { k: "Max deflection", v: "1.25 mm" },
+      ],
+      warnings: ["printed parts are weaker across layers"],
+      legend: { min: 0.5, max: 62 },
+      yields: true,
+    });
+    const rows = [...document.body.querySelectorAll(".stress-key-row")].map((r) => [
+      r.querySelector(".measure-k")?.textContent,
+      r.querySelector(".measure-v")?.textContent,
+    ]);
+    expect(rows).toEqual([
+      ["Safety factor", "0.8"],
+      ["Peak stress", "62 MPa"],
+      ["Max deflection", "1.25 mm"],
+    ]);
     const text = q(".stress-panel")!.textContent!;
     expect(text).toContain("0.5 MPa");
     expect(text).toContain("62 MPa");
-    expect(text).toContain("printed parts are weaker across layers");
+    expect(q(".stress-warning")?.textContent).toBe("printed parts are weaker across layers");
     expect(q(".stress-yields")?.textContent).toBe("0.8");
     expect(q(".stress-legend")?.getAttribute("style")).toContain("linear-gradient");
+    const details = q(".stress-details")!;
+    expect(details.getAttribute("aria-expanded")).toBe("false");
+    expect(shown(q(".stress-details-body"))).toBe(false);
+    expect([...document.body.querySelectorAll(".stress-detail-row .measure-k")].map((e) => e.textContent)).toEqual([
+      "Material",
+      "Mesh",
+    ]);
+    details.click();
+    await flushPromises();
+    expect(shown(q(".stress-details-body"))).toBe(true);
+  });
+
+  it("says when the model changed since the Run, hides the deformation, and runs again", async () => {
+    const { p, panels } = await withResult();
+    p.setStressDeform({ scale: 10, auto: 10, max: 40, animate: false });
+    await flushPromises();
+    expect(q(".stress-stale")).toBeNull();
+    expect(q(".stress-deform")).not.toBeNull();
+    p.setStressColours("none");
+    await flushPromises();
+    expect(q(".stress-stale")?.textContent).toContain("model changed");
+    expect(q(".stress-deform")).toBeNull();
+    q(".stress-rerun")!.click();
+    expect(panels.runStress).toHaveBeenCalledOnce();
+  });
+
+  it("says when the setup changed since the Run, and not when it is back as it ran", async () => {
+    const { p } = await withResult();
+    expect(q(".stress-stale")).toBeNull();
+    const ran = p.stress!.setup.loads[0]!.force;
+    p.stress!.setup.loads[0]!.force = 42.5;
+    await flushPromises();
+    expect(q(".stress-stale")?.textContent).toContain("setup changed");
+    p.stress!.setup.loads[0]!.force = ran;
+    await flushPromises();
+    expect(q(".stress-stale")).toBeNull();
+    p.stress!.setup.loads[0]!.force = 42.5;
+    p.setStressColours("none");
+    await flushPromises();
+    expect(q(".stress-stale")?.textContent).toContain("model changed");
+    expect(document.body.querySelectorAll(".stress-stale").length).toBe(1);
+  });
+
+  it("names the setup the result ran with, not the one edited since", async () => {
+    const { p } = await withResult();
+    p.stress!.setup.gravity.on = true;
+    await flushPromises();
+    expect(q(".stress-ran-with")?.textContent).toBe("1 support, 1 load, PLA");
+  });
+
+  it("toggles the colours with a switch", async () => {
+    const { p, panels } = await withResult();
+    const colours = q(".stress-colours") as HTMLInputElement;
+    expect(colours.checked).toBe(true);
+    colours.click();
+    expect(panels.setStressColours).toHaveBeenCalledWith(false);
+    p.setStressColours("hidden");
+    await flushPromises();
+    expect(colours.checked).toBe(false);
+    colours.click();
+    expect(panels.setStressColours).toHaveBeenLastCalledWith(true);
   });
 
   it("lists supports with their kinds, and hands kind, add and remove to the facade", async () => {
@@ -188,29 +361,23 @@ describe("StressPanel", () => {
     expect(panels.removeStressSupport).toHaveBeenCalledWith(2);
   });
 
-  it("turns gravity on with a direction, off by default", async () => {
+  it("turns the own weight on with a direction, off by default", async () => {
     await mounted();
     const p = usePanelsStore();
     p.showStress("b1");
     await flushPromises();
     const on = q(".stress-gravity-on") as HTMLInputElement;
-    const dir = q(".stress-gravity-dir") as HTMLButtonElement;
     expect(on.checked).toBe(false);
-    expect(dir.disabled).toBe(true);
+    expect(q(".stress-gravity-dir")).toBeNull();
     on.click();
     await flushPromises();
     expect(p.stress!.setup.gravity.on).toBe(true);
-    expect(dir.disabled).toBe(false);
-    await pick(dir, "+Y");
+    await pick(q(".stress-gravity-dir")!, "+Y");
     expect(p.stress!.setup.gravity).toEqual({ on: true, direction: "+Y" });
   });
 
-  it("shows the deformation with its factor, 1x, Animate, Probe and the pinned probes", async () => {
-    const { panels } = await mounted();
-    const p = usePanelsStore();
-    p.showStress("b1");
-    p.stressFinished({ result: { rows: [], warnings: [], legend: { min: 0, max: 1 }, yields: false } });
-    p.setStressColours("shown");
+  it("shows the deformation with its factor, True size, Animate, Read a point and the pinned points", async () => {
+    const { p, panels } = await withResult();
     p.setStressDeform({ scale: 120, auto: 120, max: 480, animate: false });
     p.addStressPin({ tri: 3, weights: [1, 0, 0], label: "12 MPa, 0.4 mm" });
     await flushPromises();
@@ -229,44 +396,6 @@ describe("StressPanel", () => {
     expect(q(".stress-pin")?.textContent).toContain("12 MPa, 0.4 mm");
     q(".stress-remove-pin")!.click();
     expect(panels.removeStressProbe).toHaveBeenCalledWith(1);
-  });
-
-  it("folds the setup once a Run has a result, and opens it again on request or when the result goes", async () => {
-    await mounted();
-    const p = usePanelsStore();
-    p.showStress("b1");
-    p.stress!.setup.gravity.on = true;
-    await flushPromises();
-    expect(q(".stress-set-support")).not.toBeNull();
-    p.stressFinished({
-      result: { rows: [{ k: "Peak von Mises", v: "4 MPa" }], warnings: [], legend: { min: 0, max: 4 }, yields: false },
-    });
-    p.setStressColours("shown");
-    p.setStressDeform({ scale: 10, auto: 10, max: 40, animate: false });
-    await flushPromises();
-    expect(q(".stress-set-support")).toBeNull();
-    expect(q(".stress-setup-folded")?.textContent).toContain("1 support, 1 load, gravity -Z, PLA");
-    // The result's controls come before its rows.
-    const panel = q(".stress-panel")!;
-    const order = [".stress-deform", ".stress-probe", ".stress-legend"].map((c) =>
-      [...panel.querySelectorAll("*")].indexOf(q(c)!),
-    );
-    expect(order).toEqual([...order].sort((a, b) => a - b));
-    q(".stress-setup-toggle")!.click();
-    await flushPromises();
-    expect(q(".stress-set-support")).not.toBeNull();
-    q(".stress-setup-toggle")!.click();
-    await flushPromises();
-    expect(q(".stress-set-support")).toBeNull();
-    // A new Run keeps it folded while it replaces the result.
-    p.stressStarted();
-    p.clearStressResult();
-    await flushPromises();
-    expect(q(".stress-set-support")).toBeNull();
-    // A refused one opens it, where what is in the way usually is.
-    p.stressFinished({ error: "set the faces of the load from a face selection" });
-    await flushPromises();
-    expect(q(".stress-set-support")).not.toBeNull();
   });
 
   it("lets the last load go, for a body under its own weight", async () => {
@@ -345,15 +474,15 @@ describe("StressPanel", () => {
     expect(q(".stress-pressure")).not.toBeNull();
   });
 
-  it("keeps Stop probing pressable when the colours have gone", async () => {
-    const { panels } = await mounted();
-    const p = usePanelsStore();
-    p.showStress("b1");
-    p.stressFinished({ result: { rows: [], warnings: [], legend: { min: 0, max: 1 }, yields: false } });
-    p.setStressProbe(true);
+  it("keeps Read a point pressable to leave probe mode when the colours have gone", async () => {
+    const { p, panels } = await withResult();
+    p.setStressColours("none");
     await flushPromises();
     const probe = q(".stress-probe") as HTMLButtonElement;
-    expect(probe.textContent).toBe("Stop probing");
+    expect(probe.disabled).toBe(true);
+    p.setStressProbe(true);
+    await flushPromises();
+    expect(probe.getAttribute("aria-pressed")).toBe("true");
     expect(probe.disabled).toBe(false);
     probe.click();
     expect(panels.setStressProbe).toHaveBeenCalledWith(false);

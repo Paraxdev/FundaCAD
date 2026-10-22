@@ -1316,7 +1316,7 @@ async function runStress(ctx) {
       throw e;
     });
   await sleep(2500);
-  await page.getByRole("button", { name: "1x", exact: true }).click();
+  await page.getByRole("button", { name: "True size", exact: true }).click();
   await ctx.park();
   await sleep(800);
 }
