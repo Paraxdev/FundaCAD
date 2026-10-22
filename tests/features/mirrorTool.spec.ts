@@ -52,6 +52,9 @@ function rig(bodyIds = ["body1", "body2", "body3"]) {
     ghost: null as null | { bodies: readonly string[]; matrices: readonly THREE.Matrix4[] },
     hoverBody: null as string | null,
     hoverFace: 0,
+    litPlane: null as string | null,
+    litDatum: null as string | null,
+    faceMarks: null as null | { faceIds: number[]; color: number }[],
   };
   const viewport = {
     domElement: canvas,
@@ -72,7 +75,15 @@ function rig(bodyIds = ["body1", "body2", "body3"]) {
     hoverBody: (id: string | null) => {
       log.hoverBody = id;
     },
-    hoverPlane: () => {},
+    hoverPlane: (p: string | null) => {
+      log.litPlane = p;
+    },
+    highlightDatum: (id: string | null) => {
+      log.litDatum = id;
+    },
+    setFaceMarks: (marks: { faceIds: number[]; color: number }[] | null, layer: string) => {
+      if (layer === "mirror") log.faceMarks = marks;
+    },
     hoverDatum: () => {},
     hoverFaceAt: () => {
       log.hoverFace++;
@@ -161,12 +172,57 @@ describe("starting", () => {
 });
 
 describe("picking", () => {
-  it("a plain body click picks it and moves on to the plane", () => {
+  it("plain body clicks add one and many while Objects is active, Enter moves on to the plane", () => {
     const r = rig();
     r.tool.start([], r.done);
     expect(click(r.canvas, 40)).toBe(true);
-    expect(summary()).toEqual({ active: "line", values: ["1 body", "Nothing picked"], plane: null, ready: false });
-    expect(r.log.selected).toEqual(["body2"]);
+    expect(summary()).toEqual({ active: "objects", values: ["1 body", "Nothing picked"], plane: null, ready: false });
+    expect(prompt()).toContain("Pick what to mirror, Enter when done");
+    click(r.canvas, 60);
+    click(r.canvas, 20);
+    expect(r.log.selected).toEqual(["body2", "body3", "body1"]);
+    expect(summary()!.active).toBe("objects");
+    key("Enter");
+    expect(summary()!.active).toBe("line");
+    expect(prompt()).toContain("Pick the mirror plane");
+    expect(r.addFeatures).not.toHaveBeenCalled();
+  });
+
+  it("Enter with no body picked stays on Objects", () => {
+    const r = rig();
+    r.tool.start([], r.done);
+    key("Enter");
+    expect(summary()!.active).toBe("objects");
+    expect(prompt()).toContain("Pick what to mirror");
+  });
+
+  it("a set plane hands the clicks back to Objects, so a body click adds it, not its face", () => {
+    const r = rig();
+    r.tool.start(["body1"], r.done);
+    click(r.canvas, 120);
+    expect(summary()!.active).toBe("objects");
+    expect(prompt()).toContain("Enter to mirror");
+    click(r.canvas, 40);
+    expect(summary()).toEqual({ active: "objects", values: ["2 bodies", "XZ plane"], plane: "XZ", ready: true });
+  });
+
+  it("keeps the picked plane lit, a face in the line colour, and puts it out at the end", () => {
+    const r = rig();
+    r.tool.start(["body1"], r.done);
+    expect([r.log.litPlane, r.log.litDatum, r.log.faceMarks]).toEqual([null, null, null]);
+    click(r.canvas, 120);
+    expect([r.log.litPlane, r.log.planesShown]).toEqual(["XZ", true]);
+    r.canvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 40, clientY: 50 }));
+    expect(r.log.litPlane).toBe("XZ");
+    r.tool.activate("line");
+    click(r.canvas, 140);
+    expect([r.log.litPlane, r.log.litDatum, r.log.faceMarks]).toEqual([null, "f5", null]);
+    r.tool.activate("line");
+    click(r.canvas, 170);
+    expect([r.log.litPlane, r.log.litDatum]).toEqual([null, null]);
+    expect(r.log.faceMarks).toEqual([{ faceIds: [FLAT.faceId], color: 0xb48cff }]);
+    key("Escape");
+    expect([r.log.litPlane, r.log.litDatum, r.log.faceMarks, r.log.planesShown]).toEqual([null, null, null, false]);
   });
 
   it("Shift and Ctrl clicks add bodies whichever field is active", () => {
@@ -202,7 +258,7 @@ describe("picking", () => {
     const r = rig();
     r.tool.start(["body1", "body3"], r.done);
     expect(click(r.canvas, 120)).toBe(true);
-    expect(summary()).toEqual({ active: "line", values: ["2 bodies", "XZ plane"], plane: "XZ", ready: true });
+    expect(summary()).toEqual({ active: "objects", values: ["2 bodies", "XZ plane"], plane: "XZ", ready: true });
     expect(r.log.ghost!.bodies).toEqual(["body1", "body3"]);
     expect(r.log.ghost!.matrices.map((m) => m.elements)).toEqual([
       new THREE.Matrix4().elements,
@@ -214,7 +270,7 @@ describe("picking", () => {
     const r = rig();
     r.tool.start(["body2"], r.done);
     click(r.canvas, 140);
-    expect(summary()).toEqual({ active: "line", values: ["1 body", "Slant"], plane: null, ready: true });
+    expect(summary()).toEqual({ active: "objects", values: ["1 body", "Slant"], plane: null, ready: true });
     expect(r.log.ghost!.matrices[1]!.elements).toEqual(reflectionMatrix(DATUM).elements);
   });
 
@@ -224,6 +280,7 @@ describe("picking", () => {
     expect(click(r.canvas, 160)).toBe(true);
     expect(summary()!.values[1]).toBe("Nothing picked");
     expect(prompt()!.startsWith(PLANE_REFUSED)).toBe(true);
+    expect(prompt()).toContain("Pick the mirror plane");
     click(r.canvas, 120);
     expect(prompt()!.includes(PLANE_REFUSED)).toBe(false);
   });
@@ -236,7 +293,7 @@ describe("picking", () => {
     expect(prompt()!.startsWith(PLANE_REFUSED)).toBe(true);
     expect(r.log.ghost).toBeNull();
     click(r.canvas, 170);
-    expect(summary()).toEqual({ active: "line", values: ["1 body", "Flat face"], plane: null, ready: true });
+    expect(summary()).toEqual({ active: "objects", values: ["1 body", "Flat face"], plane: null, ready: true });
     expect(r.log.ghost!.matrices[1]!.elements).toEqual(reflectionMatrix(FLAT.def).elements);
   });
 
@@ -254,7 +311,7 @@ describe("picking", () => {
     r.tool.start(["body1"], r.done);
     click(r.canvas, 140);
     panel()!.onPlane("YZ");
-    expect(summary()).toEqual({ active: "line", values: ["1 body", "YZ plane"], plane: "YZ", ready: true });
+    expect(summary()).toEqual({ active: "objects", values: ["1 body", "YZ plane"], plane: "YZ", ready: true });
   });
 
   it("clearing a field empties it, makes it active and drops the ghost", () => {
@@ -285,10 +342,10 @@ describe("Items rows", () => {
     const r = rig();
     r.tool.start([], r.done);
     expect(row({ kind: "body", id: "body3" }).route).toBe("taken");
-    r.tool.activate("objects");
+    expect(summary()!.active).toBe("objects");
     expect(row({ kind: "bodies", ids: ["body3", "body1", "body8"] }).route).toBe("taken");
     expect(r.log.selected).toEqual(["body3", "body1"]);
-    expect(summary()!.active).toBe("line");
+    expect(summary()!.active).toBe("objects");
   });
 
   it("a folder of bodies already picked is refused", () => {
@@ -390,7 +447,7 @@ describe("keys and the end of a run", () => {
     expect(key("Enter", btn)).toBe(false);
     expect(key("Tab", btn)).toBe(false);
     expect(r.addFeatures).not.toHaveBeenCalled();
-    expect(summary()!.active).toBe("line");
+    expect(summary()!.active).toBe("objects");
   });
 
   it("Tab switches the field", () => {

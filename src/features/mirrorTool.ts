@@ -10,13 +10,16 @@ import { freshIds } from "./moveTarget";
 import { pickPlaneTarget, type PlanePickTarget } from "./facePlanePick";
 import { featureLabel } from "./patternSources";
 import { showMirrorPanel } from "./mirrorPanel";
+import { mirrorLineColor } from "./mirrorColors";
 import { mirrorFeatures, planeDefOf, reflectionMatrix, type MirrorPlanePick } from "./mirrorMath";
 import {
   activate,
   addObjects,
   clearField,
   countLabel,
+  enterStep,
   isReady,
+  nextPick,
   pickLine,
   pickObject,
   startFields,
@@ -38,6 +41,7 @@ export class MirrorTool {
   private fields: MirrorFields<MirrorPlanePick> = startFields([]);
   private pre: string[] = [];
   private panelId = 0;
+  private datumLit = false;
   private onDone: ((id: string | null) => void) | null = null;
   private releaseTree: (() => void) | null = null;
   private readonly gesture: CanvasGesture;
@@ -112,12 +116,24 @@ export class MirrorTool {
 
   private set(f: MirrorFields<MirrorPlanePick>): void {
     this.fields = f;
-    this.viewport.setSelectedBodies([...f.objects]);
-    this.viewport.showAllPlanes(f.active === "line");
+    const vp = this.viewport;
+    vp.setSelectedBodies([...f.objects]);
+    vp.showAllPlanes(f.active === "line" || f.line?.kind === "base");
+    vp.hoverPlane(this.pickedBase());
+    const datum = f.line?.kind === "datum" ? f.line.id : null;
+    // Only a datum this run lit is put out, a datum selected before the run keeps its highlight.
+    if (datum || this.datumLit) vp.highlightDatum(datum);
+    this.datumLit = datum !== null;
+    const face = f.line?.kind === "face" ? f.line.face.faceId : null;
+    vp.setFaceMarks(face === null ? null : [{ faceIds: [face], color: mirrorLineColor() }], "mirror");
     if (f.line && f.objects.length) {
       this.viewport.setPatternGhost(f.objects, [new THREE.Matrix4(), reflectionMatrix(planeDefOf(f.line))]);
     } else this.viewport.clearPatternGhost();
     this.update();
+  }
+
+  private pickedBase(): Plane3 | null {
+    return this.fields.line?.kind === "base" ? this.fields.line.plane : null;
   }
 
   private bodyIds(): string[] {
@@ -135,7 +151,7 @@ export class MirrorTool {
     const keep = e.shiftKey || e.ctrlKey || e.metaKey;
     const vp = this.viewport;
     if (this.fields.active === "objects" || keep) {
-      vp.hoverPlane(null);
+      vp.hoverPlane(this.pickedBase());
       vp.hoverDatum(null);
       vp.clearHover();
       const id = vp.bodyIdAt(e.clientX, e.clientY);
@@ -148,7 +164,7 @@ export class MirrorTool {
     const plane = this.planeOf(t);
     if (plane?.kind === "face") vp.hoverFaceAt(e.clientX, e.clientY);
     else vp.clearHover();
-    vp.hoverPlane(plane?.kind === "base" ? plane.plane : null);
+    vp.hoverPlane(plane?.kind === "base" ? plane.plane : this.pickedBase());
     vp.hoverDatum(plane?.kind === "datum" ? plane.id : null);
     vp.domElement.style.cursor = plane ? "pointer" : "default";
   }
@@ -171,7 +187,7 @@ export class MirrorTool {
     if (!id) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    this.set(pickObject(this.fields, id, keep));
+    this.set(pickObject(this.fields, id));
   }
 
   // Keys typed in the panel or a field belong to them: Tab moves focus there and Enter presses the focused button.
@@ -187,7 +203,9 @@ export class MirrorTool {
     if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
-      this.commit();
+      const step = enterStep(this.fields);
+      if (step === "commit") this.commit();
+      else this.set(step);
     } else if (e.key === "Tab") {
       e.preventDefault();
       e.stopPropagation();
@@ -197,7 +215,7 @@ export class MirrorTool {
 
   private treePick(pick: TreePick): TreePickAnswer {
     if (pick.kind === "body") {
-      this.set(pickObject(this.fields, pick.id, false));
+      this.set(pickObject(this.fields, pick.id));
       return true;
     }
     if (pick.kind === "bodies") {
@@ -232,11 +250,7 @@ export class MirrorTool {
   private update(refusal?: string): void {
     const f = this.fields;
     const objects = countLabel(f.objects.length, "body", "bodies");
-    const want =
-      f.active === "objects"
-        ? "Objects · click a body to mirror, Shift adds more"
-        : "Mirror plane · click a plane or a flat face";
-    setPrompt(`${refusal ? `${refusal} · ` : ""}${want} · ${objects} · Enter · Esc`);
+    setPrompt(`${refusal ? `${refusal} · ` : ""}${nextPick(f, "plane")} · ${objects} · Esc to cancel`);
     showMirrorPanel({
       id: this.panelId,
       fields: [
@@ -271,6 +285,9 @@ export class MirrorTool {
     vp.showAllPlanes(false);
     vp.hoverPlane(null);
     vp.hoverDatum(null);
+    if (this.datumLit) vp.highlightDatum(null);
+    this.datumLit = false;
+    vp.setFaceMarks(null, "mirror");
     vp.hoverBody(null);
     vp.clearHover();
     vp.clearPatternGhost();

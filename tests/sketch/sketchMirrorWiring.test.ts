@@ -60,7 +60,7 @@ function makeSketch(pre: string[]) {
     pickTol: () => 0.5,
     textAt: () => null,
     loopIdsAt: () => [],
-    showPreview: (_c, _l, hover) => log.hovers.push(hover?.id ?? null),
+    showPreview: ({ hover }) => log.hovers.push(hover?.id ?? null),
     showPanel: showMirrorPanel,
     prompt: setPrompt,
     warn: () => {},
@@ -165,7 +165,18 @@ describe("sketch Mirror inside SketchMode", () => {
     expect(key(s, "Enter", btn)).toBe(false);
     expect(key(s, "Tab", btn)).toBe(false);
     expect(s.entities).toHaveLength(3);
+    expect(panel()!.active).toBe("objects");
+  });
+
+  it("Enter on the canvas moves from picked objects to the empty line, then applies", () => {
+    const { s } = makeSketch([]);
+    s.mirrorFlow.click(ON_L1, false);
+    expect(key(s, "Enter")).toBe(true);
     expect(panel()!.active).toBe("line");
+    expect(s.entities).toHaveLength(3);
+    s.mirrorFlow.click(ON_AXIS, false);
+    expect(key(s, "Enter")).toBe(true);
+    expect(s.entities.map((e) => e.id)).toEqual(["l1", "ax", "c1", "m1"]);
   });
 
   it("Tab on the canvas switches the field", () => {

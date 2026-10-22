@@ -480,7 +480,7 @@ function toggleIsolate() {
           :sub="sketchPalette.state.construction ? 'On' : 'Off'"
           :active="sketchPalette.state.construction"
           data-action="construction"
-          @click="sketchPalette.set('construction', !sketchPalette.state.construction)"
+          @click="engine.handleAction('construction')"
         />
       </template>
       <template v-else>
