@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, watchEffect } from "vue";
 import { useWhatsNewStore } from "../../stores/whatsNew";
 import { REPO_URL } from "../../ui/reportText";
 import { openExternal } from "../../ui/welcome";
 
 const news = useWhatsNewStore();
+// A start from a double-clicked file closes Home within a moment, which does not count as reading the card.
+const SEEN_AFTER_MS = 2000;
+let seenTimer: ReturnType<typeof setTimeout> | undefined;
+watchEffect(() => {
+  clearTimeout(seenTimer);
+  if (news.notes.length) seenTimer = setTimeout(news.markSeen, SEEN_AFTER_MS);
+});
+onBeforeUnmount(() => clearTimeout(seenTimer));
 const title = computed(() =>
   /^\d/.test(news.version) ? `What's new in FundaCAD ${news.version}` : "What's new in FundaCAD",
 );

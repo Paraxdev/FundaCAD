@@ -122,8 +122,7 @@ export async function startWhatsNew(home: WhatsNewHome, dev: boolean = import.me
   const hash = notesHash(section);
   const decision = decideWhatsNew({ dev, returning: getRecentFiles().length > 0, seen: readSeen(), hash });
   if (decision === "nothing") return;
-  writeSeen(hash);
-  if (decision === "record") return;
-  useWhatsNewStore().show(await appVersion(), notes);
+  if (decision === "record") return writeSeen(hash);
+  useWhatsNewStore().show(await appVersion(), notes, () => writeSeen(hash));
   if (!home.isOpen()) toast("FundaCAD was updated.", { action: { label: "What's new", onClick: () => home.open() } });
 }
