@@ -1,10 +1,5 @@
 <script setup lang="ts">
 import { fmtKeys } from "../../input/platform";
-// The floating column of view controls down the right edge: snapping, the grid
-// and units, standard views, display and analysis, a screenshot, and the
-// history panel toggle. Each opens a popover; only settings the app has are
-// offered.
-
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useBuildValue } from "../../app/useDoc";
@@ -77,8 +72,7 @@ onUnmounted(() => {
   engine.viewport.setViewCubeInset(0);
 });
 
-// --- live values the engine does not publish --------------------------------
-
+// Live values the engine does not publish.
 const pulse = ref(0);
 const bump = () => requestAnimationFrame(() => pulse.value++);
 onMounted(() => window.addEventListener("pointerup", bump));

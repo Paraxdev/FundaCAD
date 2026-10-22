@@ -1,18 +1,6 @@
 <script setup lang="ts">
-// A collapsible section head in the Browser: caret, glyph, label, count badge
-// and (for assembly nodes and anything else that can be hidden wholesale) an eye.
-//
-// The label is document-sourced, assembly node names come straight out of an
-// untrusted STEP file, so it is an interpolation, never markup. That is what
-// replaced the esc() calls the innerHTML version needed; adding esc() back here
-// would double-escape and render a product called "Bracket & Plate" as
-// "Bracket &amp; Plate".
-//
-// A head is also renameable, right-clickable and a drop target now, because an
-// ELEMENT is a folder the user owns rather than a fact about a file (see
-// document/elements.ts). Every one of those is opt-in by prop: pass no `rename`,
-// no menu and no `dropHere` and the head is exactly the read-only heading it
-// always was, which is what "Origin", "Sketches" and an assembly node stay.
+// The label comes from untrusted STEP names, so it is interpolated, never markup, and esc() would double-escape.
+// Rename, menu and drop are opt-in by prop, without them the head is a read-only heading.
 
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import Icon from "./Icon.vue";
@@ -47,11 +35,8 @@ const props = defineProps<{
   remove?: (() => void) | undefined;
   /** Begin dragging whatever this head stands for. */
   dragStart?: (() => void) | undefined;
-  /** Can what is being dragged land here? Asked on every dragover, which is why
-   *  it reads the drag off the store rather than the event: dataTransfer cannot
-   *  be read until the drop, i.e. never at the moment a target has to decide. */
+  /** Asked on every dragover, so it reads the drag off the store: dataTransfer is unreadable until the drop. */
   acceptDrop?: (() => boolean) | undefined;
-  /** Take the drop. */
   dropHere?: (() => void) | undefined;
   /** Given, a click on the head selects what the folder holds and only the caret
    *  (or a double-click) opens and closes it. */
@@ -87,9 +72,7 @@ function startRename() {
   void nextTick(() => labelEl.value?.start());
 }
 
-// A freshly made element starts its own rename: the folder appears with its
-// name selected, so naming it is typing rather than a second gesture. Same
-// field and the same immediate-watch reasoning as TreeRow, see there.
+// A freshly made element starts its own rename, so naming it is typing. Same field and immediate watch as TreeRow.
 watch(
   () => browser.pendingRenameId,
   (id) => {
@@ -110,7 +93,7 @@ function openMenu(e: MouseEvent) {
   contextMenu(e.clientX, e.clientY, items);
 }
 
-// --- the eye, same handling as TreeRow's -----------------------------------
+// The eye, handled as in TreeRow.
 function onEyeDown(e: PointerEvent) {
   if (!props.eyeDown || e.button !== 0) return;
   e.preventDefault();
@@ -118,9 +101,8 @@ function onEyeDown(e: PointerEvent) {
   if (el?.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
   props.eyeDown(e);
 }
-/** A pointer's click on the eye was already handled by its press (onEyeDown).
- *  A click with no pointer behind it (detail 0: the keyboard, assistive tech,
- *  element.click()) still has to toggle, or the eye works for a mouse only. */
+/** A pointer click was handled by its press. A click with no pointer (detail 0: keyboard, assistive tech, click())
+ *  still toggles, or the eye works for a mouse only. */
 function onEyeClick(e: MouseEvent) {
   if (props.eyeDown && e.detail > 0) return;
   props.toggleVis?.();
@@ -133,11 +115,7 @@ function onDragStart(e: DragEvent) {
   props.dragStart?.();
 }
 
-// --- drag and drop -------------------------------------------------------
-//
-// A COUNTER rather than a flag: dragenter/dragleave also fire as the pointer
-// crosses the head's own child spans, and a boolean flickers off halfway
-// through the row it is supposed to be highlighting.
+// A counter, not a flag: dragenter and dragleave also fire across the head's child spans, and a flag would flicker.
 const inside = ref(0);
 const canTake = computed(() => !!props.dropHere && props.acceptDrop?.() !== false);
 
@@ -163,9 +141,7 @@ function onDrop(e: DragEvent) {
 </script>
 
 <template>
-  <!-- aria-expanded is the disclosure state a screen reader announces, and it is
-       also the only place that state is legible from outside: the caret is an
-       icon, so its element carries no text to read it off. -->
+  <!-- aria-expanded is the only place the disclosure state is legible from outside, the caret is an icon. -->
   <div
     class="tree-folder"
     :data-id="id"

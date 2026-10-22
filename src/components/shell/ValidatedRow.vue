@@ -1,13 +1,6 @@
 <script setup lang="ts">
-// A labelled row of feature values: label on the left, a committing text input
-// on the right, and the unit the value is measured in as a chip beside it. The
-// input's behaviour (and the mid-edit guard) lives in ValidatedInput; this only
-// adds the row chrome, the fx-row / param-stale classes and the row tooltip.
-//
-// The unit is a chip rather than part of the label because a label is a name and
-// a unit is part of the value: "Radius mm | 5in" reads as a contradiction, and
-// the label column is where the width runs out first. Same vocabulary the
-// heads-up dimension box uses (sketch/dimInput.ts), down to the class.
+// The unit is a chip, not part of the label: a label is a name and a unit is part of the value ("Radius mm | 5in" reads
+// as a contradiction). The same vocabulary as sketch/dimInput.ts, down to the class.
 
 import ValidatedInput from "./ValidatedInput.vue";
 
@@ -27,18 +20,14 @@ const props = defineProps<{
   /** What the value is measured in, e.g. "mm" or "°". Empty for a unitless
    *  field, which gets no chip rather than a blank one. */
   unit?: string | undefined;
-  /** Opens the unit picker, positioned under the chip. Absent makes the chip a
-   *  caption instead of a button: a value can only be re-shown in another unit
-   *  when it is a number, and an expression is neither. */
+  /** Opens the unit picker under the chip. Absent, the chip is a caption: only a number can be re-shown in another
+   *  unit, an expression cannot. */
   pickUnit?: ((x: number, y: number) => void) | undefined;
-  /** Show what the typed text would do, without committing it. See
-   *  ValidatedInput; passed straight through. */
+  /** Shows what the typed text would do without committing, passed through to ValidatedInput. */
   preview?: ((raw: string) => void) | undefined;
   previewEnd?: ((committing: boolean) => void) | undefined;
-  /** Why the previewed value could not be built. Shown as a line under the row
-   *  rather than as a tooltip, for the same reason the heads-up box shows it in
-   *  place: a sentence explaining which measurement is wrong is worth reading,
-   *  and a tooltip is only found by someone who already suspects there is one. */
+  /** Why the previewed value could not be built, shown as a line under the row since a tooltip is only found by
+   *  someone who already suspects one. */
   problem?: string | null | undefined;
 }>();
 

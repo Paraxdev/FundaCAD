@@ -1,7 +1,6 @@
 <script setup lang="ts">
-// The floating tool rail down the left of the viewport. It carries every tool
-// the ribbon did, and swaps its whole content with the mode: categories for the
-// model, the tools that fit a selection, or the drawing tools inside a sketch.
+// The floating tool rail. It swaps its whole content with the mode: categories, the tools that fit a selection, or the
+// drawing tools inside a sketch.
 
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
@@ -101,8 +100,7 @@ const entries = computed<RailEntry[]>(() => {
   if (mode.value === "running") return [];
   if (mode.value === "selection") {
     const onFace = sel.kind.value === "face" && engine.viewport.selectedFaceSketchPlane() ? sketchTool() : null;
-    // App tools flat here; a plugin's tools are drawn below as their own
-    // collapsible groups (see the template), so they are left out of this list.
+    // Plugin tools are drawn below as their own collapsible groups, so they are left out here.
     return [
       ...(onFace ? [onFace] : []),
       ...sel.appOffers.value.map((o): RailTool => ({
@@ -132,8 +130,7 @@ const sketchName = useDocValue((doc) => {
   return named || `Sketch ${i + 1}`;
 });
 
-// --- live state the engine does not publish --------------------------------
-
+// Live state the engine does not publish.
 const pulse = ref(0);
 let pulseRaf = 0;
 function bump() {
@@ -167,8 +164,7 @@ const measureOn = computed(() => {
   return engine.tools.measure.active;
 });
 
-// --- families: last used on the face, press and hold for the rest ----------
-
+// A family shows its last used tool on the face, press and hold for the rest.
 const chosen = ref<Record<string, string>>({});
 watch(
   () => ribbon.activeSketchTool,
@@ -212,11 +208,8 @@ function openFlyout(f: RailFamily) {
 // always `fam:${slot.id}`, see railDefs.ts's sketchRail).
 const CONSTRAIN_FAMILY_ID = "fam:constrain";
 
-/** The Constrain family's face click, with something already selected in the
- *  sketch: offer the constraint types that apply to that selection instead of
- *  always arming Horizontal (SK-3). Returns false (caller falls through to the
- *  normal default-tool click) when there's no sketch selection or nothing in
- *  it is constrainable, so an empty selection behaves exactly as before. */
+/** With a sketch selection, the Constrain face click offers the constraint types that apply instead of arming
+ *  Horizontal (SK-3). False when nothing selected is constrainable, so the caller falls through to the default. */
 function offerConstraintPopup(f: RailFamily): boolean {
   const sk = engine.sketch;
   if (!sk.active) return false;
@@ -339,8 +332,6 @@ function pickFromFlyout(t: RailTool, ev: MouseEvent) {
   closeFlyout();
   run(t.action, ev);
 }
-
-// --- running ---------------------------------------------------------------
 
 function run(action: string, ev?: MouseEvent) {
   if (action.startsWith("offer:")) {

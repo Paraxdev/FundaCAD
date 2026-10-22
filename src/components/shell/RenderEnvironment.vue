@@ -1,17 +1,8 @@
 <script setup lang="ts">
 import RenderSections from "./RenderSections.vue";
 import DenoiserRow from "./DenoiserRow.vue";
-// What the model is lit by and drawn against.
-//
-// Together on one tab because they are one decision. Choosing a dark room and
-// leaving a light background gives a part lit from a room it is plainly not in;
-// the two are read as one picture and are best chosen as one.
-//
-// The same settings are also in Preferences, and that is deliberate rather than
-// a duplication to be tidied away. Preferences is where you go to say how the
-// app should behave; this is where you go while looking at the part, and the
-// gesture here is trying six of them in ten seconds. A grid of swatches is the
-// right control for that and a dropdown in a modal is not.
+// The same settings are also in Preferences on purpose: here you try six in ten seconds while looking at the part,
+// which a swatch grid suits and a dropdown in a modal does not.
 
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import {
