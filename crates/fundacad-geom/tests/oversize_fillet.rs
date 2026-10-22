@@ -386,3 +386,43 @@ fn a_concave_fill_that_just_reaches_the_next_corner_builds() {
         assert_eq!(got, (Vec::<&str>::new(), Vec::<&str>::new(), 3840.0 - 2.0 * 60.0), "{d}/{d2}");
     }
 }
+
+fn x_chamfered_then(l: f64, w: f64, e: f64, d: f64, d2: f64) -> Rebuild {
+    let x_edges = json!({"kind": "edge", "by": "axis", "axis": "X", "body": "body1"});
+    prism_with(&rect(-6.0, 11.0, l, w), 10.0, vec![
+        json!({"id": "c0", "type": "chamfer", "distance": e, "edges": x_edges}),
+        two_distance("c", d, d2, z_edges(), json!({})),
+    ])
+}
+
+/// An l x w x 10 block, X edges chamfered e, less each corner's d x d2 wedge
+/// cut through the whole height, for every way round the corners take them.
+fn x_chamfered_cuts(l: f64, w: f64, e: f64, d: f64, d2: f64) -> Vec<f64> {
+    let wedge = |a: f64, b: f64| {
+        let m = e.min(b);
+        let under = e * m - m * m / 2.0 - e * m * m / (2.0 * b) + m * m * m / (3.0 * b);
+        a * b * 10.0 / 2.0 - 2.0 * a * under
+    };
+    let block = l * w * 10.0 - 2.0 * e * e * l;
+    (0..16u32)
+        .map(|bits| {
+            let cut: f64 = (0..4).map(|c| if (bits >> c) & 1 == 1 { wedge(d, d2) } else { wedge(d2, d) }).sum();
+            ((block - cut) * 100.0).round() / 100.0
+        })
+        .collect()
+}
+
+/// Past a 45 degree chamfer on the X edges each Z edge's wall ends on a short
+/// slanted edge that a setback longer than e runs past. The fit check read the
+/// trace as crossing the bottom edge, skipped OCCT, and the section build cut a
+/// prism over the edge alone: 22 faces and 3864 for 3848.56 at 1 then 2/3.
+#[test]
+fn a_two_distance_chamfer_runs_on_past_a_short_slanted_end() {
+    for (e, d, d2) in [(1.0, 2.0, 3.0), (1.0, 1.5, 1.0), (2.0, 5.0, 3.0), (4.0, 6.0, 5.0), (4.0, 2.0, 3.0)] {
+        let r = x_chamfered_then(24.0, 20.0, e, d, d2);
+        let v = (volume(&r) * 100.0).round() / 100.0;
+        let one_way_round = x_chamfered_cuts(24.0, 20.0, e, d, d2).iter().any(|c| (c - v).abs() < 0.015);
+        let got = (messages(&r), warnings(&r, "c"), kernel::count(&r.bodies[0].shape, Kind::Face), one_way_round);
+        assert_eq!(got, (Vec::<&str>::new(), Vec::<&str>::new(), 14, true), "{e} then {d}/{d2}: {v}");
+    }
+}
