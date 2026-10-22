@@ -1025,9 +1025,23 @@ export class Geometry implements GeometryBackend {
     return msg.ok ? msg.result : null;
   }
 
-  private call<T>(op: string, extra: object, onId?: (id: string) => void): Promise<RawReply<T>> {
+  // A rebuild's own follow up requests and wire bookkeeping belong to the session it began in, not to whichever is
+  // current when its continuation runs.
+  private scope(): DocumentSession | null {
+    return this.sessions?.current ?? null;
+  }
+  private stillIn(scope: DocumentSession | null) {
+    if (scope && !scope.alive) throw new SessionEnded();
+  }
+
+  private call<T>(
+    op: string,
+    extra: object,
+    onId?: (id: string) => void,
+    scope: DocumentSession | null = this.scope(),
+  ): Promise<RawReply<T>> {
     const id = crypto.randomUUID();
-    const session = appScoped(op) ? null : (this.sessions?.current ?? null);
+    const session = appScoped(op) ? null : scope;
     // `doc` third: the desktop relay reads id, op and doc from the first bytes of a multi megabyte request.
     const raw = JSON.stringify(session ? { id, op, doc: session.id, ...extra } : { id, op, ...extra });
     // A part standing down while its session ends may still ask; the request would only feed a closed document.
@@ -1071,8 +1085,15 @@ export class Geometry implements GeometryBackend {
 
   /** Every rebuild and computeAll goes through here so the wire opt-in flags are set once; the resync paths, the
    *  largest replies, are the ones that must never fall back to a single frame. */
-  private rebuildCall(op: "rebuild" | "computeAll", extra: object, onId?: (id: string) => void) {
-    return this.call<WireRebuildResult>(op, { ...extra, binary: true, chunked: true }, onId);
+  private async rebuildCall(
+    op: "rebuild" | "computeAll",
+    extra: object,
+    scope: DocumentSession | null,
+    onId?: (id: string) => void,
+  ) {
+    const msg = await this.call<WireRebuildResult>(op, { ...extra, binary: true, chunked: true }, onId, scope);
+    this.stillIn(scope);
+    return msg;
   }
 
   get softCancel(): boolean {
@@ -1080,6 +1101,7 @@ export class Geometry implements GeometryBackend {
   }
 
   async rebuild(doc: CadDocument, tolerance = 0.1, onId?: (id: string) => void): Promise<RebuildReply> {
+    const scope = this.scope();
     const known: Record<string, string> = {};
     for (const [id, p] of this.wire.bodyMesh) known[id] = p.etag;
 
@@ -1105,7 +1127,7 @@ export class Geometry implements GeometryBackend {
     }
     if (!payload) payload = { document: doc, revision: this.revision + 1 };
 
-    let msg = await this.rebuildCall("rebuild", { ...payload, tolerance, known }, onId);
+    let msg = await this.rebuildCall("rebuild", { ...payload, tolerance, known }, scope, onId);
     if (msg.ok && msg.result?.resync) {
       // worker respawned or lost sync, one full resend recovers everything
       pipe(
@@ -1115,7 +1137,7 @@ export class Geometry implements GeometryBackend {
       this.wire.lastSent = null;
       this.wire.bodyMesh.clear();
       payload = { document: doc, revision: this.revision + 1 };
-      msg = await this.rebuildCall("rebuild", { ...payload, tolerance }, onId);
+      msg = await this.rebuildCall("rebuild", { ...payload, tolerance }, scope, onId);
     }
     if (msg.ok && !msg.result?.resync) {
       this.revision = payload.revision;
@@ -1130,7 +1152,7 @@ export class Geometry implements GeometryBackend {
         // the assemble cache is keyed on payloads that just went away
         this.wire.lastAssembled = null;
         this.wire.lastAssembledSig = null;
-        msg = await this.rebuildCall("rebuild", { document: doc, revision: ++this.revision, tolerance }, onId);
+        msg = await this.rebuildCall("rebuild", { document: doc, revision: ++this.revision, tolerance }, scope, onId);
         if (msg.ok && msg.result?.protocol === 2) assembled = this.assemble(msg.result);
       }
       if (msg.ok && assembled !== null) return { ok: true, result: assembled };
@@ -1148,7 +1170,11 @@ export class Geometry implements GeometryBackend {
   async computeAll(doc: CadDocument, tolerance = 0.1): Promise<RebuildReply> {
     this.wire.bodyMesh.clear();
     this.wire.lastSent = null;
-    const msg = await this.rebuildCall("computeAll", { document: doc, revision: ++this.revision, tolerance });
+    const msg = await this.rebuildCall(
+      "computeAll",
+      { document: doc, revision: ++this.revision, tolerance },
+      this.scope(),
+    );
     if (msg.ok && msg.result?.protocol === 2) {
       const assembled = this.assemble(msg.result);
       if (assembled !== null) return { ok: true, result: assembled };

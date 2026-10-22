@@ -9,13 +9,17 @@ type ExportAsk = { scope?: string; selected?: readonly string[]; flat?: { label:
 const ui = vi.hoisted(() => ({
   reported: [] as string[],
   picked: null as string | null,
+  onPick: () => {},
   save: async (_o: { defaultPath: string }): Promise<string | null> => null,
   exportDialog: async (_what: ExportAsk): Promise<unknown> => null,
   closeHome: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   save: (o: { defaultPath: string }) => ui.save(o),
-  open: async () => ui.picked,
+  open: async () => {
+    ui.onPick();
+    return ui.picked;
+  },
   message: async (m: string) => void ui.reported.push(m),
 }));
 vi.mock("../../src/ui/choice", () => ({ choose: async () => null, listModal: async () => {} }));
@@ -250,6 +254,40 @@ describe("export runs as a cancellable busy op", () => {
 
     expect(ui.reported.join(" ")).toContain("disk full");
     expect(store.busyState.active).toBe(false);
+  });
+
+  it("a document closed while its Export or Save dialog was open exports nothing, the next one exports itself", async () => {
+    for (const closedIn of ["export", "save"] as const) {
+      const exported: unknown[] = [];
+      const { backend, store } = storeWith(async (d) => {
+        exported.push(d.parameters);
+        return { ok: true, path: savePath };
+      });
+      store.setParam("closed", 1);
+      const answer = { settings: { ...DEFAULT_SETTINGS, format: "step" }, scope: "all" };
+      ui.exportDialog = async () => {
+        if (closedIn === "export") store.newDocument();
+        return answer;
+      };
+      ui.save = async () => {
+        if (closedIn === "save") store.newDocument();
+        return savePath;
+      };
+      const { exportModel } = await import("../../src/io/files");
+      await exportModel(store, backend);
+      const during = [...exported];
+      ui.exportDialog = async () => answer;
+      ui.save = async () => savePath;
+      store.setParam("next", 2);
+      await exportModel(store, backend);
+      expect({ closedIn, during, after: exported, busy: store.busyState.active, reported: ui.reported }).toEqual({
+        closedIn,
+        during: [],
+        after: [{ next: 2 }],
+        busy: false,
+        reported: [],
+      });
+    }
   });
 
   it("cancelling the Export dialog exports nothing", async () => {
@@ -505,6 +543,7 @@ describe("Open with a mesh or CAD file", () => {
     ui.closeHome.mockReset();
     ui.reported = [];
     ui.picked = null;
+    ui.onPick = () => {};
     (globalThis as unknown as Record<string, unknown>).window = {
       __TAURI_INTERNALS__: {},
       addEventListener() {},
@@ -514,6 +553,43 @@ describe("Open with a mesh or CAD file", () => {
 
   afterEach(() => {
     delete (globalThis as unknown as Record<string, unknown>).window;
+  });
+
+  it("a file picked after its document was closed is not imported into the next one, a later pick is", async () => {
+    for (const via of ["open", "import"] as const) {
+      const imported: string[] = [];
+      const backend = {
+        async rebuild() {
+          return { ok: false, error: { message: "stub" } };
+        },
+        async init() {},
+        onStatus() {
+          return () => {};
+        },
+        connected: true,
+        async importGeometry(p: string) {
+          imported.push(p);
+          return { ok: false, cancelled: true };
+        },
+      } as unknown as GeometryBackend;
+      const store = new DocumentStore(backend, { parameters: {}, features: [] });
+      const { openDocument, importModel } = await import("../../src/io/files");
+      const pick = () =>
+        via === "open" ? openDocument(store, backend, async () => true) : importModel(store, backend);
+      ui.picked = "/tmp/late.step";
+      ui.onPick = () => store.newDocument();
+      await pick();
+      const during = [...imported];
+      ui.picked = "/tmp/next.step";
+      ui.onPick = () => {};
+      await pick();
+      expect({ via, during, after: imported, reported: ui.reported }).toEqual({
+        via,
+        during: [],
+        after: ["/tmp/next.step"],
+        reported: [],
+      });
+    }
   });
 
   it("closes Home, as the file goes into the open document", async () => {

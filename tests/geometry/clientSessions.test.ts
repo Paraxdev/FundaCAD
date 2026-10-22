@@ -251,4 +251,33 @@ describe("engine requests and document sessions", () => {
       sent: ["generateShape"],
     });
   });
+  it("a rebuild answered just before its session ended goes no further, so the next session starts whole", async () => {
+    const one: CadDocument = { parameters: {}, features: [{ id: "f1", type: "box" } as never] };
+    for (const reply of [{ mesh: null }, { resync: true }]) {
+      const r = rig();
+      const a = outcome(r.g.rebuild(one));
+      const idA = r.sent[0]!.id;
+      r.text({ id: idA, ok: true, result: reply });
+      r.host.begin("new");
+      const ended = await a;
+      const b = outcome(r.g.rebuild(one));
+      const last = JSON.parse(r.sent.at(-1)!.raw) as Record<string, unknown>;
+      r.text({ id: last.id, ok: true, result: { mesh: null } });
+      expect({
+        reply,
+        ended,
+        b: await b,
+        ops: r.sent.map((s) => s.op),
+        bWhole: "document" in last,
+        bDoc: last.doc === r.host.current.id,
+      }).toEqual({
+        reply,
+        ended: "SessionEnded",
+        b: "resolved",
+        ops: ["rebuild", "doc_end", "rebuild"],
+        bWhole: true,
+        bDoc: true,
+      });
+    }
+  });
 });
