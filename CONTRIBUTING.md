@@ -27,6 +27,10 @@ right to grant this, meaning the work is yours or your employer has authorised i
   development build on every push, and `main`, the beta, only moves when a green `dev` is
   promoted or a hotfix lands (docs/ENGINE.md section 7).
 - `npm run build` (TypeScript and Vite) must pass.
+- Code is formatted, and CI fails on anything the formatters would change. `npx prettier --write .`
+  formats TypeScript, Vue, JavaScript and SCSS. `cargo fmt` formats Rust: run it in the top folder,
+  in `src-tauri` and in each `plugins/*/geometry-rs`, never `cargo fmt --all`, which rewrites the
+  vendored `third_party/`.
 - `npx vitest run` and `cargo test --workspace --features fundacad-engine/ws` must pass,
   and so must every golden check,
   `fundacad-engine golden-check tests/golden/<name>.golden.json`.
