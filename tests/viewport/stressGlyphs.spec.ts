@@ -38,7 +38,7 @@ function rig() {
     projectToScreen: (v: THREE.Vector3) => ({ x: v.x + 50, y: 50 - v.y }),
     requestRender: () => {},
     pickStressOverlay: pick,
-    stressOverlayPoint: () => [1, 2, 0] as [number, number, number],
+    stressOverlayPoint: vi.fn((tri: number) => [1 + tri, 2, 0] as [number, number, number]),
     overlayDrawn: () => true,
     watchOverlays: () => () => {},
   } as unknown as StressGlyphHost;
@@ -51,7 +51,7 @@ function rig() {
   } satisfies StressGlyphHandlers;
   const glyphs = new StressGlyphs(host, handlers);
   live.push(glyphs);
-  return { glyphs, handlers, scene, canvas, pick };
+  return { glyphs, handlers, scene, canvas, pick, host };
 }
 
 const model = (force = 1, into: [number, number, number] | null = null): StressGlyphModel => ({
@@ -92,7 +92,7 @@ describe("StressGlyphs", () => {
     pointer(canvas, "pointermove", 130, 51);
     const out = dragForce(start, 80 + start.offsetPx);
     expect(handlers.forceDrag).toHaveBeenLastCalledWith(1, { direction: "+X", custom: null, force: out });
-    expect(document.body.querySelector(".stress-cursor-label")?.textContent).toBe(`${out} N, +x`);
+    expect(document.body.querySelector(".stress-cursor-label")?.textContent).toBe(`${out} N, right (+X)`);
     // Swung round to straight down the screen: -Y.
     pointer(canvas, "pointermove", 50, 100);
     expect(handlers.forceDrag).toHaveBeenLastCalledWith(1, {
@@ -204,10 +204,39 @@ describe("StressGlyphs", () => {
     const arrow = scene.children[0] as THREE.Group;
     expect(arrow.children.filter((c) => c.renderOrder === 998)).toHaveLength(2);
     const pin = document.body.querySelector(".stress-probe-pin") as HTMLElement;
-    expect(pin.textContent).toBe("3 MPa");
+    expect(pin.textContent).toBe("1 3 MPa");
     expect(pin.style.left).toBe("59px");
     glyphs.dispose();
     expect(scene.children).toHaveLength(0);
     expect(document.body.querySelector(".stress-glyph-label")).toBeNull();
+  });
+
+  it("pins the weakest spot beside the probes, where its triangle is drawn, and takes it away on null", () => {
+    const { glyphs, scene, host } = rig();
+    glyphs.setProbePins([{ tri: 0, weights: [1, 0, 0], label: "3 MPa" }]);
+    glyphs.setWeakSpot({ tri: 7, weights: [0, 1, 0], label: "Weakest, 3.3x" });
+    const weak = [...document.body.querySelectorAll<HTMLElement>(".stress-weak-pin")];
+    expect(weak.map((w) => [w.textContent, w.style.left])).toEqual([["Weakest, 3.3x", "66px"]]);
+    expect(host.stressOverlayPoint).toHaveBeenCalledWith(7, [0, 1, 0]);
+    expect(document.body.querySelectorAll(".stress-probe-pin")).toHaveLength(2);
+    expect(scene.children).toHaveLength(2);
+    glyphs.setProbePins([
+      { tri: 0, weights: [1, 0, 0], label: "3 MPa" },
+      { tri: 2, weights: [0, 0, 1], label: "7.5 MPa" },
+    ]);
+    const numbers = [...document.body.querySelectorAll(".stress-probe-pin")].map((e) => [
+      e.querySelector(".stress-pin-no")?.textContent ?? null,
+      e.textContent,
+    ]);
+    expect(numbers, "numbered as the panel's Point rows, the weakest spot not").toEqual([
+      ["1", "1 3 MPa"],
+      ["2", "2 7.5 MPa"],
+      [null, "Weakest, 3.3x"],
+    ]);
+    glyphs.setProbePins([]);
+    expect(document.body.querySelectorAll(".stress-weak-pin")).toHaveLength(1);
+    glyphs.setWeakSpot(null);
+    expect(document.body.querySelectorAll(".stress-probe-pin")).toHaveLength(0);
+    expect(scene.children).toHaveLength(0);
   });
 });

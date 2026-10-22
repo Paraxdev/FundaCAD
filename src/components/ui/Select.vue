@@ -6,10 +6,12 @@ import { ref, useTemplateRef } from "vue";
 import Popover from "./Popover.vue";
 import ChoiceList from "./ChoiceList.vue";
 
+defineOptions({ inheritAttrs: false });
+
 const props = withDefaults(
   defineProps<{
     modelValue: T;
-    options: readonly { value: T; label: string; hint?: string }[];
+    options: readonly { value: T; label: string; hint?: string; disabled?: boolean }[];
     id?: string;
     testid?: string;
     disabled?: boolean;
@@ -42,6 +44,7 @@ function pick(v: T) {
 <template>
   <button
     ref="btn"
+    v-bind="$attrs"
     :id="id"
     type="button"
     class="sm-select select-trigger"

@@ -6,6 +6,8 @@ import { usePanelsStore } from "../../src/stores/panels";
 import type { StressOptions, StressReply, StressResult } from "../../src/geometry/client";
 import type { CadDocument, StressStudy, Vec3 } from "../../src/types";
 import type { StressGlyphHandlers, StressGlyphModel } from "../../src/viewport/stressGlyphs";
+import { autoDeformScale, probeLabel, probeValues, swingScale } from "../../src/ui/stress";
+import { drawnCorner, engineHit, refineSurface } from "../../src/ui/stressSurface";
 
 // The Stress panel's facade against a hand-made viewport, store and engine:
 // faces come from the selection stamped with their body, Run sends what the
@@ -61,6 +63,7 @@ function rig() {
   let study: StressStudy | null = null;
   const saved: (StressStudy | null)[] = [];
   const deformations: number[] = [];
+  const weakSpots: ({ tri: number; weights: Vec3; label: string } | null)[] = [];
   const glyphModels: StressGlyphModel[] = [];
   const glyphCalls: string[] = [];
   let handlers: StressGlyphHandlers | null = null;
@@ -153,6 +156,7 @@ function rig() {
         setModel: (m: StressGlyphModel) => glyphModels.push(m),
         setProbe: (on: boolean) => glyphCalls.push(`probe ${on}`),
         setProbePins: (p: unknown[]) => glyphCalls.push(`pins ${p.length}`),
+        setWeakSpot: (w: { tri: number; weights: Vec3; label: string } | null) => weakSpots.push(w),
         dispose: () => glyphCalls.push("dispose"),
       };
     },
@@ -168,6 +172,7 @@ function rig() {
     cancels,
     saved,
     deformations,
+    weakSpots,
     glyphModels,
     glyphCalls,
     handlers: () => handlers!,
@@ -180,6 +185,10 @@ function rig() {
     replaceStudy: (s: StressStudy | null) => {
       study = s;
       docListeners.forEach((f) => f());
+    },
+    /** The saved study changed with no model edit, as a later panel session or a file would leave it. */
+    setStudy: (s: StressStudy | null) => {
+      study = s;
     },
     select: (ids: number[]) => {
       selected = ids;
@@ -242,9 +251,10 @@ describe("stress panel flow", () => {
     r.select([1]);
     r.ui.setStressFacesFromSelection({ support: 1 });
     const d = usePanelsStore().stress!;
+    const toasts = r.statuses.length;
     r.ui.placeStressSpot({ load: 1 });
     expect(d.placing).toEqual({ load: 1 });
-    expect(r.statuses.at(-1)).toMatch(/click the body where Load 1 pushes/);
+    expect(r.statuses.slice(toasts), "the panel's own hint says it, no toast over it").toEqual([]);
     // A click on another body is told so and places nothing.
     r.handlers().placeSpot!({ at: [1, 1, 0], normal: [0, 0, 1], body: "b2" }, false);
     expect(r.statuses.at(-1)).toMatch(/another body/);
@@ -300,13 +310,16 @@ describe("stress panel flow", () => {
     await run;
     expect(usePanelsStore().stress!.running).toBe(false);
     expect(usePanelsStore().stress!.result?.rows.find((x) => x.k === "Safety factor")?.v).toBe("12.5");
+    // One engine triangle is drawn two levels finer, sixteen triangles, over the engine's own range.
+    const drawn = refineSurface(reply.surface!, 2);
     expect(r.overlays.at(-1)).toEqual({
       bodyId: "b1",
-      positions: reply.surface!.positions,
-      indices: [0, 1, 2],
-      values: [1, 4, 2],
+      positions: drawn.positions,
+      indices: drawn.indices,
+      values: drawn.values,
       range: { min: 1, max: 4 },
     });
+    expect(drawn.indices.length / 3).toBe(16);
   });
 
   it("cancels by its own request id and stays quiet about it", async () => {
@@ -390,7 +403,8 @@ describe("stress panel across changes", () => {
     expect(p.stress!.setup.supports[0]!.faces.faceIds).toEqual([2]);
     expect(p.stress!.result).not.toBeNull();
     r.ui.setStressColours(true);
-    expect(r.overlays.at(-1)).toMatchObject({ bodyId: "b1", values: [1, 4, 2] });
+    expect(r.overlays.at(-1)).toMatchObject({ bodyId: "b1" });
+    expect(Array.from((r.overlays.at(-1) as { values: Float32Array }).values).slice(0, 3)).toEqual([1, 4, 2]);
   });
 
   it("finds the faces again on a rebuild that renumbers them, and marks the new ids", () => {
@@ -421,7 +435,7 @@ describe("stress panel across changes", () => {
     await r.ui.runStress();
     expect(r.calls).toEqual([]);
     expect(usePanelsStore().stress!.error).toBe(
-      "a face of the load is not found on the current model, set the faces again",
+      "A face of the load is not found on the current model, set the faces again.",
     );
     // The saved study never lost it: the next build that has the face finds it.
     expect(r.study()).toEqual(saved);
@@ -447,7 +461,7 @@ describe("stress panel across changes", () => {
     expect(r.study()).toEqual(saved);
     void r.ui.runStress();
     expect(r.calls).toEqual([]);
-    expect(usePanelsStore().stress!.error).toMatch(/the body analysed is not on the current model/);
+    expect(usePanelsStore().stress!.error).toMatch(/^The body analysed is not on the current model\./);
     r.editDoc();
     r.rebuild(FIRST);
     expect(s.supports[0]!.faces.faceIds).toEqual([1]);
@@ -690,7 +704,7 @@ describe("supports, gravity and the view's glyphs", () => {
       },
     });
     await run;
-    const rows = usePanelsStore().stress!.result!.rows;
+    const rows = usePanelsStore().stress!.result!.details;
     expect(rows.find((x) => x.k === "Support 2, pinned")?.v).toBe("0, 0, 30 N");
     expect(rows.find((x) => x.k === "Weight")?.v).toBe("0, 0, -0.2 N");
   });
@@ -721,7 +735,12 @@ describe("the deformed shape and the probe", () => {
     const p = usePanelsStore();
     const auto = p.stress!.deform!.auto;
     expect(p.stress!.deform).toEqual({ scale: auto, auto, max: 4 * auto, animate: false });
-    expect(r.overlays.at(-1)).toMatchObject({ displacement: moving.surface!.displacement, scale: auto });
+    // The scale is the engine mesh's; the drawn shape bends by the refined displacement.
+    expect(auto).toBe(autoDeformScale(moving.surface!.positions, moving.surface!.displacement!));
+    expect(r.overlays.at(-1)).toMatchObject({
+      displacement: refineSurface(moving.surface!, 2).displacement,
+      scale: auto,
+    });
     r.ui.setStressDeformation(1);
     expect(r.deformations.at(-1)).toBe(1);
     expect(p.stress!.deform!.scale).toBe(1);
@@ -729,6 +748,38 @@ describe("the deformed shape and the probe", () => {
     r.ui.setStressColours(false);
     r.ui.setStressColours(true);
     expect(r.overlays.at(-1)).toMatchObject({ scale: 1 });
+  });
+
+  it("draws a result over the triangle budget as the engine sent it", async () => {
+    const r = rig();
+    setUp(r);
+    const n = 50_001;
+    const big: StressReply = {
+      ...moving,
+      surface: { ...moving.surface!, indices: Array.from({ length: n * 3 }, (_, i) => i % 3) },
+    };
+    const run = r.ui.runStress();
+    r.settle({ ok: true, result: big });
+    await run;
+    const o = r.overlays.at(-1) as { indices: Uint32Array; positions: Float32Array };
+    expect({ triangles: o.indices.length / 3, vertices: o.positions.length / 3 }).toEqual({
+      triangles: n,
+      vertices: 3,
+    });
+  });
+
+  it("keeps a pinned point on its drawn triangle when the deformation changes", async () => {
+    const r = rig();
+    await deformed(r);
+    const p = usePanelsStore();
+    r.ui.setStressProbe(true);
+    const hit = { tri: 13, weights: [0.25, 0.25, 0.5] as Vec3, point: [0, 0, 0] as Vec3 };
+    r.handlers().pinProbe(hit);
+    const label = p.stress!.pins[0]!.label;
+    r.ui.setStressDeformation(37.5);
+    expect(p.stress!.pins.map((x) => ({ tri: x.tri, weights: x.weights, label: x.label }))).toEqual([
+      { tri: 13, weights: [0.25, 0.25, 0.5], label },
+    ]);
   });
 
   it("animates on frames until the panel closes", async () => {
@@ -765,10 +816,18 @@ describe("the deformed shape and the probe", () => {
     r.ui.setStressProbe(true);
     expect(p.stress!.probe).toBe(true);
     expect(r.glyphCalls).toContain("probe true");
-    const hit = { tri: 0, weights: [0.5, 0.5, 0] as Vec3, point: [50, 0, -1] as Vec3 };
-    expect(r.handlers().probeLabel(hit)).toBe("2.5 MPa, 1 mm");
+    // A hit on the drawn mesh reads the engine's surface: at an engine vertex its own values, between them the
+    // engine's interpolation in the engine triangle the drawn one lies in.
+    const drawn = refineSurface(moving.surface!, 2);
+    const corner = drawnCorner(drawn, 1)!;
+    const hit = { ...corner, point: [100, 0, -2] as Vec3 };
+    expect(r.handlers().probeLabel(hit)).toBe("4 MPa, 2 mm");
+    const inner = { tri: 9, weights: [0.2, 0.5, 0.3] as Vec3, point: [0, 0, 0] as Vec3 };
+    const at = engineHit(drawn, inner.tri, inner.weights)!;
+    expect(r.handlers().probeLabel(inner)).toBe(probeLabel(probeValues(moving.surface!, at.tri, at.weights)!, "mm"));
     r.handlers().pinProbe(hit);
-    expect(p.stress!.pins.map((x) => x.label)).toEqual(["2.5 MPa, 1 mm"]);
+    expect(p.stress!.pins.map((x) => x.label)).toEqual(["4 MPa, 2 mm"]);
+    expect(p.stress!.pins.map((x) => [x.tri, x.weights])).toEqual([[corner.tri, corner.weights]]);
     expect(r.glyphCalls.at(-1)).toBe("pins 1");
     r.ui.removeStressProbe(p.stress!.pins[0]!.id);
     expect(p.stress!.pins).toEqual([]);
@@ -959,3 +1018,330 @@ function studyOf(r: ReturnType<typeof rig>): StressStudy {
   r.ui.closeStress();
   return s;
 }
+
+describe("playing and pausing the deformation", () => {
+  const bending: StressReply = {
+    ...reply,
+    surface: {
+      ...reply.surface!,
+      positions: [13.5, -7.25, 4.1, 113.5, -2.25, 4.1, 13.5, 2.75, 6.1],
+      displacement: [0, 0, 0, 0.25, 0, -2, 0, 0.5, -1],
+    },
+  };
+  let clock = 0;
+  let frames: Map<number, FrameRequestCallback>;
+  let cancelled: number[];
+  let nextId = 0;
+
+  beforeEach(() => {
+    clock = 1000;
+    frames = new Map();
+    cancelled = [];
+    vi.stubGlobal("requestAnimationFrame", (f: FrameRequestCallback) => {
+      frames.set(++nextId, f);
+      return nextId;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+      cancelled.push(id);
+      frames.delete(id);
+    });
+    vi.spyOn(performance, "now").mockImplementation(() => clock);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  /** Runs the pending frame at `at` ms on the stubbed clock. */
+  function frame(at: number) {
+    clock = at;
+    const [id, f] = [...frames.entries()][0]!;
+    frames.delete(id);
+    f(at);
+  }
+
+  async function played() {
+    const r = rig();
+    setUp(r);
+    const run = r.ui.runStress();
+    r.settle({ ok: true, result: bending });
+    await run;
+    const scale = usePanelsStore().stress!.deform!.scale;
+    return { r, scale };
+  }
+
+  const REST = 800;
+
+  it("starts Play at the full pose the still shape shows, so it never jumps", async () => {
+    const { r, scale } = await played();
+    expect(r.overlays.at(-1)).toMatchObject({ scale });
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    expect(r.deformations.at(-1)).toBe(scale);
+    frame(1200);
+    expect(r.deformations.at(-1)).toBeCloseTo(swingScale(REST + 200, scale), 12);
+  });
+
+  it("pauses where the swing is, cancels the frame, and plays on from that pose", async () => {
+    const { r, scale } = await played();
+    const p = usePanelsStore();
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    frame(1250);
+    clock = 1400;
+    r.ui.setStressAnimate(false);
+    const held = swingScale(REST + 400, scale);
+    expect({ animate: p.stress!.deform!.animate, drawn: r.deformations.at(-1), pending: frames.size }).toEqual({
+      animate: false,
+      drawn: held,
+      pending: 0,
+    });
+    expect(cancelled).toHaveLength(1);
+    clock = 9000;
+    r.ui.setStressAnimate(true);
+    frame(9000);
+    expect(r.deformations.at(-1)).toBeCloseTo(held, 12);
+    frame(9100);
+    expect(r.deformations.at(-1)).toBeCloseTo(swingScale(REST + 500, scale), 12);
+  });
+
+  it("draws the full pose at a slider value set while paused, and plays on from it", async () => {
+    const { r } = await played();
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    clock = 1300;
+    r.ui.setStressAnimate(false);
+    r.ui.setStressDeformation(37.5);
+    expect(r.deformations.at(-1)).toBe(37.5);
+    clock = 2000;
+    r.ui.setStressAnimate(true);
+    frame(2000);
+    expect(r.deformations.at(-1)).toBe(37.5);
+  });
+
+  it("swings to the true size on the next frame after True size while playing", async () => {
+    const { r, scale } = await played();
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    frame(1100);
+    const drawn = r.deformations.length;
+    r.ui.setStressDeformation(1);
+    expect(r.deformations.length).toBe(drawn);
+    frame(1300);
+    expect(r.deformations.at(-1)).toBeCloseTo(swingScale(REST + 300, 1), 12);
+    expect(scale).not.toBe(1);
+  });
+
+  it("pauses when the tab asks, and when the colours go, coming back at the held pose", async () => {
+    const { r, scale } = await played();
+    const p = usePanelsStore();
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    clock = 1200;
+    r.ui.pauseStressAnimation();
+    const held = swingScale(REST + 200, scale);
+    expect({ animate: p.stress!.deform!.animate, drawn: r.deformations.at(-1) }).toEqual({
+      animate: false,
+      drawn: held,
+    });
+    clock = 5000;
+    r.ui.setStressAnimate(true);
+    frame(5000);
+    clock = 5300;
+    r.ui.setStressColours(false);
+    expect(p.stress!.deform!.animate).toBe(false);
+    expect(frames.size).toBe(0);
+    r.ui.setStressColours(true);
+    expect(r.overlays.at(-1)).toMatchObject({ scale: swingScale(REST + 500, scale) });
+  });
+
+  it("resets to the full pose and cancels on Close, and a new Run starts still at full", async () => {
+    const { r } = await played();
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    clock = 1500;
+    r.ui.setStressAnimate(false);
+    void r.ui.runStress();
+    expect(usePanelsStore().stress!.deform).toBeNull();
+    r.settle({ ok: true, result: bending });
+    await Promise.resolve();
+    await Promise.resolve();
+    const again = usePanelsStore().stress!.deform!;
+    expect(r.overlays.at(-1)).toMatchObject({ scale: again.scale });
+    clock = 3000;
+    r.ui.setStressAnimate(true);
+    frame(3000);
+    expect(r.deformations.at(-1)).toBe(again.scale);
+    const pending = [...frames.keys()];
+    r.ui.closeStress();
+    expect(cancelled.slice(-1)).toEqual(pending);
+    expect(frames.size).toBe(0);
+  });
+
+  it("starts still at full after a body change dropped a paused result", async () => {
+    const { r } = await played();
+    r.ui.setStressAnimate(true);
+    frame(1000);
+    clock = 1500;
+    r.ui.setStressAnimate(false);
+    r.ui.setStressBody("b2");
+    r.ui.setStressBody("b1");
+    setUp(r);
+    const run = r.ui.runStress();
+    r.settle({ ok: true, result: bending });
+    await run;
+    const scale = usePanelsStore().stress!.deform!.scale;
+    expect(r.overlays.at(-1)).toMatchObject({ scale });
+    clock = 4000;
+    r.ui.setStressAnimate(true);
+    frame(4000);
+    expect(r.deformations.at(-1)).toBe(scale);
+  });
+});
+
+describe("the result through a close", () => {
+  async function ranAndClosed() {
+    const r = rig();
+    setUp(r);
+    await settled(r);
+    const p = usePanelsStore();
+    r.handlers().pinProbe({ tri: 0, weights: [0.2, 0.5, 0.3], point: [0.5, 0.3, 0] });
+    const before = {
+      result: p.stress!.result,
+      pins: p.stress!.pins,
+      overlay: r.overlays.at(-1),
+      weak: r.weakSpots.at(-1),
+    };
+    r.ui.closeStress();
+    expect(r.overlays.at(-1)).toBeNull();
+    return { r, p, before };
+  }
+
+  it("shows the last result again on reopen, with its colours, pins and weakest spot", async () => {
+    const { r, p, before } = await ranAndClosed();
+    expect(before.pins).toHaveLength(1);
+    r.ui.showStress();
+    expect(p.stress!.result).toEqual(before.result);
+    expect(p.stress!.colours).toBe("shown");
+    expect(p.stress!.pins).toEqual(before.pins);
+    expect(r.overlays.at(-1)).toEqual(before.overlay);
+    expect(r.weakSpots.at(-1)).toEqual(before.weak);
+    expect(r.glyphCalls.at(-1)).toBe("pins 1");
+    expect(p.stress!.ranSetup, "nothing changed, so no stale line").toBe(JSON.stringify(p.stress!.setup));
+  });
+
+  it("keeps the colours off on reopen when they were off at the close", async () => {
+    const r = rig();
+    setUp(r);
+    await settled(r);
+    r.ui.setStressColours(false);
+    r.ui.closeStress();
+    r.ui.showStress();
+    const p = usePanelsStore();
+    expect(p.stress!.colours).toBe("hidden");
+    expect(r.overlays.at(-1)).toBeNull();
+    r.ui.setStressColours(true);
+    expect(p.stress!.colours).toBe("shown");
+  });
+
+  it("brings the result back without colours or pins after a model edit while closed", async () => {
+    const { r, p } = await ranAndClosed();
+    r.editDoc();
+    const n = r.weakSpots.length;
+    r.ui.showStress();
+    expect(p.stress!.result).not.toBeNull();
+    expect(p.stress!.colours).toBe("none");
+    expect(p.stress!.pins).toEqual([]);
+    expect(p.stress!.deform).toBeNull();
+    expect(r.overlays.at(-1)).toBeNull();
+    expect(r.weakSpots.slice(n).filter(Boolean)).toEqual([]);
+  });
+
+  it("says the setup changed when the saved study did while closed", async () => {
+    const { r, p } = await ranAndClosed();
+    const s = structuredClone(r.study()!);
+    s.loads[0]!.force = 250;
+    r.setStudy(s);
+    r.ui.showStress();
+    expect(p.stress!.result).not.toBeNull();
+    expect(p.stress!.colours).toBe("shown");
+    expect(p.stress!.ranSetup).not.toBe(JSON.stringify(p.stress!.setup));
+  });
+
+  it("drops it for another body, another document, or a Run stopped by the close", async () => {
+    const a = await ranAndClosed();
+    a.r.setStudy({ ...structuredClone(a.r.study()!), body: "b2" });
+    a.r.ui.showStress();
+    expect(a.p.stress!.result).toBeNull();
+
+    const b = await ranAndClosed();
+    b.r.open();
+    b.r.ui.showStress();
+    expect(b.p.stress!.result).toBeNull();
+    expect(b.r.overlays.at(-1)).toBeNull();
+
+    const c = rig();
+    setUp(c);
+    await settled(c);
+    void c.ui.runStress();
+    c.ui.closeStress();
+    c.ui.showStress();
+    expect(usePanelsStore().stress!.result).toBeNull();
+  });
+
+  it("is kept once: a second close after a reopen keeps the result shown then", async () => {
+    const { r, p, before } = await ranAndClosed();
+    r.ui.showStress();
+    r.ui.closeStress();
+    r.ui.showStress();
+    expect(p.stress!.result).toEqual(before.result);
+    expect(r.overlays.at(-1)).toEqual(before.overlay);
+  });
+});
+
+describe("the weakest spot", () => {
+  const bent: StressReply = {
+    ...reply,
+    safetyFactor: 3.32,
+    maxVonMises: { value: 4, at: [100.2, 0.1, -0.05], face: 2 },
+    surface: {
+      ...reply.surface!,
+      positions: [13.5, -7.25, 4.1, 100, 0, 0, 2, 10, 0.5],
+      displacement: [0, 0, 0, 0.25, 0, -2, 0, 0.5, -1],
+    },
+  };
+
+  async function ran(r: ReturnType<typeof rig>, result: StressReply) {
+    const run = r.ui.runStress();
+    r.settle({ ok: true, result });
+    await run;
+  }
+
+  it("is pinned at the drawn corner of the vertex nearest the peak, with the safety factor", async () => {
+    const r = rig();
+    setUp(r);
+    await ran(r, bent);
+    const corner = drawnCorner(refineSurface(bent.surface!, 2), 1)!;
+    expect(r.weakSpots.at(-1)).toEqual({ ...corner, label: "Weakest, 3.3x safe" });
+  });
+
+  it("goes with the colours, on a new Run and when the model changes, and moves with a new peak", async () => {
+    const r = rig();
+    setUp(r);
+    await ran(r, bent);
+    r.ui.setStressColours(false);
+    expect(r.weakSpots.at(-1)).toBeNull();
+    r.ui.setStressColours(true);
+    expect(r.weakSpots.at(-1)).not.toBeNull();
+    const run = r.ui.runStress();
+    expect(r.weakSpots.at(-1)).toBeNull();
+    const moved = { ...bent, safetyFactor: null, maxVonMises: { value: 4, at: [2.5, 9.5, 0.5] as Vec3, face: 2 } };
+    r.settle({ ok: true, result: moved });
+    await run;
+    const corner = drawnCorner(refineSurface(bent.surface!, 2), 2)!;
+    expect(r.weakSpots.at(-1)).toEqual({ ...corner, label: "Weakest" });
+    r.editDoc();
+    r.rebuild(FIRST);
+    expect(r.weakSpots.at(-1)).toBeNull();
+  });
+});

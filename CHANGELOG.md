@@ -25,6 +25,33 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Stress results open with a plain verdict.** The first line says whether the
+  part holds and with how much margin, or where it is likely to fail, and a pin
+  marks the weakest spot on the part. A line under it says how far it bends and
+  how much larger it is drawn. When the weakest spot is a sharp inside corner or
+  the edge of a support, the verdict says it is a rough reading.
+
+- **The stress preview bends smoothly.** The coloured part is drawn from a finer
+  copy of the analysed surface, so curved faces and the bend look smooth and the
+  colours blend instead of jumping. Sharp edges and flat faces stay as they are,
+  and every number and reading still comes from the analysis itself.
+
+- **Stress results play and pause the bend.** A Play button right under the
+  result swings the part between still and bent, and Pause holds it where it is,
+  so you can stop on any pose without leaving the tool. Going back to Set up or
+  turning the colours off pauses it too.
+
+- **The Stress panel has Set up and Results tabs.** Set up holds the body,
+  supports, loads, own weight and material, with Run in a bar at the bottom and
+  Cancel only while it runs. Results opens by itself when a Run finishes and
+  shows the safety factor, peak stress and deflection, with the rest under
+  Details. When the model or the setup changes after a Run, Results says so and
+  offers Run again. Closing the panel keeps the last result, so opening it again
+  shows the colours and readings without another Run. The panel wears the app's
+  own selects, switches and buttons, its buttons say what they do (Click on body,
+  Use selected faces), directions read Down, Up, Left and so on, and the hint
+  says Ready once the setup can run.
+
 - **The section is saved with the document.** A cut that is on is saved in the
   file and is back when you open it. New and Open no longer carry a cut over
   from the document before, undo leaves the cut alone, and an older version
