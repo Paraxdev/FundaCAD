@@ -1,15 +1,12 @@
-// What a click means in the Fillet / Chamfer tool once it has member edges:
-// on a member (its ghost line) it drops that member, on another edge it adds
-// it, and on anything else it does nothing to the feature. A miss used to
-// commit the blend with whatever edges it had so far, which a near miss while
-// adding the third of four corners turned into a part with two.
+// A Fillet or Chamfer click with members: on a member it drops it, on another edge it adds it, elsewhere nothing.
+// A miss must not commit, a near miss on the third of four corners made a part with two.
 
 export interface ScreenPt {
   x: number;
   y: number;
 }
 
-/** Distance, in px, from `p` to a polyline drawn on screen, Infinity for no points. */
+/** Infinity for no points. */
 export function screenPolylineDist(pts: readonly ScreenPt[], p: ScreenPt): number {
   if (pts.length === 1) return Math.hypot(pts[0]!.x - p.x, pts[0]!.y - p.y);
   let best = Infinity;
@@ -27,15 +24,11 @@ export function screenPolylineDist(pts: readonly ScreenPt[], p: ScreenPt): numbe
 
 export type BlendClickTarget = "member" | "edge" | "none";
 
-/** A member ranks this much nearer than a model edge. The edges right beside a
- *  member's line are mostly the blend's own preview (a chamfer's two new
- *  borders), which a click there never means, while an edge that runs on from
- *  the member's end is still preferred a few px along it. */
+/** Edges right beside a member's line are mostly the blend's own preview, while an edge running on from the
+ *  member's end should still win a few px along it. */
 export const MEMBER_PREFERENCE_PX = 6;
 
-/** Which of a member ghost and a model edge the pointer is on, each given as
- *  its screen distance (the edge's rank, picking.EdgeCandidate.rankPx) or null
- *  when none is in reach. */
+/** Each candidate is its screen distance (the edge's is picking.EdgeCandidate.rankPx), null when out of reach. */
 export function blendClickTarget(
   memberDist: number | null,
   edgeRankPx: number | null,
@@ -47,8 +40,6 @@ export function blendClickTarget(
   return "none";
 }
 
-/** The prompt for a click that found no edge: the tool stays open with its
- *  members, and says how to add one or finish. */
 export function missPrompt(kind: "fillet" | "chamfer", members: number): string {
   const kept = `${members} edge${members === 1 ? "" : "s"} kept`;
   return `No edge there, ${kept} · click an edge to add it · Enter or ✓ to ${kind} · Esc`;
