@@ -1,14 +1,6 @@
 <script setup lang="ts">
-// PRINT, Printability: what would go wrong making the selected bodies, or
-// every body, layer by layer. The user sets the nozzle, layer and limits and
-// which way is up, and Check lists the findings by body while the view tints
-// the faces they are on, one colour per kind (see printabilityPanel.ts).
-//
-// Mounted for the life of the plugin and drawn only while the panel is open.
-// Inline styles on host tokens, as a plugin .vue may not carry a <style> block.
-//
-// No Esc-dismiss: Esc clears the body selection, which is how the user widens
-// the check back to every body, and it must not close the results with it.
+// No Esc-dismiss: Esc clears the body selection, which widens the check back to every body, and must not close the
+// results with it. Inline styles on host tokens, as a plugin .vue may not carry a <style> block.
 
 import { computed, type CSSProperties } from "vue";
 import { useBrowserStore } from "fundacad";

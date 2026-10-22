@@ -1,7 +1,5 @@
-// The Printability panel's state, owned by this plugin rather than by the
-// app's panels store: the settings the user edits in place, the check in
-// flight (its id, for Cancel), and the last result grouped by body. One per
-// activation, so switching the plugin off and on starts it fresh.
+// Owned by this plugin rather than the app's panels store, one per activation, so switching the plugin off and on
+// starts it fresh.
 
 import { markRaw, ref } from "vue";
 import { newPrintabilitySetup, type PrintabilitySetup, type PrintabilityView } from "./printability";
