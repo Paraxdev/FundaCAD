@@ -1129,6 +1129,17 @@ more than one id scheme here: the MCP server (`crates/fundacad-mcp/src/model.rs`
 has. Both are hosts for one op vocabulary and both are right. The lesson holds
 either way: **read the id `feature_add` returns, never predict it.**
 
+### Edits meant for a document the user closed
+
+The app host remembers which document a plugin last worked on. When the user
+opens, creates or discards a document while a plugin is between calls, the
+plugin's next edit (`doc_set`, `param_set`, `param_remove`, `feature_add`,
+`feature_update`, `feature_remove`, `feature_move`) is refused with "the
+document closed before this edit arrived, nothing was applied, read the open
+one", so work started for one document never lands in the next. Any read
+(`doc_get`) or the plugin's own `doc_new` makes the open document the one it
+works on, and so does the refusal itself.
+
 ### What appHost does not serve yet
 
 `build`, `inspect`, `view` and `export` need the geometry engine, which a plugin

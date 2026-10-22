@@ -12,6 +12,16 @@ import type { Op } from "./ops";
 /** Refused by the host, not the broker. The broker hands it to the plugin as `{ ok: false, code: "failed" }`. */
 export class HostRefused extends Error {}
 
+const WRITES = new Set<Op>([
+  "doc_set",
+  "param_set",
+  "param_remove",
+  "feature_add",
+  "feature_update",
+  "feature_remove",
+  "feature_move",
+]);
+
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 const str = (v: unknown, what: string): string => {
@@ -90,10 +100,26 @@ export function appHost(opts: AppHostOptions): BrokerHost {
     }
   };
 
+  // The document the plugin last worked on. An edit that arrives after it was closed was meant for it, so it is
+  // refused once instead of landing in the document opened since; the plugin reads the open one and goes on.
+  let seen = store.session;
+  const sameDocument = (op: Op) => {
+    const now = store.session;
+    if (seen === now || !WRITES.has(op)) {
+      seen = now;
+      return;
+    }
+    seen = now;
+    throw new HostRefused(
+      `${op}: the document closed before this edit arrived, nothing was applied, read the open one`,
+    );
+  };
+
   return {
     async perform(op: Op, args: Record<string, unknown>): Promise<unknown> {
       const unserved = UNSERVED[op];
       if (unserved) throw new HostRefused(`${op}: ${unserved}`);
+      sameDocument(op);
 
       switch (op) {
         case "app_info":
@@ -151,6 +177,7 @@ export function appHost(opts: AppHostOptions): BrokerHost {
 
         case "doc_new":
           store.newDocument();
+          seen = store.session;
           return { ok: true };
 
         case "doc_set": {
