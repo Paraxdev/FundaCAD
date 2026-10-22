@@ -100,19 +100,12 @@ export function appHost(opts: AppHostOptions): BrokerHost {
     }
   };
 
-  // The document the plugin last worked on. An edit that arrives after it was closed was meant for it, so it is
-  // refused once instead of landing in the document opened since; the plugin reads the open one and goes on.
-  let seen = store.session;
+  // A host serves one plugin run, and the run works on the document open when it started. Once the user closes that
+  // document, every write of the run is refused, a read of the next one included; only its own doc_new moves it on.
+  let session = store.session;
   const sameDocument = (op: Op) => {
-    const now = store.session;
-    if (seen === now || !WRITES.has(op)) {
-      seen = now;
-      return;
-    }
-    seen = now;
-    throw new HostRefused(
-      `${op}: the document closed before this edit arrived, nothing was applied, read the open one`,
-    );
+    if (session.alive || !(WRITES.has(op) || op === "doc_new")) return;
+    throw new HostRefused(`${op}: the document this plugin run was working on was closed, nothing was applied`);
   };
 
   return {
@@ -177,10 +170,16 @@ export function appHost(opts: AppHostOptions): BrokerHost {
 
         case "doc_new":
           store.newDocument();
-          seen = store.session;
+          session = store.session;
           return { ok: true };
 
         case "doc_set": {
+          // The import lands in whatever document is open when its read ends, and this one may be another file.
+          if (store.importRunning) {
+            throw new HostRefused(
+              `${op}: an import is still being read into the open document, nothing was applied, try again once it has landed`,
+            );
+          }
           const next = clone(obj(args.document, "document")) as unknown as CadDocument;
           next.parameters ??= {};
           next.features ??= [];

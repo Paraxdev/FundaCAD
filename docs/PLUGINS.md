@@ -1131,14 +1131,22 @@ either way: **read the id `feature_add` returns, never predict it.**
 
 ### Edits meant for a document the user closed
 
-The app host remembers which document a plugin last worked on. When the user
-opens, creates or discards a document while a plugin is between calls, the
-plugin's next edit (`doc_set`, `param_set`, `param_remove`, `feature_add`,
-`feature_update`, `feature_remove`, `feature_move`) is refused with "the
-document closed before this edit arrived, nothing was applied, read the open
-one", so work started for one document never lands in the next. Any read
-(`doc_get`) or the plugin's own `doc_new` makes the open document the one it
-works on, and so does the refusal itself.
+A plugin run works on the document that was open when the run started. When the
+user opens, creates or discards a document while the run is still going, every
+later edit of that run (`doc_set`, `doc_new`, `param_set`, `param_remove`,
+`feature_add`, `feature_update`, `feature_remove`, `feature_move`) is refused
+with "the document this plugin run was working on was closed, nothing was
+applied", so work started for one document never lands in the next. Reads
+(`doc_get`) still answer with the open document, but they do not make it the
+run's own: the user picks the run's document by running the plugin. The run's
+own `doc_new` is the one way it moves on, and the document it starts is then the
+one it works on.
+
+`doc_set` is also refused while an import is still being read into the open
+document, since the import lands in whatever document is open when its read ends
+and the one a plugin sets may be another file. The other edits are not, as they
+change the document the import was started for. Try `doc_set` again once the
+import has landed.
 
 ### What appHost does not serve yet
 
