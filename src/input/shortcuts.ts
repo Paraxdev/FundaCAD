@@ -1,8 +1,5 @@
-// Single source of truth for keyboard shortcuts. keymap.ts dispatches from this
-// table, commands.ts reads its hint column, and the `?` HUD renders it, so the
-// three surfaces can never disagree again (they did: M/T were emitted but never
-// dispatched, the palette advertised Fit on "F" while F ran Fillet, and the
-// ribbon promised sketch Offset on "O" with no binding behind it).
+// Single source of truth for shortcuts: keymap.ts dispatches from this table, commands.ts reads its hints and
+// the `?` HUD renders it, so they cannot disagree.
 
 import { useUiStore } from "../stores/ui";
 import { DEFAULT_BINDINGS, bindingRows, pointerBindings } from "../viewport/navigator/bindings";
@@ -10,14 +7,8 @@ import { DEFAULT_BINDINGS, bindingRows, pointerBindings } from "../viewport/navi
 export interface Shortcut {
   key: string; // normalized lowercase key ("b", "home", "f6", "?")
   shift?: boolean;
-  /** Ctrl (or Cmd) must be held.
-   *
-   *  Only the booleans use it, and they use it because the three single letters
-   *  that name them, U, B, I, are already Clean Up, Chamfer and Measure, and a
-   *  family of three commands wants three keys that read as a family rather than
-   *  whichever letters happened to be free. Everything else here is bare: a
-   *  modeling app's tool keys are meant to be hit one-handed while the other
-   *  hand is on the mouse. */
+  /** Ctrl (or Cmd) must be held. Only the booleans use it: U, B and I are taken, and the three want keys that
+   *  read as a family. Everything else is bare so tool keys work one-handed beside the mouse. */
   ctrl?: boolean;
   action: string; // action id fed to main's handleAction (or a special-cased id)
   context: "model" | "sketch" | "global";
@@ -25,7 +16,6 @@ export interface Shortcut {
 }
 
 export const SHORTCUTS: Shortcut[] = [
-  // --- model context ---
   { key: "s", action: "sketch", context: "model", label: "Sketch" },
   { key: "e", action: "extrude", context: "model", label: "Extrude" },
   { key: "q", action: "presspull", context: "model", label: "Press/Pull" },
@@ -46,7 +36,6 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "2", action: "selmode-bodies", context: "model", label: "Select bodies" },
   { key: "x", action: "toggle-xray", context: "model", label: "See through (select what is behind)" },
   { key: "x", shift: true, action: "toggle-wireframe", context: "model", label: "Wireframe (edges only)" },
-  // --- sketch context ---
   { key: "l", action: "line", context: "sketch", label: "Line" },
   { key: "c", action: "circle", context: "sketch", label: "Circle" },
   { key: "r", action: "rectangle", context: "sketch", label: "Rectangle" },
@@ -57,8 +46,7 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "f", action: "fillet-sketch", context: "sketch", label: "Sketch Fillet" },
   { key: "p", action: "project", context: "sketch", label: "Project" },
   { key: "m", action: "move-sketch", context: "sketch", label: "Move/Rotate" },
-  // finish-and-go: E/Q inside a sketch commit it and start the 3D tool
-  // (handleAction already finishes an active sketch before any 3D command)
+  // Finish and go: E/Q in a sketch commit it and start the 3D tool (handleAction finishes the sketch first).
   { key: "e", action: "extrude", context: "sketch", label: "Finish & Extrude" },
   { key: "q", action: "presspull", context: "sketch", label: "Finish & Press/Pull" },
   // With a fitting selection these apply at once, otherwise they arm the tool.
@@ -80,7 +68,6 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "r", action: "rectangle", context: "model", label: "Sketch: Rectangle" },
   { key: "a", action: "arc", context: "model", label: "Sketch: Arc" },
   { key: "p", action: "project", context: "model", label: "Sketch: Project" },
-  // --- global ---
   { key: "home", action: "fit", context: "global", label: "Fit view" },
   { key: "home", shift: true, action: "reset-camera", context: "global", label: "Reset camera" },
   { key: "f6", action: "fit", context: "global", label: "Fit view" },
@@ -110,11 +97,8 @@ export const SHORTCUTS: Shortcut[] = [
   },
 ];
 
-/** How a shortcut is written for a human ("Shift+H", "Ctrl+U", "Home").
- *
- *  One formatter, used by keyHint below and by the `?` HUD, because those two
- *  drifting is exactly the failure this file exists to prevent: a cheat sheet
- *  that advertises a key nothing binds. */
+/** How a shortcut is written for a human ("Shift+H", "Ctrl+U", "Home"), shared by keyHint and the `?` HUD so
+ *  the cheat sheet cannot advertise a key nothing binds. */
 export function formatShortcut(s: Shortcut): string {
   const name = s.key.replace(/^arrow/, "");
   const k = name.length === 1 ? name.toUpperCase() : name.charAt(0).toUpperCase() + name.slice(1);
@@ -132,17 +116,14 @@ export function keyHint(action: string): string | undefined {
 export function resolveShortcut(key: string, shift: boolean, context: "model" | "sketch", ctrl = false): string | null {
   const k = key.toLowerCase();
   for (const s of activeShortcuts()) {
-    // Every flag is compared, including the absent ones. A bare "b" must not
-    // resolve to Ctrl+B's action and Ctrl+B must not resolve to bare B's: the
-    // two are different commands, and the pair that would collide here is
-    // Chamfer and Subtract.
+    // Every flag is compared, absent ones too: bare B (Chamfer) and Ctrl+B (Subtract) are different commands.
     if (s.key !== k || !!s.shift !== shift || !!s.ctrl !== ctrl) continue;
     if (s.context === "global" || s.context === context) return s.action;
   }
   return null;
 }
 
-// --- overrides: a plugin holding input.remap may move a key ----------------------
+// Overrides: a plugin holding input.remap may move a key.
 
 /** A key for an action. An action the table has keeps its context and label; a
  *  contributed action needs a context (global if left out) and a label. An
@@ -273,11 +254,9 @@ export function shortcutConflicts(): [Shortcut, Shortcut][] {
   return out;
 }
 
-// --- the `?` cheat-sheet HUD: auto-generated, dismissed by any key/click ---
+// The `?` cheat sheet HUD, generated from the table and dismissed by any key or click.
 
-/** One rendered section of the HUD. Derived from SHORTCUTS so the cheat sheet
- *  cannot drift from what the dispatcher actually does, the whole point of this
- *  file being the single source of truth. */
+/** One section of the HUD, derived from SHORTCUTS so the cheat sheet cannot drift from the dispatcher. */
 export interface HudGroup {
   name: string;
   rows: { key: string; label: string; changed?: boolean }[];
@@ -320,9 +299,8 @@ export function shortcutHudGroups(): HudGroup[] {
         { key: "Ctrl+N / Ctrl+O / Ctrl+E", label: "New / Open / Export" },
         { key: "Del", label: "Delete face (heal) / feature" },
         { key: "Esc", label: "Cancel / clear selection" },
-        // A gesture rather than a key, and the only place anyone would look
-        // for it is here. "right"/"left" name the drag direction, not a mouse
-        // button, everything here is a left-button drag.
+        // A gesture, not a key, listed here because this is where anyone would look. "right"/"left" name the
+        // drag direction; all are left-button drags.
         {
           key: "Drag",
           label:
@@ -335,9 +313,7 @@ export function shortcutHudGroups(): HudGroup[] {
   ];
 }
 
-/** Toggle the HUD. Facade over stores/ui.ts, rendered by
- *  components/overlays/ShortcutHud.vue; the signature is unchanged for its two
- *  callers (the Help menu and the "shortcut-help" action). */
+/** Toggle the HUD, a facade over stores/ui.ts rendered by components/overlays/ShortcutHud.vue. */
 export function toggleShortcutHUD() {
   const ui = useUiStore();
   ui.shortcutHudOpen = !ui.shortcutHudOpen;
