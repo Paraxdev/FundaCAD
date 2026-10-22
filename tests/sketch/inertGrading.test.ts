@@ -1,5 +1,5 @@
-// Grading of constraints whose operands are all fixed (projected or `fix`), which planegcs never sees:
-// satisfied is amber (overDefined), violated is red (conflicts, ok false), one free operand is planegcs's job.
+// Grading of constraints whose operands are all fixed (projected or `fix`): satisfied is amber (overDefined),
+// violated is red (conflicts, ok false), and a constraint with a free operand is left to planegcs.
 import { describe, it, expect, vi } from "vitest";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { SketchConstraint } from "../../src/types";
@@ -91,7 +91,7 @@ const turnedRounds: [SketchConstraint, Grade][] = [
   [C({ type: "pointOnCurve", e: "s", p: 0, curve: "C1" }), "amber"], [C({ type: "pointOnCurve", e: "u", p: 0, curve: "C1" }), "red"],
   [C({ type: "pointOnCurve", e: "w", p: 0, curve: "A1" }), "amber"], [C({ type: "pointOnCurve", e: "z", p: 0, curve: "A1" }), "red"],
   [C({ type: "c2cDistance", c1: "C1", c2: "C3", value: Math.hypot(20, 40) - 10 }), "amber"], [C({ type: "c2cDistance", c1: "C1", c2: "C3", value: 40 }), "red"],
-  [C({ type: "c2cDistance", c1: "C1", c2: "C5", value: 2 }), "amber"], [C({ type: "c2cDistance", c1: "C1", c2: "C5", value: 3 }), "red"],
+  [C({ type: "c2cDistance", c1: "C1", c2: "C5", value: 2 }), "amber"], [C({ type: "c2cDistance", c1: "C5", c2: "C1", value: 2 }), "amber"], [C({ type: "c2cDistance", c1: "C1", c2: "C5", value: 3 }), "red"],
   [C({ type: "c2lDistance", circle: "C1", line: "L5", value: 3 }), "amber"], [C({ type: "c2lDistance", circle: "C1", line: "L5", value: 4 }), "red"],
   [C({ type: "p2cDistance", e: "o", p: 0, circle: "C1", value: 3 }), "amber"], [C({ type: "p2cDistance", e: "o", p: 0, circle: "C1", value: 4 }), "red"],
   [C({ type: "p2cDistance", e: "i", p: 0, circle: "C1", value: 5 - Math.SQRT2 }), "amber"], [C({ type: "radialGap", inner: "C4", outer: "C1", value: 2 }), "amber"],

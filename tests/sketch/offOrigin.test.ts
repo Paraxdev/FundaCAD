@@ -9,7 +9,7 @@ vi.mock("@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url", () => ({
 }));
 
 import { compileAndSolve } from "../../src/sketch/sketchSolve";
-import { arc, circle, line, near, pl, pt } from "./solveFixtures";
+import { arc, circle, line, near, pc, pl, pt } from "./solveFixtures";
 
 const D = Math.PI / 180;
 const on = (cx: number, cy: number, r: number, deg: number) => [cx + r * Math.cos(deg * D), cy + r * Math.sin(deg * D)] as const;
@@ -32,6 +32,12 @@ describe("an arc reads back its mid-sweep as the through point", () => {
     expect(r).toEqual(near({ entities: [arc("a", ...on(130, 70, 5, 20), ...on(130, 70, 5, 110), ...on(130, 70, 5, 65))], dof: 5, ok: true, conflicts: [], overDefined: [] }));
   });
 
+  it("keeps a short counterclockwise arc below the x axis", async () => {
+    const a = arc("a", ...on(130, -70, 5, 20), ...on(130, -70, 5, 110), ...on(130, -70, 5, 40));
+    const r = await compileAndSolve([a], []);
+    expect(r).toEqual(near({ entities: [arc("a", ...on(130, -70, 5, 20), ...on(130, -70, 5, 110), ...on(130, -70, 5, 65))], dof: 5, ok: true, conflicts: [], overDefined: [] }));
+  });
+
   it("reads back a solved arc drawn end first from its moved ends", async () => {
     // ends held on two turned lines through the fixed centre, radius 5 grown to 7
     const g1 = pl("g1", 130, 70, ...on(130, 70, 20, 30)), g2 = pl("g2", 130, 70, ...on(130, 70, 20, 150));
@@ -41,11 +47,21 @@ describe("an arc reads back its mid-sweep as the through point", () => {
     expect(r).toEqual(near({ entities: [g1, g2, arc("a", ...on(130, 70, 7, 150), ...on(130, 70, 7, 30), ...on(130, 70, 7, 90))], dof: 0, ok: true, conflicts: [], overDefined: [] }));
   });
 
+  // b's start sits on the centre and must still be free to move, to (130,77)
+  const b = line("b", 130, 70, 130, 82);
+  const shorten: SketchConstraint[] = [...fix("b", 1), { type: "vertical", line: "b" }, { type: "distance", line: "b", value: 5 }];
   it("keeps an arc's centre apart from a line end drawn on it", async () => {
     const a = arc("a", ...on(130, 70, 5, 20), ...on(130, 70, 5, 110), ...on(130, 70, 5, 40));
-    const b = line("b", 130, 70, 130, 82);
-    const r = await compileAndSolve([a, b], [...fix("a", 0, 1, 2), ...fix("b", 1), { type: "vertical", line: "b" }, { type: "distance", line: "b", value: 5 }]);
+    const r = await compileAndSolve([a, b], [...fix("a", 0, 1, 2), ...shorten]);
     expect(r).toEqual(near({ entities: [arc("a", ...on(130, 70, 5, 20), ...on(130, 70, 5, 110), ...on(130, 70, 5, 65)), line("b", 130, 77, 130, 82)], dof: 0, ok: true, conflicts: [], overDefined: [] }));
+  });
+  it("keeps a circle's centre, user or projected, apart from a line end drawn on it", async () => {
+    const r = await compileAndSolve([circle("c", 130, 70, 4), b], [...fix("c", 0), { type: "radius", e: "c", value: 4 }, ...shorten]);
+    const rp = await compileAndSolve([pc("c", 130, 70, 4), b], shorten);
+    expect([r, rp]).toEqual(near([
+      { entities: [circle("c", 130, 70, 4), line("b", 130, 77, 130, 82)], dof: 0, ok: true, conflicts: [], overDefined: [] },
+      { entities: [pc("c", 130, 70, 4), line("b", 130, 77, 130, 82)], dof: 0, ok: true, conflicts: [], overDefined: [] },
+    ]));
   });
 });
 

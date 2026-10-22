@@ -25,7 +25,7 @@ describe("lineIntersect", () => {
   });
   it("gives null for parallel slanted lines and keeps a cross product of exactly 1e-9", () => {
     expect(lineIntersect(v(100, 50), v(104, 53), v(90, 40), v(98, 46))).toBeNull();
-    expect(xy(lineIntersect(v(0, 0), v(1e-9, 0), v(0, -1), v(0, 1)))).toEqual([0, 0]);
+    expect(xy(lineIntersect(v(0, 0), v(1e-9, 0), v(0, -0.5), v(0, 0.5)))).toEqual([0, 0]);
   });
 });
 
@@ -53,7 +53,7 @@ describe("segIntersect", () => {
     expect([along(-2e-6), along(1 + 2e-6)]).toEqual([null, null]);
     expect([across(-5e-7), across(1 + 5e-7), across(1 + 1e-6)]).toEqual([[0.5, 0], [0.5, 0], [0.5, 0]]);
     expect([across(-2e-6), across(1 + 2e-6)]).toEqual([null, null]);
-    expect(xy(segIntersect(v(0, 0), v(1e-9, 0), v(0, -1), v(0, 1)))).toEqual([0, 0]);
+    expect(xy(segIntersect(v(0, 0), v(1e-9, 0), v(0, -0.5), v(0, 0.5)))).toEqual([0, 0]);
   });
 });
 
@@ -116,6 +116,7 @@ describe("circleCircleIntersect", () => {
   });
   it("returns none for concentric, apart or nested circles", () => {
     expect(circleCircleIntersect(v(100, 50), 4, v(100, 50), 3)).toEqual([]);
+    expect(circleCircleIntersect(v(100, 50), 4, v(100, 50), 4)).toEqual([]);
     expect(circleCircleIntersect(v(100, 50), 2, v(110, 60), 3)).toEqual([]);
     expect(circleCircleIntersect(v(100, 50), 8, v(101.2, 51.6), 3)).toEqual([]);
   });
