@@ -108,6 +108,33 @@ describe("a save and the document it began with", () => {
     });
   });
 
+  it("an edit landing while Save or Save As writes keeps the document dirty and its snapshot", async () => {
+    const out: Record<string, unknown> = {};
+    for (const how of ["save", "saveAs"] as const) {
+      host.invoked = [];
+      const store = edited(how === "save" ? "D:/parts/a.funda" : null);
+      const g = gate();
+      host.hold = g.p;
+      const saving = how === "save" ? saveDocument(store) : saveDocumentAs(store);
+      while (!host.invoked.some((c) => c.cmd === "container_save")) await flush();
+      store.addFeatures([box("sv08-import", 10)]);
+      g.open();
+      await saving;
+      host.hold = null;
+      out[how] = {
+        meta: meta(store),
+        saves: saves().map((s) => s.features),
+        clears: host.invoked.filter((c) => c.cmd === "recovery_clear").length,
+      };
+    }
+    const after = (path: string) => ({
+      meta: { dirty: true, path, features: ["a-plate", "sv08-import"] },
+      saves: [["a-plate"]],
+      clears: 0,
+    });
+    expect(out).toEqual({ save: after("D:/parts/a.funda"), saveAs: after("D:/parts/b.funda") });
+  });
+
   it("Save As whose path was picked after Open writes nothing, one picked in the same document writes it", async () => {
     const store = edited(null);
     const g = gate();
