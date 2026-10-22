@@ -340,6 +340,22 @@ class FaceRefOverlay extends Overlay<FaceRef> {
     out["faceMaterials"] = materials;
     if (Object.keys(prints).length) out["facePrints"] = prints;
   }
+  stored(): [string, FaceRef][] {
+    return [...this.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
+  }
+  /** Each ref at the face and print the build on screen last found it on, so a ref
+   *  undo puts back finds its face on that build. */
+  located(): [string, FaceRef][] {
+    const seen = this.resolution()?.track.seen;
+    return this.stored().map(([id, ref]) => {
+      const s = seen?.get(id);
+      return [id, s ? { ...ref, face: s.face, at: s.at } : ref];
+    });
+  }
+  restore(refs: readonly [string, FaceRef][]) {
+    this.clear();
+    for (const [id, ref] of refs) this.set(id, ref);
+  }
   override loadFrom(parsed: Record<string, unknown>) {
     this.clear();
     for (const ref of loadFaceRefs(parsed["faceMaterials"], parsed["facePrints"])) this.set(newFaceRefId(), ref);
@@ -2462,7 +2478,7 @@ export class DocumentStore {
     for (const w of migrateDocument(parsed)) this.onWarning?.(w);
     if (!opts.replace) this.emitOpen();
     this.emitRewind();
-    const replaced = opts.replace ? { entry: this.pushUndo(), before: this.stateSections() } : null;
+    const replaced = opts.replace ? { entry: this.pushUndo(), before: this.stateSections(true) } : null;
     if (!replaced) this.undoStack = [];
     this.redoStack = [];
     this.rearmProjectionValve(); // valve state must never cross documents
@@ -2545,9 +2561,9 @@ export class DocumentStore {
     }
   }
   /** The project state as a save writes it, as JSON per top level key, without the
-   *  geometry the undo entry's `doc` holds. Isolate is not saved, so it rides with
-   *  the hidden set it explains. */
-  private stateSections(): Map<string, string> {
+   *  geometry the undo entry's `doc` holds, and the face materials by id. Isolate is not
+   *  saved, so it rides with the hidden set it explains. */
+  private stateSections(located = false): Map<string, string> {
     const out = this.toObject(false) as unknown as Record<string, unknown>;
     for (const k of GEOMETRY_KEYS) delete out[k];
     // In id order, since undo of a cleared id sets it back at the end of its map.
@@ -2555,6 +2571,9 @@ export class DocumentStore {
       const map = out[k] as Record<string, unknown> | undefined;
       if (map) out[k] = Object.fromEntries(Object.entries(map).sort(([a], [b]) => (a < b ? -1 : 1)));
     }
+    // Their undo steps go by id, and the faces they are on move with every rebuild.
+    delete out["facePrints"];
+    if (this.faceMaterial.size) out["faceMaterials"] = located ? this.faceMaterial.located() : this.faceMaterial.stored();
     out["bodyVisibility"] = [out["bodyVisibility"] ?? null, this.isolate];
     return new Map([...Object.entries(out).map(([k, v]) => [k, JSON.stringify(v)] as const), ...this.timelineSections()]);
   }
@@ -2579,7 +2598,10 @@ export class DocumentStore {
     }
     const vis = put["bodyVisibility"] as [Record<string, boolean> | null, boolean] | undefined;
     if (vis) put["bodyVisibility"] = vis[0] ?? undefined;
-    this.readProjectState(put as unknown as CadDocument, new Set(back.keys()));
+    const only = new Set(back.keys());
+    if (only.delete("faceMaterials")) this.faceMaterial.restore((put["faceMaterials"] ?? []) as [string, FaceRef][]);
+    delete put["faceMaterials"];
+    this.readProjectState(put as unknown as CadDocument, only);
     if (vis) this.isolate = vis[1];
     return back;
   }
