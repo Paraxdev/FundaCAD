@@ -178,6 +178,10 @@
   overflow-y: auto;
   font-size: 12px;
 }
+.home-news-body.is-more {
+  -webkit-mask-image: linear-gradient(to bottom, currentColor calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to bottom, currentColor calc(100% - 40px), transparent);
+}
 .home-news-group {
   margin: var(--s-3) 0 var(--s-1);
   font-size: 11px;
