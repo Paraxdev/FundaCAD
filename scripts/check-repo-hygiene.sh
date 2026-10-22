@@ -142,6 +142,34 @@ if [ -n "$dashes" ]; then
   printf '%s\n' "$dashes" | cut -c1-160 | sed 's/^/    /'
 fi
 
+# --- source files open with code ----------------------------------------------
+# A file opens with code, or a few comment lines saying what it is for, never an
+# essay: a GitHub preview shows only the top of a file. Counted up to the first
+# line of code, so a short header plus the first item's doc fits in 5. The two
+# exceptions document a grammar and a file layout that the code cannot show.
+echo "checking file opening comments…"
+headers=$(git ls-files -- 'src/**' 'plugins/**' 'crates/**' 'src-tauri/**' 2>/dev/null \
+  | grep -E '\.(ts|vue|rs|js|mjs|cjs|scss)$' \
+  | grep -vE '(\.d\.ts$|/vendor/|/generated/|/catalogue/|^src/params/parse\.ts$|^crates/fundacad-format/src/container\.rs$)' \
+  | xargs awk '
+      function report() { if (f != "" && n > 5) print "    " f ": " n " comment lines before the first line of code" }
+      FNR == 1 { report(); f = FILENAME; n = 0; inblock = 0; done = 0 }
+      done { next }
+      { sub(/\r$/, "") }
+      FNR == 1 && /^[ \t]*<script/ { next }
+      inblock { n++; if (index($0, "*/") || index($0, "-->")) inblock = 0; next }
+      /^[ \t]*$/ { next }
+      /^[ \t]*(\/\/|#!)/ { n++; next }
+      /^[ \t]*\/\*/ { n++; s = $0; sub(/^[ \t]*\/\*/, "", s); if (!index(s, "*/")) inblock = 1; next }
+      /^[ \t]*<!--/ { n++; if (!index($0, "-->")) inblock = 1; next }
+      { done = 1 }
+      END { report() }
+    ')
+if [ -n "$headers" ]; then
+  note "a file opens with a comment essay, keep what it is for to a line or two above the code:"
+  printf '%s\n' "$headers"
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo
   echo "Repo hygiene FAILED. Untrack with:  git rm --cached <path>"
