@@ -1,7 +1,5 @@
-//! Preview pictures for Home's cards, cached in app data beside `recovery/`.
-//! A picture is served only while the document still has the time and size it
-//! had when the picture was taken, so an edit outside the app shows a
-//! placeholder rather than a wrong picture. No Tauri in here, see library.rs.
+//! Preview pictures for Home's cards, cached in app data. Served only while the document keeps the time and size it had
+//! when taken, so an outside edit shows a placeholder. No Tauri in here, see library.rs.
 
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
