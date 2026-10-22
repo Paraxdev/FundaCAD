@@ -86,6 +86,27 @@ describe("undo after a restore", () => {
     expect(s.versionRepo!.branches).toEqual({ main: v1.id, lean: lean.id });
   });
 
+  it("takes back a branch switch made before a replacing load that carried the versions, or leaves them as the load put them", () => {
+    const carried = (drop: (d: CadDocument) => void) => {
+      const { s, v1 } = workedOn();
+      s.branchFromVersion(v1.id, "lean");
+      const live = JSON.parse(s.toJSON()) as CadDocument;
+      live.features.push(box("f7", 1.75, 4.5));
+      drop(live);
+      s.loadDocument(live, { replace: true });
+      s.undo();
+      s.undo();
+      return s;
+    };
+    expect(carried(() => {}).versionRepo!.current).toBe("main");
+    const noMain = carried((d) => {
+      const repo = d.versions as { branches: Record<string, string> };
+      delete repo.branches["main"];
+    });
+    expect([noMain.versionRepo!.current, Object.keys(noMain.versionRepo!.branches)]).toEqual(["lean", ["lean"]]);
+    expect(carried((d) => delete d.versions).versionRepo).toBeNull();
+  });
+
   it("takes back an assistant's or a plugin's replacement of the document whole", () => {
     const { s } = workedOn();
     const before = s.workingSnapshot();

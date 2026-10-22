@@ -2276,9 +2276,10 @@ export class DocumentStore {
     if (!repo) return;
     const was = repo.current;
     const head = switchVersionBranch(repo, name);
+    // this.repo, not repo: a live session's replacing load since then brings its own copy of the versions.
     const onto = (branch: string) => {
-      if (this.repo !== repo) return;
-      repo.current = branch;
+      if (!this.repo?.branches[branch]) return;
+      this.repo.current = branch;
       this.emitMeta();
     };
     this.undoAsOne(() => {
