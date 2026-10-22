@@ -38,6 +38,7 @@ export interface SurfaceNode {
 
 export interface SurfaceGraph {
   nodes: SurfaceNode[];
+  // Id of the output node.
   output: string;
 }
 
@@ -57,7 +58,7 @@ export interface MaterialDef {
   emissive?: number;
   // 0..1 glossy dielectric coat over the base, like car paint. Physical PBR only, dropped on the lightweight render.
   clearcoat?: number;
-  // Index of refraction of a see-through finish, 1 (air) to 2.5.
+  // Index of refraction of a see-through finish, 1 (air) to 2.5: water 1.33, glass 1.5, diamond 2.42.
   ior?: number;
   // mm light travels through a see-through finish. Absent is auto, measured from the body per pixel.
   thickness?: number;
@@ -222,6 +223,7 @@ export function finishLabel(m: MaterialDef | undefined): string {
   return kind ? `${gloss}, ${kind}` : gloss;
 }
 
+// Generic materials named for the stuff, not a supplier's product, and deliberately short: examples of the fields.
 // Every entry is already in normal form (materials.test.ts holds it): a default-valued field is dropped on read, which
 // would break export round trips and the store's untouched library check that keeps plain documents free of materials.
 export const STARTER_LIBRARY: readonly MaterialDef[] = Object.freeze([

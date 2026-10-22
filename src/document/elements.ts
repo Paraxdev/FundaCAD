@@ -1,5 +1,5 @@
-// Elements: user folders over the bodies, pure functions over the tables. Nothing here reaches the engine, so a
-// document builds byte-identically with or without them; organising an import must never change it.
+// Elements: user folders over the bodies, pure functions over the tables; a body in no element is an orphan. Nothing
+// here reaches the engine, so a document builds byte-identically with or without them and organising never changes it.
 
 // `parent` is absent, not null, at the top level, so a top-level element stays `{id,name}` on disk.
 export interface ElementDef {

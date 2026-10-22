@@ -51,7 +51,8 @@ export function openNotices(doc: Pick<CadDocument, "features">, openedVersion: n
   const kept = one
     ? "It is kept and saved with the file. Bodies after it may differ."
     : "They are kept and saved with the file. Bodies after them may differ.";
-  // An older stamp means no newer version wrote these, so most likely a plugin not running here.
+  // An older stamp means no newer version wrote these, so most likely a plugin not running here, which can also be one
+  // the engine still builds.
   const sentence = newer
     ? `${NEWER} ${one ? "1 feature was" : `${total} features were`} not included because this version does not know ${one ? "it" : "them"}: ${names}. ${kept} Update FundaCAD to build ${one ? "it" : "them"}.`
     : `${one ? "1 feature needs" : `${total} features need`} a plugin that is not running here: ${names}. ${kept}`;

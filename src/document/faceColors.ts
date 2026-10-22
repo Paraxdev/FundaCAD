@@ -28,8 +28,8 @@ export function decodeFaceColors(enc: FaceColorRuns | undefined, count: number):
   return out;
 }
 
-// By face count like `face_colors.py`'s `dominant`: area would need a surface integral per face. Ties go to the
-// colour seen first, so the answer does not depend on map iteration order.
+// By face count like `face_colors.py`'s `dominant`: area would need a surface integral per face, and this is only what
+// the few faces the file left uncoloured fall back to. Ties go to the colour seen first, so map order does not matter.
 export function dominantFaceColor(colors: readonly (string | null)[]): string | null {
   const tally = new Map<string, number>();
   for (const c of colors) if (c) tally.set(c, (tally.get(c) ?? 0) + 1);
@@ -42,7 +42,8 @@ export function dominantFaceColor(colors: readonly (string | null)[]): string | 
 }
 
 // Sparse against the body's dominant colour, not `bodyPaint`: the library material is only the nearest shade, and
-// comparing against it named all 1,803 faces versus 50. A body with no colour at all names every coloured face.
+// comparing against it named all 1,803 faces versus 50. The cost, a dominant face drawn in the material's shade, is the
+// tolerance the material match already accepted. A body with no colour at all names every coloured face.
 export function importedFacePaint(
   bodies:
     | readonly {
