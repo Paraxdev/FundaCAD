@@ -77,7 +77,8 @@ import {
   findDrivingDim,
   type DrivingDim,
 } from "./directDims";
-import { expandPattern, reflectedRect, translated } from "./pattern";
+import { expandPattern, translated } from "./pattern";
+import { mirrorCopies } from "./mirror";
 import {
   candidatesFromEntities,
   curvesFromEntities,
@@ -2663,66 +2664,14 @@ export class SketchMode {
     const idx = pickEntity(this.entities, p, this.pickTol());
     const axis = idx >= 0 ? this.entities[idx] : undefined;
     if (!axis || axis.type !== "line") return;
-    const selectedSources = this.entities.filter((e) => this.selected.has(e.id) && e.id !== axis.id);
-    // Projected geometry is a fixed reference, so mirror the rest (the commit clears the whole selection anyway).
     const projected = this.modifyFlow.warnSelectedProjected();
-    const chosen = selectedSources.filter((e) => !projected.has(e.id));
-    if (!chosen.length) return; // nothing selected to mirror
-    const a = new THREE.Vector2(axis.x1, axis.y1);
-    const b = new THREE.Vector2(axis.x2, axis.y2);
-    for (const e of chosen) this.entities.push(this.reflectEntity(e, a, b));
+    const ids = new Set([...this.selected].filter((id) => !projected.has(id)));
+    const ends = { id: axis.id, a: { x: axis.x1, y: axis.y1 }, b: { x: axis.x2, y: axis.y2 } };
+    const copies = mirrorCopies(this.entities, ids, ends, newEntityId);
+    if (!copies.length) return;
+    this.entities.push(...copies);
     this.selected.clear();
     this.afterModify();
-  }
-  private reflectPoint(x: number, y: number, a: THREE.Vector2, b: THREE.Vector2): { x: number; y: number } {
-    const dx = b.x - a.x,
-      dy = b.y - a.y;
-    const len2 = dx * dx + dy * dy || 1;
-    const t = ((x - a.x) * dx + (y - a.y) * dy) / len2;
-    const px = a.x + t * dx,
-      py = a.y + t * dy; // foot of perpendicular
-    return { x: 2 * px - x, y: 2 * py - y };
-  }
-  /** A reflected copy with a fresh id. */
-  private reflectEntity(e: ResolvedEntity, a: THREE.Vector2, b: THREE.Vector2): ResolvedEntity {
-    const rp = (x: number, y: number) => this.reflectPoint(x, y, a, b);
-    const id = newEntityId();
-    const c = e.construction ? { construction: true } : {};
-    if (e.type === "line") {
-      const p1 = rp(e.x1, e.y1),
-        p2 = rp(e.x2, e.y2);
-      return { type: "line", id, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, ...c };
-    }
-    if (e.type === "circle") {
-      const ctr = rp(e.x, e.y);
-      return { type: "circle", id, radius: e.radius, x: ctr.x, y: ctr.y, ...c };
-    }
-    if (e.type === "rectangle") {
-      const ctr = rp(e.x, e.y);
-      return { type: "rectangle", id, ...reflectedRect(e, b.x - a.x, b.y - a.y), x: ctr.x, y: ctr.y, ...c };
-    }
-    if (e.type === "arc") {
-      // reflection flips orientation, so the through-point reflects too
-      const p1 = rp(e.x1, e.y1),
-        p2 = rp(e.x2, e.y2),
-        m = rp(e.mx, e.my);
-      return { type: "arc", id, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, mx: m.x, my: m.y, ...c };
-    }
-    if (e.type === "spline") {
-      return { type: "spline", id, points: e.points.map((q) => rp(q.x, q.y)), ...c };
-    }
-    if (e.type === "bspline") {
-      return { ...e, id, poles: e.poles.map((q) => rp(q.x, q.y)) };
-    }
-    if (e.type === "text") {
-      const at = rp(e.x, e.y); // reflect the anchor; keep the string/style (glyphs aren't mirrored)
-      return { ...e, id, x: at.x, y: at.y };
-    }
-    const q = rp(
-      (e as Extract<ResolvedEntity, { type: "point" }>).x,
-      (e as Extract<ResolvedEntity, { type: "point" }>).y,
-    );
-    return { type: "point", id, x: q.x, y: q.y, ...c };
   }
 
   private onPointerMove(e: PointerEvent) {
