@@ -47,6 +47,9 @@ export interface BugReportForm {
    *  of report (a body drawing doubled or shredded), and mixing it into the
    *  event list would bury the events. */
   pipeline: string[];
+  /** The end of the app's log with user names hidden, read when the dialog
+   *  opened; null when unticked, in a browser, or before the app wrote one. */
+  logTail: string | null;
 }
 
 /** Registers the reporter's engine handles. The floating button renders once
@@ -69,6 +72,16 @@ export function bugContext(
     pipeline: pipelineLog(),
     faults: hasFaults(),
   };
+}
+
+export async function appLogTail(): Promise<string | null> {
+  if (!("__TAURI_INTERNALS__" in window)) return null;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return await invoke<string | null>("log_tail");
+  } catch {
+    return null;
+  }
 }
 
 /** The document as the user sees it, including a sketch still being drawn.
@@ -104,6 +117,7 @@ function reportText(
   connected: boolean,
   crumbs: string[],
   pipeline: string[],
+  logTail: string | null,
   documentJson: string | null,
 ): string {
   return [
@@ -118,6 +132,7 @@ function reportText(
     ``,
     `render pipeline:`,
     ...pipeline.map((c) => `  ${c}`),
+    ...(logTail ? [``, `app log (the end, user names hidden):`, logTail.trimEnd()] : []),
     ...(documentJson ? [``, `document:`, documentJson] : []),
   ].join("\n");
 }
@@ -139,6 +154,7 @@ export async function submitBugReport(deps: BugReportDeps, form: BugReportForm):
     connected,
     crumbList,
     form.pipeline,
+    form.logTail,
     form.includeDocument ? documentWithOpenSketch(store, live) : null,
   );
   try {
