@@ -1,12 +1,22 @@
 <script setup lang="ts">
 // The sketch MirrorFlow and the 3D MirrorTool own the picking and push a fresh view on every change.
 
+import { computed } from "vue";
 import type { MirrorPanelView } from "../../stores/toolPanels";
 import FloatingPanel from "./FloatingPanel.vue";
 import IconButton from "../ui/IconButton.vue";
 import Icon from "../shell/Icon.vue";
 
-defineProps<{ view: MirrorPanelView }>();
+const props = defineProps<{ view: MirrorPanelView }>();
+
+const waitingFor = computed(() =>
+  props.view.ready
+    ? undefined
+    : `Pick ${props.view.fields
+        .filter((f) => !f.filled)
+        .map((f) => f.label.toLowerCase())
+        .join(" and ")} first`,
+);
 </script>
 
 <template>
@@ -19,15 +29,10 @@ defineProps<{ view: MirrorPanelView }>();
       class="mirror-field"
       :class="{ active: view.active === f.key }"
       :data-field="f.key"
+      @pointerdown.prevent
+      @click="view.onActivate(f.key)"
     >
-      <IconButton
-        :icon="f.icon"
-        :title="`Pick ${f.label.toLowerCase()}`"
-        :active="view.active === f.key"
-        :size="16"
-        @pointerdown.prevent
-        @click="view.onActivate(f.key)"
-      />
+      <IconButton :icon="f.icon" :title="`Pick ${f.label.toLowerCase()}`" :active="view.active === f.key" :size="16" />
       <span class="mirror-field-k">{{ f.label }}</span>
       <span class="mirror-field-v">{{ f.value }}</span>
       <button
@@ -36,8 +41,7 @@ defineProps<{ view: MirrorPanelView }>();
         :title="`Clear ${f.label.toLowerCase()}`"
         :aria-label="`Clear ${f.label.toLowerCase()}`"
         :disabled="!f.filled"
-        @pointerdown.prevent
-        @click="view.onClear(f.key)"
+        @click.stop="view.onClear(f.key)"
       >
         <Icon name="close" :size="14" />
       </button>
@@ -62,6 +66,7 @@ defineProps<{ view: MirrorPanelView }>();
         type="button"
         class="btn btn-primary"
         :disabled="!view.ready"
+        :title="waitingFor"
         @pointerdown.prevent
         @click="view.onCommit()"
       >

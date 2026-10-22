@@ -752,6 +752,10 @@
   gap: var(--s-2);
   padding: var(--s-1);
   border-radius: var(--float-chip-radius);
+  cursor: pointer;
+}
+.mirror-field:not(.active):hover {
+  background: var(--raised);
 }
 .mirror-field .icon-btn {
   width: 28px;
@@ -790,6 +794,11 @@
   display: inline-flex;
   align-items: center;
   gap: var(--s-1);
+}
+.mirror-actions .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  box-shadow: none;
 }
 .measure-divider {
   height: 1px;
