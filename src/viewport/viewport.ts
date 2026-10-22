@@ -26,6 +26,7 @@ import { SectionCaps } from "./sectionCaps";
 // The one derivation of "which plane is that face"; pure, so nothing cycles back.
 import { pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
+import { planeHitMinPx } from "./planeHit";
 import { StutterWatch } from "./stutterWatch";
 import { MotionQuality, motionPixelScale, pixelBoundView, type DrawnView } from "./motionQuality";
 import { EdgeBlend, EdgeMotionRule, type EdgeLoad, type EdgeMode } from "./edgeMotion";
@@ -282,6 +283,7 @@ export class Viewport {
   /** A tool is asking for a plane: the construction quads draw over the model
    *  and take the click before it. */
   private planesOnTop = false;
+  private lastPointerType: string | null = null;
   // Datum points and axes, apart from datumQuads so a plane pick never resolves to one.
   private datumMarkers: THREE.Mesh[] = [];
   private hoveredDatum: string | null = null;
@@ -486,6 +488,7 @@ export class Viewport {
       // which left a stray field eating every shortcut (FI-2).
       const active = document.activeElement;
       if (active instanceof HTMLElement && isEditableTarget(active)) active.blur();
+      this.lastPointerType = e.pointerType;
       if (e.button !== 0) return;
       this.dragMoved = false;
       this.downPos = { x: e.clientX, y: e.clientY };
@@ -504,6 +507,7 @@ export class Viewport {
           : null;
     });
     c.addEventListener("pointermove", (e) => {
+      this.lastPointerType = e.pointerType;
       if (Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3) {
         this.dragMoved = true;
       }
@@ -1866,13 +1870,20 @@ export class Viewport {
     clientX: number,
     clientY: number,
   ): { kind: "base"; plane: Plane3 } | { kind: "datum"; id: string; def: PlaneDef } | null {
+    const tile = this.pickTile(clientX, clientY);
     this.rayFrom(clientX, clientY);
-    const hit = this.sharedRaycaster.intersectObjects([...this.shownTiles(), ...this.datumQuads], false)[0];
-    if (!hit) return null;
-    const id = hit.object.userData.datumId as string | undefined;
-    if (id) return { kind: "datum", id, def: hit.object.userData.datumDef as PlaneDef };
-    const plane = hit.object.userData.plane as Plane3 | undefined;
-    return plane ? { kind: "base", plane } : null;
+    // A tile's name is drawn over everything, its pad is only there to be easy to hit, so a datum quad
+    // under either the pad or a tile in front of it keeps its own press.
+    const datumFirst =
+      tile?.part === "label"
+        ? null
+        : this.sharedRaycaster.intersectObjects(
+            tile?.part === "tile" ? [...this.shownTiles(), ...this.datumQuads] : this.datumQuads,
+            false,
+          )[0];
+    const id = datumFirst?.object.userData.datumId as string | undefined;
+    if (id) return { kind: "datum", id, def: datumFirst!.object.userData.datumDef as PlaneDef };
+    return tile ? { kind: "base", plane: tile.plane } : null;
   }
 
   /** Brighten the plane under the cursor, separately from the selected one. */
@@ -2931,7 +2942,23 @@ export class Viewport {
   }
 
   private syncOriginTiles() {
-    this.scene.originTiles.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal(), this.rig.active);
+    this.scene.originTiles.update(
+      this.pixelWorldSize(WORLD_ORIGIN),
+      this.modelDiagonal(),
+      this.rig.active,
+      this.canvas.getBoundingClientRect(),
+    );
+  }
+
+  /** The smallest a plane's target is on screen, a finger's size on a touch screen. */
+  planeHitMinPx(): number {
+    const coarse = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+    return planeHitMinPx(coarse, this.lastPointerType);
+  }
+
+  private pickTile(clientX: number, clientY: number) {
+    const frame = { camera: this.rig.active, rect: this.canvas.getBoundingClientRect() };
+    return this.scene.originTiles.pick(clientX, clientY, frame, this.planeHitMinPx());
   }
 
   /** The colour drawn behind the scene, which a fixed render ground keeps apart from the theme. */
@@ -2955,13 +2982,9 @@ export class Viewport {
     this.requestRender();
   }
 
-  /** The nearest plane under the cursor, intersectObjects sorts hits nearest first. */
+  /** The origin plane a press here takes, by its tile, the pad around it or its name. */
   pickPlane(clientX: number, clientY: number): Plane3 | null {
-    this.rayFrom(clientX, clientY);
-    const hits = this.sharedRaycaster.intersectObjects(this.shownTiles(), false);
-    const hit = hits[0];
-    if (!hit) return null;
-    return (hit.object.userData.plane as Plane3) ?? null;
+    return this.pickTile(clientX, clientY)?.plane ?? null;
   }
 
   /** The plane pick of the face under the cursor. `kind` says flat or round, and

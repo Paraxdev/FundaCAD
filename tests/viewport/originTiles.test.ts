@@ -11,9 +11,9 @@ import {
   TILE_LOOK,
   TILE_ORDER,
   TILE_SHAPE,
+  LABEL_HOT_SCALE,
   labelInk,
   mixHex,
-  nameFade,
   tilePose,
   tileStates,
   type TilePose,
@@ -129,15 +129,6 @@ describe("tilePose", () => {
       ];
       for (const x of d) expect(x).toBeCloseTo(want, 12);
     }
-  });
-});
-
-describe("nameFade", () => {
-  it("ramps from 0.15 to 0.35 of facing", () => {
-    expect([0, 0.1, 0.15, 0.35, 0.9, 1].map(nameFade)).toEqual([0, 0, 0, 1, 1, 1]);
-    expect(nameFade(0.25)).toBeCloseTo(0.5, 12);
-    expect(nameFade(-0.25)).toBeCloseTo(0.5, 12);
-    expect(nameFade(0.2)).toBeCloseTo(0.25, 12);
   });
 });
 
@@ -264,42 +255,22 @@ describe("OriginTiles", () => {
     t.dispose();
   });
 
-  it("hides the names of tiles seen edge on", () => {
+  it("keeps every name at its full look edge on, and grows the hovered one", () => {
     const t = new OriginTiles(new THREE.Scene());
     t.setShown(true);
     t.update(0.37, null, topCamera());
-    expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.idle.label, XZ: 0, YZ: 0 });
+    expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.idle.label, XZ: TILE_LOOK.idle.label, YZ: TILE_LOOK.idle.label });
     t.hover("XZ");
-    expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.dim.label, XZ: 0, YZ: 0 });
+    expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.dim.label, XZ: TILE_LOOK.hot.label, YZ: TILE_LOOK.dim.label });
+    const size = (k: Plane3) => child(t.planes[k], "label").scale.toArray().slice(0, 2);
+    expect(size("XZ")).toEqual([LABEL_BOX_PX.w * LABEL_HOT_SCALE, LABEL_BOX_PX.h * LABEL_HOT_SCALE]);
+    expect(size("XY")).toEqual([LABEL_BOX_PX.w, LABEL_BOX_PX.h]);
+    const colour = (k: Plane3, role: string) => matOf(child(t.planes[k], role)).color.getHex();
+    expect(colour("XZ", "label")).toBe(colour("XZ", "rim"));
+    expect(colour("XY", "label")).not.toBe(colour("XY", "rim"));
     t.hover(null);
-    t.update(0.37, null, homeCamera());
-    const home = labelOpacity(t);
-    expect(PLANES.map((k) => home[k]! > 0)).toEqual([true, true, true]);
-    expect(PLANES.map((k) => home[k]! <= TILE_LOOK.idle.label)).toEqual([true, true, true]);
-    t.dispose();
-  });
-
-  it("fades a name by the unit direction from the tile's scaled centre to a perspective eye", () => {
-    const t = new OriginTiles(new THREE.Scene());
-    t.setShown(true);
-    const eyeAt = (x: number, y: number, z: number, look: [number, number, number]) => {
-      const cam = new THREE.PerspectiveCamera(30, 1.5, 1, 5000);
-      cam.up.set(0, 1, 0);
-      cam.position.set(x, y, z);
-      cam.lookAt(...look);
-      cam.updateMatrixWorld(true);
-      return cam;
-    };
-    t.update(0.37, null, eyeAt(12, -7, 300, [12, -7, 0]));
-    expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.idle.label, XZ: 0, YZ: 0 });
-    // At scale 13/11 the XZ centre is (52, 0, 52) and the YZ centre (0, -52, 52): the eye is 67 and 63 away.
-    t.update(13 / 11, null, eyeAt(10, -15, 102, [30, -20, 15]));
-    const ramp = (facing: number) => (TILE_LOOK.idle.label * (facing - 0.15)) / 0.2;
-    expect(labelOpacity(t)).toEqual({
-      XY: TILE_LOOK.idle.label,
-      XZ: expect.closeTo(ramp(15 / 67), 12),
-      YZ: expect.closeTo(ramp(10 / 63), 12),
-    });
+    expect(size("XZ")).toEqual([LABEL_BOX_PX.w, LABEL_BOX_PX.h]);
+    expect(colour("XZ", "label")).toBe(colour("XY", "label"));
     t.dispose();
   });
 
