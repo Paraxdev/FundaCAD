@@ -281,16 +281,24 @@ function modelDoc() {
     check("each chip button takes a finger of about 40px", hits.length === 3 && hits.every((h) => h >= 38), hits);
     await page.evaluate(() => { delete document.documentElement.dataset.pointer; });
 
-    await page.setViewportSize({ width: 760, height: 900 });
-    await page.waitForTimeout(800);
-    c = await chip();
-    const cards = await page.evaluate(() => [...document.querySelectorAll(
-      "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group, #float-layer .float-right > *",
-    )].map((o) => { const r = o.getBoundingClientRect(); return { id: o.id || o.className, left: r.left, top: r.top, right: r.right, bottom: r.bottom }; })
-      .filter((r) => r.right > r.left && r.bottom > r.top));
-    const hitCards = cards.filter((r) => r.left < c.box.right && r.right > c.box.left && r.top < c.box.bottom && r.bottom > c.box.top);
-    check("at a 760px window the chip clears every card", hitCards.length === 0, { chip: c.box, hitCards });
-    await shot("02_chip_760");
+    // 1000 to 1100 is where the rail's labels and the view controls leave the top row too narrow for the chip.
+    for (const [width, height] of [[760, 900], [900, 800], [1000, 800], [1024, 768], [1100, 800]]) {
+      await page.setViewportSize({ width, height });
+      await page.waitForTimeout(800);
+      c = await chip();
+      const cards = await page.evaluate(() => [...document.querySelectorAll(
+        "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group, #float-layer .float-right > *",
+      )].map((o) => { const r = o.getBoundingClientRect(); return { id: o.id || o.className, left: r.left, top: r.top, right: r.right, bottom: r.bottom }; })
+        .filter((r) => r.right > r.left && r.bottom > r.top));
+      const hitCards = cards.filter((r) => r.left < c.box.right && r.right > c.box.left && r.top < c.box.bottom && r.bottom > c.box.top);
+      const covered = await page.evaluate(() => [...document.querySelectorAll(".section-chip-btn")].filter((b) => {
+        const r = b.getBoundingClientRect();
+        return !b.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+      }).map((b) => b.textContent));
+      check(`at a ${width}x${height} window the chip clears every card and each of its buttons takes a click`,
+        hitCards.length === 0 && covered.length === 0, { chip: c.box, hitCards, covered });
+      await shot(`02_chip_${width}`);
+    }
     await page.setViewportSize({ width: 1400, height: 900 });
     await page.waitForTimeout(500);
 
