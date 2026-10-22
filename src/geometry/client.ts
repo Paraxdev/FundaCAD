@@ -24,7 +24,8 @@ import type {
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import { EngineTransport, type GeometryTransport } from "./transport";
-import { SessionEnded, type DocumentSession, type SessionHost } from "../document/session";
+import { SessionEnded, isOpCancelled, type DocumentSession, type SessionHost } from "../document/session";
+import { SessionWire } from "./sessionWire";
 import { blake2b128Hex } from "../document/blake2b";
 
 const BLOB_PUT_CHUNK = 4 * 1024 * 1024;
@@ -421,7 +422,7 @@ export interface GeometryBackend {
   onStatus(fn: StatusListener): () => void;
   /** Build progress about once a second: the feature index (-1 while tessellating), and while meshing the
    *  per-body `meshed`/`meshTotal` (else -1), which keeps the bar moving through 136 s of meshing on big assemblies. */
-  onProgress?(fn: (feature: number, meshed: number, meshTotal: number) => void): () => void;
+  onProgress?(fn: ProgressListener): () => void;
   /** Installments of a chunked rebuild reply for progressive display; the in-process backend never streams. */
   onRebuildChunk?(fn: (c: RebuildChunk) => void): () => void;
   /** MCAD-style "Compute All": rebuild bypassing every cache layer. Optional. */
@@ -607,6 +608,8 @@ export function tooLargeToSend(len: number): string | null {
 /** One `importing` frame: the request it is for, its stage fraction 0 to 100 or
  *  null while the stage has none, and the stage name. */
 export type OpProgressListener = (id: string, pct: number | null, stage: string) => void;
+// `id` is the rebuild the status belongs to; a backend that runs one build at a time may leave it out.
+export type ProgressListener = (feature: number, meshed: number, meshTotal: number, id?: string) => void;
 
 /** Another client's job one of ours is waiting behind, as the engine names it. */
 export interface EngineWait {
@@ -644,16 +647,13 @@ export class Geometry implements GeometryBackend {
   get inFlight(): number {
     return this.pending.size;
   }
-  // The heavy op most recently sent, for cancel(). Targeting by id keeps a late Cancel from killing the next op.
-  private lastHeavyId: string | null = null;
   private outbox: string[] = [];
   private statusListeners = new Set<StatusListener>();
   private opProgressListeners = new Set<OpProgressListener>();
-  private progressListeners = new Set<(feature: number, meshed: number, meshTotal: number) => void>();
+  private progressListeners = new Set<ProgressListener>();
   private queueListeners = new Set<(id: string, behind: EngineWait | null) => void>();
-  // Last full payload per body: the engine answers unchanged bodies with an etag stub instead of the multi-MB mesh,
-  // and assemble() rebuilds the merged result from this cache.
-  private bodyMesh = new Map<string, WireBodyFull>();
+  // Replaced when a session ends, so the next document's first rebuild is whole and the old meshes are released.
+  private wire = new SessionWire();
   /** Chunked replies in flight by id (server.py _stream_binary_reply). Invariant: each has a live `pending` entry
    *  and every teardown clears both, or a broken stream wedges rebuildNow()'s `rebuilding` flag forever. */
   private streams = new Map<
@@ -668,12 +668,6 @@ export class Geometry implements GeometryBackend {
     }
   >();
   private chunkListeners = new Set<(c: RebuildChunk) => void>();
-  /** The last assembled result and its reply signature, for assemble()'s no-op fast path. */
-  private lastAssembled: RebuildResult | null = null;
-  private lastAssembledSig: string | null = null;
-  // Delta protocol: the engine worker holds the last document, so only features changed by reference are sent
-  // (effectiveDoc() reuses unchanged objects). Any doubt (respawn, missed reply, many changes) sends it whole.
-  private lastSent: { features: Feature[]; parameters: string; bodyVisibility: string; bodyIds: string } | null = null;
   private revision = 0;
 
   constructor(transport: GeometryTransport = new EngineTransport()) {
@@ -691,6 +685,7 @@ export class Geometry implements GeometryBackend {
 
   // Its calls reject with SessionEnded, unsent ones never go out, and any late frame finds no pending id.
   private endScope(s: DocumentSession) {
+    this.wire = new SessionWire();
     const mine = this.owned.get(s);
     this.owned.delete(s);
     if (!mine?.size) return;
@@ -699,7 +694,6 @@ export class Geometry implements GeometryBackend {
       this.pending.delete(id);
       this.dropStream(id);
       raws.add(raw);
-      if (this.lastHeavyId === id) this.lastHeavyId = null;
       reject(new SessionEnded());
     }
     this.outbox = this.outbox.filter((r) => !raws.has(r));
@@ -731,7 +725,7 @@ export class Geometry implements GeometryBackend {
     return () => this.chunkListeners.delete(fn);
   }
 
-  onProgress(fn: (feature: number, meshed: number, meshTotal: number) => void): () => void {
+  onProgress(fn: ProgressListener): () => void {
     this.progressListeners.add(fn);
     return () => this.progressListeners.delete(fn);
   }
@@ -780,7 +774,7 @@ export class Geometry implements GeometryBackend {
         const f = typeof msg.feature === "number" ? msg.feature : -1;
         const m = typeof msg.meshed === "number" ? msg.meshed : -1;
         const mt = typeof msg.meshTotal === "number" ? msg.meshTotal : -1;
-        for (const fn of this.progressListeners) fn(f, m, mt);
+        for (const fn of this.progressListeners) fn(f, m, mt, msg.id);
       } else if (msg.status === "importing") {
         const pct = typeof msg.pct === "number" && msg.pct >= 0 ? Math.min(msg.pct, 100) : null;
         const label = typeof msg.label === "string" ? msg.label : "";
@@ -859,7 +853,13 @@ export class Geometry implements GeometryBackend {
       delete result.manifest;
       // Plan the whole reply from the manifest now, so each body draws as soon as its chunk lands, and an unbacked
       // stub forces a resync before any allocation or partial display.
-      const begun = RebuildAssembly.begin(result, manifest, this.bodyMesh, this.lastAssembled, this.lastAssembledSig);
+      const begun = RebuildAssembly.begin(
+        result,
+        manifest,
+        this.wire.bodyMesh,
+        this.wire.lastAssembled,
+        this.wire.lastAssembledSig,
+      );
       if (begun.kind === "resync") {
         this.settleStream(id, { id, ok: true, result: { resync: true } } as RawReply<unknown>);
         return;
@@ -910,7 +910,7 @@ export class Geometry implements GeometryBackend {
           arrived.push(b.id);
           continue;
         }
-        this.bodyMesh.set(b.id, b);
+        this.wire.bodyMesh.set(b.id, b);
         if (!s.assembly.writeBody(b)) {
           // Writing a payload that disagrees with the manifest would corrupt the next body's triangles believably.
           pipeFault(
@@ -1029,10 +1029,14 @@ export class Geometry implements GeometryBackend {
         resolve({ id, ok: false, error: { message: tooLarge } } as RawReply<T>);
         return;
       }
-      // Set only once the call goes out, or Cancel would target a request the engine never saw. Ops nobody would stop
-      // are excluded, above all the timed session polls, or Cancel would stop a poll while the build ran on.
-      if (op !== "cancel" && op !== "ping" && !op.startsWith("session_")) this.lastHeavyId = id;
-      onId?.(id);
+      // The op's owner throws OpCancelled from onId when it was cancelled before its request could go out.
+      try {
+        onId?.(id);
+      } catch (e) {
+        if (!isOpCancelled(e)) throw e;
+        resolve({ id, ok: false, cancelled: true, error: { message: "cancelled before it was sent" } } as RawReply<T>);
+        return;
+      }
       let settle = resolve as Pending;
       if (session) {
         let mine = this.owned.get(session);
@@ -1066,25 +1070,25 @@ export class Geometry implements GeometryBackend {
 
   async rebuild(doc: CadDocument, tolerance = 0.1, onId?: (id: string) => void): Promise<RebuildReply> {
     const known: Record<string, string> = {};
-    for (const [id, p] of this.bodyMesh) known[id] = p.etag;
+    for (const [id, p] of this.wire.bodyMesh) known[id] = p.etag;
 
     const pJson = JSON.stringify(doc.parameters ?? null);
     const vJson = JSON.stringify(doc.bodyVisibility ?? null);
     const iJson = JSON.stringify(doc.bodyIds ?? null);
     let payload: RebuildPayload | null = null;
-    if (this.lastSent) {
+    if (this.wire.lastSent) {
       const set: [number, Feature][] = [];
       for (let i = 0; i < doc.features.length; i++) {
         const f = doc.features[i];
-        if (f !== undefined && this.lastSent.features[i] !== f) set.push([i, f]);
+        if (f !== undefined && this.wire.lastSent.features[i] !== f) set.push([i, f]);
       }
       // Delta only when small; a reordered or rewritten timeline ships fewer bytes as a full document.
       if (set.length <= Math.max(8, doc.features.length / 2)) {
         const ops: RebuildDeltaPayload["ops"] = { length: doc.features.length, set };
-        if (pJson !== this.lastSent.parameters) ops.parameters = doc.parameters;
+        if (pJson !== this.wire.lastSent.parameters) ops.parameters = doc.parameters;
         // null, not undefined: an absent key would leave the engine's copy as it was
-        if (vJson !== this.lastSent.bodyVisibility) ops.bodyVisibility = doc.bodyVisibility ?? null;
-        if (iJson !== this.lastSent.bodyIds) ops.bodyIds = doc.bodyIds ?? null;
+        if (vJson !== this.wire.lastSent.bodyVisibility) ops.bodyVisibility = doc.bodyVisibility ?? null;
+        if (iJson !== this.wire.lastSent.bodyIds) ops.bodyIds = doc.bodyIds ?? null;
         payload = { baseRevision: this.revision, revision: this.revision + 1, ops };
       }
     }
@@ -1097,24 +1101,24 @@ export class Geometry implements GeometryBackend {
         `RESYNC asked by the engine, resending the whole document ` +
           `(${doc.features.length} features, ${Object.keys(known).length} known etags)`,
       );
-      this.lastSent = null;
-      this.bodyMesh.clear();
+      this.wire.lastSent = null;
+      this.wire.bodyMesh.clear();
       payload = { document: doc, revision: this.revision + 1 };
       msg = await this.rebuildCall("rebuild", { ...payload, tolerance }, onId);
     }
     if (msg.ok && !msg.result?.resync) {
       this.revision = payload.revision;
-      this.lastSent = { features: doc.features.slice(), parameters: pJson, bodyVisibility: vJson, bodyIds: iJson };
+      this.wire.lastSent = { features: doc.features.slice(), parameters: pJson, bodyVisibility: vJson, bodyIds: iJson };
     }
     if (msg.ok && msg.result?.protocol === 2) {
       let assembled = this.assemble(msg.result);
       if (assembled === null) {
         // We claimed an etag the cache no longer backs (say a worker respawn race), so resync in full.
         pipe("RESYNC: a stub named an etag this client no longer holds, " + "re-requesting every body in full");
-        this.bodyMesh.clear();
+        this.wire.bodyMesh.clear();
         // the assemble cache is keyed on payloads that just went away
-        this.lastAssembled = null;
-        this.lastAssembledSig = null;
+        this.wire.lastAssembled = null;
+        this.wire.lastAssembledSig = null;
         msg = await this.rebuildCall("rebuild", { document: doc, revision: ++this.revision, tolerance }, onId);
         if (msg.ok && msg.result?.protocol === 2) assembled = this.assemble(msg.result);
       }
@@ -1131,8 +1135,8 @@ export class Geometry implements GeometryBackend {
   /** MCAD-style "Compute All": bypass and rebuild every cache layer (RAM,
    *  mesh, disk checkpoints) server-side, and drop our own mesh cache. */
   async computeAll(doc: CadDocument, tolerance = 0.1): Promise<RebuildReply> {
-    this.bodyMesh.clear();
-    this.lastSent = null;
+    this.wire.bodyMesh.clear();
+    this.wire.lastSent = null;
     const msg = await this.rebuildCall("computeAll", { document: doc, revision: ++this.revision, tolerance });
     if (msg.ok && msg.result?.protocol === 2) {
       const assembled = this.assemble(msg.result);
@@ -1155,15 +1159,15 @@ export class Geometry implements GeometryBackend {
     const begun = RebuildAssembly.begin(
       r,
       manifestFromBodies(bodies),
-      this.bodyMesh,
-      this.lastAssembled,
-      this.lastAssembledSig,
+      this.wire.bodyMesh,
+      this.wire.lastAssembled,
+      this.wire.lastAssembledSig,
     );
     if (begun.kind === "resync") return null;
     if (begun.kind === "noop") return begun.result;
     for (const nb of bodies) {
       if (nb.unchanged) continue;
-      this.bodyMesh.set(nb.id, nb);
+      this.wire.bodyMesh.set(nb.id, nb);
       if (!begun.assembly.writeBody(nb)) {
         pipeFault(
           `body ${nb.id} did not match its manifest entry in a single-frame ` +
@@ -1184,9 +1188,9 @@ export class Geometry implements GeometryBackend {
     const out = assembly.complete();
     if (out === null) return null;
     const keep = new Set(live);
-    for (const id of this.bodyMesh.keys()) if (!keep.has(id)) this.bodyMesh.delete(id);
-    this.lastAssembledSig = assembly.sig;
-    this.lastAssembled = out;
+    for (const id of this.wire.bodyMesh.keys()) if (!keep.has(id)) this.wire.bodyMesh.delete(id);
+    this.wire.lastAssembledSig = assembly.sig;
+    this.wire.lastAssembled = out;
     return out;
   }
 
@@ -1363,9 +1367,8 @@ export class Geometry implements GeometryBackend {
   /** Stop the geometry op in flight. Answered on the engine's read path so it is heard during a long job; the
    *  cancelled op settles separately with `cancelled: true`. A pool job's worker is killed and respawned. */
   async cancel(target?: string, opts?: { soft?: boolean }): Promise<boolean> {
-    // Prefer an explicit target: a rebuild during a long import overwrites lastHeavyId, and the engine would then
-    // refuse to cancel the import. lastHeavyId is a fallback for callers that never learned an id.
-    const id = target ?? this.lastHeavyId;
+    // Only the op's own id: the last request sent may belong to another op or another document.
+    const id = target;
     if (!id) return false;
     const soft = opts?.soft && this.softCancel ? { soft: true } : {};
     const msg = await this.call<{ cancelled: boolean }>("cancel", { target: id, ...soft });

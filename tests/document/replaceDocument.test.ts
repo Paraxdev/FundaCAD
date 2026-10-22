@@ -31,8 +31,10 @@ function backend() {
   let calls = 0;
   let cancels = 0;
   const be = {
-    async rebuild() {
+    async rebuild(_doc: unknown, _tol?: number, onId?: (id: string) => void) {
       calls++;
+      // The real client names every request before it goes out; Cancel targets that name.
+      onId?.(`r${calls}`);
       if (calls === 1) return { ok: true as const, result: RESULT };
       return new Promise<never>(() => {}); // never settles
     },

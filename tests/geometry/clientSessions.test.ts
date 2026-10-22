@@ -2,7 +2,7 @@
 // with SessionEnded, keeps it off the wire if it was still queued, and drops every late frame for it.
 import { describe, expect, it } from "vitest";
 import { Geometry } from "../../src/geometry/client";
-import { SessionHost, isSessionEnded } from "../../src/document/session";
+import { OpCancelled, SessionHost, isSessionEnded } from "../../src/document/session";
 import type { TransportSink } from "../../src/geometry/transport";
 import type { CadDocument } from "../../src/types";
 
@@ -45,7 +45,7 @@ function rig(open = true) {
   g.bindSessions(host);
   void g.init();
   const heard: string[] = [];
-  g.onProgress((f) => heard.push(`progress:${f}`));
+  g.onProgress((f, _m, _t, id) => heard.push(`progress:${f}:${id}`));
   g.onQueue((id) => heard.push(`queue:${id}`));
   g.onOpProgress((id) => heard.push(`op:${id}`));
   g.onRebuildChunk((c) => heard.push(`chunk:${c.id}`));
@@ -135,5 +135,60 @@ describe("engine requests and document sessions", () => {
     r.binary(headFrame("never-sent"));
     await tick();
     expect({ heard: r.heard, inFlight: r.inFlight() }).toEqual({ heard: [], inFlight: 0 });
+  });
+
+  it("a new session's first rebuild is a whole document, a rebuild later in the same session is a delta", async () => {
+    const r = rig();
+    const one: CadDocument = { parameters: {}, features: [{ id: "f1", type: "box" } as never] };
+    const two: CadDocument = { parameters: {}, features: [...one.features, { id: "f2", type: "box" } as never] };
+    const shape = (i: number) => {
+      const m = JSON.parse(r.sent[i]!.raw) as Record<string, unknown>;
+      return { whole: "document" in m, delta: "baseRevision" in m, known: m.known };
+    };
+    const answer = async (p: Promise<unknown>) => {
+      r.text({ id: r.sent.at(-1)!.id, ok: true, result: { mesh: null } });
+      await p;
+    };
+    await answer(r.g.rebuild(one));
+    await answer(r.g.rebuild(two));
+    r.host.begin("new");
+    await answer(r.g.rebuild(two));
+    await answer(r.g.rebuild(one));
+    expect([0, 1, 2, 3].map(shape)).toEqual([
+      { whole: true, delta: false, known: {} },
+      { whole: false, delta: true, known: {} },
+      { whole: true, delta: false, known: {} },
+      { whole: false, delta: true, known: {} },
+    ]);
+  });
+
+  it("a building status reaches progress listeners with its request id", async () => {
+    const r = rig();
+    void r.g.rebuild(doc);
+    const id = r.sent[0]!.id;
+    r.text({ id, status: "building", feature: 3 });
+    r.text({ id: "not-ours", status: "building", feature: 4 });
+    expect(r.heard).toEqual([`progress:3:${id}`]);
+  });
+
+  it("a request whose op was cancelled before its id was known is never sent, one not cancelled is", async () => {
+    const r = rig();
+    const refused = await r.g.importGeometry("a.step", "step", () => {
+      throw new OpCancelled();
+    });
+    const kept = r.g.importGeometry("b.step", "step", () => {});
+    expect({ refused, sent: r.sent.map((s) => s.op), inFlight: r.inFlight() }).toEqual({
+      refused: { ok: false, cancelled: true, message: "import cancelled" },
+      sent: ["import"],
+      inFlight: 1,
+    });
+    void kept;
+  });
+
+  it("Cancel with no request id cancels nothing, it no longer falls back to the last request sent", async () => {
+    const r = rig();
+    void r.g.rebuild(doc);
+    const without = await r.g.cancel();
+    expect({ without, sent: r.sent.map((s) => s.op) }).toEqual({ without: false, sent: ["rebuild"] });
   });
 });

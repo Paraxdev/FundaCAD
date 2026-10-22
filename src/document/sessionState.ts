@@ -5,7 +5,9 @@ import type { BusyState, RebuildState } from "./store";
 
 export interface BusyOp {
   state: BusyState;
-  abort: AbortController | null;
+  abort: AbortController;
+  // The caller passed its own abort, so a cancel is its to carry out; no engine cancel is sent for it.
+  external: boolean;
 }
 
 export class SessionState {
