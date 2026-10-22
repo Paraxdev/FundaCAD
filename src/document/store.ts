@@ -134,11 +134,11 @@ const IDLE_BUSY: BusyState = { active: false, label: "", id: null, pct: null, st
 type BusyListener = (state: BusyState) => void;
 type MetaListener = () => void;
 
-/** A replacing load's project state, per top level key it changed: the JSON to put
- *  back (undefined for none) and the fingerprint of the JSON the load left, so a
- *  key the user changed since, off the undo stack, keeps the user's value. */
+/** Per top level key a step changed: the JSON to put back (undefined for none) and the fingerprint of
+ *  the JSON the step left. A key changed since keeps its value, so a kept id map may name a missing id. */
 type StateSwap = Map<string, { put: string | undefined; expect: string }>;
 const fingerprint = (json: string | undefined) => contentHash(json ?? "");
+const TIMELINE_KEYS: ReadonlySet<string> = new Set(["suppressed", "rollback"]);
 
 /** One undo-stack slot: either a full document snapshot (a real edit) or a
  *  small reversible overlay change (visibility and the like). Both share one
@@ -770,7 +770,17 @@ export class DocumentStore {
   }
 
   mutate(fn: (doc: CadDocument) => void, immediate = false) {
-    this.pushUndo();
+    this.step(fn, immediate);
+  }
+  /** `move` shifts the rollback marker or the suppress set with the edit, inside its undo step. */
+  private step(fn: (doc: CadDocument) => void, immediate: boolean, move?: () => void) {
+    const before = move && this.timelineSections();
+    move?.();
+    const entry = this.pushUndo();
+    if (before) {
+      const swap = stateSwap(before, this.timelineSections());
+      if (swap.size) entry.state = swap;
+    }
     this.redoStack = [];
     // a user edit is the "edit the model to retry" the valve toast promises
     this.rearmProjectionValve();
@@ -1155,32 +1165,35 @@ export class DocumentStore {
   addFeature(feature: Feature, atIndex?: number, bindings?: SketchBinding[]) {
     // new features land at the rollback marker (mainstream MCAD), which then advances past it
     const at = atIndex ?? this.rollbackIndex;
-    if (this.rollback !== null && at <= this.rollback) this.rollback += 1;
-    this.mutate((d) => {
+    this.step((d) => {
       d.features.splice(at, 0, feature);
       this.applyBindings(d, bindings);
-    }, true);
+    }, true, () => {
+      if (this.rollback !== null && at <= this.rollback) this.rollback += 1;
+    });
   }
 
   /** An edit to existing features plus any new ones, as ONE undo step. */
   editAndAdd(edit: (doc: CadDocument) => void, features: Feature[] = []) {
     const at = this.rollbackIndex;
-    if (features.length && this.rollback !== null && at <= this.rollback) this.rollback += features.length;
-    this.mutate((d) => {
+    this.step((d) => {
       edit(d);
       if (features.length) d.features.splice(at, 0, ...features);
-    }, true);
+    }, true, () => {
+      if (features.length && this.rollback !== null && at <= this.rollback) this.rollback += features.length;
+    });
   }
 
   /** Several features as one undo step at the rollback marker (a thread is two). */
   addFeatures(features: Feature[], bindings?: SketchBinding[]) {
     if (!features.length) return;
     const at = this.rollbackIndex;
-    if (this.rollback !== null && at <= this.rollback) this.rollback += features.length;
-    this.mutate((d) => {
+    this.step((d) => {
       d.features.splice(at, 0, ...features);
       this.applyBindings(d, bindings);
-    }, true);
+    }, true, () => {
+      if (this.rollback !== null && at <= this.rollback) this.rollback += features.length;
+    });
   }
 
   /** A bound numeric field is re-asserted by the recompute; use setTargetValue/setTargetExpr. */
@@ -1273,11 +1286,12 @@ export class DocumentStore {
 
   removeFeature(id: string) {
     const idx = this.doc.features.findIndex((f) => f.id === id);
-    if (this.rollback !== null && idx >= 0 && idx < this.rollback) this.rollback -= 1;
-    this.suppressed.delete(id);
-    this.mutate((d) => {
+    this.step((d) => {
       d.features = d.features.filter((f) => f.id !== id);
-    }, true);
+    }, true, () => {
+      if (this.rollback !== null && idx >= 0 && idx < this.rollback) this.rollback -= 1;
+      this.suppressed.delete(id);
+    });
   }
 
   // --- timeline: rollback marker, suppress, reorder ---
@@ -2410,12 +2424,18 @@ export class DocumentStore {
     const out = this.toObject(false) as unknown as Record<string, unknown>;
     for (const k of GEOMETRY_KEYS) delete out[k];
     out["bodyVisibility"] = [out["bodyVisibility"] ?? null, this.isolate];
-    return new Map(Object.entries(out).map(([k, v]) => [k, JSON.stringify(v)]));
+    return new Map([...Object.entries(out).map(([k, v]) => [k, JSON.stringify(v)] as const), ...this.timelineSections()]);
+  }
+  private timelineSections(): Map<string, string> {
+    const out = new Map<string, string>();
+    if (this.suppressed.size) out.set("suppressed", JSON.stringify([...this.suppressed]));
+    if (this.rollback !== null) out.set("rollback", JSON.stringify(this.rollback));
+    return out;
   }
   /** Puts back each key of `swap` the user has not changed since, and returns the
    *  swap that takes those back again. */
   private swapState(swap: StateSwap): StateSwap {
-    const now = this.stateSections();
+    const now = [...swap.keys()].every((k) => TIMELINE_KEYS.has(k)) ? this.timelineSections() : this.stateSections();
     const back: StateSwap = new Map();
     const put: Record<string, unknown> = {};
     for (const [k, { put: json, expect }] of swap) {
