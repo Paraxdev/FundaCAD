@@ -1,3 +1,5 @@
+<!-- The "What's new" section below is also the card Home shows after an update: keep it short and written for makers, one group per bold line, one bullet per change. -->
+
 > ### If you installed an earlier beta, install this one by hand once
 >
 > The key that signs updates changed with this beta. Betas installed before it cannot check updates signed with the new key, so they cannot update themselves to this one or to later ones. Download the installer for your system below and install it over your current copy. Your files and settings stay. From this beta on, FundaCAD updates itself again.

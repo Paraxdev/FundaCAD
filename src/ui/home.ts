@@ -23,6 +23,10 @@ export class Home {
     shown = this;
   }
 
+  isOpen(): boolean {
+    return useHomeStore().visible;
+  }
+
   open(): void {
     useHomeStore().visible = true;
   }

@@ -48,6 +48,7 @@ import { Home } from "../ui/home";
 import { wireHomeOnOpen } from "./homeWiring";
 import { setThumbnailSource } from "../io/thumbnails";
 import { scheduleStartupUpdateCheck } from "../ui/updates";
+import { startWhatsNew } from "../ui/whatsNew";
 
 import { installEngineDiedToast } from "./engineWatch";
 import { activatePlugins } from "../plugins/activate";
@@ -521,6 +522,7 @@ export function mountUi(e: Engine): void {
   e.handleAction = createActions(e);
 
   if (welcomeOnStartup()) e.ui.home.open();
+  void startWhatsNew(e.ui.home);
   installLaunchPaths(e, recoveryAsked);
   scheduleStartupUpdateCheck(beforeUpdate(e));
 
