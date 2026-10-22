@@ -36,7 +36,7 @@ The beta is the one for most people. It is somewhat stable, because a change onl
 
 The [development build](https://github.com/Paraxdev/fundacad/releases/tag/development) has every change the day it lands. Take it if you want the newest features and can live with a build that is sometimes broken. The file names are the same on both pages.
 
-A beta install updates itself to the next beta, and a development install to the next development build. To switch, install the file from the other page. If the other build has a lower version number, you may need to uninstall first.
+A beta install updates itself to the next beta, and a development install to the next development build. When one is out, a message at the bottom of the window says so, and its Restart & update installs it. It asks you to save unsaved changes first, and waits until an open sketch is finished. To switch, install the file from the other page. If the other build has a lower version number, you may need to uninstall first.
 
 On Linux only the AppImage updates itself. The Flatpak, the `.deb` and the `.rpm` stay on the build you installed until you install the newer file over it the same way, with `flatpak install --user --reinstall ./FundaCAD-linux-x86_64.flatpak`, `sudo apt install ./FundaCAD-linux-x86_64.deb` or `sudo dnf install ./FundaCAD-linux-x86_64.rpm`.
 
