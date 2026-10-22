@@ -140,6 +140,17 @@ impl RebuildCache {
         self.brep_sigs.clear();
     }
 
+    /// No document is open any more: the snapshots and payloads it held go, the disk checkpoints stay for a reopen.
+    pub fn release(&mut self) {
+        self.reset();
+        self.mesh_keys.clear();
+    }
+
+    /// The snapshots and viewport payloads this process holds.
+    pub fn holding(&self) -> (usize, usize) {
+        (self.ring.iter().flatten().count(), self.payloads.len())
+    }
+
     /// `_compute_all_job`: every tier dropped for this document, disk included.
     pub fn purge(&mut self, raw: &Value) {
         let keys = self.chain_keys(raw);

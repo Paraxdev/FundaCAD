@@ -767,14 +767,19 @@ export class DocumentStore {
     return st;
   }
 
-  // Every op of the ended document is cancelled by its own id, not only the newest one.
+  // Every op of the ended document stops, not only the newest one. A client that ends the session in the engine has
+  // already stopped their jobs; any other backend is told each op's own id.
   private endState(st: SessionState) {
     if (st.rebuildTimer != null) clearTimeout(st.rebuildTimer);
     st.rebuildTimer = null;
     st.rebuildQueued = false;
     st.restoreArmed = false;
     st.provisional = null;
-    for (const op of st.busyOps) void this.cancelOp(op);
+    const engineEnds = this.geometry.endsSessions === true;
+    for (const op of st.busyOps) {
+      if (engineEnds) op.abort.abort();
+      else void this.cancelOp(op);
+    }
   }
 
   private setBusy(next: BusyState) {

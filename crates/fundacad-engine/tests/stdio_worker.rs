@@ -39,8 +39,17 @@ impl Jobs for Noisy {
         JobResult::Mesh(MeshResult { fields, bodies: vec![WireBody::Full(b)] })
     }
 
-    fn run(&mut self, op: &str, _req: &Map<String, Value>, _ctx: &JobContext) -> JobResult {
-        error_result(&format!("no {op} here"))
+    /// `hold` stands in for a long import: it waits until cancelled, 20 s at most.
+    fn run(&mut self, op: &str, _req: &Map<String, Value>, ctx: &JobContext) -> JobResult {
+        if op != "hold" {
+            return error_result(&format!("no {op} here"));
+        }
+        let t0 = Instant::now();
+        while !ctx.cancel.is_cancelled() && t0.elapsed() < Duration::from_secs(20) {
+            std::thread::sleep(Duration::from_millis(10));
+            ctx.progress.tick();
+        }
+        error_result("held to the end")
     }
 }
 
@@ -170,6 +179,38 @@ fn conversation() {
     }
 }
 
+/// The app is one client of its worker, so its documents are told apart by `doc` alone.
+fn ending_a_document_frees_the_worker_for_the_next_one_at_once() {
+    let mut w = Worker::spawn();
+    w.request(json!({"id": "a1", "op": "hold", "doc": "A"}));
+    w.request(json!({"id": "a2", "op": "rebuild", "doc": "A", "revision": 1, "document": {"features": []}}));
+    std::thread::sleep(Duration::from_millis(300));
+    let t0 = Instant::now();
+    w.request(json!({"id": "end", "op": "doc_end", "doc": "A"}));
+    w.request(json!({"id": "b1", "op": "rebuild", "doc": "B", "revision": 1, "document": {"features": []}}));
+    let mut seen = vec![];
+    while seen.last().map(|(id, _): &(Value, Value)| id.clone()) != Some(json!("b1")) {
+        let m = w.next_text();
+        if m.get("status").is_none() {
+            seen.push((m["id"].clone(), if m["cancelled"] == true { json!("cancelled") } else { m["ok"].clone() }));
+        }
+    }
+    assert!(t0.elapsed() < Duration::from_secs(1), "the next document waited {:?}", t0.elapsed());
+    assert_eq!(
+        seen,
+        vec![
+            (json!("a2"), json!("cancelled")),
+            (json!("end"), json!(true)),
+            (json!("a1"), json!("cancelled")),
+            (json!("b1"), json!(true)),
+        ]
+    );
+    w.request(json!({"id": "a3", "op": "rebuild", "doc": "A", "revision": 2, "document": {"features": []}}));
+    assert_eq!(w.next_text(), json!({"id": "a3", "ok": false, "cancelled": true, "error": {"message": "cancelled"}}));
+    drop(w.stdin.take());
+    assert!(w.wait().success());
+}
+
 fn a_broken_frame_ends_the_worker() {
     let mut w = Worker::spawn();
     w.stdin.as_mut().unwrap().write_all(&[1, 0, 0, 0, 9, 0]).unwrap();
@@ -181,9 +222,14 @@ fn main() {
     if std::env::args().nth(1).as_deref() == Some("--worker") {
         fundacad_engine::stdio::run(Noisy);
     }
-    for (name, test) in
-        [("conversation", conversation as fn()), ("a_broken_frame_ends_the_worker", a_broken_frame_ends_the_worker)]
-    {
+    for (name, test) in [
+        ("conversation", conversation as fn()),
+        (
+            "ending_a_document_frees_the_worker_for_the_next_one_at_once",
+            ending_a_document_frees_the_worker_for_the_next_one_at_once,
+        ),
+        ("a_broken_frame_ends_the_worker", a_broken_frame_ends_the_worker),
+    ] {
         test();
         println!("test {name} ... ok");
     }
