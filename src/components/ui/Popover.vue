@@ -16,8 +16,7 @@ const props = withDefaults(
     kind?: string;
     /** an element beside the anchor the card must also stay clear of */
     clear?: HTMLElement | null;
-    /** px floor for the card, for a card that should not be narrower than what
-     *  opened it (a picker sitting under a full-width field) */
+    /** px floor, for a card that should not be narrower than what opened it (a picker under a full-width field) */
     minWidth?: number | null;
   }>(),
   { side: "right", align: "start", gap: 8, kind: "", clear: null, minWidth: null },
