@@ -1,6 +1,5 @@
-//! tests/fixtures/versions/v8.funda through `doc_open` and `doc_save`: an older
-//! stamp stays, since MCP does not run the app's migrations. Its own file, as
-//! the blob directory is process wide and a second test would race on it.
+//! tests/fixtures/versions/v8.funda keeps its older stamp through `doc_open` and `doc_save`, since MCP runs
+//! no migrations. Its own file, as the blob directory is process wide and a second test would race on it.
 
 mod common;
 

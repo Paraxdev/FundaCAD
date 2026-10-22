@@ -1,16 +1,5 @@
-//! Where the server looks for the geometry engine. A port of
-//! the Python MCP server's `test_sidecar_dir.py`, which asked the same three
-//! questions of the Python engine's directory.
-//!
-//! From a checkout the answer is the binary this workspace built. Installed as
-//! a plugin there is no such build, so the app hands the path over in the
-//! environment when it writes the launch command.
-//!
-//! Both readings have a way to be silently wrong, and each section here is one
-//! of them. An override that is ignored sends an installed plugin looking for a
-//! binary that is not there, and the failure surfaces as a spawn error naming a
-//! path nobody set. An override that is trusted without checking does the same
-//! thing while looking like it worked.
+//! Where the server looks for the engine: from a checkout, the binary this workspace built; installed as a
+//! plugin, the path the app sets. An override ignored, or trusted unchecked, fails naming a path nobody set.
 
 use std::path::{Path, PathBuf};
 
@@ -18,9 +7,8 @@ use fundacad_mcp::link::{engine_command, is_rust_engine_app, split_command};
 
 const VARS: &[&str] = &["FUNDACAD_ENGINE_CMD", "SINDRI_ENGINE_CMD", "SINDRICAD_ENGINE_CMD"];
 
-/// Set the override, run, and put back whatever was there. One test function
-/// for all three cases because the environment is the process's, not a
-/// thread's, and parallel tests would read each other's setting.
+/// One test for all three cases, since the environment is the process's and parallel tests would read
+/// each other's setting.
 fn with_override<T>(value: Option<&str>, body: impl FnOnce() -> T) -> T {
     let saved: Vec<(&str, Option<String>)> = VARS.iter().map(|k| (*k, std::env::var(k).ok())).collect();
     for k in VARS {
@@ -39,9 +27,8 @@ fn with_override<T>(value: Option<&str>, body: impl FnOnce() -> T) -> T {
     out
 }
 
-/// Where the engine is in THIS checkout, worked out from the test binary rather
-/// than from the code under test: an expectation that searched the same way
-/// would agree with a broken search. The test binary is in `target/<profile>/deps`.
+/// Worked out from the test binary in `target/<profile>/deps`, not the code under test, since an expectation
+/// that searched the same way would agree with a broken search.
 fn built_engine() -> PathBuf {
     let exe = std::env::current_exe().expect("a test binary has a path");
     let profile = exe.parent().and_then(Path::parent).expect("target/<profile>/deps");
@@ -63,9 +50,7 @@ fn the_engine_is_found_the_three_ways_that_matter() {
     let told = with_override(Some(&engine.to_string_lossy()), engine_command);
     assert!(same_file(Path::new(&told[0]), &engine), "{told:?}");
 
-    // An override naming nothing is not believed. A path that is not there is a
-    // setting that is wrong, and spawning it anyway turns a wrong setting into
-    // an error message about a file nobody named.
+    // An override naming nothing is not believed, or a wrong setting becomes an error about a file nobody named.
     let missing = std::env::temp_dir().join("fundacad-no-such-engine.exe");
     assert!(!missing.exists());
     let fallen_back = with_override(Some(&missing.to_string_lossy()), engine_command);

@@ -1,9 +1,5 @@
-//! Document files in both formats: `.funda` JSON and `.fundab` binary. A port
-//! of the Python MCP server's `test_docfile.py`.
-//!
-//! The binary case builds a format 2 file by the spec in docs/FUNDA-FORMAT.md,
-//! with parity shards the reader must step over, since the app's own writer is
-//! the one that computes them.
+//! Document files in both formats. The `.fundab` case is built by the spec in docs/FUNDA-FORMAT.md with parity
+//! shards the reader must step over, since only the app's writer computes them.
 
 use std::io::Write;
 use std::path::Path;
@@ -36,7 +32,7 @@ fn doc(digest: &str) -> Map<String, Value> {
     .clone()
 }
 
-// --- a format 2 file, written the way the app writes one ---------------------
+// A format 2 file, written the way the app writes one.
 
 fn cbor(v: &Value) -> Vec<u8> {
     fn head(major: u8, n: u64) -> Vec<u8> {
@@ -190,8 +186,6 @@ fn write_fundab_with(
     body.extend_from_slice(&tail);
     std::fs::write(path, &body).unwrap();
 }
-
-// --- the tests ---------------------------------------------------------------
 
 #[test]
 fn json_round_trips_with_geometry_embedded_last() {

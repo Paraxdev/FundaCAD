@@ -1,6 +1,5 @@
-//! tests/fixtures/future/v99.funda through `doc_open` and `doc_save`: the note
-//! names what this version leaves out, and the saved file holds everything the
-//! newer version wrote, its geometry too, under this build's own version stamp.
+//! tests/fixtures/future/v99.funda through `doc_open` and `doc_save`: the note names what this version leaves
+//! out, and the saved file keeps everything the newer one wrote, under this build's stamp.
 
 mod common;
 

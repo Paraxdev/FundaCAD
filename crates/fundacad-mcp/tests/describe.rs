@@ -1,10 +1,5 @@
-//! The numbers an `inspect` report prints.
-//!
-//! `describe.py` leans on two things Python does and Rust does not: `round()`
-//! goes to the even neighbour on a tie, and `%g` keeps six significant digits,
-//! trims trailing zeros and keeps the sign of a negative zero. Every one of
-//! those was a difference between the two servers' reports at some point, and
-//! a difference in a measurement is the kind nobody notices.
+//! The numbers an `inspect` report prints, matching Python's `round()` (ties to even) and `%g` (six significant
+//! digits, trailing zeros trimmed, negative zero kept), since a difference in a measurement goes unnoticed.
 
 use fundacad_mcp::describe::{describe, fmt, g_format};
 use serde_json::json;

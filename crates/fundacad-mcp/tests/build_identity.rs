@@ -1,9 +1,5 @@
-//! Which build an engine is.
-//!
-//! The same document once built differently through the MCP server than in the
-//! app, because the engine the server started was three days older than the
-//! app's, and nothing said so. An engine now names the source it was built
-//! from in its `ping` reply, and the server compares the two it can reach.
+//! An engine names the source it was built from in its `ping`, so the server can say when its engine
+//! is not the app's build, which once made one document build differently in each.
 
 mod common;
 

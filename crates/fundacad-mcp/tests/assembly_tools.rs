@@ -1,7 +1,5 @@
-//! The tools for working on an assembly rather than one part: `edit` for many
-//! changes in one call, `interference` for fits and clearances (once or swept
-//! over a parameter), a feature's `name` on the bodies it makes, and `export`
-//! one file per part, laid flat. Spawns the engine.
+//! The assembly tools: `edit` for many changes, `interference` once or swept, a feature's `name` on its bodies,
+//! and `export` one file per part, laid flat. Spawns the engine.
 
 mod common;
 

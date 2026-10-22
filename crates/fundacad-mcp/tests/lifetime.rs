@@ -1,22 +1,5 @@
-//! Does the geometry engine die with the server that started it? A port of
-//! the Python MCP server's `test_lifetime.py`.
-//!
-//! This is not housekeeping. Each session spawns an engine holding a loaded
-//! OpenCASCADE; an MCP host kills its servers with TerminateProcess, which runs
-//! no cleanup. Measured on the Python server before this was fixed: 53
-//! processes left behind, after which a fresh engine could not start and every
-//! build failed with an error about the machine, from a machine that had been
-//! fine an hour earlier.
-//!
-//! So the test kills the OWNER the way a host would, with no chance to clean
-//! up, and asks whether the engine is still there. The control is the same run
-//! with nothing holding the child, which must leave it alive, otherwise this
-//! would pass on a machine where something else happens to be reaping the
-//! process, and prove nothing.
-//!
-//! Windows only. The job object exists because Windows has neither
-//! PR_SET_PDEATHSIG nor a parent to poll for, and the app's own shell is the
-//! only other thing that supplies one.
+//! The engine must die with the server: hosts kill servers with TerminateProcess, and the Python server once
+//! left 53 engines behind until no new one could start. Windows only; the control run without the job must survive.
 
 mod common;
 
