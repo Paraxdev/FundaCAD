@@ -9,6 +9,7 @@
 //! installed.
 
 use fundacad_geom::kernel;
+use fundacad_geom::text::fonts::{Aspect, Library};
 use fundacad_geom::text::{self, TextPath, TextSpec};
 use serde_json::Value;
 
@@ -187,4 +188,185 @@ fn font_families_are_found_and_an_unknown_name_falls_back() {
         text::glyphs(&spec("sans-serif"), None),
         text::glyphs(&spec("Arial"), None)
     );
+}
+
+/// Regular outlines of any installed plain TrueType font, to dress up as other families.
+fn plain_truetype() -> Option<Vec<u8>> {
+    let mut db = fontdb::Database::new();
+    db.load_system_fonts();
+    let mut paths: Vec<std::path::PathBuf> = db
+        .faces()
+        .filter(|f| f.style == fontdb::Style::Normal && f.weight == fontdb::Weight::NORMAL)
+        .filter_map(|f| match &f.source {
+            fontdb::Source::File(p) => Some(p.clone()),
+            _ => None,
+        })
+        .collect();
+    paths.sort();
+    paths.into_iter().find_map(|p| {
+        let data = std::fs::read(p).ok()?;
+        let plain = data.starts_with(&[0, 1, 0, 0]);
+        let variable = data.windows(4).take(512).any(|w| w == b"fvar");
+        (plain && !variable).then_some(data)
+    })
+}
+
+/// The same font under another family: a new name table appended and the directory pointed at it.
+fn renamed(font: &[u8], family: &str) -> Vec<u8> {
+    let be16 = |at: usize| usize::from(u16::from_be_bytes([font[at], font[at + 1]]));
+    let entry = (0..be16(4))
+        .map(|i| 12 + 16 * i)
+        .find(|&at| &font[at..at + 4] == b"name")
+        .expect("the font has a name table");
+    let strings = [
+        (1u16, family.to_owned()),
+        (2, "Regular".to_owned()),
+        (4, family.to_owned()),
+        (6, family.replace(' ', "")),
+    ];
+    let mut table = vec![0, 0, 0, strings.len() as u8, 0, 6 + 12 * strings.len() as u8];
+    let mut blob = Vec::new();
+    for (id, text) in &strings {
+        let units: Vec<u8> = text.encode_utf16().flat_map(u16::to_be_bytes).collect();
+        for v in [3u16, 1, 0x409, *id, units.len() as u16, blob.len() as u16] {
+            table.extend(v.to_be_bytes());
+        }
+        blob.extend(units);
+    }
+    table.extend(blob);
+    let mut out = font.to_vec();
+    while out.len() % 4 != 0 {
+        out.push(0);
+    }
+    let at = out.len() as u32;
+    out[entry + 8..entry + 12].copy_from_slice(&at.to_be_bytes());
+    out[entry + 12..entry + 16].copy_from_slice(&(table.len() as u32).to_be_bytes());
+    out.extend(table);
+    out
+}
+
+/// A library holding only these families, each with its own outlines so a lookup shows which it found.
+fn library_of(font: &[u8], families: &[&str]) -> Library {
+    let mut db = fontdb::Database::new();
+    for family in families {
+        db.load_font_data(renamed(font, family));
+    }
+    db.set_sans_serif_family("DejaVu Sans");
+    Library::build(db)
+}
+
+fn found(lib: &Library, name: &str) -> Option<fontdb::ID> {
+    lib.resolve(name, Aspect::Regular).map(|r| r.face.id)
+}
+
+#[test]
+fn a_windows_document_keeps_its_font_where_only_the_liberation_set_is_installed() {
+    let Some(font) = plain_truetype() else {
+        eprintln!("skipped: no plain TrueType font to build the test families from");
+        return;
+    };
+    let lib = library_of(
+        &font,
+        &["DejaVu Sans", "Liberation Mono", "Liberation Sans", "Liberation Serif"],
+    );
+    let sans = found(&lib, "Liberation Sans").expect("liberation sans");
+    let serif = found(&lib, "Liberation Serif").expect("liberation serif");
+    let mono = found(&lib, "Liberation Mono").expect("liberation mono");
+    let dejavu = found(&lib, "DejaVu Sans").expect("dejavu sans");
+    assert_eq!(
+        [sans, serif, mono, dejavu].iter().collect::<std::collections::HashSet<_>>().len(),
+        4
+    );
+    let asked = [
+        ("Arial", sans),
+        ("ARIAL", sans),
+        ("Helvetica", sans),
+        ("sans-serif", sans),
+        ("Times New Roman", serif),
+        ("Times", serif),
+        ("times-roman", serif),
+        ("serif", serif),
+        ("Courier New", mono),
+        ("Courier", mono),
+        ("monospace", mono),
+        ("NoSuchFontAnywhere", sans),
+    ];
+    let got: Vec<_> = asked.iter().map(|(n, _)| (*n, found(&lib, n))).collect();
+    let want: Vec<_> = asked.iter().map(|(n, id)| (*n, Some(*id))).collect();
+    assert_eq!(got, want);
+    for name in ["Arial", "Times New Roman", "Courier New", "monospace"] {
+        assert!(lib.is_installed(name), "{name}");
+    }
+    assert!(!lib.is_installed("NoSuchFontAnywhere"));
+}
+
+#[test]
+fn a_linux_document_in_liberation_opens_with_the_windows_family() {
+    let Some(font) = plain_truetype() else {
+        eprintln!("skipped: no plain TrueType font to build the test families from");
+        return;
+    };
+    let lib = library_of(
+        &font,
+        &["Arial", "Courier New", "DejaVu Sans", "Times New Roman"],
+    );
+    let arial = found(&lib, "Arial").expect("arial");
+    let times = found(&lib, "Times New Roman").expect("times new roman");
+    let courier = found(&lib, "Courier New").expect("courier new");
+    let asked = [
+        ("Liberation Sans", arial),
+        ("liberation serif", times),
+        ("Liberation Mono", courier),
+        ("Arial", arial),
+        ("Times New Roman", times),
+        ("Courier New", courier),
+    ];
+    let got: Vec<_> = asked.iter().map(|(n, _)| (*n, found(&lib, n))).collect();
+    let want: Vec<_> = asked.iter().map(|(n, id)| (*n, Some(*id))).collect();
+    assert_eq!(got, want);
+    assert!(lib.is_installed("Liberation Mono"));
+}
+
+#[test]
+fn each_family_keeps_its_own_face_where_the_windows_and_liberation_sets_are_both_installed() {
+    let Some(font) = plain_truetype() else {
+        eprintln!("skipped: no plain TrueType font to build the test families from");
+        return;
+    };
+    let lib = library_of(
+        &font,
+        &["Arial", "Liberation Mono", "Liberation Sans", "Times New Roman"],
+    );
+    let arial = found(&lib, "Arial").expect("arial");
+    let sans = found(&lib, "Liberation Sans").expect("liberation sans");
+    let times = found(&lib, "Times New Roman").expect("times new roman");
+    assert_ne!(arial, sans);
+    assert_eq!(found(&lib, "sans-serif"), Some(arial));
+    assert_eq!(found(&lib, "Liberation Serif"), Some(times));
+    assert_eq!(found(&lib, "Courier New"), found(&lib, "Liberation Mono"));
+}
+
+#[test]
+fn a_machine_without_arial_still_draws_text() {
+    let mut db = fontdb::Database::new();
+    db.load_system_fonts();
+    let stand_ins: Vec<fontdb::ID> = db
+        .faces()
+        .filter(|f| {
+            f.families.iter().any(|(n, _)| {
+                n.eq_ignore_ascii_case("arial") || n.eq_ignore_ascii_case("liberation sans")
+            })
+        })
+        .map(|f| f.id)
+        .collect();
+    for id in stand_ins {
+        db.remove_face(id);
+    }
+    db.set_sans_serif_family("No Such Family");
+    if db.is_empty() {
+        return;
+    }
+    let lib = Library::build(db);
+    assert!(!lib.is_installed("Arial"));
+    assert!(lib.resolve("Arial", Aspect::Regular).is_some());
 }
