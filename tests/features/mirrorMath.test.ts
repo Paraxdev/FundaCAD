@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { basePlaneDef, mirrorFeatures, planeDefOf, reflectionMatrix } from "../../src/features/mirrorMath";
 import type { PlaneDef } from "../../src/types";
+import type { FacePlanePick } from "../../src/features/facePlanePick";
 
 const at = (m: THREE.Matrix4, p: [number, number, number]) => {
   const v = new THREE.Vector3(...p).applyMatrix4(m);
@@ -76,6 +77,21 @@ describe("mirrorFeatures", () => {
     // The feature holds its own copy of the list.
     bodies.pop();
     expect(out[0]).toMatchObject({ bodies: ["body1", "body4", "body2"] });
+  });
+
+  it("puts a datum plane on a flat face first, and mirrors across it", () => {
+    const face: FacePlanePick = {
+      def: { origin: [-8, 2.5, 3], normal: [0, 0.6, -0.8], xdir: [1, 0, 0] },
+      kind: "planar",
+      selector: { kind: "face", by: "nearest", point: [-8, 2.5, 3], body: "body2" },
+      faceId: 19,
+      at: [-8, 2.5, 3],
+    };
+    expect(mirrorFeatures(ids(), ["body2", "body5"], { kind: "face", face })).toEqual([
+      { id: "f41", type: "datumPlane", plane: face.def, offset: 0, face: face.selector, name: "Mirror plane" },
+      { id: "f42", type: "mirror", plane: { name: "f41" }, bodies: ["body2", "body5"] },
+    ]);
+    expect(planeDefOf({ kind: "face", face })).toBe(face.def);
   });
 
   it("reads the def of either pick", () => {

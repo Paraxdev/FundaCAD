@@ -9,12 +9,27 @@ import { basePlaneDef, reflectionMatrix } from "../../src/features/mirrorMath";
 import { useToolPanelStore } from "../../src/stores/toolPanels";
 import { usePromptStore } from "../../src/stores/prompt";
 import { endPickSession, resetTreePicks, routeTreeClick, treePickWaiting, type TreePick } from "../../src/ui/treePick";
-import type { PlanePickTarget } from "../../src/features/facePlanePick";
+import type { FacePlanePick, PlanePickTarget } from "../../src/features/facePlanePick";
 import type { PlaneDef } from "../../src/types";
 import type { Viewport } from "../../src/viewport/viewport";
 import type { DocumentStore } from "../../src/document/store";
 
 const DATUM: PlaneDef = { origin: [4, -2.5, 9], normal: [0.6, 0, 0.8], xdir: [0, 1, 0] };
+
+const FLAT: FacePlanePick = {
+  def: { origin: [12, 3.5, -4], normal: [0.28, -0.96, 0], xdir: [0.96, 0.28, 0] },
+  kind: "planar",
+  selector: { kind: "face", by: "nearest", point: [12, 3.5, -4], body: "body2" },
+  faceId: 31,
+  at: [12, 3.5, -4],
+};
+const ROUND: FacePlanePick = {
+  def: { origin: [-6, 2, 7.5], normal: [0, 0.6, 0.8], xdir: [1, 0, 0] },
+  kind: "tangent",
+  selector: { kind: "face", by: "nearest", point: [-6, 2, 7.5], body: "body1" },
+  faceId: 12,
+  at: [-6, 2, 7.5],
+};
 
 // Screen x decides what is under the cursor: bodies left of 100, planes and faces right of it.
 const BODY_AT: Record<number, string> = { 20: "body1", 40: "body2", 60: "body3" };
@@ -22,6 +37,8 @@ const PLANE_AT: Record<number, PlanePickTarget> = {
   120: { kind: "base", spec: "XZ" },
   140: { kind: "datum", spec: DATUM, id: "f5" },
   160: { kind: "unusable" },
+  170: { kind: "face", spec: FLAT.def, face: FLAT },
+  180: { kind: "face", spec: ROUND.def, face: ROUND },
 };
 
 function rig(bodyIds = ["body1", "body2", "body3"]) {
@@ -32,6 +49,7 @@ function rig(bodyIds = ["body1", "body2", "body3"]) {
     planesShown: false,
     ghost: null as null | { bodies: readonly string[]; matrices: readonly THREE.Matrix4[] },
     hoverBody: null as string | null,
+    hoverFace: 0,
   };
   const viewport = {
     domElement: canvas,
@@ -54,17 +72,20 @@ function rig(bodyIds = ["body1", "body2", "body3"]) {
     },
     hoverPlane: () => {},
     hoverDatum: () => {},
+    hoverFaceAt: () => {
+      log.hoverFace++;
+    },
+    clearHover: () => {},
   } as unknown as Viewport;
-  const addFeature = vi.fn();
+  const addFeatures = vi.fn();
   const store = {
     document: { features: [{ id: "f5", type: "datumPlane", plane: DATUM, name: "Slant" }] },
     buildState: { result: { bodies: bodyIds.map((id) => ({ id, name: id })) } },
-    nextId: () => "f9",
-    addFeature,
+    addFeatures,
   } as unknown as DocumentStore;
   const tool = new MirrorTool(viewport, store, (_vp, x) => PLANE_AT[x] ?? null);
   const done = vi.fn();
-  return { tool, viewport, log, addFeature, done, canvas };
+  return { tool, viewport, log, addFeatures, done, canvas };
 }
 
 const panel = () => useToolPanelStore().mirror;
@@ -195,7 +216,7 @@ describe("picking", () => {
     expect(r.log.ghost!.matrices[1]!.elements).toEqual(reflectionMatrix(DATUM).elements);
   });
 
-  it("a face is refused in the plane field and the prompt says so", () => {
+  it("a face with no plane is refused and the prompt says so", () => {
     const r = rig();
     r.tool.start(["body2"], r.done);
     expect(click(r.canvas, 160)).toBe(true);
@@ -203,6 +224,27 @@ describe("picking", () => {
     expect(prompt()!.startsWith(PLANE_REFUSED)).toBe(true);
     click(r.canvas, 120);
     expect(prompt()!.includes(PLANE_REFUSED)).toBe(false);
+  });
+
+  it("a round face is refused and a flat one beside it is taken", () => {
+    const r = rig();
+    r.tool.start(["body1"], r.done);
+    expect(click(r.canvas, 180)).toBe(true);
+    expect(summary()!.values[1]).toBe("Nothing picked");
+    expect(prompt()!.startsWith(PLANE_REFUSED)).toBe(true);
+    expect(r.log.ghost).toBeNull();
+    click(r.canvas, 170);
+    expect(summary()).toEqual({ active: "line", values: ["1 body", "Flat face"], plane: null, ready: true });
+    expect(r.log.ghost!.matrices[1]!.elements).toEqual(reflectionMatrix(FLAT.def).elements);
+  });
+
+  it("hover lights a flat face and not a round one", () => {
+    const r = rig();
+    r.tool.start(["body1"], r.done);
+    r.canvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 180, clientY: 50 }));
+    expect(r.log.hoverFace).toBe(0);
+    r.canvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 170, clientY: 50 }));
+    expect(r.log.hoverFace).toBe(1);
   });
 
   it("the chips set an origin plane and replace the last one", () => {
@@ -275,10 +317,10 @@ describe("keys and the end of a run", () => {
     r.tool.start(["body3", "body1"], r.done);
     click(r.canvas, 140);
     expect(key("Enter")).toBe(true);
-    expect(r.addFeature.mock.calls).toEqual([
-      [{ id: "f9", type: "mirror", plane: { name: "f5" }, bodies: ["body3", "body1"] }],
+    expect(r.addFeatures.mock.calls).toEqual([
+      [[{ id: "f2", type: "mirror", plane: { name: "f5" }, bodies: ["body3", "body1"] }]],
     ]);
-    expect(r.done.mock.calls).toEqual([["f9"]]);
+    expect(r.done.mock.calls).toEqual([["f2"]]);
     expect(r.tool.active).toBe(false);
     expect(panel()).toBeNull();
     expect(prompt()).toBeNull();
@@ -290,12 +332,28 @@ describe("keys and the end of a run", () => {
     expect(r.log.selected).toEqual([]);
   });
 
+  it("a flat face commits a datum plane and the mirror across it in one step", () => {
+    const r = rig();
+    r.tool.start(["body2", "body3"], r.done);
+    click(r.canvas, 170);
+    key("Enter");
+    expect(r.addFeatures.mock.calls).toEqual([
+      [
+        [
+          { id: "f2", type: "datumPlane", plane: FLAT.def, offset: 0, face: FLAT.selector, name: "Mirror plane" },
+          { id: "f3", type: "mirror", plane: { name: "f2" }, bodies: ["body2", "body3"] },
+        ],
+      ],
+    ]);
+    expect(r.done.mock.calls).toEqual([["f3"]]);
+  });
+
   it("Enter without a plane writes nothing and keeps the tool", () => {
     const r = rig();
     r.tool.start(["body1"], r.done);
     key("Enter");
     expect(r.tool.commit()).toBe(false);
-    expect(r.addFeature).not.toHaveBeenCalled();
+    expect(r.addFeatures).not.toHaveBeenCalled();
     expect(r.tool.active).toBe(true);
   });
 
@@ -304,7 +362,7 @@ describe("keys and the end of a run", () => {
     r.tool.start([], r.done);
     panel()!.onPlane("XY");
     key("Enter");
-    expect(r.addFeature).not.toHaveBeenCalled();
+    expect(r.addFeatures).not.toHaveBeenCalled();
     expect(summary()!.ready).toBe(false);
   });
 
@@ -313,7 +371,9 @@ describe("keys and the end of a run", () => {
     r.tool.start(["body2"], r.done);
     panel()!.onPlane("YZ");
     panel()!.onCommit();
-    expect(r.addFeature.mock.calls).toEqual([[{ id: "f9", type: "mirror", plane: { name: "YZ" }, bodies: ["body2"] }]]);
+    expect(r.addFeatures.mock.calls).toEqual([
+      [[{ id: "f2", type: "mirror", plane: { name: "YZ" }, bodies: ["body2"] }]],
+    ]);
   });
 
   it("Enter and Tab on a focused panel button are the button's", () => {
@@ -327,7 +387,7 @@ describe("keys and the end of a run", () => {
     document.body.appendChild(host);
     expect(key("Enter", btn)).toBe(false);
     expect(key("Tab", btn)).toBe(false);
-    expect(r.addFeature).not.toHaveBeenCalled();
+    expect(r.addFeatures).not.toHaveBeenCalled();
     expect(summary()!.active).toBe("line");
   });
 
@@ -347,7 +407,7 @@ describe("keys and the end of a run", () => {
     click(r.canvas, 20, { shiftKey: true });
     panel()!.onPlane("XZ");
     key("Escape");
-    expect(r.addFeature).not.toHaveBeenCalled();
+    expect(r.addFeatures).not.toHaveBeenCalled();
     expect(r.done.mock.calls).toEqual([[null]]);
     expect(r.log).toMatchObject({ selected: ["body2"], planesShown: false, ghost: null });
     expect(r.viewport.suspendPicking).toBe(false);
