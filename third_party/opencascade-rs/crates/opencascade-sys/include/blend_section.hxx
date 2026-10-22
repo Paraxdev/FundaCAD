@@ -6,6 +6,7 @@
 #pragma once
 #include "rust/cxx.h"
 #include <bindings_common.hxx>
+#include "blend_ops.hxx"
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Curve2d.hxx>
@@ -2092,6 +2093,14 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
   RoundTools out;
   std::vector<Round> rounds;
   Overrun first;
+  if (chamfer && !std::isnan(size2) && size2 != 0) {
+    std::vector<double> d1(sizes.begin(), sizes.begin() + std::min(sizes.size(), edges.size()));
+    BlSides bs = bl_chamfer_sides(shape, edges, d1, std::vector<double>(d1.size(), size2));
+    if (bs.concave >= 0) {
+      BRepAdaptor_Curve crv(TopoDS::Edge(edges[bs.concave]));
+      throw TooLarge(Misfit::Overlap, FITS_UNKNOWN, crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter())));
+    }
+  }
   for (size_t k = 0; k < edges.size(); ++k) {
     check_cancel();
     Round r;

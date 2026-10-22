@@ -217,3 +217,73 @@ fn rounds_that_cross_near_an_end_are_refused_with_the_size_that_keeps_them_apart
         }
     }
 }
+
+fn prism_with(corners: &[(f64, f64)], height: f64, blends: Vec<Value>) -> Rebuild {
+    let n = corners.len();
+    let lines: Vec<Value> = (0..n)
+        .map(|i| {
+            let (a, b) = (corners[i], corners[(i + 1) % n]);
+            json!({"type": "line", "id": format!("l{i}"), "x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1})
+        })
+        .collect();
+    let mut features = vec![
+        json!({"id": "sk", "type": "sketch", "plane": "XY", "entities": lines}),
+        json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": height, "operation": "new"}),
+    ];
+    features.extend(blends);
+    build(&json!({"parameters": {}, "features": features}))
+}
+
+fn two_distance(id: &str, d: f64, d2: f64, edges: Value, extra: Value) -> Value {
+    let mut chamfer =
+        json!({"id": id, "type": "chamfer", "chamferType": "twoDistance", "distance": d, "distance2": d2, "edges": edges});
+    chamfer.as_object_mut().expect("an object").extend(extra.as_object().cloned().unwrap_or_default());
+    chamfer
+}
+
+fn prism_chamfer(corners: &[(f64, f64)], height: f64, d: f64, d2: f64, edges: Value, extra: Value) -> Rebuild {
+    prism_with(corners, height, vec![two_distance("c", d, d2, edges, extra)])
+}
+
+
+/// On a ledge whose 1.5 mm wall takes a convex chamfer at one end and a concave
+/// fill at the other, 1 + 1 already runs past it. The section build never
+/// checks a fill against its neighbour: 3/1 built 1486.62 against 1492 at
+/// best, and the fill alone, after the chamfer, was clamped to 1529.99.
+#[test]
+fn a_chamfer_and_a_fill_crossing_on_a_short_wall_are_refused() {
+    let ledge = [(6.0, -4.0), (26.0, -4.0), (26.0, 1.0), (24.5, 1.0), (24.5, 6.0), (6.0, 6.0)];
+    for (d, d2) in [(1.0, 3.0), (3.0, 1.0), (1.0, 2.0), (2.0, 1.0)] {
+        for extra in [json!({}), json!({"tangentEdges": false})] {
+            let r = prism_chamfer(&ledge, 8.0, d, d2, z_edges(), extra.clone());
+            assert!(!r.errors.is_empty() || !warnings(&r, "c").is_empty(), "{d}/{d2} {extra}: built {} with no word", volume(&r));
+        }
+    }
+    let near = |x: f64, y: f64| json!({"kind": "edge", "by": "nearest", "point": [x, y, 4.0], "body": "body1"});
+    let r = prism_with(&ledge, 8.0, vec![
+        two_distance("c1", 3.0, 1.0, near(26.0, 1.0), json!({})),
+        two_distance("c2", 3.0, 1.0, near(24.5, 1.0), json!({})),
+    ]);
+    let refused: Vec<Option<&str>> = r.errors.iter().map(|e| e.feature_id.as_deref()).collect();
+    assert_eq!(refused, [Some("c2")], "the fill after the chamfer: {:?}, volume {}", messages(&r), volume(&r));
+    assert!((volume(&r) - (1540.0 - 12.0)).abs() < 0.01, "the chamfer alone cuts 3 x 1 / 2 x 8: {}", volume(&r));
+}
+
+/// A U with a 12 mm deep, 8 mm wide slot, chamfered at every other corner, the slot's right one concave.
+const U_PRISM: [(f64, f64); 8] =
+    [(5.0, -7.0), (29.0, -7.0), (29.0, 13.0), (21.0, 13.0), (21.0, 1.0), (13.0, 1.0), (13.0, 13.0), (5.0, 13.0)];
+
+fn u_alternate_corners() -> Value {
+    let at = |i: usize| json!({"kind": "edge", "by": "nearest", "point": [U_PRISM[i].0, U_PRISM[i].1, 5.0], "body": "body1"});
+    json!([at(0), at(2), at(4), at(6)])
+}
+
+/// A 17 mm fill fits neither 12 mm wall nor 8 mm floor of the U's inner corner:
+/// it came back warned about a convex corner, the fill clamped without a word.
+#[test]
+fn a_concave_fill_longer_than_both_its_faces_is_refused() {
+    for (d, d2) in [(1.0, 17.0), (17.0, 1.0), (3.0, 21.0)] {
+        let r = prism_with(&U_PRISM, 10.0, vec![two_distance("c", d, d2, u_alternate_corners(), json!({}))]);
+        assert_eq!(messages(&r).len(), 1, "{d}/{d2}: built {} with {:?}", volume(&r), warnings(&r, "c"));
+    }
+}
