@@ -47,8 +47,21 @@ describe("reflectEntity", () => {
   });
 
   it("moves a circle's centre and keeps its radius, dropping its dimension spot", () => {
-    const e: ResolvedEntity = { type: "circle", id: "c1", radius: 2.75, x: 8, y: 9, dimPlace: { dx: 1, dy: 2 } } as ResolvedEntity;
-    expect(round(reflectEntity(e, a, b, "n2"))).toEqual({ type: "circle", id: "n2", radius: 2.75, x: 12.578378, y: 5.67027 });
+    const e: ResolvedEntity = {
+      type: "circle",
+      id: "c1",
+      radius: 2.75,
+      x: 8,
+      y: 9,
+      dimPlace: { dx: 1, dy: 2 },
+    } as ResolvedEntity;
+    expect(round(reflectEntity(e, a, b, "n2"))).toEqual({
+      type: "circle",
+      id: "n2",
+      radius: 2.75,
+      x: 12.578378,
+      y: 5.67027,
+    });
   });
 
   it("turns an angled rectangle the way reflectedRect does", () => {
@@ -74,7 +87,14 @@ describe("reflectEntity", () => {
   });
 
   it("reflects spline points and B spline poles, keeping the rest of the B spline", () => {
-    const sp: ResolvedEntity = { type: "spline", id: "s1", points: [{ x: 2, y: 3 }, { x: 5, y: -6 }] };
+    const sp: ResolvedEntity = {
+      type: "spline",
+      id: "s1",
+      points: [
+        { x: 2, y: 3 },
+        { x: 5, y: -6 },
+      ],
+    };
     expect(round(reflectEntity(sp, a, b, "n5"))).toEqual({
       type: "spline",
       id: "n5",
@@ -86,7 +106,11 @@ describe("reflectEntity", () => {
     const bs: ResolvedEntity = {
       type: "bspline",
       id: "b1",
-      poles: [{ x: 2, y: 3 }, { x: 5, y: -6 }, { x: 11, y: 11 }],
+      poles: [
+        { x: 2, y: 3 },
+        { x: 5, y: -6 },
+        { x: 11, y: 11 },
+      ],
       degree: 2,
       closed: false,
       construction: true,
