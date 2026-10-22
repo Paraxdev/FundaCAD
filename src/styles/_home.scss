@@ -107,6 +107,13 @@
 .home-new-name {
   font-size: 12px;
 }
+.home-new-line {
+  margin-top: calc(-1 * var(--s-1));
+  font-size: 10px;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--text-dim);
+}
 .home-tools {
   display: flex;
   gap: var(--s-3);
@@ -133,6 +140,25 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+}
+.home-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+  max-width: 720px;
+  margin: var(--s-3) var(--s-5) 0;
+  padding: var(--s-4);
+}
+.home-welcome-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.home-welcome-text {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
 }
 .home-news {
   display: flex;

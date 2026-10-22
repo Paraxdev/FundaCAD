@@ -9,9 +9,9 @@ const emit = defineEmits<{ open: [] }>();
 <template>
   <div class="home-cell">
     <button class="home-example" :title="example.hint" @click="emit('open')">
-      <span class="home-card-pic"><Icon name="body" :size="36" /></span>
+      <span class="home-card-pic"><Icon :name="example.icon" :size="36" /></span>
       <span class="home-example-name">{{ example.name }}</span>
-      <span class="home-example-line">Example</span>
+      <span class="home-example-line">{{ example.caption }}</span>
     </button>
   </div>
 </template>

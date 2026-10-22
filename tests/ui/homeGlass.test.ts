@@ -78,6 +78,7 @@ const glass = [
   ".home-new-card",
   ".home-drawer",
   ".home-news",
+  ".home-welcome",
 ];
 
 describe("Home wears the app's glass", () => {

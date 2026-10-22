@@ -916,7 +916,7 @@ The product is spelled FundaCAD.
 | Error | What happened in plain words, then the way out, joined with a comma; lead with "Could not" | "Could not reach the clipboard, so the report was not copied." | "Error: clipboard write failed!" |
 | Rejection in a tool | Say what to do next | "That face is curved, a hole needs a flat face" | "Invalid selection" |
 | Success | Short, past tense or present state, full stop | "Copied.", "Bracket is installed." | "Success!!" |
-| Empty state | One sentence about what will appear, maybe the next step | "Your modeling history will appear here. Start with a Sketch." | "Nothing here :(" |
+| Empty state | One sentence about what will appear, maybe the next step | "Your modeling history will appear here. Start with a Sketch, or drop a STEP, STL or 3MF file." | "Nothing here :(" |
 | Tool prompt | Imperative, parts joined by " · ", ending with the key to leave | "Click a profile · Ctrl-click adds areas · Enter" | "Please select a profile to extrude." |
 | Tooltip | What the control does, sentence case, shortcut in brackets | "Reset camera (Shift+Home)" | "Camera" |
 | Setting | A noun label, then 1 to 3 sentences on the effect and the default | Animations: "Off makes every transition instant…" | "Enable animations?" |

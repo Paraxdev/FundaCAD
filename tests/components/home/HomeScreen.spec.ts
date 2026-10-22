@@ -22,6 +22,7 @@ import { saveFolder, setSaveFolder } from "../../../src/io/saveFolder";
 import ContextMenuHost from "../../../src/components/overlays/ContextMenuHost.vue";
 import HomeScreen from "../../../src/components/home/HomeScreen.vue";
 import ModalHost from "../../../src/components/overlays/ModalHost.vue";
+import { MANUAL_URL } from "../../../src/ui/welcome";
 
 enableAutoUnmount(afterEach);
 
@@ -372,8 +373,7 @@ describe("HomeScreen", () => {
     open([{ path: "C:/work/gear.funda", openedAt: 1 }]);
     expect($$(".home-new-card").map((c) => c.querySelector(".home-new-name")!.textContent)).toEqual(["Blank", "Open…"]);
     expect($(".home-new-template")).toBeNull();
-    expect($$(".home-example-name").map((n) => n.textContent)).toEqual(["Plate", "Wall bracket", "Pinned lever"]);
-    expect($$(".home-example-line").map((n) => n.textContent)).toEqual(["Example", "Example", "Example"]);
+    expect($$(".home-example-name").map((n) => n.textContent)).toEqual(["Wall bracket", "Plate", "Pinned lever"]);
     expect($(".home-examples")!.closest(".home-scroll")).toBe($(".home-grid")!.closest(".home-scroll"));
     expect($(".home-section")!.textContent).toBe("Examples");
   });
@@ -382,7 +382,7 @@ describe("HomeScreen", () => {
     const { cb } = open();
     $$(".home-example")[1]!.click();
     await flushPromises();
-    expect(cb.newFromTemplate).toHaveBeenCalledWith("wall-bracket");
+    expect(cb.newFromTemplate).toHaveBeenCalledWith("plate");
   });
 
   it("finds an example by name, and says nothing matches only when no example does either", async () => {
@@ -673,5 +673,111 @@ describe("HomeScreen", () => {
       expect(lib.summary).not.toHaveBeenCalled();
       expect(texts(".home-version-msg")).toEqual(["unsaved"]);
     });
+  });
+});
+
+describe("Home on a first run", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+    document.body.innerHTML = "";
+    vi.restoreAllMocks();
+  });
+
+  const order = (...sels: string[]) => sels.map((sel) => $$(".home-scroll *").findIndex((el) => el.matches(sel)));
+
+  it("welcomes a maker with no recent documents and puts the examples first", () => {
+    open([], {}, fakeLibrary());
+    const welcome = $(".home-welcome")!;
+    expect(welcome.querySelector("h2")!.textContent).toBe("Welcome to FundaCAD");
+    const text = welcome.querySelector("p")!.textContent!;
+    expect(text).toContain("start with Blank");
+    expect(text).toContain("STEP, STL and 3MF");
+    expect(text.toLowerCase()).not.toContain("guide");
+    expect($(".home-section")!.textContent).toBe("Start here");
+    const [w, heading, grid, empty] = order(".home-welcome", ".home-section", ".home-examples", ".home-empty");
+    expect(w! < heading! && heading! < grid! && grid! < empty!).toBe(true);
+    expect($(".home-empty")!.textContent).toBe("Documents you open or save appear here.");
+  });
+
+  it("shows no welcome once there is a recent document, and lists the examples under them", async () => {
+    open([{ path: "E:/jigs/drill guide 2.funda", openedAt: 3 }], {}, fakeLibrary());
+    await flushPromises();
+    expect($(".home-welcome")).toBeNull();
+    expect($(".home-section")!.textContent).toBe("Examples");
+    const [cards, grid] = order(".home-card", ".home-examples");
+    expect(cards! < grid!).toBe(true);
+  });
+
+  it("shows no welcome over many recent documents", async () => {
+    open(
+      [
+        { path: "E:/jigs/a.funda", openedAt: 3 },
+        { path: "E:/jigs/b.funda", openedAt: 2 },
+        { path: "F:/old/c.funda", openedAt: 1 },
+      ],
+      {},
+      fakeLibrary(),
+    );
+    await flushPromises();
+    expect($(".home-welcome")).toBeNull();
+    expect($$(".home-section").map((h) => h.textContent)).toEqual(["Examples"]);
+  });
+
+  it("shows a folder's own empty line in a folder view, not the welcome", async () => {
+    localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/empty", addedAt: 1 }]));
+    open([], {}, fakeLibrary([], 0, { "D:/empty": { files: [], truncated: false } }));
+    $(".home-folder-row")!.click();
+    await flushPromises();
+    expect($(".home-welcome")).toBeNull();
+    expect($(".home-empty")!.textContent).toBe("No documents in this folder.");
+    expect($(".home-section")!.textContent).toBe("Examples");
+  });
+
+  it("hides the welcome while searching and filters the examples", async () => {
+    // With no recent documents the search row shows only once a folder is added.
+    localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/proj", addedAt: 1 }]));
+    open([], {}, fakeLibrary());
+    expect($(".home-welcome")).not.toBeNull();
+    const field = document.querySelector<HTMLInputElement>(".home-search")!;
+    field.value = "plat";
+    field.dispatchEvent(new Event("input"));
+    await nextTick();
+    expect($(".home-welcome")).toBeNull();
+    expect($$(".home-example-name").map((n) => n.textContent)).toEqual(["Plate"]);
+  });
+
+  it("says on each example what it shows, with its own icon", () => {
+    open([], {}, fakeLibrary());
+    expect(
+      $$(".home-example").map((c) => [
+        c.querySelector(".home-example-name")!.textContent,
+        c.querySelector(".home-example-line")!.textContent,
+        c.querySelector("svg")!.getAttribute("data-icon"),
+      ]),
+    ).toEqual([
+      ["Wall bracket", "Stress study ready", "stress"],
+      ["Plate", "Sized by parameters", "box"],
+      ["Pinned lever", "Stress study ready", "rotate"],
+    ]);
+    expect($$(".home-example").map((c) => c.getAttribute("title"))).toEqual([
+      "An L bracket with a stress study ready to run",
+      "A plate with four holes, sized by parameters",
+      "A lever on a pin with a stress study ready to run",
+    ]);
+  });
+
+  it("says what Open takes", () => {
+    open([], {}, fakeLibrary());
+    expect($(".home-open .home-new-line")!.textContent).toBe("Documents, STEP, STL, 3MF");
+    expect($(".home-new-blank .home-new-line")).toBeNull();
+  });
+
+  it("opens the manual from the welcome", async () => {
+    const opened = vi.spyOn(window, "open").mockReturnValue(null);
+    open([], {}, fakeLibrary());
+    $(".home-welcome-manual")!.click();
+    await flushPromises();
+    expect(opened.mock.calls).toEqual([[MANUAL_URL, "_blank", "noopener"]]);
   });
 });
