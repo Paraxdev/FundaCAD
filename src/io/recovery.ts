@@ -33,14 +33,14 @@ interface Envelope {
 
 export function installAutosave(store: DocumentStore) {
   if (!isTauri()) return;
-  let idleTimer: number | null = null;
+  let idleTimer: (() => void) | null = null;
   let oldestEdit: number | null = null;
   let writing = false;
   let failCount = 0; // consecutive autosave failures; warn once at 3, reset on success
   let warned = false;
 
   const write = async () => {
-    if (idleTimer != null) window.clearTimeout(idleTimer);
+    idleTimer?.();
     idleTimer = null;
     oldestEdit = null;
     if (!store.dirty || writing) return;
@@ -53,8 +53,10 @@ export function installAutosave(store: DocumentStore) {
         doc: store.toObject(),
       };
       const json = JSON.stringify(env);
+      // The slot is the snapshot's own, even when another document is opened while the module loads.
+      const slot = slotFor(store.filePath);
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("recovery_write", { slot: slotFor(store.filePath), json });
+      await invoke("recovery_write", { slot, json });
       failCount = 0;
       warned = false;
     } catch (e) {
@@ -76,11 +78,16 @@ export function installAutosave(store: DocumentStore) {
     if (!store.dirty) return;
     const now = Date.now();
     if (oldestEdit == null) oldestEdit = now;
-    if (idleTimer != null) window.clearTimeout(idleTimer);
+    idleTimer?.();
     // debounce on idle, but a busy session still snapshots every MAX_MS
     const wait = Math.min(IDLE_MS, Math.max(0, oldestEdit + MAX_MS - now));
-    idleTimer = window.setTimeout(() => void write(), wait);
+    // The document's session owns the timer, so an edit of one document never times the next one's snapshot.
+    idleTimer = store.session.timeout(() => void write(), wait);
   };
+  store.sessions.onBegin(() => {
+    idleTimer = null;
+    oldestEdit = null;
+  });
 
   store.onDocChange(schedule);
   store.onMeta(schedule);

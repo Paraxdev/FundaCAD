@@ -763,6 +763,15 @@ export class DocumentStore {
     return (await this.geometry.cancel?.(id)) ?? false;
   }
 
+  // For a waiter on a later build of this document: it stops hearing builds once the document's session ends.
+  onSessionBuild(fn: BuildListener): () => void {
+    const off = this.onBuild(fn);
+    const unown = this.session.own(off);
+    return () => {
+      off();
+      unown();
+    };
+  }
   onBuild(fn: BuildListener): () => void {
     this.buildListeners.add(fn);
     fn(this.build);
