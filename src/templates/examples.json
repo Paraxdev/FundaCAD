@@ -16,12 +16,12 @@
     "source": "document"
   },
   {
-    "id": "printer",
-    "name": "3D printer",
-    "caption": "100 parts from a STEP file",
-    "hint": "A printer frame imported from a STEP file. Hide or isolate its groups in Items, or turn on a section to look inside",
-    "icon": "assembly",
-    "source": "step"
+    "id": "capsule-holder",
+    "name": "Capsule holder",
+    "caption": "A cap that screws on, ready to print",
+    "hint": "A tube and a screw-on cap laid out for printing. Change innerDiameter in Parameters and both threads follow, or set screwedOn to 1 to see the cap on the tube",
+    "icon": "thread",
+    "source": "document"
   },
   {
     "id": "plate",
