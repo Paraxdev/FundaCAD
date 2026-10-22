@@ -231,8 +231,11 @@ export class LiveSessionHost {
 
   private async runTick(): Promise<void> {
     try {
+      // The cut is the user's view, and an assistant's edit sends back the whole document it pulled: with the cut
+      // in it, an edit made against an older publish would put back a cut the user has since moved or turned off.
+      const { sectionView: _view, ...document } = this.store.toObject();
       const res = await this.geometry.session?.("session_host", {
-        document: this.store.toObject(),
+        document,
         revision: this.revision,
         title: this.store.filePath ?? null,
         status: this.buildStatus(),
