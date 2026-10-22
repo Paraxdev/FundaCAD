@@ -193,12 +193,16 @@ describe("a document still being read when the open one changes", () => {
   it("opens over an edit made while it read once the user says Discard", async () => {
     const { openDocumentAtPath } = await import("../../src/io/files");
     const { store } = setup();
+    // Read as the document ends: Discard gave its work up, so its crash snapshot is dropped with it.
+    let givenUp: boolean | null = null;
+    store.session.own(() => (givenUp = store.givenUp));
     const p = openDocumentAtPath(store, "D:/work/Gear.funda");
     const read = await reading("D:/work/Gear.funda");
     store.setParam("width", 30);
     read.release(docText("gear"));
-    expect({ outcome: await p, ...state(store) }).toEqual({
+    expect({ outcome: await p, givenUp, ...state(store) }).toEqual({
       outcome: "ok",
+      givenUp: true,
       parameters: { gear: 1 },
       path: "D:/work/Gear.funda",
       dirty: false,

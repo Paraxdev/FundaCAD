@@ -984,6 +984,17 @@ export class DocumentStore {
   get editCount(): number {
     return this.edits;
   }
+
+  private givenUpAt: { session: DocumentSession; edits: number } | null = null;
+  /** The user chose Discard or Don't save for the document as it stands now. */
+  markGivenUp() {
+    this.givenUpAt = { session: this.session, edits: this.edits };
+  }
+  // An edit made after the answer, or another document, was not given up.
+  get givenUp(): boolean {
+    const g = this.givenUpAt;
+    return g !== null && g.session === this.session && g.edits === this.edits;
+  }
   // For the writes that open a document: a clean one stays clean through them, a dirty one stays dirty.
   keepingClean<T>(fn: () => T): T {
     this.keepClean++;

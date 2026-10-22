@@ -374,6 +374,7 @@ async function mayStillReplace(store: DocumentStore, ticket: OpenTicket, name: s
       ],
     );
     if (pick !== "discard") return false;
+    store.markGivenUp();
   }
 }
 

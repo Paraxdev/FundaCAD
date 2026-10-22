@@ -25,7 +25,9 @@ export async function mayDiscard(e: Pick<Engine, "store" | "sketch">, question: 
     { value: "discard", label: "Discard", hint: "lose the unsaved changes" },
     { value: "cancel", label: "Cancel" },
   ]);
-  return pick === "discard";
+  if (pick !== "discard") return false;
+  e.store.markGivenUp();
+  return true;
 }
 
 export async function openPathGuarded(

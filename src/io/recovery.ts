@@ -92,11 +92,11 @@ export function installAutosave(store: DocumentStore) {
     idleTimer = null;
     oldestEdit = null;
   });
-  // A document only ends unsaved when its work was given up (Discard, Don't save), so its snapshot is never offered
-  // at the next start. Read while the session ends, before the next document replaces the path.
+  // Work the user gave up (Discard, Don't save) is never offered at the next start. A document thrown away without
+  // asking, by a plugin's doc_new, keeps its snapshot. Read while the session ends, before the path is replaced.
   const forgetOnEnd = (s: DocumentSession) =>
     s.own(() => {
-      if (s.endedBy !== "reload" && store.dirty) void clearRecovery(store.filePath);
+      if (s.endedBy !== "reload" && store.dirty && store.givenUp) void clearRecovery(store.filePath);
     });
   forgetOnEnd(store.session);
   store.sessions.onBegin(forgetOnEnd);
