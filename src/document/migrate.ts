@@ -9,22 +9,26 @@ import { FEATURE_NUM_FIELDS, RIGID_ENTITY_NUM_FIELDS, kindUnit, presentCommonFie
 import { isDimConstraint, newConstraintId, noteConstraintId } from "../sketch/id";
 import { nextDName, sameTarget } from "../params/engine";
 
-// v4 -> v5: import `brep` (inline base64, 541.8 MiB on the reference assembly) becomes `geom`, a hash of binary BREP in
-// the ZIP container. `brep` is still read; older builds get an explicit "update FundaCAD" message.
+// v4 -> v5: import `brep` (inline base64, 541.8 MiB on the reference assembly, 4.2x the websocket frame cap, 6.4x the
+// 64 MiB embedded BREP cap checked on every rebuild) becomes `geom`, a hash of binary BREP in the ZIP container. `brep`
+// is still read; older builds get an explicit "update FundaCAD" message.
 
 // v5 -> v6: `rectangle.angle`, absent meaning 0. Stamped because an older build would silently draw it axis-aligned.
 
-// v6 -> v7: `datumPlane.face`/`at`, so a datum follows its face; `plane` stays the cache. Stamped because an older build
-// would silently stop following.
+// v6 -> v7: `datumPlane.face`/`at`, so a datum follows its face; `plane` stays the cache. Stamped because an older
+// build would silently stop following.
 
 // v7 -> v8: extrude/loft region points select the area under the point, cut where the model ends, not the whole
 // profile; `revolve.regions` and `revolve.axisEdge` (`axis` may be an {origin, dir} line). Stamped because older builds
-// disagree about geometry. Pre-v8 profiles crossing a face edge open smaller and must be re-dragged.
+// disagree about geometry. Pre-v8 profiles crossing a face edge open smaller and must be re-dragged. An absent
+// `revolve.regions` still means the whole sketch; an older build reads an {origin, dir} `axis` as Z, silently.
 
 // v8 -> v9: `combine` becomes `boolean`, operation union/subtract/intersect, `keepTools` becomes `keepOriginals`.
-// Loss-free; an older build raises on the unknown type, better than leaving tool bodies inside the part.
+// Loss-free, since no v8 document can carry a `boolean` to collide with; an older build raises on the unknown type,
+// better than leaving tool bodies inside the part.
 
-// v9 -> v10: `datumPlane.through`, `datumPoint.at`, `datumAxis.through` references, numbers kept as cache. Stamped as v7.
+// v9 -> v10: `datumPlane.through`, `datumPoint.at`, `datumAxis.through` references, numbers kept as cache.
+// Stamped as v7.
 
 // Bump when the on-disk shape changes incompatibly.
 export const FORMAT_VERSION = 10;
@@ -80,6 +84,7 @@ export function migrateDocument(parsed: CadDocument): string[] {
     const raw = h[field];
     if (typeof raw !== "string") return;
     const value = params[raw];
+    // Not a known param, left for the legacy path.
     if (value === undefined) return;
     h[field] = value;
     // recompute writes targets in table order, so a second def for a bound field would override the one the panel edits

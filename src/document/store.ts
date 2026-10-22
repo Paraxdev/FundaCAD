@@ -462,7 +462,8 @@ class FaceRefOverlay extends Overlay<FaceRef> {
   }
 }
 
-// Kept out of the build so renaming a step does not invalidate the geometry cache for it and everything after.
+// A step's name is for people and is kept out of the build, so renaming does not invalidate the geometry cache for it
+// and everything after. An import is the exception: there the name names the bodies.
 export function withoutDisplayName(f: Feature): Feature {
   if (f.type === "import" || !("name" in f)) return f;
   // Same object back for the same feature: the rebuild wire resends any feature whose object changed.

@@ -183,6 +183,8 @@ function extrudeFieldApplies(field: string, v: Record<string, unknown>): boolean
   }
 }
 
+// No row for a sketch or datum `plane`: it is a PlaneSpec, and a dropdown offering only the three world planes would
+// silently discard a placed plane the moment it was used.
 export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> = {
   // The commands never ask which boolean, so this row is the only place to change it without recreating the feature.
   boolean: [{ field: "operation", label: "Operation", options: BOOLEAN_KINDS, fallback: "union" }],
@@ -274,6 +276,8 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
         "The joint the drive value moves: a revolute joint turns by the drive angle, a slider slides by the drive offset",
     },
   ],
+  // press-pull's operation is read off the sign of `distance` by the builder, so a dropdown over it would offer states
+  // the rebuild cannot produce. `mode` is the explicit choice.
   "press-pull": [
     {
       field: "mode",
@@ -415,6 +419,8 @@ export function fieldApplies(type: FeatureType | string, field: string, values: 
       typeof values.followTangent === "boolean" && (values.mode ?? "auto") === "auto" && values.direction !== "axis"
     );
   }
+  // The app owns rows like `seed` and `angle` because a parameter can drive them and a document must mean the same with
+  // the plugin off; the plugin only decides which of them a given pattern reads.
   return contributedFeature(type)?.fieldApplies?.(field, values) ?? true;
 }
 
