@@ -31,7 +31,10 @@ HOVER_POINTS = 40
 ORBIT_STEPS = 40
 # CI's software renderer gained only 1.9x (1043 to 550 ms) where this PC measured 469 to 92 ms.
 THIN_GAIN = 1.5
-THIN_SHARE = 0.8
+# The second orbit draws fat lines for at most its first frame, a window of 4, 3 ticks
+# back from free GPU queue slots, a double frame over MAX_SAMPLE_MS on CI and the fade
+# frame: 10 of CI's 39 moved frames. Measured 0.80 to 0.87 here, 0.78 at CI's frame cost.
+THIN_SHARE = 0.74
 REST_TIMEOUT_MS = 10_000
 
 PLATE = 30
@@ -238,6 +241,7 @@ def run(s, tmp_path):
     assert got["orbit_p95_ms"] < ORBIT_P95_BUDGET_MS, f"orbit frames too slow, {got}"
     assert full and thin, f"the first windows drew the full edges and the rest thin ones, {got}"
     assert got["second_orbit_thin_share"] >= THIN_SHARE, f"the second orbit kept the fat edges, {got}"
+    assert not any("tf" in m for m in got["orbit_modes"]), f"an orbit went back to the fat edges mid drag, {got}"
     assert got["thin_edges_median_ms"] * THIN_GAIN <= got["full_edges_median_ms"], f"the thin edges saved too little, {got}"
     for rest in (rest1, rest2):
         assert rest["mode"] == "full" and rest["drawn"] is None and rest["hidden"] == 0, f"the full edges were not back at rest, {got}"
