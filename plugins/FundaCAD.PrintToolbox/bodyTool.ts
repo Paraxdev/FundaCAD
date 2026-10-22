@@ -1,7 +1,5 @@
-// The body-target counterpart to FaceTool: a verb that acts on the selected
-// bodies, or the active one when nothing is selected. An empty selection is a
-// legitimate target here (BODIES_TARGET's whenEmpty is "the active body"), so
-// unlike a face pick there is nothing to wait for: the feature is added at once.
+// The body-target counterpart to FaceTool. An empty selection is a legitimate target (BODIES_TARGET's whenEmpty is
+// the active body), so unlike a face pick there is nothing to wait for and the feature is added at once.
 
 import type { DocumentStore, Viewport } from "fundacad";
 import { bodyFeatureFor, type BuildDir, type PrintTool } from "./printForm";

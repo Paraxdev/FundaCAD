@@ -1,8 +1,4 @@
-// The pure half of the Printability panel: the settings and their defaults,
-// turning them into the engine's `printability` op's options, turning its reply
-// into plain-English rows grouped by body, and the face tints for each kind of
-// finding that the viewport and the panel's legend share. Nothing here touches
-// the viewport or the store, so all of it is testable in node.
+// The pure half of the Printability panel. Nothing here touches the viewport or the store, so it is testable in node.
 
 import { displayRound } from "fundacad";
 import type {
@@ -90,10 +86,8 @@ export const KIND_LABELS: Record<PrintabilityKind, string> = {
 
 export type PrintabilityRequest = { ok: true; options: PrintabilityOptions } | { ok: false; message: string };
 
-/** The panel's settings as the op's options for `bodies`, or the first thing
- *  in the way, phrased for the status line. Every setting is sent, so what the
- *  engine checks against is what the panel shows. */
-/** `bodies` empty checks every body. */
+/** The panel's settings as the op's options for `bodies` (empty checks every body), or the first thing in the way,
+ *  phrased for the status line. Every setting is sent, so the engine checks against what the panel shows. */
 export function buildPrintabilityRequest(s: PrintabilitySetup, bodies: string[]): PrintabilityRequest {
   // A cleared number input reads as "", which compares as 0, so check the type first.
   if (!isNum(s.nozzle) || !(s.nozzle > 0)) return { ok: false, message: "the nozzle width must be above 0" };
@@ -243,11 +237,9 @@ export function problemCount(v: PrintabilityView): number {
   return v.groups.reduce((n, g) => n + g.notes.length + g.rows.length, 0);
 }
 
-/** The tints for a result, in display face ids: each finding's face in its
- *  kind's colour, and the one finding put forward (its face and the face
- *  across from it) in `emphasisColor` instead. `faceOf` turns a body's own
- *  face index into the viewport's id, or null for a face that cannot be
- *  drawn, on a hidden body or past the body's faces. */
+/** The tints for a result in display face ids: each finding's face in its kind's colour, and the finding put forward
+ *  (its face and the one across) in `emphasisColor`. `faceOf` maps a body's own face index to the viewport's id, or
+ *  null for a face that cannot be drawn, on a hidden body or past the body's faces. */
 export function findingMarks(
   findings: readonly PrintabilityFinding[],
   emphasis: number | null,

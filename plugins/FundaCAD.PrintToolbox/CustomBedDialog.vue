@@ -1,8 +1,4 @@
 <script setup lang="ts">
-// Typing a bed size for the "Custom" preset. Same shortcuts as the app's own
-// small dialogs: Enter accepts, Escape (or the backdrop) cancels, and a bad
-// number gets a message beside the fields instead of a silently-kept default.
-
 import { onMounted, onUnmounted, ref } from "vue";
 import { fieldError, fieldNumber } from "fundacad";
 import { ModalFrame } from "fundacad/ui";

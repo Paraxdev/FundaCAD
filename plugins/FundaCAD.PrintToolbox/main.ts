@@ -1,9 +1,5 @@
-// The 3D Printing Toolbox: print-friendly hole shapes and layer tricks, each a feature type this
-// plugin owns, geometry included (geometry/register.py), and two checks that are not features: the
-// bed fit check's toast and the Printability panel, which runs the engine's printability check.
-//
-// Adding a tool: describe it in printForm.ts, add it to PRINT_TOOLS, give it an icon below, and
-// register its handler in geometry/register.py with its type in manifest.json's featureTypes.
+// Adding a tool: describe it in printForm.ts, add it to PRINT_TOOLS, give it an icon below, and register its handler
+// in geometry/register.py with its type in manifest.json's featureTypes.
 
 import { choose, contribute, toast } from "fundacad";
 import type { Engine } from "fundacad";
