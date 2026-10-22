@@ -88,7 +88,8 @@ impl LiveLink {
         }
     }
 
-    /// Refuses rather than returning nothing when no app is hosting, since a caller that forgot to check would edit nothing.
+    /// Refuses rather than returning nothing when no app is hosting,
+    /// since a caller that forgot to check would edit nothing.
     pub async fn pull(&mut self, link: &EngineLink) -> Result<Option<Doc>, LiveError> {
         let st = self.state(link).await?;
         if st.get("attached") != Some(&json!(true)) {

@@ -356,7 +356,8 @@ impl EngineLink {
                 return Ok((link, Some(app)));
             }
             if mode == Mode::Attach {
-                // Loud by request: for a host meant for the open document, a private copy would look like ignored edits.
+                // Loud by request: for a host meant for the open document,
+                // a private copy would look like ignored edits.
                 return Err("FUNDACAD_MCP_MODE=attach, but no FundaCAD window is running (no live \
                      session file, or the engine it names is gone). Open FundaCAD, or use \
                      FUNDACAD_MCP_MODE=auto to work on a private copy when it is closed."
@@ -400,8 +401,9 @@ impl EngineLink {
         }
         cmd.env("FUNDACAD_ENGINE_PORT", self.port.to_string());
         cmd.env("FUNDACAD_ENGINE_TOKEN", &self.token);
-        // The durable blob store, which the app's shell normally sets. An `import`'s `geom` is a hash INTO it, so a
-        // default chosen here would save a document naming a blob the app never held. An explicit FUNDACAD_BLOB_DIR wins.
+        // The durable blob store, which the app's shell normally sets. An `import`'s `geom` is a hash INTO it,
+        // so a default chosen here would save a document naming a blob the app never held.
+        // An explicit FUNDACAD_BLOB_DIR wins.
         if appenv("BLOB_DIR").is_none() {
             cmd.env("FUNDACAD_BLOB_DIR", crate::app_session::app_data_dir().join("blobs"));
         }
@@ -435,7 +437,8 @@ impl EngineLink {
         }
         let stdout = child.stdout.take().expect("piped");
         let mut lines = BufReader::new(stdout).lines();
-        // The engine prints LISTENING only once it serves; a merely bound port would let the first request race the accept loop.
+        // The engine prints LISTENING only once it serves;
+        // a merely bound port would let the first request race the accept loop.
         let ready = tokio::time::timeout(START_TIMEOUT, async {
             while let Ok(Some(line)) = lines.next_line().await {
                 if line.starts_with("LISTENING") {
