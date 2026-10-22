@@ -1,35 +1,5 @@
-// Interactive Pattern: repeat a body along an axis or around one, set up in the
-// viewport rather than in a dialog.
-//
-// It used to be a modal that asked "rectangular or circular?" and then dropped a
-// feature with made-up numbers into the timeline for you to correct in the value
-// rows. Everything about a pattern is spatial, which way it runs, how far
-// apart, how many, and none of it was.
-//
-// Three axis arrows say which way. Click one and it becomes the direction (or,
-// for a circular pattern, the axis it turns about); the chosen one is the one
-// the drag reads. Dragging sets the spacing or the sweep, with the copies drawn
-// as you go, and the count is a key away in either direction. Type into either
-// field for an exact answer.
-//
-// The copies are ghosts, not a rebuild. A pattern is a rigid repeat whose cells
-// this side knows exactly, so asking the kernel to union twenty solids per frame
-// would make the drag unusable in order to show it something it already has.
-// features/patternMath holds the arithmetic and the Python engine's `builder.py`'s
-// _pattern_linear / _pattern_circular apply the same rule, which is what makes
-// the ghost a preview rather than a suggestion.
-//
-// FEATURES mode repeats a hole (or another cut/join feature) instead of a whole
-// body: `features` names which ones, and every "the bodies" below reads instead
-// as "the faces those features own" (faceOwnedByFeatures, resolved once at
-// start()). The gizmo, ghosts and starting spacing all key off that face set
-// rather than the body's; committing writes `features` and no `bodies`, the
-// engine repeats the feature's cut/join instead of copying the body outright.
-//
-// WHERE a circular pattern turns is features/patternAxis: through the origin,
-// through the middle of the body (the start for a feature, whose part is rarely
-// centred on the origin), or about an edge or face clicked on the model, which
-// the pattern then follows. C switches origin and middle; the axis is drawn.
+// Interactive Pattern, set up in the viewport. The copies are ghosts, not a rebuild: patternMath holds the arithmetic
+// the engine's builder.py applies too. Features mode repeats the faces `features` own instead of whole bodies.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -65,13 +35,7 @@ const AXES: { name: Axis3; dir: THREE.Vector3; color: number }[] = [
   { name: "Z", dir: new THREE.Vector3(0, 0, 1), color: 0x5a9bff },
 ];
 
-/** Starting numbers. A pattern of one is not a pattern, so the tool opens with
- *  something to look at, the drag then corrects it, which is a smaller job than
- *  conjuring it from nothing. */
-/** The radius, in gizmo units, of the invisible sleeve an arrow is grabbed by.
- *  The drawn shaft is a hairline and the cone tapers to a point, so aiming at
- *  the arrow itself was aiming at a pixel or two. The same size as the move
- *  tool's arrows, for the same reason. */
+/** Gizmo units, the same as the move tool's arrows: the drawn shaft is a hairline and the cone a point. */
 const ARROW_GRAB_R = 6.5;
 /** How far an arrow reaches, root to tip, in gizmo units. */
 const ARROW_LENGTH = 45;
@@ -82,7 +46,7 @@ export class PatternTool {
   active = false;
   private kind: PatternKind = "linear";
   private bodies: string[] = [];
-  private features: string[] = []; // features mode when non-empty, see the file header
+  private features: string[] = []; // features mode when non-empty
   private faceIds: number[] = []; // the above features' own faces, resolved once at start()
   private promptPrefix = ""; // "Pattern Hole1: " in features mode, "" in body mode
   private centroid = new THREE.Vector3(); // where the bodies (or the patterned faces) are
@@ -146,9 +110,7 @@ export class PatternTool {
     this.pickNote = "";
     if (kind === "linear") {
       this.axis = 0; // X
-      // One span apart, so the opening state is a row of copies that touch
-      // rather than a heap in the same place, the gesture starts from something
-      // you can see and stretch, not from nothing.
+      // One span apart, so the opening state is a row of touching copies rather than a heap.
       this.value = this.span(AXES[0]!.dir) || 20;
     } else {
       this.axis = 2; // Z
@@ -179,7 +141,6 @@ export class PatternTool {
     this.gesture.frame();
   }
 
-  /** The bodies the patterned faces lie on. */
   private bodiesOfFaces(): string[] {
     const bodies = this.store.buildState.result?.bodies ?? [];
     const out = new Set<string>();
@@ -190,7 +151,6 @@ export class PatternTool {
     return [...out];
   }
 
-  /** The line a circular pattern turns about, as three.js vectors. */
   private turnLine(): { origin: THREE.Vector3; dir: THREE.Vector3 } {
     const m = this.middle;
     const l = axisLine(this.place, this.axisName(), [m.x, m.y, m.z], this.picked);
@@ -213,10 +173,8 @@ export class PatternTool {
     return kept.length ? kept : owned;
   }
 
-  /** How far the pattern's target reaches along a direction, the natural first
-   *  spacing, since copies one span apart are copies just touching. The bodies'
-   *  own span in body mode; in features mode the patterned FACES' span, a hole
-   *  in a large plate opens on a gap the size of the hole, not the plate. */
+  /** Copies one span apart just touch. In features mode it is the faces' span, so a hole in a large plate
+   *  opens on a hole-sized gap, not a plate-sized one. */
   private span(dir: THREE.Vector3): number {
     const box = this.features.length ? this.viewport.facesBox(this.faceIds) : this.viewport.bodiesBox(this.bodies);
     if (!box) return 0;
@@ -224,7 +182,6 @@ export class PatternTool {
     return Math.abs(size.dot(dir));
   }
 
-  /** The feature(s) this pattern repeats, by name where one was given. */
   private sourceLabels(): string {
     return this.features
       .map((id) => {
@@ -234,12 +191,8 @@ export class PatternTool {
       .join(", ");
   }
 
-  /** Put the gizmo where the gesture actually happens.
-   *
-   *  A linear pattern runs FROM the bodies, so the arrows belong on them. A
-   *  circular one turns about a world axis through the origin, the arrows
-   *  belong ON that axis, at the bodies' height, or the gizmo reads as "it turns
-   *  about here" and points at a centre the copies plainly do not orbit. */
+  /** A linear pattern's arrows sit on the bodies, a circular one's on its axis at the bodies' height, or the
+   *  gizmo would point at a centre the copies do not orbit. */
   private placeGizmo() {
     if (this.kind === "linear") {
       this.anchor.copy(this.centroid);
@@ -250,8 +203,6 @@ export class PatternTool {
     this.drawAxis();
   }
 
-  /** The axis itself, a line through the part, so where the copies turn is
-   *  seen rather than inferred from the ghosts. */
   private drawAxis() {
     if (this.kind !== "circular") return;
     const { origin, dir } = this.turnLine();
@@ -277,11 +228,7 @@ export class PatternTool {
     return AXES[this.axis]!.name;
   }
 
-  // --- the copies ------------------------------------------------------------
-
-  /** Where every copy sits, copy 0 being the original. The one place the two
-   *  kinds differ geometrically, and it goes through patternMath so the ghosts
-   *  and the kernel cannot disagree. */
+  /** Copy 0 is the original. Goes through patternMath so the ghosts and the kernel cannot disagree. */
   private transforms(): THREE.Matrix4[] {
     const dir = this.axisDir();
     if (this.kind === "linear") {
@@ -306,8 +253,6 @@ export class PatternTool {
     else this.viewport.setPatternGhost(this.bodies, this.transforms());
   }
 
-  // --- input -----------------------------------------------------------------
-
   private onMove(e: PointerEvent) {
     if (this.grabbing) {
       const raw = this.grabValue + (this.dragAt(e) - this.grabRef);
@@ -329,9 +274,7 @@ export class PatternTool {
     }
   }
 
-  /** The drag's scalar for the current kind: a distance along the axis, or an
-   *  angle about it. Both are read from the same pointer, so both can be the
-   *  same gesture, take hold of the arrow and pull. */
+  /** A distance along the axis or an angle about it, read from the same pointer so both are one gesture. */
   private dragAt(e: PointerEvent): number {
     if (this.kind === "linear") {
       return axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axisDir());
@@ -340,8 +283,7 @@ export class PatternTool {
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(dir, this.anchor);
     const p = this.viewport.screenToPlane(e.clientX, e.clientY, plane);
     if (!p) return this.grabRef;
-    // Any two perpendiculars to the axis will do as a basis: the drag is read as
-    // a DIFFERENCE from where it was grabbed, so the basis cancels out.
+    // Any two perpendiculars will do: the drag is read as a difference from the grab, so the basis cancels out.
     const u = new THREE.Vector3(1, 0, 0);
     if (Math.abs(u.dot(dir)) > 0.9) u.set(0, 1, 0);
     const e1 = u
@@ -361,9 +303,7 @@ export class PatternTool {
     if (hit < 0) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    // Pressing an arrow that is not the current one CHANGES the axis and starts
-    // dragging in the same gesture, the axis is a choice you make by pulling
-    // the direction you want, not a mode you enter first.
+    // Pressing another arrow changes the axis and starts dragging in the same gesture.
     if (hit !== this.axis || this.place === "picked") {
       this.axis = hit;
       if (this.place === "picked") this.place = "centre";
@@ -388,8 +328,7 @@ export class PatternTool {
     }
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.downOnGizmo || moved) return;
-    // A circular pattern's click on the model picks the axis; off the model it
-    // applies, as it always did.
+    // A circular pattern's click on the model picks the axis; off the model it applies.
     const hit = this.kind === "circular" ? this.viewport.pickEntity(e.clientX, e.clientY) : null;
     if (!hit) {
       this.commitSoon();
@@ -404,8 +343,7 @@ export class PatternTool {
     });
   }
 
-  /** The axis an edge or face names, asked of the engine so the preview turns
-   *  about exactly the line the rebuild will. */
+  /** Asked of the engine so the preview turns about exactly the line the rebuild will. */
   private async pickAxis(hit: import("../viewport/picking").Hit, x: number, y: number) {
     let ref: Selector | null = null;
     if (hit.kind === "edge") {
@@ -455,9 +393,7 @@ export class PatternTool {
       this.updateGhosts();
       return;
     }
-    // The count, without leaving the viewport for a number field. Both spellings,
-    // because both are what people reach for.
-    // In a field, + and - are the value's sign or arithmetic, never the count.
+    // Both spellings of the count keys. In a field + and - are the value's sign or arithmetic, never the count.
     const typing = isEditableTarget(e.target);
     const up = e.key === "]" || e.key === "ArrowUp" || (e.key === "+" && !typing);
     const down = e.key === "[" || e.key === "ArrowDown" || (e.key === "-" && !typing);
@@ -472,10 +408,7 @@ export class PatternTool {
     this.updateGhosts();
   }
 
-  // --- readouts --------------------------------------------------------------
-
-  /** Show what the gesture currently means, without stamping over a number the
-   *  user is in the middle of typing. */
+  /** Never stamps over a number the user is in the middle of typing. */
   private pushFields() {
     const key = this.kind === "linear" ? "spacing" : "angle";
     const out: Record<string, number> = {};
@@ -506,8 +439,6 @@ export class PatternTool {
     );
   }
 
-  // --- gizmo -----------------------------------------------------------------
-
   private buildGizmo() {
     const g = new THREE.Group();
     this.gizmo = g;
@@ -521,8 +452,7 @@ export class PatternTool {
       head.position.y = 39;
       shaft.renderOrder = 999;
       head.renderOrder = 999;
-      // Never drawn, always hit: `material.visible` keeps it out of the render
-      // list while leaving it in the raycast, which `object.visible` would not.
+      // `material.visible` keeps it out of the render list but in the raycast, which `object.visible` would not.
       const sleeve = new THREE.Mesh(
         new THREE.CylinderGeometry(ARROW_GRAB_R, ARROW_GRAB_R, ARROW_LENGTH, 8),
         new THREE.MeshBasicMaterial({ visible: false }),
@@ -564,25 +494,18 @@ export class PatternTool {
       const chosen = a.axis === this.axis;
       const hot = chosen || a.axis === this.hoverAxis;
       a.mat.color.set(hot ? HOT : AXES[a.axis]!.color);
-      // The chosen axis is the one the drag reads; the other two stay drawn
-      // rather than hidden, because an axis you cannot see is an axis you cannot
-      // switch to.
+      // The other two stay drawn, an axis you cannot see is one you cannot switch to.
       a.mat.opacity = chosen ? 1 : 0.45;
     }
-    // Below and right of the gizmo, not on top of it: the three arrows ARE the
-    // control here, and a value panel over them is a panel over the thing you
-    // have to click. (Every other tool anchors its fields on the gizmo because
-    // its gizmo is one arrow the panel sits beside.)
+    // Below and right of the gizmo, not on it: the three arrows are the control here.
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x + 24, s.y + 84);
     this.readFields();
     this.gesture.frame();
   }
 
-  /** A typed value overrides the drag. Read every frame, because the field has
-   *  no change event this tool can subscribe to, the same read-back
-   *  planeOffsetTool does, and gated the same way so a display value written by
-   *  a drag is never mistaken for one the user typed. */
+  /** Read every frame, as planeOffsetTool does, since the field has no change event to subscribe to; gated so
+   *  a display value written by a drag is never taken for a typed one. */
   private readFields() {
     if (this.grabbing) return;
     let changed = false;
@@ -596,9 +519,7 @@ export class PatternTool {
     }
     if (this.dim.isUserDriven("count")) {
       const v = this.dim.getValue("count");
-      // A typed count is not held to the drag's ceiling: MAX_DRAG_COUNT exists
-      // because a number reached by holding a key down is not a number anyone
-      // meant, and a typed one plainly is.
+      // A typed count is not held to MAX_DRAG_COUNT, which only exists for a held key.
       if (v != null) {
         const n = Math.max(MIN_COUNT, Math.round(v));
         if (n !== this.count) {
@@ -612,10 +533,7 @@ export class PatternTool {
     this.updateGhosts();
   }
 
-  // --- ending ----------------------------------------------------------------
-
-  /** Applies once an axis pick still on its way to the engine has landed, so
-   *  Enter straight after clicking an edge turns about that edge. */
+  /** Waits for an axis pick still on its way, so Enter straight after clicking an edge turns about that edge. */
   private commitSoon() {
     if (this.pending) void this.pending.then(() => this.commit());
     else this.commit();
@@ -629,15 +547,12 @@ export class PatternTool {
     const m = this.middle;
     const placed = circularAxisFields(this.place, axis, [m.x, m.y, m.z], this.picked);
     const value = this.value;
-    // features and bodies are mutually exclusive on the feature itself, the
-    // engine refuses both together, so never write more than one.
+    // The engine refuses features and bodies together.
     const target = this.features.length ? { features: this.features } : { bodies: this.bodies };
     const kind = this.kind;
     const done = this.onDone;
     this.cleanup();
-    // A pattern of one copy is the body (or feature) you already had. Committing
-    // it would put a feature in the timeline that does nothing, which is a
-    // worse answer than saying so and leaving the model alone.
+    // A pattern of one copy would be a timeline feature that does nothing, so say so instead.
     if (count < 2) {
       setPrompt(null);
       done?.(null);
@@ -702,6 +617,4 @@ export class PatternTool {
   }
 }
 
-// Deliberately not here yet: a LINEAR pattern along a picked edge. The circular
-// one takes a picked axis (patternAxis.ts); the linear one still runs along X, Y
-// or Z.
+// Not here yet: a linear pattern along a picked edge, it still runs along X, Y or Z.
