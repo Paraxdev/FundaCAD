@@ -735,12 +735,20 @@
   max-width: calc(100vw - 32px);
 }
 .mirror-field {
+  --field-ink: var(--accent);
   display: flex;
   align-items: center;
   gap: var(--s-2);
   padding: var(--s-1);
+  border-left: 3px solid var(--field-ink);
   border-radius: var(--float-chip-radius);
   cursor: pointer;
+}
+.mirror-field[data-field="line"] {
+  --field-ink: var(--pick-line);
+}
+.mirror-field .icon-btn .icon {
+  color: var(--field-ink);
 }
 .mirror-field:not(.active):hover {
   background: var(--raised);

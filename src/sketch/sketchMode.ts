@@ -23,6 +23,7 @@ import {
   curveObjects,
   poleMarkerObjects,
   dimensionLineObjects,
+  mirrorMarkObjects,
   CURVE_COLOR,
   PREVIEW_COLOR,
   SELECT_COLOR,
@@ -80,6 +81,7 @@ import {
 import { expandPattern, translated } from "./pattern";
 import { MirrorFlow, type MirrorHost } from "./mirrorFlow";
 import { showMirrorPanel } from "../features/mirrorPanel";
+import { mirrorLineColor, mirrorObjectsColor } from "../features/mirrorColors";
 import {
   candidatesFromEntities,
   curvesFromEntities,
@@ -507,11 +509,16 @@ export class SketchMode {
         const wr = this.overlay.activeRegionAt(p);
         return wr ? this.entitiesAlongLoop(wr.region.loop) : [];
       },
-      showPreview: (copies, line, hover) => {
+      showPreview: ({ copies, objects, line, hover, hoverField }) => {
+        const objColor = mirrorObjectsColor();
+        const lineColor = mirrorLineColor();
+        const seg = line?.type === "line" ? line : line?.type === "projected" ? line.curve : null;
         this.overlay.setPreview([
           ...curveObjects(copies, this.plane, PREVIEW_COLOR, true),
-          ...(line ? curveObjects([line], this.plane, 0x33aaff, true) : []),
-          ...(hover ? curveObjects([hover], this.plane, 0xff5555, true) : []),
+          ...curveObjects(objects, this.plane, objColor, true),
+          ...(line ? curveObjects([line], this.plane, lineColor, true) : []),
+          ...(seg && "x1" in seg ? mirrorMarkObjects(seg, this.plane, lineColor, this.planeMmPerPx() * 14) : []),
+          ...(hover ? curveObjects([hover], this.plane, hoverField === "line" ? lineColor : objColor, true) : []),
         ]);
         this.viewport.requestRender();
       },
@@ -2899,7 +2906,7 @@ export class SketchMode {
       // A panel button reached by Tab keeps its own Enter.
       if (e.target instanceof Element && e.target.closest(".mirror-panel")) return;
       e.preventDefault();
-      if (e.key === "Enter") this.mirrorFlow.commit();
+      if (e.key === "Enter") this.mirrorFlow.enter();
       else this.mirrorFlow.switchField();
       return;
     }

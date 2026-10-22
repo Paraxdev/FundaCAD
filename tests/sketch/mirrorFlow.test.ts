@@ -38,6 +38,7 @@ function rig(pre: string[] = []) {
   const selected = new Set(pre);
   const log = {
     previews: [] as { copies: ResolvedEntity[]; line: string | null; hover: string | null }[],
+    marks: [] as { objects: string[]; line: string | null; hoverField: string }[],
     panels: [] as (MirrorPanelView | null)[],
     prompts: [] as string[],
     warns: [] as string[],
@@ -51,8 +52,10 @@ function rig(pre: string[] = []) {
     pickTol: () => 0.5,
     textAt: (p) => entities.find((e) => e.type === "text" && Math.hypot(p.x - e.x, p.y - e.y) < 2) ?? null,
     loopIdsAt: (p) => (p.x > -13 && p.x < -7 && p.y > -8 && p.y < -4 ? ["r1"] : []),
-    showPreview: (copies, line, hover) =>
-      log.previews.push({ copies, line: line?.id ?? null, hover: hover?.id ?? null }),
+    showPreview: ({ copies, objects, line, hover, hoverField }) => {
+      log.previews.push({ copies, line: line?.id ?? null, hover: hover?.id ?? null });
+      log.marks.push({ objects: objects.map((e) => e.id), line: line?.id ?? null, hoverField });
+    },
     showPanel: (view) => log.panels.push(view),
     prompt: (t) => log.prompts.push(t),
     warn: (m) => log.warns.push(m),
@@ -99,7 +102,8 @@ describe("MirrorFlow picking", () => {
     r.flow.begin();
     const before = r.panel();
     r.flow.click(ON.a1, false);
-    expect(r.log.prompts.at(-1)).toBe(LINE_REFUSED);
+    expect(r.log.prompts.at(-1)).toContain(LINE_REFUSED);
+    expect(r.log.prompts.at(-1)).toContain("Pick the mirror line");
     expect(r.panel()!.fields).toEqual(before!.fields);
     expect(r.flow.ready).toBe(false);
   });
@@ -131,20 +135,71 @@ describe("MirrorFlow picking", () => {
     expect(r.panel()!.active).toBe("objects");
   });
 
-  it("moves to the line after a plain pick and stays for a Shift pick", () => {
-    const shift = rig();
-    shift.flow.begin();
-    shift.flow.click(ON.c1, true);
-    shift.flow.click(ON.l1, true);
-    expect([...shift.selected]).toEqual(["c1", "l1"]);
-    expect(shift.panel()!.active).toBe("objects");
-    const plain = rig();
-    plain.flow.begin();
-    plain.flow.click(ON.c1, false);
-    expect(plain.panel()!.active).toBe("line");
-    plain.flow.click(ON.l1, true);
-    expect([...plain.selected]).toEqual(["c1", "l1"]);
-    expect(plain.panel()!.active).toBe("line");
+  it("adds plain and Shift picks alike while Objects is active, and Enter moves on to the line", () => {
+    const r = rig();
+    r.flow.begin();
+    r.flow.click(ON.c1, false);
+    r.flow.click(ON.l1, true);
+    r.flow.click(ON.a1, false);
+    expect([...r.selected]).toEqual(["c1", "l1", "a1"]);
+    expect(r.panel()!.active).toBe("objects");
+    expect(r.log.prompts.at(-1)).toContain("Pick what to mirror, Enter when done");
+    r.flow.enter();
+    expect(r.panel()!.active).toBe("line");
+    expect(r.log.prompts.at(-1)).toContain("Pick the mirror line");
+    expect(r.flow.running).toBe(true);
+  });
+
+  it("Enter with nothing picked stays on Objects, Enter when ready applies", () => {
+    const r = rig();
+    r.flow.begin();
+    r.flow.enter();
+    expect(r.panel()!.active).toBe("objects");
+    expect(r.entities).toHaveLength(6);
+    r.flow.click(ON.c1, false);
+    r.flow.enter();
+    r.flow.click(ON.l1, false);
+    r.flow.enter();
+    expect(r.flow.running).toBe(false);
+    expect(r.entities.slice(6).map((e) => e.type)).toEqual(["circle"]);
+  });
+
+  it("a construction line goes where the active field says", () => {
+    const objects = rig();
+    objects.flow.begin();
+    objects.flow.click(ON.ax, false);
+    expect([...objects.selected]).toEqual(["ax"]);
+    expect(objects.panel()!.fields[1]!.filled).toBe(false);
+    const line = rig(["c1"]);
+    line.flow.begin();
+    line.flow.click(ON.ax, false);
+    expect([...line.selected]).toEqual(["c1"]);
+    expect(line.panel()!.fields[1]).toMatchObject({ value: "Construction line", filled: true });
+  });
+
+  it("hands clicks back to Objects once the line is set, so a later line is added, not swapped in", () => {
+    const r = rig(["c1"]);
+    r.flow.begin();
+    r.flow.click(ON.ax, false);
+    expect(r.panel()!.active).toBe("objects");
+    expect(r.log.prompts.at(-1)).toContain("Enter to mirror");
+    r.flow.click(ON.l1, false);
+    expect([...r.selected]).toEqual(["c1", "l1"]);
+    expect(r.panel()!.fields[1]!.value).toBe("Construction line");
+    r.flow.activate("line");
+    r.flow.click(ON.l1, false);
+    expect([...r.selected]).toEqual(["c1"]);
+    expect(r.panel()!.fields[1]!.value).toBe("Line");
+  });
+
+  it("a closed area clicked in the line field leaves no stale refusal", () => {
+    const r = rig(["c1"]);
+    r.flow.begin();
+    r.flow.click(ON.a1, false);
+    r.flow.click(ON.insideR1, false);
+    expect(r.log.prompts.at(-1)).not.toContain(LINE_REFUSED);
+    expect(r.log.prompts.at(-1)).toContain("Pick the mirror line");
+    expect([...r.selected]).toEqual(["c1"]);
   });
 
   it("adds the curves around a closed area clicked inside", () => {
@@ -152,8 +207,7 @@ describe("MirrorFlow picking", () => {
     r.flow.begin();
     r.flow.click(ON.insideR1, false);
     expect([...r.selected]).toEqual(["r1"]);
-    expect(r.panel()!.active).toBe("line");
-    r.flow.activate("objects");
+    expect(r.panel()!.active).toBe("objects");
     r.flow.click(ON.empty, false);
     expect([...r.selected]).toEqual(["r1"]);
   });
@@ -164,7 +218,7 @@ describe("MirrorFlow picking", () => {
     r.flow.click(ON.ax, false);
     expect([...r.selected]).toEqual(["c1"]);
     expect(r.panel()!.fields[0]!.value).toBe("1 object");
-    expect(r.log.prompts.at(-1)).toBe(LINE_LEFT_OBJECTS);
+    expect(r.log.prompts.at(-1)).toContain(LINE_LEFT_OBJECTS);
   });
 
   it("says nothing extra for a line that was not in Objects", () => {
@@ -172,8 +226,8 @@ describe("MirrorFlow picking", () => {
     r.flow.begin();
     r.flow.click(ON.ax, false);
     expect(r.panel()!.fields[0]!.value).toBe("1 object");
-    expect(r.log.prompts.at(-1)).not.toBe(LINE_LEFT_OBJECTS);
-    expect(r.log.prompts.at(-1)).toContain("Mirror line");
+    expect(r.log.prompts.at(-1)).not.toContain(LINE_LEFT_OBJECTS);
+    expect(r.log.prompts.at(-1)).toContain("Enter to mirror");
   });
 
   it("lights only lines on hover in the line field, anything in Objects", () => {
@@ -181,11 +235,13 @@ describe("MirrorFlow picking", () => {
     r.flow.begin();
     r.flow.hover(ON.l1);
     expect(r.log.previews.at(-1)!.hover).toBe("l1");
+    expect(r.log.marks.at(-1)).toEqual({ objects: ["c1"], line: null, hoverField: "line" });
     r.flow.hover(ON.c1);
     expect(r.log.previews.at(-1)!.hover).toBe(null);
     r.flow.activate("objects");
     r.flow.hover(ON.c1);
     expect(r.log.previews.at(-1)!.hover).toBe("c1");
+    expect(r.log.marks.at(-1)).toEqual({ objects: ["c1"], line: null, hoverField: "objects" });
   });
 });
 
@@ -208,6 +264,7 @@ describe("MirrorFlow text", () => {
     r.flow.begin();
     r.flow.click(ON_TEXT, false);
     expect([...r.selected]).toEqual(["t1"]);
+    r.flow.enter();
     r.flow.click(ON.ax, false);
     expect(r.flow.commit()).toBe(true);
     const copy = r.entities.at(-1)!;
@@ -221,7 +278,7 @@ describe("MirrorFlow text", () => {
     r.flow.hover(ON_TEXT);
     expect(r.log.previews.at(-1)!.hover).toBe(null);
     r.flow.click(ON_TEXT, false);
-    expect(r.log.prompts.at(-1)).toBe(LINE_REFUSED);
+    expect(r.log.prompts.at(-1)).toContain(LINE_REFUSED);
     r.flow.activate("objects");
     r.flow.hover(ON_TEXT);
     expect(r.log.previews.at(-1)!.hover).toBe("t1");
@@ -307,5 +364,48 @@ describe("MirrorFlow commit and cancel", () => {
     expect([...r.selected]).toEqual([]);
     expect(r.panel()!.active).toBe("objects");
     expect(r.panel()!.ready).toBe(false);
+  });
+});
+
+describe("MirrorFlow origin axes", () => {
+  it("takes the X axis and the Y axis as the mirror line in the line field", () => {
+    const x = rig(["c1"]);
+    x.flow.begin();
+    x.flow.click(v(-17.5, 0.35), false);
+    expect(x.panel()!.fields[1]).toMatchObject({ value: "X axis", filled: true });
+    expect(x.log.marks.at(-1)!.line).toBe("origin-x");
+    x.flow.commit();
+    expect(x.entities.slice(6).map(round)).toEqual([{ type: "circle", id: "n1", radius: 2.75, x: 8, y: -9 }]);
+    const y = rig(["c1", "a1"]);
+    y.flow.begin();
+    y.flow.click(v(-0.4, -14.5), false);
+    expect(y.panel()!.fields[1]!.value).toBe("Y axis");
+    y.flow.commit();
+    expect(y.entities.slice(6).map(round)).toEqual([
+      { type: "circle", id: "n1", radius: 2.75, x: -8, y: 9 },
+      { type: "arc", id: "n2", x1: -20, y1: 1, x2: -24, y2: 5, mx: -23.5, my: 2.5 },
+    ]);
+  });
+
+  it("takes an axis up to the pick tolerance and not past it", () => {
+    const at = rig(["c1"]);
+    at.flow.begin();
+    at.flow.click(v(-17.5, -0.5), false);
+    expect(at.panel()!.fields[1]!.value).toBe("X axis");
+    const past = rig(["c1"]);
+    past.flow.begin();
+    past.flow.click(v(-17.5, -0.51), false);
+    expect(past.panel()!.fields[1]!.filled).toBe(false);
+    expect(past.log.prompts.at(-1)).toContain("Pick the mirror line");
+  });
+
+  it("lights an axis on hover only in the line field", () => {
+    const r = rig(["c1"]);
+    r.flow.begin();
+    r.flow.hover(v(-17.5, 0.2));
+    expect(r.log.previews.at(-1)!.hover).toBe("origin-x");
+    r.flow.activate("objects");
+    r.flow.hover(v(-17.5, 0.25));
+    expect(r.log.previews.at(-1)!.hover).toBe(null);
   });
 });

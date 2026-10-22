@@ -4,7 +4,9 @@ import {
   addObjects,
   clearField,
   countLabel,
+  enterStep,
   isReady,
+  nextPick,
   pickLine,
   pickObject,
   startFields,
@@ -35,39 +37,41 @@ describe("startFields", () => {
 describe("pickObject", () => {
   const empty = startFields<Axis>([]);
 
-  it("moves to the line on a plain pick while the line is empty", () => {
-    expect(pickObject(empty, "e4", false)).toEqual({ objects: ["e4"], line: null, lineId: null, active: "line" });
+  it("adds one and many plain picks while Objects stays active", () => {
+    const one = pickObject(empty, "e4");
+    expect(one).toEqual({ objects: ["e4"], line: null, lineId: null, active: "objects" });
+    expect(pickObject(pickObject(one, "e5"), "e9")).toEqual({
+      objects: ["e4", "e5", "e9"],
+      line: null,
+      lineId: null,
+      active: "objects",
+    });
   });
 
-  it("stays on Objects on a plain pick once the line is set", () => {
-    const f: MirrorFields<Axis> = { objects: ["e1"], line: AX, lineId: "ax", active: "objects" };
-    expect(pickObject(f, "e4", false)).toEqual({ objects: ["e1", "e4"], line: AX, lineId: "ax", active: "objects" });
-  });
-
-  it("stays on Objects for a Shift or Ctrl pick", () => {
-    const one = pickObject(empty, "e4", true);
-    expect(pickObject(one, "e5", true)).toEqual({ objects: ["e4", "e5"], line: null, lineId: null, active: "objects" });
+  it("adds without moving whichever field is active", () => {
+    const f: MirrorFields<Axis> = { objects: ["e1"], line: null, lineId: null, active: "line" };
+    expect(pickObject(f, "e4")).toEqual({ objects: ["e1", "e4"], line: null, lineId: null, active: "line" });
   });
 
   it("toggles a picked object off without moving", () => {
     const f: MirrorFields<Axis> = { objects: ["e4", "e5"], line: null, lineId: null, active: "objects" };
-    expect(pickObject(f, "e4", false)).toEqual({ objects: ["e5"], line: null, lineId: null, active: "objects" });
+    expect(pickObject(f, "e4")).toEqual({ objects: ["e5"], line: null, lineId: null, active: "objects" });
   });
 
   it("clears the line when the line itself is picked as an object", () => {
     const f: MirrorFields<Axis> = { objects: ["e1"], line: AX, lineId: "ax", active: "objects" };
-    expect(pickObject(f, "ax", true)).toEqual({ objects: ["e1", "ax"], line: null, lineId: null, active: "objects" });
+    expect(pickObject(f, "ax")).toEqual({ objects: ["e1", "ax"], line: null, lineId: null, active: "objects" });
   });
 });
 
 describe("addObjects", () => {
-  it("adds only new ids and moves to the line", () => {
-    const f = pickObject(startFields<Axis>([]), "e1", true);
+  it("adds only new ids and stays on Objects", () => {
+    const f = pickObject(startFields<Axis>([]), "e1");
     expect(addObjects(f, ["e1", "e2", "e3"])).toEqual({
       objects: ["e1", "e2", "e3"],
       line: null,
       lineId: null,
-      active: "line",
+      active: "objects",
     });
   });
 
@@ -79,19 +83,60 @@ describe("addObjects", () => {
 
   it("clears the line when a loop takes it in", () => {
     const f: MirrorFields<Axis> = { objects: [], line: AX, lineId: "ax", active: "objects" };
-    expect(addObjects(f, ["e1", "ax"])).toEqual({ objects: ["e1", "ax"], line: null, lineId: null, active: "line" });
+    expect(addObjects(f, ["e1", "ax"])).toEqual({ objects: ["e1", "ax"], line: null, lineId: null, active: "objects" });
   });
 });
 
 describe("pickLine", () => {
-  it("sets the line and takes it out of Objects", () => {
+  it("sets the line, takes it out of Objects and goes back to Objects", () => {
     const f = startFields<Axis>(["e1", "ax", "e2"]);
-    expect(pickLine(f, AX, "ax")).toEqual({ objects: ["e1", "e2"], line: AX, lineId: "ax", active: "line" });
+    expect(pickLine(f, AX, "ax")).toEqual({ objects: ["e1", "e2"], line: AX, lineId: "ax", active: "objects" });
   });
 
   it("replaces an earlier line, and a plane without an id leaves Objects alone", () => {
-    const f = pickLine(startFields<Axis>(["e1"]), AX, "ax");
-    expect(pickLine(f, AX2, null)).toEqual({ objects: ["e1"], line: AX2, lineId: null, active: "line" });
+    const f = activate(pickLine(startFields<Axis>(["e1"]), AX, "ax"), "line");
+    expect(pickLine(f, AX2, null)).toEqual({ objects: ["e1"], line: AX2, lineId: null, active: "objects" });
+  });
+});
+
+describe("enterStep", () => {
+  it("moves from Objects to the empty line once something is picked", () => {
+    const f: MirrorFields<Axis> = { objects: ["e1", "e2"], line: null, lineId: null, active: "objects" };
+    expect(enterStep(f)).toEqual({ ...f, active: "line" });
+  });
+
+  it("stays on, or goes back to, Objects while nothing is picked", () => {
+    const f: MirrorFields<Axis> = { objects: [], line: AX, lineId: null, active: "line" };
+    expect(enterStep(f)).toEqual({ ...f, active: "objects" });
+    const g = startFields<Axis>([]);
+    expect(enterStep(g)).toBe(g);
+  });
+
+  it("applies once both fields hold something, whichever is active", () => {
+    expect(enterStep({ objects: ["e1"], line: AX, lineId: null, active: "objects" })).toBe("commit");
+    expect(enterStep({ objects: ["e1", "e2", "e3"], line: AX, lineId: "ax", active: "line" })).toBe("commit");
+  });
+});
+
+describe("nextPick", () => {
+  const at = (objects: string[], line: Axis | null, active: "objects" | "line") =>
+    nextPick({ objects, line, lineId: null, active }, "line").toLowerCase();
+
+  it("names what to mirror while Objects is active and the line is empty", () => {
+    expect(at([], null, "objects")).toContain("pick what to mirror");
+    expect(at([], null, "objects")).not.toContain("enter");
+    expect(at(["e1"], null, "objects")).toContain("pick what to mirror");
+    expect(at(["e1"], null, "objects")).toContain("enter");
+  });
+
+  it("names the mirror line or plane while that field is active", () => {
+    expect(at(["e1"], null, "line")).toContain("pick the mirror line");
+    expect(at(["e1"], AX, "line")).toContain("pick the mirror line");
+    expect(nextPick({ objects: [], line: null, lineId: null, active: "line" }, "plane")).toContain("mirror plane");
+  });
+
+  it("offers Enter once ready", () => {
+    expect(at(["e1", "e2"], AX, "objects")).toContain("enter to mirror");
   });
 });
 

@@ -74,6 +74,6 @@ const waitingFor = computed(() =>
         Mirror
       </button>
     </div>
-    <div class="measure-hint">Enter to apply · Shift adds more · Tab switches field · Esc to cancel</div>
+    <div class="measure-hint">Enter moves to the next field, then applies · Shift adds to Objects · Esc to cancel</div>
   </FloatingPanel>
 </template>

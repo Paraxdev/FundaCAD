@@ -156,6 +156,7 @@ Status:
 | `--warn` | `#ffab2e` | Warnings, amber History steps, `.perf-warn` |
 | `--error` | `#ff5c5c` | Errors, destructive items, failed steps |
 | `--error-tint` | `rgba(255, 92, 92, 0.14)` | Error backgrounds and the error focus ring |
+| `--pick-line` | `#b48cff` | The second pick colour, apart from the accent: the Mirror line or plane, in the view and on its panel field |
 
 There is no info, success tint, warn tint, disabled or hover token. Derive them:
 

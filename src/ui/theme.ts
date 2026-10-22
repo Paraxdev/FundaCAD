@@ -46,6 +46,7 @@ const NOIR_SURFACE = {
   "--warn": "#ffab2e",
   "--error": "#ff5c5c",
   "--error-tint": "rgba(255, 92, 92, 0.14)",
+  "--pick-line": "#b48cff",
 };
 
 function noirTint(
@@ -106,6 +107,7 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--warn": "#ffb86c",
       "--error": "#ff5555",
       "--error-tint": "rgba(255, 85, 85, 0.14)",
+      "--pick-line": "#ff79c6",
       "--accent-blue": "#8be9fd",
     },
   },
@@ -136,6 +138,7 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--warn": "#b58900",
       "--error": "#dc322f",
       "--error-tint": "rgba(220, 50, 47, 0.14)",
+      "--pick-line": "#d33682",
       "--accent-blue": "#268bd2",
     },
   },
@@ -169,6 +172,7 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--warn": "#f4c542",
       "--error": "#ff5c5c",
       "--error-tint": "rgba(255, 92, 92, 0.16)",
+      "--pick-line": "#ff8fc8",
       "--accent-blue": "#8f7fe8",
     },
   },
@@ -216,6 +220,7 @@ const PALETTE_TOKENS = new Set<string>([
   "--warn",
   "--error",
   "--error-tint",
+  "--pick-line",
   "--accent-blue",
 ]);
 
