@@ -1,10 +1,5 @@
-//! Chunked replies and the cancel check between chunks.
-//!
-//! Replaces `_chunk_bodies`, `_stream_binary_reply`, `_send_reply` and the
-//! cancel token plumbing (`_CANCEL`, `_cancelled_now`) of the Python engine's `wire.py`.
-//! Transport-agnostic: a reply is an iterator of messages, and the transport
-//! pulls the next one only when it has sent the previous, which is where the
-//! Python loop awaited its send and where the cancel check sits.
+//! Chunked replies and the cancel check between chunks. A reply is an iterator of messages and the transport pulls
+//! the next only after sending the previous, which is where the cancel check sits.
 
 use crate::body::{JobResult, MeshResult, WireBody};
 use crate::envelope;
@@ -36,10 +31,8 @@ impl CancelToken {
     }
 }
 
-/// `_chunk_bodies`: group bodies IN ORDER into index ranges of roughly
-/// `target` estimated bytes. The client accumulates faceStart by manifest
-/// order, so reordering would break face picking. A body over target gets a
-/// chunk of its own, it is never split.
+/// `_chunk_bodies`: group bodies IN ORDER into ranges of about `target` estimated bytes, since the client accumulates
+/// faceStart by manifest order and reordering breaks face picking. A body over target gets a chunk of its own.
 pub fn chunk_bodies(bodies: &[WireBody], target: usize) -> Vec<Range<usize>> {
     let mut out = Vec::new();
     let (mut start, mut size) = (0usize, 0usize);
@@ -58,8 +51,7 @@ pub fn chunk_bodies(bodies: &[WireBody], target: usize) -> Vec<Range<usize>> {
     out
 }
 
-/// A random 16 hex digit stream id, `secrets.token_hex(8)` in the Python engine. It
-/// only has to differ between replies on one connection, so std's randomly
+/// A random 16 hex digit stream id. It only has to differ between replies on one connection, so std's randomly
 /// keyed hasher plus a counter is enough and needs no dependency.
 pub fn new_stream_id() -> String {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -74,7 +66,6 @@ pub struct ReplyOptions {
     pub chunked: bool,
 }
 
-/// The messages of one reply, in send order.
 pub struct Reply {
     state: State,
 }
@@ -158,11 +149,9 @@ impl Stream {
     }
 }
 
-/// `_stream_binary_reply`: frame 0 carries every non-body field and the
-/// manifest, frames 1..N carry contiguous slices of the bodies. Non-final
-/// frames have `status: "chunk"` and no `ok`, the final one has `ok: true`.
-/// The head is encoded and cap-checked here, before anything is sent, so a
-/// head over the cap is still an ordinary error reply.
+/// `_stream_binary_reply`: frame 0 carries every non-body field and the manifest, frames 1..N contiguous slices of
+/// the bodies. Non-final frames have `status: "chunk"` and no `ok`, the final one `ok: true`. The head is cap-checked
+/// here before anything is sent, so a head over the cap is still an ordinary error reply.
 pub fn stream_reply(
     id: Value,
     result: MeshResult,
@@ -187,10 +176,8 @@ pub fn stream_reply(
     })
 }
 
-/// `_send_reply`: stream when the client opted into chunked binary frames and
-/// the result is a successful mesh reply, a single message otherwise. Every
-/// such reply is streamed, not only large ones, so the multi-frame path runs
-/// constantly rather than first on a user's oversized assembly.
+/// `_send_reply`: stream when the client opted into chunked binary frames and the result is a successful mesh reply,
+/// a single message otherwise. Every such reply streams, not only large ones, so the multi-frame path runs constantly.
 pub fn send_reply(
     id: Value,
     result: JobResult,
