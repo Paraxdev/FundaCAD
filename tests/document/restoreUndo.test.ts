@@ -122,7 +122,7 @@ describe("undo after a restore", () => {
     ["environment", { environment: env(1.75) }, { environment: { name: "future", sky: 3 } }, (s: DocumentStore) => s.setDocumentEnvironment(null)],
   ])("drops the unreadable %s section a replacing load brought once undo brings the readable one back", (key, own, unreadable, clear) => {
     const s = opened({ features: [box("f1", 10.5)], ...own });
-    s.loadDocument({ parameters: {}, features: [box("f1", 10.5)], ...unreadable } as CadDocument, { replace: true });
+    s.loadDocument({ parameters: {}, features: [box("f1", 10.5)], ...unreadable } as unknown as CadDocument, { replace: true });
     expect(saved(s)[key]).toEqual(Object.values(unreadable)[0]);
     s.undo();
     expect(saved(s)[key]).toEqual(Object.values(own)[0]);
