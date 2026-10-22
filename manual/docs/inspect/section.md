@@ -6,7 +6,7 @@ Section cuts the model open with a plane so you can see inside.
 
 Pick Section under Inspect, then a face, a plane, or the Z, X or Y axis. Z gives a horizontal slice. Drag the handle or type a distance, press F to flip the kept half, and G to change how strong the faint ghost of the cut half is.
 
-Press Enter, the check or Esc when the cut is where you want it. The handle goes away and the cut stays on while you orbit, select, measure and use other tools. Clicks only reach what the cut keeps, a box select still takes both halves.
+Press Enter, the check or Esc when the cut is where you want it. The handle goes away and the cut stays on while you orbit, select, measure and use other tools. Clicks only reach what the cut keeps, a box select still takes both halves. A click on the hatched cut surface selects its body, as there is no face there to pick or measure.
 
 ![The cut bracket with the Section on chip and its Edit, Flip and Off buttons](../img/section-chip.png)
 
