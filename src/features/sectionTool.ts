@@ -259,8 +259,6 @@ export class SectionTool {
     this.arm(sectionAnchor(origin, normal, this.modelCentre()), normal);
   }
 
-  // --- aiming ----------------------------------------------------------------
-
   private beginPick() {
     this.viewport.suspendPicking = true;
     this.viewport.showAllPlanes(true);
@@ -332,8 +330,6 @@ export class SectionTool {
     if (target.kind === "base") return baseDef(target.spec);
     return target.spec;
   }
-
-  // --- editing ---------------------------------------------------------------
 
   private arm(origin: Vec3, normal: Vec3) {
     this.origin = origin;

@@ -1,17 +1,11 @@
-// The one look a rotation ring has in the app: a thin whole circle, faint until
-// the hand is on it. The ring under the cursor lights and thickens and the
-// others step back, so a set of rings reads as one ball rather than a tangle,
-// and the one being dragged is the only one left standing.
-//
-// Modelled in pixels in its local XY plane (its axis is local +Z), so a caller
-// orients it and scales it by pixelWorldSize like every other gizmo part.
+// A rotation ring: thin, faint until the hand is on it, so a set of rings reads as one ball. Modelled in pixels in
+// local XY (axis +Z), oriented by the caller and scaled by pixelWorldSize.
 
 import * as THREE from "three";
 
 const THIN = 1.1;
 const THICK = 2.4;
-/** The undrawn band a ring is grabbed by, in pixels either side of the line.
- *  Nobody can reliably hit a 1px torus in 3D. */
+/** In pixels either side of the line, since nobody can reliably hit a 1px torus in 3D. */
 export const RING_BAND = 8;
 export const RING_IDLE_OPACITY = 0.75;
 export const RING_BACK_OPACITY = 0.22;

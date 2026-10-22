@@ -1,7 +1,4 @@
-// The fillet's section shape, as a control that lives in the heads-up row
-// beside the radius instead of floating in the viewport where the row could
-// cover it. The chip draws the section it will build: drag it sideways to
-// scrub, turn the wheel over it to step, click it for presets and a track.
+// The fillet's section shape as a chip in the heads-up row beside the radius, where the row cannot cover it.
 
 import {
   PROFILE_DETENT,
@@ -116,8 +113,7 @@ export class ProfileChip {
   /** Drag on `target` moves the profile by fraction of `px` pixels; a press that
    *  never moved is a click. `start` lets the track jump to where it was pressed. */
   private wireScrub(target: HTMLElement, px: number, click: (() => void) | null, start?: (e: PointerEvent) => void) {
-    // Set here as well as in the stylesheet, so a finger scrub is a scrub and not
-    // a page pan on whichever element is wired, styled or not.
+    // Set here as well as in the stylesheet, so a finger scrub never pans the page.
     target.style.touchAction = "none";
     target.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
@@ -146,8 +142,7 @@ export class ProfileChip {
         target.removeEventListener("pointercancel", end);
         target.classList.remove("scrubbing");
       };
-      // Only a real release is a click. A cancelled pointer (the browser took
-      // the touch for a gesture) ends the scrub and opens nothing.
+      // Only a real release is a click; a cancelled pointer (the browser took the touch) opens nothing.
       const up = () => {
         end();
         if (!moved) click?.();
