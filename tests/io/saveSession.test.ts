@@ -28,7 +28,7 @@ vi.mock("../../src/ui/toast", () => ({ toast: () => null, dismissToast: () => {}
 vi.mock("../../src/io/recentFiles", () => ({ noteRecent() {}, forgetRecent() {}, getRecentFiles: () => [] }));
 
 const { saveDocument, saveDocumentAs } = await import("../../src/io/files");
-const { installAutosave } = await import("../../src/io/recovery");
+const { installAutosave, slotFor } = await import("../../src/io/recovery");
 
 const flush = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
@@ -148,6 +148,50 @@ describe("a save and the document it began with", () => {
         .filter((c) => c.cmd === "recovery_write")
         .map((c) => JSON.parse(String(c.args.json)).doc.features.map((f: { id: string }) => f.id));
       expect({ afterNew, writes }).toEqual({ afterNew: 0, writes: [["b-plate"]] });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("a document given up by New or Open drops its recovery slot, a clean one and a reload keep theirs", async () => {
+    const store = edited("D:/parts/a.funda");
+    installAutosave(store);
+    const clears = async (act: () => void) => {
+      host.invoked = [];
+      act();
+      await flush();
+      return host.invoked.filter((c) => c.cmd === "recovery_clear").map((c) => c.args.slot);
+    };
+    const discarded = await clears(() => store.newDocument());
+    const clean = await clears(() => store.newDocument());
+    store.addFeature(box("b-plate", 20));
+    const reloaded = await clears(() => store.sessions.begin("reload"));
+    const opened = await clears(() => store.load(JSON.stringify({ parameters: {}, features: [box("c-plate", 9)] })));
+    store.markSaved("D:/parts/c.funda");
+    const reopened = await clears(() => store.load(JSON.stringify({ parameters: {}, features: [] })));
+    expect({ discarded, clean, reloaded, opened, reopened }).toEqual({
+      discarded: [slotFor("D:/parts/a.funda"), slotFor(null)],
+      clean: [],
+      reloaded: [],
+      opened: [slotFor(null), slotFor(null)],
+      reopened: [],
+    });
+  });
+
+  it("an autosave whose document is given up while it starts writes nothing, one in the next document writes", async () => {
+    vi.useFakeTimers();
+    try {
+      const store = edited("D:/parts/a.funda");
+      installAutosave(store);
+      store.addFeature(box("a-more", 5));
+      vi.advanceTimersByTime(200_000);
+      store.newDocument();
+      await flush();
+      const afterNew = host.invoked.filter((c) => c.cmd === "recovery_write").length;
+      store.addFeature(box("b-plate", 20));
+      vi.advanceTimersByTime(200_000);
+      await flush();
+      const writes = host.invoked.filter((c) => c.cmd === "recovery_write").map((c) => c.args.slot);
+      expect({ afterNew, writes }).toEqual({ afterNew: 0, writes: [slotFor(null)] });
     } finally {
       vi.useRealTimers();
     }

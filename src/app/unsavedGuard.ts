@@ -1,4 +1,5 @@
 import { saveDocument } from "../io/files";
+import { clearRecovery } from "../io/recovery";
 import { choose } from "../ui/choice";
 import type { BeforeInstall } from "../ui/updates";
 import type { Engine } from "./engine";
@@ -69,11 +70,17 @@ export function installUnsavedGuard(e: Engine): void {
         return;
       }
       asking = true;
-      const question = `Save changes to ${e.store.fileName} before closing?`;
-      const close = await saveFirst(e, question, "close and lose the changes").finally(() => {
+      await confirmClose(e, ev).finally(() => {
         asking = false;
       });
-      if (!close) ev.preventDefault();
     }),
   );
+}
+
+/** A close with unsaved work: Save, Don't save or Cancel. Don't save gives the work up, so the next start must not
+ *  offer its snapshot back. */
+export async function confirmClose(e: Pick<Engine, "store">, ev: { preventDefault(): void }): Promise<void> {
+  const question = `Save changes to ${e.store.fileName} before closing?`;
+  if (!(await saveFirst(e, question, "close and lose the changes"))) ev.preventDefault();
+  else if (e.store.dirty) await clearRecovery(e.store.filePath);
 }

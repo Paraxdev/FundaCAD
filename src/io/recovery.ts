@@ -1,6 +1,7 @@
 // Crash-recovery autosave. Rust owns the snapshot files (recovery_* commands) outside the webview's fs scope;
 // this decides when: 30 s after the last edit, at most 2 min behind, only while dirty. A save clears the slot.
 
+import type { DocumentSession } from "../document/session";
 import type { DocumentStore } from "../document/store";
 import { toast } from "../ui/toast";
 import { safeMode } from "../ui/safeMode";
@@ -44,6 +45,7 @@ export function installAutosave(store: DocumentStore) {
     idleTimer = null;
     oldestEdit = null;
     if (!store.dirty || writing) return;
+    const session = store.session;
     writing = true;
     try {
       // One compact stringify, synchronously before any await, so the snapshot cannot see a half-applied edit.
@@ -56,6 +58,8 @@ export function installAutosave(store: DocumentStore) {
       // The slot is the snapshot's own, even when another document is opened while the module loads.
       const slot = slotFor(store.filePath);
       const { invoke } = await import("@tauri-apps/api/core");
+      // Its document was given up while the module loaded, and the slot was cleared for it.
+      if (!session.alive) return;
       await invoke("recovery_write", { slot, json });
       failCount = 0;
       warned = false;
@@ -88,6 +92,14 @@ export function installAutosave(store: DocumentStore) {
     idleTimer = null;
     oldestEdit = null;
   });
+  // A document only ends unsaved when its work was given up (Discard, Don't save), so its snapshot is never offered
+  // at the next start. Read while the session ends, before the next document replaces the path.
+  const forgetOnEnd = (s: DocumentSession) =>
+    s.own(() => {
+      if (s.endedBy !== "reload" && store.dirty) void clearRecovery(store.filePath);
+    });
+  forgetOnEnd(store.session);
+  store.sessions.onBegin(forgetOnEnd);
 
   store.onDocChange(schedule);
   store.onMeta(schedule);
