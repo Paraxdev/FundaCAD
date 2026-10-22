@@ -15,7 +15,6 @@ pub struct PlaneRecord {
     pub normal: [f64; 3],
 }
 
-/// A plane reference: a base plane or datum id, or a baked placement.
 pub enum PlaneRef<'a> {
     Name(&'a str),
     Def(&'a PlaneDef),

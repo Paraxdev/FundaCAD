@@ -1,6 +1,5 @@
-//! Face provenance, the Python engine's `builder.py` `_update_owners` over the fingerprints
-//! of the Python engine's `defeature.py` `_face_fp`: each face of a changed body is owned by
-//! the feature that last made it, keyed by its rounded area and centre.
+//! Face provenance, `_update_owners` in builder.py over the `_face_fp` fingerprints of defeature.py: each face
+//! of a changed body is owned by the feature that last made it, keyed by its rounded area and centre.
 
 use std::collections::HashMap;
 
@@ -13,9 +12,8 @@ use crate::kernel::{self, Kind};
 /// Fingerprint key to owning feature id.
 pub type Owners = HashMap<String, String>;
 
-/// Each body's faces with their unrounded fingerprints, by body uid, so a
-/// face a feature left alone is not integrated again. Holding the face keeps
-/// its TShape alive, so its address cannot be reused by another face.
+/// Each body's faces with their unrounded fingerprints, so an untouched face is not integrated again.
+/// Holding the face keeps its TShape alive, so its address cannot be reused by another face.
 #[derive(Default)]
 pub struct FaceFps(HashMap<u64, Vec<(Shape, Option<[f64; 4]>)>>);
 
@@ -38,8 +36,7 @@ pub fn face_key(face: &Shape) -> Option<String> {
     kernel::face_area_centre(face).map(|a| key(a[0], [a[1], a[2], a[3]]))
 }
 
-/// `listed`, the owner of each face of `shape` in face order, as the map
-/// `face_key` looks up: keyed by what the faces of this very shape measure.
+/// The owner of each face of `shape` in face order, keyed by what this very shape's faces measure.
 /// None when the shape does not hold that many faces.
 pub fn keyed(shape: &Shape, listed: &[Option<String>]) -> Option<Owners> {
     let faces = kernel::subshapes(shape, Kind::Face);
@@ -127,9 +124,8 @@ pub fn update(ctx: &mut Ctx, f: &Feature, fid: &str, pre: &[(u64, u64)], pre_own
                 prior = prior_src.iter().filter_map(|(k, v)| moved_key(k, *r, *d).map(|nk| (nk, v.clone()))).collect();
             }
         }
-        // A rigidly moved body keeps its faces' TShapes, so each face finds
-        // the fingerprint it had before the move. The rest go by their
-        // unrounded centres sent through the move, rounded once where they land.
+        // A rigidly moved body keeps its faces' TShapes, so each face finds its old fingerprint. The rest
+        // go by their unrounded centres sent through the move, rounded once where they land.
         let mut carried: HashMap<u64, Option<&String>> = HashMap::new();
         if let Some(m) = rigid.iter().find(|m| m.body == b.id) {
             let before = ctx.face_fps.0.get(&b.uid).map_or(&[][..], Vec::as_slice);
