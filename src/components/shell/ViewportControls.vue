@@ -7,7 +7,7 @@ import { useUiStore } from "../../stores/ui";
 import { useShellStore } from "../../stores/shell";
 import { useDialogStore } from "../../stores/dialogs";
 import { useSketchPaletteStore } from "../../stores/sketchPalette";
-import { fmtLength, fmtLengthCompact, getUnit, onUnitChange, setUnit, asUnit, type Unit } from "../../ui/units";
+import { fmtGridStep, fmtLengthCompact, getUnit, onUnitChange, setUnit, asUnit, type Unit } from "../../ui/units";
 import { saveRenderedImage } from "../../io/files";
 import { MATCAP_STYLES, onRenderPrefsChange, renderPrefs, setRenderPref, type MatcapStyle } from "../../ui/renderPrefs";
 import { matcapSwatchUrl } from "../../ui/matcapSwatch";
@@ -94,7 +94,7 @@ function pickUnit(u: Unit) {
   if (ok) setUnit(ok);
 }
 
-const gridLabel = computed(() => fmtLength(ui.gridStepMm));
+const gridLabel = computed(() => fmtGridStep(ui.gridStepMm));
 const gridLabelCompact = computed(() => fmtLengthCompact(ui.gridStepMm));
 
 const VIEWS = [
