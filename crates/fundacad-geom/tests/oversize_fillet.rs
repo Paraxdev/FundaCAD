@@ -524,3 +524,151 @@ fn two_distance_chamfers_the_kernel_fails_past_a_slanted_inside_corner_are_refus
         assert_eq!(outcome(&r), (0, vec![], want), "at {d}/{d2}: {:?}", messages(&r));
     }
 }
+
+/// Two straight arms 10 wide meeting at an inside corner that turns 120 degrees.
+const V60_TOP: [(f64, f64); 6] =
+    [(0.0, 0.0), (30.0, 0.0), (30.0, 10.0), (17.320508, 10.0), (27.320508, 27.320508), (18.660254, 32.320508)];
+
+fn equal_ring(corners: &[(f64, f64)], d: f64) -> Rebuild {
+    let turned: Vec<(f64, f64)> =
+        corners.iter().map(|&(x, y)| (7.0 + 0.8 * x - 0.6 * y, -3.0 + 0.6 * x + 0.8 * y)).collect();
+    let top = json!({"kind": "edge", "by": "ofFace", "body": "body1",
+        "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}});
+    prism_with(&turned, 10.0, vec![json!({"id": "c", "type": "chamfer", "edges": top, "distance": d})])
+}
+
+/// 5 + 5 meets across the 10 mm arms, OCCT gives up and the section build takes over. It ended each chamfer square
+/// at an inside corner and left the mitre wedge, tan(turn / 2) d^3 / 3 a corner: the L came back 3538.33 for 3496.67,
+/// the T 3300 for 3216.67, the 120 degree corner 3738.84 for 3666.67. The volumes are the mitred offset of the top.
+#[test]
+fn equal_chamfers_that_meet_past_an_inside_corner_cut_the_mitre() {
+    let cases = [
+        (&L_TOP[..], 5.0, 3496.67),
+        (&T_TOP[..], 5.0, 3216.67),
+        (&SLANT_TOP[..], 5.0, 3489.89),
+        (&V60_TOP[..], 5.0, 3666.67),
+        (&L_TOP[..], 4.99, 3501.06),
+        (&T_TOP[..], 4.99, 3221.06),
+        (&SLANT_TOP[..], 4.99, 3493.59),
+        (&V60_TOP[..], 4.99, 3671.66),
+        (&BAR_TOP[..], 5.0, 2166.67),
+    ];
+    let owned = |r: Rebuild| {
+        let (errors, warned, v) = outcome(&r);
+        (errors, warned.iter().map(|w| w.to_string()).collect::<Vec<_>>(), v)
+    };
+    let got: Vec<_> = cases.iter().map(|&(corners, d, _)| owned(equal_ring(corners, d))).collect();
+    let want: Vec<_> = cases.iter().map(|&(_, _, v)| (0, Vec::<String>::new(), v)).collect();
+    assert_eq!(got, want);
+}
+
+const TILTED: [f64; 3] = [0.36, -0.48, 0.8];
+
+/// Each loop turned by atan(3/4) and moved off the origin, all in one sketch on a plane through (2, -1, 3). The
+/// region seed is a world point near the first loop's first corner.
+fn plate(loops: &[&[(f64, f64)]], normal: [f64; 3], xdir: [f64; 3], height: f64, blends: Vec<Value>) -> Rebuild {
+    let mut lines = vec![];
+    for (k, corners) in loops.iter().enumerate() {
+        let turned: Vec<(f64, f64)> =
+            corners.iter().map(|&(x, y)| (7.0 + 0.8 * x - 0.6 * y, -3.0 + 0.6 * x + 0.8 * y)).collect();
+        let n = turned.len();
+        for i in 0..n {
+            let (a, b) = (turned[i], turned[(i + 1) % n]);
+            lines.push(json!({"type": "line", "id": format!("l{k}_{i}"), "x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1}));
+        }
+    }
+    let ydir = [
+        normal[1] * xdir[2] - normal[2] * xdir[1],
+        normal[2] * xdir[0] - normal[0] * xdir[2],
+        normal[0] * xdir[1] - normal[1] * xdir[0],
+    ];
+    let origin = [2.0, -1.0, 3.0];
+    let seed: Vec<f64> = (0..3).map(|i| origin[i] + 7.2 * xdir[i] - 1.6 * ydir[i]).collect();
+    let mut features = vec![
+        json!({"id": "sk", "type": "sketch", "plane": {"origin": origin, "normal": normal, "xdir": xdir},
+            "entities": lines}),
+        json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": height, "operation": "new",
+            "regions": [seed]}),
+    ];
+    features.extend(blends);
+    build(&json!({"parameters": {}, "features": features}))
+}
+
+fn owned(r: &Rebuild) -> (usize, Vec<String>, f64, Option<f64>) {
+    let (errors, warned, v) = outcome(r);
+    (errors, warned.iter().map(|w| w.to_string()).collect(), v, messages(r).first().and_then(|m| offered(m)))
+}
+
+/// A 10 mm wall between the outline and the hole, so 5 + 5 meets across it and the section build takes over. Each
+/// rim corner is an inside corner of the top face, which came back with its wedge: 6166.67 for 6000, 9166.67 for 9000.
+#[test]
+fn equal_chamfers_round_a_hole_rim_cut_the_mitre_on_a_tilted_face_too() {
+    let cases = [
+        (30.0, 10.0, [0.0, 0.0, 1.0], [1.0, 0.0, 0.0], 5.0, 6000.0),
+        (30.0, 10.0, [0.0, 0.0, 1.0], [1.0, 0.0, 0.0], 4.99, 6007.99),
+        (30.0, 10.0, TILTED, [0.8, 0.6, 0.0], 5.0, 6000.0),
+        (40.0, 20.0, TILTED, [0.8, 0.6, 0.0], 5.0, 9000.0),
+    ];
+    let got: Vec<_> = cases
+        .iter()
+        .map(|&(outer, hole, normal, xdir, d, _)| {
+            let inner = rect((outer - hole) / 2.0, (outer - hole) / 2.0, hole, hole);
+            let top = json!({"kind": "edge", "by": "ofFace", "body": "body1",
+                "face": {"kind": "face", "by": "normal", "dir": normal}});
+            let c = json!({"id": "c", "type": "chamfer", "edges": top, "distance": d});
+            owned(&plate(&[&rect(0.0, 0.0, outer, outer), &inner], normal, xdir, 10.0, vec![c]))
+        })
+        .collect();
+    let want: Vec<_> = cases.iter().map(|&(.., v)| (0, vec![], v, None)).collect();
+    assert_eq!(got, want);
+}
+
+/// Three chosen edges meet at each inside corner, two on the face and the concave wall edge, whose fill the section
+/// build adds after its cuts, so no mitre makes it right: the L all round at 5 came back 2434.89 where OCCT's trend
+/// gives about 2397, no word said. The corner offers no size, while the holed plate's own overlap still offers one.
+#[test]
+fn chamfers_where_three_chosen_edges_meet_at_an_inside_corner_are_refused() {
+    let all = json!({"kind": "edge", "by": "all", "body": "body1"});
+    let (z, x) = ([0.0, 0.0, 1.0], [1.0, 0.0, 0.0]);
+    let holed = |d: f64, d2: f64| {
+        let c = two_distance("c", d, d2, all.clone(), json!({}));
+        owned(&plate(
+            &[&rect(0.0, 0.0, 20.0, 20.0), &rect(5.0, 5.0, 10.0, 10.0)],
+            TILTED,
+            [0.8, 0.6, 0.0],
+            10.0,
+            vec![c],
+        ))
+    };
+    let l_all = |d: f64| {
+        let c = json!({"id": "c", "type": "chamfer", "edges": all.clone(), "distance": d});
+        owned(&plate(&[&L_TOP[..]], z, x, 10.0, vec![c]))
+    };
+    let got = vec![holed(4.0, 10.0), holed(1.0, 2.5), l_all(5.0), l_all(4.99), l_all(3.0)];
+    let want = vec![
+        (1, vec![], 3000.0, Some(1.0)),
+        (0, vec![], 2737.5, None),
+        (1, vec![], 4680.0, None),
+        (0, vec![], 2403.96, None),
+        (0, vec![], 3726.0, None),
+    ];
+    assert_eq!(got, want);
+}
+
+/// The slit's tip turns 10 degrees, too sharp for the mitre's cut. It refused with OCCT's bare "Failed creating a
+/// chamfer", which named no place; it now names the tip.
+#[test]
+fn a_chamfer_past_an_inside_corner_too_sharp_to_mitre_is_refused_at_the_corner() {
+    let notch = [(0.0, 0.0), (30.0, 0.0), (30.0, 20.0), (16.0, 20.0), (15.0, 8.569951), (14.0, 20.0), (0.0, 20.0)];
+    let slit = |d: f64| {
+        let top = json!({"kind": "edge", "by": "ofFace", "body": "body1",
+            "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}});
+        let c = json!({"id": "c", "type": "chamfer", "edges": top, "distance": d});
+        let r = plate(&[&notch[..]], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0], 10.0, vec![c]);
+        (owned(&r), messages(&r).iter().any(|m| m.contains("through (15.858, 11.856, 13)")))
+    };
+    let got = vec![slit(0.5), slit(0.8), slit(1.7)];
+    let want =
+        vec![((0, vec![], 5870.35, None), false), ((1, vec![], 5885.7, None), true), ((1, vec![], 5885.7, None), true)];
+    assert_eq!(got, want);
+}

@@ -62,26 +62,41 @@ fn triangles(faces: &[Shape]) -> Option<Vec<Tri>> {
     Some(out)
 }
 
-/// Clamped to the triangle: a plane distance calls every tangent junction coincident.
+/// Clamped to the triangle: a plane distance calls every tangent junction coincident. Ericson's
+/// closest point, one Voronoi region at a time.
 fn point_to_triangle(q: DVec3, tri: &[DVec3; 3]) -> f64 {
     let [a, b, c] = *tri;
     let (ab, ac, ap) = (b - a, c - a, q - a);
     let (d1, d2) = (ab.dot(ap), ac.dot(ap));
     if d1 <= 0.0 && d2 <= 0.0 {
-        return (q - a).length();
+        return ap.length();
     }
     let bp = q - b;
-    if ab.dot(bp) >= 0.0 && 0.0 >= ac.dot(bp) {
-        return (q - b).length();
+    let (d3, d4) = (ab.dot(bp), ac.dot(bp));
+    if d3 >= 0.0 && d4 <= d3 {
+        return bp.length();
+    }
+    let vc = d1 * d4 - d3 * d2;
+    if vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0 {
+        return (ap - ab * (d1 / (d1 - d3))).length();
     }
     let cp = q - c;
-    if ac.dot(cp) >= 0.0 && 0.0 >= ab.dot(cp) {
-        return (q - c).length();
+    let (d5, d6) = (ab.dot(cp), ac.dot(cp));
+    if d6 >= 0.0 && d5 <= d6 {
+        return cp.length();
+    }
+    let vb = d5 * d2 - d1 * d6;
+    if vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0 {
+        return (ap - ac * (d2 / (d2 - d6))).length();
+    }
+    let va = d3 * d6 - d5 * d4;
+    if va <= 0.0 && d4 - d3 >= 0.0 && d5 - d6 >= 0.0 {
+        return (bp - (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)))).length();
     }
     let n = ab.cross(ac);
     let ln = n.length();
     if ln <= 0.0 {
-        return (q - a).length();
+        return ap.length();
     }
     n.dot(ap).abs() / ln
 }
@@ -137,3 +152,7 @@ fn doubled_area_inner(faces: &[Shape]) -> Option<f64> {
     }
     Some(doubled)
 }
+
+#[cfg(test)]
+#[path = "overlap_tests.rs"]
+mod tests;
