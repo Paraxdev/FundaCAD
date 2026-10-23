@@ -7,7 +7,7 @@ export const OUT_OF_DATE_GRACE_MS = 600;
 
 type Watched = Pick<
   DocumentStore,
-  "onBuild" | "onBusy" | "buildState" | "busyState" | "runningOps" | "hasPreview" | "drawnBehind"
+  "onBuild" | "onBusy" | "buildState" | "busyState" | "runningOps" | "hasPreview" | "drawnBehind" | "sessions"
 >;
 
 export function watchOutOfDate(store: Watched, mark: (on: boolean) => void): () => void {
@@ -41,7 +41,12 @@ export function watchOutOfDate(store: Watched, mark: (on: boolean) => void): () 
       if (behind()) set(true);
     }, OUT_OF_DATE_GRACE_MS);
   };
-  const offs = [store.onBuild(check), store.onBusy(check)];
+  // The viewport's endDocument already cleared the mark on screen, so the next document's first mark must not be skipped.
+  const forget = () => {
+    stopTimer();
+    marked = false;
+  };
+  const offs = [store.onBuild(check), store.onBusy(check), store.sessions.onBegin(forget)];
   return () => {
     stopTimer();
     for (const off of offs) off();
