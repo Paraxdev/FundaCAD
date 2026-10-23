@@ -53,6 +53,7 @@ export type GlowKind = keyof typeof INTENSITY;
 
 // Shared and never disposed by the highlighter: disposing the last material on a program deletes the program, so a
 // material per hovered body relinked the shader on every part crossed and made drags stutter on a large assembly.
+const GLOW_NAME = "selection-glow";
 const materials = new Map<GlowKind, THREE.ShaderMaterial>();
 let clipPlanes: THREE.Plane[] | null = null;
 
@@ -86,6 +87,7 @@ function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
       clipping: true,
       clippingPlanes: clipPlanes,
     });
+    mat.name = GLOW_NAME;
     followComposer(mat);
     materials.set(kind, mat);
   }
@@ -93,8 +95,22 @@ function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
   return mat;
 }
 
-const GLOW_NAME = "selection-glow";
 const FACE_HOVER_NAME = "face-hover-overlay";
+
+let warmup: THREE.Group | null = null;
+
+/** An off scene mesh per glow kind for linking the glow programs ahead: the low power motion draw goes straight to
+ *  the canvas, so a glow first drawn there linked its srgb variant at motion stop (50 to 120 ms on SwiftShader). */
+export function selectionGlowWarmup(): THREE.Object3D {
+  if (!warmup) {
+    warmup = new THREE.Group();
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(9), 3));
+    geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(9), 3));
+    for (const kind of Object.keys(INTENSITY) as GlowKind[]) warmup.add(new THREE.Mesh(geo, glowMaterial(kind)));
+  }
+  return warmup;
+}
 
 /** A rebuild reuses an unchanged body's mesh but makes a new Highlighter with no record of the old overlays,
  *  so without this they stay lit. */

@@ -50,7 +50,8 @@ import { Picker, modelScale, type EdgeCandidate, type Hit, type PickMods } from 
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { flushRaycastIndex } from "./raycastIndex";
 import { applyKeptSpan, firstKeptHit, SECTION_PICK_SLACK, type KeptHit } from "./sectionPick";
-import { clipSelectionOverlays } from "./selectionGlow";
+import { clipSelectionOverlays, selectionGlowWarmup } from "./selectionGlow";
+import { linkProgramsAhead } from "./linkPrograms";
 import { GhostLayer, type BlendGhostEdge } from "./ghosts";
 import type { BlendKind } from "../features/blendGhost";
 import { hideFlushSeams } from "./flushSeams";
@@ -1281,16 +1282,20 @@ export class Viewport {
   });
 
   private lightTarget: THREE.WebGLRenderTarget | null = null;
+  private glowLinked = false;
 
   /** Links the emitter light programs ahead, on driver threads where KHR_parallel_shader_compile allows, so a
-   *  glow does not stall a frame for a second. The canvas and the post chain buffer each get their own program.
-   *  Polled directly, compileAsync checks the current program, which the next frame switches back. */
+   *  glow does not stall a frame for a second. The light count is part of every program key, so the selection
+   *  glow is linked again in the new lights. */
   private prepareLights(show: THREE.Object3D, hide: THREE.Object3D | null): Promise<void> {
     const hideWas = hide?.visible ?? false;
     show.visible = true;
     if (hide) hide.visible = false;
     try {
-      return this.linkPrograms(this.scene.scene, "emitter light");
+      return Promise.all([
+        this.linkPrograms(this.scene.scene, "emitter light"),
+        this.linkPrograms(selectionGlowWarmup(), "selection glow"),
+      ]).then(() => {});
     } finally {
       show.visible = false;
       if (hide) hide.visible = hideWas;
@@ -1303,29 +1308,8 @@ export class Viewport {
   }
 
   private linkPrograms(obj: THREE.Object3D, what: string): Promise<void> {
-    const r = this.scene.renderer;
-    const props = (
-      r as unknown as { properties: { get(m: THREE.Material): { currentProgram?: { isReady(): boolean } } } }
-    ).properties;
-    const programs: { isReady(): boolean }[] = [];
-    const before = r.getRenderTarget();
-    try {
-      for (const target of [null, (this.lightTarget ??= new THREE.WebGLRenderTarget(1, 1))]) {
-        r.setRenderTarget(target);
-        for (const m of r.compile(obj, this.rig.active, this.scene.scene)) {
-          const p = props.get(m).currentProgram;
-          if (p) programs.push(p);
-        }
-      }
-    } catch (e) {
-      console.warn(`[viewport] ${what} programs could not be linked ahead:`, e);
-    } finally {
-      r.setRenderTarget(before);
-    }
-    return new Promise((resolve) => {
-      const poll = () => (programs.every((p) => p.isReady()) ? resolve() : setTimeout(poll, 16));
-      poll();
-    });
+    this.lightTarget ??= new THREE.WebGLRenderTarget(1, 1);
+    return linkProgramsAhead(this.scene.renderer, obj, this.rig.active, this.scene.scene, this.lightTarget, what);
   }
 
   private peek: ReadonlySet<string> = new Set();
@@ -3460,6 +3444,7 @@ export class Viewport {
     const planes = on ? [this.sectionPlane] : null;
     this.picker.setClip(on ? this.sectionPlane : null);
     clipSelectionOverlays(planes);
+    void this.linkPrograms(selectionGlowWarmup(), "selection glow");
     if (this.model) {
       for (const b of this.model.bodies) {
         for (const mat of bodyMaterials(b)) mat.clippingPlanes = planes;
@@ -4618,6 +4603,10 @@ export class Viewport {
         this.cube.render(this.rig.active); // draw the ViewCube overlay in the corner
         this.fence.mark();
         this.fps.frame();
+        if (!moved && !this.glowLinked) {
+          this.glowLinked = true;
+          void this.linkPrograms(selectionGlowWarmup(), "selection glow");
+        }
         if (moved) this.movedDrawAt = now;
         this.needsRender = false;
         if (this.lingerFrames > 0) this.lingerFrames--;
