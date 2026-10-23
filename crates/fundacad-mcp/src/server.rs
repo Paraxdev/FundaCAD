@@ -619,8 +619,9 @@ impl FundaCad {
             model::fill_defaults(&mut st.doc);
             // No invalidate: `view` checks the cached mesh against the document in hand anyway,
             // and dropping it on every pull would make each live build then view rebuild twice.
-            st.doc.clone()
+            (st.doc.clone(), st.path.clone(), st.unread_sections.clone())
         };
+        let (before, path_before, unread_before) = before;
 
         let out = run.await;
         let Ok(CallToolResponse::Complete(result)) = out else {
@@ -649,12 +650,12 @@ impl FundaCad {
                 Ok(Ok(CallToolResponse::Complete(append(result, &format!("\n(applied in FundaCAD, revision {rev})")))))
             }
             Err(e) => {
-                // The local document holds an edit the app never took, so put it back, or the next tool builds
-                // on a change nowhere else has. A lost engine retries privately from the pulled document so the
-                // edit is not applied twice; the mesh cache follows the restored signature, and the next build
-                // lists every body again.
+                // Put back the edit the app never took, and a refused doc_open's path, or a bare doc_save writes
+                // the user's document over that file. A lost engine retries privately from the pulled document.
                 let mut st = self.state.lock().await;
                 st.doc = before;
+                st.path = path_before;
+                st.unread_sections = unread_before;
                 st.reported = None;
                 if e.is_lost() {
                     return Err(e);
