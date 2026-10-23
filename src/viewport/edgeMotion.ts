@@ -75,6 +75,8 @@ export class EdgeMotionRule {
   /** The median that turned thin on, while that verdict stands. */
   private fatMs = 0;
   private slots = 0;
+  /** This gesture's last counted period, the fat frame free slots are told by before one is known. */
+  private lastMs = 0;
   private slowRun = 0;
   /** A first thin verdict: a long stall makes thin look like a gain, so the next
    *  gesture measures one window of fat lines before thin is remembered. */
@@ -93,7 +95,7 @@ export class EdgeMotionRule {
   gestureStart(load: EdgeLoad, now: number): EdgeMode {
     this.load = load;
     this.window.length = 0;
-    this.slots = 0;
+    this.slots = this.lastMs = 0;
     this.merged = load.draws >= (this.merged ? MERGE_OFF_DRAWS : MERGE_ON_DRAWS);
     const changed = (n: number) => n > 0 && Math.abs(load.segments - n) > n * SEGMENT_CHANGE;
     if (changed(this.notEdgeBound)) this.notEdgeBound = 0;
@@ -122,9 +124,10 @@ export class EdgeMotionRule {
       }
     }
     if ((this.thin && this.verify === 0) || ms > MAX_SAMPLE_MS) return this.mode;
-    const slot = ms < this.fatMs * SLOT_SHARE;
+    const slot = ms < (this.fatMs || this.lastMs) * SLOT_SHARE;
     this.slots = slot ? this.slots + 1 : 0;
     if (slot && this.slots <= SLOT_RUN) return this.mode;
+    this.lastMs = ms;
     if (this.skip > 0) {
       this.skip--;
       return this.mode;
@@ -163,9 +166,10 @@ export class EdgeMotionRule {
     return this.mode;
   }
 
-  /** The next sample is a frame that built the batches, not a frame of the level. */
+  /** The next sample is a frame that built the batches, not a frame of the level. The first thin frame builds them,
+   *  so this must not cut short the VERIFY_SKIP over the fat frames still in the GPU queue. */
   skipNext() {
-    this.skip = 1;
+    this.skip = Math.max(this.skip, 1);
   }
 
   reset() {
@@ -178,7 +182,7 @@ export class EdgeMotionRule {
     this.window.length = 0;
     this.skip = 0;
     this.verify = this.fatMs = 0;
-    this.slots = 0;
+    this.slots = this.lastMs = 0;
     this.slowRun = 0;
     this.provisional = false;
     this.notEdgeBound = 0;
