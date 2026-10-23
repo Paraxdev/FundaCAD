@@ -495,15 +495,15 @@ fn built_payloads(
         }
         out.push(cached);
     }
+    // The pool's threads do not carry this thread's token, and a big model meshes for many seconds after a cancel.
+    let token = crate::cancel::token();
+    let stopped = || token.as_ref().is_some_and(fundacad_protocol::CancelToken::is_cancelled);
     let total = misses.len();
-    if total > 0 {
+    if total > 0 && !stopped() {
         on_body(0, total);
     }
 
     let tick = std::sync::Mutex::new(on_body);
-    // The pool's threads do not carry this thread's token, and a big model meshes for many seconds after a cancel.
-    let token = crate::cancel::token();
-    let stopped = || token.as_ref().is_some_and(fundacad_protocol::CancelToken::is_cancelled);
     let mesh_one = |k: usize| {
         if stopped() {
             return None;
