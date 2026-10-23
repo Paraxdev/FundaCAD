@@ -214,7 +214,7 @@ const ON_FACE: f64 = 1e-6;
 
 /// The faces each boundary node lies on, as sorted (node, face id) pairs. A node no face
 /// passes near (a cut point kept off a defect in the surface) goes to the face nearest it.
-fn node_faces(
+pub(super) fn node_faces(
     surf: &Surface,
     surface: &SurfaceMesh,
     nodes: &[V3],
@@ -308,12 +308,12 @@ fn lerp(a: V3, b: V3, t: f64) -> V3 {
 }
 
 /// Six times the signed volume of tetrahedron `p`.
-fn orient(p: &[V3; 4]) -> f64 {
+pub(super) fn orient(p: &[V3; 4]) -> f64 {
     dot(cross(sub(p[1], p[0]), sub(p[2], p[0])), sub(p[3], p[0]))
 }
 
 /// Smallest and largest interior dihedral angle of a tetrahedron, in radians.
-fn dihedral_range(p: &[V3; 4]) -> (f64, f64) {
+pub(super) fn dihedral_range(p: &[V3; 4]) -> (f64, f64) {
     const EDGES: [[usize; 4]; 6] = [[0, 1, 2, 3], [0, 2, 1, 3], [0, 3, 1, 2], [1, 2, 0, 3], [1, 3, 0, 2], [2, 3, 0, 1]];
     let (mut lo, mut hi) = (f64::INFINITY, 0.0f64);
     for [i, j, k, l] in EDGES {
@@ -361,7 +361,7 @@ struct Tri {
     id: u32,
 }
 
-struct Surface {
+pub(super) struct Surface {
     nodes: Vec<Node>,
     tris: Vec<Tri>,
     lo: V3,
@@ -372,7 +372,7 @@ struct Surface {
 }
 
 impl Surface {
-    fn new(mesh: &SurfaceMesh) -> Result<Surface, MeshError> {
+    pub(super) fn new(mesh: &SurfaceMesh) -> Result<Surface, MeshError> {
         let pos = &mesh.positions;
         let tris = &mesh.triangles;
         if tris.is_empty() {
@@ -509,7 +509,17 @@ impl Surface {
     }
 
     /// Closest point among triangles strictly nearer than `sqrt(best)`.
-    fn closest(&self, p: V3, mut best: f64) -> Option<(usize, V3, Feature)> {
+    fn closest(&self, p: V3, best: f64) -> Option<(usize, V3, Feature)> {
+        self.closest_where(p, best, &|_| true)
+    }
+
+    /// The closest point of the input triangles `keep` accepts, nearer than `reach`, with the triangle's index.
+    pub(super) fn closest_kept(&self, p: V3, reach: f64, keep: &dyn Fn(usize) -> bool) -> Option<(usize, V3)> {
+        self.closest_where(p, reach * reach, &|slot| keep(self.tris[slot].id as usize))
+            .map(|(slot, q, _)| (self.tris[slot].id as usize, q))
+    }
+
+    fn closest_where(&self, p: V3, mut best: f64, keep: &dyn Fn(usize) -> bool) -> Option<(usize, V3, Feature)> {
         let mut found = None;
         let mut stack = [0u32; 96];
         let mut sp = 0;
@@ -526,6 +536,9 @@ impl Surface {
             if n.count > 0 {
                 let start = n.index as usize;
                 for (slot, tri) in self.tris[start..start + n.count as usize].iter().enumerate() {
+                    if !keep(start + slot) {
+                        continue;
+                    }
                     let (q, feat) = closest_on_triangle(p, &tri.v);
                     let d = sub(p, q);
                     let d2 = dot(d, d);
@@ -596,7 +609,7 @@ impl Surface {
     }
 
     /// Index of the input triangle closest to `p`.
-    fn nearest_triangle(&self, p: V3) -> usize {
+    pub(super) fn nearest_triangle(&self, p: V3) -> usize {
         let (slot, _, _) = self.closest(p, f64::INFINITY).expect("a surface with triangles has a closest point");
         self.tris[slot].id as usize
     }
@@ -863,14 +876,14 @@ impl Lattice {
     }
 }
 
-fn edge_key(a: usize, b: usize) -> u64 {
+pub(super) fn edge_key(a: usize, b: usize) -> u64 {
     let (a, b) = if a < b { (a, b) } else { (b, a) };
     ((a as u64) << 32) | b as u64
 }
 
 /// Hash for edge keys; the map is only looked up, never iterated.
 #[derive(Default)]
-struct KeyHasher(u64);
+pub(super) struct KeyHasher(u64);
 
 impl Hasher for KeyHasher {
     fn finish(&self) -> u64 {
@@ -1232,7 +1245,7 @@ impl Stencils<'_> {
 /// Faces of `tets` that no other tetrahedron shares, wound outward, in sorted vertex order, and
 /// the number of pieces the tetrahedra form when joined across shared faces (`None` when a face
 /// is shared by more than two).
-fn boundary_faces(tets: &[[u32; 4]]) -> (Vec<[u32; 3]>, Option<usize>) {
+pub(super) fn boundary_faces(tets: &[[u32; 4]]) -> (Vec<[u32; 3]>, Option<usize>) {
     let mut faces: Vec<([u32; 3], u32, [u32; 3])> = Vec::with_capacity(tets.len() * 4);
     for (t, &[a, b, c, d]) in tets.iter().enumerate() {
         for f in [[a, c, b], [a, b, d], [a, d, c], [b, c, d]] {
@@ -1263,7 +1276,7 @@ fn boundary_faces(tets: &[[u32; 4]]) -> (Vec<[u32; 3]>, Option<usize>) {
 
 /// Whether `faces` form closed, consistently wound 2-manifold surfaces: every edge belongs to
 /// exactly two faces, once in each direction.
-fn closed_manifold(faces: &[[u32; 3]]) -> bool {
+pub(super) fn closed_manifold(faces: &[[u32; 3]]) -> bool {
     let mut edges: Vec<(u64, bool)> = Vec::with_capacity(faces.len() * 3);
     for f in faces {
         for e in 0..3 {
