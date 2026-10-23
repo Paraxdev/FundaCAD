@@ -793,6 +793,17 @@ describe("Home on a first run", () => {
     }
   });
 
+  it("hides the welcome for good once the maker hides it", async () => {
+    open([], {}, fakeLibrary());
+    $(".home-welcome-hide")!.click();
+    await flushPromises();
+    expect($(".home-welcome")).toBeNull();
+    expect(localStorage.getItem("fundacad.welcomeClosed")).toBe("true");
+    open([], {}, fakeLibrary());
+    expect($(".home-welcome")).toBeNull();
+    expect($(".home-examples")).not.toBeNull();
+  });
+
   it("opens the manual from the welcome", async () => {
     const opened = vi.spyOn(window, "open").mockReturnValue(null);
     open([], {}, fakeLibrary());
