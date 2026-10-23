@@ -63,7 +63,10 @@ const saved = ref<EnvEntry[]>([]);
 const activeSaved = ref<string | null>(activeSavedId());
 const notice = ref<string | null>(null);
 const naming = ref<{ id: string | null; text: string } | null>(null);
-const nameInput = ref<HTMLInputElement | null>(null);
+let nameInput: HTMLInputElement | null = null;
+const setNameInput = (el: unknown) => {
+  nameInput = el as HTMLInputElement | null;
+};
 const fileInput = ref<HTMLInputElement | null>(null);
 const hdrLabel = ref<string | null>(null);
 const hdrPicture = ref("");
@@ -134,8 +137,8 @@ const pickSaved = (entry: EnvEntry) => {
 const startNaming = (id: string | null, text: string) => {
   naming.value = { id, text };
   void nextTick(() => {
-    nameInput.value?.focus();
-    nameInput.value?.select();
+    nameInput?.focus();
+    nameInput?.select();
   });
 };
 const finishNaming = async () => {
@@ -269,7 +272,7 @@ const onBloom = (e: Event) => setRenderPref("bloom", Number.parseFloat((e.target
           </button>
           <input
             v-if="naming && naming.id === s.id"
-            ref="nameInput"
+            :ref="setNameInput"
             v-model="naming.text"
             class="rd-name"
             aria-label="Environment name"
@@ -291,7 +294,7 @@ const onBloom = (e: Event) => setRenderPref("bloom", Number.parseFloat((e.target
       </div>
       <input
         v-if="naming && naming.id === null"
-        ref="nameInput"
+        :ref="setNameInput"
         v-model="naming.text"
         class="rd-name"
         aria-label="Name for this environment"
