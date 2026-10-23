@@ -107,6 +107,17 @@ fn a_cantilever_matches_timoshenko_and_balances() {
     assert_eq!(n % 3, 0);
     assert_eq!(s["vonMises"].as_array().unwrap().len(), n / 3);
     assert_eq!(s["displacement"].as_array().unwrap().len(), n);
+    // The stress tensor per vertex, whose von Mises is the vertex's value to the rounding; bending stretches the top.
+    let t: Vec<f64> = s["stress"].as_array().unwrap().iter().map(num).collect();
+    assert_eq!(t.len(), 2 * n);
+    let vm: Vec<f64> = s["vonMises"].as_array().unwrap().iter().map(num).collect();
+    for (v, c) in t.chunks(6).enumerate() {
+        let of = (0.5 * ((c[0] - c[1]).powi(2) + (c[1] - c[2]).powi(2) + (c[2] - c[0]).powi(2))
+            + 3.0 * (c[3] * c[3] + c[4] * c[4] + c[5] * c[5]))
+            .sqrt();
+        assert!((of - vm[v]).abs() < 1e-5, "vertex {v}: {of} from the tensor, {} sent", vm[v]);
+    }
+    assert!((0..n / 3).filter(|&v| num(&s["positions"][3 * v + 2]) > 4.99).all(|v| t[6 * v] > 0.0 || vm[v] < 1.0));
     let tris = s["indices"].as_array().unwrap().len();
     assert_eq!(tris % 3, 0);
     assert_eq!(s["faceIds"].as_array().unwrap().len(), tris / 3);

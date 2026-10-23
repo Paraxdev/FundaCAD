@@ -293,6 +293,52 @@ describe("drawnSurface", () => {
   });
 });
 
+describe("von Mises from the stress tensor", () => {
+  // Uniaxial along a slanted unit axis, changing sign along a slanted line: von Mises is |sigma|, a V across it.
+  const axis: Vec3 = [0.48, -0.6, 0.64];
+  const sigma = (p: Vec3) => 3.1 * (p[0] - 30.37) + 0.4 * p[2];
+  const tensorBox = (n: number, withStress: boolean): EngineSurface => {
+    const e = engineBox(n);
+    const stress: number[] = [];
+    const vonMises: number[] = [];
+    const [a, b, c] = axis;
+    for (let i = 0; i < e.positions.length; i += 3) {
+      const t = sigma(unplace(e.positions, i));
+      stress.push(t * a * a, t * b * b, t * c * c, t * a * b, t * b * c, t * c * a);
+      vonMises.push(Math.abs(t));
+    }
+    return { ...e, vonMises, ...(withStress ? { stress } : {}) };
+  };
+  const errors = (withStress: boolean) => {
+    const e = tensorBox(9, withStress);
+    const at = locator(e);
+    const m = splitDisplay(displayBox(4), () => 0.9);
+    const d = drawnSurface(m, e, at, WIDE);
+    return Array.from(d.values, (v, i) => Math.abs(v - Math.abs(sigma(unplace(m.positions, i * 3)))));
+  };
+
+  it("reads the V of a sign change exactly at every display vertex", () => {
+    expect(Math.max(...errors(true))).toBeLessThan(1e-4);
+  });
+
+  it("dents the V when an older engine sends only the corner values", () => {
+    expect(Math.max(...errors(false))).toBeGreaterThan(0.5);
+  });
+
+  it("reads the same in a probe, and falls back to the values when the tensor's length is wrong", () => {
+    const e = tensorBox(9, true);
+    const at = locator(e);
+    const p = place([28.05, 11.3, 18]);
+    const hit = at.closest(p, 5)!;
+    expect(probeValues(e, hit.tri, hit.weights)!.vonMises).toBeCloseTo(Math.abs(sigma(unplace(p, 0))), 6);
+    const short = { ...e, stress: Array.from(e.stress!).slice(6) };
+    let blend = 0;
+    for (let k = 0; k < 3; k++) blend += hit.weights[k]! * e.vonMises[e.indices[hit.tri * 3 + k]!]!;
+    expect(probeValues(short, hit.tri, hit.weights)!.vonMises).toBeCloseTo(blend, 9);
+    expect(blend - Math.abs(sigma(unplace(p, 0)))).toBeGreaterThan(0.5);
+  });
+});
+
 describe("readAt and weakSpot", () => {
   const s = engineBox(12);
   const at = locator(s);

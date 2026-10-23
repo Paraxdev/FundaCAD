@@ -830,12 +830,14 @@ fn surface_of(mesh: &TetMesh, sol: &Solution) -> Value {
     let positions: Vec<f64> = used.iter().flat_map(|&v| mesh.nodes[v as usize].map(|x| py_round(x, 4) + 0.0)).collect();
     let von_mises: Vec<f64> = used.iter().map(|&v| round6(sol.von_mises[v as usize])).collect();
     let displacement: Vec<f64> = used.iter().flat_map(|&v| sol.displacement[v as usize].map(round6)).collect();
+    let stress: Vec<f64> = used.iter().flat_map(|&v| sol.stress[v as usize].map(round6)).collect();
     json!({
         "positions": positions,
         "indices": indices,
         "faceIds": mesh.boundary_face,
         "vonMises": von_mises,
         "displacement": displacement,
+        "stress": stress,
     })
 }
 

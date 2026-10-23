@@ -8,6 +8,7 @@ import { STUDY_DEFAULTS } from "../document/stressStudy";
 import { cylinderFromFace } from "../features/planeMath";
 import { displayRound, toDisplay, type Unit } from "./units";
 import { peakPlaceOf, type VerdictInput } from "./stressVerdict";
+import { vonMisesAt } from "./stressLocate";
 
 /** E and yield in MPa, density in g/cm3. Mirrors the engine's presets: a preset goes over the wire by name, so these
  *  numbers are only what the panel shows. */
@@ -900,14 +901,18 @@ export function barycentric(a: Vec3, b: Vec3, c: Vec3, p: Vec3): Vec3 {
 /** Von Mises (MPa) and deflection (mm, its size and vector) interpolated at `weights` in surface triangle `tri`.
  *  Deflection is null without displacement data; null for a triangle the surface lacks. */
 export function probeValues(
-  surface: { indices: ArrayLike<number>; vonMises: ArrayLike<number>; displacement?: ArrayLike<number> | undefined },
+  surface: {
+    indices: ArrayLike<number>;
+    vonMises: ArrayLike<number>;
+    displacement?: ArrayLike<number> | undefined;
+    stress?: ArrayLike<number> | undefined;
+  },
   tri: number,
   weights: Vec3,
 ): { vonMises: number; deflection: number | null; vector: Vec3 | null } | null {
   if (!(tri >= 0) || tri * 3 + 2 >= surface.indices.length) return null;
   const ids = [surface.indices[tri * 3]!, surface.indices[tri * 3 + 1]!, surface.indices[tri * 3 + 2]!];
-  let vm = 0;
-  for (let k = 0; k < 3; k++) vm += weights[k]! * (surface.vonMises[ids[k]!] ?? 0);
+  const vm = vonMisesAt(surface, tri, weights);
   const d = surface.displacement;
   if (!d || !d.length) return { vonMises: vm, deflection: null, vector: null };
   const at = (k: number, j: number) => weights[k]! * (d[ids[k]! * 3 + j] ?? 0);

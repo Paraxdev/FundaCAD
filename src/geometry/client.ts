@@ -234,7 +234,15 @@ export interface StressReply {
   weight?: Vec3 | null;
   reactions?: Vec3[];
   warnings?: string[];
-  surface?: { positions: number[]; indices: number[]; faceIds?: number[]; vonMises: number[]; displacement?: number[] };
+  /** `stress` is six numbers per vertex, xx yy zz xy yz zx in MPa, absent from older engines. */
+  surface?: {
+    positions: number[];
+    indices: number[];
+    faceIds?: number[];
+    vonMises: number[];
+    displacement?: number[];
+    stress?: number[];
+  };
   errors?: { feature_id?: string; message: string }[];
 }
 

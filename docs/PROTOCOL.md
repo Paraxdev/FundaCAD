@@ -563,7 +563,7 @@ Reply:
                                       // then `supports` in order; they sum to `reaction`
   "warnings": ["..."],
   "surface": { "positions": [...], "indices": [...], "faceIds": [...],
-               "vonMises": [...], "displacement": [...] },
+               "vonMises": [...], "displacement": [...], "stress": [...] },
   "errors": [ /* feature failures, only when a feature failed */ ] }
 ```
 
@@ -579,8 +579,11 @@ Reply:
   each the part along the directions it holds, or all of it to a fixed one.
 - `surface` is the boundary of the final, refined volume mesh, outward wound: `positions` (xyz per
   vertex), `indices` (three per triangle), `faceIds` (one per triangle), and per vertex
-  `vonMises` (MPa) and `displacement` (xyz, mm), as inline JSON numbers like the overlap
-  meshes of `interference`, positions rounded to 4 places and the fields to 6.
+  `vonMises` (MPa), `displacement` (xyz, mm) and `stress` (the smoothed stress tensor, xx yy
+  zz xy yz zx, MPa, whose von Mises is `vonMises`), as inline JSON numbers like the overlap
+  meshes of `interference`, positions rounded to 4 places and the fields to 6. A reader
+  blending values inside a triangle blends `stress` and takes its von Mises, since
+  blended `vonMises` dents where a component changes sign.
 - `warnings`, in plain words: a deflection above a tenth of the part's smallest
   bounding size (a linear analysis is not trustworthy there), a load only on fixed
   faces, a peak near an edge where two faces fold inward by more than 30 degrees or

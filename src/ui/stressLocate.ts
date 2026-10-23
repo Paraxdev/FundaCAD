@@ -9,6 +9,28 @@ export interface EngineSurface {
   faceIds?: ArrayLike<number> | undefined;
   vonMises: ArrayLike<number>;
   displacement?: ArrayLike<number> | undefined;
+  /** Six per vertex, xx yy zz xy yz zx in MPa; older engines omit it. */
+  stress?: ArrayLike<number> | undefined;
+}
+
+/** Von Mises at `weights` in engine triangle `tri`. Von Mises is not linear in the stress, so blending the corners'
+ *  values dents it where a component changes sign (a beam's neutral line); the blended tensor does not. */
+export function vonMisesAt(
+  s: Pick<EngineSurface, "indices" | "vonMises" | "stress">,
+  tri: number,
+  weights: ArrayLike<number>,
+): number {
+  const ids = [s.indices[tri * 3]!, s.indices[tri * 3 + 1]!, s.indices[tri * 3 + 2]!];
+  const t = s.stress;
+  if (!t || t.length !== s.vonMises.length * 6) {
+    let vm = 0;
+    for (let k = 0; k < 3; k++) vm += weights[k]! * (s.vonMises[ids[k]!] ?? 0);
+    return vm;
+  }
+  const c = [0, 0, 0, 0, 0, 0];
+  for (let k = 0; k < 3; k++) for (let j = 0; j < 6; j++) c[j]! += weights[k]! * t[ids[k]! * 6 + j]!;
+  const [xx, yy, zz, xy, yz, zx] = c as [number, number, number, number, number, number];
+  return Math.sqrt(0.5 * ((xx - yy) ** 2 + (yy - zz) ** 2 + (zz - xx) ** 2) + 3 * (xy * xy + yz * yz + zx * zx));
 }
 
 export interface Located {

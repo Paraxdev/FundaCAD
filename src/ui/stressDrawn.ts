@@ -2,7 +2,7 @@
 // elements nearby, then coloured and bent by the solver's fields read where each point lies on the tet boundary.
 
 import type { Vec3 } from "../types";
-import { closestWeights, type EngineSurface, type Locator } from "./stressLocate";
+import { closestWeights, vonMisesAt, type EngineSurface, type Locator } from "./stressLocate";
 
 export interface DisplayMesh {
   positions: Float32Array;
@@ -199,9 +199,7 @@ export function drawnSurface(
     const hit = locate.closest(at(m.positions, v), vertexFace[v]!);
     if (!hit) continue;
     const ids = [0, 1, 2].map((k) => s.indices[hit.tri * 3 + k]!);
-    let vm = 0;
-    for (let k = 0; k < 3; k++) vm += hit.weights[k]! * (s.vonMises[ids[k]!] ?? 0);
-    values[v] = clamp(vm, range);
+    values[v] = clamp(vonMisesAt(s, hit.tri, hit.weights), range);
     if (disp)
       for (let j = 0; j < 3; j++) {
         let d = 0;
