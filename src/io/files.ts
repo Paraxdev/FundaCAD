@@ -83,7 +83,8 @@ async function writeContainer(store: DocumentStore, path: string): Promise<strin
 
 // The file holds the document as it was at `edits`: a change since is not in it, so it stays unsaved and its snapshot
 // stays the one that has it.
-function savedAs(store: DocumentStore, path: string, edits: number) {
+function savedAs(store: DocumentStore, path: string, edits: number, swaps: number) {
+  if (store.untitledSwapCount !== swaps) return;
   const whole = store.editCount === edits;
   store.markSaved(path, whole);
   noteRecent(path);
@@ -96,6 +97,7 @@ export async function saveDocument(store: DocumentStore) {
     const session = store.session;
     const path = store.filePath;
     const edits = store.editCount;
+    const swaps = store.untitledSwapCount;
     const err = await writeContainer(store, path);
     if (err) {
       await reportError(`Couldn't save ${path}: ${err}`);
@@ -103,7 +105,7 @@ export async function saveDocument(store: DocumentStore) {
     }
     // The file holds the document as it was when the save began, so another document opened meanwhile is not saved.
     if (!session.alive) return;
-    savedAs(store, path, edits);
+    savedAs(store, path, edits, swaps);
   } else {
     await saveDocumentAs(store);
   }
@@ -112,6 +114,7 @@ export async function saveDocument(store: DocumentStore) {
 /** Save As: always prompt for a path (or download in a plain browser). */
 export async function saveDocumentAs(store: DocumentStore) {
   const session = store.session;
+  const swaps = store.untitledSwapCount;
   if (isTauri()) {
     const { save } = await import("@tauri-apps/plugin-dialog");
     const path = await save({
@@ -124,8 +127,8 @@ export async function saveDocumentAs(store: DocumentStore) {
         isDocumentExt(store.fileName.split(".").pop()?.toLowerCase()) ? store.fileName : `${store.fileName}.${DOC_EXT}`,
       ),
     });
-    // A path picked for a document that was closed meanwhile is not where the next one goes.
-    if (path && session.alive) {
+    // A path picked for a document that was closed or swapped for an assistant's meanwhile is not where the next one goes.
+    if (path && session.alive && store.untitledSwapCount === swaps) {
       const edits = store.editCount;
       const err = await writeContainer(store, path);
       if (err) {
@@ -133,7 +136,7 @@ export async function saveDocumentAs(store: DocumentStore) {
         return;
       }
       if (!session.alive) return;
-      savedAs(store, path, edits);
+      savedAs(store, path, edits, swaps);
     }
   } else {
     // Reuse the settled name so a second Save As downloads "Untitled.funda" again, not "Untitled.funda.funda".
@@ -146,7 +149,7 @@ export async function saveDocumentAs(store: DocumentStore) {
     if (!session.alive) return;
     downloadText(name, built.text);
     // No real path, but without this the title bar read "Untitled*" forever, as if the save had failed.
-    store.markSaved(name);
+    if (store.untitledSwapCount === swaps) store.markSaved(name);
   }
 }
 

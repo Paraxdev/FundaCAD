@@ -879,6 +879,16 @@ export class DocumentStore {
   private editPreviewListeners = new Set<() => void>();
   private emitEditPreview() {
     for (const fn of this.editPreviewListeners) fn();
+    this.emitPreview();
+  }
+  // A preview set while a rebuild runs only queues, so no build event says it started.
+  onPreview(fn: () => void): () => void {
+    this.previewListeners.add(fn);
+    return () => this.previewListeners.delete(fn);
+  }
+  private previewListeners = new Set<() => void>();
+  private emitPreview() {
+    for (const fn of this.previewListeners) fn();
   }
 
   // The tool's live version while one edits it, so a panel beside the tool never contradicts it.
@@ -963,12 +973,13 @@ export class DocumentStore {
 
   // Not for a replace load, where an armed tool stays and keeps previewing.
   private dropToolPreview() {
+    const had = this.preview !== null;
     this.preview = null;
     this.previewHold = false;
     if (this.editPreview) {
       this.editPreview = null;
       this.emitEditPreview();
-    }
+    } else if (had) this.emitPreview();
   }
 
   newDocument() {
@@ -1173,10 +1184,13 @@ export class DocumentStore {
   private queueParamCommit(fn: (d: CadDocument) => void) {
     const st = this.st;
     st.paramPending++;
+    const owner = this.untitledDoc;
     st.paramChain = st.paramChain
       // Only the last of a burst rebuilds at once, the rest keep the debounce, so
       // a plugin setting ten parameters does not start and supersede nine builds.
-      .then(() => (st.session.alive ? st.session.step(this.commitWithCascade(fn, --st.paramPending === 0)) : undefined))
+      .then(() =>
+        st.session.alive ? st.session.step(this.commitWithCascade(fn, --st.paramPending === 0, owner)) : undefined,
+      )
       .catch((e) => {
         if (isSessionEnded(e)) return;
         console.error("param commit failed:", e);
@@ -1185,9 +1199,11 @@ export class DocumentStore {
   }
   // A doc edit landing during the solves (a doc_set, an import, a restore) would be overwritten by the
   // stale draft, so the cascade redoes on top of it; past 3 tries it lands unsolved rather than never.
-  private async commitWithCascade(fn: (d: CadDocument) => void, immediate: boolean): Promise<void> {
+  // An assistant's doc_open or doc_new since the edit was queued put another document in place, so the change is dropped.
+  private async commitWithCascade(fn: (d: CadDocument) => void, immediate: boolean, owner: number): Promise<void> {
     const st = this.st;
     for (let tries = 1; ; tries++) {
+      if (this.untitledDoc !== owner) return this.warnParamDropped(owner);
       const seen = this.docEdits;
       const draft = clone(this.doc);
       fn(draft);
@@ -1204,7 +1220,7 @@ export class DocumentStore {
           if (solved) f.entities = solved;
         }
       if (!st.session.alive) return;
-      if (this.docEdits !== seen) continue;
+      if (this.docEdits !== seen || this.untitledDoc !== owner) continue;
       this.mutate((d) => {
         d.parameters = draft.parameters;
         if (draft.paramDefs) d.paramDefs = draft.paramDefs;
@@ -1682,6 +1698,7 @@ export class DocumentStore {
     const had = this.preview !== null;
     this.preview = feature === null ? null : Array.isArray(feature) ? feature : [feature];
     this.previewHold = feature !== null && !!opts?.hold;
+    this.emitPreview();
     if (feature === null && had) this.leavePreview();
     else this.scheduleRebuild(true);
   }
@@ -2679,16 +2696,33 @@ export class DocumentStore {
       this.dropPathUndoably();
     });
   }
+  private untitledSwaps = 0;
+  // Which untitled load is on screen, put back by its undo, so an edit queued on a document knows it is still there.
+  private untitledDoc = 0;
+  private untitledSeq = 0;
+  private droppedFor = -1;
+  private warnParamDropped(owner: number) {
+    if (this.droppedFor === owner) return;
+    this.droppedFor = owner;
+    this.onWarning?.("A parameter change was dropped, another document replaced this one before it finished applying.");
+  }
+  // Moves on an untitled load and on its undo and redo: a save begun before it holds the other document, so it must not
+  // name the one on screen.
+  get untitledSwapCount(): number {
+    return this.untitledSwaps;
+  }
   private dropPathUndoably() {
-    const was = { path: this.path, name: this.pathlessName };
-    if (was.path === null && was.name === null) return;
-    const put = (path: string | null, name: string | null) => {
+    const was = { path: this.path, name: this.pathlessName, doc: this.untitledDoc };
+    const now = ++this.untitledSeq;
+    const put = (path: string | null, name: string | null, doc: number) => {
+      this.untitledSwaps++;
+      this.untitledDoc = doc;
       this.path = path;
       this.pathlessName = name;
       this.emitMeta();
     };
-    put(null, null);
-    this.pushOverlayUndo({ undo: () => put(was.path, was.name), redo: () => put(null, null) });
+    put(null, null, now);
+    this.pushOverlayUndo({ undo: () => put(was.path, was.name, was.doc), redo: () => put(null, null, now) });
   }
   // A version is always the open document, even one sharing no feature with what is on screen.
   private loadAs(json: string, as: "open" | "edit" | "version") {
