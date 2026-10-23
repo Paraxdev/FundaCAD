@@ -239,7 +239,7 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
   // Esc in a third run changes nothing and gives the selection back
   await clickAt(await scr(30, 7, 8));
   await page.click("#toolrail [data-action='offer:mirror']").catch(() => {});
-  await page.waitForTimeout(400);
+  await page.waitForSelector(".mirror-panel .rd-chip", { timeout: 10000 });
   await page.click(".mirror-panel .rd-chip:nth-child(1)");
   await page.waitForTimeout(300);
   await clickAt(await scr(-25, 18, 5));

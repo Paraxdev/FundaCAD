@@ -145,6 +145,11 @@ export class MirrorTool {
     return (this.store.buildState.result?.bodies ?? []).map((b) => b.id);
   }
 
+  private bodyLabel(id: string): string {
+    const built = this.store.buildState.result?.bodies.find((b) => b.id === id);
+    return this.store.bodyName(id) ?? built?.name ?? id;
+  }
+
   private planeOf(t: PlanePickTarget): MirrorPlanePick | null {
     if (t?.kind === "base") return { kind: "base", plane: t.spec };
     if (t?.kind === "datum") return { kind: "datum", id: t.id, def: t.spec };
@@ -262,7 +267,7 @@ export class MirrorTool {
         {
           key: "objects",
           label: "Objects",
-          items: [...f.objects],
+          items: f.objects.map((id) => this.bodyLabel(id)),
           value: objects,
           filled: f.objects.length > 0,
         },

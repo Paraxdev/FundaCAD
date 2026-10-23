@@ -93,8 +93,9 @@ function rig(bodyIds = ["body1", "body2", "body3"]) {
   const addFeatures = vi.fn();
   const store = {
     document: { features: [{ id: "f5", type: "datumPlane", plane: DATUM, name: "Slant" }] },
-    buildState: { result: { bodies: bodyIds.map((id) => ({ id, name: id })) } },
+    buildState: { result: { bodies: bodyIds.map((id) => ({ id, name: id === "body3" ? "Pin" : id })) } },
     addFeatures,
+    bodyName: (id: string) => (id === "body2" ? "Bracket" : undefined),
   } as unknown as DocumentStore;
   const tool = new MirrorTool(viewport, store, (_vp, x) => PLANE_AT[x] ?? null);
   const done = vi.fn();
@@ -324,6 +325,12 @@ describe("picking", () => {
     expect(r.log.selected).toEqual([]);
     panel()!.onClear("line");
     expect(summary()!.values[1]).toBe("Nothing picked");
+  });
+
+  it("labels body rows with the override name, then the built name, then the id", () => {
+    const r = rig();
+    r.tool.start(["body1", "body2", "body3", "ghost"], r.done);
+    expect(panel()!.fields[0].items).toEqual(["body1", "Bracket", "Pin", "ghost"]);
   });
 
   it("removes a body or the plane from its list", () => {
