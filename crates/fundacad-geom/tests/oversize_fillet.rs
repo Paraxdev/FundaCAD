@@ -524,3 +524,46 @@ fn two_distance_chamfers_the_kernel_fails_past_a_slanted_inside_corner_are_refus
         assert_eq!(outcome(&r), (0, vec![], want), "at {d}/{d2}: {:?}", messages(&r));
     }
 }
+
+/// Two straight arms 10 wide meeting at an inside corner that turns 120 degrees.
+const V60_TOP: [(f64, f64); 6] = [
+    (0.0, 0.0),
+    (30.0, 0.0),
+    (30.0, 10.0),
+    (17.320508, 10.0),
+    (27.320508, 27.320508),
+    (18.660254, 32.320508),
+];
+
+fn equal_ring(corners: &[(f64, f64)], d: f64) -> Rebuild {
+    let turned: Vec<(f64, f64)> =
+        corners.iter().map(|&(x, y)| (7.0 + 0.8 * x - 0.6 * y, -3.0 + 0.6 * x + 0.8 * y)).collect();
+    let top = json!({"kind": "edge", "by": "ofFace", "body": "body1",
+        "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}});
+    prism_with(&turned, 10.0, vec![json!({"id": "c", "type": "chamfer", "edges": top, "distance": d})])
+}
+
+/// 5 + 5 meets across the 10 mm arms, OCCT gives up and the section build takes over. It ended each chamfer square
+/// at an inside corner and left the mitre wedge, tan(turn / 2) d^3 / 3 a corner: the L came back 3538.33 for 3496.67,
+/// the T 3300 for 3216.67, the 120 degree corner 3738.84 for 3666.67. The volumes are the mitred offset of the top.
+#[test]
+fn equal_chamfers_that_meet_past_an_inside_corner_cut_the_mitre() {
+    let cases = [
+        (&L_TOP[..], 5.0, 3496.67),
+        (&T_TOP[..], 5.0, 3216.67),
+        (&SLANT_TOP[..], 5.0, 3489.89),
+        (&V60_TOP[..], 5.0, 3666.67),
+        (&L_TOP[..], 4.99, 3501.06),
+        (&T_TOP[..], 4.99, 3221.06),
+        (&SLANT_TOP[..], 4.99, 3493.59),
+        (&V60_TOP[..], 4.99, 3671.66),
+        (&BAR_TOP[..], 5.0, 2166.67),
+    ];
+    let owned = |r: Rebuild| {
+        let (errors, warned, v) = outcome(&r);
+        (errors, warned.iter().map(|w| w.to_string()).collect::<Vec<_>>(), v)
+    };
+    let got: Vec<_> = cases.iter().map(|&(corners, d, _)| owned(equal_ring(corners, d))).collect();
+    let want: Vec<_> = cases.iter().map(|&(_, _, v)| (0, Vec::<String>::new(), v)).collect();
+    assert_eq!(got, want);
+}
