@@ -2,7 +2,12 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import type { CadDocument, ParamDef, ParamExtras } from "../../src/types";
 import { commitDeleteParam, commitRenameParam, deleteBlockers, defsOf, recompute } from "../../src/params/engine";
 import {
-  captureConfiguration, checkResults, clampToControl, configurationDrift, controlProblem, trialConfiguration,
+  captureConfiguration,
+  checkResults,
+  clampToControl,
+  configurationDrift,
+  controlProblem,
+  trialConfiguration,
 } from "../../src/params/extras";
 import { DocumentStore } from "../../src/document/store";
 import type { GeometryBackend } from "../../src/geometry/client";
@@ -10,7 +15,12 @@ import type { GeometryBackend } from "../../src/geometry/client";
 vi.stubGlobal("window", globalThis);
 
 function fixture(defs: Record<string, ParamDef>, extras?: ParamExtras): CadDocument {
-  const doc: CadDocument = { parameters: {}, paramDefs: defs, features: [], ...(extras ? { paramExtras: extras } : {}) };
+  const doc: CadDocument = {
+    parameters: {},
+    paramDefs: defs,
+    features: [],
+    ...(extras ? { paramExtras: extras } : {}),
+  };
   recompute(doc);
   return doc;
 }
@@ -69,10 +79,25 @@ describe("parameter extras", () => {
     expect(clampToControl({ kind: "number", min: 0.3, step: 0.1 }, 0.44)).toBe(0.4);
     expect(clampToControl({ kind: "number", min: 0.3 }, 0.1)).toBe(0.3);
     expect(clampToControl({ kind: "toggle" }, 5)).toBe(1);
-    expect(clampToControl({ kind: "choice", choices: [{ label: "S", value: 10 }, { label: "L", value: 30 }] }, 22)).toBe(30);
+    expect(
+      clampToControl(
+        {
+          kind: "choice",
+          choices: [
+            { label: "S", value: 10 },
+            { label: "L", value: 30 },
+          ],
+        },
+        22,
+      ),
+    ).toBe(30);
     expect(clampToControl(undefined, 7)).toBe(7);
-    expect(controlProblem({ ...user("30"), value: 30, control: { kind: "slider", min: 0, max: 22 } })).toMatch(/maximum of 22/);
-    expect(controlProblem({ ...user("3"), value: 3, control: { kind: "slider", min: 0, max: 22, step: 1 } })).toBeNull();
+    expect(controlProblem({ ...user("30"), value: 30, control: { kind: "slider", min: 0, max: 22 } })).toMatch(
+      /maximum of 22/,
+    );
+    expect(
+      controlProblem({ ...user("3"), value: 3, control: { kind: "slider", min: 0, max: 22, step: 1 } }),
+    ).toBeNull();
   });
 
   it("capture takes user parameters only, and a trial applies values in order or not at all", () => {
@@ -99,9 +124,13 @@ describe("store: configurations and extras", () => {
   afterEach(() => void vi.useRealTimers());
 
   const backend = {
-    async rebuild() { return { ok: false, error: { message: "stub" } }; },
+    async rebuild() {
+      return { ok: false, error: { message: "stub" } };
+    },
     async init() {},
-    onStatus() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
     connected: true,
   } as unknown as GeometryBackend;
 

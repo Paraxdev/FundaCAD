@@ -7,7 +7,8 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  fieldNumber, fieldError,
+  fieldNumber,
+  fieldError,
   commonUnits,
   formatMeasure,
   roundForDisplay,
@@ -260,7 +261,11 @@ describe("showing one back", () => {
   });
 
   it("round trips through the unit it was typed in", () => {
-    for (const [raw, id] of [["1 inch", "in"], ["3cm", "cm"], ["2ft", "ft"]] as const) {
+    for (const [raw, id] of [
+      ["1 inch", "in"],
+      ["3cm", "cm"],
+      ["2ft", "ft"],
+    ] as const) {
       const m = parseMeasure(raw, MM);
       expect(toUnit(m.value, m.unit)).toBeCloseTo(parseFloat(raw));
       expect(m.unit?.id).toBe(id);

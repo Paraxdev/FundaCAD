@@ -1,29 +1,32 @@
-// The node body tool: place nodes in 3D, link them into chains, move, turn and
-// resize the picked one with the app's own gizmo, and watch the smooth body
-// they make rebuild behind them.
-//
-// A click on a body puts a node on its surface, a click on a datum plane puts
-// one on that plane, and a click in open space puts one on the plane facing
-// the view through the picked node (the ground when nothing is picked). With
-// "Link new nodes" on, each new node extends the chain from the picked one, so
-// a limb is drawn by clicking along it. Alt-drag from a node pulls a linked
-// copy out of it. Shift-click links the picked node to the one clicked.
+// A click puts a node on a body's surface, on a datum plane, or on the plane facing the view through the picked node.
+// "Link new nodes" extends the chain from the picked node, Alt-drag pulls out a linked copy, Shift-click links two.
 
 import * as THREE from "three";
 import { ALL_HANDLES, setPrompt } from "fundacad";
 import type { Engine, Feature, Frame, MoveCommit, MoveResult, MoveTarget } from "fundacad";
 import * as panel from "./panel";
 import {
-  NODE_TYPE, asNodeFeature, freshNodeId, halfExtent, link, nodesBox, numOf, rotationMatrix, roundSize,
-  sizeLabel, unlinkNode,
-  type NodeFeature, type NodeValues,
+  NODE_TYPE,
+  asNodeFeature,
+  freshNodeId,
+  halfExtent,
+  link,
+  nodesBox,
+  numOf,
+  rotationMatrix,
+  roundSize,
+  sizeLabel,
+  unlinkNode,
+  type NodeFeature,
+  type NodeValues,
 } from "./nodeForm";
 
 const PREVIEW_DEBOUNCE_MS = 120;
 const DOT_PX = 6;
 const HIT_PX = 12;
 const DRAG_PX = 4;
-const PROMPT = "Click to place a node · Alt-drag a node to pull a linked one out · Shift-click to link · Del removes · Enter · Esc";
+const PROMPT =
+  "Click to place a node · Alt-drag a node to pull a linked one out · Shift-click to link · Del removes · Enter · Esc";
 
 const NODE_COLOR = 0x3fb6a8;
 const PICKED_COLOR = 0xffb347;
@@ -64,8 +67,6 @@ export class NodeTool {
   private readonly tick = () => this.frame();
 
   constructor(private readonly e: Engine) {}
-
-  // --- lifecycle -------------------------------------------------------------
 
   start(onDone: (id: string | null) => void) {
     if (this.active) return;
@@ -197,8 +198,6 @@ export class NodeTool {
     this.down = null;
   }
 
-  // --- the document ----------------------------------------------------------
-
   private node(id: string | null): NodeValues | null {
     return (id && this.working?.nodes.find((n) => n.id === id)) || null;
   }
@@ -228,7 +227,8 @@ export class NodeTool {
     if (!fid || !this.working) return out;
     for (const n of this.working.nodes) {
       for (const k of ["x", "y", "z", "sx", "sy", "sz", "rx", "ry", "rz"]) {
-        if (this.e.store.isParamBound({ kind: "feature", feature: fid, field: `nodes.${n.id}.${k}` })) out.add(`${n.id}.${k}`);
+        if (this.e.store.isParamBound({ kind: "feature", feature: fid, field: `nodes.${n.id}.${k}` }))
+          out.add(`${n.id}.${k}`);
       }
     }
     return out;
@@ -302,8 +302,6 @@ export class NodeTool {
     this.changed();
   }
 
-  // --- picking a node --------------------------------------------------------
-
   private select(id: string | null) {
     if (this.e.tools.move.active) this.e.tools.move.cancel();
     this.selected = this.node(id) ? id : null;
@@ -354,9 +352,8 @@ export class NodeTool {
     const view = vp.viewDirection();
     const sel = this.node(this.selected);
     if (sel) {
-      // The picked node's own level whenever the view looks down on it at all,
-      // so a limb drawn in an angled view stays where it looks like it goes;
-      // from nearly level, the upright world plane facing the view.
+      // The picked node's own level whenever the view looks down on it at all, so an angled view draws where it
+      // looks like it goes; from nearly level, the upright world plane facing the view.
       const axis = Math.abs(view.z) > 0.35 ? 2 : Math.abs(view.x) > Math.abs(view.y) ? 0 : 1;
       const normal = new THREE.Vector3().setComponent(axis, 1);
       const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, centerOf(sel));
@@ -392,8 +389,6 @@ export class NodeTool {
     this.select(id);
     this.changed({ immediate: true });
   }
-
-  // --- pointer and keys ------------------------------------------------------
 
   private pointerDown(e: PointerEvent) {
     if (e.button !== 0 || !this.active) return;
@@ -454,7 +449,8 @@ export class NodeTool {
   private key(e: KeyboardEvent) {
     if (!this.active) return;
     const t = e.target as HTMLElement | null;
-    const typing = !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+    const typing =
+      !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -465,9 +461,8 @@ export class NodeTool {
       this.cancel();
       return;
     }
-    // The gizmo's own value box holds the focus while it is up. Left at 0 it
-    // has nothing to say, so Enter finishes the body and Delete removes the
-    // node, as they do with nothing focused.
+    // The gizmo's value box keeps the focus while it is up. Left at 0 it has nothing to say, so Enter finishes the
+    // body and Delete removes the node, as with nothing focused.
     const idleGizmoBox = typing && !!t?.closest(".dim-input") && Number((t as HTMLInputElement).value || 0) === 0;
     if (typing && !(idleGizmoBox && (e.key === "Enter" || e.key === "Delete"))) return;
     if (e.key === "Enter") {
@@ -480,8 +475,6 @@ export class NodeTool {
       this.removeNode(this.selected);
     }
   }
-
-  // --- the gizmo's target ----------------------------------------------------
 
   private target(id: string): MoveTarget {
     const n0 = structuredClone(this.node(id)!);
@@ -527,10 +520,7 @@ export class NodeTool {
       centroid: () => c0.clone(),
       box: () => {
         const h = halfExtent(n0);
-        return new THREE.Box3(
-          c0.clone().sub(new THREE.Vector3(...h)),
-          c0.clone().add(new THREE.Vector3(...h)),
-        );
+        return new THREE.Box3(c0.clone().sub(new THREE.Vector3(...h)), c0.clone().add(new THREE.Vector3(...h)));
       },
       begin: () => {},
       preview: (matrix: THREE.Matrix4) => {
@@ -553,8 +543,6 @@ export class NodeTool {
       reopen: () => (this.active && this.node(id) && this.selected === id ? this.target(id) : null),
     };
   }
-
-  // --- drawing ---------------------------------------------------------------
 
   private clearOverlay() {
     const g = this.overlay;
@@ -593,7 +581,10 @@ export class NodeTool {
 
     const spineMat = new THREE.LineBasicMaterial({ color: NODE_COLOR, opacity: 0.8, ...onTop });
     for (const chain of w.chains) {
-      const pts = chain.map((id) => this.node(id)).filter((n): n is NodeValues => !!n).map(centerOf);
+      const pts = chain
+        .map((id) => this.node(id))
+        .filter((n): n is NodeValues => !!n)
+        .map(centerOf);
       if (pts.length < 2) continue;
       const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), spineMat.clone());
       line.renderOrder = 998;
@@ -620,11 +611,20 @@ export class NodeTool {
       const axes = [0, 1, 2].map((j) => new THREE.Vector3(m[0]![j]!, m[1]![j]!, m[2]![j]!));
       const c = centerOf(sel);
       const ringMat = new THREE.LineBasicMaterial({ color: PICKED_COLOR, opacity: 0.9, ...onTop });
-      for (const [a, b] of [[0, 1], [1, 2], [2, 0]] as const) {
+      for (const [a, b] of [
+        [0, 1],
+        [1, 2],
+        [2, 0],
+      ] as const) {
         const pts: THREE.Vector3[] = [];
         for (let k = 0; k <= 64; k++) {
           const t = (k / 64) * Math.PI * 2;
-          pts.push(c.clone().addScaledVector(axes[a]!, r[a]! * Math.cos(t)).addScaledVector(axes[b]!, r[b]! * Math.sin(t)));
+          pts.push(
+            c
+              .clone()
+              .addScaledVector(axes[a]!, r[a]! * Math.cos(t))
+              .addScaledVector(axes[b]!, r[b]! * Math.sin(t)),
+          );
         }
         const ring = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ringMat.clone());
         ring.renderOrder = 998;

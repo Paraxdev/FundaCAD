@@ -1,20 +1,5 @@
-//! A tapered extrude over an outline with inside corners. The kernel's tapered
-//! prism rounds each inside corner with a sliver of a cone whose tip is the
-//! outline's own vertex. Where that tip lay on a freeform face of the body, a
-//! cut handed back the body with the whole tool beside it. Leaned sides meet
-//! in an edge there, the solid a loft to the outline's mitre offset gives.
-//! `taper/ridge_outline.json` is the outline of the report, a band that follows
-//! the section of a freeform duct.
-//!
-//! An outline with an arc or a spline in it has the same edges: a side is
-//! carried on past the corner as its own plane or cone, a spline's as the plane
-//! that touches it there, and the solid is the same upwards, downwards,
-//! narrowing and flaring.
-//!
-//! The loose solid itself only shows on the body of the report, which is a
-//! user's part and not in the repo. The tests at the end run on it when
-//! `FUNDACAD_TAPER_DUCT_STEP` names a STEP file of that body, and pass without
-//! looking when it is unset.
+//! A tapered extrude carries each side past an inside corner as its own plane, cone or spline tangent plane to an
+//! edge, since the kernel's corner cone slivers, tipped on a freeform face, left a cut's whole tool beside the body.
 
 use std::sync::OnceLock;
 
@@ -27,6 +12,7 @@ use serde_json::{json, Value};
 const Z: f64 = 25.4;
 const RISE: f64 = 1.9;
 
+/// The report's outline, a band that follows the section of a freeform duct.
 fn outline() -> Vec<[f64; 2]> {
     serde_json::from_str(include_str!("taper/ridge_outline.json")).expect("the outline parses")
 }
@@ -59,7 +45,8 @@ fn block() -> Vec<Value> {
 }
 
 fn tapered(pts: &[[f64; 2]], z: f64, extra: Value) -> Vec<Value> {
-    let mut cut = json!({"id": "ridge", "type": "extrude", "sketch": "ridgeSk", "operation": "cut", "targets": ["body1"]});
+    let mut cut =
+        json!({"id": "ridge", "type": "extrude", "sketch": "ridgeSk", "operation": "cut", "targets": ["body1"]});
     for (k, v) in extra.as_object().expect("fields") {
         cut[k] = v.clone();
     }
@@ -162,10 +149,8 @@ fn new_body(pts: &[[f64; 2]], extra: Value) -> Rebuild {
     build(f)
 }
 
-/// Once sealed inside the block, once running out of its top and front as it
-/// runs out of the duct wall. No plain block was seen to show the loose solid:
-/// sealed, the rounded corners already gave one solid in an unchanged box and
-/// missed only on the volume, the 48 cones taking 0.089 mm3 more than the loft.
+/// Once sealed inside the block, once running out of its top and front. A plain block never showed the loose solid:
+/// sealed, the 48 corner cones gave one solid in an unchanged box but took 0.089 mm3 more than the loft.
 #[test]
 fn the_ridge_tapered_into_a_plain_block_removes_what_the_loft_removes() {
     let pts = outline();
@@ -206,7 +191,9 @@ fn the_ridge_keeps_its_edges_past_where_a_side_closes_up() {
     let pts = outline();
     let turned: Vec<[f64; 2]> = pts.iter().rev().copied().collect();
     let before = measured(&build(block()));
-    for (distance, taper, want) in [(2.1, 45.0, 2255.800), (2.2, 45.0, 2301.796), (1.9, 49.0, 1995.497), (1.9, 60.0, 1448.676)] {
+    for (distance, taper, want) in
+        [(2.1, 45.0, 2255.800), (2.2, 45.0, 2301.796), (1.9, 49.0, 1995.497), (1.9, 60.0, 1448.676)]
+    {
         for (label, outline) in [("as drawn", &pts), ("turned round", &turned)] {
             for way in [1.0, -1.0] {
                 let label = format!("{label}, {} by {taper}", way * distance);
@@ -262,15 +249,15 @@ fn spline(id: &str, closed: bool, pts: &[[f64; 2]]) -> Value {
     }
 }
 
-/// A spline outline has nothing but the kernel's own tapered prism or loft.
-/// Upwards the kernel hands a closed spline back as its solid with two loose
-/// faces it calls unsound, and leaves a vertex of the lens off its curve.
-/// Downwards it offsets each side of the lens in two. Each is the right solid
-/// and has to stay one. The lens is drawn clockwise, and upwards it came out
-/// below its plane.
+/// A spline outline has only the kernel's tapered prism or loft: upwards it left loose faces and a lens vertex off its
+/// curve (drawn clockwise, below its plane), downwards it split each side in two. Each has to stay the right solid.
 #[test]
 fn a_spline_outline_tapers_both_ways_on_its_own_side() {
-    let blob = json!([spline("b", true, &[[0.0, -20.0], [25.0, -18.0], [30.0, 5.0], [12.0, 28.0], [-15.0, 22.0], [-28.0, 0.0]])]);
+    let blob = json!([spline(
+        "b",
+        true,
+        &[[0.0, -20.0], [25.0, -18.0], [30.0, 5.0], [12.0, 28.0], [-15.0, 22.0], [-28.0, 0.0]]
+    )]);
     let lens = json!([
         spline("a", false, &[[0.0, 0.0], [5.0, 6.0], [15.0, 6.0], [20.0, 0.0]]),
         spline("b", false, &[[20.0, 0.0], [15.0, -6.0], [5.0, -6.0], [0.0, 0.0]]),
@@ -285,10 +272,8 @@ fn a_spline_outline_tapers_both_ways_on_its_own_side() {
     }
 }
 
-/// A 20 x 10 rectangle with 2 mm corners at 45 degrees over 2.5 mm: the
-/// corners are gone 2 mm along and the last half millimetre is a plain
-/// rectangle. Downwards the loft paired the eight sides with the four that
-/// were left and came out 1.2 percent short.
+/// A 20 x 10 rectangle with 2 mm corners at 45 degrees over 2.5 mm, the corners gone 2 mm along. Downwards the loft
+/// paired the eight sides with the four left and came out 1.2 percent short.
 #[test]
 fn a_rounded_outline_tapers_past_its_corner_radius_the_same_both_ways() {
     let (w, h, r) = (20.0, 10.0, 2.0);
@@ -313,9 +298,8 @@ fn a_rounded_outline_tapers_past_its_corner_radius_the_same_both_ways() {
     }
 }
 
-/// A 2 mm disc at 45 degrees comes to a point 2 mm along. The kernel ran the
-/// cone on through its tip to the far end, an hourglass of 3 pi mm3 that it
-/// calls sound, upwards and downwards alike.
+/// A 2 mm disc at 45 degrees comes to a point 2 mm along. The kernel ran the cone on through its tip both ways, a
+/// 3 pi mm3 hourglass it calls sound.
 #[test]
 fn a_disc_tapered_past_its_tip_is_the_cone_and_no_more() {
     let cone = std::f64::consts::PI * 8.0 / 3.0;
@@ -472,10 +456,8 @@ fn notched_disc_section(d: f64) -> f64 {
     PI * r * r - (w * (r * r - w * w).sqrt() + r * r * (w / r).asin() - 2.0 * w * floor)
 }
 
-/// The loft joined the ends of an arc's side to the ends of its offset with
-/// straight edges, so downwards and flaring the bump came out 0.076 mm3 off,
-/// the bite 0.076 and 0.138, the notched disc 0.373. Upwards and narrowing the
-/// kernel's draft had them right already.
+/// The loft joined an arc side's ends to its offset's with straight edges: downwards and flaring the bump was 0.076
+/// mm3 off, the bite 0.076 and 0.138, the notched disc 0.373. Upwards and narrowing the kernel's draft was right.
 #[test]
 fn an_arc_that_ends_in_a_corner_tapers_to_the_exact_solid_every_way() {
     tapers_to_the_exact_solid_every_way("bump", bump(), bump_section);
@@ -483,9 +465,8 @@ fn an_arc_that_ends_in_a_corner_tapers_to_the_exact_solid_every_way() {
     tapers_to_the_exact_solid_every_way("two discs", two_discs(), two_discs_section);
 }
 
-/// On Linux the kernel's tapered prism found the bisector of the arc's corner
-/// crossing one face and not the other, read past the end of its own list and
-/// took the whole process down with a segfault 1.5 up at 30 degrees.
+/// On Linux the kernel's tapered prism found the arc corner's bisector crossing one face and not the other, read past
+/// its own list and segfaulted 1.5 up at 30 degrees.
 #[test]
 fn a_notched_disc_tapers_where_the_kernel_disagrees_with_itself() {
     tapers_to_the_exact_solid_every_way("notched disc", notched_disc(), notched_disc_section);
@@ -525,10 +506,8 @@ fn rounded_ell(r: f64) -> Value {
     ])
 }
 
-/// Half millimetre corners are gone 0.866 mm up at 30 degrees, and with one of
-/// its arcs closing up the kernel's draft leaves the outline to its tapered
-/// prism, which rounded the inside corner with a cone: 71.5223 mm3. Where an
-/// arc closes up that prism is 1.4e-5 mm3 off by itself.
+/// Half mm corners are gone 0.866 up at 30 degrees. With an arc closing up the draft falls back to the tapered prism,
+/// which coned the inside corner (71.5223 mm3) and is 1.4e-5 mm3 off by itself there.
 #[test]
 fn an_inside_corner_tapers_to_an_edge_beside_an_arc_that_closes_up() {
     let (r, h, k) = (0.5, 1.5, 30f64.to_radians().tan());
@@ -546,7 +525,11 @@ fn an_inside_corner_tapers_to_an_edge_beside_an_arc_that_closes_up() {
         for (distance, taper, exact) in [(h, 30.0, narrow), (-h, 30.0, narrow), (h, -30.0, flare), (-h, -30.0, flare)] {
             let m = measured(&boss(outline.clone(), json!({"distance": distance, "taper": taper})));
             assert_eq!(m.solids, 1, "{winding}, {distance} by {taper}");
-            assert!((m.volume - exact).abs() < 1e-4, "{winding}, {distance} by {taper}: volume {} against {exact}", m.volume);
+            assert!(
+                (m.volume - exact).abs() < 1e-4,
+                "{winding}, {distance} by {taper}: volume {} against {exact}",
+                m.volume
+            );
         }
     }
 }
@@ -555,14 +538,8 @@ fn polygon(pts: &[[f64; 2]]) -> Value {
     Value::Array(lines(pts))
 }
 
-/// A spline in the outline leaves the kernel nothing but its tapered prism,
-/// which rounded every inside corner narrowing and every outside one flaring,
-/// 0.0805 mm3 a square corner here. An inside corner brought to an edge is the
-/// two sides carried on, so the solid is that of two outlines without one laid
-/// over each other, and those the kernel builds as they are: `whole` has to
-/// hold what `parts` hold less what their `overlap` holds. Flaring, the loft
-/// failed on the bulging L and built a hump no STEP file could be written of,
-/// 0.2 mm3 short.
+/// A spline leaves the kernel only its tapered prism, which rounds corners (0.0805 mm3 a square corner here), so an
+/// edged corner is two outlines laid over each other: `whole` holds what `parts` hold less their `overlap`.
 #[test]
 fn a_corner_of_an_outline_with_a_spline_tapers_to_an_edge() {
     let bulge = spline("s", false, &[[0.0, 10.0], [-2.0, 7.0], [-2.0, 3.0], [0.0, 0.0]]);
@@ -572,11 +549,20 @@ fn a_corner_of_an_outline_with_a_spline_tapers_to_an_edge() {
         (
             "bulging L",
             json!([
-                seg("a", [0.0, 0.0], [10.0, 0.0]), seg("b", [10.0, 0.0], [10.0, 4.0]), seg("c", [10.0, 4.0], [4.0, 4.0]),
-                seg("d", [4.0, 4.0], [4.0, 10.0]), seg("e", [4.0, 10.0], [0.0, 10.0]), bulge.clone(),
+                seg("a", [0.0, 0.0], [10.0, 0.0]),
+                seg("b", [10.0, 0.0], [10.0, 4.0]),
+                seg("c", [10.0, 4.0], [4.0, 4.0]),
+                seg("d", [4.0, 4.0], [4.0, 10.0]),
+                seg("e", [4.0, 10.0], [0.0, 10.0]),
+                bulge.clone(),
             ]),
             [
-                json!([seg("a", [0.0, 0.0], [4.0, 0.0]), seg("b", [4.0, 0.0], [4.0, 10.0]), seg("c", [4.0, 10.0], [0.0, 10.0]), bulge]),
+                json!([
+                    seg("a", [0.0, 0.0], [4.0, 0.0]),
+                    seg("b", [4.0, 0.0], [4.0, 10.0]),
+                    seg("c", [4.0, 10.0], [0.0, 10.0]),
+                    bulge
+                ]),
                 polygon(&[[0.0, 0.0], [10.0, 0.0], [10.0, 4.0], [0.0, 4.0]]),
             ],
             polygon(&[[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]]),
@@ -586,12 +572,21 @@ fn a_corner_of_an_outline_with_a_spline_tapers_to_an_edge() {
         (
             "hump",
             json!([
-                seg("a", [0.0, 0.0], [20.0, 0.0]), seg("b", [20.0, 0.0], [20.0, 10.0]), seg("c", [20.0, 10.0], [14.0, 10.0]),
-                hump.clone(), seg("e", [6.0, 10.0], [0.0, 10.0]), seg("f", [0.0, 10.0], [0.0, 0.0]),
+                seg("a", [0.0, 0.0], [20.0, 0.0]),
+                seg("b", [20.0, 0.0], [20.0, 10.0]),
+                seg("c", [20.0, 10.0], [14.0, 10.0]),
+                hump.clone(),
+                seg("e", [6.0, 10.0], [0.0, 10.0]),
+                seg("f", [0.0, 10.0], [0.0, 0.0]),
             ]),
             [
                 polygon(&[[0.0, 0.0], [20.0, 0.0], [20.0, 10.0], [0.0, 10.0]]),
-                json!([seg("a", [6.0, 6.0], [14.0, 6.0]), seg("b", [14.0, 6.0], [14.0, 10.0]), hump, seg("d", [6.0, 10.0], [6.0, 6.0])]),
+                json!([
+                    seg("a", [6.0, 6.0], [14.0, 6.0]),
+                    seg("b", [14.0, 6.0], [14.0, 10.0]),
+                    hump,
+                    seg("d", [6.0, 10.0], [6.0, 6.0])
+                ]),
             ],
             polygon(&[[6.0, 6.0], [14.0, 6.0], [14.0, 10.0], [6.0, 10.0]]),
         ),
@@ -619,9 +614,8 @@ fn a_corner_of_an_outline_with_a_spline_tapers_to_an_edge() {
     }
 }
 
-/// A 30 x 20 plate with a half round hole of 4 mm, flat side down. The hole
-/// leans the other way, so narrowing the plate carries its two corners on to
-/// an edge, and the section `d` in has the half disc grown by `d`.
+/// A 30 x 20 plate with a 4 mm half round hole, flat side down, leaning the other way: narrowing carries its corners
+/// to an edge, and the section `d` in has the half disc grown by `d`.
 #[test]
 fn a_hole_with_an_arc_that_ends_in_a_corner_leans_the_other_way() {
     let outline = json!([
@@ -664,29 +658,38 @@ fn both_ways_and_a_pull_on_a_face_that_looks_down_give_the_same_solid() {
     assert!((m.bbox[2] + 1.5).abs() < 1e-6 && (m.bbox[5] - 5.0).abs() < 1e-6, "{:?}", m.bbox);
 }
 
-/// The arms of the rounded L are 4 mm wide and gone 2 mm up at 45 degrees, so
-/// the cone at its inside corner stops short of the far end and there is no
-/// edge to bring it to. It built with the cone.
+/// The rounded L's 4 mm arms are gone 2 mm up at 45 degrees, so the inside corner's cone stops short of the far end
+/// with no edge to bring it to.
 #[test]
 fn a_corner_the_taper_cannot_bring_to_an_edge_fails_with_a_sentence() {
     for distance in [4.0, -4.0] {
         let r = boss(rounded_ell(0.5), json!({"distance": distance, "taper": 45}));
         let msgs = messages(&r);
         assert_eq!(msgs.len(), 1, "{distance}: {msgs:?}");
-        assert!(msgs[0].contains("corner") && msgs[0].contains("taper") && !msgs[0].contains("Error"), "{distance}: {msgs:?}");
+        assert!(
+            msgs[0].contains("corner") && msgs[0].contains("taper") && !msgs[0].contains("Error"),
+            "{distance}: {msgs:?}"
+        );
         assert!(r.bodies.is_empty(), "{distance}: a body was made all the same");
     }
 }
 
-/// The kernel has no sound tapered prism of this hump of eleven poles, and
-/// flared the loft stood in for it: 406.9 mm3 drawn one way round and 415.3
-/// the other, as a solid no STEP file could be written of. It gets the
-/// sentence and no body now.
+/// The kernel has no sound tapered prism of this eleven pole hump, and the flared loft gave 406.9 or 415.3 mm3 by
+/// winding, a solid no STEP file could be written of.
 #[test]
 fn a_spline_the_kernel_cannot_lean_fails_with_a_sentence() {
     let poles = [
-        [14.0, 10.0], [14.0, 11.0], [14.0, 12.0], [14.0, 13.0], [13.0, 16.0], [10.0, 17.0],
-        [7.0, 16.0], [6.0, 13.0], [6.0, 12.0], [6.0, 11.0], [6.0, 10.0],
+        [14.0, 10.0],
+        [14.0, 11.0],
+        [14.0, 12.0],
+        [14.0, 13.0],
+        [13.0, 16.0],
+        [10.0, 17.0],
+        [7.0, 16.0],
+        [6.0, 13.0],
+        [6.0, 12.0],
+        [6.0, 11.0],
+        [6.0, 10.0],
     ];
     let outline = json!([
         seg("a", [0.0, 0.0], [20.0, 0.0]),
@@ -709,11 +712,10 @@ fn a_spline_the_kernel_cannot_lean_fails_with_a_sentence() {
 
 const KAPPA: f64 = 0.552_284_749_830_793_6;
 
-/// A block with a tunnel of 7.2 mm swept 150 degrees about Z at 30 mm, its
-/// wall a spline turned about the axis. Like the duct of the report it is a
-/// void whose wall leans 45 degrees at the level the ridge is drawn on, which
-/// is `TUNNEL.0`, there between the radii `TUNNEL.1` and `TUNNEL.2`.
-const TUNNEL: (f64, f64, f64) = (20.0 + 0.9 * (4.0 + 3.0 * KAPPA), 30.0 - 0.9 * (4.0 + 3.0 * KAPPA), 30.0 + 0.9 * (4.0 + 3.0 * KAPPA));
+/// A block with a 7.2 mm tunnel swept 150 degrees about Z at 30 mm, its spline wall leaning 45 degrees like the
+/// report's duct at the ridge's level `TUNNEL.0`, between radii `TUNNEL.1` and `TUNNEL.2`.
+const TUNNEL: (f64, f64, f64) =
+    (20.0 + 0.9 * (4.0 + 3.0 * KAPPA), 30.0 - 0.9 * (4.0 + 3.0 * KAPPA), 30.0 + 0.9 * (4.0 + 3.0 * KAPPA));
 
 fn tunnel() -> Vec<Value> {
     let quarters = [
@@ -738,9 +740,8 @@ fn tunnel() -> Vec<Value> {
     ]
 }
 
-/// A band over the tunnel as the report's band lies over its duct: the outer
-/// side an arc on the wall, one end a spline, and the inner side two chords
-/// that meet in an inside corner on the wall.
+/// A band over the tunnel as the report's lies over its duct: the outer side an arc on the wall, one end a spline,
+/// the inner side two chords meeting in an inside corner on the wall.
 fn band() -> Value {
     let (_, r_in, r_out) = TUNNEL;
     let at = |r: f64, deg: f64| [r * deg.to_radians().cos(), r * deg.to_radians().sin()];
@@ -759,10 +760,8 @@ fn band() -> Value {
     ])
 }
 
-/// What the cut has to take was worked out apart from the engine, with the
-/// same surgery written against another build of the kernel: 197.996 and
-/// 383.782 mm3. The cone at the inside corner added 0.068 and 0.156 mm3 to
-/// that, and at 1.9 mm that other kernel cut nothing at all with it.
+/// The cut's 197.996 and 383.782 mm3 were worked out apart from the engine against another kernel build, where the
+/// inside corner cone added 0.068 and 0.156 mm3 and at 1.9 mm cut nothing.
 #[test]
 fn a_ridge_with_an_arc_a_spline_and_an_inside_corner_cuts_a_body_with_a_spline_wall() {
     let before = measured(&build(tunnel()));
@@ -776,8 +775,8 @@ fn a_ridge_with_an_arc_a_spline_and_an_inside_corner_cuts_a_body_with_a_spline_w
     }
 }
 
-/// The body of the report with nothing else in the document, or nothing when
-/// the variable is unset.
+/// The report's body, a user's part kept out of the repo, from the STEP file `FUNDACAD_TAPER_DUCT_STEP` names.
+/// Unset, the duct tests pass without looking.
 fn duct_body() -> Option<Vec<Value>> {
     static BODY: OnceLock<Option<Value>> = OnceLock::new();
     let feature = BODY.get_or_init(|| {
@@ -842,10 +841,8 @@ fn the_ridge_tapered_past_where_a_side_closes_up_still_cuts_the_duct() {
     }
 }
 
-/// One side of the six points a spline bulging 1 mm outwards. With the cone
-/// at its inside corner the tool took 62.9 mm3 of the duct for the first side
-/// and all of its own 153.4 mm3 for the second, where it dips 29.1 and 35.1
-/// mm3 into the wall, and for the third the cut was refused.
+/// One side of the six points a spline bulging 1 mm out. With the corner cone the tool took 62.9 and 153.4 mm3 for
+/// the first two sides, which dip 29.1 and 35.1 mm3 into the wall, and the third cut was refused.
 #[test]
 fn six_points_of_the_ridge_with_a_spline_side_cut_what_they_dip_into_the_duct() {
     let Some(body) = duct_body() else { return };

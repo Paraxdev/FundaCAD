@@ -1,18 +1,14 @@
-// Frames rendered on the native side (src-tauri/frames), drawn into a canvas
-// under the viewport's overlays. Windows reads WebView2 shared buffers the app
-// posts, pulled with one tiny invoke per frame; elsewhere frames stream over a
-// loopback WebSocket. Pixels never cross Tauri IPC.
-//
-// Until the native tracer lands the frames are a moving test pattern, so the
-// tracing calls only restart the sample count.
+// Windows reads WebView2 shared buffers the app posts, pulled with one tiny invoke per frame; elsewhere
+// frames stream over a loopback WebSocket. Pixels never cross Tauri IPC.
 
 import { invoke } from "@tauri-apps/api/core";
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
-import type { PictureOptions, TraceLook, TraceScene, TracerBackend } from "./backend";
+import { TracerRefused, type PictureOptions, type TraceLook, type TraceScene, type TracerBackend } from "./backend";
 import type { TraceLens } from "./camera";
+import { FrameCameras, type FrameView } from "./frameCamera";
 import { NativeScene, type Call } from "./nativeScene";
-import { runSelfCheck } from "./selfCheck";
+import { runSelfCheck, selfCheckReason } from "./selfCheck";
 import { bloomKey, bloomSide, type TraceBloomSettings } from "./tracePost";
 
 export interface NativeFrame {
@@ -350,7 +346,12 @@ const PICTURE_POLL_MS = 250;
 
 /** What a raw ipc::Response arrives as. */
 function base64(bytes: unknown): string {
-  const b = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes as number[]);
+  const b =
+    bytes instanceof ArrayBuffer
+      ? new Uint8Array(bytes)
+      : bytes instanceof Uint8Array
+        ? bytes
+        : Uint8Array.from(bytes as number[]);
   let s = "";
   for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
   return btoa(s);
@@ -386,6 +387,8 @@ export class NativeTracer implements TracerBackend {
   /** The bloom the native side holds, null until this page told it. */
   private bloomShared: string | null = null;
   private bloomSent: Promise<unknown> = Promise.resolve();
+  private cameras = new FrameCameras();
+  private shownSeq: number | null = null;
   readonly scene: NativeScene;
 
   constructor(private o: NativeTracerOptions = {}) {
@@ -416,7 +419,8 @@ export class NativeTracer implements TracerBackend {
     // The native tracer outlives a page, so a bloom of the last one is cleared.
     this.syncBloom();
     // After the connect, which is what opens the native tracer the check borrows its path from.
-    await runSelfCheck((cmd, args) => this.call(cmd, args as Record<string, unknown>));
+    const check = await runSelfCheck((cmd, args) => this.call(cmd, args as Record<string, unknown>));
+    if (check && !check.passed) throw new TracerRefused(selfCheckReason(check));
   }
 
   setSize(cssWidth: number, cssHeight: number, pixelRatio: number) {
@@ -458,7 +462,7 @@ export class NativeTracer implements TracerBackend {
 
   setScene(scene: TraceScene, camera: THREE.Camera) {
     void this.scene.look(scene);
-    void this.scene.camera(camera, scene.lens);
+    this.sendCamera(camera, scene.lens);
     void this.scene.setMeshes(scene.meshes);
     this.reset();
   }
@@ -479,8 +483,17 @@ export class NativeTracer implements TracerBackend {
     this.reset();
   }
   updateCamera(camera: THREE.Camera, lens: TraceLens | null) {
-    void this.scene.camera(camera, lens);
+    this.sendCamera(camera, lens);
     this.reset();
+  }
+  private sendCamera(camera: THREE.Camera, lens: TraceLens | null) {
+    const sent = this.scene.camera(camera, lens);
+    void sent.then(this.cameras.send(camera));
+  }
+
+  /** The camera the frame on the canvas was traced with, null when not known. */
+  shownView(): FrameView | null {
+    return this.shownSeq === null ? null : this.cameras.of(this.shownSeq);
   }
   reset() {
     this.count = 0;
@@ -560,6 +573,7 @@ export class NativeTracer implements TracerBackend {
       const whole = frame.pixels.byteLength >= frame.width * frame.height * 4 && frame.width > 0;
       if (frame.generation >= this.generation && whole && !this.disposed) {
         this.blit.upload(frame);
+        this.shownSeq = frame.seq;
         this.count++;
         if (!this.resizeTimer && !this.resizing) this.sized = true;
       }
@@ -619,10 +633,8 @@ export class NativeTracer implements TracerBackend {
     return this.shownDenoised;
   }
 
-  /** At the cap the native side denoises on its own thread; this asks after
-   *  it and pulls the denoised frame once it is held. The frame prefetched
-   *  before it landed is still the raw one, so two are pulled. A new denoise
-   *  level at the cap starts no denoise until a frame is asked for. */
+  /** The native side denoises the cap on its own thread. The frame prefetched before that landed is still
+   *  raw, so two are pulled. A new denoise level at the cap starts nothing until a frame is asked for. */
   present(): boolean {
     if (this.settle === "done" || this.disposed) return false;
     this.polling ??= this.pollDenoise().finally(() => (this.polling = null));
@@ -699,5 +711,11 @@ export class NativeTracer implements TracerBackend {
 
 export function createNativeTracer(o: NativeTracerOptions = {}): Promise<TracerBackend> {
   const t = new NativeTracer(o);
-  return t.init().then(() => t);
+  return t.init().then(
+    () => t,
+    (e: unknown) => {
+      t.dispose();
+      throw e;
+    },
+  );
 }

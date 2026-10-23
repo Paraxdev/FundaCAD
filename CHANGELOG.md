@@ -25,6 +25,54 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Stress results open with a plain verdict.** The first line says whether the
+  part holds and with how much margin, or where it is likely to fail, and a pin
+  marks the weakest spot on the part. A line under it says how far it bends and
+  how much larger it is drawn. When the weakest spot is a sharp inside corner or
+  the edge of a support, the verdict says it is a rough reading.
+
+- **The stress preview bends smoothly.** The coloured part is drawn from a finer
+  copy of the analysed surface, so curved faces and the bend look smooth and the
+  colours blend instead of jumping. Sharp edges and flat faces stay as they are,
+  and every number and reading still comes from the analysis itself.
+
+- **Stress results play and pause the bend.** A Play button right under the
+  result swings the part between still and bent, and Pause holds it where it is,
+  so you can stop on any pose without leaving the tool. Going back to Set up or
+  turning the colours off pauses it too.
+
+- **The Stress panel has Set up and Results tabs.** Set up holds the body,
+  supports, loads, own weight and material, with Run in a bar at the bottom and
+  Cancel only while it runs. Results opens by itself when a Run finishes and
+  shows the safety factor, peak stress and deflection, with the rest under
+  Details. When the model or the setup changes after a Run, Results says so and
+  offers Run again. Closing the panel keeps the last result, so opening it again
+  shows the colours and readings without another Run. The panel wears the app's
+  own selects, switches and buttons, its buttons say what they do (Click on body,
+  Use selected faces), directions read Down, Up, Left and so on, and the hint
+  says Ready once the setup can run.
+
+- **Mirror asks for what to mirror and the line or plane in a panel.** In a
+  sketch and on the model, Mirror opens a small panel with two fields, Objects
+  and Mirror line (Mirror plane on the model). The icon beside a field makes it
+  the one your clicks fill, and Objects moves on to the line or plane by itself.
+  What you selected before starting is already in Objects. A preview shows the
+  result, Enter or the check applies it as one undo step, and Esc cancels. On
+  the model the plane can be an origin plane, a datum plane or a flat face; a
+  flat face adds a Mirror plane datum that follows it. Selected bodies offer
+  Mirror in the selection toolbar.
+
+- **The section is saved with the document.** A cut that is on is saved in the
+  file and is back when you open it. New and Open no longer carry a cut over
+  from the document before, undo leaves the cut alone, and an older version
+  keeps the cut in the file when it saves.
+
+- **Clicks and hovers reach only what a section keeps.** With a cut on, a
+  click to select, hovering, measuring, fillet edge picks and face picks skip
+  the cut half, and a selected body's glow stops at the cut. A click on the
+  hatched cut surface selects its body and never a face hidden behind it. Box
+  select still takes both halves.
+
 - **Filament materials get sheen, anisotropy, flakes and scatter.** A material's
   Advanced section in the Render workspace has Sheen for a soft velvet rim,
   Anisotropy for highlights that streak along the layer lines, Flakes and Flake
@@ -397,6 +445,24 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **Sketch Mirror applies on Enter, not on the line click.** Pick the line,
+  check the preview, then press Enter or the check.
+
+- **Confirming a section keeps the cut on.** Enter, the check and Esc end
+  editing a section and leave the cut on, where Esc and the cross used to remove
+  it. The handle and the offset box go away, F is Fillet again, and orbit,
+  select, measure and other tools work with the cut on. A Section on chip at the
+  top of the view has Edit to bring the handle back, Flip to keep the other half
+  and Off to remove the cut.
+
+- **The origin planes are three small tiles that no longer cross.** While Sketch
+  or another tool asks for a plane, XY, XZ and YZ show as small rounded tiles
+  beside the origin, each in its own quadrant with its name inside, instead of
+  three large squares through each other. They stay the same size on screen as
+  you zoom, so they no longer cover the grid or the part, and shrink only when
+  the part itself is small on screen. A tile inside or behind a body draws
+  faint and can still be clicked. A tile seen edge on hides its name.
+
 - **Saving a .fundab with a big import is several times faster on a computer
   with several cores.** A 69 MB imported STEP assembly saves in about 0.4
   seconds instead of about 1.8, or 0.6 seconds on four cores. On one core it
@@ -437,6 +503,46 @@ This file starts on 2026-08-03. For anything before that, see the
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
+
+- **Sketch Mirror copies polygons and slots as themselves.** A mirrored polygon
+  or slot came out as a stray point.
+
+- **A mirror across a datum plane shows that plane.** Its Plane row read XY;
+  it now names the datum, and lists the datum planes above the mirror.
+
+- **Restoring a version that cannot be read says so.** A saved version with a
+  modelling step missing from the file made its row in the Versions panel fail
+  to open, and Restore did nothing and said nothing. The row now opens with the
+  step names it has, and Restore tells you why the version cannot be restored
+  and leaves the document as it was.
+
+- **A damaged file opens with what can be read in it.** A palette slot that was
+  not a colour came back as a slot with no name or colour, a materials list
+  with no readable row left the document with an empty library instead of the
+  starter set, and a body name that was a number, a rollback marker that was
+  not a step count, or a saved view with no direction were carried as they
+  were. Each is now left out, or put back to the default for a palette slot,
+  which keeps its place since bodies point at slots by number.
+
+- **A plugin's edit of the whole document keeps its versions and project state.**
+  A plugin that read the document and set it back wiped the saved versions for
+  good, and with them the stress study, environment, palette, materials,
+  elements and body and face colours until an Undo, and multiplied every sketch
+  polygon's angle by about 57 each time. The plugin now gets the whole document, and no
+  plugin or assistant edit changes the versions, so one saved while an
+  assistant's edit was on its way stays too.
+
+- **A two distance chamfer puts each distance on the face where it fits.** On
+  the vertical edges of a 20 mm box, 3/12 was refused although 12 at one
+  corner of each face and 3 at the other fits, and 1/12 came back carved one
+  edge at a time without a word. A two distance chamfer that fits no way round,
+  or that only the fallback build could make and would leave stepped where its
+  edge ends on a slanted or rounded face, is now refused, and so is one that
+  fits or just meets across a face with an inside corner but that only the
+  fallback build could make, like the top of an L with 5 + 5 on its 10 mm arm
+  or 2/8 where that corner turns 225 degrees: the fallback build left a wedge
+  standing in the corner without a word. Some of these used to build with a
+  warning about another corner while a concave fill was clipped without one.
 
 - **One Undo takes back an import and the colours its file carried.** Each
   colour used to be an undo step of its own, so a coloured assembly took many

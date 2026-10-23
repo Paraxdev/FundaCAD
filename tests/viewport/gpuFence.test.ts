@@ -4,16 +4,33 @@ import { GpuFence } from "../../src/viewport/gpuFence";
 function fakeGl() {
   const live = new Set<object>();
   let signaled = false;
+  let lost = false;
   const gl = {
+    isContextLost: () => lost,
     SYNC_GPU_COMMANDS_COMPLETE: 1,
     SYNC_STATUS: 2,
     SIGNALED: 3,
     UNSIGNALED: 4,
-    fenceSync: () => { const s = {}; live.add(s); return s; },
-    deleteSync: (s: object) => { live.delete(s); },
-    getSyncParameter: () => (signaled ? 3 : 4),
+    fenceSync: () => {
+      const s = {};
+      live.add(s);
+      return s;
+    },
+    deleteSync: (s: object) => {
+      live.delete(s);
+    },
+    getSyncParameter: () => (lost ? null : signaled ? 3 : 4),
   };
-  return { gl: gl as unknown as WebGL2RenderingContext, live, signal: (v: boolean) => { signaled = v; } };
+  return {
+    gl: gl as unknown as WebGL2RenderingContext,
+    live,
+    signal: (v: boolean) => {
+      signaled = v;
+    },
+    lose: () => {
+      lost = true;
+    },
+  };
 }
 
 describe("GpuFence", () => {
@@ -39,5 +56,15 @@ describe("GpuFence", () => {
     fence.mark();
     fence.mark();
     expect(f.live.size).toBe(1);
+  });
+
+  it("is idle once the context is lost, since a lost context never signals its sync", () => {
+    const f = fakeGl();
+    const fence = new GpuFence(f.gl);
+    fence.mark();
+    expect(fence.idle()).toBe(false);
+    f.lose();
+    expect(fence.idle()).toBe(true);
+    expect(fence.idle()).toBe(true);
   });
 });

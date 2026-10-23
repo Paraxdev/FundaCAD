@@ -1,13 +1,15 @@
 <script setup lang="ts">
-// Below the controller's declared settings: which pad is being read, and what
-// each button does.
-//
-// A button binds to any command the palette offers, by the same id, so this
-// list can never name a command the app does not have, and a command a plugin
-// adds shows up here the moment that plugin is on.
-
 import { computed, onUnmounted, reactive } from "vue";
-import { BINDABLE, BUTTON_LABELS, CURSOR, KEY_CHOICES, getGamepadConfig, setGamepadConfig, settings, type GamepadConfig } from "./gamepad";
+import {
+  BINDABLE,
+  BUTTON_LABELS,
+  CURSOR,
+  KEY_CHOICES,
+  getGamepadConfig,
+  setGamepadConfig,
+  settings,
+  type GamepadConfig,
+} from "./gamepad";
 import { padState } from "./state";
 import { allCommands } from "fundacad";
 
@@ -21,7 +23,8 @@ function bind(i: number, v: string) {
   setGamepadConfig({ buttons: { [i]: v } });
 }
 
-/** The palette's commands, grouped the way the palette groups them. */
+// A button binds to a palette command by its id, so it never names a command the app lacks, and a command a plugin
+// adds shows up the moment that plugin is on. Grouped the way the palette groups them.
 const groups = computed(() => {
   const out = new Map<string, { id: string; label: string }[]>();
   const seen = new Set<string>();
@@ -43,13 +46,16 @@ const groups = computed(() => {
         <span class="pref-title">Controller</span>
       </div>
       <p class="pref-hint">
-        <template v-if="padState.name">Reading <b>{{ padState.name }}</b>.</template>
+        <template v-if="padState.name"
+          >Reading <b>{{ padState.name }}</b
+          >.</template
+        >
         <template v-else>
-          No controller seen yet. Plug one in and press any button, the webview only reports a
-          pad after its first press.
+          No controller seen yet. Plug one in and press any button, the webview only reports a pad after its first
+          press.
         </template>
-        Left stick pans, right stick rotates, the triggers zoom. On a Steam Deck, start FundaCAD
-        from Steam so the Deck shows up as a controller; its trackpads keep working as a mouse.
+        Left stick pans, right stick rotates, the triggers zoom. On a Steam Deck, start FundaCAD from Steam so the Deck
+        shows up as a controller; its trackpads keep working as a mouse.
       </p>
     </div>
 
@@ -58,8 +64,7 @@ const groups = computed(() => {
         <span class="pref-title">Buttons</span>
       </div>
       <p class="pref-hint">
-        With the cursor on, the left stick moves it and A clicks, so faces can be picked without
-        a mouse.
+        With the cursor on, the left stick moves it and A clicks, so faces can be picked without a mouse.
       </p>
       <div v-for="i in BINDABLE" :key="i" class="pref-head">
         <label class="pref-title" :for="`gp-btn-${i}`">{{ BUTTON_LABELS[i] }}</label>

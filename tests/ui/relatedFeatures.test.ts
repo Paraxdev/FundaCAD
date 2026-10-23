@@ -7,7 +7,14 @@ const doc = [
   { id: "sh", type: "shell" },
   { id: "s2", type: "sketch" },
   { id: "e2", type: "extrude", sketch: "s2" },
-  { id: "l1", type: "loft", profiles: [{ sketch: "s1", region: [0, 0, 0] }, { sketch: "s2", region: [0, 0, 5] }] },
+  {
+    id: "l1",
+    type: "loft",
+    profiles: [
+      { sketch: "s1", region: [0, 0, 0] },
+      { sketch: "s2", region: [0, 0, 5] },
+    ],
+  },
 ];
 
 describe("related features", () => {

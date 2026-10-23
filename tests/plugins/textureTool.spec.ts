@@ -32,7 +32,9 @@ function fakeViewport() {
     nearAnswers: [] as (number | null)[],
   };
   const vp = {
-    get selecting() { return state.selecting; },
+    get selecting() {
+      return state.selecting;
+    },
     setSelectionMode(m: "faces" | "bodies") {
       state.selecting = m;
       // The real one clears the OTHER kind, which is why a mode switch always
@@ -42,9 +44,16 @@ function fakeViewport() {
     },
     getSelectedFaceIds: () => [...state.faceIds],
     getSelectedBodies: () => [...state.bodyIds],
-    selectFaces: (ids: number[]) => { state.faceIds = [...ids]; },
-    setSelectedBodies: (ids: string[]) => { state.bodyIds = [...ids]; },
-    clearSelection: () => { state.cleared++; state.faceIds = []; },
+    selectFaces: (ids: number[]) => {
+      state.faceIds = [...ids];
+    },
+    setSelectedBodies: (ids: string[]) => {
+      state.bodyIds = [...ids];
+    },
+    clearSelection: () => {
+      state.cleared++;
+      state.faceIds = [];
+    },
     faceIdToBodyId: (id: number) => state.owner.get(id) ?? "body1",
     faceIdNear: () => state.nearAnswers.shift() ?? null,
     selectedFacesForPressPull: () => {
@@ -53,7 +62,9 @@ function fakeViewport() {
         faceIds: [...state.faceIds],
         bodyId: state.owner.get(state.faceIds[0]!) ?? "body1",
         selectors: state.faceIds.map((i) => ({
-          kind: "face" as const, by: "nearest" as const, point: [i, 0, 0] as [number, number, number],
+          kind: "face" as const,
+          by: "nearest" as const,
+          point: [i, 0, 0] as [number, number, number],
         })),
       };
     },
@@ -211,8 +222,8 @@ describe("TextureTool", () => {
       await tick();
       expect(panel.summary.value).toBe("2 faces selected");
 
-      landBuild();          // a rebuild finished...
-      state.faceIds = [];   // ...and it cleared the selection
+      landBuild(); // a rebuild finished...
+      state.faceIds = []; // ...and it cleared the selection
       await tick();
 
       expect(vp.getSelectedFaceIds()).toEqual([7, 8]);
@@ -238,8 +249,8 @@ describe("TextureTool", () => {
       runDebounce();
       const previewsBefore = calls.previews.length;
 
-      startBuild();         // the reply begins arriving...
-      state.faceIds = [];   // ...and an installment publishes an empty selection
+      startBuild(); // the reply begins arriving...
+      state.faceIds = []; // ...and an installment publishes an empty selection
       await tick();
       await tick();
 
@@ -311,8 +322,27 @@ describe("TextureTool", () => {
       state.faceIds = [1, 2];
       await tick();
       panel.commit({
-        kind: "hex", depth: 1, scale: 3, angle: 0, offset: 0, sharpness: 0.5,
-        profile: "facet", boundaryInset: 0, grime: 0, smooth: 0, projection: "triplanar", seamBlend: 0.5, seamBand: 0.5, amplitude: 1, slopeMin: 0, slopeMax: 180, targetEdge: 0, triBudget: 0, direction: "out", seed: 1, invert: false,
+        kind: "hex",
+        depth: 1,
+        scale: 3,
+        angle: 0,
+        offset: 0,
+        sharpness: 0.5,
+        profile: "facet",
+        boundaryInset: 0,
+        grime: 0,
+        smooth: 0,
+        projection: "triplanar",
+        seamBlend: 0.5,
+        seamBand: 0.5,
+        amplitude: 1,
+        slopeMin: 0,
+        slopeMax: 180,
+        targetEdge: 0,
+        triBudget: 0,
+        direction: "out",
+        seed: 1,
+        invert: false,
       });
 
       expect(calls.added).toHaveLength(1);
@@ -336,8 +366,27 @@ describe("TextureTool", () => {
       state.faceIds = [1, 2];
       await tick();
       panel.commit({
-        kind: "knurl", depth: 1, scale: 3, angle: 0, offset: 0, sharpness: 0.5,
-        profile: "facet", boundaryInset: 0, grime: 0, smooth: 0, projection: "triplanar", seamBlend: 0.5, seamBand: 0.5, amplitude: 1, slopeMin: 0, slopeMax: 180, targetEdge: 0, triBudget: 0, direction: "out", seed: 1, invert: false,
+        kind: "knurl",
+        depth: 1,
+        scale: 3,
+        angle: 0,
+        offset: 0,
+        sharpness: 0.5,
+        profile: "facet",
+        boundaryInset: 0,
+        grime: 0,
+        smooth: 0,
+        projection: "triplanar",
+        seamBlend: 0.5,
+        seamBand: 0.5,
+        amplitude: 1,
+        slopeMin: 0,
+        slopeMax: 180,
+        targetEdge: 0,
+        triBudget: 0,
+        direction: "out",
+        seed: 1,
+        invert: false,
       });
       const f = calls.added[0] as unknown as { body: string; faces: unknown };
       expect(f.body).toBe("body1");
@@ -362,13 +411,32 @@ describe("TextureTool", () => {
       startBuild();
       state.faceIds = []; // the installment's empty moment
       panel.commit({
-        kind: "knurl", depth: 0.4, scale: 2, angle: 0, offset: 0, sharpness: 0.5,
-        profile: "facet", boundaryInset: 0, grime: 0, smooth: 0, projection: "triplanar", seamBlend: 0.5, seamBand: 0.5, amplitude: 1, slopeMin: 0, slopeMax: 180, targetEdge: 0, triBudget: 0, direction: "out", seed: 1, invert: false,
+        kind: "knurl",
+        depth: 0.4,
+        scale: 2,
+        angle: 0,
+        offset: 0,
+        sharpness: 0.5,
+        profile: "facet",
+        boundaryInset: 0,
+        grime: 0,
+        smooth: 0,
+        projection: "triplanar",
+        seamBlend: 0.5,
+        seamBand: 0.5,
+        amplitude: 1,
+        slopeMin: 0,
+        slopeMax: 180,
+        targetEdge: 0,
+        triBudget: 0,
+        direction: "out",
+        seed: 1,
+        invert: false,
       });
       expect(calls.added).toHaveLength(0); // held, not refused
       expect(tool.active).toBe(true);
 
-      state.faceIds = [3];  // the viewport restores it at the commit
+      state.faceIds = [3]; // the viewport restores it at the commit
       landBuild();
       expect(calls.added).toHaveLength(1);
       expect(calls.added[0]).toMatchObject({ type: "texture", kind: "knurl" });
@@ -389,8 +457,27 @@ describe("TextureTool", () => {
       startBuild();
       state.faceIds = [];
       panel.commit({
-        kind: "knurl", depth: 0.4, scale: 2, angle: 0, offset: 0, sharpness: 0.5,
-        profile: "facet", boundaryInset: 0, grime: 0, smooth: 0, projection: "triplanar", seamBlend: 0.5, seamBand: 0.5, amplitude: 1, slopeMin: 0, slopeMax: 180, targetEdge: 0, triBudget: 0, direction: "out", seed: 1, invert: false,
+        kind: "knurl",
+        depth: 0.4,
+        scale: 2,
+        angle: 0,
+        offset: 0,
+        sharpness: 0.5,
+        profile: "facet",
+        boundaryInset: 0,
+        grime: 0,
+        smooth: 0,
+        projection: "triplanar",
+        seamBlend: 0.5,
+        seamBand: 0.5,
+        amplitude: 1,
+        slopeMin: 0,
+        slopeMax: 180,
+        targetEdge: 0,
+        triBudget: 0,
+        direction: "out",
+        seed: 1,
+        invert: false,
       });
       landBuild(); // and the face really is gone
       expect(calls.added).toHaveLength(0);
@@ -405,8 +492,27 @@ describe("TextureTool", () => {
       const done = vi.fn();
       tool.start(done);
       panel.commit({
-        kind: "knurl", depth: 1, scale: 3, angle: 0, offset: 0, sharpness: 0.5,
-        profile: "facet", boundaryInset: 0, grime: 0, smooth: 0, projection: "triplanar", seamBlend: 0.5, seamBand: 0.5, amplitude: 1, slopeMin: 0, slopeMax: 180, targetEdge: 0, triBudget: 0, direction: "out", seed: 1, invert: false,
+        kind: "knurl",
+        depth: 1,
+        scale: 3,
+        angle: 0,
+        offset: 0,
+        sharpness: 0.5,
+        profile: "facet",
+        boundaryInset: 0,
+        grime: 0,
+        smooth: 0,
+        projection: "triplanar",
+        seamBlend: 0.5,
+        seamBand: 0.5,
+        amplitude: 1,
+        slopeMin: 0,
+        slopeMax: 180,
+        targetEdge: 0,
+        triBudget: 0,
+        direction: "out",
+        seed: 1,
+        invert: false,
       });
       expect(calls.added).toEqual([]);
       expect(tool.active).toBe(true);
@@ -423,11 +529,30 @@ describe("TextureTool", () => {
       state.faceIds = [1];
       await tick();
       panel.commit({
-        kind: "knurl", depth: 1, scale: 3, angle: 30, offset: 0, sharpness: 0.5,
-        profile: "facet", boundaryInset: 0, grime: 0, smooth: 0, projection: "triplanar", seamBlend: 0.5, seamBand: 0.5, amplitude: 1, slopeMin: 0, slopeMax: 180, targetEdge: 0, triBudget: 0, direction: "out", seed: 99, invert: false,
+        kind: "knurl",
+        depth: 1,
+        scale: 3,
+        angle: 30,
+        offset: 0,
+        sharpness: 0.5,
+        profile: "facet",
+        boundaryInset: 0,
+        grime: 0,
+        smooth: 0,
+        projection: "triplanar",
+        seamBlend: 0.5,
+        seamBand: 0.5,
+        amplitude: 1,
+        slopeMin: 0,
+        slopeMax: 180,
+        targetEdge: 0,
+        triBudget: 0,
+        direction: "out",
+        seed: 99,
+        invert: false,
       });
       const f = calls.added[0] as unknown as Record<string, unknown>;
-      expect(f["angle"]).toBe(30);   // a knurl has a lattice to rotate
+      expect(f["angle"]).toBe(30); // a knurl has a lattice to rotate
       expect(f["seed"]).toBeUndefined(); // ...and reads no seed
     });
   });
@@ -483,10 +608,18 @@ describe("TextureTool", () => {
   });
 
   describe("re-opening a committed texture", () => {
-    const committed = (over: Record<string, unknown> = {}) => ([{
-      id: "t1", type: "texture", kind: "waves", depth: 0.6, scale: 4,
-      body: "body1", ...over,
-    }] as unknown as Feature[]);
+    const committed = (over: Record<string, unknown> = {}) =>
+      [
+        {
+          id: "t1",
+          type: "texture",
+          kind: "waves",
+          depth: 0.6,
+          scale: 4,
+          body: "body1",
+          ...over,
+        },
+      ] as unknown as Feature[];
 
     it("rolls the model back, seeds the panel, and keeps the same id", () => {
       const { vp } = fakeViewport();
@@ -511,8 +644,27 @@ describe("TextureTool", () => {
       landBuild();
       state.faceIds = [1];
       panel.commit({
-        kind: "waves", depth: 2, scale: 4, angle: 0, offset: 0, sharpness: 0.5,
-        profile: "round", boundaryInset: 0, grime: 0, smooth: 0, projection: "triplanar", seamBlend: 0.5, seamBand: 0.5, amplitude: 1, slopeMin: 0, slopeMax: 180, targetEdge: 0, triBudget: 0, direction: "out", seed: 1, invert: false,
+        kind: "waves",
+        depth: 2,
+        scale: 4,
+        angle: 0,
+        offset: 0,
+        sharpness: 0.5,
+        profile: "round",
+        boundaryInset: 0,
+        grime: 0,
+        smooth: 0,
+        projection: "triplanar",
+        seamBlend: 0.5,
+        seamBand: 0.5,
+        amplitude: 1,
+        slopeMin: 0,
+        slopeMax: 180,
+        targetEdge: 0,
+        triBudget: 0,
+        direction: "out",
+        seed: 1,
+        invert: false,
       });
       expect(calls.added).toEqual([]);
       expect(calls.replaced).toHaveLength(1);
@@ -534,12 +686,14 @@ describe("TextureTool", () => {
     it("re-selects the faces the committed feature was made from", () => {
       const { vp, state } = fakeViewport();
       state.nearAnswers = [11, 12];
-      const { store, landBuild } = fakeStore(committed({
-        faces: [
-          { kind: "face", by: "nearest", point: [0, 0, 0] },
-          { kind: "face", by: "nearest", point: [1, 0, 0] },
-        ],
-      }));
+      const { store, landBuild } = fakeStore(
+        committed({
+          faces: [
+            { kind: "face", by: "nearest", point: [0, 0, 0] },
+            { kind: "face", by: "nearest", point: [1, 0, 0] },
+          ],
+        }),
+      );
       const tool = new TextureTool(vp, store);
       tool.startEdit("t1", () => {});
       landBuild();

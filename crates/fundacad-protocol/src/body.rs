@@ -1,9 +1,5 @@
-//! The mesh result a rebuild hands to the wire.
-//!
-//! Replaces the result dicts the Python engine's `server.py` passes to the Python engine's `wire.py`:
-//! the top-level result (`protocol`, `bbox`, `diagnostics`, ...) and its
-//! per-body payloads. The mesh arrays are typed, at the width they travel in,
-//! everything else stays JSON so a new field needs no protocol change.
+//! The mesh result a rebuild hands to the wire. Mesh arrays are typed at the width they travel in, everything else
+//! stays JSON so a new field needs no protocol change.
 
 use crate::pyjson;
 use serde_json::{Map, Value};
@@ -16,13 +12,8 @@ pub struct Edge {
     pub smooth: bool,
 }
 
-/// A body whose mesh the client does not hold, sent in full.
-///
-/// `fields` carries every non-array field (`id`, `name`, `etag`, `faceOwners`,
-/// `faceCount`, `bbox`, ...) in the order they are written. The mesh keys
-/// (`positions`, `normals`, `indices`, `faceIds`, `edges`) are written where
-/// `fields` already has them, whatever their placeholder value, and appended in
-/// that order otherwise, which is how the Python dict update behaves.
+/// A body the client does not hold, sent in full. `fields` keeps every non-array field in write order; the mesh keys
+/// go where `fields` already has them and are appended in order otherwise, as a Python dict update does.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct FullBody {
     pub fields: Map<String, Value>,
@@ -66,10 +57,7 @@ impl FullBody {
         fields.insert("id".into(), id.into());
         fields.insert("name".into(), name.into());
         fields.insert("etag".into(), etag.into());
-        FullBody {
-            fields,
-            ..Default::default()
-        }
+        FullBody { fields, ..Default::default() }
     }
 
     pub fn id(&self) -> &Value {
@@ -90,24 +78,15 @@ impl FullBody {
                 m.shift_remove("normals");
             }
         }
-        m.insert(
-            "indices".into(),
-            self.indices.iter().copied().map(Value::from).collect(),
-        );
-        m.insert(
-            "faceIds".into(),
-            self.face_ids.iter().copied().map(Value::from).collect(),
-        );
+        m.insert("indices".into(), self.indices.iter().copied().map(Value::from).collect());
+        m.insert("faceIds".into(), self.face_ids.iter().copied().map(Value::from).collect());
         let id = self.id();
         let edges = self
             .edges
             .iter()
             .map(|e| {
                 let mut em = Map::new();
-                let pts = e
-                    .points
-                    .iter()
-                    .map(|p| Value::Array(p.iter().map(|x| f32_value(*x)).collect()));
+                let pts = e.points.iter().map(|p| Value::Array(p.iter().map(|x| f32_value(*x)).collect()));
                 em.insert("points".into(), Value::Array(pts.collect()));
                 em.insert("body".into(), id.clone());
                 if e.smooth {
@@ -154,18 +133,12 @@ impl WireBody {
         match self {
             WireBody::Stub(_) => 128,
             WireBody::Full(b) => {
-                let mut n = b.positions.len()
-                    + b.indices.len()
-                    + b.face_ids.len()
-                    + b.normals.as_ref().map_or(0, Vec::len);
+                let mut n =
+                    b.positions.len() + b.indices.len() + b.face_ids.len() + b.normals.as_ref().map_or(0, Vec::len);
                 for e in &b.edges {
                     n += 3 * e.points.len() + 1;
                 }
-                let owners = b
-                    .fields
-                    .get("faceOwners")
-                    .and_then(Value::as_array)
-                    .map_or(0, Vec::len);
+                let owners = b.fields.get("faceOwners").and_then(Value::as_array).map_or(0, Vec::len);
                 4 * n + 24 * owners + 256
             }
         }
@@ -191,10 +164,7 @@ impl WireBody {
             }
             WireBody::Full(b) => b,
         };
-        e.insert(
-            "faceCount".into(),
-            f.get("faceCount").cloned().unwrap_or(Value::from(0)),
-        );
+        e.insert("faceCount".into(), f.get("faceCount").cloned().unwrap_or(Value::from(0)));
         e.insert("nVerts3".into(), b.positions.len().into());
         e.insert("nIdx".into(), b.indices.len().into());
         e.insert("nTris".into(), b.face_ids.len().into());
@@ -207,14 +177,9 @@ impl WireBody {
 }
 
 impl MeshResult {
-    /// The whole result as inline JSON, bodies included.
     pub fn to_json(&self) -> Map<String, Value> {
         let mut m = self.fields.clone();
-        let bodies = self
-            .bodies
-            .iter()
-            .map(|b| Value::Object(b.to_json()))
-            .collect();
+        let bodies = self.bodies.iter().map(|b| Value::Object(b.to_json())).collect();
         m.insert("bodies".into(), Value::Array(bodies));
         m
     }
@@ -229,10 +194,7 @@ impl JobResult {
     pub fn body_count(&self) -> usize {
         match self {
             JobResult::Mesh(m) => m.bodies.len(),
-            JobResult::Json(m) => m
-                .get("bodies")
-                .and_then(Value::as_array)
-                .map_or(0, Vec::len),
+            JobResult::Json(m) => m.get("bodies").and_then(Value::as_array).map_or(0, Vec::len),
         }
     }
 

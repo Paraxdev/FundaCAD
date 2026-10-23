@@ -46,10 +46,7 @@ describe("regionNudgePlacement", () => {
   it("takes the normal from the first area", () => {
     // Extruding several areas together moves them all along one direction, and
     // that direction is the first area's, same rule as the tool's preview.
-    const place = regionNudgePlacement(
-      [region([0, 0, 0], [1, 0, 0]), region([2, 0, 0], [0, 1, 0])],
-      () => {},
-    );
+    const place = regionNudgePlacement([region([0, 0, 0], [1, 0, 0]), region([2, 0, 0], [0, 1, 0])], () => {});
     expect(place?.axis({} as never).toArray()).toEqual([1, 0, 0]);
   });
 

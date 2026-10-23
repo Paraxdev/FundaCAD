@@ -1,9 +1,5 @@
-// Pattern placement/edit flow: click to place, drag to size, type counts, click
-// to commit. Each pattern persists as an editable (associative) definition,
-// entity patterns (rect/circular) replicate the current selection, presets emit
-// holes. Operates through the PatternHost accessor SketchMode provides, the
-// pending/center/edit-original state below is this collaborator's own (moved
-// out of SketchMode entirely), everything else is a live reference back into it.
+// Pattern placement and edit flow: click to place, drag to size, type counts, click to commit. Patterns persist as
+// editable definitions; entity patterns replicate the selection, presets emit holes.
 
 import * as THREE from "three";
 import type { SketchPattern } from "../types";
@@ -18,24 +14,18 @@ import type { SketchTool } from "./sketchMode";
 export const PRESET_PATTERNS = new Set<SketchTool>(["hexHoles", "honeycomb", "boltCircle", "gridHoles"]);
 // patterns that replicate the current selection (MCAD-style)
 export const ENTITY_PATTERNS = new Set<SketchTool>(["patternRect", "patternCircular"]);
-// every pattern tool (presets + entity patterns)
 export const PATTERN_TOOLS = new Set<SketchTool>([...PRESET_PATTERNS, ...ENTITY_PATTERNS]);
 
 /** The slice of SketchMode this flow reads/writes, live accessors, not copies. */
 export interface PatternHost {
-  /** current active sketch tool (which pattern is being placed) */
   tool(): SketchTool;
-  /** raw tool assignment, bypassing setTool()'s reset side-effects, editPattern
-   *  needs the active tool switched to match the pattern being edited without
-   *  wiping the placement state it just set up */
+  /** Raw tool assignment without setTool()'s reset, so edit() can switch tools without wiping its placement state. */
   setActiveTool(t: SketchTool): void;
   /** the full tool switch (used once placement commits, to return to "select") */
   setTool(t: SketchTool): void;
-  /** live multi-selection, never copied */
   selected(): Set<string>;
-  /** live pattern list, never copied; placement/edit push/splice it directly */
+  /** live; placement and edit push and splice it directly */
   patterns(): SketchPattern[];
-  /** the shared on-canvas dimension input */
   dim(): DimInput;
   /** where a source entity sits, its centre or anchor, null if the id is gone */
   sourcePoint(id: string): { x: number; y: number } | null;
@@ -67,9 +57,7 @@ export class PatternFlow {
     return this.pendingPattern != null;
   }
 
-  /** fresh sketch session: drop any placement state (mirrors enter()'s original
-   *  scope, editOriginal is intentionally left alone, as before: it's always
-   *  overwritten before it's next read, by editPattern()). */
+  /** Drops placement state on a fresh session; editOriginal stays, as edit() overwrites it before any read. */
   resetForEnter() {
     this.pendingPattern = null;
     this.patternCenter = null;
@@ -78,8 +66,7 @@ export class PatternFlow {
     this.syncDot();
   }
 
-  /** push any in-progress pattern into the committed list, nulling only the
-   *  pending pattern itself (used by finish()). */
+  /** Commits any in-progress pattern, nulling only the pending pattern itself (used by finish()). */
   flushOnFinish() {
     if (this.pendingPattern) {
       this.host.patterns().push(this.pendingPattern);
@@ -120,7 +107,8 @@ export class PatternFlow {
    *  keep the fresh placement at its current values (new). */
   cancelPending() {
     if (!this.pendingPattern) return;
-    if (this.editOriginal) this.host.patterns().push(this.editOriginal); // restore the pre-edit pattern
+    if (this.editOriginal)
+      this.host.patterns().push(this.editOriginal); // restore the pre-edit pattern
     else this.host.patterns().push(this.pendingPattern); // a fresh placement: keep it at its current values
     this.pendingPattern = null;
     this.editOriginal = null;
@@ -135,9 +123,8 @@ export class PatternFlow {
     this.host.onState();
   }
 
-  /** Circular pattern with a selection: start pending at once, centred on the
-   *  selection, so the centre dot is there to drag before any click. Returns
-   *  false when there is nothing to centre on. */
+  /** Circular pattern with a selection: start pending at once, centred on the selection, so the centre dot is there
+   *  to drag before any click. False when there is nothing to centre on. */
   begin(): boolean {
     if (this.pendingPattern || this.host.tool() !== "patternCircular") return false;
     const c = selectionCentre([...this.host.selected()].map((id) => this.host.sourcePoint(id)));
@@ -204,7 +191,7 @@ export class PatternFlow {
   click(p: THREE.Vector2) {
     if (!this.patternCenter) {
       if (ENTITY_PATTERNS.has(this.host.tool()) && this.host.selected().size === 0) {
-        setPrompt("Click the curves or profile to pattern");
+        setPrompt("Click the curves or profile to pattern · Esc");
         return;
       }
       this.patternCenter = p.clone();
@@ -223,19 +210,41 @@ export class PatternFlow {
     const id = newPatternId();
     const sources = [...this.host.selected()];
     if (tool === "boltCircle") return { id, type: "boltCircle", cx: c.x, cy: c.y, bcd: 40, count: 6, diameter: 6 };
-    if (tool === "gridHoles") return { id, type: "gridHoles", cx: c.x, cy: c.y, diameter: 6, countX: 3, countY: 3, spacingX: 12, spacingY: 12 };
+    if (tool === "gridHoles")
+      return { id, type: "gridHoles", cx: c.x, cy: c.y, diameter: 6, countX: 3, countY: 3, spacingX: 12, spacingY: 12 };
     if (tool === "hexHoles") return { id, type: "hexHoles", cx: c.x, cy: c.y, diameter: 6, spacing: 12, rings: 2 };
     if (tool === "honeycomb") return { id, type: "honeycomb", cx: c.x, cy: c.y, diameter: 12, spacing: 13, rings: 2 };
-    if (tool === "patternCircular") return { id, type: "patternCircular", sources, cx: c.x, cy: c.y, count: 6, angle: 360 };
+    if (tool === "patternCircular")
+      return { id, type: "patternCircular", sources, cx: c.x, cy: c.y, count: 6, angle: 360 };
     return { id, type: "patternRect", sources, countX: 3, countY: 1, spacingX: 15, spacingY: 15 }; // patternRect
   }
 
   private patternDimDefs(type: SketchPattern["type"]) {
-    if (type === "boltCircle") return [{ name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 }, { name: "diameter", label: "Diameter", icon: "diameter", positive: true }];
-    if (type === "gridHoles") return [{ name: "countX", label: "Nx", kind: "count" as const, integer: true, atLeast: 1 }, { name: "countY", label: "Ny", kind: "count" as const, integer: true, atLeast: 1 }, { name: "diameter", label: "Diameter", icon: "diameter", positive: true }];
-    if (type === "hexHoles" || type === "honeycomb") return [{ name: "rings", label: "Rings", kind: "count" as const, integer: true, atLeast: 0 }, { name: "diameter", label: "Diameter", icon: "diameter", positive: true }];
-    if (type === "patternCircular") return [{ name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 }, { name: "angle", label: "Angle", icon: "angle", kind: "angle" as const }];
-    return [{ name: "countX", label: "Nx", kind: "count" as const, integer: true, atLeast: 1 }, { name: "countY", label: "Ny", kind: "count" as const, integer: true, atLeast: 1 }]; // patternRect
+    if (type === "boltCircle")
+      return [
+        { name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 },
+        { name: "diameter", label: "Diameter", icon: "diameter", positive: true },
+      ];
+    if (type === "gridHoles")
+      return [
+        { name: "countX", label: "Nx", kind: "count" as const, integer: true, atLeast: 1 },
+        { name: "countY", label: "Ny", kind: "count" as const, integer: true, atLeast: 1 },
+        { name: "diameter", label: "Diameter", icon: "diameter", positive: true },
+      ];
+    if (type === "hexHoles" || type === "honeycomb")
+      return [
+        { name: "rings", label: "Rings", kind: "count" as const, integer: true, atLeast: 0 },
+        { name: "diameter", label: "Diameter", icon: "diameter", positive: true },
+      ];
+    if (type === "patternCircular")
+      return [
+        { name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 },
+        { name: "angle", label: "Angle", icon: "angle", kind: "angle" as const },
+      ];
+    return [
+      { name: "countX", label: "Nx", kind: "count" as const, integer: true, atLeast: 1 },
+      { name: "countY", label: "Ny", kind: "count" as const, integer: true, atLeast: 1 },
+    ]; // patternRect
   }
 
   /** Live sizing: cursor offset/distance from the start point drives the spatial
@@ -255,7 +264,8 @@ export class PatternFlow {
       this.host.refreshActive();
       return;
     }
-    const dx = p.x - this.patternCenter.x, dy = p.y - this.patternCenter.y;
+    const dx = p.x - this.patternCenter.x,
+      dy = p.y - this.patternCenter.y;
     const r = Math.hypot(dx, dy);
     const dimN = (name: string, fallback: number) => Math.round(dim.getValue(name) ?? fallback);
     if (pat.type === "boltCircle") {
@@ -275,10 +285,8 @@ export class PatternFlow {
       pat.countX = Math.max(1, dimN("countX", pat.countX as number));
       pat.countY = Math.max(1, dimN("countY", pat.countY as number));
       if (pat.countY === 1) {
-        // a single row is a LINE, so the drag says which way it runs as well as
-        // how far apart, and the whole row follows the cursor instead of only
-        // its X component. A grid keeps the axis-aligned steps it always had,
-        // because there the two directions are separate answers.
+        // A single row is a LINE, so it follows the cursor's direction too; a grid keeps axis-aligned steps as its two
+        // directions are separate answers.
         if (r > 1) {
           pat.spacingX = Math.round(r * 10) / 10;
           pat.angle = snapAngleDeg((Math.atan2(dy, dx) * 180) / Math.PI, e.altKey);
@@ -293,9 +301,14 @@ export class PatternFlow {
       const src = dim.isUserDriven("angle") ? null : this.firstSourcePoint(pat.sources);
       const swept = src
         ? patternSweepDeg({
-            cx: this.patternCenter.x, cy: this.patternCenter.y,
-            sx: src.x, sy: src.y, px: p.x, py: p.y,
-            prev: this.sweep, free: e.altKey,
+            cx: this.patternCenter.x,
+            cy: this.patternCenter.y,
+            sx: src.x,
+            sy: src.y,
+            px: p.x,
+            py: p.y,
+            prev: this.sweep,
+            free: e.altKey,
           })
         : null;
       if (swept != null) {
@@ -350,10 +363,7 @@ export class PatternFlow {
     this.editOriginal = { ...pat };
     this.pendingPattern = pat;
     this.sweep = null; // the first drag sample re-seeds the accumulator from the cursor
-    this.patternCenter = new THREE.Vector2(
-      "cx" in pat ? (pat.cx as number) : 0,
-      "cy" in pat ? (pat.cy as number) : 0,
-    );
+    this.patternCenter = new THREE.Vector2("cx" in pat ? (pat.cx as number) : 0, "cy" in pat ? (pat.cy as number) : 0);
     this.centreDrag = false;
     this.host.setActiveTool(pat.type);
     this.showHud(pat);

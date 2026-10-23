@@ -1,6 +1,5 @@
-//! The rebuild caches, the oracles of the Python engine's `test_checkpoint.py` and
-//! the disk resume cases of test_assembly.py: a warm rebuild replays only
-//! what changed and answers exactly what a cold one does.
+//! The rebuild caches against the Python engine's test_checkpoint.py and the disk resume cases of test_assembly.py:
+//! a warm rebuild replays only what changed and answers exactly what a cold one does.
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -81,9 +80,7 @@ fn signature(r: &Rebuild, mesh: &MeshResult) -> Value {
 
 fn cold(raw: &Value) -> Value {
     let r = builder::rebuild(&typed(raw), raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
-    let JobResult::Mesh(m) = reply::mesh_result(&r.bodies, TOL, &Map::new(), &NoWatch) else {
-        panic!("mesh")
-    };
+    let JobResult::Mesh(m) = reply::mesh_result(&r.bodies, TOL, &Map::new(), &NoWatch) else { panic!("mesh") };
     signature(&r, &m)
 }
 
@@ -126,9 +123,8 @@ fn editing_the_last_feature_replays_only_it_and_matches_a_cold_build() {
     assert_eq!(cache.stats.meshed, 0);
 }
 
-/// `tests/faces/split_wall.brep`: one body whose side is two faces of the same
-/// surface, which is what puts `faceBands` in its payload. faces_parity covers
-/// the memory tier; what this adds is the artifact written to a real store.
+/// `tests/faces/split_wall.brep`: one body whose side is two faces of one surface, which puts `faceBands` in its
+/// payload. faces_parity covers the memory tier, this covers the artifact written to a real store.
 fn split_wall() -> opencascade::primitives::Shape {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/faces/split_wall.brep");
     let text = std::fs::read_to_string(path).unwrap();
@@ -145,11 +141,7 @@ fn banded_payload(payloads: &mut Payloads, store: Option<&GeomStore>, shape: &op
         ..Default::default()
     };
     payloads.reset_counters();
-    let mut tiered = Tiered {
-        payloads,
-        store,
-        persist_after: Duration::ZERO,
-    };
+    let mut tiered = Tiered { payloads, store, persist_after: Duration::ZERO };
     let m = fundacad_geom::mesh::mesh_result_full(
         std::slice::from_ref(&body),
         TOL,
@@ -175,14 +167,20 @@ fn a_cached_payload_keeps_its_face_bands() {
     assert_eq!((payloads.ram_hits, payloads.disk_hits, payloads.meshed), (0, 0, 1));
 
     let warm = banded_payload(&mut payloads, Some(&store), &shape);
-    assert_eq!((payloads.ram_hits, payloads.disk_hits, payloads.meshed), (1, 0, 0),
-        "a banded payload was meshed again instead of served from memory");
+    assert_eq!(
+        (payloads.ram_hits, payloads.disk_hits, payloads.meshed),
+        (1, 0, 0),
+        "a banded payload was meshed again instead of served from memory"
+    );
     assert_eq!(warm, fresh);
 
     let mut reopened = Payloads::default();
     let from_disk = banded_payload(&mut reopened, Some(&store), &shape);
-    assert_eq!((reopened.ram_hits, reopened.disk_hits, reopened.meshed), (0, 1, 0),
-        "the disk artifact of a banded body was not read back");
+    assert_eq!(
+        (reopened.ram_hits, reopened.disk_hits, reopened.meshed),
+        (0, 1, 0),
+        "the disk artifact of a banded body was not read back"
+    );
     assert_eq!(from_disk, fresh);
 }
 
@@ -203,8 +201,10 @@ fn a_projecting_sketch_is_never_resumed_past() {
     let watch = Replayed::default();
     let again = cache.rebuild(&typed(&raw), &raw, &watch).unwrap();
     assert_eq!(cache.stats.resumed_at, 1, "a resume skipped the projecting sketch");
-    assert_eq!(again.projection_updates, first.projection_updates,
-        "the projection update was cached away, the frontend would never hear it");
+    assert_eq!(
+        again.projection_updates, first.projection_updates,
+        "the projection update was cached away, the frontend would never hear it"
+    );
 
     // The update applied, the sketch stops reporting and a resume may pass it.
     let mut applied = raw.clone();
@@ -376,10 +376,7 @@ fn import_doc(fixture: &str, extra: Value) -> Value {
 
 #[test]
 fn import_metadata_and_diagnostics_survive_a_disk_resume() {
-    let cases = [
-        import_doc("asm_face_colors", json!({})),
-        import_doc("asm_nested", json!({"explode": false})),
-    ];
+    let cases = [import_doc("asm_face_colors", json!({})), import_doc("asm_nested", json!({"explode": false}))];
     let mut mismatch = import_doc("asm_multisolid", json!({}));
     mismatch["features"][0]["parts"][2]["faces"] = json!(999);
     for (i, raw) in cases.iter().chain([&mismatch]).enumerate() {
@@ -547,10 +544,8 @@ fn built(raw: &Value) -> Rebuild {
     builder::rebuild(&typed(raw), raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"))
 }
 
-/// A ring of tiles, each placed by a rotation, with their tops at z 0.25 where
-/// a face fingerprint rounds either way, then a slot through the first one. A
-/// rotation read back from a blob is not the one written to the last bit, so
-/// a restored tile measures a hair off the tile that was saved.
+/// A ring of rotated tiles with tops at z 0.25, where a face fingerprint rounds either way, then a slot through the
+/// first. A rotation read back from a blob is off in the last bit, so a restored tile measures a hair off.
 fn tile_ring(slot: f64) -> Value {
     json!({"parameters": {}, "features": [
         {"id": "tile", "type": "box", "length": 4, "width": 1, "height": 0.5, "operation": "new"},
@@ -591,7 +586,11 @@ fn face_owners_survive_a_disk_resume_of_faces_measuring_on_a_rounding_tie() {
     let resumed = third.rebuild(&typed(&edited), &edited, &NoWatch).unwrap();
     assert_eq!(third.stats.source, Source::Disk);
     assert_eq!(third.stats.replayed, [3]);
-    assert_eq!(face_owners(&resumed), face_owners(&built(&edited)), "a feature replayed on a restored body owns faces it did not make");
+    assert_eq!(
+        face_owners(&resumed),
+        face_owners(&built(&edited)),
+        "a feature replayed on a restored body owns faces it did not make"
+    );
 
     // A checkpoint written from a restored body restores the same way.
     let mut fourth = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
@@ -599,4 +598,43 @@ fn face_owners_survive_a_disk_resume_of_faces_measuring_on_a_rounding_tie() {
     assert_eq!(fourth.stats.source, Source::Disk);
     assert!(fourth.stats.replayed.is_empty());
     assert_eq!(face_owners(&again), face_owners(&built(&edited)), "faces lost their owner in the second restore");
+}
+
+#[test]
+fn releasing_the_cache_drops_its_snapshots_and_payloads_and_the_next_build_is_whole() {
+    let raw = doc();
+    let mut cache = RebuildCache::new(None);
+    let (first, _) = warm(&mut cache, &raw);
+    let (snapshots, payloads) = cache.holding();
+    assert!(snapshots > 0 && payloads > 0, "a build held nothing: {:?}", cache.holding());
+
+    cache.release();
+    assert_eq!(cache.holding(), (0, 0));
+    let (after, replayed) = warm(&mut cache, &raw);
+    assert_eq!((after, replayed.len(), cache.stats.source), (first, 6, Source::Full));
+
+    // A second document builds on a released cache as on a fresh one.
+    let other = edit(&raw, 4, "length", json!(9));
+    let mut fresh = RebuildCache::new(None);
+    cache.release();
+    assert_eq!(warm(&mut cache, &other).0, warm(&mut fresh, &other).0);
+}
+
+#[test]
+fn a_cancelled_mesh_pass_meshes_no_body_and_answers_none() {
+    let raw = doc();
+    let r = builder::rebuild(&typed(&raw), &raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+    let mut cache = RebuildCache::new(None);
+    let token = fundacad_protocol::CancelToken::new();
+    let _installed = fundacad_geom::cancel::install(Some(token.clone()));
+
+    let mut ticks = 0;
+    let whole = cache.mesh(&r, TOL, &Map::new(), &mut |_, _| ticks += 1);
+    assert_eq!((whole.bodies.len(), ticks, cache.stats.meshed), (r.bodies.len(), r.bodies.len(), r.bodies.len()));
+
+    token.cancel();
+    let mut stopped = RebuildCache::new(None);
+    let mut ticks = 0;
+    let none = stopped.mesh(&r, TOL, &Map::new(), &mut |_, _| ticks += 1);
+    assert_eq!((none.bodies.len(), ticks, stopped.stats.meshed, stopped.holding()), (0, 0, 0, (0, 0)));
 }

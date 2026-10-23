@@ -82,45 +82,65 @@ fn imported_segs(r: &Map<String, Value>) -> Vec<Seg> {
 
 fn samples(s: &Seg, n: usize) -> Vec<[f64; 2]> {
     match s {
-        Seg::Line(a, b) => (0..=n).map(|i| {
-            let t = i as f64 / n as f64;
-            [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
-        }).collect(),
-        Seg::Arc { c, r, a0, sweep } => (0..=n).map(|i| {
-            let a = a0 + sweep * i as f64 / n as f64;
-            [c[0] + r * a.cos(), c[1] + r * a.sin()]
-        }).collect(),
-        Seg::Circle { c, r } => (0..=n).map(|i| {
-            let a = 2.0 * PI * i as f64 / n as f64;
-            [c[0] + r * a.cos(), c[1] + r * a.sin()]
-        }).collect(),
+        Seg::Line(a, b) => (0..=n)
+            .map(|i| {
+                let t = i as f64 / n as f64;
+                [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+            })
+            .collect(),
+        Seg::Arc { c, r, a0, sweep } => (0..=n)
+            .map(|i| {
+                let a = a0 + sweep * i as f64 / n as f64;
+                [c[0] + r * a.cos(), c[1] + r * a.sin()]
+            })
+            .collect(),
+        Seg::Circle { c, r } => (0..=n)
+            .map(|i| {
+                let a = 2.0 * PI * i as f64 / n as f64;
+                [c[0] + r * a.cos(), c[1] + r * a.sin()]
+            })
+            .collect(),
         Seg::Poly(p) => {
             let total = p.windows(2).count().max(1);
-            (0..=n).map(|i| {
-                let u = i as f64 / n as f64 * total as f64;
-                let k = (u.floor() as usize).min(total - 1);
-                let t = u - k as f64;
-                [p[k][0] + (p[k + 1][0] - p[k][0]) * t, p[k][1] + (p[k + 1][1] - p[k][1]) * t]
-            }).collect()
+            (0..=n)
+                .map(|i| {
+                    let u = i as f64 / n as f64 * total as f64;
+                    let k = (u.floor() as usize).min(total - 1);
+                    let t = u - k as f64;
+                    [p[k][0] + (p[k + 1][0] - p[k][0]) * t, p[k][1] + (p[k + 1][1] - p[k][1]) * t]
+                })
+                .collect()
         }
     }
 }
 
 fn dist_to(p: [f64; 2], chords: &[[[f64; 2]; 2]]) -> f64 {
-    chords.iter().map(|[a, b]| {
-        let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
-        let l2 = dx * dx + dy * dy;
-        let t = if l2 > 0.0 { (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2).clamp(0.0, 1.0) } else { 0.0 };
-        (p[0] - a[0] - t * dx).hypot(p[1] - a[1] - t * dy)
-    }).fold(f64::MAX, f64::min)
+    chords
+        .iter()
+        .map(|[a, b]| {
+            let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+            let l2 = dx * dx + dy * dy;
+            let t = if l2 > 0.0 { (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2).clamp(0.0, 1.0) } else { 0.0 };
+            (p[0] - a[0] - t * dx).hypot(p[1] - a[1] - t * dy)
+        })
+        .fold(f64::MAX, f64::min)
 }
 
 fn chords(segs: &[Seg]) -> Vec<[[f64; 2]; 2]> {
-    segs.iter().flat_map(|s| {
-        let n = match s { Seg::Poly(p) => p.len() - 1, Seg::Line(..) => 1, _ => 2000 };
-        let pts = match s { Seg::Poly(p) => p.clone(), _ => samples(s, n) };
-        pts.windows(2).map(|w| [w[0], w[1]]).collect::<Vec<_>>()
-    }).collect()
+    segs.iter()
+        .flat_map(|s| {
+            let n = match s {
+                Seg::Poly(p) => p.len() - 1,
+                Seg::Line(..) => 1,
+                _ => 2000,
+            };
+            let pts = match s {
+                Seg::Poly(p) => p.clone(),
+                _ => samples(s, n),
+            };
+            pts.windows(2).map(|w| [w[0], w[1]]).collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 fn lo(segs: &[Seg]) -> [f64; 2] {
@@ -132,12 +152,14 @@ fn hi(segs: &[Seg]) -> [f64; 2] {
 }
 
 fn shifted(segs: &[Seg], d: [f64; 2]) -> Vec<Seg> {
-    segs.iter().map(|s| match s {
-        Seg::Line(p, q) => Seg::Line([p[0] + d[0], p[1] + d[1]], [q[0] + d[0], q[1] + d[1]]),
-        Seg::Arc { c, r, a0, sweep } => Seg::Arc { c: [c[0] + d[0], c[1] + d[1]], r: *r, a0: *a0, sweep: *sweep },
-        Seg::Circle { c, r } => Seg::Circle { c: [c[0] + d[0], c[1] + d[1]], r: *r },
-        Seg::Poly(p) => Seg::Poly(p.iter().map(|q| [q[0] + d[0], q[1] + d[1]]).collect()),
-    }).collect()
+    segs.iter()
+        .map(|s| match s {
+            Seg::Line(p, q) => Seg::Line([p[0] + d[0], p[1] + d[1]], [q[0] + d[0], q[1] + d[1]]),
+            Seg::Arc { c, r, a0, sweep } => Seg::Arc { c: [c[0] + d[0], c[1] + d[1]], r: *r, a0: *a0, sweep: *sweep },
+            Seg::Circle { c, r } => Seg::Circle { c: [c[0] + d[0], c[1] + d[1]], r: *r },
+            Seg::Poly(p) => Seg::Poly(p.iter().map(|q| [q[0] + d[0], q[1] + d[1]]).collect()),
+        })
+        .collect()
 }
 
 /// The larger of the two one sided distances, on 200 samples per curve, after
@@ -158,12 +180,20 @@ fn hausdorff(a: &[Seg], b: &[Seg], align: bool) -> f64 {
 }
 
 fn kinds(r: &Map<String, Value>, kind: &str) -> Vec<Value> {
-    r["sketches"].as_array().unwrap().iter().flat_map(|s| s["entities"].as_array().unwrap().clone())
-        .filter(|e| e["type"] == kind).collect()
+    r["sketches"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|s| s["entities"].as_array().unwrap().clone())
+        .filter(|e| e["type"] == kind)
+        .collect()
 }
 
 fn notes(r: &Map<String, Value>) -> Vec<String> {
-    r.get("notes").and_then(Value::as_array).map(|a| a.iter().map(|n| n.as_str().unwrap().to_owned()).collect()).unwrap_or_default()
+    r.get("notes")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().map(|n| n.as_str().unwrap().to_owned()).collect())
+        .unwrap_or_default()
 }
 
 fn f(e: &Value, k: &str) -> f64 {
@@ -182,7 +212,10 @@ fn a_sketch_exports_to_dxf_and_imports_back_the_same() {
     let circles = kinds(&r, "circle");
     assert_eq!(circles.len(), 1);
     let c = &circles[0];
-    assert!((f(c, "x") - 30.0).abs() < 1e-6 && (f(c, "y") - 10.0).abs() < 1e-6 && (f(c, "radius") - 4.0).abs() < 1e-6, "{c}");
+    assert!(
+        (f(c, "x") - 30.0).abs() < 1e-6 && (f(c, "y") - 10.0).abs() < 1e-6 && (f(c, "radius") - 4.0).abs() < 1e-6,
+        "{c}"
+    );
     let arcs = kinds(&r, "arc");
     assert_eq!(arcs.len(), 3, "the arc and the slot's two ends: {arcs:?}");
     let has_arc = arcs.iter().any(|a| {
@@ -232,7 +265,8 @@ fn plate_doc() -> Value {
             {"id": "r", "type": "rectangle", "width": 40, "height": 20, "x": 20, "y": 10},
             {"id": "c", "type": "circle", "x": 30, "y": 10, "radius": 4}]},
         {"id": "x1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new"}
-    ])).0
+    ]))
+    .0
 }
 
 fn top() -> Value {
@@ -250,7 +284,8 @@ fn filled_area(r: &Map<String, Value>) -> f64 {
     if let Some(fr) = s.get("fillRule") {
         sk["fillRule"] = fr.clone();
     }
-    let (doc, typed) = doc_of(json!([sk, {"id": "f2", "type": "extrude", "sketch": "f1", "distance": 1, "operation": "new"}]));
+    let (doc, typed) =
+        doc_of(json!([sk, {"id": "f2", "type": "extrude", "sketch": "f1", "distance": 1, "operation": "new"}]));
     let b = builder::rebuild(&typed, &doc, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
     assert!(b.errors.is_empty(), "{:?}", b.errors);
     b.bodies.iter().map(|b| kernel::volume(&b.shape)).sum()
@@ -267,7 +302,11 @@ fn a_planar_face_exports_with_its_holes() {
     let a = filled_area(&r);
     assert!(a > 799.0, "a DXF import fills the outline, the hole is a second region: {a}");
 
-    let p = export(&plate_doc(), json!({"format": "svg", "face": top(), "plane": plane(), "svg": {"fill": true}}), "face.svg");
+    let p = export(
+        &plate_doc(),
+        json!({"format": "svg", "face": top(), "plane": plane(), "svg": {"fill": true}}),
+        "face.svg",
+    );
     let text = std::fs::read_to_string(&p).unwrap();
     assert_eq!(text.matches("<path").count(), 1, "{text}");
     assert_eq!(text.matches('Z').count(), 2, "{text}");
@@ -323,10 +362,12 @@ fn a_curved_face_is_refused() {
 
 #[test]
 fn chaining_many_disjoint_lines_keeps_each_and_joins_a_square() {
-    let mut segs: Vec<Seg> = (0..20_000).map(|i| {
-        let y = 100.0 + i as f64;
-        Seg::Line([0.0, y], [1.0, y])
-    }).collect();
+    let mut segs: Vec<Seg> = (0..20_000)
+        .map(|i| {
+            let y = 100.0 + i as f64;
+            Seg::Line([0.0, y], [1.0, y])
+        })
+        .collect();
     let sq = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
     segs.insert(7_000, Seg::Line(sq[1], sq[0]));
     segs.insert(3, Seg::Line(sq[1], sq[2]));

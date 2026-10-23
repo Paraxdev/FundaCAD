@@ -9,13 +9,7 @@ use serde_json::{Map, Value};
 
 use super::{fold_crlf, sha256_hex, Ctx};
 
-/// Record the named corpus documents into the golden file and rewrite it.
-pub fn record(
-    ctx: &mut Ctx,
-    golden_path: &Path,
-    corpus_path: &Path,
-    names: &[String],
-) -> Result<(), String> {
+pub fn record(ctx: &mut Ctx, golden_path: &Path, corpus_path: &Path, names: &[String]) -> Result<(), String> {
     let kind = ctx.header()["kind"].as_str().unwrap_or("").to_owned();
     for name in names {
         let case = match kind.as_str() {
@@ -24,43 +18,21 @@ pub fn record(
             "meshes" => super::meshes::record_case(ctx, name)?,
             "fillet" => super::evals::record_fillet(ctx, name)?,
             "selectors" => super::evals::record_selector(ctx, name)?,
-            other => {
-                return Err(format!(
-                    "a golden of kind {other} is not recorded from a corpus"
-                ))
-            }
+            other => return Err(format!("a golden of kind {other} is not recorded from a corpus")),
         };
-        let replaced = ctx.golden["cases"]
-            .as_object_mut()
-            .ok_or("the golden has no cases")?
-            .insert(name.clone(), case)
-            .is_some();
-        println!(
-            "recorded {name} from this engine{}",
-            if replaced {
-                ", replacing its golden"
-            } else {
-                ""
-            }
-        );
+        let replaced =
+            ctx.golden["cases"].as_object_mut().ok_or("the golden has no cases")?.insert(name.clone(), case).is_some();
+        println!("recorded {name} from this engine{}", if replaced { ", replacing its golden" } else { "" });
     }
     match kind.as_str() {
         "fillet" => super::evals::refresh_fillet_summary(ctx),
         "selectors" => super::evals::refresh_selector_metrics(ctx),
         _ => {}
     }
-    let bytes = std::fs::read(corpus_path)
-        .map_err(|e| format!("cannot read {}: {e}", corpus_path.display()))?;
-    let header = ctx.golden["golden"]
-        .as_object_mut()
-        .ok_or("the golden has no header")?;
-    header.insert(
-        "corpusSha256".into(),
-        Value::String(sha256_hex(&fold_crlf(&bytes))),
-    );
-    let recorded = header
-        .entry("rustRecorded")
-        .or_insert_with(|| Value::Array(Vec::new()));
+    let bytes = std::fs::read(corpus_path).map_err(|e| format!("cannot read {}: {e}", corpus_path.display()))?;
+    let header = ctx.golden["golden"].as_object_mut().ok_or("the golden has no header")?;
+    header.insert("corpusSha256".into(), Value::String(sha256_hex(&fold_crlf(&bytes))));
+    let recorded = header.entry("rustRecorded").or_insert_with(|| Value::Array(Vec::new()));
     if let Value::Array(list) = recorded {
         for n in names {
             if !list.iter().any(|x| x == n.as_str()) {
@@ -71,8 +43,8 @@ pub fn record(
     }
     let mut out = python_dump(&ctx.golden);
     out.push('\n');
-    let mut f = std::fs::File::create(golden_path)
-        .map_err(|e| format!("cannot write {}: {e}", golden_path.display()))?;
+    let mut f =
+        std::fs::File::create(golden_path).map_err(|e| format!("cannot write {}: {e}", golden_path.display()))?;
     f.write_all(out.as_bytes()).map_err(|e| e.to_string())
 }
 
@@ -101,19 +73,14 @@ pub fn record_platform(ctx: &mut Ctx, golden_path: &Path, names: &[String]) -> R
             .or_insert_with(|| Value::Object(Map::new()))
             .as_object_mut()
             .ok_or("platformVariants is not an object")?;
-        let this = variants
-            .entry(os)
-            .or_insert_with(|| serde_json::json!({"reason": PLATFORM_REASON, "cases": {}}));
-        this["cases"]
-            .as_object_mut()
-            .ok_or("platformVariants cases is not an object")?
-            .insert(name.clone(), case);
+        let this = variants.entry(os).or_insert_with(|| serde_json::json!({"reason": PLATFORM_REASON, "cases": {}}));
+        this["cases"].as_object_mut().ok_or("platformVariants cases is not an object")?.insert(name.clone(), case);
         println!("recorded {name} for {os} from this engine, beside the python answer");
     }
     let mut out = python_dump(&ctx.golden);
     out.push('\n');
-    let mut f = std::fs::File::create(golden_path)
-        .map_err(|e| format!("cannot write {}: {e}", golden_path.display()))?;
+    let mut f =
+        std::fs::File::create(golden_path).map_err(|e| format!("cannot write {}: {e}", golden_path.display()))?;
     f.write_all(out.as_bytes()).map_err(|e| e.to_string())
 }
 
@@ -217,11 +184,7 @@ fn python_number(n: &serde_json::Number) -> String {
     }
     let x = n.as_f64().unwrap_or(0.0);
     if x == 0.0 {
-        return if x.is_sign_negative() {
-            "-0.0".into()
-        } else {
-            "0.0".into()
-        };
+        return if x.is_sign_negative() { "-0.0".into() } else { "0.0".into() };
     }
     let sci = format!("{x:e}");
     let (mant, exp) = sci.split_once('e').unwrap_or((&sci, "0"));

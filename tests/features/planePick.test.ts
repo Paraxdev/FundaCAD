@@ -82,9 +82,12 @@ describe("what a plane pick takes", () => {
     // the model during this step, so "nothing usable here" must not become "take
     // the XY plane two hundred millimetres behind the face they were aiming at".
     const t = pickPlaneTarget(
-      stub({ face: { faceId: 3, anchor: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 } },
-             construction: { kind: "base", plane: "XY" } }),
-      0, 0,
+      stub({
+        face: { faceId: 3, anchor: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 } },
+        construction: { kind: "base", plane: "XY" },
+      }),
+      0,
+      0,
     );
     expect(t).toEqual({ kind: "unusable" });
   });

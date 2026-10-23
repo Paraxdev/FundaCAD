@@ -1,7 +1,5 @@
-// How requests reach the geometry engine and its frames come back. The Geometry
-// client owns the protocol (pending calls, streams, assembly); a transport only
-// moves whole messages, text JSON or binary frames, exactly as PROTOCOL.md
-// defines them, so both transports share one client.
+// How requests reach the engine and frames come back. A transport only moves whole messages as PROTOCOL.md
+// defines them; the Geometry client owns the protocol, so both transports share it.
 
 export interface TransportSink {
   opened(): void;
@@ -51,9 +49,7 @@ export class WebSocketTransport implements GeometryTransport {
     this.url ??= engineUrl(location.search, import.meta.env.DEV);
     // DEV builds take the token from the URL (`?token=`), so the app can be
     // driven against a hand-started engine; a production bundle keeps "".
-    this.token = import.meta.env.DEV
-      ? (new URLSearchParams(location.search).get("token") ?? "")
-      : "";
+    this.token = import.meta.env.DEV ? (new URLSearchParams(location.search).get("token") ?? "") : "";
     this.connect();
   }
 
@@ -93,10 +89,8 @@ export class WebSocketTransport implements GeometryTransport {
   }
 }
 
-/** The Rust engine worker the app supervises (src-tauri/src/engine.rs), through
- *  Tauri IPC. Frames arrive on one channel as raw bytes, a leading kind byte
- *  (1 text, 2 binary) followed by the message, so a mesh never passes through
- *  JSON or base64. */
+/** The Rust engine worker (src-tauri/src/engine.rs) over Tauri IPC. Frames arrive as raw bytes with a leading
+ *  kind byte (1 text, 2 binary), so a mesh never passes through JSON or base64. */
 export class IpcTransport implements GeometryTransport {
   readonly softCancel = true;
   private up = false;

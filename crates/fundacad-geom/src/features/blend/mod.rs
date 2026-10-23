@@ -1,10 +1,5 @@
-//! Fillets and chamfers, the Python engine's `blends.py` and the fillet and chamfer handlers
-//! of the Python engine's `builder.py`.
-//!
-//! One kernel call on the whole group first, on a copy of the body. When that
-//! refuses, the edges are blended one at a time on the evolving body in a
-//! canonical order; an edge that still refuses fails the whole feature with a
-//! sentence that says whether a smaller size would have built.
+//! Fillets and chamfers, blends.py. One kernel call on the whole group first, on a copy. When that refuses the
+//! edges go one at a time in canonical order, and one that still refuses fails saying whether a smaller size builds.
 
 pub mod eval;
 pub mod ops;
@@ -80,6 +75,9 @@ pub enum Misfit {
     IntoBody,
     Mixed,
     Split,
+    /// It would carve away the face line the blend on a neighbouring edge
+    /// rests on.
+    Overlap,
 }
 
 impl Misfit {
@@ -87,6 +85,7 @@ impl Misfit {
         match code {
             4 => Misfit::Mixed,
             5 => Misfit::Split,
+            6 => Misfit::Overlap,
             _ => Misfit::IntoBody,
         }
     }
@@ -105,21 +104,22 @@ pub enum Fits {
 /// size that fits rounded down so that it still does.
 fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at: [f64; 3]) -> Fail {
     let [x, y, z] = at.map(|c| py_g(py_round(c, 3)));
+    let neighbour = format!("it would run into the {} on the neighbouring edge", label.to_lowercase());
     let past = match why {
         Misfit::IntoBody => "it would cut on past a face into the body beyond it",
         Misfit::Mixed => "it would run off a face on part of the edge only",
         Misfit::Split => "it would cut the body in pieces",
+        Misfit::Overlap => &neighbour,
     };
     let head = format!(
         "{label} failed on {body}: at {}mm the {} does not fit the edge through ({x}, {y}, {z}), {past}.",
         py_g(size),
         label.to_lowercase()
     );
-    // Right at the limit the ball ends exactly on a face's edge and the kernel
-    // leaves a sliver face there, so the size offered stays a hair below it. A
-    // split's limit is a size that built, already on this grid.
+    // At the limit the ball ends exactly on a face's edge and the kernel leaves a sliver face, so the offer stays
+    // a hair below it. A split's or an overlap's limit is a size that built, already on this grid.
     let shown = |v: f64| {
-        let v = if why == Misfit::Split { v + 1e-6 } else { v - 1e-4 };
+        let v = if matches!(why, Misfit::Split | Misfit::Overlap) { v + 1e-6 } else { v - 1e-4 };
         let step = if v >= 1.0 { 100.0 } else { 1000.0 };
         (v * step).floor() / step
     };
@@ -143,10 +143,7 @@ fn checkpoint() -> FResult {
 }
 
 fn value_err(message: impl Into<String>, code: Option<&'static str>) -> Fail {
-    Fail::Value {
-        message: message.into(),
-        code,
-    }
+    Fail::Value { message: message.into(), code }
 }
 
 /// conic_blend.py `clamp_profile`.
@@ -169,26 +166,13 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
     let only_picked = f.tangent_edges == Some(false);
     let draft = f.draft == Some(true);
 
-    let op =
-        move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> {
-            let radii: Vec<f64> = es
-                .iter()
-                .map(|e| {
-                    if chord {
-                        chord_radius(s, e, size)
-                    } else {
-                        size
-                    }
-                })
-                .collect();
-            native_fillet(s, es, &radii)
-        };
+    let op = move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> {
+        let radii: Vec<f64> = es.iter().map(|e| if chord { chord_radius(s, e, size) } else { size }).collect();
+        native_fillet(s, es, &radii)
+    };
     let section_at = move |profile: f64| {
         move |s: &Shape, es: &[Shape]| -> Result<Shape, SectionErr> {
-            let sizes: Vec<f64> = es
-                .iter()
-                .map(|e| if chord { chord_radius(s, e, r) } else { r })
-                .collect();
+            let sizes: Vec<f64> = es.iter().map(|e| if chord { chord_radius(s, e, r) } else { r }).collect();
             ops::section(s, es, false, &sizes, None, r, g2, draft, profile)
         }
     };
@@ -208,10 +192,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
             g2 || only_picked,
         );
     }
-    let conic =
-        move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> {
-            ops::conic(s, es, size, p)
-        };
+    let conic = move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> { ops::conic(s, es, size, p) };
     match blend_edges(
         ctx,
         &f.id,
@@ -224,10 +205,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
         Some(&section),
         false,
     ) {
-        Err(Fail::Value {
-            message,
-            code: Some(CONIC_NOT_APPLICABLE),
-        }) => {
+        Err(Fail::Value { message, code: Some(CONIC_NOT_APPLICABLE) }) => {
             let _ = message;
             match blend_edges(
                 ctx,
@@ -287,10 +265,8 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
         _ => None,
     };
     let draft = f.draft == Some(true);
-    // The Python engine's combined equal chamfer always refused ("Nothing to
-    // chamfer", build123d found no solid for the copied edges), so every corner
-    // was cut one edge at a time and came out pointed. Cut together, three
-    // edges meeting at a corner end in one triangle.
+    // All edges in one call, so three edges meeting at a corner end in one triangle. build123d's combined chamfer
+    // refused here ("Nothing to chamfer"), which is why the Python engine's corners came out pointed.
     let op = move |s: &Shape, es: &[Shape], size: f64| -> Result<Shape, BlendErr> {
         match d2 {
             None => build123d_chamfer(s, es, size),
@@ -314,20 +290,13 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
     )
 }
 
-/// `_DRAFT_FELL_BACK`: drags that needed the section build, with the smallest
-/// size they needed it at.
-///
-/// Keyed by size, unlike blends.py: a drag that fell back at 43.7 mm and then
-/// came down to 3 mm went straight to the section build, which the kernel's
-/// own filleter would have answered at once, and the section build's boolean
-/// can hang outright on such a small conic blend.
+/// `_DRAFT_FELL_BACK`: drags that needed the section build and the smallest size they needed it at. Keyed by
+/// size unlike blends.py, so a drag shrunk from 43.7 mm to 3 mm tries the kernel's filleter again first, since
+/// the section build's boolean can hang outright on such a small conic blend.
 static DRAFT_FELL_BACK: std::sync::Mutex<Vec<(String, f64)>> = std::sync::Mutex::new(Vec::new());
 
 fn fell_back_before(key: &str, size: f64) -> bool {
-    DRAFT_FELL_BACK
-        .lock()
-        .map(|v| v.iter().any(|(k, at)| k == key && size >= *at))
-        .unwrap_or(false)
+    DRAFT_FELL_BACK.lock().map(|v| v.iter().any(|(k, at)| k == key && size >= *at)).unwrap_or(false)
 }
 
 fn remember_fell_back(key: String, size: f64) {
@@ -355,19 +324,12 @@ fn build123d_chamfer(s: &Shape, es: &[Shape], size: f64) -> Result<Shape, BlendE
     let d = vec![size; es.len()];
     match ops::chamfer(s, es, &d, &d) {
         Ok((out, Built::Done)) => Ok(out),
-        _ => Err(BlendErr::Kernel(
-            "Failed creating a chamfer, try a smaller length value(s)".into(),
-        )),
+        _ => Err(BlendErr::Kernel("Failed creating a chamfer, try a smaller length value(s)".into())),
     }
 }
 
 /// blends.py `native_two_distance_chamfer`.
-fn native_two_distance_chamfer(
-    s: &Shape,
-    es: &[Shape],
-    d1: f64,
-    d2: f64,
-) -> Result<Shape, BlendErr> {
+fn native_two_distance_chamfer(s: &Shape, es: &[Shape], d1: f64, d2: f64) -> Result<Shape, BlendErr> {
     const MSG: &str = "Failed creating a chamfer, try a smaller length value(s)";
     let a = vec![d1; es.len()];
     let b = vec![d2; es.len()];
@@ -386,9 +348,8 @@ pub fn chord_radius(shape: &Shape, edge: &Shape, chord: f64) -> f64 {
     }
 }
 
-/// Seams out of the set. One an edge pick named is refused, the kernel would
-/// skip it and call the blend done. One a broad selector swept in (every edge,
-/// a face's edges) is no edge anyone sees and is left out quietly.
+/// Seams out of the set. One an edge pick named is refused, since the kernel would skip it and call the blend
+/// done. One a broad selector swept in is no edge anyone sees and is left out quietly.
 fn drop_seams(shape: &Shape, sels: &[Value], edges: Vec<Shape>, label: &str) -> FResult<Vec<Shape>> {
     let adj = crate::topo::FaceAdjacency::new(shape);
     let (seams, real): (Vec<Shape>, Vec<Shape>) = edges.into_iter().partition(|e| adj.is_seam(e));
@@ -423,11 +384,7 @@ fn drop_seams(shape: &Shape, sels: &[Value], edges: Vec<Shape>, label: &str) -> 
 /// kernel refuses the whole blend over an edge it cannot put a round on.
 fn drop_slivers(edges: Vec<Shape>, label: &str) -> FResult<Vec<Shape>> {
     use crate::mesh::edges::SLIVER_EDGE_MM;
-    let real: Vec<Shape> = edges
-        .iter()
-        .filter(|e| crate::kernel::length(e) >= SLIVER_EDGE_MM)
-        .cloned()
-        .collect();
+    let real: Vec<Shape> = edges.iter().filter(|e| crate::kernel::length(e) >= SLIVER_EDGE_MM).cloned().collect();
     if real.is_empty() && !edges.is_empty() {
         return Err(Fail::msg(format!(
             "can't {} here, the selected edge is under {}mm long, a sliver left where two corners nearly meet. Pick the edges beside it instead.",
@@ -470,10 +427,7 @@ fn refuse_unchanged(before: &Shape, after: &Shape, label: &str, body: &str) -> F
 }
 
 fn refuse_smooth_edges(shape: &Shape, edges: &[Shape], label: &str) -> FResult {
-    let smooth = edges
-        .iter()
-        .filter(|e| ops::dihedral_deg(shape, e).is_some_and(|a| a < SMOOTH_EDGE_DEG))
-        .count();
+    let smooth = edges.iter().filter(|e| ops::dihedral_deg(shape, e).is_some_and(|a| a < SMOOTH_EDGE_DEG)).count();
     if smooth == 0 {
         return Ok(());
     }
@@ -482,10 +436,7 @@ fn refuse_smooth_edges(shape: &Shape, edges: &[Shape], label: &str) -> FResult {
     } else if smooth == edges.len() {
         format!("all {} selected edges are already smooth", edges.len())
     } else {
-        format!(
-            "{smooth} of the {} selected edges are already smooth",
-            edges.len()
-        )
+        format!("{smooth} of the {} selected edges are already smooth", edges.len())
     };
     Err(value_err(
         format!(
@@ -530,11 +481,7 @@ fn edge_identity(e: &Shape) -> Option<Map<String, Value>> {
 
 fn fp_vec(fp: &Map<String, Value>, key: &str) -> [f64; 3] {
     let a = fp.get(key).and_then(Value::as_array);
-    let at = |i: usize| {
-        a.and_then(|a| a.get(i))
-            .and_then(Value::as_f64)
-            .unwrap_or(0.0)
-    };
+    let at = |i: usize| a.and_then(|a| a.get(i)).and_then(Value::as_f64).unwrap_or(0.0);
     [at(0), at(1), at(2)]
 }
 
@@ -547,12 +494,7 @@ fn canonical_key(fp: &Map<String, Value>) -> [f64; 7] {
 }
 
 /// `_rematch_edge`: the cheapest edge within the drift gate, the first on a tie.
-fn rematch_edge(
-    shape: &Shape,
-    fp: &Map<String, Value>,
-    max_mid_dist: f64,
-    tol_pos: f64,
-) -> Option<Shape> {
+fn rematch_edge(shape: &Shape, fp: &Map<String, Value>, max_mid_dist: f64, tol_pos: f64) -> Option<Shape> {
     let mid = DVec3::from_array(fp_vec(fp, "mid"));
     let tuning = Tuning::shipped();
     let mut best: Option<(f64, Shape)> = None;
@@ -568,10 +510,8 @@ fn rematch_edge(
     best.map(|b| b.1)
 }
 
-/// Blending a neighbour trims an edge but leaves it on its own curve, where an
-/// edge that blend made lies somewhere else. Without this the nearest edge was
-/// taken whatever it was: a notch corner's round landed on a 0.03 mm sliver its
-/// neighbour had left, and the corner stayed sharp with no error.
+/// Blending a neighbour trims an edge but leaves it on its own curve. Without this a notch corner's round once
+/// landed on a 0.03 mm sliver its neighbour left, and the corner stayed sharp with no error.
 fn still_on(orig: &Shape, target: &Shape, tol: f64) -> bool {
     let Ok(t) = EdgeEnt::new(target.clone()) else {
         return false;
@@ -579,9 +519,8 @@ fn still_on(orig: &Shape, target: &Shape, tol: f64) -> bool {
     crate::kernel::distance_to_point(orig, t.mid.to_array()).is_some_and(|d| d <= tol)
 }
 
-/// The asked for edges that `out` still has. A blended edge leaves nothing
-/// along its old line; the section build could hand one back untouched and
-/// call it done, a notch corner that stayed sharp without a word.
+/// The asked for edges that `out` still has. The section build could hand one back untouched and call it done,
+/// a notch corner that stayed sharp without a word.
 fn still_sharp(out: &Shape, edges: &[Shape]) -> Vec<Shape> {
     let after = crate::kernel::subshapes(out, crate::kernel::Kind::Edge);
     edges
@@ -609,10 +548,8 @@ pub(crate) fn sequential_blend(
 ) -> (Shape, Vec<Shape>) {
     // The body each edge last failed on: the kernel answers the same body the
     // same way, so the next pass skips an edge until a neighbour has changed it.
-    let mut pending: Vec<(Shape, Map<String, Value>, Option<Shape>)> = edges
-        .iter()
-        .map(|e| (e.clone(), edge_identity(e).unwrap_or_default(), None))
-        .collect();
+    let mut pending: Vec<(Shape, Map<String, Value>, Option<Shape>)> =
+        edges.iter().map(|e| (e.clone(), edge_identity(e).unwrap_or_default(), None)).collect();
     pending.sort_by(|a, b| {
         let (ka, kb) = (canonical_key(&a.1), canonical_key(&b.1));
         ka.partial_cmp(&kb).unwrap_or(std::cmp::Ordering::Equal)
@@ -634,8 +571,7 @@ pub(crate) fn sequential_blend(
                 continue;
             }
             let Some(target) = crate::bench::phase("blend_rematch", || {
-                rematch_edge(&current, &fp, max_mid_dist, tol_pos)
-                    .filter(|t| still_on(&orig, t, on_curve))
+                rematch_edge(&current, &fp, max_mid_dist, tol_pos).filter(|t| still_on(&orig, t, on_curve))
             }) else {
                 still.push((orig, fp, failed_on));
                 continue;
@@ -657,8 +593,7 @@ fn size_probe(shape: &Shape, blend_size: f64) -> Option<f64> {
     if !(blend_size > 0.0) {
         return None;
     }
-    let small = (blend_size * SIZE_PROBE_FRACTION)
-        .min(crate::kernel::bbox_diagonal(shape) * SIZE_PROBE_BODY_FRACTION);
+    let small = (blend_size * SIZE_PROBE_FRACTION).min(crate::kernel::bbox_diagonal(shape) * SIZE_PROBE_BODY_FRACTION);
     (small > 0.0).then_some(small)
 }
 
@@ -688,16 +623,15 @@ struct BodyRef<'a> {
     shape: &'a Shape,
 }
 
-/// The largest of a few halvings of `blend_size` at which the edges build
-/// together. Each can refuse alone at any size, its round having nowhere to end
-/// short of the next one, while the chain as a whole fits smaller.
+/// The largest of a few halvings of `blend_size` at which the edges build together. Each can refuse alone at
+/// any size, its round having nowhere to end short of the next, while the chain as a whole fits smaller.
 fn group_fits_at(body: &Shape, edges: &[Shape], op: &BlendOp, blend_size: f64) -> Option<f64> {
     if edges.len() < 2 {
         return None;
     }
-    (1..=4).map(|k| blend_size / f64::from(1u32 << k)).find(|&size| {
-        op(body, edges, size).is_ok_and(|out| !overlap::folds_over_itself(body, &out, size))
-    })
+    (1..=4)
+        .map(|k| blend_size / f64::from(1u32 << k))
+        .find(|&size| op(body, edges, size).is_ok_and(|out| !overlap::folds_over_itself(body, &out, size)))
 }
 
 fn blend_failure(
@@ -711,11 +645,9 @@ fn blend_failure(
 ) -> Fail {
     let probed = size_probe(body.shape, blend_size);
     let helps = match probed {
-        Some(small) if unresolved.len() <= 8 => Some(
-            unresolved
-                .iter()
-                .all(|e| one_edge_at(body.shape, e, small).is_ok()),
-        ),
+        Some(small) if unresolved.len() <= 8 => {
+            Some(unresolved.iter().all(|e| one_edge_at(body.shape, e, small).is_ok()))
+        }
         _ => None,
     };
     if helps != Some(false) {
@@ -739,11 +671,7 @@ fn blend_failure(
             );
         }
         return value_err(
-            format!(
-                "{label} failed on {}: {}",
-                body.name,
-                kernel_sentence(err.text())
-            ),
+            format!("{label} failed on {}: {}", body.name, kernel_sentence(err.text())),
             helps.and(Some(BLEND_TOO_LARGE)),
         );
     }
@@ -775,9 +703,8 @@ fn blend_failure(
     )
 }
 
-/// An edge shorter than the blend that runs on from one of `edges` to a vertex
-/// the kernel gave up at: its length and that vertex. The kernel carries a blend
-/// on along a tangent sliver like that and then has to end it in the corner past it.
+/// An edge shorter than the blend that runs on from one of `edges` to a vertex the kernel gave up at, with its
+/// length. The kernel carries a blend along such a tangent sliver and then has to end it in the corner past it.
 fn short_edge_at(body: &Shape, edges: &[Shape], at: &[[f64; 3]], blend_size: f64) -> Option<(f64, [f64; 3])> {
     use crate::kernel::{subshapes, Kind};
     const SAME: f64 = 1e-4;
@@ -810,21 +737,12 @@ fn short_edge_at(body: &Shape, edges: &[Shape], at: &[[f64; 3]], blend_size: f64
 }
 
 /// `_report_edge_failures`.
-fn report_edge_failures(
-    diag: &mut Vec<Value>,
-    fid: &str,
-    edges: &[Shape],
-    try_one: &dyn Fn(&Shape) -> bool,
-) {
+fn report_edge_failures(diag: &mut Vec<Value>, fid: &str, edges: &[Shape], try_one: &dyn Fn(&Shape) -> bool) {
     if edges.len() > 32 {
         return;
     }
     let failed: Vec<&Shape> = edges.iter().filter(|e| !try_one(e)).collect();
-    let probed: Vec<&Shape> = if failed.is_empty() {
-        edges.iter().collect()
-    } else {
-        failed.clone()
-    };
+    let probed: Vec<&Shape> = if failed.is_empty() { edges.iter().collect() } else { failed.clone() };
     let mids: Vec<Value> = probed
         .iter()
         .map(|e| {
@@ -857,9 +775,8 @@ fn blend_edges(
     fid: &str,
     sels: &OneOrMany<Selector>,
     label: &str,
-    // What else shapes the blend: a fall back remembered for one profile says
-    // nothing about another, and would send its preview down another path
-    // than the commit takes.
+    // What else shapes the blend. A fall back remembered for one profile says nothing about another, and would
+    // send its preview down another path than the commit takes.
     variant: &str,
     op: &BlendOp,
     blend_size: f64,
@@ -868,39 +785,39 @@ fn blend_edges(
     section_only: bool,
 ) -> FResult {
     if !(blend_size > 0.0) {
-        return Err(Fail::msg(format!(
-            "{label}: size must be greater than 0 (got {})",
-            py_g(blend_size)
-        )));
+        return Err(Fail::msg(format!("{label}: size must be greater than 0 (got {})", py_g(blend_size))));
     }
     let groups = select::group_by_body(ctx, sels, label)?;
     let mut staged: Vec<(usize, Shape)> = Vec::new();
+    let overruns: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
     for (index, group) in groups {
         checkpoint()?;
         let body_shape = ctx.bodies[index].shape().clone();
         let body_name = ctx.bodies[index].name.clone();
-        let sel_value = Value::Array(
-            group
-                .iter()
-                .map(|s| serde_json::to_value(s).unwrap_or(Value::Null))
-                .collect(),
-        );
-        let edges =
-            Resolver::new(Some(&mut ctx.diagnostics), Some(fid)).edges(&body_shape, &sel_value)?;
+        let sel_value = Value::Array(group.iter().map(|s| serde_json::to_value(s).unwrap_or(Value::Null)).collect());
+        let edges = Resolver::new(Some(&mut ctx.diagnostics), Some(fid)).edges(&body_shape, &sel_value)?;
         if edges.is_empty() {
-            return Err(Fail::msg(format!(
-                "no edge found to {} on {body_name}",
-                label.to_lowercase()
-            )));
+            return Err(Fail::msg(format!("no edge found to {} on {body_name}", label.to_lowercase())));
         }
         let sels = sel_value.as_array().map_or(&[][..], Vec::as_slice);
         let edges = drop_seams(&body_shape, sels, edges, label)?;
         let edges = drop_slivers(edges, label)?;
         refuse_smooth_edges(&body_shape, &edges, label)?;
         let misfit: std::cell::Cell<Option<Fail>> = std::cell::Cell::new(None);
+        let note_overrun = || {
+            if let Some(o) = ops::take_overrun() {
+                overruns.borrow_mut().push(overrun_note(label, &body_name, blend_size, o));
+            }
+        };
         let try_section = |shape: &Shape, es: &[Shape]| -> Option<Shape> {
             match section?(shape, es) {
-                Ok(out) => Some(out).filter(|out| still_sharp(out, es).is_empty() && keeps_voids(shape, out)),
+                Ok(out) => {
+                    let kept = Some(out).filter(|out| still_sharp(out, es).is_empty() && keeps_voids(shape, out));
+                    if kept.is_some() {
+                        note_overrun();
+                    }
+                    kept
+                }
                 Err(SectionErr::TooLarge { why, fits, at }) => {
                     misfit.set(Some(misfit_error(label, &body_name, blend_size, why, fits, at)));
                     None
@@ -918,6 +835,7 @@ fn blend_edges(
                             sharp.len()
                         )));
                     }
+                    note_overrun();
                     staged.push((index, out));
                     continue;
                 }
@@ -941,10 +859,8 @@ fn blend_edges(
             }
         }
 
-        let (work, work_edges) =
-            ops::copy(&body_shape, &edges).unwrap_or((body_shape.clone(), edges.clone()));
-        let one_edge_at =
-            |s: &Shape, e: &Shape, size: f64| op(s, std::slice::from_ref(e), size);
+        let (work, work_edges) = ops::copy(&body_shape, &edges).unwrap_or((body_shape.clone(), edges.clone()));
+        let one_edge_at = |s: &Shape, e: &Shape, size: f64| op(s, std::slice::from_ref(e), size);
         let new_shape = match op(&work, &work_edges, blend_size) {
             Ok(out) => out,
             Err(BlendErr::Conic(msg)) => return Err(value_err(msg, Some(CONIC_NOT_APPLICABLE))),
@@ -953,8 +869,7 @@ fn blend_edges(
                 let (out, unresolved) = if draft && section.is_some() {
                     (work.clone(), work_edges.clone())
                 } else {
-                    let apply =
-                        |s: &Shape, e: &Shape| op(s, std::slice::from_ref(e), blend_size);
+                    let apply = |s: &Shape, e: &Shape| op(s, std::slice::from_ref(e), blend_size);
                     sequential_blend(&work, &work_edges, &apply, blend_size)
                 };
                 if unresolved.is_empty() {
@@ -975,19 +890,8 @@ fn blend_edges(
                     if let Some(fail) = misfit.take() {
                         return Err(fail);
                     }
-                    let body = BodyRef {
-                        name: &body_name,
-                        shape: &work,
-                    };
-                    return Err(blend_failure(
-                        label,
-                        &body,
-                        &unresolved,
-                        &one_edge_at,
-                        op,
-                        blend_size,
-                        &combined_err,
-                    ));
+                    let body = BodyRef { name: &body_name, shape: &work };
+                    return Err(blend_failure(label, &body, &unresolved, &one_edge_at, op, blend_size, &combined_err));
                 }
             }
         };
@@ -1015,7 +919,36 @@ fn blend_edges(
     for (index, shape) in staged {
         ctx.set_shape(index, shape);
     }
+    for message in overruns.into_inner() {
+        ctx.diagnostics.push(json!({
+            "feature_id": fid,
+            "kind": "edge",
+            "lossy": false,
+            "message": message,
+        }));
+    }
     Ok(())
+}
+
+/// A section round built though it runs past a face: no fillet rests on both
+/// faces at that size, it cuts the corner off, so the build says so.
+fn overrun_note(label: &str, body: &str, size: f64, o: ops::Overrun) -> String {
+    let [x, y, z] = o.at.map(|c| py_g(py_round(c, 3)));
+    let what = label.to_lowercase();
+    let head = format!(
+        "at {}mm the {what} runs past a face beside the edge through ({x}, {y}, {z}) on {body}, so it cuts that \
+         corner off instead of resting on both faces.",
+        py_g(size)
+    );
+    let fits = o.fits.map(|v| {
+        let v = v - 1e-4;
+        let step = if v >= 1.0 { 100.0 } else { 1000.0 };
+        (v * step).floor() / step
+    });
+    match fits {
+        Some(v) if v > 0.0 => format!("{head} A {what} that rests on both fits up to {}mm.", py_g(v)),
+        _ => head,
+    }
 }
 
 #[cfg(test)]

@@ -1,11 +1,6 @@
-//! A heightmap image as Pillow's `Image.open(path).convert("L")` gives it, read
-//! through the host's `files` interface and decoded in pure Rust (PNG, JPEG,
-//! BMP, the formats the panel offers).
-//!
-//! Pillow's RGB to L is `(R*19595 + G*38470 + B*7471 + 0x8000) >> 16`, a 16 bit
-//! grey is clipped to 255 and 16 bit colour keeps its high byte. PNG and BMP
-//! decode to the same pixels; a JPEG's decoder (libjpeg-turbo there, zune-jpeg
-//! here) may round a pixel one level apart.
+//! A heightmap as Pillow's `Image.open(path).convert("L")` gives it, decoded in pure Rust. RGB to L is
+//! `(R*19595 + G*38470 + B*7471 + 0x8000) >> 16`, 16 bit grey clips to 255 and 16 bit colour keeps its high byte. A JPEG
+//! pixel may round one level apart from libjpeg-turbo.
 
 use image::{DynamicImage, ImageFormat};
 
@@ -40,32 +35,22 @@ pub fn load(path: &str) -> Result<Gray, String> {
         DynamicImage::ImageLumaA8(b) => b.pixels().map(|p| f64::from(p.0[0])).collect(),
         DynamicImage::ImageLuma16(b) => b.pixels().map(|p| f64::from(p.0[0].min(255))).collect(),
         DynamicImage::ImageLumaA16(b) => b.pixels().map(|p| f64::from(p.0[0].min(255))).collect(),
-        DynamicImage::ImageRgb8(b) => b
-            .pixels()
-            .map(|p| l24(u32::from(p.0[0]), u32::from(p.0[1]), u32::from(p.0[2])))
-            .collect(),
-        DynamicImage::ImageRgba8(b) => b
-            .pixels()
-            .map(|p| l24(u32::from(p.0[0]), u32::from(p.0[1]), u32::from(p.0[2])))
-            .collect(),
-        DynamicImage::ImageRgb16(b) => b
-            .pixels()
-            .map(|p| l24(u32::from(p.0[0] >> 8), u32::from(p.0[1] >> 8), u32::from(p.0[2] >> 8)))
-            .collect(),
-        DynamicImage::ImageRgba16(b) => b
-            .pixels()
-            .map(|p| l24(u32::from(p.0[0] >> 8), u32::from(p.0[1] >> 8), u32::from(p.0[2] >> 8)))
-            .collect(),
+        DynamicImage::ImageRgb8(b) => {
+            b.pixels().map(|p| l24(u32::from(p.0[0]), u32::from(p.0[1]), u32::from(p.0[2]))).collect()
+        }
+        DynamicImage::ImageRgba8(b) => {
+            b.pixels().map(|p| l24(u32::from(p.0[0]), u32::from(p.0[1]), u32::from(p.0[2]))).collect()
+        }
+        DynamicImage::ImageRgb16(b) => {
+            b.pixels().map(|p| l24(u32::from(p.0[0] >> 8), u32::from(p.0[1] >> 8), u32::from(p.0[2] >> 8))).collect()
+        }
+        DynamicImage::ImageRgba16(b) => {
+            b.pixels().map(|p| l24(u32::from(p.0[0] >> 8), u32::from(p.0[1] >> 8), u32::from(p.0[2] >> 8))).collect()
+        }
         other => {
             let rgb = other.to_rgb8();
-            rgb.pixels()
-                .map(|p| l24(u32::from(p.0[0]), u32::from(p.0[1]), u32::from(p.0[2])))
-                .collect()
+            rgb.pixels().map(|p| l24(u32::from(p.0[0]), u32::from(p.0[1]), u32::from(p.0[2]))).collect()
         }
     };
-    Ok(Gray {
-        w,
-        h,
-        px: px.into_iter().map(|x| x / 255.0).collect(),
-    })
+    Ok(Gray { w, h, px: px.into_iter().map(|x| x / 255.0).collect() })
 }

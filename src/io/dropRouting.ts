@@ -9,11 +9,8 @@ function baseName(name: string): string {
   return name.split(/[\\/]/).pop() ?? name;
 }
 
-/** What a file dropped on the window should do, from its name alone.
- *
- *  Unknown names are refused here because extToImportFormat is total: handed a
- *  .txt it answers "step" and the user gets a STEP reader error about a text
- *  file. */
+/** What a dropped file should do, from its name alone. Unknown names are refused here because extToImportFormat
+ *  answers "step" for anything, even a .txt. */
 export function routeDroppedName(name: string): DropAction {
   const base = baseName(name);
   const dot = base.lastIndexOf(".");
@@ -56,9 +53,7 @@ export function describeDropLeftovers<T>(plan: DropPlan<T>, nameOf: (item: T) =>
   const names = (list: T[]) => list.map((i) => baseName(nameOf(i))).join(", ");
   if (plan.rejected.length) {
     const nothing = plan.open === null && plan.imports.length === 0 && plan.environments.length === 0;
-    parts.push(
-      `${nothing ? "Nothing was imported" : "Not imported"}, FundaCAD cannot read ${names(plan.rejected)}.`,
-    );
+    parts.push(`${nothing ? "Nothing was imported" : "Not imported"}, FundaCAD cannot read ${names(plan.rejected)}.`);
   }
   if (plan.skipped.length) {
     parts.push(`Only one document opens at a time, so ${names(plan.skipped)} stayed closed.`);

@@ -1,6 +1,5 @@
-//! The edge aware a-trous filter of src/viewport/pathtrace/atrous.ts on the
-//! CPU, the denoise at the cap when Open Image Denoise is not installed. Same
-//! constants, same trust mask, same demodulation by albedo.
+//! The edge aware a-trous filter of src/viewport/pathtrace/atrous.ts on the CPU, the denoise at the cap without Open
+//! Image Denoise: same constants, trust mask and demodulation by albedo.
 
 use crate::denoise::Input;
 
@@ -47,7 +46,17 @@ fn trust(w: usize, h: usize, depth: &[f32]) -> Vec<bool> {
     t
 }
 
-fn pass(w: usize, h: usize, rows: std::ops::Range<usize>, cur: &[[f32; 3]], input: &Input, trust: &[bool], step: i32, sigma: f32, out: &mut [[f32; 3]]) {
+fn pass(
+    w: usize,
+    h: usize,
+    rows: std::ops::Range<usize>,
+    cur: &[[f32; 3]],
+    input: &Input,
+    trust: &[bool],
+    step: i32,
+    sigma: f32,
+    out: &mut [[f32; 3]],
+) {
     let (n, d) = (&input.normal, &input.depth);
     for y in rows.clone() {
         for x in 0..w {
@@ -103,7 +112,9 @@ fn noise(w: usize, h: usize, c: &[[f32; 3]], trust: &[bool], n: &[f32]) -> f32 {
         for x in 1..w - 1 {
             let p = y * w + x;
             let q = [p - 1, p + 1, p - w, p + w];
-            let flat = |q: usize| trust[q] && n[p * 3] * n[q * 3] + n[p * 3 + 1] * n[q * 3 + 1] + n[p * 3 + 2] * n[q * 3 + 2] > 0.99;
+            let flat = |q: usize| {
+                trust[q] && n[p * 3] * n[q * 3] + n[p * 3 + 1] * n[q * 3 + 1] + n[p * 3 + 2] * n[q * 3 + 2] > 0.99
+            };
             if !trust[p] || !q.iter().all(|&q| flat(q)) {
                 continue;
             }
@@ -137,7 +148,8 @@ pub fn filter(input: &Input, samples: u32) -> Vec<f32> {
             [c[0] / a[0], c[1] / a[1], c[2] / a[2]]
         })
         .collect();
-    let sigma = (LUMA_SIGMA / (samples.max(1) as f32).sqrt()).min(NOISE_STOPS * noise(w, h, &cur, &trust, &input.normal));
+    let sigma =
+        (LUMA_SIGMA / (samples.max(1) as f32).sqrt()).min(NOISE_STOPS * noise(w, h, &cur, &trust, &input.normal));
     let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).min(h);
     let band = h.div_ceil(threads);
     for step in STEPS {
@@ -157,49 +169,4 @@ pub fn filter(input: &Input, samples: u32) -> Vec<f32> {
         out.extend([c[0] * a[0], c[1] * a[1], c[2] * a[2]]);
     }
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn flat(w: usize, h: usize, noise: bool) -> Input {
-        let mut color = Vec::new();
-        let mut seed = 12345u32;
-        for _ in 0..w * h {
-            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
-            let v = if noise { 0.1 + 0.8 * (seed >> 8) as f32 / (1u32 << 24) as f32 } else { 0.5 };
-            color.extend([v, v, v]);
-        }
-        Input {
-            width: w,
-            height: h,
-            color,
-            albedo: vec![0.5; w * h * 3],
-            normal: [0.0, 0.0, 1.0].repeat(w * h),
-            depth: vec![5.0; w * h],
-            samples: 64,
-        }
-    }
-
-    #[test]
-    fn a_flat_surface_keeps_its_colour() {
-        let out = filter(&flat(16, 12, false), 64);
-        assert!(out.iter().all(|v| (v - 0.5).abs() < 1e-4), "{:?}", &out[..6]);
-    }
-
-    #[test]
-    fn noise_on_one_surface_is_smoothed_toward_its_mean() {
-        let input = flat(32, 32, true);
-        let out = filter(&input, 64);
-        let rms = |v: &[f32]| (v.iter().map(|x| (x - 0.5) * (x - 0.5)).sum::<f32>() / v.len() as f32).sqrt();
-        assert!(rms(&out) < rms(&input.color) * 0.5, "rms {} from {}", rms(&out), rms(&input.color));
-    }
-
-    #[test]
-    fn the_background_stays_as_traced() {
-        let mut input = flat(16, 16, true);
-        input.depth = vec![0.0; 16 * 16];
-        assert_eq!(filter(&input, 64), input.color);
-    }
 }

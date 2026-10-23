@@ -20,7 +20,10 @@ const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const WS_PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = path.resolve(process.argv[2] || "hole_tool_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -31,25 +34,41 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-  await page.addInitScript(({ t, ws }) => {
-    const N = window.WebSocket;
-    class P extends N {
-      constructor(u, p) {
-        const s = String(u).replace(":8765", `:${ws}`).replace(/([?&])token=[^&]*/, `$1token=${t}`);
-        super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
+  await page.addInitScript(
+    ({ t, ws }) => {
+      const N = window.WebSocket;
+      class P extends N {
+        constructor(u, p) {
+          const s = String(u)
+            .replace(":8765", `:${ws}`)
+            .replace(/([?&])token=[^&]*/, `$1token=${t}`);
+          super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+        }
       }
-    }
-    window.WebSocket = P;
-  }, { t: TOKEN, ws: WS_PORT });
+      window.WebSocket = P;
+    },
+    { t: TOKEN, ws: WS_PORT },
+  );
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   await page.evaluate(async () => {
-    window.store.addFeature({ id: "s1", type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 40 }] });
+    window.store.addFeature({
+      id: "s1",
+      type: "sketch",
+      plane: "XY",
+      entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 40 }],
+    });
     window.store.addFeature({ id: "e1", type: "extrude", sketch: "s1", distance: 20, operation: "new" });
     await window.store.rebuildNow();
   });
@@ -57,10 +76,11 @@ const check = (name, ok, detail) => {
   await page.evaluate(() => window.__fundacad.handleAction("iso"));
   await page.waitForTimeout(800);
   const settled = () => page.waitForFunction(() => !window.store.buildState.building, null, { timeout: 60000 });
-  const screen = (p) => page.evaluate(([x, y, z]) => {
-    const s = window.viewport.projectToScreen(new window.viewport.anchorVector(x, y, z));
-    return { x: s.x, y: s.y };
-  }, p);
+  const screen = (p) =>
+    page.evaluate(([x, y, z]) => {
+      const s = window.viewport.projectToScreen(new window.viewport.anchorVector(x, y, z));
+      return { x: s.x, y: s.y };
+    }, p);
   const volume = () => page.evaluate(() => window.viewport.bodyProperties(null)?.volume ?? null);
   const v0 = await volume();
 
@@ -78,7 +98,8 @@ const check = (name, ok, detail) => {
     await page.waitForTimeout(250);
   };
   await click([-10, -10, 20]);
-  const tool = () => page.evaluate(() => ({ active: window.__fundacad.hole.active, n: window.__fundacad.hole.points.length }));
+  const tool = () =>
+    page.evaluate(() => ({ active: window.__fundacad.hole.active, n: window.__fundacad.hole.points.length }));
   let t = await tool();
   check("clicking the top face starts a hole there", t.active && t.n === 1, JSON.stringify(t));
   await click([10, -10, 20]);
@@ -102,13 +123,18 @@ const check = (name, ok, detail) => {
   await settled();
   await page.waitForTimeout(500);
   const f = await page.evaluate(() => window.store.document.features.find((x) => x.type === "hole") ?? null);
-  check("Enter commits a blind M4 hole feature with two positions",
+  check(
+    "Enter commits a blind M4 hole feature with two positions",
     !!f && f.size === "M4" && f.diameter === 4.5 && f.extent === "blind" && f.depth === 8 && f.points.length === 2,
-    JSON.stringify(f));
+    JSON.stringify(f),
+  );
   const v1 = await volume();
   const expected = 2 * Math.PI * 2.25 * 2.25 * 8;
-  check("the block loses two 4.5 x 8 bores", v0 != null && v1 != null && Math.abs(v0 - v1 - expected) < expected * 0.03,
-    `${v0} -> ${v1}, expected ${expected.toFixed(2)} removed`);
+  check(
+    "the block loses two 4.5 x 8 bores",
+    v0 != null && v1 != null && Math.abs(v0 - v1 - expected) < expected * 0.03,
+    `${v0} -> ${v1}, expected ${expected.toFixed(2)} removed`,
+  );
   const errs = await page.evaluate(() => window.store.buildState.result?.errors ?? []);
   check("the build has no errors", errs.length === 0, JSON.stringify(errs));
   await page.screenshot({ path: path.join(OUT, "02_committed.png") });
@@ -125,9 +151,16 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(1000);
   await settled();
   const g = await page.evaluate(() => window.store.document.features.find((x) => x.type === "hole") ?? null);
-  check("the type switch makes it a counterbore for the M4 head",
-    !!g && g.id === f.id && g.holeType === "counterbore" && g.cbDiameter === 8 && g.cbDepth === 4.4 && g.points.length === 2,
-    JSON.stringify(g));
+  check(
+    "the type switch makes it a counterbore for the M4 head",
+    !!g &&
+      g.id === f.id &&
+      g.holeType === "counterbore" &&
+      g.cbDiameter === 8 &&
+      g.cbDepth === 4.4 &&
+      g.points.length === 2,
+    JSON.stringify(g),
+  );
   await page.screenshot({ path: path.join(OUT, "03_counterbore.png") });
 
   await page.evaluate((id) => window.__fundacad.selectFeature(id), f.id);
@@ -142,9 +175,11 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(800);
   await settled();
   const h = await page.evaluate(() => window.store.document.features.find((x) => x.type === "hole") ?? null);
-  check("the Size row re-derives the diameter and counterbore",
+  check(
+    "the Size row re-derives the diameter and counterbore",
     picked && !!h && h.size === "M3" && h.diameter === 3.4 && h.cbDiameter === 6.5 && h.cbDepth === 3.4,
-    JSON.stringify(h));
+    JSON.stringify(h),
+  );
   await page.screenshot({ path: path.join(OUT, "04_rows.png") });
 
   await browser.close();

@@ -1,16 +1,38 @@
 import { describe, it, expect } from "vitest";
 import {
-  bsplineDegree, bsplineFit, bsplineInsertKnot, bsplineKnots, bsplineMinPoles, bsplineNearestParam,
-  bsplinePoint, bsplinePolyline, bsplineRange, bsplineRemovePole, poleOfRef, poleRef, type BsplineDef,
+  bsplineDegree,
+  bsplineFit,
+  bsplineInsertKnot,
+  bsplineKnots,
+  bsplineMinPoles,
+  bsplineNearestParam,
+  bsplinePoint,
+  bsplinePolyline,
+  bsplineRange,
+  bsplineRemovePole,
+  poleOfRef,
+  poleRef,
+  type BsplineDef,
 } from "../../src/sketch/bspline";
 
 import VECTORS from "../vectors/bspline.json";
 
 const wave: BsplineDef["poles"] = [
-  { x: 0, y: 0 }, { x: 10, y: 25 }, { x: 30, y: -5 }, { x: 45, y: 30 }, { x: 60, y: 10 }, { x: 80, y: 40 }, { x: 95, y: 0 },
+  { x: 0, y: 0 },
+  { x: 10, y: 25 },
+  { x: 30, y: -5 },
+  { x: 45, y: 30 },
+  { x: 60, y: 10 },
+  { x: 80, y: 40 },
+  { x: 95, y: 0 },
 ];
 const ring: BsplineDef["poles"] = [
-  { x: 0, y: -20 }, { x: 25, y: -18 }, { x: 30, y: 5 }, { x: 12, y: 28 }, { x: -15, y: 22 }, { x: -28, y: 0 },
+  { x: 0, y: -20 },
+  { x: 25, y: -18 },
+  { x: 30, y: 5 },
+  { x: 12, y: 28 },
+  { x: -15, y: 22 },
+  { x: -28, y: 0 },
 ];
 
 function samplesOf(def: BsplineDef, n = 41): number[] {
@@ -21,7 +43,8 @@ function samplesOf(def: BsplineDef, n = 41): number[] {
 function expectSameCurve(a: BsplineDef, b: BsplineDef, tol = 1e-9) {
   expect(bsplineRange(b)).toEqual(bsplineRange(a));
   for (const t of samplesOf(a, 397)) {
-    const p = bsplinePoint(a, t), q = bsplinePoint(b, t);
+    const p = bsplinePoint(a, t),
+      q = bsplinePoint(b, t);
     expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeLessThan(tol);
   }
 }
@@ -85,8 +108,10 @@ describe("bspline evaluation", () => {
       const c = bsplinePoint(def, t);
       let best = Infinity;
       for (let i = 0; i + 1 < line.length; i++) {
-        const A = line[i]!, B = line[i + 1]!;
-        const dx = B.x - A.x, dy = B.y - A.y;
+        const A = line[i]!,
+          B = line[i + 1]!;
+        const dx = B.x - A.x,
+          dy = B.y - A.y;
         const u = Math.max(0, Math.min(1, ((c.x - A.x) * dx + (c.y - A.y) * dy) / (dx * dx + dy * dy || 1)));
         best = Math.min(best, Math.hypot(A.x + u * dx - c.x, A.y + u * dy - c.y));
       }
@@ -171,7 +196,10 @@ describe("bspline fit", () => {
   });
 
   it("fits a closed loop with a periodic curve", () => {
-    const samples = Array.from({ length: 60 }, (_, i) => ({ x: 20 * Math.cos((i / 60) * 2 * Math.PI), y: 12 * Math.sin((i / 60) * 2 * Math.PI) }));
+    const samples = Array.from({ length: 60 }, (_, i) => ({
+      x: 20 * Math.cos((i / 60) * 2 * Math.PI),
+      y: 12 * Math.sin((i / 60) * 2 * Math.PI),
+    }));
     const fit = bsplineFit(samples, 10, true)!;
     expect(fit.closed).toBe(true);
     for (const s of samples) {
@@ -195,23 +223,35 @@ describe("shared vectors", () => {
     { name: "closed quadratic", def: { poles: ring, degree: 2, closed: true } },
     { name: "closed quintic", def: { poles: ring, degree: 5, closed: true } },
     { name: "closed triangle", def: { poles: ring.slice(0, 3), closed: true } },
-    { name: "closed with inserted knots", def: bsplineInsertKnot(bsplineInsertKnot({ poles: ring, closed: true }, 5.5)!, 0.25)! },
+    {
+      name: "closed with inserted knots",
+      def: bsplineInsertKnot(bsplineInsertKnot({ poles: ring, closed: true }, 5.5)!, 0.25)!,
+    },
   ];
-  const record = () => cases.map(({ name, def }) => ({
-    name,
-    poles: def.poles.map((q) => [q.x, q.y]),
-    degree: bsplineDegree(def),
-    closed: !!def.closed,
-    knots: bsplineKnots(def),
-    samples: samplesOf(def, 23).map((t) => { const c = bsplinePoint(def, t); return [t, c.x, c.y]; }),
-  }));
+  const record = () =>
+    cases.map(({ name, def }) => ({
+      name,
+      poles: def.poles.map((q) => [q.x, q.y]),
+      degree: bsplineDegree(def),
+      closed: !!def.closed,
+      knots: bsplineKnots(def),
+      samples: samplesOf(def, 23).map((t) => {
+        const c = bsplinePoint(def, t);
+        return [t, c.x, c.y];
+      }),
+    }));
 
   it("match the recorded file", () => {
     const fresh = record();
     const saved = VECTORS as unknown as { cases: ReturnType<typeof record> };
     expect(saved.cases.map((c) => c.name)).toEqual(fresh.map((c) => c.name));
     saved.cases.forEach((c, i) => {
-      const def: BsplineDef = { poles: c.poles.map(([x, y]) => ({ x: x!, y: y! })), degree: c.degree, closed: c.closed, knots: c.knots };
+      const def: BsplineDef = {
+        poles: c.poles.map(([x, y]) => ({ x: x!, y: y! })),
+        degree: c.degree,
+        closed: c.closed,
+        knots: c.knots,
+      };
       expect(bsplineKnots(def)).toEqual(c.knots);
       for (const [t, x, y] of c.samples) {
         const q = bsplinePoint(def, t!);

@@ -3,9 +3,42 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import type { GeometryBackend } from "../../src/geometry/client";
 
-import { FORMATS } from "../../src/io/exportSettings";
+// Mocked once for the file: two doMocks of one path queued together are applied
+// in whichever order vitest resolves them, so a test's own could lose to beforeEach's.
+type ExportAsk = { scope?: string; selected?: readonly string[]; flat?: { label: string }; format?: string };
+const ui = vi.hoisted(() => ({
+  reported: [] as string[],
+  picked: null as string | null,
+  onPick: () => {},
+  save: async (_o: { defaultPath: string }): Promise<string | null> => null,
+  exportDialog: async (_what: ExportAsk): Promise<unknown> => null,
+  closeHome: vi.fn(),
+}));
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  save: (o: { defaultPath: string }) => ui.save(o),
+  open: async () => {
+    ui.onPick();
+    return ui.picked;
+  },
+  message: async (m: string) => void ui.reported.push(m),
+}));
+vi.mock("../../src/ui/choice", () => ({ choose: async () => null, listModal: async () => {} }));
+vi.mock("../../src/stores/exportDialog", () => ({
+  useExportDialogStore: () => ({ open: (what: ExportAsk) => ui.exportDialog(what) }),
+}));
+vi.mock("../../src/ui/home", () => ({ closeHome: ui.closeHome }));
+
+import { DEFAULT_SETTINGS, FORMATS } from "../../src/io/exportSettings";
 import { routeDroppedName } from "../../src/io/dropRouting";
-import { IMPORT_EXTS, dialogExts, describeImportCapability, extToFormat, extToImportFormat, importedBodyCount, looksLikeContainer } from "../../src/io/files";
+import {
+  IMPORT_EXTS,
+  dialogExts,
+  describeImportCapability,
+  extToFormat,
+  extToImportFormat,
+  importedBodyCount,
+  looksLikeContainer,
+} from "../../src/io/files";
 
 // Both mappers are TOTAL, an unrecognised extension silently becomes "step"
 // rather than erroring. That is deliberate (the save dialog can hand back a bare
@@ -92,7 +125,12 @@ describe("IMPORT_EXTS", () => {
   it("offers only extensions the import reads as themselves", () => {
     for (const ext of IMPORT_EXTS) {
       const fmt = extToImportFormat(`/tmp/a.${ext}`);
-      const spellings: Record<string, string[]> = { step: ["step", "stp", "stpz", "gz"], iges: ["iges", "igs"], vrml: ["wrl", "wrz"], x3d: ["x3d", "x3dz"] };
+      const spellings: Record<string, string[]> = {
+        step: ["step", "stp", "stpz", "gz"],
+        iges: ["iges", "igs"],
+        vrml: ["wrl", "wrz"],
+        x3d: ["x3d", "x3dz"],
+      };
       expect(spellings[fmt] ?? [fmt]).toContain(ext.toLowerCase());
     }
   });
@@ -102,8 +140,7 @@ describe("looksLikeContainer", () => {
   // 0x50 0x4b 0x03 0x04 = "PK\x03\x04", a ZIP local-file header, followed by
   // bytes that are invalid UTF-8 (0xff 0xfe ...), i.e. a realistic prefix.
   const zipBytes = new Uint8Array([
-    0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x08, 0x00, 0x08, 0x00,
-    0xff, 0xfe, 0x9c, 0x8d, 0xe2, 0x28, 0x00, 0x00,
+    0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x08, 0x00, 0x08, 0x00, 0xff, 0xfe, 0x9c, 0x8d, 0xe2, 0x28, 0x00, 0x00,
   ]);
 
   // The whole diagnosis rests on one premise: plugin-fs decodes with a
@@ -142,10 +179,13 @@ describe("looksLikeContainer", () => {
 // whatever ran most recently (the document stays editable meanwhile).
 describe("export runs as a cancellable busy op", () => {
   const savePath = "/tmp/part.step";
-  let reported: string[];
 
   beforeEach(() => {
-    reported = [];
+    ui.reported = [];
+    ui.picked = null;
+    ui.save = async () => savePath;
+    // The Export dialog answers STEP, whole document.
+    ui.exportDialog = async () => ({ settings: { ...DEFAULT_SETTINGS, format: "step" }, scope: "all" });
     // No jsdom in this project on purpose (see vitest.config.ts), so stand up
     // the one property exportModel's isTauri() probe reads, nothing more.
     // diagnostics/breadcrumbs.ts registers global handlers at MODULE scope
@@ -155,39 +195,23 @@ describe("export runs as a cancellable busy op", () => {
       addEventListener() {},
       removeEventListener() {},
     };
-    vi.doMock("@tauri-apps/plugin-dialog", () => ({
-      save: async () => savePath,
-      open: async () => null,
-      message: async (m: string) => void reported.push(m),
-    }));
-    vi.doMock("../../src/ui/choice", () => ({
-      choose: async () => null,
-      listModal: async () => {},
-    }));
-    // The Export dialog answers STEP, whole document.
-    vi.doMock("../../src/stores/exportDialog", async () => {
-      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
-      return {
-        useExportDialogStore: () => ({
-          open: async () => ({ settings: { ...DEFAULT_SETTINGS, format: "step" }, scope: "all" }),
-        }),
-      };
-    });
   });
 
   afterEach(() => {
-    vi.doUnmock("@tauri-apps/plugin-dialog");
-    vi.doUnmock("../../src/ui/choice");
-    vi.doUnmock("../../src/stores/exportDialog");
     vi.unstubAllGlobals();
-    vi.resetModules();
     delete (globalThis as unknown as Record<string, unknown>).window;
   });
 
   function storeWith(exportImpl: GeometryBackend["export"]) {
     const backend = {
-      async rebuild() { return { ok: false, error: { message: "stub" } }; },
-      async init() {}, onStatus() { return () => {}; }, connected: true,
+      async rebuild() {
+        return { ok: false, error: { message: "stub" } };
+      },
+      async init() {},
+      onStatus() {
+        return () => {};
+      },
+      connected: true,
       export: exportImpl,
     } as unknown as GeometryBackend;
     return { backend, store: new DocumentStore(backend, { parameters: {}, features: [] }) };
@@ -207,17 +231,19 @@ describe("export runs as a cancellable busy op", () => {
     expect(busyDuring!.active).toBe(true);
     // the id is what makes Cancel target THIS op, without it cancelBusy is a no-op
     expect(busyDuring!.id).toBe("req-42");
-    expect(store.busyState.active).toBe(false);  // always cleared
+    expect(store.busyState.active).toBe(false); // always cleared
   });
 
   it("says nothing when the user cancels, that is not an error", async () => {
     const { backend, store } = storeWith(async () => ({
-      ok: false, cancelled: true, message: "export cancelled",
+      ok: false,
+      cancelled: true,
+      message: "export cancelled",
     }));
     const { exportModel } = await import("../../src/io/files");
     await exportModel(store, backend);
 
-    expect(reported).toEqual([]);   // no "Export failed: cancelled" dialog
+    expect(ui.reported).toEqual([]); // no "Export failed: cancelled" dialog
     expect(store.busyState.active).toBe(false);
   });
 
@@ -226,32 +252,65 @@ describe("export runs as a cancellable busy op", () => {
     const { exportModel } = await import("../../src/io/files");
     await exportModel(store, backend);
 
-    expect(reported.join(" ")).toContain("disk full");
+    expect(ui.reported.join(" ")).toContain("disk full");
     expect(store.busyState.active).toBe(false);
   });
 
+  it("a document closed while its Export or Save dialog was open exports nothing, the next one exports itself", async () => {
+    for (const closedIn of ["export", "save"] as const) {
+      const exported: unknown[] = [];
+      const { backend, store } = storeWith(async (d) => {
+        exported.push(d.parameters);
+        return { ok: true, path: savePath };
+      });
+      store.setParam("closed", 1);
+      const answer = { settings: { ...DEFAULT_SETTINGS, format: "step" }, scope: "all" };
+      ui.exportDialog = async () => {
+        if (closedIn === "export") store.newDocument();
+        return answer;
+      };
+      ui.save = async () => {
+        if (closedIn === "save") store.newDocument();
+        return savePath;
+      };
+      const { exportModel } = await import("../../src/io/files");
+      await exportModel(store, backend);
+      const during = [...exported];
+      ui.exportDialog = async () => answer;
+      ui.save = async () => savePath;
+      store.setParam("next", 2);
+      await exportModel(store, backend);
+      expect({ closedIn, during, after: exported, busy: store.busyState.active, reported: ui.reported }).toEqual({
+        closedIn,
+        during: [],
+        after: [{ next: 2 }],
+        busy: false,
+        reported: [],
+      });
+    }
+  });
+
   it("cancelling the Export dialog exports nothing", async () => {
-    vi.doMock("../../src/stores/exportDialog", () => ({
-      useExportDialogStore: () => ({ open: async () => null }),
-    }));
+    ui.exportDialog = async () => null;
     let called = false;
-    const { backend, store } = storeWith(async () => { called = true; return { ok: true, path: savePath }; });
+    const { backend, store } = storeWith(async () => {
+      called = true;
+      return { ok: true, path: savePath };
+    });
     const { exportModel } = await import("../../src/io/files");
     await exportModel(store, backend);
     expect(called).toBe(false);
   });
 
   it("sends the faceting and units with a mesh format", async () => {
-    vi.doMock("../../src/stores/exportDialog", async () => {
-      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
-      return {
-        useExportDialogStore: () => ({
-          open: async () => ({
-            settings: { ...DEFAULT_SETTINGS, format: "stl", unit: "in", faceting: { surfaceDeviation: 0.01, normalDeviation: 8, maxEdgeLength: 3 } },
-            scope: "all",
-          }),
-        }),
-      };
+    ui.exportDialog = async () => ({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        format: "stl",
+        unit: "in",
+        faceting: { surfaceDeviation: 0.01, normalDeviation: 8, maxEdgeLength: 3 },
+      },
+      scope: "all",
     });
     let sent: { format?: string; mesh?: unknown } = {};
     const { backend, store } = storeWith(async (_d, format, _p, opts) => {
@@ -268,17 +327,10 @@ describe("export runs as a cancellable busy op", () => {
 
   it("starts from the selected bodies and exports only those", async () => {
     let asked: { scope?: string; selected?: readonly string[] } = {};
-    vi.doMock("../../src/stores/exportDialog", async () => {
-      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
-      return {
-        useExportDialogStore: () => ({
-          open: async (what: { scope?: string; selected?: readonly string[] }) => {
-            asked = what;
-            return { settings: { ...DEFAULT_SETTINGS, format: "stl" }, scope: what.scope };
-          },
-        }),
-      };
-    });
+    ui.exportDialog = async (what) => {
+      asked = what;
+      return { settings: { ...DEFAULT_SETTINGS, format: "stl" }, scope: what.scope };
+    };
     let sent: { body?: string | undefined; bodies?: string[] | undefined; separate?: boolean | undefined } = {};
     let path = "";
     const { backend, store } = storeWith(async (_d, _f, p, opts) => {
@@ -291,11 +343,10 @@ describe("export runs as a cancellable busy op", () => {
       bodies: ["body1", "body2", "body3"].map((id) => ({ id, name: id })),
     };
     const saved: string[] = [];
-    vi.doMock("@tauri-apps/plugin-dialog", () => ({
-      save: async (o: { defaultPath: string }) => { saved.push(o.defaultPath); return savePath; },
-      open: async () => null,
-      message: async (m: string) => void reported.push(m),
-    }));
+    ui.save = async (o) => {
+      saved.push(o.defaultPath);
+      return savePath;
+    };
     const { exportModel } = await import("../../src/io/files");
     await exportModel(store, backend, ["body3", "body1", "body9"]);
     expect(asked.scope).toBe("selected");
@@ -307,17 +358,10 @@ describe("export runs as a cancellable busy op", () => {
 
   it("draws a sketch as DXF with its id and tolerance, and no body options", async () => {
     let asked: { flat?: { label: string }; format?: string } = {};
-    vi.doMock("../../src/stores/exportDialog", async () => {
-      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
-      return {
-        useExportDialogStore: () => ({
-          open: async (what: { flat?: { label: string }; format?: string; scope?: string }) => {
-            asked = what;
-            return { settings: { ...DEFAULT_SETTINGS, format: what.format, tolerance: 5 }, scope: "all" };
-          },
-        }),
-      };
-    });
+    ui.exportDialog = async (what) => {
+      asked = what;
+      return { settings: { ...DEFAULT_SETTINGS, format: what.format, tolerance: 5 }, scope: "all" };
+    };
     let sent: Record<string, unknown> = {};
     let format = "";
     const { backend, store } = storeWith(async (_d, f, p, opts) => {
@@ -326,13 +370,15 @@ describe("export runs as a cancellable busy op", () => {
       return { ok: true, path: p };
     });
     const saved: string[] = [];
-    vi.doMock("@tauri-apps/plugin-dialog", () => ({
-      save: async (o: { defaultPath: string }) => { saved.push(o.defaultPath); return "/tmp/plate.dxf"; },
-      open: async () => null,
-      message: async (m: string) => void reported.push(m),
-    }));
+    ui.save = async (o) => {
+      saved.push(o.defaultPath);
+      return "/tmp/plate.dxf";
+    };
     const kept = new Map([["fundacad.exportSettings", JSON.stringify({ format: "3mf" })]]);
-    vi.stubGlobal("localStorage", { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) });
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => kept.get(k) ?? null,
+      setItem: (k: string, v: string) => void kept.set(k, v),
+    });
     const { exportModel } = await import("../../src/io/files");
     await exportModel(store, backend, ["body1"], { sketch: "sk1", label: "Plate" }, "dxf");
     const { loadExportSettings } = await import("../../src/io/exportSettings");
@@ -347,14 +393,7 @@ describe("export runs as a cancellable busy op", () => {
   });
 
   it("draws a flat face as SVG with its selector and plane", async () => {
-    vi.doMock("../../src/stores/exportDialog", async () => {
-      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
-      return {
-        useExportDialogStore: () => ({
-          open: async () => ({ settings: { ...DEFAULT_SETTINGS, format: "svg" }, scope: "all" }),
-        }),
-      };
-    });
+    ui.exportDialog = async () => ({ settings: { ...DEFAULT_SETTINGS, format: "svg" }, scope: "all" });
     let sent: Record<string, unknown> = {};
     const { backend, store } = storeWith(async (_d, _f, p, opts) => {
       sent = { ...opts };
@@ -393,7 +432,9 @@ describe("export runs as a cancellable busy op", () => {
   });
 
   it("clears busy even when the backend throws", async () => {
-    const { backend, store } = storeWith(async () => { throw new Error("socket died"); });
+    const { backend, store } = storeWith(async () => {
+      throw new Error("socket died");
+    });
     const { exportModel } = await import("../../src/io/files");
     await expect(exportModel(store, backend)).rejects.toThrow("socket died");
     expect(store.busyState.active).toBe(false);
@@ -422,15 +463,15 @@ describe("describeImportCapability", () => {
     // the en-US spelling fails on any machine with a different locale (de-DE
     // renders 1.500) while telling us nothing about the behaviour.
     expect(msg!).toContain((1500).toLocaleString());
-    expect(msg!).toMatch(/still works/i);   // reassures: not a refusal
-    expect(msg!).not.toMatch(/27-37/);      // the harsher figure is for later
+    expect(msg!).toMatch(/still works/i); // reassures: not a refusal
+    expect(msg!).not.toMatch(/27-37/); // the harsher figure is for later
   });
 
   it("is blunt about a document past the slow limit, and says what still works", () => {
     const msg = describeImportCapability(3060);
     expect(msg).not.toBeNull();
     expect(msg!).toContain((3060).toLocaleString());
-    expect(msg!).toContain("27-37 fps");    // the measured number, not a vague "slow"
+    expect(msg!).toContain("27-37 fps"); // the measured number, not a vague "slow"
     // The user needs to know this is a VIEWPORT limit, not a broken import,
     // otherwise the natural conclusion is that the file failed to load.
     expect(msg!).toMatch(/export/i);
@@ -445,7 +486,14 @@ describe("describeImportCapability", () => {
 
 describe("importedBodyCount", () => {
   it("counts assembly leaves", () => {
-    expect(importedBodyCount({ parts: [{ node: 0, faces: 6 }, { node: 1, faces: 8 }] })).toBe(2);
+    expect(
+      importedBodyCount({
+        parts: [
+          { node: 0, faces: 6 },
+          { node: 1, faces: 8 },
+        ],
+      }),
+    ).toBe(2);
   });
 
   it("treats a file with no tree as one body", () => {
@@ -476,7 +524,8 @@ describe("extensions in any case", () => {
 
   it("offers dialogs every extension in lower and upper case, and FreeCAD's own spelling", () => {
     const exts = dialogExts(IMPORT_EXTS);
-    for (const e of ["stp", "STP", "step", "STEP", "STL", "3DM", "IFC", "FCSTD", "FCStd", "fcstd"]) expect(exts).toContain(e);
+    for (const e of ["stp", "STP", "step", "STEP", "STL", "3DM", "IFC", "FCSTD", "FCStd", "fcstd"])
+      expect(exts).toContain(e);
     expect(new Set(exts).size).toBe(exts.length);
   });
 
@@ -490,39 +539,81 @@ describe("extensions in any case", () => {
 });
 
 describe("Open with a mesh or CAD file", () => {
-  const closeHome = vi.fn();
-  let picked = "";
-
   beforeEach(() => {
-    closeHome.mockReset();
+    ui.closeHome.mockReset();
+    ui.reported = [];
+    ui.picked = null;
+    ui.onPick = () => {};
     (globalThis as unknown as Record<string, unknown>).window = {
       __TAURI_INTERNALS__: {},
       addEventListener() {},
       removeEventListener() {},
     };
-    vi.doMock("@tauri-apps/plugin-dialog", () => ({ open: async () => picked, message: async () => {} }));
-    vi.doMock("../../src/ui/home", () => ({ closeHome }));
   });
 
   afterEach(() => {
-    vi.doUnmock("@tauri-apps/plugin-dialog");
-    vi.doUnmock("../../src/ui/home");
-    vi.resetModules();
     delete (globalThis as unknown as Record<string, unknown>).window;
+  });
+
+  it("a file picked after its document was closed is not imported into the next one, a later pick is", async () => {
+    for (const via of ["open", "import"] as const) {
+      const imported: string[] = [];
+      const backend = {
+        async rebuild() {
+          return { ok: false, error: { message: "stub" } };
+        },
+        async init() {},
+        onStatus() {
+          return () => {};
+        },
+        connected: true,
+        async importGeometry(p: string) {
+          imported.push(p);
+          return { ok: false, cancelled: true };
+        },
+      } as unknown as GeometryBackend;
+      const store = new DocumentStore(backend, { parameters: {}, features: [] });
+      const { openDocument, importModel } = await import("../../src/io/files");
+      const pick = () =>
+        via === "open" ? openDocument(store, backend, async () => true) : importModel(store, backend);
+      ui.picked = "/tmp/late.step";
+      ui.onPick = () => store.newDocument();
+      await pick();
+      const during = [...imported];
+      ui.picked = "/tmp/next.step";
+      ui.onPick = () => {};
+      await pick();
+      expect({ via, during, after: imported, reported: ui.reported }).toEqual({
+        via,
+        during: [],
+        after: ["/tmp/next.step"],
+        reported: [],
+      });
+    }
   });
 
   it("closes Home, as the file goes into the open document", async () => {
     const imported: string[] = [];
     const backend = {
-      async rebuild() { return { ok: false, error: { message: "stub" } }; },
-      async init() {}, onStatus() { return () => {}; }, connected: true,
-      async importGeometry(p: string) { imported.push(p); return { ok: false, cancelled: true }; },
+      async rebuild() {
+        return { ok: false, error: { message: "stub" } };
+      },
+      async init() {},
+      onStatus() {
+        return () => {};
+      },
+      connected: true,
+      async importGeometry(p: string) {
+        imported.push(p);
+        return { ok: false, cancelled: true };
+      },
     } as unknown as GeometryBackend;
     const store = new DocumentStore(backend, { parameters: {}, features: [] });
     const { openDocument } = await import("../../src/io/files");
-    picked = "/tmp/part.step";
+    ui.picked = "/tmp/part.step";
     await openDocument(store, backend, async () => true);
+    expect(ui.reported).toEqual([]);
     expect(imported).toEqual(["/tmp/part.step"]);
-    expect(closeHome).toHaveBeenCalledTimes(1);
+    expect(ui.closeHome).toHaveBeenCalledTimes(1);
   });
 });

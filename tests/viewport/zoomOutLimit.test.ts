@@ -5,20 +5,16 @@
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import {
-  ZOOM_OUT_CEILING,
-  ZOOM_OUT_EMPTY,
-  ZOOM_OUT_FACTOR,
-  maxViewHalfHeight,
-} from "../../src/viewport/clipPlanes";
+import { ZOOM_OUT_CEILING, ZOOM_OUT_EMPTY, ZOOM_OUT_FACTOR, maxViewHalfHeight } from "../../src/viewport/clipPlanes";
 import { niceStep } from "../../src/ui/units";
 
 const VIEW_HEIGHTS_PX = [600, 764, 1300];
 
 /** Pixels across a cube of side `side` at the zoom-out limit. */
 function cubePx(side: number, heightPx: number): number {
-  const r = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3(side, side, side))
-    .getBoundingSphere(new THREE.Sphere()).radius;
+  const r = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3(side, side, side)).getBoundingSphere(
+    new THREE.Sphere(),
+  ).radius;
   return (side * heightPx) / (2 * maxViewHalfHeight(r));
 }
 

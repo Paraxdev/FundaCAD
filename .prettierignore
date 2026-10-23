@@ -1,0 +1,27 @@
+# Prettier also reads .gitignore, so node_modules, dist and the target dirs are already out.
+
+# Vendored code, and the Rust side (rustfmt owns it)
+third_party/
+src-tauri/
+crates/
+plugins/*/geometry-rs/
+
+# Data whose bytes matter: golden meshes, test vectors, fixtures, the screw catalogue, icons
+tests/golden/
+tests/vectors/
+tests/fixtures/
+plugins/*/catalogue/
+src/assets/
+assets/
+
+# Docs, config and pages that are not part of the formatted code
+manual/
+docs/
+packaging/
+examples/
+tools/
+*.md
+*.json
+*.yml
+*.yaml
+*.html

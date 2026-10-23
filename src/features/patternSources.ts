@@ -1,11 +1,5 @@
-// Which of the document's features a features-mode pattern can repeat, and why
-// the rest can't.
-//
-// The engine (fundacad-geom/features/pattern.rs) is the one that actually
-// refuses a feature, with its own message. This mirrors that rule on the
-// frontend, in the same voice, so startPattern can decide whether to open in
-// features mode before ever reaching the engine, and can say why not when it
-// can't, rather than opening the tool and having the first commit bounce.
+// Mirrors the engine's pattern refusal (fundacad-geom/features/pattern.rs) in the same voice, so startPattern
+// can choose features mode and say why not before the first commit bounces.
 
 import type { Feature, RebuildResult } from "../types";
 import { featureMeta } from "../ui/featureMeta";
@@ -25,9 +19,7 @@ export interface PatternSources {
 const PATTERNABLE =
   "Only a feature that cuts or joins material can be patterned: a hole, or an extrude, revolve, sweep or loft set to cut or join. To repeat a whole body, pattern the body instead.";
 
-/** Feature TYPES that ever have a cut or join to repeat. A member can still be
- *  refused, an extrude set to "new" is one of these types with nothing
- *  patternable about this particular one, see hasCutOrJoin. */
+/** Types that can ever have a cut or join to repeat; an extrude set to "new" is still refused, see hasCutOrJoin. */
 function isPatternableType(type: string): boolean {
   return (
     type === "hole" ||
@@ -42,8 +34,7 @@ function isPatternableType(type: string): boolean {
   );
 }
 
-/** Whether THIS feature actually recorded a cut or join, given its type is
- *  already one of the patternable ones. */
+/** Assumes the type already passed isPatternableType. */
 function hasCutOrJoin(f: Feature): boolean {
   switch (f.type) {
     case "hole":
@@ -54,10 +45,7 @@ function hasCutOrJoin(f: Feature): boolean {
     case "sweep":
       return f.operation === "cut" || f.operation === "join";
     case "press-pull":
-      // `operation` is always "join"/"cut" by the field's own type (the sign of
-      // the drag), but a `mode` other than auto overrides what actually gets
-      // combined, an explicit "new" or "intersect" boolean has nothing to do
-      // with `operation` any more and is not a cut or join to repeat.
+      // A `mode` other than auto overrides `operation`, which is always join or cut by the sign of the drag.
       if (f.mode && f.mode !== "auto") return f.mode === "join" || f.mode === "cut";
       return f.operation === "cut" || f.operation === "join";
     case "patternRect":
@@ -88,14 +76,8 @@ function refusalReason(f: Feature): string {
   return `Pattern: ${label} has no cut or join to repeat, it made a new body, is switched off, or did not build. ${PATTERNABLE}`;
 }
 
-/** Sort and filter `candidateIds` (feature ids named by clicked faces' owners,
- *  or a timeline selection) into what a features-mode pattern can repeat and
- *  what it can't. A candidate id absent from `features` (stale) is dropped
- *  silently, there is nothing left to say about a feature that is gone. */
-export function patternSources(
-  features: readonly Feature[],
-  candidateIds: readonly string[],
-): PatternSources {
+/** A candidate id absent from `features` (stale) is dropped silently. */
+export function patternSources(features: readonly Feature[], candidateIds: readonly string[]): PatternSources {
   const byId = new Map(features.map((f) => [f.id, f] as const));
   const order = new Map(features.map((f, i) => [f.id, i] as const));
   const ids: string[] = [];
@@ -113,9 +95,8 @@ export function patternSources(
   return { ids, refused };
 }
 
-/** The feature that owns each of `faceIds` (the build's per-body `faceOwners`,
- *  the same provenance a click resolves through, see app/selection.ts's
- *  featureForFace), deduplicated in the order the faces were given. */
+/** Through the build's per-body `faceOwners`, the provenance a click resolves through (app/selection.ts
+ *  featureForFace), deduplicated in face order. */
 export function featureOwnersOfFaces(bodies: BuildBodies, faceIds: readonly number[]): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -143,9 +124,8 @@ export interface Extent {
   max: { x: number; y: number; z: number };
 }
 
-/** A face that reaches across its whole body along two axes, the box's top
- *  that a hole was drilled through. Provenance hands such a face to the hole
- *  because the hole changed it, but it is not part of what the hole repeats. */
+/** A face spanning its body along two axes, like the top a hole was drilled through: provenance gives it to the
+ *  hole, but the hole does not repeat it. */
 export function spansBody(face: Extent, body: Extent): boolean {
   const axes = ["x", "y", "z"] as const;
   const size = Math.hypot(...axes.map((a) => body.max[a] - body.min[a]));
@@ -159,8 +139,7 @@ export function spansBody(face: Extent, body: Extent): boolean {
   return full.length >= 2;
 }
 
-/** Every face `featureIds` own, across every body, the faces a features-mode
- *  pattern ghosts and anchors on. */
+/** The faces a features-mode pattern ghosts and anchors on. */
 export function facesOwnedByFeatures(bodies: BuildBodies, featureIds: readonly string[]): number[] {
   if (!bodies?.length || !featureIds.length) return [];
   const want = new Set(featureIds);
@@ -175,8 +154,7 @@ export function facesOwnedByFeatures(bodies: BuildBodies, featureIds: readonly s
   return out;
 }
 
-/** Feature types whose result is a body of their own, so pointing Pattern at
- *  one means patterning that body. */
+/** Its result is a body of its own, so pointing Pattern at it means patterning that body. */
 function madeABody(f: Feature): boolean {
   switch (f.type) {
     case "box":
@@ -206,9 +184,7 @@ function madeABody(f: Feature): boolean {
 }
 
 export type PatternStart =
-  | { mode: "features"; ids: string[] }
-  | { mode: "body"; body: string | null }
-  | { mode: "refuse"; reason: string };
+  { mode: "features"; ids: string[] } | { mode: "body"; body: string | null } | { mode: "refuse"; reason: string };
 
 export interface PatternCandidates {
   ids: readonly string[];
@@ -218,14 +194,8 @@ export interface PatternCandidates {
   explicit: boolean;
 }
 
-/** What Pattern does with what it is pointed at.
- *
- *  A feature the user selected is what they mean to repeat, so one that cannot
- *  be patterned is refused with the reason, never quietly swapped for a whole
- *  body pattern: turning a filleted body about the origin is a star nobody
- *  asked for. Two exceptions fall through to the body pattern: a feature that
- *  made a body (the box just drawn, patterned means its body), and a selection
- *  the app made by itself. */
+/** A selected feature that cannot be patterned is refused with the reason, never swapped for a body pattern.
+ *  Only a feature that made a body, or a selection the app made itself, falls through to the body pattern. */
 export function patternStart(
   features: readonly Feature[],
   candidates: PatternCandidates,

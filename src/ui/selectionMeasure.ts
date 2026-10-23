@@ -9,7 +9,8 @@ export type Pt3 = readonly [number, number, number];
 export function polylineLength(points: readonly Pt3[]): number {
   let len = 0;
   for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1]!, b = points[i]!;
+    const a = points[i - 1]!,
+      b = points[i]!;
     len += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
   }
   return len;
@@ -20,14 +21,23 @@ export function polylineLength(points: readonly Pt3[]): number {
  *  fraction of the mean radius, which a rounded rectangle or an ellipse is not. */
 export function circleDiameter(points: readonly Pt3[], tol = 0.01): number | null {
   if (points.length < 8) return null;
-  const first = points[0]!, last = points[points.length - 1]!;
+  const first = points[0]!,
+    last = points[points.length - 1]!;
   const span = polylineLength(points);
   const gap = Math.hypot(first[0] - last[0], first[1] - last[1], first[2] - last[2]);
   if (gap > span * 1e-3) return null;
   const ring = points.slice(0, -1);
-  let cx = 0, cy = 0, cz = 0;
-  for (const p of ring) { cx += p[0]; cy += p[1]; cz += p[2]; }
-  cx /= ring.length; cy /= ring.length; cz /= ring.length;
+  let cx = 0,
+    cy = 0,
+    cz = 0;
+  for (const p of ring) {
+    cx += p[0];
+    cy += p[1];
+    cz += p[2];
+  }
+  cx /= ring.length;
+  cy /= ring.length;
+  cz /= ring.length;
   const radii = ring.map((p) => Math.hypot(p[0] - cx, p[1] - cy, p[2] - cz));
   const mean = radii.reduce((s, r) => s + r, 0) / radii.length;
   if (mean <= 0) return null;
@@ -42,9 +52,8 @@ export interface RoundSize {
   full: boolean;
 }
 
-/** The engine's exact size and wrap of the lone selected round face, once it
- *  has answered, so every readout of it agrees with the press/pull field
- *  rather than with the mesh's guess. */
+/** The engine's exact size of the lone selected round face once it answers, so every readout agrees with the
+ *  press/pull field rather than the mesh's guess. */
 export const exactRound = shallowRef<(RoundSize & { faceId: number }) | null>(null);
 
 /** A diameter all the way round, a radius on a partial arc. */
@@ -54,8 +63,10 @@ export function roundSize({ radius, full }: RoundSize): string {
 
 /** The prompt for a selected round face; only a full wrap can be dragged away. */
 export function roundFacePrompt(round: RoundSize): string {
-  return `Round face selected (${roundSize(round)}), drag the handle to resize it` +
-    `${round.full ? " · drag it away to nothing to remove it" : ""} · Esc to clear`;
+  return (
+    `Round face selected (${roundSize(round)}), drag the handle to resize it` +
+    `${round.full ? " · drag it away to nothing to remove it" : ""} · Esc to clear`
+  );
 }
 
 /** "1 edge · 300.74 mm · ⌀95.73 mm", "3 faces", "1 face · ⌀50 mm", "1 face · R2 mm". */

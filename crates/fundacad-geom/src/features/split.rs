@@ -1,6 +1,5 @@
-//! Split a body by a plane and Divide a face by sketch curves:
-//! the Python engine's `booleans.py` `_do_split` and the Python engine's `solid_ops.py` `_imprint` with
-//! the handlers of the Python engine's `builder.py`.
+//! Split a body by a plane and Divide a face by sketch curves, `_do_split` of booleans.py and `_imprint` of
+//! solid_ops.py with their builder.py handlers.
 
 use std::collections::HashMap;
 
@@ -36,14 +35,9 @@ pub(crate) fn split_by_plane(
 ) -> FResult<(Vec<Shape>, Vec<Shape>)> {
     let internal = |e: opencascade::Error| Fail::Internal(super::solid_ops::occt_class(&e));
     let tool = Shape::plane_face(origin, normal, xdir).map_err(internal)?;
-    let op = BooleanOp::run(
-        BooleanKind::Split,
-        [shape],
-        [&tool],
-        BooleanOptions::default(),
-        &ProgressRange::detached(),
-    )
-    .map_err(internal)?;
+    let op =
+        BooleanOp::run(BooleanKind::Split, [shape], [&tool], BooleanOptions::default(), &ProgressRange::detached())
+            .map_err(internal)?;
     let mut parts = Vec::new();
     leaves(&op.shape().map_err(internal)?, &mut parts);
     let (mut tops, mut bottoms) = (Vec::new(), Vec::new());
@@ -66,11 +60,7 @@ fn v(a: [f64; 3]) -> DVec3 {
 fn vertex_components(solids: &[Shape]) -> Vec<Vec<Shape>> {
     let n = solids.len();
     if n <= 1 {
-        return if n == 1 {
-            vec![solids.to_vec()]
-        } else {
-            Vec::new()
-        };
+        return if n == 1 { vec![solids.to_vec()] } else { Vec::new() };
     }
     let mut parent: Vec<usize> = (0..n).collect();
     fn find(parent: &mut [usize], mut x: usize) -> usize {
@@ -112,10 +102,7 @@ fn vertex_components(solids: &[Shape]) -> Vec<Vec<Shape>> {
         }
         groups.entry(root).or_default().push(s.clone());
     }
-    order
-        .into_iter()
-        .filter_map(|r| groups.remove(&r))
-        .collect()
+    order.into_iter().filter_map(|r| groups.remove(&r)).collect()
 }
 
 fn one_or_compound(g: &[Shape]) -> Shape {
@@ -218,17 +205,11 @@ fn imprint_target(ctx: &Ctx, f: &Imprint) -> FResult<Option<usize>> {
 pub fn imprint(ctx: &mut Ctx, f: &Imprint) -> FResult {
     let edges = require(ctx, &f.sketch, "divide")?.edges.clone();
     if edges.is_empty() {
-        ctx.skip_feature(
-            &f.id,
-            "imprint",
-            "this sketch has no curves to divide a face with",
-        );
+        ctx.skip_feature(&f.id, "imprint", "this sketch has no curves to divide a face with");
         return Ok(());
     }
     let Some(act) = imprint_target(ctx, f)? else {
-        return Err(Fail::msg(
-            "Divide: the face to split is no longer in the model",
-        ));
+        return Err(Fail::msg("Divide: the face to split is no longer in the model"));
     };
     ctx.editable(act, "Divide")?;
     let shape = ctx.bodies[act].shape().clone();
@@ -238,37 +219,19 @@ pub fn imprint(ctx: &mut Ctx, f: &Imprint) -> FResult {
         fuzzy: kernel::sketch_fuzz(kernel::extent(&shape)),
         ..Default::default()
     };
-    let op = BooleanOp::run(
-        BooleanKind::Split,
-        [&shape],
-        edges.iter(),
-        options,
-        &ProgressRange::detached(),
-    )
-    .map_err(|_| Fail::msg("Divide: the sketch curves could not be imprinted onto the face"))?;
-    let out = op
-        .shape()
-        .ok()
-        .filter(|s| !kernel::is_null(s))
-        .unwrap_or(shape);
+    let op = BooleanOp::run(BooleanKind::Split, [&shape], edges.iter(), options, &ProgressRange::detached())
+        .map_err(|_| Fail::msg("Divide: the sketch curves could not be imprinted onto the face"))?;
+    let out = op.shape().ok().filter(|s| !kernel::is_null(s)).unwrap_or(shape);
     let after = kernel::count(&out, Kind::Face);
     ctx.set_shape(act, out);
     if after <= before {
-        ctx.skip_feature(
-            &f.id,
-            "imprint",
-            "these curves don't divide the face, extend them across it to its edges",
-        );
+        ctx.skip_feature(&f.id, "imprint", "these curves don't divide the face, extend them across it to its edges");
     }
     Ok(())
 }
 
 /// Face colours of one solid out of its body's, the faces of the solids taken in order.
-fn solid_face_colors(
-    body: &Option<serde_json::Value>,
-    solids: &[Shape],
-    at: usize,
-) -> Option<serde_json::Value> {
+fn solid_face_colors(body: &Option<serde_json::Value>, solids: &[Shape], at: usize) -> Option<serde_json::Value> {
     let counts: Vec<usize> = solids.iter().map(|s| kernel::count(s, Kind::Face)).collect();
     let all = fundacad_core::face_colors::decode_value(Some(body.as_ref()?), counts.iter().sum());
     let from: usize = counts[..at].iter().sum();
@@ -341,9 +304,7 @@ pub fn separate(ctx: &mut Ctx, f: &Separate) -> FResult {
             continue;
         }
         let (face_colors, part_color) = (body.face_colors.clone(), body.part_color.clone());
-        let colors: Vec<_> = (0..solids.len())
-            .map(|i| solid_face_colors(&face_colors, &solids, i))
-            .collect();
+        let colors: Vec<_> = (0..solids.len()).map(|i| solid_face_colors(&face_colors, &solids, i)).collect();
         // Where each piece's faces sat in the body's face list as the build shows it.
         let mut spans = vec![(0, 0); solids.len()];
         let mut shown = 0;

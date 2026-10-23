@@ -20,19 +20,43 @@ import type { SketchConstraint } from "../../src/types";
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
 
 // --- fixtures ---------------------------------------------------------------
-const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity =>
-  ({ type: "line", id, x1, y1, x2, y2 });
-const circle = (id: string, x: number, y: number, radius: number): ResolvedEntity =>
-  ({ type: "circle", id, x, y, radius });
-const rect = (id: string, x: number, y: number, width: number, height: number): ResolvedEntity =>
-  ({ type: "rectangle", id, x, y, width, height });
+const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({
+  type: "line",
+  id,
+  x1,
+  y1,
+  x2,
+  y2,
+});
+const circle = (id: string, x: number, y: number, radius: number): ResolvedEntity => ({
+  type: "circle",
+  id,
+  x,
+  y,
+  radius,
+});
+const rect = (id: string, x: number, y: number, width: number, height: number): ResolvedEntity => ({
+  type: "rectangle",
+  id,
+  x,
+  y,
+  width,
+  height,
+});
 /** semicircle of radius 5 centred at the origin */
-const arc = (id: string): ResolvedEntity =>
-  ({ type: "arc", id, x1: 5, y1: 0, x2: -5, y2: 0, mx: 0, my: 5 });
-const projLine = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity =>
-  ({ type: "projected", id, source: { kind: "silhouette", body: "b" }, curve: { kind: "line", x1, y1, x2, y2 } });
-const projCircle = (id: string, x: number, y: number, r: number): ResolvedEntity =>
-  ({ type: "projected", id, source: { kind: "silhouette", body: "b" }, curve: { kind: "circle", x, y, r } });
+const arc = (id: string): ResolvedEntity => ({ type: "arc", id, x1: 5, y1: 0, x2: -5, y2: 0, mx: 0, my: 5 });
+const projLine = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({
+  type: "projected",
+  id,
+  source: { kind: "silhouette", body: "b" },
+  curve: { kind: "line", x1, y1, x2, y2 },
+});
+const projCircle = (id: string, x: number, y: number, r: number): ResolvedEntity => ({
+  type: "projected",
+  id,
+  source: { kind: "silhouette", body: "b" },
+  curve: { kind: "circle", x, y, r },
+});
 
 /** a line of `len` through `at`, rotated `deg` from +X */
 const atAngle = (id: string, deg: number, y = 0, len = 10): ResolvedEntity => {
@@ -43,8 +67,13 @@ const atAngle = (id: string, deg: number, y = 0, len = 10): ResolvedEntity => {
 const T = {
   entity: (e: ResolvedEntity): DimTarget => ({ kind: "entity", e }),
   point: (e: ResolvedEntity, p: number, x: number, y: number): DimTarget => ({ kind: "point", e, p, pos: v(x, y) }),
-  edge: (e: ResolvedEntity, k: number, ax: number, ay: number, bx: number, by: number): DimTarget =>
-    ({ kind: "edge", e, k, a: v(ax, ay), b: v(bx, by) }),
+  edge: (e: ResolvedEntity, k: number, ax: number, ay: number, bx: number, by: number): DimTarget => ({
+    kind: "edge",
+    e,
+    k,
+    a: v(ax, ay),
+    b: v(bx, by),
+  }),
 };
 
 const plan = (r: ReturnType<typeof resolveDim>): DimPlan => {
@@ -137,8 +166,11 @@ describe("resolveDim, single pick", () => {
     const p = plan(resolveDim([T.entity(line("l", 0, 0, 10, 0))]));
     expect(p.kind).toBe("length");
     expect(p.measure()).toBeCloseTo(10);
-    expect(made(resolveDim([T.entity(line("l", 0, 0, 10, 0))]), 25))
-      .toEqual({ type: "distance", line: "l", value: 25 });
+    expect(made(resolveDim([T.entity(line("l", 0, 0, 10, 0))]), 25)).toEqual({
+      type: "distance",
+      line: "l",
+      value: 25,
+    });
   });
 
   it("rectangle edge → the p2p distance between its two corners", () => {
@@ -193,7 +225,8 @@ describe("resolveDim, single pick", () => {
 
 describe("resolveDim, pair matrix", () => {
   it("point + point → p2pDistance", () => {
-    const a = line("a", 0, 0, 10, 0), b = line("b", 0, 8, 10, 8);
+    const a = line("a", 0, 0, 10, 0),
+      b = line("b", 0, 8, 10, 8);
     const res = resolveDim([T.point(a, 0, 0, 0), T.point(b, 0, 0, 8)]);
     expect(plan(res).measure()).toBeCloseTo(8);
     expect(made(res, 8)).toEqual({ type: "p2pDistance", e1: "a", p1: 0, e2: "b", p2: 0, value: 8 });
@@ -210,12 +243,18 @@ describe("resolveDim, pair matrix", () => {
   it("line + point (picked in the other order) → the same p2lDistance", () => {
     const l = line("l", 0, 0, 10, 0);
     const p = line("p", 3, 6, 4, 7);
-    expect(made(resolveDim([T.entity(l), T.point(p, 0, 3, 6)]), 6))
-      .toEqual({ type: "p2lDistance", e: "p", p: 0, line: "l", value: 6 });
+    expect(made(resolveDim([T.entity(l), T.point(p, 0, 3, 6)]), 6)).toEqual({
+      type: "p2lDistance",
+      e: "p",
+      p: 0,
+      line: "l",
+      value: 6,
+    });
   });
 
   it("circle rim + circle rim → CENTRE-TO-CENTRE distance", () => {
-    const c1 = circle("c1", 0, 0, 5), c2 = circle("c2", 30, 0, 3);
+    const c1 = circle("c1", 0, 0, 5),
+      c2 = circle("c2", 30, 0, 3);
     const res = resolveDim([T.entity(c1), T.entity(c2)]);
     expect(plan(res).measure()).toBeCloseTo(30);
     expect(made(res, 30)).toEqual({ type: "p2pDistance", e1: "c1", p1: 0, e2: "c2", p2: 0, value: 30 });
@@ -256,7 +295,8 @@ describe("resolveDim, pair matrix", () => {
   it("the parallel-lines distance is the SAME constraint in either pick order", () => {
     // setDrivingDimension dedups p2lDistance on (e, p, line), an order-dependent
     // operand would create a second dim for one visible gap instead of replacing
-    const a = line("a", 0, 0, 10, 0), b = line("b", 0, 4, 10, 4);
+    const a = line("a", 0, 0, 10, 0),
+      b = line("b", 0, 4, 10, 4);
     const fwd = made(resolveDim([T.entity(a), T.entity(b)]), 4);
     const rev = made(resolveDim([T.entity(b), T.entity(a)]), 4);
     expect(rev).toEqual(fwd);
@@ -270,10 +310,12 @@ describe("resolveDim, pair matrix", () => {
   });
 
   it("no parallelPair on the dims that don't imply one", () => {
-    expect(plan(resolveDim([T.entity(line("a", 0, 0, 10, 0)), T.entity(line("b", 0, 0, 0, 10))])).parallelPair)
-      .toBeUndefined();
-    expect(plan(resolveDim([T.entity(circle("c", 0, 9, 2)), T.entity(line("l", 0, 0, 10, 0))])).parallelPair)
-      .toBeUndefined();
+    expect(
+      plan(resolveDim([T.entity(line("a", 0, 0, 10, 0)), T.entity(line("b", 0, 0, 0, 10))])).parallelPair,
+    ).toBeUndefined();
+    expect(
+      plan(resolveDim([T.entity(circle("c", 0, 9, 2)), T.entity(line("l", 0, 0, 10, 0))])).parallelPair,
+    ).toBeUndefined();
   });
 
   it("two ANTI-parallel lines (180° apart) → distance too", () => {
@@ -358,7 +400,8 @@ describe("resolveDim, error cases", () => {
   it("a concentric pair resolves the same however each circle was picked", () => {
     // a centre pick arrives as kind:"point" and an entity pick as kind:"entity";
     // both are round operands and must reach the same radial-gap plan
-    const inner = circle("in", 0, 0, 2), outer = circle("out", 0, 0, 9);
+    const inner = circle("in", 0, 0, 2),
+      outer = circle("out", 0, 0, 9);
     for (const picks of [
       [T.point(inner, 0, 0, 0), T.entity(outer)],
       [T.point(inner, 0, 0, 0), T.point(outer, 0, 0, 0)],
@@ -371,7 +414,8 @@ describe("resolveDim, error cases", () => {
   });
 
   it("coincident points measure 0 and are refused with a message", () => {
-    const a = line("a", 0, 0, 10, 0), b = line("b", 0, 0, 0, 10);
+    const a = line("a", 0, 0, 10, 0),
+      b = line("b", 0, 0, 0, 10);
     const e = err(resolveDim([T.point(a, 0, 0, 0), T.point(b, 0, 0, 0)]));
     expect(e.error).toBe("coincident-points");
     expect(e.message).toMatch(/0/);
@@ -403,10 +447,21 @@ describe("resolveDim, error cases", () => {
   });
 
   it("splines / text / polygons are unsupported, and the message names the kind", () => {
-    const sp: ResolvedEntity = { type: "spline", id: "s", points: [{ x: 0, y: 0 }, { x: 5, y: 5 }] };
+    const sp: ResolvedEntity = {
+      type: "spline",
+      id: "s",
+      points: [
+        { x: 0, y: 0 },
+        { x: 5, y: 5 },
+      ],
+    };
     const poly: ResolvedEntity = { type: "polygon", id: "g", x: 0, y: 0, radius: 5, sides: 6, angle: 0 };
     const slot: ResolvedEntity = { type: "slot", id: "sl", x1: 0, y1: 0, x2: 10, y2: 0, width: 4 };
-    for (const [e, kind] of [[sp, "spline"], [poly, "polygon"], [slot, "slot"]] as const) {
+    for (const [e, kind] of [
+      [sp, "spline"],
+      [poly, "polygon"],
+      [slot, "slot"],
+    ] as const) {
       const d = err(resolveDim([T.entity(e)]));
       expect(d.error).toBe("unsupported");
       expect(d.message).toContain(kind);
@@ -414,7 +469,14 @@ describe("resolveDim, error cases", () => {
   });
 
   it("an unsupported entity in a PAIR is reported too, not silently ignored", () => {
-    const sp: ResolvedEntity = { type: "spline", id: "s", points: [{ x: 0, y: 0 }, { x: 5, y: 5 }] };
+    const sp: ResolvedEntity = {
+      type: "spline",
+      id: "s",
+      points: [
+        { x: 0, y: 0 },
+        { x: 5, y: 5 },
+      ],
+    };
     expect(err(resolveDim([T.entity(line("l", 0, 0, 10, 0)), T.entity(sp)])).error).toBe("unsupported");
   });
 
@@ -424,7 +486,16 @@ describe("resolveDim, error cases", () => {
       // (a concentric circle PAIR is no longer one, it resolves to the gap)
       [T.point(line("ca", 0, 0, 10, 0), 0, 0, 0), T.point(line("cb", 0, 0, 0, 10), 0, 0, 0)],
       [T.entity(line("l", 4, 4, 4, 4))],
-      [T.entity({ type: "spline", id: "s", points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] })],
+      [
+        T.entity({
+          type: "spline",
+          id: "s",
+          points: [
+            { x: 0, y: 0 },
+            { x: 1, y: 1 },
+          ],
+        }),
+      ],
       [T.point(line("l", 0, 0, 10, 0), 0, 0, 0)],
     ];
     for (const picks of cases) expect(typeof err(resolveDim(picks)).message).toBe("string");
@@ -434,8 +505,7 @@ describe("resolveDim, error cases", () => {
 // --- the parallel/angle threshold -------------------------------------------
 
 describe("parallel-vs-angle sweep", () => {
-  const sweep = (deg: number) =>
-    plan(resolveDim([T.entity(line("a", 0, 4, 10, 4)), T.entity(atAngle("b", deg))])).kind;
+  const sweep = (deg: number) => plan(resolveDim([T.entity(line("a", 0, 4, 10, 4)), T.entity(atAngle("b", deg))])).kind;
 
   it("treats near-parallel as a distance and anything past the epsilon as an angle", () => {
     expect(sweep(0)).toBe("distance");
@@ -465,15 +535,20 @@ describe("label placement", () => {
   const place = { ox: 3, oy: -4 };
 
   it("threads `place` onto the four constraint-rendered dims", () => {
-    const c1 = circle("c1", 0, 0, 5), c2 = circle("c2", 30, 0, 3);
-    expect(plan(resolveDim([T.entity(c1), T.entity(c2)])).make(30, place))
-      .toMatchObject({ type: "p2pDistance", place });
-    expect(plan(resolveDim([T.entity(c1), T.entity(line("l", 0, 20, 10, 20))])).make(20, place))
-      .toMatchObject({ type: "p2lDistance", place });
-    expect(plan(resolveDim([T.entity(arc("a"))])).make(5, place))
-      .toMatchObject({ type: "radius", place });
-    expect(plan(resolveDim([T.entity(line("a", 0, 0, 10, 0)), T.entity(line("b", 0, 0, 0, 10))])).make(90, place))
-      .toMatchObject({ type: "angle", place });
+    const c1 = circle("c1", 0, 0, 5),
+      c2 = circle("c2", 30, 0, 3);
+    expect(plan(resolveDim([T.entity(c1), T.entity(c2)])).make(30, place)).toMatchObject({
+      type: "p2pDistance",
+      place,
+    });
+    expect(plan(resolveDim([T.entity(c1), T.entity(line("l", 0, 20, 10, 20))])).make(20, place)).toMatchObject({
+      type: "p2lDistance",
+      place,
+    });
+    expect(plan(resolveDim([T.entity(arc("a"))])).make(5, place)).toMatchObject({ type: "radius", place });
+    expect(
+      plan(resolveDim([T.entity(line("a", 0, 0, 10, 0)), T.entity(line("b", 0, 0, 0, 10))])).make(90, place),
+    ).toMatchObject({ type: "angle", place });
   });
 
   it("omits `place` entirely when none was frozen (byte stability)", () => {
@@ -603,7 +678,13 @@ describe("resolveDim, rim (edge-to-edge) distances", () => {
 
   it("a concentric radial gap carries its label placement", () => {
     const p = plan(resolveDim([rim(T.entity(circle("i", 0, 0, 5))), rim(T.entity(circle("o", 0, 0, 12)))]));
-    expect(p.make(3, { ox: 1, oy: 2 })).toEqual({ type: "radialGap", inner: "i", outer: "o", value: 3, place: { ox: 1, oy: 2 } });
+    expect(p.make(3, { ox: 1, oy: 2 })).toEqual({
+      type: "radialGap",
+      inner: "i",
+      outer: "o",
+      value: 3,
+      place: { ox: 1, oy: 2 },
+    });
     expect(p.labelAnchor()).not.toBeNull();
   });
 
@@ -704,8 +785,12 @@ describe("resolveDim, rim (edge-to-edge) distances", () => {
   it("pick order does not matter for a rim + line pair", () => {
     const c = circle("c", 0, 10, 3);
     const l = line("l", -10, 0, 10, 0);
-    expect(plan(resolveDim([T.entity(l), rim(T.entity(c))])).make(2))
-      .toEqual({ type: "c2lDistance", circle: "c", line: "l", value: 2 });
+    expect(plan(resolveDim([T.entity(l), rim(T.entity(c))])).make(2)).toEqual({
+      type: "c2lDistance",
+      circle: "c",
+      line: "l",
+      value: 2,
+    });
   });
 
   it("REFUSES a line that crosses the circle", () => {
@@ -772,24 +857,23 @@ describe("resolveDim, rim (edge-to-edge) distances", () => {
 
   it("REFUSES a point sitting on another circle's centre", () => {
     const other = circle("o", 0, 0, 2);
-    expect(err(resolveDim([T.point(other, 0, 0, 0), rim(T.entity(circle("c", 0, 0, 5)))])).error)
-      .toBe("coincident-points");
+    expect(err(resolveDim([T.point(other, 0, 0, 0), rim(T.entity(circle("c", 0, 0, 5)))])).error).toBe(
+      "coincident-points",
+    );
   });
 
   // --- reference geometry ---------------------------------------------------
 
   it("two PROJECTED rims create a driven (reference) rim dim", () => {
-    const p = plan(resolveDim([
-      rim(T.entity(projCircle("pa", 0, 0, 5))),
-      rim(T.entity(projCircle("pb", 20, 0, 3))),
-    ]));
+    const p = plan(resolveDim([rim(T.entity(projCircle("pa", 0, 0, 5))), rim(T.entity(projCircle("pb", 20, 0, 3)))]));
     expect(p.forceDriven).toBe(true);
     expect(p.measure()).toBeCloseTo(12);
   });
 
   it("a degenerate (zero-radius) rim pick is refused", () => {
-    expect(err(resolveDim([rim(T.entity(circle("c", 0, 0, 0))), T.entity(line("l", 0, 5, 10, 5))])).error)
-      .toBe("degenerate");
+    expect(err(resolveDim([rim(T.entity(circle("c", 0, 0, 0))), T.entity(line("l", 0, 5, 10, 5))])).error).toBe(
+      "degenerate",
+    );
   });
 });
 
@@ -816,10 +900,9 @@ describe("resolveDim, roundPref override", () => {
   });
 
   it("leaves PAIR dimensions untouched", () => {
-    const p = plan(resolveDim(
-      [T.entity(circle("a", 0, 0, 5)), T.entity(circle("b", 20, 0, 3))],
-      { roundPref: "radius" },
-    ));
+    const p = plan(
+      resolveDim([T.entity(circle("a", 0, 0, 5)), T.entity(circle("b", 20, 0, 3))], { roundPref: "radius" }),
+    );
     expect(p.kind).toBe("distance");
     expect(p.make(20)).toEqual({ type: "p2pDistance", e1: "a", p1: 0, e2: "b", p2: 0, value: 20 });
   });

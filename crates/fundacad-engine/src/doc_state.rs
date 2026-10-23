@@ -1,9 +1,5 @@
-//! The document the worker holds between rebuilds, patched by deltas.
-//!
-//! Replaces `_apply_doc_ops` in the Python engine's `server.py`. The client sends only the
-//! features that changed, `{baseRevision, revision, ops}`; anything the held
-//! document cannot answer (a respawned worker, a missed revision, a gap the ops
-//! leave) asks for the whole document once with `{"resync": true}`.
+//! The document the worker holds between rebuilds, patched by `{baseRevision, revision, ops}` deltas. Anything the
+//! held document cannot answer (a respawned worker, a missed revision) asks for the whole one with `{"resync": true}`.
 
 use serde_json::{Map, Value};
 
@@ -14,6 +10,11 @@ pub struct DocState {
 }
 
 impl DocState {
+    /// Whether a document is held, so a delta can apply.
+    pub fn holds(&self) -> bool {
+        self.doc.is_some()
+    }
+
     /// The effective document for this request, or None when it needs a resync.
     /// `computeAll` always carries its document whole.
     pub fn apply(&mut self, req: &Map<String, Value>, _fresh: bool) -> Option<&Value> {
@@ -36,9 +37,7 @@ impl DocState {
         }
         if let Some(len) = ops.get("length").and_then(Value::as_u64) {
             let len = len as usize;
-            let feats = doc
-                .entry("features")
-                .or_insert_with(|| Value::Array(vec![]));
+            let feats = doc.entry("features").or_insert_with(|| Value::Array(vec![]));
             if let Value::Array(a) = feats {
                 a.resize(len, Value::Null);
             }
@@ -57,8 +56,7 @@ impl DocState {
                 }
             }
         }
-        let hole =
-            matches!(doc.get("features"), Some(Value::Array(a)) if a.iter().any(Value::is_null));
+        let hole = matches!(doc.get("features"), Some(Value::Array(a)) if a.iter().any(Value::is_null));
         if hole {
             self.doc = None;
             return None;

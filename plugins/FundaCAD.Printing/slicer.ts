@@ -1,9 +1,5 @@
-// Where OrcaSlicer is on this machine, and where it keeps its presets.
-//
-// Stored as `slicer.json` in this plugin's data directory, `{ slicer_path,
-// orca_datadir }`, the same shape the app shell's own settings file had, which is
-// why that file can simply be moved here on first use. With nothing stored, the
-// usual install locations are tried in order.
+// Stored as `slicer.json` in this plugin's data directory, `{ slicer_path, orca_datadir }`, the shape of the app
+// shell's old settings file so it can be moved here on first use. With nothing stored, install locations are tried.
 
 import type { SystemDirs } from "./native";
 import { readPluginFile } from "./printerClient";

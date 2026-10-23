@@ -6,8 +6,16 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  ANGLE_KINDS, SEED_KINDS, TEXTURE_KINDS, TEXTURE_KIND_GROUPS,
-  basename, initialTextureForm, sharpnessLabel, textureFormErrors, textureRows, toTextureValues,
+  ANGLE_KINDS,
+  SEED_KINDS,
+  TEXTURE_KINDS,
+  TEXTURE_KIND_GROUPS,
+  basename,
+  initialTextureForm,
+  sharpnessLabel,
+  textureFormErrors,
+  textureRows,
+  toTextureValues,
 } from "../../plugins/FundaCAD.Texture/textureForm";
 
 describe("textureRows", () => {
@@ -150,12 +158,29 @@ describe("initialTextureForm / toTextureValues", () => {
 
   it("round-trips an existing texture feature", () => {
     const v = {
-      kind: "voronoi", depth: 1.2, scale: 5, angle: 30, offset: 0.1, sharpness: 0.8,
-      profile: "round", boundaryInset: 0.25, grime: 0.4, smooth: 0.3,
-      projection: "box", seamBlend: 0.35, seamBand: 0.65,
-      amplitude: 0.7, slopeMin: 30, slopeMax: 150, targetEdge: 0.15, triBudget: 50000,
-      direction: "both", seed: 7, invert: true,
-      imagePath: "C:/x/y.png", colorSlot: 2,
+      kind: "voronoi",
+      depth: 1.2,
+      scale: 5,
+      angle: 30,
+      offset: 0.1,
+      sharpness: 0.8,
+      profile: "round",
+      boundaryInset: 0.25,
+      grime: 0.4,
+      smooth: 0.3,
+      projection: "box",
+      seamBlend: 0.35,
+      seamBand: 0.65,
+      amplitude: 0.7,
+      slopeMin: 30,
+      slopeMax: 150,
+      targetEdge: 0.15,
+      triBudget: 50000,
+      direction: "both",
+      seed: 7,
+      invert: true,
+      imagePath: "C:/x/y.png",
+      colorSlot: 2,
     } as const;
     expect(toTextureValues(initialTextureForm(v))).toEqual(v);
   });

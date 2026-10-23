@@ -30,11 +30,7 @@ fn ring(mcp: &mut Mcp) {
 }
 
 fn faces_after_fillet_at(point: [f64; 3]) -> (String, Value) {
-    let cwd = std::env::temp_dir().join(format!(
-        "fundacad-mcp-seam-{}-{}",
-        std::process::id(),
-        point[2]
-    ));
+    let cwd = std::env::temp_dir().join(format!("fundacad-mcp-seam-{}-{}", std::process::id(), point[2]));
     std::fs::create_dir_all(&cwd).expect("a working directory");
     let mut mcp = Mcp::start(&env(&[("FUNDACAD_MCP_MODE", "standalone")]), &cwd);
     ring(&mut mcp);

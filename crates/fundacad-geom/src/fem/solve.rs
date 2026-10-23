@@ -1,19 +1,7 @@
-//! Linear static analysis on quadratic tetrahedra (TET10), in mm, N and MPa.
-//!
-//! The linear mesh is promoted to TET10 by adding one node halfway along every edge, so the
-//! geometry map stays affine and the shape function gradients of an element are exact from
-//! its four corners. The stiffness is integrated with the 4-point Gauss rule, exact for TET10.
-//! Nodes on fixed faces are held in all three directions and eliminated; the rest form a
-//! sparse symmetric positive definite system, assembled straight into its lower triangle in
-//! element order and factorised by faer's sparse Cholesky on one thread, so the same mesh
-//! gives the same bits every run. Stress is evaluated at element corners (exact for the linear
-//! strain of TET10), averaged per corner node, and a mid-edge node takes the mean of its ends.
-//!
-//! A node a slider or a pin holds in only one or two directions keeps its three unknowns, but
-//! in a frame of its own whose first axes are the held directions: its block of the matrix is
-//! rotated into that frame and the held unknowns become decoupled rows `1 * u = 0`. That is an
-//! exact elimination that leaves the system symmetric positive definite and its block layout
-//! untouched, so a problem held only by fixed faces assembles exactly as before.
+//! Linear static analysis on quadratic tetrahedra (TET10) in mm, N and MPa: mid-edge nodes keep the geometry map
+//! affine, 4-point Gauss stiffness, faer's sparse Cholesky on one thread so a mesh gives the same bits every run.
+//! A slider or pin node keeps its three unknowns in a frame whose first axes are the held directions, held ones
+//! becoming decoupled rows `1 * u = 0`, so the system stays symmetric positive definite and its layout untouched.
 
 use std::fmt;
 
@@ -86,10 +74,8 @@ impl Axis {
     }
 }
 
-/// The surface of one face of a slider, which gives the direction it holds each node in. A
-/// surface with a normal in closed form gives its exact normal at the node, so the slides and
-/// turns that the surface allows (along and about a cylinder's axis, about a sphere's centre)
-/// stay exactly free; the faceted mesh's own normals lean off the surface and would hold them.
+/// The surface of one face of a slider, giving the direction it holds each node in. A closed form normal keeps
+/// the slides and turns the surface allows exactly free, the faceted mesh's own normals lean and would hold them.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SlideFace {
     /// A plane with this normal.
@@ -136,10 +122,8 @@ impl SlideFace {
         }
     }
 
-    /// The exact normal, either way round, at `x`: the surface's normal at the point of it
-    /// nearest `x`, which for a surface of revolution lies in the plane through the axis and
-    /// `x`. None for a normal read off the mesh, and at a point on the axis or the centre,
-    /// where there is no one normal.
+    /// The exact normal, either way round, at the surface point nearest `x`. None for a mesh read normal, and on
+    /// the axis or centre, where there is no one normal.
     fn normal_at(&self, x: V3) -> Option<V3> {
         let radial = |a: &Axis| {
             let r = a.radial(x);
@@ -176,9 +160,8 @@ impl SlideFace {
 pub enum Hold {
     /// Held in every direction.
     Fixed,
-    /// Held along the normal only, free to slide in the surface. One entry per face, each
-    /// face holding its nodes along its own normal, so a node where two of them meet at an
-    /// angle is held along both.
+    /// Held along the normal only, free to slide in the surface. Each face holds its nodes along its own normal, so
+    /// a node where two meet at an angle is held along both.
     Slider(Vec<SlideFace>),
     /// Held towards the axis and along it, free to turn about it (a bolt or a pin). One axis
     /// per face, as each face may be a different hole.
@@ -257,9 +240,8 @@ impl Solution {
     }
 }
 
-/// Why a problem could not be solved. The messages are written for the person running the
-/// analysis and leave out face ids, which mean nothing to them; the variants keep the ids so
-/// the caller can name the face its own way.
+/// Why a problem could not be solved. The messages leave out face ids, which mean nothing to the person running
+/// the analysis, while the variants keep them so the caller can name the face its own way.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SolveError {
     InvalidMaterial(Material),
@@ -431,11 +413,7 @@ impl fmt::Display for Motion {
                 "the body can still slide along {}, add a support that holds it that way",
                 direction_words(*along)
             ),
-            Motion::Turn {
-                through,
-                pivot: Some(pivot),
-                ..
-            } => {
+            Motion::Turn { through, pivot: Some(pivot), .. } => {
                 let at = point_words(*through);
                 match pivot {
                     Pivot::Pin => write!(
@@ -488,11 +466,7 @@ fn direction_words(d: V3) -> String {
         }
     }
     // The sign that makes the first component that is not zero positive, a line has no way.
-    let s = if d.iter().find(|c| c.abs() > 1e-9).is_some_and(|c| *c < 0.0) {
-        -1.0
-    } else {
-        1.0
-    };
+    let s = if d.iter().find(|c| c.abs() > 1e-9).is_some_and(|c| *c < 0.0) { -1.0 } else { 1.0 };
     point_words(d.map(|c| c * s))
 }
 
@@ -509,9 +483,8 @@ pub fn solve(p: &Problem, tick: &mut dyn FnMut() -> bool) -> Result<Solution, So
     solve_with(p, tick, &mut |f| f())
 }
 
-/// [`solve`], running the factorisation, one long call that cannot tick, inside `long`
-/// (the engine passes a closure that keeps its heartbeat going meanwhile). A cancel during
-/// the factorisation takes effect when it returns.
+/// [`solve`] with the factorisation, one long call that cannot tick, run inside `long` (the engine keeps its
+/// heartbeat going there). A cancel during the factorisation takes effect when it returns.
 pub fn solve_with(
     p: &Problem,
     tick: &mut dyn FnMut() -> bool,
@@ -560,44 +533,28 @@ fn solve_within(
     let has = |id: &u32| present.binary_search(id).is_ok();
     let mut supports: Vec<Support> = Vec::with_capacity(p.supports.len() + 1);
     if !p.fixed.is_empty() {
-        supports.push(Support {
-            faces: p.fixed.clone(),
-            hold: Hold::Fixed,
-        });
+        supports.push(Support { faces: p.fixed.clone(), hold: Hold::Fixed });
     }
     supports.extend(p.supports.iter().cloned());
     for (i, s) in supports.iter().enumerate() {
         let fits = match &s.hold {
             Hold::Fixed => true,
-            Hold::Slider(faces) => {
-                faces.len() == s.faces.len() && faces.iter().all(SlideFace::valid)
-            }
+            Hold::Slider(faces) => faces.len() == s.faces.len() && faces.iter().all(SlideFace::valid),
             Hold::Pinned(axes) => axes.len() == s.faces.len() && axes.iter().all(Axis::valid),
         };
         if !fits {
             return Err(SolveError::InvalidSupport { support: i });
         }
     }
-    let held_faces = sorted(
-        &supports
-            .iter()
-            .flat_map(|s| s.faces.iter().copied())
-            .collect::<Vec<_>>(),
-    );
+    let held_faces = sorted(&supports.iter().flat_map(|s| s.faces.iter().copied()).collect::<Vec<_>>());
     if held_faces.is_empty() {
         return Err(SolveError::NoFixedFaces);
     }
     // A support holds the nodes lying on its faces, so a face no node lies on holds nothing.
     let on = OnFaces::of(mesh);
-    let missing_fixed: Vec<u32> = held_faces
-        .iter()
-        .copied()
-        .filter(|&id| !on.meshed(id))
-        .collect();
+    let missing_fixed: Vec<u32> = held_faces.iter().copied().filter(|&id| !on.meshed(id)).collect();
     if missing_fixed.len() == held_faces.len() {
-        return Err(SolveError::FixedFacesNotMeshed {
-            faces: missing_fixed,
-        });
+        return Err(SolveError::FixedFacesNotMeshed { faces: missing_fixed });
     }
     for (i, load) in p.loads.iter().enumerate() {
         if load.faces.is_empty() {
@@ -624,34 +581,21 @@ fn solve_within(
         .iter()
         .enumerate()
         .map(|(i, t)| {
-            geometry([0, 1, 2, 3].map(|k| q.nodes[t[k] as usize])).ok_or_else(|| {
-                SolveError::InvalidMesh(format!("element {i} is flat or inside out"))
-            })
+            geometry([0, 1, 2, 3].map(|k| q.nodes[t[k] as usize]))
+                .ok_or_else(|| SolveError::InvalidMesh(format!("element {i} is flat or inside out")))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
     let holds = holds_of(&q, &on, &supports);
     check_held(mesh, &holds, &turnings_of(mesh, &supports))?;
-    let prescribed: Vec<Option<V3>> = (0..q.nodes.len())
-        .map(|n| holds.full(n).then_some([0.0; 3]))
-        .collect();
+    let prescribed: Vec<Option<V3>> = (0..q.nodes.len()).map(|n| holds.full(n).then_some([0.0; 3])).collect();
     let mut f_ext = loads(&q, mesh, &p.loads);
     let weight = p.body_force.map(|b| body_force(&q, &geo, b, &mut f_ext));
     if !tick() {
         return Err(SolveError::Cancelled);
     }
 
-    let fields = analyse(
-        &q,
-        &geo,
-        lame(m),
-        &prescribed,
-        &holds,
-        &f_ext,
-        tick,
-        long,
-        limit,
-    )?;
+    let fields = analyse(&q, &geo, lame(m), &prescribed, &holds, &f_ext, tick, long, limit)?;
     let reactions = share_reactions(&holds, &fields.residual, supports.len());
     finish(q, fields, reactions, weight, missing_fixed)
 }
@@ -724,11 +668,7 @@ impl OnFaces {
             start[i + 1] += start[i];
         }
         let faces: Vec<u32> = pairs.iter().map(|p| p.1).collect();
-        OnFaces {
-            start,
-            meshed: sorted(&faces),
-            faces,
-        }
+        OnFaces { start, meshed: sorted(&faces), faces }
     }
 
     /// The faces node `n` lies on; none for a mid-edge node.
@@ -770,16 +710,9 @@ fn promote(mesh: &TetMesh) -> Result<Quadratic, SolveError> {
     edges.sort_unstable();
     edges.dedup();
     if edges.iter().any(|[a, b]| a == b) {
-        return Err(SolveError::InvalidMesh(
-            "an element uses the same node twice".into(),
-        ));
+        return Err(SolveError::InvalidMesh("an element uses the same node twice".into()));
     }
-    let mid = |a: u32, b: u32| {
-        edges
-            .binary_search(&[a.min(b), a.max(b)])
-            .ok()
-            .map(|i| (corners + i) as u32)
-    };
+    let mid = |a: u32, b: u32| edges.binary_search(&[a.min(b), a.max(b)]).ok().map(|i| (corners + i) as u32);
     let tets = mesh
         .tets
         .iter()
@@ -797,21 +730,13 @@ fn promote(mesh: &TetMesh) -> Result<Quadratic, SolveError> {
         .iter()
         .map(|&[a, b, c]| Some([a, b, c, mid(a, b)?, mid(b, c)?, mid(c, a)?]))
         .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| {
-            SolveError::InvalidMesh("a boundary triangle is not a face of any element".into())
-        })?;
+        .ok_or_else(|| SolveError::InvalidMesh("a boundary triangle is not a face of any element".into()))?;
     let mut nodes = mesh.nodes.clone();
     nodes.extend(edges.iter().map(|&[a, b]| {
         let (p, q) = (mesh.nodes[a as usize], mesh.nodes[b as usize]);
         [0, 1, 2].map(|k| 0.5 * (p[k] + q[k]))
     }));
-    Ok(Quadratic {
-        nodes,
-        corners,
-        edges,
-        tets,
-        boundary,
-    })
+    Ok(Quadratic { nodes, corners, edges, tets, boundary })
 }
 
 /// A direction within this of the span already held at a node adds nothing to it. Normals of
@@ -854,21 +779,15 @@ impl Holds {
 
     /// The frame of a node held in one or two directions, with how many.
     fn partial(&self, n: usize) -> Option<(&[V3; 3], usize)> {
-        self.get(n)
-            .filter(|h| h.held < 3)
-            .map(|h| (&h.axes, h.held as usize))
+        self.get(n).filter(|h| h.held < 3).map(|h| (&h.axes, h.held as usize))
     }
 }
 
 const AXES: [V3; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
 
-/// The directions each support holds each TET10 node in. A support holds the nodes lying on
-/// its faces: a corner node the mesher found on the face, a mid-edge node when both ends of
-/// its edge are. A node on any face of a fixed support is fixed by the first such support. A
-/// slider holds a node along the normal of each of its faces the node lies on, the surface's
-/// exact normal when it has one, else the area weighted normal of the boundary triangles
-/// lying wholly on that face around the node. A pin holds its nodes towards its axis and
-/// along it.
+/// The directions each support holds each TET10 node in: corner nodes the mesher found on its faces, mid-edge
+/// nodes when both ends are. Fixed wins, a slider holds along each face normal (exact, else the area weighted
+/// normal of triangles wholly on that face), and a pin holds towards and along its axis.
 fn holds_of(q: &Quadratic, on: &OnFaces, supports: &[Support]) -> Holds {
     let nn = q.nodes.len();
     let mut fixed_by = vec![u32::MAX; nn];
@@ -906,11 +825,8 @@ fn holds_of(q: &Quadratic, on: &OnFaces, supports: &[Support]) -> Holds {
                     let x = q.nodes[n as usize];
                     let d = match faces[k] {
                         f if f.exact() => f.normal_at(x),
-                        f => meshed
-                            .binary_search_by_key(&(n, k), |e| (e.0, e.1))
-                            .ok()
-                            .map(|i| meshed[i].2)
-                            .map(|d| match f.axis() {
+                        f => meshed.binary_search_by_key(&(n, k), |e| (e.0, e.1)).ok().map(|i| meshed[i].2).map(|d| {
+                            match f.axis() {
                                 // Less its part around the axis.
                                 Some(a) => {
                                     let r = a.radial(x);
@@ -922,7 +838,8 @@ fn holds_of(q: &Quadratic, on: &OnFaces, supports: &[Support]) -> Holds {
                                     }
                                 }
                                 None => d,
-                            }),
+                            }
+                        }),
                     };
                     if let Some(d) = d.filter(|d| norm(*d) > 0.0) {
                         rows.push((n, s, unit(d)));
@@ -946,10 +863,7 @@ fn holds_of(q: &Quadratic, on: &OnFaces, supports: &[Support]) -> Holds {
     // Stable, so each support's directions at a node keep the order they were found in.
     rows.sort_by_key(|r| (r.0, r.1));
 
-    let mut holds = Holds {
-        of: vec![u32::MAX; nn],
-        nodes: Vec::new(),
-    };
+    let mut holds = Holds { of: vec![u32::MAX; nn], nodes: Vec::new() };
     let mut at = 0;
     for n in 0..nn {
         let start = at;
@@ -957,19 +871,9 @@ fn holds_of(q: &Quadratic, on: &OnFaces, supports: &[Support]) -> Holds {
             at += 1;
         }
         let h = if fixed_by[n] != u32::MAX {
-            NodeHold {
-                dirs: AXES,
-                support: [fixed_by[n]; 3],
-                held: 3,
-                axes: AXES,
-            }
+            NodeHold { dirs: AXES, support: [fixed_by[n]; 3], held: 3, axes: AXES }
         } else if at > start {
-            let mut h = NodeHold {
-                dirs: [[0.0; 3]; 3],
-                support: [0; 3],
-                held: 0,
-                axes: AXES,
-            };
+            let mut h = NodeHold { dirs: [[0.0; 3]; 3], support: [0; 3], held: 0, axes: AXES };
             for &(_, s, d) in &rows[start..at] {
                 let k = h.held as usize;
                 if k == 3 {
@@ -991,9 +895,7 @@ fn holds_of(q: &Quadratic, on: &OnFaces, supports: &[Support]) -> Holds {
                 1 => {
                     let a = h.axes[0];
                     // The world axis least along the held one, crossed, for the second.
-                    let k = (0..3)
-                        .min_by(|&i, &j| a[i].abs().total_cmp(&a[j].abs()))
-                        .unwrap_or(0);
+                    let k = (0..3).min_by(|&i, &j| a[i].abs().total_cmp(&a[j].abs())).unwrap_or(0);
                     h.axes[1] = unit(cross(a, AXES[k]));
                     h.axes[2] = cross(a, h.axes[1]);
                 }
@@ -1010,16 +912,9 @@ fn holds_of(q: &Quadratic, on: &OnFaces, supports: &[Support]) -> Holds {
     holds
 }
 
-/// The area weighted normal at each node of each of a slider's faces whose normal comes from
-/// the mesh, as (node, index of the face in `ids`, summed area vector) sorted by node and face.
-/// Only the boundary triangles lying wholly on a face count towards its normal, so those that
-/// round an edge over do not tilt it towards the face beside it.
-fn mesh_normals(
-    q: &Quadratic,
-    on: &OnFaces,
-    ids: &[u32],
-    faces: &[SlideFace],
-) -> Vec<(u32, usize, V3)> {
+/// The area weighted normal at each node of each mesh normal slider face, as (node, face index in `ids`, area
+/// vector) sorted. Only triangles wholly on a face count, so those rounding an edge do not tilt it.
+fn mesh_normals(q: &Quadratic, on: &OnFaces, ids: &[u32], faces: &[SlideFace]) -> Vec<(u32, usize, V3)> {
     let mut each: Vec<(u32, usize, V3)> = Vec::new();
     if faces.iter().all(SlideFace::exact) {
         return each;
@@ -1067,22 +962,15 @@ fn turnings_of(mesh: &TetMesh, supports: &[Support]) -> Vec<Turning> {
     for s in supports {
         match &s.hold {
             Hold::Fixed => {}
-            Hold::Pinned(axes) => pins.extend(axes.iter().map(|a| Turning {
-                pivot: Pivot::Pin,
-                origin: a.origin,
-                dir: Some(a.dir),
-            })),
+            Hold::Pinned(axes) => {
+                pins.extend(axes.iter().map(|a| Turning { pivot: Pivot::Pin, origin: a.origin, dir: Some(a.dir) }))
+            }
             Hold::Slider(faces) => {
                 for (&id, face) in s.faces.iter().zip(faces) {
                     if let SlideFace::Sphere(c) = face {
-                        round.push(Turning {
-                            pivot: Pivot::Ball,
-                            origin: *c,
-                            dir: None,
-                        });
+                        round.push(Turning { pivot: Pivot::Ball, origin: *c, dir: None });
                     } else if let Some(a) = face.axis() {
-                        let hole =
-                            matches!(face, SlideFace::Cylinder(_)) && faces_axis(mesh, id, &a);
+                        let hole = matches!(face, SlideFace::Cylinder(_)) && faces_axis(mesh, id, &a);
                         round.push(Turning {
                             pivot: if hole { Pivot::Hole } else { Pivot::Round },
                             origin: a.origin,
@@ -1152,9 +1040,7 @@ fn share_reactions(holds: &Holds, residual: &[(u32, V3)], supports: usize) -> Ve
 /// partial pivoting.
 fn gauss_solve(g: &mut [[f64; 4]; 3], k: usize) -> [f64; 3] {
     for c in 0..k {
-        let p = (c..k)
-            .max_by(|&a, &b| g[a][c].abs().total_cmp(&g[b][c].abs()))
-            .unwrap_or(c);
+        let p = (c..k).max_by(|&a, &b| g[a][c].abs().total_cmp(&g[b][c].abs())).unwrap_or(c);
         g.swap(c, p);
         if g[c][c] == 0.0 {
             continue;
@@ -1169,20 +1055,14 @@ fn gauss_solve(g: &mut [[f64; 4]; 3], k: usize) -> [f64; 3] {
     let mut x = [0.0; 3];
     for c in (0..k).rev() {
         let s: f64 = (c + 1..k).map(|j| g[c][j] * x[j]).sum();
-        x[c] = if g[c][c] != 0.0 {
-            (g[c][3] - s) / g[c][c]
-        } else {
-            0.0
-        };
+        x[c] = if g[c][c] != 0.0 { (g[c][3] - s) / g[c][c] } else { 0.0 };
     }
     x
 }
 
-/// Fails when a piece of the mesh can still move. Elements sharing a face move as one rigid
-/// piece. Each direction d a node at x is held in rules out the rigid motions (t, w) with
-/// d . (t + w x (x - c)) = 0, a row [d, (x - c) x d] of a 6 by 6 system, and a piece is held
-/// when its rows have rank 6. A node shared with a held piece is held in every direction,
-/// which catches loose lumps and pieces hinged on an edge or a corner.
+/// Fails when a piece of the mesh can still move, elements sharing a face being one rigid piece. A node at x held
+/// along d rules out motions (t, w) with d . (t + w x (x - c)) = 0, a row [d, (x - c) x d], and a piece is held
+/// when its rows have rank 6. A node shared with a held piece is held every way, catching hinged pieces.
 fn check_held(mesh: &TetMesh, holds: &Holds, turnings: &[Turning]) -> Result<(), SolveError> {
     let nt = mesh.tets.len();
     let mut parent: Vec<u32> = (0..nt as u32).collect();
@@ -1255,11 +1135,7 @@ fn check_held(mesh: &TetMesh, holds: &Holds, turnings: &[Turning]) -> Result<(),
             let p = mesh.nodes[*n as usize];
             c = [0, 1, 2].map(|i| c[i] + p[i] / k);
         }
-        let size = nodes
-            .iter()
-            .map(|(_, n)| norm(sub(mesh.nodes[*n as usize], c)))
-            .fold(0.0, f64::max)
-            .max(1e-300);
+        let size = nodes.iter().map(|(_, n)| norm(sub(mesh.nodes[*n as usize], c))).fold(0.0, f64::max).max(1e-300);
         let mut m = [[0.0; 6]; 6];
         for (_, n) in nodes {
             let n = *n as usize;
@@ -1312,9 +1188,7 @@ fn check_held(mesh: &TetMesh, holds: &Holds, turnings: &[Turning]) -> Result<(),
     if pieces == 1 {
         let (m, c, size) = rows_of(nodes, &on_held);
         let v = free_motion(&m).expect("the piece is not held");
-        return Err(SolveError::Free {
-            motion: motion_of(v, c, size, turnings),
-        });
+        return Err(SolveError::Free { motion: motion_of(v, c, size, turnings) });
     }
     let mut near = [0.0; 3];
     for (_, n) in nodes {
@@ -1325,11 +1199,7 @@ fn check_held(mesh: &TetMesh, holds: &Holds, turnings: &[Turning]) -> Result<(),
     }
     let near = near.map(|s| s / nodes.len() as f64);
     let hinged = nodes.iter().any(|(_, n)| on_held[*n as usize]);
-    Err(SolveError::NotHeld {
-        loose,
-        near,
-        hinged,
-    })
+    Err(SolveError::NotHeld { loose, near, hinged })
 }
 
 /// A rigid motion [t, w] the rows of `m` leave free, None when they hold all six. A slide
@@ -1338,9 +1208,7 @@ fn free_motion(m: &[[f64; 6]; 6]) -> Option<[f64; 6]> {
     let (values, vectors) = jacobi(*m);
     let top = values.iter().copied().fold(0.0, f64::max);
     let tol = FREE_SHARE * top;
-    let low = (0..6)
-        .min_by(|&a, &b| values[a].total_cmp(&values[b]))
-        .unwrap_or(0);
+    let low = (0..6).min_by(|&a, &b| values[a].total_cmp(&values[b])).unwrap_or(0);
     if top > 0.0 && values[low] > tol {
         return None;
     }
@@ -1438,10 +1306,8 @@ fn jacobi<const N: usize>(mut a: [[f64; N]; N]) -> ([f64; N], [[f64; N]; N]) {
     (std::array::from_fn(|i| a[i][i]), v)
 }
 
-/// Adds the consistent nodal forces of the body force `b` (N per cubic mm), integrated over
-/// each element with the 4-point rule, exact for the quadratic shape functions, and returns
-/// their sum. A corner of an element takes minus a twentieth of its share and a mid-edge
-/// node a fifth, so the weight goes mostly to the mid-edge nodes.
+/// Adds the consistent nodal forces of body force `b` (N per cubic mm) by the 4-point rule and returns their sum.
+/// A corner takes minus a twentieth of its element share and a mid-edge node a fifth.
 fn body_force(q: &Quadratic, geo: &[Geometry], b: V3, f: &mut [V3]) -> V3 {
     let mut total = [0.0; 3];
     for (t, g) in q.tets.iter().zip(geo) {
@@ -1545,10 +1411,7 @@ fn geometry(x: [V3; 4]) -> Option<Geometry> {
     let g2 = cross(c, a).map(|v| v / det);
     let g3 = cross(a, b).map(|v| v / det);
     let g0 = [0, 1, 2].map(|k| -(g1[k] + g2[k] + g3[k]));
-    Some(Geometry {
-        grad: [g0, g1, g2, g3],
-        volume: det / 6.0,
-    })
+    Some(Geometry { grad: [g0, g1, g2, g3], volume: det / 6.0 })
 }
 
 /// TET10 shape function gradients at barycentric point `l`.
@@ -1612,9 +1475,7 @@ fn stress_at(d: &[V3; 10], u: &[V3; 10], (lambda, mu): (f64, f64)) -> [f64; 6] {
 
 fn von_mises(s: &[f64; 6]) -> f64 {
     let [xx, yy, zz, xy, yz, zx] = *s;
-    (0.5 * ((xx - yy).powi(2) + (yy - zz).powi(2) + (zz - xx).powi(2))
-        + 3.0 * (xy * xy + yz * yz + zx * zx))
-        .sqrt()
+    (0.5 * ((xx - yy).powi(2) + (yy - zz).powi(2) + (zz - xx).powi(2)) + 3.0 * (xy * xy + yz * yz + zx * zx)).sqrt()
 }
 
 /// What `analyse` found on every TET10 node.
@@ -1629,9 +1490,8 @@ struct Fields {
     dofs: usize,
 }
 
-/// Solves K u = f with the displacements of `prescribed` nodes given and those `holds` holds
-/// in one or two directions kept from moving that way, then recovers the smoothed stress,
-/// the reactions and the strain energy.
+/// Solves K u = f with `prescribed` displacements given and the partial `holds` kept from moving that way, then
+/// recovers the smoothed stress, the reactions and the strain energy.
 #[allow(clippy::too_many_arguments)]
 fn analyse(
     q: &Quadratic,
@@ -1666,9 +1526,7 @@ fn analyse(
     // Lower triangle by node blocks: column block b holds b itself, then every free node a > b
     // that shares an element with it, ascending.
     let mut pairs: Vec<u64> = Vec::new();
-    pairs
-        .try_reserve(q.tets.len() * 55)
-        .map_err(|_| SolveError::OutOfMemory)?;
+    pairs.try_reserve(q.tets.len() * 55).map_err(|_| SolveError::OutOfMemory)?;
     for t in &q.tets {
         for &a in t {
             let fa = free[a as usize];
@@ -1706,12 +1564,8 @@ fn analyse(
     let nnz = col_ptr[ndof];
     let mut row_idx: Vec<usize> = Vec::new();
     let mut values: Vec<f64> = Vec::new();
-    row_idx
-        .try_reserve_exact(nnz)
-        .map_err(|_| SolveError::OutOfMemory)?;
-    values
-        .try_reserve_exact(nnz)
-        .map_err(|_| SolveError::OutOfMemory)?;
+    row_idx.try_reserve_exact(nnz).map_err(|_| SolveError::OutOfMemory)?;
+    values.try_reserve_exact(nnz).map_err(|_| SolveError::OutOfMemory)?;
     for b in 0..nfree {
         let around = &nb[nb_start[b]..nb_start[b + 1]];
         for j in 0..3 {
@@ -1778,8 +1632,8 @@ fn analyse(
                 }
                 let frame_b = holds.partial(b as usize);
                 // The block in the nodes' own frames, the held rows and columns left out.
-                let rotated = (frame_a.is_some() || frame_b.is_some())
-                    .then(|| rotate_block(&k, p, r, frame_a, frame_b));
+                let rotated =
+                    (frame_a.is_some() || frame_b.is_some()).then(|| rotate_block(&k, p, r, frame_a, frame_b));
                 let kab = |i: usize, j: usize| match &rotated {
                     None => k[3 * p + i][3 * r + j],
                     Some(m) => m[i][j],
@@ -1889,17 +1743,8 @@ fn analyse(
             count[n] += 1;
         }
     }
-    let mut stress: Vec<[f64; 6]> = sum
-        .iter()
-        .zip(&count)
-        .map(|(s, &c)| {
-            if c > 0 {
-                s.map(|v| v / c as f64)
-            } else {
-                [0.0; 6]
-            }
-        })
-        .collect();
+    let mut stress: Vec<[f64; 6]> =
+        sum.iter().zip(&count).map(|(s, &c)| if c > 0 { s.map(|v| v / c as f64) } else { [0.0; 6] }).collect();
     for &[a, b] in &q.edges {
         let (sa, sb) = (stress[a as usize], stress[b as usize]);
         stress.push([0, 1, 2, 3, 4, 5].map(|k| 0.5 * (sa[k] + sb[k])));
@@ -1926,15 +1771,7 @@ fn analyse(
     if !(energy.is_finite() && finite(&reaction) && stress.iter().all(|s| finite(s))) {
         return Err(SolveError::Overflow);
     }
-    Ok(Fields {
-        displacement,
-        stress,
-        applied,
-        reaction,
-        residual,
-        strain_energy: 0.5 * energy,
-        dofs: ndof,
-    })
+    Ok(Fields { displacement, stress, applied, reaction, residual, strain_energy: 0.5 * energy, dofs: ndof })
 }
 
 /// Elements per leaf of the dissection.
@@ -1942,11 +1779,8 @@ const LEAF: usize = 8;
 /// A cut may leave between these fractions of the elements on one side.
 const BALANCE: (f64, f64) = (0.35, 0.65);
 
-/// The nodes `keep` accepts, in nested dissection order. The elements are sorted along each
-/// axis by centroid; of the cuts that keep the halves balanced, the one whose two sides share
-/// the fewest nodes wins, and those nodes come after both halves, recursively. Eliminating in
-/// this order fills far less of the Cholesky factor than minimum degree, which tends to sweep
-/// a solid part like a band.
+/// The nodes `keep` accepts in nested dissection order: the balanced cut along a centroid axis sharing the fewest
+/// nodes goes last, recursively. This fills far less of the Cholesky factor than minimum degree, which bands a solid.
 fn dissect(q: &Quadratic, keep: impl Fn(usize) -> bool) -> Vec<u32> {
     const OPEN: u8 = 0;
     const RESERVED: u8 = 1;
@@ -1963,10 +1797,7 @@ fn dissect(q: &Quadratic, keep: impl Fn(usize) -> bool) -> Vec<u32> {
     /// the middle, position).
     fn best_cut(c: &mut Cut, elems: &[u32]) -> (usize, usize, usize) {
         let len = elems.len();
-        let (lo, hi) = (
-            (len as f64 * BALANCE.0) as usize,
-            (len as f64 * BALANCE.1) as usize,
-        );
+        let (lo, hi) = ((len as f64 * BALANCE.0) as usize, (len as f64 * BALANCE.1) as usize);
         for &e in elems {
             for &n in &c.tets[e as usize] {
                 c.right[n as usize] += 1;
@@ -2023,9 +1854,7 @@ fn dissect(q: &Quadratic, keep: impl Fn(usize) -> bool) -> Vec<u32> {
             let mut sorted = elems.clone();
             let centroid = &c.centroid;
             sorted.sort_unstable_by(|&a, &b| {
-                centroid[a as usize][axis]
-                    .total_cmp(&centroid[b as usize][axis])
-                    .then(a.cmp(&b))
+                centroid[a as usize][axis].total_cmp(&centroid[b as usize][axis]).then(a.cmp(&b))
             });
             let cut = best_cut(c, &sorted);
             if best.as_ref().is_none_or(|(b, _)| cut < *b) {
@@ -2068,13 +1897,9 @@ fn dissect(q: &Quadratic, keep: impl Fn(usize) -> bool) -> Vec<u32> {
         centroid: q
             .tets
             .iter()
-            .map(|t| {
-                [0, 1, 2].map(|k| t[..4].iter().map(|&n| q.nodes[n as usize][k]).sum::<f64>() / 4.0)
-            })
+            .map(|t| [0, 1, 2].map(|k| t[..4].iter().map(|&n| q.nodes[n as usize][k]).sum::<f64>() / 4.0))
             .collect(),
-        state: (0..nn)
-            .map(|n| if keep(n) { OPEN } else { PLACED })
-            .collect(),
+        state: (0..nn).map(|n| if keep(n) { OPEN } else { PLACED }).collect(),
         left: vec![0; nn],
         right: vec![0; nn],
         order: Vec::new(),
@@ -2086,11 +1911,7 @@ fn dissect(q: &Quadratic, keep: impl Fn(usize) -> bool) -> Vec<u32> {
 
 /// Factorises the lower triangle `a` on one thread and overwrites `rhs` with the solution,
 /// unless the factor and its scratch would take more than `limit` bytes.
-fn factor_and_solve(
-    a: SparseColMatRef<'_, usize, f64>,
-    rhs: &mut [f64],
-    limit: u64,
-) -> Result<(), SolveError> {
+fn factor_and_solve(a: SparseColMatRef<'_, usize, f64>, rhs: &mut [f64], limit: u64) -> Result<(), SolveError> {
     let oom = |_| SolveError::OutOfMemory;
     // The rows are already in dissection order. An explicit identity, as faer's `Identity`
     // ordering reads the matrix as an upper triangle whatever the side.
@@ -2113,8 +1934,7 @@ fn factor_and_solve(
         return Err(SolveError::TooLarge { needed, limit });
     }
     let mut l: Vec<f64> = Vec::new();
-    l.try_reserve_exact(sym.len_val())
-        .map_err(|_| SolveError::OutOfMemory)?;
+    l.try_reserve_exact(sym.len_val()).map_err(|_| SolveError::OutOfMemory)?;
     l.resize(sym.len_val(), 0.0);
     let mut mem = MemBuffer::try_new(factor_scratch).map_err(|_| SolveError::OutOfMemory)?;
     let llt = sym
@@ -2153,17 +1973,14 @@ fn rotate_block(
     frame_a: Option<(&[V3; 3], usize)>,
     frame_b: Option<(&[V3; 3], usize)>,
 ) -> [[f64; 3]; 3] {
-    let mut m: [[f64; 3]; 3] =
-        std::array::from_fn(|i| std::array::from_fn(|j| k[3 * p + i][3 * r + j]));
+    let mut m: [[f64; 3]; 3] = std::array::from_fn(|i| std::array::from_fn(|j| k[3 * p + i][3 * r + j]));
     if let Some((axes, _)) = frame_b {
         // M Q_b^T: column j is M times axis j.
         m = std::array::from_fn(|i| std::array::from_fn(|j| dot(m[i], axes[j])));
     }
     if let Some((axes, _)) = frame_a {
         // Q_a M: row i is axis i times M.
-        m = std::array::from_fn(|i| {
-            std::array::from_fn(|j| (0..3).map(|c| axes[i][c] * m[c][j]).sum())
-        });
+        m = std::array::from_fn(|i| std::array::from_fn(|j| (0..3).map(|c| axes[i][c] * m[c][j]).sum()));
     }
     let (held_a, held_b) = (frame_a.map_or(0, |f| f.1), frame_b.map_or(0, |f| f.1));
     for (i, row) in m.iter_mut().enumerate() {
@@ -2230,11 +2047,7 @@ fn dot(a: V3, b: V3) -> f64 {
 }
 
 fn cross(a: V3, b: V3) -> V3 {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 
 fn norm(a: V3) -> f64 {
@@ -2254,10 +2067,8 @@ fn unit(a: V3) -> V3 {
 mod tests {
     use super::*;
 
-    /// A box [0, size] split into n cells per axis, each cell into the six tetrahedra around
-    /// its main diagonal (conforming across cells). Boundary triangles are tagged 0 to 5 for
-    /// the -x, +x, -y, +y, -z, +z sides. `jitter` moves interior nodes by up to that fraction
-    /// of a cell, deterministically, for a distorted mesh.
+    /// A box [0, size] of n cells per axis, six tetrahedra per cell, boundary triangles tagged 0 to 5 for -x, +x, -y,
+    /// +y, -z, +z. `jitter` moves interior nodes by up to that fraction of a cell, deterministically.
     fn box_mesh(size: V3, n: [usize; 3], jitter: f64) -> TetMesh {
         let id = |i: usize, j: usize, k: usize| (i + (n[0] + 1) * (j + (n[1] + 1) * k)) as u32;
         let h = [0, 1, 2].map(|a| size[a] / n[a] as f64);
@@ -2281,14 +2092,7 @@ mod tests {
                 }
             }
         }
-        let perms = [
-            [0, 1, 2],
-            [0, 2, 1],
-            [1, 0, 2],
-            [1, 2, 0],
-            [2, 0, 1],
-            [2, 1, 0],
-        ];
+        let perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
         let mut tets = Vec::new();
         for k in 0..n[2] {
             for j in 0..n[1] {
@@ -2318,22 +2122,12 @@ mod tests {
                 })
                 .expect("boundary triangle on a box side") as u32
         });
-        TetMesh {
-            nodes,
-            tets,
-            boundary,
-            boundary_face,
-            node_faces: Vec::new(),
-        }
+        TetMesh { nodes, tets, boundary, boundary_face, node_faces: Vec::new() }
     }
 
     /// The faces used by one element only, wound outward, and the face id `tag` gives the
     /// centroid of each.
-    fn boundary_of(
-        nodes: &[V3],
-        tets: &[[u32; 4]],
-        tag: impl Fn(V3) -> u32,
-    ) -> (Vec<[u32; 3]>, Vec<u32>) {
+    fn boundary_of(nodes: &[V3], tets: &[[u32; 4]], tag: impl Fn(V3) -> u32) -> (Vec<[u32; 3]>, Vec<u32>) {
         let mut faces: Vec<([u32; 3], [u32; 3], u32)> = Vec::new();
         for t in tets {
             for skip in 0..4 {
@@ -2371,48 +2165,16 @@ mod tests {
         true
     }
 
-    const STEEL: Material = Material {
-        e: 210_000.0,
-        nu: 0.3,
-    };
-
-    fn balance(s: &Solution) -> f64 {
-        let r = norm([0, 1, 2].map(|k| s.applied[k] + s.reaction[k]));
-        r / norm(s.applied).max(1e-300)
-    }
-
-    /// The corner and mid-edge nodes of the boundary triangles tagged `face`.
-    fn face_nodes(m: &TetMesh, s: &Solution, face: u32) -> Vec<u32> {
-        let mut v = Vec::new();
-        for (t, &f) in m.boundary.iter().zip(&m.boundary_face) {
-            if f == face {
-                for (a, b) in [(t[0], t[1]), (t[1], t[2]), (t[2], t[0])] {
-                    v.push(a);
-                    let e = [a.min(b), a.max(b)];
-                    v.push((s.corners + s.edges.binary_search(&e).unwrap()) as u32);
-                }
-            }
-        }
-        v.sort_unstable();
-        v.dedup();
-        v
-    }
+    const STEEL: Material = Material { e: 210_000.0, nu: 0.3 };
 
     #[test]
     fn patch_test_reproduces_constant_strain() {
         let m = box_mesh([2.0, 3.0, 1.5], [3, 4, 3], 0.12);
         let q = promote(&m).unwrap();
-        let geo: Vec<Geometry> = q
-            .tets
-            .iter()
-            .map(|t| geometry([0, 1, 2, 3].map(|k| q.nodes[t[k] as usize])).unwrap())
-            .collect();
+        let geo: Vec<Geometry> =
+            q.tets.iter().map(|t| geometry([0, 1, 2, 3].map(|k| q.nodes[t[k] as usize])).unwrap()).collect();
         // u = A x + c, prescribed on every boundary node.
-        let a = [
-            [1e-3, 2e-4, -3e-4],
-            [5e-4, -7e-4, 1e-4],
-            [-2e-4, 3e-4, 4e-4],
-        ];
+        let a = [[1e-3, 2e-4, -3e-4], [5e-4, -7e-4, 1e-4], [-2e-4, 3e-4, 4e-4]];
         let c = [0.01, -0.02, 0.005];
         let exact = |x: V3| [0, 1, 2].map(|i| c[i] + (0..3).map(|j| a[i][j] * x[j]).sum::<f64>());
         let mut prescribed = vec![None; q.nodes.len()];
@@ -2423,10 +2185,7 @@ mod tests {
         }
         let interior = prescribed.iter().filter(|p| p.is_none()).count();
         assert!(interior > 50);
-        let mat = Material {
-            e: 3500.0,
-            nu: 0.36,
-        };
+        let mat = Material { e: 3500.0, nu: 0.36 };
         let f = analyse(
             &q,
             &geo,
@@ -2461,245 +2220,18 @@ mod tests {
                 err_s = err_s.max((s[k] - want[k]).abs() / scale);
             }
         }
-        eprintln!(
-            "patch: max |u - exact| = {err_u:.3e} mm, max stress error = {err_s:.3e} (relative)"
-        );
+        eprintln!("patch: max |u - exact| = {err_u:.3e} mm, max stress error = {err_s:.3e} (relative)");
         assert!(err_u < 1e-9 * 0.01, "displacement error {err_u}");
         assert!(err_s < 1e-9, "stress error {err_s}");
         assert!(norm(f.reaction) < 1e-9 * scale * 10.0);
     }
 
-    fn bar(nu: f64, len: f64, n: [usize; 3]) -> (TetMesh, Solution, f64) {
-        let m = box_mesh([len, 10.0, 10.0], n, 0.0);
-        let force = 1000.0;
-        let p = Problem {
-            mesh: &m,
-            supports: vec![],
-            body_force: None,
-            material: Material { e: 210_000.0, nu },
-            fixed: vec![0],
-            loads: vec![Load {
-                faces: vec![1],
-                kind: LoadKind::Force([force, 0.0, 0.0]),
-            }],
-        };
-        let s = solve(&p, &mut go).unwrap();
-        (m, s, force)
-    }
-
-    #[test]
-    fn bar_without_poisson_is_exact() {
-        // With nu = 0 the clamp does not disturb uniaxial tension, so the field is linear.
-        let (m, s, force) = bar(0.0, 100.0, [10, 2, 2]);
-        let area = 100.0;
-        let tip = force * 100.0 / (210_000.0 * area);
-        let mut err: f64 = 0.0;
-        for (n, x) in s.nodes.iter().enumerate() {
-            err = err.max((s.displacement[n][0] - tip * x[0] / 100.0).abs() / tip);
-            err = err.max(s.displacement[n][1].abs().max(s.displacement[n][2].abs()) / tip);
-            err = err.max((s.stress[n][0] - force / area).abs() / (force / area));
-        }
-        eprintln!(
-            "bar nu=0: max relative error {err:.3e}, balance {:.3e}",
-            balance(&s)
-        );
-        assert!(err < 1e-9, "{err}");
-        assert!(balance(&s) < 1e-9);
-        assert_eq!(s.elements, m.tets.len());
-    }
-
-    #[test]
-    fn bar_in_tension() {
-        let (len, area, e) = (100.0, 100.0, 210_000.0);
-        let (m, s, force) = bar(0.3, len, [20, 4, 4]);
-        let end = face_nodes(&m, &s, 1);
-        let ux = end
-            .iter()
-            .map(|&n| s.displacement[n as usize][0])
-            .sum::<f64>()
-            / end.len() as f64;
-        let want_u = force * len / (e * area);
-        let mid: Vec<usize> = (0..s.nodes.len())
-            .filter(|&n| (s.nodes[n][0] - len / 2.0).abs() < 1e-9)
-            .collect();
-        let sxx = mid.iter().map(|&n| s.stress[n][0]).sum::<f64>() / mid.len() as f64;
-        let want_s = force / area;
-        let (eu, es) = ((ux - want_u) / want_u, (sxx - want_s) / want_s);
-        eprintln!(
-            "bar: end ux {ux:.6e} vs FL/EA {want_u:.6e} ({:+.3}%), mid sigma {sxx:.5} vs F/A {want_s} ({:+.3}%), balance {:.2e}",
-            eu * 100.0,
-            es * 100.0,
-            balance(&s)
-        );
-        assert!(eu.abs() < 0.005);
-        assert!(es.abs() < 0.005);
-        assert!(balance(&s) < 1e-6);
-    }
-
-    struct Cantilever {
-        tip: f64,
-        sigma_top: f64,
-        s: Solution,
-    }
-
-    fn cantilever(n: [usize; 3]) -> Cantilever {
-        let m = box_mesh([100.0, 10.0, 10.0], n, 0.0);
-        let p = Problem {
-            mesh: &m,
-            supports: vec![],
-            body_force: None,
-            material: STEEL,
-            fixed: vec![0],
-            loads: vec![Load {
-                faces: vec![1],
-                kind: LoadKind::Force([0.0, 0.0, -100.0]),
-            }],
-        };
-        let s = solve(&p, &mut go).unwrap();
-        let end = face_nodes(&m, &s, 1);
-        let tip = -end
-            .iter()
-            .map(|&n| s.displacement[n as usize][2])
-            .sum::<f64>()
-            / end.len() as f64;
-        let top: Vec<usize> = (0..s.nodes.len())
-            .filter(|&n| (s.nodes[n][0] - 50.0).abs() < 1e-9 && (s.nodes[n][2] - 10.0).abs() < 1e-9)
-            .collect();
-        assert!(!top.is_empty());
-        let sigma_top = top.iter().map(|&n| s.stress[n][0]).sum::<f64>() / top.len() as f64;
-        Cantilever { tip, sigma_top, s }
-    }
-
-    #[test]
-    fn cantilever_matches_timoshenko_and_is_deterministic() {
-        let (p, l, b, h) = (100.0, 100.0, 10.0, 10.0);
-        let i = b * h * h * h / 12.0;
-        let g = STEEL.e / (2.0 * (1.0 + STEEL.nu));
-        let want = p * l * l * l / (3.0 * STEEL.e * i) + p * l / (5.0 / 6.0 * g * b * h);
-        let want_s = p * (l / 2.0) * (h / 2.0) / i;
-        let t0 = std::time::Instant::now();
-        let c = cantilever([40, 4, 4]);
-        let took = t0.elapsed();
-        let (ed, es) = ((c.tip - want) / want, (c.sigma_top - want_s) / want_s);
-        eprintln!(
-            "cantilever ({} tets, {} dofs, {:.2?}): tip {:.6} vs Timoshenko {want:.6} mm ({:+.3}%), mid-span top sigma_xx {:.4} vs Mc/I {want_s} MPa ({:+.3}%), peak vm {:.3} MPa, balance {:.2e}, energy {:.6} vs P delta / 2 {:.6}",
-            c.s.elements,
-            c.s.dofs,
-            took,
-            c.tip,
-            ed * 100.0,
-            c.sigma_top,
-            es * 100.0,
-            c.s.max_von_mises,
-            balance(&c.s),
-            c.s.strain_energy,
-            0.5 * p * c.tip
-        );
-        assert!(ed.abs() < 0.03);
-        assert!(es.abs() < 0.03);
-        assert!(balance(&c.s) < 1e-6);
-        let again = cantilever([40, 4, 4]);
-        assert!(c.s == again.s, "a second run gave different bits");
-    }
-
-    #[test]
-    fn pressure_equals_force() {
-        let m = box_mesh([30.0, 10.0, 10.0], [6, 2, 2], 0.1);
-        let solve_with_load = |kind| {
-            let p = Problem {
-                mesh: &m,
-                supports: vec![],
-                body_force: None,
-                material: STEEL,
-                fixed: vec![0],
-                loads: vec![Load {
-                    faces: vec![1],
-                    kind,
-                }],
-            };
-            solve(&p, &mut go).unwrap()
-        };
-        // 2 MPa into the +x face of 100 mm^2 is 200 N along -x.
-        let a = solve_with_load(LoadKind::Pressure(2.0));
-        let b = solve_with_load(LoadKind::Force([-200.0, 0.0, 0.0]));
-        let scale = a.max_displacement;
-        let err = a
-            .displacement
-            .iter()
-            .zip(&b.displacement)
-            .map(|(u, v)| norm(sub(*u, *v)))
-            .fold(0.0, f64::max)
-            / scale;
-        eprintln!(
-            "pressure vs force: max difference {err:.3e} relative, applied {:?}",
-            a.applied
-        );
-        assert!(err < 1e-10);
-        assert!(norm(sub(a.applied, [-200.0, 0.0, 0.0])) < 1e-9);
-        assert!(balance(&a) < 1e-6 && balance(&b) < 1e-6);
-    }
-
-    #[test]
-    fn reactions_balance_combined_loads() {
-        let m = box_mesh([40.0, 10.0, 6.0], [8, 2, 2], 0.15);
-        let p = Problem {
-            mesh: &m,
-            supports: vec![],
-            body_force: None,
-            material: Material {
-                e: 2200.0,
-                nu: 0.35,
-            },
-            fixed: vec![0, 4],
-            loads: vec![
-                Load {
-                    faces: vec![1],
-                    kind: LoadKind::Force([3.0, -20.0, 7.0]),
-                },
-                Load {
-                    faces: vec![5, 3],
-                    kind: LoadKind::Pressure(0.4),
-                },
-                Load {
-                    faces: vec![2],
-                    kind: LoadKind::Force([0.0, 0.0, -5.0]),
-                },
-            ],
-        };
-        let s = solve(&p, &mut go).unwrap();
-        // The pressure pushes along -z over the 400 mm^2 of +z and along -y over the 240 of +y.
-        let want = [3.0, -20.0 - 0.4 * 240.0, 7.0 - 0.4 * 400.0 - 5.0];
-        eprintln!(
-            "combined: applied {:?} reaction {:?} balance {:.2e}",
-            s.applied,
-            s.reaction,
-            balance(&s)
-        );
-        assert!(norm(sub(s.applied, want)) < 1e-9 * norm(want));
-        assert!(balance(&s) < 1e-6);
-        assert!(s.strain_energy > 0.0);
-        assert!(s.missing_fixed.is_empty());
-    }
-
     #[test]
     fn errors_name_the_problem() {
         let m = box_mesh([10.0, 10.0, 10.0], [2, 2, 2], 0.0);
-        let load = |faces: Vec<u32>| Load {
-            faces,
-            kind: LoadKind::Force([0.0, 0.0, -1.0]),
-        };
+        let load = |faces: Vec<u32>| Load { faces, kind: LoadKind::Force([0.0, 0.0, -1.0]) };
         let run = |fixed: Vec<u32>, loads: Vec<Load>| {
-            solve(
-                &Problem {
-                    mesh: &m,
-                    supports: vec![],
-                    body_force: None,
-                    material: STEEL,
-                    fixed,
-                    loads,
-                },
-                &mut go,
-            )
+            solve(&Problem { mesh: &m, supports: vec![], body_force: None, material: STEEL, fixed, loads }, &mut go)
         };
         let e = run(vec![], vec![load(vec![1])]).unwrap_err();
         assert_eq!(e, SolveError::NoFixedFaces);
@@ -2715,20 +2247,14 @@ mod tests {
             e.to_string(),
             "a face of load 2 (loads[1]) got no elements, it is probably narrower than the element size, use a smaller element size"
         );
-        assert_eq!(
-            run(vec![0], vec![load(vec![])]).unwrap_err(),
-            SolveError::EmptyLoad { load: 0 }
-        );
+        assert_eq!(run(vec![0], vec![load(vec![])]).unwrap_err(), SolveError::EmptyLoad { load: 0 });
         // Loads that are not numbers are named as such, not taken for a loose body.
         for kind in [
             LoadKind::Force([f64::NAN, 0.0, 0.0]),
             LoadKind::Force([0.0, f64::INFINITY, 0.0]),
             LoadKind::Pressure(f64::NEG_INFINITY),
         ] {
-            let bad = Load {
-                faces: vec![1],
-                kind,
-            };
+            let bad = Load { faces: vec![1], kind };
             let e = run(vec![0], vec![load(vec![3]), bad]).unwrap_err();
             assert_eq!(e, SolveError::InvalidLoad { load: 1 });
         }
@@ -2740,10 +2266,7 @@ mod tests {
                 body_force: None,
                 material: Material { e: 1e-300, nu: 0.3 },
                 fixed: vec![0],
-                loads: vec![Load {
-                    faces: vec![1],
-                    kind: LoadKind::Force([1e300, 0.0, 0.0]),
-                }],
+                loads: vec![Load { faces: vec![1], kind: LoadKind::Force([1e300, 0.0, 0.0]) }],
             },
             &mut go,
         )
@@ -2769,14 +2292,7 @@ mod tests {
             calls < 3
         };
         let e = solve(
-            &Problem {
-                mesh: &m,
-                supports: vec![],
-                body_force: None,
-                material: STEEL,
-                fixed: vec![0],
-                loads: vec![],
-            },
+            &Problem { mesh: &m, supports: vec![], body_force: None, material: STEEL, fixed: vec![0], loads: vec![] },
             &mut stop,
         )
         .unwrap_err();
@@ -2801,10 +2317,7 @@ mod tests {
         };
         assert!(needed > limit && limit == 1000);
         assert!(memory_limit() > 0 && memory_limit() <= FACTOR_MEMORY_CAP);
-        let big = SolveError::TooLarge {
-            needed: 5_400_000_000,
-            limit: 3 << 30,
-        };
+        let big = SolveError::TooLarge { needed: 5_400_000_000, limit: 3 << 30 };
         assert_eq!(
             big.to_string(),
             "solving this mesh needs about 5.4 GB of memory, more than the 3.2 GB it may use, use a larger element size or fewer elements"
@@ -2823,261 +2336,19 @@ mod tests {
         }
     }
 
-    /// Two meshes side by side, the second's face ids moved up by 6.
-    fn join(a: &TetMesh, b: &TetMesh, shift: V3) -> TetMesh {
-        let mut m = a.clone();
-        let base = a.nodes.len() as u32;
-        m.nodes
-            .extend(b.nodes.iter().map(|p| [0, 1, 2].map(|k| p[k] + shift[k])));
-        m.tets.extend(b.tets.iter().map(|t| t.map(|v| v + base)));
-        m.boundary
-            .extend(b.boundary.iter().map(|t| t.map(|v| v + base)));
-        m.boundary_face
-            .extend(b.boundary_face.iter().map(|f| f + 6));
-        m
-    }
-
-    #[test]
-    fn an_unheld_piece_is_an_error() {
-        let one = box_mesh([10.0, 10.0, 10.0], [2, 2, 2], 0.0);
-        let m = join(&one, &one, [20.0, 0.0, 0.0]);
-        let p = Problem {
-            mesh: &m,
-            supports: vec![],
-            body_force: None,
-            material: STEEL,
-            fixed: vec![0],
-            loads: vec![Load {
-                faces: vec![7],
-                kind: LoadKind::Force([1.0, 0.0, 0.0]),
-            }],
-        };
-        let e = solve(&p, &mut go).unwrap_err();
-        eprintln!("unheld: {e}");
-        match e {
-            SolveError::NotHeld {
-                loose,
-                near,
-                hinged,
-            } => {
-                assert_eq!(loose, 1);
-                assert!(!hinged);
-                assert!((near[0] - 25.0).abs() < 1e-9);
-            }
-            other => panic!("{other:?}"),
-        }
-        assert_eq!(
-            e.to_string(),
-            "the body is not held and can still move, the piece near (25.000, 5.000, 5.000) mm is not connected to a fixed face"
-        );
-        // Holding both pieces solves.
-        let p = Problem {
-            fixed: vec![0, 6],
-            ..p
-        };
-        let s = solve(&p, &mut go).unwrap();
-        assert!(balance(&s) < 1e-6);
-    }
-
-    #[test]
-    fn a_piece_hinged_on_an_edge_is_an_error() {
-        // Two cubes sharing only the edge x = 10, z = 10 of the first.
-        let one = box_mesh([10.0, 10.0, 10.0], [1, 1, 1], 0.0);
-        let mut m = join(&one, &one, [10.0, 0.0, 10.0]);
-        // Weld the shared edge's nodes.
-        let n = one.nodes.len() as u32;
-        let mut remap: Vec<u32> = (0..m.nodes.len() as u32).collect();
-        for j in n..m.nodes.len() as u32 {
-            if let Some(i) =
-                (0..n).find(|&i| norm(sub(m.nodes[i as usize], m.nodes[j as usize])) < 1e-9)
-            {
-                remap[j as usize] = i;
-            }
-        }
-        for t in &mut m.tets {
-            *t = t.map(|v| remap[v as usize]);
-        }
-        for t in &mut m.boundary {
-            *t = t.map(|v| remap[v as usize]);
-        }
-        let p = Problem {
-            mesh: &m,
-            supports: vec![],
-            body_force: None,
-            material: STEEL,
-            fixed: vec![0],
-            loads: vec![Load {
-                faces: vec![7],
-                kind: LoadKind::Force([1.0, 0.0, 0.0]),
-            }],
-        };
-        let e = solve(&p, &mut go).unwrap_err();
-        eprintln!("hinged: {e}");
-        assert!(
-            matches!(
-                e,
-                SolveError::NotHeld {
-                    loose: 1,
-                    hinged: true,
-                    ..
-                }
-            ),
-            "{e:?}"
-        );
-    }
-
     fn slider(faces: Vec<u32>) -> Support {
-        Support {
-            hold: Hold::Slider(vec![SlideFace::Mesh; faces.len()]),
-            faces,
-        }
+        Support { hold: Hold::Slider(vec![SlideFace::Mesh; faces.len()]), faces }
     }
 
     fn sum_of(v: &[V3]) -> V3 {
-        v.iter()
-            .fold([0.0; 3], |s, r| [0, 1, 2].map(|k| s[k] + r[k]))
-    }
-
-    #[test]
-    fn a_slider_beside_a_fixed_face_holds_only_along_its_normal() {
-        // A bar glued to a wall at x = 0 and resting on a frictionless floor at z = 0, pulled
-        // at its far end. The nodes on the edge both share are simply fixed.
-        let m = box_mesh([60.0, 10.0, 10.0], [12, 2, 2], 0.0);
-        let force = [5.0, 3.0, -40.0];
-        let p = Problem {
-            mesh: &m,
-            supports: vec![slider(vec![4])],
-            body_force: None,
-            material: STEEL,
-            fixed: vec![0],
-            loads: vec![Load {
-                faces: vec![1],
-                kind: LoadKind::Force(force),
-            }],
-        };
-        let s = solve(&p, &mut go).unwrap();
-        let total = sum_of(&s.reactions);
-        eprintln!(
-            "slider and fixed: reactions {:?}, sum {total:?}, reaction {:?}, balance {:.2e}",
-            s.reactions,
-            s.reaction,
-            balance(&s)
-        );
-        assert!(balance(&s) < 1e-6);
-        assert_eq!(s.reactions.len(), 2);
-        assert!(norm(sub(total, s.reaction)) < 1e-9 * norm(force));
-        // The floor only pushes up.
-        let floor = s.reactions[1];
-        assert!(floor[0].abs() < 1e-6 * norm(force) && floor[1].abs() < 1e-6 * norm(force));
-        assert!(floor[2] > 0.0, "{floor:?}");
-        // Its nodes away from the wall slide along it but never through it.
-        let bottom = face_nodes(&m, &s, 4);
-        let wall = face_nodes(&m, &s, 0);
-        let mut slid: f64 = 0.0;
-        for n in bottom.iter().filter(|n| wall.binary_search(n).is_err()) {
-            let u = s.displacement[*n as usize];
-            assert_eq!(u[2], 0.0, "{u:?}");
-            slid = slid.max(u[0].abs());
-        }
-        assert!(slid > 1e-6, "{slid}");
-        for n in &wall {
-            assert_eq!(s.displacement[*n as usize], [0.0; 3]);
-        }
-    }
-
-    #[test]
-    fn sliders_alone_hold_a_plate_only_when_they_stop_every_slide_and_turn() {
-        let m = box_mesh([40.0, 40.0, 4.0], [8, 8, 1], 0.0);
-        let p = |supports: Vec<Support>| Problem {
-            mesh: &m,
-            supports,
-            body_force: None,
-            material: STEEL,
-            fixed: vec![],
-            loads: vec![Load {
-                faces: vec![5],
-                kind: LoadKind::Pressure(0.01),
-            }],
-        };
-        // On the floor alone it can still slide about.
-        let e = solve(&p(vec![slider(vec![4])]), &mut go).unwrap_err();
-        assert_eq!(
-            e.to_string(),
-            "the body can still slide along X, add a support that holds it that way"
-        );
-        // Against a wall too, it can slide along the wall.
-        let e = solve(&p(vec![slider(vec![4]), slider(vec![0])]), &mut go).unwrap_err();
-        assert_eq!(
-            e,
-            SolveError::Free {
-                motion: Motion::Slide {
-                    along: [0.0, 1.0, 0.0]
-                }
-            },
-            "{e}"
-        );
-        // In a corner it is held, by three sliders or by one slider on three faces.
-        for supports in [
-            vec![slider(vec![4]), slider(vec![0]), slider(vec![2])],
-            vec![slider(vec![0, 2, 4])],
-        ] {
-            let n = supports.len();
-            let s = solve(&p(supports), &mut go).unwrap();
-            assert!(balance(&s) < 1e-6, "{}", balance(&s));
-            assert_eq!(s.reactions.len(), n);
-            assert!(norm(sub(sum_of(&s.reactions), s.reaction)) < 1e-9 * norm(s.applied));
-        }
-        let none = solve(&p(vec![]), &mut go).unwrap_err();
-        assert_eq!(none, SolveError::NoFixedFaces);
-    }
-
-    #[test]
-    fn one_slider_on_three_faces_holds_a_corner_as_three_sliders_do() {
-        // A cube in a corner, its weight and a push into the x = 0 wall. One slider over the
-        // floor and both walls holds each node along the normal of every face it lies on, as
-        // three separate sliders do; one direction averaged over the faces would let the
-        // corner node sink into one wall and lift off the floor.
-        let m = box_mesh([20.0, 20.0, 20.0], [4, 4, 4], 0.0);
-        let p = |supports: Vec<Support>| Problem {
-            mesh: &m,
-            supports,
-            body_force: Some([0.0, 0.0, -7.85 * 9.81e-6]),
-            material: STEEL,
-            fixed: vec![],
-            loads: vec![Load {
-                faces: vec![1],
-                kind: LoadKind::Force([-3.0, 0.0, 0.0]),
-            }],
-        };
-        let three = solve(
-            &p(vec![slider(vec![4]), slider(vec![0]), slider(vec![2])]),
-            &mut go,
-        )
-        .unwrap();
-        let one = solve(&p(vec![slider(vec![4, 0, 2])]), &mut go).unwrap();
-        let top = three.max_displacement;
-        assert!(top > 0.0);
-        for (a, b) in three.displacement.iter().zip(&one.displacement) {
-            assert!(norm(sub(*a, *b)) < 1e-9 * top, "{a:?} vs {b:?}");
-        }
-        assert_eq!(one.displacement[0], [0.0; 3], "the corner at the origin");
-        for (face, axis) in [(4, 2), (0, 0), (2, 1)] {
-            for n in face_nodes(&m, &one, face) {
-                assert_eq!(one.displacement[n as usize][axis], 0.0);
-            }
-        }
-        assert!(norm(sub(sum_of(&three.reactions), one.reactions[0])) < 1e-9 * 3.0);
+        v.iter().fold([0.0; 3], |s, r| [0, 1, 2].map(|k| s[k] + r[k]))
     }
 
     /// A closed box surface [0, size] moved by `off`, two triangles per side, wound outward,
     /// tagged 0 to 5 for the -x, +x, -y, +y, -z, +z sides.
     fn box_surface(size: V3, off: V3) -> SurfaceMesh {
-        let corner =
-            |i: usize| [0, 1, 2].map(|a| off[a] + if i >> a & 1 == 1 { size[a] } else { 0.0 });
-        let mut s = SurfaceMesh {
-            positions: (0..8).map(corner).collect(),
-            ..SurfaceMesh::default()
-        };
+        let corner = |i: usize| [0, 1, 2].map(|a| off[a] + if i >> a & 1 == 1 { size[a] } else { 0.0 });
+        let mut s = SurfaceMesh { positions: (0..8).map(corner).collect(), ..SurfaceMesh::default() };
         // Each side's corners in order round it, then its outward normal.
         let sides: [([u32; 4], V3); 6] = [
             ([0, 2, 6, 4], [-1.0, 0.0, 0.0]),
@@ -3100,31 +2371,20 @@ mod tests {
 
     #[test]
     fn a_support_holds_only_the_nodes_on_its_faces() {
-        // The lattice starts at the box's low corner, so its +x, +y and +z sides fall between
-        // lattice planes, where the mesher rounds the edges over and some triangles tagged
-        // with the top have a corner down the side beside it. The top's slider and the +x
-        // wall's fixed support hold the nodes on their own planes and no others.
+        // The lattice starts at the box's low corner, so the mesher rounds the +x, +y and +z edges over and some top
+        // triangles have a corner on the side. The top slider and +x fixed support must hold only their own planes' nodes.
         let (size, off) = ([30.0, 8.0, 6.0], [0.37, 0.21, 0.13]);
         let (m, _) = super::super::tetmesh::tetrahedralize(
             &box_surface(size, off),
-            &crate::fem::MeshOptions {
-                size: 1.3,
-                max_tets: 0,
-            },
+            &crate::fem::MeshOptions { size: 1.3, max_tets: 0 },
             &mut || true,
         )
         .unwrap();
         let q = promote(&m).unwrap();
         let on = OnFaces::of(&m);
         let supports = [
-            Support {
-                faces: vec![1],
-                hold: Hold::Fixed,
-            },
-            Support {
-                faces: vec![5],
-                hold: Hold::Slider(vec![SlideFace::Plane([0.0, 0.0, 1.0])]),
-            },
+            Support { faces: vec![1], hold: Hold::Fixed },
+            Support { faces: vec![5], hold: Hold::Slider(vec![SlideFace::Plane([0.0, 0.0, 1.0])]) },
         ];
         let holds = holds_of(&q, &on, &supports);
         let on_plane = |n: usize, a: usize, c: f64| (q.nodes[n][a] - c).abs() < 1e-9;
@@ -3157,16 +2417,11 @@ mod tests {
 
     #[test]
     fn a_curved_slider_face_holds_along_its_exact_normal() {
-        let z = Axis {
-            origin: [1.0, 2.0, 3.0],
-            dir: [0.0, 0.0, 2.0],
-        };
+        let z = Axis { origin: [1.0, 2.0, 3.0], dir: [0.0, 0.0, 2.0] };
         // A cylinder holds towards its axis, a sphere towards its centre.
         let n = SlideFace::Cylinder(z).normal_at([4.0, 6.0, -7.0]).unwrap();
         assert!(norm(sub(n, [0.6, 0.8, 0.0])) < 1e-15, "{n:?}");
-        let n = SlideFace::Sphere([1.0, 2.0, 3.0])
-            .normal_at([1.0, 2.0, 5.0])
-            .unwrap();
+        let n = SlideFace::Sphere([1.0, 2.0, 3.0]).normal_at([1.0, 2.0, 5.0]).unwrap();
         assert_eq!(n, [0.0, 0.0, 1.0]);
         assert_eq!(SlideFace::Cylinder(z).normal_at([1.0, 2.0, 9.0]), None);
         // A cone and a torus: square to the surface's two directions at a point on it, and the
@@ -3175,98 +2430,20 @@ mod tests {
         let e = [theta.cos(), theta.sin(), 0.0];
         let around = [-theta.sin(), theta.cos(), 0.0];
         let at = |radius: f64, h: f64| [1.0 + radius * e[0], 2.0 + radius * e[1], 3.0 + h];
-        let cone = SlideFace::Cone {
-            axis: z,
-            semi_angle: alpha,
-        };
+        let cone = SlideFace::Cone { axis: z, semi_angle: alpha };
         let v = 2.5;
         let x = at(r + v * alpha.sin(), v * alpha.cos());
         let n = cone.normal_at(x).unwrap();
         let line = [alpha.sin() * e[0], alpha.sin() * e[1], alpha.cos()];
-        assert!(
-            dot(n, line).abs() < 1e-15 && dot(n, around).abs() < 1e-15,
-            "{n:?}"
-        );
+        assert!(dot(n, line).abs() < 1e-15 && dot(n, around).abs() < 1e-15, "{n:?}");
         let pushed = [0, 1, 2].map(|i| x[i] + 0.1 * n[i]);
         assert!(norm(sub(cone.normal_at(pushed).unwrap(), n)) < 1e-12);
-        let torus = SlideFace::Torus {
-            axis: z,
-            major: 10.0,
-        };
+        let torus = SlideFace::Torus { axis: z, major: 10.0 };
         let phi = 1.1_f64;
         let x = at(10.0 + 2.0 * phi.cos(), 2.0 * phi.sin());
         let n = torus.normal_at(x).unwrap();
         let want = [phi.cos() * e[0], phi.cos() * e[1], phi.sin()];
         assert!(norm(sub(n, want)) < 1e-12, "{n:?} vs {want:?}");
-    }
-
-    #[test]
-    fn a_pin_leaves_the_turn_about_its_axis_free() {
-        // A pin through the bar's -x end along X, as a hole's walls would take it.
-        let m = box_mesh([30.0, 10.0, 10.0], [6, 2, 2], 0.0);
-        let pin = Support {
-            faces: vec![0],
-            hold: Hold::Pinned(vec![Axis {
-                origin: [-3.0, 5.0, 5.0],
-                dir: [2.0, 0.0, 0.0],
-            }]),
-        };
-        let p = |supports: Vec<Support>| Problem {
-            mesh: &m,
-            supports,
-            body_force: None,
-            material: STEEL,
-            fixed: vec![],
-            loads: vec![Load {
-                faces: vec![1],
-                kind: LoadKind::Force([0.0, 0.0, -10.0]),
-            }],
-        };
-        let e = solve(&p(vec![pin.clone()]), &mut go).unwrap_err();
-        eprintln!("pin alone: {e}");
-        let SolveError::Free {
-            motion:
-                Motion::Turn {
-                    about,
-                    through,
-                    pivot: Some(Pivot::Pin),
-                },
-        } = &e
-        else {
-            panic!("{e:?}");
-        };
-        assert!(norm(cross(*about, [1.0, 0.0, 0.0])) < 1e-9, "{about:?}");
-        assert!(norm(sub(*through, [15.0, 5.0, 5.0])) < 1e-6, "{through:?}");
-        assert_eq!(
-            e.to_string(),
-            "the body can still turn about the pin's axis through (15, 5, 5), add another support"
-        );
-        // A slider on the side stops the turn.
-        let s = solve(&p(vec![pin, slider(vec![2])]), &mut go).unwrap();
-        assert!(balance(&s) < 1e-6, "{}", balance(&s));
-        assert!(norm(sub(sum_of(&s.reactions), s.reaction)) < 1e-9 * 10.0);
-        // The pin's face moves only by turning, so not along X or towards the axis.
-        for n in face_nodes(&m, &s, 0) {
-            let x = s.nodes[n as usize];
-            let u = s.displacement[n as usize];
-            let radial = [0.0, x[1] - 5.0, x[2] - 5.0];
-            assert!(
-                u[0].abs() < 1e-15 && dot(u, radial).abs() < 1e-12,
-                "{u:?} at {x:?}"
-            );
-        }
-        // An axis of no length is refused.
-        let bad = Support {
-            faces: vec![0],
-            hold: Hold::Pinned(vec![Axis {
-                origin: [0.0; 3],
-                dir: [0.0; 3],
-            }]),
-        };
-        assert_eq!(
-            solve(&p(vec![bad]), &mut go).unwrap_err(),
-            SolveError::InvalidSupport { support: 0 }
-        );
     }
 
     #[test]
@@ -3284,10 +2461,7 @@ mod tests {
         };
         let e = solve(&p, &mut go).unwrap_err();
         assert!(e.to_string().contains("slide along X"), "{e}");
-        let p = Problem {
-            supports: vec![slider(vec![2, 3, 4, 5]), slider(vec![0])],
-            ..p
-        };
+        let p = Problem { supports: vec![slider(vec![2, 3, 4, 5]), slider(vec![0])], ..p };
         assert!(solve(&p, &mut go).is_ok());
 
         // Points held in every direction along the line y = 5, z = 5 leave the turn about it.
@@ -3313,18 +2487,8 @@ mod tests {
             "the body can still turn about an axis along X through (15, 5, 5), add a support that holds it that way"
         );
         // The same line as a pin's axis is named as the pin.
-        let pin = Turning {
-            pivot: Pivot::Pin,
-            origin: [100.0, 5.0, 5.0],
-            dir: Some([-1.0, 0.0, 0.0]),
-        };
-        assert!(matches!(
-            motion_of(v, c, size, &[pin]),
-            Motion::Turn {
-                pivot: Some(Pivot::Pin),
-                ..
-            }
-        ));
+        let pin = Turning { pivot: Pivot::Pin, origin: [100.0, 5.0, 5.0], dir: Some([-1.0, 0.0, 0.0]) };
+        assert!(matches!(motion_of(v, c, size, &[pin]), Motion::Turn { pivot: Some(Pivot::Pin), .. }));
         assert_eq!(direction_words([0.0, -0.6, 0.8]), "(0, 0.6, -0.8)");
         assert_eq!(point_words([1.23456, -0.0, 2.5]), "(1.235, 0, 2.5)");
         // The eigenvalues of a small symmetric matrix.
@@ -3335,66 +2499,11 @@ mod tests {
     }
 
     #[test]
-    fn gravity_bends_a_cantilever_by_its_weight() {
-        let (l, b, h) = (100.0, 10.0, 10.0);
-        let m = box_mesh([l, b, h], [40, 4, 4], 0.0);
-        // Steel, 7.85 g/cm3, under 9.81 m/s2 along -Z, in N per cubic mm.
-        let rho_g = 7.85 * 9.81e-6;
-        let p = Problem {
-            mesh: &m,
-            supports: vec![],
-            body_force: Some([0.0, 0.0, -rho_g]),
-            material: STEEL,
-            fixed: vec![0],
-            loads: vec![],
-        };
-        let s = solve(&p, &mut go).unwrap();
-        let weight = s.weight.expect("a weight");
-        let want = -rho_g * l * b * h;
-        assert!((weight[2] - want).abs() < 1e-12 * want.abs(), "{weight:?}");
-        assert!(norm(sub(s.applied, weight)) < 1e-12 * want.abs());
-        assert!(balance(&s) < 1e-6);
-        // q L^4 / 8 E I with the shear term q L^2 / 2 k G A.
-        let q = rho_g * b * h;
-        let i = b * h * h * h / 12.0;
-        let g = STEEL.e / (2.0 * (1.0 + STEEL.nu));
-        let tip_want =
-            q * l.powi(4) / (8.0 * STEEL.e * i) + q * l * l / (2.0 * 5.0 / 6.0 * g * b * h);
-        let end = face_nodes(&m, &s, 1);
-        let tip = -end
-            .iter()
-            .map(|&n| s.displacement[n as usize][2])
-            .sum::<f64>()
-            / end.len() as f64;
-        eprintln!("gravity: weight {weight:?}, tip {tip:.6e} vs {tip_want:.6e}");
-        assert!(
-            (tip - tip_want).abs() < 0.03 * tip_want,
-            "{tip} vs {tip_want}"
-        );
-        // The weight adds to the loads.
-        let with_load = solve(
-            &Problem {
-                loads: vec![Load {
-                    faces: vec![1],
-                    kind: LoadKind::Force([0.0, 0.0, -1.0]),
-                }],
-                ..p
-            },
-            &mut go,
-        )
-        .unwrap();
-        assert!((with_load.applied[2] - (want - 1.0)).abs() < 1e-9);
-    }
-
-    #[test]
     fn a_body_force_sums_to_the_volume_times_it() {
         let m = box_mesh([3.0, 2.0, 1.0], [3, 2, 2], 0.2);
         let q = promote(&m).unwrap();
-        let geo: Vec<Geometry> = q
-            .tets
-            .iter()
-            .map(|t| geometry([0, 1, 2, 3].map(|k| q.nodes[t[k] as usize])).unwrap())
-            .collect();
+        let geo: Vec<Geometry> =
+            q.tets.iter().map(|t| geometry([0, 1, 2, 3].map(|k| q.nodes[t[k] as usize])).unwrap()).collect();
         let mut f = vec![[0.0; 3]; q.nodes.len()];
         let total = body_force(&q, &geo, [1.0, -2.0, 0.5], &mut f);
         let sum = sum_of(&f);
@@ -3403,45 +2512,5 @@ mod tests {
         // A corner takes minus a twentieth of an element's share, a mid-edge node a fifth.
         let n = shape_values([0.25; 4]);
         assert!((n.iter().sum::<f64>() - 1.0).abs() < 1e-15);
-    }
-
-    /// Run with `cargo test --release -- --ignored --nocapture solve_time`.
-    #[test]
-    #[ignore]
-    fn solve_time_about_50k_tets() {
-        let m = box_mesh([120.0, 24.0, 24.0], [60, 12, 12], 0.0);
-        let p = Problem {
-            mesh: &m,
-            supports: vec![],
-            body_force: None,
-            material: STEEL,
-            fixed: vec![0],
-            loads: vec![Load {
-                faces: vec![1],
-                kind: LoadKind::Force([0.0, 0.0, -1000.0]),
-            }],
-        };
-        let t0 = std::time::Instant::now();
-        let mut factor = std::time::Duration::ZERO;
-        let s = solve_with(&p, &mut go, &mut |f| {
-            let t = std::time::Instant::now();
-            f();
-            factor = t.elapsed();
-        })
-        .unwrap();
-        let total = t0.elapsed();
-        let t1 = std::time::Instant::now();
-        let again = solve(&p, &mut go).unwrap();
-        eprintln!(
-            "{} tets, {} TET10 nodes, {} dofs: total {:.2?} (factorise and solve {:.2?}), second run {:.2?}, identical {}, balance {:.2e}",
-            s.elements,
-            s.nodes.len(),
-            s.dofs,
-            total,
-            factor,
-            t1.elapsed(),
-            s == again,
-            balance(&s)
-        );
     }
 }

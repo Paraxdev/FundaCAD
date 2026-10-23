@@ -10,7 +10,12 @@ const FACE = { kind: "face", by: "nearest", point: [0, 9.125, 20] } as const;
 const push = (distance: number, id = "f9"): Feature =>
   ({ id, type: "press-pull", faces: FACE, distance, followTangent: true }) as unknown as Feature;
 
-const built = (f: Feature): BuildReply => ({ previewBuilt: [f], heldRefusal: null, errorFeatureId: null, errorMessage: null });
+const built = (f: Feature): BuildReply => ({
+  previewBuilt: [f],
+  heldRefusal: null,
+  errorFeatureId: null,
+  errorMessage: null,
+});
 const refused = (f: Feature, message: string): BuildReply => ({
   previewBuilt: [f],
   heldRefusal: { featureId: f.id, message, code: null, diagnostics: [] },

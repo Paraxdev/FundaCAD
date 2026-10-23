@@ -1,6 +1,5 @@
-// Eased gestures. Each channel eases an amount toward what the input asked for
-// and hands back, every frame, an increment the navigator applies as an exact
-// transform about the channel's own fixed centre.
+// Eased gestures. Each channel eases an amount toward what the input asked for and hands back, every frame, an
+// increment the navigator applies as an exact transform about the channel's own fixed centre.
 
 import * as THREE from "three";
 import { Spring } from "./math";
@@ -96,8 +95,14 @@ export class OrbitChannel {
   }
 
   settled(): boolean {
-    return this.yaw.x === this.goalYaw && this.elev.x === this.goalElev && this.roll.x === this.goalRoll
-      && this.yaw.v === 0 && this.elev.v === 0 && this.roll.v === 0;
+    return (
+      this.yaw.x === this.goalYaw &&
+      this.elev.x === this.goalElev &&
+      this.roll.x === this.goalRoll &&
+      this.yaw.v === 0 &&
+      this.elev.v === 0 &&
+      this.roll.v === 0
+    );
   }
 
   /** The eased angles are what is on screen; make them the goal too. */
@@ -109,9 +114,8 @@ export class OrbitChannel {
   }
 }
 
-/** A grab: world point G is eased onto the cursor pixel. The error is measured
- *  from the pose on screen every frame, so whatever else moved the view (a
- *  wheel mid-pan), the pan still ends with G exactly under the cursor. */
+/** World point G eased onto the cursor pixel, the error measured from the pose on screen each frame, so the pan ends
+ *  with G exactly under the cursor whatever else moved the view. */
 export class PanChannel {
   readonly grab: THREE.Vector3;
   cx: number;
@@ -135,8 +139,12 @@ export class PanChannel {
     this.sy.step(0, tau, dt);
     let mx = ex + this.sx.x;
     let my = ey + this.sy.x;
-    if (Math.abs(this.sx.x) < EPS_PX && Math.abs(this.sy.x) < EPS_PX
-      && Math.abs(this.sx.v) < EPS_PX * 100 && Math.abs(this.sy.v) < EPS_PX * 100) {
+    if (
+      Math.abs(this.sx.x) < EPS_PX &&
+      Math.abs(this.sy.x) < EPS_PX &&
+      Math.abs(this.sx.v) < EPS_PX * 100 &&
+      Math.abs(this.sy.v) < EPS_PX * 100
+    ) {
       mx = ex;
       my = ey;
       this.sx.reset();

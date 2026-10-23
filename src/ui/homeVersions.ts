@@ -29,7 +29,9 @@ export function branchLog(s: DocSummary, branch: string): VersionRow[] {
 
 /** The current branch first, then the others by name. */
 export function branchNames(s: DocSummary): string[] {
-  const rest = Object.keys(s.branches).filter((b) => b !== s.current).sort((a, b) => a.localeCompare(b));
+  const rest = Object.keys(s.branches)
+    .filter((b) => b !== s.current)
+    .sort((a, b) => a.localeCompare(b));
   return s.branches[s.current] ? [s.current, ...rest] : rest;
 }
 

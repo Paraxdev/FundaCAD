@@ -23,7 +23,11 @@ fn text(len: usize, seed: u32) -> Vec<u8> {
             x ^= x << 13;
             x ^= x >> 17;
             x ^= x << 5;
-            if i % 7 == 0 { b' ' } else { b'0' + (x % 10) as u8 }
+            if i % 7 == 0 {
+                b' '
+            } else {
+                b'0' + (x % 10) as u8
+            }
         })
         .collect()
 }
@@ -50,14 +54,24 @@ fn write_doc(path: &Path, blobs: &[Vec<u8>], extra: Option<&[u8]>, o: &WriteOpti
     let cbor = json_to_cbor(r#"{"features":[]}"#).unwrap();
     let mut sections = vec![
         SectionSpec { kind: KIND_INFO, name: "info".into(), source: Source::Bytes(&info), layout: SMALL_LAYOUT },
-        SectionSpec { kind: KIND_DOCUMENT, name: "document".into(), source: Source::Bytes(&cbor), layout: SMALL_LAYOUT },
+        SectionSpec {
+            kind: KIND_DOCUMENT,
+            name: "document".into(),
+            source: Source::Bytes(&cbor),
+            layout: SMALL_LAYOUT,
+        },
     ];
     for b in blobs {
         let layout = if b.len() >= 2 * SEG { SMALL_GROUPS } else { LARGE_LAYOUT };
         sections.push(SectionSpec { kind: KIND_GEOMETRY, name: hash_hex(b), source: Source::Bytes(b), layout });
     }
     if let Some(index) = extra {
-        sections.push(SectionSpec { kind: 9, name: "segments".into(), source: Source::Bytes(index), layout: SMALL_LAYOUT });
+        sections.push(SectionSpec {
+            kind: 9,
+            name: "segments".into(),
+            source: Source::Bytes(index),
+            layout: SMALL_LAYOUT,
+        });
     }
     let entries = write_with(&mut File::create(path).unwrap(), &sections, o).unwrap();
     if extra.is_some() {
@@ -114,7 +128,11 @@ fn the_blobs_are_the_same_for_any_thread_count() {
         assert_eq!(opened.report, RepairReport::default());
         assert_blobs(&store, &blobs);
         for (raw, row) in blobs.iter().zip(&rows) {
-            assert_eq!(segmented(&path, &geometry(&entries, raw), row, t).unwrap().as_deref(), Some(&raw[..]), "fast path at {t} threads");
+            assert_eq!(
+                segmented(&path, &geometry(&entries, raw), row, t).unwrap().as_deref(),
+                Some(&raw[..]),
+                "fast path at {t} threads"
+            );
         }
     }
 }
@@ -334,8 +352,18 @@ fn a_carried_section_already_kept_is_listed_in_file_order() {
     let (a, b) = (text(5000, 40), text(3 * SEG, 41));
     let sections = vec![
         SectionSpec { kind: KIND_INFO, name: "info".into(), source: Source::Bytes(&info), layout: SMALL_LAYOUT },
-        SectionSpec { kind: KIND_DOCUMENT, name: "document".into(), source: Source::Bytes(&cbor), layout: SMALL_LAYOUT },
-        SectionSpec { kind: KIND_GEOMETRY, name: hash_hex(&blobs[0]), source: Source::Bytes(&blobs[0]), layout: SMALL_GROUPS },
+        SectionSpec {
+            kind: KIND_DOCUMENT,
+            name: "document".into(),
+            source: Source::Bytes(&cbor),
+            layout: SMALL_LAYOUT,
+        },
+        SectionSpec {
+            kind: KIND_GEOMETRY,
+            name: hash_hex(&blobs[0]),
+            source: Source::Bytes(&blobs[0]),
+            layout: SMALL_GROUPS,
+        },
         SectionSpec { kind: 9, name: "later".into(), source: Source::Bytes(&a), layout: SMALL_LAYOUT },
         SectionSpec { kind: 10, name: "big".into(), source: Source::Bytes(&b), layout: SMALL_GROUPS },
     ];

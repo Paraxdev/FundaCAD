@@ -1,21 +1,19 @@
-//! Document files in both formats: `.funda` JSON and `.fundab` binary. A port
-//! of the Python MCP server's `test_docfile.py`.
-//!
-//! The binary case builds a format 2 file by the spec in docs/FUNDA-FORMAT.md,
-//! with parity shards the reader must step over, since the app's own writer is
-//! the one that computes them.
+//! Document files in both formats. The `.fundab` case is built by the spec in docs/FUNDA-FORMAT.md with parity
+//! shards the reader must step over, since only the app's writer computes them.
 
 use std::io::Write;
 use std::path::Path;
 
 use blake2::digest::{Update, VariableOutput};
 use fundacad_mcp::docfile;
+use fundacad_mcp::server::FundaCad;
 use serde_json::{json, Map, Value};
 
+mod common;
+use common::{is_error, text_of, FakeEngine};
+
 fn geometry() -> Vec<u8> {
-    (0..20_000u64)
-        .map(|i| (((i * 2_654_435_761) >> 13) & 0xFF) as u8)
-        .collect()
+    (0..20_000u64).map(|i| (((i * 2_654_435_761) >> 13) & 0xFF) as u8).collect()
 }
 
 fn digest(data: &[u8]) -> String {
@@ -34,7 +32,7 @@ fn doc(digest: &str) -> Map<String, Value> {
     .clone()
 }
 
-// --- a format 2 file, written the way the app writes one ---------------------
+// A format 2 file, written the way the app writes one.
 
 fn cbor(v: &Value) -> Vec<u8> {
     fn head(major: u8, n: u64) -> Vec<u8> {
@@ -101,11 +99,7 @@ fn crc32(data: &[u8]) -> u32 {
     for byte in data {
         crc ^= u32::from(*byte);
         for _ in 0..8 {
-            crc = if crc & 1 != 0 {
-                (crc >> 1) ^ 0xEDB8_8320
-            } else {
-                crc >> 1
-            };
+            crc = if crc & 1 != 0 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
         }
     }
     !crc
@@ -118,16 +112,24 @@ fn deflate(raw: &[u8]) -> Vec<u8> {
 }
 
 fn write_fundab(path: &Path, document: &Map<String, Value>, blobs: &[(String, Vec<u8>)]) {
+    write_fundab_with(path, document, blobs, &[]);
+}
+
+fn write_fundab_with(
+    path: &Path,
+    document: &Map<String, Value>,
+    blobs: &[(String, Vec<u8>)],
+    extra: &[(u8, &str, Vec<u8>)],
+) {
     let (shard, k, m) = (4096usize, 8usize, 4usize);
     let mut body = vec![0u8; 64];
     let mut entries: Vec<(u8, String, usize, usize, usize, [u8; 16])> = Vec::new();
-    let mut sections: Vec<(u8, String, Vec<u8>)> = vec![(
-        1,
-        "document".into(),
-        cbor(&Value::Object(document.clone())),
-    )];
+    let mut sections: Vec<(u8, String, Vec<u8>)> = vec![(1, "document".into(), cbor(&Value::Object(document.clone())))];
     for (h, b) in blobs {
         sections.push((2, h.clone(), b.clone()));
+    }
+    for (kind, name, raw) in extra {
+        sections.push((*kind, (*name).to_string(), raw.clone()));
     }
     for (kind, name, raw) in sections {
         let stored = deflate(&raw);
@@ -185,8 +187,6 @@ fn write_fundab(path: &Path, document: &Map<String, Value>, blobs: &[(String, Ve
     std::fs::write(path, &body).unwrap();
 }
 
-// --- the tests ---------------------------------------------------------------
-
 #[test]
 fn json_round_trips_with_geometry_embedded_last() {
     let tmp = tempfile::tempdir().unwrap();
@@ -198,19 +198,13 @@ fn json_round_trips_with_geometry_embedded_last() {
     let path = tmp.path().join("part.funda");
     assert_eq!(docfile::write(&path, &doc(&d), Some(&store)).unwrap(), 1);
     let text = std::fs::read_to_string(&path).unwrap();
-    assert!(
-        text.find("\"features\"") < text.find("\"geometry\""),
-        "the feature tree reads first"
-    );
+    assert!(text.find("\"features\"") < text.find("\"geometry\""), "the feature tree reads first");
 
     let fresh = tmp.path().join("fresh");
     let (back, n) = docfile::read(&path, Some(&fresh)).unwrap();
     assert_eq!(n, 1);
     assert_eq!(back, doc(&d));
-    assert_eq!(
-        std::fs::read(fresh.join(format!("{d}.bbrep"))).unwrap(),
-        data
-    );
+    assert_eq!(std::fs::read(fresh.join(format!("{d}.bbrep"))).unwrap(), data);
 }
 
 #[test]
@@ -224,10 +218,7 @@ fn reads_a_binary_file_and_publishes_its_geometry() {
     let (back, n) = docfile::read(&path, Some(&store)).unwrap();
     assert_eq!(back, doc(&d));
     assert_eq!(n, 1);
-    assert_eq!(
-        std::fs::read(store.join(format!("{d}.bbrep"))).unwrap(),
-        data
-    );
+    assert_eq!(std::fs::read(store.join(format!("{d}.bbrep"))).unwrap(), data);
 }
 
 #[test]
@@ -250,20 +241,14 @@ fn damaged_binary_and_wrong_geometry_are_refused() {
     let mut raw = std::fs::read(&path).unwrap();
     raw[70] ^= 0xFF;
     std::fs::write(&path, &raw).unwrap();
-    assert!(
-        docfile::read(&path, Some(&tmp.path().join("b"))).is_err(),
-        "a damaged section was accepted"
-    );
+    assert!(docfile::read(&path, Some(&tmp.path().join("b"))).is_err(), "a damaged section was accepted");
 
     let mut bad = doc(&d);
     bad.insert("geometry".into(), json!({d.clone(): "AAAA".repeat(10)}));
     let jpath = tmp.path().join("bad.funda");
     std::fs::write(&jpath, Value::Object(bad).to_string()).unwrap();
     let store = tmp.path().join("b2");
-    assert!(
-        docfile::read(&jpath, Some(&store)).is_err(),
-        "geometry that does not match its hash was accepted"
-    );
+    assert!(docfile::read(&jpath, Some(&store)).is_err(), "geometry that does not match its hash was accepted");
     assert!(!store.join(format!("{d}.bbrep")).exists());
 }
 
@@ -326,4 +311,44 @@ fn geometry_only_a_feature_this_version_does_not_know_names_is_kept() {
     let (back, n) = docfile::read(&path, Some(&fresh)).unwrap();
     assert_eq!((back, n), (future, 1));
     assert_eq!(std::fs::read(fresh.join(format!("{d}.bbrep"))).unwrap(), data);
+}
+
+async fn open_and_save(srv: &FundaCad, from: &Path, to: &Path) -> (bool, String) {
+    let args = |p: &Path| json!({"path": p.to_string_lossy()}).as_object().cloned().unwrap();
+    let r = srv.t_doc_open(args(from)).await.unwrap();
+    assert!(!is_error(&r), "{}", text_of(&r));
+    let r = srv.t_doc_save(args(to)).await.unwrap();
+    (is_error(&r), text_of(&r))
+}
+
+#[tokio::test]
+async fn a_json_save_names_the_sections_of_the_fundab_it_leaves_out() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::env::set_var("FUNDACAD_BLOB_DIR", tmp.path().join("blobs"));
+    let data = geometry();
+    let d = digest(&data);
+    let blobs = [(d.clone(), data)];
+    let engine = FakeEngine::start(|_, _| json!({"ok": true, "result": {}}));
+    let srv = FundaCad::with_link(engine.link());
+    let args = |p: &Path| json!({"path": p.to_string_lossy()}).as_object().cloned().unwrap();
+
+    let plain = tmp.path().join("plain.fundab");
+    write_fundab(&plain, &doc(&d), &blobs);
+    let (failed, reply) = open_and_save(&srv, &plain, &tmp.path().join("plain.funda")).await;
+    assert!(!failed && !reply.contains("note: "), "{reply}");
+
+    let from = tmp.path().join("part.fundab");
+    let extra = [(9, "futureIndex", b"later".to_vec()), (12, "futureLog", b"more".to_vec())];
+    write_fundab_with(&from, &doc(&d), &blobs, &extra);
+    let (failed, reply) = open_and_save(&srv, &from, &tmp.path().join("again.fundab")).await;
+    assert!(failed && !reply.contains("futureIndex"), "{reply}");
+
+    let r = srv.t_doc_save(args(&tmp.path().join("part.funda"))).await.unwrap();
+    let reply = text_of(&r);
+    assert!(!is_error(&r), "{reply}");
+    let note = reply.lines().find(|l| l.starts_with("note: ")).unwrap_or_else(|| panic!("{reply}"));
+    assert!(note.contains("futureIndex") && note.contains("futureLog") && note.contains("save as .fundab"), "{reply}");
+
+    let r = srv.t_doc_save(args(&tmp.path().join("copy.funda"))).await.unwrap();
+    assert!(!text_of(&r).contains("note: "), "a second save has nothing new to leave out: {}", text_of(&r));
 }

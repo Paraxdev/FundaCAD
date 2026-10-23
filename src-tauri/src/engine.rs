@@ -1,19 +1,11 @@
-//! Supervises the Rust geometry engine worker and relays it to the webview.
-//!
-//! The worker is this executable started with `--engine` (docs/ENGINE.md,
-//! section 2.1). It speaks framed messages on its stdin and stdout; every
-//! message it sends goes to the one channel the webview attached, prefixed
-//! with its kind byte. A worker that dies is restarted, and a job that does not
-//! stop within a grace period after Cancel is ended by restarting the worker,
-//! the only way to stop a kernel call that does not check for cancellation.
-//!
-//! The worker exits by itself when its stdin closes, which covers this process
-//! crashing without a chance to kill it.
+//! Supervises the engine worker, this exe with `--engine` (docs/ENGINE.md 2.1), and relays its messages to the webview.
+//! A job that ignores Cancel past a grace period is stopped by restarting the worker, which exits by itself when stdin
+//! closes.
 
 use fundacad_protocol::stdio::{read_message, write_message, Message};
 use fundacad_protocol::{envelope, message_id};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -24,10 +16,8 @@ use tauri::ipc::{Channel, InvokeResponseBody, Request};
 use tauri::{AppHandle, Emitter, Manager};
 
 const CANCEL_GRACE: Duration = Duration::from_secs(3);
-/// A soft cancel stops a superseded preview at the job's next checkpoint, and
-/// the section blend and its booleans check often. A job still running this
-/// long after one is inside a single kernel call that may never return, and
-/// every request behind it waits, so the worker is restarted after all.
+/// A soft cancel stops a superseded preview at its next checkpoint. A job still running this long after is stuck in one
+/// kernel call that may never return, with every request behind it waiting, so the worker is restarted.
 const SOFT_CANCEL_GRACE: Duration = Duration::from_secs(10);
 const RESTART_FLOOR: Duration = Duration::from_millis(500);
 const RESTART_CEILING: Duration = Duration::from_secs(10);
@@ -42,8 +32,8 @@ struct Inner {
     channel: Mutex<Option<Channel<InvokeResponseBody>>>,
     up: AtomicBool,
     generation: AtomicU64,
-    /// Requests sent and not yet answered by a terminal message, by id.
-    in_flight: Mutex<HashSet<String>>,
+    /// Requests sent and not yet answered by a terminal message, by id, to the document they belong to.
+    in_flight: Mutex<HashMap<String, Option<String>>>,
     /// Cancel requests awaiting their acknowledgement, to the id they target
     /// and how long that job then has.
     cancels: Mutex<HashMap<String, (String, Duration)>>,
@@ -87,11 +77,7 @@ fn exit_meaning(code: Option<i32>) -> Option<&'static str> {
 /// The crash, pasteable into an issue: how it ended, what it was doing, and
 /// the last it said.
 fn crash_report(inner: &Inner, how: &str, code: Option<i32>, unanswered: &[String]) -> String {
-    let mut out = vec![
-        "### Geometry engine crashed".to_owned(),
-        String::new(),
-        format!("**Exit:** {how}"),
-    ];
+    let mut out = vec!["### Geometry engine crashed".to_owned(), String::new(), format!("**Exit:** {how}")];
     if let Some(m) = exit_meaning(code) {
         out.push(format!("**Meaning:** {m}"));
     }
@@ -99,7 +85,13 @@ fn crash_report(inner: &Inner, how: &str, code: Option<i32>, unanswered: &[Strin
         "**Build:** FundaCAD {}, {} {}, {} profile",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
-        if cfg!(target_env = "msvc") { "MSVC" } else if cfg!(target_env = "gnu") { "GNU" } else { "" },
+        if cfg!(target_env = "msvc") {
+            "MSVC"
+        } else if cfg!(target_env = "gnu") {
+            "GNU"
+        } else {
+            ""
+        },
         if cfg!(debug_assertions) { "debug" } else { "release" },
     ));
     if !unanswered.is_empty() {
@@ -125,11 +117,8 @@ struct Worker {
     generation: u64,
 }
 
-/// The worker entry point, called from `main` before Tauri starts.
-///
-/// `--engine --ws` is the same engine on its own WebSocket, what the shipped
-/// `fundacad-mcp` starts as its private engine, so a packaged app needs no
-/// second copy of the kernel for it.
+/// Called from `main` before Tauri starts. `--engine --ws` is the same engine on its own WebSocket, which the shipped
+/// `fundacad-mcp` starts as its private engine, so a packaged app needs no second copy of the kernel.
 pub fn run_worker() -> ! {
     fundacad_engine::set_build(env!("FUNDACAD_BUILD"));
     fundacad_geom::plugins::load();
@@ -142,9 +131,8 @@ pub fn run_worker() -> ! {
 /// The app's token for the live session port, handed to the worker it spawns.
 const LIVE_TOKEN_ENV: &str = "FUNDACAD_LIVE_TOKEN";
 
-/// A loopback WebSocket on the app's own engine, so an assistant attached
-/// through `session.json` shares the document on screen. The port goes to the
-/// app on stderr, since stdout carries the frames.
+/// A loopback WebSocket on the app's own engine, so an assistant attached through `session.json` shares the document on
+/// screen. The port goes to the app on stderr, since stdout carries the frames.
 fn live_door(engine: &Arc<fundacad_engine::Engine>) {
     let Some(token) = std::env::var(LIVE_TOKEN_ENV).ok().filter(|t| !t.is_empty()) else {
         return;
@@ -154,9 +142,7 @@ fn live_door(engine: &Arc<fundacad_engine::Engine>) {
     match fundacad_engine::ws::Server::for_engine(engine.clone(), addr, gate) {
         Ok(server) => {
             eprintln!("LISTENING {}", server.port());
-            let _ = std::thread::Builder::new()
-                .name("live-door".into())
-                .spawn(move || server.serve());
+            let _ = std::thread::Builder::new().name("live-door".into()).spawn(move || server.serve());
         }
         Err(e) => eprintln!("no live session port: {e}"),
     }
@@ -170,7 +156,7 @@ impl Engine {
             channel: Mutex::new(None),
             up: AtomicBool::new(false),
             generation: AtomicU64::new(0),
-            in_flight: Mutex::new(HashSet::new()),
+            in_flight: Mutex::new(HashMap::new()),
             cancels: Mutex::new(HashMap::new()),
             stopping: AtomicBool::new(false),
             cancel_killed: AtomicU64::new(0),
@@ -215,15 +201,12 @@ fn supervise(inner: Arc<Inner>) {
                 set_up(&inner, true);
                 let generation = inner.generation.load(Ordering::SeqCst);
                 let cause = relay(&inner, stdout);
-                let unanswered: Vec<String> = lock(&inner.in_flight).iter().cloned().collect();
-                let status = lock(&inner.worker)
-                    .as_mut()
-                    .filter(|w| w.generation == generation)
-                    .and_then(|w| {
-                        // Its output closed, so a worker still alive is wedged.
-                        let _ = w.child.kill();
-                        w.child.wait().ok()
-                    });
+                let unanswered: Vec<String> = lock(&inner.in_flight).keys().cloned().collect();
+                let status = lock(&inner.worker).as_mut().filter(|w| w.generation == generation).and_then(|w| {
+                    // Its output closed, so a worker still alive is wedged.
+                    let _ = w.child.kill();
+                    w.child.wait().ok()
+                });
                 set_up(&inner, false);
                 if let Some(dir) = &inner.session_dir {
                     crate::session_file::remove_from(dir);
@@ -241,10 +224,9 @@ fn supervise(inner: Arc<Inner>) {
                     delay = Duration::ZERO;
                 } else {
                     let detail = crash_report(&inner, &how, code, &unanswered);
-                    let _ = inner.app.emit(
-                        DIED_EVENT,
-                        serde_json::json!({ "kind": "restarted", "cause": how, "detail": detail }),
-                    );
+                    let _ = inner
+                        .app
+                        .emit(DIED_EVENT, serde_json::json!({ "kind": "restarted", "cause": how, "detail": detail }));
                 }
                 if started.elapsed() > HEALTHY_AFTER {
                     delay = RESTART_FLOOR;
@@ -255,10 +237,9 @@ fn supervise(inner: Arc<Inner>) {
                 eprintln!("[engine] cannot start the worker: {e}");
                 if !start_failed {
                     start_failed = true;
-                    let _ = inner.app.emit(
-                        DIED_EVENT,
-                        serde_json::json!({ "kind": "start_failed", "cause": e.to_string() }),
-                    );
+                    let _ = inner
+                        .app
+                        .emit(DIED_EVENT, serde_json::json!({ "kind": "start_failed", "cause": e.to_string() }));
                 }
             }
         }
@@ -275,12 +256,8 @@ fn random_token() -> String {
     buf.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// The worker's environment, split out so a test can assert it.
-///
-/// The blob store is told rather than left to the engine's default because the
-/// app's container (container.rs) reads and writes the same directory: an
-/// import the engine stored anywhere else is geometry a save cannot find.
-/// The plugin root is told because Rust is what unpacks a bundle into it.
+/// The blob store is passed because container.rs reads and writes the same directory, and the plugin root because Rust
+/// unpacks bundles into it.
 pub fn configure_env(cmd: &mut Command, blobs: Option<&Path>, plugins: Option<&Path>, live_token: &str) {
     if let Some(dir) = blobs {
         cmd.env("FUNDACAD_BLOB_DIR", dir);
@@ -294,10 +271,7 @@ pub fn configure_env(cmd: &mut Command, blobs: Option<&Path>, plugins: Option<&P
 fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
     let exe = std::env::current_exe()?;
     let mut cmd = Command::new(exe);
-    cmd.arg("--engine")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.arg("--engine").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let token = random_token();
     let safe = crate::safe_mode_active(&inner.app);
     if safe {
@@ -327,30 +301,23 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
                 // Written once the port answers, so the file never names a port
                 // nobody is listening on yet.
-                if let (Some(dir), Some(port)) = (&session_dir, line.strip_prefix("LISTENING ").and_then(|p| p.trim().parse::<u16>().ok())) {
-                    let info = crate::session_file::SessionInfo {
-                        port,
-                        token: token.clone(),
-                        pid: std::process::id(),
-                    };
+                if let (Some(dir), Some(port)) =
+                    (&session_dir, line.strip_prefix("LISTENING ").and_then(|p| p.trim().parse::<u16>().ok()))
+                {
+                    let info = crate::session_file::SessionInfo { port, token: token.clone(), pid: std::process::id() };
                     if let Err(e) = crate::session_file::write_into(dir, &info) {
                         eprintln!("[engine] no session file: {e}");
                     }
                 }
-                // Never eprintln: with no one reading our stderr it panics, this
-                // thread stops draining the worker's, and the worker blocks on
-                // its next log line in the middle of a job.
+                // Never eprintln: with no reader on our stderr it panics, this thread stops draining the worker's, and
+                // the worker blocks on its next log line mid job.
                 let _ = writeln!(std::io::stderr(), "[engine] {line}");
                 remember(&tail, line, STDERR_KEEP);
             }
         });
     }
     let generation = inner.generation.fetch_add(1, Ordering::SeqCst) + 1;
-    *lock(&inner.worker) = Some(Worker {
-        child,
-        stdin: BufWriter::new(stdin),
-        generation,
-    });
+    *lock(&inner.worker) = Some(Worker { child, stdin: BufWriter::new(stdin), generation });
     Ok(stdout)
 }
 
@@ -441,7 +408,7 @@ fn escalate_cancel(inner: Arc<Inner>, target: String, grace: Duration) {
     std::thread::spawn(move || {
         let generation = inner.generation.load(Ordering::SeqCst);
         std::thread::sleep(grace);
-        if !lock(&inner.in_flight).contains(&target) || inner.generation.load(Ordering::SeqCst) != generation {
+        if !lock(&inner.in_flight).contains_key(&target) || inner.generation.load(Ordering::SeqCst) != generation {
             return;
         }
         eprintln!("[engine] {target} ignored cancel, restarting the worker");
@@ -458,15 +425,43 @@ fn escalate_cancel(inner: Arc<Inner>, target: String, grace: Duration) {
 /// Preferences.
 #[tauri::command]
 pub fn mcp_server() -> Result<String, String> {
-    std::env::current_exe()
-        .map(|path| path.to_string_lossy().into_owned())
-        .map_err(|e| e.to_string())
+    std::env::current_exe().map(|path| path.to_string_lossy().into_owned()).map_err(|e| e.to_string())
+}
+
+/// The requests a `doc_end` ends: every one of `doc`, or every one in flight when it names none.
+fn ended_by(in_flight: &HashMap<String, Option<String>>, doc: Option<&str>) -> Vec<String> {
+    let mut ids: Vec<String> = in_flight
+        .iter()
+        .filter(|(_, d)| doc.is_none_or(|doc| d.as_deref() == Some(doc)))
+        .map(|(id, _)| id.clone())
+        .collect();
+    ids.sort();
+    ids
+}
+
+/// Every request of an ended document gets the grace a hard cancel gets; the queued ones are answered at once, so only
+/// a running job that ignores the end is left to restart the worker over.
+fn end_docs(inner: &Arc<Inner>, doc: Option<&str>) {
+    for id in ended_by(&lock(&inner.in_flight), doc) {
+        escalate_cancel(inner.clone(), id, CANCEL_GRACE);
+    }
+}
+
+/// What a reattach sends: the page before it is gone, and so is every document it had open.
+fn end_all_request(n: u64) -> String {
+    serde_json::json!({"id": format!("relay-attach-{n}"), "op": "doc_end", "all": true}).to_string()
 }
 
 /// The webview's one channel for engine messages. Returns whether the engine is up.
 #[tauri::command]
 pub fn engine_attach(state: tauri::State<'_, Engine>, channel: Channel<InvokeResponseBody>) -> bool {
-    *lock(&state.0.channel) = Some(channel);
+    static ATTACHES: AtomicU64 = AtomicU64::new(0);
+    let replaced = lock(&state.0.channel).replace(channel).is_some();
+    // A reload or a new page: the jobs of the page it replaces must not feed this one.
+    if replaced && state.0.up.load(Ordering::SeqCst) {
+        let _ = send_to_worker(&state.0, &Message::Text(end_all_request(ATTACHES.fetch_add(1, Ordering::Relaxed))));
+        end_docs(&state.0, None);
+    }
     state.0.up.load(Ordering::SeqCst)
 }
 
@@ -477,7 +472,7 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
         return Err("engine_send takes the request as raw bytes".into());
     };
     let text = String::from_utf8(bytes.clone()).map_err(|e| e.to_string())?;
-    let Head { id, op, target, soft } = head(&text);
+    let Head { id, op, target, soft, doc, all } = head(&text);
     remember(
         &state.0.recent,
         format!(
@@ -496,15 +491,16 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
     };
     match op.as_deref() {
         Some("cancel") => {
-            let target = target.or_else(|| lock(&state.0.in_flight).iter().next().cloned());
+            let target = target.or_else(|| lock(&state.0.in_flight).keys().next().cloned());
             let grace = if soft { SOFT_CANCEL_GRACE } else { CANCEL_GRACE };
             if let Some(target) = target {
                 lock(&state.0.cancels).insert(id.clone(), (target, grace));
             }
         }
+        Some("doc_end") => end_docs(&state.0, if all { None } else { doc.as_deref() }),
         Some("ping") | None => {}
         Some(_) => {
-            lock(&state.0.in_flight).insert(id.clone());
+            lock(&state.0.in_flight).insert(id.clone(), doc);
         }
     }
     send_to_worker(&state.0, &Message::Text(text)).inspect_err(|_| {
@@ -515,9 +511,7 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
 
 /// Seconds since the Unix epoch with milliseconds, no date crate needed.
 fn clock_now() -> String {
-    let t = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default();
+    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
     format!("t={}.{:03}", t.as_secs(), t.subsec_millis())
 }
 
@@ -527,11 +521,12 @@ struct Head {
     op: Option<String>,
     target: Option<String>,
     soft: bool,
+    doc: Option<String>,
+    all: bool,
 }
 
-/// The head of a request without parsing a multi-megabyte document: the
-/// client writes it first, so a prefix almost always holds it, and a full
-/// parse is the fallback.
+/// The head of a request without parsing a multi megabyte document: the client writes `id`, `op` and `doc` first, so a
+/// prefix almost always holds them, and a full parse is the fallback.
 fn head(text: &str) -> Head {
     #[derive(serde::Deserialize)]
     struct Raw {
@@ -539,21 +534,27 @@ fn head(text: &str) -> Head {
         op: Option<String>,
         target: Option<Value>,
         soft: Option<bool>,
+        doc: Option<Value>,
+        all: Option<bool>,
     }
     let pick = |h: Raw| {
         let s = |v: Option<Value>| v.and_then(|v| v.as_str().map(str::to_owned));
-        Head { id: s(h.id), op: h.op, target: s(h.target), soft: h.soft == Some(true) }
+        Head {
+            id: s(h.id),
+            op: h.op,
+            target: s(h.target),
+            soft: h.soft == Some(true),
+            doc: s(h.doc),
+            all: h.all == Some(true),
+        }
     };
     let prefix_end = text.char_indices().nth(512).map_or(text.len(), |(i, _)| i);
-    if let Some(close) = text[..prefix_end].find(",\"") {
-        let rest = &text[close + 1..prefix_end];
-        if let Some(second) = rest.find(",\"").map(|i| close + 1 + i) {
-            let candidate = format!("{}}}", &text[..second]);
-            if let Ok(h) = serde_json::from_str::<Raw>(&candidate) {
-                if h.op.is_some() && h.op.as_deref() != Some("cancel") {
-                    return pick(h);
-                }
-            }
+    let cuts: Vec<usize> = text[..prefix_end].match_indices(",\"").map(|(i, _)| i).take(3).collect();
+    // The third key is `doc` when the request has one; a cut after the second still answers a request without it.
+    for &cut in cuts.iter().skip(1).rev() {
+        let Ok(h) = serde_json::from_str::<Raw>(&format!("{}}}", &text[..cut])) else { continue };
+        if h.op.is_some() && !matches!(h.op.as_deref(), Some("cancel" | "doc_end")) {
+            return pick(h);
         }
     }
     serde_json::from_str::<Raw>(text).map(pick).unwrap_or_default()
@@ -570,19 +571,50 @@ mod tests {
             op: op.map(Into::into),
             target: target.map(Into::into),
             soft,
+            ..Head::default()
         };
         let big = format!(r#"{{"id":"a","op":"rebuild","document":{{"x":"{}"}}}}"#, "y".repeat(10_000));
         assert_eq!(head(&big), h(Some("a"), Some("rebuild"), None, false));
-        assert_eq!(
-            head(r#"{"id":"c","op":"cancel","target":"a"}"#),
-            h(Some("c"), Some("cancel"), Some("a"), false)
-        );
+        assert_eq!(head(r#"{"id":"c","op":"cancel","target":"a"}"#), h(Some("c"), Some("cancel"), Some("a"), false));
         assert_eq!(
             head(r#"{"id":"c","op":"cancel","target":"a","soft":true}"#),
             h(Some("c"), Some("cancel"), Some("a"), true)
         );
         assert_eq!(head(r#"{"op":"ping"}"#), h(None, Some("ping"), None, false));
         assert_eq!(head("not json"), Head::default());
+    }
+
+    #[test]
+    fn the_head_names_the_document_a_request_belongs_to() {
+        let big = format!(r#"{{"id":"a","op":"rebuild","doc":"D1","document":{{"x":"{}"}}}}"#, "y".repeat(10_000));
+        let doc = |id: &str, op: &str, doc: Option<&str>, all: bool| Head {
+            id: Some(id.into()),
+            op: Some(op.into()),
+            doc: doc.map(Into::into),
+            all,
+            ..Head::default()
+        };
+        assert_eq!(head(&big), doc("a", "rebuild", Some("D1"), false));
+        let no_doc = format!(r#"{{"id":"a","op":"rebuild","document":{{"x":"{}"}},"tolerance":0.1}}"#, "y".repeat(600));
+        assert_eq!(head(&no_doc), doc("a", "rebuild", None, false));
+        assert_eq!(head(r#"{"id":"e","op":"doc_end","doc":"D1"}"#), doc("e", "doc_end", Some("D1"), false));
+        assert_eq!(head(r#"{"id":"e","op":"doc_end","all":true}"#), doc("e", "doc_end", None, true));
+    }
+
+    #[test]
+    fn a_document_end_reaches_only_that_documents_requests_and_a_reattach_ends_them_all() {
+        let in_flight: HashMap<String, Option<String>> = [
+            ("a1".to_owned(), Some("A".to_owned())),
+            ("a2".to_owned(), Some("A".to_owned())),
+            ("b1".to_owned(), Some("B".to_owned())),
+            ("fonts".to_owned(), None),
+        ]
+        .into();
+        assert_eq!(ended_by(&in_flight, Some("A")), ["a1", "a2"]);
+        assert_eq!(ended_by(&in_flight, Some("C")), Vec::<String>::new());
+        assert_eq!(ended_by(&in_flight, None), ["a1", "a2", "b1", "fonts"]);
+        let end: Value = serde_json::from_str(&end_all_request(4)).unwrap();
+        assert_eq!(end, serde_json::json!({"id": "relay-attach-4", "op": "doc_end", "all": true}));
     }
 
     #[test]

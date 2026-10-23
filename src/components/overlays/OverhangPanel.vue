@@ -1,11 +1,6 @@
 <script setup lang="ts">
-// Overhang (Draft Analysis) settings: build direction + support threshold,
-// shown while Draft Analysis is active.
-//
-// No Esc-dismiss, on purpose, it is closed programmatically when Draft
-// Analysis is toggled off, so Esc must not leave the analysis running with its
-// controls gone. The settings live on the viewport, not the document: they are
-// display-only and deliberately not undoable.
+// No Esc dismiss: it closes when Draft Analysis is toggled off, and Esc must not leave the analysis running without
+// its controls. The settings live on the viewport, display only and not undoable.
 
 import { ref, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
@@ -67,8 +62,6 @@ function apply() {
     <div class="measure-row">
       <span class="measure-v" style="color: #e24a3b">red = unsupported overhang</span>
     </div>
-    <div class="measure-hint">
-      Faces past this angle from horizontal need support · toggle Draft to close
-    </div>
+    <div class="measure-hint"> Faces past this angle from horizontal need support · toggle Draft to close </div>
   </FloatingPanel>
 </template>

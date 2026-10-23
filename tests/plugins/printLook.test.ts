@@ -9,7 +9,11 @@ describe("Printed look settings to a Relief", () => {
 
   it("maps the defaults to the declared look", () => {
     expect(reliefFrom({ ...DEFAULTS, layerLines: true })).toEqual({
-      axis: [0, 0, 1], pitch: 0.2, depth: 0.35, tintJitter: 0.03, cavity: 0.4,
+      axis: [0, 0, 1],
+      pitch: 0.2,
+      depth: 0.35,
+      tintJitter: 0.03,
+      cavity: 0.4,
     });
   });
 
@@ -23,7 +27,14 @@ describe("Printed look settings to a Relief", () => {
   });
 
   it("clamps what the viewport cannot draw and falls back on rubbish", () => {
-    const r = reliefFrom({ layerLines: true, layerHeight: 0, depth: 9, variation: -1, grooveShading: 4, direction: "up" })!;
+    const r = reliefFrom({
+      layerLines: true,
+      layerHeight: 0,
+      depth: 9,
+      variation: -1,
+      grooveShading: 4,
+      direction: "up",
+    })!;
     expect(r.pitch).toBeGreaterThan(0);
     expect(r.depth).toBe(0.5);
     expect(r.tintJitter).toBe(0);

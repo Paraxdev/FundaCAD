@@ -48,18 +48,19 @@ import type { CadDocument, Feature, RebuildReply } from "../../../src/types";
  *  it, and only the dropdowns needed a plugin. Now nothing does. */
 function withTexturePlugin() {
   return contribute("FundaCAD.Texture", {
-    features: [{
-      type: "texture",
-      meta: { icon: "texture", label: "Texture" },
-      choiceFields: TEXTURE_CHOICE_FIELDS,
-      fileFields: TEXTURE_FILE_FIELDS,
-      toggleFields: TEXTURE_TOGGLE_FIELDS,
-      numFields: TEXTURE_NUM_FIELDS,
-      targets: TEXTURE_TARGETS,
-      fieldApplies: textureFieldApplies,
-      fieldLabel: (field, values) =>
-        field === "sharpness" ? sharpnessLabel(values["profile"]) : null,
-    }],
+    features: [
+      {
+        type: "texture",
+        meta: { icon: "texture", label: "Texture" },
+        choiceFields: TEXTURE_CHOICE_FIELDS,
+        fileFields: TEXTURE_FILE_FIELDS,
+        toggleFields: TEXTURE_TOGGLE_FIELDS,
+        numFields: TEXTURE_NUM_FIELDS,
+        targets: TEXTURE_TARGETS,
+        fieldApplies: textureFieldApplies,
+        fieldLabel: (field, values) => (field === "sharpness" ? sharpnessLabel(values["profile"]) : null),
+      },
+    ],
   });
 }
 
@@ -73,17 +74,27 @@ function makeEngine(doc: CadDocument) {
   const values: { field: string; value: number }[] = [];
   const exprs: { field: string; raw: string }[] = [];
   const store = {
-    get document() { return doc; },
-    liveFeature: (id: string) => (live?.id === id ? live : doc.features.find((f) => f.id === id) ?? null),
+    get document() {
+      return doc;
+    },
+    liveFeature: (id: string) => (live?.id === id ? live : (doc.features.find((f) => f.id === id) ?? null)),
     updateFeature: (id: string, patch: Record<string, unknown>) => {
       updates.push({ id, patch });
-      Object.assign(doc.features.find((f) => f.id === id)!, patch);
+      Object.assign(
+        doc.features.find((f) => f.id === id)!,
+        patch,
+      );
       docVersion.value++;
     },
     boundExpr: () => null,
     isParamBound: () => false,
-    setTargetValue: (t: { field: string }, value: number) => { values.push({ field: t.field, value }); },
-    setTargetExpr: (t: { field: string }, raw: string) => { exprs.push({ field: t.field, raw }); return null; },
+    setTargetValue: (t: { field: string }, value: number) => {
+      values.push({ field: t.field, value });
+    },
+    setTargetExpr: (t: { field: string }, raw: string) => {
+      exprs.push({ field: t.field, raw });
+      return null;
+    },
   };
   // The selection row asks whether the editor is open on it, and offers to open
   // it. Neither is exercised here, this spec is about the write path for values,
@@ -140,16 +151,11 @@ const rows = (w: VueWrapper) =>
           : file.exists()
             ? file.text()
             : (r.find("input").element as HTMLInputElement).value;
-    return [
-      r.find("label").text(),
-      r.find(".dim-unit").exists() ? r.find(".dim-unit").text() : "",
-      value,
-    ];
+    return [r.find("label").text(), r.find(".dim-unit").exists() ? r.find(".dim-unit").text() : "", value];
   });
 
 /** Just the labels, in the order the panel puts them. */
-const labels = (w: VueWrapper) =>
-  w.findAll(".param-row label").map((l) => l.text());
+const labels = (w: VueWrapper) => w.findAll(".param-row label").map((l) => l.text());
 
 /** Pick `value` in the <select> of the row labelled `label`. */
 async function choose(w: VueWrapper, label: string, value: string) {
@@ -169,16 +175,24 @@ async function commit(w: VueWrapper, label: string, text: string) {
 }
 
 const CIRCLE = (r: number): Feature =>
-  ({ id: "s1", type: "sketch", plane: "XY", entities: [{ type: "circle", id: "c1", x: 0, y: 0, radius: r }] }) as Feature;
+  ({
+    id: "s1",
+    type: "sketch",
+    plane: "XY",
+    entities: [{ type: "circle", id: "c1", x: 0, y: 0, radius: r }],
+  }) as Feature;
 
-const EXTRUDE: Feature =
-  ({ id: "e1", type: "extrude", sketch: "s1", distance: 10, operation: "new" }) as Feature;
+const EXTRUDE: Feature = { id: "e1", type: "extrude", sketch: "s1", distance: 10, operation: "new" } as Feature;
 
 describe("FeatureProperties", () => {
-  beforeEach(() => { setActivePinia(createPinia()); });
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
   // A contribution left behind changes what the next test renders, and the
   // control above depends on there being none.
-  afterEach(() => { resetContributions(); });
+  afterEach(() => {
+    resetContributions();
+  });
 
   it("lists a sketch's entity dimensions", () => {
     const fake = makeEngine({ parameters: {}, features: [CIRCLE(6)] });
@@ -301,9 +315,12 @@ describe("FeatureProperties", () => {
 
   // A value the field cannot take is refused in the row, in the words the
   // heads-up box uses for the same field, before anything reaches the build.
-  const FILLET = (): Feature => ({ id: "f1", type: "fillet", radius: 2 } as unknown as Feature);
+  const FILLET = (): Feature => ({ id: "f1", type: "fillet", radius: 2 }) as unknown as Feature;
   const problemUnder = (w: VueWrapper, label: string) =>
-    w.findAll(".param-row").find((r) => r.find("label").text() === label)!.find(".param-problem");
+    w
+      .findAll(".param-row")
+      .find((r) => r.find("label").text() === label)!
+      .find(".param-problem");
 
   it("refuses a negative radius in the row and writes nothing", async () => {
     const fake = makeEngine({ parameters: {}, features: [FILLET()] });
@@ -356,13 +373,17 @@ describe("FeatureProperties", () => {
   it("shows the selection a feature actually carries, counted", () => {
     const fake = makeEngine({
       parameters: {},
-      features: [{
-        id: "f1", type: "fillet", radius: 2,
-        edges: [
-          { kind: "edge", by: "nearest", point: [0, 0, 0] },
-          { kind: "edge", by: "nearest", point: [1, 0, 0] },
-        ],
-      } as unknown as Feature],
+      features: [
+        {
+          id: "f1",
+          type: "fillet",
+          radius: 2,
+          edges: [
+            { kind: "edge", by: "nearest", point: [0, 0, 0] },
+            { kind: "edge", by: "nearest", point: [1, 0, 0] },
+          ],
+        } as unknown as Feature,
+      ],
     });
     expect(rows(render(fake, "f1"))).toContainEqual(["Edges", "", "2 edges"]);
   });
@@ -472,7 +493,9 @@ describe("FeatureProperties", () => {
     });
     const w = render(fake, "t1");
     expect(rows(w)).toContainEqual(["Invert heights", "", "false"]);
-    const box = w.findAll(".param-row").find((r) => r.find("label").text() === "Invert heights")!
+    const box = w
+      .findAll(".param-row")
+      .find((r) => r.find("label").text() === "Invert heights")!
       .find("input[type=checkbox]");
     (box.element as HTMLInputElement).checked = true;
     await box.trigger("change");
@@ -486,7 +509,9 @@ describe("FeatureProperties", () => {
     withTexturePlugin();
     const knurl = makeEngine({
       parameters: {},
-      features: [{ id: "t1", type: "texture", kind: "knurl", depth: 0.4, scale: 2, seed: 1, angle: 0 } as unknown as Feature],
+      features: [
+        { id: "t1", type: "texture", kind: "knurl", depth: 0.4, scale: 2, seed: 1, angle: 0 } as unknown as Feature,
+      ],
     });
     const l = labels(render(knurl, "t1"));
     expect(l).toContain("Angle");
@@ -494,7 +519,9 @@ describe("FeatureProperties", () => {
 
     const noise = makeEngine({
       parameters: {},
-      features: [{ id: "t1", type: "texture", kind: "noise", depth: 0.4, scale: 2, seed: 1, angle: 0 } as unknown as Feature],
+      features: [
+        { id: "t1", type: "texture", kind: "noise", depth: 0.4, scale: 2, seed: 1, angle: 0 } as unknown as Feature,
+      ],
     });
     const n = labels(render(noise, "t1"));
     expect(n).toContain("Seed");
@@ -509,8 +536,16 @@ describe("FeatureProperties", () => {
     withTexturePlugin();
     const heightmap = makeEngine({
       parameters: {},
-      features: [{ id: "t1", type: "texture", kind: "image", depth: 0.4, scale: 2,
-                   imagePath: "C:/pictures/relief.png" } as unknown as Feature],
+      features: [
+        {
+          id: "t1",
+          type: "texture",
+          kind: "image",
+          depth: 0.4,
+          scale: 2,
+          imagePath: "C:/pictures/relief.png",
+        } as unknown as Feature,
+      ],
     });
     const w = render(heightmap, "t1");
     expect(labels(w)).toContain("Heightmap");
@@ -543,7 +578,8 @@ describe("FeatureProperties", () => {
       parameters: {},
       features: [{ id: "t1", type: "texture", kind: "image", depth: 0.4, scale: 2 } as unknown as Feature],
     });
-    const row = render(empty, "t1").findAll(".param-row")
+    const row = render(empty, "t1")
+      .findAll(".param-row")
       .find((r) => r.find("label").text() === "Heightmap")!;
     expect(row.find("button.file-pick").text()).toBe("Choose\u2026");
     // and no Clear, because there is nothing to clear
@@ -556,12 +592,13 @@ describe("FeatureProperties", () => {
     // out of the direction it was dragged in.
     const fake = makeEngine({
       parameters: {},
-      features: [{ id: "e1", type: "extrude", sketch: "s1", distance: 5,
-                   operation: "cut" } as unknown as Feature],
+      features: [{ id: "e1", type: "extrude", sketch: "s1", distance: 5, operation: "cut" } as unknown as Feature],
     });
     const w = render(fake, "e1");
     expect(rows(w)).toContainEqual(["Symmetric", "", "false"]);
-    const box = w.findAll(".param-row").find((r) => r.find("label").text() === "Symmetric")!
+    const box = w
+      .findAll(".param-row")
+      .find((r) => r.find("label").text() === "Symmetric")!
       .find("input[type=checkbox]");
     (box.element as HTMLInputElement).checked = true;
     await box.trigger("change");
@@ -574,12 +611,32 @@ describe("FeatureProperties", () => {
     withTexturePlugin();
     const facet = makeEngine({
       parameters: {},
-      features: [{ id: "t1", type: "texture", kind: "knurl", profile: "facet", depth: 0.4, scale: 2, sharpness: 0.5 } as unknown as Feature],
+      features: [
+        {
+          id: "t1",
+          type: "texture",
+          kind: "knurl",
+          profile: "facet",
+          depth: 0.4,
+          scale: 2,
+          sharpness: 0.5,
+        } as unknown as Feature,
+      ],
     });
     expect(labels(render(facet, "t1"))).toContain("Land");
     const round = makeEngine({
       parameters: {},
-      features: [{ id: "t1", type: "texture", kind: "knurl", profile: "round", depth: 0.4, scale: 2, sharpness: 0.5 } as unknown as Feature],
+      features: [
+        {
+          id: "t1",
+          type: "texture",
+          kind: "knurl",
+          profile: "round",
+          depth: 0.4,
+          scale: 2,
+          sharpness: 0.5,
+        } as unknown as Feature,
+      ],
     });
     expect(labels(render(round, "t1"))).toContain("Sharp");
   });
@@ -597,10 +654,15 @@ describe("FeatureProperties typed preview", () => {
     // rolled every later move and boolean away until Enter.
     const backend = {
       async rebuild(): Promise<RebuildReply> {
-        return { ok: true, result: { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: null, bodies: [] } } as unknown as RebuildReply;
+        return {
+          ok: true,
+          result: { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: null, bodies: [] },
+        } as unknown as RebuildReply;
       },
       async init() {},
-      onStatus() { return () => {}; },
+      onStatus() {
+        return () => {};
+      },
       connected: true,
     } as unknown as GeometryBackend;
     const store = new DocumentStore(backend, {
@@ -644,7 +706,9 @@ describe("FeatureProperties on a feature this version does not know", () => {
     };
     const fake = makeEngine(doc);
     (fake.engine.store as unknown as { buildState: unknown }).buildState = {
-      result: { skippedFeatures: [{ feature_id: "w1", type: "futureWidget", message: "unknown feature type: futureWidget" }] },
+      result: {
+        skippedFeatures: [{ feature_id: "w1", type: "futureWidget", message: "unknown feature type: futureWidget" }],
+      },
     };
     const w = render(fake, "w1");
     expect(w.find(".param-note").text()).toBe(

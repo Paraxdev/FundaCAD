@@ -1,6 +1,5 @@
-//! Control-point B-spline sketch entities: OCCT's curve agrees with the sampled
-//! points in tests/vectors/bspline.json (recorded by tests/sketch/bspline.test.ts),
-//! and a bspline profile extrudes and revolves into a valid solid.
+//! Control-point B-spline sketch entities: OCCT's curve agrees with tests/vectors/bspline.json (recorded
+//! by tests/sketch/bspline.test.ts), and a bspline profile extrudes and revolves into a valid solid.
 
 use std::path::Path;
 
@@ -24,10 +23,15 @@ fn nums(v: &Value) -> Vec<f64> {
 fn occt_samples_the_shared_vectors() {
     for c in vectors()["cases"].as_array().expect("cases") {
         let name = c["name"].as_str().expect("name");
-        let poles: Vec<[f64; 2]> = c["poles"].as_array().expect("poles").iter().map(|p| {
-            let p = nums(p);
-            [p[0], p[1]]
-        }).collect();
+        let poles: Vec<[f64; 2]> = c["poles"]
+            .as_array()
+            .expect("poles")
+            .iter()
+            .map(|p| {
+                let p = nums(p);
+                [p[0], p[1]]
+            })
+            .collect();
         let closed = c["closed"].as_bool().expect("closed");
         let knots = nums(&c["knots"]);
         let degree = c["degree"].as_f64();
@@ -38,7 +42,10 @@ fn occt_samples_the_shared_vectors() {
         for s in c["samples"].as_array().expect("samples") {
             let s = nums(s);
             let (pt, range) = kernel::edge_eval(&edge, s[0]).expect("eval");
-            assert!((range[0] - knots[0]).abs() < 1e-12 && (range[1] - knots[knots.len() - 1]).abs() < 1e-12, "{name}: range {range:?}");
+            assert!(
+                (range[0] - knots[0]).abs() < 1e-12 && (range[1] - knots[knots.len() - 1]).abs() < 1e-12,
+                "{name}: range {range:?}"
+            );
             let d = (pt[0] - s[1]).hypot(pt[1] - s[2]);
             assert!(d < 1e-9 && pt[2] == 0.0, "{name}: t={} occt {pt:?} vs {:?} ({d})", s[0], &s[1..]);
         }
@@ -47,7 +54,10 @@ fn occt_samples_the_shared_vectors() {
 
 #[test]
 fn malformed_stored_knots_fall_back_to_uniform() {
-    assert_eq!(kernel::bspline_knots(7, None, false, Some(&[0.0, 1.0, 1.0, 3.0, 4.0])).1, vec![0.0, 1.0, 2.0, 3.0, 4.0]);
+    assert_eq!(
+        kernel::bspline_knots(7, None, false, Some(&[0.0, 1.0, 1.0, 3.0, 4.0])).1,
+        vec![0.0, 1.0, 2.0, 3.0, 4.0]
+    );
     assert_eq!(kernel::bspline_knots(4, Some(5.0), false, None), (3, vec![0.0, 1.0]));
     assert_eq!(kernel::bspline_knots(5, Some(2.0), true, None), (2, vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0]));
 }

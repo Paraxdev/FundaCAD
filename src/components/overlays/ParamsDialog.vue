@@ -1,9 +1,5 @@
 <script setup lang="ts">
-// Modify → Parameters: the Change Parameters dialog. User parameters (add /
-// rename / re-express / comment / delete-with-named-blockers) and model
-// parameters (dN, expression + target readout, renamable). Values are shown in
-// display units for lengths; EXPRESSIONS are always canonical (mm / deg), the
-// same rule as every other expression surface.
+// Lengths show in display units, but expressions are always canonical (mm, deg), as on every expression surface.
 
 import Icon from "../shell/Icon.vue";
 import { computed, ref } from "vue";
@@ -28,10 +24,8 @@ interface Row {
   issue: string | undefined;
 }
 
-/** Both lists ride the document version, so an async commit landing, an undo or
- *  a load refreshes them, what the keystrokeGuard'd re-render used to do. The
- *  guard itself is per-input now (ValidatedRow / useDraft), so a refresh can no
- *  longer wipe an edit in progress. */
+/** Rides the document version, so an async commit, an undo or a load refreshes both lists. An edit in progress is
+ *  guarded per input (ValidatedRow, useDraft). */
 const rows = useDocValue((doc) => {
   const defs = doc.paramDefs ?? {};
   return Object.entries(defs).map(([name, def]) => ({
@@ -52,7 +46,6 @@ function formatValue(def: ParamDef): string {
   return String(displayRound(def.value));
 }
 
-/** Human label for what a model parameter drives. */
 function targetLabel(doc: CadDocument, t: ParamTarget): string {
   const featureName = (id: string) => {
     const f = doc.features.find((x) => x.id === id);
@@ -70,16 +63,14 @@ function targetLabel(doc: CadDocument, t: ParamTarget): string {
   }
 }
 
-// --- delete (user params only; a dN dies with its target) ---
-// deleteParam reports NAMED blockers rather than refusing silently, so the
-// message belongs on the button that was pressed.
+// User params only, a dN dies with its target. deleteParam names its blockers, so the message sits on the pressed
+// button.
 const delError = ref<Record<string, string>>({});
 function del(name: string) {
   const err = store.deleteParam(name);
   if (err) delError.value = { ...delError.value, [name]: err };
 }
 
-// --- add row ---
 const UNITS: ParamUnit[] = ["mm", "deg", "count"];
 const newName = ref("");
 const newExpr = ref("");
@@ -97,12 +88,7 @@ function add() {
 </script>
 
 <template>
-  <FloatingPanel
-    :open="panels.params"
-    close-on-esc
-    panel-class="params-dialog"
-    @close="panels.params = false"
-  >
+  <FloatingPanel :open="panels.params" close-on-esc panel-class="params-dialog" @close="panels.params = false">
     <div class="measure-title">Parameters</div>
     <div class="params-body">
       <div class="params-section">User Parameters</div>
@@ -116,25 +102,17 @@ function add() {
         :class="{ 'param-stale': !!r.issue }"
         :title="r.issue"
       >
-        <ValidatedInput
-          :value="r.name"
-          :commit="(raw) => (raw === r.name ? null : store.renameParam(r.name, raw))"
-        />
-        <ValidatedInput
-          :value="r.def.expr"
-          :commit="(raw) => store.setParamExpr(r.name, raw)"
-        />
+        <ValidatedInput :value="r.name" :commit="(raw) => (raw === r.name ? null : store.renameParam(r.name, raw))" />
+        <ValidatedInput :value="r.def.expr" :commit="(raw) => store.setParamExpr(r.name, raw)" />
         <span class="params-value">{{ r.value }}</span>
-        <ValidatedInput
-          :value="r.def.comment ?? ''"
-          :commit="(raw) => (store.setParamComment(r.name, raw), null)"
-        />
+        <ValidatedInput :value="r.def.comment ?? ''" :commit="(raw) => (store.setParamComment(r.name, raw), null)" />
         <button
           class="params-del"
           :class="{ 'input-error': !!delError[r.name] }"
           :title="delError[r.name] ?? `Delete ${r.name}`"
           @click="del(r.name)"
-        ><Icon name="close" :size="14" /></button>
+          ><Icon name="close" :size="14"
+        /></button>
       </div>
 
       <div class="params-row params-add">
@@ -158,14 +136,8 @@ function add() {
           :class="{ 'param-stale': !!r.issue }"
           :title="r.issue"
         >
-          <ValidatedInput
-            :value="r.name"
-            :commit="(raw) => (raw === r.name ? null : store.renameParam(r.name, raw))"
-          />
-          <ValidatedInput
-            :value="r.def.expr"
-            :commit="(raw) => store.setParamExpr(r.name, raw)"
-          />
+          <ValidatedInput :value="r.name" :commit="(raw) => (raw === r.name ? null : store.renameParam(r.name, raw))" />
+          <ValidatedInput :value="r.def.expr" :commit="(raw) => store.setParamExpr(r.name, raw)" />
           <span class="params-value">{{ r.value }}</span>
           <!-- a dN has no comment and no delete: it dies with its target -->
           <span class="params-drives" :title="r.drives ?? ''">{{ r.drives }}</span>

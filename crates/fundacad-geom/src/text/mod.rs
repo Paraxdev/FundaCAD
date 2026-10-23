@@ -1,12 +1,5 @@
-//! Sketch text, replacing the Python engine's `sketch_build.py` `_text_faces`,
-//! `tessellate_text` and `list_fonts` (build123d `Text` over OCCT's
-//! `Font_BRepTextBuilder`).
-//!
-//! Glyph outlines come from ttf-parser and are laid out here the way OCCT's
-//! text formatter lays them out: advances plus legacy `kern` pairs, lines
-//! centred on their own advance width, then the whole block aligned on its ink
-//! box. Each outline segment becomes an exact line or Bezier edge, so the faces
-//! agree with the Python engine's to the precision of the font's own metrics.
+//! Sketch text. Glyphs from ttf-parser are laid out as OCCT's text formatter does (advances plus legacy
+//! `kern` pairs, lines centred, the block aligned on its ink box), each segment an exact line or Bezier edge.
 
 pub mod fonts;
 
@@ -97,10 +90,7 @@ pub struct Contour {
 
 impl Contour {
     fn map(&self, f: &impl Fn(P) -> P) -> Contour {
-        Contour {
-            start: f(self.start),
-            segs: self.segs.iter().map(|s| s.map(f)).collect(),
-        }
+        Contour { start: f(self.start), segs: self.segs.iter().map(|s| s.map(f)).collect() }
     }
 
     fn pieces(&self) -> impl Iterator<Item = (P, &Seg)> {
@@ -173,18 +163,14 @@ pub struct TextSpec {
 }
 
 impl TextSpec {
-    /// `_text_faces` reading an entity whose numbers are already plain.
+    /// Reads an entity whose numbers are already plain.
     pub fn from_json(e: &Value, num: &dyn Fn(Option<&Value>) -> f64) -> Option<TextSpec> {
         let text = e.get("text").and_then(Value::as_str).unwrap_or("").to_owned();
         e.get("height")?;
         Some(TextSpec {
             text,
             size: num(e.get("height")),
-            font: e
-                .get("font")
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty())
-                .map(str::to_owned),
+            font: e.get("font").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned),
             aspect: Aspect::from_style(e.get("style").and_then(Value::as_str).unwrap_or("regular")),
             align: match e.get("align").and_then(Value::as_str) {
                 Some("center") => HAlign::Center,
@@ -227,10 +213,7 @@ impl Outline {
 impl OutlineBuilder for Outline {
     fn move_to(&mut self, x: f32, y: f32) {
         self.close();
-        self.open = Some(Contour {
-            start: self.p(x, y),
-            segs: Vec::new(),
-        });
+        self.open = Some(Contour { start: self.p(x, y), segs: Vec::new() });
     }
 
     fn line_to(&mut self, x: f32, y: f32) {
@@ -261,9 +244,8 @@ impl OutlineBuilder for Outline {
     }
 }
 
-/// The slant OCCT makes an italic with when the font has no italic face:
-/// ten degrees, applied as a rotation-like matrix, so the glyph loses that
-/// cosine of its height as well as leaning.
+/// OCCT's slant for an italic the font lacks: ten degrees as a rotation-like matrix, so the glyph loses
+/// that cosine of its height as well as leaning.
 const SYNTHETIC_SLANT: f64 = 10.0;
 
 fn kerning(face: &Face<'_>, left: GlyphId, right: GlyphId) -> f64 {
@@ -284,8 +266,7 @@ fn lay_out(face: &Face<'_>, text: &str, size: f64, synthetic_italic: bool) -> Ve
     let upem = f64::from(face.units_per_em());
     let scale = size / upem;
     let hhea = face.tables().hhea;
-    let spacing =
-        (f64::from(hhea.ascender) - f64::from(hhea.descender) + f64::from(hhea.line_gap)) * scale;
+    let spacing = (f64::from(hhea.ascender) - f64::from(hhea.descender) + f64::from(hhea.line_gap)) * scale;
     let (shear, squeeze) = if synthetic_italic {
         let (s, c) = SYNTHETIC_SLANT.to_radians().sin_cos();
         (s, c)
@@ -314,21 +295,11 @@ fn lay_out(face: &Face<'_>, text: &str, size: f64, synthetic_italic: bool) -> Ve
         let base = -(row as f64) * spacing;
         for (id, x) in ids.iter().zip(pens) {
             let Some(id) = *id else { continue };
-            let mut o = Outline {
-                contours: Vec::new(),
-                open: None,
-                scale,
-                shear,
-                squeeze,
-                dx: x + shift,
-                dy: base,
-            };
+            let mut o = Outline { contours: Vec::new(), open: None, scale, shear, squeeze, dx: x + shift, dy: base };
             face.outline_glyph(id, &mut o);
             o.close();
             if !o.contours.is_empty() {
-                out.push(Glyph {
-                    contours: o.contours,
-                });
+                out.push(Glyph { contours: o.contours });
             }
         }
     }
@@ -348,11 +319,7 @@ impl TextPath<'_> {
     }
 }
 
-fn with_face<T>(
-    lib: &Library,
-    spec: &TextSpec,
-    f: impl FnOnce(&Face<'_>, bool) -> T,
-) -> Option<T> {
+fn with_face<T>(lib: &Library, spec: &TextSpec, f: impl FnOnce(&Face<'_>, bool) -> T) -> Option<T> {
     let resolved = lib.resolve(spec.font.as_deref().unwrap_or("Arial"), spec.aspect)?;
     let synthetic = resolved.synthetic_italic;
     let coords = resolved.face.coords.clone();
@@ -369,14 +336,12 @@ fn ink_width(lib: &Library, spec: &TextSpec, s: &str) -> f64 {
     if s.trim().is_empty() {
         return 0.0;
     }
-    with_face(lib, spec, |face, synth| {
-        bbox_of(&lay_out(face, s, spec.size, synth)).map(|b| b[2] - b[0])
-    })
-    .flatten()
-    .unwrap_or(1e9)
+    with_face(lib, spec, |face, synth| bbox_of(&lay_out(face, s, spec.size, synth)).map(|b| b[2] - b[0]))
+        .flatten()
+        .unwrap_or(1e9)
 }
 
-/// `_wrap_text`: greedy word wrap to `box_w`, explicit newlines kept.
+/// Greedy word wrap to `box_w`, explicit newlines kept.
 fn wrap(lib: &Library, spec: &TextSpec, box_w: f64) -> String {
     if box_w <= 0.0 || spec.text.chars().count() > 400 {
         return spec.text.clone();
@@ -397,8 +362,7 @@ fn wrap(lib: &Library, spec: &TextSpec, box_w: f64) -> String {
     lines.join("\n")
 }
 
-/// The placed glyphs of a text entity, in sketch-local coordinates, or empty
-/// where the Python engine's best effort gives nothing.
+/// In sketch-local coordinates, empty where a best effort finds nothing to draw.
 pub fn glyphs(spec: &TextSpec, path: Option<&TextPath<'_>>) -> Vec<Glyph> {
     if spec.text.trim().is_empty() || !(spec.size > 0.0) || !spec.size.is_finite() {
         return Vec::new();
@@ -408,8 +372,7 @@ pub fn glyphs(spec: &TextSpec, path: Option<&TextPath<'_>>) -> Vec<Glyph> {
         Some(w) if path.is_none() => wrap(lib, spec, w),
         _ => spec.text.clone(),
     };
-    let Some(mut out) = with_face(lib, spec, |face, synth| lay_out(face, &text, spec.size, synth))
-    else {
+    let Some(mut out) = with_face(lib, spec, |face, synth| lay_out(face, &text, spec.size, synth)) else {
         return Vec::new();
     };
     let Some(b) = bbox_of(&out) else {
@@ -421,10 +384,7 @@ pub fn glyphs(spec: &TextSpec, path: Option<&TextPath<'_>>) -> Vec<Glyph> {
         HAlign::Right => -b[2],
     };
     let dy = -(b[1] + b[3]) / 2.0;
-    out = out
-        .iter()
-        .map(|g| place(g, &|p| [p[0] + dx, p[1] + dy]))
-        .collect();
+    out = out.iter().map(|g| place(g, &|p| [p[0] + dx, p[1] + dy])).collect();
 
     if let Some(path) = path {
         let length = crate::kernel::length(path.edge);
@@ -453,25 +413,17 @@ pub fn glyphs(spec: &TextSpec, path: Option<&TextPath<'_>>) -> Vec<Glyph> {
     }
     if spec.rotation != 0.0 {
         let (s, c) = spec.rotation.to_radians().sin_cos();
-        out = out
-            .iter()
-            .map(|g| place(g, &|p| [p[0] * c - p[1] * s, p[0] * s + p[1] * c]))
-            .collect();
+        out = out.iter().map(|g| place(g, &|p| [p[0] * c - p[1] * s, p[0] * s + p[1] * c])).collect();
     }
     if path.is_none() && (spec.x != 0.0 || spec.y != 0.0) {
         let (x, y) = (spec.x, spec.y);
-        out = out
-            .iter()
-            .map(|g| place(g, &|p| [p[0] + x, p[1] + y]))
-            .collect();
+        out = out.iter().map(|g| place(g, &|p| [p[0] + x, p[1] + y])).collect();
     }
     out
 }
 
 fn place(g: &Glyph, f: &impl Fn(P) -> P) -> Glyph {
-    Glyph {
-        contours: g.contours.iter().map(|c| c.map(f)).collect(),
-    }
+    Glyph { contours: g.contours.iter().map(|c| c.map(f)).collect() }
 }
 
 fn signed_area(poly: &[P]) -> f64 {
@@ -490,18 +442,15 @@ fn inside(poly: &[P], p: P) -> bool {
     let n = poly.len();
     for i in 0..n {
         let (a, b) = (poly[i], poly[(i + n - 1) % n]);
-        if (a[1] > p[1]) != (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]
-        {
+        if (a[1] > p[1]) != (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0] {
             odd = !odd;
         }
     }
     odd
 }
 
-/// A glyph's contours grouped into faces: `(boundary, holes)`. A contour is a
-/// hole of the smallest contour around it when that one bounds a face and
-/// winds the other way, so both TrueType's and CFF's winding conventions work
-/// and overlapping outlines of a variable font stay separate faces.
+/// `(boundary, holes)`: a contour is a hole of the smallest face-bounding contour around it winding the
+/// other way, so TrueType and CFF windings work and overlapping variable font outlines stay separate faces.
 pub fn faces_of(g: &Glyph) -> Vec<(usize, Vec<usize>)> {
     let polys: Vec<Vec<P>> = g.contours.iter().map(|c| c.polygon(12)).collect();
     let areas: Vec<f64> = polys.iter().map(|p| signed_area(p)).collect();
@@ -606,7 +555,7 @@ fn round4(v: f64) -> f64 {
     (v * 1e4).round() / 1e4
 }
 
-/// `_wire_polyline`: each edge sampled by length, closed, 4 decimals.
+/// Each edge sampled by length, closed, 4 decimals.
 fn polyline(c: &Contour, reverse: bool) -> Value {
     let mut contour = c.clone();
     if reverse {
@@ -621,10 +570,7 @@ fn polyline(c: &Contour, reverse: bool) -> Value {
                 Seg::Cubic(c1, c2, _) => Seg::Cubic(c2, c1, start),
             });
         }
-        contour = Contour {
-            start: *pts.last().unwrap_or(&c.start),
-            segs,
-        };
+        contour = Contour { start: *pts.last().unwrap_or(&c.start), segs };
     }
     let mut pts: Vec<Value> = Vec::new();
     for (s, seg) in contour.pieces() {
@@ -646,7 +592,7 @@ fn polyline(c: &Contour, reverse: bool) -> Value {
     Value::Array(pts)
 }
 
-/// `tessellate_text`: per face its outer and hole polylines, outer anticlockwise.
+/// Per face its outer and hole polylines, outer anticlockwise.
 pub fn tessellate(glyphs: &[Glyph]) -> Value {
     let mut faces = Vec::new();
     for g in glyphs {
@@ -661,7 +607,6 @@ pub fn tessellate(glyphs: &[Glyph]) -> Value {
     json!({ "faces": faces })
 }
 
-/// `list_fonts`.
 pub fn list_fonts() -> Value {
     json!({ "families": fonts::library().families() })
 }
@@ -677,7 +622,7 @@ pub fn list_fonts_result() -> fundacad_protocol::JobResult {
     fundacad_protocol::JobResult::Json(as_map(list_fonts()))
 }
 
-/// `_num_or(x, 0.0)`: a number, a numeric string, else 0.
+/// A number, a numeric string, else 0.
 pub fn num_or_zero(v: Option<&Value>) -> f64 {
     match v {
         Some(Value::Number(n)) => n.as_f64().unwrap_or(0.0),
@@ -687,7 +632,6 @@ pub fn num_or_zero(v: Option<&Value>) -> f64 {
     }
 }
 
-/// server.py `_tessellate_text_job`.
 pub fn tessellate_result(req: &serde_json::Map<String, Value>) -> fundacad_protocol::JobResult {
     let entity = req.get("entity").cloned().unwrap_or(Value::Null);
     let path_edge = req

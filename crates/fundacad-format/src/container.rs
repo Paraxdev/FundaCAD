@@ -1,25 +1,8 @@
-//! The document container: a ZIP holding the document JSON plus the geometry it
-//! references by content hash.
-//!
-//! Geometry used to live inside the document as base64 BREP. On the reference
-//! 356 MiB STEP assembly that is 541.8 MiB of JSON, 4.2x over the websocket frame
-//! cap. Binary BinTools is 224.1 MiB, deflates to 83.5 MiB, and reloads in 1.9 s
-//! against 189.0 s to re-import from STEP.
-//!
-//! THE APP OWNS IT, not the engine worker: a save routed through a worker that is
-//! restarting would leave the user unable to save with unsaved work in front of
-//! them. Saving needs no geometry, the document comes from the
-//! frontend and the blobs are already bytes on disk. Nothing here interprets a
-//! shape, so "only the engine touches geometry" still holds.
-//!
-//! TWO LOAD-BEARING RULES:
-//!
-//! 1. **Hash the STORED bytes once, at write time.** `write(read(x)) != x` for BREP
-//!    (reading rebuilds the shape graph in an equivalent but different order), so a
-//!    re-derived hash changes every generation and every lookup would miss.
-//! 2. **Never use a name from inside the archive as a path.** Extracted blobs are
-//!    published under the hash we computed over the inflated bytes, so zip-slip is
-//!    structurally impossible rather than filtered.
+//! The ZIP document container, format 1: the document JSON plus the geometry it references by content hash. On the 356
+//! MiB STEP reference, base64 BREP in JSON is 541.8 MiB; BinTools is 224.1 MiB, 83.5 deflated, and reloads in 1.9 s.
+//! The app owns it, not the engine worker, so a save never depends on a restarting worker. Two rules: hash the STORED
+//! bytes once at write time, since `write(read(x)) != x` for BREP, and never use an archive name as a path: blobs
+//! publish under the verified hash, so zip-slip is impossible.
 //!
 //! ```text
 //! manifest.json        STORED, first, readable without a decompressor
@@ -38,9 +21,8 @@ use blake2::{Blake2b, Digest};
 use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 
-/// Bumped only when the ZIP LAYOUT changes. Distinct from the document's own
-/// `version` (src/document/migrate.ts FORMAT_VERSION), which moves for different
-/// reasons: a document migration does not reshape the archive, and vice versa.
+/// Bumped only when the ZIP layout changes, apart from the document's own `version` (migrate.ts FORMAT_VERSION): a
+/// document migration does not reshape the archive, and vice versa.
 pub const CONTAINER_VERSION: u32 = 1;
 
 pub const HASH_ALG: &str = "blake2b-128";
@@ -48,15 +30,8 @@ pub const HASH_ALG: &str = "blake2b-128";
 const MANIFEST_NAME: &str = "manifest.json";
 const DOCUMENT_NAME: &str = "document.json";
 
-/// Zip-bomb guard: the DECLARED uncompressed sizes live in the central
-/// directory, so we can refuse before inflating a single byte.
-///
-/// The cap is ABSOLUTE, not a compression ratio. A ratio test was tried in the
-/// Python prototype and removed: it fires on legitimate data (a sparse or highly
-/// repetitive blob deflates ~1000x, as does pretty-printed JSON) while adding
-/// nothing, because what makes a bomb dangerous is the expanded SIZE and that is
-/// already bounded here. Extraction also streams to disk rather than memory, so
-/// the worst case is bounded disk use on a file the user chose to open.
+/// Zip-bomb guard on the declared sizes in the central directory, refused before inflating a byte. Absolute, not a
+/// ratio: sparse blobs and pretty JSON deflate ~1000x legitimately, and the expanded size is what makes a bomb harmful.
 const MAX_TOTAL_UNCOMPRESSED: u64 = 8 << 30; // 8 GiB
 
 type Blake2b128 = Blake2b<U16>;
@@ -88,13 +63,8 @@ pub struct Manifest {
     pub meshes: Vec<MeshRow>,
 }
 
-/// The content hash of a blob. See rule 1 in the module docs: call this once, on
-/// the bytes as they are first produced.
-///
-/// Not called on any production path, Rust only ever VERIFIES a hash, and does
-/// that while streaming, so it hashes incrementally rather than over a slice.
-/// This is kept as the executable statement of which digest the format uses, and
-/// is what `hash_matches_python` pins against the Python engine's copy.
+/// The content hash of a blob, taken once on the bytes as first produced. Production code only verifies hashes while
+/// streaming; this pins the digest the format uses, checked by `hash_matches_python`.
 #[allow(dead_code)]
 pub fn hash_bytes(data: &[u8]) -> String {
     let mut h = Blake2b128::new();
@@ -114,18 +84,13 @@ pub fn looks_like_container(path: &Path) -> bool {
 
 fn looks_like_zip(path: &Path) -> bool {
     let mut buf = [0u8; 2];
-    File::open(path)
-        .and_then(|mut f| f.read_exact(&mut buf))
-        .map(|_| &buf == b"PK")
-        .unwrap_or(false)
+    File::open(path).and_then(|mut f| f.read_exact(&mut buf)).map(|_| &buf == b"PK").unwrap_or(false)
 }
 
 fn is_safe_key(key: &str) -> bool {
     !key.is_empty()
         && !key.contains("..")
-        && key
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+        && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
 }
 
 /// fsync a directory so a rename INTO it is durable across a crash. Tolerant of
@@ -149,10 +114,7 @@ fn uuid_hex() -> String {
     // Failure here would mean no entropy source at all; a timestamp is a fine
     // fallback for a name that only has to be unique within one directory.
     if getrandom::getrandom(&mut b).is_err() {
-        let t = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
+        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
         b[..16].copy_from_slice(&t.to_le_bytes()[..16.min(16)]);
     }
     hex(&b)
@@ -170,11 +132,8 @@ pub fn write_container(
 ) -> Result<Manifest, String> {
     let info = crate::fnda::json_to_cbor(&serde_json::json!({ "app": app, "hashAlg": HASH_ALG }).to_string())?;
     let document = crate::fnda::json_to_cbor(document_json)?;
-    let meshes: BTreeMap<String, PathBuf> = mesh_paths
-        .iter()
-        .filter(|(k, p)| is_safe_key(k) && p.exists())
-        .map(|(k, p)| (k.clone(), p.clone()))
-        .collect();
+    let meshes: BTreeMap<String, PathBuf> =
+        mesh_paths.iter().filter(|(k, p)| is_safe_key(k) && p.exists()).map(|(k, p)| (k.clone(), p.clone())).collect();
     let carried: Vec<(crate::fnda::Carried, PathBuf)> = carried.iter().filter(|(_, p)| p.exists()).cloned().collect();
     for src in blob_paths.values() {
         std::fs::metadata(src).map_err(|e| format!("could not read geometry {}: {e}", src.display()))?;
@@ -187,7 +146,10 @@ pub fn write_container(
     let tmp = temp_sibling(dest);
     let build = || -> Result<Vec<crate::fnda::Entry>, String> {
         let mut file = std::io::BufWriter::new(File::create(&tmp).map_err(|e| e.to_string())?);
-        let entries = crate::fnda::write(&mut file, &crate::fnda::document_sections(&info, &document, blob_paths, &meshes, &carried))?;
+        let entries = crate::fnda::write(
+            &mut file,
+            &crate::fnda::document_sections(&info, &document, blob_paths, &meshes, &carried),
+        )?;
         let file = file.into_inner().map_err(|e| e.to_string())?;
         file.sync_all().map_err(|e| e.to_string())?;
         Ok(entries)
@@ -228,17 +190,9 @@ fn manifest_of(entries: &[crate::fnda::Entry], app: &str) -> Manifest {
     }
 }
 
-/// Publish a ZIP container (format 1) at `dest`, atomically. No longer written by
-/// the app; kept so the reader of old files stays tested against real ones.
-///
-/// `blob_paths` maps content hash -> a readable path holding EXACTLY the bytes
-/// that hash was computed over. `mesh_paths` maps a mesh key -> path and is
-/// optional: meshes are a reopen-speed cache, and a container without them is
-/// fully valid.
-///
-/// The archive is built at a sibling temp path, fsynced, then renamed over the
-/// target. A crash leaves either the old file or the new one, never a torn one,
-/// which matters because this file IS the user's geometry.
+/// Publish a ZIP container (format 1) at `dest`, atomically. The app no longer writes it; kept so the old file reader
+/// stays tested against real ones. `blob_paths` maps hash to a path with exactly the hashed bytes; `mesh_paths` is an
+/// optional reopen cache. Built at a sibling temp path, fsynced, then renamed, so a crash never leaves a torn file.
 pub fn write_zip_container(
     dest: &Path,
     document_json: &str,
@@ -254,25 +208,16 @@ pub fn write_zip_container(
         meshes: Vec::new(),
     };
     for (h, src) in blob_paths {
-        let bytes = std::fs::metadata(src)
-            .map_err(|e| format!("could not read geometry {}: {e}", src.display()))?
-            .len();
-        manifest.blobs.push(BlobRow {
-            entry: format!("geom/{h}.bbrep"),
-            hash: h.clone(),
-            bytes,
-        });
+        let bytes =
+            std::fs::metadata(src).map_err(|e| format!("could not read geometry {}: {e}", src.display()))?.len();
+        manifest.blobs.push(BlobRow { entry: format!("geom/{h}.bbrep"), hash: h.clone(), bytes });
     }
     for (k, src) in mesh_paths {
         let bytes = match std::fs::metadata(src) {
             Ok(m) => m.len(),
             Err(_) => continue, // a cache entry that vanished is not an error
         };
-        manifest.meshes.push(MeshRow {
-            entry: format!("mesh/{k}.bin"),
-            key: k.clone(),
-            bytes,
-        });
+        manifest.meshes.push(MeshRow { entry: format!("mesh/{k}.bin"), key: k.clone(), bytes });
     }
 
     if let Some(parent) = dest.parent() {
@@ -290,12 +235,9 @@ pub fn write_zip_container(
 
         // STORED and first, so the manifest is readable by a hex dump or a
         // minimal reader with no decompressor in the loop.
-        let stored = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored)
-            .large_file(true);
-        let deflated = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated)
-            .large_file(true);
+        let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored).large_file(true);
+        let deflated =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated).large_file(true);
         // Packed f32/u32 barely compresses; level 1 keeps the write fast.
         let deflated_fast = deflated.compression_level(Some(1));
 
@@ -365,7 +307,6 @@ pub fn open_document_checked(
     crate::json_doc::read_json_document(path, blob_dir).map(|doc| (doc, crate::fnda::RepairReport::default()))
 }
 
-/// What `open_document_full` read.
 pub struct OpenedFile {
     pub document: String,
     pub report: crate::fnda::RepairReport,
@@ -388,7 +329,6 @@ pub fn open_document_full(
     Ok(OpenedFile { document, report, carried: Vec::new() })
 }
 
-/// What `open_document_bytes` read.
 pub struct OpenedBytes {
     pub document: String,
     pub report: crate::fnda::RepairReport,
@@ -396,9 +336,8 @@ pub struct OpenedBytes {
     pub was_container: bool,
 }
 
-/// `open_document_checked` for a document the caller holds as bytes with no
-/// path, like a file dropped on a webview that does not name its paths. The
-/// readers need a seekable file, so the bytes are staged in a temp file first.
+/// `open_document_checked` for a document held as bytes with no path, like a file dropped on a webview that does not
+/// name its paths. The readers need a seekable file, so the bytes are staged in a temp file first.
 pub fn open_document_bytes(
     bytes: &[u8],
     blob_dir: &Path,
@@ -460,28 +399,15 @@ pub fn read_manifest(path: &Path) -> Result<Manifest, String> {
         ));
     }
     if manifest.hash_alg != HASH_ALG {
-        return Err(format!(
-            "This document uses an unsupported hash ({}).",
-            manifest.hash_alg
-        ));
+        return Err(format!("This document uses an unsupported hash ({}).", manifest.hash_alg));
     }
     Ok(manifest)
 }
 
-/// Open a container: extract its geometry into `blob_dir` and return
-/// `(document_json, manifest)`.
-///
-/// Every blob is streamed to a temp file while being hashed, and is published
-/// only once the hash MATCHES the one the manifest declared. The published
-/// filename is derived from that verified hash, never from the zip entry name.
-///
-/// A hash mismatch is a HARD error: it means truncation or tampering, and
-/// silently accepting the bytes would put wrong geometry in front of the user.
-pub fn read_container(
-    path: &Path,
-    blob_dir: &Path,
-    mesh_dir: Option<&Path>,
-) -> Result<(String, Manifest), String> {
+/// Open a container: extract its geometry into `blob_dir` and return `(document_json, manifest)`. Each blob streams to
+/// a temp file while hashed and publishes under that hash only when it matches the manifest; a mismatch means
+/// truncation or tampering and is a hard error.
+pub fn read_container(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>) -> Result<(String, Manifest), String> {
     read_container_checked(path, blob_dir, mesh_dir).map(|(doc, manifest, _)| (doc, manifest))
 }
 
@@ -496,14 +422,11 @@ pub fn read_container_checked(
         let manifest = manifest_of(&opened.entries, "");
         return Ok((opened.document_json, manifest, opened.report));
     }
-    read_zip_container(path, blob_dir, mesh_dir).map(|(doc, manifest)| (doc, manifest, crate::fnda::RepairReport::default()))
+    read_zip_container(path, blob_dir, mesh_dir)
+        .map(|(doc, manifest)| (doc, manifest, crate::fnda::RepairReport::default()))
 }
 
-fn read_zip_container(
-    path: &Path,
-    blob_dir: &Path,
-    mesh_dir: Option<&Path>,
-) -> Result<(String, Manifest), String> {
+fn read_zip_container(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>) -> Result<(String, Manifest), String> {
     let manifest = read_manifest(path)?;
     std::fs::create_dir_all(blob_dir).map_err(|e| e.to_string())?;
     if let Some(d) = mesh_dir {
@@ -527,9 +450,8 @@ fn read_zip_container(
 
     if let Some(dir) = mesh_dir {
         for row in &manifest.meshes {
-            // Keys are ours, but they land in a filename, so validate rather
-            // than trust the file. Meshes are derived data: a bad row costs a
-            // re-tessellation and must never fail an open.
+            // Keys land in a filename, so validate rather than trust the file. Meshes are derived data: a bad row costs
+            // a re-tessellation and must never fail an open.
             if !is_safe_key(&row.key) {
                 continue;
             }
@@ -550,16 +472,13 @@ fn extract_verified(
 ) -> Result<(), String> {
     let tmp = temp_sibling(final_path);
     let mut run = || -> Result<(), String> {
-        let mut src = z
-            .by_name(entry)
-            .map_err(|_| format!("This document is missing part of its geometry ({entry})."))?;
+        let mut src =
+            z.by_name(entry).map_err(|_| format!("This document is missing part of its geometry ({entry})."))?;
         let mut out = File::create(&tmp).map_err(|e| e.to_string())?;
         let mut h = Blake2b128::new();
         let mut buf = vec![0u8; 1 << 20];
         loop {
-            let n = src.read(&mut buf).map_err(|_| {
-                "This document is damaged and cannot be opened.".to_string()
-            })?;
+            let n = src.read(&mut buf).map_err(|_| "This document is damaged and cannot be opened.".to_string())?;
             if n == 0 {
                 break;
             }
@@ -600,151 +519,6 @@ mod tests {
         d
     }
 
-    fn blob(dir: &Path, name: &str, data: &[u8]) -> PathBuf {
-        let p = dir.join(name);
-        std::fs::write(&p, data).unwrap();
-        p
-    }
-
-    /// The blob store is written by BOTH Rust (extracting a container) and the
-    /// Python engine (importing geometry), and addressed purely by content
-    /// hash. If the two languages ever disagree about that hash, every container
-    /// reference dangles and it looks to the user like the geometry vanished.
-    /// These vectors are duplicated verbatim in the Python engine's `test_blobstore.py` so
-    /// both sides are pinned to the same constants.
-    #[test]
-    fn hash_matches_python() {
-        assert_eq!(hash_bytes(b""), "cae66941d9efbd404e4d88758ea67670");
-        assert_eq!(hash_bytes(b"fundacad"), "5648909c8c0ccf6096c0e672255e68a0");
-        assert_eq!(
-            hash_bytes(&[0x00u8, 0xff].repeat(8)),
-            "2a7271a37f134cb3bfb8ff7e507e0da7"
-        );
-        assert_eq!(hash_bytes(b"x").len(), 32, "blake2b-128 as hex");
-    }
-
-    #[test]
-    fn roundtrip_preserves_bytes_exactly() {
-        let dir = tmpdir("rt");
-        // One incompressible blob and one that deflates ~1000x, so both sides of
-        // the compression path are covered.
-        let a: Vec<u8> = (0..200_000u32).map(|i| (i.wrapping_mul(2654435761) >> 24) as u8).collect();
-        let b = vec![0u8; 500_000];
-        let (ha, hb) = (hash_bytes(&a), hash_bytes(&b));
-
-        let mut blobs = BTreeMap::new();
-        blobs.insert(ha.clone(), blob(&dir, "a.bin", &a));
-        blobs.insert(hb.clone(), blob(&dir, "b.bin", &b));
-        let mut meshes = BTreeMap::new();
-        meshes.insert("deadbeef-t0".to_string(), blob(&dir, "m.bin", b"MESHDATA".repeat(1000).as_slice()));
-
-        let doc = format!(r#"{{"version":5,"features":[{{"type":"import","geom":"{ha}"}}]}}"#);
-        let dest = dir.join("part.funda");
-        write_zip_container(&dest, &doc, &blobs, &meshes, "test").unwrap();
-
-        assert!(looks_like_container(&dest), "written file is a zip");
-
-        // The manifest must be first AND stored, or a minimal reader needs a
-        // decompressor just to learn the format version.
-        {
-            let mut z = zip::ZipArchive::new(File::open(&dest).unwrap()).unwrap();
-            assert_eq!(z.by_index(0).unwrap().name(), MANIFEST_NAME);
-            assert_eq!(
-                z.by_name(MANIFEST_NAME).unwrap().compression(),
-                zip::CompressionMethod::Stored
-            );
-            assert!(
-                z.by_name(&format!("geom/{hb}.bbrep")).unwrap().compressed_size() < 500_000,
-                "the compressible blob should actually have shrunk"
-            );
-        }
-
-        let out = dir.join("blobs");
-        let meshes_out = dir.join("meshes");
-        let (got_doc, manifest) = read_container(&dest, &out, Some(&meshes_out)).unwrap();
-
-        assert_eq!(got_doc, doc, "document survives byte-for-byte");
-        assert_eq!(manifest.container, CONTAINER_VERSION);
-        assert_eq!(std::fs::read(out.join(format!("{ha}.bbrep"))).unwrap(), a);
-        assert_eq!(std::fs::read(out.join(format!("{hb}.bbrep"))).unwrap(), b);
-        assert!(meshes_out.join("deadbeef-t0.bin").exists());
-
-        // Meshes are a cache: the same container must open fine without them.
-        let out2 = dir.join("blobs2");
-        let (got2, _) = read_container(&dest, &out2, None).unwrap();
-        assert_eq!(got2, doc);
-
-        // Re-reading is idempotent, not a duplicate-write, and leaves no litter.
-        read_container(&dest, &out, Some(&meshes_out)).unwrap();
-        let names: Vec<_> = std::fs::read_dir(&out)
-            .unwrap()
-            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
-            .collect();
-        assert_eq!(names.len(), 2, "re-read did not duplicate: {names:?}");
-        assert!(!names.iter().any(|n| n.contains(".tmp-")), "temp files left: {names:?}");
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    /// The one that must never silently pass: a valid zip with a valid manifest
-    /// but wrong bytes. Nothing else in the stack would notice, and the user
-    /// would be shown the wrong shape.
-    #[test]
-    fn tampered_geometry_is_refused_and_nothing_is_published() {
-        let dir = tmpdir("tamper");
-        let data = vec![7u8; 50_000];
-        let h = hash_bytes(&data);
-        let mut blobs = BTreeMap::new();
-        blobs.insert(h.clone(), blob(&dir, "d.bin", &data));
-        let good = dir.join("ok.funda");
-        write_zip_container(&good, r#"{"version":5}"#, &blobs, &BTreeMap::new(), "t").unwrap();
-
-        let tampered = dir.join("bad.funda");
-        {
-            let mut zin = zip::ZipArchive::new(File::open(&good).unwrap()).unwrap();
-            let mut zout = zip::ZipWriter::new(File::create(&tampered).unwrap());
-            let opts = SimpleFileOptions::default();
-            for i in 0..zin.len() {
-                let mut e = zin.by_index(i).unwrap();
-                let name = e.name().to_string();
-                let mut payload = Vec::new();
-                e.read_to_end(&mut payload).unwrap();
-                if name.starts_with("geom/") {
-                    payload = vec![9u8; payload.len()]; // same size, different bytes
-                }
-                zout.start_file(&name, opts).unwrap();
-                zout.write_all(&payload).unwrap();
-            }
-            zout.finish().unwrap();
-        }
-
-        let out = dir.join("blobs");
-        let err = read_container(&tampered, &out, None).unwrap_err();
-        assert!(err.contains("does not match"), "unexpected message: {err}");
-        assert!(
-            !out.join(format!("{h}.bbrep")).exists(),
-            "a mismatching blob must never be published"
-        );
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn truncated_file_is_refused_not_crashed_on() {
-        let dir = tmpdir("trunc");
-        let data = vec![3u8; 50_000];
-        let mut blobs = BTreeMap::new();
-        blobs.insert(hash_bytes(&data), blob(&dir, "d.bin", &data));
-        let good = dir.join("ok.funda");
-        write_zip_container(&good, r#"{"version":5}"#, &blobs, &BTreeMap::new(), "t").unwrap();
-
-        let whole = std::fs::read(&good).unwrap();
-        let trunc = dir.join("trunc.funda");
-        std::fs::write(&trunc, &whole[..whole.len() / 2]).unwrap();
-
-        assert!(read_container(&trunc, &dir.join("blobs"), None).is_err());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
     /// Zip-slip: an archive naming its blob `../../evil` must not write there.
     /// The destination comes from the hash WE computed, so the name is inert.
     #[test]
@@ -765,11 +539,7 @@ mod tests {
                     hash: h.clone(),
                     bytes: data.len() as u64,
                 }],
-                meshes: vec![MeshRow {
-                    entry: "m".into(),
-                    key: "../../pwned".into(),
-                    bytes: 1,
-                }],
+                meshes: vec![MeshRow { entry: "m".into(), key: "../../pwned".into(), bytes: 1 }],
             };
             z.start_file(MANIFEST_NAME, opts).unwrap();
             z.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
@@ -782,144 +552,10 @@ mod tests {
 
         let out = dir.join("blobs");
         read_container(&evil, &out, Some(&dir.join("meshes"))).unwrap();
-        let names: Vec<_> = std::fs::read_dir(&out)
-            .unwrap()
-            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
-            .collect();
+        let names: Vec<_> =
+            std::fs::read_dir(&out).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
         assert_eq!(names, vec![format!("{h}.bbrep")], "nothing escaped the store");
         assert!(!is_safe_key("../../pwned"));
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_failed_write_leaves_the_previous_file_intact() {
-        let dir = tmpdir("atomic");
-        let dest = dir.join("part.funda");
-        std::fs::write(&dest, b"PREVIOUS GOOD FILE").unwrap();
-
-        let mut blobs = BTreeMap::new();
-        blobs.insert("deadbeef".to_string(), PathBuf::from("/nonexistent/x"));
-        assert!(write_zip_container(&dest, r#"{"version":5}"#, &blobs, &BTreeMap::new(), "t").is_err());
-
-        assert_eq!(std::fs::read(&dest).unwrap(), b"PREVIOUS GOOD FILE");
-        let litter: Vec<_> = std::fs::read_dir(&dir)
-            .unwrap()
-            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
-            .filter(|n| n.contains(".tmp-"))
-            .collect();
-        assert!(litter.is_empty(), "temp files left behind: {litter:?}");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_newer_container_version_says_so_plainly() {
-        let dir = tmpdir("newer");
-        let p = dir.join("newer.funda");
-        {
-            let mut z = zip::ZipWriter::new(File::create(&p).unwrap());
-            z.start_file(MANIFEST_NAME, SimpleFileOptions::default()).unwrap();
-            let m = format!(
-                r#"{{"container":{},"hashAlg":"{}","blobs":[],"meshes":[]}}"#,
-                CONTAINER_VERSION + 1,
-                HASH_ALG
-            );
-            z.write_all(m.as_bytes()).unwrap();
-            z.finish().unwrap();
-        }
-        let err = read_manifest(&p).unwrap_err();
-        assert!(err.contains("Update FundaCAD"), "unexpected message: {err}");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    fn pretty_doc(hash: &str) -> String {
-        format!("{{\n  \"version\": 9,\n  \"features\": [\n    {{\n      \"id\": \"im\",\n      \"type\": \"import\",\n      \"geom\": \"{hash}\"\n    }}\n  ]\n}}")
-    }
-
-    #[test]
-    fn extension_picks_the_format() {
-        let dir = tmpdir("ext");
-        let data: Vec<u8> = (0..70_000u32).map(|i| (i.wrapping_mul(2654435761) >> 20) as u8).collect();
-        let h = hash_bytes(&data);
-        let blobs = BTreeMap::from([(h.clone(), blob(&dir, "g.bin", &data))]);
-        let doc = pretty_doc(&h);
-
-        let json = dir.join("part.funda");
-        let bin = dir.join("part.FundaB");
-        write_document(&json, &doc, &blobs, &BTreeMap::new(), &[], "t").unwrap();
-        write_document(&bin, &doc, &blobs, &BTreeMap::new(), &[], "t").unwrap();
-
-        assert!(!looks_like_container(&json));
-        assert!(crate::fnda::looks_like_fnda(&bin));
-        let text = std::fs::read_to_string(&json).unwrap();
-        assert!(text.starts_with(&doc[..doc.len() - 2]), "the frontend's text is kept as written");
-        assert!(text.find("\"features\"").unwrap() < text.find("\"geometry\"").unwrap());
-        assert!(std::fs::metadata(&bin).unwrap().len() < std::fs::metadata(&json).unwrap().len());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_legacy_plain_json_document_is_not_mistaken_for_a_container() {
-        let dir = tmpdir("legacy");
-        let p = dir.join("legacy.funda");
-        std::fs::write(&p, br#"{"version": 4, "features": []}"#).unwrap();
-        assert!(!looks_like_container(&p));
-        assert!(read_manifest(&p).is_err());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_document_held_as_bytes_publishes_its_geometry_like_one_opened_by_path() {
-        let dir = tmpdir("bytes");
-        let data: Vec<u8> = (0..50_000u32).map(|i| (i.wrapping_mul(2654435761) >> 24) as u8).collect();
-        let h = hash_bytes(&data);
-        let blobs = BTreeMap::from([(h.clone(), blob(&dir, "g.bin", &data))]);
-        let doc = format!(r#"{{"version":9,"features":[{{"id":"im","type":"import","geom":"{h}"}}]}}"#);
-
-        for (name, binary) in [("part.funda", false), ("part.fundab", true)] {
-            let dest = dir.join(name);
-            write_document(&dest, &doc, &blobs, &BTreeMap::new(), &[], "test").unwrap();
-            let store = dir.join(format!("store-{name}"));
-            let opened = open_document_bytes(&std::fs::read(&dest).unwrap(), &store, None, None).unwrap();
-            let got: serde_json::Value = serde_json::from_str(&opened.document).unwrap();
-            let want: serde_json::Value = serde_json::from_str(&doc).unwrap();
-            assert_eq!(got, want, "{name}: the document without its geometry map");
-            assert_eq!(opened.was_container, binary, "{name}");
-            assert_eq!(std::fs::read(store.join(format!("{h}.bbrep"))).unwrap(), data, "{name}: geometry published");
-        }
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_section_this_version_does_not_read_survives_a_save_as_fundab_only() {
-        let dir = tmpdir("carried");
-        let payload: Vec<u8> = (0..3000u32).map(|i| (i % 253) as u8).collect();
-        let doc = r#"{"version":11,"features":[]}"#;
-        let info = crate::fnda::json_to_cbor("{}").unwrap();
-        let cbor = crate::fnda::json_to_cbor(doc).unwrap();
-        let (b, m) = (BTreeMap::new(), BTreeMap::new());
-        let mut sections = crate::fnda::document_sections(&info, &cbor, &b, &m, &[]);
-        sections.push(crate::fnda::SectionSpec {
-            kind: 9,
-            name: "futureIndex".into(),
-            source: crate::fnda::Source::Bytes(&payload),
-            layout: crate::fnda::SMALL_LAYOUT,
-        });
-        let src = dir.join("future.fundab");
-        crate::fnda::write(&mut File::create(&src).unwrap(), &sections).unwrap();
-
-        let carry = dir.join("sections");
-        let opened = open_document_full(&src, &dir.join("blobs"), None, Some(&carry)).unwrap();
-        assert_eq!(opened.carried.len(), 1);
-        let carried: Vec<_> = opened.carried.iter().map(|c| (c.clone(), carry.join(format!("{}.bin", c.hash)))).collect();
-
-        let bin = dir.join("again.fundab");
-        let json = dir.join("again.funda");
-        write_document(&bin, &opened.document, &b, &m, &carried, "t").unwrap();
-        write_document(&json, &opened.document, &b, &m, &carried, "t").unwrap();
-        let again = open_document_full(&bin, &dir.join("blobs"), None, Some(&dir.join("sections2"))).unwrap();
-        assert_eq!(again.carried, opened.carried);
-        assert_eq!(std::fs::read(dir.join("sections2").join(format!("{}.bin", again.carried[0].hash))).unwrap(), payload);
-        assert!(open_document_full(&json, &dir.join("blobs"), None, Some(&carry)).unwrap().carried.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -5,6 +5,7 @@ import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { DisposeQueue, detachModel } from "../../src/viewport/disposeQueue";
 import type { BodyMesh, ModelView } from "../../src/viewport/render";
+import { flushRaycastIndex, scheduleRaycastIndex } from "../../src/viewport/raycastIndex";
 
 function fakeModel(n: number, disposed: string[]): ModelView {
   const bodies = Array.from({ length: n }, (_, i) => {
@@ -83,11 +84,44 @@ describe("letting go of a model", () => {
     const err = console.error;
     console.error = () => {};
     try {
-      q.add([() => done.push(1), () => { throw new Error("lost context"); }, () => done.push(3)]);
+      q.add([
+        () => done.push(1),
+        () => {
+          throw new Error("lost context");
+        },
+        () => done.push(3),
+      ]);
       while (f.frame());
     } finally {
       console.error = err;
     }
     expect(done).toEqual([1, 3]);
+  });
+
+  it("drops the queued tree builds of a detached model at once, the next document's still build", () => {
+    const indexed = () => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+      g.setIndex([0, 1, 2]);
+      return g;
+    };
+    const old = fakeModel(3, []);
+    for (const b of old.bodies) {
+      b.mesh.geometry = indexed();
+      scheduleRaycastIndex(b.mesh.geometry);
+    }
+    const group = new THREE.Group();
+    for (const b of old.bodies) group.add(b.mesh, b.edges.object);
+    detachModel(group, old, new DisposeQueue(() => {}));
+    const next = fakeModel(2, []);
+    for (const b of next.bodies) {
+      b.mesh.geometry = indexed();
+      scheduleRaycastIndex(b.mesh.geometry);
+    }
+    flushRaycastIndex();
+    expect({
+      old: old.bodies.map((b) => !!b.mesh.geometry.boundsTree),
+      next: next.bodies.map((b) => !!b.mesh.geometry.boundsTree),
+    }).toEqual({ old: [false, false, false], next: [true, true] });
   });
 });

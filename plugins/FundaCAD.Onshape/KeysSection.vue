@@ -33,8 +33,12 @@ onMounted(refresh);
       <button v-if="state === 'stored'" type="button" class="btn" @click="forget()">Forget keys</button>
     </div>
     <div class="sm-hint">
-      <template v-if="state === 'stored'">Keys are stored in the system's credential store. File, Import from Onshape link uses them.</template>
-      <template v-else-if="state === 'none'">No keys are stored. File, Import from Onshape link asks for them.</template>
+      <template v-if="state === 'stored'"
+        >Keys are stored in the system's credential store. File, Import from Onshape link uses them.</template
+      >
+      <template v-else-if="state === 'none'"
+        >No keys are stored. File, Import from Onshape link asks for them.</template
+      >
       <template v-else-if="state === 'error'">{{ message }}</template>
     </div>
   </div>

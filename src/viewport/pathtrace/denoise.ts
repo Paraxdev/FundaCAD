@@ -1,5 +1,4 @@
-// The final denoise at the sample cap: one pass over the finished image, then a
-// crossfade to it. Pure, so the stale generation rule is tested without a GPU.
+// Pure, so the stale generation rule of the final denoise is tested without a GPU.
 
 import { TraceGeneration } from "./state";
 

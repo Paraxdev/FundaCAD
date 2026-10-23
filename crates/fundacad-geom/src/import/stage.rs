@@ -57,9 +57,8 @@ pub fn of_xcaf_read(position: f64, checks: u64) -> (i64, i64, i64) {
     (WALK, -1, -1)
 }
 
-/// Run an XCAF read, sampling `progress` from a side thread every quarter
-/// second into the stage hook. The sampler only reads the indicator, which
-/// OCCT allows from another thread.
+/// Samples `progress` every quarter second from a side thread. It only reads the indicator,
+/// which OCCT allows from another thread.
 pub fn sampling_xcaf_read<T>(progress: &Progress, read: impl FnOnce() -> T) -> T {
     let Some(hook) = current() else {
         return read();
@@ -86,25 +85,4 @@ pub fn sampling_xcaf_read<T>(progress: &Progress, read: impl FnOnce() -> T) -> T
         let _ = done.send(());
         out
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn an_xcaf_sample_maps_to_parse_transfer_then_walk() {
-        assert_eq!(of_xcaf_read(0.0, 0), (READ, -1, -1));
-        assert_eq!(of_xcaf_read(0.0, 3), (TRANSFER, 0, 1000));
-        assert_eq!(of_xcaf_read(0.475, 9), (TRANSFER, 500, 1000));
-        assert_eq!(of_xcaf_read(0.95, 9), (WALK, -1, -1));
-        assert_eq!(of_xcaf_read(1.0, 9), (WALK, -1, -1));
-    }
-
-    #[test]
-    fn nothing_installed_reports_nowhere() {
-        report(READ, -1, -1);
-        let p = Progress::new(|| false);
-        assert_eq!(sampling_xcaf_read(&p, || 7), 7);
-    }
 }

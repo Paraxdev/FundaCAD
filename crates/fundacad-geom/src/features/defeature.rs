@@ -28,17 +28,11 @@ fn centre(face: &Shape) -> DVec3 {
 fn normal_at(face: &Shape, p: DVec3) -> Option<DVec3> {
     let f = face.as_face()?;
     let proj = f.project_point(p).ok()??;
-    f.point_and_normal(proj.u, proj.v)
-        .ok()
-        .map(|(_, n)| n.normalize())
+    f.point_and_normal(proj.u, proj.v).ok().map(|(_, n)| n.normalize())
 }
 
 fn vertices(shape: &Shape) -> Vec<DVec3> {
-    kernel::subshapes(shape, Kind::Vertex)
-        .iter()
-        .filter_map(kernel::bbox)
-        .map(|b| dvec3(b[0], b[1], b[2]))
-        .collect()
+    kernel::subshapes(shape, Kind::Vertex).iter().filter_map(kernel::bbox).map(|b| dvec3(b[0], b[1], b[2])).collect()
 }
 
 fn fp(face: &Shape) -> Option<String> {
@@ -46,18 +40,12 @@ fn fp(face: &Shape) -> Option<String> {
 }
 
 fn fps(shape: &Shape) -> HashSet<String> {
-    kernel::subshapes(shape, Kind::Face)
-        .iter()
-        .filter_map(fp)
-        .collect()
+    kernel::subshapes(shape, Kind::Face).iter().filter_map(fp).collect()
 }
 
 /// `_face_width`: 2 area / perimeter.
 fn width(face: &Shape) -> f64 {
-    let per: f64 = kernel::subshapes(face, Kind::Edge)
-        .iter()
-        .map(kernel::length)
-        .sum();
+    let per: f64 = kernel::subshapes(face, Kind::Edge).iter().map(kernel::length).sum();
     if per > 0.0 {
         2.0 * kernel::area(face) / per
     } else {
@@ -119,10 +107,7 @@ fn remove_features(shape: &Shape, faces: &[Shape]) -> (Option<Shape>, Vec<String
     let faces: Vec<_> = faces.iter().filter_map(Shape::as_face).collect();
     let refs: Vec<_> = faces.iter().collect();
     let keys = |lines: &[String]| -> Vec<String> {
-        lines
-            .iter()
-            .filter_map(|l| l.split_once(' ').map(|(_, k)| k.to_owned()))
-            .collect()
+        lines.iter().filter_map(|l| l.split_once(' ').map(|(_, k)| k.to_owned())).collect()
     };
     let removed = match shape.remove_features(&refs, true, &ProgressRange::detached()) {
         Ok(r) => r,
@@ -151,11 +136,7 @@ fn expand_blend_chain(shape: &Shape, seeds: &[Shape]) -> Vec<Shape> {
     const MAX_FACES: usize = 64;
     const BAND_ASPECT_MAX: f64 = 0.4;
     let adj = Adjacency::new(shape);
-    let seed_idx: Vec<usize> = seeds
-        .iter()
-        .map(|s| adj.index_of(s))
-        .filter(|&i| i > 0)
-        .collect();
+    let seed_idx: Vec<usize> = seeds.iter().map(|s| adj.index_of(s)).filter(|&i| i > 0).collect();
     if seed_idx.is_empty() {
         return seeds.to_vec();
     }
@@ -181,12 +162,7 @@ fn expand_blend_chain(shape: &Shape, seeds: &[Shape]) -> Vec<Shape> {
             .clone()
     };
     let width_cache = std::cell::RefCell::new(HashMap::<usize, f64>::new());
-    let width_of = |i: usize| -> f64 {
-        *width_cache
-            .borrow_mut()
-            .entry(i)
-            .or_insert_with(|| width(&adj.face(i)))
-    };
+    let width_of = |i: usize| -> f64 { *width_cache.borrow_mut().entry(i).or_insert_with(|| width(&adj.face(i))) };
     let dihedral = |i: usize, j: usize, p: DVec3| -> f64 {
         match (normal_at(&adj.face(i), p), normal_at(&adj.face(j), p)) {
             (Some(a), Some(b)) => a.dot(b).clamp(-1.0, 1.0).abs().acos().to_degrees(),
@@ -194,11 +170,7 @@ fn expand_blend_chain(shape: &Shape, seeds: &[Shape]) -> Vec<Shape> {
         }
     };
     let mut blend_cache: HashMap<usize, bool> = HashMap::new();
-    let cap = WIDTH_FACTOR
-        * seed_idx
-            .iter()
-            .map(|&i| width_of(i))
-            .fold(f64::NEG_INFINITY, f64::max);
+    let cap = WIDTH_FACTOR * seed_idx.iter().map(|&i| width_of(i)).fold(f64::NEG_INFINITY, f64::max);
     let patch_area_max = (cap / 2.0).powi(2);
     let mut chain: BTreeSet<usize> = seed_idx.iter().copied().collect();
     let mut queue = seed_idx.clone();
@@ -213,19 +185,13 @@ fn expand_blend_chain(shape: &Shape, seeds: &[Shape]) -> Vec<Shape> {
                 Some(b) => *b,
                 None => {
                     let face = adj.face(j);
-                    let longest = kernel::subshapes(&face, Kind::Edge)
-                        .iter()
-                        .map(kernel::length)
-                        .fold(0.0, f64::max);
+                    let longest = kernel::subshapes(&face, Kind::Edge).iter().map(kernel::length).fold(0.0, f64::max);
                     let b = if longest <= 0.0 || width_of(j) / longest > BAND_ASPECT_MAX {
                         false
                     } else {
                         match surface_type(&face) {
                             Some(
-                                SurfaceType::Cylinder
-                                | SurfaceType::Cone
-                                | SurfaceType::Torus
-                                | SurfaceType::Sphere,
+                                SurfaceType::Cylinder | SurfaceType::Cone | SurfaceType::Torus | SurfaceType::Sphere,
                             ) => near.iter().any(|(k, p)| dihedral(j, *k, *p) < 10.0),
                             Some(SurfaceType::Plane) => near.iter().any(|(k, p)| {
                                 let d = dihedral(j, *k, *p);
@@ -320,11 +286,7 @@ fn wedge(groups: &[(DVec3, f64)], region: &[Shape]) -> Option<Shape> {
         return None;
     }
     let size = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
-    let centre = [
-        (lo[0] + hi[0]) / 2.0,
-        (lo[1] + hi[1]) / 2.0,
-        (lo[2] + hi[2]) / 2.0,
-    ];
+    let centre = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, (lo[2] + hi[2]) / 2.0];
     let boxed = kernel::make_box(size[0], size[1], size[2]).ok()?;
     let mut tool = kernel::translated(&boxed, centre).ok()?;
     for (n, off) in groups {
@@ -350,16 +312,10 @@ fn outside_margin(inner: [f64; 6], outer: [f64; 6], margin: f64) -> bool {
 fn tool_fill(shape: &Shape, targets: &[Shape], feature_faces: &[Shape]) -> Option<Shape> {
     const MAX_PLANES: usize = 12;
     let comp = shape;
-    let feature_faces = if feature_faces.is_empty() {
-        targets
-    } else {
-        feature_faces
-    };
+    let feature_faces = if feature_faces.is_empty() { targets } else { feature_faces };
     let feat_fps: HashSet<String> = feature_faces.iter().filter_map(fp).collect();
-    let first_ring: Vec<Shape> = wound_boundary(comp, targets)
-        .into_iter()
-        .filter(|b| fp(b).map_or(true, |k| !feat_fps.contains(&k)))
-        .collect();
+    let first_ring: Vec<Shape> =
+        wound_boundary(comp, targets).into_iter().filter(|b| fp(b).map_or(true, |k| !feat_fps.contains(&k))).collect();
     let mut seen: HashSet<Option<String>> = feat_fps.iter().cloned().map(Some).collect();
     let mut bases = Vec::new();
     for b in first_ring {
@@ -380,18 +336,12 @@ fn tool_fill(shape: &Shape, targets: &[Shape], feature_faces: &[Shape]) -> Optio
             bases.push(b);
         }
     }
-    if bases.is_empty()
-        || bases
-            .iter()
-            .any(|b| surface_type(b) != Some(SurfaceType::Plane))
-    {
+    if bases.is_empty() || bases.iter().any(|b| surface_type(b) != Some(SurfaceType::Plane)) {
         return None;
     }
     let pts = samples(targets);
-    let groups: Vec<(DVec3, f64)> = support_groups(&bases)
-        .into_iter()
-        .filter(|(n, off)| pts.iter().all(|p| p.dot(*n) <= off + 0.1))
-        .collect();
+    let groups: Vec<(DVec3, f64)> =
+        support_groups(&bases).into_iter().filter(|(n, off)| pts.iter().all(|p| p.dot(*n) <= off + 0.1)).collect();
     if groups.is_empty() || groups.len() > MAX_PLANES {
         return None;
     }
@@ -399,10 +349,8 @@ fn tool_fill(shape: &Shape, targets: &[Shape], feature_faces: &[Shape]) -> Optio
     let tool = wedge(&groups, feature_faces)?;
     let outside = kernel::boolean_op(&tool, &[comp], BoolKind::Cut).ok()?;
     let region = kernel::compound(feature_faces);
-    let voids: Vec<Shape> = solids(&outside)
-        .into_iter()
-        .filter(|s| s.distance(&region, 0.0).is_ok_and(|d| d.value < 1e-2))
-        .collect();
+    let voids: Vec<Shape> =
+        solids(&outside).into_iter().filter(|s| s.distance(&region, 0.0).is_ok_and(|d| d.value < 1e-2)).collect();
     if voids.is_empty() {
         return None;
     }
@@ -414,18 +362,8 @@ fn tool_fill(shape: &Shape, targets: &[Shape], feature_faces: &[Shape]) -> Optio
     if voids.iter().map(kernel::volume).sum::<f64>() > gain_cap {
         return None;
     }
-    let options = BooleanOptions {
-        fuzzy: 1e-5,
-        ..Default::default()
-    };
-    let op = BooleanOp::run(
-        BooleanKind::Fuse,
-        [comp],
-        voids.iter(),
-        options,
-        &ProgressRange::detached(),
-    )
-    .ok()?;
+    let options = BooleanOptions { fuzzy: 1e-5, ..Default::default() };
+    let op = BooleanOp::run(BooleanKind::Fuse, [comp], voids.iter(), options, &ProgressRange::detached()).ok()?;
     let result = op.shape().ok()?;
     if kernel::is_null(&result) || solids(&result).len() != solids(comp).len() {
         return None;
@@ -451,19 +389,13 @@ fn tool_fill_all(shape: &Shape, feature_faces: &[Shape]) -> Option<Shape> {
     let v0 = kernel::volume(shape);
     let total_cap = budget(feature_faces);
     let by_area = |mut faces: Vec<Shape>| {
-        faces.sort_by(|a, b| {
-            kernel::area(b)
-                .partial_cmp(&kernel::area(a))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        faces.sort_by(|a, b| kernel::area(b).partial_cmp(&kernel::area(a)).unwrap_or(std::cmp::Ordering::Equal));
         faces
     };
     let mut cur = shape.clone();
     let mut remaining = by_area(feature_faces.to_vec());
     for _ in 0..MAX_ROUNDS {
-        let filled = remaining
-            .iter()
-            .find_map(|t| tool_fill(&cur, std::slice::from_ref(t), &remaining))?;
+        let filled = remaining.iter().find_map(|t| tool_fill(&cur, std::slice::from_ref(t), &remaining))?;
         if kernel::volume(&filled) - v0 > total_cap {
             return None;
         }
@@ -478,11 +410,7 @@ fn tool_fill_all(shape: &Shape, feature_faces: &[Shape]) -> Option<Shape> {
             .collect();
         cur = filled;
         let cur_fps = fps(&cur);
-        let left: HashSet<String> = remaining
-            .iter()
-            .filter_map(fp)
-            .filter(|k| cur_fps.contains(k))
-            .collect();
+        let left: HashSet<String> = remaining.iter().filter_map(fp).filter(|k| cur_fps.contains(k)).collect();
         let fragment = |g: &Shape| -> bool {
             let gc = centre(g);
             let Some(gn) = normal_at(g, gc) else {
@@ -491,9 +419,7 @@ fn tool_fill_all(shape: &Shape, feature_faces: &[Shape]) -> Option<Shape> {
             prev.iter().any(|(n, c, fb)| {
                 gn.dot(*n).abs() > 0.999
                     && (gc - *c).dot(*n).abs() < 0.05
-                    && (0..3).all(|k| {
-                        fb[k] - 0.5 <= gc.to_array()[k] && gc.to_array()[k] <= fb[k + 3] + 0.5
-                    })
+                    && (0..3).all(|k| fb[k] - 0.5 <= gc.to_array()[k] && gc.to_array()[k] <= fb[k + 3] + 0.5)
             })
         };
         remaining = by_area(
@@ -515,28 +441,16 @@ fn tool_cut(shape: &Shape, targets: &[Shape]) -> Option<Shape> {
     let comp = shape;
     let band_cap = 2.0 * targets.iter().map(kernel::area).sum::<f64>();
     let mut cut_set = targets.to_vec();
-    cut_set.extend(
-        wound_boundary(comp, targets)
-            .into_iter()
-            .filter(|b| width(b) < 2.5 && kernel::area(b) <= band_cap),
-    );
+    cut_set.extend(wound_boundary(comp, targets).into_iter().filter(|b| width(b) < 2.5 && kernel::area(b) <= band_cap));
     let cut_fps: HashSet<String> = cut_set.iter().filter_map(fp).collect();
-    let supports: Vec<Shape> = wound_boundary(comp, &cut_set)
-        .into_iter()
-        .filter(|b| fp(b).map_or(true, |k| !cut_fps.contains(&k)))
-        .collect();
-    if supports.is_empty()
-        || supports
-            .iter()
-            .any(|b| surface_type(b) != Some(SurfaceType::Plane))
-    {
+    let supports: Vec<Shape> =
+        wound_boundary(comp, &cut_set).into_iter().filter(|b| fp(b).map_or(true, |k| !cut_fps.contains(&k))).collect();
+    if supports.is_empty() || supports.iter().any(|b| surface_type(b) != Some(SurfaceType::Plane)) {
         return None;
     }
     let pts = samples(&cut_set);
-    let groups: Vec<(DVec3, f64)> = support_groups(&supports)
-        .into_iter()
-        .filter(|(n, off)| pts.iter().all(|p| p.dot(*n) <= off + 0.1))
-        .collect();
+    let groups: Vec<(DVec3, f64)> =
+        support_groups(&supports).into_iter().filter(|(n, off)| pts.iter().all(|p| p.dot(*n) <= off + 0.1)).collect();
     if groups.is_empty() || groups.len() > MAX_PLANES {
         return None;
     }
@@ -544,18 +458,8 @@ fn tool_cut(shape: &Shape, targets: &[Shape]) -> Option<Shape> {
     let loss_cap = budget(&cut_set);
     // A plain cut: the cleaned operator merges coplanar faces everywhere and
     // would dissolve the band topology the next remnant is recognised by.
-    let options = BooleanOptions {
-        fuzzy: 1e-5,
-        ..Default::default()
-    };
-    let op = BooleanOp::run(
-        BooleanKind::Cut,
-        [comp],
-        [&tool],
-        options,
-        &ProgressRange::detached(),
-    )
-    .ok()?;
+    let options = BooleanOptions { fuzzy: 1e-5, ..Default::default() };
+    let op = BooleanOp::run(BooleanKind::Cut, [comp], [&tool], options, &ProgressRange::detached()).ok()?;
     let result = op.shape().ok()?;
     if kernel::is_null(&result) {
         return None;
@@ -594,10 +498,7 @@ fn defeature(shape: &Shape, faces: &[Shape]) -> FResult<Shape> {
         alerts.extend(more);
     }
     let fbb = kernel::bbox(&kernel::compound(faces)).unwrap_or([0.0; 6]);
-    let flat = (0..3)
-        .map(|k| fbb[k + 3] - fbb[k])
-        .fold(f64::INFINITY, f64::min)
-        < 1e-6;
+    let flat = (0..3).map(|k| fbb[k + 3] - fbb[k]).fold(f64::INFINITY, f64::min) < 1e-6;
     if flat {
         if let Some(cut) = tool_cut(shape, faces) {
             return Ok(cut);
@@ -615,30 +516,17 @@ fn defeature(shape: &Shape, faces: &[Shape]) -> FResult<Shape> {
     let detail = if keys.is_empty() {
         String::new()
     } else {
-        format!(
-            " (OCCT: {})",
-            keys.into_iter().collect::<Vec<_>>().join(", ")
-        )
+        format!(" (OCCT: {})", keys.into_iter().collect::<Vec<_>>().join(", "))
     };
     let tried = if expanded {
-        format!(
-            ", even removing its whole {}-face chamfer/fillet chain and wedge-filling the corner",
-            chain.len()
-        )
+        format!(", even removing its whole {}-face chamfer/fillet chain and wedge-filling the corner", chain.len())
     } else {
         ", wedge-filling didn't apply either".to_owned()
     };
-    Err(Fail::msg(format!(
-        "can't heal after removing that face{tried}, use Press/Pull to cut it instead{detail}"
-    )))
+    Err(Fail::msg(format!("can't heal after removing that face{tried}, use Press/Pull to cut it instead{detail}")))
 }
 
-fn resolve_all(
-    ctx: &mut Ctx,
-    feature_id: &str,
-    part: &Shape,
-    sels: &[Selector],
-) -> FResult<Vec<Shape>> {
+fn resolve_all(ctx: &mut Ctx, feature_id: &str, part: &Shape, sels: &[Selector]) -> FResult<Vec<Shape>> {
     let mut out = Vec::new();
     for sel in sels {
         let v = serde_json::to_value(sel).map_err(|_| Fail::Internal("TypeError".into()))?;
@@ -652,11 +540,7 @@ fn bbox_distance(shape: &Shape, p: DVec3) -> f64 {
         return f64::INFINITY;
     };
     let d = |lo: f64, v: f64, hi: f64| (lo - v).max(0.0).max(v - hi);
-    let (dx, dy, dz) = (
-        d(bb[0], p.x, bb[3]),
-        d(bb[1], p.y, bb[4]),
-        d(bb[2], p.z, bb[5]),
-    );
+    let (dx, dy, dz) = (d(bb[0], p.x, bb[3]), d(bb[1], p.y, bb[4]), d(bb[2], p.z, bb[5]));
     (dx * dx + dy * dy + dz * dz).sqrt()
 }
 
@@ -675,11 +559,7 @@ fn retarget(
         .filter_map(|v| {
             let p = v.get("point")?.as_array()?;
             (p.len() == 3).then(|| {
-                dvec3(
-                    p[0].as_f64().unwrap_or(0.0),
-                    p[1].as_f64().unwrap_or(0.0),
-                    p[2].as_f64().unwrap_or(0.0),
-                )
+                dvec3(p[0].as_f64().unwrap_or(0.0), p[1].as_f64().unwrap_or(0.0), p[2].as_f64().unwrap_or(0.0))
             })
         })
         .collect();
@@ -691,12 +571,8 @@ fn retarget(
         return Ok(Some((named, resolve_all(ctx, &f.id, &part, sels)?)));
     }
     let p0 = points[0];
-    let mut order: Vec<(f64, usize)> = ctx
-        .bodies
-        .iter()
-        .enumerate()
-        .map(|(i, b)| (bbox_distance(b.shape(), p0), i))
-        .collect();
+    let mut order: Vec<(f64, usize)> =
+        ctx.bodies.iter().enumerate().map(|(i, b)| (bbox_distance(b.shape(), p0), i)).collect();
     order.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
     let mut winner: Option<(f64, usize)> = None;
     for (bd, i) in order {
@@ -764,10 +640,7 @@ mod tests {
         let corner = dvec3(10.0, 10.0, 10.0);
         let edges: Vec<_> = b
             .edges()
-            .filter(|e| {
-                (e.start_point() - corner).length() < 1e-6
-                    || (e.end_point() - corner).length() < 1e-6
-            })
+            .filter(|e| (e.start_point() - corner).length() < 1e-6 || (e.end_point() - corner).length() < 1e-6)
             .collect();
         b.chamfer_edges(2.0, edges)
     }
@@ -788,11 +661,7 @@ mod tests {
         assert_eq!(chain.len(), 4);
         assert!(chain.iter().all(|f| width(f) < 3.0));
         let filled = tool_fill_all(&part, &chain).expect("the corner fills");
-        assert!(
-            (kernel::volume(&filled) - 8000.0).abs() < 0.01,
-            "{}",
-            kernel::volume(&filled)
-        );
+        assert!((kernel::volume(&filled) - 8000.0).abs() < 0.01, "{}", kernel::volume(&filled));
 
         let healed = defeature(&part, &chain).expect("the chain heals");
         assert_eq!(kernel::count(&healed, Kind::Face), 6);
@@ -802,23 +671,16 @@ mod tests {
     #[test]
     fn an_unbounded_wound_is_not_filled_and_a_hole_in_the_wedge_survives() {
         let b = Shape::box_centered(20.0, 20.0, 20.0);
-        let top = kernel::subshapes(&b, Kind::Face)
-            .into_iter()
-            .max_by(|x, y| centre(x).z.total_cmp(&centre(y).z))
-            .unwrap();
+        let top =
+            kernel::subshapes(&b, Kind::Face).into_iter().max_by(|x, y| centre(x).z.total_cmp(&centre(y).z)).unwrap();
         assert!(tool_fill_all(&b, &[top]).is_none());
 
         let part = corner_chamfered();
-        let pin =
-            kernel::translated(&kernel::make_cylinder(1.5, 2.0).unwrap(), [5.0, 5.0, 9.0]).unwrap();
+        let pin = kernel::translated(&kernel::make_cylinder(1.5, 2.0).unwrap(), [5.0, 5.0, 9.0]).unwrap();
         let holed = kernel::boolean_op(&part, &[&pin], BoolKind::Cut).unwrap();
         let hole_void = kernel::volume(&part) - kernel::volume(&holed);
         let chain = expand_blend_chain(&holed, &[smallest_face(&holed)]);
         let filled = tool_fill_all(&holed, &chain).expect("the corner fills around the hole");
-        assert!(
-            (kernel::volume(&filled) - (8000.0 - hole_void)).abs() < 0.05,
-            "{}",
-            kernel::volume(&filled)
-        );
+        assert!((kernel::volume(&filled) - (8000.0 - hole_void)).abs() < 0.05, "{}", kernel::volume(&filled));
     }
 }

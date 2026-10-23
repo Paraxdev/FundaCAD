@@ -23,13 +23,14 @@ const joint = (id: string, mode: MechanismJoint["mode"]): MechanismJoint => ({
   a: { body: "body2", axis: { ...face, body: "body2" } },
   b: { body: "body1", axis: { ...face, body: "body1" } },
 });
-const claw = (drive?: string) => ({
-  id: "f9",
-  type: "mechanism",
-  ground: "body1",
-  joints: [joint("slide1", "slider"), joint("pin1", "revolute"), joint("weld1", "rigid")],
-  ...(drive !== undefined ? { drive } : {}),
-}) as Feature & Record<string, unknown>;
+const claw = (drive?: string) =>
+  ({
+    id: "f9",
+    type: "mechanism",
+    ground: "body1",
+    joints: [joint("slide1", "slider"), joint("pin1", "revolute"), joint("weld1", "rigid")],
+    ...(drive !== undefined ? { drive } : {}),
+  }) as Feature & Record<string, unknown>;
 
 describe("which drive value a mechanism reads", () => {
   it("is the offset for a slider drive and the angle for a revolute one", () => {
@@ -158,7 +159,10 @@ describe("new joints", () => {
 
 describe("the drive handle's start", () => {
   const axis = (value?: number): DatumMark => ({
-    kind: "axis", origin: [0, 0, 0], dir: [0, 0, 1], ...(value !== undefined ? { value } : {}),
+    kind: "axis",
+    origin: [0, 0, 0],
+    dir: [0, 0, 1],
+    ...(value !== undefined ? { value } : {}),
   });
 
   it("starts from the drive value when the feature has one", () => {

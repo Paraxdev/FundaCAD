@@ -1,11 +1,5 @@
-// The one pose on screen.
-//
-// The target T always lies on the view axis, and `scale` is half the visible
-// height at T. The eye is derived, eye = T - forward·d with d = scale/tan(fov/2),
-// in BOTH projections: an orthographic camera placed there with a half height of
-// `scale` shows exactly what the perspective one shows at T, so swapping
-// projections moves nothing at T and a later swap back finds the eye in front
-// of what was being looked at.
+// T lies on the view axis and `scale` is half the visible height at T. The eye is T - forward·d,
+// d = scale/tan(fov/2), in both projections, so swapping projection moves nothing at T.
 
 import * as THREE from "three";
 import { decompose, finiteQuat, finiteVec, turntableQuat } from "./math";
@@ -106,13 +100,19 @@ export function setTurntable(p: Pose, yaw: number, elev: number) {
 }
 
 export function poseFinite(p: Pose): boolean {
-  return finiteVec(p.target) && finiteQuat(p.q) && Number.isFinite(p.scale) && p.scale > 0
-    && Number.isFinite(p.fov) && p.fov > 0 && p.fov < 180
-    && Number.isFinite(p.yaw) && Number.isFinite(p.elev)
-    && Math.abs(p.q.lengthSq() - 1) < 1e-6;
+  return (
+    finiteVec(p.target) &&
+    finiteQuat(p.q) &&
+    Number.isFinite(p.scale) &&
+    p.scale > 0 &&
+    Number.isFinite(p.fov) &&
+    p.fov > 0 &&
+    p.fov < 180 &&
+    Number.isFinite(p.yaw) &&
+    Number.isFinite(p.elev) &&
+    Math.abs(p.q.lengthSq() - 1) < 1e-6
+  );
 }
-
-// --- screen <-> world ---------------------------------------------------------
 
 /** A viewport in pixels, origin top left, y down. */
 export interface Frame {
@@ -150,7 +150,11 @@ export function boxOffScreen(p: Pose, v: Frame, box: THREE.Box3): boolean {
   const a = aspectOf(v);
   const h = halfTan(p.fov);
   const c = new THREE.Vector3();
-  let left = 0, rightOut = 0, below = 0, above = 0, behind = 0;
+  let left = 0,
+    rightOut = 0,
+    below = 0,
+    above = 0,
+    behind = 0;
   for (let i = 0; i < 8; i++) {
     c.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).sub(e);
     const z = c.dot(fwd);
@@ -169,9 +173,8 @@ export function boxOffScreen(p: Pose, v: Frame, box: THREE.Box3): boolean {
 export interface Ray {
   origin: THREE.Vector3;
   dir: THREE.Vector3;
-  /** Depth of `origin` along the view axis, measured from the eye. Negative
-   *  for an orthographic ray, which starts behind the eye so geometry the
-   *  camera sits inside still counts. */
+  /** Depth of `origin` from the eye. Negative for an orthographic ray, which starts behind
+   *  the eye so geometry the camera sits inside still counts. */
   originDepth: number;
 }
 
@@ -187,7 +190,8 @@ export function rayAt(p: Pose, v: Frame, x: number, y: number, back = 0, out?: R
   const up = upOf(p, f2);
   const e = eyeOf(p, f3);
   if (p.ortho) {
-    r.origin.copy(e)
+    r.origin
+      .copy(e)
       .addScaledVector(right, nx * p.scale * a)
       .addScaledVector(up, ny * p.scale)
       .addScaledVector(fwd, -back);
@@ -196,7 +200,11 @@ export function rayAt(p: Pose, v: Frame, x: number, y: number, back = 0, out?: R
   } else {
     const h = halfTan(p.fov);
     r.origin.copy(e);
-    r.dir.copy(fwd).addScaledVector(right, nx * h * a).addScaledVector(up, ny * h).normalize();
+    r.dir
+      .copy(fwd)
+      .addScaledVector(right, nx * h * a)
+      .addScaledVector(up, ny * h)
+      .normalize();
     r.originDepth = 0;
   }
   return r;
@@ -207,7 +215,6 @@ export function rayDepth(p: Pose, ray: Ray, t: number): number {
   return ray.originDepth + t * ray.dir.dot(forwardOf(p, f0));
 }
 
-/** The point on a ray at a given depth. */
 export function rayPointAtDepth(p: Pose, ray: Ray, depth: number, out = new THREE.Vector3()): THREE.Vector3 {
   const k = ray.dir.dot(forwardOf(p, f0));
   const t = k > 1e-12 ? (depth - ray.originDepth) / k : 0;

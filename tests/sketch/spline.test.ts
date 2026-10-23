@@ -9,13 +9,21 @@ describe("splinePolyline", () => {
     expect(one[0]!.x).toBe(1);
   });
   it("is a straight segment for exactly two points", () => {
-    const p = splinePolyline([{ x: 0, y: 0 }, { x: 10, y: 5 }]);
+    const p = splinePolyline([
+      { x: 0, y: 0 },
+      { x: 10, y: 5 },
+    ]);
     expect(p).toHaveLength(2);
     expect(p[1]!.x).toBe(10);
     expect(p[1]!.y).toBe(5);
   });
   it("interpolates through every fit point", () => {
-    const fit = [{ x: 0, y: 0 }, { x: 5, y: 8 }, { x: 12, y: 2 }, { x: 18, y: 9 }];
+    const fit = [
+      { x: 0, y: 0 },
+      { x: 5, y: 8 },
+      { x: 12, y: 2 },
+      { x: 18, y: 9 },
+    ];
     const poly = splinePolyline(fit, 10);
     // endpoints are exact fit points
     expect(poly[0]!.x).toBeCloseTo(0);
@@ -27,7 +35,11 @@ describe("splinePolyline", () => {
     expect(hitsMid).toBe(true);
   });
   it("emits segsPerSpan samples per leg plus the closing point", () => {
-    const fit = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }];
+    const fit = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+    ];
     expect(splinePolyline(fit, 4)).toHaveLength((fit.length - 1) * 4 + 1);
   });
 });

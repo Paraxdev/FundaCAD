@@ -28,8 +28,25 @@ afterEach(() => {
 });
 
 const NAMES = [
-  "extrude", "edgeFeature", "targetEdit", "pressPull", "faceOffset", "draft", "thread", "textOnFace", "hole", "loft",
-  "pattern", "planeOffset", "datumPose", "lightAim", "revolvePitch", "joint", "mechanism", "move",
+  "extrude",
+  "edgeFeature",
+  "targetEdit",
+  "pressPull",
+  "faceOffset",
+  "draft",
+  "thread",
+  "textOnFace",
+  "hole",
+  "loft",
+  "pattern",
+  "mirror",
+  "planeOffset",
+  "datumPose",
+  "lightAim",
+  "revolvePitch",
+  "joint",
+  "mechanism",
+  "move",
 ];
 
 interface Opts {
@@ -38,6 +55,11 @@ interface Opts {
   preview?: { id: string; inPlace?: boolean } | null;
   sketch?: { editing: string | null };
   suppressed?: string[];
+  features?: object[];
+  /** what the engine is busy with: an import, or a rebuild */
+  busy?: "import" | "rebuild";
+  /** every running op, oldest first, when more than the one `busy` names */
+  ops?: ("import" | "rebuild")[];
 }
 
 function mountBar(o: Opts = {}) {
@@ -48,8 +70,14 @@ function mountBar(o: Opts = {}) {
   for (const n of NAMES) {
     const t: Tool = {
       active: o.tool?.name === n,
-      cancel: () => { if (t.active) log.push(`cancel:${n}`); t.active = false; },
-      startEdit: () => { log.push(`startEdit:${n}`); return true; },
+      cancel: () => {
+        if (t.active) log.push(`cancel:${n}`);
+        t.active = false;
+      },
+      startEdit: () => {
+        log.push(`startEdit:${n}`);
+        return true;
+      },
     };
     tools[n] = t;
   }
@@ -59,13 +87,32 @@ function mountBar(o: Opts = {}) {
   const sketch = {
     active: !!o.sketch,
     editingSketchId: o.sketch?.editing ?? null,
-    enter: () => { log.push("sketch.enter"); },
-    finish: (c = true) => { sketch.active = false; log.push(`sketch.finish:${c}`); },
+    enter: () => {
+      log.push("sketch.enter");
+    },
+    finish: (c = true) => {
+      sketch.active = false;
+      log.push(`sketch.finish:${c}`);
+    },
   };
   const e = {
     viewport: { highlightDatum: () => {}, getSelectedFaceIds: () => [], getSelectedBodies: () => [] },
     overlay: { selectedRegions: () => [] },
-    bridge: { docVersion: ref(0), buildVersion: ref(0), editPreviewVersion: ref(0), busy: ref({ active: false, waiting: false }) },
+    bridge: {
+      docVersion: ref(0),
+      buildVersion: ref(0),
+      editPreviewVersion: ref(0),
+      busy: ref({ active: !!o.busy, waiting: null, rebuild: o.busy === "rebuild" }),
+      ops: ref(
+        (o.ops ?? (o.busy ? [o.busy] : [])).map((kind, i) => ({
+          key: i + 1,
+          label: kind === "import" ? "Importing sv08.step" : "Rebuilding",
+          stage: null,
+          pct: null,
+          rebuild: kind === "rebuild",
+        })),
+      ),
+    },
     tools,
     sketch,
     planePick: false,
@@ -74,11 +121,13 @@ function mountBar(o: Opts = {}) {
     toolAtWork: () => sketch.active || modalActive(),
     dropBodyGizmo: () => {},
     featureForFace: () => null,
-    setStatus: (t: string) => { status.push(t); },
+    setStatus: (t: string) => {
+      status.push(t);
+    },
     noteCommitted: () => {},
     store: {
       document: {
-        features: [
+        features: o.features ?? [
           { id: "sk", type: "sketch", plane: "XY", entities: [] },
           { id: "ex1", type: "extrude", sketch: "sk", distance: 2 },
           { id: "rv", type: "revolve", sketch: "sk" },
@@ -87,12 +136,20 @@ function mountBar(o: Opts = {}) {
           { id: "dp", type: "datumPlane", plane: "XY", offset: 5 },
         ],
       },
-      get editPreviewId() { return o.preview?.id ?? null; },
-      get editPreviewInPlace() { return !!o.preview?.inPlace; },
+      get editPreviewId() {
+        return o.preview?.id ?? null;
+      },
+      get editPreviewInPlace() {
+        return !!o.preview?.inPlace;
+      },
       onEditPreview: () => () => {},
       isSuppressed: (id: string) => !!o.suppressed?.includes(id),
       rollbackIndex: 6,
       buildState: { result: null, building: false, errorFeatureId: null },
+      cancelRunningOp: (key: number) => {
+        log.push(`cancelOp:${key}`);
+        return Promise.resolve(true);
+      },
     },
   } as unknown as Engine;
   const sel = createSelection(e);
@@ -111,7 +168,7 @@ function mountBar(o: Opts = {}) {
   const chip = (id: string) => w.get(`.timeline-node[data-id="${id}"]`);
   const dbl = (id: string) => chip(id).trigger("dblclick");
   const tool = (n: string) => tools[n] as Tool;
-  return { log, status, chip, dbl, tool };
+  return { log, status, chip, dbl, tool, w };
 }
 
 /** A heads-up box with `text` typed into its one field, as a tool shows it. */
@@ -179,14 +236,20 @@ describe("History row double click while another edit is open", () => {
 
   it("enters a value typed in the heads-up box instead of throwing it away", async () => {
     const m = mountBar({ tool: { name: "extrude", on: "ex1" }, preview: { id: "ex1" } });
-    typedBox("5", () => { m.log.push("commit:extrude"); m.tool("extrude").active = false; });
+    typedBox("5", () => {
+      m.log.push("commit:extrude");
+      m.tool("extrude").active = false;
+    });
     await m.dbl("rv");
     expect(m.log).toEqual(["commit:extrude", "startEdit:revolvePitch"]);
   });
 
   it("keeps the edit and says why when the typed value is refused", async () => {
     const m = mountBar({ tool: { name: "extrude", on: "ex1" }, preview: { id: "ex1" } });
-    typedBox("abc", () => { m.log.push("commit:extrude"); m.tool("extrude").active = false; });
+    typedBox("abc", () => {
+      m.log.push("commit:extrude");
+      m.tool("extrude").active = false;
+    });
     await m.dbl("rv");
     expect(m.log).toEqual([]);
     expect(m.tool("extrude").active).toBe(true);
@@ -196,7 +259,9 @@ describe("History row double click while another edit is open", () => {
 
   it("keeps the edit and says so when entering the value leaves the tool open", async () => {
     const m = mountBar({ tool: { name: "extrude", on: "ex1" }, preview: { id: "ex1" } });
-    typedBox("5", () => { m.log.push("commit:extrude"); });
+    typedBox("5", () => {
+      m.log.push("commit:extrude");
+    });
     await m.dbl("rv");
     expect(m.log).toEqual(["commit:extrude"]);
     expect(m.status.at(-1)).toMatch(/Finish this edit/);
@@ -219,5 +284,81 @@ describe("History row double click while another edit is open", () => {
     await m.chip("rv").trigger("click");
     expect(m.log).toEqual([]);
     expect(useSelectionStore().featureId).toBe("ex1");
+  });
+});
+
+describe("an import's chip", () => {
+  const nodes = [
+    { name: "Gearbox", parent: null },
+    { name: "Shaft", parent: 0 },
+  ];
+  const imp = (id: string, name: string, extra: object = {}) => ({
+    id,
+    type: "import",
+    format: "step",
+    name,
+    source: "/in/gear-box.step",
+    ...extra,
+  });
+
+  it("is named by the assembly Items shows and keeps the file name in its tooltip", () => {
+    const m = mountBar({ features: [imp("i1", "gear-box", { nodes })] });
+    expect(m.chip("i1").find(".t-name").text()).toBe("Gearbox");
+    expect(m.chip("i1").attributes("title")).toContain("File: gear-box");
+  });
+
+  it("is named by its own name when it was renamed or has no assembly, with no file line", () => {
+    const m = mountBar({ features: [imp("i1", "Housing", { nodes }), imp("i2", "gear-box")] });
+    expect(m.chip("i1").find(".t-name").text()).toBe("Housing");
+    expect(m.chip("i2").find(".t-name").text()).toBe("gear-box");
+    expect(m.chip("i2").attributes("title")).not.toContain("File:");
+  });
+});
+
+describe("History's empty line", () => {
+  const sketch = { id: "sk1", type: "sketch", plane: "XZ", entities: [] };
+
+  it("names a sketch and a dropped file as the ways to start", () => {
+    const m = mountBar({ features: [] });
+    const line = m.w.find(".timeline-empty").text();
+    expect(line).toContain("Start with a Sketch");
+    expect(line).toContain("drop a STEP, STL or 3MF file");
+  });
+
+  it("is gone once there is a feature, one or many", () => {
+    expect(
+      mountBar({ features: [sketch] })
+        .w.find(".timeline-empty")
+        .exists(),
+    ).toBe(false);
+    expect(mountBar().w.find(".timeline-empty").exists()).toBe(false);
+  });
+
+  it("stays away while the first import runs, and shows during an empty rebuild", () => {
+    expect(mountBar({ features: [], busy: "import" }).w.find(".timeline-empty").exists()).toBe(false);
+    expect(mountBar({ features: [], busy: "rebuild" }).w.find(".timeline-empty").exists()).toBe(true);
+  });
+});
+
+// The SV08 read for minutes with no History step, and an emptied History said "remeshing…" for another document's op.
+describe("History's rows for running ops", () => {
+  it("lists an import from the moment it starts, under any rebuild, and its Cancel stops only it", async () => {
+    const m = mountBar({ features: [], busy: "rebuild", ops: ["import", "rebuild"] });
+    const rows = m.w.findAll(".timeline-node.running");
+    expect({
+      rows: rows.map((r) => r.find(".t-build").text()),
+      empty: m.w.find(".timeline-empty").exists(),
+      chip: m.w.find(".timeline-node.building").exists(),
+    }).toEqual({ rows: ["Importing sv08.step"], empty: false, chip: false });
+    await rows[0]!.find(".t-op-cancel").trigger("click");
+    expect(m.log).toEqual(["cancelOp:1"]);
+  });
+
+  it("shows no row and the empty line while only the document's own rebuild runs", () => {
+    const m = mountBar({ features: [], busy: "rebuild" });
+    expect({
+      rows: m.w.findAll(".timeline-node.running").length,
+      empty: m.w.find(".timeline-empty").exists(),
+    }).toEqual({ rows: 0, empty: true });
   });
 });

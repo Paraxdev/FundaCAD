@@ -1,8 +1,5 @@
-// File I/O: save/open the document JSON and export STEP/STL/3MF. Uses Tauri
-// native dialogs + fs when running in the app; falls back to browser
-// download/upload in a plain dev browser. Export always writes server-side: we
-// get a path from the native save dialog and hand it to the engine, which
-// writes the file directly (no fs round-trip through the webview).
+// Save, open and export. Tauri dialogs and fs in the app, browser download and upload in a plain dev browser.
+// Export hands the engine a path from the save dialog, so the file never round-trips through the webview.
 
 import { suggestedSavePath } from "./saveFolder";
 import type { CarriedSection, DocumentStore } from "../document/store";
@@ -11,33 +8,41 @@ import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat, PlaneDef } from "../types";
 import { clearRecovery } from "./recovery";
 import {
-  clampTolerance, exportFileName, exportScopeFromSelection, FORMATS, isFlatFormat, isMeshFormat, lastExportDir, meshWire,
-  loadExportSettings, rememberExportDir, saveExportSettings, type FlatSource,
+  clampTolerance,
+  exportFileName,
+  exportScopeFromSelection,
+  FORMATS,
+  isFlatFormat,
+  isMeshFormat,
+  lastExportDir,
+  meshWire,
+  loadExportSettings,
+  rememberExportDir,
+  saveExportSettings,
+  type FlatSource,
 } from "./exportSettings";
 import { buildBodyTree, importTrees } from "../ui/browserTree";
 import { referencedGeometry } from "../document/versions";
 import { hashShapedStrings } from "../document/geometryRefs";
+import { blake2b128Hex } from "../document/blake2b";
 import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
 import { closeHome } from "../ui/home";
 import { captureAfterOpen, captureThumbnail, storeThumbnail } from "./thumbnails";
-import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
+import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt, leftOutSectionsNotice } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
 import { askImportUnit, asksForUnit, type ImportUnit } from "./importUnit";
 import { importFeatures } from "./importSketches";
-import {
-  asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary,
-} from "../document/materials";
+import { asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary } from "../document/materials";
 import { importedBodyColors } from "../document/faceColors";
 import { openNotices } from "../document/openNotice";
 import type { FaceColorRuns } from "../types";
+import { isSessionEnded, type OpenOp } from "../document/session";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/** Every geometry hash the document references, and the mesh keys worth
- *  carrying. Rust turns these into container entries; the frontend collects them
- *  because it is the one that owns the document. */
+/** Every geometry hash the document references plus the mesh keys worth carrying, for Rust's container entries. */
 function referencedHashes(store: DocumentStore): string[] {
   const out = new Set<string>();
   for (const f of store.document.features ?? []) {
@@ -48,19 +53,16 @@ function referencedHashes(store: DocumentStore): string[] {
   return [...out];
 }
 
-/** Write the document at `path`, as JSON or, for a `.fundab` path, the binary
- *  format; Rust decides from the extension. Returns an error message, or null on
- *  success.
- *
- *  Goes through the app, NOT the engine: a save that needed the geometry engine
- *  would be impossible while its worker is down, with unsaved work on screen. Saving needs no
- *  geometry anyway; the blobs are already bytes on disk. */
+/** Write the document at `path`, JSON or binary for `.fundab` (Rust decides). Returns an error message or null.
+ *  Goes through the app, not the engine, so a save works while the engine worker is down. */
 async function writeContainer(store: DocumentStore, path: string): Promise<string | null> {
   const picture = captureThumbnail();
+  // Read before the first await: a document opened meanwhile must never be written under this one's path.
+  const doc = store.toObject();
+  const hashes = referencedHashes(store);
+  const carried = store.carriedSections;
   const { invoke } = await import("@tauri-apps/api/core");
   try {
-    const doc = store.toObject();
-    const hashes = referencedHashes(store);
     const optionalHashes = [...hashShapedStrings(doc)].filter((h) => !hashes.includes(h));
     await invoke("container_save", {
       path,
@@ -68,26 +70,40 @@ async function writeContainer(store: DocumentStore, path: string): Promise<strin
       hashes,
       optionalHashes,
       meshKeys: [],
-      carried: store.carriedSections,
+      carried,
     });
     void storeThumbnail(path, picture);
+    const left = leftOutSectionsNotice(path, carried);
+    if (left) void import("../ui/toast").then(({ toast }) => toast(left, { kind: "info", timeout: 12000 }));
     return null;
   } catch (e) {
     return errMsg(e);
   }
 }
 
+// The file holds the document as it was at `edits`: a change since is not in it, so it stays unsaved and its snapshot
+// stays the one that has it.
+function savedAs(store: DocumentStore, path: string, edits: number) {
+  const whole = store.editCount === edits;
+  store.markSaved(path, whole);
+  noteRecent(path);
+  if (whole) void clearRecovery(path);
+}
+
 /** Save: write to the current path if known, else behave like Save As. */
 export async function saveDocument(store: DocumentStore) {
   if (isTauri() && store.filePath) {
-    const err = await writeContainer(store, store.filePath);
+    const session = store.session;
+    const path = store.filePath;
+    const edits = store.editCount;
+    const err = await writeContainer(store, path);
     if (err) {
-      await reportError(`Couldn't save ${store.filePath}: ${err}`);
+      await reportError(`Couldn't save ${path}: ${err}`);
       return;
     }
-    store.markSaved(store.filePath);
-    noteRecent(store.filePath);
-    void clearRecovery(store.filePath); // the on-disk file is now the truth
+    // The file holds the document as it was when the save began, so another document opened meanwhile is not saved.
+    if (!session.alive) return;
+    savedAs(store, path, edits);
   } else {
     await saveDocumentAs(store);
   }
@@ -95,6 +111,7 @@ export async function saveDocument(store: DocumentStore) {
 
 /** Save As: always prompt for a path (or download in a plain browser). */
 export async function saveDocumentAs(store: DocumentStore) {
+  const session = store.session;
   if (isTauri()) {
     const { save } = await import("@tauri-apps/plugin-dialog");
     const path = await save({
@@ -107,32 +124,127 @@ export async function saveDocumentAs(store: DocumentStore) {
         isDocumentExt(store.fileName.split(".").pop()?.toLowerCase()) ? store.fileName : `${store.fileName}.${DOC_EXT}`,
       ),
     });
-    if (path) {
+    // A path picked for a document that was closed meanwhile is not where the next one goes.
+    if (path && session.alive) {
+      const edits = store.editCount;
       const err = await writeContainer(store, path);
       if (err) {
         await reportError(`Couldn't save ${path}: ${err}`);
         return;
       }
-      store.markSaved(path);
-      noteRecent(path);
-      void clearRecovery(path);
+      if (!session.alive) return;
+      savedAs(store, path, edits);
     }
   } else {
-    // Plain dev browser: no Tauri, so no container. Geometry lives in the
-    // engine's blob store either way, so this download is the document only,
-    // useful for inspecting a feature tree, NOT a portable file.
-    //
-    // Reuse the name already settled on (mirrors the Tauri defaultPath logic
-    // above), so a SECOND Save As in the same session downloads "Untitled.funda"
-    // again rather than "Untitled.funda.funda": markSaved below makes fileName
-    // return the downloaded name from here on.
+    // Reuse the settled name so a second Save As downloads "Untitled.funda" again, not "Untitled.funda.funda".
     const name = store.filePath ? store.fileName : `${store.fileName}.${DOC_EXT}`;
-    downloadText(name, store.toJSON());
-    // No real path to save to, but the title bar reads store.fileName the same
-    // way for both builds, and "Untitled*" forever after a successful download
-    // read as the save having silently failed.
+    const built = await browserDocumentText(store);
+    if ("refused" in built) {
+      await reportError(built.refused);
+      return;
+    }
+    if (!session.alive) return;
+    downloadText(name, built.text);
+    // No real path, but without this the title bar read "Untitled*" forever, as if the save had failed.
     store.markSaved(name);
   }
+}
+
+/** A browser save holds this much geometry at most: the file is built as one
+ *  string, base64 adds a third, and V8 refuses a string past about 512 MiB. */
+const MAX_BROWSER_GEOMETRY_BYTES = 256 * 1024 * 1024;
+
+/** The .funda text the desktop app would write, with imported geometry read back from the engine's blob store
+ *  since a browser has no Rust. `refused` says why no file that opens whole could be built. */
+async function browserDocumentText(store: DocumentStore): Promise<{ text: string } | { refused: string }> {
+  const doc = store.toObject();
+  const hashes = referencedHashes(store);
+  const optionalHashes = [...hashShapedStrings(doc)].filter((h) => !hashes.includes(h));
+  if (!hashes.length && !optionalHashes.length) return { text: JSON.stringify(doc, null, 2) };
+  const backend = store.backend;
+  const read = async (h: string) => (backend.blobGet ? backend.blobGet(h).catch(() => null) : null);
+  const blobs = new Map<string, Uint8Array>();
+  const missing: string[] = [];
+  let total = 0;
+  for (const h of hashes) {
+    const bytes = await read(h);
+    if (bytes) blobs.set(h, bytes);
+    else missing.push(h);
+    total += bytes?.length ?? 0;
+  }
+  if (missing.length) {
+    const names = new Set<string>();
+    for (const f of doc.features ?? []) {
+      const imp = asFeature(f, "import");
+      if (imp?.geom && missing.includes(imp.geom)) names.add(imp.name || imp.source || imp.id);
+    }
+    if (names.size < missing.length) names.add("an import in an earlier version");
+    return {
+      refused: `Couldn't save: the geometry of ${[...names].join(", ")} is not in the engine, so the file would open without it. Import it again, then save.`,
+    };
+  }
+  for (const h of optionalHashes) {
+    const bytes = await read(h);
+    if (bytes) blobs.set(h, bytes);
+    total += bytes?.length ?? 0;
+  }
+  if (total > MAX_BROWSER_GEOMETRY_BYTES) {
+    return {
+      refused: `Couldn't save: its imported geometry is ${Math.round(total / 1048576)} MB, more than the browser can put in one file. Save it in the desktop app.`,
+    };
+  }
+  const geometry: Record<string, string> = {};
+  for (const h of [...blobs.keys()].sort()) geometry[h] = bytesToBase64(blobs.get(h)!);
+  return { text: JSON.stringify(blobs.size ? { ...doc, geometry } : doc, null, 2) };
+}
+
+/** What Rust does on a desktop open: check every embedded blob against its hash, all before any is published,
+ *  then hand them to the engine. The text comes back unchanged; load() drops the `geometry` key. */
+async function publishEmbeddedGeometry(store: DocumentStore, text: string): Promise<string | null> {
+  if (!text.includes('"geometry"')) return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const embedded = raw && typeof raw === "object" ? (raw as { geometry?: unknown }).geometry : undefined;
+  if (embedded === undefined) return null;
+  const damaged = (detail: string) => new UnreadableDocumentError("its embedded geometry is damaged", detail);
+  if (!embedded || typeof embedded !== "object" || Array.isArray(embedded)) throw damaged("geometry is not an object");
+  const blobs: Uint8Array[] = [];
+  for (const [hash, data] of Object.entries(embedded)) {
+    if (typeof data !== "string" || !/^[0-9a-f]{32}$/.test(hash)) throw damaged(`bad geometry entry ${hash}`);
+    let bytes: Uint8Array;
+    try {
+      bytes = base64ToBytes(data);
+    } catch {
+      throw damaged(`geometry ${hash} is not base64`);
+    }
+    if (blake2b128Hex(bytes) !== hash) {
+      throw new UnreadableDocumentError(
+        "its geometry does not match its hash, so it was changed or damaged",
+        `geometry ${hash} does not match its bytes`,
+      );
+    }
+    blobs.push(bytes);
+  }
+  if (!blobs.length) return null;
+  const backend = store.backend;
+  if (!backend.blobPut) return "this engine has no blob store";
+  try {
+    for (const b of blobs) await backend.blobPut(b);
+  } catch (e) {
+    return errMsg(e);
+  }
+  return null;
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
 
 /** `mayReplace` is asked before a picked document takes the open one's place,
@@ -141,15 +253,24 @@ export async function openDocument(
   store: DocumentStore,
   geometry: GeometryBackend,
   mayReplace: () => Promise<boolean> = async () => true,
+  placeImport: (names: string[], run: () => Promise<unknown>) => Promise<unknown> = async (_names, run) => {
+    closeHome();
+    await run();
+  },
 ) {
   if (isTauri()) {
+    // A file picked for a document closed while the dialog was up is not imported into the next one.
+    const session = store.session;
     const { open } = await import("@tauri-apps/plugin-dialog");
     const path = await open({
       multiple: false,
       // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
       // body), routed by extension below, so users can just "open" an STL.
       filters: [
-        { name: "All supported", extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS]) },
+        {
+          name: "All supported",
+          extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS]),
+        },
         { name: "FundaCAD Document", extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"]) },
         { name: "Mesh / CAD", extensions: dialogExts(IMPORT_EXTS) },
       ],
@@ -159,9 +280,8 @@ export async function openDocument(
     if (isDocumentExt(ext)) {
       if (!(await mayReplace())) return;
       await openDocumentAtPath(store, path, geometry);
-    } else {
-      closeHome();
-      await importPath(store, geometry, path); // a mesh / CAD file → import as a body
+    } else if (session.alive) {
+      await placeImport([path.split(/[\\/]/).pop() ?? path], () => importPath(store, geometry, path));
     }
   } else {
     const picked = await uploadText();
@@ -171,29 +291,48 @@ export async function openDocument(
 
 /** Open a document the app has as text with no path, picked in a browser or
  *  dropped on the window. */
-export async function openDocumentText(store: DocumentStore, name: string, text: string): Promise<OpenOutcome> {
+export async function openDocumentText(
+  store: DocumentStore,
+  name: string,
+  text: string,
+  ticket = openTicket(store),
+): Promise<OpenOutcome> {
+  let unpublished: string | null;
   try {
+    unpublished = await publishEmbeddedGeometry(store, text);
+    if (!(await mayStillReplace(store, ticket, name))) return "dropped";
     store.load(text);
   } catch (e) {
     await reportUnreadable(e);
     return "unreadable";
   }
-  // No real path, but the name is enough for the title bar to show what is
-  // open and drop the unsaved marker, same as a Tauri Open does.
+  // No real path, but the name lets the title bar show what is open and drop the unsaved marker.
   store.markSaved(name);
   await warnAboutOpen(store);
+  if (unpublished)
+    await reportError(
+      `Opened ${name}, but its embedded geometry could not be handed to the engine, so its imports will not build: ${unpublished}.`,
+    );
   return "ok";
 }
 
 /** Open a dropped document the app has as a File with no path. The desktop app
  *  reads it in Rust like an Open does, so embedded geometry reaches the blob
  *  store and a binary .fundab opens; a plain browser reads it as text. */
-export async function openDocumentBytes(store: DocumentStore, file: File, geometry?: GeometryBackend): Promise<OpenOutcome> {
-  if (!isTauri()) return openDocumentText(store, file.name, await file.text());
+export async function openDocumentBytes(
+  store: DocumentStore,
+  file: File,
+  geometry?: GeometryBackend,
+): Promise<OpenOutcome> {
+  const ticket = openTicket(store);
+  if (!isTauri()) return openDocumentText(store, file.name, await file.text(), ticket);
   const { invoke } = await import("@tauri-apps/api/core");
   let opened: OpenedDocument;
   try {
-    const r = await invoke<RustOpened & { wasContainer: boolean }>("container_open_bytes", new Uint8Array(await file.arrayBuffer()));
+    const r = await invoke<RustOpened & { wasContainer: boolean }>(
+      "container_open_bytes",
+      new Uint8Array(await file.arrayBuffer()),
+    );
     opened = {
       text: r.document,
       wasContainer: r.wasContainer,
@@ -204,47 +343,65 @@ export async function openDocumentBytes(store: DocumentStore, file: File, geomet
     await reportError(`Couldn't open ${file.name}: ${errMsg(e)}`);
     return "unreadable";
   }
-  return finishOpen(store, file.name, opened, geometry, null);
+  return finishOpen(store, file.name, opened, geometry, null, ticket);
 }
 
-/** What happened when we tried to open a document.
- *  "unreadable" means the file is gone or corrupt, callers may forget it.
- *  "newerFormat" means the file is fine and this build is too old, so the
- *  recent-files entry must SURVIVE: dropping it would delete the one affordance
- *  the user has for finding the file again, in the same breath as telling them
- *  to upgrade. */
-export type OpenOutcome = "ok" | "unreadable" | "newerFormat";
+/** "unreadable": the file is gone or corrupt, callers may forget it. "newerFormat": this build is too old, and
+ *  the recent-files entry must survive as the user's way back to the file after upgrading. "dropped": the open
+ *  document changed or was replaced while the file was read, and the user kept it. */
+export type OpenOutcome = "ok" | "unreadable" | "newerFormat" | "dropped";
 
-/** True if `text` is a ZIP archive rather than JSON, i.e. a v5 packaged
- *  document this build cannot read.
- *
- *  `readTextFile` decodes with a NON-FATAL TextDecoder, so a zip's invalid bytes
- *  become U+FFFD instead of throwing: the read SUCCEEDS and `JSON.parse` is what
- *  fails. The local-file header is pure ASCII ("PK" followed by two control
- *  bytes), so it survives that decode intact and we can diagnose from the text
- *  we already hold, no second read, and no binary fs permission (the webview
- *  has none, by design). Matching on "PK" alone is deliberate: it also catches
- *  the empty and spanned-archive headers, and anything starting "PK" is not a
- *  JSON document regardless. */
+interface OpenTicket {
+  op: OpenOp;
+  edits: number;
+}
+
+// Taken when the user has agreed to replace the open document, before the file is read.
+function openTicket(store: DocumentStore): OpenTicket {
+  return { op: store.sessions.opening(), edits: store.editCount };
+}
+
+// Right before the swap: what the user agreed to replace must still be what is open (rm4abwsm).
+async function mayStillReplace(store: DocumentStore, ticket: OpenTicket, name: string): Promise<boolean> {
+  for (;;) {
+    if (ticket.op.superseded) return false;
+    if (!ticket.op.session.alive) {
+      const { toast } = await import("../ui/toast");
+      toast(`${name} was not opened, another document was started while it was read.`, { kind: "info" });
+      return false;
+    }
+    if (store.editCount === ticket.edits || !store.dirty) return true;
+    ticket.edits = store.editCount;
+    const { choose } = await import("../ui/choice");
+    const pick = await choose(
+      `${store.fileName} changed while ${name} was read. Discard those changes and open ${name}?`,
+      [
+        { value: "discard", label: "Discard", hint: "lose the changes" },
+        { value: "cancel", label: "Cancel", hint: `keep them, ${name} is not opened` },
+      ],
+    );
+    if (pick !== "discard") return false;
+    store.markGivenUp();
+  }
+}
+
+/** True if `text` is a ZIP, a v5 packaged document this build cannot read. readTextFile's non-fatal decoder keeps
+ *  the ASCII "PK" header intact, so no binary read is needed; "PK" alone also catches empty and spanned archives. */
 export function looksLikeContainer(text: string): boolean {
   return text.startsWith("PK") || text.startsWith("FUNDACAD");
 }
 
-/** Rewrite a pre-v5 document's inline base64 BREP into blob-store references.
- *  Returns the original text unchanged on ANY failure, this is an optimisation
- *  of the on-disk format, never a precondition for opening a file. */
+/** Rewrite a pre-v5 document's inline base64 BREP into blob references. Any failure returns the text unchanged:
+ *  an optimisation, never a precondition for opening. */
 async function migrateInlineGeometry(text: string, geometry: GeometryBackend): Promise<string> {
   try {
     const doc = JSON.parse(text) as CadDocument;
     const legacy = (doc.features ?? []).filter(
-      (f): f is Extract<Feature, { type: "import" }> =>
-        f.type === "import" && typeof f.brep === "string" && !f.geom,
+      (f): f is Extract<Feature, { type: "import" }> => f.type === "import" && typeof f.brep === "string" && !f.geom,
     );
     if (!legacy.length) return text;
 
-    const migrated = await geometry.migrateGeometry(
-      legacy.map((f) => ({ id: f.id, brep: f.brep as string })),
-    );
+    const migrated = await geometry.migrateGeometry(legacy.map((f) => ({ id: f.id, brep: f.brep as string })));
     if (!migrated.length) return text;
 
     const byId = new Map(migrated.map((m) => [m.id, m.geom]));
@@ -264,48 +421,29 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
   }
 }
 
-/** Open a document at a known path (no dialog), shared by Open…
- *  and the Home screen's recent documents.
- *
- *  A v5 document is a ZIP and is read by Rust, which also extracts its geometry
- *  into the blob store before returning. A pre-v5 document is plain JSON and is
- *  read as text exactly as it always was.
- *
- *  NOTE on ordering: `store.load()` ends by firing a rebuild SYNCHRONOUSLY,
- *  before `markSaved(path)` below has run, so that first rebuild sees the
- *  PREVIOUS document's path. That is harmless here only because geometry is
- *  resolved by content hash out of the blob store, which needs no path at all.
- *  Do not add anything to the rebuild path that depends on `store.filePath`. */
-/** Tell the person, once, that this document uses a plugin they do not have, or
- *  holds features this version does not know (document/openNotice.ts).
- *
- *  WHY A TOAST AND NOT A REFUSAL. The document is fine. Every value is in it,
- *  the save path writes them back untouched, and the features that do not need
- *  the plugin build exactly as they always did. What is missing is the code that
- *  turns one kind of feature into geometry, so the honest report is a heads-up
- *  with the plugin's name in it, not a dialog in the way of a file that opens.
- *
- *  Once per open, at the document level, rather than per feature. Thirty rows
- *  in History do not tell you what to install any better than one sentence does.
- *
- *  Longer than the default timeout on purpose: this one has an instruction in
- *  it, and a notice you are meant to ACT on has to outlast the glance. */
+/** Tell the person once that this document uses a missing plugin or unknown features (document/openNotice.ts).
+ *  A toast, not a refusal, as the document saves back untouched; it outlasts the default timeout to be acted on. */
 async function warnAboutOpen(store: DocumentStore) {
   const notices = openNotices(store.document, store.openedVersion);
   if (!notices.length) return;
   const { dismissToast, toast } = await import("../ui/toast");
-  const ids = notices.map((n) => toast(n.message, { kind: n.kind, timeout: 12000, ...(n.detail ? { detail: n.detail } : {}) }));
-  const off = store.onOpen(() => {
-    off();
+  const ids = notices.map((n) =>
+    toast(n.message, { kind: n.kind, timeout: 12000, ...(n.detail ? { detail: n.detail } : {}) }),
+  );
+  store.session.own(() => {
     for (const id of ids) if (id !== null) dismissToast(id);
   });
 }
 
+/** Open a document at a known path, shared by Open and Home's recent documents. A v5 ZIP is read by Rust, which
+ *  extracts its geometry; pre-v5 JSON is read as text. store.load() fires its rebuild before markSaved(path) runs,
+ *  so nothing on the rebuild path may depend on `store.filePath`. */
 export async function openDocumentAtPath(
   store: DocumentStore,
   path: string,
   geometry?: GeometryBackend,
 ): Promise<OpenOutcome> {
+  const ticket = openTicket(store);
   const base = path.split(/[\\/]/).pop() ?? path;
   const { invoke } = await import("@tauri-apps/api/core");
   let opened: OpenedDocument;
@@ -314,7 +452,12 @@ export async function openDocumentAtPath(
     // JSON goes through Rust too: it carries embedded geometry that has to reach
     // the blob store before the first rebuild asks for it.
     const r = await invoke<RustOpened>("container_open_checked", { path });
-    opened = { text: r.document, wasContainer, repaired: r.repairedShards > 0 || r.usedBackupIndex, carried: r.carried ?? [] };
+    opened = {
+      text: r.document,
+      wasContainer,
+      repaired: r.repairedShards > 0 || r.usedBackupIndex,
+      carried: r.carried ?? [],
+    };
   } catch (e) {
     // Rust's container errors are already user-facing sentences (a newer
     // container format, a damaged archive, geometry that does not match its
@@ -322,7 +465,7 @@ export async function openDocumentAtPath(
     await reportError(`Couldn't open ${base}: ${errMsg(e)}`);
     return "unreadable";
   }
-  return finishOpen(store, base, opened, geometry, path);
+  return finishOpen(store, base, opened, geometry, path, ticket);
 }
 
 interface RustOpened {
@@ -346,13 +489,12 @@ async function finishOpen(
   { text, wasContainer, repaired, carried }: OpenedDocument,
   geometry: GeometryBackend | undefined,
   path: string | null,
+  ticket: OpenTicket,
 ): Promise<OpenOutcome> {
-  // One-way v4 -> v5, done on the PARSED text before `load()` rather than by
-  // patching the store afterwards: patching would record an undo entry, mark a
-  // freshly-opened document dirty, and fire a second rebuild. If anything here
-  // fails, a dead engine, an unreadable legacy body, `text` is untouched and
-  // the document opens exactly as it did before, still carrying its inline copy.
+  // One-way v4 to v5 on the parsed text before load(): patching the store after would add an undo entry, dirty the
+  // document and rebuild twice. On any failure `text` is untouched and opens with its inline copy.
   if (!wasContainer && geometry) text = await migrateInlineGeometry(text, geometry);
+  if (!(await mayStillReplace(store, ticket, base))) return "dropped";
 
   try {
     // Throws before mutating anything: load() parses first (store.ts), so a
@@ -375,10 +517,7 @@ async function finishOpen(
     store.markSaved(path);
     captureAfterOpen(store, path);
   } else store.markOpenedWithoutPath(base);
-  // AFTER markSaved, so a document that needs a plugin still opens CLEAN. The
-  // notice is about what this build can do with the file, never about the file
-  // having been changed, and a freshly-opened document marked dirty would offer
-  // to save over the original on the way out.
+  // After markSaved, so a document needing a plugin still opens clean and does not offer to save over the original.
   await warnAboutOpen(store);
   if (path) noteRecent(path);
   if (geometry) void import("./fundaLinks").then((m) => m.checkLinks(store, geometry));
@@ -398,7 +537,11 @@ interface ExportViewport {
 }
 
 /** The selected sketch, else the selected flat face, as what a DXF or SVG export draws. */
-export function flatSourceOf(store: DocumentStore, viewport: ExportViewport, featureId: string | null): FlatSource | null {
+export function flatSourceOf(
+  store: DocumentStore,
+  viewport: ExportViewport,
+  featureId: string | null,
+): FlatSource | null {
   const f = featureId ? store.document.features.find((x) => x.id === featureId) : undefined;
   if (f?.type === "sketch") return sketchFlatSource(store, f.id);
   const face = viewport.selectedFaceSketchPlane();
@@ -416,7 +559,12 @@ export function sketchFlatSource(store: DocumentStore, sketchId: string): FlatSo
 /** File, Export: the selected bodies, or a selected sketch or flat face for DXF and SVG. */
 export async function exportSelection(store: DocumentStore, geometry: GeometryBackend, viewport: ExportViewport) {
   const { useSelectionStore } = await import("../stores/selection");
-  return exportModel(store, geometry, viewport.selectionBodyIds(), flatSourceOf(store, viewport, useSelectionStore().featureId));
+  return exportModel(
+    store,
+    geometry,
+    viewport.selectionBodyIds(),
+    flatSourceOf(store, viewport, useSelectionStore().featureId),
+  );
 }
 
 /** `selected` is the viewport's selection as body ids, where the picker starts.
@@ -428,6 +576,8 @@ export async function exportModel(
   flat: FlatSource | null = null,
   format?: ExportFormat,
 ) {
+  // The dialogs wait on the user; a document closed meanwhile is not exported, nor is the one opened after it.
+  const session = store.session;
   const built = store.buildState.result?.bodies ?? [];
   const bodies = built.map((b) => ({ id: b.id, name: store.bodyName(b.id) ?? b.name }));
   const docName = store.fileName === "Untitled" ? "" : store.fileName.replace(/\.[^.]+$/, "");
@@ -435,25 +585,33 @@ export async function exportModel(
   const start = exportScopeFromSelection(selected, bodies, groups, docName);
   const { useExportDialogStore } = await import("../stores/exportDialog");
   const choice = await useExportDialogStore().open({
-    bodies, scope: start.scope, selected: start.selected,
-    ...(flat ? { flat: { label: flat.label } } : {}), ...(format ? { format } : {}),
+    bodies,
+    scope: start.scope,
+    selected: start.selected,
+    ...(flat ? { flat: { label: flat.label } } : {}),
+    ...(format ? { format } : {}),
   });
-  if (!choice) return;
+  if (!choice || !session.alive) return;
   const { settings, scope } = choice;
   // The dialog offers DXF and SVG only with a 2D source, so the next plain
   // export would drop either for the default rather than the last 3D format.
   saveExportSettings(isFlatFormat(settings.format) ? { ...settings, format: loadExportSettings().format } : settings);
   if (!isTauri()) {
-    // The engine writes an export straight to a path on disk (see the file
-    // header), a plain browser has no such path to hand it and no protocol for
-    // getting the bytes back instead, so this needs the desktop app rather than
-    // a fallback that would quietly produce nothing, as it did before.
-    await reportError("Export needs the desktop app: a browser tab has no filesystem path to give the engine to write to.");
+    // The engine writes exports straight to a path, which a plain browser cannot give it, so refuse rather than
+    // quietly produce nothing.
+    await reportError(
+      "Export needs the desktop app: a browser tab has no filesystem path to give the engine to write to.",
+    );
     return;
   }
   const opts: {
-    body?: string; bodies?: string[]; separate?: boolean;
-    sketch?: string; face?: unknown; plane?: PlaneDef; tolerance?: number;
+    body?: string;
+    bodies?: string[];
+    separate?: boolean;
+    sketch?: string;
+    face?: unknown;
+    plane?: PlaneDef;
+    tolerance?: number;
   } = {};
   const drawn = isFlatFormat(settings.format) ? flat : null;
   if (drawn) {
@@ -470,8 +628,8 @@ export async function exportModel(
   const base = drawn
     ? drawn.label
     : opts.body
-    ? store.bodyName(opts.body) ?? docName
-    : (opts.bodies ? start.base : docName) || (opts.separate || opts.bodies ? "parts" : "part");
+      ? (store.bodyName(opts.body) ?? docName)
+      : (opts.bodies ? start.base : docName) || (opts.separate || opts.bodies ? "parts" : "part");
   const name = exportFileName(base, kind.ext);
   const dir = lastExportDir();
   const { save } = await import("@tauri-apps/plugin-dialog");
@@ -480,36 +638,43 @@ export async function exportModel(
     // "separate" derives one file per body as "<base>-<body>.<ext>", so name the base.
     defaultPath: dir ? `${dir}/${name}` : name,
   });
-  if (!path) return;
+  if (!path || !session.alive) return;
   rememberExportDir(path);
   const fmt = settings.format;
-  // GLB carries one material per body, so it needs the palette and each body's
-  // slot; the other formats ignore both.
-  // Wrapped exactly like importPath's runBusy below, and for the same reason:
-  // an export replays the whole feature history, so on a large document it runs
-  // for as long as an import does with nothing on screen to show it and nothing
-  // for Cancel to attach to. onStarted hands back the request id so a cancel
-  // targets THIS export, the document stays editable meanwhile, so any rebuild
-  // the user triggers would otherwise be the "most recent" op.
-  const res = await store.runBusy(
-    `Exporting ${path.split(/[\\/]/).pop() ?? "file"}`,
-    (onStarted) => geometry.export(store.document, fmt, path, {
-      ...opts,
-      palette: store.colorPalette,
-      bodyColors: store.bodyColorsMap(),
-      ...(isMeshFormat(fmt) ? { mesh: meshWire(settings) } : {}),
-    }, onStarted),
-  );
+  // GLB carries one material per body, so it needs the palette and slots. runBusy as in importPath: an export
+  // replays the whole history, and onStarted lets Cancel target this export rather than a later rebuild.
+  const file = fileName(path);
+  const res = await store
+    .runBusy(`Exporting ${file}`, (onStarted) =>
+      geometry.export(
+        store.document,
+        fmt,
+        path,
+        {
+          ...opts,
+          palette: store.colorPalette,
+          bodyColors: store.bodyColorsMap(),
+          ...(isMeshFormat(fmt) ? { mesh: meshWire(settings) } : {}),
+        },
+        onStarted,
+      ),
+    )
+    .catch((e: unknown) => {
+      if (isSessionEnded(e)) return { ok: false as const, cancelled: true, message: "export cancelled" };
+      throw e;
+    });
+  if (!session.alive && !res.ok) {
+    const { toast } = await import("../ui/toast");
+    toast(`${file} was not written, its document was closed during the export.`, { kind: "warning" });
+    return;
+  }
   if (!res.ok) {
-    // The user stopped it: they know, so say nothing. Reporting their own
-    // action back as "Export failed: cancelled" is the bug this avoids.
+    // The user stopped it, so say nothing rather than "Export failed: cancelled".
     if (res.cancelled) return;
     await reportError(`Export failed: ${res.message ?? "unknown error"}`);
     return;
   }
-  // Confirm what was written, list every file for "separate", the single path
-  // otherwise, and NAME any features whose geometry is missing from the export
-  // (export-what-built: one red feature no longer blocks the whole print loop).
+  // List every written file and name features missing from the export, since one failed feature no longer blocks it.
   const written = res.paths?.length ? res.paths : res.path ? [res.path] : [];
   const lines = [...written];
   for (const w of res.warnings ?? []) {
@@ -528,22 +693,46 @@ export function extToFormat(path: string): ExportFormat {
   const ext = path.split(".").pop()?.toLowerCase();
   if (ext === "stl") return "stl";
   if (ext === "3mf") return "3mf";
-  // NOTE: this function is TOTAL, an unrecognised extension falls through to
-  // STEP rather than erroring. Miss a format here and the user gets a STEP file
-  // wearing the extension they asked for, with no error anywhere.
+  // Total: an unknown extension falls through to STEP, so a missed format here silently writes STEP under its name.
   if (ext === "glb") return "glb";
   if (ext === "dxf") return "dxf";
   if (ext === "svg") return "svg";
   return "step";
 }
 
-// This file writes the formats the app itself understands. A format a plugin
-// owns is written by that plugin's exporter in the geometry engine, reached
-// through GeometryBackend.exportWith.
+// The formats the app itself writes; a plugin's format goes through its exporter via GeometryBackend.exportWith.
 
 /** Lower case only, every lookup lower-cases the name first (dropRouting, the
  *  two mappers above). */
-export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "3dm", "ifc", "dxf", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz", "fbx", "3ds", "svg"];
+export const IMPORT_EXTS = [
+  "stl",
+  "3mf",
+  "step",
+  "stp",
+  "stpz",
+  "gz",
+  "xbf",
+  "iges",
+  "igs",
+  "brep",
+  "fcstd",
+  "3dm",
+  "ifc",
+  "dxf",
+  "obj",
+  "ply",
+  "off",
+  "amf",
+  "glb",
+  "gltf",
+  "wrl",
+  "wrz",
+  "x3d",
+  "x3dz",
+  "fbx",
+  "3ds",
+  "svg",
+];
 
 // FreeCAD writes .FCStd.
 const MIXED_CASE_EXTS = ["FCStd"];
@@ -560,9 +749,7 @@ export function dialogExts(exts: readonly string[]): string[] {
   return [...out];
 }
 
-/** Import an external mesh / B-rep file (STL / 3MF / STEP / IGES / XBF / FreeCAD / OBJ / PLY / OFF / AMF / glTF / VRML / X3D / FBX) as a new body.
- *  The engine reads the file by path and returns an embeddable BREP payload, so
- *  this needs the native app (a real filesystem path), like export. */
+/** Import an external mesh or B-rep file as a new body. The engine reads it by path, so this needs the native app. */
 export async function importModel(store: DocumentStore, geometry: GeometryBackend) {
   if (!isTauri()) {
     // Only a drop reaches the engine's bytes form of import (importFileBytes),
@@ -570,6 +757,7 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
     await reportError("Import needs the desktop app: a browser tab has no filesystem path to give the engine to read.");
     return;
   }
+  const session = store.session;
   const { open } = await import("@tauri-apps/plugin-dialog");
   const path = await open({
     multiple: false,
@@ -597,36 +785,24 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
       { name: "3DS (old 3ds Max)", extensions: dialogExts(["3ds"]) },
     ],
   });
-  if (typeof path !== "string") return;
+  if (typeof path !== "string" || !session.alive) return;
   await importPath(store, geometry, path);
 }
 
-/** The path of the most recently CANCELLED import, so a retry is one click.
- *  Session state on purpose, it never touches the document, so nothing about a
- *  cancelled import can be saved, shared, or opened on another machine. */
+/** The most recently cancelled import's path, so a retry is one click. Session state only, never in the document. */
 let lastCancelledImport: string | null = null;
 
-/** The path a cancelled import used, or null. */
 export function cancelledImportPath(): string | null {
   return lastCancelledImport;
 }
 
-// Viewport capability, MEASURED post-Phase-A on real WebKitGTK: about 60 fps at
-// 1,000 bodies, falling to 27-37 fps at 3,060. The residual is draw-call bound
-// at 2 calls per body, which is why the threshold is a BODY count and not a
-// triangle count. Merging draw calls across bodies is the only lever left and it
-// breaks three shipped invariants (per-body `.visible`, etag reuse, move-ghost
-// translation), so these numbers are the honest limit rather than a bug.
+// Measured on WebKitGTK: about 60 fps at 1,000 bodies, 27-37 fps at 3,060, bound by 2 draw calls per body (hence a
+// body count). Merging draw calls would break per-body `.visible`, etag reuse and move ghosts.
 const SMOOTH_BODY_LIMIT = 1000;
 const SLOW_BODY_LIMIT = 3000;
 
-/** What to tell the user about a document this size, or null when it will be
- *  fine. Separated from the import flow so the thresholds can be tested without
- *  a dialog, a backend or a viewport.
- *
- *  The point is to say what the document will be like BEFORE the viewport is
- *  built. The counts are known at import time, so the alternative to saying it
- *  is letting the user discover it as a freeze and conclude the app is broken. */
+/** What to tell the user about a document this size, or null. Said before the viewport is built, so a freeze is
+ *  not mistaken for a broken app; separate so the thresholds test without a viewport. */
 export function describeImportCapability(bodies: number): string | null {
   if (!Number.isFinite(bodies) || bodies <= SMOOTH_BODY_LIMIT) return null;
   const n = bodies.toLocaleString();
@@ -642,22 +818,20 @@ export function importedBodyCount(res: { parts?: { node: number; faces: number }
   return res.parts?.length ?? 1;
 }
 
-
-/** Import the file at `path`: read it, add the feature, adopt what it looked
- *  like. The whole of an import except choosing the file, which is why the
- *  dialog above and the Open dialog both end here.
- *
- *  Exported for the harness that has a path and no dialog (e2e/*.cjs). Not a
- *  second door: it is the same one, minus the picker. */
+/** Import the file at `path`: read it, add the feature, adopt its looks. The dialog and Open both end here, and
+ *  the e2e harness calls it with a path and no dialog. */
 export async function importPath(
   store: DocumentStore,
   geometry: GeometryBackend,
   path: string,
   unit?: ImportUnit,
-  opts: { source?: string } = {},
-) {
+  opts: { source?: string; batched?: boolean } = {},
+): Promise<ImportEnd> {
   const fmt = extToImportFormat(path);
-  await importWith(store, path, fmt, (onStarted, u) => geometry.importGeometry(path, fmt, onStarted, u), { ...opts, unit });
+  return importWith(store, path, fmt, (onStarted, u) => geometry.importGeometry(path, fmt, onStarted, u), {
+    ...opts,
+    unit,
+  });
 }
 
 /** Files above this cannot reach the engine as one base64 message, its frame
@@ -665,8 +839,15 @@ export async function importPath(
 export const MAX_DROPPED_IMPORT_BYTES = 90 * 1024 * 1024;
 
 /** Import a file the app has as bytes only, like one dropped on a browser tab.
- *  Its `source` is the bare name, there is no path to remember. */
-export async function importFileBytes(store: DocumentStore, geometry: GeometryBackend, file: File, unit?: ImportUnit) {
+ *  Its `source` is the bare name, there is no path to remember. With `opening` the import is how the document
+ *  opens, so its own writes leave a clean document clean. */
+export async function importFileBytes(
+  store: DocumentStore,
+  geometry: GeometryBackend,
+  file: File,
+  unit?: ImportUnit,
+  opts: { opening?: boolean; batched?: boolean } = {},
+): Promise<ImportEnd> {
   const fmt = extToImportFormat(file.name);
   const importBytes = geometry.importBytes?.bind(geometry);
   if (!importBytes) {
@@ -674,15 +855,18 @@ export async function importFileBytes(store: DocumentStore, geometry: GeometryBa
     return;
   }
   if (file.size > MAX_DROPPED_IMPORT_BYTES) {
-    await reportError(`Couldn't import ${file.name}: it is ${Math.round(file.size / 1048576)} MB, a dropped file can be 90 MB at most here. Use File > Import in the desktop app.`);
+    await reportError(
+      `Couldn't import ${file.name}: it is ${Math.round(file.size / 1048576)} MB, a dropped file can be 90 MB at most here. Use File > Import in the desktop app.`,
+    );
     return;
   }
-  await importWith(
+  return importWith(
     store,
     file.name,
     fmt,
-    async (onStarted, u) => importBytes(file.name, fmt, bytesToBase64(new Uint8Array(await file.arrayBuffer())), onStarted, u),
-    { unit, retryable: false },
+    async (onStarted, u) =>
+      importBytes(file.name, fmt, bytesToBase64(new Uint8Array(await file.arrayBuffer())), onStarted, u),
+    { unit, retryable: false, opening: opts.opening ?? false, batched: opts.batched ?? false },
   );
 }
 
@@ -695,34 +879,60 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-async function importWith(
+type ImportRead = (onStarted: (id: string) => void, unit?: ImportUnit) => ReturnType<GeometryBackend["importGeometry"]>;
+type ImportOpts = {
+  unit?: ImportUnit | undefined;
+  source?: string;
+  retryable?: boolean;
+  opening?: boolean;
+  batched?: boolean;
+};
+
+function importWith(
   store: DocumentStore,
   path: string,
   fmt: ImportFormat,
-  read: (onStarted: (id: string) => void, unit?: ImportUnit) => ReturnType<GeometryBackend["importGeometry"]>,
-  opts: { unit?: ImportUnit | undefined; source?: string; retryable?: boolean } = {},
-) {
+  read: ImportRead,
+  opts: ImportOpts = {},
+): Promise<ImportEnd> {
+  return store.importing(() => importNow(store, path, fmt, read, opts));
+}
+
+async function importNow(
+  store: DocumentStore,
+  path: string,
+  fmt: ImportFormat,
+  read: ImportRead,
+  opts: ImportOpts,
+): Promise<ImportEnd> {
+  // Opening is not blocked while a file is read; the session's end rejects the read, so it never lands in the next.
+  const session = store.session;
   let unit = opts.unit;
-  if (asksForUnit(fmt) && !unit) {
-    const picked = await askImportUnit(fmt);
-    if (!picked) return;
-    unit = picked;
+  let res: Awaited<ReturnType<typeof read>>;
+  try {
+    if (asksForUnit(fmt) && !unit) {
+      const picked = await session.step(askImportUnit(fmt, session.signal));
+      if (!picked) return;
+      unit = picked;
+    }
+    // runBusy makes the import visible and stoppable; onStarted hands back the request id so Cancel targets it.
+    res = await store.runBusy(`Importing ${fileName(path)}`, (onStarted) => read(onStarted, unit), {
+      holdHistory: true,
+    });
+  } catch (e) {
+    if (!isSessionEnded(e)) throw e;
+    res = { ok: false, cancelled: true } as typeof res;
   }
-  // runBusy is what makes the operation VISIBLE and stoppable: an import used to
-  // run with no busy state at all, so the timeline showed nothing and there was
-  // nothing for a Cancel button to attach to. onStarted hands back the request
-  // id so a cancel targets this import specifically.
-  const res = await store.runBusy(
-    `Importing ${path.split(/[\\/]/).pop() ?? "file"}`,
-    (onStarted) => read(onStarted, unit),
-    { holdHistory: true },
-  );
+  // A read the session's end did not reject still belongs to it; a failed one keeps its error.
+  if (!session.alive && (res.ok || res.cancelled)) {
+    // A batch names every file it left out in one warning.
+    if (!opts.batched) await importDropped([fileName(path)]);
+    return "dropped";
+  }
   if (!res.ok) {
     if (res.cancelled) {
-      // The user stopped it: say nothing (they know) and add NOTHING to the
-      // document. The path is remembered in SESSION state only, a placeholder
-      // feature would persist into the saved document and reference a path that
-      // may not exist on another machine.
+      // Cancelled: say nothing and add nothing to the document. The path stays in session state only, since a
+      // placeholder feature would save a path that may not exist on another machine.
       lastCancelledImport = opts.retryable === false ? null : path;
       return;
     }
@@ -730,8 +940,15 @@ async function importWith(
     return;
   }
   lastCancelledImport = null;
-  const features = importFeatures(res, { format: fmt, source: opts.source ?? path, taken: store.document.features.map((f) => f.id) });
-  store.addFeatures(features);
+  const features = importFeatures(res, {
+    format: fmt,
+    source: opts.source ?? path,
+    taken: store.document.features.map((f) => f.id),
+  });
+  const cleanBefore = !store.dirty;
+  if (opts.opening) store.keepingClean(() => store.addFeatures(features));
+  else store.addFeatures(features);
+  const landedAt = cleanBefore ? store.editCount : null;
   const imported = features.find((f) => f.type === "import");
   if (!imported) {
     if (res.notes?.length) {
@@ -742,43 +959,101 @@ async function importWith(
   }
   const id = imported.id;
 
-  // Say what the document will be like while the user is still deciding what to
-  // do with it, rather than letting them discover it as a freeze and conclude
-  // the app is broken. Non-blocking on purpose: this is a heads-up about a
-  // measured limit, not a refusal, and everything except orbiting is unaffected.
+  // A non-blocking heads-up about a measured limit while the user still decides, rather than a surprise freeze.
   const capability = describeImportCapability(importedBodyCount(res));
   if (capability) {
     const { toast } = await import("../ui/toast");
     toast(capability, { kind: "info" });
   }
 
-  // The file's own colours become materials, and the bodies it produced wear
-  // them. This is the half of an import that used to be thrown away: a STEP
-  // assembly's product colours were read by the engine, carried in the
-  // manifest, and then never looked at, so a file that arrived fully coloured
-  // opened as three thousand identical grey bodies.
+  // The file's own colours become materials worn by the bodies it produced, or a coloured STEP assembly opens
+  // as thousands of identical grey bodies.
+  if (await cancelledImport(store, imported, res, landedAt)) return;
   const source = importSource(imported);
-  if (!(await adoptImportedColors(store, id, res, { joinImport: true, source }))) recolorOnRedo(store, imported, res);
+  const adopt = { joinImport: true, source, opening: opts.opening ?? false };
+  if (!(await adoptImportedColors(store, id, res, adopt))) recolorOnRedo(store, imported, res);
 
-  // The file carried ONE dominant colour. Say so, and let whoever has a use for
-  // it decide.
-  //
-  // This used to be the decision itself: match the colour to the nearest slot of
-  // the document's palette and assign the imported bodies to it, unless the
-  // capability that owns palettes was switched off, in which case do nothing.
-  // Three things this file has no business knowing were in those six lines. What
-  // is left is the fact, an import landed, it was this feature, it looked like
-  // this, which is true whether or not anybody is listening.
-  //
-  // Awaited rather than fired off, because a listener has to rebuild before it
-  // can find the bodies the feature produced, and an import that returned while
-  // that was still running would report itself finished too early.
+  // The file carried one dominant colour: report it and let whoever has a use for it decide. Awaited, because a
+  // listener must rebuild before it finds the feature's bodies, or the import would report finished too early.
   if (res.color === undefined) return;
   await announceImportedBody(id, res.color);
 }
 
+const fileName = (path: string) => path.split(/[\\/]/).pop() ?? "file";
+
+/** "dropped" when the file was read but left out, as another document was opened meanwhile. */
+type ImportEnd = "dropped" | undefined;
+
+/** Says imports were left out because another document was opened before they landed. */
+export async function importDropped(names: readonly string[]) {
+  if (!names.length) return;
+  const many = names.length > 1;
+  const list = many ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+  const { toast } = await import("../ui/toast");
+  const were = many ? "they were" : "it was";
+  toast(`${list} ${many ? "were" : "was"} not imported, another document was opened while ${were} read.`, {
+    kind: "warning",
+  });
+}
+
+/** Runs a batch of imports in turn and stops at the first document opened meanwhile, as the rest belong to the
+ *  one the batch began in. Each step imports with `batched`, so one warning names every file left out. */
+export async function importInTurn(
+  store: DocumentStore,
+  steps: readonly { name: string; run: () => Promise<ImportEnd | void> }[],
+): Promise<void> {
+  const session = store.session;
+  const left: string[] = [];
+  await store.importing(async () => {
+    for (const step of steps) {
+      if (!session.alive || (await step.run()) === "dropped") left.push(step.name);
+    }
+  });
+  await importDropped(left);
+}
+
+// False when the document's session ended first: what was waited for belongs to a document that is gone.
+async function builtInSession(store: DocumentStore): Promise<boolean> {
+  const session = store.session;
+  try {
+    await session.step(store.whenBuilt());
+    return true;
+  } catch (e) {
+    if (isSessionEnded(e)) return false;
+    throw e;
+  }
+}
+
 const importSource = (f: Feature) =>
   f.type === "import" ? (f as Extract<Feature, { type: "import" }>).source : undefined;
+
+/** Waits for the build that brings `imported` in. A Cancel during it undoes the import as one step (Redo builds
+ *  it again), and leaves the document clean when it was clean before the import and nothing changed since
+ *  `cleanAt`. True when nothing is left to do: cancelled, or another document was opened meanwhile. */
+async function cancelledImport(
+  store: DocumentStore,
+  imported: Feature,
+  res: Parameters<typeof adoptImportedColors>[2],
+  cleanAt: number | null = null,
+) {
+  if (!(await builtInSession(store))) return true;
+  const still = store.document.features.find((f) => f.id === imported.id);
+  if (!store.buildState.cancelled || !still || importSource(still) !== importSource(imported)) return false;
+  const has = (d: { features: { id: string }[] }) => d.features.some((f) => f.id === imported.id);
+  const untouched = cleanAt === store.editCount;
+  const undone = store.undoIfTop((before) => !has(before) && has(store.document));
+  if (undone && untouched) store.markClean();
+  if (undone) recolorOnRedo(store, imported, res);
+  const name = importSource(imported)?.split(/[\\/]/).pop() || "the file";
+  const { toast } = await import("../ui/toast");
+  toast(
+    undone
+      ? `Import of ${name} cancelled, nothing was added. Redo brings it back.`
+      : "Rebuild cancelled, the model is not built. Compute All builds it.",
+    { kind: "info" },
+  );
+  return true;
+}
 
 /** An import undone while its rebuild ran put its colours on nothing. Its redo
  *  puts them on then, as part of that same step, or never. */
@@ -801,32 +1076,19 @@ export function recolorOnRedo(store: DocumentStore, feature: Feature, res: Param
     if (rewound && back) {
       const source = importSource(feature);
       queueMicrotask(() => {
-        adoptImportedColors(store, feature.id, res, { joinImport: true, only: true, source }).catch((e) =>
-          console.warn("import colours not put back", e),
-        );
+        void (async () => {
+          if (await cancelledImport(store, feature, res)) return;
+          await adoptImportedColors(store, feature.id, res, { joinImport: true, only: true, source });
+        })().catch((e) => console.warn("import colours not put back", e));
       });
     }
   });
 }
 
-/** Make materials out of the colours an import carried, and put them on the
- *  bodies it produced.
- *
- *  The IO half of document/materials.ts's `materialsForColors`, which is where
- *  the decision (match an existing material, or mint one, and what to call it)
- *  actually lives. What is here is the part that cannot be pure: the bodies do
- *  not exist until the rebuild runs and hands out their ids, so the import
- *  has to wait for the build and then find its own bodies in the result.
- *
- *  TWO WAYS A BODY IS FOUND, because there are two kinds of import. An assembly
- *  body carries `nodeRef` naming the product it came from, and that is what
- *  binds it to a per-part colour. A single-body import has no tree, so its one
- *  colour goes on whatever bodies the feature owns, which `faceOwners` answers.
- *
- *  The assignments are one undo step. With `joinImport` they join the step that
- *  added the feature while that step is still the newest, and with `only` they go
- *  on only then. False when the feature was not in the document after the build,
- *  true without a write when another document was opened meanwhile. */
+/** Make materials from an import's colours and put them on its bodies, the IO half of materialsForColors in
+ *  document/materials.ts, since the bodies exist only after the rebuild. An assembly body is found by `nodeRef`,
+ *  a single-body import's by `faceOwners`. One undo step: `joinImport` joins the import's step while it is newest,
+ *  `only` applies only then. False if the feature is gone, true without a write if another document opened. */
 export async function adoptImportedColors(
   store: DocumentStore,
   featureId: string,
@@ -835,12 +1097,11 @@ export async function adoptImportedColors(
     nodes?: { name: string; parent: number | null; color?: string }[] | undefined;
     parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[] | undefined;
   },
-  opts: { joinImport?: boolean; only?: boolean; source?: string | undefined } = {},
+  opts: { joinImport?: boolean; only?: boolean; source?: string | undefined; opening?: boolean } = {},
 ): Promise<boolean> {
+  const own = <T>(fn: () => T): T => (opts.opening ? store.keepingClean(fn) : fn());
   const perNode = res.nodes ? nodeColors(res.nodes) : null;
-  // Normalised once, here, because it is the KEY into the map materialsForColors
-  // hands back and that map is keyed by the normalised form. nodeColors already
-  // returns it; a single dominant colour comes straight off the wire.
+  // Normalised once: it is the key into the map materialsForColors returns. nodeColors already normalises.
   const single = perNode ? null : asHex(res.color);
   const wanted: { color: string; name?: string | undefined }[] = [];
   if (perNode) {
@@ -848,11 +1109,8 @@ export async function adoptImportedColors(
   } else if (single) {
     wanted.push({ color: single });
   }
-  // The file's FACE colours, which on a file written by a mechanical CAD system
-  // is where the colour actually is: the reference board styles all 1,803 of its
-  // faces and leaves its 29 products wearing a default nobody chose. Every one
-  // of them has to be in the library, not just the one each body wears, because
-  // the faces that DISAGREE with their body are the red circuit board.
+  // Face colours are where mechanical CAD puts colour: the reference board styles all 1,803 faces and leaves its
+  // 29 products default. All go in the library, as faces that disagree with their body are the red circuit board.
   for (const p of res.parts ?? []) {
     const own = asHex(p.color);
     if (own) wanted.push({ color: own });
@@ -865,12 +1123,9 @@ export async function adoptImportedColors(
   if (!wanted.length) return true;
 
   const { add, byColor } = materialsForColors(wanted, store.materialLibrary);
-  if (add.length) store.importMaterials(add);
+  if (add.length) own(() => store.importMaterials(add));
 
-  let opened = false;
-  const offOpen = store.onOpen(() => (opened = true));
-  await store.rebuildNow().finally(offOpen);
-  if (opened) return true;
+  if (!(await builtInSession(store))) return true;
   const bodies = store.buildState.result?.bodies ?? [];
   // Note: after an undo nextId() hands this id to the next feature drawn, so the
   // id alone does not say the import is still there.
@@ -900,21 +1155,18 @@ export async function adoptImportedColors(
     }
   }
   const has = (d: { features: { id: string }[] }) => d.features.some((f) => f.id === featureId);
-  store.undoAsOne(
-    () => { for (const [material, ids] of byMaterial) store.setBodiesMaterial(ids, material); },
-    opts.joinImport ? (before) => !has(before) && has(store.document) : undefined,
-    { only: !!opts.only },
+  own(() =>
+    store.undoAsOne(
+      () => {
+        for (const [material, ids] of byMaterial) store.setBodiesMaterial(ids, material);
+      },
+      opts.joinImport ? (before) => !has(before) && has(store.document) : undefined,
+      { only: !!opts.only },
+    ),
   );
   return true;
 }
 
-/** Surface an error to the user, a native dialog in the app, console otherwise.
- *  (Import used to fail silently, which read as "nothing happened".)
- *
- *  Exported for the capabilities that write files of their own. Not because
- *  this is where such a helper belongs, but because a plugin re-implementing it
- *  would be a second answer to "what does a failed write look like", and two
- *  answers is how one of them ends up being a console warning nobody sees. */
 /** A document load() refused, in words for people. The technical reason goes
  *  with the notice's log entry rather than into the sentence. */
 async function reportUnreadable(e: unknown) {
@@ -922,15 +1174,15 @@ async function reportUnreadable(e: unknown) {
   await reportError(`This file is not a FundaCAD document, or it is damaged: ${reason}.`, errMsg(e));
 }
 
+/** Surface an error: a native dialog in the app, the title bar error notice otherwise. Exported so capabilities
+ *  writing files report failures the same way, not as a console warning nobody sees. */
 export async function reportError(msg: string, detail?: string) {
   if (isTauri()) {
     if (detail) console.error(detail);
     const { message } = await import("@tauri-apps/plugin-dialog");
     await message(msg, { title: "FundaCAD", kind: "error" });
   } else {
-    // No native dialog here, so this goes through the same title bar error
-    // notice every other error in the app uses (ui/toast.ts -> ui/errorNotice.ts),
-    // instead of a console.error nobody but a developer would ever see.
+    // No native dialog, so use the app's title bar error notice (ui/toast.ts to ui/errorNotice.ts).
     console.error(detail ? `${msg} (${detail})` : msg);
     const { toast } = await import("../ui/toast");
     toast(msg, { kind: "error", detail });
@@ -961,19 +1213,13 @@ export function extToImportFormat(path: string): ImportFormat {
   if (ext === "x3d" || ext === "x3dz") return "x3d";
   if (ext === "fbx") return "fbx";
   if (ext === "3ds") return "3ds";
-  return "step";  // TOTAL, like extToFormat above, see the note there
+  return "step"; // TOTAL, like extToFormat above, see the note there
 }
 
-// --- material library ---
-//
-// A plain JSON file, not the document container: the point of a library is that
-// it travels between documents and between people, and a format only this app
-// can open would make "export" a word for "back up". See document/materials.ts
-// for the shape; both directions go through it, so what is written is what can
-// be read back.
+// Material libraries are plain JSON, not the document container, so they travel between documents and people.
+// Both directions go through document/materials.ts, so what is written can be read back.
 
-/** The extension a library file gets. Not `.json` alone, so a folder of them is
- *  legible and the picker can default to the right thing. */
+/** Not `.json` alone, so a folder of them is legible and the picker can default to the right thing. */
 export const MATERIAL_LIB_EXT = "fcmat.json";
 
 /** Write the document's material library to a file the user picks. */
@@ -997,13 +1243,8 @@ export async function exportMaterialLibrary(store: DocumentStore) {
   }
 }
 
-/** Read a library file and MERGE it into the document's, by id. Returns what
- *  happened, so the caller can say so; null when the user cancelled.
- *
- *  Merging rather than replacing is the store's rule, see importMaterials, and
- *  the reason is here: a replace would unassign every body wearing a material
- *  the incoming file happens not to contain, which is a silent edit to the model
- *  in exchange for a file the user only meant to add. */
+/** Read a library file and merge it into the document's by id; null when cancelled. Merge, not replace: a
+ *  replace would silently unassign every body wearing a material the file lacks. */
 export async function importMaterialLibrary(
   store: DocumentStore,
 ): Promise<{ added: number; updated: number; problem: string | null } | null> {
@@ -1069,17 +1310,8 @@ export async function openTextFile(filter: { name: string; extensions: string[] 
   }
 }
 
-// --- browser fallbacks ---
-/** Write a rendered picture to a file the user picks.
- *
- *  Takes the data: URL the renderer produced rather than a canvas or a Blob,
- *  because the pixels are only readable in the same task as the render that
- *  made them (the renderer runs without preserveDrawingBuffer) and this function
- *  is asynchronous from its first line. By the time a dialog has been answered
- *  the buffer is long gone; the string is not.
- *
- *  Returns the path written, or null when the user cancelled, so the caller can
- *  say where it went. */
+/** Write a rendered picture to a file the user picks, returning the path or null. Takes the data: URL because
+ *  the renderer has no preserveDrawingBuffer, so the pixels are gone by the time a dialog is answered. */
 export async function saveRenderedImage(dataUrl: string, suggested: string): Promise<string | null> {
   const comma = dataUrl.indexOf(",");
   if (!dataUrl.startsWith("data:image/png;base64,") || comma < 0) {
@@ -1100,8 +1332,7 @@ export async function saveRenderedImage(dataUrl: string, suggested: string): Pro
     defaultPath: suggested,
   });
   if (!path) return null;
-  // Decoded here rather than sent as text: writeFile takes bytes, and a base64
-  // payload written as a string is a valid file of the wrong thing entirely.
+  // Decoded here: writeFile takes bytes, and base64 written as a string is a valid file of the wrong thing.
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -1123,10 +1354,8 @@ function downloadText(name: string, text: string) {
   URL.revokeObjectURL(a.href);
 }
 
-/** The browser fallback for picking a JSON file. A twin of uploadText below
- *  rather than a parameter on it: that one advertises document extensions, and
- *  a picker that offers .funda when it wants a material library is a picker
- *  that will be handed one. */
+/** The browser fallback for picking a JSON file, apart from uploadText so a material library picker does not
+ *  offer .funda files. */
 function uploadJson(accept = ".json,application/json"): Promise<string | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");

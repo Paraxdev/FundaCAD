@@ -1,6 +1,5 @@
-// The images in the view: one textured quad each, on the "references" overlay
-// layer, so the Display popover switches them and a picture leaves them out
-// unless it asks.
+// One textured quad per image on the "references" overlay layer, so the Display popover switches them and a picture
+// leaves them out unless it asks.
 
 import * as THREE from "three";
 import { SketchPlane } from "fundacad";
@@ -35,7 +34,9 @@ export class ImageLayer {
   stop() {
     for (const off of this.offs.splice(0)) off();
     for (const id of [...this.quads.keys()]) this.drop(id);
-    void Promise.all(this.textures.values()).then((ts) => { for (const t of ts) t?.dispose(); });
+    void Promise.all(this.textures.values()).then((ts) => {
+      for (const t of ts) t?.dispose();
+    });
     this.textures.clear();
   }
 
@@ -55,7 +56,10 @@ export class ImageLayer {
   }
 
   sync() {
-    const list = this.e.store.referenceImages().map(readRefImage).filter((r): r is RefImage => r !== null);
+    const list = this.e.store
+      .referenceImages()
+      .map(readRefImage)
+      .filter((r): r is RefImage => r !== null);
     const live = new Set(list.map((r) => r.id));
     for (const id of [...this.quads.keys()]) if (!live.has(id)) this.drop(id);
     for (const r of list) this.place(r);
@@ -66,8 +70,13 @@ export class ImageLayer {
     let q = this.quads.get(r.id);
     if (!q) {
       const material = new THREE.MeshBasicMaterial({
-        color: 0x9a9a9a, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-        polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4,
+        color: 0x9a9a9a,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -4,
       });
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
       // Drawn first so the sketch on the same plane draws over it, and never
@@ -114,10 +123,17 @@ export class ImageLayer {
     let t = this.textures.get(hash);
     if (!t) {
       const get = this.e.geometry.blobGet?.bind(this.e.geometry);
-      t = get ? get(hash).then((b) => (b ? textureFrom(b, "") : null), () => null) : Promise.resolve(null);
+      t = get
+        ? get(hash).then(
+            (b) => (b ? textureFrom(b, "") : null),
+            () => null,
+          )
+        : Promise.resolve(null);
       this.textures.set(hash, t);
       // A failed fetch is asked again next time, the engine may have come back.
-      void t.then((x) => { if (!x && this.textures.get(hash) === t) this.textures.delete(hash); });
+      void t.then((x) => {
+        if (!x && this.textures.get(hash) === t) this.textures.delete(hash);
+      });
     }
     return t;
   }

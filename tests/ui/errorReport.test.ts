@@ -9,8 +9,18 @@ const detail = {
   ms: 12.5,
   kernel: [
     { op: "BRepAlgoAPI_Fuse", ms: 3 },
-    { op: "BRepFilletAPI_MakeFillet", ms: 1, args: "shape=Solid(...), 1 edges, radii=[30]", error: "IsDone() is false" },
-    { op: "BRepFilletAPI_MakeFillet", ms: 1, args: "shape=Solid(...), 1 edges, radii=[30]", error: "IsDone() is false" },
+    {
+      op: "BRepFilletAPI_MakeFillet",
+      ms: 1,
+      args: "shape=Solid(...), 1 edges, radii=[30]",
+      error: "IsDone() is false",
+    },
+    {
+      op: "BRepFilletAPI_MakeFillet",
+      ms: 1,
+      args: "shape=Solid(...), 1 edges, radii=[30]",
+      error: "IsDone() is false",
+    },
   ],
   bodies: [{ id: "body1", name: "Box", shape: "Solid(solids=1, faces=6, edges=12)" }],
   bodyCount: 1,

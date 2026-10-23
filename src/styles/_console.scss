@@ -1,13 +1,3 @@
-/* ============================================================================
-   Console, the app's own log.
-
-   The layout rule that matters and is easy to undo by accident: MESSAGES WRAP,
-   they never clip. This panel exists because the toast and the title-bar pill
-   both end in an ellipsis, and the clipped tail of a kernel error is the part
-   that says what to do about it. Any `text-overflow` or `white-space: nowrap`
-   added below would quietly reintroduce the bug the panel was built to fix.
-   ============================================================================ */
-
 .logcon {
   position: fixed;
   right: var(--s-4);
@@ -21,7 +11,7 @@
   border: 1px solid var(--line-strong);
   background: var(--panel-2);
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
-          backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
   box-shadow: var(--shadow-3);
   animation: pop-in var(--t-fast) var(--ease);
 }
@@ -41,10 +31,11 @@
   text-transform: uppercase;
   color: var(--text-mute);
 }
-.logcon-spacer { flex: 1 1 auto; }
+.logcon-spacer {
+  flex: 1 1 auto;
+}
 
-/* Level toggles. Off reads as muted rather than hidden, so it is obvious that
-   entries are being filtered out and not that none exist. */
+/* Off reads as muted, not hidden, so filtered entries do not look absent. */
 .logcon-filter {
   display: inline-flex;
   align-items: center;
@@ -61,11 +52,25 @@
   cursor: pointer;
   opacity: 0.55;
 }
-.logcon-filter.on { opacity: 1; }
-.logcon-filter.on.is-error { color: var(--error); border-color: var(--error); }
-.logcon-filter.on.is-warning { color: #d2a83b; border-color: #d2a83b; }
-.logcon-filter.on.is-info { color: var(--text); border-color: var(--line-strong); }
-.logcon-count { font-variant-numeric: tabular-nums; opacity: 0.8; }
+.logcon-filter.on {
+  opacity: 1;
+}
+.logcon-filter.on.is-error {
+  color: var(--error);
+  border-color: var(--error);
+}
+.logcon-filter.on.is-warning {
+  color: #d2a83b;
+  border-color: #d2a83b;
+}
+.logcon-filter.on.is-info {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+.logcon-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
 
 .logcon-btn {
   display: grid;
@@ -76,12 +81,14 @@
   border-radius: var(--r-sm);
   border: 1px solid transparent;
   background: none;
-  /* Explicit: a <button> does not inherit colour, and these hold an
-     <svg stroke="currentColor">. Without it they draw as empty boxes. */
+  /* A <button> does not inherit colour, and the svg strokes currentColor. */
   color: var(--text-mute);
   cursor: pointer;
 }
-.logcon-btn:hover { color: var(--text); border-color: var(--line-strong); }
+.logcon-btn:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
 
 .logcon-body {
   flex: 1 1 auto;
@@ -106,9 +113,15 @@
   border-bottom: 1px solid var(--line);
   color: var(--text);
 }
-.logcon-row:last-child { border-bottom: none; }
-.logcon-row.is-error .logcon-msg { color: #ffb4b4; }
-.logcon-row.is-warning .logcon-msg { color: #f0d08a; }
+.logcon-row:last-child {
+  border-bottom: none;
+}
+.logcon-row.is-error .logcon-msg {
+  color: #ffb4b4;
+}
+.logcon-row.is-warning .logcon-msg {
+  color: #f0d08a;
+}
 
 .logcon-time {
   color: var(--text-mute);
@@ -127,7 +140,8 @@
   white-space: nowrap;
 }
 
-/* The load-bearing declaration in this file. */
+/* Messages wrap, never clip: the toast and the title bar pill already ellipsize, and the
+   cut tail of a kernel error is the part that says what to do. */
 .logcon-msg {
   min-width: 0;
   white-space: pre-wrap;
@@ -148,7 +162,9 @@
   padding: 0;
 }
 .logcon-more:hover,
-.logcon-copy:hover { color: var(--accent-hot); }
+.logcon-copy:hover {
+  color: var(--accent-hot);
+}
 
 .logcon-detail {
   grid-column: 1 / -1;

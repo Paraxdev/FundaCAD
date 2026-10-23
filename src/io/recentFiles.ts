@@ -1,6 +1,4 @@
-// Recent-files list for the Home screen. Display concern → localStorage
-// (same convention as the other fundacad.* keys); paths are not secrets. Newest
-// first, deduped by path, capped.
+// Recent files for Home, in localStorage since paths are not secrets. Newest first, deduped by path, capped.
 
 import { readSetting } from "../ui/storedSetting";
 
@@ -17,9 +15,7 @@ export function getRecentFiles(): RecentFile[] {
   try {
     const list = JSON.parse(readSetting(KEY, ...LEGACY_KEYS) ?? "[]");
     if (!Array.isArray(list)) return [];
-    return list.filter(
-      (r): r is RecentFile => !!r && typeof r.path === "string" && typeof r.openedAt === "number",
-    );
+    return list.filter((r): r is RecentFile => !!r && typeof r.path === "string" && typeof r.openedAt === "number");
   } catch {
     return [];
   }
@@ -38,5 +34,7 @@ export function forgetRecent(path: string): void {
 function write(list: RecentFile[]): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
-  } catch { /* blocked storage keeps the old list */ }
+  } catch {
+    /* blocked storage keeps the old list */
+  }
 }

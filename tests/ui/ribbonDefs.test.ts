@@ -13,10 +13,17 @@ import { describe, expect, it } from "vitest";
 import { MODEL, SKETCH, leavesOf, type Group } from "../../src/ui/ribbonDefs";
 import { allCommands } from "../../src/ui/commands";
 
-const actionsOf = (groups: Group[]) => groups.flatMap((g) => g.items).flatMap(leavesOf).map((t) => t.action);
+const actionsOf = (groups: Group[]) =>
+  groups
+    .flatMap((g) => g.items)
+    .flatMap(leavesOf)
+    .map((t) => t.action);
 
 /** Every action a context offers, split-button children included. */
-const contexts: [string, Group[]][] = [["model", MODEL], ["sketch", SKETCH]];
+const contexts: [string, Group[]][] = [
+  ["model", MODEL],
+  ["sketch", SKETCH],
+];
 
 describe("ribbon tool tables", () => {
   it.each(contexts)("names each %s action exactly once", (_name, groups) => {
@@ -53,16 +60,56 @@ describe("ribbon tool tables", () => {
     // The list, not the count: a fold that dropped `rectangle3` would still
     // leave a plausible-looking ribbon, and the only thing that notices is a
     // user reaching for a tool that is no longer anywhere.
-    expect(new Set(actionsOf(SKETCH))).toEqual(new Set([
-      "line", "rectangle", "centerRectangle", "rectangle3",
-      "circle", "circle2", "circle3", "arc", "polygon", "slot", "spline", "bspline",
-      "point", "text", "project",
-      "fillet-sketch", "chamfer-sketch", "trim", "extend", "offset", "break",
-      "mirror-sketch", "move-sketch", "copy-sketch", "rotate-sketch", "scale-sketch", "dimension",
-      "patternRect", "patternCircular", "boltCircle", "hexHoles", "honeycomb", "gridHoles",
-      "horizontal", "vertical", "parallel", "perpendicular", "equal", "tangent",
-      "coincident", "concentric", "midpoint", "collinear", "symmetric", "fix", "tie-loose-ends",
-    ]));
+    expect(new Set(actionsOf(SKETCH))).toEqual(
+      new Set([
+        "line",
+        "rectangle",
+        "centerRectangle",
+        "rectangle3",
+        "circle",
+        "circle2",
+        "circle3",
+        "arc",
+        "polygon",
+        "slot",
+        "spline",
+        "bspline",
+        "point",
+        "text",
+        "project",
+        "fillet-sketch",
+        "chamfer-sketch",
+        "trim",
+        "extend",
+        "offset",
+        "break",
+        "mirror-sketch",
+        "move-sketch",
+        "copy-sketch",
+        "rotate-sketch",
+        "scale-sketch",
+        "dimension",
+        "patternRect",
+        "patternCircular",
+        "boltCircle",
+        "hexHoles",
+        "honeycomb",
+        "gridHoles",
+        "horizontal",
+        "vertical",
+        "parallel",
+        "perpendicular",
+        "equal",
+        "tangent",
+        "coincident",
+        "concentric",
+        "midpoint",
+        "collinear",
+        "symmetric",
+        "fix",
+        "tie-loose-ends",
+      ]),
+    );
   });
 
   it("puts the rectangles, the circles and the splines on one button each", () => {

@@ -1,6 +1,5 @@
-//! A sketch corner snapped to a model vertex arrives a few 1e-5 mm off it. The
-//! imprint must land on that vertex rather than leave an edge that short, which
-//! no fillet can take and which the viewport cannot show.
+//! A sketch corner snapped to a model vertex arrives a few 1e-5 mm off it. The imprint must land on the
+//! vertex rather than leave an edge that short, which no fillet can take and the viewport cannot show.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};
@@ -28,9 +27,6 @@ fn a_line_ending_just_off_a_corner_divides_the_face_at_that_corner() {
     assert!(r.errors.is_empty(), "{:?}", r.errors);
     let shape = &r.bodies[0].shape;
     assert_eq!(kernel::count(shape, Kind::Face), 7, "the top face is divided in two");
-    let shortest = kernel::subshapes(shape, Kind::Edge)
-        .iter()
-        .map(kernel::length)
-        .fold(f64::INFINITY, f64::min);
+    let shortest = kernel::subshapes(shape, Kind::Edge).iter().map(kernel::length).fold(f64::INFINITY, f64::min);
     assert!(shortest > 1.0, "the shortest edge is {shortest}mm");
 }

@@ -24,8 +24,20 @@ const set = (key: string, value: unknown) => settings.set(key, value);
         :step="0.01"
         @update="set('layerHeight', $event)"
       />
-      <RenderChoices label="Direction" :value="v.direction as string" :options="options" @update="set('direction', $event)" />
-      <RenderSlider label="Depth" :value="v.depth as number" :min="LIMITS.depth[0]" :max="LIMITS.depth[1]" :step="0.01" @update="set('depth', $event)" />
+      <RenderChoices
+        label="Direction"
+        :value="v.direction as string"
+        :options="options"
+        @update="set('direction', $event)"
+      />
+      <RenderSlider
+        label="Depth"
+        :value="v.depth as number"
+        :min="LIMITS.depth[0]"
+        :max="LIMITS.depth[1]"
+        :step="0.01"
+        @update="set('depth', $event)"
+      />
     </template>
   </RenderSection>
 </template>

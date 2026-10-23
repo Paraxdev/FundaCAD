@@ -1,15 +1,6 @@
-// A long press with a finger is a right click, everywhere in the app.
-//
-// Rows in the tree, the timeline, materials and the tool rail open their menus
-// on `contextmenu`, which a touchpad sends for a two-finger tap but a finger
-// only sends in some engines (WebView2 does after a long hold, WebKit does
-// not). So a finger held still for LONG_PRESS_MS sends one to whatever it is
-// on, and the system's own, if it comes too, is dropped. The click the finger's
-// release would make after the menu is open is dropped as well, or it would act
-// on the row under the menu.
-//
-// The 3D canvas runs its own touch rules (navigator/input.ts) and opts out with
-// data-own-touch, as does anything else that does its own thing with a hold.
+// A long finger press is a right click everywhere, since a finger sends `contextmenu` only in some engines (WebView2
+// after a hold, WebKit never). The system menu and the release click that follow are dropped. Anything handling
+// holds itself, like the 3D canvas (navigator/input.ts), opts out with data-own-touch.
 
 import { LONG_PRESS_MS, TOUCH_SLOP_PX } from "../viewport/navigator/input";
 
@@ -47,8 +38,14 @@ function fire() {
   if (!p || !p.target.isConnected) return;
   firedFor = p.id;
   const ev = new MouseEvent("contextmenu", {
-    bubbles: true, cancelable: true, composed: true,
-    clientX: p.x, clientY: p.y, button: 2, buttons: 0, view: window,
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    clientX: p.x,
+    clientY: p.y,
+    button: 2,
+    buttons: 0,
+    view: window,
   });
   ours.add(ev);
   p.target.dispatchEvent(ev);
@@ -64,7 +61,8 @@ function onDown(e: PointerEvent) {
 }
 
 function onMove(e: PointerEvent) {
-  if (press && e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TOUCH_SLOP_PX) cancel();
+  if (press && e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TOUCH_SLOP_PX)
+    cancel();
 }
 
 function onEnd(e: PointerEvent) {

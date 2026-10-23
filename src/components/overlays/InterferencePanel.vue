@@ -1,9 +1,5 @@
 <script setup lang="ts">
-// Inspect → Interference: which bodies clash (and by how much), plus an
-// optional clearance pass for pairs that come within a user threshold without
-// actually overlapping. Clicking a row selects the offending pair in the
-// viewport; the overlap solids and clearance lines are drawn by the viewport
-// itself (see ui/panels.ts showInterference / closeInterference).
+// The overlap solids and clearance lines are drawn by the viewport (ui/panels.ts showInterference).
 
 import { ref } from "vue";
 import { useEngine } from "../../app/engineKey";
@@ -53,7 +49,9 @@ function close() {
       </div>
       <div v-if="!panels.interference.clashes.length" class="measure-row">
         <span class="measure-v">{{
-          panels.interference.unchecked.length ? "No overlap among the pairs that were checked" : "No overlapping bodies"
+          panels.interference.unchecked.length
+            ? "No overlap among the pairs that were checked"
+            : "No overlapping bodies"
         }}</span>
       </div>
       <div
@@ -73,9 +71,15 @@ function close() {
         </label>
         <span class="measure-v" v-if="clearanceOn">
           <input
-            class="measure-number" type="number" min="0.01" max="50" step="0.01"
-            v-model.number="threshold" @change="recheck"
-          /> mm
+            class="measure-number"
+            type="number"
+            min="0.01"
+            max="50"
+            step="0.01"
+            v-model.number="threshold"
+            @change="recheck"
+          />
+          mm
         </span>
       </div>
 

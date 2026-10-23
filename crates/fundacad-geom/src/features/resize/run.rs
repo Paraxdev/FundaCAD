@@ -1,6 +1,5 @@
-//! A whole closed tangent run (a slot's walls and ends) resized as one: its
-//! cross section offset in 2D and swept along the axis, then split and kept
-//! the way a lone face is.
+//! A whole closed tangent run (a slot's walls and ends) resized as one: its cross section offset in 2D and swept
+//! along the axis, then split and kept the way a lone face is.
 
 use glam::DVec3;
 use opencascade::primitives::{JoinType, Shape};
@@ -24,9 +23,8 @@ fn prismatic(run: &[Shape], dir: DVec3) -> bool {
     })
 }
 
-/// The face bounded by the run's cross section through `p` square to `dir`.
-/// Only the run's own faces are cut, so the wire through `p` closes only
-/// when the run closes into one loop by itself.
+/// The face bounded by the run's cross section through `p` square to `dir`. Only the run's own faces are cut, so
+/// the wire closes only when the run closes into one loop by itself.
 fn section(run: &[Shape], p: DVec3, dir: DVec3) -> Option<Shape> {
     let faces = kernel::compound(run);
     let l = 2.0 * kernel::bbox_diagonal(&faces) + 1.0;
@@ -64,7 +62,13 @@ pub(super) fn closed(body: &Shape, run: &[Shape], face: &Shape) -> bool {
 
 /// The run moved so `face` changes size by `delta`; None when the run is not
 /// closed and prismatic.
-pub(super) fn run_offset(body: &Shape, run: &[Shape], face: &Shape, delta: f64, cut: bool) -> Option<Result<Shape, Bad>> {
+pub(super) fn run_offset(
+    body: &Shape,
+    run: &[Shape],
+    face: &Shape,
+    delta: f64,
+    cut: bool,
+) -> Option<Result<Shape, Bad>> {
     let s = surf(face);
     let Surf::Cyl { dir, .. } = s else { return None };
     crate::bench::phase("resize_run", || {
@@ -73,7 +77,15 @@ pub(super) fn run_offset(body: &Shape, run: &[Shape], face: &Shape, delta: f64, 
     })
 }
 
-fn offset_swept(body: &Shape, run: &[Shape], old: &Shape, s: &Surf, dir: DVec3, delta: f64, cut: bool) -> Result<Shape, Bad> {
+fn offset_swept(
+    body: &Shape,
+    run: &[Shape],
+    old: &Shape,
+    s: &Surf,
+    dir: DVec3,
+    delta: f64,
+    cut: bool,
+) -> Result<Shape, Bad> {
     let of = old.as_face().ok_or(Bad::Failed)?;
     // The section is the cutout's void or the boss's material, either way it
     // grows with the radius.

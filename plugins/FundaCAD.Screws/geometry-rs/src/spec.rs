@@ -1,8 +1,5 @@
-//! scr_spec.py: checking a fastener spec and bringing it to millimetres.
-//!
-//! The required fields come from catalogue/fields.json, the same file the
-//! window's form and its check (spec.ts) read. `sanity` mirrors spec.ts
-//! `sanityProblems`.
+//! Port of scr_spec.py. The required fields come from catalogue/fields.json, which the form and spec.ts read too, and
+//! `sanity` mirrors spec.ts `sanityProblems`.
 
 use std::sync::OnceLock;
 
@@ -12,9 +9,7 @@ const INCH: f64 = 25.4;
 
 fn fields() -> &'static Value {
     static F: OnceLock<Value> = OnceLock::new();
-    F.get_or_init(|| {
-        serde_json::from_str(include_str!("../../catalogue/fields.json")).expect("fields.json parses")
-    })
+    F.get_or_init(|| serde_json::from_str(include_str!("../../catalogue/fields.json")).expect("fields.json parses"))
 }
 
 fn part_label(part: &str) -> &str {
@@ -67,10 +62,7 @@ fn missing_fields(spec: &Value) -> Vec<String> {
         return vec!["the whole spec".into()];
     };
     let f = fields();
-    let kind = obj
-        .get("kind")
-        .and_then(Value::as_str)
-        .and_then(|k| f["kinds"].get(k));
+    let kind = obj.get("kind").and_then(Value::as_str).and_then(|k| f["kinds"].get(k));
     let Some(kind) = kind else {
         return vec!["the fastener kind".into()];
     };
@@ -139,20 +131,13 @@ fn sanity(spec: &Value) -> Vec<String> {
         let head = &spec["head"];
         let drive = &spec["drive"];
         let length = n(spec.get("length"));
-        let shank = if kind == "shoulderScrew" {
-            n(spec.get("shoulder").and_then(|s| s.get("diameter")))
-        } else {
-            d
-        };
+        let shank = if kind == "shoulderScrew" { n(spec.get("shoulder").and_then(|s| s.get("diameter"))) } else { d };
         if kind == "shoulderScrew" && !(shank > d) {
             out.push("the shoulder must be wider than the thread".into());
         }
         let htype = head["type"].as_str().unwrap_or("");
-        let across = if htype == "hex" || htype == "hexFlange" {
-            n(head.get("acrossFlats"))
-        } else {
-            n(head.get("diameter"))
-        };
+        let across =
+            if htype == "hex" || htype == "hexFlange" { n(head.get("acrossFlats")) } else { n(head.get("diameter")) };
         if htype != "none" && !(across > shank) {
             out.push("the head must be wider than the shank".into());
         }
@@ -194,11 +179,7 @@ fn sanity(spec: &Value) -> Vec<String> {
             if !fits {
                 out.push("the drive does not fit in the head".into());
             }
-            let allowed = if htype != "none" {
-                n(head.get("height")) + d / 2.0
-            } else {
-                length * 0.6
-            };
+            let allowed = if htype != "none" { n(head.get("height")) + d / 2.0 } else { length * 0.6 };
             if !(n(drive.get("depth")) < allowed) {
                 out.push("the drive recess is too deep".into());
             }

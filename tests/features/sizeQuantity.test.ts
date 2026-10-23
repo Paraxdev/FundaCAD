@@ -2,13 +2,7 @@
 // offset. Read wrong, "r2.5" is a refused field and "-0.5" a negative radius.
 
 import { describe, expect, it } from "vitest";
-import {
-  defaultQuantity,
-  deltaForSize,
-  isAbsolute,
-  parseSizeText,
-  sizeReadout,
-} from "../../src/features/sizeQuantity";
+import { defaultQuantity, deltaForSize, isAbsolute, parseSizeText, sizeReadout } from "../../src/features/sizeQuantity";
 import { tryParseMeasure, unitById } from "../../src/ui/measure";
 
 describe("parseSizeText", () => {
@@ -88,7 +82,14 @@ describe("sizeReadout and deltaForSize", () => {
 describe("the number's text", () => {
   it("is something the field's own parser reads", () => {
     const mm = unitById("mm");
-    for (const [raw, want] of [["+0.5", 0.5], ["-0.5", -0.5], ["−0.5", -0.5], ["r2.5", 2.5], ["⌀5mm", 5], ["d 1/2", 0.5]] as const) {
+    for (const [raw, want] of [
+      ["+0.5", 0.5],
+      ["-0.5", -0.5],
+      ["−0.5", -0.5],
+      ["r2.5", 2.5],
+      ["⌀5mm", 5],
+      ["d 1/2", 0.5],
+    ] as const) {
       expect(tryParseMeasure(parseSizeText(raw)!.text, mm)?.value).toBeCloseTo(want);
     }
   });

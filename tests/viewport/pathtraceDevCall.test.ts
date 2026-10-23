@@ -50,7 +50,11 @@ function sentRequests(s: FakeSocket) {
     if (typeof m === "string") return JSON.parse(m) as { id: number; cmd: string; args?: unknown };
     const v = new DataView(m.buffer, m.byteOffset, m.byteLength);
     const n = v.getUint16(4, true);
-    return { id: v.getUint32(0, true), cmd: new TextDecoder().decode(m.subarray(6, 6 + n)), body: [...m.subarray(6 + n)] };
+    return {
+      id: v.getUint32(0, true),
+      cmd: new TextDecoder().decode(m.subarray(6, 6 + n)),
+      body: [...m.subarray(6 + n)],
+    };
   });
 }
 
@@ -121,7 +125,8 @@ describe("the WebSocket call to the dev tracer server", () => {
     const seen: [string, unknown][] = [];
     const call = async (cmd: string, args?: unknown) => {
       seen.push([cmd, args]);
-      if (cmd === "frames_open") return { id: 4, kind: "websocket", generation: 1, port: 77, token: "ft", source: "tracer" };
+      if (cmd === "frames_open")
+        return { id: 4, kind: "websocket", generation: 1, port: 77, token: "ft", source: "tracer" };
       if (cmd === "frames_resize") return 2;
       return null;
     };

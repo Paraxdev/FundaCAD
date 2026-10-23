@@ -21,29 +21,14 @@ import { replayedPress } from "../viewport/navigator/input";
 import { exactRound, roundFacePrompt } from "../ui/selectionMeasure";
 import { offeredResize } from "../features/pressPullAxis";
 
-/** How far the ambiguous-edge menu sits off the click, px. */
 const AMBIGUOUS_MENU_OFFSET = 16;
 
-/** Viewport callbacks and the two Escape listeners that clear its selections.
- *
- *  The Viewport publishes through public callback FIELDS rather than events, so
- *  each of these is a single-slot assignment, the last writer applies, and there is
- *  exactly one writer for each. */
+/** The Viewport's callbacks are single slot fields, so this is the one writer of each. */
 export function installViewportWiring(e: Engine): void {
-  // clicking a construction plane in the viewport selects it (so it can be cut by)
   e.viewport.onPickDatum = (id) => e.selectFeature(id);
 
-  // A single face click selects the face and not its owner: selecting the owner
-  // opened its values, so the top of a plate a hole was cut into opened the Hole.
-  // Double-click a face to open the edit of the feature that made it, the
-  // viewport twin of double-clicking that feature's history entry. A visible
-  // sketch profile reopens its sketch, and is asked first by the same ranking a
-  // single click uses. A face resolves to exactly one owning feature (the build's faceOwners), and
-  // a face selection leaves toolBusy() false, so editFeature's own guard lets
-  // it through and reopens whatever manipulator that feature carries. A body is
-  // many features and already raises the Move gizmo, so it keeps that. Gated on
-  // no tool and no sketch: mid-drag or inside a sketch a double-click means
-  // something else entirely and must not reach an edit here.
+  // A double click edits the feature that made the face, or the sketch of a visible profile, which is asked first.
+  // A single click selects only the face, or the plate a hole was cut into would open the Hole.
   e.viewport.onDoubleClick = (x, y) => {
     if (e.toolBusy() || e.sketch.active) return;
     const profile = regionAt(x, y);
@@ -61,29 +46,7 @@ export function installViewportWiring(e: Engine): void {
     if (owner) e.editFeature(owner);
   };
 
-  // -------------------------------------------------------------------------
-  // Viewport right-click: context-aware menus, one provider per target (datum
-  // plane / edge / face / whole body / empty space), all on the shared engine in
-  // ui/menu.ts. The viewport owns the click-vs-pan gesture (right button is
-  // camera pan) and fires onContextClick only for a genuine click; toolBusy
-  // gates it, an active tool (or sketch mode, which has its own canvas menu)
-  // owns the gesture.
-  // -------------------------------------------------------------------------
-  // -------------------------------------------------------------------------
-  // A click that landed on two edges at once.
-  //
-  // Two bodies that meet share a boundary, and each keeps its own edge there,
-  // same curve, same pixels. The picker ranks by distance from the cursor, which
-  // is a tie, so the pick was whichever the raycaster reported first: stable
-  // within a session, arbitrary between them, and impossible to override. Click
-  // the seam between two extrusions and you got one of them with no way to say
-  // which.
-  //
-  // So it asks. The menu is the ordinary right-click menu, which already knows
-  // how to place itself, dismiss on Escape or an outside click, and stay on
-  // screen near an edge, and hovering a row lights the edge it names, so which
-  // is which is answered by looking at the model rather than by reading two
-  // similar sentences.
+  // Two bodies that meet each keep their own edge on the same pixels, so a click there asks which one it meant.
   e.viewport.onAmbiguousEdge = (cands, at, mods) => {
     if (e.toolBusy()) return false;
     const bodies = e.store.buildState.result?.bodies ?? [];
@@ -91,8 +54,6 @@ export function installViewportWiring(e: Engine): void {
       if (!id) return null;
       const f = e.store.document.features.find((x) => x.id === id);
       if (!f) return null;
-      // `name` is optional and only present on some members of the union, so it
-      // is read off the record rather than the narrowed type.
       const named = (f as { name?: string }).name;
       return named || featureMeta(f).label;
     };
@@ -102,96 +63,65 @@ export function installViewportWiring(e: Engine): void {
       const name = c.edge.body ? (e.store.bodyName(c.edge.body) ?? body?.name ?? null) : null;
       return { cand: c, index, name, feature: featureName(dominantOwner(body?.faceOwners)) };
     });
-    // Two boxes are both called "Box", so the name alone cannot separate the
-    // rows. Number them by their place in the BODY LIST, which is the browser's
-    // order, so "Box 2" means the same thing in both places.
+    // Same names are numbered by body list order, so "Box 2" matches the browser.
     const shared = new Map<string, number>();
     for (const r of rows) if (r.name) shared.set(r.name, (shared.get(r.name) ?? 0) + 1);
-    // distinguish() is the last resort under that: two edges of ONE body still
-    // read alike, and edgeTies would drop the choice rather than offer it.
-    const labels = distinguish(rows.map((r) =>
-      edgeChoiceLabel(
-        bodyRowLabel(r.name, r.index, (shared.get(r.name ?? "") ?? 0) > 1),
-        r.feature,
-        r.name,
-      )));
-    // Tied by rank, so a faint tangent edge beside a sharp one is not a question.
-    // A fingertip cannot aim as finely as a cursor, so its tie band is wider.
+    // distinguish() separates two edges of one body, which edgeTies would otherwise drop.
+    const labels = distinguish(
+      rows.map((r) =>
+        edgeChoiceLabel(bodyRowLabel(r.name, r.index, (shared.get(r.name ?? "") ?? 0) > 1), r.feature, r.name),
+      ),
+    );
+    // Tied by rank, so a faint tangent edge beside a sharp one is not a question; touch gets a wider band.
     const choices = ambiguousCandidates(
       rows.map((r, i) => ({ ...r, label: labels[i] ?? "Edge", screenDist: r.cand.rankPx })),
       hitPx(TIE_BAND_PX),
     );
-    if (choices.length < 2) return false; // nothing worth asking, take the nearest
+    if (choices.length < 2) return false;
 
-    // Offset off the cursor, unlike every other menu the app pops. This one is
-    // asking about geometry AT the cursor, and opening its top-left corner
-    // exactly there covered the edges it was asking about. A small diagonal
-    // nudge cannot clear a line running in every direction at once, but it
-    // reliably clears the pixel that was clicked, and the over-drawn emphasis
-    // does the rest.
-    contextMenu(at.x + AMBIGUOUS_MENU_OFFSET, at.y + AMBIGUOUS_MENU_OFFSET, choices.map((c) => ({
-      label: c.label,
-      // Both: the tint says "this is the hovered edge" in the model's own
-      // vocabulary, and the over-drawn line makes it visible past the menu,
-      // which by construction opens right on top of the edges in question.
-      //
-      // KNOWN LIMIT, and not an oversight: where the two edges are EXACTLY
-      // coincident, two bodies meeting along one line, the commonest reason
-      // this menu opens at all, both previews draw the same pixels and only
-      // the label separates them. Which is why the label is the part that
-      // decides whether the menu opens (viewport/edgeTies.ts) rather than the
-      // geometry. Distinguishing them on screen would mean lighting the whole
-      // owning BODY, which is a bigger claim than a hover should make.
-      onHover: (on: boolean) => {
-        e.viewport.hoverEdge(on ? c.cand.edge : null);
-        e.viewport.emphasiseEdge(on ? c.cand.edge : null);
-      },
-      onClick: () => {
-        e.viewport.emphasiseEdge(null); // the choice is made; the pointer is gone
-        e.viewport.applyPick(c.cand, mods);
-      },
-    })));
+    // Offset, unlike other menus, so it does not cover the clicked edges.
+    contextMenu(
+      at.x + AMBIGUOUS_MENU_OFFSET,
+      at.y + AMBIGUOUS_MENU_OFFSET,
+      choices.map((c) => ({
+        label: c.label,
+        // Exactly coincident edges draw the same pixels, so only the label separates them (viewport/edgeTies.ts).
+        onHover: (on: boolean) => {
+          e.viewport.hoverEdge(on ? c.cand.edge : null);
+          e.viewport.emphasiseEdge(on ? c.cand.edge : null);
+        },
+        onClick: () => {
+          e.viewport.emphasiseEdge(null);
+          e.viewport.applyPick(c.cand, mods);
+        },
+      })),
+    );
     return true;
   };
 
-  // toolOwnsScreen, not toolBusy: this is the FIRST of the two gates on the
-  // right-click, the second is inside openCanvasMenu. With a plain busy test a
-  // body you had ALREADY selected had no menu at all, because selecting a body
-  // is what raises the Move gizmo a dozen lines above. See
-  // Engine.toolOwnsScreen.
+  // toolOwnsScreen, not toolBusy, or a selected body (which raises Move) gets no menu. openCanvasMenu gates again.
   e.viewport.shouldOpenContextMenu = () => !e.toolOwnsScreen();
   e.viewport.onContextClick = (x, y) => e.menus.openCanvasMenu(x, y);
 
-  // A left drag over empty canvas is an area selection, but only when nothing
-  // else owns the pointer. Every 3D tool drags a handle with the same button,
-  // and a sketch has its own gesture for everything.
-  //
-  // toolOwnsScreen, not toolBusy: selecting a body raises the Move gizmo by
-  // itself (see Engine.toolOwnsScreen), so toolBusy is true for as long as any
-  // body is selected, and asking it here meant that after ONE box over bodies
-  // you could never draw another. The gizmo is not in the way, either: its
-  // handles take their press in the capture phase and stop it there
-  // (moveTool.onDown), so a press anywhere else was always free.
+  // toolOwnsScreen, or one box over bodies would block every later box; the gizmo's handles stop their own press.
   e.viewport.canAreaSelect = () => !e.toolOwnsScreen() && !e.sketch.active;
-  // ...and once the press really is a box, stand the gizmo down. The box is
-  // about to replace the selection that raised it, and a gizmo left standing
-  // over the middle of the new one would be pointing at the old centroid.
+  // The box replaces the selection that raised the gizmo, which would point at the old centroid.
   e.viewport.onAreaBegin = () => e.dropBodyGizmo();
-  // The direction of the drag decides the verdict, and it decides it while the
-  // drag is still running, so it has to be said while the drag is still
-  // running. Restores whatever the selection prompt was on release.
+  // The drag direction decides what the box takes, so say so while dragging.
   e.viewport.onAreaDrag = (mode) => {
-    if (mode === null) { e.viewport.onSelectionChange?.(); return; }
+    if (mode === null) {
+      e.viewport.onSelectionChange?.();
+      return;
+    }
     const takes = areaFilterLabel(e.viewport.areaTakes);
-    setPrompt(mode === "window"
-      ? `Taking ${takes} fully inside the box, drag left to take anything it touches · Tab filters`
-      : `Taking ${takes} the box touches, drag right to take only what is fully inside · Tab filters`);
+    setPrompt(
+      mode === "window"
+        ? `Taking ${takes} fully inside the box, drag left to take anything it touches · Tab filters`
+        : `Taking ${takes} the box touches, drag right to take only what is fully inside · Tab filters`,
+    );
   };
 
-  // A context menu holds targets captured at open time (faceId, edge line, body
-  // id), a completed rebuild renumbers topology and replaces the mesh, and any
-  // document change can invalidate the owning feature. Dismiss rather than let a
-  // click act on stale targets ("Delete face" healing the WRONG face).
+  // A menu holds targets captured at open time, which a rebuild renumbers, so it closes before a stale click acts.
   e.store.onDocChange(() => dismissContextMenu());
   e.store.onBuild((s) => {
     if (s.result && !s.building) dismissContextMenu();
@@ -201,8 +131,7 @@ export function installViewportWiring(e: Engine): void {
   const faceAreas = new Map<number, number>();
   e.store.onBuild(() => faceAreas.clear());
   const regionAt = (x: number, y: number) => {
-    // A cut answer that landed under a tool or dialog is applied at the first
-    // hover or pick after it, before an area can be offered from the old split.
+    // A cut answer that landed under a tool or dialog applies before an area from the old split is offered.
     if (e.overlay.splitStale) {
       e.overlay.update(e.store.document);
       e.viewport.requestRender();
@@ -213,9 +142,9 @@ export function installViewportWiring(e: Engine): void {
     const onPlane = ray.intersectPlane(wr.plane.plane, new THREE.Vector3());
     const surface = e.viewport.surfaceHitAt(x, y);
     if (!onPlane || !surface) return wr;
-    let faceArea = faceAreas.get(surface.faceId);
-    if (faceArea === undefined) {
-      faceArea = e.viewport.faceArea(surface.faceId);
+    let faceArea = 0;
+    if (surface.faceId !== null) {
+      faceArea = faceAreas.get(surface.faceId) ?? e.viewport.faceArea(surface.faceId);
       faceAreas.set(surface.faceId, faceArea);
     }
     return regionBeatsSurface({
@@ -224,12 +153,11 @@ export function installViewportWiring(e: Engine): void {
       modelScale: e.viewport.modelDiagonal() ?? 0,
       regionArea: regionArea(wr.region),
       faceArea,
-    }) ? wr : null;
+    })
+      ? wr
+      : null;
   };
-  // SOLID-mode direct selection of a visible sketch's profile AREAS (MCAD-style):
-  // click a shown sketch's cell to (pre)select it, then Extrude (E) uses it. Only
-  // fires when a sketch is visible (overlay.regions is empty otherwise), so normal
-  // face/body picking is untouched the rest of the time.
+  // A visible sketch's areas are pickable outside sketch mode, so Extrude can use them.
   e.viewport.regionHoverAt = (x, y) => {
     if (e.sketch.active || e.toolBusy()) {
       if (e.overlay.setHoverRegion(null)) e.viewport.requestRender();
@@ -240,7 +168,7 @@ export function installViewportWiring(e: Engine): void {
     return !!wr;
   };
   // The section's handle lights on hover and is not a tool, so it keeps the per-move frame.
-  e.viewport.quietPointer = () => !e.toolBusy() && !e.tools.section.active;
+  e.viewport.quietPointer = () => !e.toolBusy() && !e.tools.section.editing;
   e.viewport.regionPickAt = (x, y, additive) => {
     if (e.sketch.active || e.toolBusy()) return false;
     const wr = regionAt(x, y);
@@ -249,7 +177,6 @@ export function installViewportWiring(e: Engine): void {
     refreshNudge();
     return true;
   };
-  // Esc clears a pre-selected profile-area selection (when not in a tool/sketch)
   window.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && !e.toolBusy() && !e.sketch.active && e.overlay.selectedRegions().length) {
       e.overlay.clearRegionSelection();
@@ -257,58 +184,41 @@ export function installViewportWiring(e: Engine): void {
     }
   });
 
-  // The Viewport owns the body selection and is not reactive, so mirror it into
-  // the browser store on every change. That is also what killed the tree's old
-  // `isBodySelected(id)` predicate, which allocated a fresh array and scanned it
-  // once PER BODY on every doc change and every build.
+  // The Viewport is not reactive, so its body selection is mirrored into the browser store.
   const browser = useBrowserStore();
   browser.setSelectedBodies(e.viewport.getSelectedBodies());
-  // Picking a body IS reaching for it. The gizmo used to be a second step (M,
-  // or the toolbar), which meant the obvious gesture, click the thing, drag it,
-  // did nothing at all and the prompt had to explain the missing half. So a
-  // body selection opens the move gizmo on it, and the tool hands a plain click
-  // back here so the next click moves the gizmo to the next body (or, over
-  // nothing, puts it away) in one click rather than two.
+  // Picking a body raises the Move gizmo on it; the tool hands a plain click back, so the next pick moves it on.
   e.viewport.onBodySelectionChange = (cause) => {
     browser.setSelectedBodies(e.viewport.getSelectedBodies());
     if (e.toolBusy()) return;
     const ids = e.viewport.getSelectedBodies();
-    if (!ids.length) { setPrompt(null); return; }
-    // A rebuild carrying the selection over is not a pick. Every undo and redo
-    // is one, and arming the gizmo there focused its field, which then kept
-    // every later Ctrl+Z and Ctrl+Y for itself (FI-2).
+    if (!ids.length) {
+      setPrompt(null);
+      return;
+    }
+    // Not on a rebuild restore: the gizmo's focused field would swallow every later Ctrl+Z (FI-2).
     if (cause === "restore") return;
     e.raiseBodyGizmo();
   };
-  // Esc clears the body selection while in Bodies mode. toolOwnsScreen, not
-  // toolBusy: the Move gizmo the selection raised cancels on the same key, and
-  // gating on it left the body lit with no gizmo on it. Captured because the
-  // gizmo's value box stops the key from bubbling.
-  window.addEventListener("keydown", (ev) => {
-    if (ev.key !== "Escape" || escapeClaimed()) return;
-    if (isEditableTarget(ev.target) && !e.tools.move.active) return;
-    if (e.viewport.selecting === "bodies" && !e.toolOwnsScreen() && e.viewport.getSelectedBodies().length) {
-      e.viewport.setSelectedBodies([]);
-    }
-  }, true);
+  // toolOwnsScreen, since the raised gizmo cancels on the same key; capture phase, since its value box stops bubbling.
+  window.addEventListener(
+    "keydown",
+    (ev) => {
+      if (ev.key !== "Escape" || escapeClaimed()) return;
+      if (isEditableTarget(ev.target) && !e.tools.move.active) return;
+      if (e.viewport.selecting === "bodies" && !e.toolOwnsScreen() && e.viewport.getSelectedBodies().length) {
+        e.viewport.setSelectedBodies([]);
+      }
+    },
+    true,
+  );
 
-  // --- sketch overlays follow the document (when not actively sketching) ---
   e.store.onDocChange(() => {
     if (!e.sketch.active) e.overlay.update(e.store.document);
   });
 
-  // --- selecting offers the drag handle straight away -----------------------
-  // The old behaviour was a prompt line and nothing else: the entity lit up,
-  // and you were expected to know that Fillet, Chamfer, Press/Pull or Extrude
-  // would consume it. The handle puts the offer where the geometry is; the
-  // prompt now explains the handle rather than substituting for it.
-  //
-  // Three kinds of selection, one handle, so this is also where they are ranked.
-  // Edges first: an edge hit is the most specific thing the picker can return.
-  // Then profiles, matching the picker's own sketch-over-solid priority (and
-  // because a region pick deliberately does NOT clear the face selection
-  // underneath it, so without this rule the handle would answer the wrong click).
-  // Faces last.
+  // One handle for three selections, ranked: edges, then profiles (a region pick keeps the face selection under it),
+  // then faces.
   function refreshNudge() {
     roundAsk++;
     exactRound.value = null;
@@ -317,16 +227,10 @@ export function installViewportWiring(e: Engine): void {
     const faces = edges.length || regions.length ? null : e.viewport.selectedFacesForPressPull();
 
     if (edges.length) {
-      // The bbox centre decides which way is "out of the material", read from
-      // the store, the same source EdgeFeatureTool reads, so the handle does not
-      // flip at the instant the tool takes the gesture over.
+      // The same bbox centre EdgeFeatureTool reads, so the handle does not flip when the tool takes over.
       const bb = e.store.buildState.result?.bbox;
       const centre = bb
-        ? new THREE.Vector3(
-            (bb.min[0] + bb.max[0]) / 2,
-            (bb.min[1] + bb.max[1]) / 2,
-            (bb.min[2] + bb.max[2]) / 2,
-          )
+        ? new THREE.Vector3((bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2)
         : null;
       e.nudge.show(
         edgeNudgePlacement(
@@ -339,9 +243,7 @@ export function installViewportWiring(e: Engine): void {
     } else if (regions.length) {
       e.nudge.show(regionNudgePlacement(regions, (x, y) => e.starters.grabRegionHandle(x, y)));
     } else {
-      e.nudge.show(
-        faceNudgePlacement(faces, (x, y) => e.starters.grabFaceHandle(x, y)) ?? recentExtrudePlacement(),
-      );
+      e.nudge.show(faceNudgePlacement(faces, (x, y) => e.starters.grabFaceHandle(x, y)) ?? recentExtrudePlacement());
     }
 
     if (e.toolBusy()) return;
@@ -393,8 +295,7 @@ export function installViewportWiring(e: Engine): void {
     const last = e.tools.extrude.lastCommit;
     if (!last) return null;
     const features = e.store.document.features;
-    const stillLast = features[features.length - 1]?.id === last.id
-      && e.store.rollbackIndex === features.length;
+    const stillLast = features[features.length - 1]?.id === last.id && e.store.rollbackIndex === features.length;
     if (!stillLast || e.store.buildState.errorFeatureId === last.id) return null;
     return {
       anchor: last.top,
@@ -416,25 +317,9 @@ export function installViewportWiring(e: Engine): void {
     if (ev.key === "Escape") dropRecentExtrude();
   });
 
-  // Profile selection has no change notification of its own, it lives on the
-  // overlay, which tools clear directly (extrude's edit-mode cancel) and which
-  // the doc-change handler above rebuilds wholesale. Refreshing here catches
-  // both, and registration order matters: this runs after that rebuild, so it
-  // reads the regions that now exist rather than the ones that just went.
+  // Profile selection has no change event; registered after the overlay rebuild above, so it reads the new regions.
   e.store.onDocChange(() => refreshNudge());
   e.store.onBuild((s) => {
     if (s.result && !s.building) refreshNudge();
   });
-
-  // A rebuild used to be the end of the handle: setModel built a fresh
-  // Highlighter, the edge selection went with it, and the only safe response
-  // was to drop the handle rather than let it act on a stale anchor. Cancelling
-  // a fillet therefore left you looking at the sharp edge you started from with
-  // nothing selected and no arrow, the preview's OWN rebuild had eaten the
-  // selection the gesture was standing on.
-  //
-  // setModel now carries the selection across (viewport.ts captureSelection /
-  // restoreSelection) and fires onSelectionChange either way, so the handler
-  // above already re-places the handle on the rebuilt edge, or hides it when
-  // the edge genuinely did not survive. Nothing to do here.
 }

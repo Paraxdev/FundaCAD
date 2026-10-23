@@ -1,14 +1,5 @@
-// Fine parallel ridges across a body, shaded through its normal, colour and
-// roughness only. The same functions run here (tests), in the GLSL below and in
-// the tracer, all checked against tests/fixtures/relief_profile.json.
-//
-// Per point p, axis a, origin o, pitch h: s = (dot(p, a) - o) / h, ridge k = floor(s),
-// phase f = fract(s), c = dot(n, a) with n the smooth normal, t the axis projected
-// on the surface. Each ridge is a rounded bead tilting the normal about cross(n, t);
-// on slopes part of every ridge is a flat step facing along the axis, which fills
-// the ridge as |c| reaches 1, so a face across the axis shows nothing. Where a pixel
-// spans more than about half a ridge the tilt, seam and colour fade to their means
-// and the slope variance they carried moves into roughness.
+// The same spec runs here, in the GLSL below and in the tracer, checked against tests/fixtures/relief_profile.json.
+// Past about half a ridge per pixel the tilt, seam and colour fade to their means and the slope moves into roughness.
 
 import * as THREE from "three";
 import type { Relief, ReliefMap } from "../plugins/contrib";
@@ -98,7 +89,9 @@ export function reliefHash(k: number): number {
 export function reliefAlbedo(f: number, k: number, c: number, w: number, tint: number, cavity: number): number {
   const fd = reliefFade(w);
   const wall = Math.sqrt(Math.max(0, 1 - c * c));
-  return (1 + tint * (reliefHash(k) - 0.5) * fd) * (1 - cavity * wall * (fd * reliefSeam(f) + (1 - fd) * RELIEF.seamMean));
+  return (
+    (1 + tint * (reliefHash(k) - 0.5) * fd) * (1 - cavity * wall * (fd * reliefSeam(f) + (1 - fd) * RELIEF.seamMean))
+  );
 }
 
 export function glslFloat(x: number): string {
@@ -108,7 +101,7 @@ export function glslFloat(x: number): string {
 const F = (k: keyof typeof RELIEF) => glslFloat(RELIEF[k]);
 
 export const RELIEF_GLSL = {
-  common: /* glsl */`
+  common: /* glsl */ `
 uniform float uReliefOn;
 uniform vec3 uReliefAxis;
 uniform float uReliefOrigin;
@@ -154,15 +147,15 @@ ReliefOut reliefEval(vec3 p, vec3 n) {
   r.albedo = mix(1.0, a, uReliefOn);
   return r;
 }`,
-  color_fragment: /* glsl */`
+  color_fragment: /* glsl */ `
 vec3 reliefN = (gl_FrontFacing ? 1.0 : -1.0) * normalize(vSurfWNorm);
 ReliefOut relief = reliefEval(vSurfWPos, reliefN);
 diffuseColor.rgb *= relief.albedo;`,
-  roughnessmap_fragment: /* glsl */`
+  roughnessmap_fragment: /* glsl */ `
 roughnessFactor = sqrt(roughnessFactor * roughnessFactor + relief.sigma2);`,
   // Moves the incoming normal by the tilt, so a bump an earlier patch put on it
   // stays; nonPerturbedNormal stays smooth for a clear coat.
-  normal_fragment_begin: /* glsl */`
+  normal_fragment_begin: /* glsl */ `
 {
   vec3 rwN = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
   vec3 rmN = cos(relief.tilt) * reliefN + sin(relief.tilt) * relief.t;

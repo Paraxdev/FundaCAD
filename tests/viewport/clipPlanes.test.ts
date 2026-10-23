@@ -1,13 +1,7 @@
 // The near plane that follows the camera in, and the zoom floor it lifts.
 
 import { describe, expect, it } from "vitest";
-import {
-  MIN_PERSP_DIST,
-  NEAR_AT_REST,
-  NEAR_FLOOR,
-  NEAR_FRACTION,
-  perspNear,
-} from "../../src/viewport/clipPlanes";
+import { MIN_PERSP_DIST, NEAR_AT_REST, NEAR_FLOOR, NEAR_FRACTION, perspNear } from "../../src/viewport/clipPlanes";
 
 /** The pair this replaced: a fixed near, and a floor five times it. */
 const OLD_NEAR = 0.1;
@@ -77,7 +71,12 @@ describe("perspNear outside the model", () => {
   });
 
   it("never passes the nearest point of the model", () => {
-    for (const [d, gap] of [[2000, 3], [50, 40], [9000, 8000], [3, 1]] as const) {
+    for (const [d, gap] of [
+      [2000, 3],
+      [50, 40],
+      [9000, 8000],
+      [3, 1],
+    ] as const) {
       expect(perspNear(d, gap)).toBeLessThanOrEqual(Math.max(gap, NEAR_AT_REST));
     }
   });

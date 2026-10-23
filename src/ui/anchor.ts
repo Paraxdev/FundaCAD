@@ -1,6 +1,4 @@
-// Where a popover goes beside the element that opened it: on the requested side
-// when it fits, on the opposite side when it does not, and always inside the
-// window.
+// Places a popover beside its opener: on the asked side when it fits, else the opposite one, always inside the window.
 
 export type Side = "right" | "left" | "bottom" | "top";
 
@@ -22,15 +20,24 @@ function spot(a: Rect, box: Size, side: Side, gap: number, align: "start" | "cen
   const midX = (a.left + a.right) / 2 - box.width / 2;
   const midY = (a.top + a.bottom) / 2 - box.height / 2;
   switch (side) {
-    case "right": return { left: a.right + gap, top: align === "start" ? a.top : midY };
-    case "left": return { left: a.left - gap - box.width, top: align === "start" ? a.top : midY };
-    case "bottom": return { left: align === "start" ? a.left : midX, top: a.bottom + gap };
-    case "top": return { left: align === "start" ? a.left : midX, top: a.top - gap - box.height };
+    case "right":
+      return { left: a.right + gap, top: align === "start" ? a.top : midY };
+    case "left":
+      return { left: a.left - gap - box.width, top: align === "start" ? a.top : midY };
+    case "bottom":
+      return { left: align === "start" ? a.left : midX, top: a.bottom + gap };
+    case "top":
+      return { left: align === "start" ? a.left : midX, top: a.top - gap - box.height };
   }
 }
 
 function fits(p: { left: number; top: number }, box: Size, win: Size, margin: number): boolean {
-  return p.left >= margin && p.top >= margin && p.left + box.width <= win.width - margin && p.top + box.height <= win.height - margin;
+  return (
+    p.left >= margin &&
+    p.top >= margin &&
+    p.left + box.width <= win.width - margin &&
+    p.top + box.height <= win.height - margin
+  );
 }
 
 export function placeBeside(

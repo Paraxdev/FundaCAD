@@ -1,7 +1,5 @@
-//! The tools for working on an assembly rather than one part: `edit` for many
-//! changes in one call, `interference` for fits and clearances (once or swept
-//! over a parameter), a feature's `name` on the bodies it makes, and `export`
-//! one file per part, laid flat. Spawns the engine.
+//! The assembly tools: `edit` for many changes, `interference` once or swept, a feature's `name` on its bodies,
+//! and `export` one file per part, laid flat. Spawns the engine.
 
 mod common;
 
@@ -85,8 +83,18 @@ fn edit_applies_everything_or_nothing_and_build_names_only_what_changed() {
 fn cube_stl(inside_out: bool, open: bool) -> String {
     let q = [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0], [0, 0, 10], [10, 0, 10], [10, 10, 10], [0, 10, 10]];
     let facets = [
-        [0, 2, 1], [0, 3, 2], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5],
-        [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7], [4, 5, 6], [4, 6, 7],
+        [0, 2, 1],
+        [0, 3, 2],
+        [0, 1, 5],
+        [0, 5, 4],
+        [1, 2, 6],
+        [1, 6, 5],
+        [2, 3, 7],
+        [2, 7, 6],
+        [3, 0, 4],
+        [3, 4, 7],
+        [4, 5, 6],
+        [4, 6, 7],
     ];
     let mut stl = String::from("solid cube\n");
     for f in &facets[..if open { 10 } else { 12 }] {
@@ -106,9 +114,12 @@ fn with_a_box_on_its_corner(stl: String, name: &str) -> (Mcp, String) {
     let mut mcp = session();
     let r = mcp.call("doc_import", json!({"content": stl, "name": name, "encoding": "text"}));
     assert!(!r.is_error, "{}", r.text);
-    let r = mcp.call("edit", json!({"ops": [
+    let r = mcp.call(
+        "edit",
+        json!({"ops": [
         {"op": "add", "feature": {"type": "box", "length": 10, "width": 10, "height": 10}}
-    ], "build": true}));
+    ], "build": true}),
+    );
     assert!(!r.is_error, "{}", r.text);
     (mcp, r.text)
 }
@@ -117,12 +128,18 @@ fn with_a_box_on_its_corner(stl: String, name: &str) -> (Mcp, String) {
 fn an_inside_out_import_is_turned_outward_and_said_so() {
     let (mut mcp, built) = with_a_box_on_its_corner(cube_stl(true, false), "shell.stl");
     assert!(
-        built.contains("warning (f1): 1 solid was inside out, its faces pointed into the material, so it was turned outward"),
+        built.contains(
+            "warning (f1): 1 solid was inside out, its faces pointed into the material, so it was turned outward"
+        ),
         "{built}"
     );
     assert!(!built.contains("its faces point into the material"), "{built}");
     let r = mcp.call("interference", json!({}));
-    assert!(r.text.contains("body1 \"shell\" / body2 \"Box\": 125 mm3 overlap, from (0, 0, 0) to (5, 5, 5)"), "{}", r.text);
+    assert!(
+        r.text.contains("body1 \"shell\" / body2 \"Box\": 125 mm3 overlap, from (0, 0, 0) to (5, 5, 5)"),
+        "{}",
+        r.text
+    );
     let r = mcp.call("inspect", json!({"body": "body1"}));
     assert!(r.text.contains("vol 1000 mm3") && !r.text.contains("inside out"), "{}", r.text);
 }
@@ -132,17 +149,25 @@ fn an_inside_out_import_is_turned_outward_and_said_so() {
 #[test]
 fn a_stored_inside_out_body_is_said_so_and_still_checked_right() {
     use base64::Engine as _;
-    let brep = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/inside_out_cube.brep")).unwrap();
+    let brep =
+        std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/inside_out_cube.brep")).unwrap();
     let mut mcp = session();
-    let r = mcp.call("edit", json!({"ops": [
+    let r = mcp.call(
+        "edit",
+        json!({"ops": [
         {"op": "add", "feature": {"type": "import", "name": "shell", "format": "brep",
                                   "brep": base64::engine::general_purpose::STANDARD.encode(brep)}},
         {"op": "add", "feature": {"type": "box", "length": 10, "width": 10, "height": 10}}
-    ], "build": true}));
+    ], "build": true}),
+    );
     assert!(!r.is_error, "{}", r.text);
     assert!(r.text.contains("warning (f1): shell is inside out, its faces point into the material"), "{}", r.text);
     let r = mcp.call("interference", json!({}));
-    assert!(r.text.contains("body1 \"shell\" / body2 \"Box\": 125 mm3 overlap, from (0, 0, 0) to (5, 5, 5)"), "{}", r.text);
+    assert!(
+        r.text.contains("body1 \"shell\" / body2 \"Box\": 125 mm3 overlap, from (0, 0, 0) to (5, 5, 5)"),
+        "{}",
+        r.text
+    );
     assert!(!r.text.contains("NOT CHECKED"), "{}", r.text);
     let r = mcp.call("inspect", json!({"body": "body1"}));
     assert!(r.text.contains("vol 1000 mm3") && r.text.contains("! this body is inside out"), "{}", r.text);
@@ -167,10 +192,13 @@ fn a_body_that_is_not_a_solid_is_never_called_clear() {
     let r = mcp.call("section", json!({"axis": "Z", "at": 5, "bodies": ["body1"], "outline": false}));
     assert!(r.text.contains("NOT A SOUND SOLID: body1 is a surface, not a solid, so it has no inside."), "{}", r.text);
     // Swept: clear only where the box has moved out of the tray's reach.
-    let r = mcp.call("edit", json!({"ops": [
-        {"op": "param", "name": "slide", "expr": 0},
-        {"op": "add", "feature": {"type": "move", "dx": "slide", "bodies": ["body2"]}}
-    ]}));
+    let r = mcp.call(
+        "edit",
+        json!({"ops": [
+            {"op": "param", "name": "slide", "expr": 0},
+            {"op": "add", "feature": {"type": "move", "dx": "slide", "bodies": ["body2"]}}
+        ]}),
+    );
     assert!(!r.is_error, "{}", r.text);
     let r = mcp.call("interference", json!({"sweep": {"param": "slide", "from": 0, "to": 40, "steps": 2}}));
     assert!(r.text.contains("slide = 0: no overlap found (body1 not judged, its pairs not checked)"), "{}", r.text);
@@ -211,21 +239,27 @@ fn interference_reports_overlaps_and_gaps_and_sweeps_a_parameter() {
 
     // A body whose feature fails at one step is a note on that step, with the
     // reason it failed, and the rest of the sweep still counts.
-    let r = mcp.call("edit", json!({"ops": [
-        {"op": "param", "name": "pinh", "expr": 10},
-        {"op": "update", "id": "cy1", "patch": {"height": "pinh"}}
-    ]}));
+    let r = mcp.call(
+        "edit",
+        json!({"ops": [
+            {"op": "param", "name": "pinh", "expr": 10},
+            {"op": "update", "id": "cy1", "patch": {"height": "pinh"}}
+        ]}),
+    );
     assert!(!r.is_error, "{}", r.text);
-    let r = mcp.call("interference", json!({"bodies": ["Block", "Pin"], "sweep": {"param": "pinh", "values": [10, 0]}}));
+    let r =
+        mcp.call("interference", json!({"bodies": ["Block", "Pin"], "sweep": {"param": "pinh", "values": [10, 0]}}));
     assert!(!r.is_error, "{}", r.text);
     assert!(
-        r.text.contains("pinh = 0: clear (Pin not built) (features failed: cy1: Cylinder: height must be greater than 0"),
+        r.text
+            .contains("pinh = 0: clear (Pin not built) (features failed: cy1: Cylinder: height must be greater than 0"),
         "{}",
         r.text
     );
     assert!(r.text.contains("1 step had failed features"), "{}", r.text);
     assert!(r.text.contains("Pin was not built at 1 step (pinh = 0 mm)"), "{}", r.text);
-    let r = mcp.call("interference", json!({"bodies": ["Block", "Nope"], "sweep": {"param": "pinh", "values": [10, 0]}}));
+    let r =
+        mcp.call("interference", json!({"bodies": ["Block", "Nope"], "sweep": {"param": "pinh", "values": [10, 0]}}));
     assert!(r.is_error && r.text.starts_with("no body 'Nope' at any step of the sweep"), "{}", r.text);
 
     let r = mcp.call("interference", json!({"bodies": ["Nope"]}));
@@ -271,10 +305,8 @@ fn a_named_part_exports_to_a_file_of_its_name_lying_flat() {
     assert!(r.text.contains("body3 \"Spare rod\""), "{}", r.text);
 
     let path = tmp.path().join("parts.stl");
-    let r = mcp.call(
-        "export",
-        json!({"path": path.to_string_lossy(), "format": "stl", "separate": true, "layFlat": true}),
-    );
+    let r =
+        mcp.call("export", json!({"path": path.to_string_lossy(), "format": "stl", "separate": true, "layFlat": true}));
     assert!(!r.is_error, "{}", r.text);
     assert!(r.text.contains("Laid flat: body1 on F3, body2 on F"), "{}", r.text);
     let parts = tmp.path().join("parts");
@@ -369,9 +401,12 @@ fn a_section_gives_the_outline_and_the_numbers_a_beam_check_needs() {
         assert!(r.text.contains(&note), "Z = {at}: {}", r.text);
     }
     // Far from the origin, where single precision is coarser than a micron.
-    let r = mcp.call("edit", json!({"ops": [
-        {"op": "add", "feature": {"type": "move", "dx": 1000.3, "dz": 515.3, "bodies": ["body1"]}}
-    ]}));
+    let r = mcp.call(
+        "edit",
+        json!({"ops": [
+            {"op": "add", "feature": {"type": "move", "dx": 1000.3, "dz": 515.3, "bodies": ["body1"]}}
+        ]}),
+    );
     assert!(!r.is_error, "{}", r.text);
     let r = mcp.call("section", json!({"axis": "Z", "at": 500.3, "bodies": ["Beam"], "outline": false}));
     assert!(r.text.contains("area 200 mm2 in 1 piece") && r.text.contains("Z = 500.3 plus a hair"), "{}", r.text);

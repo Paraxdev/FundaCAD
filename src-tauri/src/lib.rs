@@ -1,34 +1,32 @@
-//! FundaCAD Tauri shell entry. Supervises the geometry engine, this executable
-//! started again as `--engine` (engine.rs), and relays it to the webview over
-//! Tauri IPC; owns the window, native dialogs and the document container.
+//! The Tauri shell: supervises the engine worker (engine.rs) and relays it to the webview, and owns the window, dialogs
+//! and the document container.
 
 // `pub` so tests/container_seam.rs can drive the engine environment and the
 // container the way the app does.
-pub mod engine;
 pub mod container;
+pub mod engine;
 pub use fundacad_format::{fnda, json_doc};
-pub mod plugins;
-pub mod session_file;
-pub mod library;
-mod home_commands;
-pub mod thumbs;
-mod spacemouse;
 mod drop_paths;
-mod launch;
 pub mod frames;
+mod home_commands;
+mod launch;
+pub mod launch_args;
+pub mod library;
+mod log_file;
+pub mod plugins;
 pub mod safe_mode;
+pub mod session_file;
 pub mod settings_files;
-// WebKitGTK only exists on Linux; macOS and Windows use WKWebView and WebView2.
+mod spacemouse;
+mod system_info;
+pub mod thumbs;
 #[cfg(target_os = "linux")]
 mod webkit;
 
-/// What a saved document is called on disk. New files take the first; the
-/// second is read forever, because every document written before the rename is
-/// still on someone's disk and no upgrade step can reach it. Kept in step with
-/// src/io/documentExt.ts.
+/// Kept in step with src/io/documentExt.ts.
 const DOC_EXT: &str = "funda";
-/// Every extension a document was saved as before, read forever. Kept in step
-/// with LEGACY_DOC_EXTS in src/io/documentExt.ts.
+/// Read forever: documents saved under these names sit on disks no upgrade step reaches. Kept in step with
+/// LEGACY_DOC_EXTS in src/io/documentExt.ts.
 const LEGACY_DOC_EXTS: [&str; 2] = ["neocad", "sindri"];
 
 use tauri::{Manager, RunEvent};
@@ -38,42 +36,26 @@ pub fn run_engine_worker() -> ! {
     engine::run_worker()
 }
 
-/// Restart the app after an update, tearing down the geometry engine and
-/// releasing the single-instance lock first, so the replacement process comes up
-/// clean. Neither step can be left to a destructor, see the body.
+/// Restart after an update, stopping the engine and releasing the single instance lock first so the new process comes
+/// up clean. Neither can be left to a destructor.
 #[tauri::command]
 fn restart_for_update(app: tauri::AppHandle) {
-    // Stop the geometry engine EXPLICITLY: `app.restart()` ends this process
-    // through exit(), which runs no destructors, and the worker only notices its
-    // stdin closing once the kernel call it is in returns. `Engine::stop` waits
-    // for the worker, so the replacement never meets the old one.
+    // exit() runs no destructors and the worker only sees its stdin close after its current kernel call, so stop it
+    // here. `Engine::stop` waits, so the replacement never meets the old worker.
     if let Some(engine) = app.try_state::<engine::Engine>() {
         engine.stop();
     }
-    // Then release the single-instance lock. The frontend used to call the process
-    // plugin's `relaunch()` directly, which maps to `app.request_restart()` and
-    // spawns the replacement while this process is still shutting down, so with a
-    // single-instance guard in place the NEW instance can find the lock still held
-    // and exit immediately, leaving the user with no app at all after an update.
-    // `destroy` is synchronous on every platform (D-Bus release_name on Linux,
-    // ReleaseMutex + DestroyWindow on Windows), so it completes before the spawn.
+    // The replacement can start before this process ends and find the lock still held, leaving no app after an update.
+    // `destroy` is synchronous on every platform, so it completes before the spawn.
     tauri_plugin_single_instance::destroy(&app);
     app.restart();
 }
 
-// --- crash-recovery snapshots -------------------------------------------------
-// Autosave lives OUTSIDE the webview's tightened fs scope on purpose: widening
-// `fs:scope` to an app-data dir would re-open part of the post-XSS persistence
-// channel the security round closed. Instead the frontend calls these commands
-// (privileged IPC, same pattern as the container commands) and Rust owns the recovery
-// directory under app_data_dir()/recovery/. Writes are atomic (tmp + rename).
+// Crash recovery snapshots live outside the webview's fs scope on purpose, since widening it would reopen the post XSS
+// persistence channel. Rust owns app_data_dir()/recovery/ and writes atomically (tmp + rename).
 
 fn recovery_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("recovery");
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("recovery");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
@@ -92,9 +74,7 @@ fn slot_file(app: &tauri::AppHandle, slot: &str) -> Result<std::path::PathBuf, S
 }
 
 #[tauri::command]
-// async: Tauri runs sync commands on the MAIN thread, a multi-MB snapshot
-// write would stall the UI for its full fs time. async moves it to the runtime
-// pool; the tmp-write + rename stays atomic either way.
+// async: Tauri runs sync commands on the main thread, where a multi MB snapshot write would stall the UI.
 async fn recovery_write(app: tauri::AppHandle, slot: String, json: String) -> Result<(), String> {
     let path = slot_file(&app, &slot)?;
     let tmp = path.with_extension(concat!("funda", ".tmp"));
@@ -120,9 +100,7 @@ fn recovery_list(app: tauri::AppHandle) -> Result<Vec<(String, u64)>, String> {
     for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let p = entry.path();
-        // Both names, because a snapshot written before the rename is exactly
-        // the case recovery exists for: the app crashed, and the next launch is
-        // the one that has to find it.
+        // Both names: a snapshot written before the rename is exactly what recovery exists for.
         match p.extension().and_then(|e| e.to_str()) {
             Some(e) if e == DOC_EXT || LEGACY_DOC_EXTS.contains(&e) => {}
             _ => continue,
@@ -154,10 +132,8 @@ fn recovery_clear(app: tauri::AppHandle, slot: String) -> Result<(), String> {
     }
 }
 
-/// In-app updates only apply to formats the Tauri updater can replace: the NSIS
-/// install on Windows, the .app on macOS, and the AppImage on Linux. A deb/rpm
-/// install belongs to the package manager, so the frontend hides the update UI
-/// when this is false.
+/// In app updates only apply to what the Tauri updater can replace: NSIS on Windows, the .app, the AppImage. A deb or
+/// rpm install belongs to the package manager, so the frontend hides the update UI.
 #[tauri::command]
 fn updates_supported() -> bool {
     if cfg!(target_os = "linux") {
@@ -167,34 +143,18 @@ fn updates_supported() -> bool {
     }
 }
 
-// --- frontend load watchdog ---------------------------------------------------
-// A webview that never loads its page shows a blank window and says NOTHING.
-// Issue #3 spent four rounds on that: the geometry engine was up and logging
-// happily, the window painted, and there was no way to tell from the outside
-// whether the document had failed to load, or had loaded and thrown. Every reply
-// was a guess at an environment variable.
-//
-// So the frontend reports in, and Rust says so when it does not.
+// A webview that never loads shows a blank window and says nothing (issue #3), so the frontend reports in and Rust logs
+// when it does not.
 
-/// Set by `frontend_ready`. `AtomicBool` rather than a channel because the
-/// watchdog only ever asks one yes/no question, and a channel would have to be
-/// kept alive for a message that normally never comes.
+/// Set by `frontend_ready`. The watchdog asks one yes or no question, so no channel.
 struct FrontendReady(std::sync::atomic::AtomicBool);
 
-/// How long to wait before concluding the interface is not coming.
-///
-/// Generous on purpose. A cold first launch on a slow disk has to parse and
-/// execute the whole bundle, and the cost of being wrong is asymmetric: a late
-/// line in a log is harmless, while crying wolf on a working app would teach
-/// people to ignore the one message that matters. This is why the watchdog only
-/// logs and does not raise a dialog.
+/// Generous on purpose: a cold first launch on a slow disk parses the whole bundle, and crying wolf on a working app
+/// would teach people to ignore the message. So the watchdog only logs.
 const FRONTEND_READY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(12);
 
-/// Called by `src/boot.ts` as the document loads, to prove the webview got far
-/// enough to run our code and reach Tauri IPC, and again by `src/main.ts` with
-/// `stage: "mounted"` once the interface is up, which is what counts as a start
-/// that finished. The boot ping is too early for that: it runs before main.ts,
-/// so a throw there or a webview that dies after it would look like a good start.
+/// Called by `src/boot.ts` as the document loads, and by `src/main.ts` with `stage: "mounted"` once the interface is
+/// up, which is what counts as a finished start. The boot ping runs too early to prove that.
 #[tauri::command]
 fn frontend_ready(state: tauri::State<'_, FrontendReady>, safe: tauri::State<'_, SafeMode>, stage: Option<String>) {
     state.0.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -203,6 +163,21 @@ fn frontend_ready(state: tauri::State<'_, FrontendReady>, safe: tauri::State<'_,
     if stage.as_deref() == Some("mounted") && safe.reason.is_none() {
         safe_mode::cleared(&safe.dir);
     }
+}
+
+/// What a bug report attaches of the log: the report reaches a GitHub issue
+/// through the clipboard, and an issue body holds 65,536 characters.
+const LOG_TAIL: u64 = 16 << 10;
+
+#[tauri::command]
+fn log_tail(run: tauri::State<'_, log_file::RunLog>) -> Option<String> {
+    log_file::tail_for_run(&run, LOG_TAIL)
+}
+
+/// A crumb from the page, kept in the log where it outlives the window.
+#[tauri::command]
+fn log_line(line: String) {
+    println!("[crumb] {line}");
 }
 
 /// Why this session runs in safe mode, if it does (safe_mode.rs).
@@ -216,9 +191,8 @@ pub(crate) fn safe_mode_active(app: &tauri::AppHandle) -> bool {
     app.try_state::<SafeMode>().is_some_and(|s| s.reason.is_some())
 }
 
-/// The banner's "Restart normally": a new process without the safe mode switch,
-/// the variable or the compositing setting this session added, and a cleared
-/// count. Teardown as in `restart_for_update`, for the same reasons.
+/// The banner's "Restart normally": a new process without this session's safe mode switch, variable or compositing
+/// setting, and a cleared count. Teardown as in `restart_for_update`.
 #[tauri::command]
 fn safe_mode_exit(app: tauri::AppHandle) {
     let (dir, set_compositing) = {
@@ -249,9 +223,8 @@ fn safe_mode_exit(app: tauri::AppHandle) {
     std::process::exit(0);
 }
 
-/// Read the count and the switches, before any webview exists. The count is
-/// only written in `.setup`, after the single-instance check, or every second
-/// launch (which focuses the open window and exits) would count as a failure.
+/// Reads the count and the switches before any webview exists. The count is only written in `.setup`, after the single
+/// instance check, or every second launch would count as a failure.
 fn safe_mode_decide() -> SafeMode {
     let dir = fundacad_mcp::app_session::app_data_dir();
     let reason = safe_mode::decide(
@@ -259,9 +232,8 @@ fn safe_mode_decide() -> SafeMode {
         safe_mode::has_flag(std::env::args_os()),
         std::env::var(safe_mode::ENV).ok().as_deref(),
     );
-    let set_compositing = cfg!(target_os = "linux")
-        && reason.is_some()
-        && std::env::var_os(safe_mode::COMPOSITING).is_none();
+    let set_compositing =
+        cfg!(target_os = "linux") && reason.is_some() && std::env::var_os(safe_mode::COMPOSITING).is_none();
     if set_compositing {
         // Issue #6: with it off WebKitGTK came up on GPUs the DMABUF rule misses.
         std::env::set_var(safe_mode::COMPOSITING, "1");
@@ -277,20 +249,14 @@ fn safe_mode_decide() -> SafeMode {
     SafeMode { reason, dir, set_compositing }
 }
 
-/// Watch for the frontend checking in, and write a diagnosis if it never does.
-///
-/// The message deliberately rules the geometry engine out by name. That is the
-/// wrong turn this is built to prevent: the engine is the loudest thing in the
-/// log, so a blank window with a healthy engine above it reads as an engine
-/// problem to everyone who sees it, and it is not one.
+/// Writes a diagnosis if the frontend never checks in. It rules the engine out by name: the loudest thing in the log, a
+/// healthy engine above a blank window reads as an engine problem, and it is not.
 fn watch_frontend_load(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         std::thread::sleep(FRONTEND_READY_TIMEOUT);
 
-        let ready = app
-            .try_state::<FrontendReady>()
-            .map(|s| s.0.load(std::sync::atomic::Ordering::Relaxed))
-            .unwrap_or(false);
+        let ready =
+            app.try_state::<FrontendReady>().map(|s| s.0.load(std::sync::atomic::Ordering::Relaxed)).unwrap_or(false);
         if ready {
             return;
         }
@@ -299,31 +265,36 @@ fn watch_frontend_load(app: tauri::AppHandle) {
         let lines = [
             format!("[ui] WARNING: the interface has not loaded after {secs}s."),
             "[ui] The window opened but the page never started, so this is NOT a geometry".to_string(),
-            "[ui] engine problem, the engine's own status is logged separately above."
-                .to_string(),
-            "[ui] Either the document failed to load, or a script threw while loading it."
-                .to_string(),
-            "[ui] Please report this log at https://github.com/Paraxdev/fundacad/issues"
-                .to_string(),
+            "[ui] engine problem, the engine's own status is logged separately above.".to_string(),
+            "[ui] Either the document failed to load, or a script threw while loading it.".to_string(),
+            "[ui] Please report this log at https://github.com/Paraxdev/fundacad/issues".to_string(),
         ];
         lines.iter().for_each(|l| eprintln!("{l}"));
     });
 }
 
+fn context() -> tauri::Context<tauri::Wry> {
+    tauri::generate_context!()
+}
+
+/// Read from the build config, which the development build overrides, so the MCP server finds the session and data
+/// directory of the app it ships in.
+pub fn share_app_identifier() {
+    fundacad_mcp::app_session::set_app_identifier(&context().config().identifier);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // FIRST, before any GTK/WebKit type is touched: the web process inherits this
-    // environment when WebKit spawns it, so a variable set later is a variable the
-    // renderer never sees. See webkit.rs for what it changes and why (issue #6).
+    share_app_identifier();
+    // First, before any GTK or WebKit type is touched: the web process inherits this environment when WebKit spawns it.
+    // webkit.rs says what it changes and why (issue #6).
     let safe = safe_mode_decide();
     #[cfg(target_os = "linux")]
     webkit::apply_gpu_workarounds();
 
     let builder = tauri::Builder::default()
-        // MUST be registered before every other plugin (Tauri's documented
-        // requirement). A second launch focuses the window that is already open
-        // instead of starting a second app on the same documents and plugins,
-        // and hands it the documents the second launch was given (launch.rs).
+        // Must be registered before every other plugin (Tauri's requirement). A second launch focuses the open window
+        // and hands it its documents (launch.rs).
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.unminimize(); // a minimized window would otherwise just blink
@@ -353,8 +324,12 @@ pub fn run() {
         restart_for_update,
         updates_supported,
         frontend_ready,
+        log_tail,
+        log_line,
+        system_info::system_info,
         safe_mode_exit,
         launch::take_launch_paths,
+        drop_paths::drop_paths_take,
         recovery_write,
         recovery_read,
         recovery_list,
@@ -423,12 +398,33 @@ pub fn run() {
     let app = builder
         .manage(spacemouse::Inventory::default())
         .manage(launch::LaunchPaths::default())
-        // The files a person has handed to a plugin this session. Session-lived
-        // and nowhere on disk: a plugin cannot come back tomorrow holding a
-        // token for a file somebody forgot they had offered it.
+        .manage(drop_paths::Held::default())
+        // Files a person handed to a plugin this session, never on disk, so a plugin cannot come back tomorrow holding
+        // a token for a file somebody forgot they offered.
         .manage(plugins::files::Handles::default())
         .manage(safe)
         .setup(|app| {
+            // A Windows or Linux debug build runs in a dev's terminal, which `tauri dev` may pipe.
+            let to_file = cfg!(target_os = "macos") || !cfg!(debug_assertions);
+            let run = match app.path().app_log_dir().ok().filter(|_| to_file) {
+                None => log_file::RunLog::Off,
+                Some(dir) => match log_file::redirect(&dir) {
+                    Ok(Some(path)) => {
+                        println!("[log] FundaCAD {} started, logs to {}", env!("CARGO_PKG_VERSION"), path.display());
+                        // Printed before the log took over, so repeated where a report will find it.
+                        if let Some(r) = app.state::<SafeMode>().reason {
+                            println!("[safe-mode] starting in safe mode because {}", r.describe());
+                        }
+                        log_file::RunLog::ToFile(path)
+                    }
+                    Ok(None) => log_file::RunLog::Terminal,
+                    Err(e) => {
+                        eprintln!("[log] no log file in {}: {e}", dir.display());
+                        log_file::RunLog::Failed(e.to_string())
+                    }
+                },
+            };
+            app.manage(run);
             let (reason, dir) = {
                 let safe = app.state::<SafeMode>();
                 (safe.reason, safe.dir.clone())
@@ -448,16 +444,9 @@ pub fn run() {
             if reason.is_none() {
                 frames::denoiser::load_installed(app.handle());
             }
-            // The 3D-mouse reader is NOT started here any more. It is a
-            // capability the user can turn off (Preferences, Plugins), and one
-            // that is off must not hold the HID device open. The frontend
-            // starts it with spacemouse_start once it has its listeners up,
-            // which also removes the old race where the reader published its
-            // inventory before anything was listening.
-            // Started here rather than before the builder because the clock
-            // should run from the window existing, not from process start:
-            // everything above it is work the frontend has to wait for anyway,
-            // and counting it would eat into the timeout.
+            // The 3D mouse reader is not started here: the frontend starts it with `spacemouse_start`, see there.
+            // Started here rather than before the builder, so the clock runs from the window existing and the work
+            // above, which the frontend waits for anyway, does not eat into the timeout.
             app.manage(FrontendReady(std::sync::atomic::AtomicBool::new(false)));
             watch_frontend_load(app.handle().clone());
             if let Some(w) = app.get_webview_window("main") {
@@ -465,10 +454,14 @@ pub fn run() {
             }
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context())
         .expect("error while building FundaCAD");
 
     app.run(|app_handle, event| {
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        if let RunEvent::Opened { urls } = &event {
+            launch::queue_opened(app_handle, urls);
+        }
         if let RunEvent::ExitRequested { .. } | RunEvent::Exit = event {
             if let Some(e) = app_handle.try_state::<engine::Engine>() {
                 e.stop();

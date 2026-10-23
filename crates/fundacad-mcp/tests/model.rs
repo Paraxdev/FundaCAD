@@ -1,9 +1,4 @@
-//! The document an agent edits: ids, the timeline, and the parameter table.
-//! A port of the Python MCP server's `test_model.py`.
-//!
-//! The property worth the most here is that a REFUSED edit changes nothing. An
-//! agent works by trying things, and a tool that half-applies a bad edit leaves
-//! it debugging a document it did not write.
+//! The document model. Above all, a REFUSED edit changes nothing, or an agent debugs a document it did not write.
 
 use fundacad_mcp::model as m;
 use serde_json::{json, Value};
@@ -20,8 +15,6 @@ fn params(d: &m::Doc) -> Value {
     d.get("parameters").cloned().unwrap_or(Value::Null)
 }
 
-// --- the timeline ------------------------------------------------------------
-
 #[test]
 fn ids_are_assigned_by_type_and_are_unique() {
     let d = doc_with(&[
@@ -36,17 +29,10 @@ fn ids_are_assigned_by_type_and_are_unique() {
 fn an_explicit_id_is_kept_and_a_duplicate_is_refused() {
     let mut d = doc_with(&[json!({"id": "hub", "type": "cylinder", "radius": 1, "height": 1})]);
     assert_eq!(m::feature_ids(&d), ["hub"]);
-    let again = m::add_feature(
-        &mut d,
-        &json!({"id": "hub", "type": "box", "length": 1, "width": 1, "height": 1}),
-        None,
-    );
+    let again =
+        m::add_feature(&mut d, &json!({"id": "hub", "type": "box", "length": 1, "width": 1, "height": 1}), None);
     assert!(again.is_err(), "a duplicate id was accepted");
-    assert_eq!(
-        m::feature_ids(&d),
-        ["hub"],
-        "the refused add still changed the document"
-    );
+    assert_eq!(m::feature_ids(&d), ["hub"], "the refused add still changed the document");
 }
 
 #[test]
@@ -55,12 +41,7 @@ fn insert_and_move_put_a_feature_where_asked() {
         json!({"id": "a", "type": "box", "length": 1, "width": 1, "height": 1}),
         json!({"id": "c", "type": "box", "length": 1, "width": 1, "height": 1}),
     ]);
-    m::add_feature(
-        &mut d,
-        &json!({"id": "b", "type": "box", "length": 1, "width": 1, "height": 1}),
-        Some(1),
-    )
-    .unwrap();
+    m::add_feature(&mut d, &json!({"id": "b", "type": "box", "length": 1, "width": 1, "height": 1}), Some(1)).unwrap();
     assert_eq!(m::feature_ids(&d), ["a", "b", "c"]);
     m::move_feature(&mut d, "b", 2).unwrap();
     assert_eq!(m::feature_ids(&d), ["a", "c", "b"]);
@@ -74,15 +55,9 @@ fn a_patch_merges_and_a_null_removes() {
     m::update_feature(&mut d, "pp", &json!({"distance": 5}), false).unwrap();
     let f = &m::features(&d)[0];
     assert_eq!(f["distance"], json!(5));
-    assert!(
-        f.get("upTo").is_some(),
-        "a merge must not drop fields it was not given"
-    );
+    assert!(f.get("upTo").is_some(), "a merge must not drop fields it was not given");
     m::update_feature(&mut d, "pp", &json!({"upTo": null}), false).unwrap();
-    assert!(
-        m::features(&d)[0].get("upTo").is_none(),
-        "a null in a patch has to remove the field"
-    );
+    assert!(m::features(&d)[0].get("upTo").is_none(), "a null in a patch has to remove the field");
 }
 
 #[test]
@@ -114,13 +89,8 @@ fn chute() -> m::Doc {
 #[test]
 fn a_patch_can_change_the_type_when_the_new_fields_come_with_it() {
     let mut d = chute();
-    m::update_feature(
-        &mut d,
-        "chute_edges",
-        &json!({"type": "chamfer", "distance": 0.8, "radius": null}),
-        false,
-    )
-    .unwrap();
+    m::update_feature(&mut d, "chute_edges", &json!({"type": "chamfer", "distance": 0.8, "radius": null}), false)
+        .unwrap();
     let f = &m::features(&d)[1];
     assert_eq!(f["type"], json!("chamfer"));
     assert_eq!(f["distance"], json!(0.8));
@@ -132,24 +102,14 @@ fn a_patch_can_change_the_type_when_the_new_fields_come_with_it() {
 fn a_type_change_missing_the_new_types_fields_is_refused_and_changes_nothing() {
     let mut d = chute();
     let before = m::features(&d).to_vec();
-    let e = m::update_feature(
-        &mut d,
-        "chute_edges",
-        &json!({"type": "chamfer", "radius": null}),
-        false,
-    )
-    .expect_err("a chamfer with no distance was accepted");
+    let e = m::update_feature(&mut d, "chute_edges", &json!({"type": "chamfer", "radius": null}), false)
+        .expect_err("a chamfer with no distance was accepted");
     assert!(e.0.contains("distance"), "{e}");
     assert!(e.0.contains("chamfer"), "{e}");
     assert_eq!(m::features(&d), &before[..], "the refused update still changed the document");
 
-    let e = m::update_feature(
-        &mut d,
-        "chute_edges",
-        &json!({"type": "press-pull"}),
-        false,
-    )
-    .expect_err("a press-pull with no face or distance was accepted");
+    let e = m::update_feature(&mut d, "chute_edges", &json!({"type": "press-pull"}), false)
+        .expect_err("a press-pull with no face or distance was accepted");
     assert!(e.0.contains("face") && e.0.contains("distance"), "{e}");
     assert_eq!(m::features(&d), &before[..]);
 }
@@ -206,14 +166,14 @@ fn a_field_a_core_feature_does_not_read_is_refused_and_changes_nothing() {
 #[test]
 fn a_label_a_plugin_field_and_a_field_already_there_are_not_refused() {
     let mut d = chute();
-    m::add_feature(&mut d, &json!({"id": "b2", "type": "box", "length": 1, "width": 1, "height": 1, "name": "Lid"}), None)
-        .expect("any feature may carry a name");
     m::add_feature(
         &mut d,
-        &json!({"type": "elephantFootChamfer", "size": 0.4, "anyPluginKey": 1}),
+        &json!({"id": "b2", "type": "box", "length": 1, "width": 1, "height": 1, "name": "Lid"}),
         None,
     )
-    .expect("a plugin's feature is not checked here");
+    .expect("any feature may carry a name");
+    m::add_feature(&mut d, &json!({"type": "elephantFootChamfer", "size": 0.4, "anyPluginKey": 1}), None)
+        .expect("a plugin's feature is not checked here");
     d.get_mut("features").expect("features")[0]["futureField"] = json!(true);
     m::update_feature(&mut d, "bx", &json!({"length": 30}), false)
         .expect("a field from a newer build that this patch did not send stays");
@@ -234,18 +194,13 @@ fn a_mirror_that_names_bodies_writes_its_plane_as_a_name_object() {
     assert_eq!(f(&d, "m1")["plane"], json!({"name": "XY"}));
 }
 
-// --- parameters --------------------------------------------------------------
-
 #[test]
 fn a_parameter_table_evaluates_in_dependency_order() {
     let mut d = m::new_document();
     m::set_parameter(&mut d, "hub_d", &json!(54), "mm", None).unwrap();
     m::set_parameter(&mut d, "wall", &json!(2.4), "mm", None).unwrap();
     m::set_parameter(&mut d, "hub_r", &json!("hub_d/2 - wall"), "mm", None).unwrap();
-    assert_eq!(
-        params(&d),
-        json!({"hub_d": 54.0, "hub_r": 24.6, "wall": 2.4})
-    );
+    assert_eq!(params(&d), json!({"hub_d": 54.0, "hub_r": 24.6, "wall": 2.4}));
 }
 
 #[test]
@@ -258,11 +213,7 @@ fn the_derived_cache_is_rewritten_when_a_dependency_changes() {
     m::set_parameter(&mut d, "hub_r", &json!("hub_d/2"), "mm", None).unwrap();
     m::set_parameter(&mut d, "hub_d", &json!(60), "mm", None).unwrap();
     assert_eq!(params(&d)["hub_r"], json!(30.0));
-    assert_eq!(
-        m::param_defs(&d)["hub_r"]["expr"],
-        json!("hub_d/2"),
-        "the expression must survive the edit"
-    );
+    assert_eq!(m::param_defs(&d)["hub_r"]["expr"], json!("hub_d/2"), "the expression must survive the edit");
 }
 
 #[test]
@@ -272,10 +223,7 @@ fn a_bad_definition_is_refused_and_leaves_the_table_as_it_was() {
     let before = params(&d);
     let out = m::set_parameter(&mut d, "b", &json!("a + nope"), "mm", None);
     assert!(out.is_err(), "an expression naming nothing was accepted");
-    assert!(
-        !m::param_defs(&d).contains_key("b"),
-        "the refused definition was left behind"
-    );
+    assert!(!m::param_defs(&d).contains_key("b"), "the refused definition was left behind");
     assert_eq!(params(&d), before);
 }
 
@@ -295,11 +243,7 @@ fn a_cycle_in_a_loaded_file_is_named_rather_than_looped_on() {
     let named: Vec<&String> = issues.keys().collect();
     assert_eq!(named, ["x", "y"], "{issues:?}");
     assert!(issues["x"].contains("cycle"), "{}", issues["x"]);
-    assert_eq!(
-        params(&d)["ok"],
-        json!(7.0),
-        "one bad definition must not take the table down"
-    );
+    assert_eq!(params(&d)["ok"], json!(7.0), "one bad definition must not take the table down");
 }
 
 #[test]
@@ -317,18 +261,14 @@ fn a_parameter_still_in_use_cannot_be_removed() {
 
 #[test]
 fn redefining_a_parameter_keeps_how_the_panel_shows_it() {
-    // The app's parameters panel stores a control, a group and a hidden flag on
-    // the definition. An agent changing the VALUE must not strip them, the
-    // slider would quietly turn back into a text box.
+    // The app's parameters panel stores a control, a group and a hidden flag on the definition;
+    // changing the VALUE must not strip them, or the slider turns back into a text box.
     let mut d = m::new_document();
     m::set_parameter(&mut d, "rings", &json!(22), "count", None).unwrap();
     {
         let defs = d.get_mut("paramDefs").unwrap().as_object_mut().unwrap();
         let rings = defs.get_mut("rings").unwrap().as_object_mut().unwrap();
-        rings.insert(
-            "control".into(),
-            json!({"kind": "slider", "min": 1, "max": 40}),
-        );
+        rings.insert("control".into(), json!({"kind": "slider", "min": 1, "max": 40}));
         rings.insert("group".into(), json!("g1"));
         rings.insert("hidden".into(), json!(true));
     }
@@ -359,12 +299,7 @@ fn a_check_blocks_a_removal_and_a_configuration_entry_goes_with_it() {
     };
     assert!(e.0.contains("gap too small"), "{}", e.0);
     m::remove_parameter(&mut d, "rings").unwrap();
-    assert_eq!(
-        d["paramExtras"]["configurations"][0]["values"],
-        json!({}),
-        "{:?}",
-        d.get("paramExtras")
-    );
+    assert_eq!(d["paramExtras"]["configurations"][0]["values"], json!({}), "{:?}", d.get("paramExtras"));
 }
 
 #[test]
@@ -384,9 +319,8 @@ fn field(d: &m::Doc, fid: &str, key: &str) -> Value {
 
 #[test]
 fn a_joint_the_app_bound_to_a_parameter_moves_when_the_parameter_does() {
-    // The app turns `angle: "press"` into a number plus a model parameter that
-    // targets the field, so after it has saved the document the field only
-    // moves when the parameter's value is written back into it.
+    // The app turns `angle: "press"` into a number plus a model parameter targeting the field, so once saved
+    // the field only moves when the parameter's value is written back into it.
     let mut d = doc_with(&[
         json!({"id": "a", "type": "box", "length": 20, "width": 20, "height": 20}),
         json!({"id": "b", "type": "box", "length": 6, "width": 6, "height": 6}),
@@ -412,11 +346,7 @@ fn a_joint_the_app_bound_to_a_parameter_moves_when_the_parameter_does() {
     m::set_parameter(&mut d, "press", &json!(75), "deg", None).unwrap();
     assert_eq!(field(&d, "j", "angle"), json!(75));
     assert_eq!(field(&d, "j", "offset"), json!(2), "a field nothing targets moved");
-    assert_eq!(
-        field(&d, "j", "moving"),
-        json!("body2"),
-        "a target naming a field the joint does not list was written"
-    );
+    assert_eq!(field(&d, "j", "moving"), json!("body2"), "a target naming a field the joint does not list was written");
     assert_eq!(m::validate(&mut d), Vec::<String>::new());
 }
 
@@ -439,10 +369,7 @@ fn a_target_path_names_a_list_entry_by_its_id() {
                       "target": {"kind": "feature", "feature": "o1", "field": "nodes.n9.sx"}}}),
     );
     m::set_parameter(&mut d, "size", &json!(4.5), "mm", None).unwrap();
-    assert_eq!(
-        field(&d, "o1", "nodes"),
-        json!([{"id": "n2", "x": 10, "sx": 9}, {"id": "n1", "x": 0, "sx": 5}])
-    );
+    assert_eq!(field(&d, "o1", "nodes"), json!([{"id": "n2", "x": 10, "sx": 9}, {"id": "n1", "x": 0, "sx": 5}]));
     assert_eq!(field(&d, "o1", "blend"), json!(1));
 }
 
@@ -470,10 +397,7 @@ fn redefining_the_bound_parameter_itself_keeps_its_target() {
     assert_eq!(field(&d, "cy1", "radius"), json!(6), "the field stopped following r");
     m::set_parameter(&mut d, "d1", &json!(25), "mm", None).unwrap();
     assert_eq!(field(&d, "cy1", "radius"), json!(25));
-    assert_eq!(
-        m::param_defs(&d)["d1"]["target"],
-        json!({"kind": "feature", "feature": "cy1", "field": "radius"})
-    );
+    assert_eq!(m::param_defs(&d)["d1"]["target"], json!({"kind": "feature", "feature": "cy1", "field": "radius"}));
 }
 
 #[test]
@@ -493,10 +417,7 @@ fn a_binding_another_parameter_uses_is_kept_and_named_when_its_feature_goes() {
     m::set_parameter(&mut d, "wall", &json!("d1 / 5"), "mm", None).unwrap();
     m::remove_feature(&mut d, "cy1").unwrap();
     assert!(m::param_defs(&d).contains_key("d1"));
-    assert_eq!(
-        m::validate(&mut d),
-        ["parameter d1: its dimension or feature no longer exists"]
-    );
+    assert_eq!(m::validate(&mut d), ["parameter d1: its dimension or feature no longer exists"]);
     // Still a parameter to redefine, which a sweep over it does.
     m::set_parameter(&mut d, "d1", &json!(10), "mm", None).unwrap();
     assert_eq!(params(&d)["wall"], json!(2.0));
@@ -544,24 +465,18 @@ fn validate_reads_a_bound_field_after_its_parameter_is_written() {
 fn a_bad_expression_for_a_bound_field_is_refused_and_changes_nothing() {
     let mut d = bound_cylinder();
     let before = d.clone();
-    let e = m::update_feature(&mut d, "cy1", &json!({"radius": "nope * 2", "height": 9}), false)
-        .unwrap_err();
+    let e = m::update_feature(&mut d, "cy1", &json!({"radius": "nope * 2", "height": 9}), false).unwrap_err();
     assert!(e.0.contains("radius follows parameter d1"), "{e}");
     assert!(e.0.contains("unknown parameter nope"), "{e}");
     assert_eq!(d, before);
 }
-
-// --- validation --------------------------------------------------------------
 
 #[test]
 fn a_reference_to_a_missing_sketch_is_reported() {
     let mut d = doc_with(&[json!({"id": "ex1", "type": "extrude", "sketch": "nope",
                                   "distance": 1, "operation": "new"})]);
     let problems = m::validate(&mut d);
-    assert!(
-        problems.iter().any(|p| p.contains("nope")),
-        "{problems:?}"
-    );
+    assert!(problems.iter().any(|p| p.contains("nope")), "{problems:?}");
 }
 
 #[test]
@@ -576,17 +491,9 @@ fn a_reference_pointing_down_the_timeline_is_reported() {
         None,
     )
     .unwrap();
-    m::add_feature(
-        &mut d,
-        &json!({"id": "sk1", "type": "sketch", "plane": "XY", "entities": []}),
-        None,
-    )
-    .unwrap();
+    m::add_feature(&mut d, &json!({"id": "sk1", "type": "sketch", "plane": "XY", "entities": []}), None).unwrap();
     let problems = m::validate(&mut d);
-    assert!(
-        problems.iter().any(|p| p.contains("AFTER")),
-        "{problems:?}"
-    );
+    assert!(problems.iter().any(|p| p.contains("AFTER")), "{problems:?}");
 }
 
 #[test]
@@ -615,12 +522,8 @@ fn a_correct_document_reports_nothing() {
 #[test]
 fn a_string_in_a_numeric_field_must_name_a_parameter() {
     let mut d = m::new_document();
-    m::add_feature(
-        &mut d,
-        &json!({"id": "bx1", "type": "box", "length": "wide", "width": 1, "height": 1}),
-        None,
-    )
-    .unwrap();
+    m::add_feature(&mut d, &json!({"id": "bx1", "type": "box", "length": "wide", "width": 1, "height": 1}), None)
+        .unwrap();
     let problems = m::validate(&mut d);
     assert!(problems.iter().any(|p| p.contains("wide")), "{problems:?}");
     m::set_parameter(&mut d, "wide", &json!(40), "mm", None).unwrap();
@@ -646,10 +549,8 @@ fn a_plugin_features_text_options_are_not_mistaken_for_parameters() {
 
 #[test]
 fn a_joints_body_id_and_mode_are_not_mistaken_for_parameters() {
-    // `moving` names a body and `mode` is an enum, neither is a numeric field,
-    // so a healthy joint reports nothing. The control: `offset` IS numeric, so
-    // a string there that names no parameter still flags, the rule is not
-    // switched off for the whole feature.
+    // `moving` and `mode` are not numeric, so a healthy joint reports nothing; the control is that a string
+    // in the numeric `offset` naming no parameter still flags.
     fn face(p: [f64; 3], body: &str) -> Value {
         json!({"kind": "face", "by": "nearest", "point": p, "body": body})
     }
@@ -672,18 +573,12 @@ fn a_joints_body_id_and_mode_are_not_mistaken_for_parameters() {
     with_offset.insert("offset".into(), json!("nope"));
     m::add_feature(&mut d2, &Value::Object(with_offset), None).unwrap();
     let problems = m::validate(&mut d2);
-    assert!(
-        problems
-            .iter()
-            .any(|p| p.contains("offset") && p.contains("nope")),
-        "{problems:?}"
-    );
+    assert!(problems.iter().any(|p| p.contains("offset") && p.contains("nope")), "{problems:?}");
 }
 
 #[test]
 fn text_fields_are_not_mistaken_for_parameters() {
-    // A STEP import carries its colour and a G2 fillet its continuity as text;
-    // both built fine and were reported as problems that WILL fail a build.
+    // A STEP import's colour and a G2 fillet's continuity are text, and must not be reported as problems.
     let mut d = m::new_document();
     m::add_feature(
         &mut d,
@@ -727,14 +622,17 @@ fn hole_enum_fields_are_not_mistaken_for_parameters() {
 #[test]
 fn a_feature_turned_into_a_join_forgets_the_id_it_had_as_a_new_body() {
     let mut d = m::new_document();
-    m::add_feature(&mut d, &json!({"id": "rv", "type": "revolve", "sketch": "s", "axis": "Z",
-                                   "angle": 360, "operation": "new"}), None)
-        .unwrap();
+    m::add_feature(
+        &mut d,
+        &json!({"id": "rv", "type": "revolve", "sketch": "s", "axis": "Z",
+                                   "angle": 360, "operation": "new"}),
+        None,
+    )
+    .unwrap();
     d.insert("bodyIds".into(), json!({"bx:0": "body1", "rv:0": "body3"}));
     m::update_feature(&mut d, "rv", &json!({"angle": 180}), false).unwrap();
     assert_eq!(d["bodyIds"], json!({"bx:0": "body1", "rv:0": "body3"}));
-    m::update_feature(&mut d, "rv", &json!({"operation": "join", "targets": ["body1"]}), false)
-        .unwrap();
+    m::update_feature(&mut d, "rv", &json!({"operation": "join", "targets": ["body1"]}), false).unwrap();
     assert_eq!(d["bodyIds"], json!({"bx:0": "body1"}));
 }
 
@@ -764,9 +662,8 @@ fn a_press_pull_label_that_contradicts_its_sign_is_named() {
 
 #[test]
 fn a_build_completes_only_the_tracked_faces_written_without_an_extent() {
-    let hole = |id: &str, face: Value| {
-        json!({"id": id, "type": "hole", "diameter": 3, "points": [[0, 0, 5]], "face": face})
-    };
+    let hole =
+        |id: &str, face: Value| json!({"id": id, "type": "hole", "diameter": 3, "points": [[0, 0, 5]], "face": face});
     let tracked = json!({"kind": "face", "by": "tracked", "point": [0, 0, 5], "normal": [0, 0, 1]});
     let mut kept = tracked.clone();
     kept["extent"] = json!([-9, 9, -9, 9]);
@@ -846,8 +743,7 @@ fn a_revolve_about_a_name_that_is_not_an_axis_is_reported() {
 
 #[test]
 fn a_press_pull_takes_the_targets_its_schema_documents() {
-    // The build combines a non-auto press-pull's prism with `targets`; the
-    // feature used to have no such field, so feature_add refused it.
+    // The build combines a non-auto press-pull's prism with `targets`, so feature_add must accept it.
     let face = json!({"kind": "face", "by": "normal", "dir": [0, 0, 1], "body": "body1"});
     let d = doc_with(&[
         json!({"id": "bx1", "type": "box", "length": 20, "width": 20, "height": 20}),
@@ -888,35 +784,33 @@ fn press_pull_and_offset_face_take_the_follow_tangent_their_schema_documents() {
 
 #[test]
 fn a_document_set_over_this_one_forgets_the_records_of_a_feature_that_became_a_join() {
-    // doc_get, edit, doc_set is an edit too. A revolve built as a new body was
-    // recorded as body3; made a join into body1 by editing the document, it has
-    // to merge as body1, so its old record must go. Features the old document
-    // does not have keep theirs: a file numbered before the map existed may
-    // rely on a join's fresh id.
+    // doc_get, edit, doc_set is an edit too: a revolve recorded as body3 and made a join into body1 must merge as
+    // body1. Features the old document lacks keep their record, since an older file may rely on a fresh join id.
     let mut before = m::new_document();
-    before.insert("features".into(), json!([
-        {"id": "bx", "type": "box", "length": 20, "width": 20, "height": 20},
-        {"id": "rv", "type": "revolve", "sketch": "sk", "axis": "Z", "angle": 360, "operation": "new"},
-        {"id": "keep", "type": "revolve", "sketch": "sk", "axis": "Z", "angle": 360,
-         "operation": "join", "targets": ["body1"]}
-    ]));
+    before.insert(
+        "features".into(),
+        json!([
+            {"id": "bx", "type": "box", "length": 20, "width": 20, "height": 20},
+            {"id": "rv", "type": "revolve", "sketch": "sk", "axis": "Z", "angle": 360, "operation": "new"},
+            {"id": "keep", "type": "revolve", "sketch": "sk", "axis": "Z", "angle": 360,
+             "operation": "join", "targets": ["body1"]}
+        ]),
+    );
     let ids = json!({"bx:0": "body1", "rv:0": "body3", "keep:0": "body1", "old:0": "body4"});
     before.insert("bodyIds".into(), ids.clone());
 
     let mut after = before.clone();
     after["features"][1]["operation"] = json!("join");
     after["features"][1]["targets"] = json!(["body1"]);
-    after["features"].as_array_mut().unwrap().push(
-        json!({"id": "old", "type": "box", "length": 1, "width": 1, "height": 1, "operation": "join"}),
-    );
+    after["features"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id": "old", "type": "box", "length": 1, "width": 1, "height": 1, "operation": "join"}));
     m::forget_stale_joins(&before, &mut after);
     assert_eq!(after["bodyIds"], json!({"bx:0": "body1", "keep:0": "body1", "old:0": "body4"}));
 }
 
 #[test]
 fn a_new_document_is_stamped_with_the_version_the_app_writes() {
-    assert_eq!(
-        m::new_document()["version"],
-        json!(fundacad_core::schema::DOCUMENT_VERSION)
-    );
+    assert_eq!(m::new_document()["version"], json!(fundacad_core::schema::DOCUMENT_VERSION));
 }

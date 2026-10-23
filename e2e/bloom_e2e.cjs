@@ -15,7 +15,10 @@ const URL = process.env.SC_URL || "http://localhost:5173/";
 const PORT = process.env.SC_ENGINE_PORT || "8765";
 const ANGLE = process.env.SC_ANGLE || "d3d11";
 const OUT = path.resolve(process.argv[2] || "bloom_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -31,22 +34,31 @@ const maxDelta = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
   });
   try {
     const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
-    page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-    await page.addInitScript(([port, t]) => {
-      const N = window.WebSocket;
-      window.WebSocket = class extends N {
-        constructor(u, p) {
-          let s = String(u).replace("127.0.0.1:8765", "127.0.0.1:" + port);
-          s = s.replace(/([?&])token=[^&]*/, `$1token=${t}`);
-          super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
-        }
-      };
-    }, [PORT, TOKEN]);
+    page.on("pageerror", (e) => {
+      console.error("PAGE ERROR:", e.message);
+      failures++;
+    });
+    await page.addInitScript(
+      ([port, t]) => {
+        const N = window.WebSocket;
+        window.WebSocket = class extends N {
+          constructor(u, p) {
+            let s = String(u).replace("127.0.0.1:8765", "127.0.0.1:" + port);
+            s = s.replace(/([?&])token=[^&]*/, `$1token=${t}`);
+            super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+          }
+        };
+      },
+      [PORT, TOKEN],
+    );
     await page.goto(URL);
     await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
     await page.waitForTimeout(1500);
     const modal = await page.$(".modal-close");
-    if (modal) { await modal.click(); await page.waitForTimeout(300); }
+    if (modal) {
+      await modal.click();
+      await page.waitForTimeout(300);
+    }
     const gpu = await page.evaluate(() => {
       const gl = window.viewport.scene.renderer.getContext();
       const ext = gl.getExtension("WEBGL_debug_renderer_info");
@@ -63,8 +75,16 @@ const maxDelta = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
         let composed = false;
         const c = post.composer;
         const spy = c && c.render;
-        if (c) c.render = (...a) => { composed = true; return spy.apply(c, a); };
-        try { plain(cam, motion); } finally { if (c) c.render = spy; }
+        if (c)
+          c.render = (...a) => {
+            composed = true;
+            return spy.apply(c, a);
+          };
+        try {
+          plain(cam, motion);
+        } finally {
+          if (c) c.render = spy;
+        }
         window.__frames.push({ motion: !!motion, composed: composed || (!c && !!post.composer) });
       };
     });
@@ -90,29 +110,68 @@ const maxDelta = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
     await page.waitForTimeout(1200);
     await page.evaluate(() => window.store.setBodiesMaterial(["body1", "body3"], "m-glass"));
     await page.waitForTimeout(800);
-
-    const setPref = (k, v) => page.evaluate(async ([k, v]) => {
-      (await import("/src/ui/renderPrefs.ts")).setRenderPref(k, v);
-    }, [k, v]);
-    const settle = () => page.evaluate(async () => {
-      window.viewport.requestRender();
-      await new Promise((r) => setTimeout(r, 800));
+    // Realtime bloom runs only when something glows. The cube is added after the
+    // fit and far off screen, so the composer runs while no glow reaches the view.
+    await page.evaluate(async () => {
+      const s = window.store;
+      s.addFeature({ id: s.nextId(), type: "box", length: 8, width: 8, height: 8 });
+      s.addFeature({ id: s.nextId(), type: "move", bodies: ["body4"], dx: 1500, dy: 1500, dz: 0, rx: 0, ry: 0, rz: 0 });
+      await s.rebuildNow();
+      for (let i = 0; i < 300; i++) {
+        const b = s.buildState;
+        if (!b.building && b.result?.bodies?.length === 3) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      s.setBodiesMaterial(
+        ["body4"],
+        s.addMaterialPreset({
+          id: "g",
+          name: "glow",
+          color: "#d9f2b4",
+          metalness: 0,
+          roughness: 0.6,
+          emissive: 0.35,
+          castsLight: false,
+        }),
+      );
     });
-    // Mean colour of each [x0, y0, x1, y1] box of a screenshot, or the per channel median with "median".
-    const measure = (png, boxes, how = "mean") => page.evaluate(async ([b64, boxes, how]) => {
-      const img = await createImageBitmap(await (await fetch("data:image/png;base64," + b64)).blob());
-      const c = new OffscreenCanvas(img.width, img.height), x = c.getContext("2d");
-      x.drawImage(img, 0, 0);
-      return boxes.map(([x0, y0, x1, y1]) => {
-        const d = x.getImageData(x0, y0, x1 - x0, y1 - y0).data;
-        const ch = [[], [], []];
-        for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) ch[k].push(d[i + k]);
-        return ch.map((v) => {
-          if (how === "median") { v.sort((a, b) => a - b); return v[v.length >> 1]; }
-          return Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10;
-        });
+    await page.waitForTimeout(800);
+
+    const setPref = (k, v) =>
+      page.evaluate(
+        async ([k, v]) => {
+          (await import("/src/ui/renderPrefs.ts")).setRenderPref(k, v);
+        },
+        [k, v],
+      );
+    const settle = () =>
+      page.evaluate(async () => {
+        window.viewport.requestRender();
+        await new Promise((r) => setTimeout(r, 800));
       });
-    }, [png.toString("base64"), boxes, how]);
+    // Mean colour of each [x0, y0, x1, y1] box of a screenshot, or the per channel median with "median".
+    const measure = (png, boxes, how = "mean") =>
+      page.evaluate(
+        async ([b64, boxes, how]) => {
+          const img = await createImageBitmap(await (await fetch("data:image/png;base64," + b64)).blob());
+          const c = new OffscreenCanvas(img.width, img.height),
+            x = c.getContext("2d");
+          x.drawImage(img, 0, 0);
+          return boxes.map(([x0, y0, x1, y1]) => {
+            const d = x.getImageData(x0, y0, x1 - x0, y1 - y0).data;
+            const ch = [[], [], []];
+            for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) ch[k].push(d[i + k]);
+            return ch.map((v) => {
+              if (how === "median") {
+                v.sort((a, b) => a - b);
+                return v[v.length >> 1];
+              }
+              return Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10;
+            });
+          });
+        },
+        [png.toString("base64"), boxes, how],
+      );
     const shot = async (name) => {
       const buf = await page.screenshot();
       fs.writeFileSync(path.join(OUT, name + ".png"), buf);
@@ -120,58 +179,89 @@ const maxDelta = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
     };
     // bg is a patch of ground right of the model at 1200 x 800, far enough that the
     // glow of the rod's top at bloom 1 does not reach it, its median steps over the grid lines.
-    const glassBoxes = () => page.evaluate(() => {
-      const v = window.viewport, cam = v.rig.active, r = v.scene.renderer.domElement.getBoundingClientRect();
-      const P = (x, y, z) => {
-        const p = new (v.scene.scene.position.constructor)(x, y, z).project(cam);
-        return [Math.round(r.left + ((p.x + 1) / 2) * r.width), Math.round(r.top + ((1 - p.y) / 2) * r.height)];
-      };
-      const sq = ([x, y], h) => [x - h, y - h, x + h, y + h];
-      return { rod: sq(P(0, 0, 55), 3), box: sq(P(22, -22, 20), 8), bg: [940, 600, 1040, 680], ground: [300, 420, 400, 560] };
-    });
+    const glassBoxes = () =>
+      page.evaluate(() => {
+        const v = window.viewport,
+          cam = v.rig.active,
+          r = v.scene.renderer.domElement.getBoundingClientRect();
+        const P = (x, y, z) => {
+          const p = new v.scene.scene.position.constructor(x, y, z).project(cam);
+          return [Math.round(r.left + ((p.x + 1) / 2) * r.width), Math.round(r.top + ((1 - p.y) / 2) * r.height)];
+        };
+        const sq = ([x, y], h) => [x - h, y - h, x + h, y + h];
+        return {
+          rod: sq(P(0, 0, 55), 3),
+          box: sq(P(22, -22, 20), 8),
+          bg: [940, 600, 1040, 680],
+          ground: [300, 420, 400, 560],
+        };
+      });
 
-    const setTheme = (id) => page.evaluate(async (id) => {
-      (await import("/src/ui/theme.ts")).setTheme(id);
-    }, id);
+    const setTheme = (id) =>
+      page.evaluate(async (id) => {
+        (await import("/src/ui/theme.ts")).setTheme(id);
+      }, id);
     // 1. The background and the glass, bloom off and on, for each ground, at the
     // default amount and at the top of the slider, where the threshold is lowest.
     const grounds = [["theme"], ["dark"], ["grey"], ["light"], ["theme", "solarized-light"]];
-    for (const [bg, theme] of grounds) for (const amount of [0.4, 1]) {
-      const ground = theme ? `${bg}_${theme}` : bg;
-      if (theme) await setTheme(theme);
-      await setPref("background", bg);
-      await setPref("bloom", 0);
-      await settle();
-      const at = await glassBoxes();
-      const off = await shot(`bg_${ground}_bloom0`);
-      const directOn = await page.evaluate(() => window.__frames.at(-1).composed);
-      await setPref("bloom", amount);
-      await settle();
-      const on = await shot(`bg_${ground}_bloom${amount}`);
-      const composerOn = await page.evaluate(() => window.__frames.at(-1).composed);
-      check(`${ground}: bloom 0 draws direct, ${amount} through the composer`, !directOn && composerOn, `composed ${directOn} then ${composerOn}`);
-      const [bgOff] = await measure(off, [at.bg], "median");
-      const [bgOn] = await measure(on, [at.bg], "median");
-      check(`${ground}: background identical with bloom ${amount}`, maxDelta(bgOff, bgOn) <= 1, `${bgOff} vs ${bgOn}`);
-      const [gridOff] = await measure(off, [at.ground], "mean");
-      const [gridOn] = await measure(on, [at.ground], "mean");
-      check(`${ground}: grid lines identical with bloom ${amount}`, maxDelta(gridOff, gridOn) <= 1.5, `mean ${gridOff} vs ${gridOn}`);
-      const [rodOff, boxOff] = await measure(off, [at.rod, at.box]);
-      const [rodOn, boxOn] = await measure(on, [at.rod, at.box]);
-      console.log(`    ${ground} at ${amount}: rod ${rodOff} -> ${rodOn}, box face ${boxOff} -> ${boxOn}`);
-      check(`${ground}: glass box face keeps its colour with bloom on`, maxDelta(boxOff, boxOn) <= 4, `${boxOff} vs ${boxOn}`);
-      if (theme) await setTheme("fundacad");
-    }
+    for (const [bg, theme] of grounds)
+      for (const amount of [0.4, 1]) {
+        const ground = theme ? `${bg}_${theme}` : bg;
+        if (theme) await setTheme(theme);
+        await setPref("background", bg);
+        await setPref("bloom", 0);
+        await settle();
+        const at = await glassBoxes();
+        const off = await shot(`bg_${ground}_bloom0`);
+        const directOn = await page.evaluate(() => window.__frames.at(-1).composed);
+        await setPref("bloom", amount);
+        await settle();
+        const on = await shot(`bg_${ground}_bloom${amount}`);
+        const composerOn = await page.evaluate(() => window.__frames.at(-1).composed);
+        check(
+          `${ground}: bloom 0 draws direct, ${amount} through the composer`,
+          !directOn && composerOn,
+          `composed ${directOn} then ${composerOn}`,
+        );
+        const [bgOff] = await measure(off, [at.bg], "median");
+        const [bgOn] = await measure(on, [at.bg], "median");
+        check(
+          `${ground}: background identical with bloom ${amount}`,
+          maxDelta(bgOff, bgOn) <= 1,
+          `${bgOff} vs ${bgOn}`,
+        );
+        const [gridOff] = await measure(off, [at.ground], "mean");
+        const [gridOn] = await measure(on, [at.ground], "mean");
+        check(
+          `${ground}: grid lines identical with bloom ${amount}`,
+          maxDelta(gridOff, gridOn) <= 1.5,
+          `mean ${gridOff} vs ${gridOn}`,
+        );
+        const [rodOff, boxOff] = await measure(off, [at.rod, at.box]);
+        const [rodOn, boxOn] = await measure(on, [at.rod, at.box]);
+        console.log(`    ${ground} at ${amount}: rod ${rodOff} -> ${rodOn}, box face ${boxOff} -> ${boxOn}`);
+        check(
+          `${ground}: glass box face keeps its colour with bloom on`,
+          maxDelta(boxOff, boxOn) <= 4,
+          `${boxOff} vs ${boxOn}`,
+        );
+        if (theme) await setTheme("fundacad");
+      }
     await setPref("background", "theme");
 
     // 2. An orbit on the reduced motion level a slow machine drops to.
     const orbit = async (name) => {
       await page.evaluate(() => {
         const m = window.viewport.motion;
-        m.lvl = 1; m.maxLevel = 1; m.slowUntil = 1e15; m.probe = () => false; m.mayRise = () => false;
+        m.lvl = 1;
+        m.maxLevel = 1;
+        m.slowUntil = 1e15;
+        m.probe = () => false;
+        m.mayRise = () => false;
         window.__frames.length = 0;
       });
-      const cx = 600, cy = 400;
+      const cx = 600,
+        cy = 400;
       await page.mouse.move(cx, cy);
       await page.mouse.down({ button: "right" });
       for (let i = 1; i <= 30; i++) {
@@ -192,18 +282,34 @@ const maxDelta = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
     await settle();
     const live = await orbit("orbit_perf_off");
     const motion = live.frames.filter((f) => f.motion);
-    check("performance mode off: motion level 1 is in effect", motion.length > 5, `${motion.length} motion frames of ${live.frames.length}`);
-    check("performance mode off: every orbit frame goes through the composer", motion.length > 0 && motion.every((f) => f.composed), `${motion.filter((f) => f.composed).length}/${motion.length}`);
+    check(
+      "performance mode off: motion level 1 is in effect",
+      motion.length > 5,
+      `${motion.length} motion frames of ${live.frames.length}`,
+    );
+    check(
+      "performance mode off: every orbit frame goes through the composer",
+      motion.length > 0 && motion.every((f) => f.composed),
+      `${motion.filter((f) => f.composed).length}/${motion.length}`,
+    );
     const [bgRest, rodRest, boxRest] = await measure(live.rest, [live.at.bg, live.at.rod, live.at.box], "median");
     const [bgLast, rodLast, boxLast] = await measure(live.last, [live.at.bg, live.at.rod, live.at.box], "median");
     check("background the same while orbiting and at rest", maxDelta(bgLast, bgRest) <= 1, `${bgLast} vs ${bgRest}`);
-    check("glass the same while orbiting and at rest (no white frames)", maxDelta(rodLast, rodRest) <= 12 && maxDelta(boxLast, boxRest) <= 6, `rod ${rodLast} vs ${rodRest}, box ${boxLast} vs ${boxRest}`);
+    check(
+      "glass the same while orbiting and at rest (no white frames)",
+      maxDelta(rodLast, rodRest) <= 12 && maxDelta(boxLast, boxRest) <= 6,
+      `rod ${rodLast} vs ${rodRest}, box ${boxLast} vs ${boxRest}`,
+    );
 
     await setPref("performanceMode", true);
     await settle();
     const perf = await orbit("orbit_perf_on");
     const perfMotion = perf.frames.filter((f) => f.motion);
-    check("performance mode on: orbit frames may skip the passes", perfMotion.length > 0 && perfMotion.every((f) => !f.composed), `${perfMotion.filter((f) => !f.composed).length}/${perfMotion.length} without`);
+    check(
+      "performance mode on: orbit frames may skip the passes",
+      perfMotion.length > 0 && perfMotion.every((f) => !f.composed),
+      `${perfMotion.filter((f) => !f.composed).length}/${perfMotion.length} without`,
+    );
     await setPref("performanceMode", false);
     await settle();
 
@@ -220,4 +326,7 @@ const maxDelta = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
   }
   console.log(failures ? `${failures} FAILED` : "all passed");
   process.exit(failures ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

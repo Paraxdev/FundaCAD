@@ -1,8 +1,4 @@
-//! Face triangulations into one body mesh, replaces `tessellate`,
-//! `_display_face` and `mesh_bbox` of the Python engine's `tessellate.py`.
-//!
-//! Mesh passes (plugin displacement) are not here, they wait for the plugin
-//! host.
+//! Face triangulations joined into one body mesh.
 
 use opencascade::mesh_access::{self, EdgeSplits, MeshAccess};
 use opencascade::primitives::Shape;
@@ -24,19 +20,16 @@ pub struct MeshParams {
     pub linear: f64,
     pub angular: f64,
     pub relative: bool,
-    /// True surface normals and the seam weld, the viewport payload. Export
-    /// leaves them off, an exported mesh is the kernel's with its split edges
-    /// joined.
+    /// True surface normals and the seam weld, for the viewport payload. Export leaves them off, its mesh
+    /// is the kernel's with split edges joined.
     pub display: bool,
     /// Drop a stored triangulation first. BRepMesh keeps a finer stored mesh
     /// for a coarser request, so a tolerance backoff needs this to coarsen.
     pub force_remesh: bool,
 }
 
-/// Mesh `shape` in parallel and read every face back, skipping a face with no
-/// triangulation. A reversed face has its winding flipped so facet normals
-/// point outward, faces the mesher left apart along an edge are joined, and
-/// no triangle without area is left (mesh::flat).
+/// A reversed face gets its winding flipped so facet normals point out, faces the mesher left apart
+/// along an edge are joined, and no triangle without area is left (mesh::flat).
 pub fn tessellate(shape: &Shape, access: &MeshAccess, params: MeshParams) -> Tessellation {
     tessellate_with(shape, access, params, None)
 }
@@ -60,10 +53,8 @@ pub fn tessellate_with(
     let kept = !params.force_remesh && access.has_mesh();
     let mut edges = mesh(params.force_remesh);
     let mut reach = split_reach(shape, &edges);
-    // BRepMesh keeps a stored face mesh that is fine enough, face by face. A
-    // face this body shares with another one (a kept original) may have been
-    // meshed again for that body since, and no longer meets its neighbours
-    // here. Only a mesh of the whole body made in one run is sure to.
+    // BRepMesh keeps a stored face mesh that is fine enough, but a face shared with another body may have
+    // been remeshed for it since. Only a whole body meshed in one run surely meets its neighbours.
     if kept && outdated(&edges, reach) {
         edges = mesh(true);
         reach = split_reach(shape, &edges);
@@ -108,20 +99,15 @@ pub fn tessellate_with(
         let ntri = t.len() / 3;
         let (pos, t) = if params.display {
             let is_plane = access.face_plane_normal(fid).is_some();
-            let face = crate::bench::phase("display_face", || {
-                display_face(tri.nodes, t, &tri.normals, flip, is_plane)
-            });
-            normals
-                .get_or_insert_with(Vec::new)
-                .extend_from_slice(&face.normals);
+            let face = crate::bench::phase("display_face", || display_face(tri.nodes, t, &tri.normals, flip, is_plane));
+            normals.get_or_insert_with(Vec::new).extend_from_slice(&face.normals);
             (face.positions, face.triangles)
         } else {
             (tri.nodes, t)
         };
         out.positions.extend_from_slice(&pos);
         out.indices.extend(t.iter().map(|i| i + base));
-        out.face_ids
-            .extend(std::iter::repeat(fid as u32).take(ntri));
+        out.face_ids.extend(std::iter::repeat(fid as u32).take(ntri));
     }
     out.normals = normals;
     crate::bench::phase("flat_triangles", || super::flat::remove(&mut out));
@@ -141,27 +127,14 @@ fn split_reach(shape: &Shape, found: &EdgeSplits) -> Option<f64> {
     Some(SPLIT_REACH * norm(sub(max, min)))
 }
 
-/// Whether the faces of a mesh disagree along an edge the way faces meshed
-/// in different runs do: another number of points, or one step of the edge
-/// further apart than a fold leaves it.
+/// Faces disagree along an edge the way faces meshed in different runs do: another number of points,
+/// or one step further apart than a fold leaves.
 fn outdated(found: &EdgeSplits, reach: Option<f64>) -> bool {
     found.uneven > 0 || reach.is_some_and(|r| found.pairs.iter().any(|p| !(norm(sub(p[0], p[1])) <= r)))
 }
 
-/// The points at which the kernel's mesher left the faces along an edge
-/// apart, each with the one point its group takes.
-///
-/// BRepMesh gives every face its own copy of an edge's points, then folds the
-/// boundary nodes of a face that are within its UV tolerance of each other
-/// into one. Next to an edge shorter than that tolerance (a cut corner a few
-/// 1e-5 mm beside a seam) one face folds and its neighbour does not, and the
-/// two no longer meet. Each group of points joined this way moves to the one
-/// met first, on every face that has a node there, and a triangle that loses
-/// its area to the move goes with the others that have none (mesh::flat).
-///
-/// A face that small on every side (the sliver between a seam, a rim and a cut
-/// corner beside both) gets no triangles, or one where its outline needs five.
-/// It is one point of the mesh then, the points held around it form one group.
+/// BRepMesh folds a face's boundary nodes within its UV tolerance, so beside a shorter edge one face folds
+/// and its neighbour does not. Each group of split points moves to the one met first, on every face.
 pub(super) struct SplitJoin(HashMap<[u64; 3], [f64; 3]>);
 
 impl SplitJoin {
@@ -214,11 +187,8 @@ impl SplitJoin {
     }
 }
 
-/// How far apart two points of one edge step may be and still be joined, and
-/// how large a face the mesher did not fill may be and still count as a
-/// point, as a share of the body's diagonal. The folds measured stay under
-/// 2e-6 of it, a much wider gap is some other fault, and joining it would drag
-/// the mesh.
+/// As a share of the body's diagonal: how far apart split edge points may be joined, and how large an
+/// unfilled face still counts as a point. Measured folds stay under 2e-6, a wider gap is another fault.
 const SPLIT_REACH: f64 = 1e-4;
 
 struct DisplayFace {
@@ -232,11 +202,7 @@ fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 }
 
 fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 
 fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
@@ -247,48 +213,23 @@ fn norm(a: [f64; 3]) -> f64 {
     dot(a, a).sqrt()
 }
 
-/// One face of the display tessellation with true surface normals and its
-/// seam duplicates welded.
-///
-/// OCCT's computed normals follow the surface and ignore a REVERSED face, so
-/// they are flipped with the winding and then checked against the winding's own
-/// area weighted facet normals; a node whose normal is unsound keeps that facet
-/// average, which is what the client would draw. Coincident nodes (a closed
-/// face's seam copies) merge only when their normals agree, so a cone apex
-/// keeps its copies, and the weld never crosses a face.
-fn display_face(
-    nodes: Vec<f64>,
-    tris: Vec<u32>,
-    surface_normals: &[f64],
-    flip: bool,
-    is_plane: bool,
-) -> DisplayFace {
+/// OCCT's normals ignore a REVERSED face, so they are flipped with the winding and checked against area
+/// weighted facet normals. Seam copies merge only when normals agree, so a cone apex keeps its copies.
+fn display_face(nodes: Vec<f64>, tris: Vec<u32>, surface_normals: &[f64], flip: bool, is_plane: bool) -> DisplayFace {
     let n = nodes.len() / 3;
     let p = |i: u32| {
         let i = i as usize * 3;
         [nodes[i], nodes[i + 1], nodes[i + 2]]
     };
-    let facets: Vec<[f64; 3]> = tris
-        .chunks_exact(3)
-        .map(|c| cross(sub(p(c[1]), p(c[0])), sub(p(c[2]), p(c[0]))))
-        .collect();
+    let facets: Vec<[f64; 3]> =
+        tris.chunks_exact(3).map(|c| cross(sub(p(c[1]), p(c[0])), sub(p(c[2]), p(c[0])))).collect();
 
     if is_plane {
-        let s = facets
-            .iter()
-            .fold([0.0; 3], |a, f| [a[0] + f[0], a[1] + f[1], a[2] + f[2]]);
+        let s = facets.iter().fold([0.0; 3], |a, f| [a[0] + f[0], a[1] + f[1], a[2] + f[2]]);
         let ln = norm(s);
-        let unit = if ln > 1e-12 {
-            [s[0] / ln, s[1] / ln, s[2] / ln]
-        } else {
-            [0.0, 0.0, 1.0]
-        };
+        let unit = if ln > 1e-12 { [s[0] / ln, s[1] / ln, s[2] / ln] } else { [0.0, 0.0, 1.0] };
         let normals = unit.iter().copied().cycle().take(3 * n).collect();
-        return DisplayFace {
-            positions: nodes,
-            triangles: tris,
-            normals,
-        };
+        return DisplayFace { positions: nodes, triangles: tris, normals };
     }
 
     let mut acc = vec![[0.0f64; 3]; n];
@@ -308,10 +249,7 @@ fn display_face(
 
     let mut nn: Vec<[f64; 3]> = if surface_normals.len() == 3 * n {
         let sign = if flip { -1.0 } else { 1.0 };
-        surface_normals
-            .chunks_exact(3)
-            .map(|c| [sign * c[0], sign * c[1], sign * c[2]])
-            .collect()
+        surface_normals.chunks_exact(3).map(|c| [sign * c[0], sign * c[1], sign * c[2]]).collect()
     } else {
         acc.clone()
     };
@@ -322,19 +260,14 @@ fn display_face(
         }
     }
     for (v, a) in nn.iter_mut().zip(&acc) {
-        let bad =
-            !v.iter().all(|x| x.is_finite()) || (norm(*v) - 1.0).abs() > 1e-3 || dot(*v, *a) < 0.0;
+        let bad = !v.iter().all(|x| x.is_finite()) || (norm(*v) - 1.0).abs() > 1e-3 || dot(*v, *a) < 0.0;
         if bad {
             *v = *a;
         }
     }
 
     let (positions, triangles, nn) = weld(nodes, tris, nn);
-    DisplayFace {
-        positions,
-        triangles,
-        normals: nn.iter().flatten().copied().collect(),
-    }
+    DisplayFace { positions, triangles, normals: nn.iter().flatten().copied().collect() }
 }
 
 /// numpy's `round(x, 6)`, half to even on the scaled value, with -0.0 folded
@@ -402,9 +335,7 @@ mod tests {
     fn weld_merges_agreeing_copies_only() {
         // Nodes 0 and 2 coincide with the same normal, 1 and 3 coincide with
         // opposite normals, the apex case.
-        let nodes = vec![
-            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
-        ];
+        let nodes = vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0];
         let up = [0.0, 0.0, 1.0];
         let nn = vec![up, up, up, [0.0, 0.0, -1.0], up];
         let (pos, tris, kept) = weld(nodes, vec![0, 1, 4, 2, 3, 4], nn);
@@ -418,9 +349,7 @@ mod tests {
         // Nodes 0 and 3 are one edge point two faces hold 1e-5 apart, the
         // last triangle spans only that gap.
         let mut t = Tessellation {
-            positions: vec![
-                0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1e-5, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0, 0.0,
-            ],
+            positions: vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1e-5, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0, 0.0],
             indices: vec![0, 1, 2, 3, 4, 5, 0, 3, 4],
             face_ids: vec![0, 1, 1],
             normals: None,

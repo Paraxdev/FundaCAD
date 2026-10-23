@@ -1,6 +1,5 @@
-//! Face provenance, the Python engine's `builder.py` `_update_owners` over the fingerprints
-//! of the Python engine's `defeature.py` `_face_fp`: each face of a changed body is owned by
-//! the feature that last made it, keyed by its rounded area and centre.
+//! Face provenance, `_update_owners` in builder.py over the `_face_fp` fingerprints of defeature.py: each face
+//! of a changed body is owned by the feature that last made it, keyed by its rounded area and centre.
 
 use std::collections::HashMap;
 
@@ -13,9 +12,8 @@ use crate::kernel::{self, Kind};
 /// Fingerprint key to owning feature id.
 pub type Owners = HashMap<String, String>;
 
-/// Each body's faces with their unrounded fingerprints, by body uid, so a
-/// face a feature left alone is not integrated again. Holding the face keeps
-/// its TShape alive, so its address cannot be reused by another face.
+/// Each body's faces with their unrounded fingerprints, so an untouched face is not integrated again.
+/// Holding the face keeps its TShape alive, so its address cannot be reused by another face.
 #[derive(Default)]
 pub struct FaceFps(HashMap<u64, Vec<(Shape, Option<[f64; 4]>)>>);
 
@@ -30,13 +28,7 @@ fn round_key(v: f64, digits: usize) -> String {
 }
 
 fn key(area: f64, c: [f64; 3]) -> String {
-    format!(
-        "{}|{}|{}|{}",
-        round_key(area, 2),
-        round_key(c[0], 1),
-        round_key(c[1], 1),
-        round_key(c[2], 1)
-    )
+    format!("{}|{}|{}|{}", round_key(area, 2), round_key(c[0], 1), round_key(c[1], 1), round_key(c[2], 1))
 }
 
 /// `_face_fp` of one face, for looking up `faceOwners`.
@@ -44,8 +36,7 @@ pub fn face_key(face: &Shape) -> Option<String> {
     kernel::face_area_centre(face).map(|a| key(a[0], [a[1], a[2], a[3]]))
 }
 
-/// `listed`, the owner of each face of `shape` in face order, as the map
-/// `face_key` looks up: keyed by what the faces of this very shape measure.
+/// The owner of each face of `shape` in face order, keyed by what this very shape's faces measure.
 /// None when the shape does not hold that many faces.
 pub fn keyed(shape: &Shape, listed: &[Option<String>]) -> Option<Owners> {
     let faces = kernel::subshapes(shape, Kind::Face);
@@ -62,30 +53,15 @@ fn face_raw(face: &Shape) -> Option<[f64; 4]> {
     kernel::face_area_centre(face)
 }
 
-pub fn update(
-    ctx: &mut Ctx,
-    f: &Feature,
-    fid: &str,
-    pre: &[(u64, u64)],
-    pre_owners: &[(u64, Owners)],
-) {
+pub fn update(ctx: &mut Ctx, f: &Feature, fid: &str, pre: &[(u64, u64)], pre_owners: &[(u64, Owners)]) {
     let moved: Option<(Vec<String>, [f64; 3], [f64; 3])> = match f {
         Feature::Move(m) if !ctx.bodies.is_empty() => {
             let ids = match &m.bodies {
                 Some(ids) if !ids.is_empty() => ids.clone(),
-                _ => ctx
-                    .bodies
-                    .last()
-                    .map(|b| vec![b.id.clone()])
-                    .unwrap_or_default(),
+                _ => ctx.bodies.last().map(|b| vec![b.id.clone()]).unwrap_or_default(),
             };
-            let v =
-                |n: &Option<fundacad_core::schema::Num>| ctx.val_or(n.as_ref(), 0.0).unwrap_or(0.0);
-            Some((
-                ids,
-                [v(&m.rx), v(&m.ry), v(&m.rz)],
-                [v(&m.dx), v(&m.dy), v(&m.dz)],
-            ))
+            let v = |n: &Option<fundacad_core::schema::Num>| ctx.val_or(n.as_ref(), 0.0).unwrap_or(0.0);
+            Some((ids, [v(&m.rx), v(&m.ry), v(&m.rz)], [v(&m.dx), v(&m.dy), v(&m.dz)]))
         }
         _ => None,
     };
@@ -101,10 +77,8 @@ pub fn update(
         .filter(|(_, b)| !pre.iter().any(|(uid, gen)| *uid == b.uid && *gen == b.generation))
         .map(|(i, _)| i)
         .collect();
-    let faces: Vec<Vec<Shape>> = changed
-        .iter()
-        .map(|&i| kernel::subshapes(ctx.bodies[i].shape(), Kind::Face))
-        .collect();
+    let faces: Vec<Vec<Shape>> =
+        changed.iter().map(|&i| kernel::subshapes(ctx.bodies[i].shape(), Kind::Face)).collect();
     let mut known: HashMap<u64, Vec<&(Shape, Option<[f64; 4]>)>> = HashMap::new();
     for entry in ctx.face_fps.0.values().flatten() {
         known.entry(kernel::tshape_id(&entry.0)).or_default().push(entry);
@@ -143,22 +117,15 @@ pub fn update(
     for ((&index, fs), rs) in changed.iter().zip(faces).zip(raws) {
         let b = &ctx.bodies[index];
         let empty = Owners::new();
-        let prior_src = pre_owners
-            .iter()
-            .find(|(uid, _)| *uid == b.uid)
-            .map_or(&empty, |(_, o)| o);
+        let prior_src = pre_owners.iter().find(|(uid, _)| *uid == b.uid).map_or(&empty, |(_, o)| o);
         let mut prior: Owners = prior_src.clone();
         if let Some((ids, r, d)) = &moved {
             if ids.contains(&b.id) && !prior_src.is_empty() {
-                prior = prior_src
-                    .iter()
-                    .filter_map(|(k, v)| moved_key(k, *r, *d).map(|nk| (nk, v.clone())))
-                    .collect();
+                prior = prior_src.iter().filter_map(|(k, v)| moved_key(k, *r, *d).map(|nk| (nk, v.clone()))).collect();
             }
         }
-        // A rigidly moved body keeps its faces' TShapes, so each face finds
-        // the fingerprint it had before the move. The rest go by their
-        // unrounded centres sent through the move, rounded once where they land.
+        // A rigidly moved body keeps its faces' TShapes, so each face finds its old fingerprint. The rest
+        // go by their unrounded centres sent through the move, rounded once where they land.
         let mut carried: HashMap<u64, Option<&String>> = HashMap::new();
         if let Some(m) = rigid.iter().find(|m| m.body == b.id) {
             let before = ctx.face_fps.0.get(&b.uid).map_or(&[][..], Vec::as_slice);
@@ -171,10 +138,7 @@ pub fn update(
                 let c = m.rot * glam::DVec3::new(raw[1], raw[2], raw[3]) + m.shift;
                 prior.insert(key(raw[0], c.to_array()), owner.clone());
                 // A TShape seen twice in the body names no one face.
-                carried
-                    .entry(kernel::tshape_id(face))
-                    .and_modify(|o| *o = None)
-                    .or_insert(Some(owner));
+                carried.entry(kernel::tshape_id(face)).and_modify(|o| *o = None).or_insert(Some(owner));
             }
         }
         let mut owners = Owners::new();
@@ -223,10 +187,5 @@ fn moved_key(k: &str, r: [f64; 3], d: [f64; 3]) -> Option<String> {
         return None;
     }
     let p = kernel::euler_point(r, d, [c[0], c[1], c[2]]);
-    Some(format!(
-        "{area}|{}|{}|{}",
-        round_key(p[0], 1),
-        round_key(p[1], 1),
-        round_key(p[2], 1)
-    ))
+    Some(format!("{area}|{}|{}|{}", round_key(p[0], 1), round_key(p[1], 1), round_key(p[2], 1)))
 }

@@ -1,6 +1,5 @@
-//! A solid whose file draws an edge away from the faces it bounds is healed
-//! where the file is read. tests/fixtures/heal_edge_off.step is written by
-//! tests/step/gen_heal_edge_off.py.
+//! A solid whose file draws an edge away from the faces it bounds is healed where the file is read.
+//! tests/fixtures/heal_edge_off.step is written by tests/step/gen_heal_edge_off.py.
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -82,28 +81,17 @@ fn an_edge_drawn_off_its_faces_is_redrawn_where_they_meet() {
     let block = &r.bodies[0].shape;
     sound(block).unwrap();
     let got = kernel::volume(block);
-    assert!(
-        (got - BLOCK_VOLUME).abs() < 1e-3 * BLOCK_VOLUME,
-        "volume {got}, want {BLOCK_VOLUME}"
-    );
+    assert!((got - BLOCK_VOLUME).abs() < 1e-3 * BLOCK_VOLUME, "volume {got}, want {BLOCK_VOLUME}");
     let (away, widest) = opencascade::xcaf::edges_away(block, 1e-3);
     assert_eq!(away, 0, "an edge is still {widest} mm from its faces");
     let tolerance = opencascade::xcaf::widest_tolerance(block);
     assert!(tolerance <= 1e-3, "tolerance {tolerance}");
-    let heal = notes
-        .iter()
-        .find(|n| n.contains("redrawn"))
-        .unwrap_or_else(|| panic!("{notes:?}"));
+    let heal = notes.iter().find(|n| n.contains("redrawn")).unwrap_or_else(|| panic!("{notes:?}"));
     assert!(
-        heal.contains(
-            "1 edge the file draws up to 3 mm away from its faces was redrawn where they meet"
-        ),
+        heal.contains("1 edge the file draws up to 3 mm away from its faces was redrawn where they meet"),
         "{heal}"
     );
-    assert!(
-        notes.iter().all(|n| !n.contains("a section or a mesh")),
-        "{notes:?}"
-    );
+    assert!(notes.iter().all(|n| !n.contains("a section or a mesh")), "{notes:?}");
 }
 
 /// The post of loose_faces_mixed ends on an edge 2 mm below where its round
@@ -123,10 +111,7 @@ fn an_edge_whose_faces_do_not_meet_keeps_the_body_as_read() {
         .iter()
         .find(|n| n.starts_with("Housing 3") && n.contains("1 edge is drawn up to 2 mm away"))
         .unwrap_or_else(|| panic!("{notes:?}"));
-    assert!(
-        note.contains("it was not redrawn because the faces do not meet between the edge's ends"),
-        "{note}"
-    );
+    assert!(note.contains("it was not redrawn because the faces do not meet between the edge's ends"), "{note}");
 }
 
 /// Blob hashes of imports before the heal existed.

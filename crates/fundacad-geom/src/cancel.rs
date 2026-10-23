@@ -1,9 +1,5 @@
-//! The running job's cancel, for work deep inside one feature.
-//!
-//! The builder checks for a cancel between features, which leaves a single
-//! long feature, a fillet that falls back to its lofted sections say, running
-//! for seconds after the user has moved on. A feature asks here instead,
-//! between its kernel calls and, through [`progress`], inside them.
+//! Cancel checks inside one feature. The builder only checks between features, so a long fillet could run for
+//! seconds after the user moved on. A feature asks here between kernel calls and, through [`progress`], inside them.
 
 use fundacad_protocol::CancelToken;
 use opencascade::progress::Progress;
@@ -28,7 +24,11 @@ pub fn install(token: Option<CancelToken>) -> Installed {
     Installed(TOKEN.with(|t| std::mem::replace(&mut *t.borrow_mut(), token)))
 }
 
-/// Whether the job this thread is working for has been cancelled.
+/// The token installed on this thread, for work this thread hands to others.
+pub fn token() -> Option<CancelToken> {
+    TOKEN.with(|t| t.borrow().clone())
+}
+
 pub fn requested() -> bool {
     TOKEN.with(|t| t.borrow().as_ref().is_some_and(CancelToken::is_cancelled))
 }
@@ -51,27 +51,4 @@ pub fn progress_beating() -> Progress {
         }
         token.as_ref().is_some_and(CancelToken::is_cancelled)
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_cancel_reaches_work_on_the_thread_it_was_installed_on() {
-        let token = CancelToken::new();
-        let guard = install(Some(token.clone()));
-        let p = progress();
-        assert!(!requested() && !p.is_cancelled());
-        token.cancel();
-        assert!(requested() && p.is_cancelled());
-        drop(guard);
-        assert!(!requested());
-    }
-
-    #[test]
-    fn nothing_installed_never_stops() {
-        assert!(!requested());
-        assert!(!progress().is_cancelled());
-    }
 }

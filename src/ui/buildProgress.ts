@@ -1,20 +1,13 @@
 import type { EngineWait } from "../geometry/client";
-import type { BusyState } from "../document/store";
+import type { BusyState, RunningOp } from "../document/store";
 
-// The timeline's pure bits, split out so they can be tested without a DOM: how
-// long to wait before offering Cancel, what the "building" chip and the busy
-// line should say, and when the history is empty.
+// The timeline's pure helpers, kept apart so they test without a DOM.
 
 // A fast op must not flash a Cancel button; a slow one must offer it early.
 export const CANCEL_DELAY_MS = 700;
 
-/** Label and bar percentage for the "building" chip.
- *
- *  The meshing (payload) phase reports feature = -1 for its whole duration,
- *  measured at 136 s on the reference assembly, so it used to render as a bar
- *  pinned at 0% under a static "meshing…". When the engine supplies the
- *  per-body counts, show the real fraction; fall back to the indeterminate
- *  label when it can't. */
+/** Meshing reports feature = -1 for its whole run (136 s on the reference assembly), so per-body counts give the
+ *  real fraction when the engine supplies them, else the label stays indeterminate. */
 export function buildProgress(
   progress: number | null,
   meshed: number | null,
@@ -46,15 +39,16 @@ const WAIT_DOING: Record<string, string> = {
 
 /** What a request of ours queued behind another client's job is waiting for. */
 export function waitLabel(w: EngineWait): string {
-  const who = w.who === "assistant"
-    ? (w.name?.trim().slice(0, 40) || "an AI assistant")
-    : w.who === "app" ? "the app" : "another session";
+  const who =
+    w.who === "assistant"
+      ? w.name?.trim().slice(0, 40) || "an AI assistant"
+      : w.who === "app"
+        ? "the app"
+        : "another session";
   return `Waiting: ${who} is ${WAIT_DOING[w.op] ?? "working"}`;
 }
 
-/** The busy line under the history: what the op is, the stage it is in, and
- *  whether to draw its bar, `pct` wide or indeterminate when null. An op that
- *  reports no stages gets no bar. */
+/** `pct` null means an indeterminate bar; an op that reports no stages gets no bar. */
 export function busyLine(b: Pick<BusyState, "label" | "stage" | "pct" | "waiting">): {
   text: string;
   detail: string | null;
@@ -68,18 +62,22 @@ export function busyLine(b: Pick<BusyState, "label" | "stage" | "pct" | "waiting
   return { text: b.label, detail: b.pct === null ? b.stage : `${b.stage} ${b.pct}%`, bar: true, pct: b.pct };
 }
 
-/** The history's empty state. A rebuild of a document with no features has
- *  no steps to show even while it waits on the engine; an import into one does. */
-export function historyShowsEmpty(featureCount: number, busy: Pick<BusyState, "active" | "rebuild">): boolean {
-  return featureCount === 0 && (!busy.active || busy.rebuild);
+/** A rebuild of a featureless document has no steps to show while it waits on the engine; an import into one does,
+ *  whichever op started last. */
+export function historyShowsEmpty(featureCount: number, ops: readonly Pick<RunningOp, "rebuild">[]): boolean {
+  return featureCount === 0 && ops.every((o) => o.rebuild);
 }
 
-/** Whether the busy line and its Cancel belong on screen, once the delay has
- *  passed. An empty document's own rebuild is instant and says nothing, unless
- *  it is waiting behind another client's job, which is worth knowing. */
+/** The ops History lists as rows of their own; this document's rebuild has the build chip instead. */
+export function runningRows<T extends Pick<RunningOp, "rebuild">>(ops: readonly T[]): T[] {
+  return ops.filter((o) => !o.rebuild);
+}
+
+/** After the delay. An empty document's rebuild is instant and silent, unless it waits behind another client's job. */
 export function historyShowsBusy(
   featureCount: number,
-  busy: Pick<BusyState, "active" | "rebuild" | "waiting">,
+  busy: Pick<BusyState, "active" | "waiting">,
+  ops: readonly Pick<RunningOp, "rebuild">[],
 ): boolean {
-  return busy.active && (busy.waiting !== null || !historyShowsEmpty(featureCount, busy));
+  return busy.active && (busy.waiting !== null || !historyShowsEmpty(featureCount, ops));
 }

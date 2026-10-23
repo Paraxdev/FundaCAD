@@ -1,11 +1,5 @@
-//! A join whose flat sides only touch a cylinder along a line has to come out
-//! closed. In the claw grabber a blade 10 wide joined onto an r 5 hub, and
-//! OCCT's fuse left the two touch lines on the blade's side faces as INTERNAL
-//! edges: the shell stayed closed and the volume right, but each line bounded
-//! one face and inspect listed it OPEN. The clean after a boolean drops them.
-//!
-//! And a feature that does leave a solid with holes in its skin says so in the
-//! build, since no volume check sees it.
+//! A join whose flat sides only touch a cylinder along a line must come out closed: OCCT's fuse leaves the touch
+//! lines as INTERNAL edges that inspect lists OPEN (the claw grabber's blade on its hub), the clean drops them.
 
 use base64::Engine;
 use fundacad_core::CadDocument;
@@ -26,8 +20,8 @@ fn build(doc: &Value) -> Rebuild {
 /// sides at x = +-5 touch it along the lines y = 0, from z 2.5 up to the top.
 fn hub_and_blade() -> (Shape, Shape) {
     let hub = kernel::make_cylinder(5.0, 8.0).expect("hub");
-    let blade = kernel::translated(&kernel::make_box(10.0, 30.0, 3.0).expect("blade"), [0.0, 12.0, 4.0])
-        .expect("moved");
+    let blade =
+        kernel::translated(&kernel::make_box(10.0, 30.0, 3.0).expect("blade"), [0.0, 12.0, 4.0]).expect("moved");
     (hub, blade)
 }
 
@@ -115,12 +109,8 @@ fn the_claw_slider_union_inspects_closed() {
         10_000,
     )
     .expect("inspected");
-    let open: Vec<&Value> = report[0]["edges"]
-        .as_array()
-        .expect("edges")
-        .iter()
-        .filter(|e| e["openBoundary"] == json!(true))
-        .collect();
+    let open: Vec<&Value> =
+        report[0]["edges"].as_array().expect("edges").iter().filter(|e| e["openBoundary"] == json!(true)).collect();
     assert!(open.is_empty(), "inspect lists open edges {open:?}");
     assert!(!r.diagnostics.iter().any(|d| d["code"] == "openShell"), "{:?}", r.diagnostics);
 }
@@ -144,6 +134,7 @@ fn open_box_brep() -> String {
     base64::engine::general_purpose::STANDARD.encode(out.join("\n") + "\n")
 }
 
+/// No volume check sees holes in a solid's skin, so the build says so.
 #[test]
 fn a_solid_left_open_is_called_out_in_the_build() {
     let doc = json!({"parameters": {}, "features": [

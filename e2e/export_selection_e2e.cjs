@@ -17,7 +17,10 @@ const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const OUT = path.resolve(process.argv[2] || "export_selection_out");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -38,12 +41,18 @@ function stl(file) {
   if (fs.existsSync(target)) fs.unlinkSync(target);
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   if (process.env.SC_DEBUG) page.on("console", (m) => console.log("console:", m.text().slice(0, 200)));
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
   await page.evaluate(() => localStorage.removeItem("fundacad.exportSettings"));
 
@@ -73,7 +82,11 @@ function stl(file) {
   await page.evaluate(() => window.viewport.setSelectedBodies(["body1", "body3"]));
   await page.evaluate(() => window.__fundacad.handleAction("export"));
   await page.waitForTimeout(400);
-  check("two selected bodies open on Selected (2 bodies)", (await scopeText()) === "Selected (2 bodies)", await scopeText());
+  check(
+    "two selected bodies open on Selected (2 bodies)",
+    (await scopeText()) === "Selected (2 bodies)",
+    await scopeText(),
+  );
   await page.screenshot({ path: path.join(OUT, "01_selected.png") });
 
   await page.click("[data-testid=export-confirm]");
@@ -82,7 +95,11 @@ function stl(file) {
   if (fs.existsSync(target)) {
     const { n, xs } = stl(target);
     check("the file holds two boxes", n === 24, `${n} triangles`);
-    check("and not the middle one", xs.every((x) => x < 20 || x > 40), `x ${Math.min(...xs)}..${Math.max(...xs)}`);
+    check(
+      "and not the middle one",
+      xs.every((x) => x < 20 || x > 40),
+      `x ${Math.min(...xs)}..${Math.max(...xs)}`,
+    );
     check("but both ends", xs.some((x) => x < 0) && xs.some((x) => x > 60));
   } else {
     check("the export wrote a file", false, target);
@@ -90,17 +107,27 @@ function stl(file) {
 
   // The export ends on a summary with a Done button, which holds the keyboard.
   const done = await page.$(".choice-btn.choice-primary");
-  if (done) { await done.click(); await page.waitForTimeout(300); }
+  if (done) {
+    await done.click();
+    await page.waitForTimeout(300);
+  }
 
   await page.evaluate(() => window.viewport.setSelectedBodies(["body2"]));
   await page.keyboard.press("Control+e");
   await page.waitForTimeout(1000);
-  if (process.env.SC_DEBUG) console.log(await page.evaluate(() => ({
-    active: document.activeElement?.outerHTML.slice(0, 120), busy: window.store.busyState.active,
-  })));
-  check("Ctrl+E with one body opens on that body",
-    (await has("export-scope")) && (await page.$eval("[data-testid=export-scope]", (el) => el.dataset.value)) === "body2",
-    (await has("export-scope")) ? await scopeText() : "no dialog");
+  if (process.env.SC_DEBUG)
+    console.log(
+      await page.evaluate(() => ({
+        active: document.activeElement?.outerHTML.slice(0, 120),
+        busy: window.store.busyState.active,
+      })),
+    );
+  check(
+    "Ctrl+E with one body opens on that body",
+    (await has("export-scope")) &&
+      (await page.$eval("[data-testid=export-scope]", (el) => el.dataset.value)) === "body2",
+    (await has("export-scope")) ? await scopeText() : "no dialog",
+  );
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
 

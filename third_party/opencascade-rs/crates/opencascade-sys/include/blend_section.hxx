@@ -6,6 +6,7 @@
 #pragma once
 #include "rust/cxx.h"
 #include <bindings_common.hxx>
+#include "blend_ops.hxx"
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Curve2d.hxx>
@@ -103,7 +104,7 @@ struct DraftGaveUp : SectionError {
   explicit DraftGaveUp(const std::string &m) { msg = m; }
 };
 
-enum class Misfit { None, IntoBody = 3, Mixed, Split };
+enum class Misfit { None, IntoBody = 3, Mixed, Split, Overlap };
 
 const double FITS_NONE = -1.0, FITS_UNKNOWN = -2.0;
 
@@ -1303,10 +1304,27 @@ inline Opt<gp_Ax1> common_axis(const BRepAdaptor_Curve &crv, const std::vector<T
 
 // --- one edge ----------------------------------------------------------------
 
+// A contact of a convex round on its face, with the face's outward normal there.
+struct Rest {
+  gp_Pnt at;
+  gp_Vec out;
+};
+
+// A convex round built though a contact runs past its face: `fits` is the
+// share of the size up to which both contacts still rest on their faces.
+struct Overrun {
+  bool any = false;
+  double fits = FITS_NONE;
+  gp_Pnt at;
+};
+
 inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &shape, const TopoDS_Edge &edge,
                                                            bool chamfer, double size, double size2, bool g2,
-                                                           double tol, bool draft, double profile, double margin) {
+                                                           double tol, bool draft, double profile, double margin,
+                                                           std::vector<Rest> *rests = nullptr,
+                                                           Overrun *over = nullptr, bool d1_second = false) {
   std::vector<TopoDS_Face> faces = faces_of(shape, edge);
+  if (d1_second) std::swap(faces[0], faces[1]);
   Sides sides;
   for (const TopoDS_Face &f : faces) sides.emplace_back(new Side(f, edge));
   BRepAdaptor_Curve crv(edge);
@@ -1433,6 +1451,47 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
       why = misfit(hi);
     }
     throw TooLarge(why, lo > 0 ? lo : FITS_NONE, fm.P);
+  }
+  if (over && s > 0) {
+    auto rests_both = [&](double k) {
+      double sz2 = std::isnan(size2) ? size2 : size2 * k;
+      for (const Frame &f : probes) {
+        set_frame(f);
+        Contacts c = contacts(f.P, f.T, sides, s, chamfer, size * k, sz2, g2);
+        if (!sides[0]->contains(c.Q[0], fuzz) || !sides[1]->contains(c.Q[1], fuzz)) return false;
+      }
+      return true;
+    };
+    if (!rests_both(1.0)) {
+      double lo = 0.0, hi = 1.0;
+      if (rests_both(1e-3)) {
+        lo = 1e-3;
+        for (int i = 0; i < 30; ++i) {
+          double mid = 0.5 * (lo + hi);
+          (rests_both(mid) ? lo : hi) = mid;
+        }
+      }
+      over->any = true;
+      over->fits = lo > 0 ? lo : FITS_NONE;
+      over->at = fm.P;
+    }
+  }
+  // A neighbour that closes in on this edge may cross its round at an end only,
+  // the middles still apart (the slanted sides of a trapezoid), so the ends rest too.
+  if (rests && s > 0) {
+    std::vector<Frame> at = closed ? probes : std::vector<Frame>{frame(t0), fm, frame(t1)};
+    for (const Frame &f : at) {
+      set_frame(f);
+      Contacts c = contacts(f.P, f.T, sides, s, chamfer, size, size2, g2);
+      for (int j = 0; j < 2; ++j) {
+        if (!sides[j]->contains(c.Q[j], fuzz)) continue;
+        gp_Vec out = c.normals[j];
+        if (out.Magnitude() < 1e-12) continue;
+        out.Normalize();
+        if (out.Dot(V(c.Q[1 - j]) - V(c.Q[j])) > 0) out.Reverse();
+        rests->push_back({c.Q[j], out});
+      }
+    }
   }
   set_frame(fm);
 
@@ -1967,35 +2026,191 @@ inline TopoDS_Shape combine(const TopoDS_Shape &shape, const std::vector<TopoDS_
   return out;
 }
 
+// Each round's tool only asks whether its own contacts stay on its two faces.
+// Two rounds on one face that reach past each other's contact lines each fit
+// alone, and cut together they carve that face away into a shape nobody asked
+// for (a box's end faces into pointed arches). Rounds whose edges meet at a
+// vertex are left out: their tools cross at the corner by design, the corner
+// blend fills it.
+struct Round {
+  TopoDS_Edge edge;
+  gp_Pnt mid;
+  double size = 0;
+  std::vector<Rest> rests;
+  std::vector<TopoDS_Shape> tools;
+};
+
+inline bool share_vertex(const TopoDS_Edge &a, const TopoDS_Edge &b) {
+  TopTools_IndexedMapOfShape va, vb;
+  TopExp::MapShapes(a, TopAbs_VERTEX, va);
+  TopExp::MapShapes(b, TopAbs_VERTEX, vb);
+  for (int i = 1; i <= va.Extent(); ++i)
+    for (int j = 1; j <= vb.Extent(); ++j)
+      if (va(i).IsSame(vb(j))) return true;
+  return false;
+}
+
+// A round's tool meets its face tangent at its contact, so a contact a hair
+// past it sits inside only by d^2 / 2r, below any classifier tolerance. Each
+// contact is tested lifted into the band every tool keeps above its faces
+// (`section`'s margin), where it is inside as deep as it lies past.
+inline void rounds_keep_their_rests(const std::vector<Round> &rounds, double tol) {
+  double slack = 10 * std::max(tol * 10, 1e-5);
+  double band = INFINITY;
+  for (const Round &r : rounds) band = std::min(band, std::max(0.02 * r.size, 0.01));
+  for (const Round &cutter : rounds) {
+    for (const TopoDS_Shape &t : cutter.tools) {
+      Bnd_Box box;
+      BRepBndLib::Add(t, box);
+      std::unique_ptr<BRepClass3d_SolidClassifier> inside;
+      for (const Round &r : rounds) {
+        if (&r == &cutter || share_vertex(r.edge, cutter.edge)) continue;
+        for (const Rest &rest : r.rests) {
+          gp_Pnt p = P(V(rest.at) + rest.out.Multiplied(0.5 * band));
+          if (box.IsOut(p)) continue;
+          if (!inside) inside.reset(new BRepClass3d_SolidClassifier(t));
+          inside->Perform(p, slack);
+          if (inside->State() == TopAbs_IN) throw TooLarge(Misfit::Overlap, FITS_UNKNOWN, r.mid);
+        }
+      }
+    }
+  }
+}
+
+// The first round of the last build on this thread that runs past a face.
+inline Overrun &last_overrun() {
+  thread_local Overrun o;
+  return o;
+}
+
+// A straight chamfer is cut as a prism over its edge, so past an end face that leans out over the
+// cut, like an earlier 45 degree chamfer or a fillet, it leaves a step where OCCT's chamfer runs on.
+inline bool steps_past_end(const TopoDS_Shape &shape, const TopoDS_Edge &edge, const std::vector<TopoDS_Shape> &edges,
+                           double s, gp_Pnt &at) {
+  std::vector<TopoDS_Face> faces = faces_of(shape, edge);
+  if (faces.size() != 2 || !(s > 0)) return false;
+  gp_Vec n[2];
+  for (int k = 0; k < 2; ++k) {
+    BRepAdaptor_Surface sf(faces[k]);
+    if (sf.GetType() != GeomAbs_Plane) return false;
+    gp_Dir d = sf.Plane().Axis().Direction();
+    if (faces[k].Orientation() == TopAbs_REVERSED) d.Reverse();
+    n[k] = gp_Vec(d);
+  }
+  TopoDS_Vertex v[2];
+  TopExp::Vertices(edge, v[0], v[1]);
+  if (v[0].IsNull() || v[1].IsNull()) return false;
+  gp_Pnt P[2] = {BRep_Tool::Pnt(v[0]), BRep_Tool::Pnt(v[1])};
+  gp_Vec T(P[0], P[1]);
+  if (T.Magnitude() < 1e-9) return false;
+  T.Normalize();
+  gp_Vec in[2];
+  for (int k = 0; k < 2; ++k) {
+    in[k] = T.Crossed(n[k]);
+    if (in[k].Magnitude() < 1e-9) return false;
+    in[k].Normalize();
+    if (in[k].Dot(n[1 - k]) > 0) in[k].Reverse();
+  }
+  BRepClass3d_SolidClassifier cls(shape);
+  const double share[3][2] = {{1.0 / 3, 1.0 / 3}, {0.7, 0.15}, {0.15, 0.7}};
+  for (int end = 0; end < 2; ++end) {
+    bool shared = false;
+    for (const TopoDS_Shape &e : edges)
+      if (!e.IsSame(edge) && touches(e, {v[end]})) shared = true;
+    if (shared) continue;
+    gp_Vec out = end == 0 ? T.Reversed() : T;
+    for (const auto &w : share) {
+      gp_Pnt q = P[end].Translated(out * (0.1 * s) + in[0] * (s * w[0]) + in[1] * (s * w[1]));
+      cls.Perform(q, 1e-7);
+      if (cls.State() == TopAbs_IN) {
+        at = P[end];
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+struct RoundTools {
+  std::vector<TopoDS_Shape> cut, fuse;
+  std::vector<std::pair<TopoDS_Shape, double>> convex;
+};
+
+inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &edges, bool chamfer,
+                              double size2, bool g2, const std::vector<double> &sizes, bool draft, double profile,
+                              double tol) {
+  RoundTools out;
+  std::vector<Round> rounds;
+  Overrun first;
+  std::vector<char> second(edges.size(), 0);
+  bool judged = false;
+  if (chamfer && !std::isnan(size2) && size2 != 0) {
+    std::vector<double> d1(sizes.begin(), sizes.begin() + std::min(sizes.size(), edges.size()));
+    BlSides bs = bl_chamfer_sides(shape, edges, d1, std::vector<double>(d1.size(), size2));
+    if (bs.unseen >= 0) {
+      BRepAdaptor_Curve crv(TopoDS::Edge(edges[bs.unseen]));
+      throw TooLarge(Misfit::Overlap, FITS_UNKNOWN, crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter())));
+    }
+    second = bs.second;
+    judged = bs.kind != BL_SIDES_MAP;
+  }
+  for (size_t k = 0; k < edges.size(); ++k) {
+    check_cancel();
+    Round r;
+    r.edge = TopoDS::Edge(edges[k]);
+    r.size = sizes[k];
+    Overrun over;
+    auto got = edge_tool(shape, r.edge, chamfer, sizes[k], size2, g2, tol, draft, profile,
+                         1.0 + 0.11 * static_cast<double>(k), &r.rests, &over, second[k] != 0);
+    if (over.any && !first.any) first = over;
+    auto &dst = got.first > 0 ? out.cut : out.fuse;
+    dst.insert(dst.end(), got.second.begin(), got.second.end());
+    gp_Pnt step_at;
+    if (judged && got.first > 0 && steps_past_end(shape, r.edge, edges, std::min(sizes[k], size2), step_at))
+      throw TooLarge(Misfit::IntoBody, FITS_NONE, step_at);
+    if (got.first > 0) {
+      out.convex.push_back({edges[k], sizes[k]});
+      BRepAdaptor_Curve crv(r.edge);
+      r.mid = crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter()));
+      r.tools = got.second;
+      rounds.push_back(std::move(r));
+    }
+  }
+  rounds_keep_their_rests(rounds, tol);
+  last_overrun() = first;
+  return out;
+}
+
+inline double edges_tol(const std::vector<TopoDS_Shape> &edges) {
+  double tol = 1e-6;
+  for (const TopoDS_Shape &e : edges) tol = std::max(tol, BRep_Tool::Tolerance(TopoDS::Edge(e)));
+  return tol;
+}
+
 inline TopoDS_Shape section_blend_once(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &edges, bool chamfer,
                                       double size2, bool g2, const std::vector<double> &sizes, bool draft,
                                       double profile) {
-  double tol = 1e-6;
-  for (const TopoDS_Shape &e : edges) tol = std::max(tol, BRep_Tool::Tolerance(TopoDS::Edge(e)));
-  std::vector<TopoDS_Shape> cut, fuse;
-  std::vector<std::pair<TopoDS_Shape, double>> convex;
-  for (size_t k = 0; k < edges.size(); ++k) {
-    check_cancel();
-    auto got = edge_tool(shape, TopoDS::Edge(edges[k]), chamfer, sizes[k], size2, g2, tol, draft, profile,
-                         1.0 + 0.11 * static_cast<double>(k));
-    auto &dst = got.first > 0 ? cut : fuse;
-    dst.insert(dst.end(), got.second.begin(), got.second.end());
-    if (got.first > 0) convex.push_back({edges[k], sizes[k]});
-  }
+  double tol = edges_tol(edges);
+  last_overrun() = Overrun();
+  RoundTools rt = round_tools(shape, edges, chamfer, size2, g2, sizes, draft, profile, tol);
+  std::vector<TopoDS_Shape> &cut = rt.cut, &fuse = rt.fuse;
+  std::vector<std::pair<TopoDS_Shape, double>> &convex = rt.convex;
   std::vector<TopoDS_Shape> corners = chamfer ? std::vector<TopoDS_Shape>() : ball_corners(shape, convex, g2, profile);
+  TopoDS_Shape out;
   if (!corners.empty()) {
     try {
       std::vector<TopoDS_Shape> cut2, fuse2;
       for (const TopoDS_Shape &t : cut) cut2.push_back(copy(t));
       cut2.insert(cut2.end(), corners.begin(), corners.end());
       for (const TopoDS_Shape &t : fuse) fuse2.push_back(copy(t));
-      return combine(copy(shape), cut2, fuse2, tol, draft);
+      out = combine(copy(shape), cut2, fuse2, tol, draft);
     } catch (const DraftGaveUp &) {
       throw;
     } catch (const SectionError &) {
     }
   }
-  return combine(draft ? copy(shape) : shape, cut, fuse, tol, draft);
+  if (out.IsNull()) out = combine(draft ? copy(shape) : shape, cut, fuse, tol, draft);
+  return out;
 }
 
 inline TopoDS_Shape blend_scaled(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &es, bool chamfer,
@@ -2036,10 +2251,12 @@ struct PiecesOnly {
 // as a few builds of this one take. That search only counts the pieces of the
 // first boolean; from the size it finds, full builds step down to the largest
 // that passes every check. Two sizes are built at once, a third of the way
-// apart. A fraction of the asked size comes back.
+// apart. A fraction of the asked size comes back. Rounds that run into each
+// other show before any boolean, so for an `overlap` the largest size they
+// keep apart is found first from their tools alone, and builds start there.
 inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &es, bool chamfer, double size2,
                           bool g2, const std::vector<double> &sz, double unit, bool draft, double profile,
-                          bool one_shot, double first_secs) {
+                          bool one_shot, double first_secs, bool overlap = false) {
   using clock = std::chrono::steady_clock;
   auto started = clock::now();
   double budget = draft ? std::max(1.0, 2 * first_secs) : std::max(10.0, 3 * first_secs);
@@ -2106,6 +2323,35 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
   };
   long lo = 0, hi = grid_rank_below(unit);
   if (grid_size(hi) < unit - 1e-9) ++hi;
+  if (overlap) {
+    auto apart = [&](long r) {
+      double v = grid_size(r);
+      BRepBuilderAPI_Copy cp(shape, false);
+      std::vector<TopoDS_Shape> ec;
+      for (const TopoDS_Shape &e : es) ec.push_back(cp.ModifiedShape(e));
+      std::vector<double> sk;
+      for (double x : sz) sk.push_back(x / unit * v);
+      try {
+        round_tools(cp.Shape(), ec, chamfer, std::isnan(size2) ? size2 : size2 / unit * v, g2, sk, draft, profile,
+                    edges_tol(ec));
+      } catch (const Cancelled &) {
+        throw;
+      } catch (const SectionError &) {
+        return false;
+      } catch (const Standard_Failure &) {
+        return false;
+      }
+      return true;
+    };
+    long olo = 0, ohi = hi;
+    while (ohi - olo > 1) {
+      long m = olo + (ohi - olo) / 2;
+      (apart(m) ? olo : ohi) = m;
+    }
+    if (olo <= 0) return FITS_NONE;
+    hi = olo + 1;
+    if (builds(olo, true)) lo = olo;
+  }
   bool whole = search(lo, hi, true);
   if (lo <= 0) return whole ? FITS_NONE : FITS_UNKNOWN;
   bool at = false, under = false;
@@ -2149,6 +2395,8 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
 // 3 cancelled through `progress`, 4 the blend does not fit an edge (message is
 // "why fits x y z": fits the largest size in mm of `unit` that does, -1 when
 // none does, -2 when the search ran out of time, x y z a point on the edge).
+// Built, the message may be "overrun fits x y z": a round there runs past one
+// of its faces, and fits is the largest size at which it rests on both.
 // `unit` is the size asked for, which `sizes` and `size2` scale with.
 inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, const TopoDS_Shape &edges, bool chamfer,
                                                    rust::Slice<const double> sizes, double size2, double unit, bool g2,
@@ -2168,18 +2416,37 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
     BRepBuilderAPI_Copy pristine(shape, false);
     std::vector<TopoDS_Shape> pristine_es;
     for (const TopoDS_Shape &e : es) pristine_es.push_back(pristine.ModifiedShape(e));
+    // The section build ends both chamfers square at an inside corner and leaves their mitre standing, and
+    // only OCCT builds a set that fits there right, so no size is offered.
+    if (chamfer && !std::isnan(size2)) {
+      BlSides bs = bl_chamfer_sides(shape, es, sz, std::vector<double>(sz.size(), size2));
+      if (bs.cornered >= 0 && (bs.kind == BL_SIDES_FIT || bs.kind == BL_SIDES_MAP_FITS)) {
+        BRepAdaptor_Curve crv(TopoDS::Edge(es[bs.cornered]));
+        throw secblend::TooLarge(secblend::Misfit::Overlap, secblend::FITS_UNKNOWN,
+                                 crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter())));
+      }
+    }
     auto started = std::chrono::steady_clock::now();
     try {
       TopoDS_Shape out = secblend::blend_scaled(shape, es, chamfer, size2, g2, sz, draft, profile, one_shot);
       status = 0;
+      const secblend::Overrun &over = secblend::last_overrun();
+      if (over.any) {
+        char buf[160];
+        std::snprintf(buf, sizeof buf, "overrun %.17g %.17g %.17g %.17g", over.fits > 0 ? over.fits * unit : over.fits,
+                      over.at.X(), over.at.Y(), over.at.Z());
+        message = buf;
+      }
       return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(out));
     } catch (secblend::TooLarge &e) {
-      if (e.why != secblend::Misfit::Split) throw;
+      if (e.why != secblend::Misfit::Split && e.why != secblend::Misfit::Overlap) throw;
       double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
-      BRepAdaptor_Curve crv(TopoDS::Edge(es.front()));
-      e.at = crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter()));
+      if (e.why == secblend::Misfit::Split) {
+        BRepAdaptor_Curve crv(TopoDS::Edge(es.front()));
+        e.at = crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter()));
+      }
       e.fits = secblend::split_limit(pristine.Shape(), pristine_es, chamfer, size2, g2, sz, unit, draft, profile,
-                                     one_shot, secs);
+                                     one_shot, secs, e.why == secblend::Misfit::Overlap);
       throw;
     }
   } catch (const secblend::Cancelled &) {

@@ -16,7 +16,10 @@ const { chromium } = require("playwright-core");
 
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -58,7 +61,10 @@ endsolid ${name}
 (async () => {
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -72,24 +78,40 @@ endsolid ${name}
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
   const settle = async () => {
     await page.waitForTimeout(300);
-    await page.waitForFunction(() => !window.store.buildState.building && !window.store.busy?.active, null, { timeout: 120000 });
+    await page.waitForFunction(() => !window.store.buildState.building && !window.store.busy?.active, null, {
+      timeout: 120000,
+    });
   };
-  const imports = () => page.evaluate(() => window.store.document.features.filter((f) => f.type === "import").map((f) => f.name));
+  const imports = () =>
+    page.evaluate(() => window.store.document.features.filter((f) => f.type === "import").map((f) => f.name));
 
   // Builds the DataTransfer in the page, the way a desktop drag delivers one.
-  const drag = (type, files, opts = {}) => page.evaluate(({ type, files, opts }) => {
-    const dt = new DataTransfer();
-    for (const f of files) dt.items.add(new File([f.text], f.name));
-    if (opts.mime) dt.setData(opts.mime, "x");
-    const el = document.querySelector(opts.on || "canvas") || document.body;
-    const r = el.getBoundingClientRect();
-    const ev = new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 });
-    return { cancelled: !el.dispatchEvent(ev) };
-  }, { type, files, opts });
+  const drag = (type, files, opts = {}) =>
+    page.evaluate(
+      ({ type, files, opts }) => {
+        const dt = new DataTransfer();
+        for (const f of files) dt.items.add(new File([f.text], f.name));
+        if (opts.mime) dt.setData(opts.mime, "x");
+        const el = document.querySelector(opts.on || "canvas") || document.body;
+        const r = el.getBoundingClientRect();
+        const ev = new DragEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer: dt,
+          clientX: r.x + r.width / 2,
+          clientY: r.y + r.height / 2,
+        });
+        return { cancelled: !el.dispatchEvent(ev) };
+      },
+      { type, files, opts },
+    );
   const hint = () => page.evaluate(() => !!document.querySelector("[data-testid=drop-hint]"));
 
   console.log("1. the drop hint");
@@ -116,17 +138,26 @@ endsolid ${name}
   check("its source is the file name", src === "tri.stl", src);
 
   console.log("3. a .funda document");
-  const doc = JSON.stringify({ parameters: {}, features: [{ id: "f1", type: "box", length: 10, width: 10, height: 10 }] });
+  const doc = JSON.stringify({
+    parameters: {},
+    features: [{ id: "f1", type: "box", length: 10, width: 10, height: 10 }],
+  });
   await drag("drop", [{ name: "dropped.funda", text: doc }]);
   await page.waitForTimeout(500);
   const choice = await page.$("button:has-text('Discard')");
   if (choice) await choice.click();
   await settle();
   const opened = await page.evaluate(() => ({
-    name: window.store.fileName, types: window.store.document.features.map((f) => f.type), title: document.title,
+    name: window.store.fileName,
+    types: window.store.document.features.map((f) => f.type),
+    title: document.title,
   }));
   check("the document replaced the open one", JSON.stringify(opened.types) === '["box"]', JSON.stringify(opened.types));
-  check("the title takes its name", /dropped/.test(opened.name) && (opened.title === "" || /dropped/.test(opened.title)), `${opened.name} | ${opened.title}`);
+  check(
+    "the title takes its name",
+    /dropped/.test(opened.name) && (opened.title === "" || /dropped/.test(opened.title)),
+    `${opened.name} | ${opened.title}`,
+  );
 
   console.log("4. a .txt");
   const featuresBefore = await page.evaluate(() => window.store.document.features.length);
@@ -138,20 +169,32 @@ endsolid ${name}
 
   console.log("4b. an unreadable .funda with an STL");
   const keptBefore = await page.evaluate(() => ({
-    name: window.store.fileName, types: window.store.document.features.map((f) => f.type),
+    name: window.store.fileName,
+    types: window.store.document.features.map((f) => f.type),
   }));
-  await drag("drop", [{ name: "broken.funda", text: "not a document" }, { name: "late.stl", text: STL("late") }]);
+  await drag("drop", [
+    { name: "broken.funda", text: "not a document" },
+    { name: "late.stl", text: STL("late") },
+  ]);
   await page.waitForTimeout(500);
   const discardBroken = await page.$("button:has-text('Discard')");
   if (discardBroken) await discardBroken.click();
   await settle();
   const kept = await page.evaluate(() => ({
-    name: window.store.fileName, types: window.store.document.features.map((f) => f.type),
+    name: window.store.fileName,
+    types: window.store.document.features.map((f) => f.type),
   }));
-  check("the open document stays and the STL is not imported into it", JSON.stringify(kept) === JSON.stringify(keptBefore), JSON.stringify(kept));
+  check(
+    "the open document stays and the STL is not imported into it",
+    JSON.stringify(kept) === JSON.stringify(keptBefore),
+    JSON.stringify(kept),
+  );
 
   console.log("5. two STLs together");
-  await drag("drop", [{ name: "first.stl", text: STL("first") }, { name: "second.stl", text: STL("second") }]);
+  await drag("drop", [
+    { name: "first.stl", text: STL("first") },
+    { name: "second.stl", text: STL("second") },
+  ]);
   await settle();
   await page.waitForTimeout(500);
   await settle();
@@ -166,4 +209,7 @@ endsolid ${name}
   await browser.close();
   console.log(failures ? `FAILED: ${failures}` : "ALL PASS");
   process.exit(failures ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

@@ -65,10 +65,7 @@ describe("faceNudgePlacement", () => {
     // The bug this fixes: a closed cylinder's facet normals cancel, so
     // faceNormalWorld falls back to world +Z and grabbing a shaft dragged it
     // upward. The radial is the direction a resize actually has.
-    const place = faceNudgePlacement(
-      { ...pre([0, 0, 1]), round: round([1, 0, 0], true) },
-      () => {},
-    );
+    const place = faceNudgePlacement({ ...pre([0, 0, 1]), round: round([1, 0, 0], true) }, () => {});
     expect(place?.axis({} as never).toArray()).toEqual([1, 0, 0]);
   });
 
@@ -76,20 +73,14 @@ describe("faceNudgePlacement", () => {
     // Pulling the handle away from the axis means a bigger hole and a bigger
     // shaft alike. Flipping the arrow on a bore would make the gesture ask the
     // user to know which side the material is on before they can resize it.
-    const place = faceNudgePlacement(
-      { ...pre([0, 0, 1]), round: round([0, 1, 0], false) },
-      () => {},
-    );
+    const place = faceNudgePlacement({ ...pre([0, 0, 1]), round: round([0, 1, 0], false) }, () => {});
     expect(place?.axis({} as never).toArray()).toEqual([0, 1, 0]);
   });
 
   it("points a whole slot picked face by face away from its first end's axis", () => {
     // The tool reads such a selection as that end's radius, so the arrow
     // already points the way a bigger radius goes.
-    const place = faceNudgePlacement(
-      { ...pre([0, -1, 0]), round: null, lead: round([0, 1, 0], false) },
-      () => {},
-    );
+    const place = faceNudgePlacement({ ...pre([0, -1, 0]), round: null, lead: round([0, 1, 0], false) }, () => {});
     expect(place?.axis({} as never).toArray()).toEqual([0, 1, 0]);
   });
 

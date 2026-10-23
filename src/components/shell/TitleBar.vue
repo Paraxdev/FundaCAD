@@ -19,38 +19,26 @@ const engine = useEngine();
 const ui = useUiStore();
 const home = useHomeStore();
 
-// The wordmark is baked as light-on-dark text (fundacad-lockup-app.svg): fine
-// for FundaCAD Noir and Dracula, invisible against a light theme's panel. An
-// <img> can't repaint from CSS across the SVG boundary, so the fix is a second
-// asset with dark-text ink, picked from the theme's mode.
+// The wordmark SVG is light on dark and an <img> cannot be recoloured from CSS, so light themes get a dark-ink asset.
 const brandLockup = ref(themeMode(getTheme()) === "light" ? brandLockupLight : brandLockupDark);
 
-// Rebuilt only when what the plugins contribute changes. Everything dynamic
-// WITHIN the tree (Undo greying out, a capability's own mode checkmarks) is a
-// thunk MenuBar re-evaluates each time a menu opens, so this does not need to be
-// reactive for those. What a thunk cannot express is a row that should not exist
-// at all, and a menu left with no rows.
-//
-// The CONTRIBUTIONS, not the on/off state. Those are different moments and the
-// difference is visible: a capability is switched on, and only some
-// milliseconds later, after its module has been fetched and its activate() has
-// run, does it have rows to add. Watching the switch rebuilt the menu while the
-// capability that owns the rows was still loading, so the menubar was always one
-// step behind, showing the last capability's rows and not this one's. Watching
-// what was actually contributed cannot be early.
-//
-// markRaw because every onClick closes over the raw engine.
+// Rebuilt on what plugins contribute, not on the switch: rows arrive only after activate() runs, so the switch left the
+// menu one step behind. In-menu state is thunks MenuBar re-runs on open. markRaw since onClick closes over the engine.
 const menus = ref(markRaw(buildMenubar(engine)));
 let offPlugins: (() => void) | null = null;
 let offTheme: (() => void) | null = null;
 onMounted(() => {
-  offPlugins = onContribChange(() => { menus.value = markRaw(buildMenubar(engine)); });
+  offPlugins = onContribChange(() => {
+    menus.value = markRaw(buildMenubar(engine));
+  });
   offTheme = onThemeChange(() => {
     brandLockup.value = themeMode(getTheme()) === "light" ? brandLockupLight : brandLockupDark;
   });
 });
-onUnmounted(() => { offPlugins?.(); offTheme?.(); });
-
+onUnmounted(() => {
+  offPlugins?.();
+  offTheme?.();
+});
 </script>
 
 <template>
@@ -64,7 +52,8 @@ onUnmounted(() => { offPlugins?.(); offTheme?.(); });
       aria-label="Home"
       :aria-pressed="home.shown"
       @click="engine.ui.home.toggle()"
-    ><Icon name="home" :size="15" /></button>
+      ><Icon name="home" :size="15"
+    /></button>
     <!-- display: contents, so the bar's flex row and its narrow window rules see the controls as before. -->
     <div class="tb-rest" :inert="home.shown">
       <MenuBar :menus="menus" />
@@ -75,7 +64,8 @@ onUnmounted(() => { offPlugins?.(); offTheme?.(); });
         aria-label="Undo"
         :disabled="!ui.canUndo"
         @click="engine.doUndo()"
-      ><Icon name="undo" :size="15" /></button>
+        ><Icon name="undo" :size="15"
+      /></button>
       <button
         id="redo-btn"
         class="tb-btn"
@@ -83,18 +73,16 @@ onUnmounted(() => { offPlugins?.(); offTheme?.(); });
         aria-label="Redo"
         :disabled="!ui.canRedo"
         @click="engine.doRedo()"
-      ><Icon name="redo" :size="15" /></button>
+        ><Icon name="redo" :size="15"
+      /></button>
       <span id="context-tab" class="context-tab" :class="{ sketch: ui.sketchActive }">
         {{ ui.sketchActive ? "SKETCH" : "SOLID" }}
       </span>
       <span id="docname" class="docname" :class="{ dirty: ui.dirty }">
-        <!-- After the name, never before it: a prefix moved the whole filename
-             sideways the instant the document went dirty. -->
+        <!-- After the name, never before: a prefix moved the filename sideways when the document went dirty. -->
         {{ ui.docName }}<span v-if="ui.dirty" class="dirty-mark" title="Unsaved changes">*</span>
       </span>
-      <!-- Beside the document name, because what it is saying is about THIS
-           document: someone else is in it. It renders nothing at all unless an
-           assistant is actually attached. -->
+      <!-- Beside the name because it is about this document, renders nothing unless an assistant is attached. -->
       <LiveSessionPill />
       <ErrorNotice />
       <WorkspaceToggle />

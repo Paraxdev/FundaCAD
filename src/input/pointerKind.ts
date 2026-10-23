@@ -1,13 +1,5 @@
-// Which kind of pointer the user is on right now: a finger, a pen or a mouse
-// (a touchpad is a mouse to the browser).
-//
-// A laptop with a touchscreen has both, and its media queries say "fine
-// pointer" whichever one is in use, so the kind is taken from the last pointer
-// event instead. The listener is a window capture one, so it has run before any
-// canvas, tool or component handler of the same event reads it, and hit tests
-// that only get coordinates still size themselves for the finger that made them.
-//
-// The kind is also put on <html data-pointer="…"> for the stylesheet.
+// The pointer in use, from the last pointer event: a touchscreen laptop's media queries say "fine" either way.
+// A window capture listener sets it before any handler of the same event reads it; <html data-pointer> mirrors it.
 
 export type PointerKind = "mouse" | "pen" | "touch";
 

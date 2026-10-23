@@ -102,6 +102,7 @@ Every readout is a few lines of text. Pass `raw=True` for the JSON it was made f
 | `s.bodies()` | bodies with face count and visibility, the first 40 with counts when there are more |
 | `s.status()` | mode, running tool, workspace, document, undo and redo, what the app is busy with (an import and how far it got), prompt, selection, the newest message and error since the last action began, and a warning the view raised itself (Low performance in a headless browser) |
 | `s.selection()` | selected bodies, faces and edges |
+| `s.guide()` | the guide mode step on screen: its caption, the ref or model area the ring is on, and where the ring, the bubble and a model outline are; `None` when no step is up. Next and Stop are `#guide-next` and `#guide-stop` |
 | `s.handles()` | the named handles a tool has up, with their screen point or `covered` |
 | `s.last_error()` | a failed build or refused preview, else an error logged since the last action began, or `none` |
 | `s.messages(since=seq)` | log and toast lines after a sequence number |
@@ -154,7 +155,7 @@ with Session() as s:
 | `drag_handle(name, by=px or mm=value)` | drags a named handle along its axis; `mm=` lands near the value, the step says the value box values reached, type the exact value after |
 | `view(name)` | top, bottom, front, back, right, left, iso (the default view fitted to the model), default, fit, through the Views popover, a running tool keeps going |
 | `undo()`, `redo()` | the title bar buttons; once the document holds an import they wait as long as `import_file`, and while an import reads its file both are off |
-| `expand(target, open=True)` | opens or closes an Items folder by its caret (a click on the row selects) |
+| `expand(target, open=True)` | opens or closes an Items folder by its caret (a click on the row selects); a label matches the folders first, so an assembly opens by the name its History step shares |
 | `open_file(path, discard=True)` | File > Open, answering the file chooser and the unsaved changes question, returns once the app has loaded the file and is refused with the error it logged when it loaded none |
 | `import_file(path)` | drops the file on the canvas, the way a browser tab imports a model; waits up to 300 s or `settle_timeout`, whichever is longer, and with `settle=False` returns once the file is dropped |
 | `save_as(path)` | File > Save As, the download lands at `path` |
@@ -177,7 +178,8 @@ refs; refs never change with wording. `#n` picks the n-th of several.
   plane `offset`, draft `angle`, joint `offset` and `angle`, mechanism `offset` or `angle`, revolve
   pitch `pitch`, section `section`, selection nudge `nudge`, taper arcs `taper`, datum `arrow`,
   `tilt x`, `tilt y`, `spin`, Move `arrow x|y|z`, `plane xy|yz|xz`, `ring x|y|z`, `size x|y|z`,
-  `origin`. `s.handles()` lists the ones on screen.
+  `origin`. `s.handles()` lists the ones on screen. The `section` handle is there only while a
+  section is being edited, a confirmed cut stays on without it.
 
 Every canvas point is checked with the app's own picker before the click, and points under a
 panel or a handle are skipped. When no point works the call fails with `Occluded` and suggests a
@@ -229,9 +231,13 @@ that waited it out is written with a timeout long enough for the whole wait.
 
 `tools/harness/examples/` holds ports of e2e scripts, each a `run(s)` function plus a `__main__`
 that opens its own session: `assembly_tree.py` (a dropped STEP assembly in Items, a subassembly
-eye, save and reopen), `refused_commit.py` (a refused draft keeps the tool open), and
-`extrude_reedit.py` (reopening a whole sketch extrude). `tests/browser/test_examples.py` runs them
-in the smoke set. The fixtures they open are described in `tools/harness/fixtures/README.md`.
+eye, save and reopen), `refused_commit.py` (a refused draft keeps the tool open),
+`extrude_reedit.py` (reopening a whole sketch extrude), `shipped_examples.py` (every Home
+example opens untitled, builds and holds its bodies, the box keeps its lid's fit when its parameters
+change, and the capsule holder's cap screws on without touching the tube), and `big_printer_import.py` (a 3,000 part printer
+STEP dropped on a blank document, its import, first frame and orbit times printed to the test log).
+`tests/browser/test_examples.py` runs them in the smoke set. The fixtures they
+open are described in `tools/harness/fixtures/README.md`.
 
 ## serve
 

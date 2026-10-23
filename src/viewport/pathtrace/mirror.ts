@@ -1,17 +1,17 @@
-// The traced copy of the visible bodies. Each mirror mesh shares the viewport's
-// position and normal buffers but owns its index: the tracer's BVH build
-// reorders the index in place and hangs `boundsTree` on the geometry, and
-// neither may land on the geometry the viewport draws and picks with.
+// Each mirror shares the viewport's position and normal buffers but owns its index: the tracer's BVH build
+// reorders the index in place and hangs `boundsTree` on the geometry, neither may reach the viewport's.
 
 import * as THREE from "three";
 import { traceMaterialFrom, traceMaterialKey } from "./materials";
 
-/** Trees build in workers, but every edit still repacks the tracer's buffers
- *  on the main thread, about 0.22 us per triangle (0.45 s at 2 M, 0.7 s at 3 M,
+/** Every edit repacks the tracer's buffers on the main thread, about 0.22 us per triangle (0.45 s at 2 M,
  *  1 s at 4 M on a desktop CPU), so past this the mode refuses with a note. */
 export const TRIANGLE_BUDGET = 3_000_000;
 
-interface Owned { baseColors?: Float32Array; baseVersion?: number }
+interface Owned {
+  baseColors?: Float32Array;
+  baseVersion?: number;
+}
 
 export function isTracedBody(o: THREE.Object3D): o is THREE.Mesh {
   return (o as THREE.Mesh).isMesh === true && !!o.userData.owner && o.visible;
@@ -37,9 +37,8 @@ export function mirrorBody(src: THREE.Mesh, withIndex = true): THREE.Mesh {
   return m;
 }
 
-/** A body's procedural surfaces averaged per vertex: `slot` is -1 where no
- *  surface reaches, `tint` and `amount` blend over the base colour like the
- *  Realtime shader does, `rough` is each baked slot's mean roughness offset. */
+/** Procedural surfaces averaged per vertex: `slot` is -1 where no surface reaches, `tint` and `amount`
+ *  blend over the base colour like the Realtime shader, `rough` is each slot's mean roughness offset. */
 export interface SurfaceBake {
   slot: Int16Array;
   tint: Float32Array;
@@ -61,7 +60,7 @@ export function copyMirrorColors(mirror: THREE.Mesh, src: THREE.Mesh, bake: Surf
     return;
   }
   const c = g.getAttribute("color") as THREE.BufferAttribute | undefined;
-  const out = c && c.array.length === count * 3 ? c.array as Float32Array : new Float32Array(count * 3);
+  const out = c && c.array.length === count * 3 ? (c.array as Float32Array) : new Float32Array(count * 3);
   if (base) out.set(base);
   else out.fill(1);
   if (bake) composeBake(out, bake, Array.isArray(src.material) ? src.material : [src.material]);
@@ -123,9 +122,8 @@ export function countVertices(bodies: THREE.Mesh[]): number {
   return n;
 }
 
-/** The largest GPU storage buffer the tracer packs for this much geometry,
- *  measured on three-gpu-pathtracer 0.0.27: 64 B per vertex of interleaved
- *  attributes, about 18 B per triangle of tree nodes. */
+/** Measured on three-gpu-pathtracer 0.0.27: 64 B per vertex of interleaved attributes, about 18 B per
+ *  triangle of tree nodes. */
 export function storageBytes(triangles: number, vertices: number): number {
   return Math.max(vertices * 64, triangles * 18);
 }
@@ -148,14 +146,18 @@ export function collectAllBodies(root: THREE.Object3D): THREE.Mesh[] {
 }
 
 export function transformSignature(bodies: THREE.Mesh[]): string {
-  return bodies.map((b) => {
-    b.updateWorldMatrix(true, false);
-    return b.matrixWorld.elements.join(",");
-  }).join("|");
+  return bodies
+    .map((b) => {
+      b.updateWorldMatrix(true, false);
+      return b.matrixWorld.elements.join(",");
+    })
+    .join("|");
 }
 
 export function materialSignature(bodies: THREE.Mesh[]): string {
-  return bodies.map((b) => (Array.isArray(b.material) ? b.material : [b.material]).map(traceMaterialKey).join("+")).join("|");
+  return bodies
+    .map((b) => (Array.isArray(b.material) ? b.material : [b.material]).map(traceMaterialKey).join("+"))
+    .join("|");
 }
 
 /** highlight.setBase bumps baseVersion whenever it rewrites the base colours;
@@ -190,12 +192,17 @@ export function sceneSignature(bodies: THREE.Mesh[]): string {
     const g = b.geometry;
     const mats = Array.isArray(b.material) ? b.material : [b.material];
     b.updateWorldMatrix(true, false);
-    parts.push([
-      b.id, g.id, (g.getAttribute("position") as THREE.BufferAttribute).version ?? 0, g.index?.version ?? -1,
-      mats.map(traceMaterialKey).join("+"),
-      sampleSum(b.matrixWorld.elements),
-      sampleSum((b.userData.owner as Owned).baseColors),
-    ].join(":"));
+    parts.push(
+      [
+        b.id,
+        g.id,
+        (g.getAttribute("position") as THREE.BufferAttribute).version ?? 0,
+        g.index?.version ?? -1,
+        mats.map(traceMaterialKey).join("+"),
+        sampleSum(b.matrixWorld.elements),
+        sampleSum((b.userData.owner as Owned).baseColors),
+      ].join(":"),
+    );
   }
   return parts.join("|");
 }

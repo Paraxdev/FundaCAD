@@ -99,7 +99,10 @@ describe("the native tracer backend", () => {
       await vi.advanceTimersByTimeAsync(200);
       await t.renderSample(0);
       expect(uploads).toEqual([]);
-      link.queue = [{ generation: 5, width: 2, height: 2 }, { generation: 5, width: 2, height: 2 }];
+      link.queue = [
+        { generation: 5, width: 2, height: 2 },
+        { generation: 5, width: 2, height: 2 },
+      ];
       await t.renderSample(0);
       await t.renderSample(0);
       expect(uploads.length).toBe(1);
@@ -121,7 +124,10 @@ describe("the native tracer backend", () => {
       expect(await t.samples()).toBe(0);
       await vi.advanceTimersByTimeAsync(200);
       expect(await t.samples()).toBe(0);
-      link.queue = [{ generation: 5, width: 2, height: 2 }, { generation: 5, width: 2, height: 2 }];
+      link.queue = [
+        { generation: 5, width: 2, height: 2 },
+        { generation: 5, width: 2, height: 2 },
+      ];
       // The prefetch was asked for before the resize.
       await t.renderSample(0);
       expect(await t.samples()).toBe(0);
@@ -149,7 +155,14 @@ describe("the native tracer backend", () => {
     const roomLook = (key: string): TraceLook => {
       const tex = halfEquirect(new Uint16Array(4 * 2 * 4), 4, 2);
       tex.userData.envKey = key;
-      return { lights: [], background: new THREE.Color(), environment: tex, brightness: 1, toneMapping: THREE.NeutralToneMapping, exposure: 1 };
+      return {
+        lights: [],
+        background: new THREE.Color(),
+        environment: tex,
+        brightness: 1,
+        toneMapping: THREE.NeutralToneMapping,
+        exposure: 1,
+      };
     };
     const slowEnv = () => {
       const order: string[] = [];
@@ -170,7 +183,10 @@ describe("the native tracer backend", () => {
       t.updateLook(roomLook("studio|h1"));
       const s = t.samples();
       await new Promise((r) => setTimeout(r, 10));
-      expect(order.filter((c) => c.startsWith("pt_look") || c === "pt_env" || c === "pt_status")).toEqual(["pt_look", "pt_env"]);
+      expect(order.filter((c) => c.startsWith("pt_look") || c === "pt_env" || c === "pt_status")).toEqual([
+        "pt_look",
+        "pt_env",
+      ]);
       release();
       expect(await s).toBe(256);
       expect(order.slice(-3)).toEqual(["pt_look", "pt_env", "pt_status"]);
@@ -192,7 +208,14 @@ describe("the native tracer backend", () => {
     const statuses = (list: object[], calls: string[]) => async (cmd: string, args?: unknown) => {
       calls.push(args ? `${cmd} ${JSON.stringify(args)}` : cmd);
       if (cmd !== "pt_status") return undefined;
-      return { samples: 64, fault: null, denoised: false, denoising: false, denoiseError: null, ...((list.length > 1 ? list.shift() : list[0]) ?? {}) };
+      return {
+        samples: 64,
+        fault: null,
+        denoised: false,
+        denoising: false,
+        denoiseError: null,
+        ...((list.length > 1 ? list.shift() : list[0]) ?? {}),
+      };
     };
     async function settle(t: NativeTracer) {
       let rounds = 0;
@@ -203,7 +226,11 @@ describe("the native tracer backend", () => {
     it("waits for the native denoise, then pulls its frame past the raw prefetch", async () => {
       const link = new FakeLink();
       const calls: string[] = [];
-      const { t, uploads } = setup(link, 1, statuses([{ denoising: true }, { denoising: true }, { denoised: true }], calls));
+      const { t, uploads } = setup(
+        link,
+        1,
+        statuses([{ denoising: true }, { denoising: true }, { denoised: true }], calls),
+      );
       await t.init();
       await t.renderSample(0);
       expect(t.denoised).toBe(false);
@@ -242,11 +269,13 @@ describe("the native tracer backend", () => {
   describe("bloom", () => {
     const flush = () => new Promise((r) => setTimeout(r, 0));
     const glow = { strength: 0.252, radius: 0.48, threshold: 1.28 };
-    const logged = (link: FakeLink, status: object = {}) => async (cmd: string, args?: unknown) => {
-      link.log.push(args ? `${cmd} ${JSON.stringify(args)}` : cmd);
-      if (cmd !== "pt_status") return undefined;
-      return { samples: 64, fault: null, denoised: false, denoising: false, denoiseError: null, ...status };
-    };
+    const logged =
+      (link: FakeLink, status: object = {}) =>
+      async (cmd: string, args?: unknown) => {
+        link.log.push(args ? `${cmd} ${JSON.stringify(args)}` : cmd);
+        if (cmd !== "pt_status") return undefined;
+        return { samples: 64, fault: null, denoised: false, denoising: false, denoiseError: null, ...status };
+      };
     const blooms = (link: FakeLink) => link.log.filter((l) => l.startsWith("pt_bloom"));
 
     it("is a whole TracerBackend", () => {
@@ -297,7 +326,7 @@ describe("the native tracer backend", () => {
       t.setBloom(glow);
       for (let i = 0; i < 5; i++) await flush();
       expect(uploads.length).toBe(before + 2);
-      const sent = link.log.findIndex((l) => l.startsWith("pt_bloom {\"bloom\":{"));
+      const sent = link.log.findIndex((l) => l.startsWith('pt_bloom {"bloom":{'));
       expect(link.log.indexOf(`upload ${uploads[before + 1]}`)).toBeGreaterThan(sent);
       expect(t.denoised).toBe(true);
       expect(t.present()).toBe(false);
@@ -369,5 +398,181 @@ describe("a traced picture on the native tracer", () => {
     });
     await t.init();
     await expect(t.picture({ width: 7680, height: 4320, samples: 8 })).rejects.toThrow("needs a 1013 MiB buffer");
+  });
+});
+
+describe("the camera a native frame was traced with", () => {
+  it("is the one the tracer took before it drew the frame on screen", async () => {
+    const link = new FakeLink();
+    // The fake draws a frame as it is asked for, so a camera is taken after every frame asked so far.
+    const { t } = setup(link, 1, async (cmd) => (cmd === "pt_camera" ? link.seq : undefined));
+    await t.init();
+    const at = (x: number) => {
+      const c = new THREE.PerspectiveCamera();
+      c.position.set(x, 0, 0);
+      c.updateMatrixWorld();
+      return c;
+    };
+    expect(t.shownView()).toBeNull();
+    t.updateCamera(at(1), null);
+    await t.scene.idle();
+    await t.renderSample(0);
+    expect(t.shownView()?.matrices[12]).toBe(1);
+    // Frame 2 was asked for while frame 1 uploaded, before the camera moved.
+    t.updateCamera(at(2), null);
+    await t.scene.idle();
+    await t.renderSample(0);
+    expect(t.shownView()?.matrices[12]).toBe(1);
+    await t.renderSample(0);
+    expect(t.shownView()?.matrices[12]).toBe(2);
+  });
+});
+
+/** A native side like the app's: a frame holds the tracer for `frameMs`, and
+ *  pt_camera waits for it unless `cameraWaits` is off. Calls cost 1 ms each way. */
+function slowNative(frameMs: number, cameraWaits = true) {
+  let locked = false;
+  const waiters: (() => void)[] = [];
+  const lock = async () => {
+    while (locked) await new Promise<void>((r) => waiters.push(r));
+    locked = true;
+  };
+  const unlock = () => {
+    locked = false;
+    waiters.shift()?.();
+  };
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let camera = 0;
+  let drawn = 0;
+  let seq = 0;
+  const cameraOf = new Map<number, number>();
+  const link: FrameLink = {
+    kind: "fake",
+    async next(): Promise<NativeFrame> {
+      await wait(1);
+      const s = ++seq;
+      await lock();
+      drawn = s;
+      cameraOf.set(s, camera);
+      await wait(frameMs);
+      unlock();
+      await wait(1);
+      return { seq: s, generation: 1, width: 1, height: 1, pixels: new Uint8Array(4), release() {} };
+    },
+    async resize() {
+      return 1;
+    },
+    close() {},
+  };
+  let cameraCalls = 0;
+  const call = async (cmd: string, args?: unknown) => {
+    await wait(1);
+    if (cmd !== "pt_camera") return cmd === "pt_status" ? { samples: 1, fault: null } : undefined;
+    cameraCalls++;
+    if (cameraWaits) await lock();
+    camera = orbitIndex((args as { camera: { eye: number[] } }).camera.eye[0]!);
+    const d = drawn;
+    if (cameraWaits) unlock();
+    await wait(1);
+    return d;
+  };
+  const shown: number[] = [];
+  const blit: Blit = { maxTextureSize: 4096, upload: (f) => shown.push(f.seq), dispose() {} };
+  const canvas = { style: {} as Record<string, string>, remove() {} } as unknown as HTMLCanvasElement;
+  const t = new NativeTracer({
+    canvas,
+    blit: () => blit,
+    connect: async () => ({ link, generation: 1, source: "slow" }),
+    call,
+  });
+  return { t, shown, cameraOf, cameraCalls: () => cameraCalls };
+}
+
+const orbitEye = (i: number) => 3.25 + 0.5 * i;
+const orbitIndex = (x: number) => Math.round((x - 3.25) / 0.5);
+function orbitCamera(i: number) {
+  const c = new THREE.PerspectiveCamera(50, 1.6, 0.1, 500);
+  c.position.set(orbitEye(i), -40 + 0.3 * i, 25 - 0.1 * i);
+  c.lookAt(1.5, -2, 0.75);
+  c.updateMatrixWorld();
+  return c;
+}
+
+/** One updateCamera per tick for 2 s, a frame asked for whenever none is,
+ *  then 2 s at rest. */
+async function orbit(frameMs: number, hz: number, cameraWaits = true) {
+  vi.useFakeTimers();
+  const tickMs = 1000 / hz;
+  const n = slowNative(frameMs, cameraWaits);
+  const init = n.t.init();
+  await vi.advanceTimersByTimeAsync(5);
+  await init;
+  const sentAt: number[] = [];
+  const ticks: { now: number; traced: number | null; overlay: number | null }[] = [];
+  let inFlight = false;
+  let now = 0;
+  let live = 0;
+  const moving = Math.round(2000 / tickMs);
+  for (let k = 0; k < 2 * moving; k++) {
+    if (k < moving) {
+      live = k + 1;
+      sentAt[live] = now;
+      n.t.updateCamera(orbitCamera(live), null);
+    }
+    if (!inFlight) {
+      inFlight = true;
+      void n.t.renderSample(0).then(() => (inFlight = false));
+    }
+    await vi.advanceTimersByTimeAsync(tickMs);
+    now += tickMs;
+    const seq = n.shown.at(-1);
+    const v = n.t.shownView();
+    ticks.push({
+      now,
+      traced: seq === undefined ? null : n.cameraOf.get(seq)!,
+      overlay: v ? orbitIndex(v.matrices[12]!) : null,
+    });
+  }
+  vi.useRealTimers();
+  const drawing = ticks.filter((r) => r.traced !== null && r.traced > 0);
+  const age = drawing.filter((r) => r.now <= 2000).map((r) => r.now - sentAt[r.traced!]!);
+  const landed = ticks.find((r) => r.now > 2000 && r.traced === live);
+  return {
+    oldest: Math.max(...age),
+    landedAfterStop: landed ? landed.now - 2000 : Infinity,
+    offTrace: drawing.filter((r) => r.overlay !== r.traced).length,
+    drawing: drawing.length,
+    cameraCalls: n.cameraCalls(),
+    moving,
+  };
+}
+
+describe("a native tracer slower than the page's camera", () => {
+  // Measured in the app before the fix: 360 to 790 ms behind at p50 and over a second after a 2 s orbit.
+  for (const [frameMs, hz] of [
+    [20, 144],
+    [35, 60],
+    [8, 60],
+  ] as const) {
+    it(`traces the camera at most three frames late at ${frameMs} ms a frame and ${hz} Hz, with the edges on the trace`, async () => {
+      const r = await orbit(frameMs, hz);
+      const frame = frameMs + 2;
+      expect(r.drawing).toBeGreaterThan(50);
+      expect(r.oldest).toBeLessThanOrEqual(3 * frame + 1000 / hz);
+      expect(r.landedAfterStop).toBeLessThanOrEqual(2 * frame + 1000 / hz);
+      expect(r.offTrace).toBe(0);
+    });
+  }
+
+  it("sends fewer cameras than the page makes when the native side is slow", async () => {
+    const r = await orbit(20, 144);
+    expect(r.cameraCalls).toBeLessThan(r.moving / 2);
+  });
+
+  it("takes the camera at the next frame when pt_camera does not wait for the frame in progress", async () => {
+    const r = await orbit(20, 144, false);
+    expect(r.oldest).toBeLessThanOrEqual(2 * 22 + 1000 / 144);
+    expect(r.landedAfterStop).toBeLessThanOrEqual(2 * 22 + 1000 / 144);
+    expect(r.offTrace).toBe(0);
   });
 });

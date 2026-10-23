@@ -15,8 +15,7 @@ describe("sketchEscapeAction", () => {
     // The bug this whole module exists for: one Escape that both cancels the
     // half-drawn rectangle and leaves the sketch throws away the geometry AND
     // the session, and the user pressed one key expecting to lose the rectangle.
-    expect(sketchEscapeAction({ ...idle, tool: "rectangle", pendingGeometry: true }))
-      .toBe("cancel-geometry");
+    expect(sketchEscapeAction({ ...idle, tool: "rectangle", pendingGeometry: true })).toBe("cancel-geometry");
     expect(sketchEscapeAction({ ...idle, tool: "offset", offsetPick: true })).toBe("cancel-offset");
     expect(sketchEscapeAction({ ...idle, dragging: true })).toBe("cancel-drag");
   });
@@ -57,9 +56,7 @@ describe("sketchEscapeAction", () => {
         overlay: false,
       }),
     ).toBe("cancel-offset");
-    expect(
-      sketchEscapeAction({ ...idle, dragging: true, pendingGeometry: true, selection: true }),
-    ).toBe("cancel-drag");
+    expect(sketchEscapeAction({ ...idle, dragging: true, pendingGeometry: true, selection: true })).toBe("cancel-drag");
   });
 
   it("walks out one rung per press, and always reaches the exit", () => {
@@ -78,5 +75,15 @@ describe("sketchEscapeAction", () => {
       if (a === "arm-select") s = { ...s, tool: "select" };
     }
     expect(seen).toEqual(["cancel-geometry", "clear-selection", "arm-select", "close"]);
+  });
+
+  it("cancels the Mirror panel in one press, after a drag and a half drawn shape", () => {
+    const mirror = { ...idle, tool: "mirror", mirror: true };
+    expect(sketchEscapeAction({ ...mirror, selection: true })).toBe("cancel-mirror");
+    expect(sketchEscapeAction(mirror)).toBe("cancel-mirror");
+    expect(sketchEscapeAction({ ...mirror, dragging: true })).toBe("cancel-drag");
+    expect(sketchEscapeAction({ ...mirror, overlay: true })).toBe("none");
+    expect(sketchEscapeAction({ ...mirror, mirror: false, selection: true })).toBe("clear-selection");
+    expect(sketchEscapeAction({ ...mirror, mirror: false })).toBe("arm-select");
   });
 });

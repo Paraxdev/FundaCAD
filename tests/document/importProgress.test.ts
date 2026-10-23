@@ -13,9 +13,17 @@ function backend() {
   const cancels: (string | undefined)[] = [];
   const be = {
     async init() {},
-    onStatus() { return () => {}; },
-    onOpProgress(fn: OpProgressListener) { listeners.push(fn); return () => {}; },
-    async cancel(target?: string) { cancels.push(target); return true; },
+    onStatus() {
+      return () => {};
+    },
+    onOpProgress(fn: OpProgressListener) {
+      listeners.push(fn);
+      return () => {};
+    },
+    async cancel(target?: string) {
+      cancels.push(target);
+      return true;
+    },
     connected: true,
   } as unknown as GeometryBackend;
   return {
@@ -31,7 +39,9 @@ function importing(store: DocumentStore) {
   let finish: () => void = () => {};
   const done = store.runBusy("Importing sv08.step", (onStarted) => {
     onStarted("imp1");
-    return new Promise<void>((r) => { finish = r; });
+    return new Promise<void>((r) => {
+      finish = r;
+    });
   });
   return { done, finish: () => finish() };
 }
@@ -45,7 +55,10 @@ describe("import progress in the busy state", () => {
     frame("imp1", 42, "Transferring shapes");
     expect(store.busyState).toMatchObject({ label: "Importing sv08.step", stage: "Transferring shapes", pct: 42 });
     expect(busyLine(store.busyState)).toEqual({
-      text: "Importing sv08.step", detail: "Transferring shapes 42%", bar: true, pct: 42,
+      text: "Importing sv08.step",
+      detail: "Transferring shapes 42%",
+      bar: true,
+      pct: 42,
     });
 
     frame("someone-else", 90, "Saving the geometry");
@@ -80,7 +93,10 @@ describe("import progress in the busy state", () => {
 
   it("shows no bar for an op that reports no stages", () => {
     expect(busyLine({ label: "Exporting part.step", stage: null, pct: null, waiting: null })).toEqual({
-      text: "Exporting part.step", detail: null, bar: false, pct: null,
+      text: "Exporting part.step",
+      detail: null,
+      bar: false,
+      pct: null,
     });
   });
 });

@@ -1,13 +1,16 @@
-// An .exr reads the right way up and is refused from its header, and the
+// An .exr reads the right way up and is taken however wide, and the
 // document's embedded environment follows every change to the look.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { decodeHdr, HdrRefusal, toHalfRgba, type HdrImage } from "../../src/viewport/hdrImage";
+import { decodeHdr, toHalfRgba, type HdrImage } from "../../src/viewport/hdrImage";
 import { createEnvLibrary, memoryKv } from "../../src/ui/environmentLibrary";
 import { envSettingsOf, renderPrefs, setRenderPref } from "../../src/ui/renderPrefs";
 import { DocumentStore } from "../../src/document/store";
 import {
-  applyDocumentEnvironment, installEnvironmentSync, storeHdr, useEnvLibrary,
+  applyDocumentEnvironment,
+  installEnvironmentSync,
+  storeHdr,
+  useEnvLibrary,
 } from "../../src/ui/environmentImport";
 import type { CadDocument } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
@@ -17,11 +20,20 @@ import type { GeometryBackend } from "../../src/geometry/client";
 function exr(w: number, h: number, value: (x: number, y: number) => number, pixels = true): Uint8Array {
   const parts: number[] = [];
   const u8 = (...b: number[]) => parts.push(...b);
-  const i32 = (v: number) => { const d = new DataView(new ArrayBuffer(4)); d.setInt32(0, v, true); u8(...new Uint8Array(d.buffer)); };
-  const f32 = (v: number) => { const d = new DataView(new ArrayBuffer(4)); d.setFloat32(0, v, true); u8(...new Uint8Array(d.buffer)); };
+  const i32 = (v: number) => {
+    const d = new DataView(new ArrayBuffer(4));
+    d.setInt32(0, v, true);
+    u8(...new Uint8Array(d.buffer));
+  };
+  const f32 = (v: number) => {
+    const d = new DataView(new ArrayBuffer(4));
+    d.setFloat32(0, v, true);
+    u8(...new Uint8Array(d.buffer));
+  };
   const str = (s: string) => u8(...new TextEncoder().encode(s), 0);
   const attr = (name: string, type: string, body: () => void) => {
-    str(name); str(type);
+    str(name);
+    str(type);
     const at = parts.length;
     i32(0);
     const start = parts.length;
@@ -33,15 +45,34 @@ function exr(w: number, h: number, value: (x: number, y: number) => number, pixe
   u8(0x76, 0x2f, 0x31, 0x01);
   i32(2);
   attr("channels", "chlist", () => {
-    for (const c of ["B", "G", "R"]) { str(c); i32(2); u8(0, 0, 0, 0); i32(1); i32(1); }
+    for (const c of ["B", "G", "R"]) {
+      str(c);
+      i32(2);
+      u8(0, 0, 0, 0);
+      i32(1);
+      i32(1);
+    }
     u8(0);
   });
   attr("compression", "compression", () => u8(0));
-  attr("dataWindow", "box2i", () => { i32(0); i32(0); i32(w - 1); i32(h - 1); });
-  attr("displayWindow", "box2i", () => { i32(0); i32(0); i32(w - 1); i32(h - 1); });
+  attr("dataWindow", "box2i", () => {
+    i32(0);
+    i32(0);
+    i32(w - 1);
+    i32(h - 1);
+  });
+  attr("displayWindow", "box2i", () => {
+    i32(0);
+    i32(0);
+    i32(w - 1);
+    i32(h - 1);
+  });
   attr("lineOrder", "lineOrder", () => u8(0));
   attr("pixelAspectRatio", "float", () => f32(1));
-  attr("screenWindowCenter", "v2f", () => { f32(0); f32(0); });
+  attr("screenWindowCenter", "v2f", () => {
+    f32(0);
+    f32(0);
+  });
   attr("screenWindowWidth", "float", () => f32(1));
   u8(0);
   if (!pixels) return new Uint8Array(parts);
@@ -49,10 +80,12 @@ function exr(w: number, h: number, value: (x: number, y: number) => number, pixe
   const lineBytes = 8 + w * 3 * 4;
   for (let y = 0; y < h; y++) {
     const off = table + h * 8 + y * lineBytes;
-    i32(off); i32(0);
+    i32(off);
+    i32(0);
   }
   for (let y = 0; y < h; y++) {
-    i32(y); i32(w * 3 * 4);
+    i32(y);
+    i32(w * 3 * 4);
     for (let c = 0; c < 3; c++) for (let x = 0; x < w; x++) f32(value(x, y));
   }
   return new Uint8Array(parts);
@@ -62,16 +95,23 @@ const at = (img: HdrImage, x: number, y: number) => img.data[(y * img.width + x)
 
 describe("an imported .exr", () => {
   it("keeps row 0 at the top, like an .hdr", async () => {
-    const img = await decodeHdr(exr(8, 4, (_x, y) => (y === 0 ? 10 : 0.1)), "sky.exr");
+    const img = await decodeHdr(
+      exr(8, 4, (_x, y) => (y === 0 ? 10 : 0.1)),
+      "sky.exr",
+    );
     expect([img.width, img.height]).toEqual([8, 4]);
     expect(at(img, 0, 0)).toBeCloseTo(10, 5);
     expect(at(img, 0, 3)).toBeCloseTo(0.1, 5);
   });
 
-  it("is refused from its header before any pixel is read", async () => {
-    const err = await decodeHdr(exr(9000, 2, () => 1, false), "huge.exr").catch((e) => e);
-    expect(err).toBeInstanceOf(HdrRefusal);
-    expect((err as Error).message).toMatch(/9000 x 2.*8192/);
+  it("is taken however wide, and halved to the width asked for", async () => {
+    const img = await decodeHdr(
+      exr(9000, 2, () => 1),
+      "wide.exr",
+      2048,
+    );
+    expect([img.width, img.height]).toEqual([1125, 1]);
+    expect(at(img, 500, 0)).toBeCloseTo(1, 3);
   });
 });
 
@@ -87,16 +127,22 @@ describe("a bright sun under high exposure", () => {
 
 function stubBackend(): GeometryBackend {
   return {
-    async rebuild() { return { ok: false, error: { message: "stub" } }; },
+    async rebuild() {
+      return { ok: false, error: { message: "stub" } };
+    },
     async init() {},
-    onStatus() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
     connected: true,
   } as unknown as GeometryBackend;
 }
 const blank = (): string => JSON.stringify({ parameters: {}, features: [] } satisfies CadDocument);
 
 function sky(): HdrImage {
-  const w = 64, h = 32, data = new Float32Array(w * h * 4);
+  const w = 64,
+    h = 32,
+    data = new Float32Array(w * h * 4);
   for (let i = 0; i < w * h; i++) {
     const v = i < (w * h) / 2 ? 2 : 0.3;
     data.set([v, v, v, 1], i * 4);

@@ -18,7 +18,9 @@ function backend(calls: CadDocument[]): GeometryBackend {
   return {
     rebuild: async (doc: CadDocument) => (calls.push(doc), okReply),
     async init() {},
-    onStatus() { return () => {}; },
+    onStatus() {
+      return () => {};
+    },
     connected: true,
   } as unknown as GeometryBackend;
 }
@@ -36,11 +38,12 @@ const doc = (): CadDocument => ({
 });
 
 // Zero-delay ticks only: a rebuild still sitting on the 120 ms debounce never lands.
-const ticks = () => new Promise<void>((res) => {
-  let i = 0;
-  const tick = () => (++i > 10 ? res() : void setTimeout(tick, 0));
-  tick();
-});
+const ticks = () =>
+  new Promise<void>((res) => {
+    let i = 0;
+    const tick = () => (++i > 10 ? res() : void setTimeout(tick, 0));
+    tick();
+  });
 
 describe("parameter commit rebuild", () => {
   it("rebuilds without the debounce and keeps untouched features the same objects", async () => {

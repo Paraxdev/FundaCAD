@@ -1,13 +1,10 @@
-//! The paths of files dropped on the window, on Windows.
-//!
-//! `dragDropEnabled` stays false in tauri.conf.json: turning it on makes wry
-//! replace WebView2's own drop target with its own, and every in-page HTML5
-//! drag dies. The page still gets the drop as File objects, which carry no
-//! path, so it hands them back through
-//! `chrome.webview.postMessageWithAdditionalObjects` and WebView2 says here
-//! where each one lives. The reply goes out as the `files-dropped` event.
+//! Paths of files dropped on the window. `dragDropEnabled` stays off, since wry would replace in page HTML5 drag. On
+//! Windows WebView2 resolves the page's File objects; WebKitGTK gives the page none (webkit.org/b/271957), so on Linux
+//! GTK's uri list is held for `drop_paths_take`. Either way the reply is the `files-dropped` event.
 
 #![cfg_attr(not(windows), allow(dead_code, unused_imports))]
+
+use std::sync::Mutex;
 
 use tauri::{Emitter, Runtime, WebviewWindow};
 
@@ -20,11 +17,21 @@ struct Dropped {
     paths: Vec<Option<String>>,
 }
 
+/// The local paths of the last file drag from outside the window, until the
+/// page takes them.
+#[derive(Default)]
+pub struct Held(Mutex<Vec<String>>);
+
+#[tauri::command]
+pub fn drop_paths_take(app: tauri::AppHandle, held: tauri::State<'_, Held>, id: String) {
+    let paths = std::mem::take(&mut *held.0.lock().unwrap_or_else(|e| e.into_inner()));
+    let _ = app.emit("files-dropped", Dropped { id, paths: paths.into_iter().map(Some).collect() });
+}
+
 #[cfg(windows)]
 pub fn install<R: Runtime>(window: &WebviewWindow<R>) {
     use webview2_com::Microsoft::Web::WebView2::Win32::{
-        ICoreWebView2File, ICoreWebView2ObjectCollectionView,
-        ICoreWebView2WebMessageReceivedEventArgs2,
+        ICoreWebView2File, ICoreWebView2ObjectCollectionView, ICoreWebView2WebMessageReceivedEventArgs2,
     };
     use webview2_com::{take_pwstr, WebMessageReceivedEventHandler};
     use windows_core::{Interface, PWSTR};
@@ -71,5 +78,25 @@ pub fn install<R: Runtime>(window: &WebviewWindow<R>) {
     });
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+pub fn install<R: Runtime>(window: &WebviewWindow<R>) {
+    use gtk::prelude::*;
+    use tauri::Manager;
+
+    let app = window.app_handle().clone();
+    let _ = window.with_webview(move |w| {
+        // WebKit connects its own handler after this one and preloads every
+        // target before the page sees dragenter, so the paths are held before
+        // the page can ask, and in-page drags carry on untouched.
+        w.inner().connect_drag_data_received(move |_, ctx, _, _, data, _, _| {
+            if data.target().name() != "text/uri-list" || ctx.drag_get_source_widget().is_some() {
+                return;
+            }
+            let paths = crate::launch_args::uri_list_paths(&data.uris());
+            *app.state::<Held>().0.lock().unwrap_or_else(|e| e.into_inner()) = paths;
+        });
+    });
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 pub fn install<R: Runtime>(_window: &WebviewWindow<R>) {}

@@ -357,6 +357,11 @@ class Session(Actions):
         v = self.call("status", since=self._mark)
         return v if raw else text.status(v)
 
+    def guide(self, raw: bool = False):
+        """The guide step on screen: caption, what the ring is on and where, or None."""
+        v = self.call("guide")
+        return v if raw or v is None else text.guide(v)
+
     def selection(self, raw: bool = False):
         """The selected bodies, faces and edges."""
         v = self.call("selection")

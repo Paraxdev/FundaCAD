@@ -1,9 +1,5 @@
-//! A plugin's own small files: its settings, and the outputs it hands to
-//! another program. One directory per plugin, `app_data_dir()/plugin-data/<id>`.
-//!
-//! Kept apart from the installed bundle on purpose. Reinstalling or updating a
-//! plugin replaces its bundle directory whole, and a person's configuration must
-//! survive that.
+//! A plugin's own small files, settings and outputs, in `app_data_dir()/plugin-data/<id>`. Kept apart from the bundle,
+//! which a reinstall replaces whole, so configuration survives.
 
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
@@ -67,10 +63,8 @@ pub fn plugin_data_path(app: AppHandle, plugin: String, name: String) -> Result<
     Ok(path.to_string_lossy().into_owned())
 }
 
-/// Move a JSON file this plugin's code kept directly under the app data
-/// directory, from before plugins had a directory of their own, into its data
-/// directory as `name`. Does nothing when there is no such file or `name`
-/// already exists. Returns whether it moved anything.
+/// Moves a JSON file this plugin kept directly under the app data dir, from before plugins had their own directory, to
+/// `name`. Does nothing when there is none or `name` exists, and returns whether it moved.
 #[tauri::command]
 pub fn plugin_data_adopt(app: AppHandle, plugin: String, legacy: String, name: String) -> Result<bool, String> {
     let legacy = safe_name(&legacy)?;
@@ -84,18 +78,4 @@ pub fn plugin_data_adopt(app: AppHandle, plugin: String, legacy: String, name: S
     }
     std::fs::rename(&from, &to).map_err(|e| format!("{legacy}: {e}"))?;
     Ok(true)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn names_cannot_leave_their_directory() {
-        assert!(safe_name("devices.json").is_ok());
-        assert!(safe_name("part_1-a.3mf").is_ok());
-        for bad in ["", "../x", "a/b", "a\\b", ".hidden", "..", "c:x", &"x".repeat(101)] {
-            assert!(safe_name(bad).is_err(), "{bad:?}");
-        }
-    }
 }

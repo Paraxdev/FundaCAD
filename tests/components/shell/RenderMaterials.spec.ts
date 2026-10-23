@@ -18,7 +18,9 @@ import type { CtxItem } from "../../../src/ui/menu";
 const menus: CtxItem[][] = [];
 vi.mock("../../../src/ui/menu", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/ui/menu")>()),
-  contextMenu: (_x: number, _y: number, items: CtxItem[]) => { menus.push(items); },
+  contextMenu: (_x: number, _y: number, items: CtxItem[]) => {
+    menus.push(items);
+  },
 }));
 
 vi.mock("../../../src/viewport/materialPreview", () => ({
@@ -40,7 +42,9 @@ function makeEngine() {
   const faceMaterial = new Map<string, string>();
   let selectedFaces: string[] = [];
   const store = {
-    get materialLibrary() { return LIBRARY; },
+    get materialLibrary() {
+      return LIBRARY;
+    },
     bodyMaterialId: (id: string) => bodyMaterial.get(id),
     faceMaterialId: (body: string, face: number) => faceMaterial.get(`${body}#${face}`),
     faceMaterialEntries: () => [...faceMaterial],
@@ -67,7 +71,9 @@ function makeEngine() {
     store,
     bodyMaterial,
     faceMaterial,
-    selectFace(ids: string[]) { selectedFaces = ids; },
+    selectFace(ids: string[]) {
+      selectedFaces = ids;
+    },
     engine: {
       store,
       bridge: { buildVersion },
@@ -86,7 +92,10 @@ function tile(id: string) {
   return w.get(`.rd-tile[data-material="${id}"]`);
 }
 function badged() {
-  return w.findAll(".rd-tile").filter((t) => t.find(".rd-worn").exists()).map((t) => t.attributes("data-material"));
+  return w
+    .findAll(".rd-tile")
+    .filter((t) => t.find(".rd-worn").exists())
+    .map((t) => t.attributes("data-material"));
 }
 async function poll() {
   vi.advanceTimersByTime(300);
@@ -185,7 +194,8 @@ describe("RenderMaterials glass controls", () => {
     (tint.element as HTMLInputElement).value = "#2a8f6a";
     await tint.trigger("input");
     expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-glass", {
-      attenuationColor: "#2a8f6a", attenuationDistance: 20,
+      attenuationColor: "#2a8f6a",
+      attenuationDistance: 20,
     });
   });
 });
@@ -198,7 +208,10 @@ describe("RenderMaterials Advanced fields", () => {
     expect(adv.element.tagName).toBe("DETAILS");
     expect((adv.get('[data-field="sheen"]').element as HTMLInputElement).value).toBe("0.4");
     for (const [field, value, want] of [
-      ["sheen", "0.6", 0.6], ["anisotropy", "0.5", 0.5], ["flakes", "0.2", 0.2], ["flakeSize", "0.3", 0.3],
+      ["sheen", "0.6", 0.6],
+      ["anisotropy", "0.5", 0.5],
+      ["flakes", "0.2", 0.2],
+      ["flakeSize", "0.3", 0.3],
     ] as const) {
       const input = adv.get(`[data-field="${field}"]`);
       (input.element as HTMLInputElement).value = value;

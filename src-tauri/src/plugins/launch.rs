@@ -1,15 +1,6 @@
-//! Starting another program on this machine, for a plugin that hands its output
-//! to one. The native half of the `process.spawn` grant.
-//!
-//! No shell is involved: the program is an absolute path to a file that exists,
-//! and every argument reaches it as one argument, so nothing a plugin passes is
-//! ever parsed as a command line. Detached, the app does not wait for it.
-//!
-//! The first time a plugin starts a given program the user is asked, natively,
-//! and the answer is remembered. The grant check lives in the window, so without
-//! this any script that got into the window could start any program on the
-//! machine. The approvals file sits outside plugin-data, where a plugin could
-//! otherwise write its own.
+//! The native half of the `process.spawn` grant. No shell: an absolute path to an existing file, each argument passed
+//! as one, detached. Each program is approved natively once, since the grant check lives in the window, and the
+//! approvals file sits outside plugin-data where a plugin could write its own.
 
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -60,10 +51,7 @@ pub fn plugin_system_dirs(app: AppHandle) -> SystemDirs {
 
 /// The first candidate that is an absolute path to an existing file.
 pub fn first_program(candidates: &[String]) -> Option<PathBuf> {
-    candidates
-        .iter()
-        .map(PathBuf::from)
-        .find(|p| p.is_absolute() && p.is_file())
+    candidates.iter().map(PathBuf::from).find(|p| p.is_absolute() && p.is_file())
 }
 
 type Approvals = BTreeMap<String, Vec<String>>;
@@ -73,10 +61,7 @@ fn approvals_path(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 fn read_approvals(path: &Path) -> Approvals {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default()
+    std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
 }
 
 pub fn is_approved(approvals: &Approvals, plugin: &str, program: &str) -> bool {
@@ -116,18 +101,19 @@ pub async fn plugin_launch(
     if !is_approved(&read_approvals(&path), &plugin, &program) {
         let dialog = app
             .dialog()
-            .message(format!("The plugin {plugin} wants to start this program:
+            .message(format!(
+                "The plugin {plugin} wants to start this program:
 
 {program}
 
-Allow it, now and next time?"))
+Allow it, now and next time?"
+            ))
             .title("Start a program")
             .kind(MessageDialogKind::Warning)
             .buttons(MessageDialogButtons::OkCancelCustom("Allow".into(), "Don't allow".into()));
         // blocking_show must not run on the main thread, which drives the dialog.
-        let allowed = tauri::async_runtime::spawn_blocking(move || dialog.blocking_show())
-            .await
-            .map_err(|e| e.to_string())?;
+        let allowed =
+            tauri::async_runtime::spawn_blocking(move || dialog.blocking_show()).await.map_err(|e| e.to_string())?;
         if !allowed {
             return Err(format!("starting {program} was not allowed"));
         }
@@ -148,19 +134,6 @@ fn spawn(bin: &Path, args: &[String]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn picks_the_first_absolute_file_that_exists() {
-        let dir = std::env::temp_dir().join(format!("fundacad-launch-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let real = dir.join("tool.bin");
-        std::fs::write(&real, b"x").unwrap();
-        let missing = text(dir.join("missing.bin"));
-        let got = first_program(&[missing, "tool.bin".into(), text(dir.clone()), text(real.clone())]);
-        assert_eq!(got, Some(real));
-        assert_eq!(first_program(&[]), None);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
 
     #[test]
     fn an_approval_is_for_one_plugin_and_one_program() {

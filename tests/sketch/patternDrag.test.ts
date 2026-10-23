@@ -1,14 +1,23 @@
 import { describe, it, expect } from "vitest";
-import { nearCentreDot, patternSweepDeg, selectionCentre, snapAngleDeg, type PatternSweepInput } from "../../src/sketch/patternDrag";
+import {
+  nearCentreDot,
+  patternSweepDeg,
+  selectionCentre,
+  snapAngleDeg,
+  type PatternSweepInput,
+} from "../../src/sketch/patternDrag";
 
 /** centre at the origin, the source out along +X, so a cursor bearing in degrees
  *  IS the sweep the drag should read. */
 function at(deg: number, extra: Partial<PatternSweepInput> = {}): PatternSweepInput {
   const rad = (deg * Math.PI) / 180;
   return {
-    cx: 0, cy: 0,
-    sx: 10, sy: 0,
-    px: 10 * Math.cos(rad), py: 10 * Math.sin(rad),
+    cx: 0,
+    cy: 0,
+    sx: 10,
+    sy: 0,
+    px: 10 * Math.cos(rad),
+    py: 10 * Math.sin(rad),
     prev: null,
     ...extra,
   };
@@ -105,7 +114,13 @@ describe("selectionCentre", () => {
   });
 
   it("averages several sources", () => {
-    expect(selectionCentre([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 15 }])).toEqual({ x: 5, y: 5 });
+    expect(
+      selectionCentre([
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 5, y: 15 },
+      ]),
+    ).toEqual({ x: 5, y: 5 });
   });
 
   it("skips sources that no longer resolve", () => {

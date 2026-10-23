@@ -17,19 +17,30 @@ function backend() {
   const be = {
     rebuild(_doc: CadDocument, _t?: number, onId?: (id: string) => void): Promise<RebuildReply> {
       onId?.(`rq${++n}`);
-      return new Promise((r) => { release = r; });
+      return new Promise((r) => {
+        release = r;
+      });
     },
     async init() {},
-    onStatus() { return () => {}; },
-    onQueue(fn: QueueFn) { queue.push(fn); return () => {}; },
-    async cancel(target?: string) { cancels.push(target); return true; },
+    onStatus() {
+      return () => {};
+    },
+    onQueue(fn: QueueFn) {
+      queue.push(fn);
+      return () => {};
+    },
+    async cancel(target?: string) {
+      cancels.push(target);
+      return true;
+    },
     connected: true,
   } as unknown as GeometryBackend;
   return {
     be,
     cancels,
     frame: (id: string, behind: EngineWait | null) => queue.forEach((fn) => fn(id, behind)),
-    finish: () => release({ ok: true, result: { mesh: { positions: [], indices: [], normals: [] }, bodies: [] } as never }),
+    finish: () =>
+      release({ ok: true, result: { mesh: { positions: [], indices: [], normals: [] }, bodies: [] } as never }),
   };
 }
 
@@ -76,7 +87,14 @@ describe("a rebuild queued behind another client's job", () => {
     const store = new DocumentStore(be, doc());
     const abort = new AbortController();
     let release = () => {};
-    const done = store.runBusy("Downloading", () => new Promise<void>((r) => { release = r; }), { abort });
+    const done = store.runBusy(
+      "Downloading",
+      () =>
+        new Promise<void>((r) => {
+          release = r;
+        }),
+      { abort },
+    );
     expect(await store.cancelBusy()).toBe(true);
     expect(abort.signal.aborted).toBe(true);
     expect(cancels).toEqual([]);

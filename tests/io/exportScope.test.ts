@@ -13,7 +13,11 @@ const elements = [
   { id: "e1", name: "Top" },
   { id: "e2", name: "Hardware", parent: "e1" },
 ];
-const map = new Map([["body2", "e1"], ["body3", "e2"], ["body4", "e2"]]);
+const map = new Map([
+  ["body2", "e1"],
+  ["body3", "e2"],
+  ["body4", "e2"],
+]);
 const { groups } = buildBodyTree(bodies, new Map(), elements, map);
 
 describe("export starts from the selection", () => {
@@ -23,20 +27,26 @@ describe("export starts from the selection", () => {
 
   it("is that body, named after it, for one body", () => {
     expect(exportScopeFromSelection(["body2"], bodies, groups, "box")).toEqual({
-      scope: "body2", selected: ["body2"], base: "Lid",
+      scope: "body2",
+      selected: ["body2"],
+      base: "Lid",
     });
   });
 
   it("is the selected bodies in build order, named after the document, for loose bodies", () => {
     expect(exportScopeFromSelection(["body3", "body1"], bodies, groups, "box")).toEqual({
-      scope: "selected", selected: ["body1", "body3"], base: "box",
+      scope: "selected",
+      selected: ["body1", "body3"],
+      base: "box",
     });
   });
 
   it("is named after the folder whose bodies are selected, the nested one too", () => {
     expect(exportScopeFromSelection(["body4", "body2", "body3"], bodies, groups, "box").base).toBe("Top");
     expect(exportScopeFromSelection(["body3", "body4"], bodies, groups, "box")).toEqual({
-      scope: "selected", selected: ["body3", "body4"], base: "Hardware",
+      scope: "selected",
+      selected: ["body3", "body4"],
+      base: "Hardware",
     });
   });
 

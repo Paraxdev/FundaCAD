@@ -14,7 +14,10 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "sketch_box_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -25,7 +28,10 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -39,39 +45,62 @@ const check = (name, ok, detail) => {
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   await page.evaluate(async () => {
-    window.store.addFeature({ id: "s1", type: "sketch", plane: "XY", entities: [
-      { type: "rectangle", id: "r1", x: -20, y: 0, width: 16, height: 12 },
-      { type: "circle", id: "c1", x: 15, y: 0, radius: 6 },
-      { type: "text", id: "t1", text: "TEXT", x: -10, y: 25, height: 10 },
-    ] });
+    window.store.addFeature({
+      id: "s1",
+      type: "sketch",
+      plane: "XY",
+      entities: [
+        { type: "rectangle", id: "r1", x: -20, y: 0, width: 16, height: 12 },
+        { type: "circle", id: "c1", x: 15, y: 0, radius: 6 },
+        { type: "text", id: "t1", text: "TEXT", x: -10, y: 25, height: 10 },
+      ],
+    });
     await window.store.rebuildNow();
   });
   await page.evaluate(() => window.__fundacad.editFeature("s1"));
   await page.waitForTimeout(3000);
-  const scr = (x, y) => page.evaluate(([x, y]) => {
-    const s = window.sketch;
-    return window.viewport.projectToScreen(s.plane.to3D(x, y));
-  }, [x, y]);
+  const scr = (x, y) =>
+    page.evaluate(
+      ([x, y]) => {
+        const s = window.sketch;
+        return window.viewport.projectToScreen(s.plane.to3D(x, y));
+      },
+      [x, y],
+    );
   const sel = () => page.evaluate(() => [...window.sketch.selected].sort());
 
   await page.evaluate(() => window.sketch.setTool("select"));
   await page.waitForTimeout(300);
   // text: click inside a glyph area, then M
-  await page.waitForFunction(() => window.sketch.overlay.activeRegions.some((w) => w.entityId === "t1"), null, { timeout: 20000 }).catch(() => check("the text's letters are drawn", false));
+  await page
+    .waitForFunction(() => window.sketch.overlay.activeRegions.some((w) => w.entityId === "t1"), null, {
+      timeout: 20000,
+    })
+    .catch(() => check("the text's letters are drawn", false));
   const glyph = await page.evaluate(() => {
     const r = window.sketch.overlay.activeRegions.find((w) => w.entityId === "t1");
     return r ? window.viewport.projectToScreen(r.interior3D) : null;
   });
   await page.mouse.click(glyph.x, glyph.y);
   await page.waitForTimeout(400);
-  check("clicking a text selects its letters", (await page.evaluate(() => window.sketch.overlay.selectedActiveTextIds())).join() === "t1");
+  check(
+    "clicking a text selects its letters",
+    (await page.evaluate(() => window.sketch.overlay.selectedActiveTextIds())).join() === "t1",
+  );
   await page.locator("#toolrail [data-action='move-sketch']").click();
   await page.waitForTimeout(600);
-  check("Move/Rotate opens the gizmo on the text", await page.evaluate(() => window.__fundacad.move.active), JSON.stringify(await sel()));
+  check(
+    "Move/Rotate opens the gizmo on the text",
+    await page.evaluate(() => window.__fundacad.move.active),
+    JSON.stringify(await sel()),
+  );
   await page.screenshot({ path: path.join(OUT, "sk-1-text-gizmo.png") });
   await page.mouse.move(700, 850);
   await page.keyboard.press("Escape");
@@ -80,12 +109,21 @@ const check = (name, ok, detail) => {
 
   // the text dragged straight by its letters
   {
-    const textAt = () => page.evaluate(() => { const t = window.sketch.entities.find((e) => e.id === "t1"); return { x: t.x, y: t.y }; });
-    const from = await page.evaluate(() => window.viewport.projectToScreen(window.sketch.overlay.activeRegions.find((w) => w.entityId === "t1").interior3D));
+    const textAt = () =>
+      page.evaluate(() => {
+        const t = window.sketch.entities.find((e) => e.id === "t1");
+        return { x: t.x, y: t.y };
+      });
+    const from = await page.evaluate(() =>
+      window.viewport.projectToScreen(window.sketch.overlay.activeRegions.find((w) => w.entityId === "t1").interior3D),
+    );
     const before = await textAt();
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
-    for (let n = 1; n <= 10; n++) { await page.mouse.move(from.x + 4 * n, from.y + 3 * n); await page.waitForTimeout(16); }
+    for (let n = 1; n <= 10; n++) {
+      await page.mouse.move(from.x + 4 * n, from.y + 3 * n);
+      await page.waitForTimeout(16);
+    }
     await page.mouse.up();
     await page.waitForTimeout(500);
     const after = await textAt();
@@ -95,7 +133,8 @@ const check = (name, ok, detail) => {
   }
 
   // window box around the rectangle only
-  let a = await scr(-31, -12), b = await scr(-5, 12);
+  let a = await scr(-31, -12),
+    b = await scr(-5, 12);
   await page.mouse.click(700, 800);
   await page.mouse.move(Math.min(a.x, b.x), Math.min(a.y, b.y));
   await page.mouse.down();
@@ -104,10 +143,14 @@ const check = (name, ok, detail) => {
   await page.screenshot({ path: path.join(OUT, "sk-2-window.png") });
   await page.mouse.up();
   await page.waitForTimeout(300);
-  { const s = await sel(); check("a rightward box takes only what is inside", s.join() === "r1", JSON.stringify(s)); }
+  {
+    const s = await sel();
+    check("a rightward box takes only what is inside", s.join() === "r1", JSON.stringify(s));
+  }
 
   // crossing box from right to left clipping the circle and the text
-  a = await scr(30, 45); b = await scr(18, 3);
+  a = await scr(30, 45);
+  b = await scr(18, 3);
   await page.mouse.click(700, 800);
   await page.mouse.move(a.x, a.y);
   await page.mouse.down();
@@ -116,7 +159,10 @@ const check = (name, ok, detail) => {
   await page.screenshot({ path: path.join(OUT, "sk-3-crossing.png") });
   await page.mouse.up();
   await page.waitForTimeout(300);
-  { const s = await sel(); check("a leftward box takes what it touches", s.join() === "c1", JSON.stringify(s)); }
+  {
+    const s = await sel();
+    check("a leftward box takes what it touches", s.join() === "c1", JSON.stringify(s));
+  }
 
   await page.keyboard.press("m");
   await page.waitForTimeout(500);

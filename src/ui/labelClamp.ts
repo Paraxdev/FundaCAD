@@ -1,14 +1,10 @@
-// Keeps a sketch dimension label where it can be read. The viewport runs full
-// bleed under the floating columns, so a label projected near the left edge
-// landed under the Items card (PH-3).
+// Keeps sketch dimension labels readable: the viewport runs full bleed under the floating columns, so a label near
+// the left edge landed under the Items card (PH-3).
 
 import type { Box } from "./promptPlacement";
 
-/** The centre a label of half size `hw` x `hh`, projected to (`x`, `y`), is
- *  drawn at: inside `area`, and clear of the left and right columns' cards it
- *  shares a row with, `gap` from each. A card that misses the label's row is
- *  ignored. When the free span is too narrow for the label, the left card is
- *  preferred over the right, the same order as the prompt. */
+/** Where a label of half size `hw` x `hh` projected to (`x`, `y`) is drawn: inside `area`, `gap` clear of the cards
+ *  in its row. When the free span is too narrow, the left card wins, as in the prompt. */
 export function clampLabel(
   x: number,
   y: number,
@@ -30,8 +26,7 @@ type Cards = { left: readonly Box[]; right: readonly Box[] };
 function rowFree(cy: number, hh: number, area: Box, cards: Cards, gap: number) {
   let L = area.left + gap;
   let R = area.right - gap;
-  const inRow = (o: Box) =>
-    o.right > o.left && o.bottom > o.top && o.bottom > cy - hh && o.top < cy + hh;
+  const inRow = (o: Box) => o.right > o.left && o.bottom > o.top && o.bottom > cy - hh && o.top < cy + hh;
   for (const o of cards.right) if (inRow(o)) R = Math.min(R, o.left - gap);
   for (const o of cards.left) if (inRow(o)) L = Math.max(L, o.right + gap);
   return { L, R };
@@ -66,19 +61,8 @@ const JOIN = 1;
 const LEAVE = 12;
 let joins = 0;
 
-/** `clampLabel` for every label, then the clamped ones laid out along the edge
- *  they were clamped to so no two overlap and none leaves `area` or goes under
- *  a card. A label pushed off the top or bottom slides along that row, one
- *  pushed off a side or against a card slides up or down in a straight column.
- *  A full row or column wraps into another just inward of it. Each line keeps
- *  its labels in the order their dimensions project, so they do not swap while
- *  panning. Labels that did not need clamping stay where they are.
- *
- *  `held` carries each label's edge and line from the last frame. A label
- *  keeps its edge while it is still clamped on that edge's axis or within
- *  `LEAVE` of it (of the column, for a side), and its line while the line has
- *  room, so a label hovering at the edge or a newcomer does not reshuffle the
- *  others. */
+/** Clamped labels line up along their edge without overlap, wrapping inward, in projection order so panning keeps
+ *  them in place. `held` keeps each label's edge and line from the last frame so newcomers do not reshuffle them. */
 export function layoutLabels(
   ls: readonly LabelAt[],
   area: Box,
@@ -138,7 +122,13 @@ export function layoutLabels(
       if (!take.length) continue;
       take.sort((a, b) => ls[a]!.x - ls[b]!.x || a - b);
       const half = take.map((i) => ls[i]!.hw);
-      const pos = spread(take.map((i) => ls[i]!.x), half, half.map((h) => L + h), half.map((h) => R - h), gap);
+      const pos = spread(
+        take.map((i) => ls[i]!.x),
+        half,
+        half.map((h) => L + h),
+        half.map((h) => R - h),
+        gap,
+      );
       take.forEach((i, n) => {
         out[i] = { x: pos[n]!, y };
         held.get(i)!.line = j;
@@ -173,7 +163,13 @@ export function layoutLabels(
       }
       take.sort((a, b) => ls[a]!.y - ls[b]!.y || a - b);
       const half = take.map((i) => ls[i]!.hh);
-      const pos = spread(take.map((i) => ls[i]!.y), half, half.map((h) => T + h), half.map((h) => B - h), gap);
+      const pos = spread(
+        take.map((i) => ls[i]!.y),
+        half,
+        half.map((h) => T + h),
+        half.map((h) => B - h),
+        gap,
+      );
       let next = wall;
       take.forEach((i, n) => {
         const hw = ls[i]!.hw;
@@ -203,9 +199,8 @@ function fill(pool: number[], size: (i: number) => number, room: number, gap: nu
   return pool.splice(0, n);
 }
 
-/** Centres at `pos` (sorted, half sizes `half`) moved apart as little as it
- *  takes to leave `gap` between neighbours, each kept within `lo`..`hi`. Order
- *  is kept. They only overlap when the line is too short for them all. */
+/** Moves sorted centres apart as little as it takes to leave `gap` between neighbours, each within `lo`..`hi`, order
+ *  kept. They overlap only when the line is too short. */
 function spread(pos: number[], half: number[], lo: number[], hi: number[], gap: number): number[] {
   const n = pos.length;
   const need = (k: number) => half[k - 1]! + gap + half[k]!;
@@ -222,10 +217,8 @@ function spread(pos: number[], half: number[], lo: number[], hi: number[], gap: 
   return pos;
 }
 
-/** The leader from a label drawn at `c` (half size `hw` x `hh`) back to `p`,
- *  where its dimension put it, for a label `clampLabel` had to move. It starts
- *  on the label's border, facing `p`. Null when the label is on its spot, or
- *  so near that a line would only be a stub. */
+/** The leader from a moved label at `c` back to `p`, starting on the label border facing `p`. Null when the label is
+ *  on or near its spot. */
 export function labelLeader(
   c: { x: number; y: number },
   hw: number,

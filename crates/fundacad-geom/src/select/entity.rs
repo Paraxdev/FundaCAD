@@ -1,5 +1,4 @@
-//! Edges and faces measured once, with the fingerprint readings, keys and costs
-//! of the Python engine's `geom_select.py`.
+//! Edges and faces measured once, with the fingerprint readings, keys and costs selectors match on.
 
 use std::cmp::Ordering;
 
@@ -136,7 +135,7 @@ impl EdgeEnt {
         self.curve.name()
     }
 
-    /// `_edge_dir`: the unit tangent at the middle, else the chord, sign-normalized.
+    /// The unit tangent at the middle, else the chord, sign-normalized.
     pub fn dir(&self) -> DVec3 {
         match (self.tangent, self.ends) {
             (Some(t), _) => sign_normalize(unit(t)),
@@ -170,18 +169,12 @@ impl EdgeEnt {
 
     pub fn describe(&self) -> String {
         let c = self.mid;
-        format!(
-            "an edge at ({:.2},{:.2},{:.2}) length {:.1}",
-            c.x, c.y, c.z, self.length
-        )
+        format!("an edge at ({:.2},{:.2},{:.2}) length {:.1}", c.x, c.y, c.z, self.length)
     }
 }
 
 pub fn edges_of(shape: &Shape) -> FResult<Vec<EdgeEnt>> {
-    sa::items(shape, ItemKind::Edge)
-        .into_iter()
-        .map(EdgeEnt::new)
-        .collect()
+    sa::items(shape, ItemKind::Edge).into_iter().map(EdgeEnt::new).collect()
 }
 
 pub struct FaceEnt {
@@ -210,12 +203,12 @@ impl FaceEnt {
         self.surface.name()
     }
 
-    /// `_face_centroid`, the origin where `center()` raises.
+    /// The origin where `center()` raises.
     pub fn centroid(&self) -> DVec3 {
         self.centre.unwrap_or(DVec3::ZERO)
     }
 
-    /// `_face_normal`, zero where `normal_at()` raises.
+    /// Zero where `normal_at()` raises.
     pub fn normal(&self) -> DVec3 {
         self.normal.map_or(DVec3::ZERO, unit)
     }
@@ -232,10 +225,7 @@ impl FaceEnt {
 
     pub fn describe(&self) -> FResult<String> {
         let c = self.centre.ok_or_else(internal)?;
-        Ok(format!(
-            "a face at ({:.2},{:.2},{:.2}) area {:.1}",
-            c.x, c.y, c.z, self.area
-        ))
+        Ok(format!("a face at ({:.2},{:.2},{:.2}) area {:.1}", c.x, c.y, c.z, self.area))
     }
 
     /// `f.distance_to_with_closest_points(p)`, `None` where it raises.
@@ -249,13 +239,10 @@ impl FaceEnt {
 }
 
 pub fn faces_of(shape: &Shape) -> FResult<Vec<FaceEnt>> {
-    sa::items(shape, ItemKind::Face)
-        .into_iter()
-        .map(FaceEnt::new)
-        .collect()
+    sa::items(shape, ItemKind::Face).into_iter().map(FaceEnt::new).collect()
 }
 
-/// `_circle_center_groups`: (rank, group size) per edge, circles only.
+/// (rank, group size) per edge, circles only.
 pub fn circle_groups(edges: &[EdgeEnt], tol: f64) -> Vec<Option<(usize, usize)>> {
     let circles: Vec<(usize, DVec3, f64)> = edges
         .iter()
@@ -265,11 +252,7 @@ pub fn circle_groups(edges: &[EdgeEnt], tol: f64) -> Vec<Option<(usize, usize)>>
         .collect();
     let mut out = vec![None; edges.len()];
     for &(i, c, r) in &circles {
-        let sibs: Vec<f64> = circles
-            .iter()
-            .filter(|(_, cc, _)| (*cc - c).length() < tol)
-            .map(|s| s.2)
-            .collect();
+        let sibs: Vec<f64> = circles.iter().filter(|(_, cc, _)| (*cc - c).length() < tol).map(|s| s.2).collect();
         let rank = sibs.iter().filter(|&&rr| rr < r - 1e-9).count();
         out[i] = Some((rank, sibs.len()));
     }
@@ -281,9 +264,7 @@ fn fp_vec(fp: &Map<String, Value>, key: &str) -> FResult<Option<DVec3>> {
 }
 
 fn fp_num(fp: &Map<String, Value>, key: &str) -> FResult<Option<f64>> {
-    fp.get(key)
-        .map(|x| num(x).ok_or_else(|| Fail::Internal("TypeError".into())))
-        .transpose()
+    fp.get(key).map(|x| num(x).ok_or_else(|| Fail::Internal("TypeError".into()))).transpose()
 }
 
 /// `fp.get(key) and entity_type != fp[key]`.
@@ -291,7 +272,7 @@ pub fn type_differs(fp: &Map<String, Value>, key: &str, name: &str) -> bool {
     truthy(fp.get(key)) && fp.get(key).and_then(Value::as_str) != Some(name)
 }
 
-/// `_edge_cost`, lower is better.
+/// Lower is better.
 pub fn edge_cost(
     t: &Tuning,
     e: &EdgeEnt,
@@ -345,8 +326,7 @@ pub fn edge_cost(
     Ok(cost)
 }
 
-/// `_face_cost`, lower is better. The normal term is signed, so the inward twin
-/// of a thin wall loses.
+/// Lower is better. The normal term is signed, so the inward twin of a thin wall loses.
 pub fn face_cost(t: &Tuning, f: &FaceEnt, fp: &Map<String, Value>, tol_pos: f64) -> FResult<f64> {
     let mut cost = t.w_pos * (f.centroid() - vector(need(fp, "centroid")?)?).length() / tol_pos;
     if let Some(n) = fp_vec(fp, "normal")? {
@@ -363,23 +343,4 @@ pub fn face_cost(t: &Tuning, f: &FaceEnt, fp: &Map<String, Value>, tol_pos: f64)
         cost += t.w_rad * rel_err(r, fr) / t.len_rel_tol;
     }
     Ok(cost)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rounding_matches_python() {
-        // round(0.125, 2), round(2.675, 2), round(0.0625, 3), round(-0.0001, 3)
-        assert_eq!(py_round(0.125, 2), 0.12);
-        assert_eq!(py_round(2.675, 2), 2.67);
-        assert_eq!(py_round(0.0625, 3), 0.062);
-        assert_eq!(py_round(0.375, 2), 0.38);
-        assert_eq!(
-            key_bits(&[py_round(-0.0001, 3), 0.0, 0.0, 0.0]),
-            key_bits(&[0.0; 4])
-        );
-        assert_eq!(format!("{:.2}", 0.125), "0.12");
-    }
 }

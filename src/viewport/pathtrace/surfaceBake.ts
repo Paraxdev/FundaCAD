@@ -1,9 +1,5 @@
-// Procedural surfaces live in the Realtime fragment shader, which the tracer
-// does not run, so each one is evaluated once at a few points per triangle and
-// averaged into the mirror's vertex colours. The bump is dropped, roughness
-// keeps its mean offset per slot. A CAD flat face has only four vertices, so a
-// point sample at each vertex would alias; area weighted triangle samples give
-// the face its average tint instead.
+// The tracer does not run the Realtime shader, so each surface is averaged into the mirror's vertex colours, bump
+// dropped. A CAD flat face has four vertices, so area weighted triangle samples stand in for per vertex ones.
 
 import * as THREE from "three";
 import { surfaceBakeShader, type SurfaceBakeShader } from "../proceduralSurface";
@@ -12,16 +8,28 @@ import type { SurfaceBake, SurfaceBaker } from "./mirror";
 /** World positions and normals in, 3 floats per sample; out `tint` as rgb plus
  *  amount (4 per sample) and `rough` as the roughness offset (1 per sample). */
 export type SurfaceShade = (
-  pos: Float32Array, nrm: Float32Array, count: number, shader: SurfaceBakeShader,
+  pos: Float32Array,
+  nrm: Float32Array,
+  count: number,
+  shader: SurfaceBakeShader,
 ) => { tint: Float32Array; rough: Float32Array } | null;
 
 /** Samples across all baked triangles of one body; past it a body keeps its
  *  plain colour. Four per triangle below a quarter of it, one above. */
 export const SAMPLE_BUDGET = 4_000_000;
 
-const BARY: [number, number, number][] = [[1 / 3, 1 / 3, 1 / 3], [2 / 3, 1 / 6, 1 / 6], [1 / 6, 2 / 3, 1 / 6], [1 / 6, 1 / 6, 2 / 3]];
+const BARY: [number, number, number][] = [
+  [1 / 3, 1 / 3, 1 / 3],
+  [2 / 3, 1 / 6, 1 / 6],
+  [1 / 6, 2 / 3, 1 / 6],
+  [1 / 6, 1 / 6, 2 / 3],
+];
 
-interface Slot { index: number; shader: SurfaceBakeShader; tris: number[] }
+interface Slot {
+  index: number;
+  shader: SurfaceBakeShader;
+  tris: number[];
+}
 
 export function createSurfaceBaker(shade: SurfaceShade): SurfaceBaker {
   const held = new WeakMap<THREE.BufferGeometry, { key: string; bake: SurfaceBake | null }>();
@@ -43,7 +51,8 @@ export function createSurfaceBaker(shade: SurfaceShade): SurfaceBaker {
 function slotsOf(g: THREE.BufferGeometry, material: THREE.Material | THREE.Material[]): Slot[] {
   const tris = (g.index ? g.index.count : g.getAttribute("position").count) / 3;
   const mats = Array.isArray(material) ? material : [material];
-  const ranges = Array.isArray(material) && g.groups.length ? g.groups : [{ start: 0, count: tris * 3, materialIndex: 0 }];
+  const ranges =
+    Array.isArray(material) && g.groups.length ? g.groups : [{ start: 0, count: tris * 3, materialIndex: 0 }];
   const out = new Map<number, Slot>();
   for (const r of ranges) {
     const k = r.materialIndex ?? 0;
@@ -114,9 +123,13 @@ function bakeBody(src: THREE.Mesh, slots: Slot[], shade: SurfaceShade): SurfaceB
         const [a, b, c] = BARY[j]!;
         const o = (ti * k + j) * 3;
         tmp.set(0, 0, 0).addScaledVector(p[0]!, a).addScaledVector(p[1]!, b).addScaledVector(p[2]!, c);
-        ps[o] = tmp.x; ps[o + 1] = tmp.y; ps[o + 2] = tmp.z;
+        ps[o] = tmp.x;
+        ps[o + 1] = tmp.y;
+        ps[o + 2] = tmp.z;
         tmp.set(0, 0, 0).addScaledVector(n[0]!, a).addScaledVector(n[1]!, b).addScaledVector(n[2]!, c).normalize();
-        ns[o] = tmp.x; ns[o + 1] = tmp.y; ns[o + 2] = tmp.z;
+        ns[o] = tmp.x;
+        ns[o + 1] = tmp.y;
+        ns[o + 2] = tmp.z;
       }
     });
     const out = shade(ps, ns, m, s.shader);
@@ -124,7 +137,11 @@ function bakeBody(src: THREE.Mesh, slots: Slot[], shade: SurfaceShade): SurfaceB
     let roughSum = 0;
     let areaSum = 0;
     s.tris.forEach((t, ti) => {
-      let am = 0, r = 0, tr = 0, tg = 0, tb = 0;
+      let am = 0,
+        r = 0,
+        tr = 0,
+        tg = 0,
+        tb = 0;
       for (let j = 0; j < k; j++) {
         const q = ti * k + j;
         const a = out.tint[q * 4 + 3]!;
@@ -161,12 +178,12 @@ function bakeBody(src: THREE.Mesh, slots: Slot[], shade: SurfaceShade): SurfaceB
   return { slot, tint, amount, rough };
 }
 
-const VERTEX = /* glsl */`
+const VERTEX = /* glsl */ `
 void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }
 `;
 
 function fragment(glsl: string): string {
-  return /* glsl */`
+  return /* glsl */ `
 #include <common>
 uniform sampler2D uSurfBakePos;
 uniform sampler2D uSurfBakeNrm;
@@ -226,7 +243,11 @@ export function webglSurfaceShade(renderer: THREE.WebGLRenderer): SurfaceShade {
     quad.frustumCulled = false;
     const scene = new THREE.Scene();
     scene.add(quad);
-    const was = { target: renderer.getRenderTarget(), toneMapping: renderer.toneMapping, autoClear: renderer.autoClear };
+    const was = {
+      target: renderer.getRenderTarget(),
+      toneMapping: renderer.toneMapping,
+      autoClear: renderer.autoClear,
+    };
     const pixels = new Float32Array(w * 2 * h * 4);
     try {
       renderer.toneMapping = THREE.NoToneMapping;

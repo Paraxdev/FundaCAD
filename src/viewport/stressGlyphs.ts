@@ -1,37 +1,43 @@
-// What the Stress panel draws over the model besides the face tints: an arrow
-// per force load with a tip you drag to aim and size it, small arrows into the
-// faces a pressure pushes on, the gravity arrow at the body's centre, the axis
-// of each pinned support, an orb for each spot with a handle on its rim you
-// drag to size it, and the probe's markers on the coloured body. It also owns
-// the pointer while those are live: the arrow's tip, the orb's handle, in
-// place mode the click that puts a spot on the body, and in probe mode the
-// hover readout and the click that pins one.
-//
-// Deliberately not a tool, like SelectionNudge: the panel stays open while the
-// user selects faces for it, so nothing here may take the canvas. A press is
-// claimed only when it lands on an arrow's tip, and a probe click only once it
-// is known to be a click and not the start of an orbit.
-//
-// What to draw arrives from ui/panels.ts as plain numbers (setModel), and what
-// a drag means goes back as a patch for a load; the arithmetic of both lives in
-// ui/stress.ts where node can test it. Per-frame work stays out of Vue: glyphs
-// are a constant size on screen, so a rAF pass rescales them while they show.
-
+// The Stress panel's glyphs and their pointer handling. Not a tool, like SelectionNudge: the panel stays open
+// while faces are selected, so a press is claimed only on an arrow tip and a probe click only once it is not
+// an orbit. The arithmetic lives in ui/stress.ts where node can test it.
 import * as THREE from "three";
 import type { Vec3 } from "../types";
 import type { Viewport } from "./viewport";
 import { escapeClaimed } from "../ui/escapeClaim";
 import {
-  AXES, forceDragLabel, forceDragPatch, forceDragStart, forceToArrowPx, GRAVITY_MARK_COLOR, LOAD_MARK_COLOR,
-  PINNED_MARK_COLOR, roundSig, sameTarget, snapDrag, type ForceDirection, type ForceDragStart, type SnapCandidate,
+  AXES,
+  forceDragLabel,
+  forceDragPatch,
+  forceDragStart,
+  forceToArrowPx,
+  GRAVITY_MARK_COLOR,
+  LOAD_MARK_COLOR,
+  PINNED_MARK_COLOR,
+  roundSig,
+  sameTarget,
+  snapDrag,
+  type ForceDirection,
+  type ForceDragStart,
+  type SnapCandidate,
   type StressTarget,
 } from "../ui/stress";
 
 export type StressGlyphHost = Pick<
   Viewport,
-  | "addToScene" | "removeFromScene" | "rayFrom" | "pixelWorldSize" | "projectToScreen"
-  | "camera" | "domElement" | "requestRender" | "pickStressOverlay" | "stressOverlayPoint"
-  | "pickFaceForPressPull" | "overlayDrawn" | "watchOverlays"
+  | "addToScene"
+  | "removeFromScene"
+  | "rayFrom"
+  | "pixelWorldSize"
+  | "projectToScreen"
+  | "camera"
+  | "domElement"
+  | "requestRender"
+  | "pickStressOverlay"
+  | "stressOverlayPoint"
+  | "pickFaceForPressPull"
+  | "overlayDrawn"
+  | "watchOverlays"
 >;
 
 /** A spot of a support or a load: the body's surface inside the orb. */
@@ -49,13 +55,11 @@ export interface ForceGlyph {
   loadId: number;
   /** The centre of the load's faces, where the arrow stands. */
   anchor: Vec3;
-  /** Unit direction of the force as it is applied, a negative force's sign
-   *  included. */
+  /** Unit direction as applied, a negative force's sign included. */
   dir: Vec3;
   /** The force's size, N. */
   force: number;
-  /** `dir` as the panel names it, kept on a drag along it: the load's own
-   *  direction, or for a negative force the name of the way it really pushes. */
+  /** `dir` as the panel names it, kept on a drag along it. For a negative force, the way it really pushes. */
   direction: ForceDirection;
   /** "Into the face" for this load, when its faces have one. */
   into: Vec3 | null;
@@ -115,11 +119,9 @@ const GRAVITY_PX = 64;
 const PROBE_R = 3.5;
 /** How far a press may travel and still be a probe click rather than an orbit. */
 const CLICK_SLOP_PX = 5;
-/** How far a press on an arrow's tip must travel before it changes the load,
- *  so a click or a tremble on the tip leaves it as it is. */
+/** So a click or a tremble on an arrow's tip leaves the load as it is. */
 const DRAG_SLOP_PX = 3;
-/** The dark rim drawn behind every arrow, px, so it reads over a light body
- *  as well as over the dark background. */
+/** Dark rim behind every arrow, so it reads over a light body and the dark background. */
 const EDGE_PX = 1.2;
 const EDGE_COLOR = 0x1b1f24;
 /** The ball on an orb's rim, px. */
@@ -164,14 +166,23 @@ export class StressGlyphs {
   private forceArrows = new Map<number, Arrow>();
   private lines: THREE.Line[] = [];
   private probes: { mesh: THREE.Mesh; tri: number; weights: Vec3; label: HTMLElement }[] = [];
+  private pinned: { tri: number; weights: Vec3; label: string }[] = [];
+  private weak: { tri: number; weights: Vec3; label: string } | null = null;
   private orbs: Orb[] = [];
   /** The orb under the cursor in place mode, where a click would put a spot. */
   private preview: Orb | null = null;
   private placing: { color: number; radius: number } | null = null;
   private shared: {
-    shaft: THREE.CylinderGeometry; head: THREE.ConeGeometry; shaftEdge: THREE.CylinderGeometry; headEdge: THREE.ConeGeometry;
-    grab: THREE.SphereGeometry; ball: THREE.SphereGeometry; hidden: THREE.Material;
-    orb: THREE.SphereGeometry; ring: THREE.BufferGeometry; rim: THREE.SphereGeometry;
+    shaft: THREE.CylinderGeometry;
+    head: THREE.ConeGeometry;
+    shaftEdge: THREE.CylinderGeometry;
+    headEdge: THREE.ConeGeometry;
+    grab: THREE.SphereGeometry;
+    ball: THREE.SphereGeometry;
+    hidden: THREE.Material;
+    orb: THREE.SphereGeometry;
+    ring: THREE.BufferGeometry;
+    rim: THREE.SphereGeometry;
   } | null = null;
   private materials = new Map<number, THREE.Material>();
   private orbMaterials = new Map<string, THREE.Material>();
@@ -181,8 +192,12 @@ export class StressGlyphs {
   private raf = 0;
   private probe = false;
   private drag: {
-    loadId: number; glyph: ForceGlyph; candidates: SnapCandidate[]; start: ForceDragStart;
-    from: { x: number; y: number }; moved: boolean;
+    loadId: number;
+    glyph: ForceGlyph;
+    candidates: SnapCandidate[];
+    start: ForceDragStart;
+    from: { x: number; y: number };
+    moved: boolean;
   } | null = null;
   private hoverTip: number | null = null;
   private press: { x: number; y: number } | null = null;
@@ -202,14 +217,14 @@ export class StressGlyphs {
   }
   private unwatch: () => void;
 
-  /** Draw this model, replacing the last one. An empty model detaches. */
+  /** An empty model detaches. */
   setModel(m: StressGlyphModel) {
     this.model = m;
     this.rebuild();
   }
 
-  /** Place mode: the next click on the body puts a spot of this colour and
-   *  radius there, and an orb follows the cursor meanwhile. Null ends it. */
+  /** The next click on the body puts a spot there, an orb follows the cursor meanwhile. Null ends place
+   *  mode. */
   setPlacing(p: { color: number; radius: number } | null) {
     this.placing = p;
     this.press = null;
@@ -218,7 +233,7 @@ export class StressGlyphs {
     this.syncAttach();
   }
 
-  /** Probe mode on or off. Off drops the hover readout. */
+  /** Off drops the hover readout. */
   setProbe(on: boolean) {
     this.probe = on;
     if (!on) this.showLabel(null);
@@ -227,6 +242,17 @@ export class StressGlyphs {
 
   /** The pinned probes, each where its triangle is drawn now. */
   setProbePins(pins: { tri: number; weights: Vec3; label: string }[]) {
+    this.pinned = pins;
+    this.drawPins();
+  }
+
+  /** The result's weakest spot, pinned like a probe; null removes it. */
+  setWeakSpot(p: { tri: number; weights: Vec3; label: string } | null) {
+    this.weak = p;
+    this.drawPins();
+  }
+
+  private drawPins() {
     for (const p of this.probes) {
       // The ball and its material are shared, so only the mesh goes.
       this.host.removeFromScene(p.mesh);
@@ -234,13 +260,21 @@ export class StressGlyphs {
     }
     this.probes = [];
     const shared = this.geometries();
-    for (const p of pins) {
+    const all = this.weak ? [...this.pinned, this.weak] : this.pinned;
+    for (const [i, p] of all.entries()) {
       const mesh = new THREE.Mesh(shared.ball, this.material(0xffffff));
       mesh.renderOrder = 1000;
       mesh.raycast = () => {};
       this.host.addToScene(mesh, "stress");
-      const label = this.makeLabel("stress-probe-pin");
-      label.textContent = p.label;
+      const label = this.makeLabel(p === this.weak ? "stress-probe-pin stress-weak-pin" : "stress-probe-pin");
+      if (p === this.weak) label.textContent = p.label;
+      else {
+        // Numbered as the panel's Point rows are.
+        const no = document.createElement("span");
+        no.className = "stress-pin-no";
+        no.textContent = String(i + 1);
+        label.append(no, ` ${p.label}`);
+      }
       this.probes.push({ mesh, tri: p.tri, weights: p.weights, label });
     }
     this.syncAttach();
@@ -248,7 +282,6 @@ export class StressGlyphs {
     this.loop();
   }
 
-  /** Take everything off the view and give the canvas back. */
   dispose() {
     this.unwatch();
     this.model = { forces: [], pressures: [], gravity: null, pins: [] };
@@ -258,7 +291,9 @@ export class StressGlyphs {
     this.placing = null;
     this.dropPreview();
     this.clearDrawn();
-    this.setProbePins([]);
+    this.pinned = [];
+    this.weak = null;
+    this.drawPins();
     this.showLabel(null);
     this.label?.remove();
     this.label = null;
@@ -283,8 +318,6 @@ export class StressGlyphs {
     this.host.requestRender();
   }
 
-  // --- drawing -----------------------------------------------------------------
-
   private geometries() {
     if (!this.shared) {
       // A unit shaft along +Y from 0 to 1, stretched per arrow; the head's base at 0.
@@ -299,13 +332,19 @@ export class StressGlyphs {
       const headEdge = new THREE.ConeGeometry(HEAD_R + EDGE_PX, HEAD_LEN + 3 * EDGE_PX, 16);
       headEdge.translate(0, (HEAD_LEN + 3 * EDGE_PX) / 2 - EDGE_PX, 0);
       this.shared = {
-        shaft, head, shaftEdge, headEdge,
+        shaft,
+        head,
+        shaftEdge,
+        headEdge,
         grab: new THREE.SphereGeometry(GRAB_R, 10, 8),
         ball: new THREE.SphereGeometry(PROBE_R, 12, 8),
         hidden: new THREE.MeshBasicMaterial({ visible: false, depthTest: false }),
         orb: new THREE.SphereGeometry(1, 40, 20),
         ring: new THREE.BufferGeometry().setFromPoints(
-          Array.from({ length: 64 }, (_, i) => new THREE.Vector3(Math.cos((i / 64) * 2 * Math.PI), Math.sin((i / 64) * 2 * Math.PI), 0)),
+          Array.from(
+            { length: 64 },
+            (_, i) => new THREE.Vector3(Math.cos((i / 64) * 2 * Math.PI), Math.sin((i / 64) * 2 * Math.PI), 0),
+          ),
         ),
         rim: new THREE.SphereGeometry(RIM_R, 12, 8),
       };
@@ -313,8 +352,7 @@ export class StressGlyphs {
     return this.shared;
   }
 
-  /** Drawn through the model like every other handle, so a load on a face
-   *  turned away from the camera is still there to grab. */
+  /** Drawn through the model like every handle, so a load on a face turned away is still there to grab. */
   private material(color: number): THREE.Material {
     let m = this.materials.get(color);
     if (!m) {
@@ -328,18 +366,22 @@ export class StressGlyphs {
     const key = `${kind}${color}`;
     let m = this.orbMaterials.get(key);
     if (!m) {
-      m = kind === "ring"
-        ? new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 })
-        : new THREE.MeshBasicMaterial({
-            color, transparent: true, depthWrite: false, depthTest: kind === "dome", opacity: kind === "dome" ? 0.38 : 0.1,
-          });
+      m =
+        kind === "ring"
+          ? new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 })
+          : new THREE.MeshBasicMaterial({
+              color,
+              transparent: true,
+              depthWrite: false,
+              depthTest: kind === "dome",
+              opacity: kind === "dome" ? 0.38 : 0.1,
+            });
       this.orbMaterials.set(key, m);
     }
     return m;
   }
 
-  /** An orb of a world radius, unlike the arrows, which keep their size on
-   *  screen: it shows how much of the body the spot takes. */
+  /** A world radius, unlike the arrows: it shows how much of the body the spot takes. */
   private makeOrb(at: Vec3, radius: number, color: number, spot: SpotGlyph | null): Orb {
     const g = this.geometries();
     const dome = new THREE.Mesh(g.orb, this.orbMaterial("dome", color));
@@ -378,14 +420,16 @@ export class StressGlyphs {
     this.host.requestRender();
   }
 
-  /** Put an orb's parts where its centre and radius say, the ring and the
-   *  handle turned to the camera. True when anything moved. */
+  /** Ring and handle turned to the camera. True when anything moved. */
   private layOrb(o: Orb): boolean {
     const cam = this.host.camera;
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion);
     const rim = o.at.clone().addScaledVector(right, o.radius);
-    const moved = !o.dome.position.equals(o.at) || Math.abs(o.dome.scale.x - o.radius) > 1e-9 ||
-      !o.ring.quaternion.equals(cam.quaternion) || (!!o.handle && !o.handle.position.equals(rim));
+    const moved =
+      !o.dome.position.equals(o.at) ||
+      Math.abs(o.dome.scale.x - o.radius) > 1e-9 ||
+      !o.ring.quaternion.equals(cam.quaternion) ||
+      (!!o.handle && !o.handle.position.equals(rim));
     for (const part of [o.dome, o.ghost, o.ring]) {
       part.position.copy(o.at);
       part.scale.setScalar(o.radius);
@@ -420,15 +464,25 @@ export class StressGlyphs {
       grab = new THREE.Mesh(g.grab, g.hidden);
       group.add(grab);
     }
-    const a: Arrow = { group, shaft, head, shaftEdge, headEdge, grab, at: new THREE.Vector3(...at), dir: new THREE.Vector3(...dir).normalize(), px, tipAtRoot };
+    const a: Arrow = {
+      group,
+      shaft,
+      head,
+      shaftEdge,
+      headEdge,
+      grab,
+      at: new THREE.Vector3(...at),
+      dir: new THREE.Vector3(...dir).normalize(),
+      px,
+      tipAtRoot,
+    };
     this.shape(a);
     this.host.addToScene(group, "stress");
     this.arrows.push(a);
     return a;
   }
 
-  /** Lay out an arrow's parts for its length in pixels. A pressure arrow is
-   *  drawn ending at its root, pointing into the face it stands on. */
+  /** A pressure arrow ends at its root, pointing into the face it stands on. */
   private shape(a: Arrow) {
     const shaftLen = Math.max(1, a.px - HEAD_LEN);
     a.shaft.scale.set(1, shaftLen, 1);
@@ -485,7 +539,10 @@ export class StressGlyphs {
     }
     for (const p of m.pins) {
       const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...p.from), new THREE.Vector3(...p.to)]);
-      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: PINNED_MARK_COLOR, depthTest: false, transparent: true, opacity: 0.95 }));
+      const line = new THREE.Line(
+        geo,
+        new THREE.LineBasicMaterial({ color: PINNED_MARK_COLOR, depthTest: false, transparent: true, opacity: 0.95 }),
+      );
       line.renderOrder = 998;
       line.raycast = () => {};
       this.host.addToScene(line, "stress");
@@ -496,24 +553,27 @@ export class StressGlyphs {
     this.loop();
   }
 
-  /** One pass of the loop: place everything, then come back next frame while
-   *  there is something to hold in place. */
+  /** Comes back next frame while there is something to hold in place. */
   private frame() {
     this.raf = 0;
     this.place();
     this.loop();
   }
 
-  /** Keep the frame loop running while the pointer is ours and something is
-   *  drawn. Idempotent, so every change can ask for it. */
+  /** Idempotent, so every change can ask for it. */
   private loop() {
-    if (this.raf || !this.attached || !this.host.overlayDrawn("stress") || !(this.arrows.length || this.probes.length || this.orbs.length || this.preview)) return;
+    if (
+      this.raf ||
+      !this.attached ||
+      !this.host.overlayDrawn("stress") ||
+      !(this.arrows.length || this.probes.length || this.orbs.length || this.preview)
+    )
+      return;
     if (typeof requestAnimationFrame === "function") this.raf = requestAnimationFrame(this.tick);
   }
 
-  /** Hold every glyph at its size on screen, and the probe markers where their
-   *  triangles are drawn now. Asks for a render only when something moved, so
-   *  an idle view stays idle. */
+  /** Holds glyphs at their screen size and probe markers on their triangles. Renders only when something
+   *  moved, so an idle view stays idle. */
   private place() {
     let changed = false;
     for (const a of this.arrows) {
@@ -547,10 +607,9 @@ export class StressGlyphs {
     if (changed) this.host.requestRender();
   }
 
-  // --- the pointer ---------------------------------------------------------------
-
   private syncAttach() {
-    const want = this.arrows.length > 0 || this.probe || this.probes.length > 0 || this.orbs.length > 0 || !!this.placing;
+    const want =
+      this.arrows.length > 0 || this.probe || this.probes.length > 0 || this.orbs.length > 0 || !!this.placing;
     if (want) this.attach();
     else this.detach();
   }
@@ -582,15 +641,16 @@ export class StressGlyphs {
     this.hoverRim = null;
   }
 
-  /** The orb whose rim handle is under the cursor, if any. */
   private rimAt(x: number, y: number): Orb | null {
     const grabs = this.orbs.filter((o) => o.grab);
     if (!grabs.length) return null;
-    const hit = this.host.rayFrom(x, y).intersectObjects(grabs.map((o) => o.grab!), false)[0];
-    return hit ? grabs.find((o) => o.grab === hit.object) ?? null : null;
+    const hit = this.host.rayFrom(x, y).intersectObjects(
+      grabs.map((o) => o.grab!),
+      false,
+    )[0];
+    return hit ? (grabs.find((o) => o.grab === hit.object) ?? null) : null;
   }
 
-  /** Where a click at (x, y) would put a spot. */
   private spotHit(x: number, y: number): SpotHit | null {
     const hit = this.host.pickFaceForPressPull(x, y);
     if (!hit) return null;
@@ -601,8 +661,7 @@ export class StressGlyphs {
     };
   }
 
-  /** The radius the pointer at (x, y) gives an orb: how far it is from the
-   *  orb's centre in the plane through it facing the camera. */
+  /** Distance from the orb's centre in the plane through it facing the camera. */
   private radiusAt(x: number, y: number, o: Orb): number | null {
     const view = this.host.camera.getWorldDirection(new THREE.Vector3());
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(view, o.at);
@@ -610,11 +669,13 @@ export class StressGlyphs {
     return p ? Math.max(SPOT_MIN, roundSig(p.distanceTo(o.at), 2)) : null;
   }
 
-  /** The load whose arrow tip is under the cursor, if any. */
   private tipAt(x: number, y: number): number | null {
     const grabs = [...this.forceArrows.entries()].filter(([, a]) => a.grab);
     if (!grabs.length) return null;
-    const hit = this.host.rayFrom(x, y).intersectObjects(grabs.map(([, a]) => a.grab!), false)[0];
+    const hit = this.host.rayFrom(x, y).intersectObjects(
+      grabs.map(([, a]) => a.grab!),
+      false,
+    )[0];
     if (!hit) return null;
     return grabs.find(([, a]) => a.grab === hit.object)?.[0] ?? null;
   }
@@ -635,11 +696,13 @@ export class StressGlyphs {
       e.stopImmediatePropagation();
       // Keep the drag when the pointer leaves the canvas. A browser that has
       // lost track of the pointer refuses, and the drag then ends at the edge.
-      try { this.host.domElement.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
-      // The direction the arrow already has first, then "into the face" when
-      // the faces have one, then the axes. A snap keeps the first of a tie, and
-      // on a face square to an axis "into" is that axis exactly, so a drag
-      // straight along the arrow only resizes it and keeps its name.
+      try {
+        this.host.domElement.setPointerCapture(e.pointerId);
+      } catch {
+        /* not capturable */
+      }
+      // The arrow's own direction first, then into the face, then the axes: a snap keeps the first of a tie,
+      // so a drag straight along the arrow only resizes it and keeps its name.
       const candidates: SnapCandidate[] = [{ key: glyph.direction, dir: glyph.dir }];
       if (glyph.into && glyph.direction !== "into") candidates.push({ key: "into", dir: glyph.into });
       for (const [key, dir] of Object.entries(AXES)) {
@@ -647,7 +710,10 @@ export class StressGlyphs {
       }
       // Measured from where the press landed on the tip, not from the tip.
       const press = this.dragAt(e.clientX, e.clientY, glyph, candidates);
-      const start = forceDragStart(glyph.force, press ? press.length / this.host.pixelWorldSize(new THREE.Vector3(...glyph.anchor)) : null);
+      const start = forceDragStart(
+        glyph.force,
+        press ? press.length / this.host.pixelWorldSize(new THREE.Vector3(...glyph.anchor)) : null,
+      );
       this.drag = { loadId, glyph, candidates, start, from: { x: e.clientX, y: e.clientY }, moved: false };
       this.setCursor("grabbing");
       return;
@@ -656,7 +722,11 @@ export class StressGlyphs {
     if (rim?.spot) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      try { this.host.domElement.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+      try {
+        this.host.domElement.setPointerCapture(e.pointerId);
+      } catch {
+        /* not capturable */
+      }
       this.spotDrag = { orb: rim, spot: rim.spot, from: { x: e.clientX, y: e.clientY }, moved: false };
       return;
     }
@@ -722,8 +792,7 @@ export class StressGlyphs {
     this.showLabel(text, e.clientX, e.clientY);
   }
 
-  /** Where the pointer at (x, y) puts an arrow's tip: in the plane through
-   *  the arrow's root facing the camera, snapped. */
+  /** In the plane through the arrow's root facing the camera, snapped. */
   private dragAt(x: number, y: number, glyph: ForceGlyph, candidates: SnapCandidate[]) {
     const root = new THREE.Vector3(...glyph.anchor);
     const view = this.host.camera.getWorldDirection(new THREE.Vector3());
@@ -749,7 +818,11 @@ export class StressGlyphs {
     if (this.drag) {
       const id = this.drag.loadId;
       this.drag = null;
-      try { this.host.domElement.releasePointerCapture(e.pointerId); } catch { /* never captured */ }
+      try {
+        this.host.domElement.releasePointerCapture(e.pointerId);
+      } catch {
+        /* never captured */
+      }
       this.setCursor(this.tipAt(e.clientX, e.clientY) !== null ? "grab" : null);
       this.showLabel(null);
       this.handlers.forceDragEnd(id, false);
@@ -758,7 +831,11 @@ export class StressGlyphs {
     if (this.spotDrag) {
       const d = this.spotDrag;
       this.spotDrag = null;
-      try { this.host.domElement.releasePointerCapture(e.pointerId); } catch { /* never captured */ }
+      try {
+        this.host.domElement.releasePointerCapture(e.pointerId);
+      } catch {
+        /* never captured */
+      }
       this.showLabel(null);
       this.handlers.spotRadiusEnd?.(d.spot.target, d.spot.index, false);
       return;
@@ -808,8 +885,6 @@ export class StressGlyphs {
       this.handlers.leaveProbe();
     }
   }
-
-  // --- labels ----------------------------------------------------------------------
 
   private makeLabel(cls: string): HTMLElement {
     const el = document.createElement("div");

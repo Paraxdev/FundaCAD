@@ -1,11 +1,10 @@
-// The seam a tracer plugs into. P1 ships the WebGPU tracer behind it; a native
-// tracer that streams frames from the engine can take its place without the
-// viewport noticing.
+// The seam a tracer plugs into, so a native tracer can replace the WebGPU one without the viewport noticing.
 
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
 import type { LightRig } from "../lightRig";
 import type { TraceLens } from "./camera";
+import type { FrameView } from "./frameCamera";
 import type { TraceBloomSettings } from "./tracePost";
 import type { TraceHemi } from "./environment";
 
@@ -30,6 +29,9 @@ export interface TraceLook {
    *  takes its pixels instead, `key` naming panorama, turn, exposure and hemisphere. */
   hdr?: { hash: string; rotation: number; exposure: number; hemi: TraceHemi | null; key: string };
   brightness: number;
+  /** Path bounces and the native tracer's firefly clamp (ui/experimentalPrefs.ts), the tracer's own when absent. */
+  bounces?: number;
+  firefly?: number;
   toneMapping: THREE.ToneMapping;
   exposure: number;
   /** The rig `lights` were placed from. The native tracer lights from it,
@@ -65,9 +67,8 @@ export interface TracerBackend {
    *  field, null a pinhole. */
   updateCamera(camera: THREE.Camera, lens: TraceLens | null): void;
   reset(): void;
-  /** Gathers one more frame of samples; `samples` is the count so far, which
-   *  sets how hard the image is filtered on its way to the screen. Resolves
-   *  with the frame's GPU time in ms once the GPU has finished it. */
+  /** `samples` is the count so far, which sets how hard the image is filtered. Resolves with the
+   *  frame's GPU time in ms once the GPU has finished it. */
   renderSample(samples: number): Promise<number>;
   /** Path slots traced per frame. */
   setFrameBudget(slots: number): void;
@@ -78,10 +79,12 @@ export interface TracerBackend {
   /** The trace is on screen through every restart, so each frame before its
    *  first whole sample needs a picture of its own. */
   setMotionPreview?(on: boolean): void;
+  /** The camera the image on the canvas was traced with, when it can be told
+   *  and may be older than the last updateCamera. */
+  shownView?(): FrameView | null;
   readonly maxTextureSize: number;
-  /** Traces the current scene and camera at `width` x `height` until
-   *  `samples`, denoises it with the large weights and returns a PNG data URL.
-   *  The viewport's own image is gone afterwards: the caller restarts it. */
+  /** Traces until `samples`, denoises with the large weights and returns a PNG data URL. The
+   *  viewport's own image is gone afterwards, the caller restarts it. */
   picture(o: PictureOptions): Promise<string>;
   /** At the cap: runs the final denoise and crossfades to it. False once
    *  nothing is left to draw, so the GPU can idle. */
@@ -90,9 +93,8 @@ export interface TracerBackend {
   readonly denoised: boolean;
   /** Swaps the denoise weights; the samples gathered are kept. */
   setDenoise(level: Denoise): void;
-  /** Bloom on the linear frame before tone mapping, null for none. Draws the
-   *  last frame again with it and never restarts the samples; a picture blooms
-   *  the same. */
+  /** Bloom on the linear frame before tone mapping, null for none. Redraws the last frame and
+   *  never restarts the samples; a picture blooms the same. */
   setBloom(bloom: TraceBloomSettings | null): void;
   /** Samples gathered per pixel since the last reset. */
   samples(): Promise<number>;
@@ -110,3 +112,7 @@ export interface PictureOptions {
 }
 
 export const SAMPLE_CAP = 256;
+
+/** A start refused because the device cannot trace properly. It is not one of
+ *  the two faults that turn Path traced off, the other backend may stand in. */
+export class TracerRefused extends Error {}

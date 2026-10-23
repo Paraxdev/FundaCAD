@@ -1,8 +1,5 @@
-//! Press/pull previews on one rebuild cache, the way the app sends them while a
-//! face is dragged: the body of the feature before the press/pull is kept in the
-//! cache and every preview starts from it, so no preview may change it. When they did,
-//! the star pocket ring's bottom and floor refused every distance after a session
-//! of pushes ("the faces beside this one meet before it gets that far").
+//! Press/pull previews share one rebuild cache as in a face drag and all start from the cached body before the
+//! press/pull, so no preview may change it, or the star pocket ring refuses every distance after a few pushes.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::NoWatch;
@@ -51,7 +48,11 @@ fn previews_leave_the_body_before_them_as_it_was() {
     for (point, d) in [(BOTTOM, 2.05), (BOTTOM, -0.3), (FLOOR, 2.05), (FLOOR, 1.0), (BOTTOM, 1.2)] {
         let raw = with_push(&base, point, d);
         let r = cache.rebuild(&doc(&raw), &raw, &NoWatch).unwrap();
-        assert!(r.errors.is_empty(), "push {d} at {point:?}: {:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+        assert!(
+            r.errors.is_empty(),
+            "push {d} at {point:?}: {:?}",
+            r.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
+        );
     }
     let after = brep(&held);
     assert!(after == before, "the body grew from {} to {} bytes of BREP", before.len(), after.len());

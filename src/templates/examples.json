@@ -1,0 +1,37 @@
+[
+  {
+    "id": "wall-bracket",
+    "name": "Wall bracket",
+    "caption": "Find where it bends",
+    "hint": "An L bracket on a wall. Open the Stress panel and run it to see where it bends most",
+    "icon": "stress"
+  },
+  {
+    "id": "box-with-lid",
+    "name": "Box with a lid",
+    "caption": "A lid that fits, ready to print",
+    "hint": "A box and a lid laid out for printing. Change innerWidth in Parameters and both parts follow",
+    "icon": "shell"
+  },
+  {
+    "id": "capsule-holder",
+    "name": "Capsule holder",
+    "caption": "A cap that screws on, ready to print",
+    "hint": "A tube and a screw-on cap laid out for printing. Change innerDiameter in Parameters and both threads follow, or set screwedOn to 1 to see the cap on the tube",
+    "icon": "thread"
+  },
+  {
+    "id": "plate",
+    "name": "Plate",
+    "caption": "Change a size, the holes follow",
+    "hint": "A plate with four holes. Change width or depth in Parameters and the holes stay in their corners",
+    "icon": "box"
+  },
+  {
+    "id": "pinned-lever",
+    "name": "Pinned lever",
+    "caption": "See the load on a pin",
+    "hint": "A lever on a pin. Open the Stress panel and run it to see the load around the pin",
+    "icon": "rotate"
+  }
+]

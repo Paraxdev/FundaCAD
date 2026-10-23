@@ -1,9 +1,5 @@
-// Which tracer Path traced starts on. Auto prefers the native tracer where the
-// web view has no WebGPU (Linux, macOS 14/15), and beside WebGPU wherever it
-// runs on ray queries: the N2b bench measured that path 14x to 40x WebGPU's
-// samples per second, and its cap is always cleaned, by Open Image Denoise
-// when downloaded, else by the edge aware filter. The software path is about
-// WebGPU's speed, so there WebGPU and its browser denoise are preferred.
+// Auto prefers native where the web view has no WebGPU (Linux, macOS 14/15), and on ray queries, which the N2b
+// bench measured at 14x to 40x WebGPU's samples per second. The software path is about WebGPU's speed.
 
 import type { TracerPref } from "../../ui/renderPrefs";
 import type { TracerBackend } from "./backend";
@@ -36,12 +32,17 @@ export interface TracerEnv {
 
 export function chooseTracer(pref: TracerPref, env: TracerEnv): TracerKind | null {
   const usable = (k: TracerKind) => (k === "webgpu" ? env.webgpu : env.native.available);
-  const nativeFirst = pref === "native"
-    || (pref === "auto" && (!env.webgpu || env.native.path === "rayquery"));
+  const nativeFirst = pref === "native" || (pref === "auto" && (!env.webgpu || env.native.path === "rayquery"));
   const order: TracerKind[] = nativeFirst ? ["native", "webgpu"] : ["webgpu", "native"];
   const left = order.filter(usable);
   if (left.every((k) => env.faulted?.has(k)) && left.length > 1) return null;
   return left.find((k) => !env.faulted?.has(k)) ?? left[0] ?? null;
+}
+
+/** The native probe takes 350 to 610 ms, WebGPU's far less, so a trace started at boot would otherwise
+ *  read "checking" as no native tracer and keep WebGPU for the whole session. */
+export function waitsForNative(pref: TracerPref, webgpu: boolean, native: NativeProbe | null): boolean {
+  return !native && !(pref === "webgpu" && webgpu);
 }
 
 /** `prefer` "websocket" skips the native shared buffers. `call` stands in for

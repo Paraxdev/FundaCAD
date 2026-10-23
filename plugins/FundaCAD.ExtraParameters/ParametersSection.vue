@@ -1,14 +1,14 @@
 <script setup lang="ts">
-// The knobs of the model, as a section of the browser: a configuration picker,
-// the checks that do not hold, and every user parameter through the control it
-// was given, in its group.
-//
-// A slider commits when it is let go, not on every step of the drag. Each commit
-// is an undo step and a rebuild, and forty of them for one gesture would bury
-// the change somebody wants to undo under the positions they dragged through.
-
 import { computed, ref } from "vue";
-import { checkResults, clampToControl, configurationDrift, toast, useBrowserStore, useDocValue, useEngine } from "fundacad";
+import {
+  checkResults,
+  clampToControl,
+  configurationDrift,
+  toast,
+  useBrowserStore,
+  useDocValue,
+  useEngine,
+} from "fundacad";
 import { Icon } from "fundacad/ui";
 import { setupOpen } from "./state";
 import { tuneGroups, type TuneRow } from "./view";
@@ -29,7 +29,8 @@ const count = computed(() => groups.value.reduce((n, g) => n + g.rows.length, 0)
 const shown = computed(() => count.value > 0 || configs.value.length > 0);
 const collapsed = computed(() => browser.isCollapsed("Parameters"));
 
-/** A slider's position while it is held, by parameter name. */
+// A held slider's position by parameter name. A slider commits only on release, since each commit is an undo step
+// and a rebuild, and forty of them would bury the change somebody wants to undo.
 const dragging = ref<Record<string, number>>({});
 
 function commit(row: TuneRow, value: number) {
@@ -68,7 +69,8 @@ const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit"
         title="Parameter setup: controls, groups, configurations and checks"
         style="background: none; border: none; color: inherit; cursor: pointer; padding: 0 4px; margin-right: 6px"
         @click.stop="setupOpen = true"
-      ><Icon name="properties" :size="14" /></button>
+        ><Icon name="properties" :size="14"
+      /></button>
       <span class="tree-count">{{ count }}</span>
     </div>
 
@@ -88,7 +90,8 @@ const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit"
           v-if="activeId && drift.length"
           style="opacity: 0.6; font-size: 11px"
           :title="`Changed since it was applied: ${drift.join(', ')}`"
-        >modified</span>
+          >modified</span
+        >
       </div>
 
       <div
@@ -121,7 +124,7 @@ const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit"
             class="feature-row tree-child xp-row"
             :data-param="row.name"
             :style="{ ...rowStyle, paddingLeft: g.id === null ? undefined : '34px' }"
-            :title="row.problem ? `${row.name}: ${row.problem}` : row.def.comment ?? row.name"
+            :title="row.problem ? `${row.name}: ${row.problem}` : (row.def.comment ?? row.name)"
           >
             <span :style="{ ...nameStyle, color: row.problem ? '#e24a3b' : undefined }">{{ row.name }}</span>
 
@@ -147,7 +150,8 @@ const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit"
                 v-if="!row.control.choices.some((c) => c.value === row.def.value)"
                 :value="String(row.def.value)"
                 disabled
-              >{{ row.def.value }} (not listed)</option>
+                >{{ row.def.value }} (not listed)</option
+              >
             </select>
 
             <template v-else-if="row.control.kind === 'slider'">

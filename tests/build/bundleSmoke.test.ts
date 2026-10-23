@@ -46,11 +46,14 @@ describe("the bundle job", () => {
   });
 
   it("starts the AppImage, the .deb's binary and the Windows exe with --mcp", () => {
-    const text = all.filter(runsSmoke).map((s) => s.text).join("\n");
+    const text = all
+      .filter(runsSmoke)
+      .map((s) => s.text)
+      .join("\n");
     expect(text).toMatch(/\.AppImage/);
     expect(text).toMatch(/--appimage-extract-and-run/);
     expect(text).toMatch(/dpkg-deb -x/);
-    expect(text).toMatch(/fundacad\.exe/);
+    expect(text).toMatch(/\$FUNDACAD_BIN\.exe/);
     expect(text).toMatch(/--mcp/);
   });
 
@@ -89,5 +92,42 @@ describe("the test job", () => {
   it("runs the smoke driver's own tests", () => {
     const all = steps(job(workflow, "test"));
     expect(all.some((s) => /python3 tests\/build\/test_bundle_smoke\.py/.test(s.text))).toBe(true);
+  });
+});
+
+describe("the deb-install job", () => {
+  const lf = (t: string) => t.replace(/\r/g, "");
+  const text = lf(job(workflow, "deb-install"));
+  const all = steps(text);
+  const flatpak = lf(job(workflow, "build-flatpak"));
+
+  it("runs after the bundle job under the same condition as the Flatpak", () => {
+    expect(text).toMatch(/needs: \[channel, bundle\]/);
+    const cond = (t: string) => /\n    if: >-\n((?:      .*\n)+)/.exec(t)?.[1];
+    expect(cond(text)).toBeDefined();
+    expect(cond(text)).toBe(cond(flatpak));
+  });
+
+  it("covers the .deb on three distros and the AppImage on Fedora", () => {
+    const legs = [...text.matchAll(/- image: (\S+)\n\s+kind: (\S+)/g)].map((m) => [m[1], m[2]]);
+    expect(legs).toEqual([
+      ["ubuntu:22.04", "deb"],
+      ["ubuntu:24.04", "deb"],
+      ["debian:12", "deb"],
+      ["fedora:40", "appimage"],
+    ]);
+  });
+
+  it("downloads the Linux bundle and starts the package in the container", () => {
+    expect(text).toContain("name: fundacad-bundle-ubuntu-22.04");
+    expect(all.some((s) => /docker run[^\n]*\$\{\{ matrix\.image \}\}/.test(s.text.replace(/\\\n/g, " ")))).toBe(true);
+    expect(text).toMatch(/package-install-smoke\.sh \$\{\{ matrix\.kind \}\}/);
+  });
+
+  it("lets a broken Depends fail only its own job on dev and never holds a release", () => {
+    expect(text).toContain(GATE);
+    expect(text).toMatch(/fail-fast: false/);
+    const release = /^ {4}needs: (.*)$/m.exec(job(workflow, "release"))?.[1] ?? "";
+    expect(release).not.toContain("deb-install");
   });
 });

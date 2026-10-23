@@ -11,10 +11,8 @@ use serde_json::{json, Value};
 #[test]
 fn measure_gives_the_wall_between_two_inspected_faces() {
     let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
-    let add = mcp.call(
-        "feature_add",
-        json!({"feature": {"id": "bx", "type": "box", "length": 30, "width": 20, "height": 10}}),
-    );
+    let add = mcp
+        .call("feature_add", json!({"feature": {"id": "bx", "type": "box", "length": 30, "width": 20, "height": 10}}));
     assert!(!add.is_error, "{}", add.text);
     let ins = mcp.call("inspect", json!({"detail": true, "selectors": true}));
     assert!(!ins.is_error, "{}", ins.text);

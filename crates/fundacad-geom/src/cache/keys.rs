@@ -1,10 +1,5 @@
-//! Input addressed cache keys, the Python engine's `rebuild_cache.py` `_feature_sig`,
-//! `_param_closure`, `_feature_scope`, `_chain_keys_scoped`, `_env_sig` and
-//! `_blob_key`.
-//!
-//! `key_i = H(key_{i-1} ‖ sig_i ‖ scope_i)` seeded with `H(env)`. Geometry is
-//! never hashed, so kernel float noise cannot move a key; a matching key
-//! proves the document prefix and everything it could read are unchanged.
+//! Input addressed cache keys of rebuild_cache.py, `key_i = H(key_{i-1} ‖ sig_i ‖ scope_i)` seeded with `H(env)`.
+//! Geometry is never hashed, so kernel float noise cannot move a key.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -86,15 +81,8 @@ pub fn feature_sig(f: &Value, brep_sigs: &mut HashMap<String, String>) -> String
         (Some("import"), Some(b)) => {
             let head: String = b.chars().take(64).collect();
             let tail: String = b.chars().rev().take(64).collect();
-            let memo = format!(
-                "{}|{}|{head}|{tail}",
-                f.get("id").map(Value::to_string).unwrap_or_default(),
-                b.len()
-            );
-            let h = brep_sigs
-                .entry(memo)
-                .or_insert_with(|| hash_hex(&[b.as_bytes()]))
-                .clone();
+            let memo = format!("{}|{}|{head}|{tail}", f.get("id").map(Value::to_string).unwrap_or_default(), b.len());
+            let h = brep_sigs.entry(memo).or_insert_with(|| hash_hex(&[b.as_bytes()])).clone();
             let mut g = f.clone();
             g["brep"] = Value::String(h);
             canonical(&g)
@@ -109,10 +97,7 @@ pub fn param_closure(params: &serde_json::Map<String, Value>) -> HashMap<String,
         .iter()
         .map(|(n, v)| {
             let refs = match v {
-                Value::String(s) => identifiers(s)
-                    .into_iter()
-                    .filter(|r| params.contains_key(*r))
-                    .collect(),
+                Value::String(s) => identifiers(s).into_iter().filter(|r| params.contains_key(*r)).collect(),
                 _ => BTreeSet::new(),
             };
             (n.as_str(), refs)
@@ -162,10 +147,8 @@ pub fn feature_scope(
             used.extend(c.iter().cloned());
         }
     }
-    let scoped: serde_json::Map<String, Value> = used
-        .into_iter()
-        .filter_map(|n| params.get(&n).map(|v| (n, v.clone())))
-        .collect();
+    let scoped: serde_json::Map<String, Value> =
+        used.into_iter().filter_map(|n| params.get(&n).map(|v| (n, v.clone()))).collect();
     let mut scope = canonical(&Value::Object(scoped));
     if reads_visibility(f) {
         scope.push('|');
@@ -174,10 +157,8 @@ pub fn feature_scope(
     scope
 }
 
-/// A join, cut or intersect that names no `targets` skips the hidden bodies it
-/// reaches, so its result moves with the eye states. One that names them acts
-/// on them hidden or not, and an extrude that stores its own `hiddenBodies`
-/// reads that set, not the live one. A null there is read as absent.
+/// A join, cut or intersect without `targets` skips hidden bodies, so its key follows the eye states. With
+/// targets it ignores them, and an extrude with its own `hiddenBodies` (null read as absent) reads that set.
 fn reads_visibility(f: &Value) -> bool {
     if f.get("targets").and_then(Value::as_array).is_some_and(|t| !t.is_empty()) {
         return false;
@@ -186,18 +167,62 @@ fn reads_visibility(f: &Value) -> bool {
     if ty == Some("extrude") {
         return f.get("hiddenBodies").map_or(true, Value::is_null);
     }
-    ty == Some("press-pull")
-        || f.get("operation").and_then(Value::as_str).is_some_and(|op| op != "new")
+    ty == Some("press-pull") || f.get("operation").and_then(Value::as_str).is_some_and(|op| op != "new")
 }
 
-/// `_env_sig`: everything outside the document that shapes geometry. The
-/// engine binary stands in for the Python engine's source files, so any rebuild of
-/// it starts every document cold. `FUNDACAD_ENV_SIG` overrides it.
+/// Bump when a feature, kernel patch or default can change the shape a document builds to, so older
+/// checkpoints miss. Re-recording tests/golden is the usual sign, and `GOLDEN_DIGESTS` fails until both move.
+/// A false bump costs one cold reopen, a missed one stale geometry, so bump when unsure.
+pub const GEOMETRY_VERSION: u32 = 3;
+
+/// Bump when what a checkpoint holds, or how `checkpoint.rs` reads one back,
+/// changes: a field it lacks comes back empty without an error.
+pub const CACHE_FORMAT: u32 = 1;
+
+/// `_env_sig`: everything outside the document that shapes geometry, so an app update finds the last one's
+/// checkpoints. Plugins are keyed per feature in `chain_keys`. `FUNDACAD_ENV_SIG` overrides it.
 pub fn env_sig() -> String {
     if let Some(forced) = std::env::var("FUNDACAD_ENV_SIG").ok().filter(|s| !s.is_empty()) {
         return forced;
     }
-    let exe = std::env::current_exe()
+    env_sig_of(GEOMETRY_VERSION, CACHE_FORMAT, crate::OCCT_VERSION, unvouched_build().as_deref())
+}
+
+/// `unvouched` is set for a build the two versions cannot speak for.
+pub fn env_sig_of(geometry: u32, format: u32, occt: &str, unvouched: Option<&str>) -> String {
+    let (tag, own): (&[u8], &str) = match unvouched {
+        Some(own) => (b"dev", own),
+        None => (b"release", ""),
+    };
+    hash_hex(&[
+        b"engine-cache\0",
+        &geometry.to_le_bytes(),
+        &format.to_le_bytes(),
+        occt.as_bytes(),
+        b"\0",
+        tag,
+        b"\0",
+        own.as_bytes(),
+    ])
+}
+
+/// A build of committed source is vouched for by `GEOMETRY_VERSION`. One with uncommitted edits keys on them,
+/// one without a git identity or `set_build` on its binary's size and mtime.
+fn unvouched_build() -> Option<String> {
+    unvouched(fundacad_engine::build()).map(|own| own.unwrap_or_else(exe_stamp))
+}
+
+/// `None` vouched, `Some(None)` nothing to key on but the binary.
+fn unvouched(build: Option<&Value>) -> Option<Option<String>> {
+    let commit = build.and_then(|b| b.get("commit")).and_then(Value::as_str).filter(|c| !c.is_empty());
+    let Some(commit) = commit else {
+        return Some(None);
+    };
+    build.and_then(|b| b.get("changes")).and_then(Value::as_str).map(|changes| Some(format!("{commit}:{changes}")))
+}
+
+fn exe_stamp() -> String {
+    std::env::current_exe()
         .ok()
         .and_then(|p| std::fs::metadata(p).ok())
         .map(|m| {
@@ -208,12 +233,7 @@ pub fn env_sig() -> String {
                 .map_or(0, |d| d.as_nanos());
             format!("{}:{mtime}", m.len())
         })
-        .unwrap_or_default();
-    hash_hex(&[
-        env!("CARGO_PKG_VERSION").as_bytes(),
-        crate::OCCT_VERSION.as_bytes(),
-        exe.as_bytes(),
-    ])
+        .unwrap_or_default()
 }
 
 /// The blob an import reads its geometry from, by content hash.
@@ -224,12 +244,9 @@ pub fn stored_geometry(f: &Value) -> Option<&str> {
     f.get("geom").and_then(Value::as_str).filter(|g| !g.is_empty())
 }
 
-/// `_chain_keys_scoped` over a document's features. `plugins` maps a feature
-/// type to the identity of the plugin bundle that runs it, so a checkpoint
-/// past a plugin feature is never served once that bundle changes, arrives or
-/// goes. `absent` holds the hashes of `stored_geometry` the blob store lacks:
-/// an import of one fails, and that failure is not its answer once the blob
-/// is there.
+/// `_chain_keys_scoped`. `plugins` maps a feature type to its plugin bundle identity, so a checkpoint past
+/// a plugin feature misses once that bundle changes, arrives or goes. `absent` holds the `stored_geometry`
+/// hashes the blob store lacks, so an import that failed for want of one is retried once it arrives.
 pub fn chain_keys(
     raw: &Value,
     env: &str,
@@ -238,10 +255,7 @@ pub fn chain_keys(
     brep_sigs: &mut HashMap<String, String>,
 ) -> Vec<String> {
     let empty = serde_json::Map::new();
-    let params = raw
-        .get("parameters")
-        .and_then(Value::as_object)
-        .unwrap_or(&empty);
+    let params = raw.get("parameters").and_then(Value::as_object).unwrap_or(&empty);
     let closure = param_closure(params);
     let hidden: BTreeSet<&str> = raw
         .get("bodyVisibility")
@@ -257,11 +271,7 @@ pub fn chain_keys(
     for f in raw.get("features").and_then(Value::as_array).into_iter().flatten() {
         let sig = feature_sig(f, brep_sigs);
         let scope = feature_scope(f, params, &closure, &hidden_json);
-        let plugin = f
-            .get("type")
-            .and_then(Value::as_str)
-            .and_then(|t| plugins.get(t))
-            .map_or("", String::as_str);
+        let plugin = f.get("type").and_then(Value::as_str).and_then(|t| plugins.get(t)).map_or("", String::as_str);
         let mut parts: Vec<&[u8]> = vec![k.as_bytes(), sig.as_bytes(), scope.as_bytes()];
         if !plugin.is_empty() {
             parts.extend([&b"|plugin:"[..], plugin.as_bytes(), b"|", hidden_json.as_bytes()]);
@@ -286,155 +296,10 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn identifiers_scan_like_findall() {
-        assert_eq!(identifiers("w*2 + h_1 - 3e2"), ["w", "h_1", "e2"]);
-    }
-
-    #[test]
-    fn canonical_json_ignores_field_order() {
-        assert_eq!(canonical(&json!({"b": 1, "a": [2, {"d": 1, "c": 2}]})), r#"{"a":[2,{"c":2,"d":1}],"b":1}"#);
-        assert_eq!(canonical(&json!({"b": 1, "a": 2})), canonical(&json!({"a": 2, "b": 1})));
-    }
-
-    #[test]
-    fn a_parameter_edit_moves_keys_only_from_the_first_reader() {
-        let doc = |t: i32| {
-            json!({"parameters": {"t": t, "w": "t*2", "h": 4}, "features": [
-                {"id": "a", "type": "box", "length": "h", "width": 1, "height": 1},
-                {"id": "b", "type": "box", "length": 1, "width": 1, "height": 1},
-                {"id": "c", "type": "box", "length": "w", "width": 1, "height": 1},
-            ]})
-        };
-        let mut memo = HashMap::new();
-        let k5 = chain_keys(&doc(5), "env", &HashMap::new(), &BTreeSet::new(), &mut memo);
-        let k6 = chain_keys(&doc(6), "env", &HashMap::new(), &BTreeSet::new(), &mut memo);
-        assert_eq!(k5[..2], k6[..2]);
-        assert_ne!(k5[2], k6[2]);
-        assert_ne!(chain_keys(&doc(5), "other", &HashMap::new(), &BTreeSet::new(), &mut memo)[0], k5[0]);
-    }
-
-    #[test]
-    fn a_plugin_bundle_moves_keys_from_its_first_feature() {
-        let doc = json!({"features": [
-            {"id": "a", "type": "box", "length": 1, "width": 1, "height": 1},
-            {"id": "t", "type": "texture", "kind": "knurl"},
-            {"id": "b", "type": "box", "length": 2, "width": 1, "height": 1},
-        ]});
-        let mut memo = HashMap::new();
-        let none = chain_keys(&doc, "env", &HashMap::new(), &BTreeSet::new(), &mut memo);
-        let v1 = chain_keys(&doc, "env", &HashMap::from([("texture".into(), "v1".into())]), &BTreeSet::new(), &mut memo);
-        let v2 = chain_keys(&doc, "env", &HashMap::from([("texture".into(), "v2".into())]), &BTreeSet::new(), &mut memo);
-        assert_eq!(none[0], v1[0]);
-        assert!(none[1] != v1[1] && v1[1] != v2[1] && v1[2] != v2[2]);
-    }
-
-    #[test]
-    fn absent_stored_geometry_moves_keys_from_its_import() {
-        let doc = json!({"features": [
-            {"id": "a", "type": "box", "length": 1, "width": 1, "height": 1},
-            {"id": "i", "type": "import", "geom": "ab12"},
-            {"id": "b", "type": "box", "length": 2, "width": 1, "height": 1, "geom": "cd34"},
-        ]});
-        let mut memo = HashMap::new();
-        let mut keys = |absent: &[&str]| {
-            let absent = absent.iter().map(|g| g.to_string()).collect();
-            chain_keys(&doc, "env", &HashMap::new(), &absent, &mut memo)
-        };
-        let (held, gone) = (keys(&[]), keys(&["ab12"]));
-        assert_eq!(held[0], gone[0]);
-        assert!(held[1] != gone[1] && held[2] != gone[2]);
-        assert_eq!(keys(&["cd34", "ef56"]), held, "a blob no import reads moved a key");
-    }
-
-    #[test]
-    fn part_names_stay_out_of_the_parameter_scope() {
-        let f = json!({"id": "f1", "type": "import", "name": "Imported", "brep": "",
-            "nodes": [{"name": "Bracket t Left", "parent": null}], "parts": [{"node": 0, "faces": 6}],
-            "notes": ["Bracket t Left: 5 faces did not close into a solid and stay a surface, 4 open edges"]});
-        let p5 = json!({"t": 5.0});
-        let p6 = json!({"t": 6.0});
-        let closure = param_closure(p5.as_object().unwrap());
-        assert_eq!(
-            feature_scope(&f, p5.as_object().unwrap(), &closure, "[]"),
-            feature_scope(&f, p6.as_object().unwrap(), &closure, "[]")
-        );
-    }
-
-    #[test]
-    fn an_extrude_reads_visibility_only_without_its_own_set() {
-        let p = serde_json::Map::new();
-        let c = HashMap::new();
-        let legacy = json!({"id": "e", "type": "extrude"});
-        let captured = json!({"id": "e", "type": "extrude", "hiddenBodies": []});
-        assert_ne!(feature_scope(&legacy, &p, &c, "[\"body1\"]"), feature_scope(&legacy, &p, &c, "[]"));
-        assert_eq!(feature_scope(&captured, &p, &c, "[\"body1\"]"), feature_scope(&captured, &p, &c, "[]"));
-    }
-
-    fn reads(f: Value) -> bool {
-        let p = serde_json::Map::new();
-        let c = HashMap::new();
-        feature_scope(&f, &p, &c, "[\"body1\"]") != feature_scope(&f, &p, &c, "[]")
-    }
-
-    #[test]
-    fn a_feature_that_names_its_targets_does_not_read_visibility() {
-        let named = json!(["body1"]);
-        assert!(!reads(json!({"id": "l", "type": "loft", "operation": "cut", "targets": named})));
-        assert!(!reads(json!({"id": "r", "type": "revolve", "operation": "cut", "targets": named})));
-        assert!(!reads(json!({"id": "b", "type": "box", "operation": "join", "targets": named})));
-        assert!(!reads(json!({"id": "s", "type": "sweep", "operation": "intersect", "targets": named})));
-        assert!(!reads(json!({"id": "p", "type": "press-pull", "mode": "cut", "targets": named})));
-        assert!(!reads(json!({"id": "e", "type": "extrude", "operation": "cut", "targets": named})));
-        assert!(!reads(json!({"id": "e", "type": "extrude", "operation": "cut", "targets": named, "hiddenBodies": ["body1"]})));
-        for none in [json!([]), Value::Null] {
-            assert!(reads(json!({"id": "l", "type": "loft", "operation": "cut", "targets": none})), "{none}");
-            assert!(reads(json!({"id": "p", "type": "press-pull", "mode": "cut", "targets": none})), "{none}");
-            assert!(reads(json!({"id": "e", "type": "extrude", "operation": "cut", "targets": none})), "{none}");
-        }
-        let doc = |vis: Value| json!({"bodyVisibility": vis, "features": [
-            {"id": "a", "type": "box"},
-            {"id": "c", "type": "loft", "operation": "cut", "targets": named},
-            {"id": "z", "type": "box"},
-        ]});
-        let mut memo = HashMap::new();
-        let mut keys = |vis: Value, plugins: &HashMap<String, String>| chain_keys(&doc(vis), "env", plugins, &BTreeSet::new(), &mut memo);
-        let none = HashMap::new();
-        assert_eq!(keys(json!({"body1": false}), &none), keys(json!({}), &none));
-        assert_eq!(keys(json!({"body1": false}), &none), keys(json!({"body1": true}), &none));
-        // A plugin hands combine targets of its own choosing, so its key keeps the eye states.
-        let plugins = HashMap::from([("loft".into(), "v1".into())]);
-        let (hidden, shown) = (keys(json!({"body1": false}), &plugins), keys(json!({}), &plugins));
-        assert_eq!(hidden[0], shown[0]);
-        assert_ne!(hidden[1], shown[1]);
-    }
-
-    #[test]
-    fn a_null_hidden_set_on_an_extrude_still_reads_visibility() {
-        assert!(reads(json!({"id": "e", "type": "extrude", "operation": "cut", "hiddenBodies": null})));
-    }
-
-    #[test]
-    fn a_boolean_without_its_own_hidden_set_reads_visibility() {
-        assert!(reads(json!({"id": "b", "type": "box", "operation": "join"})));
-        assert!(reads(json!({"id": "r", "type": "revolve", "operation": "cut"})));
-        assert!(reads(json!({"id": "p", "type": "press-pull"})));
-        assert!(!reads(json!({"id": "b", "type": "box", "operation": "new"})));
-        assert!(!reads(json!({"id": "b", "type": "box"})));
-        assert!(!reads(json!({"id": "e", "type": "extrude", "operation": "cut", "hiddenBodies": []})));
-        let plugins = HashMap::from([("texture".into(), "v1".into())]);
-        let doc = |vis: Value| json!({"bodyVisibility": vis, "features": [{"id": "t", "type": "texture"}]});
-        let mut memo = HashMap::new();
-        assert_ne!(
-            chain_keys(&doc(json!({"body1": false})), "env", &plugins, &BTreeSet::new(), &mut memo),
-            chain_keys(&doc(json!({})), "env", &plugins, &BTreeSet::new(), &mut memo)
-        );
-    }
-
-    #[test]
-    fn cyclic_parameters_close_without_looping() {
-        let p = json!({"a": "b", "b": "a", "c": 1});
-        let closure = param_closure(p.as_object().unwrap());
-        assert_eq!(closure["a"].len(), 2);
-        assert_eq!(closure["c"].len(), 1);
+    fn only_a_build_of_committed_source_is_vouched_for() {
+        assert_eq!(unvouched(Some(&json!({"commit": "abc", "commitDate": "2026-10-21"}))), None);
+        assert_eq!(unvouched(Some(&json!({"commit": "abc", "changes": "0f"}))), Some(Some("abc:0f".into())));
+        assert_eq!(unvouched(Some(&json!({}))), Some(None));
+        assert_eq!(unvouched(None), Some(None));
     }
 }

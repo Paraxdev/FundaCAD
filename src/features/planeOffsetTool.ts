@@ -1,9 +1,4 @@
-// Interactive Offset Plane: after picking a source plane/face, drag an arrow
-// along its normal (or type a value) to set the offset distance, with a live
-// translucent ghost of the resulting plane. Commit (click / Enter) returns the
-// offset PlaneDef so the caller can sketch on it. Mirrors the fillet/press-pull
-// gizmo pattern (constant-screen arrow grabbed + dragged, value snapped to the
-// zoom-aware clean step via viewport.snapStep).
+// Offset Plane: drag an arrow along the source normal or type a value; commit returns the PlaneDef to sketch on.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -64,13 +59,15 @@ export class PlaneOffsetTool {
 
     this.buildGizmo();
     this.buildGhost();
-    this.dim.show([{ name: "offset", label: "Offset", kind: "length" }], () => this.commit(), () => this.cancel());
+    this.dim.show(
+      [{ name: "offset", label: "Offset", kind: "length" }],
+      () => this.commit(),
+      () => this.cancel(),
+    );
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ offset: 0 });
-    setPrompt(
-      "Drag or type an offset · Enter to sketch on it · Esc",
-    );
+    setPrompt("Drag or type an offset · Enter to sketch on it · Esc");
     this.gesture.frame();
     this.updateGhost();
   }
@@ -111,8 +108,7 @@ export class PlaneOffsetTool {
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
       return;
     }
-    const moved =
-      Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (!this.downOnGizmo && !moved) this.commit();
   }
 
@@ -135,8 +131,7 @@ export class PlaneOffsetTool {
     if (!this.grabbing && this.dim.isUserDriven("offset")) {
       const v = this.dim.getValue("offset");
       if (v != null) {
-        // the field is the truth: typed sign is preferred (the old code re-applied the
-        // drag's sign onto |v|, so a typed negative offset went positive)
+        // The field is the truth, typed sign included.
         if (Math.abs(v - this.value) > 1e-6) {
           this.value = v;
           this.updateGhost();
@@ -146,7 +141,6 @@ export class PlaneOffsetTool {
     this.gesture.frame();
   }
 
-  /** translucent quad showing where the offset plane lands */
   private buildGhost() {
     const geo = new THREE.PlaneGeometry(60, 60);
     const mat = new THREE.MeshBasicMaterial({
@@ -185,8 +179,7 @@ export class PlaneOffsetTool {
   private commit() {
     if (!this.active) return;
     const v = this.dim.getValue("offset");
-    // GATE on isUserDriven: while dragging the field displays |value|, so an
-    // unguarded read-back flips a negative offset positive (abs-display trap).
+    // Gated: while dragging the field shows |value|, so an unguarded read-back flips a negative offset positive.
     if (v != null && this.dim.isUserDriven("offset")) this.value = v;
     const o = this.anchor.clone().addScaledVector(this.axis, this.value);
     const def: PlaneDef = {

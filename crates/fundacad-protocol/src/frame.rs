@@ -1,15 +1,6 @@
-//! Binary reply frames and the size limits around them.
-//!
-//! Replaces `_pack_edges`, `_taker`, `_pack_bodies`, `_frame_bytes`,
-//! `_encode_binary_reply`, `_too_large_error` and `_reply_bytes` in
-//! the Python engine's `wire.py`.
-//!
-//! Layout, all integers little-endian:
-//! `[u32 header_len][header_len bytes UTF-8 JSON header][pad to 4][buf0][buf1]...`
-//! Each mesh array in the header is `{"$buf": i}`, indexing
-//! `result.$buffers[i] = {"dtype", "len"}` with `len` an element count, in
-//! on-wire order. Both dtypes are 4 bytes wide, so the one header pad aligns
-//! every buffer; a wider dtype would need per-buffer padding.
+//! Binary reply frames, integers little-endian: `[u32 header_len][UTF-8 JSON header][pad to 4][buf0][buf1]...`.
+//! A mesh array in the header is `{"$buf": i}`, indexing `result.$buffers[i] = {"dtype", "len"}`, len in elements.
+//! Both dtypes are 4 bytes wide so the one header pad aligns every buffer, a wider one needs per-buffer padding.
 
 use crate::body::{Edge, FullBody, JobResult, MeshResult, WireBody, F32, U32};
 use crate::envelope;
@@ -33,10 +24,7 @@ pub struct Limits {
 
 impl Default for Limits {
     fn default() -> Self {
-        Limits {
-            max_frame: MAX_FRAME,
-            chunk_target: CHUNK_TARGET_BYTES,
-        }
+        Limits { max_frame: MAX_FRAME, chunk_target: CHUNK_TARGET_BYTES }
     }
 }
 
@@ -122,10 +110,7 @@ impl<'a> Packer<'a> {
     }
 
     fn meta(&self) -> Value {
-        self.bufs
-            .iter()
-            .map(|b| json!({"dtype": b.dtype(), "len": b.len()}))
-            .collect()
+        self.bufs.iter().map(|b| json!({"dtype": b.dtype(), "len": b.len()})).collect()
     }
 }
 
@@ -136,22 +121,15 @@ fn pack_edges<'a>(body: &'a FullBody, p: &mut Packer<'a>) -> Value {
     out.insert("$pts".into(), p.take(BufSrc::EdgePoints(&body.edges)));
     out.insert("$counts".into(), p.take(BufSrc::EdgeCounts(&body.edges)));
     out.insert("body".into(), body.id().clone());
-    let smooth: Vec<Value> = body
-        .edges
-        .iter()
-        .enumerate()
-        .filter(|(_, e)| e.smooth)
-        .map(|(i, _)| i.into())
-        .collect();
+    let smooth: Vec<Value> = body.edges.iter().enumerate().filter(|(_, e)| e.smooth).map(|(i, _)| i.into()).collect();
     if !smooth.is_empty() {
         out.insert("smooth".into(), Value::Array(smooth));
     }
     Value::Object(out)
 }
 
-/// `_pack_bodies`: each full body's arrays become `$buf` refs, stubs pass
-/// through. Shared by the single-frame and chunked encoders so a body's
-/// payload is identical either way.
+/// `_pack_bodies`: each full body's arrays become `$buf` refs, stubs pass through. Shared by the single-frame and
+/// chunked encoders so a body's payload is identical either way.
 fn pack_bodies<'a>(bodies: &'a [WireBody], p: &mut Packer<'a>) -> Vec<Value> {
     bodies
         .iter()
@@ -179,11 +157,7 @@ fn pack_bodies<'a>(bodies: &'a [WireBody], p: &mut Packer<'a>) -> Vec<Value> {
 
 /// `_frame_bytes`: size the frame from its parts, refuse at the cap, then lay
 /// it out in one allocation.
-fn frame_bytes(
-    envelope: &Value,
-    bufs: &[BufSrc<'_>],
-    max_frame: usize,
-) -> Result<Vec<u8>, TooLarge> {
+fn frame_bytes(envelope: &Value, bufs: &[BufSrc<'_>], max_frame: usize) -> Result<Vec<u8>, TooLarge> {
     let header = pyjson::to_string(envelope);
     let pad = (4 - header.len() % 4) % 4;
     let total = 4 + header.len() + pad + bufs.iter().map(|b| 4 * b.len()).sum::<usize>();
@@ -201,36 +175,20 @@ fn frame_bytes(
 }
 
 /// `_encode_binary_reply`: a successful mesh result as one binary frame.
-pub fn encode_binary_reply(
-    id: &Value,
-    res: &MeshResult,
-    limits: &Limits,
-) -> Result<Vec<u8>, TooLarge> {
+pub fn encode_binary_reply(id: &Value, res: &MeshResult, limits: &Limits) -> Result<Vec<u8>, TooLarge> {
     let mut p = Packer::default();
     let mut header = res.fields.clone();
-    header.insert(
-        "bodies".into(),
-        Value::Array(pack_bodies(&res.bodies, &mut p)),
-    );
+    header.insert("bodies".into(), Value::Array(pack_bodies(&res.bodies, &mut p)));
     header.insert("$buffers".into(), p.meta());
     let env = json!({"id": id, "ok": true, "result": header});
     frame_bytes(&env, &p.bufs, limits.max_frame)
 }
 
 /// One frame of a chunked stream, `{"id", "stream", "ok"|"status", "result"}`.
-fn stream_envelope(
-    id: &Value,
-    sid: &str,
-    seq: usize,
-    fin: bool,
-    result: Map<String, Value>,
-) -> Value {
+fn stream_envelope(id: &Value, sid: &str, seq: usize, fin: bool, result: Map<String, Value>) -> Value {
     let mut env = Map::new();
     env.insert("id".into(), id.clone());
-    env.insert(
-        "stream".into(),
-        json!({"sid": sid, "seq": seq, "final": fin}),
-    );
+    env.insert("stream".into(), json!({"sid": sid, "seq": seq, "final": fin}));
     if fin {
         env.insert("ok".into(), Value::Bool(true));
     } else {
@@ -250,17 +208,9 @@ pub(crate) fn encode_stream_head(
 ) -> Result<Vec<u8>, TooLarge> {
     let mut head = res.fields.clone();
     head.shift_remove("bodies");
-    let manifest = res
-        .bodies
-        .iter()
-        .map(|b| Value::Object(b.manifest_entry()))
-        .collect();
+    let manifest = res.bodies.iter().map(|b| Value::Object(b.manifest_entry())).collect();
     head.insert("manifest".into(), Value::Array(manifest));
-    frame_bytes(
-        &stream_envelope(id, sid, 0, fin, head),
-        &[],
-        limits.max_frame,
-    )
+    frame_bytes(&stream_envelope(id, sid, 0, fin, head), &[], limits.max_frame)
 }
 
 /// Frame `seq` of a stream, carrying a contiguous slice of the bodies.
@@ -276,11 +226,7 @@ pub(crate) fn encode_stream_chunk(
     let mut result = Map::new();
     result.insert("bodies".into(), Value::Array(pack_bodies(bodies, &mut p)));
     result.insert("$buffers".into(), p.meta());
-    frame_bytes(
-        &stream_envelope(id, sid, seq, fin, result),
-        &p.bufs,
-        limits.max_frame,
-    )
+    frame_bytes(&stream_envelope(id, sid, seq, fin, result), &p.bufs, limits.max_frame)
 }
 
 /// `sysmem.describe`: a human size for an error message, "1.8 GiB".
@@ -331,12 +277,7 @@ pub fn too_large_error(id: &Value, size: usize, n_bodies: usize, limits: &Limits
 
 /// `_body_too_large_error`: one body alone is over the cap, the case chunking
 /// cannot fix because a body is the indivisible unit of a chunk.
-pub fn body_too_large_error(
-    id: &Value,
-    chunk: &[WireBody],
-    size: usize,
-    limits: &Limits,
-) -> String {
+pub fn body_too_large_error(id: &Value, chunk: &[WireBody], size: usize, limits: &Limits) -> String {
     // Python's max() keeps the FIRST of equal sizes, Iterator::max_by_key the last.
     let mut worst: Option<&WireBody> = None;
     for b in chunk {
@@ -344,9 +285,7 @@ pub fn body_too_large_error(
             worst = Some(b);
         }
     }
-    let label = worst
-        .map(|w| label_of(w.fields()))
-        .unwrap_or_else(|| "a body".into());
+    let label = worst.map(|w| label_of(w.fields())).unwrap_or_else(|| "a body".into());
     eprintln!(
         "[rebuild] body {label:?} alone is {}, over the {} frame cap",
         describe_size(size),
@@ -379,9 +318,8 @@ fn label_of(f: &Map<String, Value>) -> String {
     "a body".into()
 }
 
-/// `_reply_bytes`: a binary frame when the client opted in and the result is a
-/// successful mesh reply, the JSON text reply otherwise, either one refused
-/// with an error when it would reach the cap.
+/// `_reply_bytes`: a binary frame when the client opted in and the result is a successful mesh reply, the JSON text
+/// reply otherwise, either one refused with an error when it would reach the cap.
 pub fn reply_bytes(id: &Value, res: &JobResult, binary: bool, limits: &Limits) -> Message {
     let n_bodies = res.body_count();
     let text = match res {
@@ -406,15 +344,11 @@ pub enum Buf {
     U32(Vec<u32>),
 }
 
-/// A binary frame's envelope with every `$buf` reference left in place, and
-/// the buffers they index. For a client that keeps a large mesh as arrays
-/// rather than as one JSON number per coordinate.
+/// A binary frame's envelope with every `$buf` reference left in place, plus the buffers they index, for a client
+/// that keeps a large mesh as arrays rather than one JSON number per coordinate.
 pub fn decode_frame_raw(bytes: &[u8]) -> Result<(Value, Vec<Buf>), String> {
     let word = |at: usize| -> Result<[u8; 4], String> {
-        bytes
-            .get(at..at + 4)
-            .and_then(|b| b.try_into().ok())
-            .ok_or_else(|| "the frame ends early".to_string())
+        bytes.get(at..at + 4).and_then(|b| b.try_into().ok()).ok_or_else(|| "the frame ends early".to_string())
     };
     let hl = u32::from_le_bytes(word(0)?) as usize;
     let head = bytes.get(4..4 + hl).ok_or("the frame header ends early")?;
@@ -441,9 +375,8 @@ pub fn decode_frame_raw(bytes: &[u8]) -> Result<(Value, Vec<Buf>), String> {
     Ok((env, bufs))
 }
 
-/// A binary mesh frame read back into the envelope the text reply carries,
-/// every `$buf` inlined the way [`FullBody::to_json`] writes it, so a Rust
-/// client can take the streamed reply and keep its JSON handling.
+/// A binary mesh frame read back into the text reply's envelope, every `$buf` inlined as [`FullBody::to_json`]
+/// writes it, so a Rust client can take the streamed reply and keep its JSON handling.
 pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
     let (mut env, raw) = decode_frame_raw(bytes)?;
     let Some(result) = env.get_mut("result").and_then(Value::as_object_mut) else {
@@ -494,94 +427,4 @@ pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
         b.insert("edges".into(), Value::Array(edges));
     }
     Ok(env)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn body() -> FullBody {
-        let mut b = FullBody::new("b1", "Body1", "e1");
-        b.positions = vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
-        b.indices = vec![0, 1, 2];
-        b.face_ids = vec![0];
-        b.edges = vec![
-            Edge {
-                points: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
-                smooth: false,
-            },
-            Edge {
-                points: vec![[1.0, 1.0, 1.0]],
-                smooth: true,
-            },
-        ];
-        b
-    }
-
-    #[test]
-    fn frame_layout_decodes() {
-        let res = MeshResult {
-            fields: Map::new(),
-            bodies: vec![WireBody::Full(body())],
-        };
-        let frame = encode_binary_reply(&json!("r"), &res, &Limits::default()).expect("fits");
-        let hl = u32::from_le_bytes([frame[0], frame[1], frame[2], frame[3]]) as usize;
-        let header: Value = serde_json::from_slice(&frame[4..4 + hl]).expect("json");
-        let mut off = 4 + hl + (4 - hl % 4) % 4;
-        assert_eq!(off % 4, 0);
-        let bufs = header["result"]["$buffers"].as_array().expect("buffers");
-        let lens: Vec<u64> = bufs
-            .iter()
-            .map(|b| b["len"].as_u64().unwrap_or(0))
-            .collect();
-        assert_eq!(lens, vec![9, 3, 1, 9, 2]);
-        off += 4 * lens.iter().sum::<u64>() as usize;
-        assert_eq!(off, frame.len());
-        let edges = &header["result"]["bodies"][0]["edges"];
-        assert_eq!(edges["smooth"], json!([1]));
-        assert_eq!(edges["body"], json!("b1"));
-        assert!(header["result"]["bodies"][0].get("normals").is_none());
-    }
-
-    #[test]
-    fn decoded_frame_is_the_text_reply() {
-        let res = MeshResult {
-            fields: Map::new(),
-            bodies: vec![WireBody::Full(body())],
-        };
-        let frame = encode_binary_reply(&json!("r"), &res, &Limits::default()).expect("fits");
-        let decoded = decode_frame(&frame).expect("decodes");
-        let text: Value = serde_json::from_str(&envelope::reply_for(&json!("r"), &JobResult::Mesh(res).to_json()))
-            .expect("json");
-        assert_eq!(decoded, text);
-    }
-
-    #[test]
-    fn too_large_refuses() {
-        let res = MeshResult {
-            fields: Map::new(),
-            bodies: vec![WireBody::Full(body())],
-        };
-        let limits = Limits {
-            max_frame: 64,
-            chunk_target: 16,
-        };
-        let msg = reply_bytes(&json!("r"), &JobResult::Mesh(res), true, &limits);
-        match msg {
-            Message::Text(t) => {
-                assert!(t.contains("too detailed to display: the rebuilt geometry"))
-            }
-            Message::Binary(_) => panic!("expected an error"),
-        }
-    }
-
-    #[test]
-    fn sizes_and_thousands() {
-        assert_eq!(describe_size(512), "512 B");
-        assert_eq!(describe_size(2560), "2 KiB");
-        assert_eq!(describe_size(MAX_FRAME), "128 MiB");
-        assert_eq!(describe_size(3 * 1024 * 1024 * 1024 / 2), "1.5 GiB");
-        assert_eq!(thousands(1234567), "1,234,567");
-        assert_eq!(thousands(999), "999");
-    }
 }

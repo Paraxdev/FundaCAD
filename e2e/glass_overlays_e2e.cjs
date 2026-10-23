@@ -17,7 +17,10 @@ const fs = require("fs");
 const path = require("path");
 
 const TOKEN = process.env.SC_TOKEN || "";
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = path.resolve(process.env.SC_OUT || "/tmp/glass_overlays_shots");
@@ -36,20 +39,28 @@ const check = (name, ok, detail) => {
   });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
-  await page.addInitScript(([port, t]) => {
-    const N = window.WebSocket;
-    window.WebSocket = class extends N {
-      constructor(u, p) {
-        const s = String(u).replace("127.0.0.1:8765", "127.0.0.1:" + port).replace(/([?&])token=[^&]*/, `$1token=${t}`);
-        super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
-      }
-    };
-  }, [PORT, TOKEN]);
+  await page.addInitScript(
+    ([port, t]) => {
+      const N = window.WebSocket;
+      window.WebSocket = class extends N {
+        constructor(u, p) {
+          const s = String(u)
+            .replace("127.0.0.1:8765", "127.0.0.1:" + port)
+            .replace(/([?&])token=[^&]*/, `$1token=${t}`);
+          super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+        }
+      };
+    },
+    [PORT, TOKEN],
+  );
   await page.goto(URL);
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
   await page.waitForTimeout(1500);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(300); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(300);
+  }
 
   const built = await page.evaluate(async () => {
     const s = window.store;
@@ -86,7 +97,8 @@ const check = (name, ok, detail) => {
 
   const report = await page.evaluate(async () => {
     const vp = window.viewport;
-    const r = vp.scene.renderer, scene = vp.scene.scene;
+    const r = vp.scene.renderer,
+      scene = vp.scene.scene;
     const bodies = new Set(vp.bodyMeshes.map((b) => b.mesh));
     const glass = vp.bodyMeshes.find((b) => b.id === "body2").mesh;
     const log = [];
@@ -98,13 +110,24 @@ const check = (name, ok, detail) => {
       const orig = o.onBeforeRender;
       o.onBeforeRender = function (rr, ...rest) {
         // Only the transmission target generates mipmaps, which tells it apart.
-        if (frame === 1) log.push({ id, body: bodies.has(o), glass: o === glass, offscreen: !!rr.getRenderTarget()?.texture?.generateMipmaps });
+        if (frame === 1)
+          log.push({
+            id,
+            body: bodies.has(o),
+            glass: o === glass,
+            offscreen: !!rr.getRenderTarget()?.texture?.generateMipmaps,
+          });
         return orig.call(this, rr, ...rest);
       };
-      undo.push(() => { o.onBeforeRender = orig; });
+      undo.push(() => {
+        o.onBeforeRender = orig;
+      });
     });
     const R0 = r.render;
-    r.render = function (...a) { frame++; return R0.apply(this, a); };
+    r.render = function (...a) {
+      frame++;
+      return R0.apply(this, a);
+    };
     vp.requestRender();
     await new Promise((res) => setTimeout(res, 600));
     r.render = R0;
@@ -115,17 +138,33 @@ const check = (name, ok, detail) => {
       helpersOffscreen: [...new Set(log.filter((e) => e.offscreen && !e.body).map((e) => e.id))],
       bodiesOffscreen: log.filter((e) => e.offscreen && e.body).length,
       glassDrawn: glassAt >= 0,
-      helpersBeforeGlass: [...new Set(main.slice(0, Math.max(0, glassAt)).filter((e) => !e.body).map((e) => e.id))],
+      helpersBeforeGlass: [
+        ...new Set(
+          main
+            .slice(0, Math.max(0, glassAt))
+            .filter((e) => !e.body)
+            .map((e) => e.id),
+        ),
+      ],
     };
   });
   fs.writeFileSync(path.join(OUT, `${TAG}_report.json`), JSON.stringify(report, null, 1));
   check("the glass is drawn with a transmission pass", report.glassDrawn && report.bodiesOffscreen > 0);
-  check("no helper is drawn into what glass refracts", report.helpersOffscreen.length === 0, report.helpersOffscreen.join(" "));
-  check("no helper is drawn before the glass", report.helpersBeforeGlass.length === 0, report.helpersBeforeGlass.join(" "));
+  check(
+    "no helper is drawn into what glass refracts",
+    report.helpersOffscreen.length === 0,
+    report.helpersOffscreen.join(" "),
+  );
+  check(
+    "no helper is drawn before the glass",
+    report.helpersBeforeGlass.length === 0,
+    report.helpersBeforeGlass.join(" "),
+  );
 
   // Where the scale cubes and arrow heads truly are, on screen.
   const marks = await page.evaluate(() => {
-    const vp = window.viewport, cam = vp.rig.active;
+    const vp = window.viewport,
+      cam = vp.rig.active;
     const cv = vp.scene.renderer.domElement.getBoundingClientRect();
     const out = [];
     vp.scene.scene.traverse((o) => {
@@ -133,67 +172,111 @@ const check = (name, ok, detail) => {
       if (!o.isMesh || o.renderOrder !== 999 || (kind !== "ConeGeometry" && kind !== "BoxGeometry")) return;
       const p = new o.position.constructor();
       o.getWorldPosition(p).project(cam);
-      out.push({ kind, color: o.material.color.getHexString(), x: Math.round(cv.left + (p.x + 1) / 2 * cv.width), y: Math.round(cv.top + (1 - p.y) / 2 * cv.height) });
+      out.push({
+        kind,
+        color: o.material.color.getHexString(),
+        x: Math.round(cv.left + ((p.x + 1) / 2) * cv.width),
+        y: Math.round(cv.top + ((1 - p.y) / 2) * cv.height),
+      });
     });
     return out;
   });
   // Centroid of the handle's own pixels: those the gizmo changes (against a shot
   // with it hidden) whose dominant channel stands out, so a body of the same hue
   // refracted behind it never counts. The green handles face the camera in Front view.
-  const centroids = async (png, bare) => page.evaluate(async ([b64, bareB64, ms]) => {
-    const pixels = async (src) => {
-      const img = new Image();
-      img.src = "data:image/png;base64," + src;
-      await img.decode();
-      const c = document.createElement("canvas");
-      c.width = img.width; c.height = img.height;
-      const g = c.getContext("2d");
-      g.drawImage(img, 0, 0);
-      return g;
-    };
-    const g = await pixels(b64), gb = await pixels(bareB64);
-    return ms.map((m) => {
-      const ch = m.color.startsWith("ff") ? 0 : 2;
-      const r = 22, d = g.getImageData(m.x - r, m.y - r, 2 * r, 2 * r).data;
-      const e = gb.getImageData(m.x - r, m.y - r, 2 * r, 2 * r).data;
-      let n = 0, sx = 0, sy = 0;
-      for (let i = 0; i < d.length; i += 4) {
-        const o = [0, 1, 2].filter((k) => k !== ch).map((k) => d[i + k]);
-        const changed = [0, 1, 2].some((k) => Math.abs(d[i + k] - e[i + k]) > 24);
-        if (changed && d[i + ch] - (o[0] + o[1]) / 2 > 35) { n++; sx += (i / 4) % (2 * r); sy += Math.floor(i / 4 / (2 * r)); }
-      }
-      return { ...m, n, cx: n ? m.x - r + sx / n : null, cy: n ? m.y - r + sy / n : null };
-    });
-  }, [png.toString("base64"), bare.toString("base64"), marks.filter((m) => !m.color.startsWith("5ad1"))]);
+  const centroids = async (png, bare) =>
+    page.evaluate(
+      async ([b64, bareB64, ms]) => {
+        const pixels = async (src) => {
+          const img = new Image();
+          img.src = "data:image/png;base64," + src;
+          await img.decode();
+          const c = document.createElement("canvas");
+          c.width = img.width;
+          c.height = img.height;
+          const g = c.getContext("2d");
+          g.drawImage(img, 0, 0);
+          return g;
+        };
+        const g = await pixels(b64),
+          gb = await pixels(bareB64);
+        return ms.map((m) => {
+          const ch = m.color.startsWith("ff") ? 0 : 2;
+          const r = 22,
+            d = g.getImageData(m.x - r, m.y - r, 2 * r, 2 * r).data;
+          const e = gb.getImageData(m.x - r, m.y - r, 2 * r, 2 * r).data;
+          let n = 0,
+            sx = 0,
+            sy = 0;
+          for (let i = 0; i < d.length; i += 4) {
+            const o = [0, 1, 2].filter((k) => k !== ch).map((k) => d[i + k]);
+            const changed = [0, 1, 2].some((k) => Math.abs(d[i + k] - e[i + k]) > 24);
+            if (changed && d[i + ch] - (o[0] + o[1]) / 2 > 35) {
+              n++;
+              sx += (i / 4) % (2 * r);
+              sy += Math.floor(i / 4 / (2 * r));
+            }
+          }
+          return { ...m, n, cx: n ? m.x - r + sx / n : null, cy: n ? m.y - r + sy / n : null };
+        });
+      },
+      [png.toString("base64"), bare.toString("base64"), marks.filter((m) => !m.color.startsWith("5ad1"))],
+    );
   const withoutGizmo = async (name) => {
     await page.evaluate(async () => {
-      window.viewport.scene.scene.traverse((o) => { if (o.renderOrder === 999 && o.visible) { o.visible = false; o.userData.e2eHidden = true; } });
-      window.viewport.requestRender(); await new Promise((r) => setTimeout(r, 500));
+      window.viewport.scene.scene.traverse((o) => {
+        if (o.renderOrder === 999 && o.visible) {
+          o.visible = false;
+          o.userData.e2eHidden = true;
+        }
+      });
+      window.viewport.requestRender();
+      await new Promise((r) => setTimeout(r, 500));
     });
     const png = await page.screenshot({ path: path.join(OUT, `${TAG}_${name}.png`) });
     await page.evaluate(async () => {
-      window.viewport.scene.scene.traverse((o) => { if (o.userData.e2eHidden) { o.visible = true; delete o.userData.e2eHidden; } });
-      window.viewport.requestRender(); await new Promise((r) => setTimeout(r, 500));
+      window.viewport.scene.scene.traverse((o) => {
+        if (o.userData.e2eHidden) {
+          o.visible = true;
+          delete o.userData.e2eHidden;
+        }
+      });
+      window.viewport.requestRender();
+      await new Promise((r) => setTimeout(r, 500));
     });
     return png;
   };
 
   const withGlass = await page.screenshot({ path: path.join(OUT, `${TAG}_selected_gizmo.png`) });
   const withGlassBare = await withoutGizmo("selected_nogizmo");
-  await page.evaluate(() => { const s = window.store; s.setBodiesMaterial(["body2"], s.addMaterial({ name: "plain", color: "#8899aa" })); });
+  await page.evaluate(() => {
+    const s = window.store;
+    s.setBodiesMaterial(["body2"], s.addMaterial({ name: "plain", color: "#8899aa" }));
+  });
   await page.waitForTimeout(800);
-  await page.evaluate(async () => { window.viewport.requestRender(); await new Promise((r) => setTimeout(r, 500)); });
+  await page.evaluate(async () => {
+    window.viewport.requestRender();
+    await new Promise((r) => setTimeout(r, 500));
+  });
   const opaque = await page.screenshot({ path: path.join(OUT, `${TAG}_noglass.png`) });
   const opaqueBare = await withoutGizmo("noglass_nogizmo");
-  const a = await centroids(withGlass, withGlassBare), b = await centroids(opaque, opaqueBare);
+  const a = await centroids(withGlass, withGlassBare),
+    b = await centroids(opaque, opaqueBare);
   fs.writeFileSync(path.join(OUT, `${TAG}_marks.json`), JSON.stringify({ glass: a, opaque: b }, null, 1));
   for (let i = 0; i < a.length; i++) {
-    const p = a[i], q = b[i];
+    const p = a[i],
+      q = b[i];
     const off = p.cx === null || q.cx === null ? Infinity : Math.hypot(p.cx - q.cx, p.cy - q.cy);
-    check(`${p.kind} #${p.color} is drawn where it is under glass as without`, off <= 1 && Math.abs(p.n - q.n) <= q.n * 0.1,
-      `${off.toFixed(1)} px off, ${p.n} vs ${q.n} px`);
+    check(
+      `${p.kind} #${p.color} is drawn where it is under glass as without`,
+      off <= 1 && Math.abs(p.n - q.n) <= q.n * 0.1,
+      `${off.toFixed(1)} px off, ${p.n} vs ${q.n} px`,
+    );
   }
   await browser.close();
   console.log(failures ? `${failures} FAILED` : "all passed");
   process.exit(failures ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(2); });
+})().catch((e) => {
+  console.error(e);
+  process.exit(2);
+});

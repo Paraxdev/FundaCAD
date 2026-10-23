@@ -1,6 +1,5 @@
-//! What every mesh the engine hands out must hold, whatever made it: no
-//! triangle without area, and for a closed solid every side met by two
-//! triangles running opposite ways.
+//! What every mesh the engine hands out must hold: no triangle without area, and for a closed solid every side met
+//! by two triangles running opposite ways.
 #![allow(dead_code)]
 
 use std::collections::HashMap;
@@ -10,9 +9,8 @@ fn corner(positions: &[f32], i: u32) -> [f64; 3] {
     [positions[i] as f64, positions[i + 1] as f64, positions[i + 2] as f64]
 }
 
-/// The triangles with two corners at one point, or lower over their longest
-/// side than two steps of single precision at the mesh's largest coordinate,
-/// each as its three corners.
+/// Triangles with two corners at one point, or lower over their longest side than two steps of single precision at
+/// the mesh's largest coordinate, each as its three corners.
 pub fn flat_triangles(positions: &[f32], indices: &[u32]) -> Vec<[[f64; 3]; 3]> {
     let reach = positions.iter().fold(0.0f64, |m, v| m.max(v.abs() as f64));
     let limit = 2.0 * f32::EPSILON as f64 * reach;

@@ -1,9 +1,5 @@
-//! Rhino .3dm: Breps, extrusions and NURBS surfaces become OCCT faces with
-//! their trims, meshes go through the mesh path, layers become the tree.
-//!
-//! The decoder hands an IR of NURBS surfaces, 3D edge curves and 2D trims.
-//! There is no binding to build a B-spline surface or a pcurve, so each body
-//! is written as OCCT BRep text and read back, then healed.
+//! Rhino .3dm: Breps, extrusions and NURBS surfaces become trimmed OCCT faces, layers the tree.
+//! No binding builds a B-spline surface or pcurve, so each body goes through OCCT BRep text.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write as _;
@@ -217,8 +213,7 @@ impl<'a> Model<'a> {
         self.ix.get(table).and_then(|t| t.get(id).copied()).ok_or_else(|| format!("the file names a missing {id}"))
     }
 
-    /// Every importable object once, in the order of the file's records, and
-    /// how many bodies hold no face, a curve or a point cloud.
+    /// Every importable object once in file record order, and how many bodies hold no face.
     fn objects(&self) -> (Vec<Obj>, usize) {
         let mut rank: HashMap<&str, usize> = HashMap::new();
         let mut by_layer: HashSet<&str> = HashSet::new();
@@ -238,7 +233,11 @@ impl<'a> Model<'a> {
                 let Some(so) = r.get("source_object") else { continue };
                 let Some(uuid) = so["object_id"].as_str() else { continue };
                 info.entry(uuid).or_insert_with(|| {
-                    (so["name"].as_str().map(str::to_string), rgb(&so["color"]), so["layer"].as_str().map(str::to_string))
+                    (
+                        so["name"].as_str().map(str::to_string),
+                        rgb(&so["color"]),
+                        so["layer"].as_str().map(str::to_string),
+                    )
                 });
             }
         }
@@ -289,15 +288,14 @@ impl<'a> Model<'a> {
         body["regions"].as_array().into_iter().flatten().filter_map(Value::as_str).any(|r| {
             self.ix["regions"].get(r).is_some_and(|reg| {
                 reg["shells"].as_array().into_iter().flatten().filter_map(Value::as_str).any(|s| {
-                    self.ix["shells"].get(s).is_some_and(|sh| {
-                        sh["members"].as_array().into_iter().flatten().any(|m| m["kind"] == "face")
-                    })
+                    self.ix["shells"]
+                        .get(s)
+                        .is_some_and(|sh| sh["members"].as_array().into_iter().flatten().any(|m| m["kind"] == "face"))
                 })
             })
         })
     }
 
-    /// One note for what the file holds that does not import.
     fn skipped_note(&self, faceless: usize) -> Vec<String> {
         let mut out = Vec::new();
         let subds = self.list("subds").count();
@@ -310,13 +308,17 @@ impl<'a> Model<'a> {
             ));
         }
         let loose = |t: &str, kind: &str| {
-            self.list(t).filter(|r| matches!(r["id"].as_str().and_then(split_id), Some((k, _, None)) if k == kind)).count()
+            self.list(t)
+                .filter(|r| matches!(r["id"].as_str().and_then(split_id), Some((k, _, None)) if k == kind))
+                .count()
         };
-        let native = |t: &str| {
-            self.ir.pointer(&format!("/native/rhino/{t}")).and_then(Value::as_array).map_or(0, Vec::len)
-        };
-        let other =
-            faceless + loose("curves", "curve") + loose("points", "point") + native("text_dots") + native("annotations");
+        let native =
+            |t: &str| self.ir.pointer(&format!("/native/rhino/{t}")).and_then(Value::as_array).map_or(0, Vec::len);
+        let other = faceless
+            + loose("curves", "curve")
+            + loose("points", "point")
+            + native("text_dots")
+            + native("annotations");
         if other > 0 {
             out.push(format!(
                 "{other} curve, point or annotation object{} skipped, only solids, surfaces and meshes import",
@@ -339,7 +341,9 @@ impl<'a> Model<'a> {
             solid |= body["kind"] == "solid";
             let mut shells = Vec::new();
             for region in body["regions"].as_array().into_iter().flatten().filter_map(Value::as_str) {
-                for shell in self.rec("regions", region)?["shells"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+                for shell in
+                    self.rec("regions", region)?["shells"].as_array().into_iter().flatten().filter_map(Value::as_str)
+                {
                     let faces: Vec<&str> = self.rec("shells", shell)?["members"]
                         .as_array()
                         .into_iter()
@@ -352,7 +356,12 @@ impl<'a> Model<'a> {
                         members.push(self.face(&mut text, f)?);
                     }
                     if !members.is_empty() {
-                        shells.push(text.push("Sh", String::new(), if body["kind"] == "solid" { "0101100" } else { "0101000" }, members));
+                        shells.push(text.push(
+                            "Sh",
+                            String::new(),
+                            if body["kind"] == "solid" { "0101100" } else { "0101000" },
+                            members,
+                        ));
                     }
                 }
             }
@@ -378,9 +387,13 @@ impl<'a> Model<'a> {
             for s in laterals {
                 faces.push(untrimmed(&s["geometry"])?);
             }
-            let sewn = Sewing::run(faces.iter(), SewingOptions { tolerance: tol, cutting: true, non_manifold: false }, &ProgressRange::detached())
-                .map_err(|e| format!("its extrusion faces could not be sewn ({e})"))?
-                .shape();
+            let sewn = Sewing::run(
+                faces.iter(),
+                SewingOptions { tolerance: tol, cutting: true, non_manifold: false },
+                &ProgressRange::detached(),
+            )
+            .map_err(|e| format!("its extrusion faces could not be sewn ({e})"))?
+            .shape();
             let shells = sewn.subshapes(ShapeType::Shell);
             shape = Some(match shells.as_slice() {
                 [one] => one.fix_solid(tol, MAX_TOL).unwrap_or_else(|_| sewn.clone()),
@@ -390,7 +403,11 @@ impl<'a> Model<'a> {
         }
         let shape = shape.ok_or("it has no faces")?;
         let fixed = shape.fix(FixOptions::default()).map(|f| f.shape).unwrap_or(shape);
-        Ok(if solid && fixed.shape_type() == ShapeType::Solid { fixed.fix_solid(tol, MAX_TOL).unwrap_or(fixed) } else { fixed })
+        Ok(if solid && fixed.shape_type() == ShapeType::Solid {
+            fixed.fix_solid(tol, MAX_TOL).unwrap_or(fixed)
+        } else {
+            fixed
+        })
     }
 
     fn free_surface(&self, uuid: &str) -> Result<Shape, String> {
@@ -404,7 +421,9 @@ impl<'a> Model<'a> {
     fn mesh(&self, o: &Obj) -> Result<MeshObject, String> {
         let t = self
             .list("tessellations")
-            .find(|t| t["id"].as_str().filter(|id| is_mesh_object(id)).and_then(split_id).is_some_and(|(_, u, _)| u == o.uuid))
+            .find(|t| {
+                t["id"].as_str().filter(|id| is_mesh_object(id)).and_then(split_id).is_some_and(|(_, u, _)| u == o.uuid)
+            })
             .ok_or("its mesh is missing")?;
         let m = &t["mesh"];
         let mut pos = Vec::new();
@@ -428,7 +447,8 @@ impl<'a> Model<'a> {
         let mut layers: Vec<&Value> =
             self.ir.pointer("/native/rhino/layers").and_then(Value::as_array).into_iter().flatten().collect();
         layers.sort_by_key(|l| l["archive_index"].as_i64().unwrap_or(i64::MAX));
-        let by_uuid: HashMap<&str, &Value> = layers.iter().filter_map(|l| Some((l["source_uuid"].as_str()?, *l))).collect();
+        let by_uuid: HashMap<&str, &Value> =
+            layers.iter().filter_map(|l| Some((l["source_uuid"].as_str()?, *l))).collect();
         let mut wanted: HashSet<&str> = HashSet::new();
         for mut u in used {
             while let Some(l) = by_uuid.get(u) {
@@ -482,7 +502,12 @@ impl<'a> Model<'a> {
         let mut uses: BTreeMap<String, Vec<(bool, usize)>> = BTreeMap::new();
         for lid in f["loops"]["loops"].as_array().into_iter().flatten().filter_map(Value::as_str) {
             let mut members = Vec::new();
-            for cid in self.rec("loops", lid)?["boundary"]["coedges"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+            for cid in self.rec("loops", lid)?["boundary"]["coedges"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+            {
                 let c = self.rec("coedges", cid)?;
                 let eid = c["edge"].as_str().ok_or("a trim has no edge")?;
                 let e = self.edge(text, eid)?;
@@ -543,7 +568,8 @@ impl<'a> Model<'a> {
         let (curve, range) = match e["carrier"]["curve"].as_str() {
             Some(cid) => {
                 let g = Nurbs::read(&self.rec("curves", cid)?["geometry"], 3)?;
-                let r = e["carrier"]["param_range"].as_array().filter(|r| r.len() == 2).ok_or("an edge has no range")?;
+                let r =
+                    e["carrier"]["param_range"].as_array().filter(|r| r.len() == 2).ok_or("an edge has no range")?;
                 let range = (r[0].as_f64().unwrap_or(0.0), r[1].as_f64().unwrap_or(0.0));
                 (Some(text.curve3d(&g)), Some(range))
             }
@@ -562,7 +588,8 @@ fn xyz(p: &Value) -> Result<[f64; 3], String> {
 }
 
 fn read_brep(text: &str) -> Result<Shape, String> {
-    Shape::from_brep_text(text, &ProgressRange::detached()).map_err(|e| format!("its geometry could not be built ({e})"))
+    Shape::from_brep_text(text, &ProgressRange::detached())
+        .map_err(|e| format!("its geometry could not be built ({e})"))
 }
 
 /// A surface over its whole range, for a free surface or an extrusion side.
@@ -612,7 +639,8 @@ fn unique_knots(flat: &[f64]) -> (Vec<f64>, Vec<usize>) {
 fn pole(c: &Value, dim: usize) -> Result<([f64; 3], f64), String> {
     let p = c.get("point").unwrap_or(c);
     let w = c.get("weight").and_then(Value::as_f64).unwrap_or(1.0);
-    let get = |k: &str| p.get(k).and_then(Value::as_f64).ok_or_else(|| "a control point has no coordinates".to_string());
+    let get =
+        |k: &str| p.get(k).and_then(Value::as_f64).ok_or_else(|| "a control point has no coordinates".to_string());
     Ok(if dim == 2 { ([get("u")?, get("v")?, 0.0], w) } else { ([get("x")?, get("y")?, get("z")?], w) })
 }
 
@@ -774,10 +802,8 @@ struct TShape {
     subs: Vec<(bool, usize)>,
 }
 
-/// OCCT's BRep text, version 3. A TShape names a sub-shape by its distance
-/// from the end of the list, so the list is numbered only when written.
-/// Edges are records until `finish`, each face adds its trims to them, and a
-/// wire names its edges by record.
+/// OCCT BRep text v3. A TShape names a sub-shape by its distance from the list end, so the
+/// list is numbered only when written. Edges stay records until `finish` so faces add trims.
 struct BrepText {
     tol: f64,
     curves2d: Vec<String>,

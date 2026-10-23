@@ -1,7 +1,5 @@
-// Snapping in 2D sketch space. Candidates (endpoints/midpoints/centers from
-// existing geometry) are compared to the cursor in SCREEN PIXELS so the snap
-// radius is zoom-independent, like mainstream MCAD. Grid snapping is the low-priority
-// fallback.
+// Snap candidates are compared to the cursor in screen pixels so the radius is zoom-independent, the grid is the
+// low-priority fallback.
 
 import * as THREE from "three";
 import type { DimPlace, ProjectedCurve, ProjectedSource, SketchConstraint } from "../types";
@@ -9,25 +7,15 @@ import { asRound } from "./entityDims";
 import { rectCorners } from "./region";
 import type { SketchPlane } from "./plane";
 
-export type SnapKind =
-  | "free"
-  | "grid"
-  | "endpoint"
-  | "midpoint"
-  | "center"
-  | "control"
-  | "curve"
-  | "align";
+export type SnapKind = "free" | "grid" | "endpoint" | "midpoint" | "center" | "control" | "curve" | "align";
 
-/** Which piece of geometry a snap caught: an endpoint index (dimPoint numbering),
- *  a line's midpoint, or the nearest point on a curve. Only set for sketch
- *  entities the solver can hold a relation to. */
+/** Endpoint index (dimPoint numbering), midpoint or nearest point on a curve. Only set for entities the solver can
+ *  hold a relation to. */
 export interface SnapRef {
   entity: string;
   at: number | "mid" | "curve";
 }
 
-/** A curve the cursor can land on anywhere along, for the on-curve snap. */
 export type SnapCurve =
   | { entity: string; kind: "line"; x1: number; y1: number; x2: number; y2: number }
   | { entity: string; kind: "circle"; cx: number; cy: number; r: number }
@@ -40,15 +28,12 @@ export interface SnapCandidate {
   priority: number; // higher is preferred
   /** What the anchor is, named beside the marker ("Face Center"). */
   label?: string | undefined;
-  /** Names for the lines through this anchor along the sketch's own x and y, for
-   *  a cursor that lines up with it on one of them ("X Axis"). */
+  /** Names of the lines through this anchor along the sketch's x and y ("X Axis"). */
   lineLabels?: { x: string; y: string } | undefined;
   ref?: SnapRef | undefined;
 }
 
-/** One alignment guide: the anchor the cursor lined up WITH, and which of that
- *  anchor's coordinates the cursor adopted. `axis: "x"` means the cursor took
- *  the anchor's x, i.e. it is standing on the anchor's vertical line. */
+/** `axis: "x"` means the cursor took the anchor's x, standing on its vertical line. */
 export interface SnapGuide {
   from: THREE.Vector2;
   axis: "x" | "y";
@@ -57,8 +42,7 @@ export interface SnapGuide {
 export interface SnapResult {
   point: THREE.Vector2;
   kind: SnapKind;
-  /** The anchors this result lined up with, for drawing the guides. Empty for
-   *  every kind but "align". */
+  /** Empty for every kind but "align". */
   guides: SnapGuide[];
   label?: string | undefined;
   ref?: SnapRef | undefined;
@@ -79,10 +63,7 @@ export function snap(
   };
   let best: SnapCandidate | null = null;
   let bestD = pixelTol;
-  // Nearest anchor sharing the cursor's row / column, the alignment pass. Both
-  // are gathered in this one loop rather than in a second walk of the candidates,
-  // which on a large sketch is the difference between one projection per
-  // candidate and three.
+  // Row and column alignment are gathered in this one loop, a second walk would cost three projections per candidate.
   let alignX: { c: SnapCandidate; d: number } | null = null;
   let alignY: { c: SnapCandidate; d: number } | null = null;
 
@@ -91,19 +72,13 @@ export function snap(
     const d = Math.hypot(s.x - rawScreen.x, s.y - rawScreen.y);
     if (d <= pixelTol) {
       // within tolerance: prefer higher priority, then nearer
-      if (
-        !best ||
-        c.priority > best.priority ||
-        (c.priority === best.priority && d < bestD)
-      ) {
+      if (!best || c.priority > best.priority || (c.priority === best.priority && d < bestD)) {
         best = c;
         bestD = d;
       }
     }
-    // Measured to the point that has the ANCHOR's x and the CURSOR's y, as a
-    // full screen distance, the same construction the grid fallback uses below,
-    // and for the same reason: the tolerance has to be the same reach at every
-    // zoom, and with Lock to Plane off a sketch axis is neither screen axis.
+    // Full screen distance to (anchor x, cursor y), like the grid fallback: the same reach at every zoom, and with Lock
+    // to Plane off a sketch axis is neither screen axis.
     const dx = screenGap(new THREE.Vector2(c.p.x, raw.y));
     if (dx <= pixelTol && (!alignX || dx < alignX.d)) alignX = { c, d: dx };
     const dy = screenGap(new THREE.Vector2(raw.x, c.p.y));
@@ -112,26 +87,8 @@ export function snap(
 
   if (best) return { point: best.p.clone(), kind: best.kind, guides: [], label: snapLabel(best), ref: best.ref };
 
-  // THE GRID'S ANSWER, ONE AXIS AT A TIME.
-  //
-  // Each axis is tested on its OWN, which is the whole of it: this rounded both
-  // axes and then measured one distance to the resulting corner, so the cursor
-  // had to be within tolerance of a lattice POINT in both axes at once.
-  // Anywhere along a grid line but between two intersections, nothing snapped,
-  // which is exactly what "drawing freely does not snap to the grid" describes.
-  // Snapping the axes separately makes an intersection the case where both
-  // fire, so the old behaviour survives as a special case rather than as a
-  // second rule.
-  //
-  // Measured as a full SCREEN distance to the axis-snapped point rather than as
-  // a difference in screen x or y (see screenGap above). The tolerance is in
-  // pixels so that it is the same reach at every zoom, and the sketch plane can
-  // sit at any angle on screen when Lock to Plane is off, where a sketch axis is
-  // neither.
-  //
-  // Computed BEFORE the alignment result is assembled, because alignment can
-  // answer one axis and leave the other free, and in that case the grid is
-  // still the best thing there is to say about the other one.
+  // Each axis snaps to the grid on its own, so anywhere along a grid line snaps and an intersection is both firing.
+  // Full screen distance per axis (see screenGap). Computed before alignment, which can leave one axis free.
   const gridAxis = (): { x: number | null; y: number | null } => {
     if (gridStep <= 0) return { x: null, y: null }; // grid snap off
     const gx = Math.round(raw.x / gridStep) * gridStep;
@@ -142,10 +99,8 @@ export function snap(
     };
   };
 
-  // On a curve, below every point anchor and above alignment: lying on a line
-  // the user can see is a stronger statement than lining up with a corner.
-  // A lattice point the curve passes through is preferred over the nearest point
-  // on it, so a grid aligned line still takes the grid's coordinates.
+  // On a curve ranks below point anchors and above alignment. A lattice point on the curve beats the nearest point, so
+  // a grid aligned line still takes the grid's coordinates.
   let onCurve: { p: THREE.Vector2; d: number; cv: SnapCurve } | null = null;
   for (const cv of curves) {
     const f = nearestOnCurve(cv, raw);
@@ -164,40 +119,30 @@ export function snap(
     return { point, kind: "curve", guides: [], label: "On Curve", ref: { entity: onCurve.cv.entity, at: "curve" } };
   }
 
-  // ALIGNMENT, above the grid and below a point.
-  //
-  // Above the grid because a guide is a statement about the drawing, "level
-  // with that hole", "centred on this face", and the lattice is only ever the
-  // fallback for having nothing better to say. Below a point because when the
-  // cursor is ON an anchor, that anchor is the answer and a line through it is
-  // not needed.
+  // Alignment ranks above the grid, being a statement about the drawing, and below a point: on an anchor, the anchor
+  // is the answer.
   if (alignX || alignY) {
-    // Both axes from the SAME anchor means the cursor is diagonally near it but
-    // outside the round tolerance the point pass used. Snapping to it is right;
-    // reporting it as an alignment with two zero-length guides is not.
+    // Both axes from the same anchor: the cursor is diagonally near it outside the point tolerance. Snap to it, but not
+    // as an alignment with two zero-length guides.
     if (alignX && alignY && alignX.c === alignY.c) {
-      return { point: alignX.c.p.clone(), kind: alignX.c.kind, guides: [], label: snapLabel(alignX.c), ref: alignX.c.ref };
+      return {
+        point: alignX.c.p.clone(),
+        kind: alignX.c.kind,
+        guides: [],
+        label: snapLabel(alignX.c),
+        ref: alignX.c.ref,
+      };
     }
     const guides: SnapGuide[] = [];
     if (alignX) guides.push({ from: alignX.c.p.clone(), axis: "x" });
     if (alignY) guides.push({ from: alignY.c.p.clone(), axis: "y" });
-    // The axis alignment did NOT answer still gets the grid's answer. A guide
-    // and the lattice are two different statements about two different
-    // coordinates, and there is no reason taking one should throw the other
-    // away, but it did: alignment returned before the grid was ever consulted,
-    // so a point that lined up with an existing corner kept a raw, unrounded
-    // coordinate in the other axis. That is where a vertex reading 20.0000 by
-    // 5.0072 comes from, on a 1mm grid, seven microns off a line the user could
-    // see. Both mechanisms were already per-axis; this is only letting them
-    // compose.
+    // The axis alignment did not answer still gets the grid's answer, else a vertex aligned with a corner keeps a raw
+    // coordinate in the other axis (20.0000 by 5.0072 on a 1mm grid).
     const g = gridAxis();
     // Lined up on x means standing on the anchor's vertical line, its y line.
     const line = alignX && !alignY ? alignX.c.lineLabels?.y : alignY && !alignX ? alignY.c.lineLabels?.x : undefined;
     return {
-      point: new THREE.Vector2(
-        alignX ? alignX.c.p.x : (g.x ?? raw.x),
-        alignY ? alignY.c.p.y : (g.y ?? raw.y),
-      ),
+      point: new THREE.Vector2(alignX ? alignX.c.p.x : (g.x ?? raw.x), alignY ? alignY.c.p.y : (g.y ?? raw.y)),
       kind: "align",
       guides,
       ...(line ? { label: line } : {}),
@@ -228,32 +173,33 @@ export function snapLabel(c: Pick<SnapCandidate, "kind" | "label">): string | un
   return c.label ?? KIND_LABEL[c.kind];
 }
 
-/** Whether the snap marker comes up for this kind of snap, given the armed tool.
- *
- *  With the select tool armed there is nothing to place, so a marker on a bare
- *  grid intersection or an alignment line advertises a position that no click is
- *  going to put anything at. What is still worth marking there is an anchor on
- *  real geometry, an endpoint, a midpoint, a centre, because those ARE what a
- *  click grabs and drags. Every other tool is placing a point and wants the
- *  whole lattice.
- *
- *  Here rather than in SketchMode because it is a rule about snapping and
- *  nothing else, and this is the file the rest of those live in and get tested
- *  in. */
+/** Under the select tool only real geometry anchors (endpoint, midpoint, centre) get a marker, since nothing is placed
+ *  and those are what a click grabs. Every other tool places a point and wants the whole lattice. */
 export function showsSnapMarker(tool: string, kind: SnapKind, label?: string): boolean {
   if (kind === "free") return false;
   if (tool !== "select") return true;
-  return kind === "endpoint" || kind === "midpoint" || kind === "center" || kind === "control" || (kind === "align" && !!label);
+  return (
+    kind === "endpoint" ||
+    kind === "midpoint" ||
+    kind === "center" ||
+    kind === "control" ||
+    (kind === "align" && !!label)
+  );
 }
 
 /** The world origin as a snap anchor, when the sketch plane passes through it. */
 export function originCandidate(plane: SketchPlane): SnapCandidate[] {
   const origin = new THREE.Vector3();
   if (Math.abs(plane.n.dot(origin.clone().sub(plane.origin))) > 1e-6) return [];
-  return [{
-    p: plane.to2D(origin), kind: "center", priority: 95, label: "Origin",
-    lineLabels: { x: axisName(plane.u), y: axisName(plane.v) },
-  }];
+  return [
+    {
+      p: plane.to2D(origin),
+      kind: "center",
+      priority: 95,
+      label: "Origin",
+      lineLabels: { x: axisName(plane.u), y: axisName(plane.v) },
+    },
+  ];
 }
 
 /** "X Axis" for a direction along a world axis, else a plain name for the line. */
@@ -264,10 +210,7 @@ function axisName(dir: THREE.Vector3): string {
   return i >= 0 ? `${names[i]} Axis` : "Axis";
 }
 
-/** An already-fixed construction point sitting exactly on `pos`, if the sketch
- *  has one. Shared by the dimension tool (repeat-dimensioning to the origin
- *  reuses it) and pinOriginPoint below, so the two never disagree about what
- *  counts as "already pinned here". */
+/** Shared by the dimension tool and pinOriginPoint so the two agree on what counts as already pinned here. */
 export function existingFixedPoint(
   entities: ResolvedEntity[],
   constraints: SketchConstraint[],
@@ -282,21 +225,9 @@ export function existingFixedPoint(
   return null;
 }
 
-/** Turn a bare position ON the origin into real, fixed geometry: reuse a
- *  construction point already pinned there, or create one. Called the moment a
- *  drawing tool's click actually SNAPS to the origin (never on a hover alone,
- *  the same rule dimFlow's commitOriginPick follows).
- *
- *  No coincident constraint is added, and none is needed: sketchSolve merges
- *  any two points at the same position into one solver point (coincKey), so an
- *  entity's corner drawn exactly here shares this point's id and inherits its
- *  `fix` for free. That is also why this is idempotent, drawing a second
- *  corner on the origin finds the first point already there and reuses it
- *  rather than stacking a duplicate.
- *
- *  This is what SK-6 was missing: the origin looked like a snap target but had
- *  no geometry of its own to attach to, so a corner that landed on it did so by
- *  numeric coincidence only, free for the next unrelated solve to move. */
+/** Called only when a drawing click SNAPS to the origin, never on hover. Needs no coincident: sketchSolve merges
+ *  same-position points (coincKey), so a corner here shares this point's id and `fix`, and a second one reuses it.
+ *  Without it a corner on the origin was free for the next solve to move (SK-6). */
 export function pinOriginPoint(
   entities: ResolvedEntity[],
   constraints: SketchConstraint[],
@@ -305,19 +236,23 @@ export function pinOriginPoint(
 ): Extract<ResolvedEntity, { type: "point" }> {
   const existing = existingFixedPoint(entities, constraints, pos);
   if (existing) return existing;
-  const point: Extract<ResolvedEntity, { type: "point" }> = { type: "point", id: newId(), x: pos.x, y: pos.y, construction: true };
+  const point: Extract<ResolvedEntity, { type: "point" }> = {
+    type: "point",
+    id: newId(),
+    x: pos.x,
+    y: pos.y,
+    construction: true,
+  };
   entities.push(point);
   constraints.push({ type: "fix", e: point.id, p: 0 });
   return point;
 }
 
-/** A drawing click that snapped to the Origin, waiting for its shape. The pin
- *  is only made once that shape commits (anything that grew the entity list
- *  past `count`), so a shape cancelled halfway leaves no point behind (SK-10). */
+/** The pin is only made once the shape commits (the entity list grew past `count`), so a cancelled shape leaves no
+ *  point behind (SK-10). */
 export type OriginPinRequest = { at: THREE.Vector2; count: number };
 
-/** Make the requested pin if the shape has committed. Returns the request
- *  still waiting, or null once it is settled. */
+/** Returns the request still waiting, or null once settled. */
 export function settleOriginPin(
   req: OriginPinRequest | null,
   entities: ResolvedEntity[],
@@ -329,9 +264,8 @@ export function settleOriginPin(
   return null;
 }
 
-/** Where a dragged point lands: on an anchor it is close to, or on a named axis
- *  line, or null to follow the cursor. The grid and plain alignment guides are
- *  left out, a drag that stepped along the lattice would stop feeling like a drag. */
+/** null follows the cursor. Grid and plain alignment are left out, a drag stepping along the lattice stops feeling
+ *  like a drag. */
 export function dragSnap(
   raw: THREE.Vector2,
   candidates: SnapCandidate[],
@@ -341,19 +275,23 @@ export function dragSnap(
   const res = snap(raw, candidates, toScreen, 0, pixelTol);
   // A named line (an axis through the origin) is a real place to drop a point.
   if (res.kind === "align" && res.label) return res;
-  return res.kind === "endpoint" || res.kind === "midpoint" || res.kind === "center" || res.kind === "control" ? res : null;
+  return res.kind === "endpoint" || res.kind === "midpoint" || res.kind === "center" || res.kind === "control"
+    ? res
+    : null;
 }
 
 /** The nearest point of `cv` to `q`, or null when it falls past an arc's ends. */
 export function nearestOnCurve(cv: SnapCurve, q: THREE.Vector2): THREE.Vector2 | null {
   if (cv.kind === "line") {
-    const dx = cv.x2 - cv.x1, dy = cv.y2 - cv.y1;
+    const dx = cv.x2 - cv.x1,
+      dy = cv.y2 - cv.y1;
     const L2 = dx * dx + dy * dy;
     if (L2 < 1e-18) return null;
     const t = Math.min(1, Math.max(0, ((q.x - cv.x1) * dx + (q.y - cv.y1) * dy) / L2));
     return new THREE.Vector2(cv.x1 + t * dx, cv.y1 + t * dy);
   }
-  const vx = q.x - cv.cx, vy = q.y - cv.cy;
+  const vx = q.x - cv.cx,
+    vy = q.y - cv.cy;
   const len = Math.hypot(vx, vy);
   if (len < 1e-12 || !(cv.r > 0)) return null;
   if (cv.kind === "arc") {
@@ -365,8 +303,7 @@ export function nearestOnCurve(cv: SnapCurve, q: THREE.Vector2): THREE.Vector2 |
   return new THREE.Vector2(cv.cx + (vx / len) * cv.r, cv.cy + (vy / len) * cv.r);
 }
 
-/** On-curve snap targets: native lines, circles and arcs, the curves a
- *  pointOnCurve relation can hold a point to. */
+/** The curves a pointOnCurve relation can hold a point to: native lines, circles and arcs. */
 export function curvesFromEntities(entities: ResolvedEntity[]): SnapCurve[] {
   const out: SnapCurve[] = [];
   for (const e of entities) {
@@ -384,10 +321,7 @@ export function curvesFromEntities(entities: ResolvedEntity[]): SnapCurve[] {
   return out;
 }
 
-/** snap candidates from resolved sketch entities (numbers, not params) */
-export function candidatesFromEntities(
-  entities: ResolvedEntity[],
-): SnapCandidate[] {
+export function candidatesFromEntities(entities: ResolvedEntity[]): SnapCandidate[] {
   const out: SnapCandidate[] = [];
   const add = (x: number, y: number, kind: SnapKind, priority: number, ref?: SnapRef) =>
     out.push({ p: new THREE.Vector2(x, y), kind, priority, ...(ref ? { ref } : {}) });
@@ -398,10 +332,7 @@ export function candidatesFromEntities(
       add(e.x2, e.y2, "endpoint", 100, { entity: e.id, at: 1 });
       add((e.x1 + e.x2) / 2, (e.y1 + e.y2) / 2, "midpoint", 80, { entity: e.id, at: "mid" });
     } else if (e.type === "rectangle") {
-      // Through rectCorners rather than +-hw/+-hh, so a ROTATED rectangle snaps
-      // to where it is drawn. Computing corners inline here is how the two would
-      // drift apart, and a snap that lands on a phantom axis-aligned corner is
-      // the sort of thing you only notice after the part is wrong.
+      // Through rectCorners so a rotated rectangle snaps to where it is drawn, inline corners would drift apart.
       const c = rectCorners(e.x, e.y, e.width, e.height, e.angle);
       c.forEach((p, k) => add(p.x, p.y, "endpoint", 100, { entity: e.id, at: k }));
       add(e.x, e.y, "center", 90);
@@ -427,10 +358,8 @@ export function candidatesFromEntities(
     } else if (e.type === "point") {
       add(e.x, e.y, "endpoint", 110, { entity: e.id, at: 0 }); // a placed point is a strong snap target
     } else if (e.type === "projected") {
-      // projected reference curves snap like their native counterparts, that's
-      // half the point of projecting. Centers come from asRound (the one
-      // circumcenter-for-projected-arc rule). Poly interior vertices are
-      // SAMPLES, not real model points, so they snap weakly (60).
+      // Projected curves snap like native ones. Centers come from asRound, poly interior vertices are samples so they
+      // snap weakly (60).
       const round = asRound(e);
       if (round) add(round.x, round.y, "center", 90);
       const cv = e.curve;
@@ -454,24 +383,98 @@ export function candidatesFromEntities(
   return out;
 }
 
-// `id` is the stable in-session identity constraints reference (see ./id.ts).
-// `dimPlace` mirrors SketchEntity's badge-label placement (see types.ts), it's
-// plain numbers already, so it survives resolution as a structural copy.
+// `id` is the stable in-session identity constraints reference (see ./id.ts). `dimPlace` is plain numbers, a
+// structural copy through resolution.
 export type ResolvedEntity =
-  | { type: "line"; id: string; x1: number; y1: number; x2: number; y2: number; construction?: boolean; dimPlace?: DimPlace }
-  | { type: "rectangle"; id: string; width: number; height: number; x: number; y: number; angle?: number; construction?: boolean; dimPlace?: DimPlace }
+  | {
+      type: "line";
+      id: string;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      construction?: boolean;
+      dimPlace?: DimPlace;
+    }
+  | {
+      type: "rectangle";
+      id: string;
+      width: number;
+      height: number;
+      x: number;
+      y: number;
+      angle?: number;
+      construction?: boolean;
+      dimPlace?: DimPlace;
+    }
   | { type: "circle"; id: string; radius: number; x: number; y: number; construction?: boolean; dimPlace?: DimPlace }
-  | { type: "arc"; id: string; x1: number; y1: number; x2: number; y2: number; mx: number; my: number; construction?: boolean }
+  | {
+      type: "arc";
+      id: string;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      mx: number;
+      my: number;
+      construction?: boolean;
+    }
   | { type: "spline"; id: string; points: { x: number; y: number }[]; construction?: boolean }
-  | { type: "bspline"; id: string; poles: { x: number; y: number }[]; degree?: number; closed?: boolean; knots?: number[]; construction?: boolean }
+  | {
+      type: "bspline";
+      id: string;
+      poles: { x: number; y: number }[];
+      degree?: number;
+      closed?: boolean;
+      knots?: number[];
+      construction?: boolean;
+    }
   | { type: "point"; id: string; x: number; y: number; construction?: boolean }
   // parametric shapes (rigid: the solver skips them; edited via their params)
-  | { type: "polygon"; id: string; x: number; y: number; radius: number; sides: number; angle: number; construction?: boolean; dimPlace?: DimPlace }
-  | { type: "slot"; id: string; x1: number; y1: number; x2: number; y2: number; width: number; construction?: boolean; dimPlace?: DimPlace }
-  | { type: "text"; id: string; text: string; x: number; y: number; height: number;
-      font?: string; style?: "regular" | "bold" | "italic" | "bolditalic";
-      align?: "left" | "center" | "right"; angle: number;
-      pathRef?: string; positionOnPath?: number; boxWidth?: number; construction?: boolean }
-  // projected reference geometry (fixed/linked): the curve is already plain
-  // numbers, so resolution is a structural pass-through
-  | { type: "projected"; id: string; source: ProjectedSource; curve: ProjectedCurve; stale?: true; construction?: boolean };
+  | {
+      type: "polygon";
+      id: string;
+      x: number;
+      y: number;
+      radius: number;
+      sides: number;
+      angle: number;
+      construction?: boolean;
+      dimPlace?: DimPlace;
+    }
+  | {
+      type: "slot";
+      id: string;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      width: number;
+      construction?: boolean;
+      dimPlace?: DimPlace;
+    }
+  | {
+      type: "text";
+      id: string;
+      text: string;
+      x: number;
+      y: number;
+      height: number;
+      font?: string;
+      style?: "regular" | "bold" | "italic" | "bolditalic";
+      align?: "left" | "center" | "right";
+      angle: number;
+      pathRef?: string;
+      positionOnPath?: number;
+      boxWidth?: number;
+      construction?: boolean;
+    }
+  // projected reference geometry: already plain numbers, so resolution passes it through
+  | {
+      type: "projected";
+      id: string;
+      source: ProjectedSource;
+      curve: ProjectedCurve;
+      stale?: true;
+      construction?: boolean;
+    };

@@ -25,10 +25,7 @@ pub enum PlaneSpec {
     Def(PlaneDef),
 }
 
-plain_struct!(AxisLine {
-    origin: Vec3,
-    dir: Vec3
-});
+plain_struct!(AxisLine { origin: Vec3, dir: Vec3 });
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -230,9 +227,8 @@ feature_struct!(DeleteFace {
 
 plain_struct!(PlaneName { name: Plane3 });
 
-/// A mirror's `plane`, a world plane or datum plane by name. A mirror that
-/// names `bodies` writes it as `{name}`, which a build from before targeted
-/// mirrors refuses; a bare name it would read and reflect the active body.
+/// A mirror's `plane`, a world or datum plane by name. A mirror naming `bodies` writes `{name}`, which older builds
+/// refuse, rather than a bare name they would read as a mirror of the active body.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MirrorPlane {
@@ -268,10 +264,7 @@ feature_struct!(
     }
 );
 
-plain_struct!(LoftProfile {
-    sketch: String,
-    region: Vec3
-});
+plain_struct!(LoftProfile { sketch: String, region: Vec3 });
 
 feature_struct!(Loft {
     #[serde(default, skip_serializing_if = "Option::is_none")] profiles: Option<Vec<LoftProfile>>,
@@ -289,10 +282,8 @@ feature_struct!(Sweep {
 });
 
 feature_struct!(
-    /// The reference (`planeId`, else `face`, else `plane`), shifted by
-    /// `shiftX`/`shiftY`/`offset` along its own axes, then turned about that
-    /// point: `tiltX` about the reference x, `tiltY` about the y that leaves,
-    /// `spin` about the normal that leaves. Angles in degrees.
+    /// The reference (`planeId`, else `face`, else `plane`) shifted by `shiftX`, `shiftY` and `offset` along its own
+    /// axes, then turned there: `tiltX` about its x, `tiltY` about the new y, `spin` about the new normal, in degrees.
     DatumPlane {
         plane: PlaneSpec,
         #[serde(default, skip_serializing_if = "Option::is_none")] offset: Option<Num>,
@@ -319,8 +310,13 @@ feature_struct!(
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum PlaneThrough {
     /// Halfway between two planes, their bisector when they cross.
-    Mid { a: PlaneOf, b: PlaneOf },
-    Points { points: Vec<PointAt> },
+    Mid {
+        a: PlaneOf,
+        b: PlaneOf,
+    },
+    Points {
+        points: Vec<PointAt>,
+    },
     /// Normal to `edge` at the datum's `t`, or at `vertex` when given.
     #[serde(rename_all = "camelCase")]
     NormalToEdge {
@@ -329,9 +325,15 @@ pub enum PlaneThrough {
         vertex: Option<PointAt>,
     },
     /// Through two parallel or crossing coplanar edges.
-    TwoEdges { a: Selector, b: Selector },
+    TwoEdges {
+        a: Selector,
+        b: Selector,
+    },
     /// Through `edge`, turned the datum's `angle` from the plane `from`.
-    Angle { edge: Selector, from: PlaneOf },
+    Angle {
+        edge: Selector,
+        from: PlaneOf,
+    },
 }
 
 /// A plane a datum is built from: a flat face, or XY, XZ, YZ or a datum plane id.
@@ -342,9 +344,8 @@ pub enum PlaneOf {
     Named { plane: String },
 }
 
-/// A point a datum is built from. On an edge: `end` is start, end or mid, else
-/// `t` is a fraction 0..1; `point` is where it was, which picks the end
-/// meant when an edit reverses the edge. On a face, its centre.
+/// A point a datum is built from. On an edge, `end` (start, end or mid) or else the fraction `t`, with `point` telling
+/// which end was meant when an edit reverses the edge. On a face, its centre.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum PointAt {
@@ -357,8 +358,12 @@ pub enum PointAt {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         point: Option<Vec3>,
     },
-    Face { face: Selector },
-    Datum { datum: String },
+    Face {
+        face: Selector,
+    },
+    Datum {
+        datum: String,
+    },
 }
 
 feature_struct!(DatumPoint {
@@ -379,11 +384,19 @@ feature_struct!(DatumAxis {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum AxisThrough {
-    Points { a: PointAt, b: PointAt },
+    Points {
+        a: PointAt,
+        b: PointAt,
+    },
     /// The axis of a cylindrical face.
-    Cylinder { face: Selector },
+    Cylinder {
+        face: Selector,
+    },
     /// Where two planes meet.
-    Planes { a: PlaneOf, b: PlaneOf },
+    Planes {
+        a: PlaneOf,
+        b: PlaneOf,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -404,14 +417,8 @@ plain_struct!(ImportPart {
     #[serde(default, skip_serializing_if = "Option::is_none")] face_colors: Option<FaceColorRuns>,
     #[serde(default, skip_serializing_if = "Option::is_none")] color: Option<String>,
 });
-plain_struct!(ImportLink {
-    path: String,
-    stamp: String
-});
-plain_struct!(GeneratedBy {
-    plugin: String,
-    spec: Extra
-});
+plain_struct!(ImportLink { path: String, stamp: String });
+plain_struct!(GeneratedBy { plugin: String, spec: Extra });
 
 feature_struct!(
     /// An imported body, embedded so the file rebuilds without the original.
@@ -524,14 +531,10 @@ open_enum! {
 }
 
 feature_struct!(
-    /// A helical groove (`cut`, the default) or ridge (`join`) swept along a
-    /// round face that is found again at every build. Each `profile` point is
-    /// `[into, along]` in mm: into the material from the face, and along the axis
-    /// from the profile's centre line. `pitch` is the axial distance between
-    /// neighbouring grooves, the lead is `pitch * starts`. `axis` only says which
-    /// way the face runs, `offset` and `length` are measured from its first end
-    /// that way. `clearance` moves the whole thread that far into the material.
-    /// `spec` belongs to the tool that wrote the feature and is never read here.
+    /// A helical groove (`cut`, the default) or ridge (`join`) on a round face found again at every build. Each
+    /// `profile` point is `[into, along]` in mm from the face and the profile's centre line; `pitch` is the axial
+    /// spacing, the lead `pitch * starts`. `axis` only orients the face, `offset` and `length` run from its first end,
+    /// `clearance` sinks the whole thread, and `spec` belongs to the tool that wrote it.
     Thread {
         face: Selector,
         profile: Vec<[Real; 2]>,
@@ -574,9 +577,8 @@ feature_struct!(
 );
 
 feature_struct!(
-    /// Text laid on a face, wrapped along a round one so the letters keep their
-    /// size. `at` places the anchor as fractions of the face's (u, v) range and
-    /// is preferred over `point`; operation join embosses, cut engraves.
+    /// Text laid on a face, wrapped around a round one so the letters keep their size. `at`, in fractions of the face's
+    /// (u, v) range, wins over `point`; join embosses, cut engraves.
     TextOnFace {
         face: Selector,
         text: String,
@@ -610,9 +612,8 @@ feature_struct!(PatternLinear {
     #[serde(default, skip_serializing_if = "Option::is_none")] features: Option<Vec<String>>,
 });
 feature_struct!(
-    /// `axis` is X, Y, Z, a line, or `{datum}` naming a datum axis above the
-    /// pattern. `axisRef` makes the axis follow an edge or face, with the line
-    /// in `axis` as the cache.
+    /// `axis` is X, Y, Z, a line, or `{datum}` naming a datum axis above the pattern; `axisRef` makes it follow an edge
+    /// or face, with the line in `axis` as the cache.
     PatternCircular {
         count: Num, angle: Num, axis: PatternAxis,
         #[serde(default, skip_serializing_if = "Option::is_none")] axis_ref: Option<Selector>,
@@ -792,8 +793,7 @@ macro_rules! each_known {
             Feature::Mechanism($f) => $e,
             Feature::CleanUp($f) => $e,
             Feature::RemoveBody($f) => $e,
-            Feature::Unknown($unknown)
-            | Feature::Invalid(super::value::Invalid { raw: $unknown, .. }) => $u,
+            Feature::Unknown($unknown) | Feature::Invalid(super::value::Invalid { raw: $unknown, .. }) => $u,
         }
     };
 }
@@ -817,9 +817,7 @@ impl Feature {
     /// The keys a known feature carries and a build ignores. `name` is the
     /// label any feature may carry.
     pub fn unread_fields(&self) -> Vec<&str> {
-        self.extra()
-            .map(|e| e.keys().map(String::as_str).filter(|k| *k != "name").collect())
-            .unwrap_or_default()
+        self.extra().map(|e| e.keys().map(String::as_str).filter(|k| *k != "name").collect()).unwrap_or_default()
     }
 
     pub fn is_core_type(type_name: &str) -> bool {

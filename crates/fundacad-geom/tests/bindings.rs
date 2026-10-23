@@ -1,15 +1,14 @@
-//! Kernel tests for the OpenCASCADE classes added to the vendored bindings for
-//! the Rust engine port (docs/ENGINE.md section 2.2). Each asserts on what
-//! the kernel computed, never only that a call returned.
+//! Kernel tests for the OpenCASCADE classes added to the vendored bindings, each asserting on what the
+//! kernel computed, never only that a call returned.
 
 use glam::{dvec3, DVec3};
 use opencascade::{
     boolean_op::{bop_split, BooleanKind, BooleanOp, BooleanOptions, Glue},
     extrema::SupportKind,
-    progress::{Progress, ProgressRange},
     heal::FixOptions,
     modify::{OffsetJoin, OffsetOptions, UnifyOptions},
     primitives::{Direction, Edge, Face, Shape, ShapeType, SurfaceType, Vertex},
+    progress::{Progress, ProgressRange},
     query::PointState,
     sewing::{ReShape, Sewing, SewingCounts, SewingOptions},
     shape_io::BrepWriteOptions,
@@ -33,11 +32,8 @@ fn solid_from_shell(shell: &Shape) -> Shape {
     Shape::from_raw_ref(make.pin_mut().Shape())
 }
 
-// Two ways a solid ends up inside out: a REVERSED flag on the solid, or a
-// FORWARD solid around a reversed shell (what sewing an inward shell gives).
-// ShapeFix rights both, but ShapeFix_Solid::Perform only records the flip in
-// its status (DONE2) and returns false, so `modified` stays false. BRepCheck
-// calls both valid, which is why the Python engine tests the volume sign instead.
+// ShapeFix rights a REVERSED solid and a FORWARD solid around a reversed shell, but only records the flip
+// in its status (DONE2), so `modified` stays false. BRepCheck calls both valid, hence the volume sign test.
 #[test]
 fn shape_fix_turns_an_inside_out_solid_the_right_way() {
     let cube = Shape::box_with_dimensions(10.0, 10.0, 10.0);
@@ -475,9 +471,8 @@ fn splitters_and_general_fuse_divide_without_removing_anything() {
 #[test]
 fn progress_indicator_reports_and_cancels_a_boolean() {
     let block = Shape::box_with_dimensions(20.0, 20.0, 10.0);
-    let pins: Vec<Shape> = (0..4)
-        .map(|i| Shape::cylinder(dvec3(3.0 + 4.0 * i as f64, 10.0, -1.0), 1.0, DVec3::Z, 12.0))
-        .collect();
+    let pins: Vec<Shape> =
+        (0..4).map(|i| Shape::cylinder(dvec3(3.0 + 4.0 * i as f64, 10.0, -1.0), 1.0, DVec3::Z, 12.0)).collect();
 
     let progress = Progress::new(|| false);
     let range = progress.start();
@@ -490,7 +485,8 @@ fn progress_indicator_reports_and_cancels_a_boolean() {
 
     let flag = Arc::new(AtomicBool::new(true));
     let cancelled = Progress::from_flag(flag.clone());
-    let refused = BooleanOp::run(BooleanKind::Cut, [&block], pins.iter(), BooleanOptions::default(), &cancelled.start());
+    let refused =
+        BooleanOp::run(BooleanKind::Cut, [&block], pins.iter(), BooleanOptions::default(), &cancelled.start());
     assert!(matches!(refused, Err(opencascade::Error::Cancelled)));
     assert!(cancelled.is_cancelled());
 
@@ -641,7 +637,8 @@ fn unify_same_domain_merges_split_faces_and_keeps_history() {
 #[test]
 fn sewing_rebuilds_a_shell_from_loose_faces_and_reshape_edits_one() {
     let block = Shape::box_with_dimensions(10.0, 10.0, 10.0);
-    let loose: Vec<Shape> = block.subshapes(ShapeType::Face).iter().map(|f| f.deep_copy(true, false).unwrap()).collect();
+    let loose: Vec<Shape> =
+        block.subshapes(ShapeType::Face).iter().map(|f| f.deep_copy(true, false).unwrap()).collect();
     assert!(loose.iter().all(|f| block.shape_map(ShapeType::Face).index_of(f) == 0), "copies share nothing");
     let pile = Shape::from(opencascade::primitives::Compound::from_shapes(&loose));
     assert_eq!(count(&pile, ShapeType::Edge), 24);
@@ -650,7 +647,10 @@ fn sewing_rebuilds_a_shell_from_loose_faces_and_reshape_edits_one() {
     let sewn = sewing.shape();
     assert_eq!(sewn.shape_type(), ShapeType::Shell);
     assert_eq!(count(&sewn, ShapeType::Edge), 12);
-    assert_eq!(sewing.counts(), SewingCounts { free_edges: 0, multiple_edges: 0, degenerated_shapes: 0, deleted_faces: 0 });
+    assert_eq!(
+        sewing.counts(),
+        SewingCounts { free_edges: 0, multiple_edges: 0, degenerated_shapes: 0, deleted_faces: 0 }
+    );
     assert!(close(sewn.fix_solid(0.0, 0.0).unwrap().volume(), 1000.0, 1e-6));
     let first = sewing.modified(&loose[0]).unwrap();
     assert!(sewn.shape_map(ShapeType::Face).index_of(&first) > 0);

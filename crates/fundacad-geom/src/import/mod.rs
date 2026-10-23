@@ -1,18 +1,13 @@
-//! The `import` op, replaces `import_geometry`, `_assembly_payload` and
-//! `_import_size_cap` of the Python engine's `mesh_import.py`, with the product tree walk
-//! of `step_assembly.py` in the vendored bindings (`opencascade::xcaf`).
-//!
-//! Not here yet: the free memory guard.
+//! The `import` op, with the STEP product tree walk over `opencascade::xcaf`.
 
 pub mod amf;
 pub mod blobstore;
 pub mod canonical;
 pub mod dxf;
-pub mod heal2d;
-pub mod svg;
 pub mod fbx;
 pub mod fcstd;
 pub mod gltf;
+pub mod heal2d;
 pub mod ifc;
 pub mod mesh;
 pub mod off;
@@ -21,6 +16,7 @@ pub mod ply;
 pub mod rhino;
 pub mod scan;
 pub mod stage;
+pub mod svg;
 pub mod threeds;
 pub mod x3d;
 
@@ -53,7 +49,7 @@ fn hex(c: [u8; 3]) -> String {
     format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
 }
 
-/// `step_assembly._clean`: control and format characters out, ends trimmed.
+/// Control and format characters out, ends trimmed.
 fn clean(name: &str) -> String {
     name.chars()
         .filter(|&c| {
@@ -68,15 +64,13 @@ fn clean(name: &str) -> String {
         .to_string()
 }
 
-/// The imported shape and the manifest fields that go beside it.
 pub struct Imported {
     pub shape: Shape,
     pub fields: Map<String, Value>,
 }
 
-/// What sewing loose faces left to say, each sentence led by the name the
-/// build gives the body it is about. `names` is empty for a file that is one
-/// body, which the feature names.
+/// Each sentence is led by the name the build gives its body. `names` is empty for a
+/// one body file, which the feature names.
 fn repair_notes(asm: &StepAssembly, names: &[String], turned: &[StepNote]) -> Vec<Value> {
     let mut owned: HashMap<usize, usize> = HashMap::new();
     for leaf in &asm.leaves {
@@ -88,7 +82,8 @@ fn repair_notes(asm: &StepAssembly, names: &[String], turned: &[StepNote]) -> Ve
             None => note.text.clone(),
             Some(name) => match note.leaf.filter(|_| owned.get(&note.node).is_some_and(|&n| n > 1)) {
                 Some(leaf) => {
-                    let nth = asm.leaves[..=leaf.min(asm.leaves.len() - 1)].iter().filter(|l| l.node == note.node).count();
+                    let nth =
+                        asm.leaves[..=leaf.min(asm.leaves.len() - 1)].iter().filter(|l| l.node == note.node).count();
                     format!("{name} {nth}: {}", note.text)
                 }
                 None => format!("{name}: {}", note.text),
@@ -102,7 +97,6 @@ fn repair_notes(asm: &StepAssembly, names: &[String], turned: &[StepNote]) -> Ve
     out
 }
 
-/// What turning `n` inside out solids outward says.
 fn turned_text(n: usize) -> String {
     if n == 1 {
         "1 solid was inside out, its faces pointed into the material, so it was turned outward".into()
@@ -111,10 +105,8 @@ fn turned_text(n: usize) -> String {
     }
 }
 
-/// A mesh or BREP file's shape with its inside out solids turned outward, and
-/// what that says. The STEP reader turns a solid outward itself, see
-/// `reader_turned`. A document that already holds a shape keeps it as stored,
-/// a face selector saved against it carries the normal it had.
+/// Mesh and BREP files only, the STEP reader turns solids outward itself in `reader_turned`.
+/// A shape a document already stores is kept, a face selector saved on it carries its normal.
 fn outward(imported: Imported) -> Imported {
     if imported.fields.get("scan").is_some_and(|v| v == true) {
         return imported;
@@ -132,15 +124,13 @@ fn outward(imported: Imported) -> Imported {
     Imported { shape, fields }
 }
 
-/// What the STEP reader turning the solids of `shape` outward says, about the
-/// body `node` and `leaf` name.
+/// The note for solids of `shape` the STEP reader turned outward, on the body `node` and `leaf` name.
 fn reader_turned(shape: &Shape, node: usize, leaf: Option<usize>) -> Option<StepNote> {
     let n = kernel::reader_turned_solids(shape);
     (n > 0).then(|| StepNote { node, leaf, text: turned_text(n) })
 }
 
-/// `_assembly_payload`: the leaves in order as one flat compound, their
-/// products as `nodes`, and one `parts` row per leaf.
+/// The leaves in order as one flat compound, their products as `nodes`, one `parts` row per leaf.
 pub fn assembly_payload(asm: &StepAssembly) -> Imported {
     let names: Vec<String> = asm
         .nodes
@@ -234,19 +224,22 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
     Imported { shape, fields }
 }
 
-/// The STEP half of `import_geometry`.
 pub fn read_step(path: &Path) -> Result<Imported, String> {
     let progress = crate::cancel::progress_beating();
-    let asm = crate::bench::phase("step_read", || stage::sampling_xcaf_read(&progress, || xcaf::read_step_assembly_with(path, &progress.start())))
-        .map_err(|e| occt_message(&e))?;
+    let asm = crate::bench::phase("step_read", || {
+        stage::sampling_xcaf_read(&progress, || xcaf::read_step_assembly_with(path, &progress.start()))
+    })
+    .map_err(|e| occt_message(&e))?;
     Ok(from_assembly(asm))
 }
 
 /// IGES, read like STEP with each free root a product.
 pub fn read_iges(path: &Path) -> Result<Imported, String> {
     let progress = crate::cancel::progress_beating();
-    let asm = crate::bench::phase("iges_read", || stage::sampling_xcaf_read(&progress, || xcaf::read_iges_assembly_with(path, &progress.start())))
-        .map_err(|e| occt_message(&e))?;
+    let asm = crate::bench::phase("iges_read", || {
+        stage::sampling_xcaf_read(&progress, || xcaf::read_iges_assembly_with(path, &progress.start()))
+    })
+    .map_err(|e| occt_message(&e))?;
     Ok(from_assembly(asm))
 }
 
@@ -262,7 +255,8 @@ pub fn read_xbf(path: &Path) -> Result<Imported, String> {
     let progress = crate::cancel::progress_beating();
     let asm = crate::bench::phase("xbf_read", || {
         stage::sampling_xcaf_read(&progress, || xcaf::read_xbf_assembly_with(path, &progress.start()))
-    }).map_err(|e| {
+    })
+    .map_err(|e| {
         // OCCT can fail on a damaged file with something that is neither a
         // Standard_Failure nor a std::exception, which the bridge can only call unknown.
         match occt_message(&e) {
@@ -278,17 +272,14 @@ fn from_assembly(asm: StepAssembly) -> Imported {
     if asm.is_assembly {
         return crate::bench::phase("assembly_payload", || assembly_payload(&asm));
     }
-    let color = asm
-        .leaves
-        .first()
-        .and_then(|l| l.solid_color)
-        .or_else(|| asm.nodes.first().and_then(|n| n.color));
+    let color = asm.leaves.first().and_then(|l| l.solid_color).or_else(|| asm.nodes.first().and_then(|n| n.color));
     let mut fields = Map::new();
     if let Some(c) = color {
         fields.insert("color".into(), json!(hex(c)));
     }
     let n: usize = asm.roots.iter().map(kernel::reader_turned_solids).sum();
-    let turned: Vec<StepNote> = (n > 0).then(|| StepNote { node: 0, leaf: None, text: turned_text(n) }).into_iter().collect();
+    let turned: Vec<StepNote> =
+        (n > 0).then(|| StepNote { node: 0, leaf: None, text: turned_text(n) }).into_iter().collect();
     let notes = repair_notes(&asm, &[], &turned);
     if !notes.is_empty() {
         fields.insert("notes".into(), Value::Array(notes));
@@ -302,13 +293,13 @@ fn from_assembly(asm: StepAssembly) -> Imported {
     Imported { shape, fields }
 }
 
-/// A text file as read, or unpacked when it is gzip (.wrz, .x3dz), capped at
-/// the import size limit.
 fn is_gzip(p: &Path) -> bool {
     let mut magic = [0u8; 2];
-    std::fs::File::open(p).and_then(|mut f| std::io::Read::read_exact(&mut f, &mut magic)).is_ok() && magic == [0x1f, 0x8b]
+    std::fs::File::open(p).and_then(|mut f| std::io::Read::read_exact(&mut f, &mut magic)).is_ok()
+        && magic == [0x1f, 0x8b]
 }
 
+/// Unpacked when it is gzip (.wrz, .x3dz), capped at the import size limit.
 fn text_maybe_gzipped(data: Vec<u8>) -> Result<String, String> {
     use std::io::Read;
     if !data.starts_with(&[0x1f, 0x8b]) {
@@ -320,7 +311,10 @@ fn text_maybe_gzipped(data: Vec<u8>) -> Result<String, String> {
         .read_to_end(&mut out)
         .map_err(|e| format!("couldn't unpack this gzip file ({e})"))?;
     if out.len() as u64 > MAX_IMPORT_FILE_BYTES {
-        return Err(format!("the file unpacks past {} MiB, too large to import", MAX_IMPORT_FILE_BYTES / (1024 * 1024)));
+        return Err(format!(
+            "the file unpacks past {} MiB, too large to import",
+            MAX_IMPORT_FILE_BYTES / (1024 * 1024)
+        ));
     }
     Ok(String::from_utf8_lossy(&out).into_owned())
 }
@@ -332,15 +326,19 @@ fn occt_message(e: &opencascade::Error) -> String {
     }
 }
 
-/// `import_geometry`: read the file, store its geometry and answer
-/// `{geom, solid, faces, name, color?, nodes?, parts?, notes?}`.
+/// Stores the geometry and answers `{geom, solid, faces, name, color?, nodes?, parts?, notes?}`.
 pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<String, Value>, String> {
     import_geometry_in(path, fmt, store, None)
 }
 
-/// `import_geometry` with the unit the user said a glTF, VRML or X3D file is
-/// in, `mm`, `cm`, `m` or `inch`. Without one those read as metres, the spec.
-pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option<&str>) -> Result<Map<String, Value>, String> {
+/// `unit` is what the user said a glTF, VRML or X3D file is in: `mm`, `cm`, `m` or `inch`.
+/// Without one those read as metres, the spec.
+pub fn import_geometry_in(
+    path: &str,
+    fmt: &str,
+    store: &BlobStore,
+    unit: Option<&str>,
+) -> Result<Map<String, Value>, String> {
     let mm_per_unit = unit.map(mesh::mm_per_unit_name).transpose()?;
     let fmt = fmt.to_lowercase();
     let p = Path::new(path);
@@ -375,10 +373,7 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
         "fcstd" => fcstd::read_fcstd(p)?,
         "3dm" => outward(rhino::read_3dm(p)?),
         "ifc" => outward(ifc::import_ifc(&std::fs::read(p).map_err(|e| e.to_string())?)?),
-        "brep" => outward(Imported {
-            shape: Shape::read_brep_text(p).map_err(|e| e.to_string())?,
-            fields: Map::new(),
-        }),
+        "brep" => outward(Imported { shape: Shape::read_brep_text(p).map_err(|e| e.to_string())?, fields: Map::new() }),
         "stl" | "3mf" | "obj" => {
             let peek = mesh::peek_triangle_count(p, &fmt).filter(|&n| n > mesh::MAX_IMPORT_TRIANGLES);
             if let Some(ntri) = peek {
@@ -395,7 +390,9 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
                         scan::scan_imported(&pos, &idx)?
                     }
                     scan::Route::Refused(why) => return Err(why),
-                    scan::Route::Editable => outward(Imported { shape: mesh::sew_triangles(&pos, &idx)?, fields: Map::new() }),
+                    scan::Route::Editable => {
+                        outward(Imported { shape: mesh::sew_triangles(&pos, &idx)?, fields: Map::new() })
+                    }
                 }
             } else {
                 let shape = if fmt == "stl" { mesh::read_stl(p)? } else { mesh::read_3mf(p)? };
@@ -418,12 +415,14 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
         }
         "ply" | "off" => {
             let data = std::fs::read(p).map_err(|e| e.to_string())?;
-            let obj = if fmt == "ply" { ply::read_ply(&data)? } else { off::read_off(&String::from_utf8_lossy(&data))? };
+            let obj =
+                if fmt == "ply" { ply::read_ply(&data)? } else { off::read_off(&String::from_utf8_lossy(&data))? };
             outward(mesh::finish_objects(vec![obj])?)
         }
         "vrml" | "x3d" => {
             let text = text_maybe_gzipped(std::fs::read(p).map_err(|e| e.to_string())?)?;
-            let (objs, notes) = if fmt == "vrml" { x3d::read_vrml(&text, mm_per_unit)? } else { x3d::read_x3d(&text, mm_per_unit)? };
+            let (objs, notes) =
+                if fmt == "vrml" { x3d::read_vrml(&text, mm_per_unit)? } else { x3d::read_x3d(&text, mm_per_unit)? };
             let mut imported = mesh::finish_objects(objs)?;
             if !notes.is_empty() {
                 imported.fields.insert("notes".into(), json!(notes));
@@ -482,7 +481,8 @@ fn import_dxf(p: &Path, store: &BlobStore) -> Result<Map<String, Value>, String>
         out.insert("notes".into(), Value::Array(notes));
     }
     if !read.sketches.is_empty() {
-        let sketches: Vec<Value> = read.sketches.into_iter().map(|(name, entities)| json!({"name": name, "entities": entities})).collect();
+        let sketches: Vec<Value> =
+            read.sketches.into_iter().map(|(name, entities)| json!({"name": name, "entities": entities})).collect();
         out.insert("sketches".into(), Value::Array(sketches));
     }
     out.insert("unit".into(), json!(read.unit));
@@ -563,9 +563,8 @@ fn body_name(p: &Path) -> String {
     }
 }
 
-/// The `import` op. A request carries a `path` the engine reads, or the file
-/// itself as base64 `data` with its `name`, for a client that has bytes and no
-/// path, like a file dropped on a browser tab.
+/// A request carries a `path` the engine reads, or the file as base64 `data` with its `name`
+/// for a client that has bytes and no path, like a file dropped on a browser tab.
 pub fn import_result(req: &Map<String, Value>) -> JobResult {
     let fmt = req.get("format").and_then(Value::as_str);
     let path = req.get("path").and_then(Value::as_str);
@@ -600,10 +599,8 @@ pub fn import_result(req: &Map<String, Value>) -> JobResult {
 /// the import is named after what the user dropped.
 fn spool_name(name: &str, fmt: &str) -> String {
     let base = name.trim().rsplit(['/', '\\']).next().unwrap_or("");
-    let cleaned: String = base
-        .chars()
-        .map(|c| if c.is_control() || r#"<>:"|?*"#.contains(c) { '_' } else { c })
-        .collect();
+    let cleaned: String =
+        base.chars().map(|c| if c.is_control() || r#"<>:"|?*"#.contains(c) { '_' } else { c }).collect();
     let cleaned = cleaned.trim_end_matches(['.', ' ']).to_string();
     if cleaned.trim_matches('.').is_empty() {
         format!("imported.{fmt}")

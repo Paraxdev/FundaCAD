@@ -1,26 +1,7 @@
-// The game controller capability: a pad or a Steam Deck flying the camera and
-// running commands.
-//
-// THE APP KNOWS NOTHING OF IT. What it reaches is what every plugin gets: the
-// camera rig on the viewport, the one dispatcher the ribbon and the palette
-// share, and the command list the palette searches. Keys and clicks it sends as
-// ordinary DOM events, so whatever already answers Enter, Escape or a click on
-// the canvas answers the pad the same way, with no second path to disagree.
-//
-// No native half. The pad is read through the webview's Gamepad API, which
-// WebView2 and WKWebView carry and WebKitGTK carries when it was built with
-// libmanette. A webview built without it reports no pads at all, and this does
-// nothing, which is the right amount of nothing.
+// Keys and clicks go out as ordinary DOM events, so whatever answers Enter, Escape or a canvas click answers the pad
+// the same way. Pads come from the webview's Gamepad API, WebKitGTK built without libmanette reports none.
 
-import {
-  CURSOR,
-  getGamepadConfig,
-  motionOf,
-  parseKey,
-  pressed,
-  settings,
-  type Binding,
-} from "./gamepad";
+import { CURSOR, getGamepadConfig, motionOf, parseKey, pressed, settings, type Binding } from "./gamepad";
 import { padState } from "./state";
 import GamepadSection from "./GamepadSection.vue";
 import { contribute, stickyFact } from "fundacad";
@@ -66,7 +47,7 @@ export async function activate(e: Engine): Promise<() => void> {
   };
 
   const loop = () => {
-    if (stopped) return; // not re-scheduled: this is what "off" means
+    if (stopped) return;
     const now = performance.now();
     const dt = Math.min(50, now - last) / 1000;
     last = now;
@@ -84,12 +65,7 @@ export async function activate(e: Engine): Promise<() => void> {
 
     const cfg = getGamepadConfig();
     const down = pad.buttons.map((b) => b.pressed);
-    const m = motionOf(
-      pad.axes,
-      [pad.buttons[6]?.value ?? 0, pad.buttons[7]?.value ?? 0],
-      cfg,
-      cursor.on(),
-    );
+    const m = motionOf(pad.axes, [pad.buttons[6]?.value ?? 0, pad.buttons[7]?.value ?? 0], cfg, cursor.on());
 
     const rig = e.viewport.rig;
     if (m.panX || m.panY) rig.panScreen(m.panX * dt, m.panY * dt);
@@ -158,12 +134,8 @@ function sendKey(key: string, ctrl: boolean, shift: boolean) {
   target.dispatchEvent(new KeyboardEvent("keyup", init));
 }
 
-/** The on-screen cursor, for a pad with no trackpad to point with.
- *
- *  It sends the pointer and mouse events a real left button sends, to whatever
- *  is under it, so a face on the canvas, a ribbon button and a field in a dialog
- *  all take it without knowing it is not a mouse. A Steam Deck does not need
- *  it: its trackpads already are a mouse. */
+/** The on-screen cursor, for a pad with no trackpad. It sends the pointer and mouse events a real left button sends
+ *  to whatever is under it, so canvas, ribbon and dialogs take it as a mouse. A Steam Deck's trackpads already are one. */
 function createCursor() {
   const el = document.createElement("div");
   el.setAttribute("aria-hidden", "true");

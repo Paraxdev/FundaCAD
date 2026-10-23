@@ -1,15 +1,5 @@
-// Frame-rate readout in the viewport's bottom-right corner.
-//
-// The viewport renders ON DEMAND (see Viewport.loop): when the camera is still
-// and nothing is dirty, no frame is drawn at all. A naive counter would then sit
-// at "0 fps" on a perfectly healthy idle app, so this reports `render idle` instead,
-// which also makes the render-on-demand behaviour visible rather than looking
-// like a stall.
-//
-// The number that actually matters when something feels slow is the frame TIME,
-// not the rate: a rate is capped by the display's refresh, so it reads 60 right
-// up until it falls off a cliff, while the millisecond figure degrades smoothly
-// and is directly comparable to a budget (16.7ms at 60Hz).
+// Frame time readout. Rendering is on demand, so no frames reads `render idle` rather than 0 fps, and the ms figure
+// leads because the rate is capped by the display refresh.
 
 /** Frames older than this are dropped from the rolling window. */
 const WINDOW_MS = 1000;
@@ -28,12 +18,8 @@ export class FpsMeter {
     if (this.el) this.start();
   }
 
-  /** Adopt the readout element after construction.
-   *
-   *  The Viewport creates its FpsMeter in a field initializer, which runs while
-   *  the Vue shell that owns #fps has not rendered yet, so the element cannot
-   *  be looked up by id any more. components/shell/FpsReadout.vue hands it over
-   *  in onMounted instead. */
+  /** The Viewport builds this in a field initializer, before the Vue shell has rendered #fps, so FpsReadout.vue hands the
+   *  element over in onMounted. */
   setHost(host: HTMLElement) {
     if (this.el) return;
     this.el = host;
@@ -44,9 +30,7 @@ export class FpsMeter {
     if (!this.timer) this.timer = window.setInterval(() => this.paint(), REFRESH_MS);
   }
 
-  /** Call once per ACTUALLY RENDERED frame (not once per rAF tick, the loop
-   *  skips the draw when nothing changed, and counting skipped ticks would
-   *  report a steady 60 no matter how slow the real frames were). */
+  /** Once per frame actually drawn, not per rAF tick: the loop skips idle draws, and counting those reads a steady 60. */
   frame(now = performance.now()) {
     this.stamps.push(now);
     // bounded by refresh rate * WINDOW_MS, so a plain shift-while is fine
@@ -61,7 +45,11 @@ export class FpsMeter {
     const last = this.stamps[this.stamps.length - 1];
     if (last === undefined || now - last > IDLE_AFTER_MS) {
       // Not "idle" alone: beside the history's build state that read as the engine's.
-      this.show("render idle", "The viewport only draws when something changes, nothing to render right now. This says nothing about the geometry engine." + gpuLine);
+      this.show(
+        "render idle",
+        "The viewport only draws when something changes, nothing to render right now. This says nothing about the geometry engine." +
+          gpuLine,
+      );
       return;
     }
     // Rate over the window, and the mean interval between the frames in it.
@@ -74,16 +62,14 @@ export class FpsMeter {
     const ms = span / (n - 1);
     this.show(
       `${Math.round(fps)} fps · ${ms.toFixed(1)} ms`,
-      `${n} frames drawn in the last ${Math.round(span)}ms. `
-        + "The viewport renders on demand, so this only counts frames that were actually drawn."
-        + gpuLine,
+      `${n} frames drawn in the last ${Math.round(span)}ms. ` +
+        "The viewport renders on demand, so this only counts frames that were actually drawn." +
+        gpuLine,
     );
   }
 
-  /** Note: writing even an identical textContent replaces the text node, which
-   *  repaints the page and re-blurs every glass panel over the viewport, four
-   *  times a second on an idle app. Under a software renderer that alone kept
-   *  two to three cores busy and slowed the engine's rebuilds beside it. */
+  /** Even an identical textContent write repaints and re-blurs every glass panel; four times a second under a software
+   *  renderer that kept two to three cores busy. */
   private show(text: string, title: string) {
     if (!this.el) return;
     if (this.el.textContent !== text) this.el.textContent = text;

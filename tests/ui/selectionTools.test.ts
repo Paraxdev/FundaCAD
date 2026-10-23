@@ -202,6 +202,15 @@ describe("what a picked body is offered", () => {
     expect(one).toContain("move");
   });
 
+  it("offers Mirror for one body or several, right after the patterns, and not for a face", () => {
+    for (const n of [1, 3]) {
+      const offered = labels(selectionOffers({ body: n }));
+      expect(offered.indexOf("mirror")).toBe(offered.indexOf("pattern-circular") + 1);
+    }
+    expect(labels(selectionOffers({ face: 2 }))).not.toContain("mirror");
+    expect(labels(selectionOffers({}))).not.toContain("mirror");
+  });
+
   it("keeps the patterns live on ONE body, unlike the booleans", () => {
     // CONTROL, and the reason the rows carry no `min`: a pattern of one body is
     // the ordinary case, a boolean of one is not. If these ever grew a minimum

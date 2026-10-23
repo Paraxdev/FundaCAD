@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import { fmtKeys } from "../../input/platform";
-// The history: a floating list of every feature in build order, with a draggable
-// rollback marker, transport buttons and an error badge that jumps to failing
-// features. A selected row opens its values in place under it.
-
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useDocValue, useBuildValue } from "../../app/useDoc";
 import { useSelectionStore } from "../../stores/selection";
 import { useTimelineStore } from "../../stores/timeline";
 import { useShellStore } from "../../stores/shell";
-import { featureMeta } from "../../ui/featureMeta";
+import { featureMeta, stepName } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
-import { buildProgress, busyLine, CANCEL_DELAY_MS, historyShowsBusy, historyShowsEmpty } from "../../ui/buildProgress";
+import {
+  buildProgress,
+  busyLine,
+  CANCEL_DELAY_MS,
+  historyShowsBusy,
+  historyShowsEmpty,
+  runningRows,
+} from "../../ui/buildProgress";
 import { featureFailures, featureNotes, featurePlaceholders, placeholderNote } from "../../ui/featureNotes";
 import { gapIndexIn } from "../../ui/trackGaps";
 import { getUnit, onUnitChange } from "../../ui/units";
@@ -34,8 +37,7 @@ const shellStore = useShellStore();
 const scroller = useTemplateRef<HTMLElement>("scroller");
 const track = useTemplateRef<HTMLElement>("track");
 
-// Cast because `name` is optional and only on SOME feature variants, the same
-// way every other reader of it in the app reaches for it.
+// Cast because `name` is only on some feature variants.
 const features = useDocValue((doc) =>
   doc.features.map((f) => {
     const activeWhen = (f as { activeWhen?: unknown }).activeWhen;
@@ -43,23 +45,32 @@ const features = useDocValue((doc) =>
       id: f.id,
       type: f.type,
       name: (f as { name?: string }).name ?? "",
+      shown: stepName(f as Parameters<typeof stepName>[0]),
       hasCondition: activeWhen !== undefined,
       inactive: activeWhen === 0,
     };
   }),
 );
 
-// --- Related to Selection -------------------------------------------------
-// The selection lives on the viewport and the overlay, which are not reactive;
-// the offers composable already watches both and bumps `counts` on a change.
+// The selection lives on the non-reactive viewport and overlay, the offers composable watches both and bumps `counts`.
 const selectionOffers = useSelectionOffers(engine);
 const RELATED_KEY = "fundacad.historyRelated";
-const relatedOn = ref((() => {
-  try { return localStorage.getItem(RELATED_KEY) !== "0"; } catch { return true; }
-})());
+const relatedOn = ref(
+  (() => {
+    try {
+      return localStorage.getItem(RELATED_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  })(),
+);
 function toggleRelated() {
   relatedOn.value = !relatedOn.value;
-  try { localStorage.setItem(RELATED_KEY, relatedOn.value ? "1" : "0"); } catch { /* not remembered */ }
+  try {
+    localStorage.setItem(RELATED_KEY, relatedOn.value ? "1" : "0");
+  } catch {
+    /* not remembered */
+  }
 }
 const related = computed<Set<string> | null>(() => {
   void selectionOffers.counts.value;
@@ -79,7 +90,9 @@ const related = computed<Set<string> | null>(() => {
 const filtering = computed(() => relatedOn.value && related.value !== null);
 
 const unit = ref(getUnit());
-const offUnit = onUnitChange(() => { unit.value = getUnit(); });
+const offUnit = onUnitChange(() => {
+  unit.value = getUnit();
+});
 onUnmounted(offUnit);
 
 // The SAVED marker, from the document. Transport buttons and the marker drag
@@ -92,10 +105,8 @@ const editing = computed(() => {
   editTick.value;
   return store.editPreviewId !== null && !store.editPreviewInPlace;
 });
-// The marker AS DRAWN. While a feature is being edited it drops onto that
-// feature, since the preview shows the model as of that step with everything
-// after it rolled away; the saved marker (docRollback) stays put and finishing
-// the edit springs the drawn marker back to it.
+// The marker as drawn: during an edit it drops onto the edited feature, the preview's rollback point. The saved
+// marker (docRollback) stays put, and finishing the edit springs the drawn one back.
 const rollback = computed(() => {
   if (editing.value) {
     const i = features.value.findIndex((f) => f.id === store.editPreviewId);
@@ -108,9 +119,7 @@ const suppressed = useDocValue(() => new Set(features.value.filter((f) => store.
 /** Every failing feature this build: id -> message. Continue-past-errors can
  *  yield several; fall back to the single legacy error field. */
 const errors = useBuildValue((b) => featureFailures({ ...b, featureErrors: b.result?.featureErrors }));
-/** Every feature that BUILT but had something to say: id -> reason. The rule
- *  itself is in ui/featureNotes.ts, where it can be read and tested on its own;
- *  this is the wiring. */
+/** Features that built but had something to say: id -> reason. The rule is in ui/featureNotes.ts. */
 const notes = useBuildValue((b) =>
   featureNotes({
     featureErrors: b.result?.featureErrors,
@@ -123,11 +132,11 @@ const placeholders = useBuildValue((b) => featurePlaceholders({ skippedFeatures:
 const building = useBuildValue((b) => b.building);
 const progress = useBuildValue((b) => ({ progress: b.progress, meshed: b.meshed, meshTotal: b.meshTotal }));
 
-// --- busy / Cancel -------------------------------------------------------
-// Timestamp the TRANSITION into busy, not each emission: an op emits busy
-// frames throughout, and re-arming the delay on every one means it never
-// elapses. The delay exists so a fast op doesn't flash a button at the user.
+// Busy is timed from the transition, not each emission: an op emits busy frames throughout, and re-arming would never
+// elapse. The delay keeps a fast op from flashing a button.
 const busy = engine.bridge.busy;
+const ops = engine.bridge.ops;
+const rows = computed(() => runningRows(ops.value));
 const busySince = ref(0);
 const delayElapsed = ref(false);
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -138,16 +147,23 @@ watch(
     if (!b.active) {
       busySince.value = 0;
       delayElapsed.value = false;
-      if (timer) { clearTimeout(timer); timer = null; }
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
       return;
     }
     if (busySince.value) return; // already timing this op
     busySince.value = Date.now();
-    timer = setTimeout(() => { delayElapsed.value = true; }, CANCEL_DELAY_MS);
+    timer = setTimeout(() => {
+      delayElapsed.value = true;
+    }, CANCEL_DELAY_MS);
   },
   { immediate: true },
 );
-onUnmounted(() => { if (timer) clearTimeout(timer); });
+onUnmounted(() => {
+  if (timer) clearTimeout(timer);
+});
 
 const chip = computed(() =>
   busy.value.waiting
@@ -156,9 +172,7 @@ const chip = computed(() =>
 );
 const line = computed(() => busyLine(busy.value));
 
-// Cancelling is not instant (the engine kills the worker and spawns a fresh
-// one), so the button disables itself in flight, a second press would target
-// an op that is already gone.
+// Cancel is not instant (the engine kills the worker and spawns a fresh one), so the button disables in flight.
 const cancelling = ref(false);
 async function cancelBusy() {
   cancelling.value = true;
@@ -169,37 +183,27 @@ async function cancelBusy() {
   }
 }
 
-// An import into an EMPTY document is the most common long operation there is,
-// and without the busy check the timeline would advertise "start with a Sketch"
-// for the whole 90+ seconds.
-const showEmpty = computed(() => historyShowsEmpty(features.value.length, busy.value));
-const showCancel = computed(() => delayElapsed.value && historyShowsBusy(features.value.length, busy.value));
+// An import into an empty document is the most common long op, without the busy check the empty hint shows for 90+ s.
+const showEmpty = computed(() => historyShowsEmpty(features.value.length, ops.value));
+const showCancel = computed(() => delayElapsed.value && historyShowsBusy(features.value.length, busy.value, ops.value));
 
-// --- chips ---------------------------------------------------------------
-// The whole feature, not just its type: a boolean is named after the operation
-// it performs (ui/featureMeta.ts), so a chip that read only the type would give
-// three different commands one word. Unknown types still render rather than
-// crash, a document from a newer version would otherwise throw mid-draw and
-// make File→Open silently do nothing.
+// Chips read the whole feature, not the type: a boolean is named after its operation (ui/featureMeta.ts). Unknown types
+// still render, a newer document would otherwise throw mid-draw and make File, Open silently do nothing.
 function metaFor(f: { type: string; operation?: unknown }) {
   return featureMeta(f);
 }
 
-function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: number) {
+function chipTitle(f: { id: string; type: string; name?: string; shown?: string; inactive?: boolean }, i: number) {
   const err = errors.value.get(f.id);
   const note = notes.value.get(f.id);
   const placeholder = placeholders.value.get(f.id);
   return (
     `${i + 1} · ${metaFor(f).label}` +
+    (f.type === "import" && f.name && f.shown !== f.name ? `\nFile: ${f.name}` : "") +
     (f.inactive ? "\nSwitched off: its Active when condition is 0" : "") +
     (placeholder !== undefined ? `\n${placeholderNote(placeholder)}` : "") +
-    // A plain-text word, not a warning sign: this is a `title` attribute, and
-    // the browser draws it in the OS tooltip font where a symbol lands as
-    // whatever fallback glyph, or tofu, that font happens to carry.
-    //
-    // The two are mutually exclusive by construction (notes skips a feature
-    // that failed), so this reads as one line either way rather than as a
-    // feature accused of two different things.
+    // A plain word, not a warning sign: the OS tooltip font may lack the symbol. Failed and Note never both apply, notes
+    // skips a failed feature.
     (err ? `\nFailed: ${err}` : note ? `\nNote: ${note}` : "") +
     (placeholder !== undefined
       ? "\nclick to select · right-click for more"
@@ -207,18 +211,8 @@ function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: numbe
   );
 }
 
-// A single click SELECTS a step: its values open under the chip and the datum
-// it made lights up, but the MODEL DOES NOT MOVE. A double-click EDITS it, which
-// rolls the view back to just before the feature (its own tool then shows the
-// inputs it was built from) and opens that tool; finishing or Escape puts the
-// model back at the tip. There is no separate "peek": the edit's own rollback is
-// the look back in time, and one gesture that moves the model is clearer than a
-// single click that quietly did.
-//
-// Both are ignored while a tool already owns the screen (an edit in progress, a
-// sketch): a click that swapped the open feature out from under a running editor
-// is exactly the "clicking around bugs out" case. A double-click is the one
-// gesture that switches: it closes another feature's open edit, then edits.
+// A click selects a step without moving the model, a double-click edits it with the model rolled back to just before
+// it. Both are ignored while a tool owns the screen, except a double-click, which closes the other edit first.
 function busyElsewhere(): boolean {
   return engine.toolBusy() || engine.sketch.active;
 }
@@ -238,10 +232,11 @@ function onChipDblclick(id: string) {
   if (busyElsewhere()) return;
   timeline.edit(id);
 }
-// --- renaming ------------------------------------------------------------
 const renamingId = ref<string | null>(null);
 function linkedPath(id: string): string | null {
-  return (store.document.features.find((f) => f.id === id) as { link?: { path: string } } | undefined)?.link?.path ?? null;
+  return (
+    (store.document.features.find((f) => f.id === id) as { link?: { path: string } } | undefined)?.link?.path ?? null
+  );
 }
 function hasOwnName(id: string): boolean {
   return !!(store.document.features.find((f) => f.id === id) as { name?: string } | undefined)?.name;
@@ -272,18 +267,16 @@ function onRenameKey(e: KeyboardEvent) {
 let offEditPreview: (() => void) | null = null;
 onMounted(() => {
   window.addEventListener("keydown", onRenameKey);
-  offEditPreview = store.onEditPreview(() => { editTick.value++; });
+  offEditPreview = store.onEditPreview(() => {
+    editTick.value++;
+  });
 });
 onUnmounted(() => {
   window.removeEventListener("keydown", onRenameKey);
   offEditPreview?.();
 });
 
-// --- scrolling -----------------------------------------------------------
-// The scroller is a persistent element and Vue patches the chips in place, so
-// scroll position survives a re-render on its own, the old code had to save
-// and restore it around `track.innerHTML = ""`. Only the follow-on-append
-// behaviour is left to do explicitly.
+// Scroll position survives a re-render since Vue patches chips in place, only follow-on-append is explicit.
 watch(
   () => features.value.length,
   async (n, prev) => {
@@ -305,7 +298,6 @@ function onDragOverScroller(e: DragEvent) {
   else if (e.clientY > r.bottom - 48) el.scrollTop += 14;
 }
 
-// --- reorder via native drag-and-drop ------------------------------------
 const dragId = ref<string | null>(null);
 const dropTarget = ref<string | null>(null);
 
@@ -326,11 +318,12 @@ function onDrop(id: string, i: number, e: DragEvent) {
   dragId.value = null;
 }
 
-// --- error badge ---------------------------------------------------------
 const errCycle = ref(0);
 watch(
   () => errors.value.size,
-  (n) => { if (n === 0) errCycle.value = 0; },
+  (n) => {
+    if (n === 0) errCycle.value = 0;
+  },
 );
 
 function jumpToNextError() {
@@ -345,8 +338,7 @@ function jumpToNextError() {
   timeline.select(id);
 }
 
-// --- rollback marker (drag to roll the model back/forward) ---------------
-// Stays imperative: it is a pointer drag resolved against measured chip rects.
+// The rollback marker drag stays imperative: it resolves a pointer against measured chip rects.
 function onMarkerDown(e: PointerEvent) {
   // The drawn marker sits on the edited step during an edit; it is not the saved
   // marker and must not be dragged. Finish or Escape first.
@@ -366,40 +358,40 @@ function onMarkerDown(e: PointerEvent) {
     end();
     store.setRollback(gapIndexAt(ev));
   };
-  // A cancelled pointer (the browser took a touch for a gesture, a pen left the
-  // screen's range) never gets a pointerup. Without this the listeners stayed
-  // on the window and the next unrelated release anywhere moved the rollback.
-  // A cancel is not a drop, so the marker stays where it was.
+  // A cancelled pointer (a touch taken as a gesture, a pen out of range) gets no pointerup, so listeners would linger.
+  // A cancel is not a drop, the marker stays.
   const cancel = () => end();
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
   window.addEventListener("pointercancel", cancel);
 }
 
-/** Which inter-feature gap (0..n) the pointer falls into. The measuring is here;
- *  the arithmetic, including which axis the track runs along, since the history
- *  strip can be moved to the right-hand side, is in ui/trackGaps.ts. */
+/** Which gap (0..n) the pointer falls into. The arithmetic, including the track's axis (the strip can sit on the
+ *  right), is in ui/trackGaps.ts. */
 function gapIndexAt(ev: PointerEvent): number {
   const nodes = [...(track.value?.querySelectorAll<HTMLElement>(".timeline-node:not(.building)") ?? [])];
-  return gapIndexIn(nodes.map((n) => n.getBoundingClientRect()), ev.clientX, ev.clientY);
+  return gapIndexIn(
+    nodes.map((n) => n.getBoundingClientRect()),
+    ev.clientX,
+    ev.clientY,
+  );
 }
 
-// --- right-click context menu (shared engine in ui/menu.ts) --------------
 function openMenu(e: MouseEvent, id: string, i: number) {
   e.preventDefault();
-  // "Re-pick" only appears when THIS feature's last build reported an ambiguous
-  // saved reference, offering it on a healthy feature would invite users to
-  // overwrite references that are working.
-  const repick = timeline.canRepick(id)
-    ? [{ label: "Re-pick face…", onClick: () => timeline.repick(id) }]
-    : [];
+  // Re-pick only when this feature's last build reported an ambiguous saved reference, offering it on a healthy one
+  // invites overwriting working references.
+  const repick = timeline.canRepick(id) ? [{ label: "Re-pick face…", onClick: () => timeline.repick(id) }] : [];
   contextMenu(e.clientX, e.clientY, [
     ...repick,
     ...(placeholders.value.has(id) ? [] : [{ label: "Edit", onClick: () => timeline.edit(id) }]),
     { label: "Rename", shortcut: "F2", onClick: () => startRename(id) },
     ...(linkedPath(id)
       ? [
-          { label: "Update from linked file", onClick: () => void import("../../io/fundaLinks").then((m) => m.refreshLink(store, engine.geometry, id)) },
+          {
+            label: "Update from linked file",
+            onClick: () => void import("../../io/fundaLinks").then((m) => m.refreshLink(store, engine.geometry, id)),
+          },
           { label: "Unlink", onClick: () => void import("../../io/fundaLinks").then((m) => m.unlink(store, id)) },
         ]
       : []),
@@ -414,18 +406,16 @@ function openMenu(e: MouseEvent, id: string, i: number) {
       ? [{ label: "Remove condition", onClick: () => store.removeFeatureField(id, "activeWhen") }]
       : features.value[i]?.type === "sketch"
         ? []
-        : [{
-            label: "Add condition",
-            onClick: () => {
-              store.updateFeature(id, { activeWhen: 1 } as unknown as Partial<Feature>);
-              timeline.select(id);
+        : [
+            {
+              label: "Add condition",
+              onClick: () => {
+                store.updateFeature(id, { activeWhen: 1 } as unknown as Partial<Feature>);
+                timeline.select(id);
+              },
             },
-          }]),
-    // setRollback(k) builds features[0..k-1], so k = i excludes this step (the
-    // model as it was right BEFORE it ran) and k = i + 1 includes it (right
-    // after it ran). "Roll to here" now means what it says: the state this step
-    // produced. FI-7: it used to sit on setRollback(i), so rolling to a step
-    // showed the model with that step itself missing.
+          ]),
+    // setRollback(k) builds features[0..k-1], so k = i is the model just before this step and k = i + 1 just after (FI-7).
     { label: "Roll back before this", onClick: () => store.setRollback(i) },
     { label: "Roll to here", onClick: () => store.setRollback(i + 1) },
     { separator: true, label: "" },
@@ -443,31 +433,64 @@ function openMenu(e: MouseEvent, id: string, i: number) {
         class="timeline-related"
         :class="{ on: relatedOn }"
         data-testid="history-related"
-        :title="relatedOn ? 'Showing what relates to the selection, click to show everything' : 'Show only what relates to the selection'"
+        :title="
+          relatedOn
+            ? 'Showing what relates to the selection, click to show everything'
+            : 'Show only what relates to the selection'
+        "
         @click="toggleRelated()"
-      >Related to Selection · {{ related.size }}</button>
+        >Related to Selection · {{ related.size }}</button
+      >
       <button
         class="timeline-errbadge"
         :class="{ hidden: errors.size === 0 }"
         title="Failing features, click to jump to the next one"
         @click="jumpToNextError()"
-      ><Icon name="warning" :size="14" /> {{ errors.size }}</button>
-      <button class="float-card-close" :title="fmtKeys('Hide the history (Ctrl+Alt+H)')" @click="shellStore.setHistory(false)"><Icon name="close" :size="14" /></button>
+        ><Icon name="warning" :size="14" /> {{ errors.size }}</button
+      >
+      <button
+        class="float-card-close"
+        :title="fmtKeys('Hide the history (Ctrl+Alt+H)')"
+        @click="shellStore.setHistory(false)"
+        ><Icon name="close" :size="14"
+      /></button>
     </div>
-    <!-- Transport moves the SAVED marker (docRollback), and stands down while a
-         feature is being edited: the drawn marker is on the edited step then, and
-         scrubbing out from under a live edit is the "bugs out" case. -->
+    <!-- Transport moves the saved marker and stands down during an edit, the drawn marker is on the edited step then. -->
     <div class="timeline-transport">
-      <button class="tl-btn" title="Roll back to the start" :disabled="editing || docRollback <= 0" @click="store.setRollback(0)"><Icon name="skipStart" /></button>
-      <button class="tl-btn" title="Step one feature back" :disabled="editing || docRollback <= 0" @click="store.setRollback(Math.max(0, docRollback - 1))"><Icon name="stepBack" /></button>
-      <button class="tl-btn" title="Step one feature forward" :disabled="editing || docRollback >= features.length" @click="store.setRollback(Math.min(features.length, docRollback + 1))"><Icon name="stepForward" /></button>
-      <button class="tl-btn" title="Roll forward to the end" :disabled="editing || docRollback >= features.length" @click="store.setRollback(features.length)"><Icon name="skipEnd" /></button>
+      <button
+        class="tl-btn"
+        title="Roll back to the start"
+        :disabled="editing || docRollback <= 0"
+        @click="store.setRollback(0)"
+        ><Icon name="skipStart"
+      /></button>
+      <button
+        class="tl-btn"
+        title="Step one feature back"
+        :disabled="editing || docRollback <= 0"
+        @click="store.setRollback(Math.max(0, docRollback - 1))"
+        ><Icon name="stepBack"
+      /></button>
+      <button
+        class="tl-btn"
+        title="Step one feature forward"
+        :disabled="editing || docRollback >= features.length"
+        @click="store.setRollback(Math.min(features.length, docRollback + 1))"
+        ><Icon name="stepForward"
+      /></button>
+      <button
+        class="tl-btn"
+        title="Roll forward to the end"
+        :disabled="editing || docRollback >= features.length"
+        @click="store.setRollback(features.length)"
+        ><Icon name="skipEnd"
+      /></button>
     </div>
 
     <div ref="scroller" class="timeline-scroll" @dragover="onDragOverScroller">
       <div ref="track" class="timeline-track">
         <div v-if="showEmpty" class="timeline-empty">
-          Your modeling history will appear here. Start with a Sketch.
+          Your modeling history will appear here. Start with a Sketch, or drop a STEP, STL or 3MF file.
         </div>
         <template v-else>
           <template v-for="(f, i) in features" :key="f.id">
@@ -476,7 +499,8 @@ function openMenu(e: MouseEvent, id: string, i: number) {
               class="timeline-marker"
               title="Drag to roll the model back / forward"
               @pointerdown="onMarkerDown"
-            ><span class="marker-grip"></span></div>
+              ><span class="marker-grip"></span
+            ></div>
             <div v-show="!filtering || related?.has(f.id)" class="timeline-item" :data-feature="f.id">
               <div
                 class="timeline-node"
@@ -513,16 +537,19 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                   @click.stop
                   @dblclick.stop
                   @pointerdown.stop
-                  @keydown.stop="$event.key === 'Enter' ? finishRename($event, true) : $event.key === 'Escape' ? finishRename($event, false) : undefined"
+                  @keydown.stop="
+                    $event.key === 'Enter'
+                      ? finishRename($event, true)
+                      : $event.key === 'Escape'
+                        ? finishRename($event, false)
+                        : undefined
+                  "
                   @blur="finishRename($event, true)"
                 />
-                <span v-else class="t-name">{{ f.name || metaFor(f).label }}</span>
+                <span v-else class="t-name">{{ f.shown }}</span>
                 <Icon class="t-caret" :name="selection.featureId === f.id ? 'caretDown' : 'caretRight'" :size="12" />
               </div>
-              <!-- The feature's own values, under the chip you clicked. The
-                   point of putting them HERE rather than in a docked panel is
-                   that the history already says which operation you are
-                   changing, so the form does not have to. -->
+              <!-- The values sit under the clicked chip, so the history already names the operation and the form need not. -->
               <div v-if="selection.featureId === f.id" class="timeline-props">
                 <FeatureProperties :feature-id="f.id" :unit="unit" />
               </div>
@@ -533,8 +560,16 @@ function openMenu(e: MouseEvent, id: string, i: number) {
             class="timeline-marker"
             title="Drag to roll the model back / forward"
             @pointerdown="onMarkerDown"
-          ><span class="marker-grip"></span></div>
+            ><span class="marker-grip"></span
+          ></div>
 
+          <!-- An import shows here from the moment it starts, not only once its file is read. -->
+          <div v-for="op in rows" :key="op.key" class="timeline-node running" :data-op="op.key">
+            <span class="t-build" :title="op.label">{{ op.stage ? `${op.label}, ${op.stage}` : op.label }}</span>
+            <button class="t-op-cancel" :title="`Stop ${op.label}`" @click="store.cancelRunningOp(op.key)"
+              >Cancel</button
+            >
+          </div>
           <div v-if="building" class="timeline-node building">
             <span class="t-build">{{ chip.label }}</span>
             <span class="t-bar"><i :style="{ width: `${chip.pct}%` }"></i></span>
@@ -543,11 +578,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
       </div>
     </div>
 
-    <!-- Cancel and the busy label are SIBLINGS of the track, never inside it.
-         That mattered structurally before (a button detached between mousedown
-         and mouseup fires no click at all, so one press in eight was swallowed
-         by the once-a-second re-render); Vue patches in place, so the hazard is
-         gone, but keeping them out here also keeps focus and the CSS. -->
+    <!-- Cancel and the busy label are siblings of the track, which keeps their focus and CSS out of its re-renders. -->
     <div class="timeline-busy" :class="{ hidden: !showCancel }">
       <span class="busy-text" :title="line.text">{{ line.text }}</span>
       <template v-if="line.bar">
@@ -560,16 +591,21 @@ function openMenu(e: MouseEvent, id: string, i: number) {
           aria-valuemin="0"
           aria-valuemax="100"
           :aria-label="line.detail ?? undefined"
-        ><i :style="line.pct === null ? undefined : { width: `${line.pct}%` }"></i></span>
+          ><i :style="line.pct === null ? undefined : { width: `${line.pct}%` }"></i
+        ></span>
       </template>
     </div>
     <button
       class="timeline-cancel"
       :class="{ hidden: !showCancel }"
       :disabled="cancelling"
-      :title="busy.waiting ? 'Withdraw this request, the job it waits on carries on' : busy.label || 'Stop the running operation'"
+      :title="
+        busy.waiting
+          ? 'Withdraw this request, the job it waits on carries on'
+          : busy.label || 'Stop the running operation'
+      "
       @click="cancelBusy()"
-    >Cancel</button>
-
+      >Cancel</button
+    >
   </section>
 </template>

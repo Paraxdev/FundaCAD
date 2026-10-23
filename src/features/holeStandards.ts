@@ -1,12 +1,10 @@
-// Standard hole sizes, and the dimensions a hole type and size default to.
-//
-// Mirrors the Python engine's `hole_feature.py`, which fills in any dimension a document
-// leaves out. Both test files pin the same numbers.
+// Standard hole sizes and the dimensions a hole type and size default to, mirroring the engine's hole_feature.py.
+// Both test files pin the same numbers.
 
 import type { Feature, HoleFit, HoleStandard, HoleType } from "../types";
 import { plainNumber } from "../ui/units";
 
-export const HOLE_SIZES = ["M2", "M2.5", "M3", "M4", "M5", "M6", "M8", "M10"] as const;
+export const HOLE_SIZES = ["M2", "M2.5", "M3", "M4", "M5", "M6", "M8", "M10", "M12", "M16", "M20"] as const;
 export type HoleSize = (typeof HOLE_SIZES)[number];
 
 export const HOLE_TYPES: readonly HoleType[] = ["simple", "counterbore", "countersink", "insert"];
@@ -21,11 +19,24 @@ export const CLEARANCE: Record<HoleSize, readonly [number, number, number]> = {
   M6: [6.4, 6.6, 7.0],
   M8: [8.4, 9.0, 10.0],
   M10: [10.5, 11.0, 12.0],
+  M12: [13.0, 13.5, 14.5],
+  M16: [17.0, 17.5, 18.5],
+  M20: [21.0, 22.0, 24.0],
 };
 
 /** Tap drill for the coarse pitch. */
 export const TAP_DRILL: Record<HoleSize, number> = {
-  M2: 1.6, "M2.5": 2.05, M3: 2.5, M4: 3.3, M5: 4.2, M6: 5.0, M8: 6.8, M10: 8.5,
+  M2: 1.6,
+  "M2.5": 2.05,
+  M3: 2.5,
+  M4: 3.3,
+  M5: 4.2,
+  M6: 5.0,
+  M8: 6.8,
+  M10: 8.5,
+  M12: 10.2,
+  M16: 14.0,
+  M20: 17.5,
 };
 
 /** ISO 4762 socket head cap screw: counterbore diameter and depth. */
@@ -38,11 +49,24 @@ export const COUNTERBORE: Record<HoleSize, readonly [number, number]> = {
   M6: [11.0, 6.4],
   M8: [15.0, 8.6],
   M10: [18.0, 10.6],
+  M12: [20.0, 12.6],
+  M16: [26.0, 16.6],
+  M20: [33.0, 20.6],
 };
 
 /** ISO 10642 90 degree countersunk head: countersink diameter at the face. */
 export const COUNTERSINK: Record<HoleSize, number> = {
-  M2: 4.4, "M2.5": 5.5, M3: 6.9, M4: 9.2, M5: 11.5, M6: 13.7, M8: 18.3, M10: 22.7,
+  M2: 4.4,
+  "M2.5": 5.5,
+  M3: 6.9,
+  M4: 9.2,
+  M5: 11.5,
+  M6: 13.7,
+  M8: 18.3,
+  M10: 22.7,
+  M12: 27.2,
+  M16: 33.9,
+  M20: 40.6,
 };
 
 /** Brass heat-set inserts: bore diameter and depth. */
@@ -102,21 +126,21 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
  *  so switching a custom hole to a counterbore never leaves a row empty. */
 function customDims(holeType: HoleType, d: number): HoleDims {
   switch (holeType) {
-    case "counterbore": return { cbDiameter: round2(d * 1.9), cbDepth: round2(d) };
-    case "countersink": return { csDiameter: round2(d * 2), csAngle: 90 };
-    case "insert": return { leadIn: INSERT_LEAD_IN };
-    default: return {};
+    case "counterbore":
+      return { cbDiameter: round2(d * 1.9), cbDepth: round2(d) };
+    case "countersink":
+      return { csDiameter: round2(d * 2), csAngle: 90 };
+    case "insert":
+      return { leadIn: INSERT_LEAD_IN };
+    default:
+      return {};
   }
 }
 
 type HoleFeature = Extract<Feature, { type: "hole" }>;
 
-/** The patch for picking `value` in one of a hole's choice rows: the choice,
- *  and the dimensions that follow from it.
- *
- *  A size, type or standard rewrites every dimension its standard defines, a
- *  fit only the diameter. A stand-in only fills a dimension that is absent, and
- *  a dimension a parameter drives (`bound`) is never touched. */
+/** A size, type or standard rewrites every dimension its standard defines, a fit only the diameter. A stand-in
+ *  fills only absent dimensions, and one a parameter drives (`bound`) is never touched. */
 export function holeChoicePatch(
   f: HoleFeature,
   field: string,
@@ -128,9 +152,10 @@ export function holeChoicePatch(
   const next = { ...f, ...patch } as HoleFeature;
   const holeType = next.holeType ?? "simple";
   if (holeType === "insert" && next.extent === "through") next.extent = patch.extent = "blind";
-  const std = holeType === "insert" || next.standard !== "custom"
-    ? standardDims(holeType, next.standard, next.size, next.fit)
-    : {};
+  const std =
+    holeType === "insert" || next.standard !== "custom"
+      ? standardDims(holeType, next.standard, next.size, next.fit)
+      : {};
   const d = std.diameter ?? (typeof next.diameter === "number" ? next.diameter : 3);
   const overwrite: readonly HoleDimField[] =
     field === "fit" ? ["diameter"] : field === "extent" ? [] : (Object.keys(std) as HoleDimField[]);
@@ -189,6 +214,11 @@ export function parseHoleSize(text: string): { size: HoleSize } | { diameter: nu
   return null;
 }
 
+/** What the size box says when `parseHoleSize` could not read its text. */
+export function badHoleSizeText(text: string): string {
+  return `Size: "${text.trim()}" is not a size, use ${HOLE_SIZES[0]} to ${HOLE_SIZES[HOLE_SIZES.length - 1]} or a diameter in mm`;
+}
+
 /** A complete hole of this type and size: every dimension written out, so the
  *  rows under the feature show real numbers from the moment it exists. */
 export function newHoleFields(
@@ -201,7 +231,10 @@ export function newHoleFields(
   const std = standardDims(holeType, standard, size, fit);
   const diameter = std.diameter ?? CLEARANCE[size][1];
   return {
-    holeType, standard, size, fit,
+    holeType,
+    standard,
+    size,
+    fit,
     extent: holeType === "insert" ? "blind" : extent,
     ...customDims(holeType, diameter),
     ...std,

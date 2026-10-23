@@ -1,4 +1,3 @@
-/* ---- modal dialog (3D Mouse settings) ---- */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -12,10 +11,8 @@
   background: var(--panel, #16181d);
   border: 1px solid var(--line, #262a31);
   border-radius: var(--r-lg, 10px);
-  /* The same flat, zero-blur elevation every other overlay in the app uses
-     (menus, palette, timeline, prefs): a soft 60px blur was a one-off here and,
-     against the backdrop's own dark tint, read as an oddly-edged halo rather
-     than a clean shadow. */
+  /* The flat zero blur elevation of every overlay: a soft blur read as an odd halo against
+     the dark backdrop. */
   box-shadow: var(--shadow-3);
   width: min(720px, 92vw);
   max-height: 88vh;
@@ -27,13 +24,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* Head, body and foot are siblings and share one inset, so the title, the
-     content and the buttons all sit on the same two vertical lines. They were
-     14/16, 14/16 and 12/16, three values for one edge, which is what made a
-     dialog's footer look very slightly misaligned without it being obvious why.
-     Note --s-5 rather than a mixed pair: at dialog scale a square inset reads
-     as intentional, and the extra 2px of top and bottom is the "spaced out"
-     the complaint was about. */
+  /* Head, body and foot share one inset, so title, content and buttons sit on the same two
+     vertical lines. */
   padding: var(--s-5);
   border-bottom: 1px solid var(--line, #262a31);
 }
@@ -72,9 +64,7 @@
   color: var(--text, #e6e8ec);
   border: 1px solid var(--line-strong, #323843);
   border-radius: var(--r-sm, 6px);
-  /* Resolves to the same pair as the bare `button` rule in _layout: a dialog's
-     OK is the app's default button wearing different colours, not a different
-     size of control. */
+  /* The same pair as the bare button rule in _layout: OK is the default button recoloured. */
   padding: var(--s-3) var(--s-4);
   font-size: 12px;
   cursor: pointer;
@@ -92,13 +82,11 @@
   background: var(--accent-hot, #ff9a5c);
 }
 
-/* ---- 3D mouse settings ---- */
+/* 3D mouse (sm) settings. */
 .sm-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  /* The widest gap in the app, and it earns it: these are two independent
-     columns of settings, and anything narrower lets the eye read across a row
-     from one column into the other. */
+  /* The widest gap in the app, so the eye does not read across two independent columns. */
   gap: var(--s-7);
 }
 .sm-col {
@@ -111,8 +99,7 @@
   text-transform: uppercase;
   letter-spacing: 0.7px;
   color: var(--text-mute, #6b7280);
-  /* On top of .sm-col's gap, so a caption gets a full step of clearance from
-     the setting above it while its own rows stay packed underneath. */
+  /* On top of .sm-col's gap, so a caption clears the setting above it. */
   margin-top: var(--s-3);
 }
 .sm-section:first-child {
@@ -136,8 +123,7 @@
   position: relative;
   height: 8px;
   background: var(--panel-2, #1c1f26);
-  /* --r-pill, not half the height written out: the track and the bar inside it
-     are capsules, and saying so keeps the two ends matching if the 8px moves. */
+  /* --r-pill, not half the height, so both capsules keep matching ends if the 8px moves. */
   border-radius: var(--r-pill);
   overflow: hidden;
 }
@@ -211,18 +197,22 @@
   appearance: none;
   -webkit-appearance: none;
   background-color: var(--panel-2, #1c1f26);
-  /* custom caret since we removed the native one */
-  background-image: linear-gradient(45deg, transparent 50%, var(--text-dim, #9aa3af) 50%),
+  /* A caret in place of the native one. */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-dim, #9aa3af) 50%),
     linear-gradient(135deg, var(--text-dim, #9aa3af) 50%, transparent 50%);
-  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
-  background-size: 5px 5px, 5px 5px;
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 9px) 50%;
+  background-size:
+    5px 5px,
+    5px 5px;
   background-repeat: no-repeat;
   color: var(--text, #e6e8ec);
   border: 1px solid var(--line-strong, #323843);
   border-radius: var(--r-sm, 6px);
-  /* Field size, with the same right-hand exception as every other select in the
-     app: 26px is clearance for the two-gradient caret drawn above, which is
-     positioned from the right edge, so it tracks that and not the scale. */
+  /* The 26px clears the gradient caret above, placed from the right edge, like every other
+     select. */
   padding: var(--s-2) 26px var(--s-2) var(--s-3);
   font-size: 11px;
   cursor: pointer;
@@ -234,15 +224,13 @@
   outline: none;
   border-color: var(--accent, #ff7a3c);
 }
-/* darken the native option popup (WebKitGTK renders it light by default) */
+/* WebKitGTK renders the native option popup light by default. */
 .sm-select option {
   background-color: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
 }
-/* .select-trigger is a <button> standing in for a <select> (see Select.vue):
-   everything above still applies since it shares the .sm-select class, this
-   only covers what a <select> gets from the UA for free and a plain button
-   does not. */
+/* A <button> standing in for a <select> (Select.vue): this adds what the UA gives a
+   <select> for free. */
 .select-trigger {
   display: block;
   width: 100%;
@@ -261,11 +249,8 @@
 .select-trigger.open {
   border-color: var(--accent, #ff7a3c);
 }
-/* A TEXT field on a settings screen. Everything .sm-select has except the
-   caret and its clearance, because a caret on something you type into says the
-   value is one of a fixed set and it is not. Its own rule rather than an
-   override of .sm-select for that reason: the two differ in what they mean,
-   not only in what they look like. */
+/* A text field: .sm-select without the caret, which would say the value is one of a fixed
+   set. */
 .sm-input {
   background-color: var(--panel-2, #1c1f26);
   color: var(--text, #e6e8ec);
@@ -288,18 +273,13 @@
   color: var(--text-dim, #9aa3af);
   display: flex;
   align-items: center;
-  /* Checkbox-to-label, the same rung as .home-startup and .ta-publish-public
-     -- a label belongs to its box and must not float away from it. */
+  /* Checkbox to label, the same rung as .home-startup and .ta-publish-public. */
   gap: var(--s-2);
   cursor: pointer;
 }
 
-/* --- Preferences ---
-   Reuses .sm-section / .sm-hint / .sm-select from the 3D-mouse dialog above:
-   they are the shared vocabulary of a settings screen (a heading, a caption, a
-   dropdown) and a second set under different names would drift. Only the ROW is
-   its own, because a preference is a label and one control, not the three-column
-   grid a slider or an axis mapping needs. */
+/* Preferences reuse the sm- vocabulary above so the two do not drift; only the row is its
+   own, a label and one control. */
 .prefs {
   display: flex;
   flex-direction: column;
@@ -308,8 +288,7 @@
 }
 .prefs-row {
   display: grid;
-  /* The label column is fixed so every control starts on the same line, a
-     settings list reads as a column of choices, not as ragged pairs. */
+  /* A fixed label column, so every control starts on the same line. */
   grid-template-columns: 92px 1fr;
   align-items: center;
   gap: var(--s-3);
@@ -322,25 +301,19 @@
 .prefs-switch {
   justify-self: start;
 }
-/* Upload / Remove for a user's own theme, sitting in the control column of a
-   row whose label column is left empty, so the buttons line up under the theme
-   picker above them. */
+/* Upload and Remove for a user theme, in the control column under the theme picker. */
 .prefs-actions {
   display: flex;
   gap: var(--s-2);
   flex-wrap: wrap;
 }
-/* The one hint that reports a refused upload rather than describing a setting,
-   so it is coloured as the error it is instead of as ordinary help text. */
+/* The one hint that reports a refused upload, so it is coloured as an error. */
 .prefs-theme-error {
   color: var(--error, #f0564a);
 }
 
-/* --- Preferences, Plugins section ---
-   A plugin row is a name, one line about it, and one button. When an install is
-   being decided, two lists open underneath. The consent block is set in from
-   the left and boxed because it is a question rather than more settings: it has
-   to read as something that stopped and is waiting for an answer. */
+/* Plugins. The consent block is set in and boxed: it is a question waiting for an answer,
+   not more settings. */
 .plug-row {
   display: flex;
   flex-direction: column;
@@ -354,9 +327,7 @@
   justify-content: space-between;
   gap: var(--s-3);
 }
-/* The switch and Remove, kept together at the right of a row. Two controls that
-   mean different things (stop it, and get rid of it), so they read as a pair
-   rather than as one thing with a label beside it. */
+/* The switch and Remove, two different controls kept together as a pair. */
 .plug-controls {
   display: flex;
   align-items: center;
@@ -429,8 +400,7 @@
   font-size: 12px;
   color: var(--text, #e6e8ec);
 }
-/* The "will not" list is deliberately quieter than the "will" list. It is there
-   so the first list can be judged against something, not to be read twice. */
+/* The "will not" list is quieter: it is there to judge the first list against. */
 .plug-cannot ul {
   color: var(--text-dim, #9aa3af);
 }
@@ -446,9 +416,7 @@
   gap: var(--s-2);
   font-size: 12px;
 }
-/* The row that takes a link or opens a file picker. Wraps rather than
-   scrolling: a URL field that has to be scrolled to read is a URL field whose
-   host is off screen, which is the one part of it that has to be read. */
+/* Wraps rather than scrolls, so a URL's host is never off screen. */
 .plug-add {
   display: flex;
   flex-wrap: wrap;
@@ -467,14 +435,12 @@
   font: inherit;
   font-size: 12px;
 }
-/* Where a bundle came from, above the two lists rather than below them. It is
-   the half of the question a person can actually judge, and a note underneath
-   an argument is a note read after the decision. */
+/* Above the two lists: where a bundle came from is what a person can judge, so it is read
+   before deciding. */
 .plug-origin {
   font-size: 12px;
   color: var(--text, #e6e8ec);
 }
-/* --- Preferences, MCP section --- */
 .mcp-status {
   font-size: 12px;
   color: var(--text-dim, #9aa3af);
@@ -504,7 +470,7 @@
   user-select: text;
 }
 
-/* --- small modal chooser (Split keep-mode, Section axis) --- */
+/* The small chooser (Split keep mode, Section axis). */
 .choice-backdrop {
   position: fixed;
   inset: 0;
@@ -514,7 +480,7 @@
   justify-content: center;
   background: rgba(0, 0, 0, 0.45);
   -webkit-backdrop-filter: blur(2px);
-          backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
 }
 .choice-card {
   background: var(--panel-2, #1c1f26);
@@ -531,7 +497,10 @@
   margin-bottom: var(--s-4, 12px);
 }
 .choice-row {
-  display: flex;
+  /* Equal columns as wide as the widest button, a flex split of the summed widths left a long caption spilling out. */
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: var(--s-3, 8px);
 }
 .choice-btn {
@@ -539,12 +508,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* A hairline between the title and its <small> caption -- they are one label
-     on two lines, not two things. */
+  /* A hairline: the title and its <small> caption are one label on two lines. */
   gap: var(--s-0);
-  /* Card padding, even inset: unlike the app's buttons this one is a tile with
-     a stacked title and caption, so it wants to be padded like a small card
-     rather than like a control. */
+  /* Card padding: a tile with a stacked title and caption, not a control. */
   padding: var(--s-4);
   background: var(--raised, #22262e);
   border: 1px solid var(--line, #262a31);
@@ -552,7 +518,9 @@
   color: var(--text, #e6e8ec);
   font-size: 12px;
   cursor: pointer;
-  transition: background var(--t-fast, 120ms) var(--ease), border-color var(--t-fast, 120ms) var(--ease);
+  transition:
+    background var(--t-fast, 120ms) var(--ease),
+    border-color var(--t-fast, 120ms) var(--ease);
 }
 .choice-btn:hover {
   background: var(--accent-tint, rgba(255, 122, 60, 0.14));
@@ -579,7 +547,7 @@
   opacity: 0.4;
   cursor: default;
 }
-/* checkbox list (chooseMulti) + read-only file list (listModal) */
+/* The checkbox list (chooseMulti) and the read only file list (listModal). */
 .choice-checklist {
   display: flex;
   flex-direction: column;
@@ -628,7 +596,6 @@
   background: var(--raised, #22262e);
 }
 
-/* --- Cmd-K command palette --- */
 .cmdk-backdrop {
   position: fixed;
   inset: 0;
@@ -659,22 +626,20 @@
   color: var(--text, #e6e9ee);
   font: inherit;
   font-size: 15px;
-  /* The command palette's head. Same inset as .modal-head so the two dialog
-     shapes in the app open at the same size. */
+  /* Same inset as .modal-head, so both dialog shapes open at the same size. */
   padding: var(--s-5);
   border-bottom: 1px solid var(--line, #23272e);
 }
 .cmdk-list {
   overflow-y: auto;
-  /* Popup shell padding -- the same 4px as .menu-popup, .context-menu and the
-     ribbon's overflow popup. */
+  /* The same 4px popup padding as .menu-popup, .context-menu and the ribbon overflow. */
   padding: var(--s-1);
 }
 .cmdk-item {
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  /* Shared popup-row size -- see .ribbon-overflow-item. */
+  /* Shared popup-row size, see .ribbon-overflow-item. */
   padding: var(--s-3) var(--s-4);
   border-radius: var(--r-sm, 6px);
   cursor: pointer;
@@ -704,7 +669,6 @@
   color: var(--text-mute, #6b7280);
 }
 
-/* --- Measure (Inspect) readout panel --- */
 .measure-panel {
   position: fixed;
   top: 128px;
@@ -723,26 +687,8 @@
 .properties-panel {
   min-width: 260px;
 }
-/* The Stress panel floats over the model it analyses and the arrows it asks
-   the user to drag, so it is a fixed narrow column at the side, never as wide
-   as its longest hint or warning: those wrap. The setup runs long with several
-   loads; it scrolls rather than running off the bottom of the window. */
-.stress-panel {
-  box-sizing: border-box;
-  width: 340px;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 160px);
-  overflow-y: auto;
-  overflow-wrap: anywhere;
-}
-/* Only the text wraps anywhere: a button keeps its label whole, and the row of
-   them wraps onto a second line instead. */
-.stress-panel .btn {
-  overflow-wrap: normal;
-  white-space: nowrap;
-}
-/* The Stress panel's labels in the view: the value beside the cursor while an
-   arrow is dragged or the body probed, and each pinned probe's readout. */
+/* Stress labels in the view: the value by the cursor while dragging or probing, and each
+   pinned probe's readout. */
 .stress-glyph-label {
   position: fixed;
   z-index: 1400;
@@ -758,6 +704,9 @@
 }
 .stress-probe-pin {
   opacity: 0.9;
+}
+.stress-pin-no {
+  font-weight: 700;
 }
 .measure-title {
   font-weight: 600;
@@ -782,6 +731,10 @@
   font-size: 10px;
   color: var(--text-mute, #6b7280);
 }
+.mirror-chips {
+  display: flex;
+  gap: var(--s-2);
+}
 .measure-divider {
   height: 1px;
   margin: var(--s-2) 0;
@@ -803,20 +756,17 @@
 }
 
 .bug-report-card {
-  width: 440px;
+  width: 520px;
   max-width: calc(100vw - 32px);
+  max-height: 88vh;
+  overflow: auto;
 }
 .bug-report-card .bug-desc {
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
   margin: var(--s-3) 0;
-  background: var(--panel-1, #161a20);
-  color: inherit;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
-  padding: var(--s-2) var(--s-3);
-  font: inherit;
+  font-size: 12px;
 }
 .bug-report-card .bug-check {
   display: block;
@@ -829,19 +779,54 @@
   font-size: 11.5px;
 }
 .bug-report-card .bug-preview pre {
-  max-height: 140px;
+  max-height: 220px;
   overflow: auto;
-  background: rgba(0, 0, 0, 0.25);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
   border-radius: var(--r-sm);
   padding: var(--s-2) var(--s-3);
   white-space: pre-wrap;
 }
+.bug-report-card .bug-shot-row,
+.bug-report-card .bug-again {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin: var(--s-2) 0;
+  font-size: 12px;
+}
+.bug-report-card .bug-shot-saved {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin: var(--s-1) 0 var(--s-2);
+}
+.bug-report-card .bug-shot-saved img {
+  width: 96px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.bug-report-card .bug-note,
+.bug-report-card .bug-shot-saved,
+.bug-report-card .bug-again {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.bug-report-card .bug-note {
+  margin-top: var(--s-2);
+  line-height: 1.45;
+}
+.bug-report-card .bug-doc-big {
+  margin: 0 0 var(--s-2);
+}
+.bug-report-card .btn:disabled,
+.bug-report-card .choice-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 
-/* --- Materials dialog ---
-   Two columns: the library on the left, the editor for one row on the right.
-   Side by side rather than stacked because the whole gesture is picking a
-   material and immediately dragging a slider, and a stacked layout puts the two
-   halves of that a scroll apart. */
+/* Materials: library and editor side by side, since picking a material and dragging a
+   slider is one gesture. */
 .mats-panel {
   width: min(720px, 92vw);
 }
@@ -849,8 +834,7 @@
   display: grid;
   grid-template-columns: 240px 1fr;
   gap: var(--s-5);
-  /* Bounded, so a library of two hundred scrolls inside the dialog instead of
-     growing it past the window. */
+  /* Bounded, so a library of two hundred scrolls inside the dialog. */
   max-height: min(56vh, 460px);
 }
 .mats-list {
@@ -900,9 +884,8 @@
   gap: var(--s-2);
   overflow: auto;
 }
-/* Native controls, deliberately: a colour well and a slider are two of the very
-   few inputs the platform draws better than a hand-rolled one, and both are
-   keyboard-operable for free. Only the sizing is ours. */
+/* Native on purpose: the platform draws a colour well and a slider better, keyboard
+   included. Only the sizing is ours. */
 .mats-color {
   width: 56px;
   height: 26px;
@@ -912,9 +895,7 @@
   border-radius: var(--r-sm, 6px);
   cursor: pointer;
 }
-/* Shared with Preferences, hence the sm- prefix rather than mats-: it joins
-   .sm-section / .sm-hint / .sm-select as the settings-screen vocabulary, and a
-   second slider under another name would drift from this one. */
+/* sm-, not mats-: shared with Preferences as settings vocabulary. */
 .sm-slider {
   width: 100%;
   accent-color: var(--accent);
@@ -925,8 +906,7 @@
   gap: var(--s-3);
   margin-top: var(--s-3);
 }
-/* The footer holds two groups (edit the library, move it about) with the gap
-   between them, so it is a flex row rather than the default right-aligned pair. */
+/* Two groups with a gap between, so a flex row, not the default right aligned pair. */
 .mats-foot {
   justify-content: flex-start;
 }

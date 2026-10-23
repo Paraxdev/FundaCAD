@@ -28,7 +28,14 @@ function reply(n: number): RebuildResult {
     for (let v = 0; v < 4; v++) positions.push(v0 + v, v, b);
     indices.push(v0, v0 + 1, v0 + 2, v0 + 1, v0 + 2, v0 + 3);
     faceIds.push(b * 2, b * 2 + 1);
-    edges.push({ id: `e${b}`, points: [[b, 0, 0], [b, 1, 0]], body: `b${b}` });
+    edges.push({
+      id: `e${b}`,
+      points: [
+        [b, 0, 0],
+        [b, 1, 0],
+      ],
+      body: `b${b}`,
+    });
     bodies.push({ id: `b${b}`, name: `b${b}`, faceStart: b * 2, faceCount: 2, etag: `etag-${b}` });
   }
   return {
@@ -41,7 +48,11 @@ function reply(n: number): RebuildResult {
 
 function edgesByBody(r: RebuildResult, ids: string[]) {
   const m = new Map<string, RebuildResult["edges"]>();
-  for (const id of ids) m.set(id, r.edges.filter((e) => e.body === id));
+  for (const id of ids)
+    m.set(
+      id,
+      r.edges.filter((e) => e.body === id),
+    );
   return m;
 }
 
@@ -49,8 +60,11 @@ function edgesByBody(r: RebuildResult, ids: string[]) {
 function snap(b: BodyMesh) {
   const g = b.mesh.geometry;
   return {
-    id: b.id, name: b.name, etag: b.etag,
-    faceStart: b.faceStart, faceCount: b.faceCount,
+    id: b.id,
+    name: b.name,
+    etag: b.etag,
+    faceStart: b.faceStart,
+    faceCount: b.faceCount,
     faceIds: b.faceIds,
     indices: Array.from(g.getIndex()!.array),
     positions: Array.from(g.getAttribute("position").array),
@@ -73,15 +87,16 @@ function stream(r: RebuildResult, size: number, prev = null, hidden = new Set<st
   const disposed: string[] = [];
   const pm = new ProgressiveModel(group, (b) => disposed.push(b.id));
   const metas = r.bodies!;
-  const box = new THREE.Box3(
-    new THREE.Vector3(...r.bbox.min), new THREE.Vector3(...r.bbox.max),
-  );
+  const box = new THREE.Box3(new THREE.Vector3(...r.bbox.min), new THREE.Vector3(...r.bbox.max));
   pm.begin(0, metas, r, box, prev, hidden);
   const views = [];
   for (let i = 0; i < metas.length; i += size) {
     const slice = metas.slice(i, i + size);
     const ids = slice.map((m) => m.id);
-    const triRange = { triStart: slice[0]!.faceStart, triEnd: slice[slice.length - 1]!.faceStart + slice[slice.length - 1]!.faceCount };
+    const triRange = {
+      triStart: slice[0]!.faceStart,
+      triEnd: slice[slice.length - 1]!.faceStart + slice[slice.length - 1]!.faceCount,
+    };
     views.push(pm.append(0, r, slice, edgesByBody(r, ids), triRange, hidden, RES));
   }
   return { pm, group, disposed, views };
@@ -99,8 +114,7 @@ describe("ProgressiveModel", () => {
     // reordered bodies array would recolour the whole model at the commit.
     const r = reply(6);
     for (const size of [1, 2, 3, 6]) {
-      expect(stream(r, size).pm.current!.bodies.map((b) => b.id))
-        .toEqual(["b0", "b1", "b2", "b3", "b4", "b5"]);
+      expect(stream(r, size).pm.current!.bodies.map((b) => b.id)).toEqual(["b0", "b1", "b2", "b3", "b4", "b5"]);
     }
   });
 
@@ -124,8 +138,18 @@ describe("ProgressiveModel", () => {
     const r = reply(3);
     const { pm, group } = stream(r, 3);
     const metas = r.bodies!;
-    pm.append(0, r, metas, edgesByBody(r, metas.map((m) => m.id)),
-      { triStart: 0, triEnd: 6 }, new Set(), RES);
+    pm.append(
+      0,
+      r,
+      metas,
+      edgesByBody(
+        r,
+        metas.map((m) => m.id),
+      ),
+      { triStart: 0, triEnd: 6 },
+      new Set(),
+      RES,
+    );
     expect(pm.current!.bodies.length).toBe(3);
     expect(group.children.length).toBe(6);
   });
@@ -148,7 +172,10 @@ describe("ProgressiveModel", () => {
     function previous(r: RebuildResult) {
       const group = new THREE.Group();
       const bodies = commitBuild(r);
-      for (const b of bodies) { group.add(b.mesh); group.add(b.edges.object); }
+      for (const b of bodies) {
+        group.add(b.mesh);
+        group.add(b.edges.object);
+      }
       return { bodies, edges: [], orphanEdges: null, box: new THREE.Box3() };
     }
 
@@ -185,12 +212,19 @@ describe("ProgressiveModel", () => {
       const pm = new ProgressiveModel(group, (b) => disposed.push(b.id));
       pm.begin(0, edited.bodies!, edited, new THREE.Box3(), prev, new Set());
 
-      expect(disposed).toEqual([]);              // nothing thrown away yet
-      expect(group.children.length).toBe(0);     // the old one is still in prev's group
+      expect(disposed).toEqual([]); // nothing thrown away yet
+      expect(group.children.length).toBe(0); // the old one is still in prev's group
       const m = edited.bodies![1]!;
-      pm.append(0, edited, [m], edgesByBody(edited, ["b1"]),
-        { triStart: m.faceStart, triEnd: m.faceStart + m.faceCount }, new Set(), RES);
-      expect(disposed).toEqual(["b1"]);          // swapped only once ready
+      pm.append(
+        0,
+        edited,
+        [m],
+        edgesByBody(edited, ["b1"]),
+        { triStart: m.faceStart, triEnd: m.faceStart + m.faceCount },
+        new Set(),
+        RES,
+      );
+      expect(disposed).toEqual(["b1"]); // swapped only once ready
       expect(pm.current!.bodies.map((b) => b.id)).toEqual(["b0", "b1", "b2"]);
     });
 
@@ -224,8 +258,15 @@ describe("ProgressiveModel", () => {
 
       // Stream 1, complete.
       pm.begin(0, r.bodies!, r, new THREE.Box3(), null, new Set());
-      const first = pm.append(0, r, r.bodies!, edgesByBody(r, ["b0", "b1", "b2"]),
-        { triStart: 0, triEnd: 6 }, new Set(), RES)!;
+      const first = pm.append(
+        0,
+        r,
+        r.bodies!,
+        edgesByBody(r, ["b0", "b1", "b2"]),
+        { triStart: 0, triEnd: 6 },
+        new Set(),
+        RES,
+      )!;
       expect(group.children.length).toBe(6);
       const uuids = new Map(first.bodies.map((b) => [b.id, b.mesh.uuid]));
 
@@ -259,18 +300,32 @@ describe("ProgressiveModel", () => {
       const group = new THREE.Group();
       const pm = new ProgressiveModel(group, (b) => disposed.push(b.id));
       pm.begin(0, r.bodies!, r, new THREE.Box3(), null, new Set());
-      const first = pm.append(0, r, r.bodies!, edgesByBody(r, ["b0", "b1", "b2"]),
-        { triStart: 0, triEnd: 6 }, new Set(), RES)!;
+      const first = pm.append(
+        0,
+        r,
+        r.bodies!,
+        edgesByBody(r, ["b0", "b1", "b2"]),
+        { triStart: 0, triEnd: 6 },
+        new Set(),
+        RES,
+      )!;
 
       const edited = reply(3);
       edited.bodies![2]!.etag = "etag-CHANGED";
       pm.begin(1, edited.bodies!, edited, new THREE.Box3(), first, new Set());
-      expect(disposed).toEqual([]);           // still held, so no hole
-      expect(group.children.length).toBe(6);  // and still on screen
+      expect(disposed).toEqual([]); // still held, so no hole
+      expect(group.children.length).toBe(6); // and still on screen
 
-      pm.append(1, edited, [edited.bodies![2]!], edgesByBody(edited, ["b2"]),
-        { triStart: 4, triEnd: 6 }, new Set(), RES);
-      expect(disposed).toEqual(["b2"]);       // swapped, then dropped
+      pm.append(
+        1,
+        edited,
+        [edited.bodies![2]!],
+        edgesByBody(edited, ["b2"]),
+        { triStart: 4, triEnd: 6 },
+        new Set(),
+        RES,
+      );
+      expect(disposed).toEqual(["b2"]); // swapped, then dropped
       expect(group.children.length).toBe(6);
     });
 
@@ -282,8 +337,15 @@ describe("ProgressiveModel", () => {
       const group = new THREE.Group();
       const pm = new ProgressiveModel(group, (b) => disposed.push(b.id));
       pm.begin(0, r.bodies!, r, new THREE.Box3(), null, new Set());
-      const first = pm.append(0, r, r.bodies!, edgesByBody(r, ["b0", "b1", "b2"]),
-        { triStart: 0, triEnd: 6 }, new Set(), RES)!;
+      const first = pm.append(
+        0,
+        r,
+        r.bodies!,
+        edgesByBody(r, ["b0", "b1", "b2"]),
+        { triStart: 0, triEnd: 6 },
+        new Set(),
+        RES,
+      )!;
 
       const fewer = reply(2);
       pm.begin(1, fewer.bodies!, fewer, new THREE.Box3(), first, new Set());
@@ -297,8 +359,7 @@ describe("ProgressiveModel", () => {
       const group = new THREE.Group();
       const pm = new ProgressiveModel(group, (b) => disposed.push(b.id));
       pm.begin(0, r.bodies!, r, new THREE.Box3(), null, new Set());
-      pm.append(0, r, r.bodies!, edgesByBody(r, ["b0", "b1", "b2"]),
-        { triStart: 0, triEnd: 6 }, new Set(), RES);
+      pm.append(0, r, r.bodies!, edgesByBody(r, ["b0", "b1", "b2"]), { triStart: 0, triEnd: 6 }, new Set(), RES);
       pm.finish();
       expect(disposed).toEqual([]);
       expect(group.children.length).toBe(6); // still in the scene, now the model's
@@ -319,8 +380,15 @@ describe("ProgressiveModel", () => {
       const group = new THREE.Group();
       const pm = new ProgressiveModel(group, (b) => disposed.push(b.id));
       pm.begin(0, r.bodies!, r, new THREE.Box3(), null, new Set());
-      const first = pm.append(0, r, r.bodies!, edgesByBody(r, ["b0", "b1", "b2"]),
-        { triStart: 0, triEnd: 6 }, new Set(), RES)!;
+      const first = pm.append(
+        0,
+        r,
+        r.bodies!,
+        edgesByBody(r, ["b0", "b1", "b2"]),
+        { triStart: 0, triEnd: 6 },
+        new Set(),
+        RES,
+      )!;
 
       const edited = reply(3);
       edited.bodies![2]!.etag = "etag-CHANGED";

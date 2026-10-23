@@ -1,7 +1,4 @@
-// The app's generic native commands, typed for this plugin. None of them knows
-// what a printer or a slicer is: a request to a device on the local network, a
-// file in this plugin's own data directory, a program started with arguments,
-// and a file the person picked.
+// The app's generic native commands, typed for this plugin. None of them knows what a printer or a slicer is.
 
 import { invoke } from "fundacad";
 
@@ -11,9 +8,9 @@ export type LocalBody =
   | { kind: "text"; text: string; mime?: string }
   | { kind: "json"; value: unknown }
   | {
-    kind: "form";
-    parts: { name: string; text?: string; file?: string; filename?: string; mime?: string }[];
-  };
+      kind: "form";
+      parts: { name: string; text?: string; file?: string; filename?: string; mime?: string }[];
+    };
 
 export interface LocalRequest {
   method?: string;

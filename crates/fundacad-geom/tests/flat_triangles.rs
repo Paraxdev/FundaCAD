@@ -1,8 +1,5 @@
-//! The kernel's mesher triangulates a face in its own parameters, where a pole
-//! (the tip of a sphere, the corner patch three fillets leave, the point a
-//! lofted spline face closes to) is a whole side of the face. That side gets
-//! two nodes at the one point and a triangle between them, which has no area.
-//! No mesh handed out may hold one: a voxeliser refuses the STL over it.
+//! The mesher gives a surface pole (a sphere tip, a three fillet corner patch, a loft's closing point) two
+//! nodes at one point with a triangle without area between. No mesh handed out may hold one.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};
@@ -40,11 +37,15 @@ fn rounded_corner() -> Value {
 fn findings(doc: &Value) -> Vec<Value> {
     let mut req = Map::new();
     req.insert("document".into(), doc.clone());
-    let JobResult::Json(r) = printability_result(&req, &NoWatch) else {
-        panic!("expected a JSON result")
-    };
+    let JobResult::Json(r) = printability_result(&req, &NoWatch) else { panic!("expected a JSON result") };
     assert!(r.get("error").is_none(), "{r:?}");
-    r["findings"].as_array().unwrap().iter().filter(|f| f["kind"] == "meshHole" || f["kind"] == "flatTriangle").cloned().collect()
+    r["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["kind"] == "meshHole" || f["kind"] == "flatTriangle")
+        .cloned()
+        .collect()
 }
 
 fn assert_no_flat_triangle(label: &str, raw: Value) {
@@ -63,8 +64,17 @@ fn assert_no_flat_triangle(label: &str, raw: Value) {
         [("viewport mesh", &view.positions, &view.indices), ("STL", &stl32, &stl.1), ("3MF", &welded32, &welded_idx)]
     {
         let flat = soup::flat_triangles(positions, indices);
-        assert!(flat.is_empty(), "{label}: {} triangles without area in the {what}, the first {:?}", flat.len(), flat[0]);
-        assert_eq!(soup::open_sides(positions, indices), 0, "{label}: sides of the {what} not met twice, once each way");
+        assert!(
+            flat.is_empty(),
+            "{label}: {} triangles without area in the {what}, the first {:?}",
+            flat.len(),
+            flat[0]
+        );
+        assert_eq!(
+            soup::open_sides(positions, indices),
+            0,
+            "{label}: sides of the {what} not met twice, once each way"
+        );
     }
     assert_eq!(soup::lost_in_seven_digits(&stl.0, &stl.1), 0, "{label}: triangles an ASCII STL writes without area");
     assert_eq!(findings(&raw), Vec::<Value>::new(), "{label}: printability mesh findings");

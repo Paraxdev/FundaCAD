@@ -1,7 +1,5 @@
-//! Turns filled 2D outlines (lines, circular arcs, quadratic and cubic Beziers)
-//! into the boundary of the area they fill: ends joined, small gaps closed,
-//! crossings split, duplicates and everything inside the area dropped. The
-//! result never crosses itself, so the sketch's even-odd fill reproduces it.
+//! Turns filled 2D outlines into the boundary of the area they fill: ends joined, small gaps closed, crossings
+//! split, inner pieces dropped. The result never crosses itself, so the sketch's even-odd fill reproduces it.
 
 use std::collections::{HashMap, HashSet};
 use std::f64::consts::{PI, TAU};
@@ -12,7 +10,12 @@ pub type P = [f64; 2];
 pub enum Seg {
     Line(P, P),
     /// Angle `a0 + sweep * t` about `c`.
-    Arc { c: P, r: f64, a0: f64, sweep: f64 },
+    Arc {
+        c: P,
+        r: f64,
+        a0: f64,
+        sweep: f64,
+    },
     Quad(P, P, P),
     Cubic(P, P, P, P),
 }
@@ -169,7 +172,9 @@ impl Seg {
             Seg::Arc { c, r, .. } => vec![[c[0] - r, c[1] - r], [c[0] + r, c[1] + r]],
             _ => self.ctrl(),
         };
-        pts.iter().fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, p| [b[0].min(p[0]), b[1].min(p[1]), b[2].max(p[0]), b[3].max(p[1])])
+        pts.iter().fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, p| {
+            [b[0].min(p[0]), b[1].min(p[1]), b[2].max(p[0]), b[3].max(p[1])]
+        })
     }
 
     fn y_extrema(&self) -> Vec<f64> {
@@ -308,9 +313,8 @@ fn degenerate(s: &Seg, tol: f64) -> bool {
     }
 }
 
-/// Drops zero length pieces and closes a subpath: a gap within `gap` by
-/// moving the last end, a wider one with a line when `fill` asks for it.
-/// Returns (snapped a real gap, added a line).
+/// Drops zero length pieces and closes a subpath, a gap within `gap` by moving the last end, a wider one with a
+/// line when `fill` asks. Returns (snapped a real gap, added a line).
 pub fn close_sub(sub: &mut Sub, tol: &Tol, fill: bool) -> (bool, bool) {
     sub.segs.retain(|s| !degenerate(s, tol.join));
     let (Some(first), Some(last)) = (sub.segs.first().copied(), sub.segs.last().copied()) else {
@@ -418,10 +422,12 @@ fn closest_param(s: &Seg, p: P) -> f64 {
 
 fn polyline(s: &Seg) -> Vec<(f64, P)> {
     let n = s.samples();
-    (0..=n).map(|i| {
-        let t = i as f64 / n as f64;
-        (t, s.at(t))
-    }).collect()
+    (0..=n)
+        .map(|i| {
+            let t = i as f64 / n as f64;
+            (t, s.at(t))
+        })
+        .collect()
 }
 
 /// Parameters where `a` and `b` cross or touch, from their polylines refined
@@ -429,9 +435,19 @@ fn polyline(s: &Seg) -> Vec<(f64, P)> {
 fn cross_params(a: &Seg, b: &Seg, pa: &[(f64, P)], pb: &[(f64, P)], tol: f64) -> Vec<(f64, f64)> {
     let mut out = Vec::new();
     for wa in pa.windows(2) {
-        let ba = [wa[0].1[0].min(wa[1].1[0]), wa[0].1[1].min(wa[1].1[1]), wa[0].1[0].max(wa[1].1[0]), wa[0].1[1].max(wa[1].1[1])];
+        let ba = [
+            wa[0].1[0].min(wa[1].1[0]),
+            wa[0].1[1].min(wa[1].1[1]),
+            wa[0].1[0].max(wa[1].1[0]),
+            wa[0].1[1].max(wa[1].1[1]),
+        ];
         for wb in pb.windows(2) {
-            let bb = [wb[0].1[0].min(wb[1].1[0]), wb[0].1[1].min(wb[1].1[1]), wb[0].1[0].max(wb[1].1[0]), wb[0].1[1].max(wb[1].1[1])];
+            let bb = [
+                wb[0].1[0].min(wb[1].1[0]),
+                wb[0].1[1].min(wb[1].1[1]),
+                wb[0].1[0].max(wb[1].1[0]),
+                wb[0].1[1].max(wb[1].1[1]),
+            ];
             if !overlap(&ba, &bb, tol) {
                 continue;
             }

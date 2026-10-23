@@ -1,17 +1,6 @@
-//! The surface texture's geometry as a FundaCAD plugin component, the Rust
-//! twin of geometry/*.py.
-//!
-//! Two registrations, because a texture happens at two times. The FEATURE
-//! validates the values against the body as it stands, so a bad value turns
-//! the row red at once, and stashes the spec on the body; it displaces nothing.
-//! The MESH PASS runs at tessellation against the FINAL shape, which is why a
-//! texture survives the booleans and fillets applied after it: it resolves the
-//! stored selector then, and displaces each face's triangulation.
-//!
-//! With grime on, the faces next to the textured ones are claimed too, tagged
-//! "bleed", and get a fading noise instead of the pattern (Python keeps that
-//! set in a module global between resolve and displace; a component keeps no
-//! state between calls, so the tag carries it).
+//! The Rust twin of geometry/*.py. The feature only validates and stashes the spec, the mesh pass displaces at
+//! tessellation against the final shape, so a texture survives later booleans and fillets. A component keeps no state
+//! between calls, so grime neighbours carry a "bleed" tag where Python keeps a module global.
 
 wit_bindgen::generate!({
     world: "plugin",
@@ -38,19 +27,13 @@ use serde_json::{json, Value};
 
 pub use fundacad::plugin::{feature, kernel};
 
-/// Bumped on ANY change to the displacement's output, as texture.py's
-/// CODE_VERSION is; it keys the mesh caches. The two halves share the number
-/// because they make the same mesh.
+/// Bump on any change to the displacement's output, together with texture.py's CODE_VERSION: it keys the mesh caches.
 pub const CODE_VERSION: u32 = 12;
 
 const BLEED: &str = "bleed";
 
 fn faces_selector(spec: &Value) -> String {
-    spec.get("faces")
-        .filter(|v| py::truthy(v))
-        .cloned()
-        .unwrap_or(json!({"by": "all"}))
-        .to_string()
+    spec.get("faces").filter(|v| py::truthy(v)).cloned().unwrap_or(json!({"by": "all"})).to_string()
 }
 
 /// `_resolve_texture_faces`: the faces a selector (or a list) names, once each.
@@ -84,9 +67,8 @@ fn adjacent_faces(shape: &Shape, primary: &[Shape]) -> Vec<Shape> {
 fn run_texture() -> Result<(), String> {
     let raw: Value = serde_json::from_str(&feature::definition()).map_err(|e| e.to_string())?;
     let f = raw.as_object().ok_or("the feature is not an object")?;
-    let body = *feature::target_bodies("body", "Texture")?
-        .first()
-        .ok_or("Texture: the target body no longer exists")?;
+    let body =
+        *feature::target_bodies("body", "Texture")?.first().ok_or("Texture: the target body no longer exists")?;
     let shape = feature::body_shape(body)?;
     let found = resolve_faces(&shape, &faces_selector(&raw))?;
     if found.is_empty() {
@@ -102,10 +84,7 @@ impl Guest for Texture {
     fn register() -> Registration {
         Registration {
             features: vec!["texture".into()],
-            mesh_passes: vec![MeshPass {
-                name: spec::PASS.into(),
-                code_version: CODE_VERSION,
-            }],
+            mesh_passes: vec![MeshPass { name: spec::PASS.into(), code_version: CODE_VERSION }],
             exporters: vec![],
             shape_generators: vec![],
         }
@@ -125,20 +104,19 @@ impl Guest for Texture {
         let spec: Value = serde_json::from_str(&spec).map_err(|e| e.to_string())?;
         let primary = resolve_faces(body, &faces_selector(&spec))?;
         let grime = spec::Spec::read(&spec).grime;
-        let bleed = if !primary.is_empty() && grime > 0.0 {
-            adjacent_faces(body, &primary)
-        } else {
-            Vec::new()
-        };
-        let mut out: Vec<Claimed> = primary
-            .into_iter()
-            .map(|face| Claimed { face, tag: String::new() })
-            .collect();
+        let bleed = if !primary.is_empty() && grime > 0.0 { adjacent_faces(body, &primary) } else { Vec::new() };
+        let mut out: Vec<Claimed> = primary.into_iter().map(|face| Claimed { face, tag: String::new() }).collect();
         out.extend(bleed.into_iter().map(|face| Claimed { face, tag: BLEED.into() }));
         Ok(out)
     }
 
-    fn displace(pass: String, face: &Shape, spec: String, tag: String, options: DisplaceOptions) -> Result<Mesh, String> {
+    fn displace(
+        pass: String,
+        face: &Shape,
+        spec: String,
+        tag: String,
+        options: DisplaceOptions,
+    ) -> Result<Mesh, String> {
         if pass != spec::PASS {
             return Err(format!("no mesh pass {pass:?} here"));
         }

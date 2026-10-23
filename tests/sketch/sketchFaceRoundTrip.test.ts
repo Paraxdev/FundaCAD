@@ -36,10 +36,8 @@ const ANCHOR = { selector: SEL, at: [9.5, 0, 10] as [number, number, number] };
   innerWidth: 1000,
   innerHeight: 800,
 };
-(globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame ??=
-  (() => 0) as unknown;
-(globalThis as unknown as { cancelAnimationFrame: unknown }).cancelAnimationFrame ??=
-  (() => {}) as unknown;
+(globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame ??= (() => 0) as unknown;
+(globalThis as unknown as { cancelAnimationFrame: unknown }).cancelAnimationFrame ??= (() => {}) as unknown;
 
 /** A SketchMode whose collaborators are stubs, so enter()/snapshotFeature() can
  *  run. Everything here is a dependency of entering a sketch, not part of what
@@ -96,7 +94,11 @@ function makeSketch(doc: CadDocument) {
 
 const circle = (s: SketchMode) =>
   (s as unknown as { entities: unknown[] }).entities.push({
-    type: "circle", id: "c1", x: 0, y: 0, radius: 3,
+    type: "circle",
+    id: "c1",
+    x: 0,
+    y: 0,
+    radius: 3,
   });
 
 describe("a face-anchored sketch round-trips through enter, snapshot and enter", () => {
@@ -150,13 +152,17 @@ describe("a face-anchored sketch round-trips through enter, snapshot and enter",
   it("drops the anchor when a saved sketch had none", () => {
     // Reopening an old document must not invent an anchor, and must not inherit
     // one left on the instance by a previous session.
-    doc.features = [{
-      id: "s1", type: "sketch", plane: PLANE,
-      entities: [{ type: "circle", id: "c1", x: 0, y: 0, radius: 3 }],
-    } as unknown as Feature];
+    doc.features = [
+      {
+        id: "s1",
+        type: "sketch",
+        plane: PLANE,
+        entities: [{ type: "circle", id: "c1", x: 0, y: 0, radius: 3 }],
+      } as unknown as Feature,
+    ];
     const { s, store } = makeSketch(doc);
-    s.enter(PLANE, store, undefined, undefined, ANCHOR);  // a previous session
-    s.enter(PLANE, store, "s1");                          // ...then this one
+    s.enter(PLANE, store, undefined, undefined, ANCHOR); // a previous session
+    s.enter(PLANE, store, "s1"); // ...then this one
     const f = s.snapshotFeature() as Extract<Feature, { type: "sketch" }>;
     expect("face" in f).toBe(false);
   });

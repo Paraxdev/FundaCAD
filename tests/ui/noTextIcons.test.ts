@@ -19,8 +19,7 @@ const ALLOWED: { file: string; text: string; why: string }[] = [
   { file: "src/ui/measure.ts", text: "×", why: "typed input, 10×20 is multiplication" },
 ];
 
-const allowed = (file: string, text: string) =>
-  ALLOWED.some((a) => file.endsWith(a.file) && a.text === text);
+const allowed = (file: string, text: string) => ALLOWED.some((a) => file.endsWith(a.file) && a.text === text);
 
 describe("no text icons", () => {
   it("finds the sources", () => {
@@ -43,7 +42,9 @@ describe("no text icons", () => {
     for (const [file, src] of Object.entries(sources)) {
       if (!file.endsWith(".vue")) continue;
       const template = src.slice(src.indexOf("<template"));
-      for (const m of template.matchAll(/>\s*([^<>{}\w\s]{1,3}|&(?:#\d+|#x[\da-f]+|times|hellip|larr|rarr|uarr|darr|harr|check|cross);)\s*</gi)) {
+      for (const m of template.matchAll(
+        />\s*([^<>{}\w\s]{1,3}|&(?:#\d+|#x[\da-f]+|times|hellip|larr|rarr|uarr|darr|harr|check|cross);)\s*</gi,
+      )) {
         const text = m[1]!;
         if (text.startsWith("&") || SYMBOL.test(text)) offenders.push(`${file}: ${m[0].trim()}`);
       }

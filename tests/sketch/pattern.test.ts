@@ -16,8 +16,13 @@ function byIdMap(entities: ResolvedEntity[]): Map<string, ResolvedEntity> {
 describe("expandPattern / patternRect", () => {
   const src: ResolvedEntity = { type: "circle", id: "c1", radius: 2, x: 0, y: 0 };
   const pat: SketchPattern = {
-    id: "p1", type: "patternRect", sources: ["c1"],
-    countX: 3, countY: 2, spacingX: 10, spacingY: 5,
+    id: "p1",
+    type: "patternRect",
+    sources: ["c1"],
+    countX: 3,
+    countY: 2,
+    spacingX: 10,
+    spacingY: 5,
   };
 
   it("emits (countX * countY - 1) instances, skipping the original at (0,0)", () => {
@@ -29,7 +34,11 @@ describe("expandPattern / patternRect", () => {
     const out = expandPattern(pat, byIdMap([src]), params) as Extract<ResolvedEntity, { type: "circle" }>[];
     const positions = out.map((e) => [e.x, e.y] as [number, number]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
     expect(positions).toEqual([
-      [0, 5], [10, 0], [10, 5], [20, 0], [20, 5],
+      [0, 5],
+      [10, 0],
+      [10, 5],
+      [20, 0],
+      [20, 5],
     ]);
   });
 
@@ -99,32 +108,54 @@ describe("expandPattern / patternCircular", () => {
 
   it("full 360° pattern spaces `count` instances evenly and omits the original", () => {
     const pat: SketchPattern = {
-      id: "p2", type: "patternCircular", sources: ["c1"],
-      cx: 0, cy: 0, count: 4, angle: 360,
+      id: "p2",
+      type: "patternCircular",
+      sources: ["c1"],
+      cx: 0,
+      cy: 0,
+      count: 4,
+      angle: 360,
     };
     const out = expandPattern(pat, byIdMap([src]), params) as Extract<ResolvedEntity, { type: "circle" }>[];
     expect(out).toHaveLength(3); // count - 1 (original stays as the real entity)
     // step = 360/4 = 90°: instances land at (0,10), (-10,0), (0,-10)
     const rounded = out.map((e) => [Math.round(e.x) || 0, Math.round(e.y) || 0]);
-    expect(rounded).toEqual([[0, 10], [-10, 0], [0, -10]]);
+    expect(rounded).toEqual([
+      [0, 10],
+      [-10, 0],
+      [0, -10],
+    ]);
   });
 
   it("partial-angle pattern spaces across count-1 steps", () => {
     const pat: SketchPattern = {
-      id: "p3", type: "patternCircular", sources: ["c1"],
-      cx: 0, cy: 0, count: 3, angle: 180,
+      id: "p3",
+      type: "patternCircular",
+      sources: ["c1"],
+      cx: 0,
+      cy: 0,
+      count: 3,
+      angle: 180,
     };
     const out = expandPattern(pat, byIdMap([src]), params) as Extract<ResolvedEntity, { type: "circle" }>[];
     expect(out).toHaveLength(2);
     // step = 180/(3-1) = 90°
     const rounded = out.map((e) => [Math.round(e.x), Math.round(e.y)]);
-    expect(rounded).toEqual([[0, 10], [-10, 0]]);
+    expect(rounded).toEqual([
+      [0, 10],
+      [-10, 0],
+    ]);
   });
 
   it("derives ids as '<pattern.id>#<n>'", () => {
     const pat: SketchPattern = {
-      id: "p4", type: "patternCircular", sources: ["c1"],
-      cx: 0, cy: 0, count: 3, angle: 360,
+      id: "p4",
+      type: "patternCircular",
+      sources: ["c1"],
+      cx: 0,
+      cy: 0,
+      count: 3,
+      angle: 360,
     };
     const out = expandPattern(pat, byIdMap([src]), params);
     expect(out.map((e) => e.id)).toEqual(["p4#0", "p4#1"]);
@@ -139,8 +170,13 @@ describe("expandPattern / patternCircular", () => {
   // assert a "correct" value here until it's fixed on both sides.
   it.skip("half-integer counts match the Python build123d port (KNOWN DIVERGENCE, unresolved)", () => {
     const pat: SketchPattern = {
-      id: "p5", type: "patternCircular", sources: ["c1"],
-      cx: 0, cy: 0, count: 2.5, angle: 360,
+      id: "p5",
+      type: "patternCircular",
+      sources: ["c1"],
+      cx: 0,
+      cy: 0,
+      count: 2.5,
+      angle: 360,
     };
     const out = expandPattern(pat, byIdMap([src]), params);
     // Math.round(2.5) = 3 in JS; Python round(2.5) = 2 (round-half-to-even),
@@ -151,17 +187,26 @@ describe("expandPattern / patternCircular", () => {
 
 describe("scaled", () => {
   it("scales a line about a base point", () => {
-    const s = scaled({ type: "line", id: "l", x1: 1, y1: 0, x2: 2, y2: 0 }, 0, 0, 2, "l2") as Extract<ResolvedEntity, { type: "line" }>;
+    const s = scaled({ type: "line", id: "l", x1: 1, y1: 0, x2: 2, y2: 0 }, 0, 0, 2, "l2") as Extract<
+      ResolvedEntity,
+      { type: "line" }
+    >;
     expect(s.type).toBe("line");
     expect([s.x1, s.y1, s.x2, s.y2]).toEqual([2, 0, 4, 0]);
   });
   it("scales a circle's radius and center", () => {
-    const s = scaled({ type: "circle", id: "c", radius: 5, x: 10, y: 0 }, 0, 0, 2, "c2") as Extract<ResolvedEntity, { type: "circle" }>;
+    const s = scaled({ type: "circle", id: "c", radius: 5, x: 10, y: 0 }, 0, 0, 2, "c2") as Extract<
+      ResolvedEntity,
+      { type: "circle" }
+    >;
     expect(s.radius).toBe(10);
     expect(s.x).toBe(20);
   });
   it("scales a rectangle about its own center (center fixed, size grows)", () => {
-    const s = scaled({ type: "rectangle", id: "r", width: 10, height: 4, x: 3, y: 3 }, 3, 3, 2, "r2") as Extract<ResolvedEntity, { type: "rectangle" }>;
+    const s = scaled({ type: "rectangle", id: "r", width: 10, height: 4, x: 3, y: 3 }, 3, 3, 2, "r2") as Extract<
+      ResolvedEntity,
+      { type: "rectangle" }
+    >;
     expect(s.width).toBe(20);
     expect(s.height).toBe(8);
     expect(s.x).toBe(3);
@@ -171,7 +216,9 @@ describe("scaled", () => {
 
 describe("rotated", () => {
   it("rotates a line 90° about the origin", () => {
-    const [r] = rotated({ type: "line", id: "l", x1: 1, y1: 0, x2: 2, y2: 0 }, 0, 0, Math.PI / 2, "l2") as [Extract<ResolvedEntity, { type: "line" }>];
+    const [r] = rotated({ type: "line", id: "l", x1: 1, y1: 0, x2: 2, y2: 0 }, 0, 0, Math.PI / 2, "l2") as [
+      Extract<ResolvedEntity, { type: "line" }>,
+    ];
     expect(r.x1).toBeCloseTo(0);
     expect(r.y1).toBeCloseTo(1);
     expect(r.x2).toBeCloseTo(0);
@@ -197,7 +244,9 @@ describe("a rotated rectangle keeps its angle", () => {
 
   it("through a rotation, which traces its real corners", () => {
     const lines = rotated(r, 0, 0, Math.PI / 6, "r2") as Extract<ResolvedEntity, { type: "line" }>[];
-    const turned = rectCorners(3, 1, 10, 4, 30).map((q) => q.clone().rotateAround(new THREE.Vector2(0, 0), Math.PI / 6));
+    const turned = rectCorners(3, 1, 10, 4, 30).map((q) =>
+      q.clone().rotateAround(new THREE.Vector2(0, 0), Math.PI / 6),
+    );
     lines.forEach((l, k) => {
       expect(l.x1).toBeCloseTo(turned[k]!.x, 9);
       expect(l.y1).toBeCloseTo(turned[k]!.y, 9);

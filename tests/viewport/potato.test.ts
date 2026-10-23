@@ -21,17 +21,39 @@ function rig() {
   const scene = new THREE.Scene();
   const clip = [new THREE.Plane(new THREE.Vector3(0, 0, 1), 3)];
   const pbr = new THREE.MeshPhysicalMaterial({
-    color: 0x336699, vertexColors: true, transparent: true, opacity: 0.4,
-    side: THREE.DoubleSide, clearcoat: 1, transmission: 0.5, emissive: 0xff0000,
-    polygonOffset: true, polygonOffsetFactor: 1,
+    color: 0x336699,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.4,
+    side: THREE.DoubleSide,
+    clearcoat: 1,
+    transmission: 0.5,
+    emissive: 0xff0000,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
   });
   pbr.clippingPlanes = clip;
   const body = new THREE.Mesh(new THREE.BoxGeometry(), pbr);
   const basic = new THREE.MeshBasicMaterial();
   const multi = new THREE.Mesh(new THREE.BoxGeometry(), [new THREE.MeshStandardMaterial(), basic]);
   const edgeList: RebuildResult["edges"] = [
-    { id: "e0", body: "b", points: [[0, 0, 0], [1, 0, 0], [1, 1, 0]] },
-    { id: "e1", body: "b", points: [[0, 0, 1], [1, 0, 1]] },
+    {
+      id: "e0",
+      body: "b",
+      points: [
+        [0, 0, 0],
+        [1, 0, 0],
+        [1, 1, 0],
+      ],
+    },
+    {
+      id: "e1",
+      body: "b",
+      points: [
+        [0, 0, 1],
+        [1, 0, 1],
+      ],
+    },
   ];
   const edges = new BodyEdges(edgeList, new THREE.Vector2(800, 600));
   edges.object.position.set(5, 0, 0);
@@ -44,12 +66,17 @@ function rig() {
   const renderer = {
     getDrawingBufferSize: (v: THREE.Vector2) => v.set(320, 200),
     getRenderTarget: () => current,
-    setRenderTarget: (t: THREE.WebGLRenderTarget | null) => { current = t; },
+    setRenderTarget: (t: THREE.WebGLRenderTarget | null) => {
+      current = t;
+    },
     render: (s: THREE.Scene) => {
       draws.push({ scene: s, target: current });
       if (s !== scene) return;
       const proxies: THREE.LineSegments[] = [];
-      s.traverse((o) => { if ((o as THREE.LineSegments).isLineSegments && o.parent?.name === "potato-lines") proxies.push(o as THREE.LineSegments); });
+      s.traverse((o) => {
+        if ((o as THREE.LineSegments).isLineSegments && o.parent?.name === "potato-lines")
+          proxies.push(o as THREE.LineSegments);
+      });
       seen.push({
         target: current,
         materials: [body.material as THREE.Material, ...(multi.material as THREE.Material[])],
@@ -59,7 +86,20 @@ function rig() {
       });
     },
   } as unknown as THREE.WebGLRenderer;
-  return { scene, body, multi, basic, pbr, clip, edges, light, renderer, seen, draws, camera: new THREE.PerspectiveCamera() };
+  return {
+    scene,
+    body,
+    multi,
+    basic,
+    pbr,
+    clip,
+    edges,
+    light,
+    renderer,
+    seen,
+    draws,
+    camera: new THREE.PerspectiveCamera(),
+  };
 }
 
 describe("PotatoDraw", () => {
@@ -98,7 +138,11 @@ describe("PotatoDraw", () => {
     const r = rig();
     const multiWas = r.multi.material;
     const bomb = new THREE.Object3D();
-    Object.defineProperty(bomb, "isMesh", { get() { throw new Error("boom"); } });
+    Object.defineProperty(bomb, "isMesh", {
+      get() {
+        throw new Error("boom");
+      },
+    });
     r.scene.add(bomb);
     const draw = new PotatoDraw();
     expect(() => draw.render(r.renderer, r.scene, r.camera)).toThrow("boom");
@@ -154,7 +198,9 @@ describe("PotatoDraw", () => {
     let ambient = 0;
     const render = r.renderer.render.bind(r.renderer);
     (r.renderer as unknown as { render: (s: THREE.Scene) => void }).render = (s: THREE.Scene) => {
-      s.traverse((o) => { if ((o as THREE.AmbientLight).isAmbientLight) ambient = (o as THREE.AmbientLight).intensity; });
+      s.traverse((o) => {
+        if ((o as THREE.AmbientLight).isAmbientLight) ambient = (o as THREE.AmbientLight).intensity;
+      });
       render(s, r.camera);
     };
     new PotatoDraw().render(r.renderer, r.scene, r.camera, 0.5);
@@ -162,7 +208,9 @@ describe("PotatoDraw", () => {
     expect(cheap.polygonOffsetFactor).toBeGreaterThan(r.pbr.polygonOffsetFactor);
     expect(ambient).toBeGreaterThan(0);
     let after = 0;
-    r.scene.traverse((o) => { if ((o as THREE.AmbientLight).isAmbientLight) after++; });
+    r.scene.traverse((o) => {
+      if ((o as THREE.AmbientLight).isAmbientLight) after++;
+    });
     expect(after).toBe(0);
   });
 
@@ -229,8 +277,12 @@ describe("PostChain and potato mode", () => {
     const renderer = {
       getDrawingBufferSize: (v: THREE.Vector2) => v.set(64, 32),
       getRenderTarget: () => current,
-      setRenderTarget: (t: unknown) => { current = t; },
-      render: (s: THREE.Scene) => { draws.push({ scene: s, target: current }); },
+      setRenderTarget: (t: unknown) => {
+        current = t;
+      },
+      render: (s: THREE.Scene) => {
+        draws.push({ scene: s, target: current });
+      },
     } as unknown as THREE.WebGLRenderer;
     return { scene, draws, post: new PostChain(renderer, scene, potatoOn, lowPower) };
   }
@@ -253,7 +305,10 @@ describe("PostChain and potato mode", () => {
 
   it("draws a low power motion frame straight to the canvas with thin lines and no passes", () => {
     setRenderPref("bloom", 1);
-    const c = chain(() => false, () => true);
+    const c = chain(
+      () => false,
+      () => true,
+    );
     const { edges } = rig();
     c.scene.add(edges.object);
     const lines: number[] = [];
@@ -261,7 +316,9 @@ describe("PostChain and potato mode", () => {
     const plain = render.render;
     render.render = (s) => {
       let n = 0;
-      s.traverse((o) => { if (o.parent?.name === "potato-lines") n++; });
+      s.traverse((o) => {
+        if (o.parent?.name === "potato-lines") n++;
+      });
       lines.push(n);
       plain(s);
     };

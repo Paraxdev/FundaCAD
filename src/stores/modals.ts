@@ -30,24 +30,20 @@ export interface ListReq {
 
 export type ModalReq = (ChooseReq | MultiReq | ListReq) & { id: number };
 
-/** The one-shot modal chooser queue, plus the app-wide "a modal is open" gate.
- *
- *  `depth` is what toolBusy() reads (via isChoiceOpen) so a global shortcut,
- *  "e" for Extrude, say, can't fire underneath an awaiting modal. It counts
- *  modals built OUTSIDE this module too (Home, sign-in, publish),
- *  which is why pushModal/popModal are public. */
+/** The one-shot modal chooser queue and the app-wide "a modal is open" gate. `depth` feeds toolBusy() so a shortcut
+ *  cannot fire under an awaiting modal. It counts modals built elsewhere too, hence public pushModal/popModal. */
 export const useModalStore = defineStore("modals", () => {
   const current = ref<ModalReq | null>(null);
   const queue: ModalReq[] = [];
   const depth = ref(0);
   let nextId = 1;
 
-  // markRaw: every request holds a `resolve` closure, and the choose() options
-  // come straight from caller code. Nothing here benefits from being proxied.
-  function enqueue(req: ChooseReq | MultiReq | ListReq) {
+  // markRaw: requests hold `resolve` closures, and choose() options come straight from caller code.
+  function enqueue(req: ChooseReq | MultiReq | ListReq): number {
     const full = markRaw({ ...req, id: nextId++ }) as ModalReq;
     if (current.value) queue.push(full);
     else current.value = full;
+    return full.id;
   }
 
   /** Finish the open modal and promote the next queued one. */
@@ -55,5 +51,17 @@ export const useModalStore = defineStore("modals", () => {
     current.value = queue.shift() ?? null;
   }
 
-  return { current, depth, enqueue, close };
+  /** Take the request off the screen or out of the queue, false when it was already answered. */
+  function withdraw(id: number): boolean {
+    if (current.value?.id === id) {
+      close();
+      return true;
+    }
+    const i = queue.findIndex((r) => r.id === id);
+    if (i < 0) return false;
+    queue.splice(i, 1);
+    return true;
+  }
+
+  return { current, depth, enqueue, close, withdraw };
 });

@@ -53,7 +53,19 @@ describe("glass refracts only bodies", () => {
   });
 
   it("body edge lines stay out of the refraction, also after a reused body is reset", () => {
-    const edges = new BodyEdges([{ id: "e0", body: "b", points: [[0, 0, 0], [1, 0, 0]] }], RES);
+    const edges = new BodyEdges(
+      [
+        {
+          id: "e0",
+          body: "b",
+          points: [
+            [0, 0, 0],
+            [1, 0, 0],
+          ],
+        },
+      ],
+      RES,
+    );
     expect(sort(edges.object).opaque).toEqual([]);
     edges.resetAppearance();
     expect(sort(edges.object).opaque).toEqual([]);
@@ -71,13 +83,18 @@ describe("glass refracts only bodies", () => {
     const doc = {
       version: 4,
       parameters: {},
-      features: [{
-        id: "s1", type: "sketch", plane: "XY", entities: [
-          { type: "rectangle", id: "r", x: 0, y: 0, width: 10, height: 10 },
-          { type: "line", id: "c", x1: 0, y1: 0, x2: 10, y2: 10, construction: true },
-          { type: "point", id: "p", x: 5, y: 5 },
-        ],
-      }],
+      features: [
+        {
+          id: "s1",
+          type: "sketch",
+          plane: "XY",
+          entities: [
+            { type: "rectangle", id: "r", x: 0, y: 0, width: 10, height: 10 },
+            { type: "line", id: "c", x1: 0, y1: 0, x2: 10, y2: 10, construction: true },
+            { type: "point", id: "p", x: 5, y: 5 },
+          ],
+        },
+      ],
     } as unknown as CadDocument;
     const o = new SketchOverlay();
     o.update(doc);
@@ -91,7 +108,10 @@ describe("glass refracts only bodies", () => {
     beforeEach(() => {
       setActivePinia(createPinia());
       frames = [];
-      vi.stubGlobal("requestAnimationFrame", (fn: () => void) => { frames.push(fn); return frames.length; });
+      vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+        frames.push(fn);
+        return frames.length;
+      });
       vi.stubGlobal("cancelAnimationFrame", () => {});
     });
     afterEach(() => {

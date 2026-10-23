@@ -52,11 +52,20 @@ describe("importPath with a unit", () => {
   function backend() {
     const calls: unknown[][] = [];
     const be = {
-      async rebuild() { return new Promise<never>(() => {}); },
+      // The import waits for its build, which is what says whether Cancel stopped it.
+      async rebuild() {
+        return { ok: true, result: { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bodies: [] } };
+      },
       async init() {},
-      onStatus() { return () => {}; },
-      onProgress() { return () => {}; },
-      async cancel() { return true; },
+      onStatus() {
+        return () => {};
+      },
+      onProgress() {
+        return () => {};
+      },
+      async cancel() {
+        return true;
+      },
       async importGeometry(...args: unknown[]) {
         calls.push(args);
         return { ok: true, geom: "h", name: "cube", solid: true, faces: 6, ...(args[3] ? { unit: args[3] } : {}) };
@@ -97,7 +106,9 @@ describe("importPath with a unit", () => {
     const store = new DocumentStore(be, { parameters: {}, features: [] });
     await importPath(store, be, "C:/data/downloads/Bracket.step");
     expect(store.document.features[0]).toHaveProperty("source", "C:/data/downloads/Bracket.step");
-    await importPath(store, be, "C:/data/downloads/Bracket.step", undefined, { source: "https://cad.onshape.com/documents/x" });
+    await importPath(store, be, "C:/data/downloads/Bracket.step", undefined, {
+      source: "https://cad.onshape.com/documents/x",
+    });
     expect(store.document.features[1]).toHaveProperty("source", "https://cad.onshape.com/documents/x");
   });
 });
@@ -106,12 +117,23 @@ describe("importFileBytes with a unit", () => {
   function backend() {
     const calls: unknown[][] = [];
     const be = {
-      async rebuild() { return new Promise<never>(() => {}); },
+      // The import waits for its build, which is what says whether Cancel stopped it.
+      async rebuild() {
+        return { ok: true, result: { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bodies: [] } };
+      },
       async init() {},
-      onStatus() { return () => {}; },
-      onProgress() { return () => {}; },
-      async cancel() { return true; },
-      async importGeometry() { throw new Error("a dropped file has no path"); },
+      onStatus() {
+        return () => {};
+      },
+      onProgress() {
+        return () => {};
+      },
+      async cancel() {
+        return true;
+      },
+      async importGeometry() {
+        throw new Error("a dropped file has no path");
+      },
       async importBytes(...args: unknown[]) {
         calls.push(args);
         return { ok: true, geom: "h", name: "scene", solid: true, faces: 6, ...(args[4] ? { unit: args[4] } : {}) };
@@ -128,7 +150,12 @@ describe("importFileBytes with a unit", () => {
     expect(calls[0]![0]).toBe("scene.glb");
     expect(calls[0]![2]).toBe("AQID");
     expect(calls[0]![4]).toBe("cm");
-    expect(store.document.features[0]).toMatchObject({ type: "import", format: "glb", unit: "cm", source: "scene.glb" });
+    expect(store.document.features[0]).toMatchObject({
+      type: "import",
+      format: "glb",
+      unit: "cm",
+      source: "scene.glb",
+    });
   });
 
   it("reads nothing when the picker is dismissed", async () => {

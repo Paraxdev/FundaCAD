@@ -1,8 +1,5 @@
-//! A cylinder, cone, sphere or torus face resized about its own axis or
-//! centre, the faces around it keeping their own surfaces and trimmed or
-//! extended to meet it. Faces running smoothly into it that the new size
-//! would leave behind either follow it, when they close into one loop along
-//! its axis, or the resize is refused.
+//! A cylinder, cone, sphere or torus face resized about its axis or centre, neighbours trimmed or extended to meet
+//! it. Smooth neighbours it would leave behind follow it when they close into one loop, else the resize is refused.
 
 mod band;
 mod cells;
@@ -49,11 +46,8 @@ pub use check::checked_solid;
 #[doc(hidden)]
 pub use memo::{forget, seen, Seen};
 
-/// `faces` moved `d` along their outward normal, so a positive `d` adds
-/// material. `faces` is one analytic curved face (its siblings on the same
-/// surface move with it), or a whole closed tangent run such as every face of
-/// a slot. `follow` lets the faces that run smoothly into a lone face follow
-/// it where the new size would leave them behind.
+/// `faces` moved `d` along their outward normal, positive adding material: one analytic curved face with its
+/// same surface siblings, or a whole closed tangent run. `follow` lets smooth neighbours of a lone face follow it.
 pub fn resize(part: &Shape, faces: &[Shape], d: f64, follow: bool) -> Resize {
     crate::bench::phase("resize", || resize_in(part, faces, d, follow))
 }
@@ -92,7 +86,8 @@ fn resize_in(part: &Shape, faces: &[Shape], d: f64, follow: bool) -> Resize {
         return Resize::Refused(refusal::tangent_lost(&lost, delta));
     }
     let contacts = lost.iter().map(|l| l.contact);
-    let contact = if delta < 0.0 { contacts.fold(f64::NEG_INFINITY, f64::max) } else { contacts.fold(f64::INFINITY, f64::min) };
+    let contact =
+        if delta < 0.0 { contacts.fold(f64::NEG_INFINITY, f64::max) } else { contacts.fold(f64::INFINITY, f64::min) };
     let unsupported = || Resize::Refused(refusal::run_unsupported(contact, delta));
     if !matches!(s, Surf::Cyl { .. }) {
         return unsupported();
@@ -160,7 +155,10 @@ pub fn has_tangent_neighbour(part: &Shape, face: &Shape) -> bool {
 }
 
 pub fn resize_invalid() -> Fail {
-    refusal::coded(refusal::RESIZE_INVALID, "can't change this face to that size, the result wouldn't be a valid solid".into())
+    refusal::coded(
+        refusal::RESIZE_INVALID,
+        "can't change this face to that size, the result wouldn't be a valid solid".into(),
+    )
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -206,12 +204,9 @@ pub fn describe(part: &Shape, face: &Shape) -> Option<ResizeInfo> {
     };
     let cave = concave(face, &s)?;
     let memo::Around { group, nbs } = memo::around(part, face);
-    let sweep: f64 = group
-        .iter()
-        .filter_map(|f| f.as_face()?.uv_bounds().ok())
-        .map(|b| b.u_max - b.u_min)
-        .sum();
-    let full = matches!(s, Surf::Cyl { .. } | Surf::Cone { .. } | Surf::Torus { .. }) && sweep >= std::f64::consts::TAU - 1e-6;
+    let sweep: f64 = group.iter().filter_map(|f| f.as_face()?.uv_bounds().ok()).map(|b| b.u_max - b.u_min).sum();
+    let full =
+        matches!(s, Surf::Cyl { .. } | Surf::Cone { .. } | Surf::Torus { .. }) && sweep >= std::f64::consts::TAU - 1e-6;
     let tangents: Vec<_> = nbs.iter().filter(|n| n.kind == Some(EdgeKind::Tangent)).collect();
     let lost_when = [(-1e-3, "shrink"), (1e-3, "grow")]
         .into_iter()
@@ -323,7 +318,10 @@ mod refusal {
 
     pub fn past_body(cone: bool) -> Fail {
         let what = if cone { "offset" } else { "radius" };
-        coded(PAST_BODY, format!("that size runs past the whole body and would take all of it away, try a smaller {what}"))
+        coded(
+            PAST_BODY,
+            format!("that size runs past the whole body and would take all of it away, try a smaller {what}"),
+        )
     }
 
     pub fn not_one_run() -> Fail {

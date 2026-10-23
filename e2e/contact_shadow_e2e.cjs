@@ -20,7 +20,10 @@ const ANGLE = process.env.SC_ANGLE || "d3d11";
 const OUT = path.resolve(process.argv[2] || "contact_shadow_shots");
 const BASELINE = process.env.SC_BASELINE || "";
 const WRITE_BASELINE = process.env.SC_WRITE_BASELINE === "1";
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -35,78 +38,140 @@ const check = (name, ok, detail) => {
   });
   try {
     const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
-    page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-    await page.addInitScript(([port, t]) => {
-      const N = window.WebSocket;
-      window.WebSocket = class extends N {
-        constructor(u, p) {
-          let s = String(u).replace("127.0.0.1:8765", "127.0.0.1:" + port);
-          s = s.replace(/([?&])token=[^&]*/, `$1token=${t}`);
-          super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
-        }
-      };
-    }, [PORT, TOKEN]);
+    page.on("pageerror", (e) => {
+      console.error("PAGE ERROR:", e.message);
+      failures++;
+    });
+    await page.addInitScript(
+      ([port, t]) => {
+        const N = window.WebSocket;
+        window.WebSocket = class extends N {
+          constructor(u, p) {
+            let s = String(u).replace("127.0.0.1:8765", "127.0.0.1:" + port);
+            s = s.replace(/([?&])token=[^&]*/, `$1token=${t}`);
+            super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+          }
+        };
+      },
+      [PORT, TOKEN],
+    );
     await page.goto(URL);
     await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
     await page.waitForTimeout(1500);
     const modal = await page.$(".modal-close");
-    if (modal) { await modal.click(); await page.waitForTimeout(300); }
+    if (modal) {
+      await modal.click();
+      await page.waitForTimeout(300);
+    }
 
-    const save = (name, url) => fs.writeFileSync(path.join(OUT, `${name}.png`), Buffer.from(url.split(",")[1], "base64"));
-    const frames = (n) => page.evaluate((n) => new Promise((res) => {
-      let i = 0;
-      const step = () => (++i >= n ? res() : requestAnimationFrame(step));
-      requestAnimationFrame(step);
-    }), n);
+    const save = (name, url) =>
+      fs.writeFileSync(path.join(OUT, `${name}.png`), Buffer.from(url.split(",")[1], "base64"));
+    const frames = (n) =>
+      page.evaluate(
+        (n) =>
+          new Promise((res) => {
+            let i = 0;
+            const step = () => (++i >= n ? res() : requestAnimationFrame(step));
+            requestAnimationFrame(step);
+          }),
+        n,
+      );
     const pref = async (k, v) => {
-      await page.evaluate(([k, v]) => { window.__fundacad.setRenderPref(k, v); window.viewport.requestRender(); }, [k, v]);
+      await page.evaluate(
+        ([k, v]) => {
+          window.__fundacad.setRenderPref(k, v);
+          window.viewport.requestRender();
+        },
+        [k, v],
+      );
       await frames(6);
     };
     // The view without the grid, which is drawn over the catcher.
-    const shot = (name) => page.evaluate(() => {
-      const sc = window.viewport.scene;
-      const was = [sc.grid.group.visible, sc.triad.group.visible];
-      sc.grid.group.visible = false;
-      sc.triad.group.visible = false;
-      try { return window.viewport.screenshotPNG(); } finally {
-        [sc.grid.group.visible, sc.triad.group.visible] = was;
-      }
-    }).then((url) => { save(name, url); return url; });
-    const diff = (a, b) => page.evaluate(async ([a, b]) => {
-      const load = (u) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = u; });
-      const [A, B] = await Promise.all([load(a), load(b)]);
-      const w = A.width, h = A.height;
-      const px = (img) => {
-        const c = document.createElement("canvas"); c.width = w; c.height = h;
-        const g = c.getContext("2d"); g.drawImage(img, 0, 0, w, h);
-        return g.getImageData(0, 0, w, h).data;
-      };
-      const p = px(A), q = px(B);
-      let sum = 0, n = 0, max = 0;
-      for (let i = 0; i < p.length; i += 4) for (let c = 0; c < 3; c++) {
-        const d = Math.abs(p[i + c] - q[i + c]);
-        sum += d; n++; if (d > max) max = d;
-      }
-      return { mean: sum / n, max, sameSize: A.width === B.width && A.height === B.height };
-    }, [a, b]);
+    const shot = (name) =>
+      page
+        .evaluate(() => {
+          const sc = window.viewport.scene;
+          const was = [sc.grid.group.visible, sc.triad.group.visible];
+          sc.grid.group.visible = false;
+          sc.triad.group.visible = false;
+          try {
+            return window.viewport.screenshotPNG();
+          } finally {
+            [sc.grid.group.visible, sc.triad.group.visible] = was;
+          }
+        })
+        .then((url) => {
+          save(name, url);
+          return url;
+        });
+    const diff = (a, b) =>
+      page.evaluate(
+        async ([a, b]) => {
+          const load = (u) =>
+            new Promise((res, rej) => {
+              const i = new Image();
+              i.onload = () => res(i);
+              i.onerror = rej;
+              i.src = u;
+            });
+          const [A, B] = await Promise.all([load(a), load(b)]);
+          const w = A.width,
+            h = A.height;
+          const px = (img) => {
+            const c = document.createElement("canvas");
+            c.width = w;
+            c.height = h;
+            const g = c.getContext("2d");
+            g.drawImage(img, 0, 0, w, h);
+            return g.getImageData(0, 0, w, h).data;
+          };
+          const p = px(A),
+            q = px(B);
+          let sum = 0,
+            n = 0,
+            max = 0;
+          for (let i = 0; i < p.length; i += 4)
+            for (let c = 0; c < 3; c++) {
+              const d = Math.abs(p[i + c] - q[i + c]);
+              sum += d;
+              n++;
+              if (d > max) max = d;
+            }
+          return { mean: sum / n, max, sameSize: A.width === B.width && A.height === B.height };
+        },
+        [a, b],
+      );
     // Mean luminance of a small square around world point (x, y, z) in an image of the current view.
-    const lum = (url, pts) => page.evaluate(async ([url, pts]) => {
-      const cam = window.viewport.rig.active;
-      cam.updateMatrixWorld();
-      const V = cam.position.constructor;
-      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-      const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
-      const g = c.getContext("2d"); g.drawImage(img, 0, 0);
-      return pts.map(([x, y, z]) => {
-        const v = new V(x, y, z).project(cam);
-        const px = Math.round((v.x + 1) / 2 * img.width), py = Math.round((1 - v.y) / 2 * img.height);
-        const r = Math.max(2, Math.round(img.width / 200));
-        const d = g.getImageData(px - r, py - r, 2 * r + 1, 2 * r + 1).data;
-        let s = 0;
-        for (let i = 0; i < d.length; i += 4) s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
-        return s / (d.length / 4);
-      });
-    }, [url, pts]);
+    const lum = (url, pts) =>
+      page.evaluate(
+        async ([url, pts]) => {
+          const cam = window.viewport.rig.active;
+          cam.updateMatrixWorld();
+          const V = cam.position.constructor;
+          const img = await new Promise((res, rej) => {
+            const i = new Image();
+            i.onload = () => res(i);
+            i.onerror = rej;
+            i.src = url;
+          });
+          const c = document.createElement("canvas");
+          c.width = img.width;
+          c.height = img.height;
+          const g = c.getContext("2d");
+          g.drawImage(img, 0, 0);
+          return pts.map(([x, y, z]) => {
+            const v = new V(x, y, z).project(cam);
+            const px = Math.round(((v.x + 1) / 2) * img.width),
+              py = Math.round(((1 - v.y) / 2) * img.height);
+            const r = Math.max(2, Math.round(img.width / 200));
+            const d = g.getImageData(px - r, py - r, 2 * r + 1, 2 * r + 1).data;
+            let s = 0;
+            for (let i = 0; i < d.length; i += 4) s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+            return s / (d.length / 4);
+          });
+        },
+        [url, pts],
+      );
 
     // One block standing on the ground at x = 30 and a small one off to -X and
     // +Y, so the catcher's middle is under neither and a mirror in X or Y shows.
@@ -146,31 +211,62 @@ const check = (name, ok, detail) => {
     if (BASELINE && fs.existsSync(BASELINE)) {
       const base = "data:image/png;base64," + fs.readFileSync(BASELINE).toString("base64");
       const d = await diff(base, none0);
-      check("Ground None draws the frame a build without the catcher drew", d.sameSize && d.max === 0, JSON.stringify(d));
+      check(
+        "Ground None draws the frame a build without the catcher drew",
+        d.sameSize && d.max === 0,
+        JSON.stringify(d),
+      );
     }
     const caught = await page.evaluate(() => window.viewport.contactShadow.group.visible);
     check("Ground None by default, no catcher drawn", !caught);
     // Both workspaces, whichever the page opened on.
-    const ground = async (g) => { await pref("groundModel", g); await pref("groundRender", g); };
+    const ground = async (g) => {
+      await pref("groundModel", g);
+      await pref("groundRender", g);
+    };
     await ground("shadow");
     await page.waitForTimeout(300);
     const shadow = await shot("ground_shadow");
     const z = await page.evaluate(() => window.viewport.contactShadow.group.position.z);
-    const [cx, cy] = await page.evaluate(() => [window.viewport.contactShadow.group.position.x, window.viewport.contactShadow.group.position.y]);
+    const [cx, cy] = await page.evaluate(() => [
+      window.viewport.contactShadow.group.position.x,
+      window.viewport.contactShadow.group.position.y,
+    ]);
     // Beside the big block's +X and -Y faces, the same points mirrored through
     // the catcher's middle, and two far from both blocks.
-    const pts = [[42.5, 0, z], [30, -12.5, z], [2 * cx - 42.5, 0, z], [30, 2 * cy + 12.5, z], [5, -30, z], [0, 40, z]];
+    const pts = [
+      [42.5, 0, z],
+      [30, -12.5, z],
+      [2 * cx - 42.5, 0, z],
+      [30, 2 * cy + 12.5, z],
+      [5, -30, z],
+      [0, 40, z],
+    ];
     const [lx, ly, mx, my, far1, far2] = await lum(shadow, pts);
     const far = (far1 + far2) / 2;
-    console.log(`    luminance beside the block ${lx.toFixed(1)} ${ly.toFixed(1)}, mirrored ${mx.toFixed(1)} ${my.toFixed(1)}, far ${far1.toFixed(1)} ${far2.toFixed(1)}`);
-    check("the ground beside the big block is darker than far away", lx < far - 8 && ly < far - 8, `${lx.toFixed(1)} ${ly.toFixed(1)} against ${far.toFixed(1)}`);
-    check("and not where a mirrored bake would put it", mx > lx + 5 && my > ly + 5, `${mx.toFixed(1)} ${my.toFixed(1)}`);
+    console.log(
+      `    luminance beside the block ${lx.toFixed(1)} ${ly.toFixed(1)}, mirrored ${mx.toFixed(1)} ${my.toFixed(1)}, far ${far1.toFixed(1)} ${far2.toFixed(1)}`,
+    );
+    check(
+      "the ground beside the big block is darker than far away",
+      lx < far - 8 && ly < far - 8,
+      `${lx.toFixed(1)} ${ly.toFixed(1)} against ${far.toFixed(1)}`,
+    );
+    check(
+      "and not where a mirrored bake would put it",
+      mx > lx + 5 && my > ly + 5,
+      `${mx.toFixed(1)} ${my.toFixed(1)}`,
+    );
     await ground("none");
     const none1 = await shot("ground_none_again");
     const dn = await diff(none0, none1);
     check("Ground None again is the first frame exactly", dn.max === 0, JSON.stringify(dn));
     const [nx, ny, , , nfar1] = await lum(none1, pts);
-    check("with Ground None there is no such darkness", Math.abs(nx - nfar1) < 3 && Math.abs(ny - nfar1) < 3, `${nx.toFixed(1)} ${ny.toFixed(1)} ${nfar1.toFixed(1)}`);
+    check(
+      "with Ground None there is no such darkness",
+      Math.abs(nx - nfar1) < 3 && Math.abs(ny - nfar1) < 3,
+      `${nx.toFixed(1)} ${ny.toFixed(1)} ${nfar1.toFixed(1)}`,
+    );
     await ground("shadow");
 
     const bakes = () => page.evaluate(() => window.viewport.contactShadow.bakes);
@@ -186,11 +282,14 @@ const check = (name, ok, detail) => {
     await page.evaluate(() => window.__fundacad.handleAction("fit"));
     await page.waitForTimeout(1500);
 
-    const meshVisible = (on) => page.evaluate((on) => {
-      const v = window.viewport;
-      v.scene.modelGroup.traverse((o) => { if (o.userData.owner && o.userData.owner.id === "body2") o.visible = on; });
-      v.requestRender();
-    }, on);
+    const meshVisible = (on) =>
+      page.evaluate((on) => {
+        const v = window.viewport;
+        v.scene.modelGroup.traverse((o) => {
+          if (o.userData.owner && o.userData.owner.id === "body2") o.visible = on;
+        });
+        v.requestRender();
+      }, on);
     const b1 = await bakes();
     await meshVisible(false);
     await frames(4);
@@ -210,20 +309,33 @@ const check = (name, ok, detail) => {
     await page.waitForTimeout(1500);
 
     // A section keeping x < 30 cuts the big block's +X half away, and its shadow with it.
-    const section = (on) => page.evaluate(async (on) => {
-      const url = [...document.scripts].map((x) => x.src).find((x) => /three/.test(x));
-      const THREE = url ? await import(url) : await import("/node_modules/.vite/deps/three.js");
-      window.viewport.setSectionView(on ? { plane: new THREE.Plane(new THREE.Vector3(-1, 0, 0), 30), ghost: 0 } : null);
-      window.viewport.requestRender();
-    }, on);
+    const section = (on) =>
+      page.evaluate(async (on) => {
+        const url = [...document.scripts].map((x) => x.src).find((x) => /three/.test(x));
+        const THREE = url ? await import(url) : await import("/node_modules/.vite/deps/three.js");
+        window.viewport.setSectionView(
+          on ? { plane: new THREE.Plane(new THREE.Vector3(-1, 0, 0), 30), ghost: 0 } : null,
+        );
+        window.viewport.requestRender();
+      }, on);
     const b3 = await bakes();
     await section(true);
     await frames(6);
     const cut = await shot("section_shadow");
-    const [cutX, , , , cutFar] = await lum(cut, [[42.5, 0, z], [30, -12.5, z], [0, 0, z], [0, 0, z], [5, -30, z]]);
+    const [cutX, , , , cutFar] = await lum(cut, [
+      [42.5, 0, z],
+      [30, -12.5, z],
+      [0, 0, z],
+      [0, 0, z],
+      [5, -30, z],
+    ]);
     const [cutY] = await lum(cut, [[25, -12.5, z]]);
     check("a section rebakes", (await bakes()) > b3, `${b3} then ${await bakes()}`);
-    check("the cut away half leaves no shadow, the kept half does", cutX > cutFar - 3 && cutY < cutFar - 8, `${cutX.toFixed(1)} ${cutY.toFixed(1)} against ${cutFar.toFixed(1)}`);
+    check(
+      "the cut away half leaves no shadow, the kept half does",
+      cutX > cutFar - 3 && cutY < cutFar - 8,
+      `${cutX.toFixed(1)} ${cutY.toFixed(1)} against ${cutFar.toFixed(1)}`,
+    );
     await section(false);
     await frames(6);
     const viewNow = await shot("ground_shadow_again");
@@ -231,7 +343,11 @@ const check = (name, ok, detail) => {
     save("picture_shadow", pic);
     const [plx, ply, , , pfar1, pfar2] = await lum(pic, pts);
     const pfar = (pfar1 + pfar2) / 2;
-    check("a Realtime picture keeps the shadow", plx < pfar - 10 && ply < pfar - 10, `${plx.toFixed(1)} ${ply.toFixed(1)} against ${pfar.toFixed(1)}`);
+    check(
+      "a Realtime picture keeps the shadow",
+      plx < pfar - 10 && ply < pfar - 10,
+      `${plx.toFixed(1)} ${ply.toFixed(1)} against ${pfar.toFixed(1)}`,
+    );
     const [vlx] = await lum(viewNow, pts);
     check("as dark as in the view", Math.abs(plx - vlx) < 8, `${plx.toFixed(1)} against ${vlx.toFixed(1)}`);
 
@@ -251,7 +367,11 @@ const check = (name, ok, detail) => {
     await page.waitForTimeout(800);
     const keyLit = await shot("shadows_on");
     const [klx, kly] = await lum(keyLit, pts);
-    check("with Shadows on the catcher still darkens beside the block", klx < far && kly < far, `${klx.toFixed(1)} ${kly.toFixed(1)}`);
+    check(
+      "with Shadows on the catcher still darkens beside the block",
+      klx < far && kly < far,
+      `${klx.toFixed(1)} ${kly.toFixed(1)}`,
+    );
     const keyVisible = await page.evaluate(() => window.viewport.contactShadow.keyShadow.visible);
     check("and takes the key shadow", keyVisible);
     await pref("shadows", false);
@@ -266,13 +386,26 @@ const check = (name, ok, detail) => {
     await frames(6);
     const row = await page.evaluate(() => {
       const p = window.__fundacad.renderPrefs();
-      return { render: p.groundRender, model: p.groundModel, drawn: window.viewport.contactShadow.group.visible,
-        pressed: document.querySelector('[data-ground="shadow"]')?.getAttribute("aria-pressed") };
+      return {
+        render: p.groundRender,
+        model: p.groundModel,
+        drawn: window.viewport.contactShadow.group.visible,
+        pressed: document.querySelector('[data-ground="shadow"]')?.getAttribute("aria-pressed"),
+      };
     });
-    check("the Shadow chip sets Render's ground and the catcher shows", row.render === "shadow" && row.model === "none" && row.drawn && row.pressed === "true", JSON.stringify(row));
+    check(
+      "the Shadow chip sets Render's ground and the catcher shows",
+      row.render === "shadow" && row.model === "none" && row.drawn && row.pressed === "true",
+      JSON.stringify(row),
+    );
     await page.click('[data-ground="none"]');
     await frames(6);
-    check("and None takes it away", await page.evaluate(() => window.__fundacad.renderPrefs().groundRender === "none" && !window.viewport.contactShadow.group.visible));
+    check(
+      "and None takes it away",
+      await page.evaluate(
+        () => window.__fundacad.renderPrefs().groundRender === "none" && !window.viewport.contactShadow.group.visible,
+      ),
+    );
   } finally {
     await browser.close();
   }

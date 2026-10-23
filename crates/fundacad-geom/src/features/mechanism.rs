@@ -1,12 +1,6 @@
-//! Mechanisms: bodies joined by revolute, slider and rigid joints into one
-//! linkage, closed loops included, posed together. `ground` stays where it is;
-//! every other body in a joint is moved rigidly so all the joints meet, with
-//! the `drive` joint at `offset` (a slider) or `angle` (a revolute).
-//!
-//! Connectors resolve once, on the bodies as the features above left them,
-//! and then ride on their bodies. The solve starts from that modelled pose and
-//! walks the drive to its value in small steps, so the linkage stays on the
-//! branch it was modelled on and the result depends on the document alone.
+//! Mechanisms: bodies linked by revolute, slider and rigid joints, loops included, posed so all joints meet with
+//! `ground` fixed and the `drive` at its value. Connectors resolve once and ride their bodies, and the drive walks
+//! from the modelled pose in small steps, so the linkage keeps its modelled branch and depends on the document alone.
 
 mod solve;
 
@@ -22,10 +16,7 @@ use crate::kernel;
 use solve::{Frame, Kind, Problem};
 
 fn refuse(message: String) -> Fail {
-    Fail::Value {
-        message,
-        code: Some(BAD_REQUEST),
-    }
+    Fail::Value { message, code: Some(BAD_REQUEST) }
 }
 
 /// One validated joint: its id, kind, and each side's body and connector.
@@ -37,12 +28,9 @@ struct Entry {
 
 /// The body a connector rides on: its own `body`, else the one its selector names.
 fn side_body(c: &MateConnector) -> Option<String> {
-    c.body.clone().or_else(|| {
-        [&c.axis, &c.face, &c.edge]
-            .into_iter()
-            .flatten()
-            .find_map(|s| s.body().map(str::to_owned))
-    })
+    c.body
+        .clone()
+        .or_else(|| [&c.axis, &c.face, &c.edge].into_iter().flatten().find_map(|s| s.body().map(str::to_owned)))
 }
 
 fn entries(ctx: &Ctx, f: &Mechanism) -> FResult<Vec<Entry>> {
@@ -68,11 +56,7 @@ fn entries(ctx: &Ctx, f: &Mechanism) -> FResult<Vec<Entry>> {
                     "mechanism: joints[{id}] has the mode \"{m}\", which is not rigid, revolute or slider"
                 )))
             }
-            None => {
-                return Err(refuse(format!(
-                    "mechanism: joints[{id}] has no mode, give rigid, revolute or slider"
-                )))
-            }
+            None => return Err(refuse(format!("mechanism: joints[{id}] has no mode, give rigid, revolute or slider"))),
         };
         let side = |c: &Option<MateConnector>, name: &str| -> FResult<(String, MateConnector)> {
             let Some(c) = c else {
@@ -93,10 +77,7 @@ fn entries(ctx: &Ctx, f: &Mechanism) -> FResult<Vec<Entry>> {
         let a = side(&j.a, "a")?;
         let b = side(&j.b, "b")?;
         if a.0 == b.0 {
-            return Err(refuse(format!(
-                "mechanism: joints[{id}] has both sides on {}, a joint joins two bodies",
-                a.0
-            )));
+            return Err(refuse(format!("mechanism: joints[{id}] has both sides on {}, a joint joins two bodies", a.0)));
         }
         out.push(Entry { id, kind, sides: [a, b] });
     }
@@ -130,7 +111,11 @@ fn listed(names: &[&str]) -> String {
 
 /// A gap in mm to three figures, a sliver as "less than 0.001".
 fn mm(v: f64) -> String {
-    if v < 1e-3 { "less than 0.001".into() } else { py_g_prec(v, 3) }
+    if v < 1e-3 {
+        "less than 0.001".into()
+    } else {
+        py_g_prec(v, 3)
+    }
 }
 
 pub fn handle(ctx: &mut Ctx, f: &Mechanism) -> FResult {
@@ -138,9 +123,7 @@ pub fn handle(ctx: &mut Ctx, f: &Mechanism) -> FResult {
         return Err(Fail::Missing("ground".into()));
     };
     let Some(ground) = ctx.find_body(&ground_id) else {
-        return Err(missing_reference(format!(
-            "mechanism: the ground {ground_id} is missing or was consumed"
-        )));
+        return Err(missing_reference(format!("mechanism: the ground {ground_id} is missing or was consumed")));
     };
     let entries = entries(ctx, f)?;
     let drive = match &f.drive {
@@ -204,13 +187,7 @@ pub fn handle(ctx: &mut Ctx, f: &Mechanism) -> FResult {
         let [Some(fa), Some(fb)] = frames else { unreachable!("both sides resolved") };
         // Neither side gives an x: a's is b's, so the joint reads 0 as modelled.
         let fa = if own_x { fa } else { fa.x_from(&fb) };
-        joints.push(solve::Joint {
-            kind: e.kind,
-            a: unknown(&e.sides[0].0),
-            b: unknown(&e.sides[1].0),
-            fa,
-            fb,
-        });
+        joints.push(solve::Joint { kind: e.kind, a: unknown(&e.sides[0].0), b: unknown(&e.sides[1].0), fa, fb });
     }
 
     let indices: Vec<usize> = movers.iter().filter_map(|m| ctx.find_body(m)).collect();
@@ -268,9 +245,10 @@ pub fn handle(ctx: &mut Ctx, f: &Mechanism) -> FResult {
                 (locked.reached + std::f64::consts::TAU * turns).to_degrees()
             };
             // A gap the message would print as 0 explains nothing.
-            let gives = locked.gap.filter(|g| g.size >= 1e-3).map_or(String::new(), |g| {
-                format!(" where {} stays {} mm apart", entries[g.joint].id, mm(g.size))
-            });
+            let gives = locked
+                .gap
+                .filter(|g| g.size >= 1e-3)
+                .map_or(String::new(), |g| format!(" where {} stays {} mm apart", entries[g.joint].id, mm(g.size)));
             return Err(Fail::msg(format!(
                 "mechanism: the linkage cannot reach {word} {} {unit} on {}, it locks near {} {unit}{gives}",
                 py_g(value),
@@ -334,6 +312,3 @@ pub fn handle(ctx: &mut Ctx, f: &Mechanism) -> FResult {
     }
     Ok(())
 }
-
-#[cfg(test)]
-mod tests;

@@ -6,9 +6,15 @@ import type { RebuildResult } from "../../src/types";
 
 function cube(id: string, faceStart: number): RebuildResult {
   const positions = [0, 0, 0, 10, 0, 0, 10, 10, 0, 0, 10, 0, 0, 0, 10, 10, 0, 10, 10, 10, 10, 0, 10, 10];
-  const indices = [0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7];
+  const indices = [
+    0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7,
+  ];
   return {
-    mesh: { positions, indices, faceIds: indices.filter((_, i) => i % 3 === 0).map((_, i) => faceStart + Math.floor(i / 2)) },
+    mesh: {
+      positions,
+      indices,
+      faceIds: indices.filter((_, i) => i % 3 === 0).map((_, i) => faceStart + Math.floor(i / 2)),
+    },
     edges: [],
     bbox: { min: [0, 0, 0], max: [10, 10, 10] },
     bodies: [{ id, name: id, faceStart, faceCount: 6 }],
@@ -29,7 +35,10 @@ describe("SectionCaps", () => {
     caps.mount(bodies, PLANE, () => new THREE.Color(0x9aa7b4));
     const passes = bodies.flatMap((b) => b.mesh.children as THREE.Mesh[]);
     expect(passes.map((m) => (m.material as THREE.Material).side)).toEqual([
-      THREE.BackSide, THREE.FrontSide, THREE.BackSide, THREE.FrontSide,
+      THREE.BackSide,
+      THREE.FrontSide,
+      THREE.BackSide,
+      THREE.FrontSide,
     ]);
     for (const m of passes) {
       const mat = m.material as THREE.MeshBasicMaterial;
@@ -63,7 +72,11 @@ describe("SectionCaps", () => {
   it("leaves a very large assembly uncapped", () => {
     const caps = new SectionCaps();
     const body = bodyOf("a");
-    caps.mount(Array.from({ length: CAP_BODY_LIMIT + 1 }, () => body), PLANE, () => new THREE.Color());
+    caps.mount(
+      Array.from({ length: CAP_BODY_LIMIT + 1 }, () => body),
+      PLANE,
+      () => new THREE.Color(),
+    );
     expect(caps.group.children).toHaveLength(0);
     expect(body.mesh.children).toHaveLength(0);
   });

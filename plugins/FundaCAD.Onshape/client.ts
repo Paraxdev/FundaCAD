@@ -86,7 +86,8 @@ export function onshapeClient({ transport, keys, sleep }: ClientDeps) {
         continue;
       }
       if (res.status === 429) {
-        if (++retries > MAX_RETRIES) throw new OnshapeError("Onshape is asking for fewer requests, try again in a minute", 429);
+        if (++retries > MAX_RETRIES)
+          throw new OnshapeError("Onshape is asking for fewer requests, try again in a minute", 429);
         const secs = Number(res.retryAfter);
         await sleep(Math.min(Number.isFinite(secs) && secs > 0 ? secs : 2, 60) * 1000);
         continue;

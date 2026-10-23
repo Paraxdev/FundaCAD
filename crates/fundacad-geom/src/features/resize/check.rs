@@ -14,9 +14,8 @@ pub(super) struct Expect<'a> {
     pub keep: &'a [Shape],
 }
 
-/// One valid solid that gained or lost material as asked. Solids are counted
-/// before anything unifies them: unifying a result in pieces has been seen to
-/// rewrite the shapes its input shares.
+/// One valid solid that gained or lost material as asked. Solids are counted before anything unifies them, since
+/// unifying a result in pieces has been seen to rewrite the shapes its input shares.
 pub fn checked_solid(before: &Shape, out: &Shape, cut: bool) -> Result<Shape, Bad> {
     one_solid(before, out, cut, false, None)
 }
@@ -42,7 +41,13 @@ fn one_solid(before: &Shape, out: &Shape, cut: bool, cone: bool, known: Option<(
     Ok(out)
 }
 
-pub(super) fn checked(before: &Shape, out: &Shape, cut: bool, known: Option<(f64, f64)>, e: &Expect) -> Result<Shape, Bad> {
+pub(super) fn checked(
+    before: &Shape,
+    out: &Shape,
+    cut: bool,
+    known: Option<(f64, f64)>,
+    e: &Expect,
+) -> Result<Shape, Bad> {
     let out = one_solid(before, out, cut, matches!(e.surf, Surf::Cone { .. }), known)?;
     let tol = tol_apart(e.delta);
     if area_at(&out, e.surf, e.delta, tol) < 1e-9 {

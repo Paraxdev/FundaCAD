@@ -6,9 +6,7 @@ import type { SketchPlane } from "../sketch/plane";
 import type { DimItem } from "../sketch/sketchDimensions";
 import type { GlyphItem } from "../sketch/sketchGlyphs";
 
-/** Late-bound hooks the dimension layer calls back into. SketchMode assigns the
- *  matching public fields on SketchDimensions AFTER construction, so these read
- *  them at call time rather than capturing them. */
+/** SketchMode assigns the matching fields on SketchDimensions after construction, so these are read at call time. */
 export interface DimHooks {
   overlapPick(e: PointerEvent): boolean;
   planePoint(clientX: number, clientY: number): THREE.Vector2 | null;
@@ -21,25 +19,10 @@ export interface GlyphHooks {
   editPattern(patternId: string): void;
 }
 
-/** The two projected badge layers over the sketch: editable dimension labels and
- *  constraint glyphs.
- *
- *  SPLIT OF RESPONSIBILITY, and it is the whole reason this store looks the way
- *  it does: everything here is STRUCTURE, which badges exist, what each says,
- *  which classes it wears, which one the Delete key is armed on. POSITION is not
- *  here and must never be. Both layers project every badge from sketch mm to
- *  screen px on each frame the camera moves; a 200-label sketch at 60 fps is
- *  12,000 style writes a second, and routing those through Vue's scheduler would
- *  be a performance disaster. The components collect their elements into a plain
- *  (non-reactive, non-ref) array and write `style.transform` directly from a rAF
- *  loop, see Sketch{Dim,Glyph}Layer.vue.
- *
- *  shallowRef throughout, and markRaw on everything that lands here: the items
- *  carry commit/placeCommit/onDelete closures over SketchMode and the raw
- *  document, the anchors are THREE.Vector2s a drag mutates IN PLACE, and the
- *  plane and viewport are Three.js objects. None of it may become a Proxy. */
+/** Structure of the dimension label and constraint glyph layers, never position: at 60 fps a 200-label sketch is 12,000
+ *  style writes a second, so Sketch{Dim,Glyph}Layer.vue write transforms from a rAF loop outside Vue. Everything here
+ *  is markRaw: closures over SketchMode, THREE.Vector2 anchors a drag mutates in place, and Three.js objects. */
 export const useSketchAnnotationStore = defineStore("sketchAnnotations", () => {
-  // --- dimension labels ---------------------------------------------------
   const dimItems = shallowRef<readonly DimItem[]>([]);
   const dimPlane = shallowRef<SketchPlane | null>(null);
   const dimViewport = shallowRef<Viewport | null>(null);
@@ -62,7 +45,6 @@ export const useSketchAnnotationStore = defineStore("sketchAnnotations", () => {
     dimItems.value = [];
   }
 
-  // --- constraint glyphs --------------------------------------------------
   const glyphItems = shallowRef<readonly GlyphItem[]>([]);
   const glyphPlane = shallowRef<SketchPlane | null>(null);
   const glyphViewport = shallowRef<Viewport | null>(null);
@@ -81,7 +63,20 @@ export const useSketchAnnotationStore = defineStore("sketchAnnotations", () => {
   }
 
   return {
-    dimItems, dimPlane, dimViewport, dimHooks, dimsPassive, dimSelected, showDims, hideDims,
-    glyphItems, glyphPlane, glyphViewport, glyphHooks, glyphsPassive, showGlyphs, hideGlyphs,
+    dimItems,
+    dimPlane,
+    dimViewport,
+    dimHooks,
+    dimsPassive,
+    dimSelected,
+    showDims,
+    hideDims,
+    glyphItems,
+    glyphPlane,
+    glyphViewport,
+    glyphHooks,
+    glyphsPassive,
+    showGlyphs,
+    hideGlyphs,
   };
 });

@@ -1,14 +1,6 @@
 <script setup lang="ts">
-// Floating panel for the sketch Text tool. DimInput is numeric-only, so text
-// gets its own small panel: a multi-line string, a system-font picker (fonts
-// come from the engine's listFonts op), size, bold/italic, alignment and
-// rotation. On every edit it fires onChange for a live preview; Add/Enter
-// commits, Cancel/Esc cancels.
-//
-// Replaces the DOM half of sketch/textPanel.ts, which stays as the facade
-// SketchMode calls. The inline styles are carried over verbatim rather than
-// promoted to SCSS: this panel has never had a stylesheet entry, and inventing
-// one in the same commit as the port would make the port unreviewable.
+// DimInput is numeric only, so the sketch Text tool gets its own panel. Its inline styles came over verbatim from
+// sketch/textPanel.ts, it has no stylesheet entry.
 
 import { computed, onMounted, onUnmounted, reactive, useTemplateRef, type CSSProperties } from "vue";
 import Icon from "../shell/Icon.vue";
@@ -18,10 +10,7 @@ import { useToolPanelStore, type TextReq } from "../../stores/toolPanels";
 const props = defineProps<{ req: TextReq }>();
 const panels = useToolPanelStore();
 
-// Local form state. App.vue keys this component on req.id, so a second show()
-// remounts it and this is rebuilt from the new `initial`, there is no reset
-// path to get wrong, and no chance of a stale field surviving into a different
-// text object.
+// App.vue keys this on req.id, so a second show() remounts and rebuilds the form from the new `initial`.
 const form = reactive(initialTextForm(props.req.initial));
 const pos = textPanelPos(props.req.screen, window);
 
@@ -36,8 +25,7 @@ function commit() {
   panels.commitText(toTextValues(form));
 }
 
-// Capture phase, matching the class: Escape has to cancel the text tool before
-// it reaches SketchMode's own global handler and cancels something else.
+// Capture phase: Escape must cancel the text tool before SketchMode's global handler cancels something else.
 function onEsc(e: KeyboardEvent) {
   if (e.key !== "Escape") return;
   e.preventDefault();
@@ -51,19 +39,31 @@ onMounted(() => {
 });
 onUnmounted(() => document.removeEventListener("keydown", onEsc, true));
 
-// --- inline styles, carried over from the class verbatim ------------------
 const root: CSSProperties = {
-  position: "fixed", zIndex: "50", padding: "8px",
-  background: "#20242c", border: "1px solid #3a4150", borderRadius: "6px",
-  boxShadow: "0 6px 20px rgba(0,0,0,0.4)", font: "12px system-ui, sans-serif",
-  color: "#dce3ee", width: "300px", maxWidth: "calc(100vw, 24px)", boxSizing: "border-box",
+  position: "fixed",
+  zIndex: "50",
+  padding: "8px",
+  background: "#20242c",
+  border: "1px solid #3a4150",
+  borderRadius: "6px",
+  boxShadow: "0 6px 20px rgba(0,0,0,0.4)",
+  font: "12px system-ui, sans-serif",
+  color: "#dce3ee",
+  width: "300px",
+  maxWidth: "calc(100vw, 24px)",
+  boxSizing: "border-box",
   colorScheme: "dark", // native <select> dropdown + number spinners render dark
-  left: `${pos.left}px`, top: `${pos.top}px`,
+  left: `${pos.left}px`,
+  top: `${pos.top}px`,
 };
 const row: CSSProperties = { display: "flex", gap: "6px", alignItems: "center", marginBottom: "6px" };
 const field: CSSProperties = {
-  background: "#161a20", color: "#dce3ee", border: "1px solid #3a4150",
-  borderRadius: "3px", padding: "3px 5px", font: "inherit",
+  background: "#161a20",
+  color: "#dce3ee",
+  border: "1px solid #3a4150",
+  borderRadius: "3px",
+  padding: "3px 5px",
+  font: "inherit",
 };
 const lbl: CSSProperties = { whiteSpace: "nowrap", cursor: "pointer" };
 const textArea: CSSProperties = { ...field, width: "100%", resize: "vertical" };
@@ -73,7 +73,14 @@ const wide: CSSProperties = { ...field, flex: "1", minWidth: "0" };
 const bad: CSSProperties = { borderColor: "var(--error, #f0564a)" };
 const problem: CSSProperties = { color: "var(--error, #f0564a)", fontSize: "11px", marginBottom: "6px" };
 const btnRow: CSSProperties = { ...row, marginBottom: "0", justifyContent: "flex-end" };
-const btn: CSSProperties = { color: "#fff", border: "none", borderRadius: "4px", padding: "4px 10px", cursor: "pointer", font: "inherit" };
+const btn: CSSProperties = {
+  color: "#fff",
+  border: "none",
+  borderRadius: "4px",
+  padding: "4px 10px",
+  cursor: "pointer",
+  font: "inherit",
+};
 const okBtn: CSSProperties = { ...btn, background: "#2b6" };
 const noBtn: CSSProperties = { ...btn, background: "#555" };
 </script>
@@ -103,9 +110,25 @@ const noBtn: CSSProperties = { ...btn, background: "#555" };
 
       <div :style="row">
         <label :style="lbl">Size</label>
-        <input v-model="form.height" type="text" inputmode="decimal" :title="errors.height" :style="[num, errors.height ? bad : {}]" @input="emitChange" @change="emitChange" />
+        <input
+          v-model="form.height"
+          type="text"
+          inputmode="decimal"
+          :title="errors.height"
+          :style="[num, errors.height ? bad : {}]"
+          @input="emitChange"
+          @change="emitChange"
+        />
         <label :style="lbl">Angle°</label>
-        <input v-model="form.angle" type="text" inputmode="decimal" :title="errors.angle" :style="[num, errors.angle ? bad : {}]" @input="emitChange" @change="emitChange" />
+        <input
+          v-model="form.angle"
+          type="text"
+          inputmode="decimal"
+          :title="errors.angle"
+          :style="[num, errors.angle ? bad : {}]"
+          @input="emitChange"
+          @change="emitChange"
+        />
       </div>
 
       <div :style="row">
@@ -123,8 +146,14 @@ const noBtn: CSSProperties = { ...btn, background: "#555" };
       <div :style="row">
         <label :style="lbl">Box width (mm)</label>
         <input
-          v-model="form.boxWidth" type="text" inputmode="decimal" placeholder="0 = no box"
-          :title="errors.boxWidth" :style="[wide, errors.boxWidth ? bad : {}]" @input="emitChange" @change="emitChange"
+          v-model="form.boxWidth"
+          type="text"
+          inputmode="decimal"
+          placeholder="0 = no box"
+          :title="errors.boxWidth"
+          :style="[wide, errors.boxWidth ? bad : {}]"
+          @input="emitChange"
+          @change="emitChange"
         />
       </div>
 

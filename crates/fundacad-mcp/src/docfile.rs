@@ -1,16 +1,6 @@
-//! FundaCAD document files on disk, in either format. A port of
-//! the Python MCP server's `docfile.py`.
-//!
-//! `.funda` is pretty JSON, `.fundab` is the binary format 2
-//! (docs/FUNDA-FORMAT.md), and a reader decides by the first bytes, never the
-//! name. Imported geometry is not part of the document object: a JSON file
-//! carries it in a trailing `geometry` map, a binary file in sections, and both
-//! land in the blob store the engine builds from, each blob published only once
-//! its bytes prove its hash.
-//!
-//! Writing the binary format needs Reed-Solomon parity that only the app
-//! computes, so a `.fundab` save here is refused with the way round it rather
-//! than written without its error correction.
+//! `.funda` is pretty JSON, `.fundab` the binary format 2 (docs/FUNDA-FORMAT.md), told apart by the first bytes.
+//! Geometry rides beside the document object and reaches the engine's store only once its bytes prove its hash.
+//! A `.fundab` save is refused, since only the app computes its Reed-Solomon parity.
 
 use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
@@ -25,6 +15,8 @@ const MAGIC: &[u8; 8] = b"FUNDACAD";
 const TAIL_MAGIC: &[u8; 8] = b"FNDATAIL";
 const KIND_DOCUMENT: u8 = 1;
 const KIND_GEOMETRY: u8 = 2;
+/// The last kind this build knows, the app carries every section above it.
+const KIND_SEGMENTS: u8 = 4;
 const MAX_TOTAL: u64 = 8 << 30;
 
 #[derive(Debug, Clone)]
@@ -46,15 +38,11 @@ fn fail<T>(message: impl Into<String>) -> Result<T, DocumentFileError> {
 pub fn blob_dir() -> PathBuf {
     crate::link::appenv("BLOB_DIR")
         .filter(|v| !v.is_empty())
-        .map_or_else(
-            || crate::app_session::app_data_dir().join("blobs"),
-            PathBuf::from,
-        )
+        .map_or_else(|| crate::app_session::app_data_dir().join("blobs"), PathBuf::from)
 }
 
 pub fn is_binary_path(path: &Path) -> bool {
-    path.extension()
-        .is_some_and(|e| e.to_string_lossy().to_ascii_lowercase() == BINARY_EXT)
+    path.extension().is_some_and(|e| e.to_string_lossy().to_ascii_lowercase() == BINARY_EXT)
 }
 
 pub fn hash(data: &[u8]) -> String {
@@ -71,9 +59,7 @@ fn is_hash(s: &str) -> bool {
 
 fn publish(root: &Path, digest: &str, data: &[u8]) -> Result<(), DocumentFileError> {
     if hash(data) != digest {
-        return fail(
-            "this document's geometry does not match its hash, the file is damaged or was modified",
-        );
+        return fail("this document's geometry does not match its hash, the file is damaged or was modified");
     }
     if std::fs::create_dir_all(root).is_err() {
         return fail(format!("cannot write the blob store at {}", root.display()));
@@ -100,38 +86,38 @@ pub fn read(path: &Path, root: Option<&Path>) -> Result<(Map<String, Value>, usi
     Ok((doc, blobs.len()))
 }
 
-/// The document object and its embedded geometry, each blob checked against
-/// its hash, and nothing written anywhere.
+/// Each blob checked against its hash, and nothing written anywhere.
 pub fn read_document(path: &Path) -> Result<(Map<String, Value>, Vec<(String, Vec<u8>)>), DocumentFileError> {
+    read_document_full(path).map(|(doc, blobs, _)| (doc, blobs))
+}
+
+/// Also names the `.fundab` sections this build cannot read, which a JSON file has no place for.
+pub fn read_document_full(
+    path: &Path,
+) -> Result<(Map<String, Value>, Vec<(String, Vec<u8>)>, Vec<String>), DocumentFileError> {
     let Ok(raw) = std::fs::read(path) else {
         return fail(format!("No such file: {}", path.display()));
     };
     let tail_is_magic = raw.len() >= 64 && &raw[raw.len() - 64..raw.len() - 56] == TAIL_MAGIC;
-    let (doc, blobs) = if raw.starts_with(MAGIC) || tail_is_magic {
+    let (doc, blobs, unread) = if raw.starts_with(MAGIC) || tail_is_magic {
         read_fnda(&raw)?
     } else if raw.starts_with(b"PK") {
-        read_zip(path)?
+        let (doc, blobs) = read_zip(path)?;
+        (doc, blobs, Vec::new())
     } else {
-        read_json(path, &raw)?
+        let (doc, blobs) = read_json(path, &raw)?;
+        (doc, blobs, Vec::new())
     };
     let Value::Object(doc) = doc else {
-        return fail(format!(
-            "{} is not a FundaCAD document (no `features`).",
-            path.display()
-        ));
+        return fail(format!("{} is not a FundaCAD document (no `features`).", path.display()));
     };
     if !doc.contains_key("features") {
-        return fail(format!(
-            "{} is not a FundaCAD document (no `features`).",
-            path.display()
-        ));
+        return fail(format!("{} is not a FundaCAD document (no `features`).", path.display()));
     }
     if blobs.iter().any(|(digest, data)| hash(data) != *digest) {
-        return fail(
-            "this document's geometry does not match its hash, the file is damaged or was modified",
-        );
+        return fail("this document's geometry does not match its hash, the file is damaged or was modified");
     }
-    Ok((doc, blobs))
+    Ok((doc, blobs, unread))
 }
 
 /// Best effort: a store this process cannot write is no reason to refuse a
@@ -142,36 +128,20 @@ pub fn publish_all(root: &Path, blobs: &[(String, Vec<u8>)]) -> bool {
 
 /// A blob from the local store, only when its bytes still hash to its name.
 pub fn local_blob(root: &Path, digest: &str) -> Option<Vec<u8>> {
-    std::fs::read(root.join(format!("{digest}.bbrep")))
-        .ok()
-        .filter(|data| hash(data) == digest)
+    std::fs::read(root.join(format!("{digest}.bbrep"))).ok().filter(|data| hash(data) == digest)
 }
 
 fn read_json(path: &Path, raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFileError> {
     let text = match std::str::from_utf8(raw) {
         Ok(t) => t,
-        Err(e) => {
-            return fail(format!(
-                "{} is not a FundaCAD document: {e}",
-                path.display()
-            ))
-        }
+        Err(e) => return fail(format!("{} is not a FundaCAD document: {e}", path.display())),
     };
     let mut doc: Value = match serde_json::from_str(text) {
         Ok(v) => v,
-        Err(e) => {
-            return fail(format!(
-                "{} is not a FundaCAD document: {e}",
-                path.display()
-            ))
-        }
+        Err(e) => return fail(format!("{} is not a FundaCAD document: {e}", path.display())),
     };
     let mut blobs = Vec::new();
-    if let Some(geometry) = doc
-        .as_object_mut()
-        .and_then(|o| o.remove(GEOMETRY_KEY))
-        .filter(Value::is_object)
-    {
+    if let Some(geometry) = doc.as_object_mut().and_then(|o| o.remove(GEOMETRY_KEY)).filter(Value::is_object) {
         let mut total: u64 = 0;
         for (digest, b64) in geometry.as_object().expect("checked") {
             let Some(b64) = b64.as_str().filter(|_| is_hash(digest)) else {
@@ -192,11 +162,7 @@ fn read_json(path: &Path, raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>),
 
 pub fn referenced_geometry(doc: &Map<String, Value>) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
-    for f in doc
-        .get("features")
-        .and_then(Value::as_array)
-        .map_or(&[][..], Vec::as_slice)
-    {
+    for f in doc.get("features").and_then(Value::as_array).map_or(&[][..], Vec::as_slice) {
         if f.get("type").and_then(Value::as_str) != Some("import") {
             continue;
         }
@@ -210,9 +176,8 @@ pub fn referenced_geometry(doc: &Map<String, Value>) -> Vec<String> {
     out
 }
 
-/// Every other hash shaped string anywhere in `doc`. A feature of a type this
-/// version does not know may name a blob in any field, so such geometry is
-/// embedded when the store has it and skipped when it does not.
+/// Every other hash shaped string in `doc`: an unknown feature type may name a blob in any field,
+/// so such geometry is embedded when the store has it and skipped when it does not.
 pub fn optional_geometry(doc: &Map<String, Value>) -> Vec<String> {
     fn walk(v: &Value, out: &mut Vec<String>) {
         match v {
@@ -238,11 +203,7 @@ fn importing_features(doc: &Map<String, Value>, digests: &[String]) -> String {
         .and_then(Value::as_array)
         .map_or(&[][..], Vec::as_slice)
         .iter()
-        .filter(|f| {
-            f.get("geom")
-                .and_then(Value::as_str)
-                .is_some_and(|g| digests.iter().any(|d| d == g))
-        })
+        .filter(|f| f.get("geom").and_then(Value::as_str).is_some_and(|g| digests.iter().any(|d| d == g)))
         .map(|f| {
             let id = f.get("id").and_then(Value::as_str).unwrap_or("?");
             match f.get("name").and_then(Value::as_str) {
@@ -254,18 +215,12 @@ fn importing_features(doc: &Map<String, Value>, digests: &[String]) -> String {
         .join(", ")
 }
 
-/// Write `doc` as JSON with its referenced geometry embedded. Returns the
-/// number of blobs embedded.
-pub fn write(
-    path: &Path,
-    doc: &Map<String, Value>,
-    root: Option<&Path>,
-) -> Result<usize, DocumentFileError> {
+/// Returns the number of geometry blobs embedded.
+pub fn write(path: &Path, doc: &Map<String, Value>, root: Option<&Path>) -> Result<usize, DocumentFileError> {
     write_with(path, doc, root, &std::collections::HashMap::new())
 }
 
-/// `write`, with `fetched` holding geometry that came from somewhere other than
-/// the local store, the engine's socket as a rule.
+/// `fetched` holds geometry from somewhere other than the local store, the engine's socket as a rule.
 pub fn write_with(
     path: &Path,
     doc: &Map<String, Value>,
@@ -279,21 +234,15 @@ pub fn write_with(
         );
     }
     let root = root.map_or_else(blob_dir, Path::to_path_buf);
-    let mut body: Map<String, Value> = doc
-        .iter()
-        .filter(|(k, _)| k.as_str() != GEOMETRY_KEY)
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .collect();
+    let mut body: Map<String, Value> =
+        doc.iter().filter(|(k, _)| k.as_str() != GEOMETRY_KEY).map(|(k, v)| (k.clone(), v.clone())).collect();
     let mut geometry = Map::new();
     let mut missing = Vec::new();
     for digest in referenced_geometry(&body) {
         let data = fetched.get(&digest).cloned().or_else(|| local_blob(&root, &digest));
         match data {
             Some(data) => {
-                geometry.insert(
-                    digest,
-                    Value::String(base64::engine::general_purpose::STANDARD.encode(data)),
-                );
+                geometry.insert(digest, Value::String(base64::engine::general_purpose::STANDARD.encode(data)));
             }
             None => missing.push(digest),
         }
@@ -326,9 +275,7 @@ pub fn write_with(
     text.push('\n');
     let tmp = path.with_extension(format!(
         "{}.tmp-{}",
-        path.extension().map_or(String::new(), |e| e
-            .to_string_lossy()
-            .into_owned()),
+        path.extension().map_or(String::new(), |e| e.to_string_lossy().into_owned()),
         std::process::id()
     ));
     if std::fs::write(&tmp, text.as_bytes()).is_err() {
@@ -341,10 +288,8 @@ pub fn write_with(
     Ok(embedded)
 }
 
-// --- format 2, read without repair -------------------------------------------
-// The data shards are the stored bytes, so concatenating them and checking each
-// section's hash is a complete reader for an undamaged file (FUNDA-FORMAT.md,
-// "Reading", last paragraph). A damaged one is reported, and the app repairs it.
+// Format 2, read without repair: the data shards are the stored bytes, so joining them and checking
+// each section's hash reads an undamaged file (FUNDA-FORMAT.md, "Reading"). The app repairs a damaged one.
 
 fn u16_at(b: &[u8], at: usize) -> u16 {
     u16::from_le_bytes([b[at], b[at + 1]])
@@ -365,11 +310,7 @@ fn crc32(data: &[u8]) -> u32 {
     for byte in data {
         crc ^= u32::from(*byte);
         for _ in 0..8 {
-            crc = if crc & 1 != 0 {
-                (crc >> 1) ^ 0xEDB8_8320
-            } else {
-                crc >> 1
-            };
+            crc = if crc & 1 != 0 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
         }
     }
     !crc
@@ -379,7 +320,7 @@ fn damaged<T>() -> Result<T, DocumentFileError> {
     fail("this .fundab file is damaged, open it in FundaCAD to repair it")
 }
 
-fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFileError> {
+fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>), DocumentFileError> {
     let mut table: Option<&[u8]> = None;
     let heads = [0usize, raw.len().saturating_sub(64)];
     for at in heads {
@@ -396,11 +337,7 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFile
         if u16_at(head, 8) > 2 {
             return fail("this document was written by a newer FundaCAD");
         }
-        let (ta, tb, tl) = (
-            u64_at(head, 16) as usize,
-            u64_at(head, 24) as usize,
-            u64_at(head, 32) as usize,
-        );
+        let (ta, tb, tl) = (u64_at(head, 16) as usize, u64_at(head, 24) as usize, u64_at(head, 32) as usize);
         let crc = u32_at(head, 40);
         for off in [ta, tb] {
             if off + tl > raw.len() {
@@ -422,6 +359,7 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFile
 
     let mut doc: Option<Value> = None;
     let mut blobs = Vec::new();
+    let mut unread = Vec::new();
     let count = u32_at(table, 4) as usize;
     let mut p = 8usize;
     for _ in 0..count {
@@ -447,6 +385,9 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFile
         let k = u16_at(table, p + 4) as usize;
         let m = u16_at(table, p + 6) as usize;
         p += 8;
+        if kind > KIND_SEGMENTS {
+            unread.push(if name.is_empty() { format!("kind {kind}") } else { name.clone() });
+        }
         if kind != KIND_DOCUMENT && kind != KIND_GEOMETRY {
             continue;
         }
@@ -467,11 +408,7 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFile
             q += (k + m) * shard;
         }
         data.truncate(stored);
-        let body = if codec == 1 {
-            inflate_raw(&data).unwrap_or_default()
-        } else {
-            data
-        };
+        let body = if codec == 1 { inflate_raw(&data).unwrap_or_default() } else { data };
         if body.len() != rawlen || hash(&body) != digest {
             return damaged();
         }
@@ -482,16 +419,14 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFile
         }
     }
     match doc {
-        Some(doc) => Ok((doc, blobs)),
+        Some(doc) => Ok((doc, blobs, unread)),
         None => fail("this .fundab file has no document in it"),
     }
 }
 
 fn inflate_raw(data: &[u8]) -> Option<Vec<u8>> {
     let mut out = Vec::new();
-    flate2::read::DeflateDecoder::new(data)
-        .read_to_end(&mut out)
-        .ok()?;
+    flate2::read::DeflateDecoder::new(data).read_to_end(&mut out).ok()?;
     Some(out)
 }
 
@@ -502,32 +437,20 @@ fn read_zip(path: &Path) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFile
     let Ok(mut z) = zip::ZipArchive::new(file) else {
         return fail(format!("{} is not a FundaCAD document.", path.display()));
     };
-    let total: u64 = (0..z.len())
-        .filter_map(|i| z.by_index_raw(i).ok().map(|e| e.size()))
-        .sum();
+    let total: u64 = (0..z.len()).filter_map(|i| z.by_index_raw(i).ok().map(|e| e.size())).sum();
     if total > MAX_TOTAL {
         return fail("this document expands to more than 8 GiB and was refused");
     }
-    let manifest: Value = read_entry(&mut z, "manifest.json")
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(Value::Null);
-    let Some(doc) = read_entry(&mut z, "document.json").and_then(|b| serde_json::from_slice(&b).ok())
-    else {
-        return fail(format!(
-            "{} is not a FundaCAD document (no `features`).",
-            path.display()
-        ));
+    let manifest: Value =
+        read_entry(&mut z, "manifest.json").and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+    let Some(doc) = read_entry(&mut z, "document.json").and_then(|b| serde_json::from_slice(&b).ok()) else {
+        return fail(format!("{} is not a FundaCAD document (no `features`).", path.display()));
     };
     let mut blobs = Vec::new();
-    for row in manifest
-        .get("blobs")
-        .and_then(Value::as_array)
-        .map_or(&[][..], Vec::as_slice)
-    {
-        let (Some(h), Some(entry)) = (
-            row.get("hash").and_then(Value::as_str),
-            row.get("entry").and_then(Value::as_str),
-        ) else {
+    for row in manifest.get("blobs").and_then(Value::as_array).map_or(&[][..], Vec::as_slice) {
+        let (Some(h), Some(entry)) =
+            (row.get("hash").and_then(Value::as_str), row.get("entry").and_then(Value::as_str))
+        else {
             continue;
         };
         if !is_hash(h) {
@@ -547,7 +470,7 @@ fn read_entry<R: Read + Seek>(z: &mut zip::ZipArchive<R>, name: &str) -> Option<
     Some(out)
 }
 
-// --- CBOR, enough of it to read a document -----------------------------------
+// Just enough CBOR to read a document.
 
 fn cbor(b: &[u8]) -> Result<Value, DocumentFileError> {
     let (value, _) = cbor_item(b, 0)?;
@@ -563,15 +486,7 @@ fn cbor_len(b: &[u8], p: usize, ai: u8) -> Result<(Option<u64>, usize), Document
         0..=23 => (Some(u64::from(ai)), p),
         24 if p < b.len() => (Some(u64::from(b[p])), p + 1),
         25 if p + 2 <= b.len() => (Some(u64::from(u16::from_be_bytes([b[p], b[p + 1]]))), p + 2),
-        26 if p + 4 <= b.len() => (
-            Some(u64::from(u32::from_be_bytes([
-                b[p],
-                b[p + 1],
-                b[p + 2],
-                b[p + 3],
-            ]))),
-            p + 4,
-        ),
+        26 if p + 4 <= b.len() => (Some(u64::from(u32::from_be_bytes([b[p], b[p + 1], b[p + 2], b[p + 3]]))), p + 4),
         27 if p + 8 <= b.len() => {
             let mut n = [0u8; 8];
             n.copy_from_slice(&b[p..p + 8]);
@@ -595,15 +510,9 @@ fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError
             21 => (Value::Bool(true), p),
             22 | 23 => (Value::Null, p),
             25 if p + 2 <= b.len() => (number(f16(u16::from_be_bytes([b[p], b[p + 1]]))), p + 2),
-            26 if p + 4 <= b.len() => (
-                number(f64::from(f32::from_be_bytes([
-                    b[p],
-                    b[p + 1],
-                    b[p + 2],
-                    b[p + 3],
-                ]))),
-                p + 4,
-            ),
+            26 if p + 4 <= b.len() => {
+                (number(f64::from(f32::from_be_bytes([b[p], b[p + 1], b[p + 2], b[p + 3]]))), p + 4)
+            }
             27 if p + 8 <= b.len() => {
                 let mut n = [0u8; 8];
                 n.copy_from_slice(&b[p..p + 8]);
@@ -639,10 +548,7 @@ fn cbor_item(b: &[u8], mut p: usize) -> Result<(Value, usize), DocumentFileError
                     p = end;
                 }
             }
-            Ok((
-                Value::String(String::from_utf8_lossy(&parts).into_owned()),
-                p,
-            ))
+            Ok((Value::String(String::from_utf8_lossy(&parts).into_owned()), p))
         }
         4 => {
             let mut out = Vec::new();

@@ -106,7 +106,8 @@ describe("SketchDimLayer", () => {
 
   // PH-3: a label projected at the window's edge sat under the Items card.
   it("draws a label clear of a left card it would sit under", async () => {
-    document.body.innerHTML = '<div id="float-layer"><div class="float-left-stack"><div class="card"></div></div></div>';
+    document.body.innerHTML =
+      '<div id="float-layer"><div class="float-left-stack"><div class="card"></div></div></div>';
     const card = document.querySelector<HTMLElement>(".card")!;
     card.getBoundingClientRect = () => ({ left: 0, top: 0, right: 300, bottom: 600 }) as DOMRect;
     mount(SketchDimLayer, { attachTo: document.body });
@@ -168,7 +169,10 @@ describe("SketchDimLayer", () => {
     await nextTick();
     const store = useSketchAnnotationStore();
     store.dimHooks = {
-      overlapPick: () => { d.show([], plane, [extra()]); return true; },
+      overlapPick: () => {
+        d.show([], plane, [extra()]);
+        return true;
+      },
       planePoint: () => null,
       labelMenu: () => {},
     };

@@ -1,12 +1,6 @@
 <script setup lang="ts">
-// A text input that commits on `change` (Enter / blur): `commit` returns an
-// error message to show, the input turns red and KEEPS the rejected text so
-// the user can fix it, or null on success. Typing clears the error.
-//
-// Replaces liveInputs.ts's validatedInput. Bare on purpose: ValidatedRow wraps
-// it in a labelled row (ValidatedRow), while the Parameters dialog drops it
-// straight into a grid cell, and those two layouts have nothing in common
-// beyond this behaviour.
+// Commits on change (Enter, blur): `commit` returns an error, and the input turns red and keeps the rejected text.
+// Bare on purpose, ValidatedRow and the Parameters grid wrap it in layouts with nothing else in common.
 
 import { nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from "vue";
 import { useDraft } from "../../composables/useDraft";
@@ -17,57 +11,32 @@ const props = defineProps<{
   commit: (raw: string) => string | null;
   /** Tooltip while there is no error; the error replaces it when there is one. */
   hint?: string | undefined;
-  /** A refusal from OUTSIDE the box: the kernel could not build what the value
-   *  currently says. Kept apart from the local `error`, which is a parse failure
-   *  the user caused by pressing Enter, because this one arrives unasked while
-   *  they are still typing and must not be cleared by the next keystroke, the
-   *  keystroke schedules another preview, and that build is what withdraws it. */
+  /** A refusal from outside: the kernel could not build what the value says. Kept apart from the local parse `error`
+   *  because it arrives while typing, and only the next preview's build withdraws it, not a keystroke. */
   problem?: string | null | undefined;
   placeholder?: string | undefined;
-  /** Show what the typed text WOULD do, without committing it.
-   *
-   *  A field that only answers on Enter is a field you have to guess at: you
-   *  type 1600 into a revolve's angle, nothing on screen moves, and the only way
-   *  to find out whether that was the number you meant is to commit it, look,
-   *  undo and try again. Called on a debounce while typing; the panel decides
-   *  what a preview is and how to withdraw it.
-   *
-   *  Free text, so it will often be nonsense mid-word ("1", "16", "16m"). The
-   *  panel is expected to ignore what it cannot parse rather than to flash an
-   *  error at every keystroke, the ERROR path is still `commit`, which is what
-   *  the user asked for by pressing Enter. */
+  /** Shows what the typed text would do without committing, on a debounce while typing. Mid-word text is often
+   *  nonsense, so the panel ignores what it cannot parse, errors come from `commit`. */
   preview?: ((raw: string) => void) | undefined;
-  /** Take the preview back down. `committing` is true when a commit is about to
-   *  land, which is the panel's cue not to pay for a rebuild it is about to pay
-   *  for again a line later. */
+  /** Takes the preview down. `committing` means a commit is about to land, so the panel can skip a redundant rebuild. */
   previewEnd?: ((committing: boolean) => void) | undefined;
 }>();
 
-/** How long the typing has to stop before the preview is worth building.
- *
- *  A preview is a real rebuild through the kernel, so this is not a repaint
- *  throttle: at one per keystroke a four-digit angle would queue four sweeps,
- *  three of them for numbers the user was only passing through on the way to
- *  the fourth. Long enough to sit out a digit, short enough that a pause reads
- *  as an answer rather than as a delay. */
+/** A preview is a real kernel rebuild, not a repaint: long enough to sit out a digit, short enough that a pause reads
+ *  as an answer. */
 const PREVIEW_MS = 200;
 
-// The keystrokeGuard replacement: a background doc change re-runs `value`, but
-// the draft ignores it while this input has focus, so uncommitted keystrokes
-// survive an async param commit landing from elsewhere.
+// The draft ignores a background doc change while focused, so uncommitted keystrokes survive an async param commit.
 const el = useTemplateRef<HTMLInputElement>("el");
 const { draft, resync } = useDraft(() => props.value, el);
 const error = ref<string | null>(null);
 
-/** A commit succeeded and the field is waiting to be told how the panel spells
- *  the result. Cleared by the next keystroke, which means the user has moved on
- *  and their text is preferred over the answer to the previous edit. */
+/** A commit succeeded and the field waits for the panel's spelling of the result. The next keystroke clears it, the
+ *  user's text wins over the answer to the previous edit. */
 let settling = false;
 
 let previewTimer = 0;
-/** A preview has been asked for and not yet withdrawn. Tracked rather than
- *  withdrawing unconditionally, so a field nobody previewed never schedules a
- *  rebuild by being blurred. */
+/** Tracked, so a field nobody previewed never schedules a rebuild by being blurred. */
 let previewing = false;
 
 function schedulePreview() {
@@ -81,16 +50,17 @@ function schedulePreview() {
 }
 
 function endPreview(committing: boolean) {
-  if (previewTimer) { clearTimeout(previewTimer); previewTimer = 0; }
+  if (previewTimer) {
+    clearTimeout(previewTimer);
+    previewTimer = 0;
+  }
   if (!previewing) return;
   previewing = false;
   props.previewEnd?.(committing);
 }
 
-// Leaving the field without committing, Escape, a click elsewhere, the panel
-// closing under a selection change, has to take the preview down too, or the
-// model is left showing a number the document does not hold and nothing on
-// screen says so.
+// Leaving without committing (Escape, a click elsewhere, the panel closing) takes the preview down too, or the model
+// shows a number the document does not hold.
 onBeforeUnmount(() => endPreview(false));
 
 async function onChange() {
@@ -100,20 +70,14 @@ async function onChange() {
   // On failure keep the rejected text so it can be fixed rather than retyped.
   if (err) return;
   settling = true;
-  // On success, re-read: the panel may re-spell what we sent (fx badge,
-  // canonical rounding, a unit the row adopted). AFTER a tick, because `value`
-  // is a prop and props do not update until the re-render, so reading it here
-  // resyncs the field to the value that was just replaced.
+  // On success re-read after a tick, since `value` is a prop that updates only on re-render: the panel may re-spell
+  // what was sent (fx badge, canonical rounding, an adopted unit).
   await nextTick();
   resync();
 }
 
-// The draft ignores the source while this input has focus, which is right for an
-// edit landing from somewhere else and wrong for the answer to the edit made
-// here: a parameter expression commits on a promise chain and arrives several
-// frames after the change event, long past the tick above. Skipped rather than
-// deferred, the field sat on its pre-edit number for as long as it kept focus,
-// so typing "20+5" and pressing Enter looked like it had done nothing.
+// The draft ignores the source while focused, which is wrong for the answer to this edit: a parameter expression
+// commits on a promise chain frames later, so without this, "20+5" then Enter looked like it did nothing.
 watch(
   () => props.value,
   () => {
@@ -132,7 +96,11 @@ watch(
     :class="{ 'input-error': !!error || !!problem, 'input-problem': !!problem }"
     :title="error ?? problem ?? hint"
     :placeholder="placeholder"
-    @input="error = null; settling = false; schedulePreview()"
+    @input="
+      error = null;
+      settling = false;
+      schedulePreview();
+    "
     @change="onChange"
     @blur="endPreview(false)"
     @keydown.esc="endPreview(false)"

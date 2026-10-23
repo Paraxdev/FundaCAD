@@ -250,10 +250,9 @@ impl SketchEntity {
             SketchEntity::Slot(e) => e.id.as_deref(),
             SketchEntity::Text(e) => e.id.as_deref(),
             SketchEntity::Projected(e) => e.id.as_deref(),
-            SketchEntity::Unknown(_) | SketchEntity::Invalid(_) => self
-                .raw()
-                .and_then(|v| v.get("id"))
-                .and_then(serde_json::Value::as_str),
+            SketchEntity::Unknown(_) | SketchEntity::Invalid(_) => {
+                self.raw().and_then(|v| v.get("id")).and_then(serde_json::Value::as_str)
+            }
         }
     }
 
@@ -292,10 +291,7 @@ macro_rules! plain_struct {
 pub(crate) use plain_struct;
 
 plain_struct!(OneLine { line: String });
-plain_struct!(TwoLines {
-    l1: String,
-    l2: String
-});
+plain_struct!(TwoLines { l1: String, l2: String });
 plain_struct!(Distance {
     #[serde(default, skip_serializing_if = "Option::is_none")] id: Option<String>,
     line: String,
@@ -324,32 +320,12 @@ dim_struct!(
     /// `p*`: 0/1 start/end, 0..3 rectangle corner, 2 arc centre.
     P2pDistance { e1: String, p1: Real, e2: String, p2: Real }
 );
-dim_struct!(P2lDistance {
-    e: String,
-    p: Real,
-    line: String
-});
-dim_struct!(RadialGap {
-    inner: String,
-    outer: String
-});
-dim_struct!(C2cDistance {
-    c1: String,
-    c2: String
-});
-dim_struct!(C2lDistance {
-    circle: String,
-    line: String
-});
-dim_struct!(P2cDistance {
-    e: String,
-    p: Real,
-    circle: String
-});
-dim_struct!(AngleDim {
-    l1: String,
-    l2: String
-});
+dim_struct!(P2lDistance { e: String, p: Real, line: String });
+dim_struct!(RadialGap { inner: String, outer: String });
+dim_struct!(C2cDistance { c1: String, c2: String });
+dim_struct!(C2lDistance { circle: String, line: String });
+dim_struct!(P2cDistance { e: String, p: Real, circle: String });
+dim_struct!(AngleDim { l1: String, l2: String });
 dim_struct!(RadiusDim { e: String });
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -361,37 +337,13 @@ pub struct OffsetPair {
 }
 dim_struct!(Offset { pairs: Vec<OffsetPair> });
 
-plain_struct!(Tangent {
-    line: String,
-    circle: String
-});
-plain_struct!(Coincident {
-    e1: String,
-    p1: Real,
-    e2: String,
-    p2: Real
-});
-plain_struct!(TwoRounds {
-    c1: String,
-    c2: String
-});
-plain_struct!(Midpoint {
-    e: String,
-    p: Real,
-    line: String
-});
-plain_struct!(Symmetric {
-    e1: String,
-    p1: Real,
-    e2: String,
-    p2: Real,
-    line: String
-});
+plain_struct!(Tangent { line: String, circle: String });
+plain_struct!(Coincident { e1: String, p1: Real, e2: String, p2: Real });
+plain_struct!(TwoRounds { c1: String, c2: String });
+plain_struct!(Midpoint { e: String, p: Real, line: String });
+plain_struct!(Symmetric { e1: String, p1: Real, e2: String, p2: Real, line: String });
 plain_struct!(Fix { e: String, p: Real });
-plain_struct!(Pair {
-    a: String,
-    b: String
-});
+plain_struct!(Pair { a: String, b: String });
 
 tagged_enum! {
     /// Solved by planegcs in the app; the engine only reads the entities.
@@ -431,22 +383,8 @@ plain_struct!(PatternRect {
     #[serde(default, skip_serializing_if = "Option::is_none")] angle: Option<Num>,
 });
 plain_struct!(PatternCircular { id: String, sources: Vec<String>, cx: Num, cy: Num, count: Num, angle: Num });
-plain_struct!(HexHoles {
-    id: String,
-    cx: Num,
-    cy: Num,
-    diameter: Num,
-    spacing: Num,
-    rings: Num
-});
-plain_struct!(BoltCircle {
-    id: String,
-    cx: Num,
-    cy: Num,
-    bcd: Num,
-    count: Num,
-    diameter: Num
-});
+plain_struct!(HexHoles { id: String, cx: Num, cy: Num, diameter: Num, spacing: Num, rings: Num });
+plain_struct!(BoltCircle { id: String, cx: Num, cy: Num, bcd: Num, count: Num, diameter: Num });
 plain_struct!(GridHoles {
     id: String,
     cx: Num,

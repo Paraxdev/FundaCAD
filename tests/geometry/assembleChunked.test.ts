@@ -22,12 +22,19 @@ function wireBody(id: string, faceIds: number[], edges = 1): WireBodyFull {
   const indices: number[] = [];
   for (let t = 0; t < tris; t++) indices.push(0, t + 1, t + 2);
   return {
-    id, name: id, etag: `etag-${id}`,
-    positions, indices, faceIds,
+    id,
+    name: id,
+    etag: `etag-${id}`,
+    positions,
+    indices,
+    faceIds,
     faceCount: Math.max(...faceIds) + 1,
     faceOwners: faceIds.map((f) => `feat-${id}-${f}`),
     edges: Array.from({ length: edges }, (_, k) => ({
-      points: [[k, k, k], [k + 1, k + 1, k + 1]] as [number, number, number][],
+      points: [
+        [k, k, k],
+        [k + 1, k + 1, k + 1],
+      ] as [number, number, number][],
       body: id,
     })),
   };
@@ -79,7 +86,11 @@ describe("RebuildAssembly, incremental", () => {
     // The whole point of planning offsets from the manifest. Chunks arrive in
     // order today, but nothing downstream should depend on that.
     const one = singleShot([A, B, C]).complete()!;
-    for (const order of [[2, 1, 0], [1, 0, 2], [1, 2, 0]]) {
+    for (const order of [
+      [2, 1, 0],
+      [1, 0, 2],
+      [1, 2, 0],
+    ]) {
       expect(snapshot(chunked([A, B, C], order).complete()!)).toEqual(snapshot(one));
     }
   });
@@ -88,8 +99,11 @@ describe("RebuildAssembly, incremental", () => {
     const r = chunked([A, B, C], [2, 0, 1]).complete()!;
     // A: faces 0,0,1 -> 0,0,1 | B: 0,1,1,2 -> +2 | C: 0,1 -> +5
     expect(Array.from(r.mesh.faceIds as Uint32Array)).toEqual([0, 0, 1, 2, 3, 3, 4, 5, 6]);
-    expect(r.bodies!.map((b) => [b.id, b.faceStart, b.faceCount]))
-      .toEqual([["bodyA", 0, 2], ["bodyB", 2, 3], ["bodyC", 5, 2]]);
+    expect(r.bodies!.map((b) => [b.id, b.faceStart, b.faceCount])).toEqual([
+      ["bodyA", 0, 2],
+      ["bodyB", 2, 3],
+      ["bodyC", 5, 2],
+    ]);
   });
 
   it("numbers edges by manifest position, not arrival", () => {
@@ -101,8 +115,7 @@ describe("RebuildAssembly, incremental", () => {
   it("rebases indices per body regardless of arrival order", () => {
     const one = singleShot([A, B, C]).complete()!;
     const many = chunked([A, B, C], [2, 1, 0]).complete()!;
-    expect(Array.from(many.mesh.indices as Uint32Array))
-      .toEqual(Array.from(one.mesh.indices as Uint32Array));
+    expect(Array.from(many.mesh.indices as Uint32Array)).toEqual(Array.from(one.mesh.indices as Uint32Array));
   });
 
   it("refuses to complete while a body is missing", () => {
@@ -129,7 +142,7 @@ describe("RebuildAssembly, incremental", () => {
     // Without this the extra elements run past the slice and silently overwrite
     // the NEXT body's triangles.
     const asm = chunked([A, B, C], [0]);
-    const fat = { ...B, faceIds: [...B.faceIds as number[], 9] };
+    const fat = { ...B, faceIds: [...(B.faceIds as number[]), 9] };
     expect(asm.writeBody(fat as WireBodyFull)).toBe(false);
     expect(asm.has("bodyB")).toBe(false);
     // and the neighbouring body is untouched
@@ -146,7 +159,7 @@ describe("RebuildAssembly, incremental", () => {
     const stub: WireBody = { id: "bodyB", name: "bodyB", etag: "etag-bodyB", unchanged: true };
     const b = RebuildAssembly.begin(HEAD, manifestFromBodies([A, stub, C]), cache, null, null);
     if (b.kind !== "stream") throw new Error("expected stream");
-    expect(b.assembly.has("bodyB")).toBe(true);   // no chunk needed for it
+    expect(b.assembly.has("bodyB")).toBe(true); // no chunk needed for it
     expect(b.assembly.remaining).toBe(2);
     b.assembly.writeBody(A);
     b.assembly.writeBody(C);
@@ -156,21 +169,27 @@ describe("RebuildAssembly, incremental", () => {
 
   it("asks for a resync on an unbacked stub, before allocating anything", () => {
     const stub: WireBody = { id: "bodyB", name: "bodyB", etag: "etag-bodyB", unchanged: true };
-    expect(RebuildAssembly.begin(HEAD, manifestFromBodies([A, stub]), new Map(), null, null))
-      .toEqual({ kind: "resync" });
+    expect(RebuildAssembly.begin(HEAD, manifestFromBodies([A, stub]), new Map(), null, null)).toEqual({
+      kind: "resync",
+    });
     // a STALE etag is just as unbacked as a missing one
     const stale = new Map<string, WireBodyFull>([["bodyB", { ...B, etag: "old" }]]);
-    expect(RebuildAssembly.begin(HEAD, manifestFromBodies([A, stub]), stale, null, null))
-      .toEqual({ kind: "resync" });
+    expect(RebuildAssembly.begin(HEAD, manifestFromBodies([A, stub]), stale, null, null)).toEqual({ kind: "resync" });
   });
 
   it("takes the no-op fast path from the manifest alone, by reference", () => {
     // This identity is what lets viewport.setModel skip a full scene rebuild on
     // an eye toggle, 0.63 s per toggle at 3,071 bodies.
     const stubs: WireBody[] = [A, B].map((b) => ({
-      id: b.id, name: b.name, etag: b.etag, unchanged: true as const,
+      id: b.id,
+      name: b.name,
+      etag: b.etag,
+      unchanged: true as const,
     }));
-    const cache = new Map<string, WireBodyFull>([["bodyA", A], ["bodyB", B]]);
+    const cache = new Map<string, WireBodyFull>([
+      ["bodyA", A],
+      ["bodyB", B],
+    ]);
     const first = RebuildAssembly.begin(HEAD, manifestFromBodies(stubs), cache, null, null);
     if (first.kind !== "stream") throw new Error("expected stream");
     const prev = first.assembly.complete()!;
@@ -182,7 +201,10 @@ describe("RebuildAssembly, incremental", () => {
 
   it("does NOT take the fast path when a non-geometry field changed", () => {
     const stubs: WireBody[] = [A].map((b) => ({
-      id: b.id, name: b.name, etag: b.etag, unchanged: true as const,
+      id: b.id,
+      name: b.name,
+      etag: b.etag,
+      unchanged: true as const,
     }));
     const cache = new Map<string, WireBodyFull>([["bodyA", A]]);
     const first = RebuildAssembly.begin(HEAD, manifestFromBodies(stubs), cache, null, null);

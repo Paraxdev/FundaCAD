@@ -1,12 +1,5 @@
-// The soft shadow a part leaves on the ground it stands on.
-//
-// An orthographic depth render of the bodies from below, blurred, is the
-// darkness of a catcher plane at the model floor: dark where a body touches it,
-// fading as the body rises away. The bodies change rarely next to the camera,
-// so it is drawn again only when a key over the casters changes, and a frame
-// pays one transparent quad. With Shadows on, a second quad on the same plane
-// takes the key light's shadow. Both quads have their own materials, nothing
-// here touches a body material.
+// The soft shadow a part leaves on the ground: a blurred orthographic depth render from below, baked again only when
+// the casters' key changes, so a frame pays one transparent quad. Nothing here touches a body material.
 
 import * as THREE from "three";
 import { HorizontalBlurShader } from "three/examples/jsm/shaders/HorizontalBlurShader.js";
@@ -86,8 +79,15 @@ export function casterKey(model: THREE.Object3D): number[] {
     if (!isBody(o)) return;
     const geo = o.geometry;
     const pos = geo.getAttribute("position") as THREE.BufferAttribute | undefined;
-    v.push(o.id, ...o.matrixWorld.elements, geo.id, pos?.version ?? -1, geo.index?.version ?? -1,
-      geo.drawRange.start, geo.drawRange.count);
+    v.push(
+      o.id,
+      ...o.matrixWorld.elements,
+      geo.id,
+      pos?.version ?? -1,
+      geo.index?.version ?? -1,
+      geo.drawRange.start,
+      geo.drawRange.count,
+    );
     for (const mat of materialsOf(o)) {
       v.push(mat.side, mat.clipIntersection ? 1 : 0);
       for (const p of mat.clippingPlanes ?? []) v.push(p.normal.x, p.normal.y, p.normal.z, p.constant);
@@ -127,8 +127,18 @@ export class ContactShadow {
   private readonly spare = target();
   private readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private readonly quadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 2);
-  private readonly blurH = new THREE.ShaderMaterial({ ...HorizontalBlurShader, uniforms: THREE.UniformsUtils.clone(HorizontalBlurShader.uniforms), depthTest: false, depthWrite: false });
-  private readonly blurV = new THREE.ShaderMaterial({ ...VerticalBlurShader, uniforms: THREE.UniformsUtils.clone(VerticalBlurShader.uniforms), depthTest: false, depthWrite: false });
+  private readonly blurH = new THREE.ShaderMaterial({
+    ...HorizontalBlurShader,
+    uniforms: THREE.UniformsUtils.clone(HorizontalBlurShader.uniforms),
+    depthTest: false,
+    depthWrite: false,
+  });
+  private readonly blurV = new THREE.ShaderMaterial({
+    ...VerticalBlurShader,
+    uniforms: THREE.UniformsUtils.clone(VerticalBlurShader.uniforms),
+    depthTest: false,
+    depthWrite: false,
+  });
   private readonly quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.blurH);
   private twins = new Map<THREE.Material, THREE.MeshDepthMaterial>();
   private key: number[] = [];
@@ -140,11 +150,24 @@ export class ContactShadow {
     const uv = geo.getAttribute("uv") as THREE.BufferAttribute;
     for (let i = 0; i < uv.count; i++) uv.setX(i, 1 - uv.getX(i));
     const catcher = new THREE.MeshBasicMaterial({
-      color: 0x000000, transparent: true, depthWrite: false, opacity: DARKNESS, alphaMap: this.depth.texture,
-      toneMapped: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+      color: 0x000000,
+      transparent: true,
+      depthWrite: false,
+      opacity: DARKNESS,
+      alphaMap: this.depth.texture,
+      toneMapped: false,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
     });
     this.mesh = new THREE.Mesh(geo, catcher);
-    const key = new THREE.ShadowMaterial({ opacity: KEY_SHADOW_OPACITY, depthWrite: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+    const key = new THREE.ShadowMaterial({
+      opacity: KEY_SHADOW_OPACITY,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
+    });
     this.keyShadow = new THREE.Mesh(geo, key);
     this.keyShadow.receiveShadow = true;
     for (const m of [this.mesh, this.keyShadow]) {
@@ -200,7 +223,10 @@ export class ContactShadow {
   private bake(r: THREE.WebGLRenderer, model: THREE.Object3D, p: CatcherPlane): void {
     const half = p.extent / 2;
     const cam = this.camera;
-    cam.left = -half; cam.right = half; cam.top = half; cam.bottom = -half;
+    cam.left = -half;
+    cam.right = half;
+    cam.top = half;
+    cam.bottom = -half;
     // Just under the floor, so a bottom face on it is inside the near plane.
     const below = p.extent * 1e-4;
     cam.near = 0;
@@ -225,7 +251,10 @@ export class ContactShadow {
     try {
       for (const b of bodies) {
         b.mesh.material = Array.isArray(b.material)
-          ? b.material.map((m) => { used.add(m); return this.twin(m); })
+          ? b.material.map((m) => {
+              used.add(m);
+              return this.twin(m);
+            })
           : (used.add(b.material), this.twin(b.material));
         b.mesh.layers.set(BAKE_LAYER);
       }
@@ -256,7 +285,13 @@ export class ContactShadow {
     }
   }
 
-  private pass(r: THREE.WebGLRenderer, m: THREE.ShaderMaterial, from: THREE.WebGLRenderTarget, to: THREE.WebGLRenderTarget, axis: "h" | "v"): void {
+  private pass(
+    r: THREE.WebGLRenderer,
+    m: THREE.ShaderMaterial,
+    from: THREE.WebGLRenderTarget,
+    to: THREE.WebGLRenderTarget,
+    axis: "h" | "v",
+  ): void {
     m.uniforms["tDiffuse"]!.value = from.texture;
     m.uniforms[axis]!.value = BLUR_TEXELS / CATCHER_SIZE;
     this.quad.material = m;

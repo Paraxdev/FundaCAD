@@ -4,14 +4,26 @@
 import { SKETCH_MODIFY } from "../app/actionTables";
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
-import { featureMeta } from "../ui/featureMeta";
+import { stepName } from "../ui/featureMeta";
 import { logEntries } from "../ui/logStore";
 import { sketchRail } from "../ui/railDefs";
 
 export interface ReadHost {
   store: Pick<
     DocumentStore,
-    "document" | "buildState" | "rollbackIndex" | "isSuppressed" | "isBodyVisible" | "bodyMaterialId" | "bodyColorSlot" | "busyState" | "previewError" | "canUndo" | "canRedo" | "dirty" | "fileName"
+    | "document"
+    | "buildState"
+    | "rollbackIndex"
+    | "isSuppressed"
+    | "isBodyVisible"
+    | "bodyMaterialOf"
+    | "bodyColorSlot"
+    | "busyState"
+    | "previewError"
+    | "canUndo"
+    | "canRedo"
+    | "dirty"
+    | "fileName"
   >;
   viewport: Pick<Viewport, "getSelectedBodies" | "getSelectedFaceIds" | "selectedEdgeLines" | "faceIdToBodyId">;
 }
@@ -33,12 +45,11 @@ export function history(h: ReadHost): { count: number; at: string; rows: History
   if (failed && store.buildState.errorMessage) errors.set(failed, store.buildState.errorMessage);
   const roll = store.rollbackIndex;
   const rows = features.map((f, i): HistoryRow => {
-    const named = (f as { name?: string }).name;
     let state = "";
     if (i >= roll) state = "rolled back";
     else if (store.isSuppressed(f.id)) state = "suppressed";
     else if (errors.has(f.id)) state = `error: ${errors.get(f.id)}`;
-    return { id: f.id, name: named || featureMeta(f).label, type: f.type, state };
+    return { id: f.id, name: stepName(f as Parameters<typeof stepName>[0]), type: f.type, state };
   });
   const at = roll >= features.length ? "at end" : `rolled back to ${roll}`;
   return { count: features.length, at, rows };
@@ -61,7 +72,7 @@ export function bodies(h: ReadHost): BodyRow[] {
     name: b.name,
     faces: b.faceCount,
     visible: h.store.isBodyVisible(b.id),
-    material: h.store.bodyMaterialId(b.id) ?? null,
+    material: h.store.bodyMaterialOf(b.id)?.name ?? null,
     slot: h.store.bodyColorSlot(b.id) ?? null,
     fault: b.fault ?? null,
   }));
@@ -91,7 +102,11 @@ export function selection(h: ReadHost, doc: Document = document): Selection {
 
 /** The element's own text, without its children's or a dev build's comments. */
 function ownText(el: Element): string {
-  return [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim();
+  return [...el.childNodes]
+    .filter((n) => n.nodeType === 3)
+    .map((n) => n.textContent)
+    .join("")
+    .trim();
 }
 
 function text(doc: Document, sel: string): string {
@@ -107,7 +122,9 @@ export interface Message {
 
 export function messages(since = 0): { seq: number; rows: Message[] } {
   const all = logEntries();
-  const rows = all.filter((e) => e.id > since).slice(-100)
+  const rows = all
+    .filter((e) => e.id > since)
+    .slice(-100)
     .map((e) => ({ seq: e.id, level: e.level, text: e.message, at: e.at }));
   return { seq: all.length ? all[all.length - 1]!.id : since, rows };
 }
@@ -186,7 +203,57 @@ export function status(h: ReadHost, doc: Document = document, since = 0): Status
     selection: text(doc, "[data-testid=selection-readout]"),
     recent: last ? { seq: last.id, level: last.level, text: last.message, at: last.at } : null,
     error: lastError(h, since),
-    warnings: [...doc.querySelectorAll("#viewcontrols .perf-warn")].map((b) => b.getAttribute("title") ?? "").filter(Boolean),
+    warnings: [...doc.querySelectorAll("#viewcontrols .perf-warn")]
+      .map((b) => b.getAttribute("title") ?? "")
+      .filter(Boolean),
     busy: busyText(h),
+  };
+}
+
+export interface GuideReadout {
+  caption: string;
+  count: string;
+  hint: string;
+  /** The ref or model area the ring is on. */
+  on: string;
+  ring: Box | null;
+  bubble: Box | null;
+  /** The model outline's screen bounds, when the step points at the model. */
+  outline: Box | null;
+}
+
+type Box = { left: number; top: number; width: number; height: number };
+
+const boxOf = (el: Element | null): Box | null => {
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
+};
+
+export function guide(doc: Document = document): GuideReadout | null {
+  const layer = doc.querySelector(".guide-layer");
+  if (!layer) return null;
+  const lines = [...layer.querySelectorAll(".guide-model polyline")];
+  let outline: Box | null = null;
+  for (const l of lines) {
+    const b = boxOf(l);
+    if (!b) continue;
+    if (!outline) outline = b;
+    else {
+      const right = Math.max(outline.left + outline.width, b.left + b.width),
+        bottom = Math.max(outline.top + outline.height, b.top + b.height);
+      outline = { left: Math.min(outline.left, b.left), top: Math.min(outline.top, b.top), width: 0, height: 0 };
+      outline.width = right - outline.left;
+      outline.height = bottom - outline.top;
+    }
+  }
+  return {
+    caption: text(doc, ".guide-caption"),
+    count: text(doc, ".guide-count"),
+    hint: text(doc, ".guide-hint"),
+    on: (layer as HTMLElement).dataset.ref ?? "",
+    ring: boxOf(layer.querySelector(".guide-ring")),
+    bubble: boxOf(layer.querySelector(".guide-bubble")),
+    outline,
   };
 }

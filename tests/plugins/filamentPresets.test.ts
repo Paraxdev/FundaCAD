@@ -4,7 +4,8 @@ import { FILAMENT_GROUP, FILAMENT_PRESETS } from "../../plugins/FundaCAD.PrintLo
 import { normalizeMaterial } from "../../src/document/materials";
 import { materialPreview } from "../../src/viewport/materialPreview";
 
-const BANNED = /printer|slicer|\borca|bambu|moonraker|octoprint|prusa|klipper|snapmaker|\bqidi\b|toolhead|\bb?g-?code\b/i;
+const BANNED =
+  /printer|slicer|\borca|bambu|moonraker|octoprint|prusa|klipper|snapmaker|\bqidi\b|toolhead|\bb?g-?code\b/i;
 
 describe("the filament presets", () => {
   it("are the eight classes, in one group", () => {

@@ -33,11 +33,18 @@ const raw = (pattern: Record<string, string>, endsWith: string): string => {
 
 // crates/fundacad-geom/src/mesh/mod.rs builds the body payload the engine sends.
 const server = raw(
-  import.meta.glob("../../crates/fundacad-geom/src/mesh/mod.rs", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
+  import.meta.glob("../../crates/fundacad-geom/src/mesh/mod.rs", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>,
   "/mesh/mod.rs",
 );
 const assembly = raw(
-  import.meta.glob("../../src/geometry/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
+  import.meta.glob("../../src/geometry/*.ts", { query: "?raw", import: "default", eager: true }) as Record<
+    string,
+    string
+  >,
   "/geometry/assembly.ts",
 );
 

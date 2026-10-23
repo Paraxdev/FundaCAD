@@ -1,21 +1,6 @@
 <script setup lang="ts">
-// A labelled row whose value is a path on disk.
-//
-// The fourth kind of row, and the one that existed nowhere: a feature could
-// carry a file (a heightmap, so far) but only the tool that made it could
-// choose one. Pick Heightmap in Properties on a committed texture and the
-// pattern changed to one that reads an image, with no way to say which image,
-// so the only route to a different picture was to delete the feature and make
-// it again.
-//
-// The button, not the text, is the control. A path is long, the value column is
-// 120px, and a text field would invite someone to type one, which is a way to
-// author a path that does not exist. So the name of the file is shown and the
-// dialog is what changes it, which is also what the tool panel does.
-//
-// Clearing matters as much as choosing: a heightmap you have moved or deleted
-// leaves a feature that fails every rebuild, and Clear is the way back to a
-// pattern that builds.
+// The button, not a text field, is the control: the value column is 120px and typing invites paths that do not exist.
+// Clear matters too, a moved or deleted heightmap fails every rebuild.
 
 import Icon from "./Icon.vue";
 import { openDialog } from "../../plugins/host";
@@ -36,9 +21,7 @@ function basename(p: string): string {
 }
 
 async function browse() {
-  // The native dialog only exists in the desktop app. In a browser (the dev
-  // server, a test) there is no filesystem to name, and a silent no-op would
-  // read as a button that does not work.
+  // The native dialog exists only in the desktop app, and a silent no-op in a browser would read as a broken button.
   if (!("__TAURI_INTERNALS__" in window)) {
     toast("Choosing a file needs the desktop app", { kind: "warning" });
     return;
@@ -56,13 +39,9 @@ async function browse() {
       <button type="button" class="file-pick" @click="browse">
         {{ value ? basename(value) : "Choose…" }}
       </button>
-      <button
-        v-if="value"
-        type="button"
-        class="file-clear"
-        title="Clear the file"
-        @click="commit('')"
-      ><Icon name="close" :size="12" /></button>
+      <button v-if="value" type="button" class="file-clear" title="Clear the file" @click="commit('')"
+        ><Icon name="close" :size="12"
+      /></button>
     </div>
   </div>
 </template>

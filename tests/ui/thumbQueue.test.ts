@@ -7,8 +7,7 @@ const flush = async () => {
 
 function deferredFetch() {
   const calls: { paths: string[]; resolve: (urls: (string | null)[]) => void }[] = [];
-  const fetch = (paths: string[]) =>
-    new Promise<(string | null)[]>((resolve) => calls.push({ paths, resolve }));
+  const fetch = (paths: string[]) => new Promise<(string | null)[]>((resolve) => calls.push({ paths, resolve }));
   const answer = (i: number) => calls[i]!.resolve(calls[i]!.paths.map((p) => `url:${p}`));
   return { calls, fetch, answer };
 }

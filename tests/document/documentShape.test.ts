@@ -7,9 +7,13 @@ import type { CadDocument, Feature } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 
 const backend = {
-  async rebuild() { return { ok: false, error: { message: "stub" } }; },
+  async rebuild() {
+    return { ok: false, error: { message: "stub" } };
+  },
   async init() {},
-  onStatus() { return () => {}; },
+  onStatus() {
+    return () => {};
+  },
   connected: true,
 } as unknown as GeometryBackend;
 

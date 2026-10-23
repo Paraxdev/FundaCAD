@@ -1,41 +1,15 @@
-// Per-face colours as they arrive from an imported file.
-//
-// A STEP written by a mechanical CAD system colours FACES, not products: the
-// reference PN532 board attaches a style to all 1,803 of its faces and only a
-// near-useless per-product default to its 29 products, so a reader that only
-// asks the product tree renders a red circuit board as a uniform pale grey.
-// That is what this carries, and it is why a body's own colour is not enough.
-//
-// The wire form is packed, because there is one entry per face and a large
-// assembly has six figures of them: a palette (a file uses a handful of distinct
-// colours) plus run-length encoding (faces of one colour are contiguous, being
-// the faces of one feature of one part). The reference board packs 843 faces
-// into 3 palette entries and 9 runs.
-//
-// the Python engine's `face_colors.py` writes it and holds the same two functions; the two are
-// checked against one another on the same fixtures. Pure list arithmetic, no
-// document and no renderer: what the colours MEAN is decided in rebuildBridge.
+// Per-face colours of an imported STEP: mechanical CAD colours faces, not products (the PN532 board styles all 1,803
+// faces). Twin of the Python engine's `face_colors.py`, checked on the same fixtures.
 
-// The packed form itself is declared in types.ts with the rest of the wire
-// contract, and re-exported here so a reader who found the decoder has the shape
-// in front of them: `palette` is the distinct colours, `runs` is [count,
-// paletteIndex] in face order, and an index of -1 means those faces carry no
-// colour of their own.
+// Wire form: `palette` of distinct colours plus `runs` of [count, paletteIndex] in face order, -1 meaning no colour.
+// The reference board packs 843 faces into 3 palette entries and 9 runs.
 import type { FaceColorRuns, ImportColorSource } from "../types";
 import { nodeColors } from "./materials";
 export type { FaceColorRuns, ImportColorSource };
 
-/** Unpack to exactly `count` entries, "#rrggbb" or null.
- *
- *  Tolerant on purpose. This reads a field of a saved document that may have
- *  been written by an older build, hand-edited, or truncated, and the honest
- *  answer to a run that overruns is "those faces have no colour of their own",
- *  never a throw in the middle of assembling a rebuild. A run naming a palette
- *  slot that is not there reads the same way. */
-export function decodeFaceColors(
-  enc: FaceColorRuns | undefined,
-  count: number,
-): (string | null)[] {
+// Tolerant on purpose: an overrunning run or a missing palette slot reads as "no colour" and never throws mid rebuild,
+// since an old, hand-edited or truncated document may hold it.
+export function decodeFaceColors(enc: FaceColorRuns | undefined, count: number): (string | null)[] {
   const n = Math.max(0, Math.floor(count));
   const out: (string | null)[] = new Array(n).fill(null);
   if (!enc || !Array.isArray(enc.runs)) return out;
@@ -54,17 +28,8 @@ export function decodeFaceColors(
   return out;
 }
 
-/** The colour to treat as the whole body's own, or null.
- *
- *  By face COUNT, matching the Python engine's `face_colors.py`'s `dominant`, and for the same
- *  reason: area is the better answer to "what colour does this part look" and it
- *  costs a surface integration per face, which nothing on either side of the
- *  wire is holding when this is asked. It matters less than it sounds like,
- *  because this is only what the faces the file did NOT colour fall back to, and
- *  a file that colours faces at all colours nearly all of them.
- *
- *  Ties fall to the colour that appears first, so the answer does not depend on
- *  map iteration order. */
+// By face count like `face_colors.py`'s `dominant`: area would need a surface integral per face, and this is only what
+// the few faces the file left uncoloured fall back to. Ties go to the colour seen first, so map order does not matter.
 export function dominantFaceColor(colors: readonly (string | null)[]): string | null {
   const tally = new Map<string, number>();
   for (const c of colors) if (c) tally.set(c, (tally.get(c) ?? 0) + 1);
@@ -76,36 +41,18 @@ export function dominantFaceColor(colors: readonly (string | null)[]): string | 
   return best;
 }
 
-/** The per-FACE entries an imported document contributes to the viewport's face
- *  paint map: global face id → "#rrggbb".
- *
- *  SPARSE against the body's OWN dominant colour, which is what makes it sparse
- *  at all. A body's material carries its dominant colour already, so naming
- *  those faces here would be saying the same thing twice, six figures of times
- *  on a large assembly. Only the minority faces are named: on the reference
- *  circuit board, 17 of 843.
- *
- *  Deliberately NOT sparse against `bodyPaint`. The material a body ends up
- *  wearing is the NEAREST one in the library, not necessarily an exact match
- *  (materials.ts's `materialsForColors` explains why), so comparing against it
- *  makes the saving depend on whether the library happened to hold that shade:
- *  measured on the reference assembly, comparing against the material named all
- *  1,803 faces and comparing against the dominant named 50. The cost of the
- *  difference is that a face equal to its body's dominant is drawn in the
- *  material's shade rather than the file's, which is the same small tolerance
- *  the material match already accepted for the body as a whole.
- *
- *  `bodyPaint` is still read, for the one case where that reasoning does not
- *  hold: a body with NO colour at all is drawn in the neutral shade, and
- *  leaving its dominant faces to that would throw the file's colour away. Such
- *  a body names every coloured face it has. */
+// Sparse against the body's dominant colour, not `bodyPaint`: the library material is only the nearest shade, and
+// comparing against it named all 1,803 faces versus 50. The cost, a dominant face drawn in the material's shade, is the
+// tolerance the material match already accepted. A body with no colour at all names every coloured face.
 export function importedFacePaint(
-  bodies: readonly {
-    id: string;
-    faceStart: number;
-    faceCount: number;
-    faceColors?: FaceColorRuns;
-  }[] | undefined,
+  bodies:
+    | readonly {
+        id: string;
+        faceStart: number;
+        faceCount: number;
+        faceColors?: FaceColorRuns;
+      }[]
+    | undefined,
   bodyPaint: Readonly<Record<string, string>>,
   picks?: ReadonlyMap<string, BodyColorPick>,
 ): Record<number, string> {
@@ -124,20 +71,10 @@ export function importedFacePaint(
   return out;
 }
 
-// --- a body's colour against its faces' -------------------------------------
-//
-// A file can style a part twice and disagree with itself. The reference frame
-// assembly, exported from another CAD program, styles every solid with the part's real appearance (black,
-// cyan) and ALSO leaves its faces wearing that program's feature colours, yellow
-// on a boss and red on a cut, which nobody meant as the look of the part.
-// Reading the faces there turns a black frame red. The reference PN532 board
-// is the opposite case: its faces are the real colours and its products wear a
-// default. So which one is preferred is a choice per import (the store's
-// importColorSource), and "bodies" is the default.
+// A file can style a part twice and disagree: the reference frame's faces wear feature colours (red cuts) over a black
+// solid, the PN532 board the opposite. So the preference is per import (importColorSource), "bodies" by default.
 
-/** Colours a CAD system writes when nobody picked one, which say nothing about
- *  the part and must not be preferred over a face that was painted. #cad1ee is SolidWorks'
- *  default part colour, the pale lavender on fifteen of the board's products. */
+// Colours written when nobody picked one; #cad1ee is SolidWorks' default part lavender.
 const UNCHOSEN_COLORS = new Set(["#cad1ee"]);
 
 function chosen(hex: string | undefined | null): string | null {
@@ -145,18 +82,12 @@ function chosen(hex: string | undefined | null): string | null {
 }
 
 export interface BodyColorPick {
-  /** The colour the body wears, or null when the file gave it none. */
   color: string | null;
-  /** True when that colour is the body's own and its face colours are ignored. */
   bodyWins: boolean;
 }
 
-/** Which colour one imported body wears.
- *
- *  `partColor` is the style on the body's solid, `ownColor` the style on its
- *  product, `inheritedColor` its nearest coloured ancestor's. With "bodies" a
- *  chosen body or product colour is preferred outright; everything else falls back to
- *  the faces, which is also the whole rule with "faces". */
+// `partColor` is the solid's style, `ownColor` the product's, `inheritedColor` the nearest coloured ancestor's.
+// With "bodies" a chosen body or product colour wins outright, otherwise the faces decide.
 export function pickBodyColor(
   input: {
     partColor?: string | undefined;
@@ -177,16 +108,17 @@ export function pickBodyColor(
   };
 }
 
-/** `pickBodyColor` for every body of a build that came from an imported
- *  assembly, keyed by body id. Bodies from anything else are absent. */
+// Keyed by body id; bodies not from an imported assembly are absent.
 export function importedBodyColors(
-  bodies: readonly {
-    id: string;
-    faceCount: number;
-    nodeRef?: string | undefined;
-    faceColors?: FaceColorRuns | undefined;
-    partColor?: string | undefined;
-  }[] | undefined,
+  bodies:
+    | readonly {
+        id: string;
+        faceCount: number;
+        nodeRef?: string | undefined;
+        faceColors?: FaceColorRuns | undefined;
+        partColor?: string | undefined;
+      }[]
+    | undefined,
   features: readonly {
     id: string;
     type: string;
@@ -195,7 +127,14 @@ export function importedBodyColors(
   sourceOf: (featureId: string) => ImportColorSource,
 ): Map<string, BodyColorPick> {
   const out = new Map<string, BodyColorPick>();
-  const trees = new Map<string, { source: ImportColorSource; nodes: NonNullable<(typeof features)[number]["nodes"]>; inherited: (string | undefined)[] }>();
+  const trees = new Map<
+    string,
+    {
+      source: ImportColorSource;
+      nodes: NonNullable<(typeof features)[number]["nodes"]>;
+      inherited: (string | undefined)[];
+    }
+  >();
   for (const f of features) {
     if (f.type !== "import" || !f.nodes) continue;
     trees.set(f.id, { source: sourceOf(f.id), nodes: f.nodes, inherited: nodeColors(f.nodes) });
@@ -207,12 +146,18 @@ export function importedBodyColors(
     const tree = trees.get(b.nodeRef!.slice(0, slash));
     if (!tree) continue;
     const index = Number(b.nodeRef!.slice(slash + 1));
-    out.set(b.id, pickBodyColor({
-      partColor: b.partColor,
-      ownColor: tree.nodes[index]?.color,
-      inheritedColor: tree.inherited[index],
-      faceColors: b.faceColors ? decodeFaceColors(b.faceColors, b.faceCount) : undefined,
-    }, tree.source));
+    out.set(
+      b.id,
+      pickBodyColor(
+        {
+          partColor: b.partColor,
+          ownColor: tree.nodes[index]?.color,
+          inheritedColor: tree.inherited[index],
+          faceColors: b.faceColors ? decodeFaceColors(b.faceColors, b.faceCount) : undefined,
+        },
+        tree.source,
+      ),
+    );
   }
   return out;
 }

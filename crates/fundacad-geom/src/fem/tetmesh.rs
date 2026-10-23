@@ -1,15 +1,6 @@
-//! Surface mesh to linear tetrahedra by isosurface stuffing (Labelle and Shewchuk, "Isosurface
-//! Stuffing: Fast Tetrahedral Meshes with Good Dihedral Angles", SIGGRAPH 2007).
-//!
-//! A uniform body-centred cubic lattice of spacing `size` covers the part. The signed distance
-//! to the surface (negative inside) is evaluated at every lattice vertex through a bounding
-//! volume hierarchy over the triangles, signed by angle-weighted pseudonormals. Edges whose ends
-//! lie on opposite sides get a cut point on the surface; a lattice vertex too close to a cut
-//! point is warped onto it. Each lattice tetrahedron that reaches inside is then filled with the
-//! paper's stencil for its sign pattern, which keeps every dihedral angle between about 10.7 and
-//! 164.8 degrees. Where the part is thinner than about one element the stuffing cannot follow
-//! it, so a mesh that came apart, bridged a gap or lost much of the volume is refused rather
-//! than returned. Everything runs sequentially in lattice order, so the output is deterministic.
+//! Surface mesh to linear tetrahedra by isosurface stuffing (Labelle and Shewchuk, SIGGRAPH 2007): a BCC lattice
+//! of spacing `size`, signed distance through a BVH with pseudonormals, warped cut points and the paper's stencils
+//! keep dihedral angles in about 10.7 to 164.8 degrees. Runs in lattice order, so the output is deterministic.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -94,12 +85,11 @@ impl Coarsening {
     fn advice(&self) -> String {
         match self {
             Coarsening::None => "use a smaller element size".to_string(),
-            Coarsening::ElementLimit { max_tets } => format!(
-                "the limit of {max_tets} elements forces elements this large, allow more elements"
-            ),
+            Coarsening::ElementLimit { max_tets } => {
+                format!("the limit of {max_tets} elements forces elements this large, allow more elements")
+            }
             Coarsening::LatticeLimit => {
-                "this is the smallest element size the mesher allows for a part this large"
-                    .to_string()
+                "this is the smallest element size the mesher allows for a part this large".to_string()
             }
         }
     }
@@ -174,32 +164,20 @@ pub fn tetrahedralize(
         }
         attempt += 1;
         if attempt >= MAX_ATTEMPTS {
-            return Err(MeshError::TooManyElements {
-                max_tets: opts.max_tets,
-            });
+            return Err(MeshError::TooManyElements { max_tets: opts.max_tets });
         }
         h *= (s.tets.len() as f64 / opts.max_tets as f64).cbrt() * 1.02;
-        coarsening = Coarsening::ElementLimit {
-            max_tets: opts.max_tets,
-        };
+        coarsening = Coarsening::ElementLimit { max_tets: opts.max_tets };
     };
     if stuffed.tets.is_empty() {
-        return Err(MeshError::TooSmall {
-            size: h,
-            coarsening,
-        });
+        return Err(MeshError::TooSmall { size: h, coarsening });
     }
     if !tick() {
         return Err(MeshError::Cancelled);
     }
 
     let Stuffed { nodes, tets } = stuffed;
-    let mut stats = MeshStats {
-        min_dihedral_deg: 180.0,
-        max_dihedral_deg: 0.0,
-        volume: 0.0,
-        size: h,
-    };
+    let mut stats = MeshStats { min_dihedral_deg: 180.0, max_dihedral_deg: 0.0, volume: 0.0, size: h };
     for t in &tets {
         let p = t.map(|i| nodes[i as usize]);
         let (lo, hi) = dihedral_range(&p);
@@ -208,51 +186,30 @@ pub fn tetrahedralize(
         stats.volume += orient(&p) / 6.0;
     }
 
-    // Where the part is thinner than about one element, the stuffing can drop the material,
-    // split it, bridge a narrow gap or leave elements hinged on an edge. A solver cannot use
-    // such a mesh, so refuse it rather than hand it on.
+    // Where the part is thinner than about one element the stuffing can drop, split or bridge material or hinge
+    // elements on an edge, which a solver cannot use, so refuse it.
     let (boundary, pieces) = boundary_faces(&tets);
     if pieces != Some(surf.solids)
         || !closed_manifold(&boundary)
         || (stats.volume - surf.volume).abs() > MAX_VOLUME_CHANGE * surf.volume
     {
-        return Err(MeshError::TooThin {
-            size: h,
-            coarsening,
-        });
+        return Err(MeshError::TooThin { size: h, coarsening });
     }
     let mut boundary_face = Vec::with_capacity(boundary.len());
     for (i, f) in boundary.iter().enumerate() {
         if i % TICK_EVERY == 0 && !tick() {
             return Err(MeshError::Cancelled);
         }
-        let c = scale(
-            add(
-                add(nodes[f[0] as usize], nodes[f[1] as usize]),
-                nodes[f[2] as usize],
-            ),
-            1.0 / 3.0,
-        );
+        let c = scale(add(add(nodes[f[0] as usize], nodes[f[1] as usize]), nodes[f[2] as usize]), 1.0 / 3.0);
         boundary_face.push(surface.face_ids[surf.nearest_triangle(c)]);
     }
     let node_faces = node_faces(&surf, surface, &nodes, &boundary, h, tick)?;
 
-    Ok((
-        TetMesh {
-            nodes,
-            tets,
-            boundary,
-            boundary_face,
-            node_faces,
-        },
-        stats,
-    ))
+    Ok((TetMesh { nodes, tets, boundary, boundary_face, node_faces }, stats))
 }
 
-/// A boundary node lies on a face when one of the face's triangles passes within this share
-/// of the element size of it. Every boundary node is a point of the surface, a lattice vertex
-/// warped onto it or a cut point found to within a ten-billionth of the size, so this only
-/// has to allow for rounding, and a node on an edge comes out on both faces.
+/// A boundary node lies on a face when a face triangle passes within this share of the size. Boundary nodes are
+/// surface points to a ten-billionth, so this only allows for rounding, and an edge node lands on both faces.
 const ON_FACE: f64 = 1e-6;
 
 /// The faces each boundary node lies on, as sorted (node, face id) pairs. A node no face
@@ -298,16 +255,11 @@ fn choose_size(surf: &Surface, opts: &MeshOptions) -> (f64, Coarsening) {
         let wanted = BOUNDARY_ALLOWANCE * TETS_PER_CELL * surf.volume / (h * h * h);
         if wanted > opts.max_tets as f64 {
             h = (BOUNDARY_ALLOWANCE * TETS_PER_CELL * surf.volume / opts.max_tets as f64).cbrt();
-            coarsening = Coarsening::ElementLimit {
-                max_tets: opts.max_tets,
-            };
+            coarsening = Coarsening::ElementLimit { max_tets: opts.max_tets };
         }
     }
-    let cap = if opts.max_tets > 0 {
-        MAX_LATTICE.min(opts.max_tets.saturating_mul(32).max(1_000_000))
-    } else {
-        MAX_LATTICE
-    };
+    let cap =
+        if opts.max_tets > 0 { MAX_LATTICE.min(opts.max_tets.saturating_mul(32).max(1_000_000)) } else { MAX_LATTICE };
     // Counted in floating point: a tiny size would overflow the integer count. At most `cap`
     // cells along the longest side keeps the count finite for the steps below.
     let longest = (0..3).map(|a| surf.hi[a] - surf.lo[a]).fold(0.0, f64::max);
@@ -319,18 +271,13 @@ fn choose_size(surf: &Surface, opts: &MeshOptions) -> (f64, Coarsening) {
         }
         h *= (n / cap as f64).cbrt() * 1.01;
         coarsening = if cap < MAX_LATTICE {
-            Coarsening::ElementLimit {
-                max_tets: opts.max_tets,
-            }
+            Coarsening::ElementLimit { max_tets: opts.max_tets }
         } else {
             Coarsening::LatticeLimit
         };
     }
     (h, coarsening)
 }
-
-// ---------------------------------------------------------------------------------------------
-// Vector helpers.
 
 fn add(a: V3, b: V3) -> V3 {
     [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
@@ -349,11 +296,7 @@ fn dot(a: V3, b: V3) -> f64 {
 }
 
 fn cross(a: V3, b: V3) -> V3 {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 
 fn norm(a: V3) -> f64 {
@@ -371,14 +314,7 @@ fn orient(p: &[V3; 4]) -> f64 {
 
 /// Smallest and largest interior dihedral angle of a tetrahedron, in radians.
 fn dihedral_range(p: &[V3; 4]) -> (f64, f64) {
-    const EDGES: [[usize; 4]; 6] = [
-        [0, 1, 2, 3],
-        [0, 2, 1, 3],
-        [0, 3, 1, 2],
-        [1, 2, 0, 3],
-        [1, 3, 0, 2],
-        [2, 3, 0, 1],
-    ];
+    const EDGES: [[usize; 4]; 6] = [[0, 1, 2, 3], [0, 2, 1, 3], [0, 3, 1, 2], [1, 2, 0, 3], [1, 3, 0, 2], [2, 3, 0, 1]];
     let (mut lo, mut hi) = (f64::INFINITY, 0.0f64);
     for [i, j, k, l] in EDGES {
         let e = sub(p[j], p[i]);
@@ -396,9 +332,6 @@ fn dihedral_range(p: &[V3; 4]) -> (f64, f64) {
     }
     (lo, hi)
 }
-
-// ---------------------------------------------------------------------------------------------
-// Signed distance to the surface.
 
 /// Where on a triangle the closest point lies; the sign of the distance comes from the
 /// pseudonormal of that feature (Baerentzen and Aanaes 2005).
@@ -446,10 +379,7 @@ impl Surface {
             return Err(MeshError::EmptySurface);
         }
         if mesh.face_ids.len() != tris.len() {
-            return Err(MeshError::FaceIdCount {
-                triangles: tris.len(),
-                face_ids: mesh.face_ids.len(),
-            });
+            return Err(MeshError::FaceIdCount { triangles: tris.len(), face_ids: mesh.face_ids.len() });
         }
         if tris.iter().flatten().any(|&i| i as usize >= pos.len()) {
             return Err(MeshError::MissingVertex);
@@ -476,11 +406,7 @@ impl Surface {
             let mut balance = 0i64;
             while j < half.len() && half[j].0 == half[i].0 {
                 let (t, e) = (half[j].1 as usize, half[j].2 as usize);
-                balance += if tris[t][e] < tris[t][(e + 1) % 3] {
-                    1
-                } else {
-                    -1
-                };
+                balance += if tris[t][e] < tris[t][(e + 1) % 3] { 1 } else { -1 };
                 j += 1;
             }
             if balance != 0 {
@@ -510,14 +436,8 @@ impl Surface {
             volume += dot(a, cross(b, c)) / 6.0;
             let n = cross(sub(b, a), sub(c, a));
             let len = norm(n);
-            let longest = dot(sub(b, a), sub(b, a))
-                .max(dot(sub(c, b), sub(c, b)))
-                .max(dot(sub(a, c), sub(a, c)));
-            face_n.push(if len > 1e-14 * longest {
-                scale(n, 1.0 / len)
-            } else {
-                [0.0; 3]
-            });
+            let longest = dot(sub(b, a), sub(b, a)).max(dot(sub(c, b), sub(c, b))).max(dot(sub(a, c), sub(a, c)));
+            face_n.push(if len > 1e-14 * longest { scale(n, 1.0 / len) } else { [0.0; 3] });
         }
         if !(volume > 0.0) {
             return Err(MeshError::InsideOut);
@@ -558,9 +478,7 @@ impl Surface {
         }
 
         // Degenerate triangles carry no area, their neighbours cover the surface.
-        let mut order: Vec<u32> = (0..tris.len() as u32)
-            .filter(|&t| face_n[t as usize] != [0.0; 3])
-            .collect();
+        let mut order: Vec<u32> = (0..tris.len() as u32).filter(|&t| face_n[t as usize] != [0.0; 3]).collect();
         if order.is_empty() {
             return Err(MeshError::InsideOut);
         }
@@ -572,9 +490,7 @@ impl Surface {
             .collect();
         let mut nodes = Vec::with_capacity(order.len() / 2 + 1);
         let len = order.len();
-        build_bvh(&mut nodes, &mut order, 0, len, &centroid, &|t| {
-            corners(t as usize)
-        });
+        build_bvh(&mut nodes, &mut order, 0, len, &centroid, &|t| corners(t as usize));
         let tri_list: Vec<Tri> = order
             .iter()
             .map(|&t| {
@@ -589,14 +505,7 @@ impl Surface {
             })
             .collect();
         let (lo, hi) = (nodes[0].lo, nodes[0].hi);
-        Ok(Surface {
-            nodes,
-            tris: tri_list,
-            lo,
-            hi,
-            volume,
-            solids,
-        })
+        Ok(Surface { nodes, tris: tri_list, lo, hi, volume, solids })
     }
 
     /// Closest point among triangles strictly nearer than `sqrt(best)`.
@@ -616,10 +525,7 @@ impl Surface {
             }
             if n.count > 0 {
                 let start = n.index as usize;
-                for (slot, tri) in self.tris[start..start + n.count as usize]
-                    .iter()
-                    .enumerate()
-                {
+                for (slot, tri) in self.tris[start..start + n.count as usize].iter().enumerate() {
                     let (q, feat) = closest_on_triangle(p, &tri.v);
                     let d = sub(p, q);
                     let d2 = dot(d, d);
@@ -633,11 +539,7 @@ impl Surface {
                 let r = n.index;
                 let dl = box_dist2(&self.nodes[l as usize], p);
                 let dr = box_dist2(&self.nodes[r as usize], p);
-                let (near, dn, far, df) = if dl <= dr {
-                    (l, dl, r, dr)
-                } else {
-                    (r, dr, l, dl)
-                };
+                let (near, dn, far, df) = if dl <= dr { (l, dl, r, dr) } else { (r, dr, l, dl) };
                 if df < best && sp < stack.len() {
                     stack[sp] = far;
                     sp += 1;
@@ -654,14 +556,8 @@ impl Surface {
     /// Signed distance (negative inside) and the closest surface point. `bound` is an upper
     /// bound of the distance when known, which prunes the search.
     fn signed(&self, p: V3, bound: f64) -> (f64, V3) {
-        let limit = if bound.is_finite() {
-            bound * bound * (1.0 + 1e-9) + 1e-300
-        } else {
-            f64::INFINITY
-        };
-        let hit = self
-            .closest(p, limit)
-            .or_else(|| self.closest(p, f64::INFINITY));
+        let limit = if bound.is_finite() { bound * bound * (1.0 + 1e-9) + 1e-300 } else { f64::INFINITY };
+        let hit = self.closest(p, limit).or_else(|| self.closest(p, f64::INFINITY));
         let (slot, q, feat) = hit.expect("a surface with triangles has a closest point");
         let t = &self.tris[slot];
         let n = match feat {
@@ -701,9 +597,7 @@ impl Surface {
 
     /// Index of the input triangle closest to `p`.
     fn nearest_triangle(&self, p: V3) -> usize {
-        let (slot, _, _) = self
-            .closest(p, f64::INFINITY)
-            .expect("a surface with triangles has a closest point");
+        let (slot, _, _) = self.closest(p, f64::INFINITY).expect("a surface with triangles has a closest point");
         self.tris[slot].id as usize
     }
 
@@ -782,12 +676,7 @@ fn build_bvh(
         }
     }
     let me = nodes.len();
-    nodes.push(Node {
-        lo,
-        hi,
-        index: start as u32,
-        count: (end - start) as u32,
-    });
+    nodes.push(Node { lo, hi, index: start as u32, count: (end - start) as u32 });
     let ext = sub(chi, clo);
     let axis = if ext[0] >= ext[1] && ext[0] >= ext[2] {
         0
@@ -801,9 +690,7 @@ fn build_bvh(
     }
     let mid = (start + end) / 2;
     order[start..end].select_nth_unstable_by(mid - start, |&a, &b| {
-        centroid[a as usize][axis]
-            .total_cmp(&centroid[b as usize][axis])
-            .then(a.cmp(&b))
+        centroid[a as usize][axis].total_cmp(&centroid[b as usize][axis]).then(a.cmp(&b))
     });
     build_bvh(nodes, order, start, mid, centroid, corners);
     let right = build_bvh(nodes, order, mid, end, centroid, corners);
@@ -861,14 +748,8 @@ fn closest_on_triangle(p: V3, v: &[V3; 3]) -> (V3, Feature) {
         return (add(b, scale(sub(c, b), t)), Feature::Edge(1));
     }
     let denom = 1.0 / (va + vb + vc);
-    (
-        add(a, add(scale(ab, vb * denom), scale(ac, vc * denom))),
-        Feature::Face,
-    )
+    (add(a, add(scale(ab, vb * denom), scale(ac, vc * denom))), Feature::Face)
 }
-
-// ---------------------------------------------------------------------------------------------
-// The lattice.
 
 /// Black vertices sit on the grid points `lo + h (i, j, k)` (shifted by the margin), red ones at
 /// the cell centres. Black vertices come first in the numbering, then red, each x fastest.
@@ -894,12 +775,7 @@ impl Lattice {
 
     fn new(lo: V3, hi: V3, h: f64) -> Lattice {
         let n = Lattice::cells(lo, hi, h).map(|c| c as usize);
-        Lattice {
-            base: lo,
-            h,
-            n,
-            blacks: (n[0] + 1) * (n[1] + 1) * (n[2] + 1),
-        }
+        Lattice { base: lo, h, n, blacks: (n[0] + 1) * (n[1] + 1) * (n[2] + 1) }
     }
 
     fn count(&self) -> usize {
@@ -1013,9 +889,6 @@ impl Hasher for KeyHasher {
 
 type CutMap = HashMap<u64, u32, BuildHasherDefault<KeyHasher>>;
 
-// ---------------------------------------------------------------------------------------------
-// Stuffing.
-
 struct Stuffed {
     nodes: Vec<V3>,
     tets: Vec<[u32; 4]>,
@@ -1072,9 +945,8 @@ fn stuff(surf: &Surface, h: f64, tick: &mut dyn FnMut() -> bool) -> Result<Stuff
         }
     }
 
-    // Warp every vertex that a cut point violates onto the closest violating cut point. The
-    // vertex is then on the surface, which retires the cut points of all its edges: an edge
-    // keeps its cut point exactly while its ends have strictly opposite signs.
+    // Warp every vertex a cut point violates onto the closest violating cut point. On the surface it retires the
+    // cut points of all its edges, as an edge keeps one exactly while its ends have strictly opposite signs.
     let short = h * 3f64.sqrt() * 0.5;
     for v in 0..nv {
         if v % TICK_EVERY == 0 && !tick() {
@@ -1090,11 +962,7 @@ fn stuff(surf: &Surface, h: f64, tick: &mut dyn FnMut() -> bool) -> Result<Stuff
                 continue;
             }
             let c = cut_of[&edge_key(v, u)];
-            let (len, alpha) = if long {
-                (h, ALPHA_LONG)
-            } else {
-                (short, ALPHA_SHORT)
-            };
+            let (len, alpha) = if long { (h, ALPHA_LONG) } else { (short, ALPHA_SHORT) };
             let d = norm(sub(cuts[c as usize], pos[v])) / len;
             if d < alpha && best.map_or(true, |(bd, _)| d < bd) {
                 best = Some((d, c));
@@ -1108,15 +976,7 @@ fn stuff(surf: &Surface, h: f64, tick: &mut dyn FnMut() -> bool) -> Result<Stuff
 
     // Stencils for each lattice tetrahedron: a long edge along axis `a` and, around it, the
     // ring of four cell centres; consecutive centres close a positively oriented tetrahedron.
-    let mut st = Stencils {
-        lat: &lat,
-        pos: &pos,
-        sign: &sign,
-        cuts: &cuts,
-        cut_of: &cut_of,
-        surf,
-        tets: Vec::new(),
-    };
+    let mut st = Stencils { lat: &lat, pos: &pos, sign: &sign, cuts: &cuts, cut_of: &cut_of, surf, tets: Vec::new() };
     const RING: [[usize; 2]; 4] = [[0, 0], [1, 0], [1, 1], [0, 1]];
     for a in 0..3 {
         let (b, c) = ((a + 1) % 3, (a + 2) % 3);
@@ -1168,10 +1028,7 @@ fn stuff(surf: &Surface, h: f64, tick: &mut dyn FnMut() -> bool) -> Result<Stuff
             nodes.push(if i < nv { pos[i] } else { cuts[i - nv] });
         }
     }
-    let tets = tets
-        .into_iter()
-        .map(|t| t.map(|i| remap[i as usize]))
-        .collect();
+    let tets = tets.into_iter().map(|t| t.map(|i| remap[i as usize])).collect();
     Ok(Stuffed { nodes, tets })
 }
 
@@ -1230,11 +1087,8 @@ impl Stencils<'_> {
             }
         }
         let id = |v: usize| v as u32;
-        // No vertex inside. Four vertices on the surface can make an arbitrarily flat
-        // tetrahedron (on a smooth surface they are nearly coplanar), so one is kept only when
-        // it lies inside and its angles are within the paper's bounds. Dropping them all would
-        // also drop the one element through a wall about one element thick and leave the
-        // remaining ones hinged on an edge.
+        // No vertex inside. Four surface vertices can make a flat tetrahedron, so one is kept only inside and within the
+        // paper's angle bounds. Dropping them all would lose the one element through a wall one element thick.
         if ni == 0 {
             if no == 0 {
                 let p = t.map(|v| self.pos[v]);
@@ -1288,8 +1142,7 @@ impl Stencils<'_> {
                 let o = outs[0];
                 let top = [ins[0], ins[1], ins[2]];
                 let bot = top.map(|x| self.cut(x, o));
-                let dirs = [(0, 1), (0, 2), (1, 2)]
-                    .map(|(i, j)| Some(self.diagonal_end(top[i], top[j], o) == top[i]));
+                let dirs = [(0, 1), (0, 2), (1, 2)].map(|(i, j)| Some(self.diagonal_end(top[i], top[j], o) == top[i]));
                 self.prism(top.map(id), bot, dirs);
             }
             // Two inside, two outside: a prism along the inside edge. Its third quadrilateral
@@ -1307,12 +1160,9 @@ impl Stencils<'_> {
         }
     }
 
-    /// The inside vertex that the diagonal of the quadrilateral on lattice face (`a`, `b`, `o`)
-    /// touches; the quadrilateral is `a`, `b`, cut(b, o), cut(a, o). Both lattice tetrahedra on
-    /// the face must agree, so the choice depends on the face alone. On a long edge `a`-`b` the
-    /// face is symmetric and the parity rule picks the even end. On a short edge, one of
-    /// `a`-`o` and `b`-`o` is long and the diagonal starts at that edge's inside end (the other
-    /// choice measured a few degrees worse on random shapes).
+    /// The inside vertex the diagonal of the quadrilateral `a`, `b`, cut(b, o), cut(a, o) on lattice face (`a`, `b`,
+    /// `o`) touches, from the face alone so both tetrahedra on it agree. A long `a`-`b` takes the even end by parity,
+    /// a short one starts at the inside end of whichever of `a`-`o`, `b`-`o` is long (measured a few degrees better).
     fn diagonal_end(&self, a: usize, b: usize, o: usize) -> usize {
         if self.lat.same_grid(a, b) {
             if self.lat.parity(a) == 0 {
@@ -1327,11 +1177,9 @@ impl Stencils<'_> {
         }
     }
 
-    /// Splits the prism with triangles `top` and `bot` (column `i` runs from `top[i]` to
-    /// `bot[i]`) into three tetrahedra. `dirs` covers the quadrilaterals between columns
-    /// (0, 1), (0, 2) and (1, 2): `Some(true)` when the diagonal runs from the first column's
-    /// top to the second column's bottom, `Some(false)` for the other one, `None` when the
-    /// quadrilateral is free; a free one takes the diagonal that gives the better tetrahedra.
+    /// Splits the prism with triangles `top` and `bot` (column `i` from `top[i]` to `bot[i]`) into three tetrahedra.
+    /// `dirs` covers the quads between columns (0, 1), (0, 2), (1, 2): `Some(true)` for the diagonal from the first
+    /// column's top to the second's bottom, `Some(false)` the other, `None` free, which takes the better tetrahedra.
     fn prism(&mut self, top: [u32; 3], bot: [u32; 3], dirs: [Option<bool>; 3]) {
         const PAIRS: [(usize, usize); 3] = [(0, 1), (0, 2), (1, 2)];
         let mut best: Option<(f64, [[u32; 4]; 3])> = None;
@@ -1356,18 +1204,13 @@ impl Stencils<'_> {
             for (q, &(i, j)) in PAIRS.iter().enumerate() {
                 out[if d[q] { i } else { j }] += 1;
             }
-            let (Some(s), Some(m), Some(t)) = (
-                out.iter().position(|&x| x == 2),
-                out.iter().position(|&x| x == 1),
-                out.iter().position(|&x| x == 0),
-            ) else {
+            let (Some(s), Some(m), Some(t)) =
+                (out.iter().position(|&x| x == 2), out.iter().position(|&x| x == 1), out.iter().position(|&x| x == 0))
+            else {
                 continue;
             };
-            let tets = [
-                [top[s], top[m], top[t], bot[t]],
-                [top[s], top[m], bot[m], bot[t]],
-                [top[s], bot[s], bot[m], bot[t]],
-            ];
+            let tets =
+                [[top[s], top[m], top[t], bot[t]], [top[s], top[m], bot[m], bot[t]], [top[s], bot[s], bot[m], bot[t]]];
             let score = tets
                 .iter()
                 .map(|t| {
@@ -1429,9 +1272,7 @@ fn closed_manifold(faces: &[[u32; 3]]) -> bool {
         }
     }
     edges.sort_unstable();
-    edges
-        .chunks(2)
-        .all(|p| p.len() == 2 && p[0].0 == p[1].0 && p[0].1 != p[1].1)
+    edges.chunks(2).all(|p| p.len() == 2 && p[0].0 == p[1].0 && p[0].1 != p[1].1)
 }
 
 struct UnionFind {
@@ -1440,9 +1281,7 @@ struct UnionFind {
 
 impl UnionFind {
     fn new(n: usize) -> UnionFind {
-        UnionFind {
-            parent: (0..n as u32).collect(),
-        }
+        UnionFind { parent: (0..n as u32).collect() }
     }
 
     fn find(&mut self, mut x: usize) -> usize {
@@ -1464,17 +1303,13 @@ impl UnionFind {
 
     /// Number of separate sets.
     fn count(&mut self) -> usize {
-        (0..self.parent.len())
-            .filter(|&x| self.find(x) == x)
-            .count()
+        (0..self.parent.len()).filter(|&x| self.find(x) == x).count()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Instant;
-
     /// Builds closed test surfaces; each triangle is wound so its normal agrees with the
     /// outward hint it is given.
     #[derive(Default)]
@@ -1493,11 +1328,7 @@ mod tests {
         fn tri(&mut self, t: [u32; 3], id: u32, outward: V3) {
             let p = t.map(|i| self.pos[i as usize]);
             let n = cross(sub(p[1], p[0]), sub(p[2], p[0]));
-            self.tris.push(if dot(n, outward) < 0.0 {
-                [t[0], t[2], t[1]]
-            } else {
-                t
-            });
+            self.tris.push(if dot(n, outward) < 0.0 { [t[0], t[2], t[1]] } else { t });
             self.ids.push(id);
         }
 
@@ -1507,18 +1338,12 @@ mod tests {
         }
 
         fn centroid(&self, q: &[u32]) -> V3 {
-            let s = q
-                .iter()
-                .fold([0.0; 3], |s, &i| add(s, self.pos[i as usize]));
+            let s = q.iter().fold([0.0; 3], |s, &i| add(s, self.pos[i as usize]));
             scale(s, 1.0 / q.len() as f64)
         }
 
         fn mesh(self) -> SurfaceMesh {
-            SurfaceMesh {
-                positions: self.pos,
-                triangles: self.tris,
-                face_ids: self.ids,
-            }
+            SurfaceMesh { positions: self.pos, triangles: self.tris, face_ids: self.ids }
         }
     }
 
@@ -1543,8 +1368,7 @@ mod tests {
         for a in 0..3 {
             let (b, c) = ((a + 1) % 3, (a + 2) % 3);
             for side in 0..2u32 {
-                let q = [[0, 0], [1, 0], [1, 1], [0, 1]]
-                    .map(|[x, y]| ((side as usize) << a | x << b | y << c) as u32);
+                let q = [[0, 0], [1, 0], [1, 1], [0, 1]].map(|[x, y]| ((side as usize) << a | x << b | y << c) as u32);
                 let out = sub(s.centroid(&q), centre);
                 s.quad(q, 2 * a as u32 + side, out);
             }
@@ -1562,14 +1386,7 @@ mod tests {
             let ring: Vec<u32> = (0..nu)
                 .map(|i| {
                     let ph = 2.0 * std::f64::consts::PI * i as f64 / nu as f64;
-                    s.vertex(add(
-                        centre,
-                        [
-                            r * th.sin() * ph.cos(),
-                            r * th.sin() * ph.sin(),
-                            r * th.cos(),
-                        ],
-                    ))
+                    s.vertex(add(centre, [r * th.sin() * ph.cos(), r * th.sin() * ph.sin(), r * th.cos()]))
                 })
                 .collect();
             rings.push(ring);
@@ -1619,62 +1436,12 @@ mod tests {
         s.mesh()
     }
 
-    /// Square plate `2 half` wide and `thick` high with a round hole of radius `r` through it
-    /// along z. Face ids: 0 top, 1 bottom, 2 to 5 the sides, 6 the hole.
-    fn holed_plate(half: f64, thick: f64, r: f64, segments: usize) -> SurfaceMesh {
-        assert_eq!(
-            segments % 8,
-            0,
-            "the square corners must be on the sampled angles"
-        );
-        let mut s = Shape::default();
-        let tau = 2.0 * std::f64::consts::PI;
-        let ring = |s: &mut Shape, z: f64| {
-            let mut hole = Vec::new();
-            let mut outer = Vec::new();
-            for k in 0..segments {
-                let a = tau * k as f64 / segments as f64;
-                let (sn, cs) = a.sin_cos();
-                hole.push(s.vertex([r * cs, r * sn, z]));
-                let m = cs.abs().max(sn.abs());
-                outer.push(s.vertex([half * cs / m, half * sn / m, z]));
-            }
-            (hole, outer)
-        };
-        let (hb, ob) = ring(&mut s, 0.0);
-        let (ht, ot) = ring(&mut s, thick);
-        for k in 0..segments {
-            let k1 = (k + 1) % segments;
-            s.quad([ht[k], ot[k], ot[k1], ht[k1]], 0, [0.0, 0.0, 1.0]);
-            s.quad([hb[k], ob[k], ob[k1], hb[k1]], 1, [0.0, 0.0, -1.0]);
-            let q = [ob[k], ob[k1], ot[k1], ot[k]];
-            let c = s.centroid(&q);
-            let side = if c[0].abs() > c[1].abs() {
-                if c[0] < 0.0 {
-                    2
-                } else {
-                    3
-                }
-            } else if c[1] < 0.0 {
-                4
-            } else {
-                5
-            };
-            s.quad(q, side, [c[0], c[1], 0.0]);
-            let q = [hb[k], hb[k1], ht[k1], ht[k]];
-            let c = s.centroid(&q);
-            s.quad(q, 6, [-c[0], -c[1], 0.0]);
-        }
-        s.mesh()
-    }
-
     /// Both surfaces as one mesh.
     fn join(a: &SurfaceMesh, b: &SurfaceMesh) -> SurfaceMesh {
         let mut m = a.clone();
         let off = m.positions.len() as u32;
         m.positions.extend_from_slice(&b.positions);
-        m.triangles
-            .extend(b.triangles.iter().map(|t| t.map(|i| i + off)));
+        m.triangles.extend(b.triangles.iter().map(|t| t.map(|i| i + off)));
         m.face_ids.extend_from_slice(&b.face_ids);
         m
     }
@@ -1729,10 +1496,7 @@ mod tests {
         }
         for w in faces.windows(3) {
             if w[0].0 == w[2].0 {
-                return Err(format!(
-                    "face {:?} shared by more than two tetrahedra",
-                    w[0].0
-                ));
+                return Err(format!("face {:?} shared by more than two tetrahedra", w[0].0));
             }
         }
         for w in faces.windows(2) {
@@ -1741,9 +1505,7 @@ mod tests {
                 root[x.max(y)] = x.min(y);
             }
         }
-        let found = (0..m.tets.len())
-            .filter(|&k| find(&mut root, k) == k)
-            .count();
+        let found = (0..m.tets.len()).filter(|&k| find(&mut root, k) == k).count();
         if found != pieces {
             return Err(format!("{found} pieces, expected {pieces}"));
         }
@@ -1762,10 +1524,7 @@ mod tests {
         directed.sort_unstable();
         for w in directed.windows(2) {
             if w[0] == w[1] {
-                return Err(format!(
-                    "boundary edge {:?} used twice in one direction",
-                    w[0]
-                ));
+                return Err(format!("boundary edge {:?} used twice in one direction", w[0]));
             }
         }
         for &(a, b) in &directed {
@@ -1782,47 +1541,9 @@ mod tests {
             })
             .sum();
         if (enclosed - stats.volume).abs() > 1e-9 * stats.volume {
-            return Err(format!(
-                "boundary encloses {enclosed}, tetrahedra fill {}",
-                stats.volume
-            ));
+            return Err(format!("boundary encloses {enclosed}, tetrahedra fill {}", stats.volume));
         }
         Ok(())
-    }
-
-    /// Meshes one solid, checks the mesh invariants and quality, and returns the relative
-    /// volume error against the surface.
-    fn check(name: &str, surface: &SurfaceMesh, size: f64) -> (TetMesh, MeshStats, f64) {
-        let start = Instant::now();
-        let (m, stats) = mesh(surface, size);
-        let took = start.elapsed();
-        if let Err(e) = audit(&m, &stats, 1) {
-            panic!("{name}: {e}");
-        }
-
-        let reference = surface_volume(surface);
-        let err = (stats.volume - reference) / reference;
-        eprintln!(
-            "{name:>22}: {:>7} tets {:>6} nodes, size {:.3}, dihedral {:6.2} to {:6.2} deg, volume error {:+.3}%, {:.0} ms",
-            m.tets.len(),
-            m.nodes.len(),
-            stats.size,
-            stats.min_dihedral_deg,
-            stats.max_dihedral_deg,
-            100.0 * err,
-            took.as_secs_f64() * 1e3
-        );
-        assert!(
-            stats.min_dihedral_deg > 9.0,
-            "{name}: min dihedral {}",
-            stats.min_dihedral_deg
-        );
-        assert!(
-            stats.max_dihedral_deg < 166.0,
-            "{name}: max dihedral {}",
-            stats.max_dihedral_deg
-        );
-        (m, stats, err)
     }
 
     #[test]
@@ -1850,15 +1571,8 @@ mod tests {
         let pos: Vec<V3> = (0..lat.count()).map(|v| lat.position(v)).collect();
         let surf = Surface::new(&cuboid([3.0, 4.0, 5.0], &|p| p)).unwrap();
         let cut_of = CutMap::default();
-        let mut st = Stencils {
-            lat: &lat,
-            pos: &pos,
-            sign: &sign,
-            cuts: &[],
-            cut_of: &cut_of,
-            surf: &surf,
-            tets: Vec::new(),
-        };
+        let mut st =
+            Stencils { lat: &lat, pos: &pos, sign: &sign, cuts: &[], cut_of: &cut_of, surf: &surf, tets: Vec::new() };
         let n = lat.n;
         let mut vol = 0.0;
         for a in 0..3 {
@@ -1900,9 +1614,7 @@ mod tests {
         let surf = Surface::new(&sphere([0.0; 3], r, 96, 48)).unwrap();
         let mut seed = 12345u64;
         let mut rnd = || {
-            seed = seed
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
             (seed >> 11) as f64 / (1u64 << 53) as f64
         };
         for _ in 0..4000 {
@@ -1912,308 +1624,8 @@ mod tests {
             if exact.abs() > 0.02 * r {
                 assert_eq!(f < 0.0, exact < 0.0, "sign at {p:?}");
             }
-            assert!(
-                (f - exact).abs() < 0.01 * r,
-                "distance at {p:?}: {f} vs {exact}"
-            );
+            assert!((f - exact).abs() < 0.01 * r, "distance at {p:?}: {f} vs {exact}");
             assert!((norm(q) - r).abs() < 0.01 * r);
-        }
-    }
-
-    #[test]
-    fn boundary_nodes_know_every_face_they_lie_on() {
-        // A box off the lattice, so its edges are rounded over by triangles that span two
-        // faces. Face 2a + side lies in the plane where coordinate a is `plane(f)`.
-        let (size, off) = ([10.0, 6.0, 4.0], [0.37, 0.21, 0.13]);
-        let (m, _) = mesh(&cuboid(size, &|p| add(p, off)), 1.3);
-        let plane = |f: u32| {
-            let a = (f / 2) as usize;
-            (a, off[a] + if f % 2 == 1 { size[a] } else { 0.0 })
-        };
-        let on = |n: u32, f: u32| {
-            let (a, c) = plane(f);
-            (m.nodes[n as usize][a] - c).abs() < 1e-9
-        };
-        let mut boundary: Vec<u32> = m.boundary.iter().flatten().copied().collect();
-        boundary.sort_unstable();
-        boundary.dedup();
-        let mut listed: Vec<u32> = m.node_faces.iter().map(|e| e.0).collect();
-        listed.dedup();
-        assert_eq!(listed, boundary);
-        assert!(m.node_faces.windows(2).all(|w| w[0] < w[1]));
-        for &(n, f) in &m.node_faces {
-            assert!(
-                on(n, f),
-                "node {n} at {:?} is off face {f}",
-                m.nodes[n as usize]
-            );
-        }
-        let mut edges = 0;
-        for &n in &boundary {
-            let faces: Vec<u32> = (0..6).filter(|&f| on(n, f)).collect();
-            for &f in &faces {
-                assert!(
-                    m.node_faces.binary_search(&(n, f)).is_ok(),
-                    "node {n} on {f}"
-                );
-            }
-            edges += usize::from(faces.len() > 1);
-        }
-        // Tags alone would put nodes on faces they are off, the corners of the triangles
-        // that round the edges over.
-        let off_tag = m
-            .boundary
-            .iter()
-            .zip(&m.boundary_face)
-            .filter(|(t, &f)| t.iter().any(|&n| !on(n, f)))
-            .count();
-        eprintln!("{edges} nodes on an edge, {off_tag} triangles with a corner off their face");
-        assert!(edges > 0 && off_tag > 0);
-    }
-
-    #[test]
-    fn aligned_cube_is_exact() {
-        let cube = cuboid([10.0; 3], &|p| p);
-        let (m, _, err) = check("aligned cube", &cube, 1.0);
-        assert!(err.abs() < 1e-9, "volume error {err}");
-        // Lattice-aligned faces cut the boundary tetrahedra exactly in half.
-        assert_eq!(m.tets.len(), 13200);
-    }
-
-    #[test]
-    fn cube_volume_closed_boundary_and_quality() {
-        let cube = cuboid([10.0; 3], &|p| {
-            add(rotate(p, 0.3, 0.5, 0.7), [0.37, -1.21, 2.05])
-        });
-        let (_, _, err) = check("rotated cube", &cube, 0.5);
-        assert!(err.abs() < 0.01, "volume error {err}");
-        let cube = cuboid([10.0; 3], &|p| add(p, [0.37, 0.0, 0.0]));
-        let (_, _, err) = check("shifted cube", &cube, 0.7);
-        assert!(err.abs() < 0.01, "volume error {err}");
-    }
-
-    #[test]
-    fn face_ids_follow_face_area() {
-        let size = [10.0, 14.0, 18.0];
-        let body = cuboid(size, &|p| rotate(p, 0.2, -0.4, 0.9));
-        let (m, _, _) = check("tagged box", &body, 0.8);
-        let mut area = [0.0; 6];
-        for (f, &id) in m.boundary.iter().zip(&m.boundary_face) {
-            let [a, b, c] = f.map(|i| m.nodes[i as usize]);
-            area[id as usize] += 0.5 * norm(cross(sub(b, a), sub(c, a)));
-        }
-        let total: f64 = area.iter().sum();
-        for id in 0..6 {
-            let a = id / 2;
-            let exact = size[(a + 1) % 3] * size[(a + 2) % 3];
-            let exact_total = 2.0 * (size[0] * size[1] + size[1] * size[2] + size[2] * size[0]);
-            let (got, want) = (area[id] / total, exact / exact_total);
-            assert!(
-                ((got - want) / want).abs() < 0.04,
-                "face {id}: fraction {got:.4}, area says {want:.4}"
-            );
-        }
-    }
-
-    #[test]
-    fn sphere_volume() {
-        let s = sphere([0.31, -0.17, 0.05], 10.0, 128, 64);
-        let (_, _, err) = check("sphere", &s, 0.8);
-        assert!(err.abs() < 0.02, "volume error {err}");
-    }
-
-    #[test]
-    fn torus_volume() {
-        let t = torus(10.0, 4.0, 128, 48);
-        let (_, _, err) = check("torus", &t, 0.6);
-        assert!(err.abs() < 0.03, "volume error {err}");
-    }
-
-    #[test]
-    fn thin_plate_two_elements_thick() {
-        let thick = 2.0;
-        let plate = cuboid([30.0, 20.0, thick], &|p| rotate(p, 0.11, -0.07, 0.4));
-        let (m, _, err) = check("plate 2 elements thick", &plate, thick / 2.0);
-        assert!(err.abs() < 0.03, "volume error {err}");
-        // Every element sits inside the plate's thickness.
-        let normal = rotate([0.0, 0.0, 1.0], 0.11, -0.07, 0.4);
-        for p in &m.nodes {
-            let z = dot(*p, normal);
-            assert!(z > -1e-6 && z < thick + 1e-6, "node at height {z}");
-        }
-    }
-
-    #[test]
-    fn body_with_a_through_hole() {
-        let body = holed_plate(10.0, 6.0, 4.0, 64);
-        let (m, _, err) = check("plate with a hole", &body, 0.7);
-        assert!(err.abs() < 0.03, "volume error {err}");
-        // The boundary is one surface of genus 1: V - E + F = 0.
-        let mut verts: Vec<u32> = m.boundary.iter().flatten().copied().collect();
-        verts.sort_unstable();
-        verts.dedup();
-        let edges = m.boundary.len() * 3 / 2;
-        assert_eq!(
-            verts.len() as i64 - edges as i64 + m.boundary.len() as i64,
-            0
-        );
-        // Nothing fills the hole, and its wall is tagged.
-        for t in &m.tets {
-            let c = scale(
-                t.iter().fold([0.0; 3], |s, &i| add(s, m.nodes[i as usize])),
-                0.25,
-            );
-            assert!(
-                c[0].hypot(c[1]) > 4.0 - 0.7,
-                "element inside the hole at {c:?}"
-            );
-        }
-        let mut ids: Vec<u32> = m.boundary_face.clone();
-        ids.sort_unstable();
-        ids.dedup();
-        assert_eq!(ids, vec![0, 1, 2, 3, 4, 5, 6]);
-    }
-
-    #[test]
-    fn deterministic() {
-        let s = torus(6.0, 2.5, 64, 24);
-        let a = mesh(&s, 0.5);
-        let b = mesh(&s, 0.5);
-        assert!(a == b);
-    }
-
-    #[test]
-    fn max_tets_coarsens_the_mesh() {
-        let s = sphere([0.0; 3], 10.0, 64, 32);
-        let (m, stats) = tetrahedralize(
-            &s,
-            &MeshOptions {
-                size: 0.3,
-                max_tets: 20_000,
-            },
-            &mut || true,
-        )
-        .unwrap();
-        assert!(m.tets.len() <= 20_000, "{} tets", m.tets.len());
-        assert!(m.tets.len() > 10_000, "{} tets", m.tets.len());
-        assert!(stats.size > 0.3);
-    }
-
-    #[test]
-    fn errors_read_well() {
-        let cube = cuboid([10.0; 3], &|p| p);
-        let opts = MeshOptions {
-            size: 1.0,
-            max_tets: 0,
-        };
-
-        let mut open = cube.clone();
-        open.triangles.pop();
-        open.face_ids.pop();
-        let e = tetrahedralize(&open, &opts, &mut || true).unwrap_err();
-        assert_eq!(e, MeshError::OpenSurface { open_edges: 3 });
-        assert!(e.to_string().starts_with("the surface is open"));
-
-        let mut flipped = cube.clone();
-        for t in &mut flipped.triangles {
-            t.swap(1, 2);
-        }
-        assert_eq!(
-            tetrahedralize(&flipped, &opts, &mut || true).unwrap_err(),
-            MeshError::InsideOut
-        );
-
-        let tiny = cuboid([0.2; 3], &|p| add(p, [0.3, 0.3, 0.3]));
-        let e = tetrahedralize(
-            &tiny,
-            &MeshOptions {
-                size: 2.0,
-                max_tets: 0,
-            },
-            &mut || true,
-        )
-        .unwrap_err();
-        assert_eq!(
-            e,
-            MeshError::TooSmall {
-                size: 2.0,
-                coarsening: Coarsening::None
-            }
-        );
-        assert_eq!(
-            e.to_string(),
-            "the part is thinner than one element of 2.000 mm, so no element fits inside it, use a smaller element size"
-        );
-
-        assert_eq!(
-            tetrahedralize(
-                &cube,
-                &MeshOptions {
-                    size: 0.0,
-                    max_tets: 0
-                },
-                &mut || true
-            )
-            .unwrap_err(),
-            MeshError::InvalidSize(0.0)
-        );
-        let mut short = cube.clone();
-        short.face_ids.pop();
-        assert!(matches!(
-            tetrahedralize(&short, &opts, &mut || true),
-            Err(MeshError::FaceIdCount { .. })
-        ));
-        assert_eq!(
-            tetrahedralize(&SurfaceMesh::default(), &opts, &mut || true).unwrap_err(),
-            MeshError::EmptySurface
-        );
-
-        // Cancelling partway through, and the progress callback is called often.
-        let mut calls = 0;
-        let e = tetrahedralize(
-            &cube,
-            &MeshOptions {
-                size: 0.25,
-                max_tets: 0,
-            },
-            &mut || {
-                calls += 1;
-                calls < 20
-            },
-        )
-        .unwrap_err();
-        assert_eq!(e, MeshError::Cancelled);
-        assert_eq!(e.to_string(), "meshing was cancelled");
-        let mut calls = 0;
-        tetrahedralize(&cube, &opts, &mut || {
-            calls += 1;
-            true
-        })
-        .unwrap();
-        assert!(calls > 20, "{calls} progress calls");
-    }
-
-    #[test]
-    fn fifty_thousand_tets_timing() {
-        // Debug builds are far slower; the timing target is for release.
-        let (r, size, surface_res) = if cfg!(debug_assertions) {
-            (10.0, 1.6, (128, 64))
-        } else {
-            (10.0, 1.0, (384, 192))
-        };
-        let s = sphere([0.0; 3], r, surface_res.0, surface_res.1);
-        let start = Instant::now();
-        let (m, stats) = mesh(&s, size);
-        let took = start.elapsed();
-        eprintln!(
-            "timing: {} tets from {} surface triangles in {:.0} ms (min dihedral {:.2})",
-            m.tets.len(),
-            s.triangles.len(),
-            took.as_secs_f64() * 1e3,
-            stats.min_dihedral_deg
-        );
-        if !cfg!(debug_assertions) {
-            assert!(m.tets.len() >= 50_000, "{} tets", m.tets.len());
         }
     }
 
@@ -2223,9 +1635,7 @@ mod tests {
         // position and rotation against the lattice.
         let mut seed = 99u64;
         let mut rnd = || {
-            seed = seed
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
             (seed >> 11) as f64 / (1u64 << 53) as f64
         };
         let count = if cfg!(debug_assertions) { 15 } else { 90 };
@@ -2242,19 +1652,10 @@ mod tests {
                 }
             };
             let (_, stats) = mesh(&s, 0.5);
-            worst = (
-                worst.0.min(stats.min_dihedral_deg),
-                worst.1.max(stats.max_dihedral_deg),
-            );
+            worst = (worst.0.min(stats.min_dihedral_deg), worst.1.max(stats.max_dihedral_deg));
         }
-        eprintln!(
-            "worst dihedral over {count} random meshes: {:.2} to {:.2} deg",
-            worst.0, worst.1
-        );
-        assert!(
-            worst.0 >= PAPER_DIHEDRAL[0] && worst.1 <= PAPER_DIHEDRAL[1],
-            "{worst:?}"
-        );
+        eprintln!("worst dihedral over {count} random meshes: {:.2} to {:.2} deg", worst.0, worst.1);
+        assert!(worst.0 >= PAPER_DIHEDRAL[0] && worst.1 <= PAPER_DIHEDRAL[1], "{worst:?}");
     }
 
     #[test]
@@ -2263,9 +1664,7 @@ mod tests {
         // pieces and most of the volume, or refused. Never hinged, split or bridged.
         let mut seed = 7u64;
         let mut rnd = || {
-            seed = seed
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
             (seed >> 11) as f64 / (1u64 << 53) as f64
         };
         let h = 0.5;
@@ -2288,14 +1687,7 @@ mod tests {
                 (join(&one, &two), 2)
             };
             let name = format!("case {case}");
-            match tetrahedralize(
-                &s,
-                &MeshOptions {
-                    size: h,
-                    max_tets: 0,
-                },
-                &mut || true,
-            ) {
+            match tetrahedralize(&s, &MeshOptions { size: h, max_tets: 0 }, &mut || true) {
                 Ok((m, stats)) => {
                     if let Err(e) = audit(&m, &stats, pieces) {
                         panic!("{name}: {e}");
@@ -2312,13 +1704,8 @@ mod tests {
                     assert!(
                         matches!(
                             e,
-                            MeshError::TooThin {
-                                coarsening: Coarsening::None,
-                                ..
-                            } | MeshError::TooSmall {
-                                coarsening: Coarsening::None,
-                                ..
-                            }
+                            MeshError::TooThin { coarsening: Coarsening::None, .. }
+                                | MeshError::TooSmall { coarsening: Coarsening::None, .. }
                         ),
                         "{name}: {e:?}"
                     );
@@ -2331,15 +1718,7 @@ mod tests {
 
         // Half an element thick never meshes, nor does a gap three quarters of an element wide.
         let plate = cuboid([6.0, 5.0, 0.25], &|p| rotate(p, 0.3, 0.2, 0.1));
-        let e = tetrahedralize(
-            &plate,
-            &MeshOptions {
-                size: h,
-                max_tets: 0,
-            },
-            &mut || true,
-        )
-        .unwrap_err();
+        let e = tetrahedralize(&plate, &MeshOptions { size: h, max_tets: 0 }, &mut || true).unwrap_err();
         assert!(matches!(e, MeshError::TooThin { .. }), "{e:?}");
         assert_eq!(
             e.to_string(),
@@ -2348,91 +1727,15 @@ mod tests {
         let place = |p: V3| rotate(p, 0.3, 0.2, 0.1);
         let one = cuboid([3.0; 3], &place);
         let two = cuboid([3.0; 3], &|p| place(add(p, [3.375, 0.0, 0.0])));
-        let e = tetrahedralize(
-            &join(&one, &two),
-            &MeshOptions {
-                size: h,
-                max_tets: 0,
-            },
-            &mut || true,
-        )
-        .unwrap_err();
+        let e = tetrahedralize(&join(&one, &two), &MeshOptions { size: h, max_tets: 0 }, &mut || true).unwrap_err();
         assert!(matches!(e, MeshError::TooThin { .. }), "{e:?}");
-    }
-
-    #[test]
-    fn hollow_body_is_one_piece() {
-        let outer = sphere([0.1, 0.2, 0.3], 5.0, 64, 32);
-        let mut inner = sphere([0.1, 0.2, 0.3], 3.0, 64, 32);
-        for t in &mut inner.triangles {
-            t.swap(1, 2);
-        }
-        let s = join(&outer, &inner);
-        let (m, stats) = mesh(&s, 0.5);
-        audit(&m, &stats, 1).unwrap();
-        let reference = surface_volume(&s);
-        assert!(((stats.volume - reference) / reference).abs() < 0.02);
-    }
-
-    #[test]
-    fn coarsening_errors_ask_for_more_elements() {
-        // The element limit, not the size asked for, makes the elements too large.
-        let cube = cuboid([10.0; 3], &|p| p);
-        let e = tetrahedralize(
-            &cube,
-            &MeshOptions {
-                size: 1.0,
-                max_tets: 1,
-            },
-            &mut || true,
-        )
-        .unwrap_err();
-        assert!(
-            matches!(
-                e,
-                MeshError::TooSmall {
-                    coarsening: Coarsening::ElementLimit { max_tets: 1 },
-                    ..
-                }
-            ),
-            "{e:?}"
-        );
-        let text = e.to_string();
-        assert!(
-            text.ends_with(
-                "the limit of 1 elements forces elements this large, allow more elements"
-            ) && !text.contains("smaller"),
-            "{text}"
-        );
-
-        // A large thin plate at the default limit grows the size past its thickness.
-        let plate = cuboid([100.0, 100.0, 1.0], &|p| rotate(p, 0.01, 0.02, 0.3));
-        let e = tetrahedralize(
-            &plate,
-            &MeshOptions {
-                size: 0.5,
-                max_tets: 60_000,
-            },
-            &mut || true,
-        )
-        .unwrap_err();
-        let MeshError::TooThin { size, coarsening } = e else {
-            panic!("{e:?}");
-        };
-        assert!(size > 1.0, "{size}");
-        assert_eq!(coarsening, Coarsening::ElementLimit { max_tets: 60_000 });
-        assert!(e.to_string().ends_with(
-            "the limit of 60000 elements forces elements this large, allow more elements"
-        ));
     }
 
     #[test]
     fn tiny_sizes_do_not_overflow_the_lattice() {
         let surf = Surface::new(&cuboid([10.0; 3], &|p| p)).unwrap();
-        for (max_tets, want) in [
-            (0, Coarsening::LatticeLimit),
-            (60_000, Coarsening::ElementLimit { max_tets: 60_000 }),
-        ] {
+        for (max_tets, want) in [(0, Coarsening::LatticeLimit), (60_000, Coarsening::ElementLimit { max_tets: 60_000 })]
+        {
             for size in [1e-7, 1e-30, f64::MIN_POSITIVE] {
                 let (h, coarsening) = choose_size(&surf, &MeshOptions { size, max_tets });
                 assert_eq!(coarsening, want);
@@ -2441,13 +1744,7 @@ mod tests {
             }
         }
         // A sensible size is left alone.
-        let (h, coarsening) = choose_size(
-            &surf,
-            &MeshOptions {
-                size: 1.0,
-                max_tets: 0,
-            },
-        );
+        let (h, coarsening) = choose_size(&surf, &MeshOptions { size: 1.0, max_tets: 0 });
         assert_eq!((h, coarsening), (1.0, Coarsening::None));
     }
 }

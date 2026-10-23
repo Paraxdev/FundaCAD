@@ -1,6 +1,3 @@
-/* ============================================================================
-   TITLEBAR
-   ============================================================================ */
 #titlebar {
   display: flex;
   align-items: center;
@@ -8,15 +5,12 @@
   padding: 0 var(--s-4);
   background: var(--panel);
   border-bottom: 1px solid var(--line);
-  /* Let the row be narrower than its content (see #app). Deliberately NOT
-     `overflow: hidden`: .menu-popup is absolutely positioned at top:100%, i.e.
-     it hangs BELOW this 36px bar while still being a child of it, so clipping
-     here makes every File/Edit/View menu invisible. The shrinking is done by
-     the error notice's slot giving up its width instead. */
+  /* Not overflow: hidden, .menu-popup hangs below this bar as its child and would be
+     clipped away. The error notice slot gives up the width instead. */
   min-width: 0;
 }
 
-/* brand lockup: the FundaCAD mark + wordmark (assets/brand, set in index.html) */
+/* The mark and wordmark come from assets/brand, set in index.html. */
 .brand {
   display: inline-flex;
   align-items: center;
@@ -37,12 +31,12 @@
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
-  /* The app's badge size: the timeline's error badge, its cancel button and its
-     busy readout all resolve here too, so a status marker is the same shape
-     whichever bar it appears in. */
+  /* The app's badge size, shared by the timeline's error badge, cancel and busy readout. */
   padding: var(--s-1) var(--s-3);
   text-transform: uppercase;
-  transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease),
+  transition:
+    color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
     background var(--t-fast) var(--ease);
 }
 .context-tab.sketch {
@@ -52,7 +46,6 @@
   box-shadow: 0 0 0 1px var(--accent-tint-2);
 }
 
-/* ---- menu bar (File …) ---- */
 .menubar {
   display: flex;
   align-items: stretch;
@@ -69,14 +62,14 @@
   font: inherit;
   font-size: 12.5px;
   padding: 0 var(--s-4);
-  /* The vertical margin is what gives the hover fill its height inside a 36px
-     bar; the 1px horizontal is NOT a spacing rung, it is the hairline that stops
-     two adjacent hover fills from touching, and putting it on the scale would
-     widen the whole menu bar by a dozen pixels at the notice slot's expense. */
+  /* The 1px is not a spacing rung but the hairline that keeps adjacent hover fills apart;
+     a rung would widen the menu bar at the notice slot's expense. */
   margin: var(--s-2) 1px;
   cursor: pointer;
   border-radius: var(--r-sm);
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 .menu-btn:hover {
   background: var(--raised);
@@ -100,8 +93,14 @@
   animation: pop-in var(--t-fast) var(--ease);
 }
 @keyframes pop-in {
-  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
-  to   { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .menu-popup.hidden {
   display: none;
@@ -110,10 +109,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* A MINIMUM separation, not a layout gap: the row is space-between, so this
-     only bites when the label and its shortcut would otherwise collide, and it
-     has to be wide enough that "Save As…  Ctrl+Shift+S" still reads as two
-     columns rather than one sentence. */
+  /* A minimum in a space-between row, wide enough that "Save As…  Ctrl+Shift+S" still
+     reads as two columns. */
   gap: var(--s-7);
   width: 100%;
   background: none;
@@ -125,7 +122,9 @@
   padding: var(--s-3) var(--s-4);
   border-radius: var(--r-sm);
   cursor: pointer;
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 .menu-item:hover {
   background: var(--accent-tint);
@@ -148,7 +147,6 @@
   background: var(--line);
   margin: var(--s-1) var(--s-2);
 }
-/* titlebar undo/redo (mouse-visible; Ctrl+Z was the only affordance before) */
 .tb-btn {
   width: 26px;
   height: 24px;
@@ -160,7 +158,9 @@
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 .tb-btn:hover:not(:disabled) {
   background: var(--raised);
@@ -173,9 +173,8 @@
 .tb-rest {
   display: contents;
 }
-/* Under Home the controls for the hidden workspace read as switched off, inert
-   takes their clicks, hover and focus. A display: contents box paints nothing
-   of its own, so the dimming goes on its children. */
+/* Under Home, inert takes these controls' input; a display: contents box paints nothing,
+   so the dimming goes on its children. */
 #titlebar.home-up .brand,
 #titlebar.home-up .tb-rest > * {
   opacity: 0.38;
@@ -187,67 +186,6 @@
   color: var(--accent-hot);
 }
 
-/* ---- "?" shortcut cheat-sheet HUD ---- */
-.shortcut-hud {
-  position: fixed;
-  inset: 0;
-  z-index: 2600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(10, 11, 14, 0.6);
-}
-.shortcut-hud-card {
-  display: flex;
-  gap: var(--s-6);
-  padding: var(--s-6);
-  background: var(--panel-2);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-3);
-  animation: pop-in var(--t-fast) var(--ease);
-  flex-wrap: wrap;
-  max-width: 900px;
-}
-.shortcut-hud-title {
-  flex-basis: 100%;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: var(--s-2);
-}
-.shortcut-hud-group h4 {
-  margin: 0 0 var(--s-2);
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--text-mute);
-}
-.shortcut-hud-row {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  padding: var(--s-0) 0;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.shortcut-hud-changed {
-  margin-left: auto;
-  font-size: 10px;
-  color: var(--accent);
-}
-.shortcut-hud-row kbd {
-  min-width: 54px;
-  padding: var(--s-0) var(--s-2);
-  border: 1px solid var(--line-strong);
-  border-bottom-width: 2px;
-  border-radius: var(--r-sm);
-  background: var(--bg);
-  color: var(--accent-hot);
-  font-size: 11px;
-  font-family: inherit;
-  text-align: center;
-}
 .docname {
   color: var(--text-mute);
   font-size: 12px;
@@ -257,11 +195,8 @@
   color: var(--text);
 }
 
-/* ---- [ Model | Render ] workspace segment ------------------------------- */
-/* One control made of buttons, so the border is on the GROUP and the buttons
-   only carry a divider between them. Drawn as a single pill: two separately
-   bordered buttons read as two tools, which is the one thing this must not
-   say. */
+/* The border is on the group, one pill: two separately bordered buttons would read as
+   two tools. */
 #workspace-toggle.segmented {
   display: flex;
   align-items: stretch;
@@ -282,7 +217,9 @@
   font-size: 11px;
   letter-spacing: 0.3px;
   cursor: pointer;
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 #workspace-toggle .seg-btn + .seg-btn {
   border-left: 1px solid var(--line);

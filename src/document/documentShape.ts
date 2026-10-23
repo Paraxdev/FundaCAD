@@ -1,13 +1,11 @@
-// What load() checks before it touches the store, so a file that is not a
-// document, or is a damaged one, is refused whole and with a reason a person
-// can read, instead of failing halfway through with whatever a migration step
-// tripped over ("features.flatMap is not a function", FI-8).
+// load() checks this before touching the store, so a non document is refused whole with a readable reason (FI-8).
 
-/** A file load() refused. `reason` is for people, finishing the sentence "This
- *  file is not a FundaCAD document, or it is damaged: ...". `message` keeps the
- *  technical detail. */
+// `reason` finishes "This file is not a FundaCAD document, or it is damaged: ..."; `message` keeps the detail.
 export class UnreadableDocumentError extends Error {
-  constructor(readonly reason: string, detail: string) {
+  constructor(
+    readonly reason: string,
+    detail: string,
+  ) {
     super(detail);
     this.name = "UnreadableDocumentError";
   }
@@ -19,10 +17,8 @@ function kindOf(v: unknown): string {
   return `a ${typeof v}`;
 }
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  v !== null && typeof v === "object" && !Array.isArray(v);
+const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 
-/** Null when `parsed` has the shape of a document, else what is wrong with it. */
 export function documentShapeProblem(parsed: unknown): { reason: string; detail: string } | null {
   if (!isRecord(parsed)) {
     return { reason: "it holds no document", detail: `top level is ${kindOf(parsed)}, expected an object` };
@@ -32,7 +28,10 @@ export function documentShapeProblem(parsed: unknown): { reason: string; detail:
     return { reason: "it has no modelling steps in it", detail: `"features" is missing` };
   }
   if (!Array.isArray(features)) {
-    return { reason: "its list of modelling steps is damaged", detail: `"features" is ${kindOf(features)}, expected an array` };
+    return {
+      reason: "its list of modelling steps is damaged",
+      detail: `"features" is ${kindOf(features)}, expected an array`,
+    };
   }
   for (let i = 0; i < features.length; i++) {
     const f: unknown = features[i];

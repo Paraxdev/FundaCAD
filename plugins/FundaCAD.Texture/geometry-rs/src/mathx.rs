@@ -1,8 +1,5 @@
-//! Transcendentals from the engine's C math library (the `numeric` import), so
-//! they round as the Python half's math and numpy calls do on the same machine:
-//! both end in the platform libm, where Rust's own wasm copies can land one ulp
-//! apart, and one ulp moves a Delaunay tie or a floor at a cell boundary.
-//! Native builds (the unit tests) call the platform libm directly.
+//! Transcendentals from the engine's C libm (the `numeric` import), so they round as the Python half's do: Rust's own
+//! wasm copies can land one ulp apart, which moves a Delaunay tie or a floor at a cell boundary. Native tests use libm.
 
 #[cfg(target_arch = "wasm32")]
 mod imp {

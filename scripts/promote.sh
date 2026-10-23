@@ -8,6 +8,10 @@
 # jobs are all green, merges it into main with --no-ff, and prints the push.
 # dev itself may be red, a promotion may not. With --push it pushes main, and
 # the main build publishes the beta once its own gating jobs are green.
+# The beta page opens with docs/release-notes/beta.md, which is written by hand
+# on dev before a promotion, and the script says when it did not change.
+# Its "What's new" section is also the card Home shows after an update, so
+# keep it short and written for makers.
 # --stable also tags the merge v1.<minor>.<patch>, pushed atomically with main,
 # and the tag's build publishes a stable release.
 #
@@ -49,7 +53,9 @@ if [ -n "$version" ]; then
 fi
 
 cd "$(git rev-parse --show-toplevel)"
-git fetch --quiet --tags "$REMOTE" main
+# --force because the rolling beta and development tags move on every release,
+# and a plain --tags fetch refuses to update a moved tag and fails the script.
+git fetch --quiet --force --tags "$REMOTE" main
 git fetch --quiet "$REMOTE" dev \
   || die "could not fetch dev from $REMOTE. If it does not exist yet, create it from main first (docs/ENGINE.md section 7)."
 
@@ -92,6 +98,10 @@ for id in $runs; do
 done
 [ -n "$run" ] || die "no green build of ${sha:0:7} on dev yet ($why). dev may publish a red build, main may not. See: gh run list -R $REPO --branch dev"
 echo "green: $run"
+
+if [ -z "$tag" ] && git diff --quiet "$REMOTE/main" "$sha" -- docs/release-notes/beta.md; then
+  echo "note: docs/release-notes/beta.md is the same on ${sha:0:7} as on main. The beta page shows it above the generated part, so update it on dev first if this promotion changes what users see or need to do (docs/ENGINE.md section 7.1)."
+fi
 
 tmp=$(mktemp -d)
 cleanup() { git worktree remove --force "$tmp" 2>/dev/null || { rm -rf "$tmp"; git worktree prune; }; }

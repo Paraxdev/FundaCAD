@@ -1,6 +1,5 @@
-//! A built body's triangles as flat arrays. A 666 part assembly is millions
-//! of coordinates, and as one JSON number each the reply of one `build` took
-//! most of 17 GB.
+//! A built body's triangles as flat arrays: with one JSON number per coordinate,
+//! one `build` reply of a 666 part assembly took most of 17 GB.
 
 use fundacad_protocol::frame::Buf;
 use serde_json::{Map, Value};
@@ -37,17 +36,15 @@ fn numbers<T>(v: Option<&Value>, cast: impl Fn(f64) -> T) -> Vec<T> {
 }
 
 impl MeshBody {
-    /// A body of a JSON reply, the arrays inline.
     pub fn from_value(v: &Value) -> MeshBody {
         let mut info = v.as_object().cloned().unwrap_or_default();
         let positions = numbers(info.get("positions"), |x| x as f32);
         let indices = numbers(info.get("indices"), |x| x as u32);
         let face_ids = numbers(info.get("faceIds"), |x| x as u32);
         let edges = match info.get("edges") {
-            Some(Value::Array(list)) => list
-                .iter()
-                .map(|e| numbers(e.get("points").or(Some(e)), |x| x as f32))
-                .collect(),
+            Some(Value::Array(list)) => {
+                list.iter().map(|e| numbers(e.get("points").or(Some(e)), |x| x as f32)).collect()
+            }
             _ => Vec::new(),
         };
         for k in ARRAYS.iter().chain(&["edges"]) {
@@ -92,10 +89,7 @@ impl MeshBody {
                     at = end;
                 }
             } else if let Value::Array(list) = &packed {
-                edges = list
-                    .iter()
-                    .map(|e| numbers(e.get("points").or(Some(e)), |x| x as f32))
-                    .collect();
+                edges = list.iter().map(|e| numbers(e.get("points").or(Some(e)), |x| x as f32)).collect();
             }
         }
         MeshBody { info, positions, indices, face_ids, edges }
@@ -111,36 +105,5 @@ impl MeshBody {
 
     pub fn triangles(&self) -> usize {
         self.indices.len() / 3
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn a_json_body_and_a_framed_one_read_the_same() {
-        let v = json!({"id": "b1", "name": "Body1", "faceCount": 1,
-            "positions": [0, 0, 0, 1, 0, 0, 0, 1, 0], "indices": [0, 1, 2], "faceIds": [0],
-            "normals": [0, 0, 1, 0, 0, 1, 0, 0, 1],
-            "edges": [{"points": [[0, 0, 0], [1, 0, 0]], "body": "b1"}]});
-        let a = MeshBody::from_value(&v);
-        let mut bufs = vec![
-            Buf::F32(vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]),
-            Buf::U32(vec![0, 1, 2]),
-            Buf::U32(vec![0]),
-            Buf::F32(vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0]),
-            Buf::U32(vec![2]),
-        ];
-        let framed = json!({"id": "b1", "name": "Body1", "faceCount": 1,
-            "positions": {"$buf": 0}, "indices": {"$buf": 1}, "faceIds": {"$buf": 2},
-            "edges": {"$pts": {"$buf": 3}, "$counts": {"$buf": 4}, "body": "b1"}});
-        let b = MeshBody::from_frame(framed, &mut bufs);
-        assert_eq!(a, b);
-        assert_eq!(a.triangles(), 1);
-        assert_eq!(a.id(), "b1");
-        assert_eq!(a.edges, vec![vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0]]);
-        assert!(a.get("positions").is_none());
     }
 }

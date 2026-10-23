@@ -1,16 +1,6 @@
-// Bringing one FundaCAD document into another.
-//
-// What arrives is the source's GEOMETRY, as an import body, not its features. A
-// feature copied across keeps its selectors, and those name bodies by the order
-// the SOURCE built them in ("body1"), which in the host is a different body. The
-// build numbers bodies with one counter over the whole history, so no remapping
-// done here could know what the host will call them. Geometry has no such
-// references: the source is built on its own, written out, and read back in.
-//
-// Two ways in:
-//  - append: the geometry is copied in once and is the host's from then on;
-//  - link: the same, plus where it came from and a fingerprint of the source, so
-//    the body can be refreshed when that file changes.
+// Bringing one FundaCAD document into another as geometry, not features: the source's selectors name bodies by
+// its own build order, which the host numbers differently. Append copies once; link also keeps the source path
+// and a fingerprint so the body can refresh when that file changes.
 
 import type { DocumentStore } from "../document/store";
 import { prefixFeatures } from "../document/store";
@@ -84,16 +74,32 @@ async function bakeSource(
   try {
     doc = buildableSource(source.text);
   } catch (e) {
-    return { ok: false, message: `could not read ${baseName(source.path)}: ${e instanceof Error ? e.message : String(e)}` };
+    return {
+      ok: false,
+      message: `could not read ${baseName(source.path)}: ${e instanceof Error ? e.message : String(e)}`,
+    };
   }
   if (!doc.features.length) return { ok: false, message: `${baseName(source.path)} has nothing in it to insert` };
   const label = baseName(source.path);
-  const exported = await store.runBusy(`Building ${label}`, (onStarted) => geometry.export(doc, "step", tempPath, {}, onStarted));
+  const exported = await store.runBusy(`Building ${label}`, (onStarted) =>
+    geometry.export(doc, "step", tempPath, {}, onStarted),
+  );
   if (!exported.ok) {
-    return { ok: false, message: exported.message ?? `could not build ${label}`, ...(exported.cancelled ? { cancelled: true } : {}) };
+    return {
+      ok: false,
+      message: exported.message ?? `could not build ${label}`,
+      ...(exported.cancelled ? { cancelled: true } : {}),
+    };
   }
-  const read = await store.runBusy(`Reading ${label}`, (onStarted) => geometry.importGeometry(exported.path ?? tempPath, "step", onStarted));
-  if (!read.ok) return { ok: false, message: read.message ?? `could not read ${label} back`, ...(read.cancelled ? { cancelled: true } : {}) };
+  const read = await store.runBusy(`Reading ${label}`, (onStarted) =>
+    geometry.importGeometry(exported.path ?? tempPath, "step", onStarted),
+  );
+  if (!read.ok)
+    return {
+      ok: false,
+      message: read.message ?? `could not read ${label} back`,
+      ...(read.cancelled ? { cancelled: true } : {}),
+    };
   return read;
 }
 
@@ -105,7 +111,8 @@ export async function insertFundaDocument(
   mode: FundaInsertMode,
   tempPath: string,
 ): Promise<InsertOutcome> {
-  const baked = await bakeSource(store, geometry, source, tempPath);
+  // The bake runs on the engine for this document; its session ending rejects it before anything is written.
+  const baked = await store.session.step(store.importing(() => bakeSource(store, geometry, source, tempPath)));
   if (!baked.ok) return baked;
   const id = store.nextId();
   store.addFeature({
@@ -129,9 +136,13 @@ export async function updateFundaLink(
   source: FundaSource,
   tempPath: string,
 ): Promise<InsertOutcome> {
-  const f = asFeature(store.document.features.find((x) => x.id === featureId), "import");
+  const f = asFeature(
+    store.document.features.find((x) => x.id === featureId),
+    "import",
+  );
   if (!f?.link) return { ok: false, message: "that step is not linked to a file" };
-  const baked = await bakeSource(store, geometry, source, tempPath);
+  // The bake runs on the engine for this document; its session ending rejects it before anything is written.
+  const baked = await store.session.step(store.importing(() => bakeSource(store, geometry, source, tempPath)));
   if (!baked.ok) return baked;
   store.updateFeature(featureId, {
     ...importFields(baked),

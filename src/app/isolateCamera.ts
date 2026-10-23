@@ -1,8 +1,4 @@
 // Isolate frames what it keeps, and ending it puts the view back.
-//
-// Isolating a small or off centre body left the camera framed on everything
-// that had just been hidden, so the part it was meant to show was a speck, or
-// off screen, and it read as the model vanishing.
 
 import type * as THREE from "three";
 import type { CameraState } from "../viewport/cameras";
@@ -28,11 +24,13 @@ export interface IsolateCameraView {
 export function sameCameraState(a: CameraState, b: CameraState): boolean {
   const near = (x: number, y: number, tol: number) => Math.abs(x - y) <= tol;
   const len = Math.max(1e-6, a.scale) * 1e-4;
-  return a.mode === b.mode
-    && near(a.scale, b.scale, len)
-    && near(a.fov, b.fov, 1e-6)
-    && a.target.every((v, i) => near(v, b.target[i]!, len))
-    && Math.abs(a.quaternion.reduce((s, v, i) => s + v * b.quaternion[i]!, 0)) >= 1 - 1e-6;
+  return (
+    a.mode === b.mode &&
+    near(a.scale, b.scale, len) &&
+    near(a.fov, b.fov, 1e-6) &&
+    a.target.every((v, i) => near(v, b.target[i]!, len)) &&
+    Math.abs(a.quaternion.reduce((s, v, i) => s + v * b.quaternion[i]!, 0)) >= 1 - 1e-6
+  );
 }
 
 export function installIsolateCamera(
@@ -60,8 +58,7 @@ export function installIsolateCamera(
       if (!box) return;
       const from = view.rig.getState();
       before ??= from;
-      // Fitted once instantly to learn where the animation ends, which is what
-      // tells a camera the user has since moved from one still where this left it.
+      // Fitted instantly first to learn the end pose, which later tells whether the user has moved the camera.
       view.rig.fit(box, false);
       framed = view.rig.getState();
       view.rig.setState(from, false);

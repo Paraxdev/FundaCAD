@@ -70,14 +70,22 @@ describe("waiting for a STEP translation", () => {
   it("rejects with Onshape's reason when the translation fails", async () => {
     const s = server({});
     await expect(
-      pollTranslation(async () => ({ id: "t", requestState: "FAILED", failureReason: "Empty part studio" }), { id: "t", requestState: "ACTIVE" }, s),
+      pollTranslation(
+        async () => ({ id: "t", requestState: "FAILED", failureReason: "Empty part studio" }),
+        { id: "t", requestState: "ACTIVE" },
+        s,
+      ),
     ).rejects.toThrow("Empty part studio");
   });
 
   it("gives up after the timeout", async () => {
     const s = server({});
     await expect(
-      pollTranslation(async () => ({ id: "t", requestState: "ACTIVE" }), { id: "t", requestState: "ACTIVE" }, { ...s, timeoutMs: 20_000 }),
+      pollTranslation(
+        async () => ({ id: "t", requestState: "ACTIVE" }),
+        { id: "t", requestState: "ACTIVE" },
+        { ...s, timeoutMs: 20_000 },
+      ),
     ).rejects.toThrow("has not finished");
     expect(Math.max(...s.slept)).toBe(5000);
   });
@@ -87,7 +95,8 @@ describe("the signed client", () => {
   it("waits as long as a 429 asks before trying again", async () => {
     let n = 0;
     const s = server({
-      [`GET /api/translations/t`]: () => (n++ === 0 ? reply(429, {}, { retryAfter: "2" }) : reply(200, { id: "t", requestState: "DONE" })),
+      [`GET /api/translations/t`]: () =>
+        n++ === 0 ? reply(429, {}, { retryAfter: "2" }) : reply(200, { id: "t", requestState: "DONE" }),
     });
     const t = await s.client.json<{ requestState: string }>("GET", "https://cad.onshape.com/api/translations/t");
     expect(t.requestState).toBe("DONE");
@@ -101,7 +110,10 @@ describe("the signed client", () => {
         reply(307, undefined, { location: `https://acme.onshape.com/api/documents/${D}?x=1` }),
       [`GET acme.onshape.com/api/documents/${D}`]: () => reply(200, { defaultWorkspace: { id: W } }),
     });
-    const doc = await s.client.json<{ defaultWorkspace: { id: string } }>("GET", `https://cad.onshape.com/api/documents/${D}`);
+    const doc = await s.client.json<{ defaultWorkspace: { id: string } }>(
+      "GET",
+      `https://cad.onshape.com/api/documents/${D}`,
+    );
     expect(doc.defaultWorkspace.id).toBe(W);
     expect(s.seen[1]!.url).toBe(`https://acme.onshape.com/api/documents/${D}?x=1`);
     expect(header(s.seen[0]!, "Authorization")).not.toBe(header(s.seen[1]!, "Authorization"));
@@ -139,7 +151,12 @@ describe("a part studio from a link", () => {
         return reply(200, { id: "t1", requestState: "ACTIVE" });
       },
       [`GET /api/translations/t1`]: () =>
-        reply(200, polls++ ? { id: "t1", requestState: "DONE", resultExternalDataIds: ["x1"] } : { id: "t1", requestState: "ACTIVE" }),
+        reply(
+          200,
+          polls++
+            ? { id: "t1", requestState: "DONE", resultExternalDataIds: ["x1"] }
+            : { id: "t1", requestState: "ACTIVE" },
+        ),
       [`GET /api/documents/d/${D}/externaldata/x1`]: (req) => {
         expect(req.saveAs).toBe("Bracket.step");
         return reply(200, undefined, { path: "C:/data/downloads/Bracket.step", len: 1234 });

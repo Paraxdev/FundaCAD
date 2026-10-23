@@ -1,11 +1,5 @@
-/* ============================================================================
-   RENDER DOCK, the Render workspace's own column
-   ============================================================================
-   Wider than the browser tree (232px) on purpose. This one holds a two-column
-   grid of rendered spheres with two lines of text under each; at the tree's
-   width that is one column, and a library you scroll one row at a time is a
-   list, not a library.
-   ============================================================================ */
+/* Wider than the browser tree (232px) on purpose, so the material library is two
+   columns of spheres and not a one column list. */
 #renderdock {
   width: 300px;
   display: flex;
@@ -15,7 +9,6 @@
   border-left: 1px solid var(--line);
 }
 
-/* ---- tabs ---------------------------------------------------------------- */
 .rd-tabs {
   display: flex;
   flex: 0 0 auto;
@@ -29,9 +22,7 @@
   gap: var(--s-1);
   padding: var(--s-2) var(--s-1);
   border: 0;
-  /* The selected tab is marked by a bar under it rather than by a filled
-     background: the panel below is the tab's own surface, so a filled tab and
-     the panel would read as one shape and the row would lose its rhythm. */
+  /* A bar, not a filled background: a filled tab would merge with the panel below. */
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   background: transparent;
@@ -49,7 +40,6 @@
   border-bottom-color: var(--accent);
 }
 
-/* ---- the scrolling body -------------------------------------------------- */
 .rd-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -92,7 +82,6 @@
   color: var(--text);
 }
 
-/* ---- search -------------------------------------------------------------- */
 .rd-search {
   display: flex;
   align-items: center;
@@ -115,7 +104,6 @@
   outline: none;
 }
 
-/* ---- the used-materials list --------------------------------------------- */
 .rd-used {
   display: flex;
   align-items: center;
@@ -156,7 +144,6 @@
   color: var(--text-mute);
 }
 
-/* ---- the library grid ---------------------------------------------------- */
 .rd-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -175,9 +162,7 @@
   color: var(--text);
   font: inherit;
   text-align: left;
-  /* The cursor IS the affordance: nothing else on the tile says it can be
-     picked up and carried to the model, and a hint under every one of thirty
-     tiles would be thirty copies of one sentence. */
+  /* The cursor is the only sign a tile can be dragged to the model. */
   cursor: grab;
 }
 .rd-tile:hover {
@@ -230,9 +215,8 @@
   flex: 0 0 auto;
   aspect-ratio: auto;
 }
-/* The fallback when this machine would not give the preview renderer a context
-   at all: a flat square of the colour. Worse, and honestly worse, rather than an
-   empty box that reads as a failed image. */
+/* When the preview renderer gets no context: a flat colour square, not an empty box that
+   reads as a failed image. */
 .rd-ball.flat {
   border: 1px solid var(--line);
 }
@@ -255,7 +239,6 @@
   margin-top: var(--s-2);
 }
 
-/* ---- chips (background, bloom, render size) ------------------------------ */
 .rd-chips {
   display: flex;
   flex-wrap: wrap;
@@ -286,12 +269,8 @@
   cursor: default;
 }
 
-/* A settings row with a READOUT after the control. .prefs-row is a two-column
-   grid (label, control), so a third child lands on a line of its own: the value
-   ended up under the slider rather than beside it, which reads as a caption for
-   the whole row instead of as the number the slider is currently at. Narrowed
-   here too, because 92px of label in a 300px column leaves a slider that cannot
-   be aimed. */
+/* A third track puts the readout beside the slider, not under it, and a narrower label
+   leaves a slider that can be aimed in a 300px column. */
 #renderdock .prefs-row {
   grid-template-columns: 72px minmax(0, 1fr) auto;
   margin-bottom: var(--s-1);
@@ -311,6 +290,17 @@
    stretched across the whole track into a lozenge. */
 #renderdock .prefs-row > input[type="checkbox"] {
   justify-self: start;
+}
+
+#renderdock .rd-chip-row {
+  cursor: default;
+  align-items: start;
+}
+#renderdock .rd-chip-row > .prefs-label {
+  padding-top: 4px;
+}
+#renderdock .rd-chip-row > .rd-chips {
+  margin-bottom: 0;
 }
 
 .rd-value {
@@ -334,11 +324,8 @@
   border-top: 1px solid var(--line);
 }
 
-/* ---- the chip that follows a dragged material ---------------------------- */
-/* Teleported to <body>, so it is positioned in viewport coordinates and cannot
-   be clipped by the canvas or by the dock it started in. pointer-events off:
-   an element under the cursor during a drag would take the dragover events the
-   viewport needs to answer with. */
+/* Teleported to <body>, so fixed and never clipped. No pointer events, or it would take
+   the dragover events the viewport needs. */
 .dropchip {
   position: fixed;
   z-index: 60;
@@ -438,4 +425,5 @@
 }
 .rd-notice {
   color: var(--text);
+  margin-bottom: var(--s-2);
 }

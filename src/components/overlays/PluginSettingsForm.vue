@@ -1,8 +1,4 @@
 <script setup lang="ts">
-// One plugin's settings, drawn from what it declared: a row per property,
-// grouped, each with a reset when it differs from its default, then whatever
-// component the plugin added for what a schema cannot say.
-
 import { computed, onUnmounted, ref, shallowRef, watch, type Component } from "vue";
 import { settingMatches, type NumberSetting, type PluginSettings, type SettingProp } from "../../plugins/settings";
 import { fmtKeys } from "../../input/platform";
@@ -29,13 +25,21 @@ watch(
   () => props.settings,
   (s) => {
     off?.();
-    off = s?.onChange(() => { values.value = s.all(); }) ?? null;
+    off =
+      s?.onChange(() => {
+        values.value = s.all();
+      }) ?? null;
     values.value = s?.all() ?? {};
   },
   { immediate: true },
 );
-const offUnit = onUnitChange(() => { unit.value = getUnit(); });
-onUnmounted(() => { off?.(); offUnit(); });
+const offUnit = onUnitChange(() => {
+  unit.value = getUnit();
+});
+onUnmounted(() => {
+  off?.();
+  offUnit();
+});
 
 const visible = computed(() =>
   (props.settings?.schema.props ?? []).filter(
@@ -124,7 +128,10 @@ const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in 
 async function pickFile(p: SettingProp & { extensions?: readonly string[] }) {
   const { open } = await import("@tauri-apps/plugin-dialog");
   const exts = p.extensions ? [...p.extensions] : undefined;
-  const picked = await open({ multiple: false, ...(exts ? { filters: [{ name: p.label ?? p.key, extensions: exts }] } : {}) });
+  const picked = await open({
+    multiple: false,
+    ...(exts ? { filters: [{ name: p.label ?? p.key, extensions: exts }] } : {}),
+  });
   if (typeof picked === "string") store(p, picked);
 }
 

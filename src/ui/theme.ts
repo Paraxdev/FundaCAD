@@ -1,10 +1,5 @@
-// The active theme: the built-in palette on :root in styles/_tokens.scss, or a
-// JSON palette of colour tokens the user uploaded. Only colour tokens are read,
-// so a theme is a repaint and never a relayout.
-//
-// An uploaded palette is written as inline custom properties on the document
-// element, which takes precedence over any stylesheet rule regardless of source order. The
-// built-in theme is the absence of those, so a failure here still looks right.
+// The active theme: the built-in palette in styles/_tokens.scss or an uploaded JSON palette, colour tokens only so a
+// theme never relayouts. Uploads are inline custom properties on <html>, so the built-in theme is just their absence.
 
 import { readSetting } from "./storedSetting";
 
@@ -34,9 +29,7 @@ export const BUILTIN_THEME: Theme = { id: "fundacad", label: "FundaCAD Noir", mo
 
 export const DEFAULT_THEME_ID = BUILTIN_THEME.id;
 
-/** FundaCAD Noir's surfaces, shared by the Noir <Color> variants below: only
- *  the accent changes, for someone who wants the same dark shell without the
- *  default mint-green (or Dracula's purple). */
+/** Noir's surfaces, shared by the Noir variants below, which change only the accent. */
 const NOIR_SURFACE = {
   "--bg": "#050409",
   "--panel": "#1b1826",
@@ -53,6 +46,7 @@ const NOIR_SURFACE = {
   "--warn": "#ffab2e",
   "--error": "#ff5c5c",
   "--error-tint": "rgba(255, 92, 92, 0.14)",
+  "--pick-line": "#b48cff",
 };
 
 function noirTint(
@@ -113,6 +107,7 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--warn": "#ffb86c",
       "--error": "#ff5555",
       "--error-tint": "rgba(255, 85, 85, 0.14)",
+      "--pick-line": "#ff79c6",
       "--accent-blue": "#8be9fd",
     },
   },
@@ -131,10 +126,10 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--line": "#d6cfb4",
       "--line-strong": "#93a1a1",
       "--text": "#073642",
-      "--text-dim": "#586e75",
+      "--text-dim": "#4c6067",
       "--text-mute": "#839496",
       "--accent": "#268bd2",
-      "--accent-hot": "#4aa3e0",
+      "--accent-hot": "#0f5a8c",
       "--accent-tint": "rgba(38, 139, 210, 0.14)",
       "--accent-tint-2": "rgba(38, 139, 210, 0.24)",
       "--accent-glow": "rgba(38, 139, 210, 0.35)",
@@ -143,20 +138,14 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--warn": "#b58900",
       "--error": "#dc322f",
       "--error-tint": "rgba(220, 50, 47, 0.14)",
+      "--pick-line": "#d33682",
       "--accent-blue": "#268bd2",
     },
   },
   {
-    // A theme that stays legible for every kind of colour blindness. Its four
-    // signal colours were chosen and simulation-checked so no two collapse under
-    // protanopia, deuteranopia or tritanopia (the closest pair holds a CIE ΔE of
-    // ~29), and their lightness also steps apart so the ok/warn/error trio still
-    // separates under monochromacy, where hue carries nothing. The accent is
-    // violet rather than a second blue: a blue accent merged with the teal ok
-    // under tritanopia. ok leans teal, not pure green, to keep a blue axis under
-    // red-green blindness; warn is amber, error a bright red that still clears
-    // ~6:1 contrast on the dark surface, since --error is drawn as text.
-    // Surfaces are near-neutral so those signals are what the eye lands on.
+    // Simulation checked so no two signal colours collapse under protanopia, deuteranopia or tritanopia (closest pair
+    // ΔE ~29), with lightness steps for monochromacy. Violet accent, as blue merged with the teal ok in tritanopia;
+    // error clears ~6:1 contrast as it is drawn as text.
     id: "colorblind-safe",
     label: "Colour-Blind Safe",
     mode: "dark",
@@ -183,6 +172,7 @@ const SHIPPED_THEMES: ShippedTheme[] = [
       "--warn": "#f4c542",
       "--error": "#ff5c5c",
       "--error-tint": "rgba(255, 92, 92, 0.16)",
+      "--pick-line": "#ff8fc8",
       "--accent-blue": "#8f7fe8",
     },
   },
@@ -209,11 +199,28 @@ const LIBRARY_KEY = "fundacad.themes";
 
 /** The palette half of _tokens.scss. Anything else in a file is dropped. */
 const PALETTE_TOKENS = new Set<string>([
-  "--bg", "--panel", "--panel-2", "--raised", "--raised-2", "--viewport-bg",
-  "--line", "--line-strong",
-  "--text", "--text-dim", "--text-mute",
-  "--accent", "--accent-hot", "--accent-tint", "--accent-tint-2", "--accent-glow", "--on-accent",
-  "--ok", "--warn", "--error", "--error-tint",
+  "--bg",
+  "--panel",
+  "--panel-2",
+  "--raised",
+  "--raised-2",
+  "--viewport-bg",
+  "--line",
+  "--line-strong",
+  "--text",
+  "--text-dim",
+  "--text-mute",
+  "--accent",
+  "--accent-hot",
+  "--accent-tint",
+  "--accent-tint-2",
+  "--accent-glow",
+  "--on-accent",
+  "--ok",
+  "--warn",
+  "--error",
+  "--error-tint",
+  "--pick-line",
   "--accent-blue",
 ]);
 
@@ -257,8 +264,7 @@ function writeLibrary(list: CustomTheme[]) {
   if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(LIBRARY_KEY, JSON.stringify(list));
-  } catch {
-  }
+  } catch {}
 }
 
 let library: CustomTheme[] = readLibrary();
@@ -339,10 +345,11 @@ export function initTheme() {
   apply(activeId);
 }
 
-// --- uploading and removing palettes ----------------------------------------
-
 function slug(label: string): string {
-  const base = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const base = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
   return `custom-${base || "theme"}`;
 }
 
@@ -362,9 +369,7 @@ function asMode(v: unknown): "dark" | "light" {
 /** Accepts a flat `{ "--bg": "#..." }` map or a `{ palette: { ... } }` wrapper. */
 function extractPalette(source: Record<string, unknown>): Record<string, string> {
   const raw =
-    source.palette && typeof source.palette === "object"
-      ? (source.palette as Record<string, unknown>)
-      : source;
+    source.palette && typeof source.palette === "object" ? (source.palette as Record<string, unknown>) : source;
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(raw)) {
     const token = key.toLowerCase();
@@ -399,7 +404,7 @@ export function addCustomTheme(source: unknown, fallbackLabel = "Custom theme"):
   if (Object.keys(palette).length === 0) {
     return {
       ok: false,
-      error: "No usable colours found. A theme is a JSON object like { \"--bg\": \"#141414\", \"--accent\": \"#f0982d\" }.",
+      error: 'No usable colours found. A theme is a JSON object like { "--bg": "#141414", "--accent": "#f0982d" }.',
     };
   }
   if (library.length >= MAX_CUSTOM) {

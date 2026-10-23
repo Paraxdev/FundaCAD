@@ -138,10 +138,7 @@ pub fn elephant_foot_chamfer(f: &F) -> Result<(), String> {
     let label = "Elephant-foot chamfer";
     let size = f.num("size", 0.4)?;
     if !(0.01..=20.0).contains(&size) {
-        return Err(format!(
-            "{label}: the chamfer size must be between 0.01 and 20 mm (got {})",
-            py_g(size)
-        ));
+        return Err(format!("{label}: the chamfer size must be between 0.01 and 20 mm (got {})", py_g(size)));
     }
     let bdir = g::build_dir(f, label)?;
     for body in feature::target_bodies("bodies", label)? {
@@ -159,10 +156,7 @@ pub fn vertical_fillet(f: &F) -> Result<(), String> {
     let label = "Vertical edge fillet";
     let radius = f.num("radius", 2.0)?;
     if !(0.01..=100.0).contains(&radius) {
-        return Err(format!(
-            "{label}: the radius must be between 0.01 and 100 mm (got {})",
-            py_g(radius)
-        ));
+        return Err(format!("{label}: the radius must be between 0.01 and 100 mm (got {})", py_g(radius)));
     }
     let bdir = g::build_dir(f, label)?;
     let only_convex = f.flag("onlyConvex");

@@ -12,7 +12,14 @@ const sources = import.meta.glob("../../src/styles/*.scss", {
 }) as Record<string, string>;
 
 const scss = new Map(
-  Object.entries(sources).map(([path, text]) => [path.split("/").pop()!.replace(/^_/, "").replace(/\.scss$/, ""), text]),
+  Object.entries(sources).map(([path, text]) => [
+    path
+      .split("/")
+      .pop()!
+      .replace(/^_/, "")
+      .replace(/\.scss$/, ""),
+    text,
+  ]),
 );
 const homeSrc = scss.get("home") ?? "";
 
@@ -63,7 +70,16 @@ const NOIR: Record<string, string> = Object.fromEntries(
 const SOLARIZED_LIGHT: Record<string, string> =
   (themes().find((t) => t.id === "solarized-light") as ShippedTheme | undefined)?.palette ?? {};
 
-const glass = [".home-side", ".home-tools", ".home-card", ".home-example", ".home-new-card", ".home-drawer"];
+const glass = [
+  ".home-side",
+  ".home-tools",
+  ".home-card",
+  ".home-example",
+  ".home-new-card",
+  ".home-drawer",
+  ".home-news",
+  ".home-welcome",
+];
 
 describe("Home wears the app's glass", () => {
   it.each(glass)("%s has the floating panels' fill, blur, border and shadow", (sel) => {

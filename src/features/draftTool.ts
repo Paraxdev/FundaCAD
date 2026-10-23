@@ -1,13 +1,5 @@
-// Interactive Draft: pick a solid face, grab the handle on it and swing the face
-// over to the taper you want, or type the angle. Same gesture as Offset Face,
-// grab an arrow on the face and scrub along its normal, but the drag reads as an
-// ANGLE about the neutral line rather than as a distance (see draftMath.ts).
-//
-// Like Offset Face, the result cannot be faked client-side (OCCT's
-// BRepOffsetAPI_DraftAngle re-solves every neighbouring wall), so the preview is
-// engine-driven: the un-committed feature goes through store.setPreview() and
-// the normal rebuild pipeline renders it. Commit promotes it (records undo);
-// Esc reverts.
+// Interactive Draft: drag a face's handle to swing it to a taper, read as an angle about the neutral line
+// (draftMath.ts). OCCT's BRepOffsetAPI_DraftAngle re-solves the walls around it, so the preview is engine driven.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -25,9 +17,7 @@ type Phase = "pick" | "drag";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
-/** Angle steps the drag lands on, in degrees. Draft is specified in whole or half
- *  degrees on every drawing and in every print profile; a free 3.7194° is a
- *  number nobody asked for. Shift takes the finer step, as everywhere else. */
+/** Degrees. Drafts are specified in whole or half degrees, a free 3.7194 is a number nobody asked for. */
 const ANGLE_STEP = 1;
 const ANGLE_STEP_FINE = 0.1;
 
@@ -118,9 +108,7 @@ export class DraftTool {
       this.beginDrag([hit.selector], [hit.faceId], hit.anchor, hit.normal, hit.bodyId);
       return;
     }
-    // Ctrl/Cmd-click another face on the SAME body adds it; every face in one
-    // draft shares the angle and the pull axis (which is what the engine's
-    // handler does with the list it is given).
+    // Ctrl/Cmd-click adds another face of the same body; every face in one draft shares the angle and the pull axis.
     if (e.ctrlKey || e.metaKey) {
       const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
       if (hit && hit.bodyId === this.bodyId) {
@@ -139,7 +127,11 @@ export class DraftTool {
       e.preventDefault();
       e.stopImmediatePropagation(); // don't orbit while dragging the handle
       // Captured so the release still lands here when it happens over the value box.
-      try { this.viewport.domElement.setPointerCapture(e.pointerId); } catch { /* capture optional */ }
+      try {
+        this.viewport.domElement.setPointerCapture(e.pointerId);
+      } catch {
+        /* capture optional */
+      }
       this.grabbing = true;
       this.grabAngle = this.angle;
       this.grabProj = axisDragDistance(this.viewport, e.clientX, e.clientY, this.anchor, this.axis);
@@ -152,22 +144,21 @@ export class DraftTool {
     if (this.grabbing) {
       this.grabbing = false;
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
-      const moved =
-        Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+      const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
       if (moved && Math.abs(this.angle) >= 1e-3) this.commit();
       return;
     }
-    const moved =
-      Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
+    const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
     if (this.downOnGizmo || moved) return;
     this.commit();
   }
 
   private onKey(e: KeyboardEvent) {
-    if (e.key === "Escape") { this.cancel(); return; }
-    // The pull axis is a guess from the face's own normal, and on a face at 45°
-    // to two of them it is a coin toss. X cycles it rather than making the user
-    // commit and then correct the value row.
+    if (e.key === "Escape") {
+      this.cancel();
+      return;
+    }
+    // The pull axis is a guess from the normal, a coin toss on a face at 45 degrees to two axes, so X cycles it.
     if ((e.key === "x" || e.key === "X") && this.phase === "drag") {
       this.pull = this.pull === "X" ? "Y" : this.pull === "Y" ? "Z" : "X";
       this.lever = this.leverFor(this.pull);
@@ -183,11 +174,8 @@ export class DraftTool {
     );
   }
 
-  /** The height of the grab above the neutral plane for a given pull axis. The
-   *  neutral plane is the body's minimum along that axis (builder._draft), and
-   *  the bbox of the whole build is the closest thing the frontend has to it,
-   *  a single-body document, which is what a draft is nearly always used on, is
-   *  exact. */
+  /** The neutral plane is the body's minimum along the axis (builder._draft). The whole build's bbox stands in for
+   *  it, exact for the single body documents a draft is nearly always used on. */
   private leverFor(axis: Axis3): number {
     const bbox = this.store.buildState.result?.bbox;
     const min = (bbox?.min ?? [0, 0, 0]) as [number, number, number];
@@ -196,8 +184,11 @@ export class DraftTool {
   }
 
   private beginDrag(
-    faces: Selector[], faceIds: number[], anchor: THREE.Vector3,
-    normal: THREE.Vector3, bodyId: string | null = null,
+    faces: Selector[],
+    faceIds: number[],
+    anchor: THREE.Vector3,
+    normal: THREE.Vector3,
+    bodyId: string | null = null,
   ) {
     this.faces = faces;
     this.faceIds = faceIds;
@@ -211,7 +202,11 @@ export class DraftTool {
     this.previewId = this.store.nextId();
     this.viewport.clearHover();
     this.buildGizmo();
-    this.dim.show([{ name: "angle", label: "Angle", icon: "angle", kind: "angle" }], () => this.commit(true), () => this.cancel());
+    this.dim.show(
+      [{ name: "angle", label: "Angle", icon: "angle", kind: "angle" }],
+      () => this.commit(true),
+      () => this.cancel(),
+    );
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ angle: 0 });
@@ -219,8 +214,7 @@ export class DraftTool {
     this.gesture.frame();
   }
 
-  /** keep the handle a constant on-screen size, point it the way we're dragging,
-   *  and keep a typed value previewing live (the pointer may be still). */
+  /** Also keeps a typed value previewing live while the pointer is still. */
   private tick() {
     if (this.phase === "drag" && this.gizmo) {
       const sign = this.angle < 0 ? -1 : 1;
@@ -230,9 +224,7 @@ export class DraftTool {
       this.gizmo.position.copy(this.anchor);
       this.gizmo.quaternion.copy(this.quat);
       this.gizmo.scale.setScalar(k);
-      // Tone tracks which way the wall leans: amber opens the face out, red
-      // undercuts it (which a mould cannot draw, and which is worth flagging
-      // before the commit rather than after).
+      // Amber opens the face out, red undercuts it, which a mould cannot draw, so it is flagged before the commit.
       const refusal = this.store.previewError;
       this.handle?.paint({
         hot: this.hovering || this.grabbing,
@@ -242,7 +234,10 @@ export class DraftTool {
       if (this.commitPending && !this.store.buildState.building) {
         this.commitPending = false;
         this.refusalShown = refusal;
-        if (!refusal) { this.commit(); return; }
+        if (!refusal) {
+          this.commit();
+          return;
+        }
         setPrompt(`Draft refused: ${refusal} · drag back or Esc`);
       } else if (refusal !== this.refusalShown) {
         this.refusalShown = refusal;
@@ -271,7 +266,6 @@ export class DraftTool {
     this.store.setPreview(Math.abs(this.angle) < 1e-6 ? null : this.buildFeature());
   }
 
-  /** The shared drag handle; tick() scales it to a constant screen size. */
   private buildGizmo() {
     this.handle = nameHandle(createDragHandle(), "angle");
     const g = this.handle.group;
@@ -291,9 +285,8 @@ export class DraftTool {
     return { id: this.previewId, type: "draft", faces, angle: a, axis: this.pull } as Feature;
   }
 
-  /** `typed`: Enter or the tick button. A typed value is judged by the kernel
-   *  before it is committed, so the tool stays open until the answer is in and
-   *  tick() then commits it, or says why it was refused. */
+  /** `typed`: Enter or the tick button. A typed value is judged by the kernel first, so the tool stays open until
+   *  the answer is in, then tick() commits it or says why it was refused. */
   private commit(typed = false) {
     if (this.phase !== "drag") return this.cancel();
     const v = this.dim.getValue("angle");
@@ -304,7 +297,11 @@ export class DraftTool {
     let sentNow = false;
     if (v != null && this.dim.isUserDriven("angle")) {
       const value = Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, v));
-      if (value !== this.angle) { this.angle = value; this.pushPreview(); sentNow = true; }
+      if (value !== this.angle) {
+        this.angle = value;
+        this.pushPreview();
+        sentNow = true;
+      }
     }
     if (Math.abs(this.angle) < 1e-3) {
       // keep the tool alive: silently cancelling reads as "nothing happened"

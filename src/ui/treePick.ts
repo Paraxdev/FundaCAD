@@ -1,12 +1,5 @@
-// A click on an Items row, offered to the tool that is waiting for a pick.
-//
-// Every interactive pick listens on the canvas, so a row click never reached it:
-// the row ran its own action instead, and for an Origin plane that action was
-// "sketch on it", which quietly abandoned Offset Plane, Datum Plane, Split and
-// the rest. A waiting pick registers a taker here, the Browser offers each row
-// to it first, and the row's own action runs only when nothing is waiting.
-//
-// Vue-free and engine-free so the routing is testable on its own.
+// Offers an Items row click to a tool waiting for a pick: canvas picks never saw row clicks, and an Origin plane row
+// would start a sketch, abandoning Offset Plane, Split and the rest. The row's own action runs only when nothing waits.
 
 import type { Plane3, PlaneDef, Vec3 } from "../types";
 
@@ -32,10 +25,8 @@ interface PickSession {
 
 let session: PickSession | null = null;
 
-/** Open the one pick session: rows go to `taker` until the returned release is
- *  called from the pick's own cleanup. `end` is that cleanup, run when anything
- *  else ends the session (a new pick, a command, undo, another document), so a
- *  taker can never outlive the tool that registered it. */
+/** Rows go to `taker` until the returned release runs. `end` is the pick's cleanup, run when anything else ends the
+ *  session, so a taker never outlives its tool. */
 export function awaitTreePick(taker: TreePickTaker, end: () => void): () => void {
   endPickSession();
   const mine: PickSession = { taker, end };

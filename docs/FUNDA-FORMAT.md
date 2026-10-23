@@ -43,8 +43,20 @@ document has imported bodies, one more top-level key comes last:
   is the hash of the PNG or JPEG bytes, embedded in `geometry` like any other
   hash string value, so those bytes are an image, not a BREP. A version without
   the key carries it as an unknown top level key, image included.
+- `sectionView` is the section cut that is on, absent when none is: `origin` (a
+  point on the defining plane, mm), `normal` (its unit normal), `offset` (mm
+  along `normal` to the cut), `side` (1 keeps the half `normal` points into, -1
+  the other) and `ghost` (`hidden`, `faint`, `soft` or `strong`, how the removed
+  half is drawn). It is a view: the engine never reads it, undo leaves it alone
+  and versions leave it out. Restoring a version, or an assistant's or a
+  plugin's edit of the open document, keeps the cut on screen whatever cut the
+  edit holds. Unknown fields are kept, and a version without the key carries it
+  as an unknown top level key.
 
 The reference writer and reader is `crates/fundacad-format/src/json_doc.rs`.
+The browser build has no Rust to call, so `src/io/files.ts` writes and reads the
+same map itself through the engine's blob store, and refuses a download that
+would lose an import's geometry.
 
 ### Materials
 
@@ -64,6 +76,14 @@ wrong type. These finish fields came with the filament materials:
 
 A field a reader does not know is kept as it is and written back on save, so a
 file from a newer version keeps its materials.
+
+`faceMaterials` maps `bodyId#localFaceIndex` to a material id, at the face
+numbering of the build the file was saved with. `facePrints` holds, under the
+same keys, a print of each face: `centroid`, `normal`, `area`, `surface`
+(`plane` or `curved`), `points` (up to 12 points inside the face, x y z flat)
+and `faces` (the body's face count). A fillet or a cut renumbers the faces, and
+the print finds each one again. A file without `facePrints` keeps its indices on
+its first build; an older reader ignores the prints and reads the indices.
 
 ## Binary (.fundab), format 2
 
@@ -400,10 +420,18 @@ Writer rules:
   what it saves is in its own shapes. A newer reader therefore runs its newer
   migrations on such a file again, so every migration must be shape guarded:
   it rewrites only what still has the old shape, and leaves alone what already
-  has the new one. The app saves a newer file this way. MCP `doc_save` is the
-  exception: it writes the JSON back as it was read, edits included, so the
-  higher stamp stays, and an edit made through MCP must already use the shapes
-  of that stamp.
+  has the new one. The app saves a newer file this way, and so does MCP
+  `doc_save`: a stamp above its own is lowered to its own, the rest of the
+  file is written as it was. A stamp below its own stays, because MCP does not
+  run the app's migrations and a higher stamp would make the app skip them.
+  MCP cannot write a `.fundab`, and a JSON file has no sections, so a section
+  carried in a `.fundab` is dropped by an MCP save, as the app drops it when
+  it saves as `.funda`. Only the app keeps it, by saving as `.fundab`. Neither
+  save is silent about it: MCP `doc_save` names the sections in a `note:` line
+  of its reply and says to save as `.fundab` in the app, and the app shows the
+  same as a notice after a `.funda` save. MCP says it once, on the save that
+  left them out. A failed `doc_save` stamps nothing, because the stamp goes on
+  a copy of the document that is written.
 - A new reference to geometry is a lowercase hex BLAKE2b-128 string held as a
   string value, never as an object key, so an older writer finds it and keeps
   the blob. The older writer only scans values.

@@ -13,7 +13,10 @@ const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const OUT = path.resolve(process.argv[2] || "glyphs_follow_drag_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -24,15 +27,24 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.sketch && !!window.viewport, null, { timeout: 60000 });
 
   await page.evaluate(async () => {
-    window.store.addFeature({ id: "s1", type: "sketch", plane: "XY",
+    window.store.addFeature({
+      id: "s1",
+      type: "sketch",
+      plane: "XY",
       entities: [{ type: "line", id: "l1", x1: -20, y1: 0, x2: 20, y2: 0 }],
       constraints: [{ type: "horizontal", line: "l1" }],
     });
@@ -43,13 +55,15 @@ const check = (name, ok, detail) => {
   await page.evaluate(() => window.sketch.setTool("select"));
   await page.waitForTimeout(300);
 
-  const glyph = () => page.evaluate(() => {
-    const el = document.querySelector(".sketch-glyphs > *");
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    return { x: r.left, y: r.top };
-  });
-  const at = (x, y) => page.evaluate(([x, y]) => window.viewport.projectToScreen(window.sketch.plane.to3D(x, y)), [x, y]);
+  const glyph = () =>
+    page.evaluate(() => {
+      const el = document.querySelector(".sketch-glyphs > *");
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left, y: r.top };
+    });
+  const at = (x, y) =>
+    page.evaluate(([x, y]) => window.viewport.projectToScreen(window.sketch.plane.to3D(x, y)), [x, y]);
 
   const before = await glyph();
   check("the line shows a glyph", !!before, JSON.stringify(before));

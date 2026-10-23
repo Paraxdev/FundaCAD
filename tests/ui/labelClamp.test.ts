@@ -36,7 +36,10 @@ describe("clampLabel", () => {
   });
 
   it("prefers the left card when the free span is too narrow", () => {
-    const narrow = { left: [{ left: 0, top: 0, right: 700, bottom: 900 }], right: [{ left: 720, top: 0, right: 1400, bottom: 900 }] };
+    const narrow = {
+      left: [{ left: 0, top: 0, right: 700, bottom: 900 }],
+      right: [{ left: 720, top: 0, right: 1400, bottom: 900 }],
+    };
     const c = clampLabel(710, 450, 30, 10, area, narrow, 6);
     expect(c.x - 30).toBe(706);
   });
@@ -74,8 +77,12 @@ describe("labelLeader", () => {
 
 describe("layoutLabels", () => {
   const none = { left: [], right: [] };
-  const box = (c: { x: number; y: number }, l: LabelAt) =>
-    ({ left: c.x - l.hw, top: c.y - l.hh, right: c.x + l.hw, bottom: c.y + l.hh });
+  const box = (c: { x: number; y: number }, l: LabelAt) => ({
+    left: c.x - l.hw,
+    top: c.y - l.hh,
+    right: c.x + l.hw,
+    bottom: c.y + l.hh,
+  });
   const overlaps = (a: ReturnType<typeof box>, b: ReturnType<typeof box>) =>
     a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
   const noOverlap = (ls: LabelAt[], out: { x: number; y: number }[]) => {
@@ -97,7 +104,10 @@ describe("layoutLabels", () => {
       { x: 700, y: 400, hw: 30, hh: 10 },
       { x: 710, y: 405, hw: 30, hh: 10 },
     ];
-    expect(layoutLabels(ls, area, cards, 6)).toEqual([{ x: 700, y: 400 }, { x: 710, y: 405 }]);
+    expect(layoutLabels(ls, area, cards, 6)).toEqual([
+      { x: 700, y: 400 },
+      { x: 710, y: 405 },
+    ]);
   });
 
   it("spreads labels clamped against the same card up and down, in the order they project", () => {
@@ -216,7 +226,12 @@ describe("layoutLabels", () => {
   const narrowCards = { left: rail, right: [{ left: 668, top: 16, right: 780, bottom: 596 }] };
   const texts = [51, 51, 51, 51, 51, 51, 44, 51, 51, 44, 68, 68, 68, 68, 68];
   const many = (n: number, x: number, y: number, dx = 9, dy = 7): LabelAt[] =>
-    Array.from({ length: n }, (_, k) => ({ x: x + (k % 5) * dx, y: y + (k % 3) * dy, hw: texts[k % texts.length]! / 2, hh: 10 }));
+    Array.from({ length: n }, (_, k) => ({
+      x: x + (k % 5) * dx,
+      y: y + (k % 3) * dy,
+      hw: texts[k % texts.length]! / 2,
+      hh: 10,
+    }));
   const clear = (ls: LabelAt[], out: { x: number; y: number }[], a: typeof area, cs: typeof cards) => {
     for (let i = 0; i < ls.length; i++) {
       const b = box(out[i]!, ls[i]!);
@@ -233,7 +248,14 @@ describe("layoutLabels", () => {
     new Set(out.map((c, i) => Math.round(c.x - ls[i]!.hw))).size;
 
   it("wraps a full row into a second one inward, never off the view or under a card", () => {
-    for (const [x, y] of [[-100, -100], [850, -100], [-100, 720], [850, 720], [380, -150], [380, 760]]) {
+    for (const [x, y] of [
+      [-100, -100],
+      [850, -100],
+      [-100, 720],
+      [850, 720],
+      [380, -150],
+      [380, 760],
+    ]) {
       const ls = many(15, x!, y!);
       const out = layoutLabels(ls, narrow, narrowCards, 6);
       clear(ls, out, narrow, narrowCards);
@@ -260,8 +282,16 @@ describe("layoutLabels", () => {
   it("keeps a wide stage clear of its cards in every corner with a crowd", () => {
     const stage = { left: 0, top: 36, right: 1400, bottom: 900 };
     const rightRail = { left: 1088, top: 48, right: 1136, bottom: 520 };
-    const wide = { left: [items, ...rail.map((o) => ({ ...o, left: o.left + 276, right: o.right + 276 }))], right: [rightRail, palette] };
-    for (const [x, y] of [[-100, -100], [1490, -100], [-100, 990], [1490, 990]]) {
+    const wide = {
+      left: [items, ...rail.map((o) => ({ ...o, left: o.left + 276, right: o.right + 276 }))],
+      right: [rightRail, palette],
+    };
+    for (const [x, y] of [
+      [-100, -100],
+      [1490, -100],
+      [-100, 990],
+      [1490, 990],
+    ]) {
       const ls = many(15, x!, y!);
       const out = layoutLabels(ls, stage, wide, 6);
       clear(ls, out, stage, wide);
@@ -335,7 +365,12 @@ describe("layoutLabels", () => {
       hw: texts[k]! / 2,
       hh: 10,
     }));
-    for (const [vx, vy] of [[-4, -3], [4, -3], [-4, 3], [4, 3]]) {
+    for (const [vx, vy] of [
+      [-4, -3],
+      [4, -3],
+      [-4, 3],
+      [4, 3],
+    ]) {
       const held = new Map<number, Held>();
       const at = (t: number) => offsets.map((o) => ({ ...o, x: 700 + o.x + vx! * t, y: 460 + o.y + vy! * t }));
       let prev = layoutLabels(at(0), stage, cs, 6, held);
@@ -346,7 +381,12 @@ describe("layoutLabels", () => {
         const ls = at(t);
         const out = layoutLabels(ls, stage, cs, 6, held);
         const on = offsets.map((_, k) => k).filter((k) => held.has(k));
-        clear(on.map((k) => ls[k]!), on.map((k) => out[k]!), stage, cs);
+        clear(
+          on.map((k) => ls[k]!),
+          on.map((k) => out[k]!),
+          stage,
+          cs,
+        );
         const keys = offsets.map((_, i) => held.get(i)?.edge);
         const changed = keys.some((k, i) => k !== prevKeys[i]);
         if (changed) events++;

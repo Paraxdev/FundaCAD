@@ -71,10 +71,8 @@ fn a_tracked_hole_follows_its_face_when_the_body_grows() {
 #[test]
 fn a_tracked_hole_keeps_its_place_on_a_face_that_slides_sideways() {
     for (dx, h) in [(0.0, 10.0), (25.0, 10.0), (-60.0, 30.0)] {
-        let r = build(
-            json!({"h": h, "dx": dx}),
-            vec![block(), slide(), hole(top(Some([0.0, 0.0, 5.0])), [3.0, 2.0, 5.0])],
-        );
+        let r =
+            build(json!({"h": h, "dx": dx}), vec![block(), slide(), hole(top(Some([0.0, 0.0, 5.0])), [3.0, 2.0, 5.0])]);
         assert!(errors(&r).is_empty(), "dx={dx}: {:?}", errors(&r));
         assert_eq!(bores(&r), vec![[3.0 + dx, 2.0, h / 2.0 - 1.5]], "dx={dx} h={h}");
     }
@@ -291,11 +289,7 @@ fn corner_holes_stay_on_the_plate_beside_a_boss_whose_top_would_take_them() {
         ]);
         let r = build(json!({"L": l, "half": l / 2.0}), feats);
         assert!(errors(&r).is_empty(), "L={l}: {:?}", errors(&r));
-        assert_eq!(
-            sorted(bores(&r).into_iter().filter(|b| b[2] < 6.0).collect()),
-            corners_at(l),
-            "L={l}"
-        );
+        assert_eq!(sorted(bores(&r).into_iter().filter(|b| b[2] < 6.0).collect()), corners_at(l), "L={l}");
     }
 }
 
@@ -373,11 +367,7 @@ fn a_face_already_drawn_measures_the_same_extent_as_one_built_fresh() {
     let r = build(json!({"h": 10}), vec![block()]);
     let shape = &r.bodies[0].shape;
     let top = || {
-        faces_of(shape)
-            .unwrap()
-            .into_iter()
-            .find(|f| f.surface == SurfaceType::Plane && f.normal().z > 0.9)
-            .unwrap()
+        faces_of(shape).unwrap().into_iter().find(|f| f.surface == SurfaceType::Plane && f.normal().z > 0.9).unwrap()
     };
     assert_eq!(tracked::outline_extent(&top().shape, DVec3::Z), Some([-20.0, 20.0, -10.0, 10.0]));
     assert!(opencascade::mesh_access::MeshAccess::new(shape).mesh(0.5, false, 0.5, true));
@@ -460,9 +450,8 @@ fn a_rectangular_top_with_a_square_extent_still_anchors_per_axis() {
     assert_eq!(sorted(bores(&r)), vec![[5.0, 5.0, 4.5], [75.0, 35.0, 4.5]]);
 }
 
-// 6 out at (3.6, 4.8), 1 in from the r 7 rim: its offset from the rim is 1,
-// which cannot survive a shrink to radius 1 or 0.5 without going negative.
-// The clamp in `polar` lands it at the centre instead of refusing the build.
+// 6 out at (3.6, 4.8), 1 in from the r 7 rim: that offset cannot survive a shrink to radius 1 or 0.5,
+// so the clamp in `polar` lands it at the centre instead of refusing the build.
 #[test]
 fn a_rim_hole_shrunk_below_its_rim_offset_lands_at_the_centre() {
     let at = [3.6, 4.8, 5.0];
@@ -472,6 +461,10 @@ fn a_rim_hole_shrunk_below_its_rim_offset_lands_at_the_centre() {
         feats.push(small_hole(face, at));
         let b = build(json!({"r": r}), feats);
         assert!(errors(&b).is_empty(), "r={r}: {:?}", errors(&b));
-        assert!(near(&b.tracked_faces["ho"]["points"][0], [0.0, 0.0, 5.0]), "r={r}: {}", b.tracked_faces["ho"]["points"][0]);
+        assert!(
+            near(&b.tracked_faces["ho"]["points"][0], [0.0, 0.0, 5.0]),
+            "r={r}: {}",
+            b.tracked_faces["ho"]["points"][0]
+        );
     }
 }

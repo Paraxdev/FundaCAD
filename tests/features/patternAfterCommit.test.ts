@@ -32,8 +32,16 @@ function rig() {
       },
     },
     viewport: { getSelectedBodies: () => [], getSelectedFaceIds: () => [] },
-    edgeFeature: { start: (_k: string, done: Done) => { state.done = done; } },
-    pressPull: { start: (done: Done) => { state.done = done; } },
+    edgeFeature: {
+      start: (_k: string, done: Done) => {
+        state.done = done;
+      },
+    },
+    pressPull: {
+      start: (done: Done) => {
+        state.done = done;
+      },
+    },
     patternTool: {
       start: (_k: string, ids: string[], _done: Done, features?: string[]) => {
         state.patterns.push({ ids, ...(features ? { features } : {}) });
@@ -41,7 +49,9 @@ function rig() {
     },
     toolBusy: () => false,
     hasBody: () => true,
-    setStatus: (t: string) => { state.status.push(t); },
+    setStatus: (t: string) => {
+      state.status.push(t);
+    },
     selectFeature: selection.selectFeature,
     noteCommitted: () => {},
     getSelectedFeature: () => sel.featureId,

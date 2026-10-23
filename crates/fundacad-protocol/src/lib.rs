@@ -1,10 +1,5 @@
-//! The FundaCAD engine wire protocol (docs/PROTOCOL.md).
-//!
-//! Replaces the Python engine's `wire.py`: reply envelopes, binary mesh frames, chunked
-//! replies with their size limits and cancel checks, and the status frames.
-//! Output is byte-identical to the Python encoder for the same input, which
-//! the golden tests hold it to. Adds the stdio framing the engine worker
-//! speaks to the app (docs/ENGINE.md, section 2.1).
+//! The FundaCAD engine wire protocol (docs/PROTOCOL.md) and the stdio framing of the engine worker (docs/ENGINE.md 2.1).
+//! Output is byte-identical to the Python encoder for the same input, the golden tests hold it to that.
 
 pub mod body;
 pub mod envelope;

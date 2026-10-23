@@ -1,6 +1,5 @@
-//! SVG drawings as sketches on XY in mm, Y up: one per top level group or
-//! Inkscape layer, the filled outlines healed into closed profiles that a
-//! sketch's even-odd fill extrudes with their holes.
+//! SVG drawings as sketches on XY in mm, Y up, one per top level group or Inkscape layer.
+//! Filled outlines are healed into closed profiles that an even-odd fill extrudes with holes.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::f64::consts::{PI, TAU};
@@ -38,7 +37,14 @@ impl Aff {
     fn then(&self, inner: &Aff) -> Aff {
         let [a, b, c, d, e, f] = self.0;
         let [a2, b2, c2, d2, e2, f2] = inner.0;
-        Aff([a * a2 + c * b2, b * a2 + d * b2, a * c2 + c * d2, b * c2 + d * d2, a * e2 + c * f2 + e, b * e2 + d * f2 + f])
+        Aff([
+            a * a2 + c * b2,
+            b * a2 + d * b2,
+            a * c2 + c * d2,
+            b * c2 + d * d2,
+            a * e2 + c * f2 + e,
+            b * e2 + d * f2 + f,
+        ])
     }
 
     fn apply(&self, p: P) -> P {
@@ -153,10 +159,14 @@ impl Css {
         let mut best: Option<(u8, String)> = None;
         for (sel, decls) in &self.rules {
             let rank = if let Some(c) = sel.strip_prefix('.') {
-                if !classes.contains(&c) { continue }
+                if !classes.contains(&c) {
+                    continue;
+                }
                 2
             } else if let Some(i) = sel.strip_prefix('#') {
-                if id != Some(i) { continue }
+                if id != Some(i) {
+                    continue;
+                }
                 3
             } else if sel == tag || sel == "*" {
                 1
@@ -192,7 +202,10 @@ struct Group {
 
 impl<'a> Ctx<'a> {
     fn prop(&self, n: Node, name: &str) -> Option<String> {
-        if let Some(v) = n.attribute("style").and_then(|s| declarations(s).into_iter().rev().find(|(k, _)| k == name).map(|(_, v)| v)) {
+        if let Some(v) = n
+            .attribute("style")
+            .and_then(|s| declarations(s).into_iter().rev().find(|(k, _)| k == name).map(|(_, v)| v))
+        {
             return Some(v);
         }
         self.css.get(n, name).or_else(|| n.attribute(name).map(|s| s.trim().to_string()))
@@ -239,15 +252,18 @@ impl<'a> Ctx<'a> {
         let tag = n.tag_name().name();
         match tag {
             "text" | "image" | "foreignObject" | "video" | "audio" => {
-                *self.skipped.entry(match tag {
-                    "text" => "text",
-                    "image" => "image",
-                    _ => "embedded object",
-                }).or_default() += 1;
+                *self
+                    .skipped
+                    .entry(match tag {
+                        "text" => "text",
+                        "image" => "image",
+                        _ => "embedded object",
+                    })
+                    .or_default() += 1;
                 return Ok(());
             }
-            "defs" | "symbol" | "clipPath" | "mask" | "marker" | "pattern" | "linearGradient" | "radialGradient" | "filter" | "style"
-            | "title" | "desc" | "metadata" | "script" => return Ok(()),
+            "defs" | "symbol" | "clipPath" | "mask" | "marker" | "pattern" | "linearGradient" | "radialGradient"
+            | "filter" | "style" | "title" | "desc" | "metadata" | "script" => return Ok(()),
             _ => {}
         }
         for (attr, what) in [("filter", "filter"), ("clip-path", "clip path"), ("mask", "mask")] {
@@ -274,7 +290,8 @@ impl<'a> Ctx<'a> {
                     return Err(format!("this SVG nests <use> deeper than {MAX_USE_DEPTH} levels"));
                 }
                 let href = n.attribute("href").or_else(|| n.attribute(("http://www.w3.org/1999/xlink", "href")));
-                let Some(target) = href.and_then(|h| h.strip_prefix('#')).and_then(|id| self.ids.get(id).copied()) else {
+                let Some(target) = href.and_then(|h| h.strip_prefix('#')).and_then(|id| self.ids.get(id).copied())
+                else {
                     return Ok(());
                 };
                 let m = m.then(&Aff::translate(user(n, "x"), user(n, "y")));
@@ -294,7 +311,9 @@ impl<'a> Ctx<'a> {
                 }
                 self.curves += subs.iter().map(|s| s.segs.len()).sum::<usize>();
                 if self.curves > MAX_SKETCH_ENTITIES {
-                    return Err(format!("this SVG has more than {MAX_SKETCH_ENTITIES} curves, simplify it before importing"));
+                    return Err(format!(
+                        "this SVG has more than {MAX_SKETCH_ENTITIES} curves, simplify it before importing"
+                    ));
                 }
                 match (&style.fill, area) {
                     (Paint::None, _) | (_, false) => {
@@ -567,8 +586,20 @@ fn root_matrix(root: Node) -> Aff {
     let (mut tx, mut ty) = (0.0, 0.0);
     if !par.trim_start().starts_with("none") {
         let s = if par.contains("slice") { sx.max(sy) } else { sx.min(sy) };
-        let fx = if par.contains("xMin") { 0.0 } else if par.contains("xMax") { 1.0 } else { 0.5 };
-        let fy = if par.contains("YMin") { 0.0 } else if par.contains("YMax") { 1.0 } else { 0.5 };
+        let fx = if par.contains("xMin") {
+            0.0
+        } else if par.contains("xMax") {
+            1.0
+        } else {
+            0.5
+        };
+        let fy = if par.contains("YMin") {
+            0.0
+        } else if par.contains("YMax") {
+            1.0
+        } else {
+            0.5
+        };
         tx = (w - vb.w * s) * fx;
         ty = (h - vb.h * s) * fy;
         sx = s;
@@ -584,7 +615,8 @@ fn pt(p: P) -> Value {
 fn collinear(pts: &[P], tol: f64) -> bool {
     let (a, b) = (pts[0], pts[pts.len() - 1]);
     let l = (b[0] - a[0]).hypot(b[1] - a[1]);
-    l > tol && pts.iter().all(|p| ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])).abs() / l <= tol)
+    l > tol
+        && pts.iter().all(|p| ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])).abs() / l <= tol)
         && pts.windows(2).all(|w| (w[1][0] - w[0][0]) * (b[0] - a[0]) + (w[1][1] - w[0][1]) * (b[1] - a[1]) >= 0.0)
 }
 
@@ -603,10 +635,16 @@ fn entities(segs: &[Seg], tol: f64) -> Vec<Value> {
                     let (a, b, mid) = (piece.start(), piece.end(), piece.at(0.5));
                     json!({"type": "arc", "x1": a[0], "y1": a[1], "x2": b[0], "y2": b[1], "mx": mid[0], "my": mid[1]})
                 }
-                Seg::Quad(a, b, c) if collinear(&[a, b, c], tol) => json!({"type": "line", "x1": a[0], "y1": a[1], "x2": c[0], "y2": c[1]}),
-                Seg::Cubic(a, b, c, d) if collinear(&[a, b, c, d], tol) => json!({"type": "line", "x1": a[0], "y1": a[1], "x2": d[0], "y2": d[1]}),
+                Seg::Quad(a, b, c) if collinear(&[a, b, c], tol) => {
+                    json!({"type": "line", "x1": a[0], "y1": a[1], "x2": c[0], "y2": c[1]})
+                }
+                Seg::Cubic(a, b, c, d) if collinear(&[a, b, c, d], tol) => {
+                    json!({"type": "line", "x1": a[0], "y1": a[1], "x2": d[0], "y2": d[1]})
+                }
                 Seg::Quad(a, b, c) => json!({"type": "bspline", "degree": 2, "poles": [pt(a), pt(b), pt(c)]}),
-                Seg::Cubic(a, b, c, d) => json!({"type": "bspline", "degree": 3, "poles": [pt(a), pt(b), pt(c), pt(d)]}),
+                Seg::Cubic(a, b, c, d) => {
+                    json!({"type": "bspline", "degree": 3, "poles": [pt(a), pt(b), pt(c), pt(d)]})
+                }
             });
         }
     }
@@ -617,8 +655,14 @@ fn entities(segs: &[Seg], tol: f64) -> Vec<Value> {
 }
 
 fn diagonal(segs: impl Iterator<Item = Seg>) -> f64 {
-    let b = segs.map(|s| s.hull()).fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, h| [b[0].min(h[0]), b[1].min(h[1]), b[2].max(h[2]), b[3].max(h[3])]);
-    if b[0] > b[2] { 0.0 } else { (b[2] - b[0]).hypot(b[3] - b[1]) }
+    let b = segs.map(|s| s.hull()).fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, h| {
+        [b[0].min(h[0]), b[1].min(h[1]), b[2].max(h[2]), b[3].max(h[3])]
+    });
+    if b[0] > b[2] {
+        0.0
+    } else {
+        (b[2] - b[0]).hypot(b[3] - b[1])
+    }
 }
 
 fn plural(n: usize, one: &str, many: &str) -> String {
@@ -650,7 +694,10 @@ pub fn read_svg(data: &[u8]) -> Result<SvgRead, String> {
     let mut groups = Vec::new();
     for c in root.children() {
         if c.is_element() && c.tag_name().name() == "g" && c.tag_name().namespace() == Some(SVG_NS) {
-            let name = c.attribute((INKSCAPE_NS, "label")).or_else(|| c.attribute("id")).map(str::to_string)
+            let name = c
+                .attribute((INKSCAPE_NS, "label"))
+                .or_else(|| c.attribute("id"))
+                .map(str::to_string)
                 .unwrap_or_else(|| format!("Group {}", groups.len() + 1));
             let mut g = Group { name: Some(name), filled: vec![], strokes: vec![] };
             ctx.walk(c, m, &style, 0, &mut g)?;
@@ -665,7 +712,12 @@ pub fn read_svg(data: &[u8]) -> Result<SvgRead, String> {
     let (mut gaps, mut lines, mut split, mut dropped, mut open, mut stroke_outlines) = (0, 0, 0, 0, 0, 0);
     let mut sketches = Vec::new();
     for mut g in groups {
-        let d = diagonal(g.filled.iter().flat_map(|f| f.subs.iter().flat_map(|s| s.segs.iter().copied())).chain(g.strokes.iter().flat_map(|s| s.segs.iter().copied())));
+        let d = diagonal(
+            g.filled
+                .iter()
+                .flat_map(|f| f.subs.iter().flat_map(|s| s.segs.iter().copied()))
+                .chain(g.strokes.iter().flat_map(|s| s.segs.iter().copied())),
+        );
         let tol = heal2d::tolerances(d);
         let mut stroke_segs = Vec::new();
         for sub in &mut g.strokes {
@@ -682,7 +734,11 @@ pub fn read_svg(data: &[u8]) -> Result<SvgRead, String> {
             dropped += healed.dropped;
             open += healed.open_ends;
             if !healed.segs.is_empty() {
-                sketches.push(SvgSketch { name: g.name.clone(), entities: entities(&healed.segs, tol.join), evenodd: true });
+                sketches.push(SvgSketch {
+                    name: g.name.clone(),
+                    entities: entities(&healed.segs, tol.join),
+                    evenodd: true,
+                });
             }
         }
         if !stroke_segs.is_empty() {
@@ -703,28 +759,43 @@ pub fn read_svg(data: &[u8]) -> Result<SvgRead, String> {
         notes.push(format!("ignored {}, the shapes under them are kept whole", parts.join(", ")));
     }
     if ctx.paint_urls > 0 {
-        notes.push(format!("{} kept as plain fills", plural(ctx.paint_urls, "gradient or pattern fill", "gradient or pattern fills")));
+        notes.push(format!(
+            "{} kept as plain fills",
+            plural(ctx.paint_urls, "gradient or pattern fill", "gradient or pattern fills")
+        ));
     }
     if ctx.colours.len() > 1 {
-        notes.push(format!("{} fill colours, every filled shape became material, a light shape on top is not cut out", ctx.colours.len()));
+        notes.push(format!(
+            "{} fill colours, every filled shape became material, a light shape on top is not cut out",
+            ctx.colours.len()
+        ));
     }
     if gaps > 0 {
         notes.push(format!("closed {}", plural(gaps, "small gap", "small gaps")));
     }
     if lines > 0 {
-        notes.push(format!("closed {} with a straight line", plural(lines, "open filled outline", "open filled outlines")));
+        notes.push(format!(
+            "closed {} with a straight line",
+            plural(lines, "open filled outline", "open filled outlines")
+        ));
     }
     if split > 0 {
         notes.push(format!("split {} where outlines cross", plural(split, "crossing", "crossings")));
     }
     if dropped > 0 {
-        notes.push(format!("dropped {} inside a filled area, duplicated or of zero length", plural(dropped, "piece", "pieces")));
+        notes.push(format!(
+            "dropped {} inside a filled area, duplicated or of zero length",
+            plural(dropped, "piece", "pieces")
+        ));
     }
     if open > 0 {
         notes.push(format!("{} where nothing else meets", plural(open, "open end", "open ends")));
     }
     if stroke_outlines > 0 {
-        notes.push(format!("{} drawn as strokes only, kept as curves without a thickness", plural(stroke_outlines, "outline is", "outlines are")));
+        notes.push(format!(
+            "{} drawn as strokes only, kept as curves without a thickness",
+            plural(stroke_outlines, "outline is", "outlines are")
+        ));
     }
     Ok(SvgRead { sketches, notes })
 }

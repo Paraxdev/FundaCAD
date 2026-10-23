@@ -1,37 +1,9 @@
-// The part of the op table only the operating system can answer.
-//
-// Four ops reach past the window: three about files, one about the build. They
-// go through the SAME broker, checked against the SAME grants, as everything
-// else. That is the whole design decision here and it is worth stating plainly,
-// because the tempting shape is a second channel, a `native` object handed to
-// the plugin beside `app`, and a second channel is a second permission system
-// to keep in step with the first. There is one door.
-//
-// WHAT MAKES THE FILE OPS SAFE IS NOT A RULE ABOUT DIRECTORIES. A plugin never
-// names a file. It asks, a native dialog opens, and what comes back is a
-// HANDLE: an opaque token, a file name, a length. To read the file it hands the
-// handle back. So "which files may this plugin read" answers itself: the ones
-// somebody picked, this session, for this plugin. No allowlist to configure, no
-// sandbox root to get wrong, and nothing to widen later.
-//
-// A PATH NEVER CROSSES. Not to the plugin and not even into the window: the
-// handle table lives in Rust (src-tauri/src/plugins/handed.rs), so what a
-// plugin could learn about somebody's disk is a file name they chose to show
-// it.
-//
-// AND THE SEVEN OPS THIS DOES NOT ADD. `doc_open`, `doc_import` and `doc_save`
-// still refuse, and that is on purpose rather than unfinished: their signatures
-// take a path, which is exactly the thing a plugin may not have. What a plugin
-// does instead is compose, `file_pick` then `file_read` then `doc_set` to open
-// and `doc_get` then `file_write` to save, which is the same work with the
-// person in it. The alternative was to give those ops a different meaning for a
-// compute plugin than they have over MCP, and one vocabulary that means two
-// things is worse than one vocabulary with a gap in it.
+// Ops only the operating system can answer. They pass the same broker and grants as every other op, not a channel.
+// A plugin never names a file: a dialog hands it an opaque handle, and the table lives in Rust (plugins/handed.rs).
 
 import type { Op } from "./ops";
 
-/** A file the person has handed to this plugin. The `handle` is the only way
- *  to name it again, and it is meaningless to any other plugin. */
+/** The `handle` is the only way to name the file again, and it is meaningless to any other plugin. */
 export interface PickedFile {
   handle: string;
   /** the file name, never the directory */
@@ -39,9 +11,8 @@ export interface PickedFile {
   len: number;
 }
 
-/** A file's contents. Exactly one of `text` and `base64` is set: text when the
- *  bytes are valid UTF-8, which covers JSON, CSV, SVG, STEP and machine code, and
- *  base64 when they are not, which covers STL and 3MF. */
+/** Exactly one of `text` and `base64` is set: text for valid UTF-8 (JSON, CSV, SVG, STEP, machine code),
+ *  base64 otherwise (STL, 3MF). */
 export interface FileBody {
   name: string;
   len: number;
@@ -60,17 +31,9 @@ export interface AppInfo {
   arch: string;
 }
 
-/** What the ops in this file need from the outside world.
- *
- *  An interface rather than a direct `invoke`, so that a test can serve these
- *  without a desktop app and so that `appHost` has one thing to be handed
- *  rather than four. */
+/** An interface rather than a direct `invoke`, so a test can serve it without a desktop app. */
 export interface NativeBridge {
-  pick(opts: {
-    plugin: string;
-    purpose: string;
-    extensions: string[];
-  }): Promise<PickedFile | null>;
+  pick(opts: { plugin: string; purpose: string; extensions: string[] }): Promise<PickedFile | null>;
   read(opts: { plugin: string; handle: string }): Promise<FileBody>;
   write(opts: {
     plugin: string;
@@ -82,9 +45,7 @@ export interface NativeBridge {
   info(): Promise<AppInfo>;
 }
 
-/** The ops this bridge serves. Exported so `appHost` can route by membership
- *  rather than by a second copy of the list, and so a test can assert that the
- *  set has not quietly grown. */
+/** Exported so `appHost` routes by membership, and a test can assert the set has not quietly grown. */
 export const NATIVE_OPS = ["file_pick", "file_read", "file_write", "app_info"] as const;
 
 export type NativeOp = (typeof NATIVE_OPS)[number];
@@ -95,11 +56,7 @@ export function isNativeOp(op: Op): op is NativeOp {
   return NATIVE_SET.has(op);
 }
 
-/** The real bridge, over Tauri's IPC.
- *
- *  Imported lazily by the caller, never at module load: this module is reached
- *  from the plugin host, and the plugin host is reached from a browser session
- *  that has no `invoke` at all. */
+/** Imports Tauri lazily, because the plugin host is also reached from a browser session that has no `invoke`. */
 export function tauriNative(): NativeBridge {
   const call = async <T>(cmd: string, args: Record<string, unknown>): Promise<T> => {
     const { invoke } = await import("@tauri-apps/api/core");
@@ -108,9 +65,7 @@ export function tauriNative(): NativeBridge {
   return {
     pick: (o) => call<PickedFile | null>("plugin_file_pick", { ...o }),
     read: (o) => call<FileBody>("plugin_file_read", { ...o }),
-    // `base64Body`, not `base64`: the Rust parameter is named that way because
-    // `base64` is the crate, and a mismatched argument name is an invoke that
-    // fails with an unhelpful message about a missing field.
+    // `base64Body`, because `base64` is the crate's name on the Rust side. A mismatched name fails as a missing field.
     write: (o) =>
       call<WroteFile | null>("plugin_file_write", {
         plugin: o.plugin,

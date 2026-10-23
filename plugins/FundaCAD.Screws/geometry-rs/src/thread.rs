@@ -1,11 +1,6 @@
-//! scr_thread.py: modelled helical threads, cut with the kernel's helical
-//! sweep (a revolve that climbs).
-//!
-//! The groove is the 60 degree triangle src/features/threadMath.ts draws: ISO
-//! 68-1's basic depth of 0.6134 P, pushed past the cylinder it cuts so the
-//! boolean is never tangent. It is cut into a plain cylinder one turn per tool,
-//! all tools in one boolean: a long helical tool running nearly parallel to the
-//! cylinder defeats the kernel, the cut reports success and removes nothing.
+//! Port of scr_thread.py. The groove is ISO 68-1's 60 degree triangle, 0.6134 P deep, pushed past the cylinder so the
+//! boolean is never tangent. One turn per tool, all tools in one boolean: a long helical tool nearly parallel to the
+//! cylinder defeats the kernel, which reports success and removes nothing.
 
 use std::f64::consts::PI;
 
@@ -38,11 +33,7 @@ fn tools(radius: f64, pitch: f64, bottom: f64, top: f64, external: bool, left: b
     let mut done = 0.0;
     while done < total - 1e-9 {
         let turns = per_tool.min(total - done);
-        let (z0, climb) = if left {
-            (top - done * pitch, -pitch)
-        } else {
-            (bottom + done * pitch, pitch)
-        };
+        let (z0, climb) = if left { (top - done * pitch, -pitch) } else { (bottom + done * pitch, pitch) };
         let face = groove(radius, pitch, external, z0)?;
         out.push(kernel::helical_sweep(&face, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 360.0 * turns, climb)?);
         done += turns;
@@ -70,22 +61,28 @@ fn serial_cut(body: &Shape, tools: &[Shape]) -> R<Shape> {
         BooleanOp::Cut,
         body,
         &refs,
-        BooleanOptions {
-            parallel: false,
-            fuzzy: Fuzzy::Picked,
-            clean: true,
-        },
+        BooleanOptions { parallel: false, fuzzy: Fuzzy::Picked, clean: true },
     )
 }
 
 #[allow(clippy::too_many_arguments)]
-fn cut_groove(body: &Shape, radius: f64, pitch: f64, z_from: f64, z_to: f64, external: bool, left: bool, span: f64) -> R<Shape> {
+fn cut_groove(
+    body: &Shape,
+    radius: f64,
+    pitch: f64,
+    z_from: f64,
+    z_to: f64,
+    external: bool,
+    left: bool,
+    span: f64,
+) -> R<Shape> {
     let want = groove_volume(radius, pitch, external, span);
     let before = body.volume();
     for (per_tool, phase) in STRATEGIES {
         let bottom = z_from - pitch * (1.0 + phase);
         let top = z_to + pitch * phase;
-        let Ok(out) = tools(radius, pitch, bottom, top, external, left, per_tool).and_then(|t| serial_cut(body, &t)) else {
+        let Ok(out) = tools(radius, pitch, bottom, top, external, left, per_tool).and_then(|t| serial_cut(body, &t))
+        else {
             continue;
         };
         let solids = out.solids();

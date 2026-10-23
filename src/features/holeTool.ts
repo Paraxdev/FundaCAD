@@ -1,11 +1,5 @@
-// Interactive Hole: click a flat face, then click more spots on the same face
-// to add holes (click a hole again to take it away). The box sets the size, a
-// standard name ("M3") or a plain diameter, and the depth or "through"; its
-// switch steps the hole type. Everything else, fit, tap drill, counterbore and
-// countersink dimensions, drill point, is a row under the feature afterwards.
-//
-// The preview is the real cut from the engine, so a hole that cannot be built
-// says why in the box instead of committing a red history entry.
+// Interactive Hole: click a flat face, then spots on it to add holes (click one again to remove it). The box sets the
+// size and depth and steps the type, the rest are rows. The preview is the engine's real cut, so a bad hole says why.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -13,6 +7,7 @@ import type { DocumentStore } from "../document/store";
 import type { Feature, HoleType, Selector, Vec3 } from "../types";
 import { asFeature } from "../types";
 import { DimInput } from "../sketch/dimInput";
+import { clearOfCards } from "../ui/promptPlacement";
 import { setPrompt } from "../ui/prompt";
 import { CanvasGesture } from "./canvasGesture";
 import { hitPx } from "../input/pointerKind";
@@ -20,15 +15,26 @@ import { previewVerdict } from "./previewVerdict";
 import { featureNumFields } from "../document/numFields";
 import { planeXDir } from "./planeMath";
 import {
-  CLEARANCE, HOLE_TYPES, INSERT, isHoleSize, newHoleFields, parseHoleSize, type HoleSize,
+  CLEARANCE,
+  HOLE_TYPES,
+  INSERT,
+  badHoleSizeText,
+  isHoleSize,
+  newHoleFields,
+  parseHoleSize,
+  type HoleSize,
 } from "./holeStandards";
 import { rebaseHole, trackedFace, upgradeFace, withExtent } from "./holeFace";
 
 type HoleFeature = Extract<Feature, { type: "hole" }>;
 
 const SETTLE_MS = 120;
+const FREE_GAP = 12; // --float-gap
 const TYPE_LABEL: Record<HoleType, string> = {
-  simple: "Simple", counterbore: "Counterbore", countersink: "Countersink", insert: "Insert",
+  simple: "Simple",
+  counterbore: "Counterbore",
+  countersink: "Countersink",
+  insert: "Insert",
 };
 const THROUGH = /^\s*(thr(u|ough)?|all)\s*$/i;
 
@@ -41,9 +47,8 @@ export class HoleTool {
   private bodyId: string | null = null;
   private origin = new THREE.Vector3();
   private normal = new THREE.Vector3(0, 0, 1);
-  /** The face's true geometric centre (viewport.faceAreaCentroidWorld), the
-   *  origin for the X/Y offset fields and what Center snaps to. Distinct from
-   *  `origin`, an arbitrary in-plane point only used for the pick plane. */
+  /** The face's true centre (viewport.faceAreaCentroidWorld), origin of the X/Y fields and what Center snaps to.
+   *  `origin` is only an in-plane point for the pick plane. */
   private center = new THREE.Vector3();
   // In-plane axes for the X/Y offset fields.
   private xdir = new THREE.Vector3(1, 0, 0);
@@ -51,8 +56,7 @@ export class HoleTool {
   private lastXText = "";
   private lastYText = "";
   private points: Vec3[] = [];
-  // Set while a placed hole's marker is being dragged (index into `points`);
-  // null the rest of the time, including for a plain click that adds one.
+  // Index into `points` while a placed marker is dragged; null otherwise, a plain click that adds one included.
   private dragIndex: number | null = null;
   private dragMoved = false;
   // Kept across uses, the next hole is usually the same as the last one.
@@ -85,7 +89,9 @@ export class HoleTool {
       move: (e) => this.onMove(e),
       down: (e) => this.onDown(e),
       up: (e) => this.onUp(e),
-      key: (e) => { if (e.key === "Escape") this.cancel(); },
+      key: (e) => {
+        if (e.key === "Escape") this.cancel();
+      },
       frame: () => this.tick(),
     });
   }
@@ -115,11 +121,15 @@ export class HoleTool {
    *  edit surface then. */
   startEdit(id: string, onDone: (id: string | null) => void): boolean {
     if (this.active) return false;
-    const f = asFeature(this.store.document.features.find((x) => x.id === id), "hole");
+    const f = asFeature(
+      this.store.document.features.find((x) => x.id === id),
+      "hole",
+    );
     if (!f || !f.face || f.sketch || !f.points.length) return false;
     const values = f as unknown as Record<string, unknown>;
     for (const [field] of featureNumFields("hole", values)) {
-      if (typeof values[field] === "string" || this.store.isParamBound({ kind: "feature", feature: id, field })) return false;
+      if (typeof values[field] === "string" || this.store.isParamBound({ kind: "feature", feature: id, field }))
+        return false;
     }
     const placed = rebaseHole(f.face, f.points, this.store.buildState.result?.trackedFaces?.[id]);
     const first = placed.points[0]!;
@@ -167,8 +177,12 @@ export class HoleTool {
   }
 
   private pointOnPlane(clientX: number, clientY: number): THREE.Vector3 | null {
-    return this.viewport.rayFrom(clientX, clientY).ray.intersectPlane(
-      new THREE.Plane().setFromNormalAndCoplanarPoint(this.normal, this.origin), new THREE.Vector3());
+    return this.viewport
+      .rayFrom(clientX, clientY)
+      .ray.intersectPlane(
+        new THREE.Plane().setFromNormalAndCoplanarPoint(this.normal, this.origin),
+        new THREE.Vector3(),
+      );
   }
 
   /** The index of the placed hole nearest `p`, within its own pick radius, or -1. */
@@ -241,17 +255,21 @@ export class HoleTool {
   }
 
   private begin(
-    at: THREE.Vector3, normal: THREE.Vector3, origin: THREE.Vector3, bodyId: string | null,
-    faceId: number | null, face?: Selector, points?: Vec3[],
+    at: THREE.Vector3,
+    normal: THREE.Vector3,
+    origin: THREE.Vector3,
+    bodyId: string | null,
+    faceId: number | null,
+    face?: Selector,
+    points?: Vec3[],
   ) {
     this.phase = "place";
     this.armed = false;
     this.normal.copy(normal).normalize();
     this.origin.copy(origin);
     this.bodyId = bodyId;
-    // The true geometric middle, not faceCentroidWorld's by:"nearest" anchor
-    // (origin, above): that one snaps onto a single triangle's centroid, which
-    // for a two-triangle quad sits well off the middle a person means.
+    // The true middle, not faceCentroidWorld's by:"nearest" anchor, which snaps to one triangle's centroid and sits
+    // well off the middle of a two triangle quad.
     this.center.copy(faceId != null ? this.viewport.faceAreaCentroidWorld(faceId) : origin);
     const xd = planeXDir([this.normal.x, this.normal.y, this.normal.z]) ?? [1, 0, 0];
     this.xdir.set(xd[0], xd[1], xd[2]);
@@ -345,12 +363,11 @@ export class HoleTool {
     this.valueChanged();
   }
 
-  /** Size and depth are read by this tool rather than the box, a size name
-   *  and "through" not being numbers, so it is this tool that has to refuse
-   *  what it could not read instead of building the last value it could. */
+  /** A size name and "through" are not numbers, so this tool reads them and must refuse what it could not read
+   *  rather than build the last value it could. */
   private typedProblem(): string | null {
     if (this.dim.isUserDriven("size") && !parseHoleSize(this.dim.getRaw("size"))) {
-      return `Size: "${this.dim.getRaw("size").trim()}" is not a size, type M5 or a diameter`;
+      return badHoleSizeText(this.dim.getRaw("size"));
     }
     const depthText = this.dim.getRaw("depth");
     if (this.dim.isUserDriven("depth") && !(THROUGH.test(depthText) && this.holeType !== "insert")) {
@@ -377,8 +394,13 @@ export class HoleTool {
 
   private defaults() {
     const b = this.base;
-    return newHoleFields(this.holeType, this.size, this.blind() ? "blind" : "through",
-      b?.standard === "tap" ? "tap" : "clearance", b?.fit ?? "normal");
+    return newHoleFields(
+      this.holeType,
+      this.size,
+      this.blind() ? "blind" : "through",
+      b?.standard === "tap" ? "tap" : "clearance",
+      b?.fit ?? "normal",
+    );
   }
 
   private currentDiameter(): number {
@@ -413,7 +435,10 @@ export class HoleTool {
     if (depthText !== this.lastDepthText) {
       this.lastDepthText = depthText;
       if (THROUGH.test(depthText) && this.holeType !== "insert") {
-        if (!this.through) { this.through = true; changed = true; }
+        if (!this.through) {
+          this.through = true;
+          changed = true;
+        }
       } else {
         const v = this.dim.getValue("depth");
         if (v != null && v > 0 && (this.through || v !== this.depth)) {
@@ -437,18 +462,23 @@ export class HoleTool {
   /** Beside the model rather than over it: the face under the box is where the
    *  next click goes. */
   private positionDim(anchor: THREE.Vector3) {
+    this.dim.fitToWindow();
     const s = this.viewport.projectToScreen(anchor);
     const box = this.viewport.modelBox();
     if (!box) return this.dim.position(s.x + 24, s.y + 24);
-    let minX = Infinity;
-    let maxX = -Infinity;
-    for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
-      const c = this.viewport.projectToScreen(new THREE.Vector3(x, y, z));
-      minX = Math.min(minX, c.x);
-      maxX = Math.max(maxX, c.x);
-    }
-    const right = maxX + 8;
-    this.dim.position(right + 240 < window.innerWidth ? right : Math.max(0, minX - 280), s.y - 16);
+    const model = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
+    for (const x of [box.min.x, box.max.x])
+      for (const y of [box.min.y, box.max.y])
+        for (const z of [box.min.z, box.max.z]) {
+          const c = this.viewport.projectToScreen(new THREE.Vector3(x, y, z));
+          model.left = Math.min(model.left, c.x);
+          model.right = Math.max(model.right, c.x);
+          model.top = Math.min(model.top, c.y);
+          model.bottom = Math.max(model.bottom, c.y);
+        }
+    const area = this.viewport.domElement.getBoundingClientRect();
+    const free = clearOfCards(area, { top: s.y - 24, bottom: s.y + 24 }, FREE_GAP, this.dim.naturalSize().w);
+    this.dim.positionBeside(model, s, free);
   }
 
   private valueChanged() {
@@ -457,7 +487,7 @@ export class HoleTool {
     const what = this.diameter != null ? `⌀${this.diameter}` : this.size;
     setPrompt(
       `${TYPE_LABEL[this.holeType]} ${what} · ${n} hole${n === 1 ? "" : "s"} · click the face to add, ` +
-      "click a hole to remove · depth or \"through\" · Enter to commit · Esc",
+        'click a hole to remove · depth or "through" · Enter to commit · Esc',
     );
     if (this.previewTimer) clearTimeout(this.previewTimer);
     this.previewTimer = window.setTimeout(() => {
@@ -479,7 +509,9 @@ export class HoleTool {
     const keep = this.base && !this.resized ? this.base : null;
     const f: HoleFeature = {
       ...(keep ?? fresh),
-      ...(this.base && !keep ? { drillPoint: this.base.drillPoint, flip: this.base.flip, tapped: this.base.tapped } : {}),
+      ...(this.base && !keep
+        ? { drillPoint: this.base.drillPoint, flip: this.base.flip, tapped: this.base.tapped }
+        : {}),
       id: this.previewId,
       type: "hole",
       holeType: this.holeType,

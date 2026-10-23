@@ -30,7 +30,14 @@ afterEach(() => invoke.mockReset());
 
 describe("the Moonraker wire format", () => {
   it("serializes the filament remap as a nested JSON string", () => {
-    expect(mapTableString([[0, 2], [1, 0], [2, 1], [3, 3]])).toBe("[[0,2],[1,0],[2,1],[3,3]]");
+    expect(
+      mapTableString([
+        [0, 2],
+        [1, 0],
+        [2, 1],
+        [3, 3],
+      ]),
+    ).toBe("[[0,2],[1,0],[2,1],[3,3]]");
     expect(mapTableString([])).toBe("[]");
   });
 
@@ -50,7 +57,14 @@ describe("the Moonraker wire format", () => {
   });
 
   it("gives the webcam its own port", () => {
-    const cfg: PrinterConfig = { id: "t", name: "t", host: "192.168.0.46", port: 7125, kind: "MoonrakerU1", webcam_port: 8080 };
+    const cfg: PrinterConfig = {
+      id: "t",
+      name: "t",
+      host: "192.168.0.46",
+      port: 7125,
+      kind: "MoonrakerU1",
+      webcam_port: 8080,
+    };
     expect(webcamBaseUrl(cfg)).toBe("http://192.168.0.46:8080");
     expect(baseUrl(cfg)).toBe("http://192.168.0.46:7125");
   });
@@ -94,7 +108,10 @@ describe("through the app's generic commands", () => {
       plugin_data_write: (a) => void (written[a.name as string] = a.text as string),
     });
     const list = await printersList();
-    expect(adopted).toEqual([["printers.json", "printers.json"], ["settings.json", "slicer.json"]]);
+    expect(adopted).toEqual([
+      ["printers.json", "printers.json"],
+      ["settings.json", "slicer.json"],
+    ]);
     expect(list.map((p) => p.id)).toEqual(["u1", "qidi-xplus4"]);
     expect(JSON.parse(written["printers.json"]!)).toHaveLength(2);
   });
@@ -144,15 +161,28 @@ describe("through the app's generic commands", () => {
         return { status: 200, contentType: null, base64: null, text: '{"state":"success"}' };
       },
     });
-    await printerUploadAndPrint("u1", "h123", "job.gcode", [[0, 2]], { bedLevel: true, flowCalibrate: false, timeLapseCamera: false });
+    await printerUploadAndPrint("u1", "h123", "job.gcode", [[0, 2]], {
+      bedLevel: true,
+      flowCalibrate: false,
+      timeLapseCamera: false,
+    });
     expect(requests[0]).toMatchObject({
       method: "POST",
       url: "http://192.168.0.46:7125/server/files/upload",
-      body: { kind: "form", parts: [{ name: "print", text: "false" }, { name: "file", file: "h123", filename: "job.gcode" }] },
+      body: {
+        kind: "form",
+        parts: [
+          { name: "print", text: "false" },
+          { name: "file", file: "h123", filename: "job.gcode" },
+        ],
+      },
     });
     expect(requests[1]).toMatchObject({
       url: "http://192.168.0.46:7125/server/files/start_local_print",
-      body: { kind: "json", value: { path: "job.gcode", options: { map_table: "[[0,2]]", bed_level: 1, flow_calibrate: 0 } } },
+      body: {
+        kind: "json",
+        value: { path: "job.gcode", options: { map_table: "[[0,2]]", bed_level: 1, flow_calibrate: 0 } },
+      },
     });
   });
 });
@@ -161,7 +191,12 @@ describe("where the slicer is", () => {
   const dirs = (os: string): SystemDirs => ({
     os,
     home: os === "windows" ? "C:\\Users\\tester" : "/home/alice",
-    config: os === "windows" ? "C:\\Users\\tester\\AppData\\Roaming" : os === "macos" ? "/Users/alice/Library/Application Support" : "/home/alice/.config",
+    config:
+      os === "windows"
+        ? "C:\\Users\\tester\\AppData\\Roaming"
+        : os === "macos"
+          ? "/Users/alice/Library/Application Support"
+          : "/home/alice/.config",
     localData: os === "windows" ? "C:\\Users\\tester\\AppData\\Local" : null,
     programs: os === "windows" ? ["C:\\Program Files", "C:\\Program Files (x86)"] : [],
   });

@@ -1,7 +1,5 @@
-//! The server runs from a copy of its executable, so a build can replace the
-//! original while a host holds the server open. On by default on Windows only,
-//! where a running executable cannot be overwritten; `FUNDACAD_MCP_SHADOW=1`
-//! turns it on here.
+//! The server runs from a copy of its executable, so a build can replace the original. On by default
+//! on Windows only; `FUNDACAD_MCP_SHADOW=1` turns it on here.
 
 mod common;
 
@@ -39,10 +37,7 @@ fn shadowed(tmp: &Path, extra: &[(&str, String)]) -> Mcp {
 #[test]
 fn the_server_answers_from_a_copy_of_itself() {
     let tmp = tempfile::tempdir().expect("a temp dir");
-    let mut mcp = shadowed(
-        tmp.path(),
-        &[("FUNDACAD_ENGINE_CMD", engine_binary().to_string_lossy().into_owned())],
-    );
+    let mut mcp = shadowed(tmp.path(), &[("FUNDACAD_ENGINE_CMD", engine_binary().to_string_lossy().into_owned())]);
     let reply = mcp.call("schema", json!({"type": "box"}));
     assert!(!reply.is_error && reply.text.contains("CENTRED ON THE ORIGIN"), "{}", reply.text);
     assert_eq!(copies(tmp.path(), "fundacad-mcp").len(), 1, "one copy of the server");

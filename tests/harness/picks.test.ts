@@ -1,7 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
-import { edgePoint, faceInfo, facePoint, planePoint, resolveEdge, resolveFace, sketchPoint, worldPoint, type PickHost } from "../../src/harness/picks";
+import {
+  edgePoint,
+  faceInfo,
+  facePoint,
+  planePoint,
+  resolveEdge,
+  resolveFace,
+  sketchPoint,
+  worldPoint,
+  type PickHost,
+} from "../../src/harness/picks";
 import { HarnessError } from "../../src/harness/locate";
+import { OriginTiles } from "../../src/viewport/originTiles";
 
 type V = [number, number, number];
 
@@ -30,9 +41,30 @@ function rig(opts: { pick?: (x: number, y: number) => unknown } = {}) {
   const boss = boxFaces([50, 0, 0], [60, 10, 10]);
   const faces = [...plate, ...boss];
   const edges = [
-    { id: "e-top-front", body: "body1", points: [[0, 0, 5], [40, 0, 5]] as V[] },
-    { id: "e-top-right", body: "body1", points: [[40, 0, 5], [40, 20, 5]] as V[] },
-    { id: "e-boss", body: "body2", points: [[50, 0, 10], [60, 0, 10]] as V[] },
+    {
+      id: "e-top-front",
+      body: "body1",
+      points: [
+        [0, 0, 5],
+        [40, 0, 5],
+      ] as V[],
+    },
+    {
+      id: "e-top-right",
+      body: "body1",
+      points: [
+        [40, 0, 5],
+        [40, 20, 5],
+      ] as V[],
+    },
+    {
+      id: "e-boss",
+      body: "body2",
+      points: [
+        [50, 0, 10],
+        [60, 0, 10],
+      ] as V[],
+    },
   ];
   const state = { target: -1 as number, edge: "" };
   const planeXY = new THREE.Mesh(new THREE.PlaneGeometry(100, 100));
@@ -58,9 +90,12 @@ function rig(opts: { pick?: (x: number, y: number) => unknown } = {}) {
     viewport: {
       faceTriangles: (fid: number) => faces[fid] ?? [],
       projectToScreen: project,
-      pickEntity: (x: number, y: number) => opts.pick ? opts.pick(x, y) : state.edge
-        ? { kind: "edge", edge: { id: state.edge } }
-        : { kind: "face", faceId: state.target },
+      pickEntity: (x: number, y: number) =>
+        opts.pick
+          ? opts.pick(x, y)
+          : state.edge
+            ? { kind: "edge", edge: { id: state.edge } }
+            : { kind: "face", faceId: state.target },
       pickEdgeAt: () => (state.edge ? { kind: "edge", edge: { id: state.edge } } : null),
       pickConstructionAt: () => ({ kind: "base", plane: "XY" }),
       scene: { scene, planes: { XY: planeXY, XZ: planeXY, YZ: planeXY } },
@@ -74,7 +109,12 @@ function rig(opts: { pick?: (x: number, y: number) => unknown } = {}) {
 const all = () => true;
 
 function err(fn: () => unknown): HarnessError {
-  try { fn(); } catch (e) { if (e instanceof HarnessError) return e; throw e; }
+  try {
+    fn();
+  } catch (e) {
+    if (e instanceof HarnessError) return e;
+    throw e;
+  }
   throw new Error("expected a harness error");
 }
 
@@ -121,7 +161,9 @@ describe("face selectors", () => {
     const flat = [new THREE.Triangle(v(20, 0, 0), v(21, 0, 0), v(21, 1, 0))];
     const faces = [roof, flat];
     const host = {
-      store: { buildState: { result: { bodies: [{ id: "body1", name: "Dome", faceStart: 0, faceCount: 2 }], edges: [] } } },
+      store: {
+        buildState: { result: { bodies: [{ id: "body1", name: "Dome", faceStart: 0, faceCount: 2 }], edges: [] } },
+      },
       viewport: { faceTriangles: (fid: number) => faces[fid] ?? [] },
     } as unknown as PickHost;
     expect(faceInfo(roof, "body1", 0, 0).planar).toBe(false);
@@ -137,7 +179,9 @@ describe("face selectors", () => {
   it("says a face in range has nothing drawn instead of calling it out of range", () => {
     const [top] = boxFaces([0, 0, 0], [1, 1, 1]);
     const host = {
-      store: { buildState: { result: { bodies: [{ id: "body1", name: "B", faceStart: 0, faceCount: 3 }], edges: [] } } },
+      store: {
+        buildState: { result: { bodies: [{ id: "body1", name: "B", faceStart: 0, faceCount: 3 }], edges: [] } },
+      },
       viewport: { faceTriangles: (fid: number) => (fid === 0 ? top! : []) },
     } as unknown as PickHost;
     const e = err(() => resolveFace(host, "index=1"));
@@ -212,7 +256,15 @@ describe("edges", () => {
   it("measures only the edges inside both faces' bounds for between", () => {
     const { h } = rig();
     const edges = h.store.buildState.result!.edges as { id: string; body: string; points: V[] }[];
-    for (let i = 0; i < 200; i++) edges.push({ id: `far${i}`, body: "body1", points: [[0, 0, -50 - i], [40, 0, -50 - i]] });
+    for (let i = 0; i < 200; i++)
+      edges.push({
+        id: `far${i}`,
+        body: "body1",
+        points: [
+          [0, 0, -50 - i],
+          [40, 0, -50 - i],
+        ],
+      });
     const spy = vi.spyOn(THREE.Triangle.prototype, "closestPointToPoint");
     expect(resolveEdge(h, "body1:between top front").id).toBe("e-top-front");
     expect(spy.mock.calls.length).toBeLessThan(100);
@@ -236,12 +288,39 @@ describe("planes and free points", () => {
     expect(err(() => planePoint(h, "p9", all)).kind).toBe("NotFound");
   });
 
+  it("finds each origin tile where it is drawn beside the origin", () => {
+    const { h } = rig();
+    const tiles = new OriginTiles(new THREE.Scene());
+    tiles.setShown(true);
+    tiles.group.scale.setScalar(33 / 109);
+    // Tile centres (44, -44, 0), (44, 0, 44) and (0, -44, 44) px, through the rig's projection.
+    const centres = { XY: [215.5, 566], XZ: [265, 335], YZ: [50.5, 401] } as const;
+    const vp = h.viewport as unknown as Record<string, unknown>;
+    vp.scene = { scene: new THREE.Scene(), planes: tiles.planes };
+    vp.pickConstructionAt = (x: number, y: number) => {
+      for (const [plane, [cx, cy]] of Object.entries(centres)) {
+        if (Math.abs(x - cx) < 1 && Math.abs(y - cy) < 1) return { kind: "base", plane };
+      }
+      return null;
+    };
+    expect(["XY", "XZ", "YZ"].map((k) => planePoint(h, k, all))).toEqual([
+      { x: 215.5, y: 566, what: "plane XY" },
+      { x: 265, y: 335, what: "plane XZ" },
+      { x: 50.5, y: 401, what: "plane YZ" },
+    ]);
+    tiles.setShown(false);
+    expect(err(() => planePoint(h, "XZ", all)).kind).toBe("Occluded");
+    tiles.dispose();
+  });
+
   it("says how a hidden plane is shown", () => {
     const { h } = rig();
     h.viewport.scene.planes.XY.visible = false;
     const e = err(() => planePoint(h, "XY", all));
     expect(e.kind).toBe("Occluded");
-    expect(e.message).toContain("a plane shows while a tool asks for one, or with Origin and planes in the Display panel");
+    expect(e.message).toContain("XY");
+    expect(e.message).toContain("while a tool asks for a plane");
+    expect(e.message).not.toContain("Display panel");
   });
 
   it("says a sketch already open is why its planes are hidden", () => {

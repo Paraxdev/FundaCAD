@@ -37,8 +37,7 @@ function fakeViewport() {
     pixelWorldSize: () => 1,
     projectToScreen: (p: THREE.Vector3) => ({ x: p.x, y: -p.z }),
     hoverThrough: () => {},
-    rayFrom: (_x: number, y: number) =>
-      new THREE.Raycaster(new THREE.Vector3(-200, 0, y), new THREE.Vector3(1, 0, 0)),
+    rayFrom: (_x: number, y: number) => new THREE.Raycaster(new THREE.Vector3(-200, 0, y), new THREE.Vector3(1, 0, 0)),
     // A mouse's probe: the one ray through the pixel.
     probe: <T>(x: number, y: number, test: (rc: THREE.Raycaster) => T | null | undefined | false) =>
       test(vp.rayFrom(x, y)) || null,
@@ -59,7 +58,8 @@ function fakeViewport() {
   return { vp: vp as unknown as Viewport, scene, canvas, setHandles, watchers };
 }
 
-const valueRowHidden = () => (document.querySelector(".dim-input") as HTMLElement | null)?.style.visibility === "hidden";
+const valueRowHidden = () =>
+  (document.querySelector(".dim-input") as HTMLElement | null)?.style.visibility === "hidden";
 
 function fakeStore() {
   const listeners = new Set<(s: { building: boolean }) => void>();
@@ -85,7 +85,10 @@ interface Probe {
   scales: number[];
 }
 
-function probe(at: [number, number, number], opts: { rebuild?: boolean; reopen?: () => MoveTarget | null } = {}): Probe {
+function probe(
+  at: [number, number, number],
+  opts: { rebuild?: boolean; reopen?: () => MoveTarget | null } = {},
+): Probe {
   const p: Probe = { target: null as unknown as MoveTarget, began: 0, ends: [], commits: 0, sent: [], scales: [] };
   const c = new THREE.Vector3(...at);
   p.target = {
@@ -96,7 +99,9 @@ function probe(at: [number, number, number], opts: { rebuild?: boolean; reopen?:
     ownsEscape: true,
     centroid: () => c.clone(),
     box: () => new THREE.Box3(c.clone().subScalar(5), c.clone().addScalar(5)),
-    begin: () => { p.began++; },
+    begin: () => {
+      p.began++;
+    },
     preview: () => {},
     commit: (c): MoveCommit => {
       p.commits++;
@@ -104,7 +109,9 @@ function probe(at: [number, number, number], opts: { rebuild?: boolean; reopen?:
       p.scales.push(c.scale.z);
       return { id: null, rebuild: opts.rebuild ?? false };
     },
-    end: (restore) => { p.ends.push(restore); },
+    end: (restore) => {
+      p.ends.push(restore);
+    },
     reopen: opts.reopen ?? (() => probe(at, opts).target),
   };
   return p;
@@ -113,7 +120,9 @@ function probe(at: [number, number, number], opts: { rebuild?: boolean; reopen?:
 /** The gizmo arrows in the scene: each carries its frame axis as a number. */
 function gizmoArrows(scene: THREE.Scene): THREE.Object3D[] {
   const out: THREE.Object3D[] = [];
-  scene.traverse((o) => { if (typeof o.userData.axis === "number") out.push(o); });
+  scene.traverse((o) => {
+    if (typeof o.userData.axis === "number") out.push(o);
+  });
   return out;
 }
 
@@ -135,7 +144,10 @@ describe("move gizmo lifecycle", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     frames = [];
-    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => { frames.push(fn); return frames.length; });
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+      frames.push(fn);
+      return frames.length;
+    });
     vi.stubGlobal("cancelAnimationFrame", () => {});
   });
   afterEach(() => {
@@ -250,7 +262,10 @@ describe("a typed move", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     frames = [];
-    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => { frames.push(fn); return frames.length; });
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+      frames.push(fn);
+      return frames.length;
+    });
     vi.stubGlobal("cancelAnimationFrame", () => {});
   });
   afterEach(() => {
@@ -294,7 +309,8 @@ describe("a typed move", () => {
   };
   const scaleField = () =>
     [...document.querySelectorAll<HTMLInputElement>(".dim-input input")].find((i) =>
-      i.closest("label")?.textContent?.includes("Scale"))!;
+      i.closest("label")?.textContent?.includes("Scale"),
+    )!;
   /** The Z cube stands past the arrow's tip, at SCALE_AT gizmo units. */
   const clickZCube = (canvas: HTMLCanvasElement) => {
     pointer(canvas, "pointerdown", 79);
@@ -333,12 +349,31 @@ describe("move gizmo raised by a body selection", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     frames = [];
-    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => { frames.push(fn); return frames.length; });
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => {
+      frames.push(fn);
+      return frames.length;
+    });
     vi.stubGlobal("cancelAnimationFrame", () => {});
   });
   afterEach(() => {
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
+  });
+
+  it("keeps the M that claims the raised gizmo out of its value field", () => {
+    const { vp } = fakeViewport();
+    const tool = new MoveTool(vp, fakeStore().store);
+    tool.startTarget(probe([0, 0, 0]).target, () => {});
+    tool.markAmbient();
+    const field = document.querySelector<HTMLInputElement>(".dim-input input")!;
+    field.focus();
+    const m = new KeyboardEvent("keydown", { key: "m", bubbles: true, cancelable: true });
+    field.dispatchEvent(m);
+    expect(m.defaultPrevented).toBe(true);
+    expect(tool.ambient).toBe(false);
+    const again = new KeyboardEvent("keydown", { key: "m", bubbles: true, cancelable: true });
+    field.dispatchEvent(again);
+    expect(again.defaultPrevented).toBe(false);
   });
 
   it("hides its value row while the handles overlay is off, and shows it again", () => {

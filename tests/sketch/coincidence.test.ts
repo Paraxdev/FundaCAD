@@ -21,16 +21,18 @@ vi.mock("@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url", () => ({
 import { compileAndSolve } from "../../src/sketch/sketchSolve";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 
-const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity =>
-  ({ type: "line", id, x1, y1, x2, y2 });
+const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({
+  type: "line",
+  id,
+  x1,
+  y1,
+  x2,
+  y2,
+});
 
 // The thread profile from the bug report, as the file on disk holds it: three
 // lines, no constraints, corners meeting exactly.
-const CLOSED = [
-  line("e1", 20, 0, 26, 2),
-  line("e2", 26, 2, 20, 5),
-  line("e3", 20, 5, 20, 0),
-];
+const CLOSED = [line("e1", 20, 0, 26, 2), line("e2", 26, 2, 20, 5), line("e3", 20, 5, 20, 0)];
 
 describe("a drawn chain is joined by position, not by a constraint", () => {
   it("a closed triangle has three points' worth of freedom, not six", async () => {
@@ -58,9 +60,7 @@ describe("a drawn chain is joined by position, not by a constraint", () => {
     // What a snapped join records on every corner it draws. The two ends are
     // already one solver variable, so the constraint removes no freedom and
     // must not paint its glyph as over-defined.
-    const r = await compileAndSolve(CLOSED, [
-      { type: "coincident", e1: "e1", p1: 1, e2: "e2", p2: 0 },
-    ]);
+    const r = await compileAndSolve(CLOSED, [{ type: "coincident", e1: "e1", p1: 1, e2: "e2", p2: 0 }]);
     expect(r.dof).toBe(6);
     expect(r.overDefined).toEqual([]);
     expect(r.conflicts).toEqual([]);

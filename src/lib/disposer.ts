@@ -1,7 +1,5 @@
-// One owner for everything a session sets up: listeners, three.js resources,
-// timers, subscriptions. Each is registered as it is created and released in
-// reverse order by one dispose(), so a teardown cannot forget the one that was
-// added last.
+// One owner for everything a session sets up (listeners, three.js resources, timers, subscriptions), released
+// in reverse order by one dispose() so a teardown cannot forget the last one added.
 
 import type * as THREE from "three";
 
@@ -27,8 +25,18 @@ export class Disposer {
     return once;
   }
 
-  listen<K extends keyof WindowEventMap>(target: Window, type: K, fn: (e: WindowEventMap[K]) => void, opts?: boolean | AddEventListenerOptions): Cleanup;
-  listen<K extends keyof HTMLElementEventMap>(target: HTMLElement, type: K, fn: (e: HTMLElementEventMap[K]) => void, opts?: boolean | AddEventListenerOptions): Cleanup;
+  listen<K extends keyof WindowEventMap>(
+    target: Window,
+    type: K,
+    fn: (e: WindowEventMap[K]) => void,
+    opts?: boolean | AddEventListenerOptions,
+  ): Cleanup;
+  listen<K extends keyof HTMLElementEventMap>(
+    target: HTMLElement,
+    type: K,
+    fn: (e: HTMLElementEventMap[K]) => void,
+    opts?: boolean | AddEventListenerOptions,
+  ): Cleanup;
   listen(target: EventTarget, type: string, fn: (e: Event) => void, opts?: boolean | AddEventListenerOptions): Cleanup;
   listen(target: EventTarget, type: string, fn: (e: never) => void, opts?: boolean | AddEventListenerOptions): Cleanup {
     const handler = fn as unknown as EventListener;

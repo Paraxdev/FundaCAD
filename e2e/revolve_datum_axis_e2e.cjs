@@ -20,7 +20,10 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "revolve_datum_axis_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -31,7 +34,10 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((t) => {
     const N = window.WebSocket;
     class P extends N {
@@ -46,19 +52,27 @@ const check = (name, ok, detail) => {
   await page.goto("http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
 
   const prompt = () => page.evaluate(() => document.querySelector("#prompt")?.textContent ?? "");
-  const revolveCount = () => page.evaluate(() =>
-    window.store.document.features.filter((f) => f.type === "revolve").length);
+  const revolveCount = () =>
+    page.evaluate(() => window.store.document.features.filter((f) => f.type === "revolve").length);
   const bodies = () => page.evaluate(() => (window.store.buildState.result?.bodies ?? []).length);
 
   // A profile coplanar with the spin axis and offset from it (a rectangle on XZ
   // at world X 15..25), plus a datum axis along Z. Revolving the profile about Z
   // makes a ring, a valid solid of revolution.
   await page.evaluate(async () => {
-    window.store.addFeature({ id: "s", type: "sketch", plane: "XZ", entities: [{ type: "rectangle", width: 10, height: 10, x: 20, y: 0 }] });
+    window.store.addFeature({
+      id: "s",
+      type: "sketch",
+      plane: "XZ",
+      entities: [{ type: "rectangle", width: 10, height: 10, x: 20, y: 0 }],
+    });
     window.store.addFeature({ id: "da", type: "datumAxis", origin: [0, 0, 0], dir: [0, 0, 1], name: "Spin" });
     await window.store.rebuildNow();
   });
@@ -72,10 +86,16 @@ const check = (name, ok, detail) => {
   await page.evaluate(() => window.__fundacad.handleAction("revolve"));
   await page.waitForTimeout(500);
   const p1 = await prompt();
-  check("CONTROL: with nothing selected, Revolve adds no feature yet",
-    (await revolveCount()) === before, `${await revolveCount()} revolves`);
-  check("CONTROL: it opens the interactive axis pick instead",
-    /axis arrow|straight edge|spin/i.test(p1), JSON.stringify(p1));
+  check(
+    "CONTROL: with nothing selected, Revolve adds no feature yet",
+    (await revolveCount()) === before,
+    `${await revolveCount()} revolves`,
+  );
+  check(
+    "CONTROL: it opens the interactive axis pick instead",
+    /axis arrow|straight edge|spin/i.test(p1),
+    JSON.stringify(p1),
+  );
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
 
@@ -83,18 +103,22 @@ const check = (name, ok, detail) => {
   await page.evaluate(() => window.__fundacad.selectFeature("da"));
   await page.waitForTimeout(200);
   await page.evaluate(() => window.__fundacad.handleAction("revolve"));
-  await page.waitForFunction(() =>
-    window.store.document.features.some((f) => f.type === "revolve"), null, { timeout: 60000 });
-  await page.evaluate(async () => { await window.store.rebuildNow(); });
+  await page.waitForFunction(() => window.store.document.features.some((f) => f.type === "revolve"), null, {
+    timeout: 60000,
+  });
+  await page.evaluate(async () => {
+    await window.store.rebuildNow();
+  });
   await page.waitForTimeout(600);
 
-  const rev = await page.evaluate(() =>
-    window.store.document.features.find((f) => f.type === "revolve"));
+  const rev = await page.evaluate(() => window.store.document.features.find((f) => f.type === "revolve"));
   check("selecting the datum axis makes Revolve add a revolve", !!rev);
   const ax = rev && rev.axis;
-  const axOk = ax && typeof ax === "object"
-    && JSON.stringify(ax.origin) === JSON.stringify([0, 0, 0])
-    && JSON.stringify(ax.dir) === JSON.stringify([0, 0, 1]);
+  const axOk =
+    ax &&
+    typeof ax === "object" &&
+    JSON.stringify(ax.origin) === JSON.stringify([0, 0, 0]) &&
+    JSON.stringify(ax.dir) === JSON.stringify([0, 0, 1]);
   check("the revolve spins about the datum axis's own line", !!axOk, JSON.stringify(ax));
   await page.evaluate(() => window.__fundacad.handleAction("fit"));
   await page.waitForTimeout(400);

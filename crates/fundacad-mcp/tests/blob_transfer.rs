@@ -1,7 +1,5 @@
-//! Imported geometry reaching a saved file, and an opened file's geometry
-//! reaching the engine, when this process and the engine do not share a blob
-//! store. The engine is a stub that holds its blobs in memory, which is the
-//! point: nothing it has is on any disk this process looks at.
+//! Geometry moves between a saved file and an engine that shares no blob store with this process. The stub
+//! engine keeps its blobs in memory, so none is on a disk this process looks at.
 
 mod common;
 
@@ -31,9 +29,8 @@ fn geometry(seed: u32) -> Vec<u8> {
     (0..1000u32).map(|i| (i * 13 % 251 + seed) as u8).collect()
 }
 
-/// This process's own store, never the user's, and one per test binary since
-/// the variable is the process's. Only the open test writes to it, with a blob
-/// no other test uses, so for the rest every blob has to come through the socket.
+/// This process's own store, one per test binary. Only the open test writes to it, with its own blob,
+/// so for the rest every blob has to come through the socket.
 fn empty_local_store() {
     static DIR: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
     let dir = DIR.get_or_init(|| tempfile::tempdir().unwrap());
@@ -71,9 +68,7 @@ fn engine_holding(held: Arc<Mutex<HashMap<String, Vec<u8>>>>) -> FakeEngine {
             }
             "blobWrite" => {
                 let h = req["hash"].as_str().unwrap().to_string();
-                let piece = base64::engine::general_purpose::STANDARD
-                    .decode(req["data"].as_str().unwrap())
-                    .unwrap();
+                let piece = base64::engine::general_purpose::STANDARD.decode(req["data"].as_str().unwrap()).unwrap();
                 let entry = held.entry(h).or_default();
                 entry.extend_from_slice(&piece);
                 let done = entry.len() as u64 == req["total"].as_u64().unwrap();
@@ -106,10 +101,7 @@ async fn a_save_takes_the_geometry_from_the_engine_that_holds_it() {
 
     let out = tempfile::tempdir().unwrap();
     let path = a_path(&out, "part.funda");
-    let r = srv
-        .t_doc_save(args(json!({"path": path.to_string_lossy()})))
-        .await
-        .unwrap();
+    let r = srv.t_doc_save(args(json!({"path": path.to_string_lossy()}))).await.unwrap();
     assert!(!is_error(&r), "{}", text_of(&r));
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     assert_eq!(saved["geometry"][&h], json!(b64(&data)));
@@ -126,10 +118,7 @@ async fn a_save_is_refused_only_when_nobody_has_the_geometry_and_says_what_to_do
 
     let out = tempfile::tempdir().unwrap();
     let path = a_path(&out, "part.funda");
-    let r = srv
-        .t_doc_save(args(json!({"path": path.to_string_lossy()})))
-        .await
-        .unwrap();
+    let r = srv.t_doc_save(args(json!({"path": path.to_string_lossy()}))).await.unwrap();
     assert!(is_error(&r));
     let text = text_of(&r);
     assert!(text.contains("f1 'motor'"), "{text}");
@@ -147,10 +136,7 @@ async fn bytes_from_the_engine_that_do_not_match_their_hash_are_not_saved() {
 
     let out = tempfile::tempdir().unwrap();
     let path = a_path(&out, "part.funda");
-    let r = srv
-        .t_doc_save(args(json!({"path": path.to_string_lossy()})))
-        .await
-        .unwrap();
+    let r = srv.t_doc_save(args(json!({"path": path.to_string_lossy()}))).await.unwrap();
     assert!(is_error(&r), "{}", text_of(&r));
     assert!(!path.exists());
 }
@@ -169,41 +155,26 @@ async fn opening_a_file_hands_its_geometry_to_the_engine() {
     let held = Arc::new(Mutex::new(HashMap::new()));
     let engine = engine_holding(held.clone());
     let srv = FundaCad::with_link(engine.link());
-    let r = srv
-        .t_doc_open(args(json!({"path": path.to_string_lossy()})))
-        .await
-        .unwrap();
+    let r = srv.t_doc_open(args(json!({"path": path.to_string_lossy()}))).await.unwrap();
     assert!(!is_error(&r), "{}", text_of(&r));
     assert_eq!(held.lock().unwrap().get(&h), Some(&data));
 
     let again = FundaCad::with_link(engine.link());
     let before = engine.ops().len();
-    again
-        .t_doc_open(args(json!({"path": path.to_string_lossy()})))
-        .await
-        .unwrap();
-    assert_eq!(
-        engine.ops()[before..],
-        ["blobHas".to_string()],
-        "a blob the engine already has is sent again"
-    );
+    again.t_doc_open(args(json!({"path": path.to_string_lossy()}))).await.unwrap();
+    assert_eq!(engine.ops()[before..], ["blobHas".to_string()], "a blob the engine already has is sent again");
 }
 
 #[tokio::test]
 async fn an_engine_too_old_to_hand_geometry_over_is_named_as_the_reason() {
     empty_local_store();
     let h = digest(&geometry(0));
-    let engine = FakeEngine::start(|op, _| {
-        json!({"ok": false, "error": {"message": format!("unknown op: {op}")}})
-    });
+    let engine = FakeEngine::start(|op, _| json!({"ok": false, "error": {"message": format!("unknown op: {op}")}}));
     let srv = FundaCad::with_link(engine.link());
     srv.t_doc_set(args(json!({"document": import_doc(&h)}))).await.unwrap();
 
     let out = tempfile::tempdir().unwrap();
-    let r = srv
-        .t_doc_save(args(json!({"path": a_path(&out, "part.funda").to_string_lossy()})))
-        .await
-        .unwrap();
+    let r = srv.t_doc_save(args(json!({"path": a_path(&out, "part.funda").to_string_lossy()}))).await.unwrap();
     assert!(is_error(&r));
     assert!(text_of(&r).contains("older build"), "{}", text_of(&r));
 }

@@ -16,8 +16,11 @@ pub mod wire;
 pub use bloom::Bloom;
 pub use denoise::{Denoiser, Quality};
 pub use env::{Environment, Up};
-pub use gpu::{choose, encode_png, picture_refusal, Camera, Candidate, Estimator, Ground, GroundMode, Lens, LightDesc, Lights, Look, Ortho, Path, Picture, Refusal, Tracer, TracerOptions, WAIT_LIMIT};
+pub use gpu::{
+    choose, encode_png, picture_refusal, Camera, Candidate, Estimator, Ground, GroundMode, Lens, LightDesc, Lights,
+    Look, Ortho, Path, Picture, Refusal, Tracer, TracerOptions, WAIT_LIMIT,
+};
 pub use material::{pack_material, tri_slots, GpuMaterial, Group, PageMaterial};
-pub use selfcheck::{display16, Reference, SelfCheck};
 pub use scene::{pack_inst, Accel, BodyDesc, Commit, GpuInst, Instance, Mesh, Scene};
+pub use selfcheck::{display16, Reference, SelfCheck};
 pub use wire::{decode_colors, decode_env, decode_mesh};

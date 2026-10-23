@@ -1,18 +1,6 @@
 <script setup lang="ts">
-// The member list for the Fillet / Chamfer tool. While a blend is being sized,
-// its member edges show as orange lines in the view you click to drop; this is
-// the same set as a list, which is what a blend with a lot of edges needs, and
-// the only way to reach the UNRESOLVED members, saved selectors whose edge the
-// current geometry no longer draws, so they have no line to click.
-//
-// It sits at the bottom of the left column, under the Items browser (which
-// shrinks to make room) and beside the tool rail, so it is a docked card rather
-// than a panel floating over the model. Renders nothing until a blend is being
-// edited.
-//
-// A poll rather than a subscription, the same shape useSelectionOffers uses: the
-// tool is plain imperative code that mutates its member array on pointer events,
-// and the loop runs only while a blend is being edited.
+// The Fillet and Chamfer member list, the only way to reach unresolved members (saved selectors whose edge the
+// current geometry no longer draws).
 
 import { onMounted, onUnmounted, shallowRef } from "vue";
 import { useEngine } from "../../app/engineKey";
@@ -40,6 +28,7 @@ function refresh(): boolean {
 }
 
 let raf = 0;
+// Polled while a blend is edited: the tool mutates its member array imperatively on pointer events.
 function tick() {
   raf = 0;
   if (refresh()) raf = requestAnimationFrame(tick);
@@ -108,9 +97,7 @@ const unresolvedCount = () => rows.value.filter((r) => !r.resolved).length;
 </template>
 
 <style scoped>
-/* A docked card in the left column: sticks to the bottom (margin-top:auto), and
-   is capped so a long edge list scrolls rather than pushing the Items browser
-   out of the column. */
+/* Docked at the bottom of the left column, capped so a long edge list scrolls instead of pushing out the Items browser. */
 .fm-card {
   flex: 0 0 auto;
   margin-top: auto;

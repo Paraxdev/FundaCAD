@@ -1,11 +1,5 @@
-// How an MCP host starts this executable's embedded MCP server.
-//
-// The app never runs the server, the host does (Claude Code, Claude Desktop, an
-// editor), so what the app hands out is the command line in the shape each host
-// takes. The server needs no arguments: its private engine is the app, started
-// with `--engine --ws`, and it attaches to a running window by itself through
-// session.json.
-
+// The command line an MCP host (Claude Code, Claude Desktop, an editor) uses to start this executable's MCP server.
+// It needs no arguments: its engine is the app with `--engine --ws`, and it finds a running window via session.json.
 
 export type McpHost = "claude-code" | "claude-desktop" | "other";
 
@@ -53,14 +47,12 @@ export function mcpSetupFor(host: McpHost, server: string): { text: string; hint
     case "claude-desktop":
       return {
         text: mcpConfigBlock(mcpServerLaunch(server)),
-        hint:
-          "Add this to claude_desktop_config.json (Settings, Developer, Edit Config), then restart Claude Desktop.",
+        hint: "Add this to claude_desktop_config.json (Settings, Developer, Edit Config), then restart Claude Desktop.",
       };
     case "other":
       return {
         text: `${quoted(server)} --mcp`,
-        hint:
-          "Start this program over stdio with --mcp. Hosts that read an mcpServers block take the same one Claude Desktop does.",
+        hint: "Start this program over stdio with --mcp. Hosts that read an mcpServers block take the same one Claude Desktop does.",
       };
   }
 }

@@ -1,5 +1,4 @@
-//! Shell, thicken and draft: the Python engine's `solid_ops.py` `_shell`, `_draft` and the
-//! handlers of the Python engine's `builder.py` that drive them.
+//! Shell, thicken and draft, `_shell` and `_draft` of solid_ops.py and the builder.py handlers that drive them.
 
 use fundacad_core::schema::{Draft, OneOrMany, Selector, Shell, Thicken};
 use glam::DVec3;
@@ -13,10 +12,8 @@ use crate::builder::{py_g, Ctx, FResult, Fail};
 use crate::kernel::{self, BoolKind, Kind};
 use crate::select::{group_by_body, Resolver};
 
-/// The class name an OpenCASCADE failure reaches Python as.
-///
-/// The class is what the user reads, the whole exception text goes to the
-/// error report through the trace.
+/// The class name an OpenCASCADE failure reaches Python as. The user reads the class, the whole exception text
+/// goes to the error report through the trace.
 pub(crate) fn occt_class(e: &opencascade::Error) -> String {
     if let opencascade::Error::Occt(m) = e {
         crate::trace::failed("OpenCASCADE", None, m.clone(), None);
@@ -32,12 +29,7 @@ pub(crate) fn internal(e: opencascade::Error) -> Fail {
     Fail::Internal(occt_class(&e))
 }
 
-pub(crate) fn resolve(
-    ctx: &mut Ctx,
-    feature_id: &str,
-    part: &Shape,
-    sels: &[&Selector],
-) -> FResult<Vec<Shape>> {
+pub(crate) fn resolve(ctx: &mut Ctx, feature_id: &str, part: &Shape, sels: &[&Selector]) -> FResult<Vec<Shape>> {
     let v = serde_json::to_value(sels).map_err(|_| Fail::Internal("TypeError".into()))?;
     Resolver::new(Some(&mut ctx.diagnostics), Some(feature_id)).faces(part, &v)
 }
@@ -64,10 +56,7 @@ pub(crate) fn surface_type(face: &Shape) -> Option<SurfaceType> {
 
 /// `OFFSETTABLE_CURVED`: the analytic surfaces BRepOffset has a closed form for.
 pub(crate) fn offsettable_curved(t: Option<SurfaceType>) -> bool {
-    matches!(
-        t,
-        Some(SurfaceType::Cylinder | SurfaceType::Cone | SurfaceType::Sphere | SurfaceType::Torus)
-    )
+    matches!(t, Some(SurfaceType::Cylinder | SurfaceType::Cone | SurfaceType::Sphere | SurfaceType::Torus))
 }
 
 /// `_guard_offsetable`. Freeform surfaces are refused because BRepOffset
@@ -94,11 +83,8 @@ pub(crate) fn guard_offsetable(part: &Shape, faces: &[Shape], label: &str) -> FR
 /// build123d `Solid.offset_3d` with the Intersection kind, then `fix()`.
 fn offset_3d(solid: &Shape, openings: &[Shape], amount: f64) -> Result<Shape, String> {
     let faces = faces_of(solid);
-    let mine: Vec<_> = openings
-        .iter()
-        .filter(|o| faces.iter().any(|f| f.is_same(o)))
-        .filter_map(Shape::as_face)
-        .collect();
+    let mine: Vec<_> =
+        openings.iter().filter(|o| faces.iter().any(|f| f.is_same(o))).filter_map(Shape::as_face).collect();
     let refs: Vec<_> = mine.iter().collect();
     let options = OffsetOptions {
         tolerance: 1e-4,
@@ -107,25 +93,15 @@ fn offset_3d(solid: &Shape, openings: &[Shape], amount: f64) -> Result<Shape, St
         remove_internal_edges: true,
         ..Default::default()
     };
-    let out = solid
-        .thick_solid_by_join(&refs, amount, options, &ProgressRange::detached())
-        .map_err(|e| match &e {
-            opencascade::Error::Occt(m) if m.contains("did not finish") => {
-                "RuntimeError".to_owned()
-            }
-            _ => occt_class(&e),
-        })?;
-    let out = if out.volume() < 0.0 {
-        out.reversed()
-    } else {
-        out
-    };
+    let out = solid.thick_solid_by_join(&refs, amount, options, &ProgressRange::detached()).map_err(|e| match &e {
+        opencascade::Error::Occt(m) if m.contains("did not finish") => "RuntimeError".to_owned(),
+        _ => occt_class(&e),
+    })?;
+    let out = if out.volume() < 0.0 { out.reversed() } else { out };
     if out.is_valid().unwrap_or(false) {
         return Ok(out);
     }
-    out.fix(FixOptions::default())
-        .map(|f| f.shape)
-        .map_err(|e| occt_class(&e))
+    out.fix(FixOptions::default()).map(|f| f.shape).map_err(|e| occt_class(&e))
 }
 
 /// build123d `offset(shape, amount, openings, kind=INTERSECTION)` on a part.
@@ -148,13 +124,8 @@ fn shell_shape(shape: &Shape, thickness: f64, openings: &[Shape]) -> FResult<Sha
         // An offset with nothing opened shrinks the solid instead of hollowing
         // it, so the sealed wall is the original minus that shrunk solid.
         let inner = offset_part(shape, &[], amount)?;
-        kernel::boolean_op(shape, &[&inner], BoolKind::Cut).map_err(|e| {
-            e.0.split(':')
-                .next()
-                .unwrap_or("RuntimeError")
-                .trim()
-                .to_owned()
-        })
+        kernel::boolean_op(shape, &[&inner], BoolKind::Cut)
+            .map_err(|e| e.0.split(':').next().unwrap_or("RuntimeError").trim().to_owned())
     };
     run().map_err(|class| {
         Fail::msg(format!(
@@ -197,14 +168,12 @@ fn thicken_face(face: &Shape, depth: f64) -> FResult<Shape> {
         remove_internal_edges: true,
         ..Default::default()
     };
-    let out = face
-        .offset_shape(depth, &[], options, &ProgressRange::detached())
-        .map_err(|e| match e {
-            opencascade::Error::Occt(m) if m.starts_with("BRepOffset_MakeOffset error") => {
-                Fail::Internal("RuntimeError".into())
-            }
-            other => internal(other),
-        })?;
+    let out = face.offset_shape(depth, &[], options, &ProgressRange::detached()).map_err(|e| match e {
+        opencascade::Error::Occt(m) if m.starts_with("BRepOffset_MakeOffset error") => {
+            Fail::Internal("RuntimeError".into())
+        }
+        other => internal(other),
+    })?;
     if out.shape_type() != ShapeType::Solid {
         return Err(Fail::Internal("Standard_TypeMismatch".into()));
     }
@@ -247,15 +216,7 @@ pub fn thicken(ctx: &mut Ctx, f: &Thicken) -> FResult {
     } else {
         kernel::clean(&solids[0])?
     };
-    combine(
-        ctx,
-        &f.id,
-        kernel::compound([&merged]),
-        f.operation.as_ref(),
-        f.targets.as_deref(),
-        None,
-        None,
-    )
+    combine(ctx, &f.id, kernel::compound([&merged]), f.operation.as_ref(), f.targets.as_deref(), None, None)
 }
 
 fn draft_shape(shape: &Shape, faces: &[Shape], angle_deg: f64, axis: &str) -> FResult<Shape> {
@@ -272,27 +233,22 @@ fn draft_shape(shape: &Shape, faces: &[Shape], angle_deg: f64, axis: &str) -> FR
     };
     let faces: Vec<_> = faces.iter().filter_map(Shape::as_face).collect();
     let refs: Vec<_> = faces.iter().collect();
-    shape
-        .draft(&refs, pull, angle_deg.to_radians(), pull * base, pull)
-        .map_err(|e| match &e {
-            opencascade::Error::Occt(m) if m.contains("the draft did not build") => {
-                Fail::msg("draft failed for these faces / angle")
-            }
-            // A refused Add leaves the drafter to raise on Build in Python.
-            opencascade::Error::Occt(m) if m.starts_with("the draft refused") => {
-                Fail::Internal("Standard_ConstructionError".into())
-            }
-            _ => internal(e),
-        })
+    shape.draft(&refs, pull, angle_deg.to_radians(), pull * base, pull).map_err(|e| match &e {
+        opencascade::Error::Occt(m) if m.contains("the draft did not build") => {
+            Fail::msg("draft failed for these faces / angle")
+        }
+        // A refused Add leaves the drafter to raise on Build in Python.
+        opencascade::Error::Occt(m) if m.starts_with("the draft refused") => {
+            Fail::Internal("Standard_ConstructionError".into())
+        }
+        _ => internal(e),
+    })
 }
 
 pub fn draft(ctx: &mut Ctx, f: &Draft) -> FResult {
     let angle = ctx.val(&f.angle)?;
     if !(-90.0 < angle && angle < 90.0) {
-        return Err(Fail::msg(format!(
-            "Draft: angle must be between -90 and 90 degrees (got {})",
-            py_g(angle)
-        )));
+        return Err(Fail::msg(format!("Draft: angle must be between -90 and 90 degrees (got {})", py_g(angle))));
     }
     let axis = f.axis.as_str().to_owned();
     let mut staged = Vec::new();
@@ -300,10 +256,7 @@ pub fn draft(ctx: &mut Ctx, f: &Draft) -> FResult {
         let part = ctx.bodies[body].shape().clone();
         let faces = resolve(ctx, &f.id, &part, &group)?;
         if faces.is_empty() {
-            return Err(Fail::msg(format!(
-                "no face found to draft on {}",
-                ctx.bodies[body].name
-            )));
+            return Err(Fail::msg(format!("no face found to draft on {}", ctx.bodies[body].name)));
         }
         staged.push((body, draft_shape(&part, &faces, angle, &axis)?));
     }

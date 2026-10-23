@@ -1,5 +1,6 @@
 import type * as THREE from "three";
 import { disposeBody, type ModelView } from "./render";
+import { forgetRaycastIndex } from "./raycastIndex";
 
 type Job = () => void;
 
@@ -61,6 +62,7 @@ export function detachModel(group: THREE.Object3D, view: ModelView, queue: Dispo
   for (const b of view.bodies) {
     gone.add(b.mesh);
     gone.add(b.edges.object);
+    forgetRaycastIndex(b.mesh.geometry);
   }
   if (view.orphanEdges) gone.add(view.orphanEdges.object);
   // Object3D.remove is an indexOf and a splice per object, quadratic on a few

@@ -1,6 +1,5 @@
-// The model projected to the screen for a box drag. Every face keeps its screen
-// bounding box, which settles a window outright and rules most of the model out
-// for a crossing, so only a crossing that really overlaps walks triangles.
+// The model projected to the screen for a box drag. Each face keeps its screen bounding box, so only a crossing
+// that really overlaps one walks its triangles.
 
 import * as THREE from "three";
 import type { EdgeRef, ModelView } from "./render";
@@ -25,7 +24,12 @@ export interface AreaProjection {
 }
 
 /** `seeThrough` keeps the far side: without it back-facing triangles are culled. */
-export function projectForArea(model: ModelView, cam: THREE.Camera, view: DOMRect, seeThrough: boolean): AreaProjection {
+export function projectForArea(
+  model: ModelView,
+  cam: THREE.Camera,
+  view: DOMRect,
+  seeThrough: boolean,
+): AreaProjection {
   const out: AreaProjection = { bodies: [], edges: [] };
   cam.updateMatrixWorld();
   const vp = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
@@ -58,11 +62,17 @@ export function projectForArea(model: ModelView, cam: THREE.Camera, view: DOMRec
     const p = new THREE.Vector4();
     for (let i = 0; i < count; i++) {
       p.set(pos.getX(i), pos.getY(i), pos.getZ(i), 1).applyMatrix4(body.mesh.matrixWorld);
-      wx[i] = p.x; wy[i] = p.y; wz[i] = p.z;
+      wx[i] = p.x;
+      wy[i] = p.y;
+      wz[i] = p.z;
       p.applyMatrix4(vp);
       // Behind the camera the divide folds a point back into view. NaN answers
       // no to both verdicts in areaSelect.
-      if (!(p.w > 0)) { sx[i] = NaN; sy[i] = NaN; continue; }
+      if (!(p.w > 0)) {
+        sx[i] = NaN;
+        sy[i] = NaN;
+        continue;
+      }
       sx[i] = view.left + ((p.x / p.w) * 0.5 + 0.5) * view.width;
       sy[i] = view.top + ((-p.y / p.w) * 0.5 + 0.5) * view.height;
     }
@@ -86,9 +96,12 @@ export function projectForArea(model: ModelView, cam: THREE.Camera, view: DOMRec
           look.copy(ortho ? camDir : a.sub(camPos));
           if (nrm.dot(look) >= 0) continue;
         }
-        tri[0] = sx[i0] as number; tri[1] = sy[i0] as number;
-        tri[2] = sx[i1] as number; tri[3] = sy[i1] as number;
-        tri[4] = sx[i2] as number; tri[5] = sy[i2] as number;
+        tri[0] = sx[i0] as number;
+        tri[1] = sy[i0] as number;
+        tri[2] = sx[i1] as number;
+        tri[3] = sy[i1] as number;
+        tri[4] = sx[i2] as number;
+        tri[5] = sy[i2] as number;
         facing.push(tri.slice());
       }
       let box: ScreenBox = facing.length ? [Infinity, Infinity, -Infinity, -Infinity] : null;
@@ -111,7 +124,10 @@ export function projectForArea(model: ModelView, cam: THREE.Camera, view: DOMRec
     let usable = true;
     for (const pt of e.points) {
       q.set(pt[0], pt[1], pt[2], 1).applyMatrix4(vp);
-      if (!(q.w > 0)) { usable = false; break; }
+      if (!(q.w > 0)) {
+        usable = false;
+        break;
+      }
       flat.push(
         view.left + ((q.x / q.w) * 0.5 + 0.5) * view.width,
         view.top + ((-q.y / q.w) * 0.5 + 0.5) * view.height,
@@ -124,7 +140,11 @@ export function projectForArea(model: ModelView, cam: THREE.Camera, view: DOMRec
 
 /** A window takes a body only when all of it is inside, a crossing as soon as
  *  one face is touched, so a window over an assembly leaves the plate behind. */
-export function collectInBox(proj: AreaProjection, rect: ScreenRect, mode: AreaMode): {
+export function collectInBox(
+  proj: AreaProjection,
+  rect: ScreenRect,
+  mode: AreaMode,
+): {
   faces: number[];
   edges: EdgeRef[];
   bodies: string[];

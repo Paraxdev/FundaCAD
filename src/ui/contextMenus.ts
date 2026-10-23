@@ -1,11 +1,5 @@
-// Viewport right-click: context-aware menus, one provider per target (datum
-// plane / edge / face / whole body / empty space), all on the shared engine in
-// ui/menu.ts. The viewport owns the click-vs-pan gesture (right button is
-// camera pan) and fires onContextClick only for a genuine click; toolBusy
-// gates it, an active tool (or sketch mode, which has its own canvas menu)
-// owns the gesture. NOT toolBusy for that gate, though: picking a body raises
-// the Move gizmo by itself, so a plain busy test meant right-clicking a body
-// you had already selected opened no menu at all. See Engine.toolOwnsScreen.
+// Viewport right-click menus, one provider per target (datum, edge, face, body, empty space) on ui/menu.ts.
+// The viewport fires onContextClick only for a real click, since the right button also pans the camera.
 import { markRaw } from "vue";
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
@@ -32,14 +26,9 @@ export interface ContextMenusDeps {
   sketch: SketchMode;
   measure: MeasureTool;
   toolBusy: () => boolean;
-  /** toolBusy() minus the Move gizmo a body selection raises by itself, see
-   *  Engine.toolOwnsScreen. What gates the menu OPENING: with plain toolBusy
-   *  here, right-clicking a body that was already selected opened nothing at
-   *  all, because selecting it is what raised the gizmo. */
+  /** toolBusy() minus the Move gizmo a body selection raises, so right-clicking a selected body still opens a menu. */
   toolOwnsScreen: () => boolean;
-  /** Stand that gizmo down, see Engine.dropBodyGizmo. What every item that acts
-   *  on the body calls first, or it is refused by the guard inside the very
-   *  command the menu just offered. */
+  /** Every item acting on the body calls this first, or the command it offers refuses because of the gizmo. */
   dropBodyGizmo: () => void;
   setStatus: (text: string, cls: "" | "connected" | "error") => void;
   selectFeature: (id: string | null) => void;
@@ -82,17 +71,11 @@ export function createContextMenus(deps: ContextMenusDeps) {
     exportFlat,
   } = deps;
 
-  /** Wrap a menu item that starts a tool or mutates the DOCUMENT: the click runs
-   *  when the item is chosen, not when the menu opened, and a keyboard shortcut
-   *  may have started a tool in between. Refusals are reported, never silent.
-   *  Display-only items (hide/isolate/color/rename) stay unwrapped on purpose,
-   *  the browser tree's eye toggles are likewise always available, even mid-tool. */
+  /** For items that start a tool or edit the document: a shortcut may have started a tool since the menu opened, and
+   *  refusals are reported. Display-only items stay unwrapped, like the tree's eye toggles. */
   function unlessBusy(fn: () => void): () => void {
     return () => {
-      // The body gizmo first: it is not a tool the user started, it is what
-      // picking a body raises, and every item below that acts on that body was
-      // refused by it. A no-op for the datum, edge and face menus, which are
-      // not in bodies mode.
+      // The gizmo a body pick raises would refuse every item below. A no-op for datum, edge and face menus.
       dropBodyGizmo();
       if (toolBusy()) {
         setStatus("Finish the active tool first (Esc cancels it)", "");
@@ -109,39 +92,94 @@ export function createContextMenus(deps: ContextMenusDeps) {
     selectFeature(datumId); // same as clicking it, the menu acts on a visible selection
     contextMenu(x, y, [
       { label: "Cut all bodies", onClick: unlessBusy(() => void startCutByPlane(datumId)) },
-      // enter BY ID: the def is only the cached placement, so passing the datum
-      // id too is what makes the sketch follow later edits to its offset
-      { label: "Sketch on plane", disabled: !f, onClick: unlessBusy(() => { if (f) sketch.enter(datumPlaneDef(f), store, undefined, f.id); }) },
-      { label: "Offset plane", disabled: !f, onClick: unlessBusy(() => { if (f) offsetPlaneFromFace(datumPlaneDef(f), f.id); }) },
+      // Enter by id: the def is only the cached placement, the id makes the sketch follow later offset edits.
+      {
+        label: "Sketch on plane",
+        disabled: !f,
+        onClick: unlessBusy(() => {
+          if (f) sketch.enter(datumPlaneDef(f), store, undefined, f.id);
+        }),
+      },
+      {
+        label: "Offset plane",
+        disabled: !f,
+        onClick: unlessBusy(() => {
+          if (f) offsetPlaneFromFace(datumPlaneDef(f), f.id);
+        }),
+      },
       { separator: true, label: "" },
       // setPlaneVisibility deliberately emits nothing (a plane toggle costs no
       // rebuild), so the browser is told by hand, see stores/browser.ts.
-      { label: "Hide plane", onClick: () => { store.setPlaneVisibility(datumId, false); syncDatumPlanes(); useBrowserStore().bumpView(); } },
-      { label: "Delete plane", danger: true, onClick: unlessBusy(() => { store.removeFeature(datumId); selectFeature(null); }) },
+      {
+        label: "Hide plane",
+        onClick: () => {
+          store.setPlaneVisibility(datumId, false);
+          syncDatumPlanes();
+          useBrowserStore().bumpView();
+        },
+      },
+      {
+        label: "Delete plane",
+        danger: true,
+        onClick: unlessBusy(() => {
+          store.removeFeature(datumId);
+          selectFeature(null);
+        }),
+      },
     ]);
   }
 
   function openEdgeMenu(x: number, y: number, hit: EdgeHit) {
     contextMenu(x, y, [
       // routed through handleAction so "Repeat <command>" records them
-      { label: "Fillet", shortcut: keyHint("fillet"), onClick: unlessBusy(() => { viewport.selectOnlyEdge(hit.edge); handleAction("fillet"); }) },
-      { label: "Chamfer", shortcut: keyHint("chamfer"), onClick: unlessBusy(() => { viewport.selectOnlyEdge(hit.edge); handleAction("chamfer"); }) },
-      { label: "Plane normal to edge", onClick: unlessBusy(() => { viewport.selectOnlyEdge(hit.edge); handleAction("plane-normal-edge"); }) },
-      { label: "Plane at angle", onClick: unlessBusy(() => { viewport.selectOnlyEdge(hit.edge); handleAction("plane-angle"); }) },
+      {
+        label: "Fillet",
+        shortcut: keyHint("fillet"),
+        onClick: unlessBusy(() => {
+          viewport.selectOnlyEdge(hit.edge);
+          handleAction("fillet");
+        }),
+      },
+      {
+        label: "Chamfer",
+        shortcut: keyHint("chamfer"),
+        onClick: unlessBusy(() => {
+          viewport.selectOnlyEdge(hit.edge);
+          handleAction("chamfer");
+        }),
+      },
+      {
+        label: "Plane normal to edge",
+        onClick: unlessBusy(() => {
+          viewport.selectOnlyEdge(hit.edge);
+          handleAction("plane-normal-edge");
+        }),
+      },
+      {
+        label: "Plane at angle",
+        onClick: unlessBusy(() => {
+          viewport.selectOnlyEdge(hit.edge);
+          handleAction("plane-angle");
+        }),
+      },
       { separator: true, label: "" },
-      { label: "Measure from here", shortcut: keyHint("measure"), onClick: unlessBusy(() => { setLastAction("measure"); measure.startWith(hit); }) },
+      {
+        label: "Measure from here",
+        shortcut: keyHint("measure"),
+        onClick: unlessBusy(() => {
+          setLastAction("measure");
+          measure.startWith(hit);
+        }),
+      },
     ]);
   }
 
   function openFaceMenu(x: number, y: number, hit: FaceHit) {
     const facePick = viewport.facePlanePick(x, y);
     const plane = facePick?.def ?? null;
-    // The same anchor the plane picker hands startSketch, so a sketch begun from
-    // the right-click menu follows its face too. Planar only: a tangent plane on
-    // a cylinder is a different plane at every point, so there is nothing for a
-    // rebuild to re-derive.
-    const anchor = facePick && facePick.kind === "planar"
-      ? { selector: facePick.selector, at: facePick.at } : null;
+    // The anchor the plane picker hands startSketch, so the sketch follows its face. Planar only: a cylinder tangent
+    // plane differs at every point, so a rebuild has nothing to re-derive.
+    const anchor = facePick && facePick.kind === "planar" ? { selector: facePick.selector, at: facePick.at } : null;
     const bodyId = viewport.faceIdToBodyId(hit.faceId);
     // The plane a sketch on this face takes, so the drawing lines up with one.
     const flatFace = facePick && facePick.kind === "planar" ? facePick : null;
@@ -154,9 +192,30 @@ export function createContextMenus(deps: ContextMenusDeps) {
     const owner = ownerId ? store.document.features.find((f) => f.id === ownerId) : undefined;
     const ownerLabel = owner ? featureMeta(owner).label : "";
     const items: CtxItem[] = [
-      { label: "Press/Pull face", shortcut: keyHint("presspull"), onClick: unlessBusy(() => { viewport.selectOnlyFace(hit.faceId); handleAction("presspull"); }) },
-      { label: "Sketch on this face", shortcut: keyHint("sketch"), disabled: !plane, onClick: unlessBusy(() => { if (plane) sketch.enter(plane, store, undefined, undefined, anchor); }) },
-      { label: "Measure from here", shortcut: keyHint("measure"), onClick: unlessBusy(() => { setLastAction("measure"); measure.startWith(hit); }) },
+      {
+        label: "Press/Pull face",
+        shortcut: keyHint("presspull"),
+        onClick: unlessBusy(() => {
+          viewport.selectOnlyFace(hit.faceId);
+          handleAction("presspull");
+        }),
+      },
+      {
+        label: "Sketch on this face",
+        shortcut: keyHint("sketch"),
+        disabled: !plane,
+        onClick: unlessBusy(() => {
+          if (plane) sketch.enter(plane, store, undefined, undefined, anchor);
+        }),
+      },
+      {
+        label: "Measure from here",
+        shortcut: keyHint("measure"),
+        onClick: unlessBusy(() => {
+          setLastAction("measure");
+          measure.startWith(hit);
+        }),
+      },
       { separator: true, label: "" },
       {
         label: "Select coplanar faces",
@@ -165,7 +224,14 @@ export function createContextMenus(deps: ContextMenusDeps) {
           setStatus(`Selected ${n} coplanar face${n === 1 ? "" : "s"}`, "");
         }),
       },
-      { label: "Offset plane from face", shortcut: keyHint("offset-plane"), disabled: !plane, onClick: unlessBusy(() => { if (plane) offsetPlaneFromFace(plane); }) },
+      {
+        label: "Offset plane from face",
+        shortcut: keyHint("offset-plane"),
+        disabled: !plane,
+        onClick: unlessBusy(() => {
+          if (plane) offsetPlaneFromFace(plane);
+        }),
+      },
       ...(facePick?.kind === "tangent"
         ? [{ label: "Axis of cylinder", onClick: unlessBusy(() => axisFromRoundFace(facePick)) }]
         : []),
@@ -174,7 +240,12 @@ export function createContextMenus(deps: ContextMenusDeps) {
       { label: "Export face as SVG…", disabled: !flatFace, onClick: unlessBusy(() => exportFace("svg")) },
       { separator: true, label: "" },
       ...(owner
-        ? [{ label: `${isInspectorEditable(owner.type) ? "Edit" : "Select"} ${ownerLabel}`, onClick: unlessBusy(() => editFeature(owner.id)) }]
+        ? [
+            {
+              label: `${isInspectorEditable(owner.type) ? "Edit" : "Select"} ${ownerLabel}`,
+              onClick: unlessBusy(() => editFeature(owner.id)),
+            },
+          ]
         : []),
       ...(bodyId
         ? [
@@ -183,16 +254,21 @@ export function createContextMenus(deps: ContextMenusDeps) {
           ]
         : []),
       { separator: true, label: "" },
-      { label: "Delete face (heal)", danger: true, onClick: unlessBusy(() => { viewport.selectOnlyFace(hit.faceId); deleteSelectedFace(); }) },
+      {
+        label: "Delete face (heal)",
+        danger: true,
+        onClick: unlessBusy(() => {
+          viewport.selectOnlyFace(hit.faceId);
+          deleteSelectedFace();
+        }),
+      },
     ];
     contextMenu(x, y, items);
     if (facePick?.kind !== "planar") offerTangentFaces(hit);
   }
 
-  /** "Select tangent faces" beside "Select coplanar faces", once the engine has
-   *  named a tangent run for the face. The menu opens without waiting for it,
-   *  so the entry joins the menu still open, never a later one, and joins it in
-   *  place: opening it again would drop the row under the pointer. */
+  /** Added once the engine names a tangent run. It joins the still open menu in place, since reopening would move the
+   *  row under the pointer. */
   function offerTangentFaces(hit: FaceHit) {
     const menu = useContextMenuStore();
     const epoch = menu.epoch;
@@ -218,25 +294,19 @@ export function createContextMenus(deps: ContextMenusDeps) {
     });
   }
 
-  /** The bodies a body-menu entry acts on: the whole selection when the body
-   *  under the cursor is part of it, otherwise just that one. The same rule the
-   *  Browser row uses, and the reason organising an import is one gesture. */
+  /** The whole selection when the body under the cursor is in it, else just that body; same rule as the Browser row. */
   function bodiesUnder(bodyId: string): string[] {
     const selected = viewport.getSelectedBodies();
     return selected.includes(bodyId) ? [...selected] : [bodyId];
   }
 
-  /** "Move to" for the body under the cursor, and for the whole selection when
-   *  that body is part of it. */
   function moveToElementMenu(bodyId: string): CtxItem {
     const ids = bodiesUnder(bodyId);
     return elementMoveMenu(store.bodyElements, ids, store.bodyElementOf(bodyId), {
       toNew: () => {
         const id = store.addElement();
         store.setBodiesElement(ids, id);
-        // Open the tree to it and start the rename there: the element is made
-        // from the viewport, so without this the folder appears somewhere off
-        // screen in a panel the user was not looking at, wearing a default name.
+        // Open the tree at it and start the rename, or the new folder appears off screen with a default name.
         const browser = useBrowserStore();
         browser.expand("f:Bodies");
         for (const key of ancestryOf(store.bodyElements, id)) browser.expand(`e:${key}`);
@@ -251,14 +321,10 @@ export function createContextMenus(deps: ContextMenusDeps) {
     contextMenu(x, y, [
       // routed through handleAction so "Repeat <command>" records them
       { label: "Move", shortcut: keyHint("move"), onClick: unlessBusy(() => handleAction("move")) },
-      // Neither needs an edge pre-picked, opening either enters the tool and
-      // asks for one (edgeFeatureTool.start), so both stay reachable from a
-      // plain body selection, not just from an edge or face.
+      // Neither needs an edge pre-picked (edgeFeatureTool.start asks), so both work from a plain body selection.
       { label: "Fillet…", shortcut: keyHint("fillet"), onClick: unlessBusy(() => handleAction("fillet")) },
       { label: "Chamfer…", shortcut: keyHint("chamfer"), onClick: unlessBusy(() => handleAction("chamfer")) },
-      // All three, not one entry that opens a dialog: the whole point of
-      // splitting Combine up is that a body you have right-clicked is one click
-      // from the boolean you want.
+      // All three booleans, not one dialog entry, so a right-clicked body is one click from the boolean you want.
       ...BOOLEAN_COMMANDS.map((c) => ({
         label: `${c.label} with…`,
         shortcut: keyHint(c.action),
@@ -269,21 +335,25 @@ export function createContextMenus(deps: ContextMenusDeps) {
       { separator: true, label: "" },
       { label: "Hide body", onClick: () => hideBody(bodyId) },
       { label: "Isolate body", onClick: () => isolateBody(bodyId) },
-      { label: "Show all bodies", shortcut: keyHint("show-all-bodies"), onClick: () => handleAction("show-all-bodies") },
+      {
+        label: "Show all bodies",
+        shortcut: keyHint("show-all-bodies"),
+        onClick: () => handleAction("show-all-bodies"),
+      },
       { separator: true, label: "" },
       { label: "Rename…", onClick: () => useBrowserStore().beginRename(bodyId) },
-      // The same submenu the Browser row carries, from the same builder. Filing
-      // a part away is worth reaching from the model as well as from the tree:
-      // on a large import the part you want to put somewhere is the one you just
-      // clicked on in the viewport, and finding its row among three thousand to
-      // right-click it is the work this feature exists to remove.
+      // Same submenu as the Browser row: on a big import the part you want to file is the one you just clicked.
       moveToElementMenu(bodyId),
-      materialMenu(store.materialLibrary, bodiesUnder(bodyId), store.bodyMaterialId(bodyId),
+      materialMenu(
+        store.materialLibrary,
+        bodiesUnder(bodyId),
+        store.bodyMaterialId(bodyId),
         (m) => store.setBodiesMaterial(bodiesUnder(bodyId), m),
         {
           count: bodiesUnder(bodyId).reduce((n, id) => n + store.faceMaterialCount(id), 0),
           clear: () => store.clearFaceMaterials(bodiesUnder(bodyId)),
-        }),
+        },
+      ),
       ...bodyExtraMenu(bodyId),
       { separator: true, label: "" },
       { label: "Duplicate body", onClick: unlessBusy(() => store.duplicateBody(bodyId)) },
@@ -291,9 +361,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     ]);
   }
 
-  // "Repeat <last command>" (Onshape-style): the empty-space menu re-runs the last
-  // real command. Navigation / view / file actions aren't commands you repeat, so
-  // they don't overwrite it.
+  // "Repeat <last command>": navigation, view and file actions are not repeated, so they do not overwrite it.
   function actionLabel(id: string): string {
     return allCommands().find((c) => c.id === id)?.label ?? id;
   }
@@ -304,7 +372,9 @@ export function createContextMenus(deps: ContextMenusDeps) {
       {
         label: lastAction ? `Repeat ${actionLabel(lastAction)}` : "Repeat last command",
         disabled: !lastAction,
-        onClick: () => { if (lastAction) handleAction(lastAction); },
+        onClick: () => {
+          if (lastAction) handleAction(lastAction);
+        },
       },
       { separator: true, label: "" },
       { label: "Fit view", shortcut: keyHint("fit"), onClick: () => handleAction("fit") },
@@ -317,25 +387,25 @@ export function createContextMenus(deps: ContextMenusDeps) {
           { label: "Right", onClick: () => handleAction("right") },
         ],
       },
-      { label: "Show all bodies", shortcut: keyHint("show-all-bodies"), onClick: () => handleAction("show-all-bodies") },
+      {
+        label: "Show all bodies",
+        shortcut: keyHint("show-all-bodies"),
+        onClick: () => handleAction("show-all-bodies"),
+      },
       { separator: true, label: "" },
       { label: "Undo", shortcut: "Ctrl+Z", disabled: !store.canUndo, onClick: () => store.undo() },
       { label: "Redo", shortcut: "Ctrl+Y", disabled: !store.canRedo, onClick: () => store.redo() },
     ]);
   }
 
-  // Both of these re-emit the build (see store.setBodiesVisibility), which is
-  // what repaints the browser, no explicit refresh, and none of the old
-  // "toggle N bodies, re-render N times" hazard either.
+  // Both re-emit the build (see store.setBodiesVisibility), which repaints the browser.
   function hideBody(id: string) {
-    // The gizmo is standing on it. Left up, it is a set of arrows floating over
-    // a body nobody can see, still offering to drag it.
+    // Otherwise the gizmo floats over a hidden body, still offering to drag it.
     dropBodyGizmo();
     store.setBodyVisibility(id, false);
   }
 
-  /** Show only this body (Onshape "Isolate"): hide every other body, one batched
-   *  store update, ONE re-render. Undo is "Show all bodies" (Shift+H / the menus). */
+  /** Hides every other body in one batched store update. Undone by "Show all bodies" (Shift+H). */
   function isolateBody(id: string) {
     store.isolateBodies([id]);
   }
@@ -346,8 +416,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     const datumId = viewport.pickDatumAt(x, y);
     if (datumId) return openDatumMenu(x, y, datumId);
     if (viewport.selecting === "bodies" || viewport.bodyClickAt(x, y)) {
-      // plain mesh raycast (no edge priority), must agree with left-click select,
-      // else right-clicking on/near any edge of a body misses the body menu
+      // Plain mesh raycast like left-click select, or right-clicking near an edge misses the body menu.
       const bodyId = viewport.bodyIdAt(x, y);
       return bodyId ? openBodyMenu(x, y, bodyId) : openEmptyMenu(x, y);
     }

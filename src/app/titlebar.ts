@@ -3,25 +3,17 @@ import { useUiStore } from "../stores/ui";
 import { useTimelineStore } from "../stores/timeline";
 import type { Engine } from "./engine";
 
-/** Feeds the titlebar's reactive state and wires the timeline's callbacks.
- *
- *  What used to be here, the click handlers for undo/redo, the view-control
- *  pill cluster and the unit <select>, plus the direct textContent/classList
- *  writes for #docname and the button disabled flags, now lives in
- *  components/shell/TitleBar.vue and ViewportControls.vue. This module is the half
- *  that has to stay outside a component: it subscribes to the store. */
+/** The half of the titlebar that subscribes to the store; the rest is components/shell/TitleBar.vue. */
 export function installTitlebar(e: Engine): void {
   const ui = useUiStore();
 
-  // Note: the store emits before it moves the entry between its undo and redo stacks, so
-  // they are read a moment later. A material, colour or body visibility change and its
-  // undo emit only a build. An import holds both off while it reads, which only busy
-  // says. A plane or sketch eye emits none of these, so the buttons catch up with the
-  // next change.
-  const syncUndo = () => queueMicrotask(() => {
-    ui.canUndo = e.store.canUndo;
-    ui.canRedo = e.store.canRedo;
-  });
+  // The store emits before moving the entry between its undo and redo stacks, so read a microtask later. Display
+  // changes emit only a build, an import only busy; a plane or sketch eye emits nothing, caught up on the next change.
+  const syncUndo = () =>
+    queueMicrotask(() => {
+      ui.canUndo = e.store.canUndo;
+      ui.canRedo = e.store.canRedo;
+    });
   e.store.onDocChange(syncUndo);
   e.store.onBuild(syncUndo);
   e.store.onBusy(syncUndo);
@@ -33,9 +25,7 @@ export function installTitlebar(e: Engine): void {
   useTimelineStore().bind({
     onSelect: (id) => e.selectFeature(id),
     onEdit: (id) => e.editFeature(id),
-    // Read the diagnostics off the LATEST build each time rather than caching: the
-    // menu opens long after the build, and a feature repaired in between must stop
-    // offering the repair.
+    // Not cached: a feature repaired since the build must stop offering the repair.
     canRepick: (id) => !!repairableDiagFor(e.store.buildState.result?.diagnostics, id),
     onRepick: (id) => {
       const amb = repairableDiagFor(e.store.buildState.result?.diagnostics, id);

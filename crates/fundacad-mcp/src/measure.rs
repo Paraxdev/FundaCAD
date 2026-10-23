@@ -1,6 +1,5 @@
-//! The `measure` tool's request and its text: the engine measures on the
-//! B-rep and replies with raw numbers, this rounds them for reading and keeps
-//! the raw reply at the end.
+//! The `measure` tool: the engine replies with raw numbers, this rounds them
+//! for reading and keeps the raw reply at the end.
 
 use rmcp::model::JsonObject;
 use serde_json::{json, Map, Value};
@@ -51,25 +50,21 @@ fn axis(v: &Value) -> String {
 
 fn round(item: &Value, out: &mut String) {
     if item.get("radius").is_some() {
-        out.push_str(&format!(
-            ", radius {} mm (diameter {})",
-            n(item.get("radius")),
-            n(item.get("diameter"))
-        ));
+        out.push_str(&format!(", radius {} mm (diameter {})", n(item.get("radius")), n(item.get("diameter"))));
     }
     if let Some(c) = item.get("centre") {
         out.push_str(&format!(", centre {}", point(c)));
     }
 }
 
-/// One line for one measured thing.
 pub fn item_line(item: &Value) -> String {
     let s = |k: &str| item.get(k).and_then(Value::as_str).unwrap_or("?").to_string();
     let owner = match item.get("body").and_then(Value::as_str) {
         Some(b) => format!(" of {b} \"{}\"", s("name")),
         None => String::new(),
     };
-    let index = |label: &str| item.get("index").and_then(Value::as_u64).map_or(String::new(), |i| format!(" {label}{i}"));
+    let index =
+        |label: &str| item.get("index").and_then(Value::as_u64).map_or(String::new(), |i| format!(" {label}{i}"));
     let mut out = String::new();
     match s("kind").as_str() {
         "point" => out.push_str(&format!("point {}", point(&item["at"]))),
@@ -131,7 +126,6 @@ fn from_to(v: &Value) -> String {
     format!("from {} to {}", point(&v["from"]), point(&v["to"]))
 }
 
-/// The tool's text: each thing, what lies between them, then the raw reply.
 pub fn report(r: &Value) -> String {
     let mut lines = vec![format!("a: {}", item_line(&r["a"]))];
     if let Some(b) = r.get("b") {

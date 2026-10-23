@@ -1,11 +1,5 @@
-// Renders sketches in 3D: committed sketch curves (always visible, like mainstream MCAD),
-// translucent profile region fills, the active sketch being drawn, the
-// in-progress preview entity, and the snap glyph. Region metadata is exposed so
-// the extrude tool can hit-test and preview.
-//
-// Materials are module-shared (one per color) so the per-pointer-move redraw
-// allocates only geometry, never materials; clearGroup therefore disposes
-// geometry only and leaves the shared materials intact.
+// Renders sketches in 3D: committed curves, region fills, the active sketch, the preview entity and the snap glyph.
+// Materials are module-shared (one per color), so redraws allocate only geometry and clearGroup disposes only that.
 
 import * as THREE from "three";
 import { disposeObject3D } from "../lib/disposer";
@@ -56,25 +50,26 @@ const lineMats = new Map<number, THREE.LineBasicMaterial>();
 function lineMat(color: number): THREE.LineBasicMaterial {
   let m = lineMats.get(color);
   if (!m) {
-    // depthTest TRUE: WebKitGTK does not render LineBasicMaterial lines with
-    // depthTest:false (the grid/model edges, which use depthTest:true, render
-    // fine). The coplanar grids + the dimmed model all have depthWrite:false, so
-    // these lines never z-fight, they just paint on top via renderOrder.
+    // depthTest TRUE: WebKitGTK does not render LineBasicMaterial lines with depthTest:false. Coplanar grids and the
+    // dimmed model have depthWrite:false, so these never z-fight and paint on top via renderOrder.
     m = overlayMaterial(new THREE.LineBasicMaterial({ color, depthTest: true }));
     lineMats.set(color, m);
   }
   return m;
 }
-// construction geometry: dashed orange (referenceable, not a profile)
-const CONSTRUCTION_MAT = overlayMaterial(new THREE.LineDashedMaterial({
-  color: 0xffa64d,
-  dashSize: 1.6,
-  gapSize: 1.0,
-  depthTest: true,
-}));
-// alignment guides: the snap marker's amber, dashed and dimmed. The dash is
-// short and the gap long so a guide reads as an aid rather than as a drawn line
-// even when it runs the width of the screen.
+const CONSTRUCTION_COLOR = 0xffa64d;
+const dashMats = new Map<number, THREE.LineDashedMaterial>();
+// Construction geometry is dashed, orange on a plain pass and the pass colour on a highlight pass.
+function dashMat(color: number): THREE.LineDashedMaterial {
+  let m = dashMats.get(color);
+  if (!m) {
+    m = overlayMaterial(new THREE.LineDashedMaterial({ color, dashSize: 1.6, gapSize: 1.0, depthTest: true }));
+    dashMats.set(color, m);
+  }
+  return m;
+}
+// Alignment guides: the snap marker's amber, dashed and dimmed, with a short dash and long gap so a guide reads as
+// an aid rather than a drawn line.
 const GUIDE_DASH_PX = 5;
 const GUIDE_GAP_PX = 5;
 const GUIDE_MAT = new THREE.LineDashedMaterial({
@@ -132,9 +127,6 @@ const FILL_SELECTED_MAT = new THREE.MeshBasicMaterial({
   ...FILL_OFFSET,
 });
 
-// filled glyph interior is drawn by the region fill layer (fillMesh) so it can
-// show hover/selection and be picked for extrude, see SketchOverlay.glyphWorldRegions.
-
 export class SketchOverlay {
   readonly group = new THREE.Group();
   private committed = new THREE.Group();
@@ -186,30 +178,18 @@ export class SketchOverlay {
     return p;
   }
 
-  /** Decides which committed sketches are shown on the model. Set by the app so
-   *  sketches consumed by a feature hide by default (MCAD-style), keeping the
-   *  solid's own edges visible/selectable. */
+  /** Set by the app so sketches consumed by a feature hide by default (MCAD-style), keeping solid edges selectable. */
   sketchVisible: (id: string) => boolean = () => true;
 
-  /** The planes the last rebuild actually USED, for sketches that follow a face
-   *  and for the datums such sketches sit on (see document/planeOf). Injected
-   *  the way sketchVisible is rather than passed to update(), which has several
-   *  call sites and none of which can see the build state. The default is none,
-   *  i.e. every sketch draws at its own cached plane, which is exactly what a
-   *  document with no anchor wants. */
+  /** The planes the last rebuild USED, for face-following sketches and their datums (see document/planeOf). Injected
+   *  like sketchVisible since update()'s call sites cannot see the build state; the default draws cached planes. */
   resolvedPlanes: () => {
     sketchPlanes?: Record<string, PlaneDef>;
     datumPlanes?: Record<string, PlaneDef>;
   } = () => ({});
 
-  /** Where the model cuts a profile on a sketch plane, as polylines reaching
-   *  `need`, the sketch-2D box of its curves, so a profile that runs off its
-   *  face splits there instead of picking as one region. The active sketch in
-   *  sketchMode reads the same answer.
-   *
-   *  Injected because the overlay has no engine. The default answers "no
-   *  footprint", which is both the safe fallback and the literal truth for a
-   *  sketch on a datum plane. See faceFootprint.profileCutCache. */
+  /** Where the model cuts a profile on a sketch plane, so a profile running off its face splits there. Injected as the
+   *  overlay has no engine; the default answers no footprint, which is true on a datum plane. See profileCutCache. */
   footprintFor: (plane: SketchPlane, need: Box | null) => THREE.Vector2[][] = () => [];
 
   /** Newer cut lines landed while a tool or dialog held the regions, so the
@@ -229,10 +209,7 @@ export class SketchOverlay {
       if (!f) continue;
       if (f.id === hiddenSketchId) continue; // active sketch drawn by the editor
       if (!this.sketchVisible(f.id)) continue; // hidden (e.g. consumed by a feature)
-      // Where the BUILD put it, not where the pick recorded it. For a sketch
-      // that follows a face those part company the moment anything upstream
-      // moves, and drawing the cache means the curves say one thing while the
-      // geometry cut from them says another.
+      // Where the BUILD put it, not the recorded pick: for a face-following sketch they part when upstream moves.
       const plane = this.planeFor(planeOf(f, resolved.sketchPlanes, resolved.datumPlanes));
       const ents = resolveEntities(f, doc.parameters);
 
@@ -266,14 +243,8 @@ export class SketchOverlay {
     }
   }
 
-  /** Selectable regions for each non-construction text entity's glyph faces,
-   *  sourced from the client-side tessellation cache (empty until glyphs warm,
-   *  the async cache fill triggers a repaint, so they appear a frame later). */
-  private glyphWorldRegions(
-    ents: ResolvedEntity[],
-    plane: SketchPlane,
-    sketchId: string,
-  ): WorldRegion[] {
+  /** From the client-side glyph tessellation cache, empty until it warms; the fill repaints a frame later. */
+  private glyphWorldRegions(ents: ResolvedEntity[], plane: SketchPlane, sketchId: string): WorldRegion[] {
     const out: WorldRegion[] = [];
     for (const e of ents) {
       if (e.type !== "text" || e.construction) continue;
@@ -295,10 +266,8 @@ export class SketchOverlay {
     return out;
   }
 
-  /** Profile fills for the active sketch being edited (which `update()` hides).
-   *  Sketch mode calls this so areas are visible + selectable while drawing.
-   *  `textEnts` (the resolved entity list) lets glyph faces become fills/regions
-   *  too, text skips `detectRegions`, so it's threaded in separately. */
+  /** Profile fills for the active sketch, which `update()` hides. `textEnts` is threaded in separately because text
+   *  skips `detectRegions`. */
   setActiveRegions(
     regions: Region[],
     plane: SketchPlane,
@@ -346,7 +315,6 @@ export class SketchOverlay {
     return [...this.regions, ...this.activeRegions].filter((r) => r.groupId === wr.groupId);
   }
 
-  // --- region (area) selection: shared by the sketch and the extrude tool ---
   /** committed regions whose material is selected (what the extrude tool consumes) */
   selectedRegions(): WorldRegion[] {
     return this.regions.filter((wr) => this.isRegionSelected(wr));
@@ -360,16 +328,11 @@ export class SketchOverlay {
   isRegionSelected(wr: WorldRegion): boolean {
     return this.selectedRegionPoints.some((p) => this.pointHitsRegion(p, wr));
   }
-  /** Toggle a region's selection. `additive` (Ctrl/Shift) keeps the rest; a plain
-   *  click replaces the whole selection with just this region. A grouped region (a
-   *  text's glyphs) toggles as one unit, all its glyph anchors move together. */
+  /** `additive` (Ctrl/Shift) keeps the rest, a plain click replaces it. A text's glyphs toggle as one unit. */
   toggleRegionSelection(wr: WorldRegion, additive: boolean) {
     const group = this.regionGroup(wr);
-    const pts = group.map(
-      (r) => [r.interior3D.x, r.interior3D.y, r.interior3D.z] as [number, number, number],
-    );
-    const inGroup = (p: [number, number, number]) =>
-      group.some((r) => this.pointHitsRegion(p, r));
+    const pts = group.map((r) => [r.interior3D.x, r.interior3D.y, r.interior3D.z] as [number, number, number]);
+    const inGroup = (p: [number, number, number]) => group.some((r) => this.pointHitsRegion(p, r));
     const sel = this.isRegionSelected(wr);
     if (!additive) {
       // plain click: this group becomes the whole selection, unless it already WAS
@@ -388,24 +351,17 @@ export class SketchOverlay {
     this.selectedRegionPoints = [];
     this.recolorFills();
   }
-  /** Replace the selection with regions containing these world points (the
-   *  persisted shape an extrude feature stores), used when re-opening an
-   *  extrude for editing. Points whose region no longer exists simply match
-   *  nothing (the containment rule drops them silently). */
+  /** The persisted points an extrude stores, used when re-opening one; points whose region is gone match nothing. */
   selectRegionsByPoints(points: [number, number, number][]) {
     this.selectedRegionPoints = points.map((p) => [p[0], p[1], p[2]]);
     this.recolorFills();
   }
-  /** Interior anchor of every committed area of one sketch. A whole-sketch
-   *  extrude (one that saved no explicit regions) reopens onto these: it stands
-   *  for the whole sketch, so editing it reselects the whole sketch rather than
-   *  nothing. Same shape selectRegionsByPoints consumes. */
+  /** A whole-sketch extrude (no explicit regions) reopens onto these, so editing it reselects the whole sketch. */
   regionPointsForSketch(sketchId: string): [number, number, number][] {
     return this.regions
       .filter((wr) => wr.sketchId === sketchId && !wr.hole)
       .map((wr) => [wr.interior3D.x, wr.interior3D.y, wr.interior3D.z]);
   }
-  /** Hover-highlight one region's fill (or clear with null). */
   /** True when the hovered region changed. */
   setHoverRegion(wr: WorldRegion | null): boolean {
     if (this.hovered === wr) return false;
@@ -430,20 +386,23 @@ export class SketchOverlay {
     }
     return null;
   }
-  /** The text entity id whose glyph group's bounding box contains `p`, a GENEROUS
-   *  hit (the whole text block, not just glyph ink) so double-click-to-edit lands
-   *  even in the gaps between letters. Smallest text is preferred when several overlap.
-   *  `p` is a 2D sketch-plane point; returns null when no text is under it. */
+  /** A GENEROUS hit on the whole text block, not glyph ink, so double-click-to-edit lands between letters.
+   *  The smallest text wins when several overlap. */
   activeTextIdAt(p: THREE.Vector2): string | null {
     type B = { id: string; minx: number; miny: number; maxx: number; maxy: number };
     const bounds = new Map<string, B>();
     for (const wr of this.activeRegions) {
       if (!wr.groupId || wr.entityId === undefined) continue; // only glyph regions
       let b = bounds.get(wr.groupId);
-      if (!b) { b = { id: wr.entityId, minx: Infinity, miny: Infinity, maxx: -Infinity, maxy: -Infinity }; bounds.set(wr.groupId, b); }
+      if (!b) {
+        b = { id: wr.entityId, minx: Infinity, miny: Infinity, maxx: -Infinity, maxy: -Infinity };
+        bounds.set(wr.groupId, b);
+      }
       for (const pt of wr.region.loop) {
-        b.minx = Math.min(b.minx, pt.x); b.miny = Math.min(b.miny, pt.y);
-        b.maxx = Math.max(b.maxx, pt.x); b.maxy = Math.max(b.maxy, pt.y);
+        b.minx = Math.min(b.minx, pt.x);
+        b.miny = Math.min(b.miny, pt.y);
+        b.maxx = Math.max(b.maxx, pt.x);
+        b.maxy = Math.max(b.maxy, pt.y);
       }
     }
     let best: string | null = null;
@@ -451,14 +410,14 @@ export class SketchOverlay {
     for (const b of bounds.values()) {
       if (p.x < b.minx || p.x > b.maxx || p.y < b.miny || p.y > b.maxy) continue;
       const area = (b.maxx - b.minx) * (b.maxy - b.miny);
-      if (area < bestArea) { bestArea = area; best = b.id; }
+      if (area < bestArea) {
+        bestArea = area;
+        best = b.id;
+      }
     }
     return best;
   }
-  /** Front-most COMMITTED region whose material the cursor ray hits, lets a visible
-   *  sketch's profile areas be selected directly in the model view (not just inside
-   *  the extrude tool). Only visible sketches contribute regions (see update()), so
-   *  this is inert when every sketch is hidden/consumed. */
+  /** Lets a visible sketch's areas be selected in the model view. Only visible sketches have regions (see update()). */
   committedRegionAtRay(ray: THREE.Ray): WorldRegion | null {
     const hit = new THREE.Vector3();
     let best: WorldRegion | null = null;
@@ -480,12 +439,8 @@ export class SketchOverlay {
     }
   }
 
-  /** The committed sketch curve nearest the cursor, within `maxPx` SCREEN pixels
-   *  (the Project tool's sketch-curve pick). Walks the committed curve objects,
-   *  tagged with {sketchId, entityId} in update()/curveObjects, and measures
-   *  screen-space distance to each polyline segment via `project` (the
-   *  viewport's world→client projection). The active sketch's own curves are
-   *  never here (update() hides them), and only VISIBLE sketches are pickable. */
+  /** The Project tool's sketch-curve pick, within `maxPx` SCREEN pixels via `project`. The active sketch's curves
+   *  are never here (update() hides them), and only visible sketches are pickable. */
   committedCurveAt(
     clientX: number,
     clientY: number,
@@ -550,33 +505,19 @@ export class SketchOverlay {
     for (const o of objects) this.previewGroup.add(o);
   }
 
-  /** Alignment guides: a dashed line from each anchor the cursor lined up with
-   *  to where the cursor now is (2D sketch mm, on `plane`). Pass [] to clear.
-   *
-   *  Drawn dashed and in the snap marker's own amber, because that is what it
-   *  is: the guide and the marker are one answer, and a solid line in a curve
-   *  colour would read as geometry that had been drawn. */
-  setGuides(
-    segments: readonly (readonly [THREE.Vector2, THREE.Vector2])[],
-    plane: SketchPlane,
-    pixelWorldSize = 0,
-  ) {
+  /** Dashed lines from each anchor the cursor lined up with to the cursor (2D sketch mm), in the snap marker's amber
+   *  since guide and marker are one answer; a solid curve colour would read as drawn geometry. [] clears. */
+  setGuides(segments: readonly (readonly [THREE.Vector2, THREE.Vector2])[], plane: SketchPlane, pixelWorldSize = 0) {
     this.clearGroup(this.guideGroup);
-    // Dash length in PIXELS, not millimetres. A guide runs from an anchor to the
-    // cursor, so its length is whatever the user's hand made it, and a dash
-    // fixed in world units is a solid line at one zoom and a row of dots at the
-    // next. The material is module-shared, so this is two assignments rather
-    // than an allocation per pointer move.
+    // Dash length in PIXELS: a world-unit dash is a solid line at one zoom and dots at the next. The material is
+    // shared, so this is two assignments, not an allocation per move.
     if (pixelWorldSize > 0 && Number.isFinite(pixelWorldSize)) {
       GUIDE_MAT.dashSize = pixelWorldSize * GUIDE_DASH_PX;
       GUIDE_MAT.gapSize = pixelWorldSize * GUIDE_GAP_PX;
     }
     for (const [a, b] of segments) {
       const line = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([
-          plane.to3D(a.x, a.y),
-          plane.to3D(b.x, b.y),
-        ]),
+        new THREE.BufferGeometry().setFromPoints([plane.to3D(a.x, a.y), plane.to3D(b.x, b.y)]),
         GUIDE_MAT,
       );
       line.computeLineDistances(); // required for dashing
@@ -606,8 +547,13 @@ export class SketchOverlay {
       const dot = new THREE.Points(
         new THREE.BufferGeometry().setFromPoints([new THREE.Vector3()]),
         new THREE.PointsMaterial({
-          color: 0xffffff, size: HANDLE_DOT_PX, sizeAttenuation: false, map: pointDotTexture(),
-          transparent: true, depthTest: false, depthWrite: false,
+          color: 0xffffff,
+          size: HANDLE_DOT_PX,
+          sizeAttenuation: false,
+          map: pointDotTexture(),
+          transparent: true,
+          depthTest: false,
+          depthWrite: false,
         }),
       );
       dot.frustumCulled = false;
@@ -669,34 +615,30 @@ export function curveObjects(
       out.push(o);
     };
     if (e.type === "point") {
-      add(pointMarker(plane, e.x, e.y, e.construction ? 0xffa64d : color));
+      add(pointMarker(plane, e.x, e.y, e.construction && !highlight ? CONSTRUCTION_COLOR : color));
       continue;
     }
     if (e.type === "text") {
       const faces = getCachedText(e);
-      if (faces && faces.length) add(textObjects(faces, plane, color, !!e.construction));
+      if (faces && faces.length) add(textObjects(faces, plane, color, !!e.construction, highlight));
       continue;
     }
     const pts = entityPolyline(e).map((p) => plane.to3D(p.x, p.y));
-    // projected geometry keeps its link color (purple; amber when stale) even
-    // as construction, the link state is the more important signal. Emphasis
-    // passes (selection, modify hover) set `highlight` so their color is preferred:
-    // Delete works on projected entities, so selection must be visible.
+    // Projected geometry keeps its link color even as construction; `highlight` passes override it, since Delete
+    // works on projected entities and the selection must show.
     const projected = e.type === "projected" ? e : null;
     const drawColor =
-      projected && !highlight
-        ? projected.stale === true ? PROJECTED_STALE_COLOR : PROJECTED_COLOR
-        : color;
+      projected && !highlight ? (projected.stale === true ? PROJECTED_STALE_COLOR : PROJECTED_COLOR) : color;
     const curve =
-      !projected && e.construction ? constructionLine(pts) : polyline(pts, drawColor);
-    // Circles/arcs (native or projected) get a visible center "+": the center is
-    // a snap target and the dimension tool's position handle, invisible, nobody
-    // finds it. Grouped so the one-object-per-entity contract holds. asRound is
-    // the one center rule (incl. circumcenter for projected arcs).
+      !projected && e.construction
+        ? constructionLine(pts, highlight ? color : CONSTRUCTION_COLOR)
+        : polyline(pts, drawColor);
+    // Circles and arcs get a visible centre +: it is a snap target and the dimension tool's handle. Grouped to keep
+    // one object per entity; asRound is the one centre rule.
     const center = asRound(e);
     if (center) {
       const g = new THREE.Group();
-      const markerColor = projected ? drawColor : e.construction ? 0xffa64d : color;
+      const markerColor = projected ? drawColor : e.construction && !highlight ? CONSTRUCTION_COLOR : color;
       g.add(curve, pointMarker(plane, center.x, center.y, markerColor));
       g.renderOrder = 12;
       add(g);
@@ -721,14 +663,26 @@ export function controlPolygonObjects(
   POLYGON_MAT.dashSize = px * POLYGON_DASH_PX;
   POLYGON_MAT.gapSize = px * POLYGON_GAP_PX;
   const ring = e.closed ? [...e.poles, e.poles[0]!] : e.poles;
-  const poly = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ring.map((q) => plane.to3D(q.x, q.y))), POLYGON_MAT);
+  const poly = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(ring.map((q) => plane.to3D(q.x, q.y))),
+    POLYGON_MAT,
+  );
   poly.computeLineDistances();
   poly.renderOrder = 12;
   g.add(poly);
-  g.add(poleSquares(e.poles.filter((_, k) => k !== active), plane, px));
+  g.add(
+    poleSquares(
+      e.poles.filter((_, k) => k !== active),
+      plane,
+      px,
+    ),
+  );
   const a = e.poles[active];
   if (a) {
-    const dot = new THREE.Points(new THREE.BufferGeometry().setFromPoints([plane.to3D(a.x, a.y)]), dotMat(SELECT_COLOR));
+    const dot = new THREE.Points(
+      new THREE.BufferGeometry().setFromPoints([plane.to3D(a.x, a.y)]),
+      dotMat(SELECT_COLOR),
+    );
     dot.renderOrder = 14;
     g.add(dot);
   }
@@ -736,9 +690,7 @@ export function controlPolygonObjects(
   return g;
 }
 
-/** Just the squares on poles `ks` of a control-point spline that is not
- *  selected, the ones a constraint or dimension holds, so what they attach to
- *  can be seen. */
+/** Squares on the poles `ks` a constraint or dimension holds, on a spline that is not selected. */
 export function poleMarkerObjects(
   e: Extract<ResolvedEntity, { type: "bspline" }>,
   plane: SketchPlane,
@@ -754,7 +706,12 @@ function poleSquares(poles: { x: number; y: number }[], plane: SketchPlane, px: 
   const s = px * POLE_HALF_PX;
   const sq: THREE.Vector3[] = [];
   for (const q of poles) {
-    const c = [plane.to3D(q.x - s, q.y - s), plane.to3D(q.x + s, q.y - s), plane.to3D(q.x + s, q.y + s), plane.to3D(q.x - s, q.y + s)];
+    const c = [
+      plane.to3D(q.x - s, q.y - s),
+      plane.to3D(q.x + s, q.y - s),
+      plane.to3D(q.x + s, q.y + s),
+      plane.to3D(q.x - s, q.y + s),
+    ];
     for (let i = 0; i < 4; i++) sq.push(c[i]!, c[(i + 1) % 4]!);
   }
   const squares = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sq), lineMat(POLE_COLOR));
@@ -762,20 +719,20 @@ function poleSquares(poles: { x: number; y: number }[], plane: SketchPlane, px: 
   return squares;
 }
 
-/** One THREE.Group for a text entity: an outline THREE.Line per glyph contour plus a
- *  filled glyph mesh (skipped for construction text). Kept to ONE object per entity so
- *  curveObjects' one-object-per-entity contract (see sketchMode preview) holds. */
+/** One Group per text entity, glyph outlines plus a fill mesh (not for construction), so the one object per entity
+ *  contract holds (see sketchMode preview). */
 function textObjects(
   faces: TextFace[],
   plane: SketchPlane,
   color: number,
   construction: boolean,
+  highlight: boolean,
 ): THREE.Group {
   const g = new THREE.Group();
   for (const f of faces) {
     for (const loop of [f.outer, ...f.holes]) {
       const pts = loop.map(([x, y]) => plane.to3D(x, y));
-      g.add(construction ? constructionLine(pts) : polyline(pts, color));
+      g.add(construction ? constructionLine(pts, highlight ? color : CONSTRUCTION_COLOR) : polyline(pts, color));
     }
     // The solid glyph fill is drawn by the region layer (fillMesh) so it can show
     // hover/selection state and be picked for extrude, see glyphWorldRegions.
@@ -815,8 +772,13 @@ function dotMat(color: number): THREE.PointsMaterial {
   let m = dotMats.get(color);
   if (!m) {
     m = new THREE.PointsMaterial({
-      color, size: POINT_DOT_PX, sizeAttenuation: false, map: pointDotTexture(),
-      transparent: true, depthTest: true, depthWrite: false,
+      color,
+      size: POINT_DOT_PX,
+      sizeAttenuation: false,
+      map: pointDotTexture(),
+      transparent: true,
+      depthTest: true,
+      depthWrite: false,
     });
     dotMats.set(color, m);
   }
@@ -831,23 +793,24 @@ function looseEndMat(color: number): THREE.PointsMaterial {
   let m = looseMats.get(color);
   if (!m) {
     m = new THREE.PointsMaterial({
-      color, size: POINT_DOT_PX + 2, sizeAttenuation: false, map: pointDotTexture(),
-      transparent: true, depthTest: false, depthWrite: false,
+      color,
+      size: POINT_DOT_PX + 2,
+      sizeAttenuation: false,
+      map: pointDotTexture(),
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
     });
     looseMats.set(color, m);
   }
   return m;
 }
 
-/** A sketch point: a "+" (what committedCurveAt picks) under a dot that keeps its size at any zoom.
- *  Built in PLANE coordinates, world-axis offsets would push strokes out of
- *  the plane on XZ/YZ sketches (edge-on, half the cross vanished). */
+/** A + (what committedCurveAt picks) under a dot of constant size. Built in PLANE coordinates: world-axis offsets
+ *  pushed strokes out of the plane on XZ and YZ sketches. */
 function pointMarker(plane: SketchPlane, x: number, y: number, color: number): THREE.Object3D {
   const s = 0.9;
-  const pts = [
-    plane.to3D(x - s, y), plane.to3D(x + s, y),
-    plane.to3D(x, y - s), plane.to3D(x, y + s),
-  ];
+  const pts = [plane.to3D(x - s, y), plane.to3D(x + s, y), plane.to3D(x, y - s), plane.to3D(x, y + s)];
   const g = new THREE.BufferGeometry().setFromPoints(pts);
   const seg = new THREE.LineSegments(g, lineMat(color));
   seg.renderOrder = 13;
@@ -883,9 +846,9 @@ export function dimensionLineObjects(
   return [line];
 }
 
-function constructionLine(points: THREE.Vector3[]): THREE.Line {
+function constructionLine(points: THREE.Vector3[], color: number): THREE.Line {
   const g = new THREE.BufferGeometry().setFromPoints(points);
-  const line = new THREE.Line(g, CONSTRUCTION_MAT);
+  const line = new THREE.Line(g, dashMat(color));
   line.computeLineDistances(); // required for dashing
   line.renderOrder = 12;
   return line;
@@ -901,4 +864,33 @@ function fillMesh(region: Region, plane: SketchPlane, material: THREE.Material):
   const mesh = new THREE.Mesh(geo, material);
   mesh.renderOrder = 11;
   return mesh;
+}
+
+/** The double arrow drawings put across a symmetry line, at the middle of the segment, `size` long each way. */
+export function mirrorMarkObjects(
+  seg: { x1: number; y1: number; x2: number; y2: number },
+  plane: SketchPlane,
+  color: number,
+  size: number,
+): THREE.Object3D[] {
+  const len = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1);
+  if (!(len > 0) || !(size > 0)) return [];
+  const dx = (seg.x2 - seg.x1) / len;
+  const dy = (seg.y2 - seg.y1) / len;
+  const cx = (seg.x1 + seg.x2) / 2;
+  const cy = (seg.y1 + seg.y2) / 2;
+  const pts: THREE.Vector3[] = [];
+  const add = (x1: number, y1: number, x2: number, y2: number) => pts.push(plane.to3D(x1, y1), plane.to3D(x2, y2));
+  add(cx + dy * size, cy - dx * size, cx - dy * size, cy + dx * size);
+  for (const s of [1, -1]) {
+    const tx = cx + dy * size * s;
+    const ty = cy - dx * size * s;
+    const bx = tx - dy * size * 0.4 * s;
+    const by = ty + dx * size * 0.4 * s;
+    add(tx, ty, bx + dx * size * 0.3, by + dy * size * 0.3);
+    add(tx, ty, bx - dx * size * 0.3, by - dy * size * 0.3);
+  }
+  const mark = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), lineMat(color));
+  mark.renderOrder = 13;
+  return [mark];
 }

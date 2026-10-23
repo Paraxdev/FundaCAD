@@ -16,10 +16,7 @@ const okDisabled = computed(() => {
   return checked.value.filter(Boolean).length < r.min;
 });
 
-// Keyboard-first: focus the first control so Enter commits without a mouse.
-// This modal used to be click-only with a silently-cancelling backdrop; a user
-// pressing Enter (dead) and then clicking (backdrop = cancel) got "nothing
-// happened" with no feedback.
+// Keyboard first: focus the first control so Enter commits without a mouse.
 watch(
   req,
   async (r) => {
@@ -54,9 +51,8 @@ function buttons(): HTMLButtonElement[] {
   return [...(card.value?.querySelectorAll<HTMLButtonElement>(".choice-row button") ?? [])];
 }
 
-// Capture phase, and it swallows everything it does not handle: while a modal is
-// open it OWNS the keyboard, so a global shortcut can't fire underneath it. Esc
-// uses stopImmediatePropagation for the same reason the imperative version did.
+// Swallows every key it does not handle, so no global shortcut fires under an open modal. Esc uses
+// stopImmediatePropagation for the same reason.
 function onKeydown(e: KeyboardEvent) {
   const r = req.value;
   if (!r) return;
@@ -91,45 +87,28 @@ function onKeydown(e: KeyboardEvent) {
   e.stopPropagation();
 }
 
-// On WINDOW, in the CAPTURE phase, not on the backdrop element. The trap has to
-// swallow keystrokes wherever focus happens to be (click the backdrop and focus
-// leaves the card), which is what the imperative version got from
-// window.addEventListener("keydown", onKey, true).
+// On window in the capture phase, not the backdrop: the trap must swallow keys wherever focus is, and a backdrop
+// click moves focus out of the card.
 onMounted(() => window.addEventListener("keydown", onKeydown, true));
 onUnmounted(() => window.removeEventListener("keydown", onKeydown, true));
 </script>
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="req"
-      class="choice-backdrop"
-      @pointerdown.self="cancel()"
-    >
+    <div v-if="req" class="choice-backdrop" @pointerdown.self="cancel()">
       <div class="choice-card" ref="card" role="dialog" aria-modal="true" :aria-labelledby="titleId">
         <div :id="titleId" class="choice-title">{{ req.title }}</div>
 
-        <!-- choose(): a row of option buttons -->
         <div v-if="req.kind === 'choose'" class="choice-row">
-          <button
-            v-for="opt in req.options"
-            :key="opt.value"
-            class="choice-btn"
-            @click="finish(opt.value)"
-          >
+          <button v-for="opt in req.options" :key="opt.value" class="choice-btn" @click="finish(opt.value)">
             <span>{{ opt.label }}</span>
             <small v-if="opt.hint">{{ opt.hint }}</small>
           </button>
         </div>
 
-        <!-- chooseMulti(): a checkbox list + Cancel/confirm -->
         <template v-else-if="req.kind === 'multi'">
           <div class="choice-checklist">
-            <label
-              v-for="(opt, i) in req.options"
-              :key="opt.value"
-              class="choice-check"
-            >
+            <label v-for="(opt, i) in req.options" :key="opt.value" class="choice-check">
               <input type="checkbox" :value="opt.value" v-model="checked[i]" />
               <span>{{ opt.label }}</span>
               <small v-if="opt.hint">{{ opt.hint }}</small>
@@ -137,11 +116,9 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown, true));
           </div>
           <div class="choice-row">
             <button class="choice-btn" @click="cancel()"><span>Cancel</span></button>
-            <button
-              class="choice-btn choice-primary"
-              :disabled="okDisabled"
-              @click="confirmMulti()"
-            ><span>{{ req.confirmLabel }}</span></button>
+            <button class="choice-btn choice-primary" :disabled="okDisabled" @click="confirmMulti()"
+              ><span>{{ req.confirmLabel }}</span></button
+            >
           </div>
         </template>
 

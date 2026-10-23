@@ -18,7 +18,10 @@ const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = path.resolve(process.argv[2] || "triad_prompt_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 
 let failures = 0;
 const check = (name, ok, detail) => {
@@ -30,11 +33,16 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.addInitScript((port) => {
     const N = window.WebSocket;
     class P extends N {
-      constructor(u, p) { super(String(u).replace(":8765", `:${port}`), p); }
+      constructor(u, p) {
+        super(String(u).replace(":8765", `:${port}`), p);
+      }
     }
     window.WebSocket = P;
   }, ENGINE_PORT);
@@ -43,8 +51,13 @@ const check = (name, ok, detail) => {
     await page.goto(`${URL}?token=${TOKEN}`);
     await page.waitForTimeout(2500);
     const modal = await page.$(".modal-close");
-    if (modal) { await modal.click(); await page.waitForTimeout(400); }
-    await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, { timeout: 60000 });
+    if (modal) {
+      await modal.click();
+      await page.waitForTimeout(400);
+    }
+    await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, {
+      timeout: 60000,
+    });
   };
   await boot();
 
@@ -59,12 +72,15 @@ const check = (name, ok, detail) => {
   const iso = async (target, scale) => {
     await page.evaluate(() => window.__fundacad.handleAction("iso"));
     await page.waitForTimeout(700);
-    await page.evaluate(({ target, scale }) => {
-      const V = window.viewport.camera.position.constructor;
-      window.viewport.rig.moveTo(new V(...target), false);
-      window.viewport.rig.setViewScale(scale, false);
-      window.viewport.requestRender();
-    }, { target, scale });
+    await page.evaluate(
+      ({ target, scale }) => {
+        const V = window.viewport.camera.position.constructor;
+        window.viewport.rig.moveTo(new V(...target), false);
+        window.viewport.rig.setViewScale(scale, false);
+        window.viewport.requestRender();
+      },
+      { target, scale },
+    );
     await page.waitForTimeout(400);
   };
 
@@ -91,7 +107,9 @@ const check = (name, ok, detail) => {
     const v = window.viewport;
     const t = v.scene.triad;
     const before = [];
-    t.group.traverse((o) => { if (o.material?.color) before.push(o.material.color.getHex()); });
+    t.group.traverse((o) => {
+      if (o.material?.color) before.push(o.material.color.getHex());
+    });
     return { x, y, before };
   }, o0);
   await page.mouse.move(o0.x + 20, o0.y);
@@ -99,7 +117,9 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(200);
   const afterHover = await page.evaluate(() => {
     const out = [];
-    window.viewport.scene.triad.group.traverse((o) => { if (o.material?.color) out.push(o.material.color.getHex()); });
+    window.viewport.scene.triad.group.traverse((o) => {
+      if (o.material?.color) out.push(o.material.color.getHex());
+    });
     return out;
   });
   check("hovering the triad does not light it", JSON.stringify(afterHover) === JSON.stringify(hover.before));
@@ -126,35 +146,41 @@ const check = (name, ok, detail) => {
   await shot("triad_vs_move", { x: x0, y: y0, width: Math.abs(g.x - o1.x) + 300, height: Math.abs(g.y - o1.y) + 300 });
 
   // --- the prompt, clear of both columns -------------------------------------------------
-  const overlaps = () => page.evaluate(() => {
-    const p = document.querySelector("#viewport .prompt");
-    if (!p || p.classList.contains("hidden")) return { shown: false };
-    const r = p.getBoundingClientRect();
-    // Every card the user sees. The rail's own box is not one: it runs the full
-    // height at the width of its widest label, most of it empty.
-    const sel = "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group, #float-layer .float-right > *, #renderdock";
-    const hits = [];
-    for (const el of document.querySelectorAll(sel)) {
-      const q = el.getBoundingClientRect();
-      if (q.width <= 0 || q.height <= 0) continue;
-      const w = Math.min(r.right, q.right) - Math.max(r.left, q.left);
-      const h = Math.min(r.bottom, q.bottom) - Math.max(r.top, q.top);
-      if (w > 0 && h > 0) hits.push(`${el.id || el.className} ${Math.round(w)}x${Math.round(h)}`);
-    }
-    const vp = document.querySelector("#viewport").getBoundingClientRect();
-    return {
-      shown: true,
-      rect: [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)],
-      inside: r.left >= vp.left && r.right <= vp.right,
-      style: p.getAttribute("style"),
-      viewport: [Math.round(vp.left), Math.round(vp.right)],
-      hits,
-    };
-  });
+  const overlaps = () =>
+    page.evaluate(() => {
+      const p = document.querySelector("#viewport .prompt");
+      if (!p || p.classList.contains("hidden")) return { shown: false };
+      const r = p.getBoundingClientRect();
+      // Every card the user sees. The rail's own box is not one: it runs the full
+      // height at the width of its widest label, most of it empty.
+      const sel =
+        "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group, #float-layer .float-right > *, #renderdock";
+      const hits = [];
+      for (const el of document.querySelectorAll(sel)) {
+        const q = el.getBoundingClientRect();
+        if (q.width <= 0 || q.height <= 0) continue;
+        const w = Math.min(r.right, q.right) - Math.max(r.left, q.left);
+        const h = Math.min(r.bottom, q.bottom) - Math.max(r.top, q.top);
+        if (w > 0 && h > 0) hits.push(`${el.id || el.className} ${Math.round(w)}x${Math.round(h)}`);
+      }
+      const vp = document.querySelector("#viewport").getBoundingClientRect();
+      return {
+        shown: true,
+        rect: [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)],
+        inside: r.left >= vp.left && r.right <= vp.right,
+        style: p.getAttribute("style"),
+        viewport: [Math.round(vp.left), Math.round(vp.right)],
+        hits,
+      };
+    });
   const promptCheck = async (label) => {
     const o = await overlaps();
     check(`${label}: the prompt is up`, o.shown);
-    check(`${label}: the prompt stays inside the viewport and clear of every column`, o.shown && o.inside && o.hits.length === 0, JSON.stringify(o));
+    check(
+      `${label}: the prompt stays inside the viewport and clear of every column`,
+      o.shown && o.inside && o.hits.length === 0,
+      JSON.stringify(o),
+    );
   };
 
   console.log("\n[prompt, model]");
@@ -167,7 +193,11 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(600);
   await page.click('.rd-tab[data-tab="environment"]');
   await page.waitForTimeout(200);
-  if (!(await page.evaluate(() => document.querySelector('[data-shadows="mode"]')?.getAttribute("aria-pressed") === "true"))) {
+  if (
+    !(await page.evaluate(
+      () => document.querySelector('[data-shadows="mode"]')?.getAttribute("aria-pressed") === "true",
+    ))
+  ) {
     await page.click('[data-shadows="mode"]');
   }
   await page.click('[data-key-light="aim"]');
@@ -204,4 +234,7 @@ const check = (name, ok, detail) => {
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall checks passed");
   process.exit(failures ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

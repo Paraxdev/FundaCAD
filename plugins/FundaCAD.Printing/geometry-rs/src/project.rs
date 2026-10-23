@@ -1,11 +1,6 @@
-//! print_project3mf.py: the Orca project 3MF, one object per body, a per
-//! object extruder (the palette slot) and the palette's colours as filament
-//! slots.
-//!
-//! Indexing, which is easy to get wrong: palette slots and the
-//! project_settings filament_colour array are 0-based, the model_settings
-//! "extruder" metadata is 1-based. A body with no palette slot prints on
-//! extruder 1.
+//! print_project3mf.py: the Orca project 3MF, one object per body with its palette slot as extruder. Indexing is easy
+//! to get wrong: palette slots and filament_colour are 0-based, model_settings "extruder" is 1-based, and a body with
+//! no palette slot prints on extruder 1.
 
 use std::collections::HashMap;
 
@@ -75,9 +70,8 @@ fn as_map(v: Option<&Value>) -> Map<String, Value> {
     }
 }
 
-/// `sanitize_inputs`: untrusted request fields clamped to what the writer
-/// expects, colours normalised, names capped and slot indices kept to the
-/// palette (an index out of range is unassigned).
+/// `sanitize_inputs`: untrusted request fields clamped to what the writer expects, colours normalised, names capped
+/// and slot indices kept to the palette (an index out of range is unassigned).
 pub fn sanitize_inputs(
     palette: Option<&Value>,
     body_colors: Option<&Value>,
@@ -92,11 +86,8 @@ pub fn sanitize_inputs(
         } else {
             cap(&format!("Filament {}", pal.len() + 1))
         };
-        let material = if py::truthy(obj.get("material")) {
-            cap(py::str_of(&obj["material"]).trim())
-        } else {
-            String::new()
-        };
+        let material =
+            if py::truthy(obj.get("material")) { cap(py::str_of(&obj["material"]).trim()) } else { String::new() };
         pal.push(Slot {
             name,
             color: norm_color(obj.get("color")),
@@ -112,10 +103,7 @@ pub fn sanitize_inputs(
             colors.insert(bid, i as usize);
         }
     }
-    let names = as_map(body_names)
-        .into_iter()
-        .map(|(k, v)| (k, cap(&py::str_of(&v))))
-        .collect();
+    let names = as_map(body_names).into_iter().map(|(k, v)| (k, cap(&py::str_of(&v)))).collect();
     (pal, colors, names)
 }
 
@@ -143,12 +131,7 @@ fn mesh_xml(positions: &[f64], indices: &[u32], out: &mut ZipOut) -> Result<(), 
     let mut buf = String::new();
     let mut n = 0;
     for p in positions.chunks_exact(3) {
-        buf.push_str(&format!(
-            "<vertex x=\"{}\" y=\"{}\" z=\"{}\"/>",
-            py::g(p[0], 6),
-            py::g(p[1], 6),
-            py::g(p[2], 6)
-        ));
+        buf.push_str(&format!("<vertex x=\"{}\" y=\"{}\" z=\"{}\"/>", py::g(p[0], 6), py::g(p[1], 6), py::g(p[2], 6)));
         n += 1;
         if n >= XML_CHUNK_VERTS {
             out.write(buf.as_bytes())?;
@@ -196,11 +179,8 @@ pub fn write_project_3mf(
         .iter()
         .map(|s| format!("<m:base name={} displaycolor=\"{}FF\"/>", quoteattr(&s.name), s.color))
         .collect();
-    let basematerials = if palette.is_empty() {
-        String::new()
-    } else {
-        format!("<m:basematerials id=\"1\">{mats}</m:basematerials>")
-    };
+    let basematerials =
+        if palette.is_empty() { String::new() } else { format!("<m:basematerials id=\"1\">{mats}</m:basematerials>") };
 
     let mut headers = Vec::new();
     let mut items = String::new();
@@ -215,11 +195,7 @@ pub fn write_project_3mf(
             .or_else(|| (!b.name.is_empty()).then(|| b.name.clone()))
             .unwrap_or_else(|| format!("Body{}", n + 1));
         let name = cap(&name);
-        let pid = if palette.is_empty() {
-            String::new()
-        } else {
-            format!(" pid=\"1\" pindex=\"{slot}\"")
-        };
+        let pid = if palette.is_empty() { String::new() } else { format!(" pid=\"1\" pindex=\"{slot}\"") };
         headers.push(format!("<object id=\"{oid}\" type=\"model\" name={}{pid}>", quoteattr(&name)));
         items.push_str(&format!("<item objectid=\"{oid}\" transform=\"{transform}\" printable=\"1\"/>"));
         cfg_objects.push(format!(
@@ -228,10 +204,8 @@ pub fn write_project_3mf(
             e = slot + 1
         ));
     }
-    let model_settings = format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<config>\n{}\n</config>",
-        cfg_objects.join("\n")
-    );
+    let model_settings =
+        format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<config>\n{}\n</config>", cfg_objects.join("\n"));
 
     let mut proj = Map::new();
     if !palette.is_empty() {
@@ -243,10 +217,7 @@ pub fn write_project_3mf(
             proj.insert(
                 "filament_type".into(),
                 Value::Array(
-                    palette
-                        .iter()
-                        .map(|s| Value::String(s.material.clone().unwrap_or_else(|| "PLA".into())))
-                        .collect(),
+                    palette.iter().map(|s| Value::String(s.material.clone().unwrap_or_else(|| "PLA".into()))).collect(),
                 ),
             );
         }
@@ -273,9 +244,6 @@ pub fn write_project_3mf(
     z.write(format!("</resources>\n <build>{items}</build>\n</model>").as_bytes())?;
     z.end()?;
     z.entry("Metadata/model_settings.config", model_settings.as_bytes())?;
-    z.entry(
-        "Metadata/project_settings.config",
-        py::dumps_indent1(&Value::Object(proj)).as_bytes(),
-    )?;
+    z.entry("Metadata/project_settings.config", py::dumps_indent1(&Value::Object(proj)).as_bytes())?;
     z.finish()
 }

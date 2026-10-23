@@ -1,50 +1,21 @@
-//! WebKitGTK GPU workarounds, applied before the webview starts (Linux only).
-//!
-//! macOS (WKWebView) and Windows (WebView2) are different engines entirely and
-//! read none of these variables, which is why the whole module is Linux-gated.
-//!
-//! Split into a pure `decide` plus a thin applier for the same reason
-//! `engine::configure_env` is split out: this is behaviour that only misfires
-//! on hardware nobody here builds on, so the decision has to be assertable
-//! without the hardware. Nothing in this file has been exercised against an
-//! actual Nvidia GPU by me, see the test module.
+//! WebKitGTK GPU workarounds, applied before the webview starts (Linux only, the other engines read none of this).
+//! `decide` is pure so the decision is testable without Nvidia hardware, which nobody here has.
 
 use std::path::Path;
 
-/// Our own opt-out. A user whose machine is made *worse* by the workaround
-/// needs an escape hatch, and the obvious one, setting
-/// `WEBKIT_DISABLE_DMABUF_RENDERER=0`, does not work: WebKit's own checks are
-/// presence-based in places, so "0" can read as "yes, disable it". A separate
-/// variable of ours has no such ambiguity.
+/// Our own opt out, since `WEBKIT_DISABLE_DMABUF_RENDERER=0` does not work: WebKit's checks are presence based in
+/// places, so "0" can read as disable.
 const OPT_OUT: &str = "FUNDACAD_NO_GPU_WORKAROUND";
 
-/// The name this variable had before the app was renamed. Still honoured: this
-/// is a knob a user sets in a shell profile or a .desktop file, neither of which
-/// a rename in here can reach, and dropping it would silently turn a working
-/// machine's workaround back on.
+/// The name before the rename, still honoured: it lives in shell profiles and .desktop files no rename reaches.
 const OPT_OUT_LEGACY: &str = "SINDRICAD_NO_GPU_WORKAROUND";
 
-/// The WebKitGTK knob we set. Deliberately NOT
-/// `WEBKIT_DISABLE_COMPOSITING_MODE`, which also avoids the crash but turns off
-/// accelerated compositing wholesale, a bad trade for an app whose main view is
-/// a WebGL canvas, and the mode under which the reporter of issue #6 also saw
-/// viewport pointer capture stick (that is bug 2 of the same issue, unfixed).
-///
-/// This one is narrower: it does not disable WebGL or compositing, only the
-/// DMA-BUF path that carries composited frames from the web process to the GTK
-/// widget. It is not free, though. Without it, GTK3 (which is what
-/// webkit2gtk-4.1 gives us) downloads each buffer to the CPU and paints it with
-/// Cairo, so GPU-heavy content pays a per-frame cost. For the viewport that is a
-/// smoothness cost, not a correctness one, and it is preferred over not launching.
-///
-/// WebKit documents the variable as a transitional debugging escape hatch that
-/// will eventually be removed. When it goes, this module has to be revisited
-/// rather than quietly stop working.
+/// Not `WEBKIT_DISABLE_COMPOSITING_MODE`, which turns off accelerated compositing in a WebGL app (and saw pointer
+/// capture stick in issue #6). This only disables the DMA-BUF path, so GTK3 paints each frame through the CPU, a
+/// smoothness cost. WebKit calls it a transitional escape hatch, so revisit this module when it goes.
 const DMABUF: &str = "WEBKIT_DISABLE_DMABUF_RENDERER";
 
-/// Whether to disable the DMABUF renderer, and why. The reason is carried so the
-/// startup log says what happened; a silent environment change is exactly the
-/// kind of thing that makes a later field report unreadable.
+/// The reason goes to the startup log, since a silent environment change makes later field reports unreadable.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Decision {
     Disable,
@@ -52,28 +23,17 @@ pub enum Decision {
     Skip(&'static str),
 }
 
-// Named so the applier can match on them instead of repeating the prose, which
-// would drift apart from `decide` the first time either is reworded.
+// Named so the applier matches on them instead of repeating prose that would drift from `decide`.
 const SKIP_OPT_OUT: &str = "opted out via FUNDACAD_NO_GPU_WORKAROUND";
 const SKIP_ALREADY_SET: &str = "WEBKIT_DISABLE_DMABUF_RENDERER already set by the environment";
 const SKIP_NO_NVIDIA: &str = "no Nvidia driver";
 
-/// Issue #6 (Nobara/Fedora 44, RTX 5080, driver 595.84, Wayland):
-/// `WebKitWebProcess` takes a SIGSEGV inside `libnvidia-eglcore` on launch and
-/// the app dies before painting anything, no dialog, no message, nothing the
-/// user can act on. The reporter confirmed that EITHER
-/// `WEBKIT_DISABLE_DMABUF_RENDERER=1` or `WEBKIT_DISABLE_COMPOSITING_MODE=1`
-/// avoids it; we pick the narrower one.
-///
-/// This fires for every Nvidia machine, not only broken ones, because there is
-/// no way to tell them apart before the crash. That costs the working majority
-/// the per-frame cost described on `DMABUF`; the alternative costs the affected
-/// minority the entire application. The size of that cost is documented by
-/// WebKit, not measured by me, there is no Nvidia hardware here to measure on.
+/// Issue #6 (Nobara, RTX 5080, driver 595.84, Wayland): `WebKitWebProcess` segfaults in `libnvidia-eglcore` on launch.
+/// Fires for every Nvidia machine, as broken ones cannot be told apart before the crash; the cost is WebKit's
+/// documented per frame copy, not measured here.
 fn decide(nvidia_present: bool, dmabuf_already_set: bool, opted_out: bool) -> Decision {
-    // Precedence: an explicit human is preferred over our guess, both ways round. Someone
-    // running with the variable already set is mid-workaround (the issue #6
-    // reporter is, right now) and must not have it changed under them.
+    // An explicit human wins over our guess both ways: someone with the variable already set is mid workaround and must
+    // not have it changed under them.
     if opted_out {
         return Decision::Skip(SKIP_OPT_OUT);
     }
@@ -86,22 +46,13 @@ fn decide(nvidia_present: bool, dmabuf_already_set: bool, opted_out: bool) -> De
     Decision::Disable
 }
 
-/// Is the Nvidia userspace driver in play?
-///
-/// `/proc/driver/nvidia/version` is the canonical marker for the loaded Nvidia
-/// kernel module, proprietary or open-kernel, both ship the same
-/// `libnvidia-eglcore`, which is where the crash lives, so both must match.
-/// Nouveau creates neither path and is unaffected.
-///
-/// Takes a root so a test can point it at a fixture; production passes "/".
+/// `/proc/driver/nvidia/version` marks the loaded Nvidia module, proprietary or open, which both ship the crashing
+/// `libnvidia-eglcore`; Nouveau creates neither path. Takes a root for test fixtures.
 fn nvidia_driver_present_under(root: &Path) -> bool {
-    root.join("proc/driver/nvidia/version").exists()
-        || root.join("sys/module/nvidia/version").exists()
+    root.join("proc/driver/nvidia/version").exists() || root.join("sys/module/nvidia/version").exists()
 }
 
-/// Apply the workaround. MUST run before the webview is created: WebKit reads
-/// these variables when it spawns its web process, and the process inherits the
-/// environment as it stood at that moment.
+/// Must run before the webview is created: WebKit's web process inherits the environment as it stood when spawned.
 pub fn apply_gpu_workarounds() {
     let decision = decide(
         nvidia_driver_present_under(Path::new("/")),
@@ -139,17 +90,14 @@ mod tests {
         assert_eq!(decide(true, false, false), Decision::Disable);
     }
 
-    /// Everyone else keeps the fast path. A blanket disable would have been the
-    /// easy fix and would have cost every Linux user buffer sharing for a fault
-    /// only Nvidia has.
+    /// Everyone else keeps buffer sharing; a blanket disable would cost every Linux user for an Nvidia fault.
     #[test]
     fn non_nvidia_machines_are_untouched() {
         assert_eq!(decide(false, false, false), Decision::Skip(SKIP_NO_NVIDIA));
     }
 
-    /// A human who has already set the variable, like the #6 reporter running
-    /// his workaround today, is preferred over the probe, on Nvidia and off it. Changing
-    /// it under him would silently swap the configuration he reported against.
+    /// A variable a human already set wins over the probe, on Nvidia and off, so the configuration they reported
+    /// against stays.
     #[test]
     fn an_existing_setting_is_never_overridden() {
         assert!(matches!(decide(true, true, false), Decision::Skip(_)));
@@ -174,34 +122,18 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
 
         std::fs::create_dir_all(tmp.join("sys/module/nvidia")).unwrap();
-        assert!(
-            !nvidia_driver_present_under(&tmp),
-            "an empty module directory must not count as the driver"
-        );
+        assert!(!nvidia_driver_present_under(&tmp), "an empty module directory must not count as the driver");
 
         std::fs::create_dir_all(tmp.join("proc/driver/nvidia")).unwrap();
         std::fs::write(tmp.join("proc/driver/nvidia/version"), "NVRM version …").unwrap();
-        assert!(
-            nvidia_driver_present_under(&tmp),
-            "/proc/driver/nvidia/version is the canonical marker"
-        );
+        assert!(nvidia_driver_present_under(&tmp), "/proc/driver/nvidia/version is the canonical marker");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
-    /// `decide` being right is worth nothing if the applier reads the wrong
-    /// variables, so exercise the real entry point once. The opt-out path is the
-    /// one that can be asserted on any machine: it must leave the environment
-    /// untouched whatever hardware the test happens to run on.
-    ///
-    /// Both spellings are exercised, in one test rather than two: these are
-    /// process-wide variables and a second test setting them would race this one
-    /// under the parallel runner. The retired name matters as much as the current
-    /// one, it is set in shell profiles this repository cannot reach, so a
-    /// machine that opted out before the rename must still be opted out after it.
-    ///
-    /// This mutates process-wide environment, which is why it restores what it
-    /// found and why nothing else in this crate reads these variables.
+    /// Exercises the real entry point through the opt out, which must leave the environment untouched on any machine.
+    /// Both spellings in one test, as these are process wide variables a parallel test would race; it restores what it
+    /// found.
     #[test]
     fn the_applier_reads_the_variables_it_documents() {
         let restore = std::env::var_os(DMABUF);
@@ -219,9 +151,8 @@ mod tests {
             std::env::remove_var(name);
         }
 
-        // And with NEITHER set, the applier is free to act, otherwise the loop
-        // above would pass on a build where the opt-out check was deleted
-        // outright and nothing ever set DMABUF.
+        // With neither set the applier is free to act, or the loop above would pass on a build without the opt out
+        // check.
         std::env::remove_var(DMABUF);
         assert_eq!(
             decide(true, false, false),

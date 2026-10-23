@@ -97,7 +97,7 @@ describe("trace lens", () => {
     expect((lens.apertureRadius * (200 - d)) / d / (2 * 200 * half)).toBeCloseTo(0.4 * 0.012, 6);
     const wide = lensFor(cam, 2, 2.8, 1)!;
     // Close up the slope at the focus is the limit: 0.4 * 0.006 / fStop per mm.
-    expect(wide.apertureRadius / (2 * 2 * 2 * half)).toBeCloseTo(0.4 * 0.006 / 2.8, 6);
+    expect(wide.apertureRadius / (2 * 2 * 2 * half)).toBeCloseTo((0.4 * 0.006) / 2.8, 6);
   });
 
   it("gives the tracer a physical camera focused where the lens says, in millimetres", () => {

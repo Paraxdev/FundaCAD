@@ -1,33 +1,17 @@
-// Where an emissive body or face puts its light, and how bright that light is.
-//
-// A glowing surface is lit as what it is, an AREA: each flat patch of it becomes
-// a rectangle light fitted to the patch (THREE.RectAreaLight), so a lit panel
-// throws the long soft pool a panel throws and a thin strip a thin one, where a
-// point light at its centre put a round hotspot on the wall beside it. A curved
-// face or a whole glowing body is a MESH light: its triangles are split into
-// patches by which way they face, one rectangle per patch, so a tube lights its
-// sides and a globe lights all round.
-//
-// Pure numbers, kept out of viewport.ts so they can be tested without a scene.
-// The viewport owns the lights, the rank and cap budget and the shadows.
+// Where an emissive surface puts its light: each flat patch becomes a fitted RectAreaLight, and a curved face or a
+// glowing body splits into patches by facing direction, so a tube lights its sides. Pure numbers, tested sceneless.
 
 export type Vec3 = [number, number, number];
 
-/** Surface luminance per unit of glow. A rectangle light's brightness IS a
- *  luminance, so a bigger glowing face gives off more light in total and a
- *  small one less, the way real emitters do; one number serves every size.
- *  Measured in the app (bloom off, default studio) to put a clear pool on the
- *  surface beside a lit panel without blowing out the panel's neighbours. */
+/** Surface luminance per unit of glow, so a bigger face gives off more light in total. Measured in the app (bloom off,
+ *  default studio) to light the surface beside a panel without blowing out its neighbours. */
 export const EMITTER_LUMINANCE = 40;
 
-/** Triangles within this angle of their patch's mean normal still count as one
- *  flat patch. Loose enough for a tessellated gentle curve, tight enough that a
- *  box's faces never merge. */
+/** Loose enough for a tessellated gentle curve, tight enough that a box's faces never merge. */
 const FLAT_COS = Math.cos((12 * Math.PI) / 180);
 
-/** A body with more glowing patches than this (an imported mesh is one face per
- *  triangle) is regrouped by facing direction only, so it costs a handful of
- *  lights rather than thousands. */
+/** Past this many glowing patches (an imported mesh is one face per triangle) a body regroups by facing direction only,
+ *  a handful of lights rather than thousands. */
 export const MAX_PATCHES_PER_BODY = 12;
 
 /** How far the shadow for a patch is cast from in front of it. On the surface
@@ -61,19 +45,23 @@ export interface AreaEmitter {
 
 /** The dominant axis of a normal, 0..5 for +x, -x, +y, -y, +z, -z. */
 function facing(nx: number, ny: number, nz: number): number {
-  const ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
+  const ax = Math.abs(nx),
+    ay = Math.abs(ny),
+    az = Math.abs(nz);
   if (ax >= ay && ax >= az) return nx >= 0 ? 0 : 1;
   if (ay >= az) return ny >= 0 ? 2 : 3;
   return nz >= 0 ? 4 : 5;
 }
 
-interface Tri { fid: number; t: number; area: number; n: Vec3 }
+interface Tri {
+  fid: number;
+  t: number;
+  area: number;
+  n: Vec3;
+}
 
-/** Area lights for the glowing triangles of one body mesh.
- *
- *  `index` is the mesh's index buffer. Bodies are indexed, so triangle t's
- *  corners are index[3t..3t+2] and NOT vertices 3t..3t+2. Pass null only for a
- *  mesh that really is a triangle soup. */
+/** `index` is the mesh's index buffer: triangle t's corners are index[3t..3t+2], not vertices 3t..3t+2. Null only for
+ *  a real triangle soup. */
 export function areaEmitters(
   positions: ArrayLike<number>,
   index: ArrayLike<number> | null,
@@ -85,10 +73,18 @@ export function areaEmitters(
   for (let t = 0; t < faceIds.length; t++) {
     const fid = faceIds[t]!;
     if (!glowing(fid)) continue;
-    const i0 = corner(t, 0), i1 = corner(t, 1), i2 = corner(t, 2);
-    const ux = positions[i1]! - positions[i0]!, uy = positions[i1 + 1]! - positions[i0 + 1]!, uz = positions[i1 + 2]! - positions[i0 + 2]!;
-    const vx = positions[i2]! - positions[i0]!, vy = positions[i2 + 1]! - positions[i0 + 1]!, vz = positions[i2 + 2]! - positions[i0 + 2]!;
-    const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+    const i0 = corner(t, 0),
+      i1 = corner(t, 1),
+      i2 = corner(t, 2);
+    const ux = positions[i1]! - positions[i0]!,
+      uy = positions[i1 + 1]! - positions[i0 + 1]!,
+      uz = positions[i1 + 2]! - positions[i0 + 2]!;
+    const vx = positions[i2]! - positions[i0]!,
+      vy = positions[i2 + 1]! - positions[i0 + 1]!,
+      vz = positions[i2 + 2]! - positions[i0 + 2]!;
+    const cx = uy * vz - uz * vy,
+      cy = uz * vx - ux * vz,
+      cz = ux * vy - uy * vx;
     const len = Math.hypot(cx, cy, cz);
     if (len <= 0) continue;
     let list = byFace.get(fid);
@@ -129,18 +125,20 @@ function push<K, V>(m: Map<K, V[]>, k: K, v: V) {
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 function meanNormal(tris: Tri[]): Vec3 | null {
-  let x = 0, y = 0, z = 0;
-  for (const tr of tris) { x += tr.n[0] * tr.area; y += tr.n[1] * tr.area; z += tr.n[2] * tr.area; }
+  let x = 0,
+    y = 0,
+    z = 0;
+  for (const tr of tris) {
+    x += tr.n[0] * tr.area;
+    y += tr.n[1] * tr.area;
+    z += tr.n[2] * tr.area;
+  }
   const l = Math.hypot(x, y, z);
   return l > 0 ? [x / l, y / l, z / l] : null;
 }
 
-/** The smallest rectangle, in the patch's own plane, that covers every corner of
- *  its triangles projected onto that plane. Smallest by rotating calipers over
- *  the convex hull, so a panel at any angle in its plane gets a rectangle its own
- *  shape rather than an axis box around it. The plane sits at the patch's
- *  outermost point along the normal, so a domed patch's light is in front of
- *  the dome, not buried inside it. */
+/** Minimum area rectangle (rotating calipers over the hull) in the patch's plane, placed at its outermost point along
+ *  the normal so a domed patch's light sits in front of the dome. */
 function fitRectangle(
   key: string,
   tris: Tri[],
@@ -159,8 +157,10 @@ function fitRectangle(
 
   const pts: [number, number][] = [];
   const faces = new Map<number, number>();
-  let area = 0, far = -Infinity;
-  const min: Vec3 = [Infinity, Infinity, Infinity], max: Vec3 = [-Infinity, -Infinity, -Infinity];
+  let area = 0,
+    far = -Infinity;
+  const min: Vec3 = [Infinity, Infinity, Infinity],
+    max: Vec3 = [-Infinity, -Infinity, -Infinity];
   for (const tr of tris) {
     area += tr.area;
     faces.set(tr.fid, (faces.get(tr.fid) ?? 0) + tr.area);
@@ -169,13 +169,17 @@ function fitRectangle(
       const p: Vec3 = [positions[i]!, positions[i + 1]!, positions[i + 2]!];
       pts.push([dot(p, u), dot(p, v)]);
       far = Math.max(far, dot(p, n));
-      for (let a = 0; a < 3; a++) { min[a] = Math.min(min[a]!, p[a]!); max[a] = Math.max(max[a]!, p[a]!); }
+      for (let a = 0; a < 3; a++) {
+        min[a] = Math.min(min[a]!, p[a]!);
+        max[a] = Math.max(max[a]!, p[a]!);
+      }
     }
   }
   const rect = minAreaRect(pts);
   if (!rect) return null;
   const [cu, cv] = rect.center;
-  const ca = Math.cos(rect.angle), sa = Math.sin(rect.angle);
+  const ca = Math.cos(rect.angle),
+    sa = Math.sin(rect.angle);
   return {
     key,
     center: [0, 1, 2].map((a) => u[a]! * cu + v[a]! * cv + n[a]! * far) as Vec3,
@@ -191,7 +195,9 @@ function fitRectangle(
 
 /** Minimum area bounding rectangle of 2D points: centre, the angle of its width
  *  side from the +u axis, and its two side lengths. */
-export function minAreaRect(pts: [number, number][]): { center: [number, number]; angle: number; w: number; h: number } | null {
+export function minAreaRect(
+  pts: [number, number][],
+): { center: [number, number]; angle: number; w: number; h: number } | null {
   const hull = convexHull(pts);
   if (hull.length === 0) return null;
   if (hull.length < 3) {
@@ -201,17 +207,28 @@ export function minAreaRect(pts: [number, number][]): { center: [number, number]
   }
   let best: { center: [number, number]; angle: number; w: number; h: number } | null = null;
   for (let i = 0; i < hull.length; i++) {
-    const p = hull[i]!, q = hull[(i + 1) % hull.length]!;
+    const p = hull[i]!,
+      q = hull[(i + 1) % hull.length]!;
     const angle = Math.atan2(q[1] - p[1], q[0] - p[0]);
-    const c = Math.cos(angle), s = Math.sin(angle);
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    const c = Math.cos(angle),
+      s = Math.sin(angle);
+    let x0 = Infinity,
+      x1 = -Infinity,
+      y0 = Infinity,
+      y1 = -Infinity;
     for (const [x, y] of hull) {
-      const rx = x * c + y * s, ry = -x * s + y * c;
-      x0 = Math.min(x0, rx); x1 = Math.max(x1, rx); y0 = Math.min(y0, ry); y1 = Math.max(y1, ry);
+      const rx = x * c + y * s,
+        ry = -x * s + y * c;
+      x0 = Math.min(x0, rx);
+      x1 = Math.max(x1, rx);
+      y0 = Math.min(y0, ry);
+      y1 = Math.max(y1, ry);
     }
-    const w = x1 - x0, h = y1 - y0;
+    const w = x1 - x0,
+      h = y1 - y0;
     if (!best || w * h < best.w * best.h - 1e-9) {
-      const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+      const mx = (x0 + x1) / 2,
+        my = (y0 + y1) / 2;
       best = { center: [mx * c - my * s, mx * s + my * c], angle, w, h };
     }
   }
@@ -240,10 +257,7 @@ function convexHull(input: [number, number][]): [number, number][] {
   return lower.concat(upper);
 }
 
-/** A patch's rectangle light luminance. The rectangle bounds the patch, so a
- *  disc or an L shaped face covers less than its rectangle: the luminance is
- *  scaled by the covered fraction, which keeps the light given off equal to
- *  what the real surface would give off. */
+/** Scaled by the share of its rectangle the patch covers, so a disc gives off what the real surface would. */
 export function emitterLuminance(glow: number, e: Pick<AreaEmitter, "area" | "width" | "height">): number {
   return glow * EMITTER_LUMINANCE * Math.min(1, e.area / (e.width * e.height));
 }
@@ -253,16 +267,15 @@ export function emitterPower(glow: number, e: Pick<AreaEmitter, "area" | "width"
   return emitterLuminance(glow, e) * e.width * e.height;
 }
 
-/** No patch of a body inside `box` can rank above this, so a body whose bound is
- *  below the dimmest light already kept need not be fitted at all.
- *
- *  Power is at most glow x luminance x the fitted rectangle. That rectangle is the
- *  smallest one around the patch projected on its plane, so it is at most twice
- *  the projected hull (true of any convex set), and the hull lies inside the
- *  box's projection, which is at most half the box's surface. The 1e-3 floor on
- *  each side of the rectangle is the last term. */
-export function emitterPowerBound(glow: number, box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } }): number {
-  const a = box.max.x - box.min.x, b = box.max.y - box.min.y, c = box.max.z - box.min.z;
+/** No patch of a body in `box` can rank above this: the fitted rectangle is at most twice the projected hull, which is
+ *  at most half the box's surface, plus the 1e-3 side floor. Lets a dim body skip fitting. */
+export function emitterPowerBound(
+  glow: number,
+  box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } },
+): number {
+  const a = box.max.x - box.min.x,
+    b = box.max.y - box.min.y,
+    c = box.max.z - box.min.z;
   const surface = 2 * (a * b + b * c + c * a);
   const d = Math.hypot(a, b, c);
   return glow * EMITTER_LUMINANCE * (surface + 2e-3 * d + 1e-6) * (1 + 1e-9);

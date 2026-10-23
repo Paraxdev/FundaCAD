@@ -88,15 +88,26 @@ class StubOidn implements OidnLike {
   texture: THREE.Texture | null = null;
   camera: THREE.Camera | null = null;
   guidesFrom: THREE.Camera | null = null;
-  setScene(_s: THREE.Scene, c: THREE.Camera) { this.camera = c; }
+  setScene(_s: THREE.Scene, c: THREE.Camera) {
+    this.camera = c;
+  }
   _renderAuxiliaryBuffers() {
     this.guidesFrom = this.camera;
     return { textures: [new THREE.Texture(), new THREE.Texture()] };
   }
-  async denoise() { this.running = true; }
-  reset() { this.running = false; this.complete = false; }
+  async denoise() {
+    this.running = true;
+  }
+  reset() {
+    this.running = false;
+    this.complete = false;
+  }
   dispose() {}
-  land() { this.running = false; this.complete = true; this.texture = new THREE.Texture(); }
+  land() {
+    this.running = false;
+    this.complete = true;
+    this.texture = new THREE.Texture();
+  }
 }
 
 describe("oidn pass", () => {
@@ -120,7 +131,11 @@ describe("oidn pass", () => {
 
   it("resolves false when cancelled mid pass", async () => {
     const o = new StubOidn();
-    const src = { scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera() as THREE.Camera, color: new THREE.Texture({ width: 2, height: 2 }) };
+    const src = {
+      scene: new THREE.Scene(),
+      camera: new THREE.PerspectiveCamera() as THREE.Camera,
+      color: new THREE.Texture({ width: 2, height: 2 }),
+    };
     const pass = new OidnPass(o, () => src);
     const done = pass.run();
     await flush();

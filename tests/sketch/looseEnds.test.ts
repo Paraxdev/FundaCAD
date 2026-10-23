@@ -5,16 +5,29 @@ vi.mock("@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url", () => ({
   default: process.cwd() + "/node_modules/@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm",
 }));
 
-import { looseEnds, tieConstraints } from "../../src/sketch/looseEnds";
+import { defaultReach, gapReport, looseEnds, nothingToTiePrompt, tieConstraints } from "../../src/sketch/looseEnds";
 import { detectRegions } from "../../src/sketch/region";
 import { compileAndSolve } from "../../src/sketch/sketchSolve";
 import { SketchHistory, cloneSnapshot, type SketchSnapshot } from "../../src/sketch/history";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { SketchConstraint } from "../../src/types";
 
-const L = (id: string, x1: number, y1: number, x2: number, y2: number, construction?: boolean): ResolvedEntity =>
-  ({ type: "line", id, x1, y1, x2, y2, ...(construction ? { construction } : {}) });
-const co = (e1: string, p1: number, e2: string, p2: number): SketchConstraint => ({ type: "coincident", e1, p1, e2, p2 });
+const L = (id: string, x1: number, y1: number, x2: number, y2: number, construction?: boolean): ResolvedEntity => ({
+  type: "line",
+  id,
+  x1,
+  y1,
+  x2,
+  y2,
+  ...(construction ? { construction } : {}),
+});
+const co = (e1: string, p1: number, e2: string, p2: number): SketchConstraint => ({
+  type: "coincident",
+  e1,
+  p1,
+  e2,
+  p2,
+});
 const refs = (xs: { entity: string; p: number }[]) => xs.map((u) => `${u.entity}:${u.p}`).sort();
 const tri = (g = 0) => [L("a", 0, 0, 10, 0), L("b", 10, 0, 5, 8), L("c", 5, 8, 0, g)];
 
@@ -44,7 +57,10 @@ describe("looseEnds detection", () => {
 
   it("a lone line has two open ends, with coordinates", () => {
     const le = looseEnds([L("a", 1, 2, 3, 4)], [], 0.1);
-    expect(le.open).toEqual([{ entity: "a", p: 0, x: 1, y: 2 }, { entity: "a", p: 1, x: 3, y: 4 }]);
+    expect(le.open).toEqual([
+      { entity: "a", p: 0, x: 1, y: 2 },
+      { entity: "a", p: 1, x: 3, y: 4 },
+    ]);
   });
 
   it("an arc end near a line end ties with a coincident on the arc end", () => {
@@ -69,7 +85,15 @@ describe("looseEnds detection", () => {
   });
 
   it("splines: a curve touch is reported but not tieable, an end touch ties on the spline end", () => {
-    const sp: ResolvedEntity = { type: "spline", id: "s", points: [{ x: 0, y: 0 }, { x: 5, y: 3 }, { x: 10, y: 0 }] };
+    const sp: ResolvedEntity = {
+      type: "spline",
+      id: "s",
+      points: [
+        { x: 0, y: 0 },
+        { x: 5, y: 3 },
+        { x: 10, y: 0 },
+      ],
+    };
     const onBody = looseEnds([sp, L("m", 5, 6, 5, 3.04)], [], 0.2).untied.find((u) => u.entity === "m")!;
     expect(onBody).toMatchObject({ p: 1, touches: { kind: "curve", entity: "s" }, tieable: false });
     expect(tieConstraints({ open: [], untied: [onBody] })).toEqual([]);
@@ -78,14 +102,31 @@ describe("looseEnds detection", () => {
   });
 
   it("an open bspline exposes its first and last pole as ends 0 and 1, a closed one has none", () => {
-    const poles = [{ x: 0, y: 0 }, { x: 3, y: 4 }, { x: 6, y: 4 }, { x: 9, y: 0 }];
+    const poles = [
+      { x: 0, y: 0 },
+      { x: 3, y: 4 },
+      { x: 6, y: 4 },
+      { x: 9, y: 0 },
+    ];
     const le = looseEnds([{ type: "bspline", id: "b", poles }], [], 0.1);
-    expect(le.open).toEqual([{ entity: "b", p: 0, x: 0, y: 0 }, { entity: "b", p: 1, x: 9, y: 0 }]);
+    expect(le.open).toEqual([
+      { entity: "b", p: 0, x: 0, y: 0 },
+      { entity: "b", p: 1, x: 9, y: 0 },
+    ]);
     expect(looseEnds([{ type: "bspline", id: "b", poles, closed: true }], [], 0.1)).toEqual({ open: [], untied: [] });
   });
 
   it("a free form curve may close onto itself, a line never does", () => {
-    const sp: ResolvedEntity = { type: "spline", id: "s", points: [{ x: 0, y: 0 }, { x: 5, y: 5 }, { x: 10, y: 0 }, { x: 0.02, y: 0 }] };
+    const sp: ResolvedEntity = {
+      type: "spline",
+      id: "s",
+      points: [
+        { x: 0, y: 0 },
+        { x: 5, y: 5 },
+        { x: 10, y: 0 },
+        { x: 0.02, y: 0 },
+      ],
+    };
     expect(tieConstraints(looseEnds([sp], [], 0.1))).toEqual([co("s", 0, "s", 1)]);
     expect(refs(looseEnds([L("a", 0, 0, 0.05, 0)], [], 0.1).open)).toEqual(["a:0", "a:1"]);
   });
@@ -107,7 +148,12 @@ describe("looseEnds detection", () => {
   it("construction ends never count, a projected line is a target and never a loose end", () => {
     const ents: ResolvedEntity[] = [
       L("k", 0, 0, 3, 3, true),
-      { type: "projected", id: "p", source: { kind: "sketchCurve", sketch: "s0", entity: "e0" }, curve: { kind: "line", x1: 0, y1: 0, x2: 10, y2: 0 } },
+      {
+        type: "projected",
+        id: "p",
+        source: { kind: "sketchCurve", sketch: "s0", entity: "e0" },
+        curve: { kind: "line", x1: 0, y1: 0, x2: 10, y2: 0 },
+      },
       L("l", 10, 0.01, 10, 5),
     ];
     const le = looseEnds(ents, [], 0.1);
@@ -137,19 +183,28 @@ describe("looseEnds detection", () => {
     const ents = [L("a", 0, 0, 5, 0), L("k", 5, 0, 5, 5, true), L("m", 0, 3, 9, 3, true)];
     const le = looseEnds(ents, [co("a", 1, "k", 0)], 0.1);
     expect(refs(le.open)).toEqual(["a:0", "a:1"]);
-    const on = looseEnds([L("a", 0, 0, 5, 3), L("m", 0, 3, 9, 3, true)], [{ type: "pointOnCurve", e: "a", p: 1, curve: "m" }], 0.1);
+    const on = looseEnds(
+      [L("a", 0, 0, 5, 3), L("m", 0, 3, 9, 3, true)],
+      [{ type: "pointOnCurve", e: "a", p: 1, curve: "m" }],
+      0.1,
+    );
     expect(refs(on.open)).toEqual(["a:0", "a:1"]);
   });
 
   it("a coincident onto an arc centre leaves the end open", () => {
-    const ents: ResolvedEntity[] = [L("a", -9, 0, 0, 0), { type: "arc", id: "r", x1: 5, y1: 0, x2: -5, y2: 0, mx: 0, my: 5 }];
+    const ents: ResolvedEntity[] = [
+      L("a", -9, 0, 0, 0),
+      { type: "arc", id: "r", x1: 5, y1: 0, x2: -5, y2: 0, mx: 0, my: 5 },
+    ];
     const le = looseEnds(ents, [co("a", 1, "r", 2)], 0.1);
     expect(refs(le.open)).toEqual(["a:0", "a:1", "r:0"]);
     expect(refs(le.untied)).toEqual(["r:1"]);
   });
 
   it("among thousands of curves a near miss on a long line or a big circle is still found", () => {
-    const ents: ResolvedEntity[] = Array.from({ length: 3000 }, (_, i) => L("s" + i, (i % 60) * 10, Math.floor(i / 60) * 10, (i % 60) * 10 + 4, Math.floor(i / 60) * 10 + 3));
+    const ents: ResolvedEntity[] = Array.from({ length: 3000 }, (_, i) =>
+      L("s" + i, (i % 60) * 10, Math.floor(i / 60) * 10, (i % 60) * 10 + 4, Math.floor(i / 60) * 10 + 3),
+    );
     ents.push(L("long", 0, -50, 1000, -50), L("t", 500, -49.95, 500, -40));
     ents.push({ type: "circle", id: "c", x: 2000, y: 0, radius: 100 }, L("u", 2100.05, 0, 2150, 0));
     const le = looseEnds(ents, [], 0.1);
@@ -203,7 +258,11 @@ describe("tying loose ends closes the profile", () => {
   // edit state, the solver write back re-arms without banking
   it("the tie and its solve are one undo step", async () => {
     const sq = [L("a", 0, 0, 10, 0), L("b", 10, 0, 10, 8), L("c", 10, 8, 0, 8), L("d", 0, 8, 0.02, 0.01)];
-    const snap = (entities: ResolvedEntity[], constraints: SketchConstraint[]): SketchSnapshot => ({ entities, constraints, patterns: [] });
+    const snap = (entities: ResolvedEntity[], constraints: SketchConstraint[]): SketchSnapshot => ({
+      entities,
+      constraints,
+      patterns: [],
+    });
     const before = cloneSnapshot(snap(sq, []));
     const h = new SketchHistory();
     h.reset(before);
@@ -215,5 +274,66 @@ describe("tying loose ends closes the profile", () => {
     expect(h.depth).toBe(1);
     expect(h.undo(after)).toEqual(before);
     expect(h.canUndo).toBe(false);
+  });
+});
+
+// A 50 mm square whose last side stops `gap` short of the first corner, the
+// closed corners held as the sketcher's snaps hold them.
+const square = (gap: number) => [
+  L("a", 0, 0, 50, 0),
+  L("b", 50, 0, 50, 50),
+  L("c", 50, 50, 0, 50),
+  L("d", 0, 50, 0, gap),
+];
+const corners = [co("a", 1, "b", 0), co("b", 1, "c", 0), co("c", 1, "d", 0)];
+const report = (ents: ResolvedEntity[], cs: SketchConstraint[]) => gapReport(ents, cs, defaultReach(ents));
+
+describe("gap report: a profile with a gap or an open sketch", () => {
+  it("a gap within the snap reach is tieable as before", () => {
+    expect(report(square(0.05), corners).kind).toBe("tieable");
+  });
+
+  it("a 3 mm gap on a 50 mm square is a gap, beyond the 0.7 mm snap reach", () => {
+    const r = report(square(3), corners);
+    expect(r.kind).toBe("gap");
+    expect(r.open).toBe(2);
+    expect(r.gapMm).toBeCloseTo(3, 6);
+    expect(r.reach).toBeGreaterThanOrEqual(3);
+    const ties = tieConstraints(looseEnds(square(3), corners, r.reach), corners);
+    expect(ties).toEqual([co("a", 0, "d", 1)]);
+  });
+
+  it("an L with ends 70 mm apart is clearly open", () => {
+    const ell = [L("a", 0, 0, 50, 0), L("b", 50, 0, 50, 50)];
+    expect(report(ell, [co("a", 1, "b", 0)]).kind).toBe("open");
+  });
+
+  it("a U whose ends are a whole side apart is open", () => {
+    const u = [L("a", 0, 0, 50, 0), L("b", 50, 0, 50, 50), L("d", 0, 50, 0, 0)];
+    expect(report(u, [co("a", 1, "b", 0), co("d", 1, "a", 0)]).kind).toBe("open");
+  });
+
+  it("a closed square has nothing loose", () => {
+    expect(report(square(0), [...corners, co("d", 1, "a", 0)]).kind).toBe("none");
+  });
+});
+
+describe("Tie Loose Ends with nothing in reach", () => {
+  it("never says there are no loose ends while red open ends show", () => {
+    const le = looseEnds(square(3), corners, 0.7);
+    const msg = nothingToTiePrompt(le, report(square(3), corners));
+    expect(msg).not.toMatch(/No loose ends/);
+    expect(msg).toMatch(/^2 open ends 3 mm apart, too far apart to tie/);
+  });
+
+  it("an open L says how many open ends and that they are too far apart", () => {
+    const ell = [L("a", 0, 0, 50, 0), L("b", 50, 0, 50, 50)];
+    const cs = [co("a", 1, "b", 0)];
+    expect(nothingToTiePrompt(looseEnds(ell, cs, 0.7), report(ell, cs))).toMatch(/^2 open ends, too far apart to tie/);
+  });
+
+  it("a closed sketch still says there is nothing to tie", () => {
+    const cs = [...corners, co("d", 1, "a", 0)];
+    expect(nothingToTiePrompt(looseEnds(square(0), cs, 0.7), report(square(0), cs))).toBe("No loose ends to tie");
   });
 });

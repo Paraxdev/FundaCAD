@@ -167,6 +167,33 @@ single executable. It still requires the system WebView2 runtime.
   system library the binary cannot find and how to install it;
 - every plugin that names a `geometryWasm` component has it in its bundle.
 
+## What each installer registers for Open With
+
+`.funda` (JSON) and `.fundab` (binary) are FundaCAD documents everywhere. Windows
+and macOS take them from `bundle.fileAssociations` in `src-tauri/tauri.conf.json`;
+Linux from the files in `packaging/`. The MIME types are the same on every
+platform, `application/x-fundacad` and `application/x-fundacad-bundle`, and
+`launch_args.rs` checks the config and the Linux files agree.
+
+| Installer | What it registers | How the path reaches the app |
+|---|---|---|
+| NSIS `.exe` (Windows) | `Software\Classes\.funda` and `.fundab` (under HKCU for a per user install, HKLM for all users) point at the ProgIDs `FundaCAD document` and `FundaCAD binary document`, whose description is the Explorer Type column, `DefaultIcon` is `fundacad.exe,0` (the app icon) and `shell\open\command` is `<install dir>\fundacad.exe "%1"`. The uninstaller removes them. | argv. The exe is unquoted in that command, so an install path with spaces reaches argv in pieces; only arguments that name a document are kept, so the pieces drop out. |
+| WiX `.msi` (Windows) | advertised ProgIDs `FundaCAD.funda` and `FundaCAD.fundab` with the description, and an `open` verb `"<install dir>\fundacad.exe" "%1"`. The template names no icon for them. | argv. |
+| portable `fundacad.exe` | nothing. | Open With, Choose another app, still starts it with the path in argv. |
+| `.app` / `.dmg` (macOS) | `CFBundleDocumentTypes` in `Info.plist` with role Editor and rank Owner, and `UTExportedTypeDeclarations` for `dev.fundacad.app.funda` (conforms to `public.json`) and `dev.fundacad.app.fundab` (conforms to `public.data`), each with its extension and MIME type. Launch Services reads it when the app is first seen, in `/Applications` or anywhere else. No document icon: Tauri 2.9's config has no field for one, so Finder shows its generic document. | `RunEvent::Opened` with `file://` URLs, at start and while the app runs. argv carries no path on macOS. |
+| `.deb` / `.rpm` (Linux) | `MimeType=` in the desktop file (`packaging/fundacad.desktop.hbs`, which replaces Tauri's own) and the shared MIME info `/usr/share/mime/packages/dev.fundacad.app.xml`, which also knows a `.fundab` by its `FUNDACAD` magic. | `fundacad %F`, argv. |
+| AppImage | the same desktop file inside the image, registered only by an integration tool such as AppImageLauncher. | argv. |
+| Flatpak | its own copy of the desktop file and MIME info, under the `dev.fundacad.app` icon name. | argv. |
+
+A path that arrives while FundaCAD runs goes to the open window: on Windows and
+Linux the second launch hands its argv over through the single instance plugin
+and exits, on macOS the Opened event comes to the running app. Every path lands
+in one queue (`launch.rs`) that the page takes from once recovery has settled,
+and it opens the first. `sh scripts/check-launch-args.sh` runs the parsing tests
+(`src-tauri/tests/unit/launch_args.rs`) on Windows without the webview stack,
+including ones that start a process with the command lines the
+installers register.
+
 ## Code signing & notarization
 
 ### macOS

@@ -1,5 +1,4 @@
-// When the path tracer may spend GPU time. Pure, so the switching rules are
-// tested without a GPU.
+// Pure, so the rules for when the tracer may spend GPU time are tested without a GPU.
 
 import type { ViewMode } from "../../ui/renderPrefs";
 
@@ -25,8 +24,15 @@ export interface TraceInputs {
 }
 
 export type TraceState =
-  | "off" | "hidden" | "moving" | "done" | "trace"
-  | "paused:section" | "paused:xray" | "paused:wireframe" | "paused:sketch";
+  | "off"
+  | "hidden"
+  | "moving"
+  | "done"
+  | "trace"
+  | "paused:section"
+  | "paused:xray"
+  | "paused:wireframe"
+  | "paused:sketch";
 
 export function traceState(i: TraceInputs): TraceState {
   if (i.mode !== "pathtraced") return "off";

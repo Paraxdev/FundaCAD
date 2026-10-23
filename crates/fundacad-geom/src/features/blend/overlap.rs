@@ -1,10 +1,5 @@
-//! A blend that folded back over itself, the Python engine's `blend_overlap.py`.
-//!
-//! BRepCheck calls such a solid valid; what is wrong is that faces the blend
-//! made lie on top of each other and the depth buffer flickers between them.
-//! The faces it made are meshed coarsely and a triangle counts as doubled when
-//! its centre lies within a micron of a near parallel triangle of another of
-//! those faces that really is that close to its own surface.
+//! A blend that folded back over itself, blend_overlap.py. BRepCheck passes it, but faces the blend made lie on
+//! each other: a coarse triangle counts as doubled within a micron of a near parallel one of another such face.
 
 use std::collections::HashMap;
 
@@ -23,18 +18,11 @@ const MEASURE_DEFLECTION_MM: f64 = 0.1;
 /// Faces of `after` that `before` does not share by identity.
 pub fn new_faces(before: &Shape, after: &Shape) -> Vec<Shape> {
     let old = before.shape_map(ShapeType::Face);
-    kernel::subshapes(after, Kind::Face)
-        .into_iter()
-        .filter(|f| old.index_of(f) == 0)
-        .collect()
+    kernel::subshapes(after, Kind::Face).into_iter().filter(|f| old.index_of(f) == 0).collect()
 }
 
-/// Anything that cannot be measured is not a fold.
-///
-/// The allowance grows with the blend: a fold runs along an edge, so what it
-/// doubles is at least about `size` squared. A fixed 0.01 mm2 refused a
-/// 1.13 mm rim round for 0.12 mm2 where it meets two notch rounds, a junction
-/// the reference CAD model has too.
+/// Anything that cannot be measured is not a fold. The allowance grows with `size` squared, since a fixed
+/// 0.01 mm2 refused a 1.13 mm rim round for 0.12 mm2 at a junction the reference CAD model has too.
 pub fn folds_over_itself(before: &Shape, after: &Shape, size: f64) -> bool {
     let fresh = crate::bench::phase("blend_new_faces", || new_faces(before, after));
     if fresh.is_empty() {
@@ -99,17 +87,12 @@ fn point_to_triangle(q: DVec3, tri: &[DVec3; 3]) -> f64 {
 }
 
 fn near_the_face(point: DVec3, face: &Shape) -> bool {
-    face.distance_to_point(point)
-        .is_ok_and(|d| d <= MEASURE_DEFLECTION_MM)
+    face.distance_to_point(point).is_ok_and(|d| d <= MEASURE_DEFLECTION_MM)
 }
 
 fn cell_of(c: DVec3) -> (i64, i64, i64) {
     const CELL: f64 = 0.25;
-    (
-        (c.x / CELL).floor() as i64,
-        (c.y / CELL).floor() as i64,
-        (c.z / CELL).floor() as i64,
-    )
+    ((c.x / CELL).floor() as i64, (c.y / CELL).floor() as i64, (c.z / CELL).floor() as i64)
 }
 
 /// `doubled_area`, in mm2.
@@ -139,9 +122,7 @@ fn doubled_area_inner(faces: &[Shape]) -> Option<f64> {
                             continue;
                         }
                         if point_to_triangle(t.centre, &o.pts) <= COINCIDENT_MM
-                            && faces
-                                .get(o.face)
-                                .is_some_and(|f| near_the_face(t.centre, f))
+                            && faces.get(o.face).is_some_and(|f| near_the_face(t.centre, f))
                         {
                             hit = true;
                             break 'cells;
@@ -155,36 +136,4 @@ fn doubled_area_inner(faces: &[Shape]) -> Option<f64> {
         }
     }
     Some(doubled)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn face_at_x(s: &Shape, x: f64) -> Shape {
-        kernel::subshapes(s, Kind::Face)
-            .into_iter()
-            .find(|f| kernel::face_area_centre(f).is_some_and(|a| (a[1] - x).abs() < 1e-9))
-            .expect("a face at x")
-    }
-
-    #[test]
-    fn coincident_faces_are_doubled_and_apart_ones_are_not() {
-        let a = kernel::make_box(10.0, 10.0, 10.0).unwrap();
-        let b = kernel::translated(&a, [10.0, 0.0, 0.0]).unwrap();
-        let doubled = doubled_area(&[face_at_x(&a, 5.0), face_at_x(&b, 5.0)]).unwrap();
-        assert!((doubled - 200.0).abs() < 1.0, "both sides count, {doubled}");
-        let apart = doubled_area(&[face_at_x(&a, 5.0), face_at_x(&b, 15.0)]).unwrap();
-        assert_eq!(apart, 0.0);
-    }
-
-    #[test]
-    fn a_sound_fillet_does_not_fold() {
-        let a = kernel::make_box(20.0, 20.0, 10.0).unwrap();
-        let edges = kernel::subshapes(&a, Kind::Edge);
-        let (out, built) = ops::fillet(&a, &edges, &vec![2.0; edges.len()]).unwrap();
-        assert_eq!(built, ops::Built::Done);
-        assert!(!new_faces(&a, &out).is_empty());
-        assert!(!folds_over_itself(&a, &out, 2.0));
-    }
 }

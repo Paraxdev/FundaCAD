@@ -1,6 +1,5 @@
-//! A feature of a type this build does not know, from a file a newer version
-//! wrote, is left out of the build without failing it: everything else builds,
-//! and the reply lists what was left out.
+//! A feature of a type this build does not know, from a newer version's file, is left out without failing the build:
+//! everything else builds and the reply lists what was left out.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};

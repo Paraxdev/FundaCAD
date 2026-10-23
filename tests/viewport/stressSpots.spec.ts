@@ -4,7 +4,12 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
-import { StressGlyphs, type StressGlyphHandlers, type StressGlyphHost, type StressGlyphModel } from "../../src/viewport/stressGlyphs";
+import {
+  StressGlyphs,
+  type StressGlyphHandlers,
+  type StressGlyphHost,
+  type StressGlyphModel,
+} from "../../src/viewport/stressGlyphs";
 
 // A 100 x 100 px canvas showing world x and y from -50 to 50, looking down -Z:
 // one pixel is one millimetre and screen (50, 50) is the origin. The body is
@@ -32,9 +37,14 @@ function rig() {
     requestRender: () => {},
     pickStressOverlay: () => null,
     stressOverlayPoint: () => null,
-    pickFaceForPressPull: (x: number, y: number) => x - 50 <= -40 ? null : {
-      anchor: new THREE.Vector3(x - 50, 50 - y, 0), normal: new THREE.Vector3(0, 0, 1), bodyId: "body1",
-    },
+    pickFaceForPressPull: (x: number, y: number) =>
+      x - 50 <= -40
+        ? null
+        : {
+            anchor: new THREE.Vector3(x - 50, 50 - y, 0),
+            normal: new THREE.Vector3(0, 0, 1),
+            bodyId: "body1",
+          },
     overlayDrawn: () => true,
     watchOverlays: () => () => {},
   } as unknown as StressGlyphHost;
@@ -55,7 +65,10 @@ function rig() {
 }
 
 const spotted = (radius = 10): StressGlyphModel => ({
-  forces: [], pressures: [], gravity: null, pins: [],
+  forces: [],
+  pressures: [],
+  gravity: null,
+  pins: [],
   spots: [{ target: { load: 3 }, index: 0, at: [0, 0, 0], radius, color: 0xff9a2e }],
 });
 

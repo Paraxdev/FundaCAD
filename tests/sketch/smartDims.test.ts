@@ -18,7 +18,14 @@ import type { PlaceOffset, SketchConstraint } from "../../src/types";
 
 type Line = Extract<ResolvedEntity, { type: "line" }>;
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
-const line = (id: string, x1: number, y1: number, x2: number, y2: number): Line => ({ type: "line", id, x1, y1, x2, y2 });
+const line = (id: string, x1: number, y1: number, x2: number, y2: number): Line => ({
+  type: "line",
+  id,
+  x1,
+  y1,
+  x2,
+  y2,
+});
 const pick = (ents: ResolvedEntity[], x: number, y: number): DimTarget => pickDimTarget(ents, v(x, y), 0.5)!;
 const planOf = (r: ReturnType<typeof resolveDim>): DimPlan => {
   if (isDimError(r)) throw new Error(r.message);
@@ -44,7 +51,9 @@ describe("point to point distance picks its mode by the cursor", () => {
   });
 
   it("makes vDistance, hDistance, or the old p2pDistance byte for byte", () => {
-    const right = at(p, 60, 20), above = at(p, 15, 80), near = at(p, 16, 21);
+    const right = at(p, 60, 20),
+      above = at(p, 15, 80),
+      near = at(p, 16, 21);
     expect(p.make(40, right)).toEqual({ type: "vDistance", e1: "a", p1: 0, e2: "a", p2: 1, value: 40, place: right });
     expect(p.make(30, above)).toEqual({ type: "hDistance", e1: "a", p1: 0, e2: "a", p2: 1, value: 30, place: above });
     expect(p.make(50, near)).toEqual({ type: "p2pDistance", e1: "a", p1: 0, e2: "a", p2: 1, value: 50, place: near });
@@ -52,7 +61,14 @@ describe("point to point distance picks its mode by the cursor", () => {
   });
 
   it("the hover cursor picks the mode when no label was placed", () => {
-    expect(p.make(30, undefined, at(p, 15, 80))).toEqual({ type: "hDistance", e1: "a", p1: 0, e2: "a", p2: 1, value: 30 });
+    expect(p.make(30, undefined, at(p, 15, 80))).toEqual({
+      type: "hDistance",
+      e1: "a",
+      p1: 0,
+      e2: "a",
+      p2: 1,
+      value: 30,
+    });
   });
 
   it("orders the operands so the stored value is positive", () => {
@@ -75,7 +91,15 @@ describe("a single line pick has the same three modes", () => {
   it("aligned stays a plain length with no place, the others carry it", () => {
     expect(p.labelAnchor()).not.toBeNull();
     expect(p.make(50, at(p, 16, 21))).toEqual({ type: "distance", line: "a", value: 50 });
-    expect(p.make(40, at(p, 60, 20))).toEqual({ type: "vDistance", e1: "a", p1: 0, e2: "a", p2: 1, value: 40, place: at(p, 60, 20) });
+    expect(p.make(40, at(p, 60, 20))).toEqual({
+      type: "vDistance",
+      e1: "a",
+      p1: 0,
+      e2: "a",
+      p2: 1,
+      value: 40,
+      place: at(p, 60, 20),
+    });
     expect(p.measure(at(p, 15, 80))).toBeCloseTo(30);
   });
 });
@@ -103,7 +127,8 @@ describe("horizontal and vertical distances solve", () => {
   it("between two entities, with the right point staying right", async () => {
     const ents = [line("a", 0, 0, 0, 10), line("b", 30, 5, 30, 25)];
     const r = await compileAndSolve(ents, [
-      { type: "fix", e: "a", p: 0 }, { type: "fix", e: "a", p: 1 },
+      { type: "fix", e: "a", p: 0 },
+      { type: "fix", e: "a", p: 1 },
       { type: "vertical", line: "b" },
       { type: "hDistance", e1: "a", p1: 0, e2: "b", p2: 0, value: 12 },
     ]);
@@ -113,21 +138,34 @@ describe("horizontal and vertical distances solve", () => {
 
   it("a pinned pair reports a wrong value as a conflict and a right one as redundant", async () => {
     const ents = [line("a", 0, 0, 30, 40)];
-    const pins: SketchConstraint[] = [{ type: "fix", e: "a", p: 0 }, { type: "fix", e: "a", p: 1 }];
-    const bad = await compileAndSolve(ents, [...pins, { type: "hDistance", e1: "a", p1: 0, e2: "a", p2: 1, value: 20 }]);
+    const pins: SketchConstraint[] = [
+      { type: "fix", e: "a", p: 0 },
+      { type: "fix", e: "a", p: 1 },
+    ];
+    const bad = await compileAndSolve(ents, [
+      ...pins,
+      { type: "hDistance", e1: "a", p1: 0, e2: "a", p2: 1, value: 20 },
+    ]);
     expect(bad.conflicts.length).toBeGreaterThan(0);
-    const good = await compileAndSolve(ents, [...pins, { type: "hDistance", e1: "a", p1: 0, e2: "a", p2: 1, value: 30 }]);
+    const good = await compileAndSolve(ents, [
+      ...pins,
+      { type: "hDistance", e1: "a", p1: 0, e2: "a", p2: 1, value: 30 },
+    ]);
     expect(good.conflicts).toEqual([]);
   });
 });
 
 describe("the angle takes the wedge the cursor is in", () => {
-  const polar = (r: number, deg: number) => [r * Math.cos((deg * Math.PI) / 180), r * Math.sin((deg * Math.PI) / 180)] as const;
+  const polar = (r: number, deg: number) =>
+    [r * Math.cos((deg * Math.PI) / 180), r * Math.sin((deg * Math.PI) / 180)] as const;
   // l2 runs inward to the crossing at 60 degrees, so its stored direction points at 240
   const drawn = [line("l1", 0, 0, 10, 0), line("l2", 5, 5 * Math.sqrt(3) * 1, 0, 0)];
   const outward = [line("l1", 0, 0, 10, 0), line("l2", 0, 0, 5, 5 * Math.sqrt(3))];
 
-  for (const [name, ents] of [["inward", drawn], ["outward", outward]] as const) {
+  for (const [name, ents] of [
+    ["inward", drawn],
+    ["outward", outward],
+  ] as const) {
     it(`reads 60, 120, 60, 120 round the crossing and 300 reflex (${name})`, () => {
       const p = planOf(resolveDim([pick(ents, 7, 0), pick(ents, 2.5, 2.5 * Math.sqrt(3))]));
       const read = (deg: number) => p.measure(at(p, ...polar(5, deg)));
@@ -146,12 +184,14 @@ describe("the angle takes the wedge the cursor is in", () => {
         const r = await compileAndSolve(ents, [{ type: "fix", e: "l1", p: 0 }, { type: "fix", e: "l1", p: 1 }, c]);
         expect(r.ok).toBe(true);
         const k = c as Extract<SketchConstraint, { type: "angle" }>;
-        const s1 = lineOf(r.entities, k.l1), s2 = lineOf(r.entities, k.l2);
+        const s1 = lineOf(r.entities, k.l1),
+          s2 = lineOf(r.entities, k.l2);
         expect(measuredAngleDeg(s1, s2, k.rays)).toBeCloseTo(45, 4);
         // the wedge the cursor sat in still holds the cursor's direction
         const l2 = lineOf(r.entities, "l2");
-        const dirs = [Math.atan2(l2.y2 - l2.y1, l2.x2 - l2.x1), Math.atan2(l2.y1 - l2.y2, l2.x1 - l2.x2)]
-          .map((a) => ((a * 180) / Math.PI + 360) % 360);
+        const dirs = [Math.atan2(l2.y2 - l2.y1, l2.x2 - l2.x1), Math.atan2(l2.y1 - l2.y2, l2.x1 - l2.x2)].map(
+          (a) => ((a * 180) / Math.PI + 360) % 360,
+        );
         expect(dirs.some((d) => Math.abs(d - (deg === 30 ? 45 : 135)) < 1e-3)).toBe(true);
       }
     });
@@ -159,7 +199,8 @@ describe("the angle takes the wedge the cursor is in", () => {
 
   it("an old signed angle with no rays solves exactly as before", async () => {
     const r = await compileAndSolve(drawn, [
-      { type: "fix", e: "l1", p: 0 }, { type: "fix", e: "l1", p: 1 },
+      { type: "fix", e: "l1", p: 0 },
+      { type: "fix", e: "l1", p: 1 },
       { type: "angle", l1: "l1", l2: "l2", value: -120 },
     ]);
     const l2 = lineOf(r.entities, "l2");
@@ -183,7 +224,15 @@ describe("the angle takes the wedge the cursor is in", () => {
 describe("axis dims render along their axis", () => {
   it("a horizontal distance has a horizontal dimension line and vertical extension lines", () => {
     const ents = [line("a", 0, 0, 30, 40)];
-    const c: SketchConstraint = { type: "hDistance", e1: "a", p1: 0, e2: "a", p2: 1, value: 30, place: { ox: 0, oy: 40 } };
+    const c: SketchConstraint = {
+      type: "hDistance",
+      e1: "a",
+      p1: 0,
+      e2: "a",
+      p2: 1,
+      value: 30,
+      place: { ox: 0, oy: 40 },
+    };
     const [d] = constraintDims(ents, [c]);
     const [e1, e2, dim] = d!.lines;
     expect(dim![0].y).toBeCloseTo(60);

@@ -24,7 +24,9 @@ describe("recent files", () => {
   });
 
   it("survives storage that refuses writes", () => {
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("quota"); });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
     expect(() => noteRecent("C:/a.funda")).not.toThrow();
     expect(() => forgetRecent("C:/a.funda")).not.toThrow();
   });

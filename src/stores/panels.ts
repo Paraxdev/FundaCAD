@@ -1,8 +1,15 @@
 import { defineStore } from "pinia";
 import { markRaw, ref } from "vue";
 import {
-  emptyFaceSet, newLoad, newSetup, newSupport, nextId,
-  type StressFaceSet, type StressResultView, type StressSetup, type StressTarget,
+  emptyFaceSet,
+  newLoad,
+  newSetup,
+  newSupport,
+  nextId,
+  type StressFaceSet,
+  type StressResultView,
+  type StressSetup,
+  type StressTarget,
 } from "../ui/stress";
 import type { StressSpot, StressSupportType, Vec3 } from "../types";
 
@@ -15,18 +22,14 @@ export interface PanelRow {
 export interface PropertiesData {
   title: string;
   rows: PanelRow[];
-  /** Unrounded mm/mm2/mm3 values, for the filament estimate to compute from
-   *  live as the user changes material/infill, without a unit-display round
-   *  trip through the formatted rows above. Null when a measured body is not a
-   *  sound solid, it has no volume to estimate from. */
+  /** Unrounded, so the filament estimate recomputes live without a display round trip. Null when a measured body is not
+   *  a sound solid, having no volume to estimate from. */
   raw: { volumeMm3: number; areaMm2: number } | null;
   /** Each measured body that is not a sound solid, its name and the engine's reason. */
   faults: string[];
 }
 
-/** One overlapping pair, keeping the body ids so clicking the row can select
- *  them. Volume is pre-formatted in display units by the facade, unit
- *  conversion stays next to the geometry that produced the number. */
+/** Keeps the body ids so a row click can select them. Volume is pre-formatted in display units by the facade. */
 export interface ClashRow extends PanelRow {
   a: string;
   b: string;
@@ -58,8 +61,7 @@ export interface StressDeform {
   animate: boolean;
 }
 
-/** A point pinned on the coloured body: where it is on the result's surface
- *  (a triangle and barycentric weights, so it rides the deformed shape) and the
+/** A point pinned on the coloured body, as a triangle and barycentric weights so it rides the deformed shape, and the
  *  readout taken there. */
 export interface StressProbePin {
   id: number;
@@ -78,9 +80,8 @@ export interface StressData {
   result: StressResultView | null;
   /** Why the last Run did not produce a result, cleared by the next. */
   error: string | null;
-  /** The result's colours: on the body in the view, taken off so the body's
-   *  faces can be picked again (the rows stay), or none to show, before a Run
-   *  or once the model has changed under them. */
+  /** "hidden" takes the colours off so faces can be picked again while the rows stay; "none" before a Run or after the
+   *  model changed under them. */
   colours: "shown" | "hidden" | "none";
   /** Null until a result with displacements arrives. */
   deform: StressDeform | null;
@@ -89,11 +90,12 @@ export interface StressData {
   pins: StressProbePin[];
   /** The row whose next click on the body places a spot, null when none is. */
   placing: StressTarget | null;
+  /** The setup as JSON when the last Run started, to tell when the result no longer matches it. */
+  ranSetup: string | null;
 }
 
-/** The floating "measure-panel" popups. Each is independent, Properties and
- *  the Overhang settings can legitimately be on screen together, which is why
- *  this is separate fields rather than one `activePanel` discriminant. */
+/** The floating measure-panel popups. Independent fields, since Properties and Overhang settings can be open
+ *  together. */
 export const usePanelsStore = defineStore("panels", () => {
   const properties = ref<PropertiesData | null>(null);
   const interference = ref<InterferenceData | null>(null);
@@ -122,8 +124,17 @@ export const usePanelsStore = defineStore("panels", () => {
 
   function fresh(setup: StressSetup): StressData {
     return {
-      setup, running: false, requestId: null, result: null, error: null, colours: "none",
-      deform: null, probe: false, pins: [], placing: null,
+      setup,
+      running: false,
+      requestId: null,
+      result: null,
+      error: null,
+      colours: "none",
+      deform: null,
+      probe: false,
+      pins: [],
+      placing: null,
+      ranSetup: null,
     };
   }
 
@@ -132,6 +143,7 @@ export const usePanelsStore = defineStore("panels", () => {
   function replaceStressSetup(setup: StressSetup) {
     if (stress.value) {
       stress.value.setup = setup;
+      stress.value.ranSetup = null;
       clearStressResult();
     } else {
       stress.value = fresh(setup);
@@ -153,7 +165,9 @@ export const usePanelsStore = defineStore("panels", () => {
   function stressRow(target: StressTarget) {
     const s = stress.value?.setup;
     if (!s) return undefined;
-    return "support" in target ? s.supports.find((x) => x.id === target.support) : s.loads.find((l) => l.id === target.load);
+    return "support" in target
+      ? s.supports.find((x) => x.id === target.support)
+      : s.loads.find((l) => l.id === target.load);
   }
 
   function addStressSpot(target: StressTarget, spot: StressSpot) {
@@ -209,6 +223,7 @@ export const usePanelsStore = defineStore("panels", () => {
     stress.value.running = true;
     stress.value.requestId = null;
     stress.value.error = null;
+    stress.value.ranSetup = JSON.stringify(stress.value.setup);
   }
 
   function stressSent(id: string) {
@@ -224,8 +239,7 @@ export const usePanelsStore = defineStore("panels", () => {
     stress.value.error = outcome.error ?? null;
   }
 
-  /** Drop the result and everything drawn from it: the deformed shape and
-   *  the probes. */
+  /** Drop the result and everything drawn from it: the deformed shape and the probes. */
   function clearStressResult() {
     if (!stress.value) return;
     stress.value.result = null;
@@ -258,11 +272,34 @@ export const usePanelsStore = defineStore("panels", () => {
   }
 
   return {
-    properties, interference, overhang, params, stress,
-    showProperties, showInterference,
-    showStress, replaceStressSetup, setStressBody, setStressSupportFaces, addStressSupport, removeStressSupport,
-    setStressLoadFaces, addStressLoad, removeStressLoad, stressRow, addStressSpot, removeStressSpot, setStressPlacing,
-    stressStarted, stressSent, stressFinished, clearStressResult, setStressColours,
-    setStressDeform, setStressProbe, addStressPin, removeStressPin,
+    properties,
+    interference,
+    overhang,
+    params,
+    stress,
+    showProperties,
+    showInterference,
+    showStress,
+    replaceStressSetup,
+    setStressBody,
+    setStressSupportFaces,
+    addStressSupport,
+    removeStressSupport,
+    setStressLoadFaces,
+    addStressLoad,
+    removeStressLoad,
+    stressRow,
+    addStressSpot,
+    removeStressSpot,
+    setStressPlacing,
+    stressStarted,
+    stressSent,
+    stressFinished,
+    clearStressResult,
+    setStressColours,
+    setStressDeform,
+    setStressProbe,
+    addStressPin,
+    removeStressPin,
   };
 });

@@ -16,11 +16,11 @@ use crate::denoise::{self, Denoiser, Quality};
 use crate::scene::{BodyDesc, Commit, Mesh, Scene};
 
 use accel::{make_tlas, GpuAccel};
+pub use adapter::{adapter_label, choose, Candidate, Refusal};
 use envmap::EnvMap;
-pub use adapter::{choose, Candidate, Refusal};
 pub use picture::{encode_png, picture_refusal, Picture};
-use pipelines::Pipelines;
 pub(crate) use pipelines::pipeline_at;
+use pipelines::Pipelines;
 use upload::Shading;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -148,6 +148,8 @@ pub struct Look {
     pub sun_color: [f32; 3],
     pub exposure: f32,
     pub bounces: u32,
+    /// The luminance an indirect contribution is scaled down to, against fireflies.
+    pub firefly: f32,
     pub lights: Option<Lights>,
     /// What camera rays that miss show, linear. Absent, they show the sky.
     pub background: Option<[f32; 3]>,
@@ -218,6 +220,7 @@ impl Default for Look {
             sun_color: [0.0; 3],
             exposure: 1.0,
             bounces: 6,
+            firefly: 10.0,
             lights: None,
             background: None,
             environment_behind: false,
@@ -294,7 +297,7 @@ pub struct Tracer {
     denoise_error: Option<String>,
     fault: Arc<Mutex<Fault>>,
     buffer_limit: u64,
-    wait_limit: Duration,
+    stalled: bool,
 }
 
 /// The first loss and the first uncaptured error. Not behind the frames
@@ -333,7 +336,6 @@ struct Job {
     key: FrameKey,
     rx: mpsc::Receiver<Result<Denoised, String>>,
 }
-
 
 impl Tracer {
     pub fn new(opts: TracerOptions) -> Result<Tracer, Refusal> {
@@ -426,7 +428,7 @@ impl Tracer {
             device,
             queue,
             path,
-            adapter: format!("{} ({:?})", info.name, info.backend),
+            adapter: adapter_label(&info.name, info.backend, info.device_type),
             scene: Scene::new(accel),
             pipes,
             uniform,
@@ -456,7 +458,7 @@ impl Tracer {
             denoise_error: None,
             fault,
             buffer_limit,
-            wait_limit: WAIT_LIMIT,
+            stalled: false,
         };
         t.resize(64, 64);
         Ok(t)
@@ -477,9 +479,10 @@ impl Tracer {
         self.instance_uploads
     }
 
+    /// Fakes a GPU that never finishes: every later wait times out without asking it.
     #[doc(hidden)]
-    pub fn set_wait_limit_for_test(&mut self, limit: Duration) {
-        self.wait_limit = limit;
+    pub fn stall_gpu_for_test(&mut self) {
+        self.stalled = true;
     }
 
     #[doc(hidden)]
@@ -524,9 +527,9 @@ impl Tracer {
 
     /// The first dispatch traces about this many paths, so one dispatch never
     /// holds the GPU long enough to stall the UI or trip the driver's timeout.
+    /// Only the band size changes, the accumulation and the held frame stay.
     pub fn set_frame_budget(&mut self, paths: u32) {
         self.rows = (paths / self.w).clamp(8, self.h.next_multiple_of(8)).next_multiple_of(8);
-        self.reset();
     }
 
     pub fn set_cap(&mut self, cap: u32) {
@@ -625,9 +628,8 @@ impl Tracer {
         }
         self.quality = q;
         self.job = None;
-        if self.held.as_ref().is_some_and(|h| h.denoised) {
-            self.held = None;
-        }
+        // Even a raw held frame goes: its denoise was just dropped, and the next frame at the cap starts a new one.
+        self.held = None;
     }
 
     /// The frame handed out is the denoised one for the current scene.
@@ -669,7 +671,12 @@ impl Tracer {
         let spawned = std::thread::Builder::new().name("denoise".into()).spawn(move || {
             let (c, by, note) = denoise::run(&input, quality);
             let rgb: Vec<[f32; 3]> = c.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect();
-            let d = Denoised { plain: denoise::tone_map(&rgb), hdr: rgb.iter().map(|p| [p[0] / e, p[1] / e, p[2] / e, 1.0]).collect(), by, note };
+            let d = Denoised {
+                plain: denoise::tone_map(&rgb),
+                hdr: rgb.iter().map(|p| [p[0] / e, p[1] / e, p[2] / e, 1.0]).collect(),
+                by,
+                note,
+            };
             let _ = tx.send(Ok(d));
         });
         match spawned {
@@ -724,54 +731,12 @@ impl Tracer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{Duration, Instant};
-
-    #[test]
-    fn the_tracer_never_asks_for_the_opengl_backend() {
-        assert!(!TracerOptions::default().backends.contains(wgpu::Backends::GL));
-    }
 
     #[test]
     fn a_poll_that_times_out_names_the_limit() {
         let e = super::frame::settle(Err(wgpu::PollError::Timeout), WAIT_LIMIT).unwrap_err();
         assert!(e.contains("did not finish a frame within 10 s"), "{e}");
         assert!(super::frame::settle(Ok(wgpu::PollStatus::QueueEmpty), WAIT_LIMIT).is_ok());
-    }
-
-    fn impatient(w: u32, h: u32) -> Option<Tracer> {
-        let Ok(mut t) = Tracer::new(TracerOptions { software: true, ..Default::default() }) else {
-            eprintln!("skipped: no adapter");
-            return None;
-        };
-        t.resize(w, h);
-        t.set_cap(64);
-        t.set_wait_limit_for_test(Duration::ZERO);
-        Some(t)
-    }
-
-    #[test]
-    fn a_readback_the_gpu_never_finishes_returns_a_timeout_fault() {
-        let Some(mut t) = impatient(512, 512) else { return };
-        let start = Instant::now();
-        let px = t.resolve();
-        assert!(start.elapsed() < Duration::from_secs(1), "the readback waited {:?}", start.elapsed());
-        assert!(px.iter().all(|&b| b == 0));
-        let f = t.fault().expect("a readback past the limit is a fault");
-        assert!(f.contains("did not finish a frame within 0 s"), "{f}");
-        t.render_samples(64);
-        assert_eq!(t.samples(), 0, "a faulted tracer traced on");
-    }
-
-    #[test]
-    fn a_trace_the_gpu_does_not_finish_in_time_stops_with_the_reason() {
-        let Some(mut t) = impatient(512, 512) else { return };
-        let start = Instant::now();
-        t.render_samples(64);
-        assert!(start.elapsed() < Duration::from_secs(1), "the trace waited {:?}", start.elapsed());
-        assert!(t.samples() < 64, "the trace ran to the cap past its limit");
-        let f = t.fault().expect("a band past the limit is a fault");
-        assert!(f.contains("did not finish a frame"), "{f}");
-        assert_eq!(t.frame(512, 512, Duration::from_millis(50)), vec![0; 512 * 512 * 4]);
     }
 
     #[test]
@@ -795,7 +760,13 @@ mod tests {
                 ..Default::default()
             },
         );
-        t.set_camera(Camera { eye: [0.0, 0.0, 12.0], target: [0.0; 3], up: [0.0, 1.0, 0.0], fov: 50.0, ..Default::default() });
+        t.set_camera(Camera {
+            eye: [0.0, 0.0, 12.0],
+            target: [0.0; 3],
+            up: [0.0, 1.0, 0.0],
+            fov: 50.0,
+            ..Default::default()
+        });
         t.set_look(Look { exposure: 1.7, sky_top: [0.1; 3], sky_bottom: [0.05; 3], ..Look::default() });
         t.set_denoise(Quality::Off);
         t.set_cap(1);

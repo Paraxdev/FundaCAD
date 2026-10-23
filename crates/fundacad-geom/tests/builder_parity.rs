@@ -13,18 +13,47 @@ fn close_rel(a: f64, b: f64) -> bool {
     (a - b).abs() <= VOLUME_REL * a.abs().max(b.abs()) + 1e-9
 }
 
+/// Python built these blends whose setbacks pass each other on a shared face, carving it away (r = 12 on
+/// the Z edges left a lens of bbox +-9.832). They are refused now, the box left whole.
+const PYTHON_OVERLAP: [&str; 3] = ["chamfer_section_huge_all", "fillet_section_draft", "fillet_section_huge"];
+
+/// 3 x 12 on the Z edges: Python put both 12 setbacks on the 20 wide faces, which crossed. With the 12 on
+/// one corner of each face and the 3 on the other every face stays, at 4000 - 4 x 180 = 3280.
+const PYTHON_CROSSED: (&str, f64) = ("chamfer_section_two_distance", 3280.0);
+
 fn check_case(name: &str, case: &Value) -> Vec<String> {
     let mut bad = Vec::new();
     let doc = &case["doc"];
     let expect = &case["expect"];
     let typed: CadDocument = serde_json::from_value(doc.clone()).expect("fixture document parses");
     let r = builder::rebuild(&typed, doc, &NoWatch).expect("not cancelled");
+    if PYTHON_OVERLAP.contains(&name) {
+        let refused = r.errors.len() == 1
+            && r.errors[0].code.as_deref() == Some("blendTooLarge")
+            && r.errors[0].message.contains("neighbouring edge");
+        let whole = r.bodies.len() == 1 && (kernel::volume(&r.bodies[0].shape) - 4000.0).abs() < 1e-6;
+        if !refused || !whole {
+            let said: Vec<&String> = r.errors.iter().map(|e| &e.message).collect();
+            bad.push(format!("{name}: not refused with the box left whole: {said:?}"));
+        }
+        return bad;
+    }
+    if name == PYTHON_CROSSED.0 {
+        let built = r.errors.is_empty() && r.bodies.len() == 1;
+        let volume = built.then(|| kernel::volume(&r.bodies[0].shape)).unwrap_or(f64::NAN);
+        let bbox = built.then(|| kernel::bbox(&r.bodies[0].shape)).flatten();
+        let box_size = [10.0, 10.0, 5.0, 10.0, 10.0, 5.0];
+        let whole = bbox.is_some_and(|b| b.iter().zip(box_size).all(|(v, w)| (v.abs() - w).abs() < BBOX_ABS));
+        if !close_rel(volume, PYTHON_CROSSED.1) || !whole {
+            let said: Vec<&String> = r.errors.iter().map(|e| &e.message).collect();
+            let want = PYTHON_CROSSED.1;
+            bad.push(format!("{name}: volume {volume} bbox {bbox:?} {said:?}, want {want} with every face kept"));
+        }
+        return bad;
+    }
     if std::env::var("PARITY_VERBOSE").is_ok() {
         let vols: Vec<f64> = r.bodies.iter().map(|b| kernel::volume(&b.shape)).collect();
-        eprintln!(
-            "{name}: {vols:?} {:?}",
-            r.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
-        );
+        eprintln!("{name}: {vols:?} {:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
     }
 
     let errors: Vec<Value> = r.errors.iter().map(|e| e.wire()).collect();
@@ -41,19 +70,12 @@ fn check_case(name: &str, case: &Value) -> Vec<String> {
 
     let want = expect["bodies"].as_array().cloned().unwrap_or_default();
     if want.len() != r.bodies.len() {
-        bad.push(format!(
-            "{name}: {} bodies, expected {}",
-            r.bodies.len(),
-            want.len()
-        ));
+        bad.push(format!("{name}: {} bodies, expected {}", r.bodies.len(), want.len()));
         return bad;
     }
     for (got, want) in r.bodies.iter().zip(&want) {
         if got.id != want["id"] || got.name != want["name"] {
-            bad.push(format!(
-                "{name}: body {}/{} != {}/{}",
-                got.id, got.name, want["id"], want["name"]
-            ));
+            bad.push(format!("{name}: body {}/{} != {}/{}", got.id, got.name, want["id"], want["name"]));
         }
         let vol = kernel::volume(&got.shape);
         let wv = want["volume"].as_f64().unwrap_or(f64::NAN);
@@ -77,10 +99,7 @@ fn check_case(name: &str, case: &Value) -> Vec<String> {
         };
         let want_owners = want["faceOwners"].as_array().cloned().unwrap_or_default();
         if sorted(&owners) != sorted(&want_owners) {
-            bad.push(format!(
-                "{name}: {} faceOwners {owners:?} != {}",
-                got.id, want["faceOwners"]
-            ));
+            bad.push(format!("{name}: {} faceOwners {owners:?} != {}", got.id, want["faceOwners"]));
         }
         let bb = kernel::bbox(&got.shape);
         match (bb, want["bbox"].as_array()) {
@@ -117,29 +136,19 @@ fn check_case(name: &str, case: &Value) -> Vec<String> {
     }
 
     let planes = serde_json::to_value(&r.datum_planes).unwrap_or(Value::Null);
-    let want_planes = expect["datumPlanes"]
-        .as_object()
-        .cloned()
-        .unwrap_or_default();
+    let want_planes = expect["datumPlanes"].as_object().cloned().unwrap_or_default();
     let got_planes = planes.as_object().cloned().unwrap_or_default();
     if want_planes.len() != got_planes.len() {
-        bad.push(format!(
-            "{name}: datumPlanes {planes} != {}",
-            expect["datumPlanes"]
-        ));
+        bad.push(format!("{name}: datumPlanes {planes} != {}", expect["datumPlanes"]));
     }
     for (id, want) in &want_planes {
         for key in ["origin", "xdir", "normal"] {
             let (g, w) = (&got_planes.get(id).map(|p| &p[key]), &want[key]);
-            let ok = g
-                .and_then(Value::as_array)
-                .zip(w.as_array())
-                .is_some_and(|(g, w)| {
-                    g.iter().zip(w).all(|(a, b)| {
-                        (a.as_f64().unwrap_or(f64::NAN) - b.as_f64().unwrap_or(f64::NAN)).abs()
-                            < 1e-9
-                    })
-                });
+            let ok = g.and_then(Value::as_array).zip(w.as_array()).is_some_and(|(g, w)| {
+                g.iter()
+                    .zip(w)
+                    .all(|(a, b)| (a.as_f64().unwrap_or(f64::NAN) - b.as_f64().unwrap_or(f64::NAN)).abs() < 1e-9)
+            });
             if !ok {
                 bad.push(format!("{name}: datum {id}.{key} {g:?} != {w}"));
             }
@@ -147,20 +156,11 @@ fn check_case(name: &str, case: &Value) -> Vec<String> {
     }
 
     let kinds = |v: &[Value]| -> Vec<(Value, Value)> {
-        v.iter()
-            .map(|d| (d["feature_id"].clone(), d["kind"].clone()))
-            .collect()
+        v.iter().map(|d| (d["feature_id"].clone(), d["kind"].clone())).collect()
     };
-    let want_diag = expect["diagnostics"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
+    let want_diag = expect["diagnostics"].as_array().cloned().unwrap_or_default();
     if kinds(&r.diagnostics) != kinds(&want_diag) {
-        bad.push(format!(
-            "{name}: diagnostics {:?} != {:?}",
-            kinds(&r.diagnostics),
-            kinds(&want_diag)
-        ));
+        bad.push(format!("{name}: diagnostics {:?} != {:?}", kinds(&r.diagnostics), kinds(&want_diag)));
     }
     bad
 }
@@ -168,8 +168,7 @@ fn check_case(name: &str, case: &Value) -> Vec<String> {
 #[test]
 fn builder_matches_the_python_engine() {
     let text = include_str!("builder/fixtures.json");
-    let fixtures: serde_json::Map<String, Value> =
-        serde_json::from_str(text).expect("fixtures parse");
+    let fixtures: serde_json::Map<String, Value> = serde_json::from_str(text).expect("fixtures parse");
     let only = std::env::var("PARITY_CASE").ok();
     let mut bad = Vec::new();
     for (name, case) in &fixtures {
@@ -178,10 +177,5 @@ fn builder_matches_the_python_engine() {
         }
         bad.extend(check_case(name, case));
     }
-    assert!(
-        bad.is_empty(),
-        "{} mismatches:\n{}",
-        bad.len(),
-        bad.join("\n")
-    );
+    assert!(bad.is_empty(), "{} mismatches:\n{}", bad.len(), bad.join("\n"));
 }

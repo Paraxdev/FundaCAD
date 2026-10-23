@@ -16,7 +16,16 @@ function body(id: string): BodyMesh {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
   const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial());
-  return { id, name: id, faceStart: 0, faceCount: 1, mesh, faceIds: [0], baseColors: new Float32Array(9), faceTriangles: new Map() } as unknown as BodyMesh;
+  return {
+    id,
+    name: id,
+    faceStart: 0,
+    faceCount: 1,
+    mesh,
+    faceIds: [0],
+    baseColors: new Float32Array(9),
+    faceTriangles: new Map(),
+  } as unknown as BodyMesh;
 }
 
 function layer(bodies: BodyMesh[]) {
@@ -81,9 +90,18 @@ describe("BodyFinishLayer peek", () => {
 
 // One case per field: a field missing from a key makes its edit a silent no op.
 const OPTICS: (Partial<Omit<BodyFinish, "thickness">> & { thickness?: number })[] = [
-  { ior: 2.42 }, { thickness: 20 }, { dispersion: 5 }, { attenuationColor: "#2a8f6a" },
-  { attenuationDistance: 15 }, { iridescence: 0.6 }, { specularColor: "#ffd0a0" },
-  { sheen: 0.4 }, { anisotropy: 0.6 }, { flakes: 0.2 }, { flakeSize: 0.3 }, { scatterDistance: 2 },
+  { ior: 2.42 },
+  { thickness: 20 },
+  { dispersion: 5 },
+  { attenuationColor: "#2a8f6a" },
+  { attenuationDistance: 15 },
+  { iridescence: 0.6 },
+  { specularColor: "#ffd0a0" },
+  { sheen: 0.4 },
+  { anisotropy: 0.6 },
+  { flakes: 0.2 },
+  { flakeSize: 0.3 },
+  { scatterDistance: 2 },
   { castsLight: false },
 ];
 
@@ -105,8 +123,16 @@ describe("glass and thin film reach the screen", () => {
   it("copies IOR, thickness, tint and dispersion onto a glass material", () => {
     const m = new THREE.MeshPhysicalMaterial();
     const f = finishOf({
-      id: "d", name: "D", color: "#ffffff", metalness: 0, opacity: 0.1,
-      ior: 2.42, thickness: 12, dispersion: 5, attenuationColor: "#2a8f6a", attenuationDistance: 20,
+      id: "d",
+      name: "D",
+      color: "#ffffff",
+      metalness: 0,
+      opacity: 0.1,
+      ior: 2.42,
+      thickness: 12,
+      dispersion: 5,
+      attenuationColor: "#2a8f6a",
+      attenuationDistance: 20,
     });
     expect(applyGlassLook(m, f, false)).toBe(true);
     expect([m.ior, m.thickness, m.dispersion, m.attenuationDistance]).toEqual([2.42, 12, 5, 20]);
@@ -124,7 +150,10 @@ describe("glass and thin film reach the screen", () => {
 
   it("drops to plain alpha on a ghost and on a weak machine, dispersion and film with it", () => {
     const f: BodyFinish = { ...glass, dispersion: 5, iridescence: 0.6 };
-    for (const [ghost, low] of [[true, false], [false, true]] as const) {
+    for (const [ghost, low] of [
+      [true, false],
+      [false, true],
+    ] as const) {
       setRenderLowPower(false);
       const m = new THREE.MeshPhysicalMaterial();
       expect(applyGlassLook(m, f, false)).toBe(true);
@@ -274,7 +303,11 @@ describe("BodyFinishLayer relief", () => {
     f.apply(base);
     const mats = () => b.mesh.material as THREE.Material[];
     const u = shared(mats()[0]!);
-    for (const o of [{ ...base, xray: true }, { ...base, stale: true }, { ...base, peek: new Set(["a"]) }]) {
+    for (const o of [
+      { ...base, xray: true },
+      { ...base, stale: true },
+      { ...base, peek: new Set(["a"]) },
+    ]) {
       f.apply(o);
       for (const m of mats()) expect(getPatch(m, "relief")).toBeUndefined();
       f.apply(base);
@@ -295,8 +328,12 @@ describe("BodyFinishLayer relief", () => {
       requestRender: () => {},
       savedMats: () => new Map(),
       prepareMaterials: (obj) => {
-        obj.traverse((o) => { if (o instanceof THREE.Mesh) linked.push(o.material as THREE.Material); });
-        return new Promise<void>((r) => { release = r; });
+        obj.traverse((o) => {
+          if (o instanceof THREE.Mesh) linked.push(o.material as THREE.Material);
+        });
+        return new Promise<void>((r) => {
+          release = r;
+        });
       },
     });
     f.setRelief({ all: ridges(0.2) });
@@ -319,5 +356,48 @@ describe("BodyFinishLayer relief", () => {
     f.apply(base);
     expect(getPatch(mat(a), "relief")).toBeDefined();
     expect(linked.length).toBe(1);
+  });
+
+  it("a stand in that finishes linking after the model was cleared changes nothing, the next document warms its own", async () => {
+    let model = { bodies: [body("a")], edges: [] } as unknown as ModelView;
+    const releases: (() => void)[] = [];
+    const linked: THREE.Material[] = [];
+    let renders = 0;
+    const f = new BodyFinishLayer({
+      model: () => model,
+      scene: () => ({ renderer: { shadowMap: { enabled: false } } }) as never,
+      faceIdToBodyId: () => null,
+      addToScene: () => {},
+      requestRender: () => renders++,
+      savedMats: () => new Map(),
+      prepareMaterials: (obj) => {
+        obj.traverse((o) => {
+          if (o instanceof THREE.Mesh) linked.push(o.material as THREE.Material);
+        });
+        return new Promise<void>((r) => releases.push(r));
+      },
+    });
+    const old = model.bodies[0]!;
+    f.setRelief({ all: ridges(0.2) });
+    f.apply(base);
+    let disposedClone = false;
+    linked[0]!.addEventListener("dispose", () => (disposedClone = true));
+    f.clear();
+    renders = 0;
+    releases[0]!();
+    await Promise.resolve();
+    expect({ relief: getPatch(mat(old), "relief"), renders, disposedClone }).toEqual({
+      relief: undefined,
+      renders: 0,
+      disposedClone: true,
+    });
+
+    model = { bodies: [body("b")], edges: [] } as unknown as ModelView;
+    const next = model.bodies[0]!;
+    f.apply(base);
+    expect(linked.length).toBe(2);
+    releases[1]!();
+    await Promise.resolve();
+    expect(getPatch(mat(next), "relief")).toBeDefined();
   });
 });

@@ -1,6 +1,5 @@
-// The custom bed size dialog's own window, mirroring FundaCAD.Printing's
-// filament-mapping request: a plain ref outside any store, so a mounted
-// dialog IS the question being open, and closing it is answering.
+// A plain ref outside any store, like FundaCAD.Printing's filament mapping request, so a mounted dialog IS the
+// question being open and closing it is answering.
 
 import { markRaw, shallowRef } from "vue";
 import type { Vec3 } from "./bedFit";

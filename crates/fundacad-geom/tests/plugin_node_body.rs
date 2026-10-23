@@ -1,6 +1,5 @@
-//! The FundaCAD.Organic component through the plugin host: node bodies built
-//! from the generic loft, ellipse, affine map and combine calls.
-//! Needs `python scripts/build-plugin-wasm.py FundaCAD.Organic` first.
+//! The FundaCAD.Organic component through the plugin host: node bodies from the generic loft, ellipse, affine map
+//! and combine calls. Needs `python scripts/build-plugin-wasm.py FundaCAD.Organic` first.
 #![cfg(feature = "plugins")]
 
 use std::f64::consts::PI;
@@ -165,9 +164,8 @@ fn a_long_span_meshes_whole() {
     if !built() {
         return;
     }
-    // Two spans ten radii long. Lofted at the kernel's degree 8 through a
-    // section every half radius, the mesher left a sixth of it uncovered at
-    // 0.05 mm, a limb with a gap through its middle.
+    // Two spans ten radii long: lofted at the kernel's degree 8 through a section every half radius, the mesher
+    // left a sixth of it uncovered at 0.05 mm.
     let spine = [[0.0, 0.0, 0.0], [32.23, -36.79, 12.0], [62.35, -47.77, 12.0]];
     let nodes = spine.iter().enumerate().map(|(i, c)| node(&format!("n{i}"), *c, [5.0; 3])).collect();
     let r = build(vec![body(nodes, json!([["n0", "n1", "n2"]]))]);
@@ -182,8 +180,7 @@ fn a_box_cutting_a_limb_in_two_keeps_both_pieces() {
     if !built() {
         return;
     }
-    // Placed in the app by clicking. The smoothed loft this once used came
-    // out of the cut with only the small piece left.
+    // Placed in the app by clicking. A smoothed loft here came out of the cut with only the small piece left.
     let limb = body(
         vec![
             node("n1", [-0.000003, 0.0, 0.0], [16.0, 5.0, 5.0]),
@@ -229,10 +226,7 @@ fn a_fork_fuses_and_blends_or_says_why_not() {
     let plain = one_solid(&build(vec![y_shape(None)]));
     let r = build(vec![y_shape(Some(2.0))]);
     let blended = one_solid(&r);
-    let warned = r
-        .diagnostics
-        .iter()
-        .any(|d| d.get("kind").and_then(Value::as_str) == Some("edgeOpFailed"));
+    let warned = r.diagnostics.iter().any(|d| d.get("kind").and_then(Value::as_str) == Some("edgeOpFailed"));
     if !warned {
         // A concave junction rounded over adds material.
         assert!(blended > plain, "{blended} vs {plain}");

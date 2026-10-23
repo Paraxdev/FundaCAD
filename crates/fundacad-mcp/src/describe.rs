@@ -1,27 +1,13 @@
-//! Turning an `inspect` report into something worth reading. A port of
-//! the Python MCP server's `describe.py`.
-//!
-//! The reply is a few hundred kilobytes of exact numbers. Handed over whole it
-//! costs an agent most of its context to learn that a box is a box, so this is
-//! the summary layer, with the full detail available on request for the one
-//! body that turned out to matter.
-//!
-//! Every line here is derived, none of it is measured, which is the point of
-//! keeping it apart from the engine's `inspect`, which does the measuring and
-//! knows nothing about how anyone wants to read it.
+//! An `inspect` report as a summary an agent can afford, since the whole reply is a few hundred
+//! kilobytes of exact numbers. Every line here is derived, the engine does the measuring.
 
 use serde_json::Value;
 
-/// Python's `f"{round(x, places):g}"`: the rounded value in the shorter of
-/// fixed and exponential, with no trailing zeros.
+/// Python's `f"{round(x, places):g}"`: the shorter of fixed and exponential, no trailing zeros.
 pub fn fmt(x: Option<&Value>, places: i32) -> String {
     match x {
         None | Some(Value::Null) => "?".into(),
-        Some(Value::Array(items)) => items
-            .iter()
-            .map(|v| fmt(Some(v), places))
-            .collect::<Vec<_>>()
-            .join(", "),
+        Some(Value::Array(items)) => items.iter().map(|v| fmt(Some(v), places)).collect::<Vec<_>>().join(", "),
         Some(v) => match v.as_f64() {
             None => "?".into(),
             Some(f) => g_format(round_half_even(f, places)),
@@ -56,18 +42,14 @@ fn s(v: &Value, key: &str) -> String {
 }
 
 fn list_of<'a>(v: &'a Value, key: &str) -> &'a [Value] {
-    v.get(key)
-        .and_then(Value::as_array)
-        .map_or(&[][..], Vec::as_slice)
+    v.get(key).and_then(Value::as_array).map_or(&[][..], Vec::as_slice)
 }
 
 fn index(v: &Value) -> i64 {
     v.get("i").and_then(Value::as_i64).unwrap_or(0)
 }
 
-/// {surface type: how many}, biggest group first. The shape of a body in one
-/// line: "6 plane" is a box, "1 cylinder, 2 plane" is a rod, and anything with
-/// a bspline in it came from a loft or an import.
+/// {surface type: count}, biggest first: "6 plane" is a box, and a bspline means a loft or an import.
 pub fn surface_census(body: &Value) -> Vec<(String, usize)> {
     if let Some(Value::Array(rows)) = body.get("surfaces") {
         return rows
@@ -98,50 +80,29 @@ pub fn body_line(body: &Value) -> String {
     let mut bits = vec![format!("{id} \"{}\"", s(body, "name"))];
     let bbox = body.get("bbox").cloned().unwrap_or(Value::Null);
     if let Some(size) = bbox.get("size").and_then(Value::as_array) {
-        bits.push(format!(
-            "{} x {} x {} mm",
-            fmt(size.first(), 3),
-            fmt(size.get(1), 3),
-            fmt(size.get(2), 3)
-        ));
+        bits.push(format!("{} x {} x {} mm", fmt(size.first(), 3), fmt(size.get(1), 3), fmt(size.get(2), 3)));
     }
     if body.get("volume").is_some_and(|v| !v.is_null()) {
         bits.push(format!("vol {} mm3", fmt(body.get("volume"), 1)));
     }
-    bits.push(format!(
-        "{} faces, {} edges",
-        s(body, "faceCount"),
-        s(body, "edgeCount")
-    ));
+    bits.push(format!("{} faces, {} edges", s(body, "faceCount"), s(body, "edgeCount")));
     let solids = body.get("solidCount").and_then(Value::as_i64).unwrap_or(1);
     if solids > 1 {
         bits.push(format!("{solids} disjoint solids"));
     }
     let census = surface_census(body);
     if !census.is_empty() {
-        bits.push(
-            census
-                .iter()
-                .map(|(k, n)| format!("{n} {k}"))
-                .collect::<Vec<_>>()
-                .join(", "),
-        );
+        bits.push(census.iter().map(|(k, n)| format!("{n} {k}")).collect::<Vec<_>>().join(", "));
     }
     bits.join(" | ")
 }
 
 fn few(items: &[i64], prefix: char) -> String {
     let shown: Vec<String> = items.iter().take(6).map(|i| format!("{prefix}{i}")).collect();
-    format!(
-        "{}{}",
-        shown.join(", "),
-        if items.len() > 6 { "..." } else { "" }
-    )
+    format!("{}{}", shown.join(", "), if items.len() > 6 { "..." } else { "" })
 }
 
-/// The things about a body that will bite a LATER feature. Not errors, every
-/// one of these is a perfectly valid solid: each is a refusal waiting to
-/// happen.
+/// What will bite a LATER feature: not errors, each is a valid solid and a refusal waiting to happen.
 pub fn warnings_for(body: &Value) -> Vec<String> {
     let mut out = Vec::new();
     // A summary carries each flag as a list of indices, a detailed report
@@ -150,11 +111,7 @@ pub fn warnings_for(body: &Value) -> Vec<String> {
         if let Some(Value::Array(ix)) = body.get(summary) {
             return ix.iter().filter_map(Value::as_i64).collect();
         }
-        list_of(body, list)
-            .iter()
-            .filter(|e| e.get(key).and_then(Value::as_bool).unwrap_or(false))
-            .map(index)
-            .collect()
+        list_of(body, list).iter().filter(|e| e.get(key).and_then(Value::as_bool).unwrap_or(false)).map(index).collect()
     };
     let seams = flagged("seam", "edges", "seams");
     if !seams.is_empty() {
@@ -176,10 +133,7 @@ pub fn warnings_for(body: &Value) -> Vec<String> {
     }
     let open = flagged("openBoundary", "edges", "openEdges");
     if !open.is_empty() {
-        out.push(format!(
-            "{} edge(s) bound only ONE face, this body is a surface, not a closed solid",
-            open.len()
-        ));
+        out.push(format!("{} edge(s) bound only ONE face, this body is a surface, not a closed solid", open.len()));
     }
     // An open body has its line above.
     if let Some(why) = body.get("fault").and_then(Value::as_str).filter(|_| open.is_empty()) {
@@ -207,10 +161,7 @@ pub fn warnings_for(body: &Value) -> Vec<String> {
 }
 
 pub fn face_line(f: &Value) -> String {
-    let mut bits = vec![
-        format!("F{} {}", index(f), s(f, "surface")),
-        format!("area {}", fmt(f.get("area"), 2)),
-    ];
+    let mut bits = vec![format!("F{} {}", index(f), s(f, "surface")), format!("area {}", fmt(f.get("area"), 2))];
     if f.get("radius").is_some_and(|v| !v.is_null()) {
         bits.push(format!("r {}", fmt(f.get("radius"), 3)));
     }
@@ -225,19 +176,13 @@ pub fn face_line(f: &Value) -> String {
 }
 
 pub fn edge_line(e: &Value) -> String {
-    let mut bits = vec![
-        format!("E{} {}", index(e), s(e, "curve")),
-        format!("len {}", fmt(e.get("length"), 2)),
-    ];
+    let mut bits = vec![format!("E{} {}", index(e), s(e, "curve")), format!("len {}", fmt(e.get("length"), 2))];
     if e.get("radius").is_some_and(|v| !v.is_null()) {
         bits.push(format!("r {}", fmt(e.get("radius"), 3)));
     }
     bits.push(format!("mid ({})", fmt(e.get("mid"), 3)));
     let faces = list_of(e, "faces");
-    let mut between = format!(
-        "between F{}",
-        faces.first().map_or("?".into(), |v| fmt(Some(v), 3))
-    );
+    let mut between = format!("between F{}", faces.first().map_or("?".into(), |v| fmt(Some(v), 3)));
     if faces.len() > 1 {
         between.push_str(&format!(" and F{}", fmt(faces.get(1), 3)));
     }
@@ -251,8 +196,7 @@ pub fn edge_line(e: &Value) -> String {
     format!("  {}", bits.join(" | "))
 }
 
-/// The whole report as text. `detail` adds the per-face and per-edge lines,
-/// which is what a caller asks for once it knows which body it cares about.
+/// `detail` adds the per-face and per-edge lines, for once a caller knows which body it cares about.
 pub fn describe(report: &Value, detail: bool) -> String {
     let mut lines: Vec<String> = Vec::new();
     let bodies = list_of(report, "bodies");

@@ -121,9 +121,17 @@ describe("radialDrag", () => {
 
 describe("roundFromResize", () => {
   const tangent = { faces: 0, lostWhen: null, run: [], closed: false, followable: false };
-  const read = (kind: OfferedResize["kind"], extra: Partial<OfferedResize> = {}): OfferedResize =>
-    ({ kind, radius: 4, full: false, concave: true, contact: null, tangent, ...extra });
-  const near = (v: THREE.Vector3 | number[]) => (Array.isArray(v) ? v : v.toArray()).map((c) => Math.round(c * 1e9) / 1e9 + 0);
+  const read = (kind: OfferedResize["kind"], extra: Partial<OfferedResize> = {}): OfferedResize => ({
+    kind,
+    radius: 4,
+    full: false,
+    concave: true,
+    contact: null,
+    tangent,
+    ...extra,
+  });
+  const near = (v: THREE.Vector3 | number[]) =>
+    (Array.isArray(v) ? v : v.toArray()).map((c) => Math.round(c * 1e9) / 1e9 + 0);
 
   it("reads a sphere about its centre, the arrow pointing away from it", () => {
     const r = roundFromResize(read("sphere", { centre: [0, 0, 10] }), null, [0, 3, 6]);
@@ -139,7 +147,9 @@ describe("roundFromResize", () => {
   });
 
   it("a ball reads with the material inside it", () => {
-    expect(roundFromResize(read("sphere", { centre: [0, 0, 0], concave: false }), null, [4, 0, 0])!.solidInside).toBe(true);
+    expect(roundFromResize(read("sphere", { centre: [0, 0, 0], concave: false }), null, [4, 0, 0])!.solidInside).toBe(
+      true,
+    );
   });
 
   it("reads a cylinder about the engine's axis", () => {
@@ -180,10 +190,16 @@ describe("facetNormalAt", () => {
 
   // A pointed cone, apex at (0, 0, 8) over a ring of radius 6 at z 0, as a
   // fan of facets that all meet at the apex.
-  const fan = (n: number) => Array.from({ length: n }, (_, i) => {
-    const a = (2 * Math.PI * i) / n, b = (2 * Math.PI * (i + 1)) / n;
-    return new THREE.Triangle(V(6 * Math.cos(a), 6 * Math.sin(a), 0), V(6 * Math.cos(b), 6 * Math.sin(b), 0), V(0, 0, 8));
-  });
+  const fan = (n: number) =>
+    Array.from({ length: n }, (_, i) => {
+      const a = (2 * Math.PI * i) / n,
+        b = (2 * Math.PI * (i + 1)) / n;
+      return new THREE.Triangle(
+        V(6 * Math.cos(a), 6 * Math.sin(a), 0),
+        V(6 * Math.cos(b), 6 * Math.sin(b), 0),
+        V(0, 0, 8),
+      );
+    });
 
   it("points a pick at a cone's apex up its axis, not along one facet of the fan", () => {
     const n = facetNormalAt(fan(24), V(0.02, -0.01, 7.97))!;

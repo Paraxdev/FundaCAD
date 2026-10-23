@@ -16,8 +16,8 @@ import {
 const cand = (screenDist: number, smooth: boolean, occluded = false, shortBoost = 0) => ({
   screenDist,
   rankPx: edgeRankPx(screenDist, smooth),
-  occluded,
-  bandPx: edgeBandForPx(EDGE_NEAR_PX, shortBoost, smooth),
+  occluded: () => occluded,
+  bandPx: () => edgeBandForPx(EDGE_NEAR_PX, shortBoost, smooth),
 });
 const ranked = <T extends { rankPx: number }>(cs: T[]) => [...cs].sort((a, b) => a.rankPx - b.rankPx);
 
@@ -90,5 +90,60 @@ describe("preferredEdge", () => {
   it("gives the face when every candidate is out of reach", () => {
     expect(preferredEdge([], true)).toBeNull();
     expect(preferredEdge([cand(0.5, false, true)], true)).toBeNull();
+  });
+});
+
+describe("preferredEdge, cost on a big assembly", () => {
+  // Each occlusion test is a sight ray through every body, 0.32 ms on a 1310 body
+  // assembly, and a whole assembly view puts thousands of edges in the grab
+  // radius: asked for all of them up front a hover froze for 2.8 s.
+  const counted = (n: number, dist: (i: number) => number, occluded: (i: number) => boolean) => {
+    const calls = { occluded: 0, band: 0 };
+    const cs = Array.from({ length: n }, (_, i) => ({
+      screenDist: dist(i),
+      occluded: () => (calls.occluded++, occluded(i)),
+      bandPx: () => (calls.band++, EDGE_NEAR_PX),
+    }));
+    return { cs, calls };
+  };
+
+  it("casts one sight ray when the nearest edge is in band and visible", () => {
+    const { cs, calls } = counted(
+      5000,
+      (i) => 0.1 + i * 0.01,
+      () => false,
+    );
+    expect(preferredEdge(cs, true)).toBe(0);
+    expect(calls.occluded).toBe(1);
+  });
+
+  it("casts none for edges outside their band over a face", () => {
+    const { cs, calls } = counted(
+      5000,
+      (i) => EDGE_NEAR_PX + 1 + i * 0.01,
+      () => false,
+    );
+    expect(preferredEdge(cs, true)).toBeNull();
+    expect(calls.occluded).toBe(0);
+  });
+
+  it("stops at the first visible edge past occluded ones", () => {
+    const { cs, calls } = counted(
+      5000,
+      (i) => 0.1 + i * 0.0001,
+      (i) => i < 3,
+    );
+    expect(preferredEdge(cs, true)).toBe(3);
+    expect(calls.occluded).toBe(4);
+  });
+
+  it("measures no band with no face under the pointer", () => {
+    const { cs, calls } = counted(
+      5000,
+      (i) => 20 + i,
+      () => false,
+    );
+    expect(preferredEdge(cs, false)).toBe(0);
+    expect(calls.band).toBe(0);
   });
 });

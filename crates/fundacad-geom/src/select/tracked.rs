@@ -1,22 +1,5 @@
-//! `by:"tracked"`: a flat face kept by its outward normal, found again however
-//! far a change upstream moves it.
-//!
-//! The pick point is carried onto each flat face still facing the stored way
-//! as if that face were the one moved, and only a face the carried point lands
-//! on can be it. Of those, a face still under the pick point itself is
-//! preferred over one that is not, then whichever carried the point least far.
-//! A tie is refused, never guessed.
-//!
-//! How a point is carried: with an `extent`, each in-plane coordinate keeps its
-//! offset from whichever of that axis's min, middle or max it was nearest when
-//! written, so a hole by a corner stays by that corner as the face grows and a
-//! centred one stays centred. A face whose outline is a circle, and was a
-//! circle when written (a square extent), anchors in polar terms about its
-//! centre instead: a point keeps its angle, and its offset from whichever of
-//! the centre or the rim it was nearer, so a hole by the rim stays by the rim
-//! where two independent axes would carry it off the face. With only a
-//! `center`, the older form, everything moves with the outline's centre. With
-//! neither, only along the normal.
+//! `by:"tracked"`: a flat face kept by its outward normal however far upstream moves it. The pick point is
+//! carried onto each face facing that way, a face still under the pick wins, then the shortest carry, a tie refuses.
 
 use glam::{DVec2, DVec3};
 use opencascade::primitives::Shape;
@@ -106,9 +89,8 @@ fn anchored(c: f64, lo: f64, hi: f64, lo2: f64, hi2: f64) -> f64 {
     best.1 + (c - best.0)
 }
 
-/// `p`, in the plane of the circle whose extent was `was`, kept at its angle
-/// and at its offset from the nearer of that circle's centre and rim, moved
-/// onto the circle whose extent is `now`. A tie prefers the centre.
+/// `p` kept at its angle and its offset from the nearer of the old circle's centre and rim, moved onto the
+/// circle whose extent is `now`. A tie prefers the centre.
 fn polar(p: DVec2, was: [f64; 4], now: [f64; 4]) -> DVec2 {
     let circle = |e: [f64; 4]| (DVec2::new(e[0] + e[1], e[2] + e[3]) / 2.0, (e[1] - e[0]) / 2.0);
     let ((c0, r0), (c1, r1)) = (circle(was), circle(now));
@@ -164,23 +146,18 @@ impl Tracking {
                     Step::Anchored { was: *was, now }
                 }
             }
-            Written::Center(c) => Step::Shift(
-                kernel::outline_center(&face.shape).map_or(face.centroid(), DVec3::from_array) - *c,
-            ),
+            Written::Center(c) => {
+                Step::Shift(kernel::outline_center(&face.shape).map_or(face.centroid(), DVec3::from_array) - *c)
+            }
             Written::Normal => Step::Normal,
         };
-        Some(Onto {
-            n: self.n,
-            plane_point: face.centroid(),
-            plane_normal: face.normal(),
-            extent,
-            step,
-        })
+        Some(Onto { n: self.n, plane_point: face.centroid(), plane_normal: face.normal(), extent, step })
     }
 }
 
 impl Onto {
-    /// `p`, written against the stored face, where it is on this one.
+    /// `p`, written against the stored face, where it is on this one. An older selector with only a `center`
+    /// shifts with the outline's centre, one with neither moves only along the normal.
     pub fn carry(&self, p: DVec3) -> DVec3 {
         let q = match &self.step {
             Step::Anchored { was, now } => {
@@ -213,9 +190,7 @@ fn covers(outline: &Shape, q: DVec3) -> bool {
 }
 
 fn filled(face: &FaceEnt) -> Shape {
-    kernel::outer_wire(&face.shape)
-        .and_then(|w| kernel::face_from_wire(&w).ok())
-        .unwrap_or_else(|| face.shape.clone())
+    kernel::outer_wire(&face.shape).and_then(|w| kernel::face_from_wire(&w).ok()).unwrap_or_else(|| face.shape.clone())
 }
 
 pub(super) fn resolve(r: &mut Resolver, part: &Shape, m: &Map<String, Value>) -> FResult<Vec<FaceEnt>> {
@@ -250,10 +225,7 @@ pub(super) fn resolve(r: &mut Resolver, part: &Shape, m: &Map<String, Value>) ->
     }
     if pool.is_empty() {
         r.push("face", 0, 0.0, true, Some(REASON_SPLIT.into()), m.get("point"), None, Some(REFERENCE_NOT_FOUND));
-        return Err(Fail::Value {
-            message: REASON_SPLIT.into(),
-            code: Some(REFERENCE_NOT_FOUND),
-        });
+        return Err(Fail::Value { message: REASON_SPLIT.into(), code: Some(REFERENCE_NOT_FOUND) });
     }
     if pool.iter().any(|c| c.2) {
         pool.retain(|c| c.2);

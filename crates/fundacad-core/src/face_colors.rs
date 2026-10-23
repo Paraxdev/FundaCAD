@@ -12,10 +12,7 @@ pub const NO_COLOR: i64 = -1;
 
 /// `None` when no face carries a colour, which must add nothing to the document.
 pub fn encode<S: AsRef<str>>(colors: &[Option<S>]) -> Option<FaceColorRuns> {
-    if !colors
-        .iter()
-        .any(|c| c.as_ref().is_some_and(|s| !s.as_ref().is_empty()))
-    {
+    if !colors.iter().any(|c| c.as_ref().is_some_and(|s| !s.as_ref().is_empty())) {
         return None;
     }
     let mut palette: Vec<String> = Vec::new();
@@ -34,15 +31,8 @@ pub fn encode<S: AsRef<str>>(colors: &[Option<S>]) -> Option<FaceColorRuns> {
             _ => runs.push((1, i)),
         }
     }
-    let runs = runs
-        .into_iter()
-        .map(|(n, i)| [Real::from(n), Real::from(i)])
-        .collect();
-    Some(FaceColorRuns {
-        palette,
-        runs,
-        extra: Extra::new(),
-    })
+    let runs = runs.into_iter().map(|(n, i)| [Real::from(n), Real::from(i)]).collect();
+    Some(FaceColorRuns { palette, runs, extra: Extra::new() })
 }
 
 /// JavaScript's `Math.floor(Number(x))` over a JSON value.
@@ -89,19 +79,12 @@ pub fn decode_value(enc: Option<&Value>, count: usize) -> Vec<Option<String>> {
         }
         let hex = if idx >= 0.0 && idx < palette.len() as f64 {
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            palette
-                .get(idx as usize)
-                .and_then(Value::as_str)
-                .map(str::to_owned)
+            palette.get(idx as usize).and_then(Value::as_str).map(str::to_owned)
         } else {
             None
         };
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let end = if len >= count as f64 {
-            count
-        } else {
-            at.saturating_add(len as usize).min(count)
-        };
+        let end = if len >= count as f64 { count } else { at.saturating_add(len as usize).min(count) };
         for slot in out.iter_mut().take(end).skip(at) {
             slot.clone_from(&hex);
         }
@@ -124,12 +107,7 @@ pub fn decode(enc: Option<&FaceColorRuns>, count: usize) -> Vec<Option<String>> 
 /// colour that appears first.
 pub fn dominant<S: AsRef<str>>(colors: &[Option<S>]) -> Option<String> {
     let mut tally: IndexMap<&str, usize> = IndexMap::new();
-    for c in colors
-        .iter()
-        .filter_map(|c| c.as_ref())
-        .map(AsRef::as_ref)
-        .filter(|s| !s.is_empty())
-    {
+    for c in colors.iter().filter_map(|c| c.as_ref()).map(AsRef::as_ref).filter(|s| !s.is_empty()) {
         *tally.entry(c).or_default() += 1;
     }
     let mut best: Option<(&str, usize)> = None;

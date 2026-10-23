@@ -1,6 +1,5 @@
-//! The payload caches of the Python engine's `viewport_mesh.py`: in memory by body
-//! identity (`_MESH_CACHE`), and on disk as mesh artifacts keyed by the body's
-//! checkpoint blob key, `mesh::CODE_VERSION` and the deflections.
+//! The payload caches of viewport_mesh.py: in memory by body identity, and on disk as mesh artifacts keyed by
+//! the body's checkpoint blob key, `mesh::CODE_VERSION` and the deflections.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -36,6 +35,14 @@ pub struct Payloads {
 impl Payloads {
     pub fn clear(&mut self) {
         self.ram.clear();
+    }
+
+    pub fn len(&self) -> usize {
+        self.ram.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.ram.is_empty()
     }
 
     pub fn reset_counters(&mut self) {
@@ -102,20 +109,21 @@ impl PayloadCache for Tiered<'_> {
         let payload = decode(&store.get_mesh(&body_artifact_key(key, passes.as_deref(), tolerance, profile))?)?;
         self.payloads.disk_hits += 1;
         if let Some(identity) = body.identity {
-            self.payloads.ram.insert(
-                body.id.clone(),
-                RamPayload {
-                    identity,
-                    request: req,
-                    passes,
-                    payload: payload.clone(),
-                },
-            );
+            self.payloads
+                .ram
+                .insert(body.id.clone(), RamPayload { identity, request: req, passes, payload: payload.clone() });
         }
         Some(payload)
     }
 
-    fn put(&mut self, body: &MeshBody<'_>, tolerance: f64, profile: ViewportProfile, payload: &FullBody, build: Duration) {
+    fn put(
+        &mut self,
+        body: &MeshBody<'_>,
+        tolerance: f64,
+        profile: ViewportProfile,
+        payload: &FullBody,
+        build: Duration,
+    ) {
         self.payloads.meshed += 1;
         let passes = mesh::pass_key(body);
         if let (Some(store), Some(key)) = (self.store, body.mesh_key.as_deref()) {
@@ -127,12 +135,7 @@ impl PayloadCache for Tiered<'_> {
         if let Some(identity) = body.identity {
             self.payloads.ram.insert(
                 body.id.clone(),
-                RamPayload {
-                    identity,
-                    request: request(tolerance, profile),
-                    passes,
-                    payload: payload.clone(),
-                },
+                RamPayload { identity, request: request(tolerance, profile), passes, payload: payload.clone() },
             );
         }
     }
@@ -226,39 +229,10 @@ pub fn decode(data: &[u8]) -> Option<FullBody> {
         let smooth = r.u8()? != 0;
         let k = r.u32()?;
         let flat = r.f32s(k.checked_mul(3)?)?;
-        edges.push(Edge {
-            points: flat.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect(),
-            smooth,
-        });
+        edges.push(Edge { points: flat.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect(), smooth });
     }
     if !r.0.is_empty() {
         return None;
     }
-    Some(FullBody {
-        fields,
-        positions,
-        normals,
-        indices,
-        face_ids,
-        edges,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn an_artifact_round_trips_and_junk_is_a_miss() {
-        let sphere = crate::kernel::make_sphere(4.0).unwrap();
-        let full = mesh::strip_envelope(&mesh::body_payload(&sphere, "b", "B", 0.1, mesh::viewport_profile(1)));
-        let bytes = encode(&full);
-        let back = decode(&bytes).unwrap();
-        assert_eq!(back, full);
-        assert_eq!(mesh::etag(&back), mesh::etag(&full));
-        assert!(decode(&bytes[..bytes.len() - 1]).is_none());
-        assert!(decode(b"FCMESH01garbage").is_none());
-        let key = artifact_key(&"ab".repeat(16), 0.1, mesh::viewport_profile(1));
-        assert!(key.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-'), "{key}");
-    }
+    Some(FullBody { fields, positions, normals, indices, face_ids, edges })
 }

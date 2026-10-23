@@ -9,8 +9,7 @@ import { scheduleRaycastIndex, flushRaycastIndex, disposeRaycastIndex } from "..
 
 function indexedGeo(): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(
-    [0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0], 3));
+  g.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0], 3));
   g.setIndex([0, 1, 2, 1, 3, 2]);
   return g;
 }
@@ -24,13 +23,15 @@ describe("deferred raycast index", () => {
   });
 
   it("flush builds every queued tree", () => {
-    const a = indexedGeo(), b = indexedGeo();
+    const a = indexedGeo(),
+      b = indexedGeo();
     scheduleRaycastIndex(a);
     scheduleRaycastIndex(b);
     flushRaycastIndex();
     expect(a.boundsTree).toBeDefined();
     expect(b.boundsTree).toBeDefined();
-    disposeRaycastIndex(a); disposeRaycastIndex(b);
+    disposeRaycastIndex(a);
+    disposeRaycastIndex(b);
   });
 
   it("flush is a no-op when nothing is queued", () => {
@@ -48,7 +49,7 @@ describe("deferred raycast index", () => {
   it("a disposed geometry is dropped from the queue, never built", () => {
     const g = indexedGeo();
     scheduleRaycastIndex(g);
-    disposeRaycastIndex(g);   // body removed before idle ran
+    disposeRaycastIndex(g); // body removed before idle ran
     flushRaycastIndex();
     expect(g.boundsTree).toBeUndefined();
   });

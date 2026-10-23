@@ -1,38 +1,24 @@
 <script setup lang="ts">
-// Floating panel for the printed-Texture tool (knurl/hex/waves/ribs/voronoi/
-// noise/image heightmap). Unlike the Text panel (cursor-anchored, one text
-// object) this is DOCKED top-right: the tool can span a whole body, not one
-// clicked point, so there is no natural anchor to follow.
-//
-// Which rows a given kind/profile shows is decided by textureRows() in
-// textureForm.ts, pure, and tested, because that logic encodes real engine
-// behaviour and has been wrong before.
-//
-// MOUNTED FOR THE WHOLE LIFE OF THE PLUGIN, and draws nothing until the tool
-// opens it. That is the contract a contributed overlay is held to: the
-// application mounts it once and never asks again whether it should be visible,
-// because the only thing that knows is the plugin. The `v-if` that used to be in
-// App.vue was the application knowing this tool exists.
-//
-// Escape is NOT handled here. TextureTool owns it for its whole active lifetime,
-// which starts before this panel is open (the edit path rolls the model back
-// first) and must outlast a refused commit. A panel-scoped handler left those
-// windows with no way out.
+// Docked top right, since the tool can span a whole body and has no point to anchor to. Escape is not handled here:
+// TextureTool owns it from the rollback before this panel opens until after a refused commit.
 
 import { computed, reactive, watch, type CSSProperties } from "vue";
 import {
-  TEXTURE_KIND_GROUPS, basename, initialTextureForm, sharpnessLabel, textureFormErrors, textureRows, toTextureValues,
+  TEXTURE_KIND_GROUPS,
+  basename,
+  initialTextureForm,
+  sharpnessLabel,
+  textureFormErrors,
+  textureRows,
+  toTextureValues,
   type TextureMode,
 } from "./textureForm";
 import { Icon } from "fundacad/ui";
 import { fieldNumber, openDialog } from "fundacad";
 import * as panel from "./panel";
 
-// Seeded from the request, and RESEEDED whenever the tool opens a new one.
-// App.vue used to key the component on `req.id`, which remounted it and got the
-// fresh form for free. A permanently mounted overlay has no such key, so the
-// same job is done explicitly here, without it, re-opening the tool would show
-// the values from the last time it ran.
+// Reseeded whenever the tool opens a new request: a permanently mounted overlay has no key to remount it, so a reopen
+// would show the last run's values.
 const form = reactive(initialTextureForm(panel.request.value?.initial ?? {}));
 const errors = computed(() => Object.entries(textureFormErrors(form)));
 watch(
@@ -43,9 +29,8 @@ watch(
   },
 );
 const rows = computed(() => textureRows(form));
-// Read through the request so they follow a re-open. Empty is the meaningful
-// answer for the palette, not a degenerate one: nothing contributing colours is
-// how a document with no palette has always looked, and the row hides itself.
+// Read through the request so they follow a reopen. An empty palette is how a document with no palette looks, and the
+// row hides itself.
 const palette = computed(() => panel.request.value?.palette ?? []);
 const editing = computed(() => panel.request.value?.editing ?? false);
 const sharpLabel = computed(() => sharpnessLabel(form.profile));
@@ -76,11 +61,8 @@ async function browse() {
     console.warn("a heightmap needs the native app (a real filesystem path)");
     return;
   }
-  // The host's dialog rather than the plugin's own import of it: a built plugin
-  // externalises nothing but vue, pinia, three and the host, so a dynamic
-  // import of @tauri-apps/plugin-dialog here would bundle a second copy of it
-  // into the plugin. This is also the only place `files.read` is exercised, and
-  // only after the person has pressed Browse and chosen something.
+  // The host's dialog: importing @tauri-apps/plugin-dialog would bundle a second copy into the plugin. files.read runs
+  // only after the person pressed Browse and chose something.
   const path = await openDialog({
     filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "bmp"] }],
   });
@@ -89,27 +71,13 @@ async function browse() {
   emitChange();
 }
 
-// --- inline styles --------------------------------------------------------
-//
-// THE HEX USED TO BE HARDCODED HERE, one dark palette baked into a plugin that
-// draws inside an application whose theme the user can replace. So the panel
-// stayed graphite-on-charcoal under a light theme, the one surface in the window
-// that did not repaint. Every colour is a host token now, with the old literal
-// kept as the `var(--token, #fallback)` floor: the tokens are defined on :root
-// by the host stylesheet (see src/styles/_tokens.scss), the panel is teleported
-// into <body> under that :root, so the cascade reaches it exactly as it reaches
-// the application's own popups. The fallback is what a plugin owes a host it
-// cannot import: if a token is ever missing, the panel is the colour it always
-// was rather than unstyled.
-//
-// Still inline rather than a class, and still no `:hover`, for the reason the
-// template's comment gives: the one hook an e2e holds is `data-panel`, and a
-// stylesheet a plugin ships is a second place a colour can be wrong. `font` and
-// `color-scheme` are the two the panel deliberately does NOT set: it inherits
-// the document's, so the native <select>/checkbox render in whatever scheme the
-// active theme declared instead of being pinned to dark.
+// Host tokens with the old hex as the `var(--token, #fallback)` floor (src/styles/_tokens.scss), so the panel follows
+// the theme. Inline with no :hover, and font and color-scheme are inherited so native controls follow the theme too.
 const root: CSSProperties = {
-  position: "fixed", top: "60px", right: "16px", zIndex: "50",
+  position: "fixed",
+  top: "60px",
+  right: "16px",
+  zIndex: "50",
   padding: "8px",
   background: "var(--panel, #20242c)",
   border: "1px solid var(--line-strong, #3a4150)",
@@ -117,15 +85,20 @@ const root: CSSProperties = {
   boxShadow: "var(--shadow-2, 0 6px 20px rgba(0,0,0,0.4))",
   font: "12px system-ui, sans-serif",
   color: "var(--text, #dce3ee)",
-  width: "270px", maxWidth: "calc(100vw, 24px)", boxSizing: "border-box",
-  maxHeight: "calc(100vh, 80px)", overflowY: "auto",
+  width: "270px",
+  maxWidth: "calc(100vw, 24px)",
+  boxSizing: "border-box",
+  maxHeight: "calc(100vh, 80px)",
+  overflowY: "auto",
 };
 const row: CSSProperties = { display: "flex", gap: "6px", alignItems: "center", marginBottom: "6px" };
 const field: CSSProperties = {
   background: "var(--panel-2, #161a20)",
   color: "var(--text, #dce3ee)",
   border: "1px solid var(--line-strong, #3a4150)",
-  borderRadius: "var(--r-sm, 3px)", padding: "3px 5px", font: "inherit",
+  borderRadius: "var(--r-sm, 3px)",
+  padding: "3px 5px",
+  font: "inherit",
 };
 const lbl: CSSProperties = { whiteSpace: "nowrap", cursor: "pointer" };
 const grow: CSSProperties = { ...field, flex: "1" };
@@ -133,23 +106,37 @@ const num: CSSProperties = { ...field, width: "64px" };
 const title: CSSProperties = { fontWeight: "600", marginBottom: "6px" };
 const muted: CSSProperties = { color: "var(--text-mute, #8b93a3)", marginBottom: "6px" };
 const modeBtn: CSSProperties = {
-  flex: "1", border: "1px solid var(--line-strong, #3a4150)",
-  borderRadius: "var(--r-sm, 3px)", padding: "4px 6px",
-  cursor: "pointer", font: "inherit",
+  flex: "1",
+  border: "1px solid var(--line-strong, #3a4150)",
+  borderRadius: "var(--r-sm, 3px)",
+  padding: "4px 6px",
+  cursor: "pointer",
+  font: "inherit",
 };
 const modeOn: CSSProperties = {
-  background: "var(--accent, #2b6)", borderColor: "var(--accent, #2b6)", color: "var(--on-accent, #fff)",
+  background: "var(--accent, #2b6)",
+  borderColor: "var(--accent, #2b6)",
+  color: "var(--on-accent, #fff)",
 };
 const modeOff: CSSProperties = {
-  background: "transparent", borderColor: "var(--line-strong, #3a4150)", color: "var(--text, #dce3ee)",
+  background: "transparent",
+  borderColor: "var(--line-strong, #3a4150)",
+  color: "var(--text, #dce3ee)",
 };
 const smallBtn: CSSProperties = {
-  border: "1px solid var(--line-strong, #3a4150)", borderRadius: "var(--r-sm, 3px)",
-  padding: "3px 8px", cursor: "pointer", font: "inherit",
-  background: "transparent", color: "var(--text-dim, #dce3ee)",
+  border: "1px solid var(--line-strong, #3a4150)",
+  borderRadius: "var(--r-sm, 3px)",
+  padding: "3px 8px",
+  cursor: "pointer",
+  font: "inherit",
+  background: "transparent",
+  color: "var(--text-dim, #dce3ee)",
 };
 const pathLabel: CSSProperties = {
-  flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  flex: "1",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
   color: "var(--text-mute, #8b93a3)",
 };
 const summaryStyle: CSSProperties = { cursor: "pointer", marginBottom: "4px" };
@@ -157,32 +144,33 @@ const offsetRow: CSSProperties = { display: "flex", gap: "6px", alignItems: "cen
 const problem: CSSProperties = { color: "var(--error, #f0564a)", fontSize: "11px", marginBottom: "4px" };
 const note: CSSProperties = { color: "var(--text-mute, #8b93a3)", fontStyle: "italic", margin: "8px 0" };
 const btnRow: CSSProperties = { ...row, marginBottom: "0", justifyContent: "flex-end" };
-const btn: CSSProperties = { border: "none", borderRadius: "var(--r-sm, 4px)", padding: "4px 10px", cursor: "pointer", font: "inherit" };
+const btn: CSSProperties = {
+  border: "none",
+  borderRadius: "var(--r-sm, 4px)",
+  padding: "4px 10px",
+  cursor: "pointer",
+  font: "inherit",
+};
 const okBtn: CSSProperties = { ...btn, background: "var(--accent, #2b6)", color: "var(--on-accent, #fff)" };
 const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color: "var(--text, #fff)" };
 </script>
 
 <template>
-  <!-- v-if on the request: mounted for the whole life of the plugin, drawn only
-       while the tool is running. -->
+  <!-- Mounted for the plugin's whole life, drawn only while the tool runs. -->
   <Teleport v-if="panel.request.value" to="body">
-    <!-- `data-panel` is the one thing an e2e script can hold on to. Everything
-         here is inline-styled with no class names, and the application's own
-         Icon component makes the same argument for `data-icon`: a marker put
-         there on purpose is preferred over a script matching on visible text, which changes
-         the first time a word does. -->
+    <!-- `data-panel` is the one hook an e2e script holds, everything is inline styled with no class names. -->
     <div data-panel="texture" :style="root">
       <div :style="title">Texture</div>
-      <!-- Live selection summary. Bound straight to the store rather than
-           carried on the request, so refreshing it (the tool rewrites it on
-           every rAF tick) cannot re-render the form and steal focus from
-           whatever field is being typed into. -->
+      <!-- Its own ref, not the request, so the per-tick rewrite cannot re-render the form and steal focus. -->
       <div :style="muted">{{ panel.summary.value }}</div>
 
-      <!-- [Faces] / [Whole Body] mode toggle, a segmented pair of buttons. -->
       <div :style="row">
-        <button :style="[modeBtn, panel.mode.value === 'faces' ? modeOn : modeOff]" @click="chooseMode('faces')">Faces</button>
-        <button :style="[modeBtn, panel.mode.value === 'body' ? modeOn : modeOff]" @click="chooseMode('body')">Whole Body</button>
+        <button :style="[modeBtn, panel.mode.value === 'faces' ? modeOn : modeOff]" @click="chooseMode('faces')"
+          >Faces</button
+        >
+        <button :style="[modeBtn, panel.mode.value === 'body' ? modeOn : modeOff]" @click="chooseMode('body')"
+          >Whole Body</button
+        >
       </div>
 
       <div :style="row">
@@ -194,8 +182,7 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
         </select>
       </div>
 
-      <!-- Hard surface is the default: planar facets and real creases are what a
-           printer can actually reproduce. "Smooth" restores the original fields. -->
+      <!-- Hard surface is the default, planar facets and creases are what a printer reproduces. -->
       <div :style="row">
         <label :style="lbl">Profile</label>
         <select v-model="form.profile" :style="grow" @input="emitChange" @change="emitChange">
@@ -206,26 +193,48 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
 
       <div :style="row">
         <label :style="lbl">Depth</label>
-        <input v-model="form.depth" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
+        <input
+          v-model="form.depth"
+          type="text"
+          inputmode="decimal"
+          :style="num"
+          @input="emitChange"
+          @change="emitChange"
+        />
         <label :style="lbl">Scale</label>
-        <input v-model="form.scale" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
+        <input
+          v-model="form.scale"
+          type="text"
+          inputmode="decimal"
+          :style="num"
+          @input="emitChange"
+          @change="emitChange"
+        />
       </div>
 
       <div v-show="rows.angle" :style="row">
         <label :style="lbl">Angle°</label>
-        <input v-model="form.angle" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
+        <input
+          v-model="form.angle"
+          type="text"
+          inputmode="decimal"
+          :style="num"
+          @input="emitChange"
+          @change="emitChange"
+        />
         <label v-show="rows.sharpness" :style="lbl" :title="sharpLabel.title">{{ sharpLabel.text }}</label>
         <input
-          v-show="rows.sharpness" v-model="form.sharpness" type="text" inputmode="decimal"
-          :style="num" @input="emitChange" @change="emitChange"
+          v-show="rows.sharpness"
+          v-model="form.sharpness"
+          type="text"
+          inputmode="decimal"
+          :style="num"
+          @input="emitChange"
+          @change="emitChange"
         />
       </div>
 
-      <!-- Direction is NOT an angle-kind thing: the engine applies it to the
-           height field itself (out = h, in = h-1, both = centred), so every kind
-           honours it. Gating it behind ANGLE_KINDS left noise/voronoi/image able
-           only to GROW the part, changing its dimensions instead of texturing
-           the surface it sits on. -->
+      <!-- Every kind honours direction, the engine applies it to the height field (out = h, in = h-1, both = centred). -->
       <div :style="row">
         <label :style="lbl">Direction</label>
         <select v-model="form.direction" :style="grow" @input="emitChange" @change="emitChange">
@@ -235,13 +244,12 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
         </select>
       </div>
 
-      <!-- Projection: how a curved (freeform) face lays out the pattern.
-           Triplanar keeps the cells one size where a single planar projection
-           would foreshorten them; flat/cylindrical/conical faces use their exact
-           chart regardless of this. Hidden for a heightmap, which carries its own
-           orientation. -->
-      <div v-show="rows.projection" :style="row"
-        title="How a curved (freeform) face lays out the pattern. Triplanar keeps one size across the curve; Box favours the nearest axis; Planar projects along one direction and foreshortens. Flat, cylindrical and conical faces use their exact chart regardless.">
+      <!-- Triplanar keeps the cells one size on a freeform face, exact charts ignore it. Hidden for a heightmap. -->
+      <div
+        v-show="rows.projection"
+        :style="row"
+        title="How a curved (freeform) face lays out the pattern. Triplanar keeps one size across the curve; Box favours the nearest axis; Planar projects along one direction and foreshortens. Flat, cylindrical and conical faces use their exact chart regardless."
+      >
         <label :style="lbl">Projection</label>
         <select v-model="form.projection" :style="grow" @input="emitChange" @change="emitChange">
           <option value="triplanar">Triplanar</option>
@@ -250,68 +258,106 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
         </select>
       </div>
 
-      <!-- Seam blend (triplanar) / Seam band (box): how softly the three world
-           planes meet. Only the one the active mode reads is shown. -->
-      <div v-show="rows.seamBlend" :style="row"
-        title="How softly the three world planes blend on a triplanar projection. Higher is a broader, gentler blend.">
+      <!-- How softly the three world planes meet, only the control the active mode reads is shown. -->
+      <div
+        v-show="rows.seamBlend"
+        :style="row"
+        title="How softly the three world planes blend on a triplanar projection. Higher is a broader, gentler blend."
+      >
         <label :style="lbl">Seam blend</label>
-        <input v-model="form.seamBlend" type="range" min="0" max="1" step="0.05"
-          :style="{ flex: '1', minWidth: '0' }" @input="emitChange" />
-        <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{ seamBlendPct }}</span>
+        <input
+          v-model="form.seamBlend"
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          :style="{ flex: '1', minWidth: '0' }"
+          @input="emitChange"
+        />
+        <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{
+          seamBlendPct
+        }}</span>
       </div>
-      <div v-show="rows.seamBand" :style="row"
-        title="How wide the transition band is where two box-projection axes meet. Higher is a wider, softer band.">
+      <div
+        v-show="rows.seamBand"
+        :style="row"
+        title="How wide the transition band is where two box-projection axes meet. Higher is a wider, softer band."
+      >
         <label :style="lbl">Seam band</label>
-        <input v-model="form.seamBand" type="range" min="0" max="1" step="0.05"
-          :style="{ flex: '1', minWidth: '0' }" @input="emitChange" />
+        <input
+          v-model="form.seamBand"
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          :style="{ flex: '1', minWidth: '0' }"
+          @input="emitChange"
+        />
         <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{ seamBandPct }}</span>
       </div>
 
-      <!-- Grime: a noise bleed onto the faces next to this one, so the effect
-           reads as wear or dirt that crept off the edge rather than something
-           masked to a clean boundary. Zero is the old behaviour exactly. -->
+      <!-- Grime bleeds noise onto the neighbouring faces, so the wear seems to creep off the edge. -->
       <div
         :style="row"
         title="Bleeds a fading noise onto the faces next to the textured ones, like dirt or wear that crept off the edge. 0 = a clean boundary."
       >
         <label :style="lbl">Grime</label>
         <input
-          v-model="form.grime" type="range" min="0" max="1" step="0.05"
-          :style="{ flex: '1', minWidth: '0' }" @input="emitChange"
+          v-model="form.grime"
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          :style="{ flex: '1', minWidth: '0' }"
+          @input="emitChange"
         />
         <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{ grimePct }}</span>
       </div>
 
-      <!-- Soften: a low-pass blur of the height field before it displaces, so
-           the relief reads soft and rounded rather than crisp. Named apart from
-           the "Smooth" profile above, which is a different thing (the continuous
-           field vs the faceted one). 0 = the crisp relief, unchanged. -->
+      <!-- Named apart from the "Smooth" profile, which is the continuous field rather than this blur. -->
       <div
         :style="row"
         title="Blurs the height field before it displaces: 0 = crisp relief, higher = softer and more rounded."
       >
         <label :style="lbl">Soften</label>
         <input
-          v-model="form.smooth" type="range" min="0" max="1" step="0.05"
-          :style="{ flex: '1', minWidth: '0' }" @input="emitChange"
+          v-model="form.smooth"
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          :style="{ flex: '1', minWidth: '0' }"
+          @input="emitChange"
         />
         <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{ smoothPct }}</span>
       </div>
 
-      <!-- Amplitude: a master trim on the depth, for tuning the whole relief
-           without editing the mm depth. 100% is full depth. -->
       <div :style="row" title="Master trim on the depth: 100% is the full depth, lower scales the whole relief down.">
         <label :style="lbl">Amplitude</label>
         <input
-          v-model="form.amplitude" type="range" min="0" max="1" step="0.05"
-          :style="{ flex: '1', minWidth: '0' }" @input="emitChange"
+          v-model="form.amplitude"
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          :style="{ flex: '1', minWidth: '0' }"
+          @input="emitChange"
         />
-        <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{ amplitudePct }}</span>
+        <span :style="[pathLabel, { flex: '0 0 auto', textAlign: 'right', minWidth: '2.6em' }]">{{
+          amplitudePct
+        }}</span>
       </div>
 
       <div v-show="rows.seed" :style="row">
         <label :style="lbl">Seed</label>
-        <input v-model="form.seed" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
+        <input
+          v-model="form.seed"
+          type="text"
+          inputmode="decimal"
+          :style="num"
+          @input="emitChange"
+          @change="emitChange"
+        />
         <button :style="smallBtn" @click="randomize"><Icon name="dice" :size="13" /> Randomize</button>
       </div>
 
@@ -324,9 +370,7 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
         <input v-model="form.invert" type="checkbox" @input="emitChange" @change="emitChange" />
       </div>
 
-      <!-- Inlay colour: which palette slot the textured faces print in
-           (two-tone). Only shown when the caller passed a palette, i.e. in a
-           document that has bodies. -->
+      <!-- Shown only when the caller passed a palette, i.e. in a document with bodies. -->
       <div v-show="palette.length" :style="row">
         <label :style="lbl">Print color</label>
         <select v-model="form.colorSlot" :style="grow" @input="emitChange" @change="emitChange">
@@ -342,46 +386,87 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
           title="Edge blend: mm the pattern fades over at a face boundary. 0 = a clean machined cut-off."
         >
           <label :style="lbl">Offset</label>
-          <input v-model="form.offset" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
+          <input
+            v-model="form.offset"
+            type="text"
+            inputmode="decimal"
+            :style="num"
+            @input="emitChange"
+            @change="emitChange"
+          />
           <label :style="lbl">Edge blend</label>
-          <input v-model="form.edgeBlend" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
+          <input
+            v-model="form.edgeBlend"
+            type="text"
+            inputmode="decimal"
+            :style="num"
+            @input="emitChange"
+            @change="emitChange"
+          />
         </div>
-        <!-- Slope mask: keep the texture only where the face normal's angle from
-             +Z (up) is in this band, so a near-horizontal top or bottom can be
-             left clean. 0 to 180 masks nothing. -->
+        <!-- Keeps the texture only where the normal's angle from +Z is in the band, 0 to 180 masks nothing. -->
         <div
           :style="[offsetRow, { marginTop: '6px' }]"
           title="Keep the texture only where the surface's angle from up (0 = a flat top, 90 = a vertical wall, 180 = a flat underside) is in this band. 0 to 180 masks nothing."
         >
           <label :style="lbl">Slope°</label>
-          <input v-model="form.slopeMin" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
+          <input
+            v-model="form.slopeMin"
+            type="text"
+            inputmode="decimal"
+            :style="num"
+            @input="emitChange"
+            @change="emitChange"
+          />
           <label :style="lbl">to</label>
-          <input v-model="form.slopeMax" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
+          <input
+            v-model="form.slopeMax"
+            type="text"
+            inputmode="decimal"
+            :style="num"
+            @input="emitChange"
+            @change="emitChange"
+          />
         </div>
-        <!-- Mesh: the target edge length of the sampling mesh (0 = automatic,
-             from the scale) and a hard per-face triangle budget (0 = off). A
-             finer edge or a larger budget carries more detail; a coarser edge or
-             a tighter budget keeps a heavy texture from ballooning the mesh. -->
+        <!-- Edge 0 is automatic from the scale and budget 0 is off, a coarser edge or tighter budget keeps the mesh light. -->
         <div
           :style="[offsetRow, { marginTop: '6px' }]"
           title="Mesh detail: target edge length in mm for the sampling mesh (0 = automatic). Max triangles: a hard per-face budget (0 = off). Lower detail or a tighter budget keeps a heavy texture light."
         >
           <label :style="lbl">Mesh mm</label>
-          <input v-model="form.targetEdge" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
+          <input
+            v-model="form.targetEdge"
+            type="text"
+            inputmode="decimal"
+            :style="num"
+            @input="emitChange"
+            @change="emitChange"
+          />
           <label :style="lbl">Max tris</label>
-          <input v-model="form.triBudget" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
+          <input
+            v-model="form.triBudget"
+            type="text"
+            inputmode="decimal"
+            :style="num"
+            @input="emitChange"
+            @change="emitChange"
+          />
         </div>
       </details>
 
       <div :style="note">Preview is real geometry at display resolution, exports keep full detail.</div>
 
-      <div v-for="[k, msg] in errors" :key="k" :style="problem" data-testid="texture-field-error">{{ k }}: {{ msg }}</div>
+      <div v-for="[k, msg] in errors" :key="k" :style="problem" data-testid="texture-field-error"
+        >{{ k }}: {{ msg }}</div
+      >
 
       <div :style="btnRow">
         <button :style="okBtn" @pointerdown.prevent.stop="panel.commit(toTextureValues(form))">
           <Icon name="check" :size="13" /> {{ editing ? "Apply" : "Add" }}
         </button>
-        <button :style="noBtn" @pointerdown.prevent.stop="panel.cancel()"><Icon name="close" :size="13" /> Cancel</button>
+        <button :style="noBtn" @pointerdown.prevent.stop="panel.cancel()"
+          ><Icon name="close" :size="13" /> Cancel</button
+        >
       </div>
     </div>
   </Teleport>

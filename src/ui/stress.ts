@@ -1,11 +1,5 @@
-// The pure half of the Stress panel: the material presets the engine knows by
-// name, turning the panel's setup into the `stress` op's options and into the
-// study the document saves, turning its reply into display rows in the user's
-// units, the blue to red colour map the viewport overlay and the panel's legend
-// share, and the arithmetic behind the view's handles: dragging a force arrow,
-// scaling the deformed shape, and reading a value off the coloured surface.
-// Nothing here touches the viewport or the store, so all of it is testable in
-// node.
+// The Stress panel's pure half: material presets, setup to `stress` op options and saved study, reply to display
+// rows, the colour map, and the arithmetic behind the force arrow, deformation and probe. Testable in node.
 
 import type { AxisDirection, Selector, StressSpot, StressStudy, StressSupportType, Vec3 } from "../types";
 import type { StressMaterial, StressOptions, StressReply, StressSpotArea } from "../geometry/client";
@@ -13,11 +7,10 @@ import type { PanelRow } from "../stores/panels";
 import { STUDY_DEFAULTS } from "../document/stressStudy";
 import { cylinderFromFace } from "../features/planeMath";
 import { displayRound, toDisplay, type Unit } from "./units";
+import { peakPlaceOf, type VerdictInput } from "./stressVerdict";
 
-/** E and yield in MPa, density in g/cm3. Mirrors the engine's presets, names
- *  and values both: a preset goes over the wire by name, and the engine's table
- *  is what it uses, so these numbers are only what the panel shows next to the
- *  name. */
+/** E and yield in MPa, density in g/cm3. Mirrors the engine's presets: a preset goes over the wire by name, so these
+ *  numbers are only what the panel shows. */
 export interface MaterialPreset {
   name: string;
   E: number;
@@ -68,45 +61,48 @@ export function cssHex(c: number): string {
 
 export type ForceDirection = StressStudy["loads"][number]["direction"];
 
+export const GRAVITY_DIRECTIONS: readonly AxisDirection[] = ["-Z", "+Z", "+X", "-X", "+Y", "-Y"];
+
+// Z is up and the front view looks along +Y.
+export const AXIS_LABELS: Record<AxisDirection, string> = {
+  "-Z": "Down (-Z)",
+  "+Z": "Up (+Z)",
+  "+X": "Right (+X)",
+  "-X": "Left (-X)",
+  "+Y": "Back (+Y)",
+  "-Y": "Front (-Y)",
+};
+
 export const FORCE_DIRECTIONS: readonly { value: ForceDirection; label: string }[] = [
   { value: "into", label: "Into the face" },
-  { value: "-Z", label: "-Z" },
-  { value: "+Z", label: "+Z" },
-  { value: "+X", label: "+X" },
-  { value: "-X", label: "-X" },
-  { value: "+Y", label: "+Y" },
-  { value: "-Y", label: "-Y" },
+  ...GRAVITY_DIRECTIONS.map((d) => ({ value: d, label: AXIS_LABELS[d] })),
   { value: "custom", label: "Custom vector" },
 ];
 
-export const GRAVITY_DIRECTIONS: readonly AxisDirection[] = ["-Z", "+Z", "+X", "-X", "+Y", "-Y"];
-
 export const AXES: Record<AxisDirection, Vec3> = {
-  "-Z": [0, 0, -1], "+Z": [0, 0, 1], "+X": [1, 0, 0], "-X": [-1, 0, 0], "+Y": [0, 1, 0], "-Y": [0, -1, 0],
+  "-Z": [0, 0, -1],
+  "+Z": [0, 0, 1],
+  "+X": [1, 0, 0],
+  "-X": [-1, 0, 0],
+  "+Y": [0, 1, 0],
+  "-Y": [0, -1, 0],
 };
 
 /** Standard gravity, m/s2, what the gravity checkbox applies. */
 export const GRAVITY = 9.81;
 
-/** Faces taken from the selection: body-stamped selectors for the engine, the
- *  display face ids for marking them, and the faces' summed area-weighted
- *  outward normal with their area, which "into the face" reads. A selector the
- *  view cannot place (one written by hand or over MCP that names a face by
- *  something other than a point) is kept for the engine with no face id. */
+/** Body-stamped selectors for the engine, display face ids for marking, and the summed area-weighted outward normal
+ *  for "into the face". A selector the view cannot place (hand or MCP written) is kept with no face id. */
 export interface StressFaceSet {
   selectors: Selector[];
   faceIds: number[];
   normalSum: Vec3;
   area: number;
-  /** How many of the selectors name a face the current model does not have
-   *  (an edit took it away, or the timeline is rolled back before it). They
-   *  stay in the set, and so in the saved study, for a model that has them
-   *  again; until then a Run is refused. Absent means none. */
+  /** Selectors naming a face the current model lacks. Kept, and saved, for a model that has them again; until then a
+   *  Run is refused. Absent means none. */
   missing?: number;
-  /** How many of the selectors the view cannot place but the engine still
-   *  resolves (a fingerprint whose old centre the face has moved off, a face
-   *  named by its normal). Absent means every selector without a face id that
-   *  is not missing. */
+  /** Selectors the view cannot place but the engine resolves (a moved fingerprint, a face named by its normal). Absent
+   *  means every selector without a face id that is not missing. */
   unshown?: number;
 }
 
@@ -126,12 +122,14 @@ export function faceCountLabel(set: StressFaceSet, spots: readonly StressSpot[] 
 
 function facesLabel(set: StressFaceSet): string {
   const n = set.selectors.length;
-  if (!n) return "none";
+  if (!n) return "No faces yet";
   const faces = `${n} face${n === 1 ? "" : "s"}`;
   const missing = set.missing ?? 0;
-  if (missing) return `${faces}, ${missing === n ? (n === 1 ? "not" : "none") : `${missing} not`} found on the current model`;
+  if (missing)
+    return `${faces}, ${missing === n ? (n === 1 ? "not" : "none") : `${missing} not`} found on the current model`;
   const unshown = unshownFaces(set);
-  if (unshown > 0) return `${faces} (${unshown === n ? (n === 1 ? "not" : "none") : `${unshown} not`} shown in the view)`;
+  if (unshown > 0)
+    return `${faces} (${unshown === n ? (n === 1 ? "not" : "none") : `${unshown} not`} shown in the view)`;
   return faces;
 }
 
@@ -187,8 +185,13 @@ export function newSupport(id: number, type: StressSupportType = "fixed"): Stres
 
 export function newLoad(id: number): StressLoadSetup {
   return {
-    id, faces: emptyFaceSet(), kind: "force", force: STUDY_DEFAULTS.force, direction: "into",
-    custom: [...STUDY_DEFAULTS.custom], pressure: STUDY_DEFAULTS.pressure,
+    id,
+    faces: emptyFaceSet(),
+    kind: "force",
+    force: STUDY_DEFAULTS.force,
+    direction: "into",
+    custom: [...STUDY_DEFAULTS.custom],
+    pressure: STUDY_DEFAULTS.pressure,
   };
 }
 
@@ -199,17 +202,19 @@ export function newSetup(body: string | null): StressSetup {
     loads: [newLoad(1)],
     gravity: { on: false, direction: "-Z" },
     material: STUDY_DEFAULTS.material,
-    custom: { E: STUDY_DEFAULTS.E, nu: STUDY_DEFAULTS.nu, yield: STUDY_DEFAULTS.yield, density: STUDY_DEFAULTS.density },
+    custom: {
+      E: STUDY_DEFAULTS.E,
+      nu: STUDY_DEFAULTS.nu,
+      yield: STUDY_DEFAULTS.yield,
+      density: STUDY_DEFAULTS.density,
+    },
     size: null,
   };
 }
 
-/** The next free id in a list of rows. */
 export function nextId(rows: readonly { id: number }[]): number {
   return rows.reduce((m, r) => Math.max(m, r.id), 0) + 1;
 }
-
-// --- the study the document saves ---------------------------------------------
 
 function num(v: unknown, fallback: number): number {
   return typeof v === "number" && Number.isFinite(v) ? v : fallback;
@@ -221,17 +226,19 @@ function copy<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
 }
 
-/** The setup as the document stores it: selectors only, and every number a
- *  number. The study saves numbers only, so a field the user has just cleared
- *  keeps the value `prev` (the study saved before) has for it, the last one the
- *  user had there, and a Run refuses the blank field by name meanwhile. Only a
- *  row `prev` has not seen falls back to the default it was shown with. */
+/** Selectors and numbers only. A just-cleared field keeps the value `prev` saved, and a Run refuses the blank field
+ *  by name meanwhile; only a row `prev` has not seen falls back to its shown default. */
 export function studyFromSetup(s: StressSetup, prev?: Readonly<StressStudy> | null): StressStudy {
   const d = STUDY_DEFAULTS;
   const pc = prev?.custom;
   return {
     body: s.body,
-    supports: s.supports.map((x) => ({ id: x.id, type: x.type, faces: copy(x.faces.selectors), ...savedSpots(x.spots) })),
+    supports: s.supports.map((x) => ({
+      id: x.id,
+      type: x.type,
+      faces: copy(x.faces.selectors),
+      ...savedSpots(x.spots),
+    })),
     loads: s.loads.map((l) => {
       const was = prev?.loads.find((p) => p.id === l.id);
       const wc = was?.custom ?? d.custom;
@@ -258,9 +265,7 @@ export function studyFromSetup(s: StressSetup, prev?: Readonly<StressStudy> | nu
   };
 }
 
-/** A row's spots as the study saves them: the key only when there are any, and
- *  a radius the user has just cleared left out with its spot's old one unknown,
- *  so the study never holds a spot without a size. */
+/** The key only when there are spots; a just-cleared radius is left out, so no saved spot lacks a size. */
 function savedSpots(spots: readonly StressSpot[] | undefined): { spots?: StressSpot[] } {
   const kept = (spots ?? []).filter((s) => isNum(s.radius) && s.radius > 0);
   return kept.length ? { spots: copy(kept) } : {};
@@ -272,7 +277,10 @@ export function setupFromStudy(study: StressStudy, faces: (selectors: Selector[]
   return {
     body: study.body,
     supports: study.supports.map((x) => ({
-      id: x.id, type: x.type, faces: faces(copy(x.faces)), ...(x.spots?.length ? { spots: copy(x.spots) } : {}),
+      id: x.id,
+      type: x.type,
+      faces: faces(copy(x.faces)),
+      ...(x.spots?.length ? { spots: copy(x.spots) } : {}),
     })),
     loads: study.loads.map((l) => ({
       id: l.id,
@@ -291,12 +299,8 @@ export function setupFromStudy(study: StressStudy, faces: (selectors: Selector[]
   };
 }
 
-// --- the request ----------------------------------------------------------------
-
-/** The unit direction "into the face" means: minus the mean outward normal of
- *  the faces and the spots, a spot counting as a disc of its radius. Null when
- *  they point too many ways to have one, a whole cylinder or a set of opposite
- *  faces, where it would be a guess. */
+/** Minus the mean outward normal of the faces and spots, a spot counting as a disc of its radius. Null when they point
+ *  too many ways (a whole cylinder, opposite faces). */
 export function intoDirection(faces: StressFaceSet, spots: readonly StressSpot[] = []): Vec3 | null {
   let [x, y, z] = faces.normalSum;
   let area = faces.area;
@@ -317,19 +321,22 @@ export function intoDirection(faces: StressFaceSet, spots: readonly StressSpot[]
 /** One load's unit direction, or why it has none. */
 export function forceDirection(load: StressLoadSetup): Vec3 | string {
   if (load.direction === "into") {
-    // "Into the face" is read off the faces drawn in the view. With one of them
-    // not there, the faces it has would give a direction the load may not
-    // have, and none at all would read as faces pointing every way.
+    // "Into the face" is read off the faces drawn in the view, so with any unplaced the direction would be a guess.
     const unplaced = unshownFaces(load.faces) + (load.faces.missing ?? 0);
     if (unplaced > 0) {
-      return `${unplaced === 1 ? "one of its faces is" : `${unplaced} of its faces are`} not shown in the view, so ` +
-        "\"into the face\" cannot be worked out; set the faces again, or pick an axis or a custom vector";
+      return (
+        `${unplaced === 1 ? "one of its faces is" : `${unplaced} of its faces are`} not shown in the view, so ` +
+        '"into the face" cannot be worked out; set the faces again, or pick an axis or a custom vector'
+      );
     }
     if (load.spots?.some((s) => !s.normal)) {
-      return "one of its spots has no direction of its own, so \"into the face\" cannot be worked out; place the spot again, or pick an axis or a custom vector";
+      return 'one of its spots has no direction of its own, so "into the face" cannot be worked out; place the spot again, or pick an axis or a custom vector';
     }
     const d = intoDirection(load.faces, load.spots);
-    return d ?? "its faces point different ways, so \"into the face\" has no single direction; pick an axis, a custom vector or a pressure";
+    return (
+      d ??
+      'its faces point different ways, so "into the face" has no single direction; pick an axis, a custom vector or a pressure'
+    );
   }
   if (load.direction === "custom") {
     const [x, y, z] = load.custom;
@@ -359,8 +366,15 @@ export type StressRequest = { ok: true; body: string; options: StressOptions } |
  *  value its default. */
 function untouchedLoad(l: StressLoadSetup): boolean {
   const d = STUDY_DEFAULTS;
-  return !l.faces.selectors.length && !l.spots?.length && l.kind === "force" && l.force === d.force && l.direction === "into" &&
-    l.pressure === d.pressure && l.custom.every((v, i) => v === d.custom[i]);
+  return (
+    !l.faces.selectors.length &&
+    !l.spots?.length &&
+    l.kind === "force" &&
+    l.force === d.force &&
+    l.direction === "into" &&
+    l.pressure === d.pressure &&
+    l.custom.every((v, i) => v === d.custom[i])
+  );
 }
 
 /** Why a face set cannot be sent as it is: faces the current model lacks. */
@@ -373,11 +387,13 @@ function missingFaces(set: StressFaceSet, which: string): string | null {
 /** What a row holds or pushes on, as the engine takes it: its faces when it
  *  has any, its spots when it has any, or why it cannot be sent. */
 function areaOf(
-  faces: StressFaceSet, spots: readonly StressSpot[] | undefined, which: string,
+  faces: StressFaceSet,
+  spots: readonly StressSpot[] | undefined,
+  which: string,
 ): { faces?: Selector[]; spots?: StressSpotArea[] } | string {
   const placed = spots ?? [];
   if (!faces.selectors.length && !placed.length) {
-    return `place ${which} on the body, or set its faces from a face selection`;
+    return `${which} has no faces yet, place it on the body or use selected faces`;
   }
   const missing = missingFaces(faces, which);
   if (missing) return missing;
@@ -388,9 +404,7 @@ function areaOf(
   };
 }
 
-/** The radius a spot is placed with on a body whose bounding box has this
- *  diagonal, mm: a twentieth of it, to two figures, so it is in proportion to
- *  the part and never a point. */
+/** A twentieth of the bounding box diagonal, mm, to two figures, so a spot is in proportion to the part. */
 export function defaultSpotRadius(diagonal: number): number {
   if (!Number.isFinite(diagonal) || !(diagonal > 0)) return STUDY_DEFAULTS.radius;
   return Math.max(0.5, roundSig(diagonal / 20, 2));
@@ -407,14 +421,17 @@ export function buildStressRequest(s: StressSetup): StressRequest {
     const area = areaOf(x.faces, x.spots, which);
     if (typeof area === "string") return { ok: false, message: area };
     if (area.spots && x.type !== "fixed") {
-      return { ok: false, message: `${which} is ${x.type} and has a spot, a spot is held every way, make it fixed or remove the spot` };
+      return {
+        ok: false,
+        message: `${which} is ${x.type} but has a spot, and a spot holds every way, so make it fixed or remove the spot`,
+      };
     }
     supports.push({ type: x.type, ...area });
   }
   // Its own weight is a load, so a body under gravity alone is a study, and
   // the blank row a fresh panel starts with is no load at all then.
   const rows = s.gravity.on ? s.loads.filter((l) => !untouchedLoad(l)) : s.loads;
-  if (!rows.length && !s.gravity.on) return { ok: false, message: "add a load, or turn on gravity" };
+  if (!rows.length && !s.gravity.on) return { ok: false, message: "add a load, or turn on Own weight" };
   const loads: StressOptions["loads"] = [];
   for (const l of rows) {
     const i = s.loads.indexOf(l);
@@ -436,19 +453,22 @@ export function buildStressRequest(s: StressSetup): StressRequest {
     const { E, nu, yield: y, density } = s.custom;
     // A cleared number input reads as "", which compares as 0, so check the type first.
     if (!isNum(E) || !(E > 0)) return { ok: false, message: "the custom material needs a modulus E above 0" };
-    if (!isNum(nu) || !(nu >= 0 && nu < 0.5)) return { ok: false, message: "Poisson's ratio must be from 0 to below 0.5" };
+    if (!isNum(nu) || !(nu >= 0 && nu < 0.5))
+      return { ok: false, message: "Poisson's ratio must be from 0 to below 0.5" };
     if (!isNum(y) || !(y > 0)) return { ok: false, message: "the custom material needs a yield strength above 0" };
     const hasDensity = isNum(density) && density > 0;
-    if (s.gravity.on && !hasDensity) return { ok: false, message: "gravity needs the material's density in g/cm3" };
+    if (s.gravity.on && !hasDensity) return { ok: false, message: "own weight needs the material's density in g/cm3" };
     material = { E, nu, yield: y, ...(hasDensity ? { density } : {}), name: CUSTOM_MATERIAL };
   } else {
-    if (!STRESS_MATERIALS.some((m) => m.name === s.material)) return { ok: false, message: `unknown material ${s.material}` };
+    if (!STRESS_MATERIALS.some((m) => m.name === s.material))
+      return { ok: false, message: `unknown material ${s.material}` };
     material = s.material;
   }
   const options: StressOptions = { supports, loads, material };
   if (s.gravity.on) options.gravity = gravityVector(s.gravity.direction);
   if (s.size !== null) {
-    if (!isNum(s.size) || !(s.size > 0)) return { ok: false, message: "the element size must be above 0, or blank for automatic" };
+    if (!isNum(s.size) || !(s.size > 0))
+      return { ok: false, message: "the mesh size must be above 0, or blank for automatic" };
     options.size = s.size;
   }
   return { ok: true, body: s.body, options };
@@ -464,16 +484,22 @@ function roundForce(v: number): number {
   return v === 0 ? 0 : Number(v.toPrecision(12)) + 0;
 }
 
-// --- the result -------------------------------------------------------------------
-
 /** The result as panel rows, lengths in the display unit. */
 export interface StressResultView {
+  /** The rows that say whether it holds and how far it bends; `details` holds the rest. */
   rows: PanelRow[];
+  details: PanelRow[];
   warnings: string[];
   /** The colour bar's ends, MPa. */
   legend: { min: number; max: number };
   /** Below 1, or no yield at all, the part is expected to yield. */
   yields: boolean;
+  /** What the verdict is worded from, as the view shows it: marked or not. */
+  verdict: VerdictInput;
+  /** Where the peak stress is, for the weakest spot's pin. */
+  peakAt: Vec3 | null;
+  /** The largest deflection, mm. */
+  maxDeflection: number | null;
 }
 
 function fmtPoint(p: Vec3, unit: Unit): string {
@@ -494,44 +520,72 @@ export function valueRange(values: readonly number[]): { min: number; max: numbe
 
 /** `supports` are the kinds of the supports sent, in order, which is the order
  *  the engine's per-support reactions come back in. */
-export function formatStressResult(r: StressReply, unit: Unit, supports: readonly StressSupportType[] = []): StressResultView {
-  const rows: PanelRow[] = [];
+export function formatStressResult(
+  r: StressReply,
+  unit: Unit,
+  supports: readonly StressSupportType[] = [],
+): StressResultView {
   const sf = r.safetyFactor;
-  rows.push({ k: "Material", v: r.material.name });
-  rows.push({ k: "Peak von Mises", v: `${displayRound(r.maxVonMises.value)} MPa` });
+  const rows: PanelRow[] = [
+    { k: "Safety factor", v: sf !== null && Number.isFinite(sf) ? `${displayRound(sf)}` : "none, no stress" },
+    { k: "Peak stress", v: `${displayRound(r.maxVonMises.value)} MPa` },
+    { k: "Max deflection", v: `${displayRound(toDisplay(r.maxDisplacement.value))} ${unit}` },
+  ];
+  const details: PanelRow[] = [];
+  details.push({ k: "Material", v: r.material.name });
   // Not the engine's face index: it counts the faces of a copy of the body, a
   // number nothing else in the app shows.
-  rows.push({ k: "Peak at", v: fmtPoint(r.maxVonMises.at, unit) });
-  rows.push({ k: "Max deflection", v: `${displayRound(toDisplay(r.maxDisplacement.value))} ${unit}` });
-  rows.push({ k: "Deflection at", v: fmtPoint(r.maxDisplacement.at, unit) });
-  rows.push({ k: "Safety factor", v: sf !== null && Number.isFinite(sf) ? `${displayRound(sf)}` : "none, no stress" });
-  rows.push({ k: "Yield", v: `${displayRound(r.material.yield)} MPa` });
-  if (r.weight) rows.push({ k: "Weight", v: fmtForce(r.weight) });
-  rows.push({ k: "Applied", v: fmtForce(r.applied) });
-  rows.push({ k: "Reaction", v: fmtForce(r.reaction) });
+  details.push({ k: "Peak at", v: fmtPoint(r.maxVonMises.at, unit) });
+  details.push({ k: "Deflection at", v: fmtPoint(r.maxDisplacement.at, unit) });
+  details.push({ k: "Yield", v: `${displayRound(r.material.yield)} MPa` });
+  if (r.weight) details.push({ k: "Weight", v: fmtForce(r.weight) });
+  details.push({ k: "Applied", v: fmtForce(r.applied) });
+  details.push({ k: "Reaction", v: fmtForce(r.reaction) });
   // One support's reaction is the total above, so per support only with several.
   const reactions = r.reactions ?? [];
   if (reactions.length > 1) {
     for (const [i, f] of reactions.entries()) {
       const kind = supports[i];
       const label = kind ? SUPPORT_KINDS.find((x) => x.value === kind)?.label.toLowerCase() : undefined;
-      rows.push({ k: `Support ${i + 1}${label ? `, ${label}` : ""}`, v: fmtForce(f) });
+      details.push({ k: `Support ${i + 1}${label ? `, ${label}` : ""}`, v: fmtForce(f) });
     }
   }
   // In mm like the element size box and the engine's warnings about it.
-  rows.push({ k: "Mesh", v: `${r.mesh.elements} elements, ${displayRound(r.mesh.size)} mm` });
+  details.push({ k: "Mesh", v: `${r.mesh.elements} elements, ${displayRound(r.mesh.size)} mm` });
   const warnings = [...(r.warnings ?? [])];
   for (const e of r.errors ?? []) warnings.push(e.feature_id ? `${e.feature_id}: ${e.message}` : e.message);
   const values = r.surface?.vonMises ?? [];
   const legend = values.length ? valueRange(values) : { min: 0, max: r.maxVonMises.value };
-  return { rows, warnings, legend, yields: sf !== null && sf < 1 };
+  return {
+    rows,
+    details,
+    warnings,
+    legend,
+    yields: sf !== null && sf < 1,
+    verdict: { safetyFactor: sf, peakPlace: peakPlaceOf(r.warnings ?? []) },
+    peakAt: r.maxVonMises.at,
+    maxDeflection: r.maxDisplacement.value,
+  };
+}
+
+/** The legend's end labels, MPa. A minimum under a thousandth of the peak is no colour of its own, so it reads 0. */
+export function legendEnds(legend: { min: number; max: number }): [string, string] {
+  const min = Math.abs(legend.min) < Math.abs(legend.max) / 1000 ? 0 : legend.min;
+  return [String(displayRound(min)), String(displayRound(legend.max))];
+}
+
+/** The setup a result ran with, in one line: what holds it, what pushes, its own weight and the material. */
+export function setupSummary(s: StressSetup): string {
+  const n = (k: number, what: string) => `${k} ${what}${k === 1 ? "" : "s"}`;
+  const parts = [n(s.supports.length, "support"), n(s.loads.length, "load")];
+  if (s.gravity.on) parts.push(`own weight ${s.gravity.direction}`);
+  parts.push(s.material);
+  return parts.join(", ");
 }
 
 function fmtForce(f: Vec3): string {
   return `${displayRound(f[0])}, ${displayRound(f[1])}, ${displayRound(f[2])} N`;
 }
-
-// --- the colour map -------------------------------------------------------------
 
 // Blue, cyan, green, yellow, red, in sRGB, evenly spaced: the usual FEA ramp,
 // low stress cold and the peak hot.
@@ -556,7 +610,7 @@ export function stressColor(t: number): Vec3 {
 
 /** One sRGB triple per value, mapped over [min, max]. A flat field (max = min)
  *  is all blue rather than a division by zero. */
-export function stressColors(values: readonly number[], min: number, max: number): Float32Array {
+export function stressColors(values: ArrayLike<number>, min: number, max: number): Float32Array {
   const out = new Float32Array(values.length * 3);
   const span = max - min;
   for (let i = 0; i < values.length; i++) {
@@ -578,12 +632,8 @@ export function legendGradient(): string {
   return `linear-gradient(to right, ${parts.join(", ")})`;
 }
 
-// --- the force arrow -------------------------------------------------------------
-// The arrow's length on screen grows with the cube root of the force, so twice
-// as long is eight times the force at any size: a hand that doubles an arrow
-// gets a bigger load, not a thousandfold one. Pixels, not mm, because the arrow
-// is a constant size on screen like every other handle, and a drag is
-// measured in what the hand moved.
+// Arrow length grows with the cube root of the force, so doubling an arrow is eight times the force. In screen pixels,
+// since the arrow is a constant size handle and a drag measures what the hand moved.
 
 /** Length goes with the force to the power 1 / ARROW_EXPONENT. */
 export const ARROW_EXPONENT = 3;
@@ -624,11 +674,8 @@ export function arrowPxToForce(px: number): number {
   return roundSig(pxToForce(px), 2);
 }
 
-/** Where a drag of an arrow started: the load's force, the arrow's drawn
- *  length, and how far behind the tip the press landed. A drag is measured
- *  from there, so pressing anywhere on the tip and letting go changes nothing,
- *  and an arrow drawn at its longest for a force past the scale still grows
- *  and shrinks from what the load is. */
+/** A drag is measured from where it started, so pressing the tip and letting go changes nothing, and an arrow capped
+ *  at its longest still grows and shrinks from the real force. */
 export interface ForceDragStart {
   force: number;
   px: number;
@@ -657,13 +704,8 @@ export interface SnapCandidate {
   dir: Vec3;
 }
 
-/** Where a drag of the arrow's tip lands. `v` is the tip's offset from the
- *  arrow's root in world units, in the plane facing the camera; `view` is the
- *  camera's unit forward direction. A candidate whose screen image lies within
- *  `degrees` of the drag takes it over, and the length is then measured along
- *  that candidate, so a drag along an arrow that leans into the screen changes
- *  its size and nothing else. A candidate pointing at the camera has no screen
- *  direction to aim at and is passed over. Null for a drag back onto the root. */
+/** `v` is the tip offset from the root in world units, in the camera-facing plane. A candidate within `degrees` on
+ *  screen takes over and the length is measured along it; one facing the camera is skipped. Null back on the root. */
 export function snapDrag(
   v: Vec3,
   view: Vec3,
@@ -687,25 +729,23 @@ export function snapDrag(
   return { key: "custom", dir: [v[0] / vl, v[1] / vl, v[2] / vl], length: vl };
 }
 
-/** What a drag of a force arrow writes into its load: the direction by name
- *  (a custom one rounded to three decimals, which is all a hand can aim) and
- *  the force from the arrow's length on screen against where the drag began.
- *  The force is always positive: the direction carries the sign. */
+/** A custom direction is rounded to three decimals, all a hand can aim. The force is always positive, the direction
+ *  carries the sign. */
 export function forceDragPatch(
   snapped: { key: ForceDirection; dir: Vec3; length: number },
   worldPerPx: number,
   start: ForceDragStart,
 ): { direction: ForceDirection; custom: Vec3 | null; force: number } {
   const px = worldPerPx > 0 ? snapped.length / worldPerPx + start.offsetPx : start.px;
-  const custom: Vec3 | null = snapped.key === "custom"
-    ? [round3(snapped.dir[0]), round3(snapped.dir[1]), round3(snapped.dir[2])]
-    : null;
+  const custom: Vec3 | null =
+    snapped.key === "custom" ? [round3(snapped.dir[0]), round3(snapped.dir[1]), round3(snapped.dir[2])] : null;
   return { direction: snapped.key, custom, force: dragForce(start, px) };
 }
 
 /** The live label beside a dragged arrow. */
 export function forceDragLabel(patch: { direction: ForceDirection; force: number }): string {
-  const named = patch.direction === "custom" ? "" : `, ${FORCE_DIRECTIONS.find((d) => d.value === patch.direction)?.label.toLowerCase()}`;
+  const label = FORCE_DIRECTIONS.find((d) => d.value === patch.direction)?.label;
+  const named = patch.direction === "custom" || !label ? "" : `, ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
   return `${patch.force} N${named}`;
 }
 
@@ -716,8 +756,6 @@ function round3(v: number): number {
 function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
-
-// --- where the glyphs stand --------------------------------------------------------
 
 export type Tri = [Vec3, Vec3, Vec3];
 
@@ -747,10 +785,8 @@ export function areaCentre(tris: readonly Tri[]): Vec3 | null {
   return a > 0 ? [c[0] / a, c[1] / a, c[2] / a] : null;
 }
 
-/** Up to `max` spots spread over a pressure's faces, each with the direction
- *  into the face there (`normals` are the triangles' outward normals). Every
- *  k-th triangle by area order would bunch them on the big ones, so they are
- *  taken in the faces' own order, which runs across the surface. */
+/** Up to `max` spots over a pressure's faces, with the direction into the face there. Taken in the faces' own order,
+ *  since area order would bunch them on the big triangles. */
 export function pressureSites(tris: readonly Tri[], normals: readonly Vec3[], max = 16): { at: Vec3; dir: Vec3 }[] {
   const out: { at: Vec3; dir: Vec3 }[] = [];
   if (!tris.length || max <= 0) return out;
@@ -763,26 +799,28 @@ export function pressureSites(tris: readonly Tri[], normals: readonly Vec3[], ma
   return out;
 }
 
-/** The axis a pinned support turns about, as a segment through its face and a
- *  little past both ends, from the face's own tessellation. Null when the face
- *  is not a cylinder (the engine refuses those, and says so). */
+/** The pin axis as a segment through the face and a little past both ends. Null when the face is not a cylinder,
+ *  which the engine refuses. */
 export function pinAxisSegment(points: readonly Vec3[], normals: readonly Vec3[]): { from: Vec3; to: Vec3 } | null {
   const cyl = cylinderFromFace([...points], [...normals]);
   if (!cyl) return null;
   let lo = Infinity;
   let hi = -Infinity;
   for (const p of points) {
-    const t = (p[0] - cyl.point[0]) * cyl.axis[0] + (p[1] - cyl.point[1]) * cyl.axis[1] + (p[2] - cyl.point[2]) * cyl.axis[2];
+    const t =
+      (p[0] - cyl.point[0]) * cyl.axis[0] + (p[1] - cyl.point[1]) * cyl.axis[1] + (p[2] - cyl.point[2]) * cyl.axis[2];
     if (t < lo) lo = t;
     if (t > hi) hi = t;
   }
   if (!(hi >= lo)) return null;
   const margin = Math.max(0.25 * (hi - lo), cyl.radius);
-  const at = (t: number): Vec3 => [cyl.point[0] + cyl.axis[0] * t, cyl.point[1] + cyl.axis[1] * t, cyl.point[2] + cyl.axis[2] * t];
+  const at = (t: number): Vec3 => [
+    cyl.point[0] + cyl.axis[0] * t,
+    cyl.point[1] + cyl.axis[1] * t,
+    cyl.point[2] + cyl.axis[2] * t,
+  ];
   return { from: at(lo - margin), to: at(hi + margin) };
 }
-
-// --- the deformed shape -----------------------------------------------------------
 
 /** The scale that draws the largest deflection at `share` of the body's size
  *  (its bounding box diagonal), to two significant figures. 1, true scale, when
@@ -828,12 +866,12 @@ export function displacedPositions(
   return out;
 }
 
-/** The Animate toggle's swing: 0 to `scale` and back, eased at both ends. */
-export function swingScale(timeMs: number, scale: number, periodMs = 1600): number {
+export const SWING_PERIOD_MS = 1600;
+
+/** The deformation's swing: 0 to `scale` and back, eased at both ends, at `scale` half way through a period. */
+export function swingScale(timeMs: number, scale: number, periodMs = SWING_PERIOD_MS): number {
   return (scale * (1 - Math.cos((2 * Math.PI * timeMs) / periodMs))) / 2;
 }
-
-// --- the probe ---------------------------------------------------------------------
 
 /** Barycentric weights of `p` in triangle abc, the point projected onto the
  *  triangle's plane and pulled back inside it, so a hit a hair off the edge
@@ -859,10 +897,8 @@ export function barycentric(a: Vec3, b: Vec3, c: Vec3, p: Vec3): Vec3 {
   return [u / s, v / s, w / s];
 }
 
-/** Von Mises (MPa) and the deflection (mm, its size, and its vector) at a
- *  point of surface triangle `tri` with barycentric `weights`, interpolated
- *  from the triangle's corners. Deflection is null when the reply carried no
- *  displacement. Null for a triangle the surface does not have. */
+/** Von Mises (MPa) and deflection (mm, its size and vector) interpolated at `weights` in surface triangle `tri`.
+ *  Deflection is null without displacement data; null for a triangle the surface lacks. */
 export function probeValues(
   surface: { indices: ArrayLike<number>; vonMises: ArrayLike<number>; displacement?: ArrayLike<number> },
   tri: number,
@@ -889,9 +925,11 @@ export function probeLabel(p: { vonMises: number; deflection: number | null }, u
  *  load for MCP callers too, as "support 1 (supports[0].faces[1])"; the panel
  *  calls the same row "Support 1", so the request path is dropped. */
 export function panelMessage(message: string): string {
-  const named = message.replace(
-    /\b(support|load) (\d+) \((?:supports|loads)\[\d+\][^)]*\)/g,
-    (_, kind: string, n: string) => `${kind === "support" ? "Support" : "Load"} ${n}`,
-  ).replace(/\b(?:supports|loads)\[\d+\]\.spots\[(\d+)\] of /g, (_, i: string) => `spot ${Number(i) + 1} of `);
+  const named = message
+    .replace(
+      /\b(support|load) (\d+) \((?:supports|loads)\[\d+\][^)]*\)/g,
+      (_, kind: string, n: string) => `${kind === "support" ? "Support" : "Load"} ${n}`,
+    )
+    .replace(/\b(?:supports|loads)\[\d+\]\.spots\[(\d+)\] of /g, (_, i: string) => `spot ${Number(i) + 1} of `);
   return named.charAt(0).toUpperCase() + named.slice(1);
 }

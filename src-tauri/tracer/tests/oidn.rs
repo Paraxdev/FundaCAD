@@ -19,7 +19,14 @@ fn leak(s: String) -> &'static str {
 }
 
 fn files(set: &[(&'static str, &'static [u8])]) -> &'static [Pinned] {
-    let v: Vec<Pinned> = set.iter().map(|(name, bytes)| Pinned { member: leak(format!("bin/{name}")), file: leak(format!("bin/{name}")), sha256: leak(sha256_hex(bytes)) }).collect();
+    let v: Vec<Pinned> = set
+        .iter()
+        .map(|(name, bytes)| Pinned {
+            member: leak(format!("bin/{name}")),
+            file: leak(format!("bin/{name}")),
+            sha256: leak(sha256_hex(bytes)),
+        })
+        .collect();
     Box::leak(v.into_boxed_slice())
 }
 
@@ -64,8 +71,19 @@ fn the_platform_load_from_an_empty_folder_leaves_the_filter_with_a_note() {
 
 #[test]
 fn an_archive_unpacks_only_its_pinned_set() {
-    let archive = zip_of(&[("oidn-x/bin/a.dll", SET[0].1), ("oidn-x/bin/b.dll", SET[1].1), ("oidn-x/bin/oidnDenoise.exe", b"never")]);
-    let rel = Release { url: "", sha256: leak(sha256_hex(&archive)), bytes: archive.len() as u64, installed: 0, zip: true, files: files(SET) };
+    let archive = zip_of(&[
+        ("oidn-x/bin/a.dll", SET[0].1),
+        ("oidn-x/bin/b.dll", SET[1].1),
+        ("oidn-x/bin/oidnDenoise.exe", b"never"),
+    ]);
+    let rel = Release {
+        url: "",
+        sha256: leak(sha256_hex(&archive)),
+        bytes: archive.len() as u64,
+        installed: 0,
+        zip: true,
+        files: files(SET),
+    };
     let dest = scratch("install").join("2.5.1");
     oidn::install(&archive, &rel, &dest).unwrap();
     assert!(oidn::verify(&dest, rel.files).is_ok());
@@ -75,7 +93,8 @@ fn an_archive_unpacks_only_its_pinned_set() {
 #[test]
 fn an_archive_with_another_digest_writes_nothing() {
     let archive = zip_of(&[("oidn-x/bin/a.dll", SET[0].1), ("oidn-x/bin/b.dll", SET[1].1)]);
-    let rel = Release { url: "", sha256: leak(sha256_hex(b"other")), bytes: 0, installed: 0, zip: true, files: files(SET) };
+    let rel =
+        Release { url: "", sha256: leak(sha256_hex(b"other")), bytes: 0, installed: 0, zip: true, files: files(SET) };
     let dest = scratch("badzip").join("2.5.1");
     let err = oidn::install(&archive, &rel, &dest).err().expect("refused");
     assert!(err.contains("pinned release digest"), "{err}");
@@ -85,7 +104,8 @@ fn an_archive_with_another_digest_writes_nothing() {
 #[test]
 fn an_archive_missing_a_pinned_file_writes_nothing() {
     let archive = zip_of(&[("oidn-x/bin/a.dll", SET[0].1)]);
-    let rel = Release { url: "", sha256: leak(sha256_hex(&archive)), bytes: 0, installed: 0, zip: true, files: files(SET) };
+    let rel =
+        Release { url: "", sha256: leak(sha256_hex(&archive)), bytes: 0, installed: 0, zip: true, files: files(SET) };
     let dest = scratch("short").join("2.5.1");
     assert!(oidn::install(&archive, &rel, &dest).is_err());
     assert!(!dest.exists() && !dest.with_extension("part").exists());

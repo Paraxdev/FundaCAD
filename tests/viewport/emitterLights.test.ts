@@ -21,10 +21,23 @@ function quad(id: string, fid: number, s = 1, x = 0): BodyMesh {
   geo.setAttribute("position", new THREE.Float32BufferAttribute([x, 0, 0, x + s, 0, 0, x + s, s, 0, x, s, 0], 3));
   geo.setIndex([0, 1, 2, 0, 2, 3]);
   const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial());
-  return { id, name: id, faceStart: fid, faceCount: 1, mesh, faceIds: [fid, fid], baseColors: new Float32Array(12), faceTriangles: new Map() } as unknown as BodyMesh;
+  return {
+    id,
+    name: id,
+    faceStart: fid,
+    faceCount: 1,
+    mesh,
+    faceIds: [fid, fid],
+    baseColors: new Float32Array(12),
+    faceTriangles: new Map(),
+  } as unknown as BodyMesh;
 }
 
-interface Rig { layer: BodyFinishLayer; root: THREE.Group; later: (() => void)[] }
+interface Rig {
+  layer: BodyFinishLayer;
+  root: THREE.Group;
+  later: (() => void)[];
+}
 
 function rig(bodies: BodyMesh[], extra: Partial<FinishHost> = {}, shadows = true): Rig {
   const model = { bodies, edges: [] } as unknown as ModelView;
@@ -55,7 +68,9 @@ function lights(root: THREE.Object3D) {
 const base: FinishOverlays = { xray: false, stale: false, wireframe: false };
 const glow = (v: number) => ({ ...FINISH, emissive: v });
 
-beforeEach(() => { fits.mockClear(); });
+beforeEach(() => {
+  fits.mockClear();
+});
 
 describe("emitter lights on a glow change", () => {
   it("re-uses the fitted patches when only the amount changes", () => {
@@ -100,10 +115,19 @@ describe("emitter lights on a glow change", () => {
     layer.bodyFinish = finish;
     layer.apply(base);
     expect(fits.mock.calls.length).toBeLessThan(bodies.length / 2);
-    const kept = lights(root).lit.map((l) => `${l.width.toFixed(2)}@${l.position.x.toFixed(3)}`).sort();
+    const kept = lights(root)
+      .lit.map((l) => `${l.width.toFixed(2)}@${l.position.x.toFixed(3)}`)
+      .sort();
 
-    const sizes = bodies.map((b) => ({ x: (b.mesh.geometry.getAttribute("position").array as Float32Array)[0]!, s: 0.5 + ((Number(b.id.slice(1)) * 37) % 200) / 20 }));
-    const brute = sizes.sort((p, q) => q.s - p.s).slice(0, 12).map((p) => `${p.s.toFixed(2)}@${(p.x + p.s / 2).toFixed(3)}`).sort();
+    const sizes = bodies.map((b) => ({
+      x: (b.mesh.geometry.getAttribute("position").array as Float32Array)[0]!,
+      s: 0.5 + ((Number(b.id.slice(1)) * 37) % 200) / 20,
+    }));
+    const brute = sizes
+      .sort((p, q) => q.s - p.s)
+      .slice(0, 12)
+      .map((p) => `${p.s.toFixed(2)}@${(p.x + p.s / 2).toFixed(3)}`)
+      .sort();
     expect(kept).toEqual(brute);
   });
 });
@@ -112,7 +136,10 @@ describe("emitter light structure", () => {
   it("keeps the number of lights and shadow casters through a drag and as patches come and go", () => {
     const bodies = [quad("a", 0), quad("b", 1, 2, 3), quad("c", 2, 3, 8)];
     const { layer, root } = rig(bodies);
-    const shape = () => { const l = lights(root); return [l.area.length, l.shadow.length]; };
+    const shape = () => {
+      const l = lights(root);
+      return [l.area.length, l.shadow.length];
+    };
     layer.bodyFinish = { a: glow(0.3) };
     layer.apply(base);
     const first = shape();
@@ -187,7 +214,10 @@ describe("progressive emitter fill", () => {
     const sync = rig(bodies);
     sync.layer.bodyFinish = finish;
     sync.layer.apply(base);
-    const key = (r: THREE.Object3D) => lights(r).lit.map((l) => l.position.x.toFixed(3)).sort();
+    const key = (r: THREE.Object3D) =>
+      lights(r)
+        .lit.map((l) => l.position.x.toFixed(3))
+        .sort();
     expect(key(root)).toEqual(key(sync.root));
   });
 });

@@ -19,7 +19,10 @@ const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const OUT = path.resolve(process.argv[2] || "export_dialog_shots");
-if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+if (!TOKEN) {
+  console.error("set SC_TOKEN");
+  process.exit(1);
+}
 let failures = 0;
 const check = (name, ok, detail) => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
@@ -30,11 +33,17 @@ const check = (name, ok, detail) => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ executablePath: EXE, args: ["--use-angle=swiftshader", "--no-sandbox"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+  page.on("pageerror", (e) => {
+    console.error("PAGE ERROR:", e.message);
+    failures++;
+  });
   await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
-  if (modal) { await modal.click(); await page.waitForTimeout(400); }
+  if (modal) {
+    await modal.click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
   await page.evaluate(() => localStorage.removeItem("fundacad.exportSettings"));
 
@@ -53,7 +62,10 @@ const check = (name, ok, detail) => {
     await page.waitForTimeout(150);
     const ok = await page.evaluate((lbl) => {
       const row = [...document.querySelectorAll(".select-pop .opt-row")].find((r) => r.textContent.trim() === lbl);
-      if (row) { row.click(); return true; }
+      if (row) {
+        row.click();
+        return true;
+      }
       return false;
     }, label);
     await page.waitForTimeout(150);
@@ -71,17 +83,26 @@ const check = (name, ok, detail) => {
 
   await page.click("[data-testid=export-advanced]");
   await page.waitForTimeout(200);
-  check("the Advanced toggle reveals the three faceting settings",
-    (await has("export-surface-deviation")) && (await has("export-normal-deviation")) && (await has("export-max-edge")));
+  check(
+    "the Advanced toggle reveals the three faceting settings",
+    (await has("export-surface-deviation")) && (await has("export-normal-deviation")) && (await has("export-max-edge")),
+  );
 
   await pick("export-refinement", "High");
-  check("a preset fills the values", (await value("export-surface-deviation")) === "0.005" && (await value("export-normal-deviation")) === "5",
-    JSON.stringify([await value("export-surface-deviation"), await value("export-normal-deviation")]));
+  check(
+    "a preset fills the values",
+    (await value("export-surface-deviation")) === "0.005" && (await value("export-normal-deviation")) === "5",
+    JSON.stringify([await value("export-surface-deviation"), await value("export-normal-deviation")]),
+  );
 
   await page.fill("[data-testid=export-max-edge]", "2");
   await page.press("[data-testid=export-max-edge]", "Tab");
   await page.waitForTimeout(150);
-  check("editing one turns the refinement to Custom", (await selValue("export-refinement")) === "custom", await selValue("export-refinement"));
+  check(
+    "editing one turns the refinement to Custom",
+    (await selValue("export-refinement")) === "custom",
+    await selValue("export-refinement"),
+  );
 
   await pick("export-unit", "Inch");
   await pick("export-binary", "ASCII");
@@ -102,7 +123,11 @@ const check = (name, ok, detail) => {
     refinement: document.querySelector("[data-testid=export-refinement]")?.dataset.value,
     maxEdge: document.querySelector("[data-testid=export-max-edge]")?.value,
   }));
-  check("the next Export remembers the choices", back.format === "stl" && back.unit === "in" && back.refinement === "custom" && back.maxEdge === "2", JSON.stringify(back));
+  check(
+    "the next Export remembers the choices",
+    back.format === "stl" && back.unit === "in" && back.refinement === "custom" && back.maxEdge === "2",
+    JSON.stringify(back),
+  );
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
   check("Escape cancels", !(await has("export-format")));

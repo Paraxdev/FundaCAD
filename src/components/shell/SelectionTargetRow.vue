@@ -1,27 +1,6 @@
 <script setup lang="ts">
-// A labelled row whose value is GEOMETRY: "Edges, 4 edges, Edit".
-//
-// The other half of a feature. Every row beside this one edits a number or a
-// choice; this one shows what the feature is applied to, which until now was
-// picked once at creation and then invisible for the rest of the document's
-// life. A fillet that caught one edge too many was cheaper to delete and redo
-// than to correct, because there was nothing to correct it with.
-//
-// The count is not a decoration and not always a count: several targets mean
-// something specific when EMPTY, a shell with no faces is a sealed hollow, a
-// texture with none covers the whole body, so the row says that instead of
-// "0 faces". features/selectionTargets.describeTarget owns the wording.
-//
-// Pressing Edit hands the whole gesture to features/targetEditTool, which rolls
-// the model back to before this feature so the geometry it consumed is on screen
-// to be clicked. Nothing about that lives here.
-//
-// Except for one shape. A PROFILE area is an interior point on a sketch plane,
-// and the generic editor picks on the solid, there is nothing there for it to
-// click. Those rows open the feature's own tool instead, which already rolls the
-// model back, already forces the consumed sketch visible, and already restores
-// the saved areas for Ctrl-click to add to. Same button, same meaning, a
-// different picker behind it.
+// Empty can mean something (a shell with no faces is sealed, a texture with none covers the body), describeTarget owns
+// the wording. Edit hands off to features/targetEditTool, a profile area opens its feature's own tool instead.
 
 import { computed } from "vue";
 import Icon from "./Icon.vue";
@@ -33,11 +12,8 @@ const props = defineProps<{ featureId: string; target: TargetField }>();
 
 const engine = useEngine();
 
-// useDocValue rather than a computed over the feature: store.document keeps the
-// same object identity across an in-place mutate, so a plain computed recomputes
-// to a value === its last one and Vue short-circuits the notification, the
-// hazard app/useDoc.ts documents, and the reason a set edited in the viewport
-// would leave this row showing the old count.
+// useDocValue, not a computed: store.document keeps its identity across an in-place mutate, so a computed would see an
+// equal value and skip the update (see app/useDoc.ts).
 const count = useDocValue((doc) => {
   const f = doc.features.find((x) => x.id === props.featureId);
   return f ? readTarget(f, props.target).length : 0;
@@ -45,8 +21,7 @@ const count = useDocValue((doc) => {
 
 const summary = computed(() => describeTarget(props.target, count.value));
 
-/** True while the editor is open on THIS row, so the button says so rather than
- *  offering to open a second one. */
+/** True while the editor is open on this row, so the button says so instead of offering a second one. */
 const editing = computed(
   () =>
     engine.tools.targetEdit.active &&
@@ -55,9 +30,7 @@ const editing = computed(
 );
 
 function edit() {
-  // toolBusy covers the editor itself, so this also refuses a second row while
-  // one is open, which is the right answer: two rollbacks at once is not a
-  // state the document has.
+  // toolBusy covers the editor too, so a second row is refused while one is open: two rollbacks at once is no state.
   if (engine.toolBusy()) return;
   if (props.target.shape === "regionPoint") {
     engine.editFeature(props.featureId);

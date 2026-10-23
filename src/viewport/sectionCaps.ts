@@ -1,11 +1,5 @@
-// Solid caps over a cross-section, hatched, so a cut reads as material rather
-// than as a hollow shell.
-//
-// Stencil parity per body: its back faces add one, its front faces take one away,
-// both clipped by the section and drawn without depth, so a pixel is left non-zero
-// exactly where the cut plane passes through the inside of that body. A quad on the
-// plane then paints only those pixels, and clears the stencil for the next body.
-// Needs a closed mesh; an open shell gives a partial cap.
+// Stencil parity per body (back faces +1, front faces -1, clipped and depthless) leaves pixels non zero where the
+// plane is inside the body, which a quad on the plane then paints. Needs a closed mesh, an open shell caps partly.
 
 import * as THREE from "three";
 import type { BodyMesh } from "./render";
@@ -103,7 +97,10 @@ export class SectionCaps {
     this.front = stencilPass(plane, THREE.FrontSide, THREE.DecrementWrapStencilOp);
     bodies.forEach((b, i) => {
       const order = CAP_ORDER + i * 3;
-      for (const [mat, k] of [[this.back!, 0], [this.front!, 1]] as const) {
+      for (const [mat, k] of [
+        [this.back!, 0],
+        [this.front!, 1],
+      ] as const) {
         const m = new THREE.Mesh(b.mesh.geometry, mat);
         m.renderOrder = order + k;
         m.raycast = noRaycast;

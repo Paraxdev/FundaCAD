@@ -23,11 +23,7 @@ fn ok(r: &Rebuild) {
 }
 
 fn err_with(r: &Rebuild, part: &str) {
-    assert!(
-        errors(r).iter().any(|e| e.contains(part)),
-        "wanted an error with {part:?}, got {:?}",
-        errors(r)
-    );
+    assert!(errors(r).iter().any(|e| e.contains(part)), "wanted an error with {part:?}, got {:?}", errors(r));
 }
 
 fn bbox(r: &Rebuild, i: usize) -> [f64; 6] {
@@ -89,11 +85,9 @@ fn an_l_of_two_lines_is_a_wall_with_a_mitred_corner() {
 
 #[test]
 fn the_sides_of_an_l() {
-    for (side, extra, v) in [
-        ("inside", json!({}), 1360.0),
-        ("outside", json!({}), 1440.0),
-        ("twoSides", json!({"thickness2": 1}), 2070.0),
-    ] {
+    for (side, extra, v) in
+        [("inside", json!({}), 1360.0), ("outside", json!({}), 1440.0), ("twoSides", json!({"thickness2": 1}), 2070.0)]
+    {
         let e = with(json!({"curves": ["a", "b"], "side": side}), &extra);
         let r = build(json!({}), vec![ell(), thin(e)]);
         ok(&r);
@@ -347,9 +341,8 @@ fn cot(deg: f64) -> f64 {
     1.0 / deg.to_radians().tan()
 }
 
-// A fan of 20 mm spokes from the origin, all in a half plane: every pair of
-// neighbours leaves a kite of legs 1 and cot(gap / 2) unfilled at the node, and
-// only the two spokes bounding the empty side are mitred, adding cot(their angle / 2).
+// A fan of 20 mm spokes in a half plane: each neighbour pair leaves a kite of legs 1 and cot(gap / 2) unfilled at
+// the node, and only the two bounding spokes are mitred, adding cot(their angle / 2).
 fn fan_area(n: f64, gap: f64, bound: f64) -> f64 {
     n * 40.0 - (n - 1.0) * cot(gap / 2.0) + cot(bound / 2.0)
 }

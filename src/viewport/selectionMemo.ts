@@ -1,57 +1,12 @@
-// Carrying a selection across a rebuild, and across a STREAM.
-//
-// A completed rebuild replaces the Highlighter and every trace of what was
-// selected. Tolerable while selecting only lit an edge up, but direct manipulation
-// makes the selection a live control: the drag handle is drawn FROM it, so
-// cancelling a fillet returned you to the sharp model with no arrow, the geometry
-// was back, the affordance was not.
-//
-// Two ways to find an entity again, in cost order:
-//
-//  1. It came through untouched. A body whose etag is unchanged is REUSED whole by
-//     setModel, same BodyMesh, same EdgeRefs, same faceId numbering, so the old
-//     reference is still right. The common case, since a rebuild usually touches
-//     one body out of however many exist.
-//  2. Its body was rebuilt. Ids are not stable (the client renumbers), so geometry
-//     is the only identity left: match by the world-space point convention the
-//     selectors already use. Correct, but each lookup walks the model.
-//
-// A chunked reply is the harder half, and it was missed for a long time. The
-// commit is one moment and the two tiers above are enough for it; a stream is
-// several, and EVERY installment publishes a fresh ModelView with a fresh
-// Highlighter. So the selection was gone long before the commit ran, and the
-// commit's own capture, reading that empty Highlighter, correctly reported
-// "nothing is selected" and restored nothing. It looked like a tool losing its
-// own gesture at random, because whether a reply streams at all depends on how
-// big it is.
-//
-// Two rules come out of that, and both are here rather than in the viewport
-// because both are decisions, not drawing.
-//
-// Generic over entity type so survivor reuse, the fallback, its cap and
-// de-duplication can all be tested with no scene, camera or GPU.
+// The drag handle is drawn from the selection, so it has to survive a rebuild: a reused body keeps its refs, a rebuilt
+// one is matched by world point. Every installment of a stream makes a fresh Highlighter, hence the stream rules.
 
-/** Above this many entities needing the geometric fallback, drop them instead.
- *
- *  The fallback is O(model) EACH: faceIdNear walks every triangle of every
- *  body. One or two of those is invisible; a coplanar smart-select of 200 faces
- *  would turn every rebuild into a freeze. Losing the selection there is the
- *  behaviour that existed before any of this, so the cap degrades to the old
- *  outcome rather than to a new bug, and the cases direct manipulation is
- *  built around (one edge, one face) are nowhere near it. */
+/** The fallback is O(model) each (faceIdNear walks every triangle), so a 200 face smart select would freeze every
+ *  rebuild. Past the cap the selection is dropped, which one edge or one face never reaches. */
 export const MAX_GEOMETRIC_REMATCH = 16;
 
-/** Re-point a captured selection at a freshly rebuilt model.
- *
- *  `survivor` returns the entity when the memo came through the rebuild
- *  verbatim, else null. `rematch` is the expensive geometric fallback, called
- *  ONLY for what `survivor` gave up on, and only while the number of those
- *  stays within `maxRematch`.
- *
- *  Order follows the capture, and duplicates collapse: two selected edges can
- *  legitimately resolve to the same rebuilt edge (a fillet merging two
- *  collinear stretches into one), and feeding that to a TOGGLE would select it
- *  and then immediately deselect it. */
+/** `rematch` runs only for what `survivor` gave up on, while within `maxRematch`. Duplicates collapse: a fillet
+ *  can merge two selected edges into one, and feeding both to a toggle would deselect it again. */
 export function remapSelection<M, E>(
   memos: readonly M[],
   survivor: (memo: M) => E | null,
@@ -73,17 +28,8 @@ export function remapSelection<M, E>(
   return out;
 }
 
-/** Re-point a captured selection at ONE INSTALLMENT of a streamed rebuild.
- *
- *  The same two tiers, plus the one rule a stream adds: A BODY WHOSE CHUNK HAS
- *  NOT LANDED YET IS NOT A BODY WHOSE ENTITY IS GONE.
- *
- *  The survivor path needs no help, a body reused whole is on screen from the
- *  first installment. The geometric fallback does: it finds the nearest thing
- *  to a point, and with the right body still in flight the nearest thing is
- *  some other body's face. Answering with that is worse than not answering,
- *  because the commit re-runs this a few installments later and would have got
- *  it right. `landed` is what holds it back until then. */
+/** A body whose chunk has not landed is not a body whose entity is gone: the fallback would answer with another
+ *  body's face, while the commit reruns this a few installments later and gets it right. */
 export function remapStreamedSelection<M, E>(
   memos: readonly M[],
   survivor: (memo: M) => E | null,
@@ -94,16 +40,8 @@ export function remapStreamedSelection<M, E>(
   return remapSelection(memos, survivor, (m) => (landed(m) ? rematch(m) : null), maxRematch);
 }
 
-/** Whether a restore should tell the app the selection moved.
- *
- *  A COMMIT announces either way, and deliberately: "the selection is gone" is
- *  exactly the news a drag handle needs in order to take itself down, so the
- *  test is on what was captured, not on what came back.
- *
- *  AN INSTALLMENT MUST NOT. Mid-stream "nothing came back" is the ordinary
- *  state of a reply that has not delivered the right body yet, and announcing
- *  it takes the handle down, and ends the gesture, a few milliseconds before
- *  the body lands. Only a real restore is news. */
+/** A commit announces either way, since "the selection is gone" is what takes a drag handle down. An installment
+ *  must not: nothing back mid stream is normal, and announcing it would end the gesture just before the body lands. */
 export function shouldAnnounce(captured: number, restored: number, duringStream: boolean): boolean {
   return duringStream ? restored > 0 : captured > 0;
 }

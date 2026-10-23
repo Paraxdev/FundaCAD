@@ -7,12 +7,20 @@ import { DocumentStore } from "../../src/document/store";
 import type { CadDocument } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 
-const files = import.meta.glob("../fixtures/versions/*.funda", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
-const expected = import.meta.glob("../fixtures/versions/expected/*.json", { import: "default", eager: true }) as Record<string, unknown>;
+const files = import.meta.glob("../fixtures/versions/*.funda", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+const expected = import.meta.glob("../fixtures/versions/expected/*.json", { import: "default", eager: true }) as Record<
+  string,
+  unknown
+>;
 const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
-const writer = env["UPDATE_VERSION_FIXTURES"] === "1"
-  ? ((await import(/* @vite-ignore */ "node:" + "fs")) as { writeFileSync(path: URL, text: string): void })
-  : null;
+const writer =
+  env["UPDATE_VERSION_FIXTURES"] === "1"
+    ? ((await import(/* @vite-ignore */ "node:" + "fs")) as { writeFileSync(path: URL, text: string): void })
+    : null;
 
 const backend = {
   async rebuild() {

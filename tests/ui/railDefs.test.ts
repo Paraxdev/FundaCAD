@@ -1,6 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { faceOf, familyOf, modelRail, sketchRail, sketchTool, SKETCH_OFF_RAIL, type RailEntry } from "../../src/ui/railDefs";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  faceOf,
+  familyOf,
+  modelRail,
+  sketchRail,
+  sketchTool,
+  SKETCH_OFF_RAIL,
+  type RailEntry,
+} from "../../src/ui/railDefs";
 import { leavesOf, MODEL, SKETCH } from "../../src/ui/ribbonDefs";
+import { resetUserShortcuts, setUserShortcut, shortcutRows } from "../../src/input/shortcuts";
 
 const actions = (entries: RailEntry[]) =>
   entries.flatMap((e) => (e.kind === "tool" ? [e.action] : e.items.map((t) => t.action)));
@@ -14,7 +23,10 @@ describe("modelRail", () => {
   });
 
   it("files a plugin group as a category of its own", () => {
-    const rail = modelRail([...MODEL, { label: "PRINT", items: [{ action: "print", label: "Print", iconName: "print" }] }]);
+    const rail = modelRail([
+      ...MODEL,
+      { label: "PRINT", items: [{ action: "print", label: "Print", iconName: "print" }] },
+    ]);
     const last = rail[rail.length - 1]!;
     expect(last).toMatchObject({ kind: "family", label: "Print", style: "category", icon: "print" });
   });
@@ -39,5 +51,18 @@ describe("sketchRail", () => {
     expect(faceOf(rect, undefined).action).toBe("rectangle");
     expect(faceOf(rect, "centerRectangle").action).toBe("centerRectangle");
     expect(faceOf(rect, "not-in-family").action).toBe("rectangle");
+  });
+});
+
+describe("rail key badges", () => {
+  afterEach(() => resetUserShortcuts());
+
+  it("show the key a tool is rebound to, and none once it is unbound", () => {
+    const id = shortcutRows().find((r) => r.action === "sketch" && r.context === "model")!.id;
+    expect(sketchTool()?.keys).toBe("S");
+    setUserShortcut(id, { key: "j" });
+    expect(sketchTool()?.keys).toBe("J");
+    setUserShortcut(id, { key: "" });
+    expect(sketchTool()?.keys).toBeUndefined();
   });
 });

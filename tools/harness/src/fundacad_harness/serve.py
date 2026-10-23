@@ -12,7 +12,7 @@ from typing import Any, Callable, TextIO
 from . import steps
 from .errors import BadArgs, HarnessError
 
-READS = ("screen", "history", "bodies", "status", "errors", "selection", "handles")
+READS = ("screen", "history", "bodies", "status", "errors", "selection", "handles", "guide")
 SHRINK = """async ([b64, max]) => {
     const img = new Image();
     img.src = "data:image/png;base64," + b64;

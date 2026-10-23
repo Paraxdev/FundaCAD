@@ -45,18 +45,32 @@ function setup(reply: FaceAxisReply | null, pick: "planar" | "tangent" = "tangen
     }),
     faceIdToBodyId: () => "body1",
     faceIdNear: (p: Vec3) => ids.get(p.join()) ?? null,
-    selectOnlyFace: (id: number) => { selected.length = 0; selected.push(id); announced++; },
-    selectOnlyFaces: (list: number[]) => { selected.length = 0; selected.push(...list); announced++; },
+    selectOnlyFace: (id: number) => {
+      selected.length = 0;
+      selected.push(id);
+      announced++;
+    },
+    selectOnlyFaces: (list: number[]) => {
+      selected.length = 0;
+      selected.push(...list);
+      announced++;
+    },
   };
   const store = {
     document: { features: [] },
-    faceAxis: async (face: unknown, body: string | null) => { asked.push({ face, body }); return reply; },
+    faceAxis: async (face: unknown, body: string | null) => {
+      asked.push({ face, body });
+      return reply;
+    },
   };
   const deps = {
-    store, viewport,
+    store,
+    viewport,
     toolBusy: () => false,
     dropBodyGizmo: () => {},
-    setStatus: (text: string) => { status = text; },
+    setStatus: (text: string) => {
+      status = text;
+    },
     featureForFace: () => null,
     getLastAction: () => null,
   } as unknown as ContextMenusDeps;

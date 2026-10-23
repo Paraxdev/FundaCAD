@@ -65,7 +65,8 @@ describe("TextToolPanel", () => {
 
   it("commits on Add and closes the panel", async () => {
     const { handlers } = open({ text: "Hi" });
-    document.querySelectorAll("button")[0]!
+    document
+      .querySelectorAll("button")[0]!
       .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
     await nextTick();
     expect(handlers.onCommit).toHaveBeenCalledOnce();
@@ -76,7 +77,8 @@ describe("TextToolPanel", () => {
   // Committing empty text would add an invisible entity nobody can select.
   it("drops an empty commit instead of adding a blank text object", async () => {
     const { handlers } = open({ text: "   " });
-    document.querySelectorAll("button")[0]!
+    document
+      .querySelectorAll("button")[0]!
       .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
     await nextTick();
     expect(handlers.onCommit).not.toHaveBeenCalled();
@@ -85,7 +87,8 @@ describe("TextToolPanel", () => {
 
   it("cancels on Cancel", async () => {
     const { handlers } = open({ text: "Hi" });
-    document.querySelectorAll("button")[1]!
+    document
+      .querySelectorAll("button")[1]!
       .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
     await nextTick();
     expect(handlers.onCancel).toHaveBeenCalledOnce();

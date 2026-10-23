@@ -1,8 +1,5 @@
-// Which mouse button, with which modifiers, orbits, pans, zooms or opens the
-// menu. One table is active: the default below, or the one a plugin holding the
-// input.remap grant contributed (plugins/contrib.ts). Selection is not in it,
-// the left button alone always selects and Shift or Ctrl with it adds to the
-// selection, so a left binding needs Alt.
+// Which mouse button and modifiers orbit, pan, zoom or open the menu: the default table, or a plugin's with the
+// input.remap grant (plugins/contrib.ts). The left button alone always selects, so a left binding needs Alt.
 
 export type PointerButton = "left" | "middle" | "right";
 export type PointerDrag = "orbit" | "pan" | "zoom" | "gesture";
@@ -88,7 +85,11 @@ export function validateBindings(table: readonly PointerBinding[]): string[] {
     for (let i = 0; i < j; i++) {
       const a = table[i]!;
       if (a.button !== b.button || !MODS.every((m) => a[m] === undefined || a[m] === b[m])) continue;
-      const what = (x: PointerBinding) => [x.drag, x.click].filter(Boolean).map((k) => ACTION_NAMES[k!]).join(" and ");
+      const what = (x: PointerBinding) =>
+        [x.drag, x.click]
+          .filter(Boolean)
+          .map((k) => ACTION_NAMES[k!])
+          .join(" and ");
       out.push(`${bindingKeys(b)} is bound twice, to ${what(a)} and to ${what(b)}, and only the first applies`);
       break;
     }
@@ -112,8 +113,6 @@ export function bindingRows(table: readonly PointerBinding[]): { key: string; la
   return rows;
 }
 
-// --- the active table -----------------------------------------------------------
-
 let active: readonly PointerBinding[] = DEFAULT_BINDINGS;
 let gestureHandler: ((g: PointerGesture) => void) | null = null;
 let leftHeld: () => boolean = () => false;
@@ -127,7 +126,7 @@ export function setPointerBindings(table: readonly PointerBinding[] | null, onGe
     if (bad.length) throw new Error(`Mouse bindings refused: ${bad.join("; ")}`);
   }
   active = table ? [...table] : DEFAULT_BINDINGS;
-  gestureHandler = table ? onGesture ?? null : null;
+  gestureHandler = table ? (onGesture ?? null) : null;
   for (const fn of listeners) fn();
 }
 

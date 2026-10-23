@@ -1,20 +1,7 @@
-//! Disk checkpoints of the build state, the Python engine's `rebuild_cache.py`
-//! `_persist_tick`, `_save_checkpoint`, `_restore_from_disk` and
-//! `_body_fingerprint`.
-//!
-//! Body state that is not in the shape (owners, node ref, colours, `intact`,
-//! a plugin's mesh pass specs) is written from `Body` field by field, and read
-//! back the same way: a field left out here comes back empty on every reopen
-//! with nothing to notice it.
-//!
-//! A shape read back is not the shape written, to the last bit. A blob holds
-//! a location as twelve numbers that the kernel reads through
-//! `gp_Trsf::SetValues`, which works a scale out of the determinant and makes
-//! the matrix orthogonal again, so a face a rotation places can measure an ulp
-//! or two off what it measured when saved. Owners are keyed by a rounded
-//! measure, and a face sitting where the rounding goes either way would lose
-//! its owner. So they are also saved face by face, and keyed again on restore
-//! by what the faces read back measure.
+//! Disk checkpoints, `_save_checkpoint` and `_restore_from_disk` of rebuild_cache.py. Body fields outside the
+//! shape are written and read field by field, one left out here silently comes back empty on every reopen.
+//! A restored location goes through `gp_Trsf::SetValues` and can measure an ulp off, which can move a face
+//! across an owner key's rounding, so owners are also saved face by face and rekeyed on restore.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -75,8 +62,7 @@ impl Persist<'_> {
         for b in &state.ctx.bodies {
             let stale = self.modified.get(&b.id).map_or(true, |(ident, _)| *ident != b.identity());
             if stale {
-                self.modified
-                    .insert(b.id.clone(), (b.identity(), blob_key(&self.keys[index], &b.id)));
+                self.modified.insert(b.id.clone(), (b.identity(), blob_key(&self.keys[index], &b.id)));
             }
         }
         self.acc_ms += elapsed.as_secs_f64() * 1000.0;
@@ -134,14 +120,7 @@ impl Persist<'_> {
             "face_owners": face_owners,
             "fps": fps,
         });
-        let record = Checkpoint {
-            feat_index: index,
-            manifest,
-            state,
-            replay_ms: self.acc_ms,
-            bytes: 0,
-            pinned: false,
-        };
+        let record = Checkpoint { feat_index: index, manifest, state, replay_ms: self.acc_ms, bytes: 0, pinned: false };
         if self.store.save_checkpoint(chain_key, record).is_ok() {
             self.written += 1;
             self.acc_ms = 0.0;
@@ -171,9 +150,8 @@ fn object_map<T: serde::de::DeserializeOwned>(v: &Value) -> Option<IndexMap<Stri
     serde_json::from_value(v.clone()).ok()
 }
 
-/// `_restore_from_disk`: the deepest checkpoint of these keys as a resume
-/// point `(start, snapshot, modified)`. Anything missing, unreadable or not
-/// matching its fingerprint is a miss for the whole checkpoint.
+/// `_restore_from_disk`: the deepest checkpoint of these keys as `(start, snapshot, modified)`. Anything
+/// missing, unreadable or off its fingerprint is a miss for the whole checkpoint.
 pub fn restore(store: &GeomStore, keys: &[String]) -> Option<(usize, Snapshot, Modified)> {
     let (_, cp) = store.find_checkpoint(keys)?;
     let state = &cp.state;
@@ -221,18 +199,8 @@ pub fn restore(store: &GeomStore, keys: &[String]) -> Option<(usize, Snapshot, M
         modified.insert(entry.body_id.clone(), (body.identity(), entry.blob_key.clone()));
         bodies.push(body);
     }
-    let errors = state
-        .get("errors")?
-        .as_array()?
-        .iter()
-        .map(parse_error)
-        .collect::<Option<Vec<_>>>()?;
-    let id_events = state
-        .get("ids")?
-        .as_array()?
-        .iter()
-        .map(parse_event)
-        .collect::<Option<Vec<_>>>()?;
+    let errors = state.get("errors")?.as_array()?.iter().map(parse_error).collect::<Option<Vec<_>>>()?;
+    let id_events = state.get("ids")?.as_array()?.iter().map(parse_event).collect::<Option<Vec<_>>>()?;
     let datums: IndexMap<String, PlaneRecord> = object_map(state.get("datums")?)?;
     let snap = Snapshot {
         bodies,

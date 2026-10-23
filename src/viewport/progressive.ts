@@ -1,28 +1,16 @@
-// Progressive display: putting a chunked rebuild reply on screen as it arrives.
-//
-// The rest of the app only ever sees a FINISHED model. This is the one place
-// that draws a partial one, and it exists because the alternative is worse:
-// without it a large assembly shows the PREVIOUS document until the whole reply
-// lands, which on the reference file is minutes of a frozen, wrong scene.
-//
-// The rule that keeps this safe: THE STREAM IS A PURE ACCELERATOR, THE COMMIT IS
-// AUTHORITATIVE. Everything built here is keyed by body id and etag, exactly as
-// viewport.setModel() builds it, so when the completed build finally arrives,
-// setModel's ordinary etag diff finds every body already present, reuses all of
-// them, and runs its whole-model passes once. If a chunk was dropped or this
-// file got something wrong, setModel simply builds the missing bodies itself.
-// Nothing here can produce a model the commit would not have produced anyway.
+// Without this a large assembly shows the previous document for minutes while a reply streams in. Bodies are keyed
+// by id and etag as setModel keys them, so the commit reuses them and stays authoritative over anything shown here.
 
 import * as THREE from "three";
-import { buildBodyMesh, partitionMesh, resetBodyAppearance } from "./render";
+import { pushAll } from "../lib/pushAll";
+import { buildBodyMesh, partitionMesh, resetBodyAppearance, reuseUnchanged } from "./render";
 import type { BodyMesh, MeshPartition, ModelView } from "./render";
 import type { EdgeRef } from "./edgeLines";
 import type { RebuildResult } from "../types";
 
 type BodyMeta = NonNullable<RebuildResult["bodies"]>[number];
 
-/** Dispose one body's GPU objects and take it out of the scene. Mirrors the
- *  disposal viewport.setModel does for a body that has gone away. */
+/** Mirrors the disposal viewport.setModel does for a body that has gone away. */
 type DisposeFn = (b: BodyMesh) => void;
 
 /** Shared empty keep-set, so abort() allocates nothing. */
@@ -46,27 +34,21 @@ export class ProgressiveModel {
     private readonly dispose: DisposeFn,
   ) {}
 
-  get current(): ModelView | null { return this.view; }
-  get streaming(): boolean { return this.epoch >= 0; }
-  get filled(): number { return this.slots.reduce((n, b) => n + (b ? 1 : 0), 0); }
-  get total(): number { return this.slots.length; }
+  get current(): ModelView | null {
+    return this.view;
+  }
+  get streaming(): boolean {
+    return this.epoch >= 0;
+  }
+  get filled(): number {
+    return this.slots.reduce((n, b) => n + (b ? 1 : 0), 0);
+  }
+  get total(): number {
+    return this.slots.length;
+  }
 
-  /** Start a stream. `manifest` names every body of the reply in final order and
-   *  is authoritative: a body of the previous model that it does not name is
-   *  provably gone and is disposed now.
-   *
-   *  STARTING A STREAM OVER THE TOP OF ONE STILL RUNNING is the case to keep in
-   *  mind here, and it is not exotic: it is what happens every time somebody
-   *  edits while a large rebuild is still arriving, which is what this whole
-   *  file exists to make bearable. In that case `prev` is the view the running
-   *  stream published, so the bodies this stream is about to reuse ARE the
-   *  bodies the running stream is holding, and tearing the old one down first
-   *  freed exactly them. An unchanged body then came back into `slots` with its
-   *  GPU buffers already released and without ever being added back to the
-   *  scene, so it vanished and stayed vanished: the commit's own etag diff finds
-   *  it "already present", reuses it, and never rebuilds it either.
-   *
-   *  So nothing is disposed until this method knows what it wants. */
+  /** `manifest` is authoritative: a previous body it does not name is gone. A stream started over a running
+   *  one reuses the bodies that one holds, so nothing is disposed until this method knows what it wants. */
   begin(
     epoch: number,
     manifest: BodyMeta[],
@@ -75,10 +57,8 @@ export class ProgressiveModel {
     prev: ModelView | null,
     hidden: Set<string>,
   ): ModelView {
-    // Everything on screen from before this stream, by id: the bodies the last
-    // installment published, plus any the old stream was still holding in place
-    // of a body whose chunk never came. Both are bodies of the previous MODEL
-    // and both are candidates to reuse, replace or drop.
+    // The bodies the last installment published, plus any the old stream still held in place of a body
+    // whose chunk never came: all candidates to reuse, replace or drop.
     const keptById = new Map<string, BodyMesh>();
     for (const b of prev?.bodies ?? []) keptById.set(b.id, b);
     for (const [id, b] of this.stale) if (!keptById.has(id)) keptById.set(id, b);
@@ -89,22 +69,21 @@ export class ProgressiveModel {
     this.slots = new Array(manifest.length).fill(null);
     this.byId = new Map(manifest.map((m, i) => [m.id, i]));
     this.edges = [];
-    // One scratch buffer for the WHOLE stream. buildBodyMesh hands it back
-    // clean, so allocating and re-filling a model-sized Int32Array per chunk is
-    // exactly the O(chunks x model) cost this avoids.
+    // One scratch buffer for the whole stream, which buildBodyMesh hands back clean, instead of a model
+    // sized Int32Array per chunk.
     this.remap = new Int32Array(result.mesh.positions.length / 3).fill(-1);
 
     for (const m of manifest) {
       const p = keptById.get(m.id);
       if (!p) continue;
       keptById.delete(m.id);
-      if (m.etag !== undefined && p.etag === m.etag) {
+      if (reuseUnchanged(p, m)) {
         // unchanged: keep its GPU objects untouched. It never blinks.
         resetBodyAppearance(p);
         p.mesh.visible = !hidden.has(m.id);
         p.edges.setBodyVisible(p.mesh.visible);
         this.slots[this.byId.get(m.id)!] = p;
-        this.edges.push(...p.edges.refs);
+        pushAll(this.edges, p.edges.refs);
       } else {
         this.stale.set(m.id, p); // hold it on screen until its chunk lands
       }
@@ -132,11 +111,11 @@ export class ProgressiveModel {
     });
     if (!wanted.length) return this.view;
 
-    // Ranged, so the scan cannot wander into triangles this stream has not
-    // written yet: those are still zeros, and zero is a legitimate faceId, so an
-    // unranged pass would hand every unwritten triangle to whoever owns face 0.
+    // Ranged, because unwritten triangles are still zeros and zero is a legitimate faceId, so an unranged
+    // pass would hand them all to whoever owns face 0.
     const partition: MeshPartition = partitionMesh(
-      result, wanted.map((m) => m.id),
+      result,
+      wanted.map((m) => m.id),
       { range: triRange, ...(this.remap ? { remap: this.remap } : {}) },
     );
     for (const m of wanted) {
@@ -144,12 +123,15 @@ export class ProgressiveModel {
       this.group.add(body.mesh);
       this.group.add(body.edges.object);
       const old = this.stale.get(m.id);
-      if (old) { this.remove(old); this.stale.delete(m.id); } // atomic swap
+      if (old) {
+        this.remove(old);
+        this.stale.delete(m.id);
+      } // atomic swap
       body.mesh.visible = !hidden.has(m.id);
       body.edges.setBodyVisible(body.mesh.visible);
       body.edges.flush();
       this.slots[this.byId.get(m.id)!] = body;
-      this.edges.push(...body.edges.refs);
+      pushAll(this.edges, body.edges.refs);
     }
     return this.snapshot();
   }
@@ -160,33 +142,15 @@ export class ProgressiveModel {
     this.release(EMPTY);
   }
 
-  /** Hand over to the commit: it owns every body this stream BUILT, so those are
-   *  released without being disposed.
-   *
-   *  A body still held in `stale` is the exception, and it is not owned by
-   *  anybody. It is the PREVIOUS model's mesh, kept on screen because the chunk
-   *  carrying its replacement never arrived, and it never reached the ModelView
-   *  the viewport adopted (snapshot() publishes filled slots only). So the
-   *  commit cannot see it: setModel diffs against the view it adopted, finds no
-   *  entry for that id, builds the body fresh and adds it to this same group.
-   *  The old mesh is then in the scene with nothing referencing it and nothing
-   *  that will ever remove it, sitting a hair away from its own replacement.
-   *
-   *  That does not read as a leak on screen, it reads as corruption: two nearly
-   *  identical surfaces z-fighting, doubled edges, and holes that appear twice.
-   *  Disposing here is what makes the commit's rebuild of that body correct
-   *  rather than additive. */
+  /** A body still in `stale` never reached the ModelView the viewport adopted, so the commit would build it
+   *  fresh beside the old mesh, z-fighting with doubled edges. Disposing here keeps that rebuild correct. */
   finish() {
     for (const b of this.stale.values()) this.remove(b);
     this.reset();
   }
 
-  /** Drop this stream, disposing what it holds EXCEPT the bodies in `keep`.
-   *
-   *  `keep` is how a stream hands its bodies to the next one without them
-   *  passing through a disposed state on the way. Membership is by OBJECT, not
-   *  by id: two different meshes for one body id is exactly the swap this class
-   *  performs, and the old one of that pair still has to go. */
+  /** `keep` hands bodies to the next stream without a disposed state on the way. Membership is by object,
+   *  not id: the swap makes two meshes for one body id, and the old one still has to go. */
   private release(keep: ReadonlySet<BodyMesh>) {
     for (const b of this.slots) if (b && !keep.has(b)) this.remove(b);
     for (const b of this.stale.values()) if (!keep.has(b)) this.remove(b);
@@ -209,14 +173,8 @@ export class ProgressiveModel {
     this.dispose(b);
   }
 
-  /** A FRESH ModelView object every time, reusing the same arrays by reference.
-   *
-   *  Not cosmetic. render.ts's faceIndexCache (backing bodyOfFace ->
-   *  faceIdToBodyId -> hover and body select) and Highlighter.byId are both
-   *  keyed on ModelView IDENTITY, and are documented as never needing
-   *  invalidation precisely because a new reply always makes a new ModelView.
-   *  Mutating one in place would leave hover painting the wrong body. The
-   *  wrapper is one object literal; nothing is copied. */
+  /** A fresh object every time: render.ts's faceIndexCache and Highlighter.byId are keyed on ModelView
+   *  identity, so mutating one in place would paint hover on the wrong body. Nothing is copied. */
   private snapshot(): ModelView {
     const bodies: BodyMesh[] = [];
     for (const b of this.slots) if (b) bodies.push(b);

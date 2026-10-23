@@ -1,7 +1,5 @@
-// The High tier of the realtime frame: the model drawn on its own into the HDR
-// target, with a prepass of normals, roughness and depth beside it for the screen
-// space effects that read them, and the overlays drawn after the OutputPass on the
-// canvas, so they are never bloomed, blurred or tone mapped twice.
+// High tier: the model alone into the HDR target with a prepass for the screen space effects, and overlays after
+// the OutputPass so they are never bloomed, blurred or tone mapped twice.
 
 import * as THREE from "three";
 import type { RealtimeQualityPref, ViewMode } from "../ui/renderPrefs";
@@ -29,19 +27,19 @@ export function highRefusal(t: QualityTier): string | null {
   return null;
 }
 
-/** The quality the realtime view runs at for a saved choice. Auto is Standard
- *  until the machine is measured. `reason` is why High is refused on this tier,
- *  whatever was chosen, for the tooltip of the row. */
-export function resolveRealtimeQuality(pref: RealtimeQualityPref, t: QualityTier): { quality: RealtimeQuality; reason: string | null } {
+/** Auto is Standard until the machine is measured. `reason` is why High is refused on this tier, whatever
+ *  was chosen, for the row's tooltip. */
+export function resolveRealtimeQuality(
+  pref: RealtimeQualityPref,
+  t: QualityTier,
+): { quality: RealtimeQuality; reason: string | null } {
   const reason = highRefusal(t);
   return { quality: pref === "high" && reason === null ? "high" : "standard", reason };
 }
 
 export type Stage = "prepass" | "model" | "bokeh" | "bloom" | "output" | "compose";
 
-/** What the viewport knows about a frame and PostChain does not. The loop, a
- *  picture and a screenshot pass it; null is a caller that does not say, which
- *  keeps today's path. */
+/** What the viewport knows about a frame and PostChain does not; null is a caller that does not say. */
 export interface FrameFacts {
   moving: boolean;
   /** X ray, wireframe, stale, peek or a dimmed model behind a sketch. */
@@ -116,7 +114,11 @@ function seenThrough(m: THREE.Material): boolean {
   return isGlassAuto(m) || (p.transmission ?? 0) > 0 || (m.transparent && m.opacity < 1) || m.colorWrite === false;
 }
 
-interface Swapped { mesh: THREE.Mesh; material: THREE.Mesh["material"]; hook?: THREE.Object3D["onBeforeRender"] }
+interface Swapped {
+  mesh: THREE.Mesh;
+  material: THREE.Mesh["material"];
+  hook?: THREE.Object3D["onBeforeRender"];
+}
 
 const noHook: THREE.Object3D["onBeforeRender"] = () => {};
 
@@ -149,12 +151,8 @@ class Twins<T extends THREE.Material> {
   }
 }
 
-/** One render of the scene with some meshes swapped and some hidden, everything
- *  given back in the finally, whatever the draw throws.
- *
- *  Note: a swapped mesh's own draw hook is off for the render. Hooks write the
- *  uniforms of the material they were made for (a section cap's hatch), which a
- *  twin does not have, and the model pass has already run them this frame. */
+/** Note: a swapped mesh's own draw hook is off for the render, since hooks write uniforms a twin lacks
+ *  (a section cap's hatch) and the model pass already ran them this frame. */
 function drawSwapped(
   r: THREE.WebGLRenderer,
   scene: THREE.Scene,
@@ -168,7 +166,11 @@ function drawSwapped(
   const shadows = r.shadowMap;
   const autoUpdate = shadows.autoUpdate;
   const cameraMask = camera.layers.mask;
-  const restore: Swapped[] = swap.map((s) => ({ mesh: s.mesh, material: s.mesh.material, hook: s.mesh.onBeforeRender }));
+  const restore: Swapped[] = swap.map((s) => ({
+    mesh: s.mesh,
+    material: s.mesh.material,
+    hook: s.mesh.onBeforeRender,
+  }));
   try {
     for (const s of swap) {
       s.mesh.material = s.material;
@@ -191,7 +193,9 @@ function drawSwapped(
   }
 }
 
-interface PrepassTwin extends THREE.MeshNormalMaterial { userData: { rough: { value: number } } }
+interface PrepassTwin extends THREE.MeshNormalMaterial {
+  userData: { rough: { value: number } };
+}
 
 function prepassTwin(): PrepassTwin {
   const m = new THREE.MeshNormalMaterial() as PrepassTwin;
@@ -201,7 +205,10 @@ function prepassTwin(): PrepassTwin {
     shader.uniforms.uRough = rough;
     shader.fragmentShader = shader.fragmentShader
       .replace("void main() {", "uniform float uRough;\nvoid main() {")
-      .replace("gl_FragColor = vec4( normalize( normal ) * 0.5 + 0.5, diffuseColor.a );", "gl_FragColor = vec4( normalize( normal ) * 0.5 + 0.5, uRough );");
+      .replace(
+        "gl_FragColor = vec4( normalize( normal ) * 0.5 + 0.5, diffuseColor.a );",
+        "gl_FragColor = vec4( normalize( normal ) * 0.5 + 0.5, uRough );",
+      );
   };
   m.customProgramCacheKey = () => "rt-prepass";
   return m;
@@ -298,13 +305,8 @@ function depthTwin(): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({ colorWrite: false });
 }
 
-/** The overlays over the finished model picture on the canvas. The model's meshes
- *  are drawn again as depth only twins, with their clipping and stencil, so an
- *  overlay is hidden behind the model exactly as on the direct path.
- *
- *  Note: with the full draw mask on purpose. Lights live on layer 0 and three
- *  culls them by the camera mask, so a mask without layer 0 draws lit gizmos dark
- *  and compiles a second, unlit, program for each of their materials. */
+/** Note: the full draw mask on purpose. Lights on layer 0 are culled by the camera mask, so without it
+ *  gizmos draw dark and compile a second, unlit program per material. */
 export class OverlayCompose {
   private twins = new Twins(depthTwin);
 
@@ -314,7 +316,10 @@ export class OverlayCompose {
     scene.traverseVisible((o) => {
       if (!drawable(o) || !onModelLayer(o)) return;
       const mesh = o as THREE.Mesh;
-      if (mesh.isMesh !== true || materialsOf(mesh).some((m) => (m as { isLineMaterial?: boolean }).isLineMaterial === true)) {
+      if (
+        mesh.isMesh !== true ||
+        materialsOf(mesh).some((m) => (m as { isLineMaterial?: boolean }).isLineMaterial === true)
+      ) {
         hide.push(o);
         return;
       }
@@ -362,5 +367,111 @@ export class OverlayCompose {
 
   dispose(): void {
     this.twins.dispose();
+  }
+}
+
+export function glows(m: THREE.Material): boolean {
+  const s = m as THREE.MeshStandardMaterial;
+  return (
+    s.isMeshStandardMaterial === true &&
+    s.emissiveIntensity > 0 &&
+    (s.emissive.r > 0 || s.emissive.g > 0 || s.emissive.b > 0)
+  );
+}
+
+const HIGH_PASS_TEXEL = "vec4 texel = texture2D( tDiffuse, vUv );";
+
+/** Makes UnrealBloomPass's high pass read only where `mask` is white. False when
+ *  three's shader no longer has the line this rewrites, and then nothing changed. */
+export function maskHighPass(m: THREE.ShaderMaterial, mask: THREE.Texture): boolean {
+  if (!m.fragmentShader.includes(HIGH_PASS_TEXEL)) return false;
+  m.uniforms["tMask"] = { value: mask };
+  m.fragmentShader =
+    "uniform sampler2D tMask;\n" +
+    m.fragmentShader.replace(HIGH_PASS_TEXEL, `${HIGH_PASS_TEXEL}\n\ttexel *= texture2D( tMask, vUv ).r;`);
+  m.needsUpdate = true;
+  return true;
+}
+
+function glowTwin(): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial();
+}
+
+/** Depth tested, so a body in front hides a glow. Note: a lit white face reaches a glowing one's luminance
+ *  (2.55 against 3.16 linear at bloom 0.4), so no threshold alone keeps it from blooming. */
+export class GlowMask {
+  readonly target = new THREE.WebGLRenderTarget(1, 1, { samples: 0, depthBuffer: true });
+  private twins = new Twins(glowTwin);
+  private clearWas = new THREE.Color();
+
+  private swapFor(scene: THREE.Scene): { swap: Swapped[]; hide: THREE.Object3D[] } | null {
+    const bodies: THREE.Mesh[] = [];
+    const hide: THREE.Object3D[] = [];
+    let lit = false;
+    scene.traverseVisible((o) => {
+      if (!drawable(o) || !onModelLayer(o)) return;
+      if (!isBody(o)) {
+        hide.push(o);
+        return;
+      }
+      bodies.push(o);
+      if (!lit && materialsOf(o).some(glows)) lit = true;
+    });
+    if (!lit) return null;
+    const twin = (src: THREE.Material) => {
+      const t = this.twins.get(src);
+      mirror(t, src);
+      const glow = glows(src);
+      // Glass in front of a glow lets the glow through, as it does in the picture.
+      const through = !glow && seenThrough(src);
+      t.color.set(glow ? 0xffffff : 0x000000);
+      t.wireframe = (src as THREE.MeshBasicMaterial).wireframe === true;
+      t.colorWrite = !through;
+      t.depthWrite = !through;
+      t.transparent = false;
+      t.blending = THREE.NoBlending;
+      return t;
+    };
+    const swap = bodies.map((mesh) => ({
+      mesh,
+      material: Array.isArray(mesh.material) ? mesh.material.map(twin) : twin(mesh.material),
+    }));
+    return { swap, hide };
+  }
+
+  /** Draws the mask at `w` x `h`. False, with nothing drawn, when no body on screen glows. */
+  render(r: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, w: number, h: number): boolean {
+    const plan = this.swapFor(scene);
+    if (!plan) {
+      this.twins.prune();
+      return false;
+    }
+    if (this.target.width !== w || this.target.height !== h) this.target.setSize(w, h);
+    const prevTarget = r.getRenderTarget();
+    r.getClearColor(this.clearWas);
+    const alpha = r.getClearAlpha();
+    const auto = r.autoClear;
+    const override = scene.overrideMaterial;
+    try {
+      drawSwapped(r, scene, camera, plan.swap, plan.hide, MODEL_MASK, () => {
+        scene.overrideMaterial = null;
+        r.autoClear = true;
+        r.setClearColor(0x000000, 1);
+        r.setRenderTarget(this.target);
+        r.render(scene, camera);
+      });
+    } finally {
+      scene.overrideMaterial = override;
+      r.autoClear = auto;
+      r.setRenderTarget(prevTarget);
+      r.setClearColor(this.clearWas, alpha);
+    }
+    this.twins.prune();
+    return true;
+  }
+
+  dispose(): void {
+    this.twins.dispose();
+    this.target.dispose();
   }
 }

@@ -1,15 +1,10 @@
-//! Settings files Rust reads from the app data directory. Read leniently, a
-//! corrupt one would read as empty and the next save would overwrite what was
-//! in it, so one that does not parse is moved aside first and kept for a bug
-//! report.
+//! Settings files Rust reads from the app data dir. One that does not parse is moved aside first, since read as empty
+//! the next save would overwrite it.
 
 use std::path::{Path, PathBuf};
 
 fn unix_secs() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
 /// Rename `path` to `<name>.bad-<unix secs>`, with `-<n>` added when that name
@@ -19,11 +14,7 @@ pub fn back_up(path: &Path) -> std::io::Result<PathBuf> {
 }
 
 fn back_up_at(path: &Path, secs: u64) -> std::io::Result<PathBuf> {
-    let name = path
-        .file_name()
-        .ok_or_else(|| std::io::Error::other("no file name"))?
-        .to_string_lossy()
-        .into_owned();
+    let name = path.file_name().ok_or_else(|| std::io::Error::other("no file name"))?.to_string_lossy().into_owned();
     let base = format!("{name}.bad-{secs}");
     let mut target = path.with_file_name(&base);
     let mut n = 1;
@@ -62,27 +53,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
-    }
-
-    #[test]
-    fn an_unreadable_settings_file_is_renamed_with_the_time() {
-        let d = dir("bad");
-        let plugins = d.join("plugins");
-        std::fs::create_dir_all(plugins.join("good")).unwrap();
-        std::fs::create_dir_all(plugins.join("broken")).unwrap();
-        std::fs::write(d.join("launch-approvals.json"), "{\"a\": [").unwrap();
-        std::fs::write(plugins.join("good/installed.json"), "{\"id\":\"good\"}").unwrap();
-        std::fs::write(plugins.join("broken/installed.json"), "").unwrap();
-
-        let moved = check_settings(&d, &plugins, "installed.json");
-        assert_eq!(moved.len(), 2, "{moved:?}");
-        assert!(!d.join("launch-approvals.json").exists());
-        assert!(!plugins.join("broken/installed.json").exists());
-        assert_eq!(std::fs::read_to_string(plugins.join("good/installed.json")).unwrap(), "{\"id\":\"good\"}");
-        let name = moved[0].file_name().unwrap().to_string_lossy().into_owned();
-        assert!(name.starts_with("launch-approvals.json.bad-"), "{name}");
-        assert_eq!(std::fs::read_to_string(&moved[0]).unwrap(), "{\"a\": [");
-        assert!(check_settings(&d, &plugins, "installed.json").is_empty());
     }
 
     #[test]

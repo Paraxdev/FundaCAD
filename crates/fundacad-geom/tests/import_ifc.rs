@@ -103,7 +103,11 @@ fn a_zipped_ifc_is_refused_by_name() {
 }
 
 fn notes(reply: &Map<String, Value>) -> Vec<String> {
-    reply.get("notes").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default()
+    reply
+        .get("notes")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
+        .unwrap_or_default()
 }
 
 fn scratch(name: &str, text: &str) -> String {

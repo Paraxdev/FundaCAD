@@ -1,10 +1,7 @@
-// What the floating tool rail shows, built from the ribbon tables so a tool is
-// still defined in exactly one place (ui/ribbonDefs.ts).
-//
-// Three modes: the model with nothing selected shows categories that open
-// flyouts, a selection shows the tools that can act on it, and a sketch shows
-// its own drawing tools with each family behind one button.
+// The floating tool rail, built from the ribbon tables (ui/ribbonDefs.ts). Nothing selected shows categories, a
+// selection shows the tools that act on it, and a sketch shows its drawing tools with each family behind one button.
 
+import { keyHint, shortcutRows } from "../input/shortcuts";
 import { leavesOf, modelGroups, SKETCH, type Group, type ToolItem } from "./ribbonDefs";
 
 export type RailMode = "model" | "selection" | "sketch";
@@ -31,8 +28,14 @@ export interface RailFamily {
 
 export type RailEntry = RailTool | RailFamily;
 
+/** The key a tool shows: the one it is bound to now, none when a person unbound it, the ribbon's own for a tool the keymap does not carry. */
+function keyOf(t: ToolItem): string | undefined {
+  return shortcutRows().some((r) => r.action === t.action) ? keyHint(t.action) : t.key;
+}
+
 export function railTool(t: ToolItem): RailTool {
-  return { kind: "tool", action: t.action, label: t.label, icon: t.iconName, ...(t.key ? { keys: t.key } : {}) };
+  const keys = keyOf(t);
+  return { kind: "tool", action: t.action, label: t.label, icon: t.iconName, ...(keys ? { keys } : {}) };
 }
 
 const CATEGORY: Record<string, { label: string; icon: string }> = {
@@ -77,7 +80,8 @@ export function sketchTool(groups: Group[] = modelGroups()): RailTool | null {
 }
 
 function sketchLeaf(action: string): ToolItem {
-  for (const g of SKETCH) for (const it of g.items) for (const leaf of leavesOf(it)) if (leaf.action === action) return leaf;
+  for (const g of SKETCH)
+    for (const it of g.items) for (const leaf of leavesOf(it)) if (leaf.action === action) return leaf;
   throw new Error(`sketch rail names an unknown tool: ${action}`);
 }
 
@@ -85,7 +89,8 @@ function sketchLeaf(action: string): ToolItem {
 export function sketchToolName(action: string): { label: string; keys?: string } | null {
   try {
     const leaf = sketchLeaf(action);
-    return { label: leaf.label, ...(leaf.key ? { keys: leaf.key } : {}) };
+    const keys = keyOf(leaf);
+    return { label: leaf.label, ...(keys ? { keys } : {}) };
   } catch {
     return null;
   }
@@ -105,7 +110,11 @@ const SKETCH_SLOTS: readonly SketchSlot[] = [
   { id: "corner", label: "Fillet", actions: ["fillet-sketch", "chamfer-sketch"] },
   "move-sketch",
   "mirror-sketch",
-  { id: "pattern", label: "Pattern", actions: ["patternRect", "patternCircular", "boltCircle", "hexHoles", "honeycomb", "gridHoles"] },
+  {
+    id: "pattern",
+    label: "Pattern",
+    actions: ["patternRect", "patternCircular", "boltCircle", "hexHoles", "honeycomb", "gridHoles"],
+  },
   "project",
   "text",
   "trim",
@@ -113,7 +122,20 @@ const SKETCH_SLOTS: readonly SketchSlot[] = [
   {
     id: "constrain",
     label: "Constrain",
-    actions: ["horizontal", "vertical", "parallel", "perpendicular", "equal", "tangent", "coincident", "concentric", "midpoint", "collinear", "symmetric", "fix"],
+    actions: [
+      "horizontal",
+      "vertical",
+      "parallel",
+      "perpendicular",
+      "equal",
+      "tangent",
+      "coincident",
+      "concentric",
+      "midpoint",
+      "collinear",
+      "symmetric",
+      "fix",
+    ],
   },
   "tie-loose-ends",
 ];

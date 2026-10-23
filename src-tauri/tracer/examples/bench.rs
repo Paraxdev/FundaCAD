@@ -1,9 +1,6 @@
-//! Samples per second and time to a sample count, one JSON line per run.
-//! BENCH_PATH rq|sw, BENCH_SCENE small|many|big or one of tests/common
-//! (golden, studio, hdr-sun, emitter, glass, metal, assembly), BENCH_W, BENCH_H,
-//! BENCH_SPP, BENCH_BUDGET (software paths per dispatch). BENCH_RMSE=<target of
-//! 255> on a scene with a committed reference traces at the reference's size and
-//! adds the samples and seconds until the picture first reaches the target.
+//! Samples per second and time to a sample count, one JSON line per run. BENCH_PATH rq|sw, BENCH_SCENE small|many|big
+//! or a tests/common scene, BENCH_W, BENCH_H, BENCH_SPP, BENCH_BUDGET (software paths per dispatch). BENCH_RMSE=<target
+//! of 255> on a scene with a committed reference adds the samples and seconds until the picture reaches the target.
 
 #[path = "../tests/common/mod.rs"]
 mod common;
@@ -97,12 +94,15 @@ fn main() {
         t.set_look(Look { sun_dir: [0.4, -0.3, 1.0], sun_color: [2.0; 3], ..Look::default() });
         for k in t.set_bodies(bodies) {
             if k == "floor" {
-                t.add_mesh(&k, Mesh {
-                    positions: vec![[-1.0, -1.0, 0.0], [1.0, -1.0, 0.0], [1.0, 1.0, 0.0], [-1.0, 1.0, 0.0]],
-                    normals: vec![[0.0, 0.0, 1.0]; 4],
-                    indices: vec![0, 1, 2, 0, 2, 3],
-                    ..Default::default()
-                });
+                t.add_mesh(
+                    &k,
+                    Mesh {
+                        positions: vec![[-1.0, -1.0, 0.0], [1.0, -1.0, 0.0], [1.0, 1.0, 0.0], [-1.0, 1.0, 0.0]],
+                        normals: vec![[0.0, 0.0, 1.0]; 4],
+                        indices: vec![0, 1, 2, 0, 2, 3],
+                        ..Default::default()
+                    },
+                );
             } else {
                 t.add_mesh(&k, mesh.clone());
             }

@@ -10,7 +10,10 @@ type LaunchEngine = Pick<Engine, "store" | "sketch" | "geometry">;
  *  `after`, the recovery prompt, so two questions never stand at once. */
 export function installLaunchPaths(e: LaunchEngine, after: Promise<unknown> = Promise.resolve()): void {
   if (!("__TAURI_INTERNALS__" in globalThis)) return;
-  let queue: Promise<void> = after.then(() => {}, () => {});
+  let queue: Promise<void> = after.then(
+    () => {},
+    () => {},
+  );
   const drain = () => {
     queue = queue.then(() => drainLaunchPaths(e)).catch((err) => console.warn("launch paths failed:", err));
   };
@@ -25,6 +28,9 @@ export async function drainLaunchPaths(e: LaunchEngine): Promise<void> {
   if ((await openPathGuarded(e, first)) !== "ok") return;
   closeHome();
   if (paths.length > 1) {
-    toast(`Opened ${first.split(/[\\/]/).pop()}, FundaCAD opens one document at a time`, { kind: "info", timeout: 8000 });
+    toast(`Opened ${first.split(/[\\/]/).pop()}, FundaCAD opens one document at a time`, {
+      kind: "info",
+      timeout: 8000,
+    });
   }
 }

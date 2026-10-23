@@ -1,10 +1,5 @@
-//! Sketches turned into located profiles and region cells, replacing
-//! the Python engine's `sketch_build.py` (`_build_sketch`, `_entity_edges`,
-//! `_expand_pattern`, `_faces_from_edges`, `_subdivide_faces`, `_region_*`) and
-//! the `split_profile_cells` rule of the Python engine's `face_footprint.py`.
-//!
-//! A sketch follows the face it was made on through face_anchor.rs, and its
-//! text entities are drawn by the text module.
+//! Sketches turned into located profiles and region cells, `_build_sketch` and the `_region_*` helpers of
+//! sketch_build.py with `split_profile_cells` of face_footprint.py.
 
 use std::collections::HashMap;
 use std::f64::consts::PI;
@@ -21,57 +16,16 @@ use crate::kernel::{self, BoolKind, Frame, Kind};
 /// A sketch entity with its numbers resolved.
 #[derive(Debug, Clone)]
 enum Ent {
-    Rect {
-        w: f64,
-        h: f64,
-        x: f64,
-        y: f64,
-        angle: f64,
-    },
-    Circle {
-        r: f64,
-        x: f64,
-        y: f64,
-    },
-    Ellipse {
-        rx: f64,
-        ry: f64,
-        x: f64,
-        y: f64,
-        angle: f64,
-    },
-    Line {
-        a: [f64; 2],
-        b: [f64; 2],
-    },
-    Arc {
-        a: [f64; 2],
-        b: [f64; 2],
-        m: [f64; 2],
-    },
+    Rect { w: f64, h: f64, x: f64, y: f64, angle: f64 },
+    Circle { r: f64, x: f64, y: f64 },
+    Ellipse { rx: f64, ry: f64, x: f64, y: f64, angle: f64 },
+    Line { a: [f64; 2], b: [f64; 2] },
+    Arc { a: [f64; 2], b: [f64; 2], m: [f64; 2] },
     Spline(Vec<[f64; 2]>),
-    Bspline {
-        poles: Vec<[f64; 2]>,
-        degree: Option<f64>,
-        closed: bool,
-        knots: Option<Vec<f64>>,
-    },
-    Point {
-        x: f64,
-        y: f64,
-    },
-    Polygon {
-        x: f64,
-        y: f64,
-        r: f64,
-        sides: f64,
-        angle: f64,
-    },
-    Slot {
-        a: [f64; 2],
-        b: [f64; 2],
-        w: f64,
-    },
+    Bspline { poles: Vec<[f64; 2]>, degree: Option<f64>, closed: bool, knots: Option<Vec<f64>> },
+    Point { x: f64, y: f64 },
+    Polygon { x: f64, y: f64, r: f64, sides: f64, angle: f64 },
+    Slot { a: [f64; 2], b: [f64; 2], w: f64 },
     Projected(ProjectedCurve),
     Text(Box<fundacad_core::schema::Text>),
     Other,
@@ -89,46 +43,17 @@ fn resolve(ctx: &Ctx, e: &SketchEntity) -> FResult<Item> {
     let (construction, ent) = match e {
         SketchEntity::Rectangle(r) => (
             r.construction,
-            Ent::Rect {
-                w: v(&r.width)?,
-                h: v(&r.height)?,
-                x: o(&r.x)?,
-                y: o(&r.y)?,
-                angle: o(&r.angle)?,
-            },
+            Ent::Rect { w: v(&r.width)?, h: v(&r.height)?, x: o(&r.x)?, y: o(&r.y)?, angle: o(&r.angle)? },
         ),
-        SketchEntity::Circle(c) => (
-            c.construction,
-            Ent::Circle {
-                r: v(&c.radius)?,
-                x: o(&c.x)?,
-                y: o(&c.y)?,
-            },
-        ),
+        SketchEntity::Circle(c) => (c.construction, Ent::Circle { r: v(&c.radius)?, x: o(&c.x)?, y: o(&c.y)? }),
         SketchEntity::Ellipse(c) => (
             c.construction,
-            Ent::Ellipse {
-                rx: v(&c.rx)?,
-                ry: v(&c.ry)?,
-                x: o(&c.x)?,
-                y: o(&c.y)?,
-                angle: o(&c.angle)?,
-            },
+            Ent::Ellipse { rx: v(&c.rx)?, ry: v(&c.ry)?, x: o(&c.x)?, y: o(&c.y)?, angle: o(&c.angle)? },
         ),
-        SketchEntity::Line(l) => (
-            l.construction,
-            Ent::Line {
-                a: [v(&l.x1)?, v(&l.y1)?],
-                b: [v(&l.x2)?, v(&l.y2)?],
-            },
-        ),
+        SketchEntity::Line(l) => (l.construction, Ent::Line { a: [v(&l.x1)?, v(&l.y1)?], b: [v(&l.x2)?, v(&l.y2)?] }),
         SketchEntity::Arc(a) => (
             a.construction,
-            Ent::Arc {
-                a: [v(&a.x1)?, v(&a.y1)?],
-                b: [v(&a.x2)?, v(&a.y2)?],
-                m: [v(&a.mx)?, v(&a.my)?],
-            },
+            Ent::Arc { a: [v(&a.x1)?, v(&a.y1)?], b: [v(&a.x2)?, v(&a.y2)?], m: [v(&a.mx)?, v(&a.my)?] },
         ),
         SketchEntity::Spline(s) => {
             let mut pts = Vec::with_capacity(s.points.len());
@@ -152,55 +77,29 @@ fn resolve(ctx: &Ctx, e: &SketchEntity) -> FResult<Item> {
                 },
             )
         }
-        SketchEntity::Point(p) => (
-            p.construction,
-            Ent::Point {
-                x: v(&p.x)?,
-                y: v(&p.y)?,
-            },
-        ),
+        SketchEntity::Point(p) => (p.construction, Ent::Point { x: v(&p.x)?, y: v(&p.y)? }),
         SketchEntity::Polygon(p) => (
             p.construction,
-            Ent::Polygon {
-                x: v(&p.x)?,
-                y: v(&p.y)?,
-                r: v(&p.radius)?,
-                sides: v(&p.sides)?,
-                angle: v(&p.angle)?,
-            },
+            Ent::Polygon { x: v(&p.x)?, y: v(&p.y)?, r: v(&p.radius)?, sides: v(&p.sides)?, angle: v(&p.angle)? },
         ),
-        SketchEntity::Slot(s) => (
-            s.construction,
-            Ent::Slot {
-                a: [v(&s.x1)?, v(&s.y1)?],
-                b: [v(&s.x2)?, v(&s.y2)?],
-                w: v(&s.width)?,
-            },
-        ),
+        SketchEntity::Slot(s) => {
+            (s.construction, Ent::Slot { a: [v(&s.x1)?, v(&s.y1)?], b: [v(&s.x2)?, v(&s.y2)?], w: v(&s.width)? })
+        }
         SketchEntity::Projected(p) => (p.construction, Ent::Projected(p.curve.clone())),
         SketchEntity::Text(t) => (t.construction, Ent::Text(Box::new(t.clone()))),
         SketchEntity::Unknown(_) => (None, Ent::Other),
         SketchEntity::Invalid(inv) => {
-            let raw_construction = inv
-                .raw
-                .get("construction")
-                .and_then(serde_json::Value::as_bool);
+            let raw_construction = inv.raw.get("construction").and_then(serde_json::Value::as_bool);
             if raw_construction == Some(true) {
                 (Some(true), Ent::Other)
             } else if let Some(rest) = inv.error.strip_prefix("missing field `") {
-                return Err(Fail::Missing(
-                    rest.split('`').next().unwrap_or("").to_owned(),
-                ));
+                return Err(Fail::Missing(rest.split('`').next().unwrap_or("").to_owned()));
             } else {
                 return Err(Fail::Internal("TypeError".into()));
             }
         }
     };
-    Ok(Item {
-        id: e.id().map(str::to_owned),
-        construction: construction.unwrap_or(false),
-        ent,
-    })
+    Ok(Item { id: e.id().map(str::to_owned), construction: construction.unwrap_or(false), ent })
 }
 
 /// Python's `round()` to an integer: ties to even.
@@ -233,40 +132,13 @@ fn translate(ctx: &Ctx, e: &Item, dx: f64, dy: f64, id: String) -> FResult<Item>
                 ..(**t).clone()
             }))
         }
-        Ent::Line { a, b } => Ent::Line {
-            a: [a[0] + dx, a[1] + dy],
-            b: [b[0] + dx, b[1] + dy],
-        },
-        Ent::Rect { w, h, x, y, angle } => Ent::Rect {
-            w: *w,
-            h: *h,
-            x: x + dx,
-            y: y + dy,
-            angle: *angle,
-        },
-        Ent::Circle { r, x, y } => Ent::Circle {
-            r: *r,
-            x: x + dx,
-            y: y + dy,
-        },
-        Ent::Ellipse {
-            rx,
-            ry,
-            x,
-            y,
-            angle,
-        } => Ent::Ellipse {
-            rx: *rx,
-            ry: *ry,
-            x: x + dx,
-            y: y + dy,
-            angle: *angle,
-        },
-        Ent::Arc { a, b, m } => Ent::Arc {
-            a: [a[0] + dx, a[1] + dy],
-            b: [b[0] + dx, b[1] + dy],
-            m: [m[0] + dx, m[1] + dy],
-        },
+        Ent::Line { a, b } => Ent::Line { a: [a[0] + dx, a[1] + dy], b: [b[0] + dx, b[1] + dy] },
+        Ent::Rect { w, h, x, y, angle } => Ent::Rect { w: *w, h: *h, x: x + dx, y: y + dy, angle: *angle },
+        Ent::Circle { r, x, y } => Ent::Circle { r: *r, x: x + dx, y: y + dy },
+        Ent::Ellipse { rx, ry, x, y, angle } => Ent::Ellipse { rx: *rx, ry: *ry, x: x + dx, y: y + dy, angle: *angle },
+        Ent::Arc { a, b, m } => {
+            Ent::Arc { a: [a[0] + dx, a[1] + dy], b: [b[0] + dx, b[1] + dy], m: [m[0] + dx, m[1] + dy] }
+        }
         Ent::Spline(p) => Ent::Spline(p.iter().map(|q| [q[0] + dx, q[1] + dy]).collect()),
         Ent::Bspline { poles, degree, closed, knots } => Ent::Bspline {
             poles: poles.iter().map(|q| [q[0] + dx, q[1] + dy]).collect(),
@@ -274,35 +146,14 @@ fn translate(ctx: &Ctx, e: &Item, dx: f64, dy: f64, id: String) -> FResult<Item>
             closed: *closed,
             knots: knots.clone(),
         },
-        Ent::Point { x, y } => Ent::Point {
-            x: x + dx,
-            y: y + dy,
-        },
-        Ent::Polygon {
-            x,
-            y,
-            r,
-            sides,
-            angle,
-        } => Ent::Polygon {
-            x: x + dx,
-            y: y + dy,
-            r: *r,
-            sides: *sides,
-            angle: *angle,
-        },
-        Ent::Slot { a, b, w } => Ent::Slot {
-            a: [a[0] + dx, a[1] + dy],
-            b: [b[0] + dx, b[1] + dy],
-            w: *w,
-        },
+        Ent::Point { x, y } => Ent::Point { x: x + dx, y: y + dy },
+        Ent::Polygon { x, y, r, sides, angle } => {
+            Ent::Polygon { x: x + dx, y: y + dy, r: *r, sides: *sides, angle: *angle }
+        }
+        Ent::Slot { a, b, w } => Ent::Slot { a: [a[0] + dx, a[1] + dy], b: [b[0] + dx, b[1] + dy], w: *w },
         _ => return Err(Fail::Missing("x".into())),
     };
-    Ok(Item {
-        id: Some(id),
-        construction: e.construction,
-        ent,
-    })
+    Ok(Item { id: Some(id), construction: e.construction, ent })
 }
 
 /// `rotated` in src/sketch/pattern.ts, a rectangle becomes four lines.
@@ -312,63 +163,25 @@ fn rotate(ctx: &Ctx, e: &Item, cx: f64, cy: f64, ang: f64, id: &str) -> FResult<
         let (ddx, ddy) = (x - cx, y - cy);
         [cx + ddx * co - ddy * si, cy + ddx * si + ddy * co]
     };
-    let one = |ent: Ent| {
-        Ok(vec![Item {
-            id: Some(id.to_owned()),
-            construction: e.construction,
-            ent,
-        }])
-    };
+    let one = |ent: Ent| Ok(vec![Item { id: Some(id.to_owned()), construction: e.construction, ent }]);
     match &e.ent {
         Ent::Circle { r, x, y } => {
             let p = rot(*x, *y);
-            one(Ent::Circle {
-                r: *r,
-                x: p[0],
-                y: p[1],
-            })
+            one(Ent::Circle { r: *r, x: p[0], y: p[1] })
         }
-        Ent::Ellipse {
-            rx,
-            ry,
-            x,
-            y,
-            angle,
-        } => {
+        Ent::Ellipse { rx, ry, x, y, angle } => {
             let p = rot(*x, *y);
-            one(Ent::Ellipse {
-                rx: *rx,
-                ry: *ry,
-                x: p[0],
-                y: p[1],
-                angle: angle + ang.to_degrees(),
-            })
+            one(Ent::Ellipse { rx: *rx, ry: *ry, x: p[0], y: p[1], angle: angle + ang.to_degrees() })
         }
         Ent::Point { x, y } => {
             let p = rot(*x, *y);
             one(Ent::Point { x: p[0], y: p[1] })
         }
-        Ent::Polygon {
-            x,
-            y,
-            r,
-            sides,
-            angle,
-        } => {
+        Ent::Polygon { x, y, r, sides, angle } => {
             let p = rot(*x, *y);
-            one(Ent::Polygon {
-                x: p[0],
-                y: p[1],
-                r: *r,
-                sides: *sides,
-                angle: angle + ang.to_degrees(),
-            })
+            one(Ent::Polygon { x: p[0], y: p[1], r: *r, sides: *sides, angle: angle + ang.to_degrees() })
         }
-        Ent::Slot { a, b, w } => one(Ent::Slot {
-            a: rot(a[0], a[1]),
-            b: rot(b[0], b[1]),
-            w: *w,
-        }),
+        Ent::Slot { a, b, w } => one(Ent::Slot { a: rot(a[0], a[1]), b: rot(b[0], b[1]), w: *w }),
         Ent::Text(t) => {
             let o = |v: &Option<Num>| ctx.val_or(v.as_ref(), 0.0);
             let p = rot(o(&t.x)?, o(&t.y)?);
@@ -379,15 +192,8 @@ fn rotate(ctx: &Ctx, e: &Item, cx: f64, cy: f64, ang: f64, id: &str) -> FResult<
                 ..(**t).clone()
             })))
         }
-        Ent::Line { a, b } => one(Ent::Line {
-            a: rot(a[0], a[1]),
-            b: rot(b[0], b[1]),
-        }),
-        Ent::Arc { a, b, m } => one(Ent::Arc {
-            a: rot(a[0], a[1]),
-            b: rot(b[0], b[1]),
-            m: rot(m[0], m[1]),
-        }),
+        Ent::Line { a, b } => one(Ent::Line { a: rot(a[0], a[1]), b: rot(b[0], b[1]) }),
+        Ent::Arc { a, b, m } => one(Ent::Arc { a: rot(a[0], a[1]), b: rot(b[0], b[1]), m: rot(m[0], m[1]) }),
         Ent::Spline(p) => one(Ent::Spline(p.iter().map(|q| rot(q[0], q[1])).collect())),
         Ent::Bspline { poles, degree, closed, knots } => one(Ent::Bspline {
             poles: poles.iter().map(|q| rot(q[0], q[1])).collect(),
@@ -401,10 +207,7 @@ fn rotate(ctx: &Ctx, e: &Item, cx: f64, cy: f64, ang: f64, id: &str) -> FResult<
                 .map(|i| Item {
                     id: Some(format!("{id}.{i}")),
                     construction: e.construction,
-                    ent: Ent::Line {
-                        a: c[i],
-                        b: c[(i + 1) % 4],
-                    },
+                    ent: Ent::Line { a: c[i], b: c[(i + 1) % 4] },
                 })
                 .collect())
         }
@@ -423,10 +226,7 @@ fn hexagon_lines(cx: f64, cy: f64, r: f64, id: &str) -> Vec<Item> {
         .map(|k| Item {
             id: Some(format!("{id}.{k}")),
             construction: false,
-            ent: Ent::Line {
-                a: v[k],
-                b: v[(k + 1) % 6],
-            },
+            ent: Ent::Line { a: v[k], b: v[(k + 1) % 6] },
         })
         .collect()
 }
@@ -440,11 +240,7 @@ fn expand_pattern(
 ) -> FResult<Vec<Item>> {
     let mut out = Vec::new();
     let mut counter = 0usize;
-    let pid = pat
-        .raw()
-        .and_then(|r| r.get("id"))
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_owned);
+    let pid = pat.raw().and_then(|r| r.get("id")).and_then(serde_json::Value::as_str).map(str::to_owned);
     let mut did = |base: &str| {
         counter += 1;
         format!("{base}#{}", counter - 1)
@@ -458,10 +254,7 @@ fn expand_pattern(
     };
     match pat {
         SketchPattern::PatternRect(p) => {
-            let (cx, cy) = (
-                py_round(v(&p.count_x)?).max(1),
-                py_round(v(&p.count_y)?).max(1),
-            );
+            let (cx, cy) = (py_round(v(&p.count_x)?).max(1), py_round(v(&p.count_y)?).max(1));
             let (sx, sy) = (v(&p.spacing_x)?, v(&p.spacing_y)?);
             let ang = ctx.val_or(p.angle.as_ref(), 0.0)?.to_radians();
             let (co, si) = (ang.cos(), ang.sin());
@@ -488,12 +281,7 @@ fn expand_pattern(
             let total = v(&p.angle)?;
             let full = total != 0.0 && (total.abs() - 360.0).abs() < 1e-6;
             #[allow(clippy::cast_precision_loss)]
-            let step = if full {
-                total / count as f64
-            } else {
-                total / (count - 1).max(1) as f64
-            }
-            .to_radians();
+            let step = if full { total / count as f64 } else { total / (count - 1).max(1) as f64 }.to_radians();
             let (cx, cy) = (v(&p.cx)?, v(&p.cy)?);
             let srcs = sources(&p.sources);
             for k in 1..count {
@@ -515,34 +303,21 @@ fn expand_pattern(
                 out.push(Item {
                     id: Some(id),
                     construction: false,
-                    ent: Ent::Circle {
-                        r: rad,
-                        x: cx + r * a.cos(),
-                        y: cy + r * a.sin(),
-                    },
+                    ent: Ent::Circle { r: rad, x: cx + r * a.cos(), y: cy + r * a.sin() },
                 });
             }
         }
         SketchPattern::GridHoles(p) => {
-            let (nx, ny) = (
-                py_round(v(&p.count_x)?).max(1),
-                py_round(v(&p.count_y)?).max(1),
-            );
+            let (nx, ny) = (py_round(v(&p.count_x)?).max(1), py_round(v(&p.count_y)?).max(1));
             let (sx, sy, rad) = (v(&p.spacing_x)?, v(&p.spacing_y)?, v(&p.diameter)? / 2.0);
             let (cx, cy) = (v(&p.cx)?, v(&p.cy)?);
             for i in 0..nx {
                 for j in 0..ny {
                     let id = did(&p.id);
                     #[allow(clippy::cast_precision_loss)]
-                    let (x, y) = (
-                        cx + (i as f64 - (nx - 1) as f64 / 2.0) * sx,
-                        cy + (j as f64 - (ny - 1) as f64 / 2.0) * sy,
-                    );
-                    out.push(Item {
-                        id: Some(id),
-                        construction: false,
-                        ent: Ent::Circle { r: rad, x, y },
-                    });
+                    let (x, y) =
+                        (cx + (i as f64 - (nx - 1) as f64 / 2.0) * sx, cy + (j as f64 - (ny - 1) as f64 / 2.0) * sy);
+                    out.push(Item { id: Some(id), construction: false, ent: Ent::Circle { r: rad, x, y } });
                 }
             }
         }
@@ -560,11 +335,7 @@ fn expand_pattern(
                     if honeycomb {
                         out.extend(hexagon_lines(x, y, rad, &id));
                     } else {
-                        out.push(Item {
-                            id: Some(id),
-                            construction: false,
-                            ent: Ent::Circle { r: rad, x, y },
-                        });
+                        out.push(Item { id: Some(id), construction: false, ent: Ent::Circle { r: rad, x, y } });
                     }
                 }
             }
@@ -582,13 +353,7 @@ fn entity_edges(e: &Ent) -> FResult<Vec<Shape>> {
         Ent::Line { a, b } => vec![kernel::edge_line(*a, *b)?],
         Ent::Arc { a, b, m } => vec![kernel::edge_arc3(*a, *m, *b)?],
         Ent::Circle { r, x, y } => vec![kernel::edge_circle([*x, *y], *r)?],
-        Ent::Ellipse {
-            rx,
-            ry,
-            x,
-            y,
-            angle,
-        } => vec![kernel::edge_ellipse([*x, *y], *rx, *ry, *angle)?],
+        Ent::Ellipse { rx, ry, x, y, angle } => vec![kernel::edge_ellipse([*x, *y], *rx, *ry, *angle)?],
         Ent::Spline(pts) => {
             if pts.len() >= 2 {
                 vec![kernel::edge_spline(pts)?]
@@ -605,17 +370,9 @@ fn entity_edges(e: &Ent) -> FResult<Vec<Shape>> {
         }
         Ent::Rect { w, h, x, y, angle } => {
             let c = rect_corners(*w, *h, *x, *y, *angle);
-            (0..4)
-                .map(|k| kernel::edge_line(c[k], c[(k + 1) % 4]))
-                .collect::<Result<_, _>>()?
+            (0..4).map(|k| kernel::edge_line(c[k], c[(k + 1) % 4])).collect::<Result<_, _>>()?
         }
-        Ent::Polygon {
-            x,
-            y,
-            r,
-            sides,
-            angle,
-        } => {
+        Ent::Polygon { x, y, r, sides, angle } => {
             let n = py_round(*sides).max(3);
             let ang = angle.to_radians();
             #[allow(clippy::cast_precision_loss)]
@@ -626,9 +383,7 @@ fn entity_edges(e: &Ent) -> FResult<Vec<Shape>> {
                 })
                 .collect();
             let n = pts.len();
-            (0..n)
-                .map(|i| kernel::edge_line(pts[i], pts[(i + 1) % n]))
-                .collect::<Result<_, _>>()?
+            (0..n).map(|i| kernel::edge_line(pts[i], pts[(i + 1) % n])).collect::<Result<_, _>>()?
         }
         Ent::Slot { a, b, w } => {
             let (ax, ay, bx, by) = (a[0], a[1], b[0], b[1]);
@@ -664,11 +419,9 @@ fn entity_edges(e: &Ent) -> FResult<Vec<Shape>> {
             ProjectedCurve::Circle(c) => {
                 vec![kernel::edge_circle([c.x.get(), c.y.get()], c.r.get())?]
             }
-            ProjectedCurve::Arc(a) => vec![kernel::edge_arc3(
-                [a.x1.get(), a.y1.get()],
-                [a.mx.get(), a.my.get()],
-                [a.x2.get(), a.y2.get()],
-            )?],
+            ProjectedCurve::Arc(a) => {
+                vec![kernel::edge_arc3([a.x1.get(), a.y1.get()], [a.mx.get(), a.my.get()], [a.x2.get(), a.y2.get()])?]
+            }
             ProjectedCurve::Poly(p) => {
                 let pts: Vec<[f64; 2]> = p.pts.iter().map(|q| [q[0].get(), q[1].get()]).collect();
                 let mut dedup: Vec<[f64; 2]> = Vec::new();
@@ -680,10 +433,7 @@ fn entity_edges(e: &Ent) -> FResult<Vec<Shape>> {
                 if dedup.len() < 2 {
                     Vec::new()
                 } else {
-                    dedup
-                        .windows(2)
-                        .map(|w| kernel::edge_line(w[0], w[1]))
-                        .collect::<Result<_, _>>()?
+                    dedup.windows(2).map(|w| kernel::edge_line(w[0], w[1])).collect::<Result<_, _>>()?
                 }
             }
             _ => Vec::new(),
@@ -736,11 +486,9 @@ fn thin_pieces(e: &Ent) -> Option<Result<Vec<Piece>, &'static str>> {
             vec![Piece::Seg { a: [l.x1.get(), l.y1.get()], b: [l.x2.get(), l.y2.get()] }]
         }
         Ent::Projected(ProjectedCurve::Circle(c)) => vec![Piece::Circle { c: [c.x.get(), c.y.get()], r: c.r.get() }],
-        Ent::Projected(ProjectedCurve::Arc(a)) => vec![Piece::Arc {
-            a: [a.x1.get(), a.y1.get()],
-            m: [a.mx.get(), a.my.get()],
-            b: [a.x2.get(), a.y2.get()],
-        }],
+        Ent::Projected(ProjectedCurve::Arc(a)) => {
+            vec![Piece::Arc { a: [a.x1.get(), a.y1.get()], m: [a.mx.get(), a.my.get()], b: [a.x2.get(), a.y2.get()] }]
+        }
         Ent::Projected(ProjectedCurve::Poly(p)) => p
             .pts
             .windows(2)
@@ -768,26 +516,20 @@ pub fn path_edge_json(e: &serde_json::Value) -> Option<Shape> {
     let n = |k: &str| e.get(k).map(|v| crate::text::num_or_zero(Some(v)));
     let o = |k: &str| crate::text::num_or_zero(e.get(k));
     let ent = match e.get("type").and_then(serde_json::Value::as_str)? {
-        "line" => Ent::Line {
-            a: [n("x1")?, n("y1")?],
-            b: [n("x2")?, n("y2")?],
-        },
-        "arc" => Ent::Arc {
-            a: [n("x1")?, n("y1")?],
-            b: [n("x2")?, n("y2")?],
-            m: [n("mx")?, n("my")?],
-        },
-        "circle" => Ent::Circle {
-            r: n("radius")?,
-            x: o("x"),
-            y: o("y"),
-        },
+        "line" => Ent::Line { a: [n("x1")?, n("y1")?], b: [n("x2")?, n("y2")?] },
+        "arc" => Ent::Arc { a: [n("x1")?, n("y1")?], b: [n("x2")?, n("y2")?], m: [n("mx")?, n("my")?] },
+        "circle" => Ent::Circle { r: n("radius")?, x: o("x"), y: o("y") },
         "spline" => Ent::Spline(
             e.get("points")
                 .and_then(serde_json::Value::as_array)
                 .map(|pts| {
                     pts.iter()
-                        .map(|p| Some([p.get("x").map(|v| crate::text::num_or_zero(Some(v)))?, p.get("y").map(|v| crate::text::num_or_zero(Some(v)))?]))
+                        .map(|p| {
+                            Some([
+                                p.get("x").map(|v| crate::text::num_or_zero(Some(v)))?,
+                                p.get("y").map(|v| crate::text::num_or_zero(Some(v)))?,
+                            ])
+                        })
                         .collect::<Option<Vec<_>>>()
                 })
                 .unwrap_or(Some(Vec::new()))?,
@@ -822,9 +564,7 @@ fn text_faces(ctx: &Ctx, t: &fundacad_core::schema::Text, path: Option<&Shape>) 
             text: t.text.clone(),
             size: ctx.val(&t.height)?,
             font: t.font.clone().filter(|f| !f.is_empty()),
-            aspect: crate::text::fonts::Aspect::from_style(
-                t.style.as_ref().map_or("regular", |s| s.as_str()),
-            ),
+            aspect: crate::text::fonts::Aspect::from_style(t.style.as_ref().map_or("regular", |s| s.as_str())),
             align: match t.align.as_ref().map(|a| a.as_str()) {
                 Some("center") => crate::text::HAlign::Center,
                 Some("right") => crate::text::HAlign::Right,
@@ -885,15 +625,19 @@ fn evenodd_cells(cells: &[Shape], outlines: &[Shape], edges: &[Shape]) -> Vec<Sh
         let rim = kernel::compound(&kernel::subshapes(&cell, Kind::Edge));
         let clear = |x: f64, y: f64| kernel::distance_to_point(&rim, [x, y, 0.0]).is_some_and(|d| d > margin);
         let good = |x: f64, y: f64| kernel::face_contains(&cell, [x, y, 0.0], 1e-7);
-        let found = [(3, 32), (7, 100), (15, 400)].into_iter().find_map(|(lines, steps)| inside_point_grid(&cell, good, &clear, lines, steps));
+        let found = [(3, 32), (7, 100), (15, 400)]
+            .into_iter()
+            .find_map(|(lines, steps)| inside_point_grid(&cell, good, &clear, lines, steps));
         let Some([x, y]) = found else {
             continue;
         };
         let depth = outlines
             .iter()
             .zip(&boxes)
-            .filter(|(o, b)| b.is_some_and(|b| x >= b[0] - 1e-7 && x <= b[3] + 1e-7 && y >= b[1] - 1e-7 && y <= b[4] + 1e-7)
-                && kernel::face_contains(o, [x, y, 0.0], 1e-7))
+            .filter(|(o, b)| {
+                b.is_some_and(|b| x >= b[0] - 1e-7 && x <= b[3] + 1e-7 && y >= b[1] - 1e-7 && y <= b[4] + 1e-7)
+                    && kernel::face_contains(o, [x, y, 0.0], 1e-7)
+            })
             .count();
         if depth % 2 == 1 {
             kept.push(cell);
@@ -1073,10 +817,7 @@ pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResu
     } else {
         None
     };
-    let tool_edges = all_edges
-        .iter()
-        .map(|e| plane.locate(e))
-        .collect::<Result<Vec<_>, _>>()?;
+    let tool_edges = all_edges.iter().map(|e| plane.locate(e)).collect::<Result<Vec<_>, _>>()?;
     Ok(SketchEntry {
         sketch,
         faces: located,
@@ -1110,10 +851,7 @@ fn hole_points(items: &[Item], plane: &Frame) -> Vec<[f64; 3]> {
         points
     };
     let (o, xd, yd) = (plane.origin, plane.x, plane.y);
-    marks
-        .iter()
-        .map(|[x, y]| std::array::from_fn(|k| o[k] + x * xd[k] + y * yd[k]))
-        .collect()
+    marks.iter().map(|[x, y]| std::array::from_fn(|k| o[k] + x * xd[k] + y * yd[k])).collect()
 }
 
 /// Stitches fragments parted by less than a printed layer so the whole path
@@ -1161,10 +899,8 @@ struct Cell {
     area: f64,
 }
 
-/// The shapes a profile on a plane can be cut by, those whose box meets the
-/// plane and, when given, the `reach` box, with the model's box diagonal the
-/// cut tolerance scales by. Coarse boxes: the answer is the same, and an exact
-/// box of a big import that was never meshed is seconds.
+/// The shapes a profile on a plane can be cut by (box meets the plane and `reach`), with the model's diagonal the
+/// cut tolerance scales by. Coarse boxes give the same answer, an exact box of an unmeshed big import takes seconds.
 fn cut_candidates<'a>(
     shapes: &[&'a Shape],
     origin: [f64; 3],
@@ -1197,20 +933,21 @@ fn cut_candidates<'a>(
     let meets = |b: &[f64; 6]| {
         let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
         for c in 0..8 {
-            let p = [b[if c & 1 == 0 { 0 } else { 3 }], b[if c & 2 == 0 { 1 } else { 4 }], b[if c & 4 == 0 { 2 } else { 5 }]];
+            let p = [
+                b[if c & 1 == 0 { 0 } else { 3 }],
+                b[if c & 2 == 0 { 1 } else { 4 }],
+                b[if c & 4 == 0 { 2 } else { 5 }],
+            ];
             let d = (0..3).map(|k| (p[k] - origin[k]) * normal[k]).sum::<f64>();
             lo = lo.min(d);
             hi = hi.max(d);
         }
-        lo <= slack && hi >= -slack
+        lo <= slack
+            && hi >= -slack
             && reach.map_or(true, |r| (0..3).all(|k| b[k] <= r[k + 3] + slack && b[k + 3] >= r[k] - slack))
     };
-    let kept = shapes
-        .iter()
-        .zip(&boxes)
-        .filter(|(_, b)| b.as_ref().map_or(true, |b| meets(b)))
-        .map(|(s, _)| *s)
-        .collect();
+    let kept =
+        shapes.iter().zip(&boxes).filter(|(_, b)| b.as_ref().map_or(true, |b| meets(b))).map(|(s, _)| *s).collect();
     (kept, scale)
 }
 
@@ -1221,23 +958,14 @@ fn region_cells(ctx: &Ctx, entry: &SketchEntry) -> Vec<Cell> {
     if !shapes.is_empty() && !faces.is_empty() {
         let (near, scale) = cut_candidates(&shapes, entry.plane.origin, entry.plane.z, None);
         if !near.is_empty() {
-            faces =
-                kernel::split_profile_cells(&faces, entry.plane.origin, entry.plane.z, &near, scale);
+            faces = kernel::split_profile_cells(&faces, entry.plane.origin, entry.plane.z, &near, scale);
         }
     }
-    faces
-        .into_iter()
-        .map(|face| Cell {
-            bbox: kernel::bbox(&face),
-            area: kernel::area(&face),
-            face,
-        })
-        .collect()
+    faces.into_iter().map(|face| Cell { bbox: kernel::bbox(&face), area: kernel::area(&face), face }).collect()
 }
 
-/// The `profileCuts` op: the lines the built model cuts a profile along on one
-/// plane, the same lines `region_cells` cuts with, so the sketch overlay offers
-/// exactly the areas a feature will build.
+/// The `profileCuts` op: the lines the built model cuts a profile along on one plane, the ones `region_cells`
+/// uses, so the sketch overlay offers exactly the areas a feature will build.
 pub fn profile_cuts_result(req: &serde_json::Map<String, serde_json::Value>) -> fundacad_protocol::JobResult {
     use serde_json::json;
     let vec3 = |k: &str| -> Option<[f64; 3]> {
@@ -1271,11 +999,14 @@ pub fn profile_cuts_result(req: &serde_json::Map<String, serde_json::Value>) -> 
         None => return fundacad_engine::error_result("'document'"),
     };
     let Some(bodies) = held else {
-        return fundacad_protocol::JobResult::Json(json!({"cuts": null, "ready": false}).as_object().cloned().unwrap_or_default());
+        return fundacad_protocol::JobResult::Json(
+            json!({"cuts": null, "ready": false}).as_object().cloned().unwrap_or_default(),
+        );
     };
     let shapes: Vec<&Shape> = bodies.iter().map(|b| b.shape()).collect();
     let bound = (!reach.is_empty()).then(|| {
-        let mut b = [f64::INFINITY, f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY];
+        let mut b =
+            [f64::INFINITY, f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY];
         for p in &reach {
             for k in 0..3 {
                 b[k] = b[k].min(p[k]);
@@ -1314,14 +1045,10 @@ fn region_face_at(cells: &[Cell], p: [f64; 3]) -> Option<Shape> {
         return Some(b.face.clone());
     }
     let dist = |c: &Cell| {
-        kernel::face_area_centre(&c.face).map_or(f64::INFINITY, |a| {
-            ((a[1] - p[0]).powi(2) + (a[2] - p[1]).powi(2) + (a[3] - p[2]).powi(2)).sqrt()
-        })
+        kernel::face_area_centre(&c.face)
+            .map_or(f64::INFINITY, |a| ((a[1] - p[0]).powi(2) + (a[2] - p[1]).powi(2) + (a[3] - p[2]).powi(2)).sqrt())
     };
-    cells
-        .iter()
-        .min_by(|a, b| dist(a).total_cmp(&dist(b)))
-        .map(|c| c.face.clone())
+    cells.iter().min_by(|a, b| dist(a).total_cmp(&dist(b))).map(|c| c.face.clone())
 }
 
 /// `_region_face_at` over `_region_cells`, for one picked point.
@@ -1335,10 +1062,7 @@ pub fn region_target(ctx: &Ctx, pts: &[[f64; 3]], entry: &SketchEntry) -> FResul
         return Ok(None);
     }
     let cells = region_cells(ctx, entry);
-    let sel: Vec<Shape> = pts
-        .iter()
-        .filter_map(|p| region_face_at(&cells, *p))
-        .collect();
+    let sel: Vec<Shape> = pts.iter().filter_map(|p| region_face_at(&cells, *p)).collect();
     let Some((first, rest)) = sel.split_first() else {
         return Err(Fail::msg("no profile found under the selected area"));
     };
@@ -1356,19 +1080,16 @@ pub fn entity_curve_edges(ctx: &Ctx, e: &SketchEntity) -> FResult<Vec<Shape>> {
 
 /// A frame whose z is `normal`, for handlers that only need the direction.
 pub fn frame_for_normal(origin: [f64; 3], normal: [f64; 3]) -> Frame {
-    let hint = if normal[0].abs() < 0.9 {
-        [1.0, 0.0, 0.0]
-    } else {
-        [0.0, 1.0, 0.0]
-    };
+    let hint = if normal[0].abs() < 0.9 { [1.0, 0.0, 0.0] } else { [0.0, 1.0, 0.0] };
     Frame::new(origin, hint, normal)
 }
 
-/// The `sketchOutline` op: the union of some of a sketch's closed shapes, as
-/// the lines, arcs and circles that bound it, for the MCP `sketch_merge`.
-/// Each face of the union comes back with its loops, outer first, and a point
-/// inside it in world coordinates, which is what an extrude's `regions` take.
-pub fn sketch_outline_result(req: &serde_json::Map<String, serde_json::Value>, watch: &dyn crate::builder::Watch) -> fundacad_protocol::JobResult {
+/// The `sketchOutline` op for MCP `sketch_merge`: the union of some closed shapes as bounding lines, arcs and
+/// circles. Each face comes back with its loops, outer first, and a world point inside it for an extrude's `regions`.
+pub fn sketch_outline_result(
+    req: &serde_json::Map<String, serde_json::Value>,
+    watch: &dyn crate::builder::Watch,
+) -> fundacad_protocol::JobResult {
     use serde_json::Value;
     let Some(raw) = req.get("document") else {
         return fundacad_engine::error_result("'document'");
@@ -1395,7 +1116,9 @@ pub fn sketch_outline_result(req: &serde_json::Map<String, serde_json::Value>, w
             .into_iter()
             .map(|o| {
                 let seed = frame.as_ref().zip(o.inside).map(|(p, [u, v])| {
-                    let w: [f64; 3] = std::array::from_fn(|k| crate::select::entity::py_round(p.origin[k] + u * p.x[k] + v * p.y[k], 6) + 0.0);
+                    let w: [f64; 3] = std::array::from_fn(|k| {
+                        crate::select::entity::py_round(p.origin[k] + u * p.x[k] + v * p.y[k], 6) + 0.0
+                    });
                     serde_json::json!(w)
                 });
                 serde_json::json!({
@@ -1426,10 +1149,13 @@ struct OutlineFace {
     loops: Vec<Vec<serde_json::Value>>,
 }
 
-/// The plane the sketch builds on, as `build` picks it: the face it follows,
-/// else its datum, else its plane. Following a face or a datum needs the
-/// model built, so only those rebuild; `None` when that fails.
-fn outline_frame(req: &serde_json::Map<String, serde_json::Value>, f: &SketchFeature, watch: &dyn crate::builder::Watch) -> Option<Frame> {
+/// The plane the sketch builds on, as `build` picks it: the followed face, its datum, else its plane. Only the
+/// first two need the model rebuilt, `None` when that fails.
+fn outline_frame(
+    req: &serde_json::Map<String, serde_json::Value>,
+    f: &SketchFeature,
+    watch: &dyn crate::builder::Watch,
+) -> Option<Frame> {
     let datum = f.plane_id.as_deref().filter(|s| !s.is_empty());
     if f.face.is_none() && datum.is_none() {
         return plane_of(PlaneRef::from(&f.plane), &indexmap::IndexMap::new()).ok();
@@ -1440,7 +1166,8 @@ fn outline_frame(req: &serde_json::Map<String, serde_json::Value>, f: &SketchFea
             let a = p.get(k)?.as_array()?;
             Some([a.first()?.as_f64()?, a.get(1)?.as_f64()?, a.get(2)?.as_f64()?])
         };
-        let rec = crate::builder::plane::PlaneRecord { origin: v3("origin")?, xdir: v3("xdir")?, normal: v3("normal")? };
+        let rec =
+            crate::builder::plane::PlaneRecord { origin: v3("origin")?, xdir: v3("xdir")?, normal: v3("normal")? };
         return plane_of(PlaneRef::Record(rec), &built.datum_planes).ok();
     }
     match datum {
@@ -1458,23 +1185,32 @@ fn weld(reps: &mut Vec<[f64; 2]>, p: [f64; 2], tol: f64) -> [f64; 2] {
     p
 }
 
-/// A point well inside `face` and outside every shape of `avoid`, which an
-/// extrude's `regions` would otherwise pick instead: the centroid when it
-/// qualifies, else the middle of the widest run of qualifying samples on a
-/// few lines across the face, checked again before it is given.
+/// A point well inside `face` and outside every shape of `avoid`, which an extrude's `regions` would pick instead:
+/// the centroid if it qualifies, else the middle of the widest qualifying run on a few scan lines, rechecked.
 fn inside_point(face: &Shape, avoid: &[Shape]) -> Option<[f64; 2]> {
     let good = |x: f64, y: f64| {
-        kernel::face_contains(face, [x, y, 0.0], 1e-7) && !avoid.iter().any(|a| kernel::face_contains(a, [x, y, 0.0], 1e-7))
+        kernel::face_contains(face, [x, y, 0.0], 1e-7)
+            && !avoid.iter().any(|a| kernel::face_contains(a, [x, y, 0.0], 1e-7))
     };
     inside_point_by(face, good, |_, _| true)
 }
 
-fn inside_point_by(face: &Shape, good: impl Fn(f64, f64) -> bool, strict: impl Fn(f64, f64) -> bool) -> Option<[f64; 2]> {
+fn inside_point_by(
+    face: &Shape,
+    good: impl Fn(f64, f64) -> bool,
+    strict: impl Fn(f64, f64) -> bool,
+) -> Option<[f64; 2]> {
     inside_point_grid(face, good, strict, 15, 400)
 }
 
 /// `good` is tested on every scan sample, `strict` only on the candidates.
-fn inside_point_grid(face: &Shape, good: impl Fn(f64, f64) -> bool, strict: impl Fn(f64, f64) -> bool, lines: usize, steps: usize) -> Option<[f64; 2]> {
+fn inside_point_grid(
+    face: &Shape,
+    good: impl Fn(f64, f64) -> bool,
+    strict: impl Fn(f64, f64) -> bool,
+    lines: usize,
+    steps: usize,
+) -> Option<[f64; 2]> {
     let c = kernel::face_area_centre(face)?;
     if good(c[1], c[2]) && strict(c[1], c[2]) {
         return Some([c[1], c[2]]);
@@ -1501,15 +1237,16 @@ fn inside_point_grid(face: &Shape, good: impl Fn(f64, f64) -> bool, strict: impl
     runs.into_iter().map(|(_, p)| p).find(|p| good(p[0], p[1]) && strict(p[0], p[1]))
 }
 
-/// The areas closed shapes bound: a rectangle, circle or ellipse each its own,
-/// and lines, arcs, polygons and slots by the cells their edges cut the plane
-/// into, so loops that share an edge or branch at a corner are all found.
+/// The areas closed shapes bound: a rectangle, circle or ellipse each its own, and lines, arcs, polygons and slots
+/// by the cells their edges cut the plane into, so loops sharing an edge or branching at a corner are all found.
 fn areas(items: &[&Item]) -> FResult<Vec<Shape>> {
     let mut faces = Vec::new();
     let mut edges = Vec::new();
     for it in items {
         match &it.ent {
-            Ent::Rect { w, h, x, y, angle } if *w > 0.0 && *h > 0.0 => faces.push(kernel::face_rect(*x, *y, *w, *h, *angle)?),
+            Ent::Rect { w, h, x, y, angle } if *w > 0.0 && *h > 0.0 => {
+                faces.push(kernel::face_rect(*x, *y, *w, *h, *angle)?)
+            }
             Ent::Circle { r, .. } if *r > 0.0 => {
                 if let Some(e) = entity_edges(&it.ent)?.first() {
                     faces.push(face_of_loop(e)?);
@@ -1646,7 +1383,9 @@ fn outline(ctx: &Ctx, f: &SketchFeature, ids: &[&str]) -> FResult<Vec<OutlineFac
                 };
                 // An edge twice is an outline folded over itself.
                 let back = match ent["type"].as_str() {
-                    Some("line") => json!({"type": "line", "x1": ent["x2"], "y1": ent["y2"], "x2": ent["x1"], "y2": ent["y1"]}),
+                    Some("line") => {
+                        json!({"type": "line", "x1": ent["x2"], "y1": ent["y2"], "x2": ent["x1"], "y2": ent["y1"]})
+                    }
                     _ => ent.clone(),
                 };
                 if seen.contains(&ent) || seen.contains(&back) {

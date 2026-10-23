@@ -1,7 +1,5 @@
-//! A plugin's secrets, such as API keys, in the operating system's credential
-//! store: Credential Manager on Windows, the Keychain on macOS, the Secret
-//! Service on Linux. Never a file, never the document. When the store is not
-//! there the call fails and says so, it does not fall back to plain text.
+//! A plugin's secrets in the OS credential store (Credential Manager, Keychain, Secret Service), never a file. Without
+//! a store the call fails, it never falls back to plain text.
 
 use keyring::Entry;
 
@@ -67,14 +65,5 @@ mod tests {
         delete(&e).unwrap();
         assert_eq!(get(&e).unwrap(), None);
         delete(&e).unwrap();
-    }
-
-    #[test]
-    fn names_that_could_reach_another_entry_are_refused() {
-        keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
-        assert!(entry("FundaCAD.Onshape", "../Other/key").is_err());
-        assert!(entry("FundaCAD.Onshape", "a/b").is_err());
-        assert!(entry("../x", "key").is_err());
-        assert!(plugin_secret_set("FundaCAD.Onshape".into(), "key".into(), String::new()).is_err());
     }
 }

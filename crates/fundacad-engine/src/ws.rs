@@ -1,18 +1,7 @@
-//! The WebSocket transport, for a browser, the e2e scripts and the Python
-//! protocol suites (docs/ENGINE.md, section 2.1).
-//!
-//! Replaces the serving half of the Python engine's `server.py` (`main`, `handle`,
-//! `_authorized`, `_mint_token`, `_ip_conns`): the same loopback address, port
-//! variable, token and Origin gate, per address connection cap, close codes,
-//! stdout readiness lines and port in use exit.
-//!
-//! tungstenite on one std thread per connection, no async runtime: the engine
-//! already owns its job thread, a loopback server holds a handful of sockets,
-//! and blocking writes of a 128 MiB frame are what a job's reply wants anyway.
-//! A socket has one reader and many writers (job replies, progress, read path
-//! answers), so the WebSocket sits behind a mutex. The reader waits for bytes
-//! with `peek` outside the lock and parses them under it with the socket put
-//! in non-blocking mode, so an idle connection never holds a writer back.
+//! The WebSocket transport for browsers, the e2e scripts and the protocol suites (docs/ENGINE.md, section 2.1).
+//! One std thread per connection and no async runtime: a loopback server holds a handful of sockets, and a job's
+//! 128 MiB reply wants a blocking write anyway. The reader peeks outside the socket's mutex and parses under it in
+//! non-blocking mode, so an idle connection never holds a writer back.
 
 use crate::{Client, Engine, EngineOptions, Jobs, Outbox, Respawn};
 use fundacad_protocol::{Message, MAX_FRAME};
@@ -32,8 +21,7 @@ pub const DEFAULT_PORT: u16 = 8765;
 /// so rather than report a crash.
 pub const EXIT_PORT_IN_USE: i32 = 3;
 
-/// server.py `MAX_CONNS_PER_IP`. Every client is on 127.0.0.1, so in practice
-/// this caps open sockets.
+/// Every client is on 127.0.0.1, so in practice this caps open sockets.
 pub const MAX_CONNS_PER_IP: usize = 8;
 
 /// A foreign Origin is refused even with the token; no Origin (a non-browser
@@ -46,9 +34,7 @@ pub const ALLOWED_ORIGINS: [&str; 5] = [
     "http://127.0.0.1:5173",
 ];
 
-/// Nothing supervises a `--ws` engine from outside, so a job that ignores a
-/// cancel this long is abandoned by the engine itself, where server.py kills
-/// its worker pool at once.
+/// Nothing supervises a `--ws` engine from outside, so it abandons a job that ignores a cancel this long by itself.
 const CANCEL_GRACE: Duration = Duration::from_secs(2);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -56,9 +42,7 @@ const CLOSE_TIMEOUT: Duration = Duration::from_secs(10);
 /// `FUNDACAD_<suffix>` or a retired spelling. An empty value is a value, not a
 /// miss.
 pub fn appenv(suffix: &str) -> Option<String> {
-    ["FUNDACAD_", "SINDRI_", "SINDRICAD_"]
-        .iter()
-        .find_map(|p| std::env::var(format!("{p}{suffix}")).ok())
+    ["FUNDACAD_", "SINDRI_", "SINDRICAD_"].iter().find_map(|p| std::env::var(format!("{p}{suffix}")).ok())
 }
 
 /// `FUNDACAD_ENGINE_<suffix>`, else the retired `FUNDACAD_SIDECAR_<suffix>`
@@ -67,7 +51,7 @@ pub fn engine_env(suffix: &str) -> Option<String> {
     appenv(&format!("ENGINE_{suffix}")).or_else(|| appenv(&format!("SIDECAR_{suffix}")))
 }
 
-/// The token and Origin check every connection passes, server.py `_authorized`.
+/// The token and Origin check every connection passes.
 #[derive(Debug, Clone)]
 pub struct Gate {
     token: String,
@@ -78,35 +62,22 @@ impl Gate {
     /// `extra_origins` is the comma separated `FUNDACAD_EXTRA_ORIGINS`.
     pub fn new(token: impl Into<String>, extra_origins: &str) -> Gate {
         let mut origins: BTreeSet<String> = ALLOWED_ORIGINS.iter().map(|s| s.to_string()).collect();
-        origins.extend(
-            extra_origins
-                .split(',')
-                .filter(|o| !o.is_empty())
-                .map(String::from),
-        );
-        Gate {
-            token: token.into(),
-            origins,
-        }
+        origins.extend(extra_origins.split(',').filter(|o| !o.is_empty()).map(String::from));
+        Gate { token: token.into(), origins }
     }
 
     pub fn authorized(&self, query: Option<&str>, origin: Option<&str>) -> bool {
         if self.token.is_empty() {
             return false;
         }
-        let tok = query
-            .and_then(|q| query_value(q, "token"))
-            .unwrap_or_default();
+        let tok = query.and_then(|q| query_value(q, "token")).unwrap_or_default();
         if !constant_time_eq(tok.as_bytes(), self.token.as_bytes()) {
             return false;
         }
         let origin = origin.unwrap_or("");
         if !origin.is_empty() && !self.origins.contains(origin) {
             let allowed: Vec<String> = self.origins.iter().map(|o| format!("'{o}'")).collect();
-            eprintln!(
-                "[auth] rejected WS handshake from origin '{origin}' (allowed: [{}])",
-                allowed.join(", ")
-            );
+            eprintln!("[auth] rejected WS handshake from origin '{origin}' (allowed: [{}])", allowed.join(", "));
             return false;
         }
         true
@@ -136,10 +107,7 @@ fn form_decode(s: &str) -> String {
     while i < bytes.len() {
         match bytes[i] {
             b'+' => out.push(b' '),
-            b'%' if i + 2 < bytes.len()
-                && hex(bytes[i + 1]).is_some()
-                && hex(bytes[i + 2]).is_some() =>
-            {
+            b'%' if i + 2 < bytes.len() && hex(bytes[i + 1]).is_some() && hex(bytes[i + 2]).is_some() => {
                 out.push(hex(bytes[i + 1]).unwrap_or(0) * 16 + hex(bytes[i + 2]).unwrap_or(0));
                 i += 2;
             }
@@ -161,10 +129,7 @@ pub fn mint_token() -> io::Result<String> {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let mut out = String::with_capacity(43);
     for chunk in raw.chunks(3) {
-        let n = chunk
-            .iter()
-            .enumerate()
-            .fold(0u32, |n, (i, b)| n | (*b as u32) << (16 - 8 * i));
+        let n = chunk.iter().enumerate().fold(0u32, |n, (i, b)| n | (*b as u32) << (16 - 8 * i));
         for i in 0..=chunk.len() {
             out.push(ALPHABET[(n >> (18 - 6 * i) & 63) as usize] as char);
         }
@@ -252,9 +217,7 @@ impl Server {
         for stream in self.listener.incoming() {
             let Ok(stream) = stream else { continue };
             let shared = self.shared.clone();
-            let spawned = std::thread::Builder::new()
-                .name("ws-conn".into())
-                .spawn(move || connection(stream, &shared));
+            let spawned = std::thread::Builder::new().name("ws-conn".into()).spawn(move || connection(stream, &shared));
             if let Err(e) = spawned {
                 eprintln!("[ws] cannot start a connection thread: {e}");
             }
@@ -285,10 +248,7 @@ pub fn run<J: Jobs + Default>(jobs: J) -> ! {
     };
     let gate = Gate::new(token, &appenv("EXTRA_ORIGINS").unwrap_or_default());
     let addr = SocketAddr::new(HOST.parse().expect("loopback literal"), port);
-    let opts = EngineOptions {
-        cancel_grace: Some(CANCEL_GRACE),
-        ..EngineOptions::from_env()
-    };
+    let opts = EngineOptions { cancel_grace: Some(CANCEL_GRACE), ..EngineOptions::from_env() };
     let server = match Server::bind_with(jobs, Some(Arc::new(J::default)), opts, addr, gate) {
         Ok(s) => s,
         Err(e) => {
@@ -366,17 +326,12 @@ fn connection(stream: TcpStream, shared: &Shared) {
 
     let seen: Arc<Mutex<(Option<String>, Option<String>)>> = Arc::default();
     let seen_cb = seen.clone();
-    let config = WebSocketConfig::default()
-        .max_message_size(Some(shared.max_message))
-        .max_frame_size(Some(shared.max_message));
+    let config =
+        WebSocketConfig::default().max_message_size(Some(shared.max_message)).max_frame_size(Some(shared.max_message));
     let callback = move |req: &tungstenite::handshake::server::Request,
                          resp: tungstenite::handshake::server::Response| {
-        let origin = req
-            .headers()
-            .get("origin")
-            .map(|v| String::from_utf8_lossy(v.as_bytes()).into_owned());
-        *seen_cb.lock().unwrap_or_else(|p| p.into_inner()) =
-            (req.uri().query().map(String::from), origin);
+        let origin = req.headers().get("origin").map(|v| String::from_utf8_lossy(v.as_bytes()).into_owned());
+        *seen_cb.lock().unwrap_or_else(|p| p.into_inner()) = (req.uri().query().map(String::from), origin);
         Ok(resp)
     };
     let Ok(mut ws) = tungstenite::accept_hdr_with_config(stream, callback, Some(config)) else {
@@ -460,14 +415,10 @@ fn drain(sock: &mut Socket, into: &mut Vec<Message>) -> ReadState {
     }
 }
 
-/// Sends a close frame and waits for the client to hang up. Dropping a socket
-/// with unread bytes resets it, and a reset can reach the client before the
-/// close frame is read, which would hide the close code.
+/// Sends a close frame and waits for the client to hang up: dropping a socket with unread bytes resets it, and the
+/// reset can reach the client before the close frame, hiding the close code.
 fn close_and_linger(sock: &mut Socket, code: CloseCode, reason: &'static str) {
-    let _ = sock.close(Some(CloseFrame {
-        code,
-        reason: reason.into(),
-    }));
+    let _ = sock.close(Some(CloseFrame { code, reason: reason.into() }));
     let _ = sock.flush();
     let stream = sock.get_mut();
     let deadline = Instant::now() + CLOSE_TIMEOUT;

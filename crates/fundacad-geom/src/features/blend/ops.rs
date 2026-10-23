@@ -9,6 +9,31 @@ use super::{BlendErr, Fits, Misfit, SectionErr};
 use crate::kernel;
 use crate::select::entity::EdgeEnt;
 
+/// A round of the last section build on this thread that runs past one of its
+/// faces: the largest size at which it rests on both, and a point on its edge.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Overrun {
+    pub fits: Option<f64>,
+    pub at: [f64; 3],
+}
+
+thread_local! {
+    static OVERRUN: std::cell::Cell<Option<Overrun>> = const { std::cell::Cell::new(None) };
+}
+
+pub fn take_overrun() -> Option<Overrun> {
+    OVERRUN.with(std::cell::Cell::take)
+}
+
+fn overrun_of(message: &str) -> Option<Overrun> {
+    let rest = message.strip_prefix("overrun ")?;
+    let n: Vec<f64> = rest.split(' ').filter_map(|w| w.parse().ok()).collect();
+    match n.as_slice() {
+        [fits, x, y, z] => Some(Overrun { fits: Some(*fits).filter(|k| *k > 0.0), at: [*x, *y, *z] }),
+        _ => None,
+    }
+}
+
 /// What a Python caller of an OCP exception reads: the detail, else the class.
 fn exception_text(e: &cxx::Exception) -> String {
     let what = e.what();
@@ -26,10 +51,7 @@ pub enum Built {
     Invalid,
 }
 
-fn built(
-    r: Result<UniquePtr<TopoDS_Shape>, cxx::Exception>,
-    status: i32,
-) -> Result<(Shape, Built), String> {
+fn built(r: Result<UniquePtr<TopoDS_Shape>, cxx::Exception>, status: i32) -> Result<(Shape, Built), String> {
     let p = r.map_err(|e| exception_text(&e))?;
     let state = match status {
         0 => Built::Done,
@@ -50,12 +72,7 @@ pub fn fillet(shape: &Shape, edges: &[Shape], radii: &[f64]) -> Result<(Shape, B
     })
 }
 
-pub fn chamfer(
-    shape: &Shape,
-    edges: &[Shape],
-    d1: &[f64],
-    d2: &[f64],
-) -> Result<(Shape, Built), String> {
+pub fn chamfer(shape: &Shape, edges: &[Shape], d1: &[f64], d2: &[f64]) -> Result<(Shape, Built), String> {
     let es = kernel::compound(edges);
     let mut status = 0;
     let began = std::time::Instant::now();
@@ -102,9 +119,8 @@ pub fn copy(shape: &Shape, edges: &[Shape]) -> Option<(Shape, Vec<Shape>)> {
 /// blends.py `_edge_dihedral_deg`.
 pub fn dihedral_deg(shape: &Shape, edge: &Shape) -> Option<f64> {
     let mid = EdgeEnt::new(edge.clone()).ok()?.mid;
-    let d = crate::bench::phase("blend_dihedral", || {
-        ffi::blend_dihedral_deg(shape.raw(), edge.raw(), mid.x, mid.y, mid.z)
-    });
+    let d =
+        crate::bench::phase("blend_dihedral", || ffi::blend_dihedral_deg(shape.raw(), edge.raw(), mid.x, mid.y, mid.z));
     (d >= 0.0).then_some(d)
 }
 
@@ -127,9 +143,7 @@ pub fn conic(shape: &Shape, edges: &[Shape], radius: f64, profile: f64) -> Resul
         0 if !out.is_null() => {
             let shape = Shape::from_raw(out);
             if kernel::is_null(&shape) {
-                Err(BlendErr::Kernel(
-                    "Fillet: the conic profile produced no usable solid".into(),
-                ))
+                Err(BlendErr::Kernel("Fillet: the conic profile produced no usable solid".into()))
             } else {
                 Ok(shape)
             }
@@ -139,13 +153,9 @@ pub fn conic(shape: &Shape, edges: &[Shape], radius: f64, profile: f64) -> Resul
     }
 }
 
-/// section_blend.py `section_blend` through blends.py `section_fn`.
-///
-/// Cutting every tool at once can leave the tools' faces inside the result,
-/// lying on the faces that replaced them. BRepCheck passes such a solid, the
-/// viewport draws both layers and a section cap streaks. Which answer folds
-/// depends on how the body happens to be oriented, so a folded one is built
-/// again without the one-shot cut, and refused if that folds too.
+/// section_blend.py `section_blend` through blends.py `section_fn`. Cutting every tool at once can leave tool
+/// faces inside the result on the faces that replaced them, which BRepCheck passes. Which answer folds depends on
+/// the body's orientation, so a folded one is built again without the one-shot cut, and refused if that folds too.
 #[allow(clippy::too_many_arguments)]
 pub fn section(
     shape: &Shape,
@@ -165,9 +175,7 @@ pub fn section(
     }
     let again = section_with(shape, edges, chamfer, sizes, size2, unit, g2, draft, profile, false)?;
     if super::overlap::folds_over_itself(shape, &again, size) {
-        return Err(SectionErr::Blend(
-            "at this size the blend folds over itself".into(),
-        ));
+        return Err(SectionErr::Blend("at this size the blend folds over itself".into()));
     }
     Ok(again)
 }
@@ -211,10 +219,9 @@ fn section_with(
         0 if !out.is_null() => {
             let shape = Shape::from_raw(out);
             if kernel::is_null(&shape) {
-                Err(SectionErr::Value(
-                    "the blend produced no usable solid".into(),
-                ))
+                Err(SectionErr::Value("the blend produced no usable solid".into()))
             } else {
+                OVERRUN.with(|c| c.set(overrun_of(&message)));
                 Ok(shape)
             }
         }

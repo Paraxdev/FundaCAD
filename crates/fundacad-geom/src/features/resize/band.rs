@@ -31,9 +31,8 @@ pub(super) fn cone_tool(s: &Surf, delta: f64, p: DVec3, bounds: (f64, f64)) -> O
     kernel::revolve(&profile, apex2.to_array(), a.to_array(), 360.0).ok()
 }
 
-/// The solid on the centre side of the group's surface offset by `delta`,
-/// reaching `ext` past the group along its axis but not far past `body`.
-/// None where the offset surface does not exist.
+/// The solid on the centre side of the group's surface offset by `delta`, reaching `ext` past the group along its
+/// axis but not far past `body`. None where the offset surface does not exist.
 pub(super) fn long_tool(group: &Shape, s: &Surf, delta: f64, ext: f64, body: &Shape) -> Option<Shape> {
     let margin = 1.0 + 2.0 * delta.abs();
     match *s {
@@ -62,7 +61,11 @@ pub(super) fn long_tool(group: &Shape, s: &Surf, delta: f64, ext: f64, body: &Sh
 pub(super) fn clipped(span: (f64, f64), body: &Shape, o: DVec3, dir: DVec3, margin: f64) -> (f64, f64) {
     let Some(b) = kernel::coarse_bbox(body) else { return span };
     let along = (0..8).map(|i| {
-        let c = DVec3::new(b[if i & 1 == 0 { 0 } else { 3 }], b[if i & 2 == 0 { 1 } else { 4 }], b[if i & 4 == 0 { 2 } else { 5 }]);
+        let c = DVec3::new(
+            b[if i & 1 == 0 { 0 } else { 3 }],
+            b[if i & 2 == 0 { 1 } else { 4 }],
+            b[if i & 4 == 0 { 2 } else { 5 }],
+        );
         (c - o).dot(dir)
     });
     let (blo, bhi) = along.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), t| (lo.min(t), hi.max(t)));
@@ -93,7 +96,9 @@ pub(super) fn whole_surface(n: &Shape, size: f64) -> Option<Shape> {
             Shape::cylinder(base, r, dir, 2.0 * l)
         }
         Surf::Sphere { c, r } => Shape::sphere(r).at(c).build(),
-        Surf::Torus { dir, loc, big, small } => Shape::torus().at(loc).z_axis(dir).radius_1(big).radius_2(small).build(),
+        Surf::Torus { dir, loc, big, small } => {
+            Shape::torus().at(loc).z_axis(dir).radius_1(big).radius_2(small).build()
+        }
         Surf::Cone { dir, apex, .. } => {
             let (p, _) = inner_point(n)?;
             let a = nappe(dir, apex, p);

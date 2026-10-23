@@ -13,7 +13,8 @@ const RINGS = [0, 1, 2] as const;
 
 describe("ringLook", () => {
   it("draws every ring thin and faint with nothing under the hand", () => {
-    for (const r of RINGS) expect(ringLook(r, null, null, RINGS)).toEqual({ thick: false, opacity: RING_IDLE_OPACITY, held: false });
+    for (const r of RINGS)
+      expect(ringLook(r, null, null, RINGS)).toEqual({ thick: false, opacity: RING_IDLE_OPACITY, held: false });
   });
 
   it("lights and thickens only the hovered ring, the others step back", () => {
@@ -29,8 +30,16 @@ describe("ringLook", () => {
 
   it("leaves the rings alone for a handle that is not a ring", () => {
     const turns = ["tiltX", "tiltY", "spin"] as const;
-    expect(ringLook<string>("tiltX", "offset", null, turns)).toEqual({ thick: false, opacity: RING_IDLE_OPACITY, held: false });
-    expect(ringLook<string>("tiltX", "tiltX", "offset", turns)).toEqual({ thick: false, opacity: RING_IDLE_OPACITY, held: false });
+    expect(ringLook<string>("tiltX", "offset", null, turns)).toEqual({
+      thick: false,
+      opacity: RING_IDLE_OPACITY,
+      held: false,
+    });
+    expect(ringLook<string>("tiltX", "tiltX", "offset", turns)).toEqual({
+      thick: false,
+      opacity: RING_IDLE_OPACITY,
+      held: false,
+    });
   });
 });
 

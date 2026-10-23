@@ -1,10 +1,5 @@
-// Glass without the blur, for machines that draw in software.
-//
-// A backdrop-filter re-blurs whatever is behind the panel on every repaint of
-// that panel, and over a WebGL viewport a software rasteriser (SwiftShader in a
-// VM) pays for it on the CPU: a caret blinking in a dialog cost about 1.5 cores.
-// So potato mode, or a detected software renderer, puts `no-glass-blur` on <html>
-// and _glass.scss drops every backdrop-filter and makes the fills opaque.
+// Glass without blur for software renderers: a backdrop-filter over the WebGL viewport under SwiftShader cost about
+// 1.5 cores for a blinking caret. Potato mode or a software renderer sets `no-glass-blur` on <html> for _glass.scss.
 
 import { onRenderPrefsChange, renderPrefs, type RenderPrefs } from "./renderPrefs";
 

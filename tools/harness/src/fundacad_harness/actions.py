@@ -133,8 +133,8 @@ class Actions:
 
     # --- DOM controls --------------------------------------------------------
 
-    def _locator(self, target: str):
-        hit = self.bridge.call("locate", target=target)
+    def _locator(self, target: str, **opts):
+        hit = self.bridge.call("locate", target=target, **opts)
         return hit, self.page.locator(f'[data-harness-target="{hit["marker"]}"]')
 
     def _click_control(self, target: str, button: str = "left", double: bool = False, mods=()) -> dict:
@@ -168,7 +168,7 @@ class Actions:
     @action
     def expand(self, target: str, open: bool = True):
         """Opens or closes a tree folder by its caret, a click on the row itself selects."""
-        hit, loc = self._locator(target)
+        hit, loc = self._locator(target, folder=True)
         state = loc.get_attribute("aria-expanded")
         if state is None:
             raise BadArgs(f'{hit["ref"]} "{hit["label"]}" is not a folder')

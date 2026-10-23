@@ -18,11 +18,7 @@ use crate::select::entity::FaceEnt;
 fn simplify(shape: &Shape, tol_deg: f64) -> Shape {
     let options = UnifyOptions {
         concat_bsplines: true,
-        angular_tolerance: if tol_deg > 0.0 {
-            tol_deg.to_radians()
-        } else {
-            0.0
-        },
+        angular_tolerance: if tol_deg > 0.0 { tol_deg.to_radians() } else { 0.0 },
         ..Default::default()
     };
     match shape.unify_same_domain(options, &[]) {
@@ -56,26 +52,17 @@ fn pieces(shape: &Shape) -> Vec<Shape> {
         }
     }
     if shape.shape_type() == ShapeType::Compound {
-        out.extend(
-            kernel::children(shape)
-                .into_iter()
-                .filter(|c| kernel::count(c, Kind::Solid) == 0),
-        );
+        out.extend(kernel::children(shape).into_iter().filter(|c| kernel::count(c, Kind::Solid) == 0));
     }
     out
 }
 
 fn vertices(face: &Shape) -> Vec<DVec3> {
-    kernel::subshapes(face, Kind::Vertex)
-        .iter()
-        .filter_map(kernel::bbox)
-        .map(|b| dvec3(b[0], b[1], b[2]))
-        .collect()
+    kernel::subshapes(face, Kind::Vertex).iter().filter_map(kernel::bbox).map(|b| dvec3(b[0], b[1], b[2])).collect()
 }
 
-/// Whether `_refacet_clean` would merge any faces: region growth from the
-/// largest faces over edge neighbours whose vertices all lie within `tol` of
-/// the anchor's plane.
+/// Whether `_refacet_clean` would merge any faces: region growth from the largest faces over edge neighbours
+/// whose vertices all lie within `tol` of the anchor's plane.
 fn has_debris(shape: &Shape, tol: f64) -> bool {
     let fmap = shape.shape_map(ShapeType::Face);
     let emap = shape.ancestor_map(ShapeType::Edge, ShapeType::Face);
@@ -136,19 +123,11 @@ fn has_debris(shape: &Shape, tol: f64) -> bool {
 /// sliver debris would be rebuilt from its snapped mesh, which is not ported.
 fn refacet_clean(shape: &Shape, tol: f64) -> FResult<Shape> {
     let faces = kernel::subshapes(shape, Kind::Face);
-    if faces.is_empty()
-        || faces
-            .iter()
-            .any(|f| surface_type(f) != Some(SurfaceType::Plane))
-    {
+    if faces.is_empty() || faces.iter().any(|f| surface_type(f) != Some(SurfaceType::Plane)) {
         return Ok(shape.clone());
     }
     let parts = pieces(shape);
-    let dirty = if parts.len() > 1 {
-        parts.iter().any(|p| has_debris(p, tol))
-    } else {
-        has_debris(shape, tol)
-    };
+    let dirty = if parts.len() > 1 { parts.iter().any(|p| has_debris(p, tol)) } else { has_debris(shape, tol) };
     if dirty {
         return Err(not_ported("cleanUp of a faceted body"));
     }

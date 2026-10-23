@@ -1,19 +1,6 @@
-// The Project tool's click flow: pick a model edge, a body face (which projects
-// its boundary), a whole body's silhouette, or a committed sketch curve, and
-// land the result in the open sketch as linked "projected" entities.
-//
-// Split out of sketchMode.ts, following the ConstraintTools / PatternFlow /
-// DimFlow precedent: ProjectHost below is a set of live accessors into
-// SketchMode, never a copy, so nothing here can hold a stale entity list. That
-// matters more here than anywhere else in the sketch, because projectClick
-// AWAITS the engine: the sketch can be finished and a new one entered while a
-// pick is in flight, and the session check at the end of that await only works
-// because `entities()` reads the current array rather than one captured at
-// construction.
-//
-// Every pick runs the projectGeometry aux-op against the timeline-PREFIX
-// document (store.projectGeometry truncates), so a sketch can only project
-// geometry that already existed when it was created.
+// The Project tool's click flow: model edges, face boundaries, body silhouettes or committed sketch curves land as
+// linked projected entities. ProjectHost reads live because projectClick awaits the engine and the sketch can change
+// meanwhile. Picks run against the timeline-prefix document, so a sketch only projects geometry older than itself.
 
 import * as THREE from "three";
 import { asFeature } from "../types";
@@ -32,10 +19,8 @@ import { resolveRealEntities } from "./resolve";
 import { edgeProbePoint } from "./planeEdgePick";
 import { toast } from "../ui/toast";
 
-// Tolerant edge-fingerprint compare for the Project tool's duplicate-pick check.
-// Fingerprints carry unrounded float noise (engine-authored), so byte equality
-// is meaningless, same midpoint (within 1e-3 mm), same unoriented tangent, and
-// a matching length when both carry one, is "the same edge".
+// Fingerprints carry engine float noise: same midpoint within 1e-3 mm, same unoriented tangent and matching length
+// when both carry one is the same edge.
 function fpClose(a: EdgeFingerprint, b: EdgeFingerprint): boolean {
   if (Math.hypot(a.mid[0] - b.mid[0], a.mid[1] - b.mid[1], a.mid[2] - b.mid[2]) > 1e-3) return false;
   const dot = Math.abs(a.dir[0] * b.dir[0] + a.dir[1] * b.dir[1] + a.dir[2] * b.dir[2]);
@@ -44,23 +29,22 @@ function fpClose(a: EdgeFingerprint, b: EdgeFingerprint): boolean {
   return true;
 }
 
-/** The slice of SketchMode this flow reads/writes, live accessors, not copies. */
+/** Live accessors, not copies. */
 export interface ProjectHost {
-  /** live entity list; the projected curves are pushed straight onto it */
+  /** projected curves are pushed straight onto it */
   entities(): ResolvedEntity[];
-  /** undefined until enter() runs; every pick needs it */
+  /** undefined until enter() runs */
   store(): DocumentStore | undefined;
   overlay(): SketchOverlay;
   viewport(): Viewport;
   plane(): SketchPlane;
-  /** the filter chips: edges & faces / body silhouette / sketch curves */
   projectPanel(): ProjectPanel;
-  /** the sketch feature being edited, or null when this is a new one */
+  /** null for a new sketch */
   editingId(): string | null;
-  /** is the sketch still open? an awaited pick can outlive it */
+  /** an awaited pick can outlive the sketch */
   active(): boolean;
   tool(): SketchTool;
-  /** pick radius in sketch mm at the current zoom */
+  /** sketch mm at the current zoom */
   pickTol(): number;
   planePoint(e: MouseEvent): THREE.Vector2 | null;
   refreshActive(): void;
@@ -69,25 +53,19 @@ export interface ProjectHost {
 }
 
 export class ProjectFlow {
-  // one pick at a time: projectClick awaits the engine, and a double-click
-  // would otherwise race two ops against the same sketch
+  // projectClick awaits the engine, a double-click would race two ops against the same sketch.
   private projectBusy = false;
 
   constructor(private readonly host: ProjectHost) {}
 
-  // --- Project (Fusion-style): click 3D model edges, body faces (→ boundary),
-  // or committed sketch curves; each pick calls the projectGeometry aux-op
-  // against the timeline-PREFIX document (store.projectGeometry truncates) and
-  // lands purple linked "projected" entities in the open sketch immediately. ---
-
-  /** the committed sketch feature `id`, when it is a sketch */
   private sourceSketch(id: string): Extract<Feature, { type: "sketch" }> | null {
-    return asFeature(this.host.store()?.document.features.find((x) => x.id === id), "sketch");
+    return asFeature(
+      this.host.store()?.document.features.find((x) => x.id === id),
+      "sketch",
+    );
   }
 
-  /** a committed sketch's REAL entity by id, with its owning sketch feature,
-   *  derived pattern copies (ids carry "#") resolve to null: they don't exist
-   *  in the document, so the engine could never re-find them. */
+  /** Derived pattern copies (ids with "#") resolve to null, the engine could never re-find them. */
   private committedSource(
     sketchId: string,
     entityId: string,
@@ -99,11 +77,8 @@ export class ProjectFlow {
     return entity ? { sketch: sk, entity } : null;
   }
 
-  /** hover feedback for the Project tool: model edge/face highlight in Edges &
-   *  faces AND Body silhouette modes (the model is dimmed 0.25 in sketch view
-   *  but still raycastable; there is no body-level hover in the viewport, so a
-   *  silhouette pick hovers the face/edge that will resolve to its body); a
-   *  committed curve highlight via the preview layer in Sketch curves mode. */
+  /** The model is dimmed in sketch view but still raycastable. The viewport has no body-level hover, so a silhouette
+   *  pick hovers the face or edge that resolves to its body. */
   projectHover(e: PointerEvent) {
     if (this.host.projectPanel().filter !== "sketchCurves") {
       this.host.overlay().setPreview([]);
@@ -111,17 +86,19 @@ export class ProjectFlow {
       return;
     }
     this.host.viewport().hoverEntity(null);
-    const hit = this.host.overlay().committedCurveAt(e.clientX, e.clientY, (w) => this.host.viewport().projectToScreen(w));
+    const hit = this.host
+      .overlay()
+      .committedCurveAt(e.clientX, e.clientY, (w) => this.host.viewport().projectToScreen(w));
     const src = hit ? this.committedSource(hit.sketchId, hit.entityId) : null;
-    this.host.overlay().setPreview(
-      src ? curveObjects([src.entity], this.host.overlay().planeFor(src.sketch.plane), 0x33aaff, true) : [],
-    );
+    this.host
+      .overlay()
+      .setPreview(
+        src ? curveObjects([src.entity], this.host.overlay().planeFor(src.sketch.plane), 0x33aaff, true) : [],
+      );
     this.host.viewport().requestRender();
   }
 
-  /** the already-placed projected entity carrying (a match selector for) this
-   *  edge fingerprint, if any. Tolerant compare, fps carry float noise, never
-   *  compare them byte-for-byte. */
+  /** Tolerant compare, fingerprints carry float noise. */
   private projectedWithFp(fp: EdgeFingerprint): ResolvedEntity | undefined {
     return this.host.entities().find((x) => {
       if (x.type !== "projected") return false;
@@ -134,15 +111,8 @@ export class ProjectFlow {
     return !!this.projectedWithFp(fp);
   }
 
-  /** Project these model edges into the open sketch without the Project tool,
-   *  for a tool that treats a face edge as a sketch curve. Returns, per edge,
-   *  the ids of the projected entities standing for it: freshly added ones, or
-   *  the ones already there when the edge was projected before. Null when the
-   *  engine refused or the sketch changed while the op was in flight.
-   *
-   *  Deliberately no solve or state notification: the caller finishes the
-   *  gesture, and its own modify tail banks the projection and the result as
-   *  one undo step. */
+  /** For a tool that treats a face edge as a sketch curve. Per edge, the new or already projected entity ids, null
+   *  when the engine refused or the sketch changed mid-op. No solve or notify: the caller banks one undo step. */
   async projectModelEdges(
     edges: readonly { body: string; points: readonly (readonly [number, number, number])[] }[],
   ): Promise<{ ids: string[][]; added: string[] } | null> {
@@ -178,7 +148,10 @@ export class ProjectFlow {
       const own: string[] = [];
       for (const { fp, curve } of results[i]!.curves) {
         const existing = fp ? this.projectedWithFp(fp) : undefined;
-        if (existing) { own.push(existing.id); continue; }
+        if (existing) {
+          own.push(existing.id);
+          continue;
+        }
         const id = newEntityId();
         const sel: Selector = fp ? { kind: "edge", by: "match", fp } : source.sel;
         this.host.entities().push({ type: "projected", id, source: { kind: "edge", body: source.body, sel }, curve });
@@ -190,34 +163,35 @@ export class ProjectFlow {
     return { ids, added };
   }
 
-  /** One Project pick: resolve what's under the cursor into a ProjectedSource,
-   *  run the op, land the returned curves as projected entities. Await-guarded
-   *  by projectBusy so double-clicks can't race two calls. */
   async projectClick(e: PointerEvent) {
     const store = this.host.store();
     if (this.projectBusy || !store) return;
     let source: ProjectedSource | null = null;
     if (this.host.projectPanel().filter === "sketchCurves") {
-      const hit = this.host.overlay().committedCurveAt(e.clientX, e.clientY, (w) => this.host.viewport().projectToScreen(w));
+      const hit = this.host
+        .overlay()
+        .committedCurveAt(e.clientX, e.clientY, (w) => this.host.viewport().projectToScreen(w));
       if (!hit) {
-        // nothing committed under the cursor, the ACTIVE sketch's own entities
-        // are never valid sources (checked second: a projection usually lies
-        // screen-coincident with its source, and the source must stay pickable)
+        // Committed curves only, never the active sketch's own. Checked second since a projection usually lies
+        // screen-coincident with its source.
         const p = this.host.planePoint(e);
-        if (p && pickEntity(this.host.entities(), p, this.host.pickTol()) >= 0) toast("Can't project the active sketch's own curves");
+        if (p && pickEntity(this.host.entities(), p, this.host.pickTol()) >= 0)
+          toast("Can't project the active sketch's own curves");
         return;
       }
       if (!this.committedSource(hit.sketchId, hit.entityId)) {
         toast("Pattern copies can't be projected, pick the pattern's source curve");
         return;
       }
-      const dup = this.host.entities().some(
-        (x) =>
-          x.type === "projected" &&
-          x.source.kind === "sketchCurve" &&
-          x.source.sketch === hit.sketchId &&
-          x.source.entity === hit.entityId,
-      );
+      const dup = this.host
+        .entities()
+        .some(
+          (x) =>
+            x.type === "projected" &&
+            x.source.kind === "sketchCurve" &&
+            x.source.sketch === hit.sketchId &&
+            x.source.entity === hit.entityId,
+        );
       if (dup) {
         toast("That curve is already projected into this sketch");
         return;
@@ -226,16 +200,13 @@ export class ProjectFlow {
     } else {
       const hit = this.host.viewport().pickEntity(e.clientX, e.clientY);
       if (!hit) return;
-      const body =
-        hit.kind === "edge"
-          ? hit.edge.body
-          : this.host.viewport().faceIdToBodyId(hit.faceId);
+      const body = hit.kind === "edge" ? hit.edge.body : this.host.viewport().faceIdToBodyId(hit.faceId);
       if (!body) return;
       if (this.host.projectPanel().filter === "silhouette") {
         // any face/edge hit resolves to its whole BODY, the HLR outline source
-        const dup = this.host.entities().some(
-          (x) => x.type === "projected" && x.source.kind === "silhouette" && x.source.body === body,
-        );
+        const dup = this.host
+          .entities()
+          .some((x) => x.type === "projected" && x.source.kind === "silhouette" && x.source.body === body);
         if (dup) {
           toast("That body's silhouette is already projected into this sketch");
           return;
@@ -248,22 +219,15 @@ export class ProjectFlow {
         if (!point) return;
         source = { kind: "edge", body, sel: { kind: "edge", by: "nearest", point } };
       } else {
-        // the raycast hit point re-finds exactly the clicked face: it lies ON
-        // the face's material, so by:"nearest" distance is 0 there and > 0 for
-        // every other face. NOT the face centroid (which can fall off the
-        // material, a washer's annular face, and tie with another face), and
-        // NOT the picker's own selector (may be a by:"normal" GROUP hit, too
-        // broad for one face's boundary).
+        // The raycast hit lies on the clicked face's material, so by:"nearest" re-finds exactly it. Not the centroid (can
+        // fall off a washer's face), not the picker's selector (may be a broad by:"normal" group).
         source = { kind: "faceBoundary", body, sel: { kind: "face", by: "nearest", point: hit.point } };
       }
     }
 
     this.projectBusy = true;
-    // Session identity: enter() always assigns a fresh entities array, so if the
-    // sketch was finished and a NEW one started while the op was in flight (a
-    // realistic window, cold-cache prefix rebuilds take seconds), the identity
-    // check below rejects the stale reply instead of landing curves computed
-    // against the old sketch's plane and timeline prefix.
+    // enter() assigns a fresh entities array, so the identity check below rejects a reply that lands after the sketch
+    // was finished and a new one started (cold prefix rebuilds take seconds).
     const session = this.host.entities();
     let results;
     try {
@@ -281,33 +245,40 @@ export class ProjectFlow {
       toast(r.error ?? "projection failed"); // engine message verbatim ("created after this sketch"…)
       return;
     }
-    // body-edge duplicates are detected against the returned fingerprints (the
-    // sketch-curve case was pre-checked above, its ids are stable)
+    // Sketch-curve duplicates were pre-checked above, body edges are checked against the returned fingerprints.
     const fresh = r.curves.filter(({ fp }) => !(fp && this.hasProjectedFp(fp)));
     const skipped = r.curves.length - fresh.length;
-    if (skipped) toast(skipped === r.curves.length ? "That edge is already projected into this sketch" : `${skipped} already-projected edge${skipped > 1 ? "s" : ""} skipped`);
+    if (skipped)
+      toast(
+        skipped === r.curves.length
+          ? "That edge is already projected into this sketch"
+          : `${skipped} already-projected edge${skipped > 1 ? "s" : ""} skipped`,
+      );
     if (!fresh.length) return;
-    // multi-curve picks (a face boundary, a projected rectangle) emit sibling
-    // entities sharing source.group = the FIRST sibling's entity id (stable:
-    // entity ids are birth-stamped and survive edits)
+    // Multi-curve picks emit siblings sharing source.group, the first sibling's birth-stamped entity id.
     const ids = fresh.map(() => newEntityId());
     const group = ids.length > 1 ? { group: ids[0]! } : {};
     fresh.forEach(({ fp, curve }, i) => {
-      // NOTE (plan step 4): a faceBoundary source persists with a per-edge
-      // by:"match" sel, the rebuild refresh handler must resolve it via
-      // resolve_edges (not resolve_faces) when it lands.
+      // A faceBoundary source persists a per-edge by:"match" sel, so the refresh must resolve it via resolve_edges.
       const src: ProjectedSource =
         source.kind === "sketchCurve"
-          ? // `index: i` is sound because sketch-curve results carry no fps, so
-            // the dedup filter above never drops any, i IS the edge index in
-            // the engine's deterministic _entity_edges order (the refresh
-            // handler's authoritative sibling correspondence).
-            { kind: "sketchCurve", sketch: source.sketch, entity: source.entity, ...group, ...(fresh.length > 1 ? { index: i } : {}) }
+          ? // `index: i` is sound: sketch-curve results carry no fps so none are dropped, i is the _entity_edges index.
+            {
+              kind: "sketchCurve",
+              sketch: source.sketch,
+              entity: source.entity,
+              ...group,
+              ...(fresh.length > 1 ? { index: i } : {}),
+            }
           : source.kind === "silhouette"
-            ? // whole-body source: no selector; the refresh re-runs HLR and
-              // re-matches the sibling curves (see _recompute_projections)
+            ? // whole-body source: the refresh re-runs HLR and re-matches the siblings (see _recompute_projections)
               { kind: "silhouette", body: source.body, ...group }
-            : { kind: source.kind, body: source.body, sel: fp ? { kind: "edge", by: "match", fp } : source.sel, ...group };
+            : {
+                kind: source.kind,
+                body: source.body,
+                sel: fp ? { kind: "edge", by: "match", fp } : source.sel,
+                ...group,
+              };
       this.host.entities().push({ type: "projected", id: ids[i]!, source: src, curve });
     });
     this.host.refreshActive();

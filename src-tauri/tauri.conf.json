@@ -40,6 +40,46 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "funda"
+        ],
+        "name": "FundaCAD document",
+        "description": "FundaCAD document",
+        "role": "Editor",
+        "rank": "Owner",
+        "mimeType": "application/x-fundacad",
+        "exportedType": {
+          "identifier": "dev.fundacad.app.funda",
+          "conformsTo": [
+            "public.json",
+            "public.data"
+          ]
+        }
+      },
+      {
+        "ext": [
+          "fundab"
+        ],
+        "name": "FundaCAD binary document",
+        "description": "FundaCAD binary document",
+        "role": "Editor",
+        "rank": "Owner",
+        "mimeType": "application/x-fundacad-bundle",
+        "exportedType": {
+          "identifier": "dev.fundacad.app.fundab",
+          "conformsTo": [
+            "public.data"
+          ]
+        }
+      }
+    ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "windows/installer-hooks.nsh"
+      }
+    },
     "linux": {
       "deb": {
         "desktopTemplate": "../packaging/fundacad.desktop.hbs",

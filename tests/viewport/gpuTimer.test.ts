@@ -20,20 +20,31 @@ function fakeGl(withExt = true) {
       withExt && n === "EXT_disjoint_timer_query_webgl2"
         ? { TIME_ELAPSED_EXT: TIME_ELAPSED, GPU_DISJOINT_EXT: DISJOINT }
         : null,
-    createQuery: () => { const q = {}; live.set(q, { ns: null }); return q; },
+    createQuery: () => {
+      const q = {};
+      live.set(q, { ns: null });
+      return q;
+    },
     beginQuery: (t: number, q: object) => {
       if (open) throw new Error("a query is already active");
       expect(t).toBe(TIME_ELAPSED);
       open = q;
       log.push("begin");
     },
-    endQuery: () => { if (!open) throw new Error("no active query"); open = null; log.push("end"); },
-    deleteQuery: (q: object) => { live.delete(q); },
+    endQuery: () => {
+      if (!open) throw new Error("no active query");
+      open = null;
+      log.push("end");
+    },
+    deleteQuery: (q: object) => {
+      live.delete(q);
+    },
     getQueryParameter: (q: object, p: number) => {
       const s = live.get(q)!;
       return p === 1 ? s.ns !== null : s.ns;
     },
     getParameter: (p: number) => (p === DISJOINT ? disjoint : null),
+    isContextLost: () => false,
     fenceSync: () => ({}),
     deleteSync: () => {},
     getSyncParameter: () => (signaled ? 5 : 0),
@@ -41,19 +52,30 @@ function fakeGl(withExt = true) {
   /** Finish the ended queries that are still unread, oldest first, with these durations in ms. */
   const finish = (...ms: number[]) => {
     const ready = [...live].filter(([q, s]) => s.ns === null && q !== open);
-    ready.forEach(([, s], i) => { s.ns = (ms[i] ?? 0) * 1e6; });
+    ready.forEach(([, s], i) => {
+      s.ns = (ms[i] ?? 0) * 1e6;
+    });
   };
   return {
     gl: gl as unknown as WebGL2RenderingContext,
-    live, log, finish,
-    setDisjoint: (v: boolean) => { disjoint = v; },
-    signal: (v: boolean) => { signaled = v; },
+    live,
+    log,
+    finish,
+    setDisjoint: (v: boolean) => {
+      disjoint = v;
+    },
+    signal: (v: boolean) => {
+      signaled = v;
+    },
   };
 }
 
 function frameOf(t: GpuTimer, f: ReturnType<typeof fakeGl>, passes: [string, number][]) {
   t.frame();
-  for (const [name] of passes) { t.begin(name); t.end(name); }
+  for (const [name] of passes) {
+    t.begin(name);
+    t.end(name);
+  }
   f.finish(...passes.map(([, ms]) => ms));
 }
 
@@ -73,7 +95,8 @@ describe("GpuTimer with the timer query extension", () => {
     const f = fakeGl();
     const t = new GpuTimer(f.gl);
     t.frame();
-    t.begin("main"); t.end("main");
+    t.begin("main");
+    t.end("main");
     t.frame();
     expect(t.medians()).toEqual({});
     f.finish(3);
@@ -139,7 +162,11 @@ describe("GpuTimer with the timer query extension", () => {
   it("keeps only a bounded number of unread queries", () => {
     const f = fakeGl();
     const t = new GpuTimer(f.gl);
-    for (let i = 0; i < 500; i++) { t.frame(); t.begin("main"); t.end("main"); }
+    for (let i = 0; i < 500; i++) {
+      t.frame();
+      t.begin("main");
+      t.end("main");
+    }
     expect(f.live.size).toBeLessThanOrEqual(64);
   });
 });
@@ -151,7 +178,8 @@ describe("GpuTimer without the extension", () => {
     const t = new GpuTimer(f.gl, () => clock);
     expect(t.kind).toBe("fence");
     t.frame();
-    t.begin("main"); t.end("main");
+    t.begin("main");
+    t.end("main");
     clock = 10;
     t.endFrame();
     clock = 18;
@@ -166,7 +194,10 @@ describe("GpuTimer without the extension", () => {
   it("does nothing without a context", () => {
     const t = new GpuTimer(null);
     expect(t.kind).toBe("none");
-    t.frame(); t.begin("main"); t.end("main"); t.endFrame();
+    t.frame();
+    t.begin("main");
+    t.end("main");
+    t.endFrame();
     expect(t.medians()).toEqual({});
   });
 });

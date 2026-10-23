@@ -29,35 +29,19 @@ pub fn outcome(ctx: &Ctx, reply: &Value) -> Outcome {
             bodies: 0,
             volumes: BTreeMap::new(),
             bbox: None,
-            errors: vec![(
-                err.get("feature_id").cloned().unwrap_or(Value::Null),
-                class(&message),
-            )],
+            errors: vec![(err.get("feature_id").cloned().unwrap_or(Value::Null), class(&message))],
         };
     }
     let result = &reply["result"];
     let bodies = result["bodies"].as_array().cloned().unwrap_or_default();
-    let volumes = bodies
-        .iter()
-        .map(|b| (b["id"].as_str().unwrap_or("").to_owned(), body_volume(b)))
-        .collect();
+    let volumes = bodies.iter().map(|b| (b["id"].as_str().unwrap_or("").to_owned(), body_volume(b))).collect();
     let errors = result["featureErrors"]
         .as_array()
         .into_iter()
         .flatten()
-        .map(|e| {
-            (
-                e.get("feature_id").cloned().unwrap_or(Value::Null),
-                class(e["message"].as_str().unwrap_or("")),
-            )
-        })
+        .map(|e| (e.get("feature_id").cloned().unwrap_or(Value::Null), class(e["message"].as_str().unwrap_or(""))))
         .collect();
-    Outcome {
-        bodies: bodies.len(),
-        volumes,
-        bbox: result.get("bbox").filter(|b| !b.is_null()).cloned(),
-        errors,
-    }
+    Outcome { bodies: bodies.len(), volumes, bbox: result.get("bbox").filter(|b| !b.is_null()).cloned(), errors }
 }
 
 fn diagonal(bbox: &Value) -> f64 {
@@ -73,16 +57,7 @@ fn diagonal(bbox: &Value) -> f64 {
 fn errors_text(errors: &[(Value, String)]) -> String {
     let parts: Vec<String> = errors
         .iter()
-        .map(|(f, c)| {
-            format!(
-                "({}, {c:?})",
-                if f.is_null() {
-                    "None".into()
-                } else {
-                    f.to_string()
-                }
-            )
-        })
+        .map(|(f, c)| format!("({}, {c:?})", if f.is_null() { "None".into() } else { f.to_string() }))
         .collect();
     format!("[{}]", parts.join(", "))
 }
@@ -100,11 +75,7 @@ pub fn compare(ctx: &Ctx, py: &Value, rs: &Outcome) -> Vec<String> {
     }
     let py_vol: BTreeMap<String, f64> = py["volumes"]
         .as_object()
-        .map(|m| {
-            m.iter()
-                .map(|(k, v)| (k.clone(), v.as_f64().unwrap_or(0.0)))
-                .collect()
-        })
+        .map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_f64().unwrap_or(0.0))).collect())
         .unwrap_or_default();
     if py_vol.keys().ne(rs.volumes.keys()) {
         diffs.push(format!(
@@ -129,10 +100,8 @@ pub fn compare(ctx: &Ctx, py: &Value, rs: &Outcome) -> Vec<String> {
             let tol = bbox_abs.max(bbox_rel * diagonal(pb));
             for corner in ["min", "max"] {
                 for i in 0..3 {
-                    let (r, p) = (
-                        rb[corner][i].as_f64().unwrap_or(f64::NAN),
-                        pb[corner][i].as_f64().unwrap_or(f64::NAN),
-                    );
+                    let (r, p) =
+                        (rb[corner][i].as_f64().unwrap_or(f64::NAN), pb[corner][i].as_f64().unwrap_or(f64::NAN));
                     if !((r - p).abs() <= tol) {
                         diffs.push(format!("bbox {corner}[{i}] {} vs {}", fx(r, 6), fx(p, 6)));
                     }
@@ -147,36 +116,18 @@ pub fn compare(ctx: &Ctx, py: &Value, rs: &Outcome) -> Vec<String> {
         .map(|e| (e[0].clone(), e[1].as_str().unwrap_or("").to_owned()))
         .collect();
     if py_errors != rs.errors {
-        diffs.push(format!(
-            "errors {} vs {}",
-            errors_text(&rs.errors),
-            errors_text(&py_errors)
-        ));
+        diffs.push(format!("errors {} vs {}", errors_text(&rs.errors), errors_text(&py_errors)));
     }
     diffs
 }
 
 /// A document's import fixture through this engine's import op, merged into its
 /// feature as diff_engines.import_all merges the Python reply.
-fn seed(
-    ctx: &Ctx,
-    session: &mut Session,
-    doc: &mut Value,
-    spec: &Value,
-) -> (Vec<String>, Option<String>) {
+fn seed(ctx: &Ctx, session: &mut Session, doc: &mut Value, spec: &Value) -> (Vec<String>, Option<String>) {
     let path = ctx.repo.join(spec["fixture"].as_str().unwrap_or(""));
-    let reply = session.call(
-        "import",
-        json!({"path": path.to_string_lossy(), "format": spec["format"]}),
-    );
+    let reply = session.call("import", json!({"path": path.to_string_lossy(), "format": spec["format"]}));
     if reply["ok"] != true {
-        return (
-            vec![format!(
-                "the import op refused {}: {}",
-                spec["fixture"], reply["error"]
-            )],
-            None,
-        );
+        return (vec![format!("the import op refused {}: {}", spec["fixture"], reply["error"])], None);
     }
     let mut result = reply["result"].as_object().cloned().unwrap_or_default();
     let mut rest = result.clone();
@@ -202,8 +153,7 @@ fn seed(
     } else {
         format!(
             "imported here as blob {}, python stored {}",
-            geom.and_then(|g| g.as_str().map(str::to_owned))
-                .unwrap_or_default(),
+            geom.and_then(|g| g.as_str().map(str::to_owned)).unwrap_or_default(),
             spec["pythonGeom"].as_str().unwrap_or("")
         )
     };
@@ -211,9 +161,7 @@ fn seed(
 }
 
 pub fn check(ctx: &Ctx) -> Result<bool, String> {
-    let docs = ctx.corpus["documents"]
-        .as_array()
-        .ok_or("the corpus has no documents")?;
+    let docs = ctx.corpus["documents"].as_array().ok_or("the corpus has no documents")?;
     let tolerance = ctx.header()["rebuildTolerance"].as_f64().unwrap_or(0.1);
     let cases = ctx.cases().as_object().ok_or("the golden has no cases")?;
     let names: Vec<&str> = docs.iter().filter_map(|d| d["name"].as_str()).collect();
@@ -252,10 +200,7 @@ pub fn check(ctx: &Ctx) -> Result<bool, String> {
             ]);
             continue;
         }
-        let reply = session.call(
-            "rebuild",
-            json!({"document": doc, "tolerance": tolerance, "binary": false}),
-        );
+        let reply = session.call("rebuild", json!({"document": doc, "tolerance": tolerance, "binary": false}));
         let rs = outcome(ctx, &reply);
         let py = &cases[name];
         diffs.extend(compare(ctx, py, &rs));
@@ -267,19 +212,11 @@ pub fn check(ctx: &Ctx) -> Result<bool, String> {
             name.to_owned(),
             py["bodies"].to_string(),
             rs.bodies.to_string(),
-            if diffs.is_empty() {
-                "match"
-            } else {
-                "MISMATCH"
-            }
-            .to_owned(),
+            if diffs.is_empty() { "match" } else { "MISMATCH" }.to_owned(),
             diffs.join("; "),
         ]);
     }
-    table(
-        &rows,
-        &["document", "py bodies", "rust bodies", "status", "detail"],
-    );
+    table(&rows, &["document", "py bodies", "rust bodies", "status", "detail"]);
     if !notes.is_empty() {
         println!("\nimport fixtures, through this engine's import op:");
         for n in &notes {
@@ -287,18 +224,13 @@ pub fn check(ctx: &Ctx) -> Result<bool, String> {
         }
     }
     if !skipped.is_empty() {
-        println!(
-            "\n{} skipped for a font this machine does not have: {}",
-            skipped.len(),
-            skipped.join(", ")
-        );
+        println!("\n{} skipped for a font this machine does not have: {}", skipped.len(), skipped.join(", "));
     }
     Ok(verdict(bad, rows.len() - skipped.len()))
 }
 
-/// The fonts a document's text draws with that this machine does not have.
-/// Outlines come from the system's fonts, so a case frozen with a font that is
-/// missing here can only be compared with whatever stands in for it.
+/// The fonts a document's text uses that this machine lacks. Outlines come from the system's fonts, so such a
+/// case can only be compared with whatever stands in for the missing font.
 fn missing_fonts(doc: &Value) -> Vec<String> {
     let lib = fundacad_geom::text::fonts::library();
     let mut out: Vec<String> = Vec::new();
@@ -337,15 +269,9 @@ pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
         let fixture = format!("tests/{}", spec["path"].as_str().unwrap_or(""));
         let format = spec.get("format").cloned().unwrap_or(json!("step"));
         let mut s = Session::start();
-        let reply = s.call(
-            "import",
-            json!({"path": ctx.repo.join(&fixture).to_string_lossy(), "format": format}),
-        );
+        let reply = s.call("import", json!({"path": ctx.repo.join(&fixture).to_string_lossy(), "format": format}));
         if reply["ok"] != true {
-            return Err(format!(
-                "the import op refused {fixture}: {}",
-                reply["error"]
-            ));
+            return Err(format!("the import op refused {fixture}: {}", reply["error"]));
         }
         let mut rest = reply["result"].as_object().cloned().unwrap_or_default();
         rest.remove("geom");
@@ -360,38 +286,18 @@ pub fn record_case(ctx: &Ctx, name: &str) -> Result<Value, String> {
         import = Some(rec);
     }
     let tolerance = ctx.header()["rebuildTolerance"].as_f64().unwrap_or(0.1);
-    let reply = Session::start().call(
-        "rebuild",
-        json!({"document": doc, "tolerance": tolerance, "binary": false}),
-    );
+    let reply = Session::start().call("rebuild", json!({"document": doc, "tolerance": tolerance, "binary": false}));
     let o = outcome(ctx, &reply);
     let bbox = o.bbox.as_ref().map_or(Value::Null, |b| {
-        let corner = |c: &str| {
-            Value::Array(
-                (0..3)
-                    .map(|i| fixed(b[c][i].as_f64().unwrap_or(0.0), 9))
-                    .collect(),
-            )
-        };
+        let corner = |c: &str| Value::Array((0..3).map(|i| fixed(b[c][i].as_f64().unwrap_or(0.0), 9)).collect());
         object(vec![("max", corner("max")), ("min", corner("min"))])
     });
     let mut case = object(vec![
         ("bbox", bbox),
         ("bodies", json!(o.bodies)),
-        (
-            "errors",
-            Value::Array(o.errors.iter().map(|(f, c)| json!([f, c])).collect()),
-        ),
+        ("errors", Value::Array(o.errors.iter().map(|(f, c)| json!([f, c])).collect())),
         ("fatal", json!(reply["ok"] != true)),
-        (
-            "volumes",
-            Value::Object(
-                o.volumes
-                    .iter()
-                    .map(|(k, v)| (k.clone(), sig(*v, 10)))
-                    .collect(),
-            ),
-        ),
+        ("volumes", Value::Object(o.volumes.iter().map(|(k, v)| (k.clone(), sig(*v, 10))).collect())),
     ]);
     if let Some(i) = import {
         case["import"] = i;

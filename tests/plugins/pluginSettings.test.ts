@@ -27,7 +27,16 @@ const schema = (extra: Partial<SettingsSchema> = {}): SettingsSchema => ({
   props: [
     { key: "on", type: "boolean", label: "On", default: false },
     { key: "speed", type: "number", label: "Speed", default: 2, min: 0, max: 10 },
-    { key: "mode", type: "enum", label: "Mode", default: "a", options: [{ id: "a", label: "A" }, { id: "b", label: "B" }] },
+    {
+      key: "mode",
+      type: "enum",
+      label: "Mode",
+      default: "a",
+      options: [
+        { id: "a", label: "A" },
+        { id: "b", label: "B" },
+      ],
+    },
     { key: "name", type: "string", label: "Name", default: "", maxLength: 4 },
     { key: "tint", type: "colour", label: "Tint", default: "#ff8800", group: "Look" },
     { key: "hotkey", type: "key", label: "Hot key", default: "Ctrl+K" },
@@ -67,7 +76,12 @@ describe("validateSchema", () => {
   });
 
   it("refuses to define settings from a broken schema", () => {
-    expect(() => definePluginSettings("A.Bad", { version: 1, props: [{ key: "x", type: "number", label: "X", default: Infinity }] })).toThrow(/finite/);
+    expect(() =>
+      definePluginSettings("A.Bad", {
+        version: 1,
+        props: [{ key: "x", type: "number", label: "X", default: Infinity }],
+      }),
+    ).toThrow(/finite/);
   });
 });
 
@@ -79,7 +93,10 @@ describe("storage", () => {
     expect(y.get("speed")).toBe(2);
     expect([...store.map.keys()]).toEqual([storageKey("A.X")]);
     expect(storageKey("A.X")).toBe("fundacad.pluginSettings.A.X");
-    expect(JSON.parse(store.getItem("fundacad.pluginSettings.A.X")!)).toMatchObject({ version: 1, values: { speed: 7 } });
+    expect(JSON.parse(store.getItem("fundacad.pluginSettings.A.X")!)).toMatchObject({
+      version: 1,
+      values: { speed: 7 },
+    });
   });
 
   it("reads back what an earlier start stored", () => {
@@ -90,7 +107,10 @@ describe("storage", () => {
   });
 
   it("falls back per property when a stored value is no longer valid", () => {
-    store.setItem(storageKey("A.X"), JSON.stringify({ version: 1, values: { speed: "fast", mode: "gone", on: true, name: "toolong" } }));
+    store.setItem(
+      storageKey("A.X"),
+      JSON.stringify({ version: 1, values: { speed: "fast", mode: "gone", on: true, name: "toolong" } }),
+    );
     const s = definePluginSettings("A.X", schema());
     expect(s.get("speed")).toBe(2);
     expect(s.get("mode")).toBe("a");

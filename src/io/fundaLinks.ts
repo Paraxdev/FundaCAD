@@ -1,18 +1,11 @@
-// The app's side of inserting and linking FundaCAD documents: the file dialog,
-// reading a document off disk, and where the intermediate STEP is written.
-// io/fundaInsert.ts is the part that does not need the native shell.
+// The native side of inserting and linking FundaCAD documents: the dialog, reading off disk, the temp STEP path.
+// io/fundaInsert.ts holds the part that needs no native shell.
 
 import type { DocumentStore } from "../document/store";
 import type { GeometryBackend } from "../geometry/client";
 import { asFeature, type Feature } from "../types";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS } from "./documentExt";
-import {
-  baseName,
-  insertFundaDocument,
-  staleLinks,
-  updateFundaLink,
-  type FundaInsertMode,
-} from "./fundaInsert";
+import { baseName, insertFundaDocument, staleLinks, updateFundaLink, type FundaInsertMode } from "./fundaInsert";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
@@ -44,28 +37,35 @@ export async function insertDocumentFromDialog(store: DocumentStore, geometry: G
     await say("Inserting a document needs the desktop app, it reads the file from disk");
     return;
   }
-  const { open } = await import("@tauri-apps/plugin-dialog");
-  const path = await open({
-    multiple: false,
-    filters: [{ name: "FundaCAD Document", extensions: [DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"] }],
-  });
+  // Every wait goes through the document's session, so a file picked for a document closed meanwhile is never put in.
+  const s = store.session;
+  const { open } = await s.step(import("@tauri-apps/plugin-dialog"));
+  const path = await s.step(
+    open({
+      multiple: false,
+      filters: [{ name: "FundaCAD Document", extensions: [DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"] }],
+    }),
+  );
   if (typeof path !== "string") return;
   if (store.filePath && samePath(path, store.filePath)) {
     await say("A document cannot be inserted into itself", "error");
     return;
   }
-  const { choose } = await import("../ui/choice");
-  const mode = await choose<FundaInsertMode>(`Insert ${baseName(path)}`, [
-    { value: "append", label: "Append", hint: "copy it in once" },
-    { value: "link", label: "Link", hint: "update when the file changes" },
-  ]);
+  const { choose } = await s.step(import("../ui/choice"));
+  const mode = await s.step(
+    choose<FundaInsertMode>(`Insert ${baseName(path)}`, [
+      { value: "append", label: "Append", hint: "copy it in once" },
+      { value: "link", label: "Link", hint: "update when the file changes" },
+    ]),
+  );
   if (!mode) return;
-  const text = await readDocumentText(path);
+  const text = await s.step(readDocumentText(path));
   if (text === null) {
     await say(`Couldn't read ${baseName(path)}`, "error");
     return;
   }
-  const res = await insertFundaDocument(store, geometry, { path, text }, mode, await tempStepPath());
+  const temp = await s.step(tempStepPath());
+  const res = await insertFundaDocument(store, geometry, { path, text }, mode, temp);
   if (!res.ok) {
     if (!res.cancelled) await say(`Couldn't insert ${baseName(path)}: ${res.message}`, "error");
     return;
@@ -75,14 +75,19 @@ export async function insertDocumentFromDialog(store: DocumentStore, geometry: G
 
 /** Re-read one linked step from its file. */
 export async function refreshLink(store: DocumentStore, geometry: GeometryBackend, featureId: string) {
-  const f = asFeature(store.document.features.find((x) => x.id === featureId), "import");
+  const f = asFeature(
+    store.document.features.find((x) => x.id === featureId),
+    "import",
+  );
   if (!f?.link) return;
-  const text = await readDocumentText(f.link.path);
+  const s = store.session;
+  const text = await s.step(readDocumentText(f.link.path));
   if (text === null) {
     await say(`Couldn't read ${f.link.path}, it may have moved`, "error");
     return;
   }
-  const res = await updateFundaLink(store, geometry, featureId, { path: f.link.path, text }, await tempStepPath());
+  const temp = await s.step(tempStepPath());
+  const res = await updateFundaLink(store, geometry, featureId, { path: f.link.path, text }, temp);
   if (!res.ok && !res.cancelled) await say(`Couldn't update ${baseName(f.link.path)}: ${res.message}`, "error");
 }
 
@@ -94,12 +99,17 @@ export function unlink(store: DocumentStore, featureId: string) {
 /** After a document opens: say which linked files changed or went missing. */
 export async function checkLinks(store: DocumentStore, geometry: GeometryBackend) {
   if (!isTauri()) return;
-  const { changed, missing } = await staleLinks(store.document.features, readDocumentText);
+  const s = store.session;
+  const { changed, missing } = await s.step(staleLinks(store.document.features, readDocumentText));
   if (changed.length) {
     const names = changed.map((id) => nameOf(store, id)).join(", ");
     await say(`${names} changed since ${changed.length === 1 ? "it was" : "they were"} linked`, "info", {
       label: "Update",
-      onClick: () => void (async () => { for (const id of changed) await refreshLink(store, geometry, id); })(),
+      // The ids are this document's; an Update clicked after another document opened has nothing to refresh.
+      onClick: () =>
+        void (async () => {
+          for (const id of changed) if (s.alive) await refreshLink(store, geometry, id);
+        })(),
     });
   }
   if (missing.length) {
@@ -108,7 +118,10 @@ export async function checkLinks(store: DocumentStore, geometry: GeometryBackend
 }
 
 function nameOf(store: DocumentStore, id: string): string {
-  const f = asFeature(store.document.features.find((x) => x.id === id), "import");
+  const f = asFeature(
+    store.document.features.find((x) => x.id === id),
+    "import",
+  );
   return f?.name || (f?.link ? baseName(f.link.path) : id);
 }
 

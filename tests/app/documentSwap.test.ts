@@ -8,6 +8,9 @@ import type { CadDocument, RebuildResult } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 import { cancelActiveTools } from "../../src/app/toolBusy";
 import type { EngineTools } from "../../src/app/engine";
+import { createPinia, setActivePinia } from "pinia";
+import { useBrowserStore } from "../../src/stores/browser";
+import { setWorkspace, workspace } from "../../src/ui/workspace";
 
 const RESULT: RebuildResult = {
   mesh: { positions: [0, 0, 0], indices: [0], faceIds: [0] },
@@ -15,7 +18,10 @@ const RESULT: RebuildResult = {
   bbox: { min: [0, 0, 0], max: [1, 1, 1] },
   bodies: [{ id: "b1", name: "Body1", faceStart: 0, faceCount: 1 }],
 };
-const DOC = { parameters: {}, features: [{ id: "f1", type: "sketch", plane: "XY", entities: [] }] } as unknown as CadDocument;
+const DOC = {
+  parameters: {},
+  features: [{ id: "f1", type: "sketch", plane: "XY", entities: [] }],
+} as unknown as CadDocument;
 
 /** Lands RESULT once, then never answers again, like an engine still busy freeing the old build. */
 function slowEngine() {
@@ -25,13 +31,19 @@ function slowEngine() {
       return ++calls === 1 ? { ok: true as const, result: RESULT } : new Promise<never>(() => {});
     },
     async init() {},
-    onStatus() { return () => {}; },
-    onProgress() { return () => {}; },
-    async cancel() { return true; },
+    onStatus() {
+      return () => {};
+    },
+    onProgress() {
+      return () => {};
+    },
+    async cancel() {
+      return true;
+    },
   } as unknown as GeometryBackend;
 }
 
-function harness() {
+function harness(browser?: { forgetDocumentFolders(): void }) {
   const store = new DocumentStore(slowEngine(), DOC);
   const calls: string[] = [];
   const sketch = { active: true, cancel: () => calls.push("sketch.cancel") };
@@ -44,10 +56,13 @@ function harness() {
     viewport: {
       clearSelection: () => calls.push("clearSelection"),
       setSelectedBodies: () => calls.push("setSelectedBodies"),
-      clearModel: () => calls.push("clearModel"),
+      endDocument: () => calls.push("endDocument"),
     },
+    browser: browser ?? { forgetDocumentFolders: () => calls.push("forgetDocumentFolders") },
   });
-  store.onBuild((s) => { if (!s.building) calls.push(`build:${s.result ? "old" : "none"}`); });
+  store.onBuild((s) => {
+    if (!s.building) calls.push(`build:${s.result ? "old" : "none"}`);
+  });
   return { store, calls };
 }
 
@@ -60,10 +75,20 @@ describe("New and Open clear the view at once", () => {
       if (how === "New") store.newDocument();
       else store.load(JSON.stringify({ parameters: {}, features: [] }));
       expect(calls.slice(0, 8)).toEqual([
-        "cancelTools", "sketch.cancel", "dropBodyGizmo", "clearSelection", "setSelectedBodies",
-        "clearRegionSelection", "forgetLastCommit", "clearModel",
+        "cancelTools",
+        "sketch.cancel",
+        "dropBodyGizmo",
+        "clearSelection",
+        "setSelectedBodies",
+        "clearRegionSelection",
+        "forgetLastCommit",
+        "endDocument",
       ]);
       expect(calls).not.toContain("build:old");
+      // The second document's session owns the next swap, and it runs once.
+      calls.length = 0;
+      store.newDocument();
+      expect(calls.filter((c) => c === "endDocument")).toEqual(["endDocument"]);
     });
   }
 
@@ -72,7 +97,38 @@ describe("New and Open clear the view at once", () => {
     await store.rebuildNow();
     calls.length = 0;
     store.load(JSON.stringify(DOC), { replace: true });
-    expect(calls).not.toContain("clearModel");
+    expect(calls).not.toContain("endDocument");
+  });
+});
+
+// Every import's top node is "n:f1/0", so a STEP example opened with its folders as an earlier document's
+// assembly was left.
+describe("New and Open start the next document's folders from their defaults", () => {
+  const open = (b: ReturnType<typeof useBrowserStore>) =>
+    ["n:f1/0", "e:el1", "f:Origin", "f:Bodies"].filter((k) => !b.isCollapsed(k));
+
+  for (const how of ["New", "Open"] as const) {
+    it(`closes assembly folders and forgets element ones on ${how}, section folders stay as the user left them`, () => {
+      setActivePinia(createPinia());
+      const browser = useBrowserStore();
+      const { store } = harness(browser);
+      browser.expand("n:f1/0");
+      browser.toggle("e:el1");
+      browser.toggle("f:Origin");
+      expect(open(browser)).toEqual(["n:f1/0", "f:Bodies"]);
+      if (how === "New") store.newDocument();
+      else store.load(JSON.stringify({ parameters: {}, features: [] }));
+      expect(open(browser)).toEqual(["e:el1", "f:Bodies"]);
+    });
+  }
+
+  it("keeps every folder through a replace, which is the same document", () => {
+    setActivePinia(createPinia());
+    const browser = useBrowserStore();
+    const { store } = harness(browser);
+    browser.expand("n:f1/0");
+    store.load(JSON.stringify(DOC), { replace: true });
+    expect(browser.isCollapsed("n:f1/0")).toBe(false);
   });
 });
 
@@ -83,27 +139,57 @@ describe("New and Open stand every tool down", () => {
     const tool = (name: string, active: boolean) => ({ active, cancel: () => calls.push(`${name}.cancel`) });
     const t: Record<string, unknown> = {};
     for (const n of [
-      "extrude", "edgeFeature", "targetEdit", "pressPull", "faceOffset", "draft", "thread", "textOnFace", "hole", "loft",
-      "pattern", "planeOffset", "datumPose", "lightAim", "revolvePitch", "joint", "mechanism",
-    ]) t[n] = tool(n, n === "extrude" || n === "pressPull");
+      "extrude",
+      "edgeFeature",
+      "targetEdit",
+      "pressPull",
+      "faceOffset",
+      "draft",
+      "thread",
+      "textOnFace",
+      "hole",
+      "loft",
+      "pattern",
+      "mirror",
+      "planeOffset",
+      "datumPose",
+      "lightAim",
+      "revolvePitch",
+      "joint",
+      "mechanism",
+    ])
+      t[n] = tool(n, n === "extrude" || n === "pressPull" || n === "mirror");
     t.move = tool("move", false);
     t.measure = { active: true, stop: () => calls.push("measure.stop") };
-    t.section = { active: true, picking: false, stop: () => calls.push("section.stop") };
+    t.section = { picking: false, editing: false, endEdit: () => calls.push("section.endEdit") };
     return t as unknown as EngineTools;
   }
 
-  it("cancels the armed tools and leaves idle ones and a standing section alone", () => {
+  it("cancels the armed tools and leaves idle ones alone", () => {
     const calls: string[] = [];
     cancelActiveTools(tools(calls));
-    expect(calls.sort()).toEqual(["extrude.cancel", "measure.stop", "move.cancel", "pressPull.cancel"]);
+    expect(calls.sort()).toEqual([
+      "extrude.cancel",
+      "measure.stop",
+      "mirror.cancel",
+      "move.cancel",
+      "pressPull.cancel",
+    ]);
   });
 
-  it("ends a section still aiming", () => {
-    const calls: string[] = [];
-    const t = tools(calls);
-    Object.assign(t.section, { active: false, picking: true });
-    cancelActiveTools(t);
-    expect(calls).toContain("section.stop");
+  // A cut that is on, or none, is the store's to replace with the next document's own.
+  it("ends a section aiming or editing and leaves one that is on or off alone", () => {
+    for (const [picking, editing, ends] of [
+      [true, false, true],
+      [false, true, true],
+      [false, false, false],
+    ] as const) {
+      const calls: string[] = [];
+      const t = tools(calls);
+      Object.assign(t.section, { picking, editing });
+      cancelActiveTools(t);
+      expect(calls.includes("section.endEdit")).toBe(ends);
+    }
   });
 
   for (const how of ["New", "Open"] as const) {
@@ -115,31 +201,46 @@ describe("New and Open stand every tool down", () => {
           return { ok: true as const, result: RESULT };
         },
         async init() {},
-        onStatus() { return () => {}; },
-        onProgress() { return () => {}; },
-        async cancel() { return true; },
+        onStatus() {
+          return () => {};
+        },
+        onProgress() {
+          return () => {};
+        },
+        async cancel() {
+          return true;
+        },
       } as unknown as GeometryBackend;
       const store = new DocumentStore(engine, DOC);
       await store.rebuildNow();
       store.setPreview({ id: "pv", type: "box", width: 60, depth: 60, height: 5 } as never);
       store.beginEditPreview("f1", null);
+      const before = sent.length;
       if (how === "New") store.newDocument();
       else store.load(JSON.stringify({ parameters: {}, features: [] }));
       expect(store.hasPreview).toBe(false);
       expect(store.editPreviewId).toBeNull();
-      sent.length = 0;
       await store.rebuildNow();
-      expect(sent.at(-1)).toBe("");
+      // The next document's own build went out empty; the second ask settled empty here, with its build still out.
+      expect({ sent: sent.slice(before), bodies: store.buildState.result?.bodies }).toEqual({ sent: [""], bodies: [] });
     });
   }
 
   it("keeps a tool's live preview through a replace load, where the tool stays armed", async () => {
     const engine = {
-      async rebuild() { return { ok: true as const, result: RESULT }; },
+      async rebuild() {
+        return { ok: true as const, result: RESULT };
+      },
       async init() {},
-      onStatus() { return () => {}; },
-      onProgress() { return () => {}; },
-      async cancel() { return true; },
+      onStatus() {
+        return () => {};
+      },
+      onProgress() {
+        return () => {};
+      },
+      async cancel() {
+        return true;
+      },
     } as unknown as GeometryBackend;
     const store = new DocumentStore(engine, DOC);
     await store.rebuildNow();
@@ -153,10 +254,37 @@ describe("New and Open stand every tool down", () => {
   it("still clears the document when one tool's cancel throws", () => {
     const calls: string[] = [];
     const t = tools(calls);
-    t.extrude.cancel = () => { throw new Error("boom"); };
+    t.extrude.cancel = () => {
+      throw new Error("boom");
+    };
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => cancelActiveTools(t)).not.toThrow();
     expect(calls).toContain("pressPull.cancel");
     err.mockRestore();
+  });
+});
+
+// Render, a discard and Home kept the Render dock up over Home and on the next document.
+describe("New and Open start the next document in Model", () => {
+  for (const how of ["New", "Open"] as const) {
+    it(`leaves Render on ${how}, and again for a second document after the first`, () => {
+      const { store } = harness();
+      const next = () =>
+        how === "New" ? store.newDocument() : store.load(JSON.stringify({ parameters: {}, features: [] }));
+      setWorkspace("render");
+      next();
+      expect(workspace()).toBe("model");
+      setWorkspace("render");
+      next();
+      expect(workspace()).toBe("model");
+    });
+  }
+
+  it("keeps Render through a replace, which is the same document", () => {
+    const { store } = harness();
+    setWorkspace("render");
+    store.load(JSON.stringify(DOC), { replace: true });
+    expect(workspace()).toBe("render");
+    setWorkspace("model");
   });
 });

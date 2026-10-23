@@ -1,4 +1,4 @@
-/* ---- Home: covers the stage, the title bar stays live ---- */
+/* Home covers the stage, the title bar stays live. */
 .home {
   position: absolute;
   inset: 0;
@@ -107,6 +107,13 @@
 .home-new-name {
   font-size: 12px;
 }
+.home-new-line {
+  margin-top: calc(-1 * var(--s-1));
+  font-size: 10px;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--text-dim);
+}
 .home-tools {
   display: flex;
   gap: var(--s-3);
@@ -134,6 +141,73 @@
   overflow-y: auto;
   overflow-x: hidden;
 }
+.home-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+  max-width: 720px;
+  margin: var(--s-3) var(--s-5) 0;
+  padding: var(--s-4);
+}
+.home-welcome-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.home-welcome-text {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.home-welcome-acts {
+  display: flex;
+  gap: var(--s-2);
+}
+.home-news {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-width: 720px;
+  margin: var(--s-3) var(--s-5) 0;
+  padding: var(--s-4);
+}
+.home-news-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.home-news-body {
+  max-height: clamp(120px, 30vh, 240px);
+  overflow-y: auto;
+  font-size: 12px;
+}
+.home-news-body.is-more {
+  -webkit-mask-image: linear-gradient(to bottom, currentColor calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to bottom, currentColor calc(100% - 40px), transparent);
+}
+.home-news-group {
+  margin: var(--s-3) 0 var(--s-1);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.home-news-group:first-child {
+  margin-top: 0;
+}
+.home-news-list {
+  display: grid;
+  gap: var(--s-1);
+  margin: 0;
+  padding-left: var(--s-5);
+}
+.home-news-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
 .home-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -153,9 +227,8 @@
   font-weight: 600;
   color: var(--text-dim);
 }
-/* content-visibility clips paint to the cell, so the cell bleeds past its grid
-   area by the reach of --float-shadow and the card keeps its whole shadow. The
-   bleed takes no clicks, or it would steal them from the neighbouring cards. */
+/* content-visibility clips paint to the cell, so the cell bleeds by the reach of
+   --float-shadow; the bleed takes no clicks from the neighbouring cards. */
 $card-bleed-top: 8px;
 $card-bleed-side: 26px;
 $card-bleed-bottom: 44px;
@@ -248,6 +321,8 @@ $card-bleed-bottom: 44px;
 /* A chip of glass of its own, the label is unreadable on the bare scrim over a light viewport. */
 .home-foot {
   display: flex;
+  align-items: center;
+  gap: var(--s-4);
   align-self: flex-start;
   margin: var(--s-2) var(--s-5) var(--s-4);
   padding: var(--s-2) var(--s-3);
@@ -259,6 +334,19 @@ $card-bleed-bottom: 44px;
   font-size: 12px;
   color: var(--text-dim);
   cursor: pointer;
+}
+.home-report {
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.home-report:hover {
+  background: transparent;
+  color: var(--text);
 }
 #stage.narrow .home {
   grid-template-columns: minmax(0, 1fr);

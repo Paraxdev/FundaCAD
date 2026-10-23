@@ -12,13 +12,9 @@ import {
 
 /** The top face of a 20x20 box at z = 5: a sketch made on it lives in this
  *  plane, and the four edges below are that face's boundary. */
-const topPlane = () =>
-  new SketchPlane({ origin: [0, 0, 5], normal: [0, 0, 1], xdir: [1, 0, 0] });
+const topPlane = () => new SketchPlane({ origin: [0, 0, 5], normal: [0, 0, 1], xdir: [1, 0, 0] });
 
-const seg = (
-  a: [number, number, number],
-  b: [number, number, number],
-): FootprintEdge => ({ points: [a, b] });
+const seg = (a: [number, number, number], b: [number, number, number]): FootprintEdge => ({ points: [a, b] });
 
 /** The rim of the top face, as four separate B-rep edges, which is how the
  *  viewport actually holds it. */
@@ -118,10 +114,7 @@ describe("planeFootprint", () => {
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
       const b = ((i + 1) / n) * Math.PI * 2;
-      bore.push(seg(
-        [Math.cos(a) * 3, Math.sin(a) * 3, 5],
-        [Math.cos(b) * 3, Math.sin(b) * 3, 5],
-      ));
+      bore.push(seg([Math.cos(a) * 3, Math.sin(a) * 3, 5], [Math.cos(b) * 3, Math.sin(b) * 3, 5]));
     }
     const loops = planeFootprint([...topRim(), ...bore], topPlane(), 28);
     expect(loops).toHaveLength(2);
@@ -155,7 +148,11 @@ describe("profileCutCache", () => {
       await Promise.resolve();
     };
     return {
-      src, asks: () => reaches.length, reaches, landed: () => landed, flush,
+      src,
+      asks: () => reaches.length,
+      reaches,
+      landed: () => landed,
+      flush,
       retarget: (e: object) => (now = e),
       open: () => (doc = {}),
       answer: (a: Line[] | null) => (answer = a),
@@ -286,8 +283,10 @@ describe("profileCutCache", () => {
 
 describe("faceFocus", () => {
   const sq = (cx: number, cy: number, h: number) => [
-    new THREE.Vector2(cx - h, cy - h), new THREE.Vector2(cx + h, cy - h),
-    new THREE.Vector2(cx + h, cy + h), new THREE.Vector2(cx - h, cy + h),
+    new THREE.Vector2(cx - h, cy - h),
+    new THREE.Vector2(cx + h, cy - h),
+    new THREE.Vector2(cx + h, cy + h),
+    new THREE.Vector2(cx - h, cy + h),
   ];
   it("centres on the smallest loop around the click, not the origin", () => {
     const c = faceFocus([sq(100, 40, 30), sq(100, 40, 10)], new THREE.Vector2(120, 40));

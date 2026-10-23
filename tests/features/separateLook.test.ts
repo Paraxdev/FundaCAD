@@ -13,7 +13,14 @@ vi.stubGlobal("window", globalThis);
 beforeEach(() => setActivePinia(createPinia()));
 
 function rig() {
-  const be = { async init() {}, onStatus: () => () => {}, onProgress: () => () => {}, async cancel() { return true; } } as unknown as GeometryBackend;
+  const be = {
+    async init() {},
+    onStatus: () => () => {},
+    onProgress: () => () => {},
+    async cancel() {
+      return true;
+    },
+  } as unknown as GeometryBackend;
   const real = new DocumentStore(be, { parameters: {}, features: [] });
   real.setBodyColorSlot("body1", 3);
   real.setBodiesMaterial(["body1"], "m-steel");
@@ -25,9 +32,18 @@ function rig() {
     buildState: { result: { bodies } },
     nextId: () => "f9",
     addFeature: vi.fn(),
-    onBuild: (fn: (s: unknown) => void) => { listener = fn; return () => { listener = null; }; },
+    onBuild: (fn: (s: unknown) => void) => {
+      listener = fn;
+      return () => {
+        listener = null;
+      };
+    },
+    onSessionBuild(fn: (s: unknown) => void) {
+      return this.onBuild(fn);
+    },
     bodyName: (id: string) => real.bodyName(id),
-    inheritBodyLook: (from: string, pieces: Parameters<DocumentStore["inheritBodyLook"]>[1]) => real.inheritBodyLook(from, pieces),
+    inheritBodyLook: (from: string, pieces: Parameters<DocumentStore["inheritBodyLook"]>[1]) =>
+      real.inheritBodyLook(from, pieces),
   };
   const deps = {
     store,
@@ -49,7 +65,10 @@ describe("Separate keeps the look", () => {
       errorFeatureId: null,
       result: { bodies: [...r.bodies, { id: "body2", name: "Body1 2" }, { id: "body3", name: "Body1 3" }] },
     });
-    for (const [id, name] of [["body2", "Bracket 2"], ["body3", "Bracket 3"]] as const) {
+    for (const [id, name] of [
+      ["body2", "Bracket 2"],
+      ["body3", "Bracket 3"],
+    ] as const) {
       expect(r.real.bodyColorSlot(id)).toBe(3);
       expect(r.real.bodyMaterialId(id)).toBe("m-steel");
       expect(r.real.bodyName(id)).toBe(name);
@@ -78,17 +97,30 @@ describe("Separate keeps the look", () => {
 
   it("moves per face materials to the piece their faces went to", async () => {
     const r = rig();
-    r.real.setFacesMaterial([{ body: "body1", face: 2 }, { body: "body1", face: 7 }], "m-steel");
+    r.real.setFacesMaterial(
+      [
+        { body: "body1", face: 2 },
+        { body: "body1", face: 7 },
+      ],
+      "m-steel",
+    );
     await r.starters.startSeparate();
     r.fire({
       building: false,
       errorFeatureId: null,
       result: {
         bodies: [...r.bodies, { id: "body2", name: "Body1 2" }],
-        diagnostics: [{
-          feature_id: "f9", kind: "separateFaces", source: "body1",
-          pieces: [{ body: "body1", from: 6, count: 6 }, { body: "body2", from: 0, count: 6 }],
-        }],
+        diagnostics: [
+          {
+            feature_id: "f9",
+            kind: "separateFaces",
+            source: "body1",
+            pieces: [
+              { body: "body1", from: 6, count: 6 },
+              { body: "body2", from: 0, count: 6 },
+            ],
+          },
+        ],
       },
     });
     expect(r.real.faceMaterialId("body2", 2)).toBe("m-steel");
@@ -106,7 +138,11 @@ describe("Separate keeps the look", () => {
     const r = rig();
     await r.starters.startSeparate();
     r.fire({ building: false, errorFeatureId: "f9", result: { bodies: r.bodies } });
-    r.fire({ building: false, errorFeatureId: null, result: { bodies: [...r.bodies, { id: "body2", name: "Body1 2" }] } });
+    r.fire({
+      building: false,
+      errorFeatureId: null,
+      result: { bodies: [...r.bodies, { id: "body2", name: "Body1 2" }] },
+    });
     expect(r.real.bodyColorSlot("body2")).toBeUndefined();
   });
 });

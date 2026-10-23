@@ -1,6 +1,4 @@
-//! Exact B-rep measurements and clash checks of the live bodies: the `inspect`
-//! op (the Python engine's `inspect_model.py`, server.py `_inspect_job`) and the
-//! `interference` op (server.py `_interference_job`, `_min_distance`).
+//! Exact B-rep measurements and clash checks of the live bodies, the `inspect` and `interference` ops.
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
@@ -29,16 +27,14 @@ pub const MAX_INTERFERENCE_OPS: usize = 400;
 /// How long the pair sweep beats on its own, after that only a finished pair does.
 const SLOW_PAIR_BEATS: std::time::Duration = std::time::Duration::from_secs(300);
 
-/// The document of a request, rebuilt; the error reply when it cannot be.
 pub fn rebuild_request(req: &Map<String, Value>, watch: &dyn Watch) -> Result<(Value, Rebuild), JobResult> {
     let Some(doc) = req.get("document") else {
         return Err(error_result("'document'"));
     };
-    let typed: CadDocument = CadDocument::from_value_lenient(doc)
-        .map_err(|e| error_result(&format!("the document does not parse: {e}")))?;
-    // Through the rebuild's own cache: an inspect right after a build of the
-    // same document replays nothing, where a cold rebuild of an import is
-    // most of a minute.
+    let typed: CadDocument =
+        CadDocument::from_value_lenient(doc).map_err(|e| error_result(&format!("the document does not parse: {e}")))?;
+    // The rebuild's own cache: an inspect right after a build replays nothing, where a cold
+    // rebuild of an import is most of a minute.
     let mut cache = crate::cache::global().lock().unwrap_or_else(|p| p.into_inner());
     let r = cache.rebuild(&typed, doc, watch).map_err(|_| error_result("cancelled"))?;
     Ok((doc.clone(), r))
@@ -56,7 +52,7 @@ fn vec3(v: &Value) -> [f64; 3] {
     std::array::from_fn(|k| v[k].as_f64().unwrap_or(0.0))
 }
 
-/// build123d `bounding_box()`: zeros when the box is void.
+/// Zeros when the box is void, as build123d's `bounding_box()`.
 pub(crate) fn bbox(shape: &Shape) -> [f64; 6] {
     let mut o = [0.0; 6];
     match fq::FQ_bbox(shape.raw(), true, &mut o) {
@@ -71,9 +67,8 @@ fn mass(shape: &Shape, kind: i32) -> Option<(f64, [f64; 3])> {
     Some((o[0], [o[1], o[2], o[3]]))
 }
 
-/// The quick integration is up to 3 percent low on lofted spline faces, so the
-/// precise one is preferred wherever the two disagree by more than its own
-/// millionth. Where they agree the quick figure stands, which is build123d's.
+/// The quick integration is up to 3 percent low on lofted spline faces, so the precise one wins
+/// where the two differ by more than its own millionth. Where they agree, build123d's quick figure stands.
 pub(crate) fn volume(shape: &Shape) -> Option<(f64, [f64; 3])> {
     let (quick, centre) = mass(shape, 3)?;
     let precise = crate::kernel::volume_precise(shape);
@@ -81,7 +76,7 @@ pub(crate) fn volume(shape: &Shape) -> Option<(f64, [f64; 3])> {
     Some((if differs { precise } else { quick }, centre))
 }
 
-/// `_axis_of`: the axis of a cylinder, cone, torus or surface of revolution.
+/// Of a cylinder, cone, torus or surface of revolution.
 fn axis_of(face: &Shape) -> Option<[f64; 3]> {
     let mut o = [0.0; 13];
     let kind = fq::FQ_surface(face.raw(), &mut o).ok()?;
@@ -96,11 +91,7 @@ fn face_entry(
     body_id: &Value,
 ) -> builder::FResult<Value> {
     let fp = face_fingerprint(face)?;
-    let mut neighbors: Vec<usize> = adj
-        .neighbors(adj.index_of(face))
-        .into_iter()
-        .filter_map(renum)
-        .collect();
+    let mut neighbors: Vec<usize> = adj.neighbors(adj.index_of(face)).into_iter().filter_map(renum).collect();
     neighbors.sort_unstable();
     let mut e = Map::new();
     e.insert("i".into(), json!(i));
@@ -112,10 +103,7 @@ fn face_entry(
     e.insert("neighbors".into(), json!(neighbors));
     let point = sa::distance_to_point(face, vec3(&fp["centroid"])).map(|(_, p)| p);
     let radius = fp.get("radius").and_then(Value::as_f64);
-    e.insert(
-        "selector".into(),
-        json!({"kind": "face", "by": "match", "fp": fp, "body": body_id}),
-    );
+    e.insert("selector".into(), json!({"kind": "face", "by": "match", "fp": fp, "body": body_id}));
     if let Some(p) = point {
         e.insert("point".into(), r3(p));
     }
@@ -146,10 +134,7 @@ fn edge_entry(
     e.insert("faces".into(), json!(faces));
     let radius = fp.get("radius").and_then(Value::as_f64);
     let center = fp.get("center").map(vec3);
-    e.insert(
-        "selector".into(),
-        json!({"kind": "edge", "by": "match", "fp": fp, "body": body_id}),
-    );
+    e.insert("selector".into(), json!({"kind": "edge", "by": "match", "fp": fp, "body": body_id}));
     if faces.len() == 2 && faces[0] == faces[1] {
         e.insert("seam".into(), json!(true));
     } else if faces.len() == 1 && adj.lies_inside(edge) {
@@ -167,7 +152,6 @@ fn edge_entry(
     Ok(Value::Object(e))
 }
 
-/// A body as `inspect_bodies` takes it.
 pub struct InspectBody<'a> {
     pub id: Value,
     pub name: Value,
@@ -179,8 +163,7 @@ pub struct InspectBody<'a> {
 pub enum Level {
     /// Sizes, mass properties and counts.
     Plain,
-    /// Plain, and the surface census and the seam, wrapping and open lists a
-    /// one line summary reads, without measuring any face or edge.
+    /// Plain, and the surface census and the seam, wrapping and open lists, measuring no face or edge.
     Summary,
     /// Plain, and every face and edge with its selector.
     Detail,
@@ -202,9 +185,10 @@ struct Local {
 }
 
 fn union(boxes: impl IntoIterator<Item = Option<[f64; 6]>>) -> Option<[f64; 6]> {
-    boxes.into_iter().flatten().reduce(|a, b| {
-        [a[0].min(b[0]), a[1].min(b[1]), a[2].min(b[2]), a[3].max(b[3]), a[4].max(b[4]), a[5].max(b[5])]
-    })
+    boxes
+        .into_iter()
+        .flatten()
+        .reduce(|a, b| [a[0].min(b[0]), a[1].min(b[1]), a[2].min(b[2]), a[3].max(b[3]), a[4].max(b[4]), a[5].max(b[5])])
 }
 
 fn face_box(face: &Shape) -> Option<[f64; 6]> {
@@ -384,9 +368,8 @@ fn placed_boxes(
                 (_, None) => None,
                 (None, b) => b,
                 (Some(m), Some(b)) => permuted_box(m, &b).or_else(|| {
-                    let known = shapes[i]
-                        .and_then(|s| cache.entries.get(&local_key(s)))
-                        .and_then(|e| e.placed.get(&bits(m)));
+                    let known =
+                        shapes[i].and_then(|s| cache.entries.get(&local_key(s))).and_then(|e| e.placed.get(&bits(m)));
                     if known.is_none() {
                         again.push(i);
                     }
@@ -428,11 +411,8 @@ fn detail_lists(comp: &Shape, body_id: &Value, max_faces: usize, max_edges: usiz
     let renum = |j: usize| renum_map.get(&j).copied();
     let fs = &faces[..faces.len().min(max_faces)];
     let es = &edges[..edges.len().min(max_edges)];
-    let face_list = fs
-        .iter()
-        .enumerate()
-        .map(|(k, f)| face_entry(k, f, &adj, &renum, body_id))
-        .collect::<Result<Vec<_>, _>>()?;
+    let face_list =
+        fs.iter().enumerate().map(|(k, f)| face_entry(k, f, &adj, &renum, body_id)).collect::<Result<Vec<_>, _>>()?;
     let fps = edge_fingerprints(es, comp)?;
     let edge_list = es
         .iter()
@@ -443,7 +423,6 @@ fn detail_lists(comp: &Shape, body_id: &Value, max_faces: usize, max_edges: usiz
     Ok((face_list, edge_list))
 }
 
-/// `inspect_bodies`.
 pub fn inspect_bodies(
     bodies: &[InspectBody<'_>],
     detail: bool,
@@ -542,10 +521,7 @@ pub fn inspect_bodies_at(
                     entry.insert("faces".into(), Value::Array(face_list));
                     entry.insert("edges".into(), Value::Array(edge_list));
                     if local.faces > nf || local.edges > ne {
-                        entry.insert(
-                            "truncated".into(),
-                            json!({"faces": local.faces - nf, "edges": local.edges - ne}),
-                        );
+                        entry.insert("truncated".into(), json!({"faces": local.faces - nf, "edges": local.edges - ne}));
                     }
                 }
             }
@@ -558,13 +534,10 @@ pub fn inspect_bodies_at(
 fn cap(req: &Map<String, Value>, key: &str, default: usize) -> usize {
     match req.get(key) {
         None | Some(Value::Null) => default,
-        Some(v) => v
-            .as_f64()
-            .map_or(default, |x| if x < 0.0 { 0 } else { x.trunc() as usize }),
+        Some(v) => v.as_f64().map_or(default, |x| if x < 0.0 { 0 } else { x.trunc() as usize }),
     }
 }
 
-/// The `inspect` op.
 pub fn inspect_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let (_, r) = match rebuild_request(req, watch) {
@@ -590,18 +563,21 @@ pub fn inspect_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult 
         .filter(|b| want.as_ref().map_or(true, |w| w.contains(&b.id) || w.contains(&b.name)))
         .map(|b| InspectBody { id: json!(b.id), name: json!(b.name), shape: Some(&b.shape) })
         .collect();
-    let bodies = match inspect_bodies_at(
-        &live,
-        level,
-        cap(req, "maxFaces", MAX_FACES),
-        cap(req, "maxEdges", MAX_EDGES),
-    ) {
+    let bodies = match inspect_bodies_at(&live, level, cap(req, "maxFaces", MAX_FACES), cap(req, "maxEdges", MAX_EDGES))
+    {
         Ok(b) => b,
         Err(e) => return error_result(&fail_text(&e)),
     };
     let mut m = Map::new();
     m.insert("bodies".into(), Value::Array(bodies));
     m.insert("errors".into(), Value::Array(r.errors.iter().map(FeatureError::wire).collect()));
+    let mut unknown: Vec<&String> =
+        want.iter().flatten().filter(|w| !r.bodies.iter().any(|b| &b.id == *w || &b.name == *w)).collect();
+    if !unknown.is_empty() {
+        unknown.sort();
+        m.insert("unknown".into(), json!(unknown));
+        m.insert("have".into(), Value::Array(r.bodies.iter().map(|b| json!({"id": b.id, "name": b.name})).collect()));
+    }
     JobResult::Json(m)
 }
 
@@ -622,25 +598,21 @@ fn overlap(a: &[f64; 6], b: &[f64; 6], tol: f64) -> bool {
         && a[5] >= b[2] - tol
 }
 
-/// `_min_distance`: the distance and a nearest point on each shape.
+/// The distance and a nearest point on each shape.
 pub fn min_distance(a: &Shape, b: &Shape) -> Option<(f64, [f64; 3], [f64; 3])> {
     let d = a.distance(b, 0.0).ok()?;
     let s = d.solutions.first()?;
     Some((d.value, s.on_first.point.to_array(), s.on_second.point.to_array()))
 }
 
-/// What one candidate pair of the sweep found.
 enum Clash {
     Overlap(Value),
     Near(Value),
     Clear,
 }
 
-/// One pair of the sweep, `material` the two bodies as `soundness::material`
-/// hands them out. Common runs on copies: BOPAlgo may raise the
-/// tolerances of its arguments in place and meshing the result writes into
-/// faces it kept from them, so two pairs sharing a body cannot run at once on
-/// the originals, and the live bodies stay untouched.
+/// Common runs on copies: BOPAlgo may raise its arguments' tolerances in place and meshing the result
+/// writes into faces it kept, so two pairs sharing a body cannot run at once on the originals.
 fn clash(a: &BuiltBody, b: &BuiltBody, material: (&Shape, &Shape), threshold: Option<f64>) -> Clash {
     let common = kernel::copy(material.0)
         .and_then(|ca| kernel::copy(material.1).and_then(|cb| kernel::boolean_op(&ca, &[&cb], BoolKind::Common)))
@@ -676,11 +648,14 @@ fn clash(a: &BuiltBody, b: &BuiltBody, material: (&Shape, &Shape), threshold: Op
     }
 }
 
-/// The pairwise sweep of `_interference_job`, `max_ops` candidate pairs at most,
-/// the pairs checked on the engine's threads and reported in row order. A
-/// body that is not closed solids is listed under `unchecked` with why, and no
-/// pair with it is tested: its common comes back without an error and wrong.
-pub fn interference(bodies: &[BuiltBody], clearance: Option<f64>, max_ops: usize, watch: &dyn Watch) -> Map<String, Value> {
+/// At most `max_ops` candidate pairs, run on the engine's threads and reported in row order. A body that
+/// is not closed solids goes under `unchecked` untested, its common would come back wrong without an error.
+pub fn interference(
+    bodies: &[BuiltBody],
+    clearance: Option<f64>,
+    max_ops: usize,
+    watch: &dyn Watch,
+) -> Map<String, Value> {
     let boxes: Vec<[f64; 6]> = bodies.iter().map(|b| bbox(&b.shape)).collect();
     let threshold = clearance.filter(|t| *t > 0.0);
     let reject = threshold.unwrap_or(1e-6);
@@ -772,7 +747,6 @@ pub fn interference(bodies: &[BuiltBody], clearance: Option<f64>, max_ops: usize
     res
 }
 
-/// The `interference` op.
 pub fn interference_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let (_, r) = match rebuild_request(req, watch) {

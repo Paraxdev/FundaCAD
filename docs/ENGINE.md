@@ -226,6 +226,9 @@ use for them).
   `FUNDACAD_ENGINE_TEST_OPS=1` and takes its clocks from
   `FUNDACAD_STALL_TIMEOUT` and `FUNDACAD_JOB_TIMEOUT`, so a cancel test has
   something long to cancel and a reap can be watched without waiting a minute.
+  Under the same switch `FUNDACAD_TEST_HOLD="import=20000,rebuild=6000"` holds
+  every job of the named ops that long before it runs (a cancel ends the hold),
+  so an end to end check can switch documents while a long import runs.
 - **Kernel tests in Rust.** `cargo test -p fundacad-geom` runs real
   OpenCASCADE tests.
 - **Shared vectors.** A TypeScript mirror and its Rust twin both read one file
@@ -258,6 +261,20 @@ in the `rust-geom` job.
   message. There is no sidecar left to ask: re-record the named case
   with `golden-check <golden> --record <case>` (or edit the value by hand),
   and review the diff, which touches only that case.
+- **The disk cache follows the shapes, not the binary.** Checkpoints are keyed
+  on `GEOMETRY_VERSION`, `CACHE_FORMAT` and the OCCT version in
+  `crates/fundacad-geom/src/cache/keys.rs`, so an app update reopens a long
+  document from disk. A change that can move the shape a document builds to,
+  an OCCT patch at the same version included, bumps `GEOMETRY_VERSION` in the
+  same commit; a change to what a checkpoint holds bumps `CACHE_FORMAT`.
+  Re-recording an engine golden fails `geometry_version_tracks_the_golden_answers`
+  until the new digest is added to `GOLDEN_DIGESTS`, and
+  `each_golden_digest_came_with_a_version_bump` fails until `GEOMETRY_VERSION`
+  is the last pair's version and higher than the one before, as the reminder.
+  Neither sees a pair whose digest was replaced in place, which only a version
+  that has not shipped may take, so review checks that. Plugins are keyed on
+  their manifest and component bytes, and a build with uncommitted engine
+  edits on those edits.
 - **A new corpus document** has no frozen answer. Add it to the corpus, look
   at what the engine does with it (in the app, or measured by hand), and only
   then run `golden-check <golden> --record <name>`, which writes this engine's
@@ -303,8 +320,8 @@ the bundle:
   sidecar runtime, so what shipped is a fact about the bytes rather than
   about the arguments.
 - Title: `FundaCAD 1.0 beta, Rust engine (rolling)`.
-- Release notes open with the warning, which is not optional: this is the
-  Funda Engine and the sidecar is retired, anything that builds differently from the sidecar is worth a report, plugin
+- Release notes open with `docs/release-notes/beta.md` when it exists (7.1),
+  then the warning, which is not optional: this is the Funda Engine and the sidecar is retired, anything that builds differently from the sidecar is worth a report, plugin
   geometry runs as WebAssembly components, and the sidecar's documents open
   here.
 
@@ -419,18 +436,47 @@ engine inside the package and checks the volume is 6000 mm3. On `dev` a red
 smoke is an annotation and the build still ships. On `main` it fails the leg,
 which holds the beta, or for the Flatpak leaves the Flatpak out of it. The
 bundle runner has every library `linux-deps` installs, so a `.deb` or
-AppImage with a wrong dependency still starts there; only the Flatpak's clean
-runtime catches that today. A second Linux step opens the AppImage window
+AppImage with a wrong dependency still starts there, so the `deb-install` job
+installs the `.deb` in clean Ubuntu 22.04, Ubuntu 24.04 and Debian 12
+containers and runs the AppImage on a Fedora 40 that has only python3 (it must
+name the missing WebKitGTK, then start once that is installed), each ending
+in the same smoke. It is not in the release job's `needs`, so for now a
+broken `Depends` shows red without holding the beta. A second Linux step opens the AppImage window
 under Xvfb and builds the box through a server attached to it, which proves
 the page loaded; it does not gate anything yet.
 
 The two never touch each other's release. Each has its own tag, its own
 concurrency group (`release-development`, `release-beta`) and its own feed,
-baked into the binary. They are the same app with the same identifier, so
-switching channel is installing the other channel's installer. A
-development install only updates to the next development build and a beta
-install to the next beta. Both count up the same run number, so moving to a
-build with a lower version can need an uninstall first.
+baked into the binary. A development install only updates to the next
+development build and a beta install to the next beta.
+
+**On Windows and macOS the development build is FundaCAD Dev**, its own
+product (`src-tauri/tauri.dev-product.conf.json`, added to the build by
+`build.yml` for `dev` only): identifier `dev.fundacad.app.dev`, binary
+`fundacad-dev`, its own Start menu entry, install folder and `.app`, so it
+installs beside the beta. A separate identifier is a separate data folder, so
+its preferences, recovery files, document cache, plugins and MCP session are
+its own and a broken development build cannot touch the beta's. It registers
+no file types, `.funda` and `.fundab` stay with the beta. The binary is
+renamed because the NSIS installer closes running copies of its binary by
+name, and an update of one channel must not close the other. On Linux it
+keeps the beta's names, since the `.deb`, Flatpak and container checks are
+keyed on them, so there switching channel is installing the other channel's
+package, and as both count up the same run number, moving to a lower version
+can need an uninstall first. On every platform the window title says FundaCAD Dev, and
+About, the update prompts and a problem report show the version as
+`dev-<run number>`; the real version stays `1.0.<run number>`, which the
+updater compares. An install of a development build from before the rename
+is a separate "FundaCAD" install: its next update installs FundaCAD Dev
+beside it, and the old one can be uninstalled.
+
+An update started from the portable exe is the first install of that
+channel. The updater always runs the setup as `/P /R /UPDATE`, and the Tauri
+NSIS template skips the shortcuts in update mode, so
+`src-tauri/windows/installer-hooks.nsh` drops update mode when the binary is
+not installed yet; that install then makes the Start menu and desktop
+shortcuts a passive install makes. The Windows bundle leg checks both cases
+on the built setup.
 
 The tag is `development` rather than `dev`: a tag and a branch with the same
 name make `git push origin dev` fail as ambiguous for anyone who fetched
@@ -461,6 +507,15 @@ not. It then merges the commit into `main` with `--no-ff` in a throwaway
 worktree and prints the push. `--push` pushes `main`, with the tag in the
 same atomic push when there is one. The `main` run tests again and publishes
 the beta.
+
+The beta page opens with `docs/release-notes/beta.md`, which the release job
+puts above its generated part and which replaces the generated commit list.
+It is written by hand, so edit it on `dev` before a promotion: what is new
+since the last beta, what to know before installing, the known limits. The
+job does not overwrite it, and without the file it publishes the generated
+notes alone. `promote.sh` says when the file is the same on the commit it
+promotes as on `main`. A beta installed before the signing key changed cannot
+update itself, so the notes say to install by hand once, until none are left.
 
 `e2e` is not gating, so a flake there does not block a promotion. A dev
 commit that only touches `manual/` starts no build at all, so promote an older

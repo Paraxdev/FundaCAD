@@ -1,5 +1,5 @@
-//! Byte equality against the Python engine's `wire.py`, on the fixtures
-//! `tests/golden/gen_golden.py on the legacy branch` wrote from the Python encoders.
+//! Byte equality against the Python engine's `wire.py`, on the fixtures `tests/golden/gen_golden.py` wrote from the
+//! Python encoders on the legacy branch.
 
 use fundacad_protocol::body::{Edge, FullBody, JobResult, MeshResult, WireBody};
 use fundacad_protocol::stream::{send_reply, CancelToken, ReplyOptions};
@@ -9,9 +9,7 @@ use std::io::Cursor;
 use std::path::PathBuf;
 
 fn golden_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("golden")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("golden")
 }
 
 fn load_json(name: &str) -> Value {
@@ -20,19 +18,11 @@ fn load_json(name: &str) -> Value {
 }
 
 fn f32s(v: &Value) -> Vec<f32> {
-    v.as_array()
-        .unwrap()
-        .iter()
-        .map(|x| x.as_f64().unwrap() as f32)
-        .collect()
+    v.as_array().unwrap().iter().map(|x| x.as_f64().unwrap() as f32).collect()
 }
 
 fn u32s(v: &Value) -> Vec<u32> {
-    v.as_array()
-        .unwrap()
-        .iter()
-        .map(|x| x.as_u64().unwrap() as u32)
-        .collect()
+    v.as_array().unwrap().iter().map(|x| x.as_u64().unwrap() as u32).collect()
 }
 
 fn body_from_json(m: &Map<String, Value>) -> WireBody {
@@ -73,10 +63,7 @@ fn result_from_json(v: &Value) -> JobResult {
     let m = v.as_object().unwrap().clone();
     match m.get("bodies").and_then(Value::as_array) {
         Some(bodies) => {
-            let bodies = bodies
-                .iter()
-                .map(|b| body_from_json(b.as_object().unwrap()))
-                .collect();
+            let bodies = bodies.iter().map(|b| body_from_json(b.as_object().unwrap())).collect();
             JobResult::Mesh(MeshResult { fields: m, bodies })
         }
         None => JobResult::Json(m),
@@ -96,37 +83,22 @@ fn run_case(case: &Value) -> Vec<Message> {
         }
     }
     match case["kind"].as_str().unwrap() {
-        "reply_for" => text(envelope::reply_for(
-            &id,
-            case["result"].as_object().unwrap(),
-        )),
+        "reply_for" => text(envelope::reply_for(&id, case["result"].as_object().unwrap())),
         "err" => {
             let fid = case.get("feature_id").filter(|v| !v.is_null());
             text(envelope::err(&id, case["message"].as_str().unwrap(), fid))
         }
         "building" => {
             let f = &case["frame"];
-            text(envelope::building(
-                &id,
-                f[0].as_i64().unwrap(),
-                f[1].as_i64().unwrap(),
-                f[2].as_i64().unwrap(),
-            ))
+            text(envelope::building(&id, f[0].as_i64().unwrap(), f[1].as_i64().unwrap(), f[2].as_i64().unwrap()))
         }
         "importing" => {
             let f = &case["frame"];
-            text(envelope::importing(
-                &id,
-                f[0].as_i64().unwrap(),
-                f[1].as_str().unwrap(),
-                f[2].as_i64().unwrap(),
-            ))
+            text(envelope::importing(&id, f[0].as_i64().unwrap(), f[1].as_str().unwrap(), f[2].as_i64().unwrap()))
         }
         "send_reply" => {
-            let opts = ReplyOptions {
-                binary: case["binary"].as_bool().unwrap(),
-                chunked: case["chunked"].as_bool().unwrap(),
-            };
+            let opts =
+                ReplyOptions { binary: case["binary"].as_bool().unwrap(), chunked: case["chunked"].as_bool().unwrap() };
             let result = result_from_json(&case["result"]);
             let token = CancelToken::new();
             let cancel_after = case.get("cancel_after").and_then(Value::as_u64);
@@ -142,9 +114,7 @@ fn run_case(case: &Value) -> Vec<Message> {
                         limits,
                     ) {
                         Ok(r) => r,
-                        Err(over) => {
-                            return text(frame::too_large_error(&id, over.size, n, &limits))
-                        }
+                        Err(over) => return text(frame::too_large_error(&id, over.size, n, &limits)),
                     }
                 }
                 _ => send_reply(id.clone(), result, opts, Some(token.clone()), limits),
@@ -163,11 +133,7 @@ fn run_case(case: &Value) -> Vec<Message> {
 }
 
 fn describe_first_difference(want: &[u8], got: &[u8]) -> String {
-    let at = want
-        .iter()
-        .zip(got)
-        .position(|(a, b)| a != b)
-        .unwrap_or(want.len().min(got.len()));
+    let at = want.iter().zip(got).position(|(a, b)| a != b).unwrap_or(want.len().min(got.len()));
     let lo = at.saturating_sub(40);
     format!(
         "differs at byte {at} (want {} bytes, got {})\nwant: {:?}\n got: {:?}",
@@ -190,20 +156,13 @@ fn replies_match_wire_py_byte_for_byte() {
         for m in run_case(case) {
             stdio::write_message(&mut got, &m).unwrap();
         }
-        assert!(
-            want == got,
-            "case {name}: {}",
-            describe_first_difference(&want, &got)
-        );
+        assert!(want == got, "case {name}: {}", describe_first_difference(&want, &got));
 
         // The Python-written framing reads back through the Rust reader too.
         let mut cur = Cursor::new(&want);
         let mut n = 0;
         while let Some(m) = stdio::read_message(&mut cur).unwrap() {
-            assert!(
-                stdio::message_id(&m).is_some() || case["id"].is_null(),
-                "case {name}: no id"
-            );
+            assert!(stdio::message_id(&m).is_some() || case["id"].is_null(), "case {name}: no id");
             n += 1;
         }
         assert!(n >= 1);
@@ -226,10 +185,6 @@ fn size_text_matches_sysmem_describe() {
     let vectors = load_json("vectors.json");
     for v in vectors["sizes"].as_array().unwrap() {
         let n = v["n"].as_u64().unwrap() as usize;
-        assert_eq!(
-            frame::describe_size(n),
-            v["text"].as_str().unwrap(),
-            "{n} bytes"
-        );
+        assert_eq!(frame::describe_size(n), v["text"].as_str().unwrap(), "{n} bytes");
     }
 }

@@ -3,12 +3,7 @@
 // third of four corners used to commit the chamfer with two.
 
 import { describe, expect, it } from "vitest";
-import {
-  MEMBER_PREFERENCE_PX,
-  blendClickTarget,
-  missPrompt,
-  screenPolylineDist,
-} from "../../src/features/blendPick";
+import { MEMBER_PREFERENCE_PX, blendClickTarget, missPrompt, screenPolylineDist } from "../../src/features/blendPick";
 
 const R = 13;
 
@@ -16,15 +11,35 @@ describe("screenPolylineDist", () => {
   it("measures along a straight edge, not only at its two ends", () => {
     // A straight B-rep edge is sampled as just its endpoints; the old member
     // hit test only looked there, so the middle of a member was unclickable.
-    expect(screenPolylineDist([{ x: 0, y: 0 }, { x: 200, y: 0 }], { x: 100, y: 5 })).toBeCloseTo(5);
+    expect(
+      screenPolylineDist(
+        [
+          { x: 0, y: 0 },
+          { x: 200, y: 0 },
+        ],
+        { x: 100, y: 5 },
+      ),
+    ).toBeCloseTo(5);
   });
 
   it("measures past an end to the end point", () => {
-    expect(screenPolylineDist([{ x: 0, y: 0 }, { x: 10, y: 0 }], { x: 13, y: 4 })).toBeCloseTo(5);
+    expect(
+      screenPolylineDist(
+        [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+        ],
+        { x: 13, y: 4 },
+      ),
+    ).toBeCloseTo(5);
   });
 
   it("takes the nearest segment of a curve", () => {
-    const arc = [{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 20, y: 0 }];
+    const arc = [
+      { x: 0, y: 0 },
+      { x: 10, y: 10 },
+      { x: 20, y: 0 },
+    ];
     expect(screenPolylineDist(arc, { x: 15, y: 5 })).toBeCloseTo(0);
   });
 

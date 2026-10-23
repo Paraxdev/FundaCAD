@@ -22,11 +22,7 @@ fn read(path: &Path) -> Value {
 fn documents() -> Vec<(String, Value)> {
     let mut out = Vec::new();
     for name in ["python_engine_tests.json", "plugin_tests.json", "app_shapes.json"] {
-        let Value::Array(rows) = read(
-            &Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/fixtures")
-                .join(name),
-        ) else {
+        let Value::Array(rows) = read(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name)) else {
             panic!("{name} is not an array");
         };
         for (i, row) in rows.into_iter().enumerate() {
@@ -34,10 +30,7 @@ fn documents() -> Vec<(String, Value)> {
             out.push((label, row["doc"].clone()));
         }
     }
-    for corpus in [
-        "tests/golden/corpus/corpus_fillet.json",
-        "tests/golden/corpus/corpus_fillet_regression.json",
-    ] {
+    for corpus in ["tests/golden/corpus/corpus_fillet.json", "tests/golden/corpus/corpus_fillet_regression.json"] {
         let v = read(&repo().join(corpus));
         for case in v["cases"].as_array().expect("cases") {
             out.push((format!("{corpus} {}", case["id"]), case["doc"].clone()));
@@ -121,11 +114,7 @@ fn selectors_of(v: &Value, out: &mut Vec<Value>) {
 #[test]
 fn every_repository_document_round_trips_and_lands_typed() {
     let docs = documents();
-    assert!(
-        docs.len() > 1000,
-        "expected the fixture and corpus documents, found {}",
-        docs.len()
-    );
+    assert!(docs.len() > 1000, "expected the fixture and corpus documents, found {}", docs.len());
 
     let mut features = Coverage::default();
     let mut entities = Coverage::default();
@@ -145,45 +134,26 @@ fn every_repository_document_round_trips_and_lands_typed() {
         };
         let back = serde_json::to_value(&doc).expect("serialize");
         if &back != raw {
-            failures.push(format!(
-                "{label}: changed in a round trip\n  before {raw}\n  after  {back}"
-            ));
+            failures.push(format!("{label}: changed in a round trip\n  before {raw}\n  after  {back}"));
             continue;
         }
         let text = doc.to_json().expect("to_json");
-        assert_eq!(
-            CadDocument::from_json(&text).expect("from_json"),
-            doc,
-            "{label}"
-        );
+        assert_eq!(CadDocument::from_json(&text).expect("from_json"), doc, "{label}");
 
-        let before =
-            features.invalid.values().sum::<usize>() + selectors.invalid.values().sum::<usize>();
+        let before = features.invalid.values().sum::<usize>() + selectors.invalid.values().sum::<usize>();
         for f in &doc.features {
             features.add(f.type_name(), landed!(f));
             if let Feature::Sketch(s) = f {
-                s.entities
-                    .iter()
-                    .for_each(|e| entities.add(e.type_name(), landed!(e)));
-                s.constraints
-                    .iter()
-                    .flatten()
-                    .for_each(|c| constraints.add(c.type_name(), landed!(c)));
-                s.patterns
-                    .iter()
-                    .flatten()
-                    .for_each(|p| patterns.add(p.type_name(), landed!(p)));
+                s.entities.iter().for_each(|e| entities.add(e.type_name(), landed!(e)));
+                s.constraints.iter().flatten().for_each(|c| constraints.add(c.type_name(), landed!(c)));
+                s.patterns.iter().flatten().for_each(|p| patterns.add(p.type_name(), landed!(p)));
             }
         }
         let mut sels = Vec::new();
         selectors_of(raw, &mut sels);
         for s in sels {
             let parsed: Selector = serde_json::from_value(s.clone()).expect("selector");
-            let name = format!(
-                "{}:{}",
-                s["kind"].as_str().unwrap_or(""),
-                s["by"].as_str().unwrap_or("")
-            );
+            let name = format!("{}:{}", s["kind"].as_str().unwrap_or(""), s["by"].as_str().unwrap_or(""));
             let landed = match parsed {
                 Selector::Known(_) => Landed::Known,
                 Selector::Unknown(_) => Landed::Unknown,
@@ -191,20 +161,12 @@ fn every_repository_document_round_trips_and_lands_typed() {
             };
             selectors.add(Some(&name), landed);
         }
-        if features.invalid.values().sum::<usize>() + selectors.invalid.values().sum::<usize>()
-            > before
-        {
+        if features.invalid.values().sum::<usize>() + selectors.invalid.values().sum::<usize>() > before {
             invalid_docs.push(label.clone());
         }
     }
 
-    assert!(
-        failures.is_empty(),
-        "{} of {} documents failed:\n{}",
-        failures.len(),
-        docs.len(),
-        failures.join("\n")
-    );
+    assert!(failures.is_empty(), "{} of {} documents failed:\n{}", failures.len(), docs.len(), failures.join("\n"));
 
     let report = |title: &str, c: &Coverage| {
         eprintln!("{title}:");
@@ -227,10 +189,7 @@ fn every_repository_document_round_trips_and_lands_typed() {
 
     let check = |title: &str, c: &Coverage, known: &[&str]| {
         for k in known {
-            assert!(
-                c.known.get(*k).copied().unwrap_or(0) > 0,
-                "{title} {k} never parsed as typed"
-            );
+            assert!(c.known.get(*k).copied().unwrap_or(0) > 0, "{title} {k} never parsed as typed");
             assert!(!c.unknown.contains_key(*k), "{title} {k} fell into Unknown");
         }
     };
@@ -258,16 +217,10 @@ fn every_repository_document_round_trips_and_lands_typed() {
             "{label} has an Invalid feature or selector but is not a known broken document"
         );
     }
-    eprintln!(
-        "{} documents are broken on purpose and loaded with Invalid parts",
-        invalid_docs.len()
-    );
+    eprintln!("{} documents are broken on purpose and loaded with Invalid parts", invalid_docs.len());
 
     for plugin in ["texture", "teardropHole", "combine"] {
-        assert!(
-            features.unknown.get(plugin).copied().unwrap_or(0) > 0,
-            "{plugin} should be carried as Unknown"
-        );
+        assert!(features.unknown.get(plugin).copied().unwrap_or(0) > 0, "{plugin} should be carried as Unknown");
     }
 }
 
@@ -275,35 +228,20 @@ fn every_repository_document_round_trips_and_lands_typed() {
 fn unknown_data_is_carried_and_typed_data_is_reachable() {
     let v = read(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/app_shapes.json"));
     let doc: CadDocument = serde_json::from_value(v[0]["doc"].clone()).expect("load");
-    assert_eq!(
-        doc.extra
-            .get("futureTopLevelKey")
-            .map(|x| x["anything"][2].clone()),
-        Some(Value::from("x"))
-    );
+    assert_eq!(doc.extra.get("futureTopLevelKey").map(|x| x["anything"][2].clone()), Some(Value::from("x")));
     assert_eq!(doc.rollback, Some(None));
-    let Some(Feature::Extrude(e)) = doc.feature("f2") else {
-        panic!("f2 is an extrude")
-    };
+    let Some(Feature::Extrude(e)) = doc.feature("f2") else { panic!("f2 is an extrude") };
     assert_eq!(e.distance.as_number(), Some(25.0));
     assert!(matches!(&e.active_when, Some(fundacad_core::schema::Num::Expr(n)) if n == "solid"));
     assert_eq!(doc.feature("f38").map(Feature::id), Some("f38"));
-    assert!(doc
-        .feature("f38")
-        .is_some_and(|f| f.active_when().is_some()));
+    assert!(doc.feature("f38").is_some_and(|f| f.active_when().is_some()));
 
     let odd: CadDocument = serde_json::from_value(v[1]["doc"].clone()).expect("load");
-    let Feature::Sketch(s) = &odd.features[0] else {
-        panic!("sketch")
-    };
+    let Feature::Sketch(s) = &odd.features[0] else { panic!("sketch") };
     assert!(s.entities[0].is_unknown());
-    let SketchEntity::Circle(c) = &s.entities[1] else {
-        panic!("circle")
-    };
+    let SketchEntity::Circle(c) = &s.entities[1] else { panic!("circle") };
     assert_eq!(c.extra.get("futureFlag"), Some(&Value::from(2.5)));
-    let Feature::Extrude(e) = &odd.features[1] else {
-        panic!("extrude")
-    };
+    let Feature::Extrude(e) = &odd.features[1] else { panic!("extrude") };
     assert_eq!(e.operation.as_str(), "emboss");
     assert_eq!(odd.rollback.clone().flatten().map(|r| r.get()), Some(3.0));
 }
@@ -325,9 +263,7 @@ fn a_material_field_this_build_does_not_know_survives_a_load_and_save() {
 fn a_known_type_that_does_not_fit_loads_as_invalid_and_saves_unchanged() {
     let bad = serde_json::json!({"parameters": {}, "features": [{"id": "x", "type": "extrude", "sketch": "s"}]});
     let doc: CadDocument = serde_json::from_value(bad.clone()).expect("loads");
-    let Feature::Invalid(i) = &doc.features[0] else {
-        panic!("invalid")
-    };
+    let Feature::Invalid(i) = &doc.features[0] else { panic!("invalid") };
     assert!(i.error.contains("distance"), "{}", i.error);
     assert_eq!(doc.features[0].id(), "x");
     assert_eq!(serde_json::to_value(&doc).expect("save"), bad);
@@ -337,8 +273,7 @@ fn a_known_type_that_does_not_fit_loads_as_invalid_and_saves_unchanged() {
 fn legacy_parameter_names_resolve_and_expressions_do_not() {
     use fundacad_core::schema::Num;
     let doc: CadDocument =
-        serde_json::from_value(serde_json::json!({"parameters": {"w": 40}, "features": []}))
-            .expect("load");
+        serde_json::from_value(serde_json::json!({"parameters": {"w": 40}, "features": []})).expect("load");
     assert_eq!(Num::Expr("w".into()).resolve(|n| doc.param(n)), Ok(40.0));
     assert!(Num::Expr("w/2".into()).resolve(|n| doc.param(n)).is_err());
 }
@@ -352,22 +287,14 @@ fn a_pattern_carries_the_features_it_repeats() {
         {"id": "pb", "type": "patternCircular", "count": 4, "angle": 360, "axis": "Z", "bodies": ["body1"]}
     ]});
     let doc: CadDocument = serde_json::from_value(raw.clone()).expect("load");
-    let Some(Feature::PatternCircular(pc)) = doc.feature("pc") else {
-        panic!("pc is a circular pattern")
-    };
+    let Some(Feature::PatternCircular(pc)) = doc.feature("pc") else { panic!("pc is a circular pattern") };
     assert_eq!(pc.features.as_deref(), Some(&["h".to_owned()][..]));
     assert!(pc.bodies.is_none() && pc.extra.is_empty());
-    let Some(Feature::PatternLinear(pl)) = doc.feature("pl") else {
-        panic!("pl is a linear pattern")
-    };
+    let Some(Feature::PatternLinear(pl)) = doc.feature("pl") else { panic!("pl is a linear pattern") };
     assert_eq!(pl.features.as_ref().map(Vec::len), Some(2));
-    let Some(Feature::PatternRect(pr)) = doc.feature("pr") else {
-        panic!("pr is a rect pattern")
-    };
+    let Some(Feature::PatternRect(pr)) = doc.feature("pr") else { panic!("pr is a rect pattern") };
     assert!(pr.features.is_some() && pr.extra.is_empty());
-    let Some(Feature::PatternCircular(pb)) = doc.feature("pb") else {
-        panic!("pb is a circular pattern")
-    };
+    let Some(Feature::PatternCircular(pb)) = doc.feature("pb") else { panic!("pb is a circular pattern") };
     assert!(pb.features.is_none());
     assert_eq!(serde_json::to_value(&doc).expect("save"), raw);
 }
@@ -399,20 +326,14 @@ fn a_circular_pattern_axis_is_a_name_a_line_a_datum_or_a_reference() {
     let picked = pc("picked");
     assert_eq!(picked.axis_ref.as_ref().and_then(|s| s.kind()), Some("face"));
     assert!(picked.extra.is_empty());
-    let Some(Feature::PatternRect(pr)) = doc.feature("rect") else {
-        panic!("rect is a rect pattern")
-    };
+    let Some(Feature::PatternRect(pr)) = doc.feature("rect") else { panic!("rect is a rect pattern") };
     assert_eq!(pr.bodies.as_deref(), Some(&["body1".to_owned()][..]));
     assert!(pr.extra.is_empty());
     assert_eq!(serde_json::to_value(&doc).expect("save"), raw);
 }
 
-/// What a build from before placed axes (main at 286c7c8e) makes of each form.
-/// Its `patternCircular` was this struct; a known type that does not fit its
-/// struct loads as `Feature::Invalid` and builds as an error naming the
-/// feature, so every form but X, Y and Z is refused there, never turned about
-/// world Z. A bare datum id is what it would misread, which is why a datum
-/// axis is `{datum}`.
+/// What a build from before placed axes (main at 286c7c8e) makes of each form: anything but X, Y and Z loads as
+/// `Feature::Invalid` and fails naming the feature, while a bare datum id it would turn about world Z, hence `{datum}`.
 #[test]
 fn a_build_before_placed_axes_refuses_every_new_axis_form() {
     use fundacad_core::schema::{Axis3, Extra, Num};
@@ -433,15 +354,10 @@ fn a_build_before_placed_axes_refuses_every_new_axis_form() {
         #[serde(flatten)]
         extra: Extra,
     }
-    let with = |axis: Value| {
-        serde_json::json!({"id": "pc", "type": "patternCircular", "count": 6, "angle": 360, "axis": axis})
-    };
+    let with = |axis: Value| serde_json::json!({"id": "pc", "type": "patternCircular", "count": 6, "angle": 360, "axis": axis});
     let before = |axis: Value| serde_json::from_value::<BeforePlacedAxes>(with(axis));
     assert_eq!(before(serde_json::json!("Z")).expect("X, Y, Z as ever").axis, Axis3::Z);
-    for axis in [
-        serde_json::json!({"origin": [30, 30, 0], "dir": [0, 0, 1]}),
-        serde_json::json!({"datum": "ax1"}),
-    ] {
+    for axis in [serde_json::json!({"origin": [30, 30, 0], "dir": [0, 0, 1]}), serde_json::json!({"datum": "ax1"})] {
         assert!(before(axis.clone()).is_err(), "{axis} is refused");
     }
     let mut picked = with(serde_json::json!({"origin": [30, 30, 0], "dir": [0, 0, 1]}));
@@ -474,10 +390,8 @@ fn a_mirror_plane_is_a_name_or_a_name_object_with_bodies() {
     assert_eq!(serde_json::to_value(&doc).expect("save"), raw);
 }
 
-/// A build from before targeted mirrors (main at 040f9ea5) had this `mirror`.
-/// `bodies` it would carry in `extra` and reflect the active body instead, so a
-/// mirror that names bodies writes `{name}`, which it loads as `Invalid` and
-/// builds as an error naming the feature.
+/// A build from before targeted mirrors (main at 040f9ea5) would keep `bodies` in `extra` and reflect the active body,
+/// so a mirror naming bodies writes `{name}`, which that build loads as `Invalid` and fails naming the feature.
 #[test]
 fn a_build_before_targeted_mirrors_refuses_a_mirror_that_names_bodies() {
     use fundacad_core::schema::{Extra, Num, Plane3};
@@ -515,16 +429,12 @@ fn features_of(v: &Value, out: &mut Vec<Value>) {
     }
 }
 
-/// A build names the fields a built-in feature ignores, so an ordinary
-/// document must carry none or every build of it would warn. The Python
-/// engine's test fixtures keep fields it ignored too, and app_shapes carries
-/// one on purpose to show it round trips.
+/// A build names the fields a built-in feature ignores, so an ordinary document carries none or every build warns.
+/// The Python engine's fixtures keep ignored fields too, and app_shapes carries one on purpose to show it round trips.
 #[test]
 fn no_ordinary_document_carries_a_field_a_build_ignores() {
-    let mut docs: Vec<(String, Value)> = documents()
-        .into_iter()
-        .filter(|(label, _)| !label.starts_with("python_engine_tests.json"))
-        .collect();
+    let mut docs: Vec<(String, Value)> =
+        documents().into_iter().filter(|(label, _)| !label.starts_with("python_engine_tests.json")).collect();
     let dir = repo().join("tests/golden/corpus");
     for entry in std::fs::read_dir(&dir).expect("the corpora") {
         let path = entry.expect("an entry").path();
@@ -561,21 +471,15 @@ fn horizontal_and_vertical_distances_land_typed_and_keep_their_fields() {
         "features": [{ "type": "sketch", "id": "s1", "plane": "XY", "entities": [], "constraints": constraints }]
     });
     let doc: CadDocument = serde_json::from_value(doc_json.clone()).expect("load");
-    let Feature::Sketch(s) = &doc.features[0] else {
-        panic!("sketch")
-    };
+    let Feature::Sketch(s) = &doc.features[0] else { panic!("sketch") };
     let loaded = s.constraints.as_ref().expect("constraints");
     for (c, want) in loaded.iter().zip(["hDistance", "vDistance", "angle", "radius", "diameter"]) {
         assert_eq!(c.type_name(), Some(want));
         assert!(!c.is_unknown(), "{want} fell into Unknown");
     }
-    let SketchConstraint::HDistance(h) = &loaded[0] else {
-        panic!("hDistance is typed")
-    };
+    let SketchConstraint::HDistance(h) = &loaded[0] else { panic!("hDistance is typed") };
     assert_eq!(h.value.get(), 8.0);
-    let SketchConstraint::VDistance(v) = &loaded[1] else {
-        panic!("vDistance is typed")
-    };
+    let SketchConstraint::VDistance(v) = &loaded[1] else { panic!("vDistance is typed") };
     assert_eq!(v.value.get(), -4.0);
     assert_eq!(serde_json::to_value(&doc).expect("save"), doc_json);
 }
@@ -585,9 +489,7 @@ fn a_file_from_a_newer_version_lands_what_it_knows_and_carries_the_rest() {
     let v = read(&repo().join("tests/fixtures/future/v99.funda"));
     let doc = CadDocument::from_json(&v.to_string()).expect("load");
     assert!(matches!(doc.feature("w1"), Some(Feature::Unknown(_))));
-    let Some(Feature::Extrude(e)) = doc.feature("e1") else {
-        panic!("e1 is an extrude")
-    };
+    let Some(Feature::Extrude(e)) = doc.feature("e1") else { panic!("e1 is an extrude") };
     assert_eq!(e.extra.get("futureFlag"), Some(&Value::Bool(true)));
     assert_eq!(doc.extra.get("futureKey"), Some(&v["futureKey"]));
     let saved: Value = serde_json::from_str(&doc.to_json().expect("save")).expect("json");
