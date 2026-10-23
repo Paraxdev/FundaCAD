@@ -123,7 +123,7 @@ function capture(e: KeyboardEvent, id: string) {
 
 function problemText(p: Pending): string {
   const p0 = p.problem;
-  if ("conflict" in p0) return `${fmtKeys(p.name)} is already ${p0.conflict.label}`;
+  if ("conflict" in p0) return `${fmtKeys(p.name)} is already used by ${p0.conflict.label}`;
   if ("reserved" in p0) return `${fmtKeys(p.name)} is taken by ${p0.reserved}`;
   return p0.refused;
 }
