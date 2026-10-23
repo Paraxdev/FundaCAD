@@ -208,3 +208,45 @@ async fn a_new_document_is_refused_by_name_while_the_app_imports_and_an_edit_is_
     assert!(!later.is_error, "{}", later.text);
     assert_eq!(host.feature_names(), Vec::<String>::new());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_edit_the_app_applied_is_reported_applied_even_if_another_document_opens_right_after() {
+    let engine = RealEngine::start();
+    let mut host = Host::new(engine.socket().await);
+    host.session = Some("doc-a".into());
+    host.opens_after_apply = Some("doc-b".into());
+    host.tick().await;
+
+    let mcp = Mcp::start(&engine.mcp_env("auto", true), &std::env::temp_dir());
+    let (mcp, out) = while_pumping(
+        mcp,
+        &mut host,
+        "feature_add",
+        json!({"feature": {"id": "s1", "type": "sphere", "radius": 4.5, "name": "from-the-agent"}}),
+        5.0,
+    )
+    .await;
+    let applied = host.applied.clone();
+
+    // The wire half: an edit the user's own change overtook before the next publish is refused by id, not applied.
+    let stale = host
+        .call(
+            "session_propose",
+            json!({"document": a_document(3, "overtaken"), "baseRevision": host.rev, "doc": "doc-b"}),
+        )
+        .await;
+    host.doc = a_document(2, "the-user-moved-it");
+    host.rev += 1;
+    host.tick().await;
+    let st = host.call("session_state", json!({})).await;
+    drop(mcp);
+
+    assert!(!out.is_error, "an applied edit was reported as not applied: {}", out.text);
+    assert!(out.text.contains("applied in FundaCAD"), "{}", out.text);
+    assert_eq!(applied.len(), 1);
+    let id = stale["result"]["proposal"].clone();
+    let refused: Vec<Value> = st["result"]["status"]["refused"].as_array().cloned().unwrap_or_default();
+    assert_eq!(refused.iter().map(|r| r["id"].clone()).collect::<Vec<_>>(), vec![id], "{st}");
+    assert!(refused[0]["message"].as_str().unwrap_or_default().contains("doc_get"), "{st}");
+    assert_eq!(host.feature_names(), vec!["the-user-moved-it".to_string(), "the-user-moved-it".to_string()]);
+}
