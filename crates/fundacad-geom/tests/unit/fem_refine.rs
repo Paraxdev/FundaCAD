@@ -413,8 +413,8 @@ fn boundary_midpoints_on_a_curved_face_move_onto_it_and_planar_ones_stay_on_thei
 }
 
 /// One thin tet over a box whose underside lies `gap` above the chord midpoint of the tet's longest edge, all
-/// tagged face 0, so splitting that edge tries to lift the midpoint onto the box.
-fn lifted(height: f64, gap: f64) -> V3 {
+/// tagged face 0, so splitting that edge tries to lift the midpoint onto the box. `on` is the mesh's node faces.
+fn lifted_on(height: f64, gap: f64, on: &[(u32, u32)]) -> V3 {
     let nodes = [[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [5.0, 8.0, 0.0], [5.0, 3.0, height]].map(place);
     let mut t = [0u32, 1, 2, 3];
     let mut m = TetMesh { nodes: nodes.to_vec(), tets: vec![t], ..TetMesh::default() };
@@ -425,12 +425,17 @@ fn lifted(height: f64, gap: f64) -> V3 {
     let [a, b, c, d] = t;
     m.boundary = vec![[a, c, b], [a, b, d], [a, d, c], [b, c, d]];
     m.boundary_face = vec![0; 4];
+    m.node_faces = on.to_vec();
     let mut s = cuboid([100.0, 100.0, 50.0], &|p| place([p[0] - 45.0, p[1] - 50.0, p[2] + gap]));
     s.face_ids = vec![0; s.face_ids.len()];
     let r = refine(&s, &m, &[0], &opts(0, 0.0), &mut go).unwrap();
     assert_eq!(r.split, 1);
     assert!(r.mesh.tets.iter().all(|&t| det(&r.mesh, t) > 0.0));
     unplace(r.mesh.nodes[4])
+}
+
+fn lifted(height: f64, gap: f64) -> V3 {
+    lifted_on(height, gap, &[])
 }
 
 fn close(a: V3, b: V3) -> bool {
@@ -446,4 +451,15 @@ fn a_midpoint_moves_onto_the_surface_only_within_a_quarter_edge_and_without_maki
     // Lifts that keep 37% of the volume, one with 6.99 degree dihedrals (chord 18.4) and one with 23.8.
     assert!(close(lifted(1.0, 1.0), [5.0, 0.0, 0.0]), "the lift would make a sliver");
     assert!(close(lifted(2.0, 1.0), [5.0, 0.0, 1.0]));
+}
+
+#[test]
+fn a_midpoint_moves_onto_a_face_only_when_both_ends_of_its_edge_lie_on_that_face() {
+    let both = [(0, 0), (1, 0), (2, 0), (3, 0)];
+    assert!(close(lifted_on(6.0, 1.5, &both), [5.0, 0.0, 1.5]));
+    // Node 1 lies on face 2 only, as a node on the rounding of an edge does, though every triangle is tagged 0.
+    let one = [(0, 0), (1, 2), (2, 0), (3, 0)];
+    assert!(close(lifted_on(6.0, 1.5, &one), [5.0, 0.0, 0.0]), "an end off the face keeps the chord");
+    let neither = [(0, 2), (1, 2), (2, 0), (3, 0)];
+    assert!(close(lifted_on(6.0, 1.5, &neither), [5.0, 0.0, 0.0]));
 }

@@ -2554,4 +2554,20 @@ mod tests {
         let n = shape_values([0.25; 4]);
         assert!((n.iter().sum::<f64>() - 1.0).abs() < 1e-15);
     }
+
+    #[test]
+    fn the_complementary_energy_is_the_hand_value_for_tension_shear_and_pressure() {
+        let m = Material { e: 3500.0, nu: 0.3 };
+        let l = lame(m);
+        let bulk = m.e / (3.0 * (1.0 - 2.0 * m.nu));
+        let shear = m.e / (2.0 * (1.0 + m.nu));
+        let close = |a: f64, b: f64| (a - b).abs() < 1e-12 * b.abs();
+        // Tension along a slanted axis n: d = 7.3 n n.
+        let n = [0.36, -0.48, 0.8];
+        let t = [n[0] * n[0], n[1] * n[1], n[2] * n[2], n[0] * n[1], n[1] * n[2], n[2] * n[0]].map(|v| 7.3 * v);
+        assert!(close(complementary(&t, l), 7.3 * 7.3 / m.e));
+        assert!(close(complementary(&[0.0, 0.0, 0.0, 0.0, -2.9, 0.0], l), 2.9 * 2.9 / shear));
+        assert!(close(complementary(&[-4.1, -4.1, -4.1, 0.0, 0.0, 0.0], l), 4.1 * 4.1 / bulk));
+        assert_eq!(complementary(&[0.0; 6], l), 0.0);
+    }
 }

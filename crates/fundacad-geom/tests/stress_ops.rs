@@ -769,13 +769,12 @@ fn standard_refines_the_cantilever_once_and_stays_on_beam_theory() {
     assert_eq!(run(cantilever(json!("aluminium"), 2.5)), r);
 }
 
-/// A 120 x 40 x 10 plate with a centred 12 mm hole, pulled along its length, placed off the origin and turned
-/// 30 degrees about z then 20 about x. Returns the request and the place back in the plate's own frame.
-fn holed_plate(refine: &str) -> (Value, impl Fn([f64; 3]) -> [f64; 3]) {
+/// Off the origin, turned 30 degrees about z then 20 about x, and back.
+fn plate_frame() -> (impl Fn([f64; 3]) -> [f64; 3] + Copy, impl Fn([f64; 3]) -> [f64; 3] + Copy) {
     let (cz, sz) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
     let (cx, sx) = (20f64.to_radians().cos(), 20f64.to_radians().sin());
     let o = [17.0, -9.0, 31.0];
-    let turn = |p: [f64; 3]| {
+    let turn = move |p: [f64; 3]| {
         let q = [cz * p[0] - sz * p[1], sz * p[0] + cz * p[1], p[2]];
         [q[0] + o[0], cx * q[1] - sx * q[2] + o[1], sx * q[1] + cx * q[2] + o[2]]
     };
@@ -784,6 +783,13 @@ fn holed_plate(refine: &str) -> (Value, impl Fn([f64; 3]) -> [f64; 3]) {
         let q = [q[0], cx * q[1] + sx * q[2], -sx * q[1] + cx * q[2]];
         [cz * q[0] + sz * q[1], -sz * q[0] + cz * q[1], q[2]]
     };
+    (turn, unturn)
+}
+
+/// A 120 x 40 x 10 plate with a centred 12 mm hole, pulled along its length, in `plate_frame`. Returns the request
+/// and the way back to the plate's own frame.
+fn holed_plate(refine: &str) -> (Value, impl Fn([f64; 3]) -> [f64; 3]) {
+    let (turn, unturn) = plate_frame();
     let doc = json!({"features": [
         {"id": "p", "type": "box", "length": 120, "width": 40, "height": 10},
         {"id": "h", "type": "cylinder", "radius": 6, "height": 30},
@@ -854,6 +860,48 @@ fn standard_leaves_the_fixed_end_edge_as_it_was_and_refines_elsewhere() {
     assert_eq!(end, plate_vertices(&off, &unturn, at_end));
     let (a, b) = (num(&off["mesh"]["nodes"]), num(&std["mesh"]["nodes"]));
     assert!(b > 1.5 * a, "nodes: off {a}, standard {b}");
+}
+
+#[test]
+fn standard_does_not_refine_beside_a_slider_faces_rim() {
+    // The top of a plate whose top edges are rounded, so the slider's rim meets the rounds smoothly and only the held
+    // edge rule keeps it: fixed at one end, held on the top by a slider and pushed up from below.
+    let (h, r) = (4.2, 4.0);
+    let (turn, unturn) = plate_frame();
+    let edges: Vec<Value> = [[0.0, 20.0, 5.0], [0.0, -20.0, 5.0], [60.0, 0.0, 5.0], [-60.0, 0.0, 5.0]]
+        .iter()
+        .map(|&p| json!({"kind": "edge", "by": "nearest", "point": p}))
+        .collect();
+    let doc = json!({"features": [
+        {"id": "p", "type": "box", "length": 120, "width": 40, "height": 10},
+        {"id": "round", "type": "fillet", "radius": r, "edges": edges},
+        {"id": "z", "type": "move", "rz": 30, "bodies": ["body1"]},
+        {"id": "x", "type": "move", "rx": 20, "dx": 17, "dy": -9, "dz": 31, "bodies": ["body1"]},
+    ]});
+    let req = |refine: &str| {
+        json!({
+            "document": doc, "body": "body1", "material": "aluminium", "refine": refine, "size": h,
+            "fixed": [nearest(turn([-60.0, 3.0, -1.0]))],
+            "supports": [{"type": "slider", "faces": [nearest(turn([10.0, 3.0, 5.0]))]}],
+            "loads": [{"faces": [nearest(turn([10.0, 3.0, -5.0]))], "pressure": 0.05}],
+        })
+    };
+    let std = run(req("standard"));
+    let off = run(req("off"));
+    assert_eq!(off["mesh"]["elements"], std["mesh"]["passes"][0]["elements"], "{std}");
+    // Beside the rim along the long sides, away from the sharp ends.
+    let rim = 20.0 - r;
+    let at_rim =
+        |q: [f64; 3]| q[0].abs() < 40.0 && ((q[1].abs() - rim).powi(2) + (q[2] - 5.0).powi(2)).sqrt() < 0.5 * h;
+    let was = plate_vertices(&off, &unturn, at_rim);
+    let now = plate_vertices(&std, &unturn, at_rim);
+    assert!(was.len() > 20, "{}", was.len());
+    assert!(was.iter().all(|v| now.contains(v)));
+    // A split propagating from a marked tet farther off may still halve an edge there.
+    let added = now.len() - was.len();
+    assert!(added <= was.len() / 10, "{added} added beside the rim to {}", was.len());
+    let (a, b) = (num(&off["mesh"]["nodes"]), num(&std["mesh"]["nodes"]));
+    assert!(b > 1.2 * a, "nodes: off {a}, standard {b}");
 }
 
 #[test]
