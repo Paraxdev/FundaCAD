@@ -1118,6 +1118,13 @@ jobs:
           SC_CHROME: /usr/bin/google-chrome
         run: node e2e/shell_no_shift_e2e.cjs
 
+      # SwiftShader runs the low power tier, so the check turns the shadow map back on itself.
+      - name: First stress result drawn in Matcap end-to-end
+        env:
+          SC_TOKEN: citoken
+          SC_CHROME: /usr/bin/google-chrome
+        run: node e2e/matcap_first_stress_e2e.cjs
+
       # Builds only the small frames crate and tungstenite, no Tauri, no kernel.
       - name: Native frames over WebSocket end-to-end
         env:

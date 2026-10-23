@@ -2,7 +2,7 @@
 // Matcap restores everything without a rebuild. One draw straight to the target, no composer or shadow pass.
 
 import * as THREE from "three";
-import { isCostlyLight, isPbr, mirror } from "./potato";
+import { castsWithoutMap, isCostlyLight, isPbr, mirror } from "./potato";
 import type { MatcapStyle } from "../ui/renderPrefs";
 
 /** A twin nobody has drawn for this many matcap frames is disposed. */
@@ -124,6 +124,7 @@ export class MatcapDraw {
   private look: MatcapLook = { style: "studio", tint: true };
   private swapped: { mesh: THREE.Mesh; was: THREE.Material | THREE.Material[] }[] = [];
   private hidden: THREE.Object3D[] = [];
+  private uncast: THREE.Object3D[] = [];
 
   render(
     renderer: THREE.WebGLRenderer,
@@ -137,6 +138,7 @@ export class MatcapDraw {
     this.look = look;
     this.swapped.length = 0;
     this.hidden.length = 0;
+    this.uncast.length = 0;
     const shadows = renderer.shadowMap as THREE.WebGLShadowMap | undefined;
     const autoUpdate = shadows?.autoUpdate;
     try {
@@ -147,8 +149,10 @@ export class MatcapDraw {
       if (shadows) shadows.autoUpdate = autoUpdate!;
       for (const { mesh, was } of this.swapped) mesh.material = was;
       for (const o of this.hidden) o.visible = true;
+      for (const o of this.uncast) o.castShadow = true;
       this.swapped.length = 0;
       this.hidden.length = 0;
+      this.uncast.length = 0;
       this.prune();
     }
   }
@@ -167,6 +171,11 @@ export class MatcapDraw {
     if (isCostlyLight(o)) {
       o.visible = false;
       this.hidden.push(o);
+      return;
+    }
+    if (castsWithoutMap(o)) {
+      o.castShadow = false;
+      this.uncast.push(o);
       return;
     }
     if (!isBodyMesh(o) || !o.material) return;
