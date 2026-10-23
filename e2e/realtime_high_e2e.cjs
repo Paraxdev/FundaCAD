@@ -59,6 +59,18 @@ const check = (name, ok, detail) => {
     await page.goto(URL);
     await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
     await page.waitForTimeout(1500);
+    const gpu = await page.evaluate(() => {
+      const g = window.viewport.scene.renderer.getContext();
+      const d = g.getExtension("WEBGL_debug_renderer_info");
+      return d ? g.getParameter(d.UNMASKED_RENDERER_WEBGL) : "?";
+    });
+    console.log(`  gpu ${gpu}`);
+    // A software renderer starts on the low power tier, which never draws High.
+    if (/swiftshader|llvmpipe|software/i.test(gpu)) {
+      console.error("needs a GPU: the low power tier a software renderer gets keeps Standard");
+      process.exitCode = 1;
+      return;
+    }
     const modal = await page.$(".modal-close");
     if (modal) {
       await modal.click();
