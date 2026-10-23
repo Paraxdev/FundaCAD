@@ -135,6 +135,7 @@ const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
 
 import { Highlighter, EDGE_HOVER_COLOR, sameHover } from "./highlight";
+import { DRAFT_COLORS } from "./draftColors";
 import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, nearestEdgeByCurve, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
 import { mergeScope, pickScope, type ScopeDecision, type ScopeView } from "./pickScope";
@@ -1679,9 +1680,9 @@ export class Viewport {
       this.highlighter.setBase((fid) => hue.get(this.faceIdToBodyId(fid) ?? "") ?? BASE_COLOR, only);
     } else if (this.analysis === "draft") {
       const B = this.draftDir;
-      const OVERHANG = new THREE.Color(0xe24a3b); // unsupported overhang (red)
-      const TOP = new THREE.Color(0x49c46a); // up-facing
-      const WALL = new THREE.Color(0x4aa3e2); // wall / steep-enough downward
+      const OVERHANG = new THREE.Color(DRAFT_COLORS.overhang);
+      const TOP = new THREE.Color(DRAFT_COLORS.top);
+      const WALL = new THREE.Color(DRAFT_COLORS.wall);
       // A downward face overhangs when its angle from straight down (β) is below the threshold.
       this.highlighter.setBase((fid) => {
         const c = this.faceNormalWorld(fid).dot(B); // cos(angle to build dir)
