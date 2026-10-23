@@ -119,9 +119,7 @@ const check = (label, ok, detail = "") => {
 
   await page.evaluate(() => window.__fundacad.handleAction("shortcut-help"));
   await page.waitForTimeout(300);
-  const mouseRows = await page.$$eval(".shortcut-hud-row", (rows) =>
-    rows.map((r) => r.textContent.replace(/\s+/g, " ").trim()),
-  );
+  const mouseRows = await page.$$eval(".sc-row", (rows) => rows.map((r) => r.textContent.replace(/\s+/g, " ").trim()));
   check(
     "the ? sheet shows the preset",
     mouseRows.some((r) => r.startsWith("Middle drag") && r.includes("Orbit")),
@@ -129,7 +127,7 @@ const check = (label, ok, detail = "") => {
   );
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
-  if (await page.$(".shortcut-hud")) await page.evaluate(() => window.__fundacad.handleAction("shortcut-help"));
+  if (await page.$(".shortcuts-panel")) await page.evaluate(() => window.__fundacad.handleAction("shortcut-help"));
 
   // --- Alt+left orbits, plain left still selects -----------------------------------
   await config({ preset: "alt-left" });
@@ -202,7 +200,7 @@ const check = (label, ok, detail = "") => {
   await page.mouse.up({ button: "right" });
   await page.waitForTimeout(400);
   check("moving up lights the top item", hot !== null && hot.includes("Shortcut"), String(hot));
-  check("releasing over it runs it once", !!(await page.$(".shortcut-hud")));
+  check("releasing over it runs it once", !!(await page.$(".shortcuts-panel")));
   check("the ring closes on release", !(await page.$("[data-radial-menu]")));
   check("no context menu after the radial drag", !(await page.$(".context-menu")));
   await page.evaluate(() => window.__fundacad.handleAction("shortcut-help"));

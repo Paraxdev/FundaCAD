@@ -33,9 +33,6 @@ export const useUiStore = defineStore("ui", () => {
   const lowPerformance = ref(false);
   const lowPerformanceDismissed = ref(false);
 
-  // The `?` keyboard cheat sheet.
-  const shortcutHudOpen = ref(false);
-
   return {
     docName,
     dirty,
@@ -51,6 +48,5 @@ export const useUiStore = defineStore("ui", () => {
     traceState,
     lowPerformance,
     lowPerformanceDismissed,
-    shortcutHudOpen,
   };
 });
