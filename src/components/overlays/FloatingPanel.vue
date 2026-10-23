@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // The measure-panel popup shell worn by Properties, Interference, Overhang, Parameters and plugin panels.
 
-import { onUnmounted, watch } from "vue";
+import { onUnmounted, ref, watch } from "vue";
+import { panelStack } from "../../ui/panelStack";
 
 const props = withDefaults(defineProps<{ open: boolean; closeOnEsc?: boolean; panelClass?: string }>(), {
   closeOnEsc: false,
@@ -26,12 +27,30 @@ watch(
   },
   { immediate: true },
 );
-onUnmounted(unbind);
+
+// Each open panel takes the next slot in the column under the view cube.
+const el = ref<HTMLElement | null>(null);
+let slot = "";
+let serial = 0;
+function release() {
+  if (slot) panelStack.remove(slot);
+  slot = "";
+}
+watch(el, (node) => {
+  release();
+  if (!node) return;
+  slot = `panel-${++serial}-${Math.random().toString(36).slice(2)}`;
+  panelStack.add(slot, node);
+});
+onUnmounted(() => {
+  unbind();
+  release();
+});
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="measure-panel" :class="panelClass">
+    <div v-if="open" ref="el" class="measure-panel" :class="panelClass">
       <slot />
     </div>
   </Teleport>

@@ -8,8 +8,8 @@ import { contextMenu } from "../ui/menu";
 import { themeColor } from "./themeColors";
 import { hitScale } from "../input/pointerKind";
 
-const SIZE = 120; // corner viewport, CSS px
-const MARGIN = 14; // gap from the top-right edge
+export const SIZE = 120; // corner viewport, CSS px
+export const MARGIN = 14; // gap from the top-right edge
 /** Pixel radii of the extra samples a finger's pick tries around the touch. */
 const CUBE_PROBE_RINGS_PX = [6, 12];
 const HALF = 0.5; // half-extent of the unit cube
