@@ -25,6 +25,7 @@ import {
 import { CanvasGesture } from "./canvasGesture";
 import { RotateDial } from "../viewport/rotateDial";
 import { overlayMaterial } from "../viewport/overlayMaterial";
+import { resolveShortcut } from "../input/shortcuts";
 import { createSlimRing, ringLook, type SlimRing } from "./slimRing";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -532,6 +533,13 @@ export class MoveTool {
   }
 
   private onKey(e: KeyboardEvent) {
+    // The raised gizmo's field already has focus, so the tool's own key would otherwise be typed into it.
+    if (this.ambient && resolveShortcut(e.key.toLowerCase(), e.shiftKey, "model", e.ctrlKey || e.metaKey) === "move") {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.claim();
+      return;
+    }
     if (e.key !== "Escape") return;
     if (this.target?.ownsEscape) e.stopImmediatePropagation();
     this.cancel();
