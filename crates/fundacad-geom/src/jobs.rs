@@ -15,8 +15,12 @@ pub struct GeomJobs;
 struct EngineWatch<'a>(&'a JobContext);
 
 impl Watch for EngineWatch<'_> {
-    fn feature(&self, index: usize) {
+    fn feature_started(&self, index: usize) {
         self.0.progress.feature(i64::try_from(index).unwrap_or(i64::MAX));
+    }
+
+    fn phase(&self, phase: i64) {
+        self.0.progress.phase(phase);
     }
 
     fn meshing(&self, done: usize, total: usize) {
@@ -79,11 +83,13 @@ fn rebuild_with(
         }
         return JobResult::Json(builder::result_fields(&typed, &r));
     }
+    watch.phase(fundacad_protocol::build_phase::ASSEMBLING);
     let fields = builder::result_fields(&typed, &r);
     let meshed = match cache {
         Some(c) => JobResult::Mesh(c.mesh(&r, tolerance, known, &mut |done, total| watch.meshing(done, total))),
         None => mesh_result(&r.bodies, tolerance, known, watch),
     };
+    watch.phase(fundacad_protocol::build_phase::ASSEMBLING);
     match meshed {
         JobResult::Mesh(mut mesh) => {
             let bbox = mesh.fields.get("bbox").cloned().unwrap_or(Value::Null);
@@ -150,7 +156,8 @@ mod tests {
             panic!("expected a mesh result");
         };
         assert_eq!(m.bodies.len(), 3);
-        assert_eq!(ctx.progress.beats(), 6, "one beat per feature and one per meshed body");
+        // 3 features, the two phase changes around meshing, the meshing start and 3 bodies
+        assert_eq!(ctx.progress.beats(), 9, "a beat per feature start, phase change and meshed body");
     }
 
     /// The field report's fillet: three edges at a corner, a radius the kernel's filleter refuses, so it

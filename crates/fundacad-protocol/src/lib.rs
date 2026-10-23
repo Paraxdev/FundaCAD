@@ -2,6 +2,7 @@
 //! Output is byte-identical to the Python encoder for the same input, the golden tests hold it to that.
 
 pub mod body;
+pub mod build_phase;
 pub mod envelope;
 pub mod frame;
 pub mod import_stage;

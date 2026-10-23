@@ -123,7 +123,12 @@ const notes = useBuildValue((b) =>
 /** Features the build left out because this version does not know their type. */
 const placeholders = useBuildValue((b) => featurePlaceholders({ skippedFeatures: b.result?.skippedFeatures }));
 const building = useBuildValue((b) => b.building);
-const progress = useBuildValue((b) => ({ progress: b.progress, meshed: b.meshed, meshTotal: b.meshTotal }));
+const progress = useBuildValue((b) => ({
+  phase: b.phase,
+  progress: b.progress,
+  meshed: b.meshed,
+  meshTotal: b.meshTotal,
+}));
 
 // Busy is timed from the transition, not each emission: an op emits busy frames throughout, and re-arming would never
 // elapse. The delay keeps a fast op from flashing a button.
@@ -159,7 +164,10 @@ onUnmounted(() => {
 const chip = computed(() =>
   busy.value.waiting
     ? { label: "waiting…", pct: 0 }
-    : buildProgress(progress.value.progress, progress.value.meshed, progress.value.meshTotal, features.value.length),
+    : buildProgress(
+        progress.value,
+        features.value.map((f) => f.shown),
+      ),
 );
 const line = computed(() => busyLine(busy.value));
 

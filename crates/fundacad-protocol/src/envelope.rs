@@ -61,6 +61,15 @@ pub fn building(id: &Value, feature: i64, meshed: i64, mesh_total: i64) -> Strin
     }))
 }
 
+/// A `building` frame that also says which [`crate::build_phase`] the job is in. `feature` is the feature
+/// running, -1 outside the feature phase, and the mesh counters are -1 outside the meshing phase.
+pub fn building_in(id: &Value, phase: i64, feature: i64, meshed: i64, mesh_total: i64) -> String {
+    pyjson::to_string(&json!({
+        "id": id, "status": "building", "phase": phase, "feature": feature,
+        "meshed": meshed, "meshTotal": mesh_total,
+    }))
+}
+
 /// `{"id", "status": "importing", "phase", "label", "pct"}`. `phase` is an
 /// [`crate::import_stage`], `pct` is -1 while the stage has no fraction.
 pub fn importing(id: &Value, phase: i64, label: &str, pct: i64) -> String {

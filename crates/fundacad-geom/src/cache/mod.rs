@@ -225,6 +225,7 @@ impl RebuildCache {
             replayed: Vec::new(),
             persist: self.store.as_ref().filter(|_| n > 0).map(|store| Persist {
                 store,
+                watch,
                 keys: &keys,
                 modified,
                 acc_ms: 0.0,

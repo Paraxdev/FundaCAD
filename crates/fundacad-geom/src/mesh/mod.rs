@@ -474,7 +474,8 @@ pub fn mesh_result_cached(
 }
 
 /// The cache is read and written here in body order so cached and fresh runs agree, misses mesh on other
-/// threads. Every body ticks progress once, the stall watchdog is promised one beat per body, not an order.
+/// threads. `on_body(done, total)` counts only the misses, a hit is not meshing and a cache full of them
+/// reports nothing, so the stall watchdog gets a beat per hit instead.
 fn built_payloads(
     bodies: &[MeshBody<'_>],
     tolerance: f64,
@@ -482,8 +483,7 @@ fn built_payloads(
     cache: &mut dyn PayloadCache,
     on_body: &mut dyn FnMut(usize, usize),
 ) -> Vec<Option<Built>> {
-    let total = bodies.len();
-    let mut out: Vec<Option<Built>> = Vec::with_capacity(total);
+    let mut out: Vec<Option<Built>> = Vec::with_capacity(bodies.len());
     let mut misses: Vec<usize> = Vec::new();
     let ticked = std::sync::atomic::AtomicUsize::new(0);
     for (i, body) in bodies.iter().enumerate() {
@@ -491,9 +491,13 @@ fn built_payloads(
         if cached.is_none() && body.shape.is_some() {
             misses.push(i);
         } else {
-            on_body(ticked.fetch_add(1, std::sync::atomic::Ordering::Relaxed), total);
+            crate::heartbeat::beat();
         }
         out.push(cached);
+    }
+    let total = misses.len();
+    if total > 0 {
+        on_body(0, total);
     }
 
     let tick = std::sync::Mutex::new(on_body);
@@ -503,7 +507,7 @@ fn built_payloads(
         let shape = body.shape.expect("a miss has a shape");
         let began = std::time::Instant::now();
         let full = crate::bench::phase("body_payload", || body_payload_for(body, shape, tolerance, profile));
-        let done = ticked.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let done = ticked.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
         if let Ok(mut t) = tick.lock() {
             t(done, total);
         }
