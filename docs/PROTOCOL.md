@@ -533,7 +533,9 @@ same request gives the same answer every time.
   null, and without `density` there is no gravity.
 - `refine`: every mode first solves the mesh `off` solves. `standard` then estimates the
   stress error of each element, splits the elements where it is high and solves once more,
-  within `maxElements` and about twice the first solve's time; `fine` runs up to three
+  within `maxElements` and about twice the first solve's time, unless the stress gaps of
+  the split elements say the peak cannot move by more than about 3%, then the split mesh is
+  not solved and the answer is `off`'s; `fine` runs up to three
   refined solves and may take six times as long; `off` stops after the first, the answer of
   before refinement existed. A refined solve does not split the elements at a sharp inside corner,
   at the edge of a fixed or pinned face, or at a sharp edge of the part, whose readings grow
@@ -553,7 +555,8 @@ Reply:
 { "body": "body3", "name": "Spring",
   "material": { "name": "PLA", "E": 3500, "nu": 0.36, "yield": 50, "density": 1.24 },
   "mesh": { "nodes": 41210, "elements": 24102, "size": 3.0, "finest": 0.78, "minDihedral": 14.2,
-            "passes": [ { "elements": 9554, "maxVonMises": 12.63 }, { "elements": 24102, "maxVonMises": 14.1 } ] },
+            "passes": [ { "elements": 9554, "maxVonMises": 12.63 }, { "elements": 24102, "maxVonMises": 14.1 } ],
+            "stop": "passes" },
   "maxVonMises": { "value": 31.2, "at": [x,y,z], "face": 4 },   // face null when the peak is inside
   "maxDisplacement": { "value": 0.84, "at": [x,y,z], "vector": [dx,dy,dz] },
   "safetyFactor": 1.6,                 // yield / peak von Mises
@@ -570,7 +573,10 @@ Reply:
 - `mesh.nodes` counts the quadratic mesh's nodes (corners and mid-edge nodes). `size` is
   the starting element size, `finest` the smallest mean edge of any element, `passes` one
   entry per solve, the last being the result; `nodes`, `elements` and `minDihedral` are
-  the final mesh's.
+  the final mesh's. `stop` says why refinement ended: `off`, `passes` (all the mode's),
+  `settled` (the next pass could not move the peak, `standard` only), `elements` (no room
+  under `maxElements`), `time` (about a minute), `memory` (the solver's limit) or
+  `unrefinable` (nothing left to split); older engines omit it.
 - `maxVonMises.face` is the face index (the `i` of `inspect`, the mesh `faceIds`) the
   peak lies on: of the boundary triangles touching it, the face with the most area.
 - `safetyFactor` is null when the material has no `yield` or nothing is stressed.

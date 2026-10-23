@@ -38,6 +38,10 @@ const THETA: f64 = 1.0;
 const BISECTIONS: u8 = 3;
 /// A refined mesh with a flatter element than this is dropped and the pass before kept.
 const MIN_REFINED_DIHEDRAL: f64 = 5.0;
+/// A refined mesh is not solved when no tet it split has a stress gap reaching this share past the peak. On the Home
+/// examples, a holed plate and a grooved bar, 14 passes under 0.18 moved the peak by 2.7% at most, 6 at 0.24 or more
+/// by 3.5 to 26%, and the gap is no bound: the groove rose 36% where it read 26%.
+const SETTLED_REACH: f64 = 0.2;
 /// Refinement stops when the next pass is predicted to end past this many seconds of the run.
 const REFINE_SECONDS: f64 = 60.0;
 /// Tetrahedra per element size cubed of the mesher's lattice, with its allowance for the
@@ -1129,6 +1133,20 @@ fn rounded_nodes(mesh: &TetMesh, sharp: &[[[f64; 3]; 2]], reach: f64) -> Vec<boo
     keep
 }
 
+/// The share of the peak `refined` could move it by, from the stress gaps of the tets of `cur` it split in place.
+fn split_reach(cur: &Pass, refined: &TetMesh, e: f64) -> f64 {
+    let vm = cur.sol.corner_von_mises();
+    let (mut top, mut gap, mut split) = (Vec::new(), Vec::new(), Vec::new());
+    for (i, (t, &eta)) in cur.mesh.tets.iter().zip(&cur.sol.element_error).enumerate() {
+        top.push(t.iter().map(|&n| vm[n as usize]).fold(0.0, f64::max));
+        let v = tetmesh::orient(&t.map(|n| cur.mesh.nodes[n as usize])).abs() / 6.0;
+        // The complementary energy of a uniaxial stress gap d is d^2 / E per unit volume.
+        gap.push(if v > 0.0 { (e * eta * eta / v).sqrt() } else { 0.0 });
+        split.push(refined.tets.get(i) != Some(t));
+    }
+    adapt::reach(cur.sol.max_von_mises, &top, &gap, &split)
+}
+
 /// The tets touching solution node `node`: a corner, or either end of the edge a mid-edge node halves.
 fn around(mesh: &TetMesh, sol: &Solution, node: u32) -> Vec<u32> {
     let ends: Vec<u32> =
@@ -1360,13 +1378,18 @@ fn analyse(
     let mut sharp = sharp_edges(&surface, false);
     sharp.extend_from_slice(&corners);
     let mut stopped = None;
+    let mut stop = if refine == Refine::Off { "off" } else { "passes" };
     loop {
         let counts: Vec<usize> = passes.iter().map(|p| p.0).collect();
         let Some(cap) = adapt::next_cap(&plan, max_elements, &counts, reference) else {
+            if counts.len() <= plan.passes {
+                stop = "elements";
+            }
             break;
         };
         if adapt::over_time(started.elapsed().as_secs_f64(), last_secs, cur.mesh.tets.len(), cap, REFINE_SECONDS) {
             stopped = Some("to stay within about a minute");
+            stop = "time";
             break;
         }
         let t = Instant::now();
@@ -1376,6 +1399,7 @@ fn analyse(
         let first = around(&cur.mesh, &cur.sol, cur.sol.max_von_mises_node);
         let marked = adapt::mark(&cur.sol.element_error, &eligible, &first, THETA);
         if marked.is_empty() {
+            stop = "unrefinable";
             break;
         }
         let keep = rounded_nodes(&cur.mesh, &sharp, ROUNDED_REACH * h0);
@@ -1383,6 +1407,12 @@ fn analyse(
             RefineOptions { max_tets: cap, min_edge: plan.min_edge_share * h0, size: h0, keep, depth: BISECTIONS };
         let r = refine::refine(&surface, &cur.mesh, &marked, &opts, &mut tick).map_err(|e| mesh_error_text(&e))?;
         if r.split == 0 || r.stats.min_dihedral_deg < MIN_REFINED_DIHEDRAL {
+            stop = "unrefinable";
+            break;
+        }
+        // Fine is chosen to look closer, so it solves every pass its budget allows.
+        if refine == Refine::Standard && split_reach(&cur, &r.mesh, setup.material.e) < SETTLED_REACH {
+            stop = "settled";
             break;
         }
         match solve_pass(r.mesh, r.stats, h0, &setup, &mut tick) {
@@ -1394,6 +1424,7 @@ fn analyse(
             }
             Err(PassFail::Solve(SolveError::TooLarge { .. }, _)) => {
                 stopped = Some("as a finer mesh needs more memory than the solver may use");
+                stop = "memory";
                 break;
             }
             Err(e) => return Err(e.text()),
@@ -1494,6 +1525,7 @@ fn analyse(
             "finest": py_round(finest, 4),
             "minDihedral": py_round(stats.min_dihedral_deg, 1),
             "passes": passes.iter().map(|&(n, peak)| json!({"elements": n, "maxVonMises": r6(peak)})).collect::<Vec<_>>(),
+            "stop": stop,
         }),
     );
     out.insert("maxVonMises".into(), json!({"value": r6(peak), "at": r3(peak_at), "face": place.face}));

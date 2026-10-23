@@ -308,7 +308,7 @@ fn lerp(a: V3, b: V3, t: f64) -> V3 {
 }
 
 /// Six times the signed volume of tetrahedron `p`.
-pub(super) fn orient(p: &[V3; 4]) -> f64 {
+pub(crate) fn orient(p: &[V3; 4]) -> f64 {
     dot(cross(sub(p[1], p[0]), sub(p[2], p[0])), sub(p[3], p[0]))
 }
 

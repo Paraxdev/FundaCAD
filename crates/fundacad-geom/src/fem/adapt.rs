@@ -103,3 +103,16 @@ pub fn unsettled(peaks: &[f64]) -> Option<f64> {
 pub fn over_time(elapsed: f64, last: f64, n_last: usize, n_next: usize, limit: f64) -> bool {
     elapsed + last * (n_next as f64 / n_last.max(1) as f64).powf(WORK_EXPONENT) > limit
 }
+
+/// The share of `peak` the tets a pass refines could move it by: the most any `split` tet's stress gap reaches past
+/// the peak from its highest corner stress `top`, so a split tet at the peak counts its whole gap.
+pub fn reach(peak: f64, top: &[f64], gap: &[f64], split: &[bool]) -> f64 {
+    if peak <= 0.0 {
+        return 0.0;
+    }
+    let most = (0..gap.len().min(top.len()))
+        .filter(|&t| split.get(t).copied().unwrap_or(false))
+        .map(|t| gap[t] - (peak - top[t]))
+        .fold(0.0, f64::max);
+    most / peak
+}
