@@ -739,11 +739,11 @@ export class DocumentStore {
     return () => this.busyListeners.delete(fn);
   }
 
-  // `onStarted` hands back the request id, else a rebuild started meanwhile would be "most recent". An op that never
-  // reaches the engine passes `abort`. `holdHistory` blocks undo/redo, since an import's late step would drop a redo.
+  // `onStarted` hands back the request id, else a rebuild started meanwhile would be "most recent", and a label for
+  // an op whose passes differ. An op that never reaches the engine passes `abort`. `holdHistory` blocks undo/redo, since an import's late step would drop a redo.
   async runBusy<T>(
     label: string,
-    fn: (onStarted: (id: string) => void) => Promise<T>,
+    fn: (onStarted: (id: string, label?: string) => void) => Promise<T>,
     opts: { rebuild?: boolean; abort?: AbortController; holdHistory?: boolean } = {},
   ): Promise<T> {
     const op: BusyOp = {
@@ -760,9 +760,9 @@ export class DocumentStore {
     st.busyOps.push(op);
     this.setBusy(op.state);
     try {
-      return await fn((id) => {
+      return await fn((id, label) => {
         if (op.abort.signal.aborted) throw new OpCancelled();
-        op.state = { ...op.state, id, waiting: null };
+        op.state = { ...op.state, id, waiting: null, label: label ?? op.state.label };
         if (st === this.st && st.busyOps.at(-1) === op) this.setBusy(op.state);
       });
     } finally {
@@ -3063,7 +3063,7 @@ export class DocumentStore {
               const send = (id: string) => {
                 if (flight.dropped) throw new OpCancelled();
                 flight.id = id;
-                onStarted(id);
+                onStarted(id, all ? "Computing all" : "Rebuilding");
               };
               const reply =
                 all && computeAll
