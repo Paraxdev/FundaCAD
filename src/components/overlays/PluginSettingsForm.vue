@@ -4,6 +4,7 @@ import { settingMatches, type NumberSetting, type PluginSettings, type SettingPr
 import { fmtKeys } from "../../input/platform";
 import { keyCombo, numberText, parseNumberField, stepNumber, unitLabel } from "../../plugins/settingsInput";
 import { getUnit, onUnitChange } from "../../ui/units";
+import Select from "../ui/Select.vue";
 import Icon from "../shell/Icon.vue";
 
 const props = defineProps<{
@@ -169,7 +170,7 @@ const isDefault = (p: SettingProp) => {
             <template v-else-if="p.type === 'number'">
               <input
                 :id="id(p)"
-                class="plugset-num"
+                class="sm-input plugset-num"
                 :class="{ invalid: errors[p.key] }"
                 type="text"
                 inputmode="decimal"
@@ -185,20 +186,19 @@ const isDefault = (p: SettingProp) => {
               <span v-if="unitLabel(p, unit)" class="plugset-unit">{{ unitLabel(p, unit) }}</span>
             </template>
 
-            <select
+            <Select
               v-else-if="p.type === 'enum'"
               :id="id(p)"
               class="plugset-select"
-              :value="values[p.key]"
-              @change="store(p, ($event.target as HTMLSelectElement).value)"
-            >
-              <option v-for="o in p.options" :key="o.id" :value="o.id">{{ o.label }}</option>
-            </select>
+              :model-value="String(values[p.key])"
+              :options="p.options.map((o) => ({ value: o.id, label: o.label }))"
+              @update:model-value="store(p, $event)"
+            />
 
             <input
               v-else-if="p.type === 'string'"
               :id="id(p)"
-              class="plugset-text"
+              class="sm-input plugset-text"
               type="text"
               spellcheck="false"
               :maxlength="p.maxLength"
@@ -230,7 +230,7 @@ const isDefault = (p: SettingProp) => {
             <template v-else-if="p.type === 'file'">
               <input
                 :id="id(p)"
-                class="plugset-text"
+                class="sm-input plugset-text"
                 type="text"
                 spellcheck="false"
                 :value="values[p.key]"
@@ -284,6 +284,10 @@ const isDefault = (p: SettingProp) => {
 }
 .plugset-num.invalid {
   outline: 1px solid var(--danger, #d33);
+}
+.plugset :deep(.plugset-select) {
+  width: 18em;
+  max-width: none;
 }
 .plugset-text {
   width: 14em;
