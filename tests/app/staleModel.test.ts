@@ -5,6 +5,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { OUT_OF_DATE_GRACE_MS, watchOutOfDate } from "../../src/app/staleModel";
 import type { BusyState, RebuildState, RunningOp } from "../../src/document/store";
+import { SessionHost } from "../../src/document/session";
 
 function fakeStore() {
   const builds = new Set<(s: RebuildState) => void>();
@@ -15,6 +16,7 @@ function fakeStore() {
     drawnBehind: true,
     waiting: null as BusyState["waiting"],
     ops: [] as Pick<RunningOp, "rebuild">[],
+    sessions: new SessionHost(),
     get buildState() {
       return { building: s.building } as RebuildState;
     },
@@ -137,6 +139,37 @@ describe("a model behind its document", () => {
     r.store.drawnBehind = false;
     r.store.emit();
     expect({ stopped, landed: r.at() }).toEqual({ stopped: true, landed: false });
+    vi.useRealTimers();
+  });
+
+  it("marks the next document's model again after the old one's mark was cleared by its session's end", () => {
+    const r = rig();
+    // What the viewport's endDocument does to the mark on screen.
+    const screen: boolean[] = [];
+    const watchScreen = (s: { own(fn: () => void): () => void }) => s.own(() => screen.push(false));
+    watchScreen(r.store.sessions.current);
+    r.store.ops = [{ rebuild: false }, { rebuild: true }];
+    r.store.building = true;
+    r.store.emit();
+    const inA = r.at();
+    r.store.sessions.begin("open");
+    r.store.emit();
+    expect({ inA, cleared: screen, marks: r.marks }).toEqual({ inA: true, cleared: [false], marks: [true, true] });
+    vi.useRealTimers();
+  });
+
+  it("drops the old document's grace timer when the next one begins", () => {
+    const r = rig();
+    r.store.ops = [{ rebuild: true }];
+    r.store.building = true;
+    r.store.emit();
+    vi.advanceTimersByTime(OUT_OF_DATE_GRACE_MS - 150);
+    r.store.sessions.begin("new");
+    vi.advanceTimersByTime(OUT_OF_DATE_GRACE_MS * 2);
+    const quiet = [...r.marks];
+    r.store.emit();
+    vi.advanceTimersByTime(OUT_OF_DATE_GRACE_MS);
+    expect({ quiet, later: r.marks }).toEqual({ quiet: [], later: [true] });
     vi.useRealTimers();
   });
 

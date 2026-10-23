@@ -727,6 +727,10 @@ export class DocumentStore {
     return false;
   }
   private loads = 0;
+  /** Bumped by every load that throws the model on screen away, a replacing one included. */
+  get loadCount(): number {
+    return this.loads;
+  }
 
   /** An edit is waiting out the rebuild debounce. */
   get rebuildPending(): boolean {

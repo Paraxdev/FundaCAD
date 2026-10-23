@@ -147,7 +147,8 @@ const check = (name, ok, detail) => {
     for (let i = 0; i < 20; i++) {
       const btn = await page.$("button:has-text('Discard')");
       if (btn) {
-        await btn.click();
+        // Playwright's click waits for the frame to settle, which under SwiftShader with 1097 bodies times out.
+        await btn.evaluate((b) => b.click());
         break;
       }
       await page.waitForTimeout(100);

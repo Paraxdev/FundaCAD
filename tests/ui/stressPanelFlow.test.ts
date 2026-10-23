@@ -122,6 +122,7 @@ function rig() {
       return () => {};
     },
     isBodyVisible: () => true,
+    loadCount: 3,
     get stressStudy() {
       return study;
     },
@@ -195,6 +196,11 @@ function rig() {
     },
     settle: (r: StressResult) => settle(r),
     editDoc: () => docListeners.forEach((f) => f()),
+    /** An assistant's or a plugin's load put in place of the model, keeping the study. */
+    replaceLoad: () => {
+      store.loadCount++;
+      docListeners.forEach((f) => f());
+    },
     /** A new build drawn with these faces: the viewport drops its overlays and
      *  the rebuild bridge asks the panel to mark again. */
     rebuild: (faces: FaceMap) => {
@@ -1266,6 +1272,23 @@ describe("the result through a close", () => {
     expect(p.stress!.result).not.toBeNull();
     expect(p.stress!.colours).toBe("shown");
     expect(p.stress!.ranSetup).not.toBe(JSON.stringify(p.stress!.setup));
+  });
+
+  it("drops it after a replacing load, the model it ran on is gone, and keeps it again after the next Run", async () => {
+    const { r, p } = await ranAndClosed();
+    r.replaceLoad();
+    r.ui.showStress();
+    expect(p.stress!.result).toBeNull();
+    expect(p.stress!.colours).toBe("none");
+    expect(r.overlays.at(-1)).toBeNull();
+
+    setUp(r);
+    await settled(r);
+    const again = p.stress!.result;
+    r.ui.closeStress();
+    r.editDoc();
+    r.ui.showStress();
+    expect(p.stress!.result).toEqual(again);
   });
 
   it("drops it for another body, another document, or a Run stopped by the close", async () => {
