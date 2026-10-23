@@ -7,7 +7,7 @@ import { useUiStore } from "../../stores/ui";
 import { useShellStore } from "../../stores/shell";
 import { useDialogStore } from "../../stores/dialogs";
 import { useSketchPaletteStore } from "../../stores/sketchPalette";
-import { fmtLength, getUnit, onUnitChange, setUnit, asUnit, type Unit } from "../../ui/units";
+import { fmtLength, fmtLengthCompact, getUnit, onUnitChange, setUnit, asUnit, type Unit } from "../../ui/units";
 import { saveRenderedImage } from "../../io/files";
 import { MATCAP_STYLES, onRenderPrefsChange, renderPrefs, setRenderPref, type MatcapStyle } from "../../ui/renderPrefs";
 import { matcapSwatchUrl } from "../../ui/matcapSwatch";
@@ -95,6 +95,7 @@ function pickUnit(u: Unit) {
 }
 
 const gridLabel = computed(() => fmtLength(ui.gridStepMm));
+const gridLabelCompact = computed(() => fmtLengthCompact(ui.gridStepMm));
 
 const VIEWS = [
   { view: "top", label: "Top" },
@@ -269,7 +270,7 @@ async function screenshot() {
         :class="{ active: isOpen('grid') }"
         title="Grid and units"
         @click="open('grid', $event)"
-        >{{ gridLabel }}</button
+        >{{ gridLabelCompact }}</button
       >
       <IconButton icon="views" title="Views" :active="isOpen('views')" @click="open('views', $event)" />
       <IconButton icon="view-reset" title="Reset camera (Shift+Home)" @click="engine.handleAction('reset-camera')" />

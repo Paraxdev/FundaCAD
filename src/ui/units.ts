@@ -61,6 +61,11 @@ export function fmtLength(mm: number): string {
   return `${displayRound(toDisplay(mm))} ${current}`;
 }
 
+/** At most three significant digits and no space, for the 40 px viewport grid button. */
+export function fmtLengthCompact(mm: number): string {
+  return `${Number(toDisplay(mm).toPrecision(3))}${current}`;
+}
+
 /** Quantise for storage to a thousandth, `snap()`'s lattice floor and the finest drag step (viewport/dragStep.ts).
  *  Display decimals are `displayRound`'s job. */
 export function round(v: number): number {

@@ -100,7 +100,12 @@ describe("settings under a plugin's row", () => {
   it("shows a row once its condition holds, and resets one property or the whole plugin", async () => {
     const w = mount(PluginsSection);
     const panel = await expand(w, "Test.Alpha");
-    await panel.get('[data-setting="mode"] select').setValue("b");
+    expect(panel.find("select").exists()).toBe(false);
+    expect(panel.get('[data-setting="gap"] input').classes()).toContain("sm-input");
+    await panel.get('[data-setting="mode"] .select-trigger').trigger("click");
+    const rows = [...document.body.querySelectorAll<HTMLElement>(".select-pop .opt-row")];
+    expect(rows.map((r) => r.textContent?.trim())).toEqual(["A", "B"]);
+    rows[1]!.click();
     expect(a.get("mode")).toBe("b");
     await nextTick();
     expect(panel.find('[data-setting="extra"]').exists()).toBe(true);

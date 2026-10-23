@@ -312,6 +312,7 @@ export class Viewport {
   /** Fired when the body selection changes; "restore" when a rebuild carried it
    *  over rather than someone picking it. */
   onBodySelectionChange: ((cause?: "restore") => void) | null = null;
+  onAnalysisChange: (() => void) | null = null;
   // An edge click that hit two coincident edges of touching bodies (edgeTies.ts).
   // Returning true means the app took the click and asked which one.
   onAmbiguousEdge: ((cands: EdgeCandidate[], at: { x: number; y: number }, mods: PickMods) => boolean) | null = null;
@@ -1620,6 +1621,7 @@ export class Viewport {
   setAnalysis(mode: "none" | "component" | "draft") {
     this.analysis = mode;
     this.applyAnalysis();
+    this.onAnalysisChange?.();
   }
 
   get draftConfig(): { dir: "+X" | "-X" | "+Y" | "-Y" | "+Z" | "-Z"; threshold: number } {
@@ -1840,6 +1842,7 @@ export class Viewport {
   setZebra(on: boolean) {
     this.zebra = on;
     this.applyZebra();
+    this.onAnalysisChange?.();
   }
   private applyZebra() {
     if (!this.model) return;
@@ -1866,6 +1869,7 @@ export class Viewport {
   setCurvatureCombs(on: boolean) {
     this.combs = on;
     this.applyCombs();
+    this.onAnalysisChange?.();
   }
   private applyCombs() {
     if (this.combsObj) {

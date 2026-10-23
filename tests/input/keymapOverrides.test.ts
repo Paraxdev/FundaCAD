@@ -49,7 +49,7 @@ describe("conflicts", () => {
   it("names the action already on the key", () => {
     const p = checkShortcut({ action: "fillet", key: "e" });
     expect(p && "conflict" in p && p.conflict.action).toBe("extrude");
-    expect(describeShortcutProblem(p!)).toBe("E is already Extrude");
+    expect(describeShortcutProblem(p!)).toBe("E is already used by Extrude");
   });
 
   it("counts a global key against model and sketch keys", () => {

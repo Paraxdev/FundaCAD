@@ -122,7 +122,7 @@ export function installKeyboard(e: Engine): void {
     // Ctrl+, sits here rather than in the keymap so it works mid sketch.
     else if (ev.key === ",") {
       ev.preventDefault();
-      useDialogStore().preferences = true;
+      useDialogStore().openPreferences();
     }
   });
 }

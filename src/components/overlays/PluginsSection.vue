@@ -87,10 +87,20 @@ function toggleSettings(id: string) {
   expanded.value = next;
 }
 
-/** Whether a plugin has a setting matching the search; true for all while it is empty. */
+function nameOf(id: string): string {
+  const rec = record(id);
+  const manifest = (rec && installedManifest(rec)) || suggested.value.find((p) => p.manifest.id === id)?.manifest;
+  return manifest?.name ?? id;
+}
+
+const byName = (a: string, b: string) => nameOf(a).localeCompare(nameOf(b), undefined, { sensitivity: "base" });
+
+/** Whether a plugin's name, id or a setting matches the search; true for all while it is empty. */
 function matches(id: string): boolean {
   const q = query.value.trim();
   if (!q) return true;
+  const low = q.toLowerCase();
+  if (id.toLowerCase().includes(low) || nameOf(id).toLowerCase().includes(low)) return true;
   return sectionsOf(id).some((s) => s.settings?.schema.props.some((p) => settingMatches(p, q)));
 }
 
@@ -120,13 +130,14 @@ const rows = computed(() =>
       manifest: installedManifest(rec),
       update: updateFor(rec, suggested.value),
     }))
-    .filter((r) => matches(r.rec.id)),
+    .filter((r) => matches(r.rec.id))
+    .sort((a, b) => byName(a.rec.id, b.rec.id)),
 );
 
 /** Plugins a development build runs from this repository without installing
  *  them, so their settings have a row to sit under. */
 const fromSource = computed(() => {
-  const ids = [...new Set(sections.value.map((x) => x.plugin))].filter((id) => !record(id) && matches(id));
+  const ids = [...new Set(sections.value.map((x) => x.plugin))].filter((id) => !record(id) && matches(id)).sort(byName);
   return ids.map((id) => ({ id, manifest: suggested.value.find((p) => p.manifest.id === id)?.manifest ?? null }));
 });
 
