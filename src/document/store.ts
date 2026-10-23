@@ -879,6 +879,16 @@ export class DocumentStore {
   private editPreviewListeners = new Set<() => void>();
   private emitEditPreview() {
     for (const fn of this.editPreviewListeners) fn();
+    this.emitPreview();
+  }
+  // A preview set while a rebuild runs only queues, so no build event says it started.
+  onPreview(fn: () => void): () => void {
+    this.previewListeners.add(fn);
+    return () => this.previewListeners.delete(fn);
+  }
+  private previewListeners = new Set<() => void>();
+  private emitPreview() {
+    for (const fn of this.previewListeners) fn();
   }
 
   // The tool's live version while one edits it, so a panel beside the tool never contradicts it.
@@ -963,12 +973,13 @@ export class DocumentStore {
 
   // Not for a replace load, where an armed tool stays and keeps previewing.
   private dropToolPreview() {
+    const had = this.preview !== null;
     this.preview = null;
     this.previewHold = false;
     if (this.editPreview) {
       this.editPreview = null;
       this.emitEditPreview();
-    }
+    } else if (had) this.emitPreview();
   }
 
   newDocument() {
@@ -1687,6 +1698,7 @@ export class DocumentStore {
     const had = this.preview !== null;
     this.preview = feature === null ? null : Array.isArray(feature) ? feature : [feature];
     this.previewHold = feature !== null && !!opts?.hold;
+    this.emitPreview();
     if (feature === null && had) this.leavePreview();
     else this.scheduleRebuild(true);
   }
