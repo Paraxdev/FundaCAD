@@ -30,11 +30,6 @@ pub const MAX_ELEMENTS: usize = 80_000;
 /// The default element size aims at this share of the element limit, so the mesh lands near
 /// it without the mesher having to coarsen.
 const DEFAULT_FILL: f64 = 0.7;
-/// The first pass of a refined solve aims lower, so the refinement has elements to spend near the peak.
-const FIRST_FILL: f64 = 0.3;
-/// Elements through the typical thickness of that first pass. At two the Wall bracket's first pass was already Off's
-/// 23774 element mesh and the work budget left no refinement pass.
-const FIRST_THROUGH: f64 = 1.0;
 /// Dorfler share of the squared error a refinement pass marks. All of it, so the pass's element cap is what stops
 /// it: at half, the cantilever's error sat in about 100 tets and a pass grew the mesh by 2%.
 const THETA: f64 = 1.0;
@@ -56,9 +51,9 @@ const SHARP_FOLD_DEG: f64 = 30.0;
 /// A peak this many element sizes from a sharp inside corner is at that corner.
 const CORNER_REACH: f64 = 1.5;
 /// Refinement leaves the tets around boundary nodes this many starting sizes from a sharp edge as stuffed: the
-/// kinked chords there read a notch stress once the elements beside them are small (holed plate: 12.2 MPa on the
-/// hole wall unrefined, 14.9 on a kink of the hole's rim refined, 11.6 on the wall with this rule, 11.5 uniform fine).
-const ROUNDED_REACH: f64 = 0.5;
+/// kinked chords there read a notch stress once the elements beside them are small. Wall bracket gusset tip: 15.1 MPa
+/// unrefined, 17.2 refined at half a size, 15.2 at one, 12.3 to 14.3 on uniform meshes of 1.6 to 2 mm.
+const ROUNDED_REACH: f64 = 1.0;
 /// How long the factorisation may keep the job's heartbeat going. `FACTOR_MEMORY_CAP` bounds
 /// it to well under a minute, so this only stops beats for a call that is truly stuck.
 const FACTOR_BEATS: Duration = Duration::from_secs(600);
@@ -1285,8 +1280,9 @@ fn analyse(
         ));
     }
 
-    let (fill, through) = if refine == Refine::Off { (DEFAULT_FILL, 2.0) } else { (FIRST_FILL, FIRST_THROUGH) };
-    let requested = size.unwrap_or_else(|| default_size(volume, area, max_elements, fill, through));
+    // Every mode starts on Off's mesh, so refining only adds: a coarser start refused walls Off meshes and bent thin
+    // plates 15 to 20% too far.
+    let requested = size.unwrap_or_else(|| default_size(volume, area, max_elements, DEFAULT_FILL, 2.0));
     // The mesher grows a size below the floor anyway, and the surface is triangulated for the size used,
     // so a curved part tessellated far finer takes minutes and gigabytes for nothing.
     let effective = requested.max(size_floor(volume, max_elements));
@@ -1324,15 +1320,7 @@ fn analyse(
     let stuff = |size: f64, tick: &mut dyn FnMut() -> bool| {
         tetmesh::tetrahedralize(&surface, &MeshOptions { size, max_tets: max_elements }, tick)
     };
-    let (mesh, stats): (TetMesh, MeshStats) = match stuff(effective, &mut tick) {
-        // Walls thinner than the part's typical thickness may not take one element through them.
-        Err(MeshError::TooThin { .. }) if size.is_none() && refine != Refine::Off => stuff(
-            default_size(volume, area, max_elements, FIRST_FILL, 2.0).max(size_floor(volume, max_elements)),
-            &mut tick,
-        ),
-        r => r,
-    }
-    .map_err(|e| mesh_error_text(&e))?;
+    let (mesh, stats): (TetMesh, MeshStats) = stuff(effective, &mut tick).map_err(|e| mesh_error_text(&e))?;
 
     // Every spot in one list, the supports' first, each with its name for a refusal.
     let mut spots = Vec::new();
@@ -1453,7 +1441,7 @@ fn analyse(
             passes.len() - 1
         ));
     }
-    if passes.len() == 1 && stats.size > thickness / 2.0 * 1.0001 {
+    if stats.size > thickness / 2.0 * 1.0001 {
         warnings.push(format!(
             "the elements ({:.3} mm) are larger than half the part's typical thickness (2 V / A, {:.3} mm), so its thinnest walls may have fewer than 2 elements through them and read stiffer than they are, use a smaller size or allow more elements",
             stats.size, thickness

@@ -531,16 +531,15 @@ same request gives the same answer every time.
   PETG 1.27, ABS 1.04, ASA 1.07, PA12 nylon 1.01, PC 1.20, aluminium 2.70, steel 7.85.
   A custom material needs `E` and `nu`; without `yield` the reply's `safetyFactor` is
   null, and without `density` there is no gravity.
-- `refine`: `standard` solves a first mesh at about 30% of `maxElements`, estimates the
-  stress error of each element, splits the elements where it is high and solves once more
-  within 80% of `maxElements`; `fine` runs up to three refined solves and may use all of
-  `maxElements`; `off` solves one even mesh at the default size, the answer of before
-  refinement existed. A refined solve does not split the elements at a sharp inside corner,
+- `refine`: every mode first solves the mesh `off` solves. `standard` then estimates the
+  stress error of each element, splits the elements where it is high and solves once more,
+  within `maxElements` and about twice the first solve's time; `fine` runs up to three
+  refined solves and may take six times as long; `off` stops after the first, the answer of
+  before refinement existed. A refined solve does not split the elements at a sharp inside corner,
   at the edge of a fixed or pinned face, or at a sharp edge of the part, whose readings grow
   as elements get smaller. Any other value is refused naming the three.
 - `size` defaults to about 70% of `maxElements` for the body's volume, and at most
-  half its typical thickness `2 V / A`. The first pass of a refined solve aims at 30% and at
-  most the whole thickness, or half of it when walls that thin come apart. A size smaller than `maxElements` allows is
+  half its typical thickness `2 V / A`. A size smaller than `maxElements` allows is
   grown to fit before anything is meshed (a warning says so). `maxElements` above
   80000 is capped there with a warning. The factorisation may take at most 3 GB, and
   less when the machine has less free, which a compact part usually passes above

@@ -30,7 +30,8 @@ impl Refine {
     pub fn plan(self) -> Plan {
         match self {
             Refine::Off => Plan { passes: 0, cap_share: 0.0, work_factor: 0.0, min_edge_share: 0.0 },
-            Refine::Standard => Plan { passes: 1, cap_share: 0.8, work_factor: 1.6, min_edge_share: 0.25 },
+            // Pass 0 is Off's mesh, so a pass that grows it by MIN_GROWTH needs 1 + 1.1^1.3 = 2.13 of its work.
+            Refine::Standard => Plan { passes: 1, cap_share: 1.0, work_factor: 2.2, min_edge_share: 0.25 },
             Refine::Fine => Plan { passes: 3, cap_share: 1.0, work_factor: 6.0, min_edge_share: 0.125 },
         }
     }

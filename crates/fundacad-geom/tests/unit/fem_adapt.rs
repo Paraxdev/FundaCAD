@@ -3,15 +3,17 @@ use fundacad_geom::fem::adapt::*;
 #[test]
 fn each_mode_has_its_plan() {
     assert_eq!(Refine::Off.plan(), Plan { passes: 0, cap_share: 0.0, work_factor: 0.0, min_edge_share: 0.0 });
-    assert_eq!(Refine::Standard.plan(), Plan { passes: 1, cap_share: 0.8, work_factor: 1.6, min_edge_share: 0.25 });
+    assert_eq!(Refine::Standard.plan(), Plan { passes: 1, cap_share: 1.0, work_factor: 2.2, min_edge_share: 0.25 });
     assert_eq!(Refine::Fine.plan(), Plan { passes: 3, cap_share: 1.0, work_factor: 6.0, min_edge_share: 0.125 });
 }
 
 #[test]
 fn the_next_cap_stops_on_the_passes_the_budget_and_too_little_growth() {
     let standard = Refine::Standard.plan();
-    assert_eq!(next_cap(&standard, 30_000, &[9554], 21_000), Some(24_000));
-    assert_eq!(next_cap(&standard, 30_000, &[9554, 24_000], 21_000), None);
+    // The Wall bracket: Off's 23774 elements grow by 15% in the one pass the work allows.
+    assert_eq!(next_cap(&standard, 30_000, &[23_774], 23_774), Some(27_353));
+    assert_eq!(next_cap(&standard, 30_000, &[23_774, 27_353], 23_774), None);
+    assert_eq!(next_cap(&standard, 30_000, &[9554], 21_000), Some(30_000));
     assert_eq!(next_cap(&standard, 30_000, &[], 21_000), None);
     assert_eq!(next_cap(&Refine::Off.plan(), 30_000, &[9554], 21_000), None);
     let fine = Refine::Fine.plan();
@@ -27,8 +29,8 @@ fn the_next_cap_stops_on_the_passes_the_budget_and_too_little_growth() {
     assert_eq!(next_cap(&even, 1_000_000, &[13_377], 13_377), None);
     assert_eq!(next_cap(&even, 1_000_000, &[9_000, 9_000], 13_377), None);
 
-    assert_eq!(next_cap(&standard, 30_000, &[21_818], 100_000), Some(24_000));
-    assert_eq!(next_cap(&standard, 30_000, &[21_819], 100_000), None);
+    assert_eq!(next_cap(&standard, 30_000, &[27_272], 100_000), Some(30_000));
+    assert_eq!(next_cap(&standard, 30_000, &[27_273], 100_000), None);
 }
 
 #[test]
