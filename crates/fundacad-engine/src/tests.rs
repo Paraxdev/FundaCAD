@@ -658,3 +658,56 @@ fn a_test_hold_names_the_ops_it_holds() {
     assert_eq!(supervise::hold_ms(spec, "export"), None);
     assert_eq!(supervise::hold_ms("import=soon", "import"), None);
 }
+
+struct TwoClients {
+    engine: Arc<Engine>,
+    releases: Arc<AtomicI64>,
+    app: (Client, Receiver<Message>),
+    mcp: (Client, Receiver<Message>),
+}
+
+fn app_and_assistant() -> TwoClients {
+    let (tx, _rx) = channel();
+    let releases = Arc::new(AtomicI64::new(0));
+    let jobs = Docked(Fake { gate: None, rebuilds: Arc::new(AtomicI64::new(0)) }, releases.clone());
+    let engine = Arc::new(Engine::start(jobs, Arc::new(Collect(Mutex::new(tx)))));
+    let pair = || {
+        let (t, r) = channel();
+        (engine.client(Arc::new(Collect(Mutex::new(t)))), r)
+    };
+    let (app, mcp) = (pair(), pair());
+    TwoClients { engine, releases, app, mcp }
+}
+
+fn built(c: &(Client, Receiver<Message>), id: &str, doc: Option<&str>) {
+    let mut req = json!({"id": id, "op": "rebuild", "revision": 1, "document": {"features": [{"id": "f"}]}});
+    if let Some(d) = doc {
+        req["doc"] = json!(d);
+    }
+    say(&c.0, req);
+    assert_eq!(replies_until(&c.1, id), vec![json!([id, "ok"])]);
+}
+
+fn ended(c: &(Client, Receiver<Message>), id: &str, doc: &str) {
+    say(&c.0, json!({"id": id, "op": "doc_end", "doc": doc}));
+    assert_eq!(replies_until(&c.1, id), vec![json!([id, {"ended": 0}])]);
+}
+
+#[test]
+fn an_assistant_that_names_no_document_does_not_keep_an_ended_documents_caches_held() {
+    let t = app_and_assistant();
+    built(&t.mcp, "m1", None);
+    built(&t.app, "a1", Some("A"));
+    built(&t.app, "b1", Some("B"));
+    ended(&t.app, "end-a", "A");
+    // B is still open, so nothing is released.
+    built(&t.app, "b2", Some("B"));
+    assert_eq!(t.releases.load(Ordering::SeqCst), 0);
+    ended(&t.app, "end-b", "B");
+    until_count(&t.releases, 1);
+    built(&t.mcp, "m2", None);
+    built(&t.app, "c1", Some("C"));
+    ended(&t.app, "end-c", "C");
+    until_count(&t.releases, 2);
+    assert!(t.engine.waiting.lock().unwrap().is_empty());
+}

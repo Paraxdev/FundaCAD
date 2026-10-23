@@ -288,15 +288,17 @@ fn ends(ended: &[Ended], client: u64, doc: &str) -> bool {
     ended.iter().any(|(c, d)| *c == client && d.as_deref().map_or(true, |d| d == doc))
 }
 
-/// `owed` carries a release the jobs could not make yet, until it is made or a document holds something again.
+/// `owed` carries a release the jobs could not make yet, until it is made or a named document holds something again.
+/// A client that names no document (the MCP's live rebuild) never ends one, so it never keeps the caches held.
 fn forget_ended<J: Jobs>(pool: &Pool<J>, jobs: &mut J, docs: &mut Docs, owed: &mut bool) {
     let ended = std::mem::take(&mut *lock(&pool.ended));
+    let unnamed = |docs: &Docs| docs.keys().all(|(_, doc)| doc.is_empty());
     if !ended.is_empty() {
         docs.retain(|(client, doc), held| held.holds() && !ends(&ended, *client, doc));
-        *owed = docs.is_empty();
+        *owed = unnamed(docs);
     }
     if *owed {
-        *owed = docs.is_empty() && !jobs.release();
+        *owed = unnamed(docs) && !jobs.release();
     }
 }
 
