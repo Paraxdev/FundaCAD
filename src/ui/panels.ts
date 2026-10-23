@@ -100,9 +100,11 @@ export function createPanels(deps: PanelsDeps) {
     const f = toDisplay(1);
     // The mesh of a body that is not a sound solid has no inside, so a volume
     // summed off it and the centre of mass weighted by it are wrong.
-    const faults = (store.buildState.result?.bodies ?? [])
+    const built = store.buildState.result?.bodies ?? [];
+    const names = bodyLabels(built, (id) => store.bodyName(id));
+    const faults = built
       .filter((b) => b.fault !== undefined && p.ids.includes(b.id))
-      .map((b) => `${b.name} ${b.fault}`);
+      .map((b) => `${names.get(b.id)} ${b.fault}`);
     const solid = faults.length === 0;
     const rows: PanelRow[] = [
       ...(solid ? [{ k: "Volume", v: `${displayRound(p.volume * f * f * f)} ${unit}³` }] : []),

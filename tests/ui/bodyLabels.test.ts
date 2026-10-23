@@ -39,6 +39,19 @@ describe("bodyLabels", () => {
     ).toEqual({ body1: "Box", body2: "Lid", body3: "Lid 2" });
   });
 
+  it("keeps a name the user typed and numbers the engine's body that shares it", () => {
+    expect(
+      labels(
+        [
+          { id: "body1", name: "Box" },
+          { id: "body2", name: "Cylinder" },
+          { id: "body3", name: "Box" },
+        ],
+        { body2: "Box" },
+      ),
+    ).toEqual({ body1: "Box 2", body2: "Box", body3: "Box 3" });
+  });
+
   it("skips a number another body is already called", () => {
     expect(
       labels(

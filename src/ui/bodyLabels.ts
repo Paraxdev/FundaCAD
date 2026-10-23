@@ -10,11 +10,14 @@ export function bodyLabels(
   bodies: readonly NamedBody[],
   userName: (id: string) => string | undefined = () => undefined,
 ): Map<string, string> {
-  const base = bodies.map((b) => userName(b.id) || b.name || b.id);
+  const user = bodies.map((b) => userName(b.id) || "");
+  const base = bodies.map((b, i) => user[i] || b.name || b.id);
   const taken = new Set(base);
   const seen = new Map<string, number>();
   const out = new Map<string, string>();
-  bodies.forEach((b, i) => {
+  // A name the user typed is labelled before the engine's names, so an engine "Box" takes the number, not the user's.
+  const order = [...bodies.keys()].sort((a, b) => Number(!user[a]) - Number(!user[b]));
+  for (const i of order) {
     const name = base[i]!;
     let n = (seen.get(name) ?? 0) + 1;
     let label = name;
@@ -24,9 +27,9 @@ export function bodyLabels(
       taken.add(label);
     }
     seen.set(name, n);
-    out.set(b.id, label);
-  });
-  return out;
+    out.set(bodies[i]!.id, label);
+  }
+  return new Map(bodies.map((b) => [b.id, out.get(b.id)!]));
 }
 
 /** The built bodies in build order, each named by its picker label. */
