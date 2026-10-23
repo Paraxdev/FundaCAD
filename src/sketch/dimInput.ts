@@ -780,7 +780,9 @@ export class DimInput {
     this.root.style.top = `${Math.round(at.top)}px`;
   }
 
+  // Centred on the drawing itself, so the placing click can land under it: it must not take that click.
   positionCentred(screenX: number, screenY: number) {
+    this.setClickThrough(true);
     this.root.style.left = `${Math.round(screenX - this.root.offsetWidth / 2)}px`;
     this.root.style.top = `${Math.round(screenY - this.root.offsetHeight / 2)}px`;
   }

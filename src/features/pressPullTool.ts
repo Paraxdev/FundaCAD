@@ -374,6 +374,7 @@ export class PressPullTool {
       if (release === "commit") return this.commit();
       if (release === "cancel") return this.cancel();
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
+      this.dim.focus();
       return;
     }
     const moved = Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
