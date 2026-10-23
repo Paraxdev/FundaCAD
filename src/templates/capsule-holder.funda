@@ -46,6 +46,7 @@
     "capTurns": 8,
     "capAngle": 2880,
     "capShift": 38.1,
+    "screwedFlag": 0,
     "layoutOn": 1,
     "seatHeight": 47.175,
     "seatTurn": -5.68670270978447,
@@ -291,8 +292,13 @@
       "value": 38.1,
       "unit": "mm"
     },
+    "screwedFlag": {
+      "expr": "min(max(round(screwedOn); 0); 1)",
+      "value": 0,
+      "unit": "count"
+    },
     "layoutOn": {
-      "expr": "1 - screwedOn",
+      "expr": "1 - screwedFlag",
       "value": 1,
       "unit": "count"
     },
@@ -392,7 +398,7 @@
       }
     },
     "d9": {
-      "expr": "screwedOn",
+      "expr": "screwedFlag",
       "value": 0,
       "unit": "count",
       "target": {

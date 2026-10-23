@@ -4,6 +4,7 @@ import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import ShortcutsDialog from "../../../src/components/overlays/ShortcutsDialog.vue";
 import { contribute, resetContributions, setGrantLookup } from "../../../src/plugins/contrib";
+import { useDialogStore } from "../../../src/stores/dialogs";
 import { resetUserShortcuts, resolveShortcut } from "../../../src/input/shortcuts";
 
 enableAutoUnmount(afterEach);
@@ -106,6 +107,20 @@ describe("changing a key in the shortcuts dialog", () => {
     input.dispatchEvent(new Event("input"));
     await nextTick();
     expect([...document.querySelectorAll(".sc-label")].map((l) => l.textContent)).toEqual(["Chamfer (bevel)"]);
+  });
+
+  it("clears the search on the first Escape and closes on the second", async () => {
+    const input = document.querySelector<HTMLInputElement>("[data-shortcut-search]")!;
+    useDialogStore().shortcuts = true;
+    input.focus();
+    input.value = "chamfer";
+    input.dispatchEvent(new Event("input"));
+    await nextTick();
+    await press({ key: "Escape" });
+    expect(input.value).toBe("");
+    expect(useDialogStore().shortcuts).toBe(true);
+    await press({ key: "Escape" });
+    expect(useDialogStore().shortcuts).toBe(false);
   });
 });
 

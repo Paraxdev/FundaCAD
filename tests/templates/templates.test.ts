@@ -336,6 +336,30 @@ describe("Capsule holder", () => {
     ]);
   });
 
+  it("reads any screwedOn as 0 or 1, so the cap is either on the tube or in the layout", async () => {
+    const seen = async (value: string) => {
+      const doc = await load("capsule-holder");
+      setAll(doc, { screwedOn: value });
+      return moves(doc).map(([id, active]) => [id, active]);
+    };
+    expect(await seen("0.4")).toEqual([
+      ["place", 1],
+      ["screw", 0],
+    ]);
+    expect(await seen("0.6")).toEqual([
+      ["place", 0],
+      ["screw", 1],
+    ]);
+    expect(await seen("7")).toEqual([
+      ["place", 0],
+      ["screw", 1],
+    ]);
+    expect(await seen("-3")).toEqual([
+      ["place", 1],
+      ["screw", 0],
+    ]);
+  });
+
   describe("keeps the thread inside what the kernel cuts whole", () => {
     const turns = (doc: CadDocument) =>
       revolves(doc).flatMap(([id, , angle]) =>
