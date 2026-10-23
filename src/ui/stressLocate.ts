@@ -65,16 +65,30 @@ function closestInto(out: Float64Array, p: Vec3, q: ArrayLike<number>, o: number
     out[1] = y;
     out[2] = z;
   };
-  const ax = q[o]!, ay = q[o + 1]!, az = q[o + 2]!;
-  const bx = q[o + 3]!, by = q[o + 4]!, bz = q[o + 5]!;
-  const cx = q[o + 6]!, cy = q[o + 7]!, cz = q[o + 8]!;
-  const abx = bx - ax, aby = by - ay, abz = bz - az;
-  const acx = cx - ax, acy = cy - ay, acz = cz - az;
-  const apx = p[0] - ax, apy = p[1] - ay, apz = p[2] - az;
+  const ax = q[o]!,
+    ay = q[o + 1]!,
+    az = q[o + 2]!;
+  const bx = q[o + 3]!,
+    by = q[o + 4]!,
+    bz = q[o + 5]!;
+  const cx = q[o + 6]!,
+    cy = q[o + 7]!,
+    cz = q[o + 8]!;
+  const abx = bx - ax,
+    aby = by - ay,
+    abz = bz - az;
+  const acx = cx - ax,
+    acy = cy - ay,
+    acz = cz - az;
+  const apx = p[0] - ax,
+    apy = p[1] - ay,
+    apz = p[2] - az;
   const d1 = abx * apx + aby * apy + abz * apz;
   const d2 = acx * apx + acy * apy + acz * apz;
   if (d1 <= 0 && d2 <= 0) return set(1, 0, 0);
-  const bpx = p[0] - bx, bpy = p[1] - by, bpz = p[2] - bz;
+  const bpx = p[0] - bx,
+    bpy = p[1] - by,
+    bpz = p[2] - bz;
   const d3 = abx * bpx + aby * bpy + abz * bpz;
   const d4 = acx * bpx + acy * bpy + acz * bpz;
   if (d3 >= 0 && d4 <= d3) return set(0, 1, 0);
@@ -83,7 +97,9 @@ function closestInto(out: Float64Array, p: Vec3, q: ArrayLike<number>, o: number
     const v = d1 / (d1 - d3);
     return set(1 - v, v, 0);
   }
-  const cpx = p[0] - cx, cpy = p[1] - cy, cpz = p[2] - cz;
+  const cpx = p[0] - cx,
+    cpy = p[1] - cy,
+    cpz = p[2] - cz;
   const d5 = abx * cpx + aby * cpy + abz * cpz;
   const d6 = acx * cpx + acy * cpy + acz * cpz;
   if (d6 >= 0 && d5 <= d6) return set(0, 0, 1);
@@ -122,7 +138,8 @@ export function locator(s: EngineSurface): Locator {
       }
     }
     const o = t * 9;
-    const e = (u: number, v: number) => Math.hypot(P[o + u]! - P[o + v]!, P[o + u + 1]! - P[o + v + 1]!, P[o + u + 2]! - P[o + v + 2]!);
+    const e = (u: number, v: number) =>
+      Math.hypot(P[o + u]! - P[o + v]!, P[o + u + 1]! - P[o + v + 1]!, P[o + u + 2]! - P[o + v + 2]!);
     meanEdge[t] = (e(0, 3) + e(3, 6) + e(6, 0)) / 3;
     total += meanEdge[t]!;
   }
@@ -171,9 +188,12 @@ export function locator(s: EngineSurface): Locator {
       const covered = (r - 1) * cell;
       if (best && best.distance <= covered) break;
       if (covered > reach) break;
-      const i0 = Math.max(c[0]! - r, 0), i1 = Math.min(c[0]! + r, nx - 1);
-      const j0 = Math.max(c[1]! - r, 0), j1 = Math.min(c[1]! + r, ny - 1);
-      const k0 = Math.max(c[2]! - r, 0), k1 = Math.min(c[2]! + r, nz - 1);
+      const i0 = Math.max(c[0]! - r, 0),
+        i1 = Math.min(c[0]! + r, nx - 1);
+      const j0 = Math.max(c[1]! - r, 0),
+        j1 = Math.min(c[1]! + r, ny - 1);
+      const k0 = Math.max(c[2]! - r, 0),
+        k1 = Math.min(c[2]! + r, nz - 1);
       for (let i = i0; i <= i1; i++)
         for (let j = j0; j <= j1; j++) {
           const edge = Math.abs(i - c[0]!) === r || Math.abs(j - c[1]!) === r;

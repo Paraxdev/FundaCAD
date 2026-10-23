@@ -141,7 +141,11 @@ describe("locator", () => {
   it("answers null for no triangles and reads one and many", () => {
     expect(locator({ positions: [], indices: [], vonMises: [] }).closest([1, 2, 3], -1)).toBeNull();
     expect(locator({ positions: [], indices: [], vonMises: [] }).edgeAt([1, 2, 3])).toBe(0);
-    const one = locator({ positions: [...place([0, 0, 0]), ...place([6, 0, 0]), ...place([0, 3, 0])], indices: [0, 1, 2], vonMises: [1, 2, 3] });
+    const one = locator({
+      positions: [...place([0, 0, 0]), ...place([6, 0, 0]), ...place([0, 3, 0])],
+      indices: [0, 1, 2],
+      vonMises: [1, 2, 3],
+    });
     const hit = one.closest(place([1, 1, 5]), -1)!;
     expect(hit.tri).toBe(0);
     expect(hit.distance).toBeCloseTo(5, 9);
@@ -193,7 +197,8 @@ describe("splitDisplay", () => {
     const m = splitDisplay(displayBox(), (p) => at.edgeAt(p));
     const onEdge = new Map<string, Set<number>>();
     const faceOf = new Int32Array(m.positions.length / 3);
-    for (let t = 0; t < m.indices.length / 3; t++) for (let k = 0; k < 3; k++) faceOf[m.indices[t * 3 + k]!] = m.faceIds[t]!;
+    for (let t = 0; t < m.indices.length / 3; t++)
+      for (let k = 0; k < 3; k++) faceOf[m.indices[t * 3 + k]!] = m.faceIds[t]!;
     for (let v = 0; v < m.positions.length / 3; v++) {
       const p = unplace(m.positions, v * 3);
       const bounds = p.filter((x, k) => Math.abs(x) < 1e-4 || Math.abs(x - SIZE[k]!) < 1e-4).length;
@@ -217,7 +222,12 @@ describe("splitDisplay", () => {
   });
 
   it("leaves an empty mesh empty and one short triangle whole", () => {
-    const empty: DisplayMesh = { positions: new Float32Array(), indices: new Uint32Array(), faceIds: new Int32Array(), faceStart: 3 };
+    const empty: DisplayMesh = {
+      positions: new Float32Array(),
+      indices: new Uint32Array(),
+      faceIds: new Int32Array(),
+      faceStart: 3,
+    };
     expect(splitDisplay(empty, () => 1)).toEqual(empty);
     const one: DisplayMesh = {
       positions: new Float32Array([...place([0, 0, 0]), ...place([1, 0, 0]), ...place([0, 1.2, 0])]),
@@ -342,14 +352,20 @@ describe("von Mises from the stress tensor", () => {
 describe("readAt and weakSpot", () => {
   const s = engineBox(12);
   const at = locator(s);
-  const d = drawnSurface(splitDisplay(displayBox(), (p) => at.edgeAt(p)), s, at, WIDE);
+  const d = drawnSurface(
+    splitDisplay(displayBox(), (p) => at.edgeAt(p)),
+    s,
+    at,
+    WIDE,
+  );
 
   it("reads the engine under the hit's rest point, the same after the surface is bent", () => {
     const tri = 17;
     const w: Vec3 = [0.2, 0.5, 0.3];
     const hit = readAt(d, at, tri, w)!;
     const rest: Vec3 = [0, 0, 0];
-    for (let k = 0; k < 3; k++) for (let j = 0; j < 3; j++) rest[j] = rest[j]! + w[k]! * d.positions[d.indices[tri * 3 + k]! * 3 + j]!;
+    for (let k = 0; k < 3; k++)
+      for (let j = 0; j < 3; j++) rest[j] = rest[j]! + w[k]! * d.positions[d.indices[tri * 3 + k]! * 3 + j]!;
     const v = probeValues(s, hit.tri, hit.weights)!;
     expect(v.vonMises).toBeCloseTo(field(unplace(rest, 0)), 2);
     expect(s.faceIds![hit.tri]).toBe(d.faces[tri]);
