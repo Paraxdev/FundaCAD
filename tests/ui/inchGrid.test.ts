@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { gridStep, snapLatticeStep, GRID_CELL_PX } from "../../src/sketch/planeGrid";
-import { fmtGridStep, fmtLengthCompact, niceInchStep, setUnit } from "../../src/ui/units";
+import { gridLines, gridStep, snapLatticeStep, GRID_CELL_PX } from "../../src/sketch/planeGrid";
+import { groundGridCells } from "../../src/viewport/scene";
+import { fmtGridStep, fmtLengthCompact, gridMajorEvery, niceInchStep, setUnit } from "../../src/ui/units";
 
 const IN = 25.4;
 afterEach(() => setUnit("mm"));
@@ -96,5 +97,62 @@ describe("inch grid labels", () => {
     setUnit("mm");
     expect(fmtLengthCompact(IN / 4)).toBe("6.35mm");
     expect(fmtGridStep(12.7)).toBe("12.7 mm");
+  });
+});
+
+describe("inch grid majors", () => {
+  const majorIn = (rough: number) => {
+    const step = gridStep(zoomFor(rough), 0);
+    return (step * gridMajorEvery(step)) / IN;
+  };
+
+  it("puts majors on the next round fraction or whole inch", () => {
+    setUnit("in");
+    const cases: [number, number][] = [
+      [1 / 64, 1 / 16],
+      [1 / 32, 1 / 8],
+      [1 / 16, 1 / 4],
+      [1 / 8, 1 / 2],
+      [1 / 4, 1],
+      [1 / 2, 2],
+      [1, 5],
+      [2, 10],
+      [10, 50],
+    ];
+    for (const [rough, major] of cases) expect(majorIn(rough), `${rough} in`).toBeCloseTo(major, 9);
+  });
+
+  it("switches from four to five cells with the step, both sides", () => {
+    setUnit("in");
+    const half = Math.sqrt(1 / 2);
+    expect(majorIn(half * 0.999)).toBeCloseTo(2, 9);
+    expect(majorIn(half * 1.001)).toBeCloseTo(5, 9);
+    const edge = 1 / 64 / Math.SQRT2;
+    expect(majorIn(edge * 1.001)).toBeCloseTo(1 / 16, 9);
+    expect(majorIn(edge * 0.999)).toBeCloseTo(0.05, 9);
+  });
+
+  it("draws the sketch grid majors on whole inches", () => {
+    setUnit("in");
+    const g = gridLines(0, 0, IN / 4, IN * 3);
+    const xs = new Set<number>();
+    for (let i = 0; i < g.major.length; i += 4) if (g.major[i + 1] !== g.major[i + 3]) xs.add(g.major[i]! / IN);
+    for (const x of xs) expect(Math.abs(x - Math.round(x)), `${x} in`).toBeLessThan(1e-9);
+    expect(xs.has(1)).toBe(true);
+  });
+
+  it("keeps metric majors every five cells", () => {
+    for (const unit of ["mm", "cm"] as const) {
+      setUnit(unit);
+      for (const step of [0.1, 0.5, 1, 2, 5, 10, IN / 4, IN / 2]) expect(gridMajorEvery(step)).toBe(5);
+    }
+  });
+
+  it("sizes the ground grid in whole major cells", () => {
+    setUnit("in");
+    const step = IN / 8;
+    expect(groundGridCells(0.1, 2000, step, gridMajorEvery(step)) % 4).toBe(0);
+    setUnit("mm");
+    expect(groundGridCells(0.1, 2000, 2, gridMajorEvery(2)) % 5).toBe(0);
   });
 });
