@@ -156,6 +156,9 @@ export class LiveSessionHost {
   start(): void {
     if (this.running) return;
     this.running = true;
+    // The engine forgot its proposals on the release, an agent waiting on a new one must not be answered from these.
+    this.applied = [];
+    this.refused = [];
     // Every change bumps the revision, not only an assistant's: the engine refuses a proposal whose base moved, so a
     // user dragging a face while an agent writes loses that race loudly. A counter, since a hash can wrongly match.
     this.unsubscribeDoc = this.store.onDocChange(() => {
