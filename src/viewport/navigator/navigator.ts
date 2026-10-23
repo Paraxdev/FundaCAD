@@ -810,7 +810,7 @@ export class Navigator {
   }
 
   /** Frame a box, keeping the view direction, FIT_MARGIN clear on every side. */
-  fitBox(box: THREE.Box3, opts: { animate?: boolean; insets?: Insets } = {}) {
+  fitBox(box: THREE.Box3, opts: { animate?: boolean; insets?: Insets | undefined } = {}) {
     const p = this.destination();
     if (!frameBox(p, this.frame, box, FIT_MARGIN, opts.insets)) {
       const c = box.isEmpty() ? null : box.getCenter(new THREE.Vector3());
@@ -826,7 +826,7 @@ export class Navigator {
 
   /** The view a fresh window opens on. Given the box, it frames the box itself
    *  rather than its bounding ball. */
-  resetView(center: THREE.Vector3 | null, radius: number, animate: boolean, box?: THREE.Box3, insets?: Insets) {
+  resetView(center: THREE.Vector3 | null, radius: number, animate: boolean, box?: THREE.Box3, insets?: Insets | undefined) {
     const p = clonePose(this.pose);
     const home = HOME_EYE.clone().normalize();
     const q = lookQuat(home, new THREE.Vector3());
