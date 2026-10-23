@@ -1,7 +1,8 @@
 // Imported panoramas decoded and ready to light with, by hash.
 
 import * as THREE from "three";
-import { downscaleEquirect, LIGHTING_HDR_WIDTH, toHalfRgba, type HdrImage } from "./hdrImage";
+import { downscaleEquirect, toHalfRgba, type HdrImage } from "./hdrImage";
+import { experimentalPrefs, lightingEnvWidth, storedEnvWidth } from "../ui/experimentalPrefs";
 
 export interface HeldHdr {
   hash: string;
@@ -10,11 +11,31 @@ export interface HeldHdr {
 }
 
 const KEEP = 3;
+/** The renderer's largest texture side, told by the scene once it has a context. */
+let textureMax = 8192;
+
+export function setHdrTextureMax(side: number) {
+  if (side > 0) textureMax = side;
+}
+
+export function hdrTextureMax(): number {
+  return textureMax;
+}
+
+/** The width an imported panorama is kept and embedded at: 2048 unless Preferences, Experimental says more. */
+export function hdrStoredWidth(): number {
+  return storedEnvWidth(experimentalPrefs(), textureMax);
+}
+
+/** The width the lighting reads, half the stored one. */
+export function hdrLightingWidth(): number {
+  return lightingEnvWidth(experimentalPrefs(), textureMax);
+}
 const held = new Map<string, HeldHdr>();
 const listeners = new Set<(hash: string) => void>();
 
 export function registerHdr(hash: string, name: string, img: HdrImage): HeldHdr {
-  const h: HeldHdr = { hash, name, light: downscaleEquirect(img, LIGHTING_HDR_WIDTH) };
+  const h: HeldHdr = { hash, name, light: downscaleEquirect(img, hdrLightingWidth()) };
   held.delete(hash);
   held.set(hash, h);
   while (held.size > KEEP) held.delete(held.keys().next().value!);

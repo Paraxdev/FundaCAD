@@ -88,17 +88,18 @@ pub fn decode_colors(bytes: &[u8]) -> Result<(String, Option<Vec<[f32; 3]>>), St
     Ok((h.key, colors))
 }
 
-/// An equirect, half float RGBA, row 0 first; 0 x 0 goes back to the sky.
+/// An equirect, half float RGBA, row 0 first; 0 x 0 goes back to the sky. Any size the body holds is taken, the
+/// tracer fits it to the device (Environment::fit).
 pub fn decode_env(bytes: &[u8]) -> Result<Option<Environment>, String> {
     let (h, body) = split::<EnvHeader>(bytes)?;
     if h.width == 0 && h.height == 0 {
         return Ok(None);
     }
-    if h.width == 0 || h.height == 0 || h.width > 8192 || h.height > 4096 {
+    if h.width == 0 || h.height == 0 {
         return Err(format!("an environment of {} x {} texels", h.width, h.height));
     }
     let n = h.width as usize * h.height as usize * 4;
-    if body.len() < n * 2 {
+    if body.len() / 2 < n {
         return Err(format!("environment: {} bytes left, {} needed", body.len(), n * 2));
     }
     let rgba = body[..n * 2].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();

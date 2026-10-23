@@ -148,6 +148,8 @@ pub struct Look {
     pub sun_color: [f32; 3],
     pub exposure: f32,
     pub bounces: u32,
+    /// The luminance an indirect contribution is scaled down to, against fireflies.
+    pub firefly: f32,
     pub lights: Option<Lights>,
     /// What camera rays that miss show, linear. Absent, they show the sky.
     pub background: Option<[f32; 3]>,
@@ -218,6 +220,7 @@ impl Default for Look {
             sun_color: [0.0; 3],
             exposure: 1.0,
             bounces: 6,
+            firefly: 10.0,
             lights: None,
             background: None,
             environment_behind: false,

@@ -9,13 +9,13 @@ import {
   downscaleEquirect,
   encodeRgbe,
   HdrRefusal,
+  hdrSize,
   inflateBase64,
   sha256Hex,
-  STORED_HDR_WIDTH,
-  thumbnailPixels,
+  sphereThumbnailPixels,
   type HdrImage,
 } from "../viewport/hdrImage";
-import { heldHdr, registerHdr } from "../viewport/hdrRegistry";
+import { hdrStoredWidth, heldHdr, registerHdr } from "../viewport/hdrRegistry";
 import { createEnvLibrary, indexedDbKv, type EnvEntry, type EnvLibrary, type StoredHdr } from "./environmentLibrary";
 import {
   applyEnvSettings,
@@ -70,9 +70,9 @@ export function hdrName(hash: string): string | null {
   return heldHdr(hash)?.name ?? names.get(hash) ?? null;
 }
 
-/** Stored at 2k, hashed, kept in the library and held for the renderer. */
+/** Stored at 2k (hdrStoredWidth), hashed, kept in the library and held for the renderer. */
 export async function storeHdr(img: HdrImage, name: string, library = envLibrary()): Promise<StoredHdr> {
-  const stored = downscaleEquirect(img, STORED_HDR_WIDTH);
+  const stored = downscaleEquirect(img, hdrStoredWidth());
   const rgbe = encodeRgbe(stored);
   const hash = await sha256Hex(rgbe);
   const rec: StoredHdr = { hash, name, width: stored.width, height: stored.height, rgbe };
@@ -82,17 +82,38 @@ export async function storeHdr(img: HdrImage, name: string, library = envLibrary
   return rec;
 }
 
-/** Light the viewport with an .hdr or .exr. Returns the refusal, or null. `leftOut` is asked once the panorama is
- *  stored, and true leaves the look as it was. */
+export interface ImportOptions {
+  /** Asked once the panorama is stored, true leaves the look as it was. */
+  leftOut?: () => boolean;
+  /** Told when the panorama was kept smaller than the file, with a sentence saying so. */
+  onNote?: (note: string) => void;
+}
+
+/** The sentence for a panorama kept at `kept` from a `source` sized file, or null when nothing was dropped. */
+export function keptSmallerNote(
+  name: string,
+  source: { width: number; height: number } | null,
+  kept: { width: number; height: number },
+): string | null {
+  if (!source || source.width <= kept.width) return null;
+  return (
+    `${name} is ${source.width} x ${source.height}. It lights the scene from a ${kept.width} x ${kept.height} ` +
+    `copy, the size kept for lighting and saved documents (Preferences, Experimental).`
+  );
+}
+
+/** Light the viewport with an .hdr or .exr. Returns the refusal, or null. */
 export async function importEnvironmentBytes(
   store: DocumentStore | null,
   bytes: Uint8Array,
   name: string,
   library = envLibrary(),
-  opts: { leftOut?: () => boolean } = {},
+  opts: ImportOptions = {},
 ): Promise<string | null> {
   try {
-    const rec = await storeHdr(await decodeHdr(bytes, name), name, library);
+    const img = await decodeHdr(bytes, name, hdrStoredWidth());
+    const note = keptSmallerNote(name, hdrSize(bytes, name), img);
+    const rec = await storeHdr(img, name, library);
     if (opts.leftOut) {
       // Ready before the look changes, so the document write that follows has no library read for an open to slip
       // into. Held only once the look is taken, the cache keeps the open document's panorama.
@@ -103,6 +124,7 @@ export async function importEnvironmentBytes(
     setActiveSaved(null);
     setRenderPref("environment", `hdr:${rec.hash}`);
     if (store) await syncDocumentEnvironment(store, library);
+    if (note) opts.onNote?.(note);
     return null;
   } catch (err) {
     if (err instanceof HdrRefusal) return err.message;
@@ -113,7 +135,7 @@ export async function importEnvironmentBytes(
 export async function importEnvironmentFile(
   store: DocumentStore | null,
   file: File,
-  opts: { leftOut?: () => boolean } = {},
+  opts: ImportOptions = {},
 ): Promise<string | null> {
   return importEnvironmentBytes(store, new Uint8Array(await file.arrayBuffer()), file.name, envLibrary(), opts);
 }
@@ -226,28 +248,40 @@ export async function applyDocumentEnvironment(
   }
 }
 
+export const THUMB_SIZE = 128;
+
 function canvasThumb(img: HdrImage): string {
   try {
-    const w = 96,
-      h = 48;
     const c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
+    c.width = c.height = THUMB_SIZE;
     const ctx = c.getContext("2d");
     if (!ctx) return "";
-    ctx.putImageData(new ImageData(thumbnailPixels(img, w, h), w, h), 0, 0);
+    ctx.putImageData(new ImageData(sphereThumbnailPixels(img, THUMB_SIZE), THUMB_SIZE, THUMB_SIZE), 0, 0);
     return c.toDataURL("image/png");
   } catch {
     return "";
   }
 }
 
+const thumbs = new Map<string, string>();
+
+/** The tile picture of a held panorama, a chrome ball in it, or "" until it is loaded. */
+export function hdrThumb(hash: string): string {
+  const had = thumbs.get(hash);
+  if (had) return had;
+  const h = heldHdr(hash);
+  if (!h) return "";
+  const t = canvasThumb(h.light);
+  if (t) {
+    if (thumbs.size > 8) thumbs.clear();
+    thumbs.set(hash, t);
+  }
+  return t;
+}
+
 export function thumbFor(settings: EnvSettings): string {
   const hash = hdrHashOf(settings.environment);
-  if (hash) {
-    const h = heldHdr(hash);
-    return h ? canvasThumb(h.light) : "";
-  }
+  if (hash) return hdrThumb(hash);
   return ENVIRONMENTS_LIST.find((e) => e.id === settings.environment)?.swatch ?? "";
 }
 

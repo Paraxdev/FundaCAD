@@ -315,6 +315,7 @@ export class WebGpuTracer implements TracerBackend {
     scene.backgroundIntensity = look.environmentBehind ? look.brightness : 1;
     scene.environment = look.environment;
     scene.environmentIntensity = look.brightness;
+    if (this.tracer) this.tracer.maxBounces = look.bounces ?? MAX_BOUNCES;
     for (const l of look.lights) {
       const d = new THREE.DirectionalLight(l.color, l.intensity);
       d.position.copy(l.position);

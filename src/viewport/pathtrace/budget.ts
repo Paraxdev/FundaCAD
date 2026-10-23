@@ -1,5 +1,7 @@
 // Pure, so the per frame budget controller is tested without a GPU.
 
+import { experimentalPrefs, type ExperimentalPrefs } from "../../ui/experimentalPrefs";
+
 /** GPU time per traced frame that leaves the UI near 60 fps. */
 export const TARGET_MS = 12;
 /** Below this on every recent frame the budget may grow. */
@@ -85,25 +87,40 @@ export interface CostProfile {
   budgetScale: number;
 }
 
-export function costProfile(p: { discharging: boolean }): CostProfile {
-  return p.discharging ? { cap: 64, budgetScale: 0.5 } : { cap: 256, budgetScale: 1 };
+type Limits = Pick<ExperimentalPrefs, "sampleCap" | "batterySampleCap" | "traceScale" | "pictureMegapixels">;
+
+/** The caps default to 256 on mains and 64 on battery (ui/experimentalPrefs.ts). */
+export function costProfile(p: { discharging: boolean }, x: Limits = experimentalPrefs()): CostProfile {
+  return p.discharging ? { cap: x.batterySampleCap, budgetScale: 0.5 } : { cap: x.sampleCap, budgetScale: 1 };
 }
 
 /** Against a canvas drawn at CSS size (pixel ratio at most 1), the trace lands at 0.75 of the device
  *  pixels, or 0.5 on a dense or very large screen or on battery. */
-export function renderScaleFor(p: { cssHeight: number; dpr: number; discharging: boolean }): number {
+export function renderScaleFor(
+  p: { cssHeight: number; dpr: number; discharging: boolean },
+  x: Limits = experimentalPrefs(),
+): number {
   const dpr = p.dpr > 0 ? p.dpr : 1;
-  const device = p.discharging || dpr > 1.5 || p.cssHeight * dpr > 1440 ? 0.5 : 0.75;
+  const auto = p.discharging || dpr > 1.5 || p.cssHeight * dpr > 1440 ? 0.5 : 0.75;
+  const device = x.traceScale > 0 ? x.traceScale : auto;
   return Math.min(1, (device * dpr) / Math.min(dpr, 1));
 }
 
-/** About a 4K frame: the tracer keeps several float targets of the picture's
- *  size, and the denoiser more. */
-export const MAX_PICTURE_PIXELS = 3840 * 2160;
+/** About a 4K frame by default: the tracer keeps several float targets of the picture's size, and the denoiser
+ *  more. */
+export function maxPicturePixels(x: Limits = experimentalPrefs()): number {
+  return Math.round(x.pictureMegapixels * 1e6);
+}
 
 /** The multiple of the view a traced picture is taken at, at most `scale`. */
-export function tracedPictureScale(w: number, h: number, scale: number, maxDimension: number): number {
-  const k = Math.min(scale, Math.sqrt(MAX_PICTURE_PIXELS / (w * h)), maxDimension / Math.max(w, h));
+export function tracedPictureScale(
+  w: number,
+  h: number,
+  scale: number,
+  maxDimension: number,
+  x: Limits = experimentalPrefs(),
+): number {
+  const k = Math.min(scale, Math.sqrt(maxPicturePixels(x) / (w * h)), maxDimension / Math.max(w, h));
   return Math.floor(k * 1000) / 1000;
 }
 
