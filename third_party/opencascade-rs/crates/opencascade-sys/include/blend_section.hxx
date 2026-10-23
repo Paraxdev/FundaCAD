@@ -118,6 +118,11 @@ struct TooLarge : SectionError {
   TooLarge(Misfit w, double f, const gp_Pnt &p) : why(w), fits(f), at(p) { msg = "the blend does not fit the edge"; }
 };
 
+// An inside corner the section build cannot mitre at any size, so no fit search runs for it.
+struct Unmitred : TooLarge {
+  explicit Unmitred(const gp_Pnt &p) : TooLarge(Misfit::Overlap, FITS_UNKNOWN, p) {}
+};
+
 // Opt needs C++17, which the bridges do not build with.
 template <typename T> struct Opt {
   bool has = false;
@@ -2005,6 +2010,18 @@ inline bool &pieces_only() {
   return on;
 }
 
+// The fit search judges only overlaps and splits, so a corner it cannot mitre does not fail its sizes.
+inline bool &sizing() {
+  static thread_local bool on = false;
+  return on;
+}
+
+struct Sizing {
+  bool was = sizing();
+  Sizing() { sizing() = true; }
+  ~Sizing() { sizing() = was; }
+};
+
 inline TopoDS_Shape combine(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &cut,
                             const std::vector<TopoDS_Shape> &fuse, double tol, bool one_shot) {
   double fuzz = std::max(tol * 10, 1e-5);
@@ -2170,7 +2187,10 @@ inline Opt<TopoDS_Shape> mitre(const ChamferEnd &a, const ChamferEnd &b, double 
   inB.Normalize();
   if (b.into.Dot(inA) > -1e-6 || a.into.Dot(inB) > -1e-6) return {};
   double half = std::sin(0.5 * a.into.Angle(b.into));
-  if (half < 0.1) throw err("the chamfers meet at an inside corner too sharp to mitre");
+  if (half < 0.1) {
+    if (sizing()) return {};
+    throw Unmitred(a.at);
+  }
   double reach = 0;
   for (int k = 0; k < 2; ++k) reach = std::max({reach, a.at.Distance(a.Q[k]), b.at.Distance(b.Q[k])});
   double R = 4 * reach / half + 10 * fuzz, e = std::max(0.02 * reach, 0.01);
@@ -2239,7 +2259,7 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
     }
   }
   rounds_keep_their_rests(rounds, tol);
-  // A third selected edge at the corner, or one that is not straight, gets no mitre.
+  // A third chosen edge at the corner adds its own tool after the cuts, so a mitre alone leaves it wrong.
   double by = std::max(tol * 10, 1e-5);
   auto meeting = [&](const gp_Pnt &p) {
     int n = 0;
@@ -2254,8 +2274,14 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
     for (size_t j = i + 1; j < ends.size(); ++j)
       for (const ChamferEnd &a : ends[i])
         for (const ChamferEnd &b : ends[j]) {
-          if (a.at.Distance(b.at) > by || meeting(a.at) != 2) continue;
-          if (Opt<TopoDS_Shape> m = mitre(a, b, by)) out.cut.push_back(*m);
+          if (a.at.Distance(b.at) > by) continue;
+          Opt<TopoDS_Shape> m = mitre(a, b, by);
+          if (!m.has) continue;
+          if (meeting(a.at) != 2) {
+            if (sizing()) continue;
+            throw Unmitred(a.at);
+          }
+          out.cut.push_back(m.val);
         }
   last_overrun() = first;
   return out;
@@ -2343,6 +2369,7 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
   auto out_of_time = [&]() { return std::chrono::duration<double>(clock::now() - started).count() > budget; };
   auto builds = [&](long r, bool quick) {
     PiecesOnly mode(quick);
+    Sizing judged;
     double v = grid_size(r);
     BRepBuilderAPI_Copy cp(shape, false);
     std::vector<TopoDS_Shape> ec;
@@ -2405,6 +2432,7 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
   if (grid_size(hi) < unit - 1e-9) ++hi;
   if (overlap) {
     auto apart = [&](long r) {
+      Sizing judged;
       double v = grid_size(r);
       BRepBuilderAPI_Copy cp(shape, false);
       std::vector<TopoDS_Shape> ec;
@@ -2518,6 +2546,8 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
         message = buf;
       }
       return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(out));
+    } catch (const secblend::Unmitred &) {
+      throw;
     } catch (secblend::TooLarge &e) {
       if (e.why != secblend::Misfit::Split && e.why != secblend::Misfit::Overlap) throw;
       double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
