@@ -16,6 +16,8 @@ export function installRebuildBridge(e: Engine): void {
   // New homes the camera for a 20 mm part, so an import into an empty view is fitted too.
   let viewEmpty = true;
   e.store.onOpen(() => (viewEmpty = true));
+  // A fit asked for a document whose model never landed is not the next one's; an opener asks again after the begin.
+  e.store.sessions.onBegin(() => (pendingFit = false));
   const fitNow = () => pendingFit || (viewEmpty && e.store.document.features.some((f) => f.type === "import"));
 
   // Plugin paint wins over the document's materials, which usually just repeat what an imported file said.
