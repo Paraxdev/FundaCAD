@@ -99,4 +99,53 @@ describe("import progress in the busy state", () => {
       pct: null,
     });
   });
+
+  it("gives each running op only its own progress, even one whose request id is not back yet", async () => {
+    const { be, frame } = backend();
+    // The second document's own rebuild fails at once, so only the ops under test stay on the list.
+    (be as unknown as { rebuild: () => Promise<unknown> }).rebuild = async () => ({
+      ok: false,
+      error: { message: "stub" },
+    });
+    const store = new DocumentStore(be, doc());
+    const older = importing(store);
+    let started: (id: string) => void = () => {};
+    let finish: () => void = () => {};
+    const newer = store.runBusy("Exporting tray.step", (onStarted) => {
+      started = onStarted;
+      return new Promise<void>((r) => (finish = r));
+    });
+    const seen = () => ({
+      chip: { label: store.busyState.label, stage: store.busyState.stage, pct: store.busyState.pct },
+      rows: store.runningOps.filter((o) => !o.rebuild).map((o) => ({ label: o.label, stage: o.stage, pct: o.pct })),
+    });
+    frame("imp1", 37, "Transferring shapes");
+    const beforeId = seen();
+    started("exp2");
+    frame("exp2", 64, "Writing faces");
+    frame("imp1", 81, "Colours, names and repairs");
+    const both = seen();
+    finish();
+    await newer;
+    const back = seen();
+    older.finish();
+    await older.done;
+    store.newDocument();
+    const next = importing(store);
+    frame("exp2", 12, "Writing faces");
+    const nextDoc = seen().rows;
+    next.finish();
+    await next.done;
+    const imp = (stage: string | null, pct: number | null) => ({ label: "Importing sv08.step", stage, pct });
+    const exp = (stage: string | null, pct: number | null) => ({ label: "Exporting tray.step", stage, pct });
+    expect({ beforeId, both, back, nextDoc }).toEqual({
+      beforeId: { chip: exp(null, null), rows: [imp("Transferring shapes", 37), exp(null, null)] },
+      both: {
+        chip: exp("Writing faces", 64),
+        rows: [imp("Colours, names and repairs", 81), exp("Writing faces", 64)],
+      },
+      back: { chip: imp("Colours, names and repairs", 81), rows: [imp("Colours, names and repairs", 81)] },
+      nextDoc: [imp(null, null)],
+    });
+  });
 });
