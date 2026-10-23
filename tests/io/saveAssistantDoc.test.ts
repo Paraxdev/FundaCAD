@@ -10,6 +10,7 @@ import { box } from "../document/storeKit";
 const host = vi.hoisted(() => ({
   invoked: [] as { cmd: string; args: Record<string, unknown> }[],
   hold: null as Promise<void> | null,
+  dialog: null as Promise<void> | null,
   savePath: "E:/work/hinge-v2.funda" as string | null,
 }));
 vi.mock("@tauri-apps/api/core", () => ({
@@ -19,7 +20,13 @@ vi.mock("@tauri-apps/api/core", () => ({
     return undefined;
   },
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ message: async () => {}, save: async () => host.savePath }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  message: async () => {},
+  save: async () => {
+    if (host.dialog) await host.dialog;
+    return host.savePath;
+  },
+}));
 vi.mock("../../src/ui/toast", () => ({ toast: () => null, dismissToast: () => {} }));
 vi.mock("../../src/io/recentFiles", () => ({ noteRecent() {}, forgetRecent() {}, getRecentFiles: () => [] }));
 
@@ -95,6 +102,7 @@ describe("a save racing an assistant's replacing load", () => {
   beforeEach(() => {
     host.invoked = [];
     host.hold = null;
+    host.dialog = null;
     host.savePath = "E:/work/hinge-v2.funda";
     (globalThis as unknown as Record<string, unknown>).window = {
       __TAURI_INTERNALS__: {},
@@ -161,6 +169,72 @@ describe("a save racing an assistant's replacing load", () => {
       dirty: true,
       path: "D:/parts/bracket.funda",
       features: ["bracket-a", "web-c", "rib-b", "boss-d"],
+    });
+  });
+  it("a doc_open landing while the Save As dialog is open writes nothing and names nothing", async () => {
+    const out: Record<string, unknown> = {};
+    for (const path of ["D:/parts/bracket.funda", null]) {
+      host.invoked = [];
+      const geo = new Geo();
+      const store = userDoc(path, geo);
+      const live = new LiveSessionHost(store, geo as unknown as GeometryBackend, () => true);
+      live.start();
+      await live.tick();
+      let pick!: () => void;
+      host.dialog = new Promise<void>((r) => (pick = r));
+      const saving = saveDocumentAs(store);
+      await flush();
+      geo.reply = {
+        ok: true,
+        guests: ["an assistant"],
+        proposals: [
+          { id: "p1", name: "an assistant", note: "doc_open", document: plates("lid-x", "clip-y"), replaces: true },
+        ],
+      };
+      await live.tick();
+      pick();
+      await saving;
+      host.dialog = null;
+      await live.stop();
+      out[String(path)] = { meta: meta(store), saves: saves() };
+    }
+    const after = { meta: { dirty: true, path: null, features: ["lid-x", "clip-y"] }, saves: [] };
+    expect(out).toEqual({ "D:/parts/bracket.funda": after, null: after });
+  });
+
+  it("a redo of an assistant's doc_open during a Save leaves the redone document untitled", async () => {
+    const geo = new Geo();
+    const store = userDoc("D:/parts/bracket.funda", geo);
+    store.load(JSON.stringify(plates("lid-x", "clip-y", "pin-z")), { replace: true, untitled: true });
+    store.undo();
+    const before = meta(store);
+    let open!: () => void;
+    host.hold = new Promise<void>((r) => (open = r));
+    const saving = saveDocument(store);
+    while (!host.invoked.some((c) => c.cmd === "container_save")) await flush();
+    store.redo();
+    open();
+    await saving;
+    expect({ before, after: meta(store), saves: saves() }).toEqual({
+      before: { dirty: true, path: "D:/parts/bracket.funda", features: ["bracket-a", "web-c", "rib-b"] },
+      after: { dirty: true, path: null, features: ["lid-x", "clip-y", "pin-z"] },
+      saves: [{ path: "D:/parts/bracket.funda", features: ["bracket-a", "web-c", "rib-b"] }],
+    });
+  });
+
+  it("an undo of an untitled load during a Save As on an untitled document keeps the picked path off", async () => {
+    const store = userDoc(null, new Geo());
+    store.load(JSON.stringify(plates("blank-q")), { replace: true, untitled: true });
+    let open!: () => void;
+    host.hold = new Promise<void>((r) => (open = r));
+    const saving = saveDocumentAs(store);
+    while (!host.invoked.some((c) => c.cmd === "container_save")) await flush();
+    store.undo();
+    open();
+    await saving;
+    expect({ after: meta(store), saves: saves() }).toEqual({
+      after: { dirty: true, path: null, features: ["bracket-a", "web-c", "rib-b"] },
+      saves: [{ path: "E:/work/hinge-v2.funda", features: ["blank-q"] }],
     });
   });
 });
