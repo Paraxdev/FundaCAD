@@ -5,6 +5,7 @@ import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
+import { clearOfCards } from "../ui/promptPlacement";
 import { renderPrefs, setRenderPref } from "../ui/renderPrefs";
 import { keyAngles, keyDirection } from "../viewport/keyLight";
 import { CanvasGesture } from "./canvasGesture";
@@ -28,6 +29,13 @@ export function aimedAngles(
     azimuth: foldDegrees(snapDegrees(a.azimuth, step)),
     elevation: Math.max(-90, Math.min(90, snapDegrees(a.elevation, step))),
   };
+}
+
+const FREE_GAP = 12; // --float-gap
+
+/** The screen box the stalk can reach from its foot, which the bar stays beside. */
+export function stalkReach(foot: { x: number; y: number }) {
+  return { left: foot.x - STALK_PX, right: foot.x + STALK_PX, top: foot.y - STALK_PX, bottom: foot.y + STALK_PX };
 }
 
 export class LightAimTool {
@@ -170,7 +178,10 @@ export class LightAimTool {
     const dir = new THREE.Vector3(...keyDirection(a.azimuth, a.elevation));
     this.stalk.place(this.foot, dir, k, this.viewport.camera, this.dragging || this.hover);
     const s = this.viewport.projectToScreen(this.foot);
-    this.dim.position(s.x + STALK_PX + 40, s.y);
+    this.dim.fitToWindow();
+    const area = this.viewport.domElement.getBoundingClientRect();
+    const free = clearOfCards(area, { top: s.y - 24, bottom: s.y + 24 }, FREE_GAP, this.dim.naturalSize().w);
+    this.dim.positionBeside(stalkReach(s), s, free);
     if (!this.dragging) this.readTyped();
     this.gesture.frame();
   }
