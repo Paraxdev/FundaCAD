@@ -276,6 +276,9 @@ fn the_op_answers_over_the_protocol() {
     ] {
         assert!(keys.contains(&k), "{k} missing from {keys:?}");
     }
+    let passes = r["mesh"]["passes"].as_array().unwrap();
+    assert_eq!(passes.last().unwrap()["elements"], r["mesh"]["elements"], "{}", r["mesh"]);
+    assert!(num(&r["mesh"]["finest"]) <= num(&r["mesh"]["size"]), "{}", r["mesh"]);
 
     engine.handle(Message::Text(json!({"id": 2, "op": "stress", "document": bar(), "body": "body9"}).to_string()));
     // An error reply: {id, ok: false, error: {message}}, with no feature id as none failed.
@@ -712,4 +715,192 @@ fn a_peak_where_a_slider_face_ends_is_warned_about() {
         w.contains("the peak stress is where a slider face ends, stress at a sharp inside corner or where a support ends grows as the mesh is refined"),
         "{w}"
     );
+}
+
+fn with(mut req: Value, extra: Value) -> Value {
+    for (k, v) in extra.as_object().unwrap() {
+        req[k] = v.clone();
+    }
+    req
+}
+
+fn mesh_and_peaks(r: &Value) -> Value {
+    json!({
+        "elements": r["mesh"]["elements"], "nodes": r["mesh"]["nodes"], "size": r["mesh"]["size"],
+        "minDihedral": r["mesh"]["minDihedral"], "peak": r["maxVonMises"]["value"],
+        "deflection": r["maxDisplacement"]["value"],
+    })
+}
+
+#[test]
+fn refinement_off_gives_the_single_mesh_answer_of_before() {
+    // Pinned from the engine before refinement, one mesh at the size asked and at the default size.
+    let sized = run(with(cantilever(json!("aluminium"), 2.5), json!({"refine": "off"})));
+    assert_eq!(
+        mesh_and_peaks(&sized),
+        json!({"elements": 9024, "nodes": 15041, "size": 2.5, "minDihedral": 45.0, "peak": 61.599871, "deflection": 0.580854})
+    );
+    assert_eq!(sized["mesh"]["passes"], json!([{"elements": 9024, "maxVonMises": 61.599871}]));
+    let mut req = with(cantilever(json!("PLA"), 1.0), json!({"refine": "off", "maxElements": 8000}));
+    req.as_object_mut().unwrap().remove("size");
+    let by_default = run(req);
+    assert_eq!(
+        mesh_and_peaks(&by_default),
+        json!({"elements": 6222, "nodes": 10530, "size": 2.7036, "minDihedral": 44.0, "peak": 89.905419, "deflection": 13.064596})
+    );
+}
+
+#[test]
+fn standard_refines_the_cantilever_once_and_stays_on_beam_theory() {
+    let r = run(cantilever(json!("aluminium"), 2.5));
+    let passes = r["mesh"]["passes"].as_array().unwrap();
+    assert_eq!(passes.len(), 2, "{}", r["mesh"]);
+    let counts: Vec<f64> = passes.iter().map(|p| num(&p["elements"])).collect();
+    assert_eq!(counts[0], 9024.0);
+    assert!(counts[1] > counts[0] * 1.1 && counts[1] <= 24_000.0, "{counts:?}");
+    assert_eq!(num(&r["mesh"]["elements"]), counts[1]);
+    assert_eq!(num(&passes[1]["maxVonMises"]), num(&r["maxVonMises"]["value"]));
+    assert!(num(&r["mesh"]["finest"]) < 2.5, "{}", r["mesh"]);
+    let (p, l, e, nu): (f64, f64, f64, f64) = (100.0, 100.0, 69000.0, 0.33);
+    let i = 10.0 * 10.0f64.powi(3) / 12.0;
+    let want = p * l.powi(3) / (3.0 * e * i) + p * l / (5.0 / 6.0 * e / (2.0 * (1.0 + nu)) * 100.0);
+    let got = num(&r["maxDisplacement"]["value"]);
+    assert!((got - want).abs() < 0.05 * want, "tip deflection {got} mm vs {want} mm");
+    assert_eq!(run(cantilever(json!("aluminium"), 2.5)), r);
+}
+
+/// A 120 x 40 x 10 plate with a centred 12 mm hole, pulled along its length, placed off the origin and turned
+/// 30 degrees about z then 20 about x. Returns the request and the place back in the plate's own frame.
+fn holed_plate(refine: &str) -> (Value, impl Fn([f64; 3]) -> [f64; 3]) {
+    let (cz, sz) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+    let (cx, sx) = (20f64.to_radians().cos(), 20f64.to_radians().sin());
+    let o = [17.0, -9.0, 31.0];
+    let turn = |p: [f64; 3]| {
+        let q = [cz * p[0] - sz * p[1], sz * p[0] + cz * p[1], p[2]];
+        [q[0] + o[0], cx * q[1] - sx * q[2] + o[1], sx * q[1] + cx * q[2] + o[2]]
+    };
+    let unturn = move |p: [f64; 3]| {
+        let q = [p[0] - o[0], p[1] - o[1], p[2] - o[2]];
+        let q = [q[0], cx * q[1] + sx * q[2], -sx * q[1] + cx * q[2]];
+        [cz * q[0] + sz * q[1], -sz * q[0] + cz * q[1], q[2]]
+    };
+    let doc = json!({"features": [
+        {"id": "p", "type": "box", "length": 120, "width": 40, "height": 10},
+        {"id": "h", "type": "cylinder", "radius": 6, "height": 30},
+        {"id": "cut", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]},
+        {"id": "z", "type": "move", "rz": 30, "bodies": ["body1"]},
+        {"id": "x", "type": "move", "rx": 20, "dx": 17, "dy": -9, "dz": 31, "bodies": ["body1"]},
+    ]});
+    let (a, b) = (turn([0.0; 3]), turn([1400.0, 0.0, 0.0]));
+    let force = [0, 1, 2].map(|k| b[k] - a[k]);
+    let req = json!({
+        "document": doc, "body": "body1", "material": "aluminium", "refine": refine,
+        "fixed": [nearest(turn([-60.0, 3.0, 1.0]))],
+        "loads": [{"faces": [nearest(turn([60.0, -3.0, -1.0]))], "force": force}],
+    });
+    (req, unturn)
+}
+
+/// The largest von Mises of the reply's surface on the hole wall, read away from the fixed end's singular edge.
+fn hole_wall_peak(r: &Value, unturn: &impl Fn([f64; 3]) -> [f64; 3]) -> f64 {
+    let s = &r["surface"];
+    let p: Vec<f64> = s["positions"].as_array().unwrap().iter().map(num).collect();
+    let vm: Vec<f64> = s["vonMises"].as_array().unwrap().iter().map(num).collect();
+    (0..vm.len())
+        .filter(|&i| {
+            let q = unturn([p[3 * i], p[3 * i + 1], p[3 * i + 2]]);
+            ((q[0] * q[0] + q[1] * q[1]).sqrt() - 6.0).abs() < 0.3
+        })
+        .map(|i| vm[i])
+        .fold(0.0, f64::max)
+}
+
+#[test]
+fn standard_reads_the_hole_wall_peak_closer_than_one_mesh() {
+    let (req, unturn) = holed_plate("off");
+    let off = hole_wall_peak(&run(req), &unturn);
+    let (req, unturn) = holed_plate("standard");
+    let r = run(req);
+    let std = hole_wall_peak(&r, &unturn);
+    // A uniform 2.4 mm mesh (Off, 46405 elements) reads 12.26 MPa on the wall, Off at its default 12.61.
+    let want = 12.26;
+    assert!((std - want).abs() < (off - want).abs(), "standard {std}, off {off}, reference {want}");
+    assert!((std - want).abs() < 0.02 * want, "standard {std}, reference {want}");
+    let passes = r["mesh"]["passes"].as_array().unwrap();
+    assert_eq!(passes.len(), 2, "{}", r["mesh"]);
+    assert!(num(&r["mesh"]["finest"]) < num(&r["mesh"]["size"]), "{}", r["mesh"]);
+}
+
+/// The surface vertices of a reply, in the plate's own frame, that `keep` takes, sorted.
+fn plate_vertices(r: &Value, unturn: &impl Fn([f64; 3]) -> [f64; 3], keep: impl Fn([f64; 3]) -> bool) -> Vec<[f64; 3]> {
+    let p: Vec<f64> = r["surface"]["positions"].as_array().unwrap().iter().map(num).collect();
+    let mut out: Vec<[f64; 3]> = p.chunks(3).map(|c| unturn([c[0], c[1], c[2]])).filter(|&q| keep(q)).collect();
+    out.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    out
+}
+
+#[test]
+fn standard_leaves_the_fixed_end_edge_as_it_was_and_refines_elsewhere() {
+    let h = 4.2;
+    let (req, unturn) = holed_plate("standard");
+    let std = run(with(req, json!({"size": h})));
+    let (req, _) = holed_plate("off");
+    let off = run(with(req, json!({"size": h})));
+    assert_eq!(off["mesh"]["elements"], std["mesh"]["passes"][0]["elements"]);
+    let at_end = |q: [f64; 3]| q[0] < -60.0 + 0.5 * h;
+    let end = plate_vertices(&std, &unturn, at_end);
+    assert!(end.len() > 20, "{}", end.len());
+    assert_eq!(end, plate_vertices(&off, &unturn, at_end));
+    let (a, b) = (num(&off["mesh"]["nodes"]), num(&std["mesh"]["nodes"]));
+    assert!(b > 1.5 * a, "nodes: off {a}, standard {b}");
+}
+
+#[test]
+fn a_size_that_fills_the_element_ceiling_leaves_standard_one_pass() {
+    let r = run(with(cantilever(json!("aluminium"), 1.6), json!({"maxElements": 40000})));
+    let passes = r["mesh"]["passes"].as_array().unwrap();
+    assert_eq!(passes.len(), 1, "{}", r["mesh"]);
+    let off = run(with(cantilever(json!("aluminium"), 1.6), json!({"maxElements": 40000, "refine": "off"})));
+    assert_eq!(mesh_and_peaks(&r), mesh_and_peaks(&off));
+}
+
+#[test]
+fn refine_must_be_one_of_three_words() {
+    for bad in [json!("x"), json!(3), json!("Fine ")] {
+        let e = error_of(&run(with(cantilever(json!("PETG"), 3.0), json!({"refine": bad}))));
+        assert!(e.contains("refine must be off, standard or fine"), "{e}");
+    }
+    let r = run(with(cantilever(json!("PETG"), 3.0), json!({"refine": "fine"})));
+    assert!(r["mesh"]["passes"].as_array().unwrap().len() >= 2, "{}", r["mesh"]);
+}
+
+#[test]
+fn a_wall_too_thin_for_one_element_starts_standard_with_two_through_it() {
+    // A 2 mm walled tube on a 10 mm disk, tilted and off the origin: 2V/A is 3.7 mm, so one element through it
+    // comes apart in the tube wall.
+    let doc = json!({"features": [
+        {"id": "d", "type": "cylinder", "radius": 25, "height": 10},
+        {"id": "dm", "type": "move", "dz": -30, "bodies": ["body1"]},
+        {"id": "o", "type": "cylinder", "radius": 15, "height": 60},
+        {"id": "join", "type": "boolean", "operation": "union", "target": "body1", "tools": ["body2"]},
+        {"id": "i", "type": "cylinder", "radius": 13, "height": 60},
+        {"id": "im", "type": "move", "dz": 5, "bodies": ["body3"]},
+        {"id": "cut", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body3"]},
+        {"id": "m", "type": "move", "rx": 20, "dx": 23, "dy": 7, "dz": -11, "bodies": ["body1"]},
+    ]});
+    let up = [0.0, -20f64.to_radians().sin(), 20f64.to_radians().cos()];
+    let req = |refine: &str| {
+        json!({
+            "document": doc.clone(), "body": "body1", "material": "PETG", "refine": refine, "maxElements": 60000,
+            "fixed": [face(up.map(|x| -x))],
+            "loads": [{"faces": [face(up)], "force": [40, -15, 0]}],
+        })
+    };
+    let off = run(req("off"));
+    let std = run(req("standard"));
+    let passes = std["mesh"]["passes"].as_array().unwrap_or_else(|| panic!("{std}"));
+    // The surface stays triangulated for the coarser size first tried, so the counts differ a little.
+    assert_eq!(std["mesh"]["size"], off["mesh"]["size"], "{}", std["mesh"]);
+    let (a, b) = (num(&off["mesh"]["elements"]), num(&passes[0]["elements"]));
+    assert!((a - b).abs() < 0.02 * a, "off {a}, standard's first pass {b}");
 }

@@ -345,6 +345,10 @@ pub fn stress() -> JsonObject {
                             "description": "the most tetrahedra the mesh may have (default \
                                             30000, at most 80000). A size too fine for it is \
                                             grown, with a warning"},
+            "refine": {"type": "string", "enum": ["off", "standard", "fine"],
+                       "description": "standard (default) solves, then refines the mesh where \
+                                       the stress error is high and solves again; fine refines \
+                                       further and takes longer; off solves one even mesh"},
             "image": {"type": "boolean",
                       "description": "return a PNG of the body coloured by stress, blue low \
                                       to red high, with a colour bar (default true)"},

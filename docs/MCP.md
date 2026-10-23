@@ -346,6 +346,11 @@ on, `loads` may be left out. `[0, 0, 0]` pulls nowhere and counts as no gravity.
 The summary adds a `weight` line when gravity is on, and the reaction at each
 support, in the order `fixed` then `supports`, when there is more than one.
 
+`refine` chooses how the mesh is refined: `standard` (the default) solves,
+splits the elements where the stress error is high and solves again; `fine`
+refines up to three times and takes longer; `off` solves one even mesh. The
+mesh line of the summary says how many passes ran and the finest element size.
+
 The same names are the op vocabulary a compute plugin reaches the document
 through (`src/plugins/broker/ops.ts`), and `tests/plugins/broker.test.ts` reads
 the tool list out of `crates/fundacad-mcp/src/server.rs` so the two cannot

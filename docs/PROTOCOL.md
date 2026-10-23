@@ -473,8 +473,9 @@ same request gives the same answer every time.
     { "spots": [ { "at": [12, 0, 3.5], "radius": 4 } ], "force": [0, 0, -50] }  // no face of its own
   ],
   "material": "PLA",     // optional, default PLA; a preset or {"E", "nu", "yield", "density", "name"}
-  "size": 1.5,           // optional, element size in mm
-  "maxElements": 30000 } // optional, default 30000, at most 80000
+  "size": 1.5,           // optional, starting element size in mm
+  "maxElements": 30000,  // optional, default 30000, at most 80000, a ceiling for every pass
+  "refine": "standard" } // optional, "off" | "standard" (default) | "fine"
 ```
 
 - `fixed` and each load's `faces` take one face selector or a list (the same forms
@@ -530,8 +531,16 @@ same request gives the same answer every time.
   PETG 1.27, ABS 1.04, ASA 1.07, PA12 nylon 1.01, PC 1.20, aluminium 2.70, steel 7.85.
   A custom material needs `E` and `nu`; without `yield` the reply's `safetyFactor` is
   null, and without `density` there is no gravity.
+- `refine`: `standard` solves a first mesh at about 30% of `maxElements`, estimates the
+  stress error of each element, splits the elements where it is high and solves once more
+  within 80% of `maxElements`; `fine` runs up to three refined solves and may use all of
+  `maxElements`; `off` solves one even mesh at the default size, the answer of before
+  refinement existed. A refined solve does not split the elements at a sharp inside corner,
+  at the edge of a fixed or pinned face, or at a sharp edge of the part, whose readings grow
+  as elements get smaller. Any other value is refused naming the three.
 - `size` defaults to about 70% of `maxElements` for the body's volume, and at most
-  half its typical thickness `2 V / A`. A size smaller than `maxElements` allows is
+  half its typical thickness `2 V / A`. The first pass of a refined solve aims at 30% and at
+  most the whole thickness, or half of it when walls that thin come apart. A size smaller than `maxElements` allows is
   grown to fit before anything is meshed (a warning says so). `maxElements` above
   80000 is capped there with a warning. The factorisation may take at most 3 GB, and
   less when the machine has less free, which a compact part usually passes above
@@ -544,7 +553,8 @@ Reply:
 ```jsonc
 { "body": "body3", "name": "Spring",
   "material": { "name": "PLA", "E": 3500, "nu": 0.36, "yield": 50, "density": 1.24 },
-  "mesh": { "nodes": 12345, "elements": 23456, "size": 1.2, "minDihedral": 11.2 },
+  "mesh": { "nodes": 41210, "elements": 24102, "size": 3.0, "finest": 0.78, "minDihedral": 14.2,
+            "passes": [ { "elements": 9554, "maxVonMises": 12.63 }, { "elements": 24102, "maxVonMises": 14.1 } ] },
   "maxVonMises": { "value": 31.2, "at": [x,y,z], "face": 4 },   // face null when the peak is inside
   "maxDisplacement": { "value": 0.84, "at": [x,y,z], "vector": [dx,dy,dz] },
   "safetyFactor": 1.6,                 // yield / peak von Mises
@@ -558,14 +568,17 @@ Reply:
   "errors": [ /* feature failures, only when a feature failed */ ] }
 ```
 
-- `mesh.nodes` counts the quadratic mesh's nodes (corners and mid-edge nodes).
+- `mesh.nodes` counts the quadratic mesh's nodes (corners and mid-edge nodes). `size` is
+  the starting element size, `finest` the smallest mean edge of any element, `passes` one
+  entry per solve, the last being the result; `nodes`, `elements` and `minDihedral` are
+  the final mesh's.
 - `maxVonMises.face` is the face index (the `i` of `inspect`, the mesh `faceIds`) the
   peak lies on: of the boundary triangles touching it, the face with the most area.
 - `safetyFactor` is null when the material has no `yield` or nothing is stressed.
 - `material.density` is null when the material has none.
 - `reactions` splits the reaction among the supports: a node two supports share gives
   each the part along the directions it holds, or all of it to a fixed one.
-- `surface` is the boundary of the volume mesh, outward wound: `positions` (xyz per
+- `surface` is the boundary of the final, refined volume mesh, outward wound: `positions` (xyz per
   vertex), `indices` (three per triangle), `faceIds` (one per triangle), and per vertex
   `vonMises` (MPa) and `displacement` (xyz, mm), as inline JSON numbers like the overlap
   meshes of `interference`, positions rounded to 4 places and the fields to 6.
@@ -576,7 +589,9 @@ Reply:
   grows as the mesh is refined), elements larger than half the typical thickness `2 V / A`
   (thin walls may get fewer than two through them), an element size grown to stay within
   `maxElements`, held faces too narrow for any node to lie on them, and for plastics that
-  printed parts are weaker across their layers.
+  printed parts are weaker across their layers, a peak that moved by more than 10% with
+  the last refinement, and a refinement stopped early to stay within about a minute or the
+  solver's memory.
 - A refusal is an ordinary error reply, `{"ok": false, "error": {"message"}}`: no body
   or an unknown one, a body that is not one closed solid facing outward, no held face, no load (and no gravity) or
   loads only on fixed faces, a selector that picks nothing, an unknown material or

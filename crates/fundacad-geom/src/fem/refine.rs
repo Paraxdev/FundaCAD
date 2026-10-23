@@ -14,10 +14,11 @@ type EdgeMap = HashMap<u64, Vec<u32>, BuildHasherDefault<KeyHasher>>;
 const TICK_EVERY: usize = 256;
 /// A boundary midpoint moves onto the surface only by less than this share of its edge.
 const MOVE_REACH: f64 = 0.25;
-/// A moved midpoint must leave every child at least this share of the volume it has on the chord.
-const KEEP_VOLUME: f64 = 0.2;
+/// A moved midpoint must leave every child its chord dihedral angles or at least this many degrees. A volume share
+/// rule let three bisections deep on the Wall bracket's fillet make 3 degree slivers.
+const MOVED_DIHEDRAL: f64 = 10.0;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RefineOptions {
     /// Tets allowed after refinement, 0 for no limit; refinement stops before a split that would pass it.
     pub max_tets: usize,
@@ -25,6 +26,10 @@ pub struct RefineOptions {
     pub min_edge: f64,
     /// The element size the mesh was stuffed with, which scales the on face tolerance as in the mesher.
     pub size: f64,
+    /// Per node of the mesh, true when no tet touching it may split; empty for none.
+    pub keep: Vec<bool>,
+    /// Bisections of each marked tet and its children: three halve its edges.
+    pub depth: u8,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -42,9 +47,12 @@ struct Work<'a> {
     surface: &'a SurfaceMesh,
     nodes: Vec<V3>,
     tets: Vec<[u32; 4]>,
-    fresh: Vec<bool>,
+    /// Bisections each tet's line has had in this call.
+    depth: Vec<u8>,
     around: EdgeMap,
     faces: HashMap<[u32; 3], u32>,
+    /// (node, face) for each node known to lie on a face, None for a hand built mesh without `node_faces`.
+    on: Option<std::collections::HashSet<(u32, u32)>>,
 }
 
 const EDGES: [[usize; 2]; 6] = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]];
@@ -99,7 +107,8 @@ impl Work<'_> {
         }
     }
 
-    fn split(&mut self, [a, b]: [u32; 2]) {
+    /// Splits edge ab and returns each (split tet, its new second child).
+    fn split(&mut self, [a, b]: [u32; 2]) -> Vec<(u32, u32)> {
         let key = edge_key(a as usize, b as usize);
         let ring = self.around.remove(&key).unwrap_or_default();
         let (pa, pb) = (self.nodes[a as usize], self.nodes[b as usize]);
@@ -117,49 +126,61 @@ impl Work<'_> {
             }
         }
         let mut m = chord;
+        let mut on_face = None;
         if let [(_, f), (_, g)] = sides[..] {
-            if f == g {
+            // A triangle tag can sit on the rounding of an edge, off its face, so both ends must lie on it.
+            let ends_on = self.on.as_ref().is_none_or(|on| on.contains(&(a, f)) && on.contains(&(b, f)));
+            if f == g && ends_on {
                 let faces = &self.surface.face_ids;
                 let reach = MOVE_REACH * len2(pa, pb).sqrt();
                 if let Some((_, q)) = self.surf.closest_kept(chord, reach, &|t| faces[t] == f) {
-                    if ring.iter().all(|&s| self.keeps_volume(s, a, b, chord, q)) {
+                    if ring.iter().all(|&s| self.keeps_shape(s, a, b, chord, q)) {
                         m = q;
+                        on_face = Some(f);
                     }
                 }
             }
         }
+        let mut children = Vec::with_capacity(ring.len());
         let mi = self.nodes.len() as u32;
         self.nodes.push(m);
+        if let (Some(on), Some(f)) = (self.on.as_mut(), on_face) {
+            on.insert((mi, f));
+        }
         for &s in &ring {
             self.unlink(s, key);
             let t = self.tets[s as usize];
             let first = t.map(|n| if n == b { mi } else { n });
             let second = t.map(|n| if n == a { mi } else { n });
             self.tets[s as usize] = first;
-            self.fresh[s as usize] = true;
+            self.depth[s as usize] += 1;
             let child = self.tets.len() as u32;
             self.tets.push(second);
-            self.fresh.push(true);
+            self.depth.push(self.depth[s as usize]);
             self.link(s);
             self.link(child);
+            children.push((s, child));
         }
         for (c, f) in sides {
             self.faces.remove(&sorted3([a, b, c]));
             self.faces.insert(sorted3([a, mi, c]), f);
             self.faces.insert(sorted3([mi, b, c]), f);
         }
+        children
     }
 
-    fn keeps_volume(&self, s: u32, a: u32, b: u32, chord: V3, moved: V3) -> bool {
+    fn keeps_shape(&self, s: u32, a: u32, b: u32, chord: V3, moved: V3) -> bool {
         let t = self.tets[s as usize];
         [b, a].iter().all(|&gone| {
             let at = |m: V3| t.map(|n| if n == gone { m } else { self.nodes[n as usize] });
-            orient(&at(moved)) >= KEEP_VOLUME * orient(&at(chord))
+            let floor = dihedral_range(&at(chord)).0.min(MOVED_DIHEDRAL.to_radians());
+            orient(&at(moved)) > 0.0 && dihedral_range(&at(moved)).0 >= floor
         })
     }
 }
 
-/// Splits each tet of `marked` (indices into `mesh.tets`) once, propagating along longest edges as needed. Returns
+/// Bisects each tet of `marked` (indices into `mesh.tets`), in that order, and its children until the line has had
+/// `opts.depth` bisections, propagating along longest edges as needed. Returns
 /// the mesh unchanged when nothing is split.
 pub fn refine(
     surface: &SurfaceMesh,
@@ -173,45 +194,67 @@ pub fn refine(
         surface,
         nodes: mesh.nodes.clone(),
         tets: mesh.tets.clone(),
-        fresh: vec![false; mesh.tets.len()],
+        depth: vec![0; mesh.tets.len()],
         around: EdgeMap::default(),
         faces: mesh.boundary.iter().zip(&mesh.boundary_face).map(|(t, &f)| (sorted3(*t), f)).collect(),
+        on: (!mesh.node_faces.is_empty()).then(|| mesh.node_faces.iter().copied().collect()),
     };
     for s in 0..mesh.tets.len() as u32 {
         work.link(s);
     }
     let min2 = opts.min_edge * opts.min_edge;
     let mut split = 0usize;
+    let kept = |n: u32| opts.keep.get(n as usize).copied().unwrap_or(false);
     'marked: for &t in marked {
         if t as usize >= mesh.tets.len() {
             continue;
         }
-        while !work.fresh[t as usize] {
-            let (mut edge, mut rank) = work.longest(t);
-            if rank.0 < min2 {
-                continue 'marked;
+        let mut line = vec![t];
+        let mut members: std::collections::HashSet<u32> = [t].into();
+        'line: while let Some(u) = line.pop() {
+            let start = work.depth[u as usize];
+            if start >= opts.depth {
+                continue;
             }
-            loop {
-                let mut next = None;
-                for &s in &work.around[&rank.1] {
-                    let (e, r) = work.longest(s);
-                    if longer(r, rank) && next.is_none_or(|(_, n)| longer(r, n)) {
-                        next = Some((e, r));
+            while work.depth[u as usize] == start {
+                let (mut edge, mut rank) = work.longest(u);
+                if rank.0 < min2 {
+                    continue 'line;
+                }
+                loop {
+                    let mut next = None;
+                    for &s in &work.around[&rank.1] {
+                        let (e, r) = work.longest(s);
+                        if longer(r, rank) && next.is_none_or(|(_, n)| longer(r, n)) {
+                            next = Some((e, r));
+                        }
+                    }
+                    match next {
+                        Some((e, r)) => (edge, rank) = (e, r),
+                        None => break,
                     }
                 }
-                match next {
-                    Some((e, r)) => (edge, rank) = (e, r),
-                    None => break,
+                if work.around[&rank.1].iter().any(|&s| work.tets[s as usize].iter().any(|&n| kept(n))) {
+                    continue 'line;
+                }
+                if opts.max_tets > 0 && work.tets.len() + work.around[&rank.1].len() > opts.max_tets {
+                    break 'marked;
+                }
+                if split.is_multiple_of(TICK_EVERY) && !tick() {
+                    return Err(MeshError::Cancelled);
+                }
+                split += 1;
+                // A propagation may halve another piece of the line, whose new half joins the line too.
+                for (s, c) in work.split(edge) {
+                    if members.contains(&s) {
+                        members.insert(c);
+                        line.push(c);
+                    }
+                }
+                if work.depth[u as usize] > start {
+                    line.push(u);
                 }
             }
-            if opts.max_tets > 0 && work.tets.len() + work.around[&rank.1].len() > opts.max_tets {
-                break 'marked;
-            }
-            if split.is_multiple_of(TICK_EVERY) && !tick() {
-                return Err(MeshError::Cancelled);
-            }
-            work.split(edge);
-            split += 1;
         }
     }
 
@@ -234,14 +277,23 @@ pub fn refine(
         TetMesh { nodes, tets, boundary, boundary_face, node_faces }
     };
     let mut stats = MeshStats { min_dihedral_deg: 180.0, max_dihedral_deg: 0.0, volume: 0.0, size: opts.size };
-    let mut finest = f64::INFINITY;
     for t in &out.tets {
         let p = t.map(|n| out.nodes[n as usize]);
         let (lo, hi) = dihedral_range(&p);
         stats.min_dihedral_deg = stats.min_dihedral_deg.min(lo.to_degrees());
         stats.max_dihedral_deg = stats.max_dihedral_deg.max(hi.to_degrees());
         stats.volume += orient(&p) / 6.0;
-        finest = finest.min(EDGES.iter().map(|[i, j]| len2(p[*i], p[*j]).sqrt()).sum::<f64>() / 6.0);
     }
-    Ok(Refined { mesh: out, stats, finest, split })
+    Ok(Refined { finest: finest(&out), mesh: out, stats, split })
+}
+
+/// The smallest mean edge length of any element, mm, infinite for no elements.
+pub fn finest(mesh: &TetMesh) -> f64 {
+    mesh.tets
+        .iter()
+        .map(|t| {
+            let p = t.map(|n| mesh.nodes[n as usize]);
+            EDGES.iter().map(|[i, j]| len2(p[*i], p[*j]).sqrt()).sum::<f64>() / 6.0
+        })
+        .fold(f64::INFINITY, f64::min)
 }

@@ -33,9 +33,13 @@ fn a_closed_tetrahedron_has_no_open_edges() {
 #[test]
 fn the_default_size_follows_the_count_and_the_thickness() {
     // A 100 x 10 x 10 bar: thickness 2V/A = 4.76, the count asks for about 1.9 mm.
-    let s = default_size(10_000.0, 4_200.0, DEFAULT_MAX_ELEMENTS);
+    let s = default_size(10_000.0, 4_200.0, DEFAULT_MAX_ELEMENTS, 0.7, 2.0);
     assert!(s > 1.5 && s < 2.38, "{s}");
     // A thin plate: the thickness wins.
-    let plate = default_size(100.0 * 100.0 * 1.0, 2.0 * 100.0 * 100.0 + 400.0, DEFAULT_MAX_ELEMENTS);
+    let plate = default_size(100.0 * 100.0 * 1.0, 2.0 * 100.0 * 100.0 + 400.0, DEFAULT_MAX_ELEMENTS, 0.7, 2.0);
     assert!(plate <= 2.0 * 10_000.0 / 20_400.0 / 2.0 + 1e-12, "{plate}");
+    // One element through: the plate takes its whole thickness, the bar keeps its count size.
+    let one = default_size(100.0 * 100.0 * 1.0, 2.0 * 100.0 * 100.0 + 400.0, DEFAULT_MAX_ELEMENTS, 0.7, 1.0);
+    assert_eq!(one, 2.0 * 10_000.0 / 20_400.0);
+    assert_eq!(default_size(10_000.0, 4_200.0, DEFAULT_MAX_ELEMENTS, 0.7, 1.0), s);
 }

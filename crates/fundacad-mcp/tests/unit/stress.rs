@@ -19,8 +19,10 @@ fn a_well_formed_request_passes_through_and_draws_by_default() {
         "material": {"E": 2300, "nu": 0.35, "yield": 40, "name": "my PETG"},
         "size": 2.5,
         "maxElements": 20000,
+        "refine": "fine",
     })))
     .expect("a good request");
+    assert_eq!(r.payload["refine"], json!("fine"));
     assert!(r.image);
     assert_eq!(r.payload["loads"].as_array().map(Vec::len), Some(1));
     assert_eq!(r.payload["maxElements"], json!(20000));
@@ -42,6 +44,7 @@ fn a_null_force_or_pressure_is_left_out_of_the_request() {
     assert!(loads[0].get("pressure").is_none(), "{}", loads[0]);
     assert_eq!(loads[0]["force"], json!([0, 0, -1]));
     assert!(loads[1].get("force").is_none(), "{}", loads[1]);
+    assert!(r.payload.get("refine").is_none());
     assert_eq!(loads[1]["pressure"], json!(1));
 }
 
@@ -72,6 +75,8 @@ fn malformed_arguments_are_named() {
     assert!(refused(json!({"size": 0})).contains("`size`"));
     assert!(refused(json!({"maxElements": 1.5})).contains("`maxElements`"));
     assert!(refused(json!({"image": "yes"})).contains("`image`"));
+    assert!(refused(json!({"refine": "Fine"})).contains("`refine` is off, standard or fine"));
+    assert!(refused(json!({"refine": 2})).contains("`refine`"));
 }
 
 #[test]
@@ -94,6 +99,16 @@ fn the_report_names_the_peaks_the_balance_and_the_warnings() {
     assert!(text.contains("applied (0, 0, -100) N, reaction at the fixed faces (0, 0, 100) N"), "{text}");
     assert!(text.contains("mesh: 600 quadratic tetrahedra, 1200 nodes, element size 2.5 mm"), "{text}");
     assert!(text.ends_with("warnings:\n- printed parts are weaker across their layers"), "{text}");
+    assert!(!text.contains("passes"), "{text}");
+
+    let mut refined = r.clone();
+    refined["mesh"] = json!({"nodes": 2900, "elements": 1700, "size": 2.5, "finest": 0.64, "minDihedral": 9.4,
+        "passes": [{"elements": 600, "maxVonMises": 55.1}, {"elements": 1700, "maxVonMises": 61.23456}]});
+    let text = report(&refined, &["fixed".to_string()]);
+    assert!(text.contains("element size 2.5 mm, refined in 2 passes down to 0.64 mm, smallest dihedral"), "{text}");
+    let mut one = refined.clone();
+    one["mesh"]["passes"] = json!([{"elements": 1700, "maxVonMises": 61.23456}]);
+    assert!(!report(&one, &["fixed".to_string()]).contains("passes"));
 }
 
 #[test]

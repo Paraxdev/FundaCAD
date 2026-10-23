@@ -53,7 +53,7 @@ fn go() -> bool {
 }
 
 fn opts(max_tets: usize, min_edge: f64) -> RefineOptions {
-    RefineOptions { max_tets, min_edge, size: 3.0 }
+    RefineOptions { max_tets, min_edge, size: 3.0, keep: Vec::new(), depth: 1 }
 }
 
 fn sub(a: V3, b: V3) -> V3 {
@@ -205,6 +205,52 @@ fn many_marked_keep_every_invariant_and_run_bit_equal() {
 }
 
 #[test]
+fn depth_bisects_the_marked_tets_line_that_many_times() {
+    let (m, s) = slanted_box([6, 2, 2], 0.2);
+    let t = m.tets.len() / 2;
+    let p = m.tets[t].map(|n| m.nodes[n as usize]);
+    let whole = det(&m, m.tets[t]);
+    let inside = |r: &Refined| -> Vec<f64> {
+        r.mesh
+            .tets
+            .iter()
+            .filter(|q| {
+                let c = [0, 1, 2].map(|k| q.iter().map(|&n| r.mesh.nodes[n as usize][k]).sum::<f64>() / 4.0);
+                let w = barycentric(p, c);
+                w.iter().all(|&x| x > 1e-9)
+            })
+            .map(|q| det(&r.mesh, *q) / whole)
+            .collect()
+    };
+    for depth in [0u8, 1, 3] {
+        let r = refine(&s, &m, &[t as u32], &RefineOptions { depth, ..opts(0, 0.0) }, &mut go).unwrap();
+        let n = 1usize << depth;
+        // A sibling's propagation may bisect a piece once more, never less.
+        let shares = inside(&r);
+        assert!(shares.len() >= n, "depth {depth}: {shares:?}");
+        assert!((shares.iter().sum::<f64>() - 1.0).abs() < 1e-9, "depth {depth}: {shares:?}");
+        assert!(shares.iter().all(|&x| x <= 1.0 / n as f64 + 1e-9), "depth {depth}: {shares:?}");
+        if depth == 0 {
+            assert_eq!(r.mesh, m);
+        } else {
+            audit(&m, &r, &side);
+        }
+    }
+}
+
+/// The barycentric weights of `q` in tet `p`.
+fn barycentric(p: [V3; 4], q: V3) -> [f64; 4] {
+    let vol = |a: V3, b: V3, c: V3, d: V3| dot(sub(b, a), cross(sub(c, a), sub(d, a)));
+    let all = vol(p[0], p[1], p[2], p[3]);
+    [
+        vol(q, p[1], p[2], p[3]) / all,
+        vol(p[0], q, p[2], p[3]) / all,
+        vol(p[0], p[1], q, p[3]) / all,
+        vol(p[0], p[1], p[2], q) / all,
+    ]
+}
+
+#[test]
 fn the_tet_cap_is_exact() {
     let (m, s) = slanted_box([6, 2, 2], 0.2);
     let t = (0..m.tets.len())
@@ -219,6 +265,30 @@ fn the_tet_cap_is_exact() {
     let all: Vec<u32> = (0..m.tets.len() as u32).collect();
     let r = refine(&s, &m, &all, &opts(m.tets.len() + 40, 0.0), &mut go).unwrap();
     assert!(r.mesh.tets.len() <= m.tets.len() + 40 && r.split > 0);
+}
+
+#[test]
+fn a_kept_node_leaves_every_tet_around_a_split_edge_whole() {
+    let (m, s) = slanted_box([6, 2, 2], 0.2);
+    let terminal = |t: usize| ring(&m, longest(&m, t)).iter().all(|&o| longest(&m, o) == longest(&m, t));
+    let t = (0..m.tets.len()).find(|&t| terminal(t)).unwrap();
+    let ring_t = ring(&m, longest(&m, t));
+    let (a, b) = longest(&m, t);
+    let off_edge =
+        ring_t.iter().flat_map(|&o| m.tets[o]).find(|&n| n != a && n != b).expect("a ring tet has a node off the edge");
+    let keep = |n: u32| {
+        let mut k = vec![false; m.nodes.len()];
+        k[n as usize] = true;
+        RefineOptions { keep: k, ..opts(0, 0.0) }
+    };
+    let r = refine(&s, &m, &[t as u32], &keep(off_edge), &mut go).unwrap();
+    assert_eq!((r.split, &r.mesh), (0, &m));
+    let far = (0..m.nodes.len() as u32)
+        .find(|&n| !ring_t.iter().any(|&o| m.tets[o].contains(&n)))
+        .expect("a node away from the ring");
+    let r = refine(&s, &m, &[t as u32], &keep(far), &mut go).unwrap();
+    assert_eq!((r.split, r.mesh.tets.len()), (1, m.tets.len() + ring_t.len()));
+    audit(&m, &r, &side);
 }
 
 #[test]
@@ -309,7 +379,14 @@ fn boundary_midpoints_on_a_curved_face_move_onto_it_and_planar_ones_stay_on_thei
     let hole: Vec<u32> = (0..m.tets.len() as u32)
         .filter(|&t| near(t) || m.tets[t as usize].iter().any(|n| on_hole.contains(n)))
         .collect();
-    let r = refine(&s, &m, &hole, &RefineOptions { max_tets: 0, min_edge: 0.0, size: 2.0 }, &mut go).unwrap();
+    let r = refine(
+        &s,
+        &m,
+        &hole,
+        &RefineOptions { max_tets: 0, min_edge: 0.0, size: 2.0, keep: Vec::new(), depth: 1 },
+        &mut go,
+    )
+    .unwrap();
     assert!(r.split > 0);
     let listed: std::collections::HashSet<(u32, u32)> = r.mesh.node_faces.iter().copied().collect();
     let boundary: std::collections::HashSet<u32> = r.mesh.boundary.iter().flatten().copied().collect();
@@ -361,9 +438,12 @@ fn close(a: V3, b: V3) -> bool {
 }
 
 #[test]
-fn a_midpoint_moves_onto_the_surface_only_within_a_quarter_edge_and_without_flattening_a_tet() {
+fn a_midpoint_moves_onto_the_surface_only_within_a_quarter_edge_and_without_making_a_sliver() {
     assert!(close(lifted(6.0, 2.49), [5.0, 0.0, 2.49]));
     assert!(close(lifted(6.0, 2.5), [5.0, 0.0, 0.0]), "a quarter of the edge is too far");
     assert!(close(lifted(0.6, 1.5), [5.0, 0.0, 0.0]), "the lift would flatten the thin tet");
     assert!(close(lifted(6.0, 1.5), [5.0, 0.0, 1.5]));
+    // Lifts that keep 37% of the volume, one with 6.99 degree dihedrals (chord 18.4) and one with 23.8.
+    assert!(close(lifted(1.0, 1.0), [5.0, 0.0, 0.0]), "the lift would make a sliver");
+    assert!(close(lifted(2.0, 1.0), [5.0, 0.0, 1.0]));
 }
