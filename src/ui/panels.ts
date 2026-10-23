@@ -51,6 +51,7 @@ import {
 } from "./stress";
 import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } from "../types";
 import { isVec3 } from "../document/stressStudy";
+import { bodyLabels, labelledBodies } from "./bodyLabels";
 import * as THREE from "three";
 
 type StressOverlay = NonNullable<Parameters<Viewport["setStressOverlay"]>[0]>;
@@ -152,7 +153,9 @@ export function createPanels(deps: PanelsDeps) {
     }
     const pairs = res.pairs ?? [];
     const clearances = res.clearances ?? [];
-    const unchecked = (res.unchecked ?? []).map((u) => `${u.name} ${u.reason}`);
+    const labels = bodyLabels(store.buildState.result?.bodies ?? [], (id) => store.bodyName(id));
+    const label = (id: string, raw: string) => labels.get(id) ?? raw;
+    const unchecked = (res.unchecked ?? []).map((u) => `${label(u.id, u.name)} ${u.reason}`);
     const foundAny = pairs.length || clearances.length;
     const notJudged = unchecked.length
       ? `, ${unchecked.length} ${unchecked.length === 1 ? "body" : "bodies"} could not be checked`
@@ -167,13 +170,13 @@ export function createPanels(deps: PanelsDeps) {
     const unit = getUnit();
     const f = toDisplay(1);
     const clashes: ClashRow[] = pairs.map((p) => ({
-      k: `${p.aName} ∩ ${p.bName}`,
+      k: `${label(p.a, p.aName)} ∩ ${label(p.b, p.bName)}`,
       v: `${displayRound(p.volume * f * f * f)} ${unit}³`,
       a: p.a,
       b: p.b,
     }));
     const clearanceRows: ClearanceRow[] = clearances.map((c) => ({
-      k: `${c.aName} ↔ ${c.bName}`,
+      k: `${label(c.a, c.aName)} ↔ ${label(c.b, c.bName)}`,
       v: `${displayRound(toDisplay(c.distance))} ${unit}`,
       a: c.a,
       b: c.b,
@@ -277,7 +280,7 @@ export function createPanels(deps: PanelsDeps) {
 
   /** The bodies the panel can analyse, in build order. */
   function stressBodies(): { id: string; name: string }[] {
-    return (store.buildState.result?.bodies ?? []).map((b) => ({ id: b.id, name: b.name }));
+    return labelledBodies(store);
   }
 
   function showStress() {

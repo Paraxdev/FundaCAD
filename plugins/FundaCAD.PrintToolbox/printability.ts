@@ -199,8 +199,11 @@ export const KIND_ORDER = Object.keys(KIND_COLORS) as PrintabilityKind[];
 
 /** The reply grouped by body, in the reply's body order, each finding a row.
  *  A finding on a body the reply does not list still gets a group. */
-export function formatPrintabilityResult(r: PrintabilityReply): PrintabilityView {
-  const names = new Map(r.bodies.map((b) => [b.id, b.name || b.id]));
+export function formatPrintabilityResult(
+  r: PrintabilityReply,
+  labels: ReadonlyMap<string, string> = new Map(),
+): PrintabilityView {
+  const names = new Map(r.bodies.map((b) => [b.id, labels.get(b.id) ?? (b.name || b.id)]));
   const nameOf = (id: string) => names.get(id) ?? id;
   const groups = new Map<string, BodyGroup>();
   const groupOf = (id: string): BodyGroup => {

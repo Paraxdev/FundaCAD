@@ -10,12 +10,22 @@ import type { CadDocument } from "../../src/types";
 
 beforeEach(() => setActivePinia(createPinia()));
 
-function rig(reply: InterferenceReply) {
+type Body = { id: string; name: string };
+
+function rig(
+  reply: InterferenceReply,
+  bodies: Body[] = [
+    { id: "body1", name: "Echo Dot 2" },
+    { id: "body2", name: "Shelf" },
+  ],
+  userNames = new Map<string, string>(),
+) {
   const statuses: { text: string; cls: string }[] = [];
   const deps = {
     store: {
       document: { features: [] } as unknown as CadDocument,
-      buildState: { result: { bodies: [{}, {}] } },
+      buildState: { result: { bodies } },
+      bodyName: (id: string) => userNames.get(id),
       onDocChange: () => {},
       onOpen: () => {},
     },
@@ -49,5 +59,42 @@ describe("the Interference panel", () => {
       text: "No interferences found, 1 body could not be checked",
       cls: "error",
     });
+  });
+
+  it("tells bodies with the same engine name apart in its rows", async () => {
+    const box = (id: string): Body => ({ id, name: "Box" });
+    const clash = (a: string, b: string, volume: number) => ({
+      a,
+      b,
+      aName: "Box",
+      bName: "Box",
+      volume,
+      bbox: { min: [1, 2, 3] as [number, number, number], max: [4, 6, 9] as [number, number, number] },
+    });
+    const { panels } = rig(
+      {
+        ok: true,
+        pairs: [clash("body1", "body3", 2.5), clash("body3", "body4", 0.75)],
+        clearances: [
+          {
+            a: "body1",
+            b: "body4",
+            aName: "Box",
+            bName: "Box",
+            distance: 0.3,
+            pointA: [5, 1, 2],
+            pointB: [5.2, 1.1, 2.2],
+          },
+        ],
+        unchecked: [{ id: "body4", name: "Box", reason: "is open" }],
+      },
+      [box("body1"), box("body3"), box("body4"), box("body9")],
+      new Map([["body9", "Box 2"]]),
+    );
+    await panels.showInterference(0.5);
+    const p = usePanelsStore().interference!;
+    expect(p.clashes.map((c) => c.k)).toEqual(["Box ∩ Box 3", "Box 3 ∩ Box 4"]);
+    expect(p.clearances.map((c) => c.k)).toEqual(["Box ↔ Box 4"]);
+    expect(p.unchecked).toEqual(["Box 4 is open"]);
   });
 });

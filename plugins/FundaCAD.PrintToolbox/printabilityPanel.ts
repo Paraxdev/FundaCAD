@@ -2,6 +2,7 @@
 // faces on a face-mark layer of its own. The app has no idea the panel exists.
 
 import { shallowRef } from "vue";
+import { labelledBodies } from "fundacad";
 import type { DocumentStore, GeometryBackend, Viewport } from "fundacad";
 import {
   buildPrintabilityRequest,
@@ -20,7 +21,10 @@ export const PRINTABILITY_MARKS = "printability";
 export const EMPHASIS_COLOR = 0xffd089;
 
 export interface PrintabilityDeps {
-  store: Pick<DocumentStore, "buildState" | "builtDocument" | "isBodyVisible" | "onBuild" | "onDocChange" | "onOpen">;
+  store: Pick<
+    DocumentStore,
+    "bodyName" | "buildState" | "builtDocument" | "isBodyVisible" | "onBuild" | "onDocChange" | "onOpen"
+  >;
   viewport: Pick<
     Viewport,
     "frameAround" | "getSelectedBodies" | "onStressOverlayChange" | "setFaceMarks" | "stressOverlayBody"
@@ -47,7 +51,7 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
   let checkedEpoch = -1;
 
   function builtBodies(): { id: string; name: string }[] {
-    return (store.buildState.result?.bodies ?? []).map((b) => ({ id: b.id, name: b.name }));
+    return labelledBodies(store);
   }
 
   /** What a Check covers: the selected bodies, or none named when none is selected, so the engine checks every body
@@ -153,7 +157,7 @@ export function createPrintabilityPanel(deps: PrintabilityDeps) {
       );
       return;
     }
-    const view = formatPrintabilityResult(res.result);
+    const view = formatPrintabilityResult(res.result, new Map(builtBodies().map((b) => [b.id, b.name])));
     checkedEpoch = epoch;
     state.finished({ result: view });
     const n = problemCount(view);
