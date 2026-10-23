@@ -11,6 +11,7 @@ import { clampScale, contentLimits, defaultLimits, elevRange, minScaleOf, type L
 import { decompose, turntableQuat, wrapAngle } from "./math";
 import { rotateAbout, rotateWorldAbout, reseat, scaleAbout, truck, turntableAbout } from "./motions";
 import {
+  NO_INSETS,
   aspectOf,
   boxOffScreen,
   clonePose,
@@ -28,7 +29,9 @@ import {
   setTurntable,
   upOf,
   worldPerPixel,
+  usableInsets,
   type Frame,
+  type Insets,
   type Pose,
 } from "./pose";
 
@@ -807,9 +810,9 @@ export class Navigator {
   }
 
   /** Frame a box, keeping the view direction, FIT_MARGIN clear on every side. */
-  fitBox(box: THREE.Box3, opts: { animate?: boolean } = {}) {
+  fitBox(box: THREE.Box3, opts: { animate?: boolean; insets?: Insets } = {}) {
     const p = this.destination();
-    if (!frameBox(p, this.frame, box)) {
+    if (!frameBox(p, this.frame, box, FIT_MARGIN, opts.insets)) {
       const c = box.isEmpty() ? null : box.getCenter(new THREE.Vector3());
       if (!c || !Number.isFinite(c.x + c.y + c.z)) {
         this.fitSphere(new THREE.Vector3(), -1, opts);
@@ -823,12 +826,12 @@ export class Navigator {
 
   /** The view a fresh window opens on. Given the box, it frames the box itself
    *  rather than its bounding ball. */
-  resetView(center: THREE.Vector3 | null, radius: number, animate: boolean, box?: THREE.Box3) {
+  resetView(center: THREE.Vector3 | null, radius: number, animate: boolean, box?: THREE.Box3, insets?: Insets) {
     const p = clonePose(this.pose);
     const home = HOME_EYE.clone().normalize();
     const q = lookQuat(home, new THREE.Vector3());
     setOrientation(p, q);
-    if (box && frameBox(p, this.frame, box)) {
+    if (box && frameBox(p, this.frame, box, FIT_MARGIN, insets)) {
       this.flyTo(p, { animate });
       return;
     }
@@ -889,18 +892,23 @@ export const FIT_MARGIN = 0.12;
 
 const corner = new THREE.Vector3();
 const axes = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] as const;
-/** Aim p at the box centre with the scale that puts its silhouette `margin` in from every edge.
- *  False, p untouched, for an empty, non finite or zero size box. */
-export function frameBox(p: Pose, v: Frame, box: THREE.Box3, margin = FIT_MARGIN): boolean {
+/** Aim p so the box centre sits at the middle of the free rect left by `insets` and its silhouette
+ *  is `margin` in from that rect's edges. The target is shifted sideways in screen space, so the
+ *  centre's depth is unchanged. False, p untouched, for an empty, non finite or zero size box. */
+export function frameBox(p: Pose, v: Frame, box: THREE.Box3, margin = FIT_MARGIN, insets?: Insets): boolean {
   if (box.isEmpty()) return false;
   const c = box.getCenter(new THREE.Vector3());
   if (!Number.isFinite(c.x + c.y + c.z)) return false;
-  const a = aspectOf(v);
+  const ins = usableInsets(v, insets);
+  const freeW = v.width - ins.left - ins.right;
+  const freeH = v.height - ins.top - ins.bottom;
+  const a = aspectOf(ins === NO_INSETS ? v : { width: freeW, height: freeH });
   const k = 1 - 2 * margin;
   const right = rightOf(p, axes[0]);
   const up = upOf(p, axes[1]);
   const fwd = forwardOf(p, axes[2]);
-  const t = halfTan(p.fov);
+  const share = ins === NO_INSETS ? 1 : freeH / v.height;
+  const t = halfTan(p.fov) * share;
   let need = 0;
   for (let i = 0; i < 8; i++) {
     corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).sub(c);
@@ -915,9 +923,15 @@ export function frameBox(p: Pose, v: Frame, box: THREE.Box3, margin = FIT_MARGIN
       need = Math.max(need, x / t - z, y / t - z);
     }
   }
-  const scale = p.ortho ? need : need * t;
+  const scale = p.ortho ? need / share : need * halfTan(p.fov);
   if (!(Number.isFinite(scale) && scale > 1e-9)) return false;
-  p.target.copy(c);
+  const wpp = (2 * scale) / Math.max(1, v.height);
+  const dx = (ins.left - ins.right) / 2;
+  const dy = (ins.top - ins.bottom) / 2;
+  p.target
+    .copy(c)
+    .addScaledVector(right, -dx * wpp)
+    .addScaledVector(up, dy * wpp);
   p.scale = scale;
   return true;
 }
