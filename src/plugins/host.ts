@@ -118,6 +118,8 @@ export { fieldNumber, fieldError } from "../ui/measure";
 
 export { stripDocumentExt } from "../io/documentExt";
 
+export { bodyLabels, labelledBodies } from "../ui/bodyLabels";
+
 // Parameter controls, configurations and checks. The data is the document's, so a rename keeps it right with no plugin
 // loaded; what a panel computes lives with the engine, so the panel and the store's commits cannot disagree.
 export {

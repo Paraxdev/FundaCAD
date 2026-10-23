@@ -21,6 +21,7 @@ function rig(bodies: { id: string; name: string; fault?: string }[], selected: s
       buildState: { result: { bodies } },
       onDocChange: () => {},
       onOpen: () => {},
+      bodyName: () => undefined,
     },
     viewport: {
       getSelectedBodies: () => selected,
@@ -76,6 +77,19 @@ describe("the Properties panel", () => {
     const p = usePanelsStore().properties!;
     expect(p.raw).toBeNull();
     expect(p.faults).toEqual(["Lid is inside out, its faces point into the material"]);
+  });
+
+  it("names unsound bodies that share a built name apart", () => {
+    const { panels } = rig([
+      { id: "body3", name: "Box" },
+      { id: "body5", name: "Box", fault: OPEN },
+      { id: "body8", name: "Box", fault: "is inside out, its faces point into the material" },
+    ]);
+    panels.showProperties();
+    expect(usePanelsStore().properties!.faults).toEqual([
+      `Box 2 ${OPEN}`,
+      "Box 3 is inside out, its faces point into the material",
+    ]);
   });
 
   it("measures a selected sound body beside an unsound one it was not asked about", () => {

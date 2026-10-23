@@ -736,6 +736,33 @@
 .measure-v {
   font-variant-numeric: tabular-nums;
 }
+/* A set width, so the hint wraps instead of stretching the panel. */
+.overhang-panel {
+  width: 260px;
+  .measure-row {
+    align-items: center;
+  }
+  .select-trigger {
+    width: 96px;
+  }
+}
+.overhang-threshold {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  .sm-slider {
+    width: 96px;
+  }
+}
+.overhang-key {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--s-2);
+  border-radius: 2px;
+  vertical-align: middle;
+  background: var(--key);
+}
 .measure-hint {
   margin-top: var(--s-2);
   font-size: 10px;

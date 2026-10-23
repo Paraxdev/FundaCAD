@@ -47,6 +47,7 @@ import { contributedBrowserSections, contributedPalette, onContribChange } from 
 import type { Component } from "vue";
 import { featuresOf } from "../../types";
 import type { CadDocument, Feature, Plane3 } from "../../types";
+import { bodyLabels } from "../../ui/bodyLabels";
 
 const engine = useEngine();
 
@@ -619,6 +620,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
   }
 
   const scanIds = new Set((store.buildState.result?.bodies ?? []).filter((b) => b.scan).map((b) => b.id));
+  const labels = bodyLabels(store.buildState.result?.bodies ?? [], (id) => store.bodyName(id));
   const bodyRow = (b: BodyRef, depth: number): RowNode => {
     // The slot swatch shows only while something contributes a body colour menu, a chip nobody can change is a colour
     // nobody chose. The assignment stays in the document either way.
@@ -631,7 +633,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       k: `b:${b.id}`,
       id: b.id,
       depth,
-      label: store.bodyName(b.id) ?? b.name,
+      label: labels.get(b.id) ?? store.bodyName(b.id) ?? b.name,
       icon: scanIds.has(b.id) ? "scan" : "body",
       ...(chip ? { swatch: chip } : {}),
       selected: selectedIds.has(b.id),
