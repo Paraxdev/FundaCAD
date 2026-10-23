@@ -28,6 +28,7 @@ import {
 import { onWorkspaceChange, workspace } from "../../ui/workspace";
 import {
   activeSavedId,
+  adoptSavedForCurrentLook,
   applySavedEnvironment,
   chooseBuiltInEnvironment,
   deleteSavedEnvironment,
@@ -108,6 +109,7 @@ onMounted(() => {
   offs.push(onEnvLibraryChange(loadSaved));
   offs.push(onHdrRegistered(syncLabel));
   loadSaved();
+  void adoptSavedForCurrentLook();
   syncLabel();
 });
 onUnmounted(() => {
@@ -316,8 +318,9 @@ const onBloom = (e: Event) => setRenderPref("bloom", Number.parseFloat((e.target
             max="180"
             step="5"
             :value="prefs.envRotation"
-            @change="onRotation"
+            @input="onRotation"
           />
+          <span class="rd-value">{{ Math.round(prefs.envRotation) }}&deg;</span>
         </label>
         <label class="prefs-row">
           <span class="prefs-label">Exposure</span>
@@ -329,8 +332,9 @@ const onBloom = (e: Event) => setRenderPref("bloom", Number.parseFloat((e.target
             :max="MAX_EXPOSURE"
             step="0.25"
             :value="prefs.envExposure"
-            @change="onExposure"
+            @input="onExposure"
           />
+          <span class="rd-value">{{ prefs.envExposure > 0 ? "+" : "" }}{{ prefs.envExposure.toFixed(2) }} EV</span>
         </label>
         <div class="rd-chips" role="group" aria-label="Panorama behind the model">
           <button

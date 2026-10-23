@@ -15,6 +15,7 @@ import { initSolver } from "../sketch/solver";
 import { installAutosave, checkRecovery } from "../io/recovery";
 import { installLaunchPaths } from "../io/launchPaths";
 import { toast } from "../ui/toast";
+import { traceFaultToast } from "../ui/traceFault";
 import { logWarning } from "../ui/logStore";
 import { crumb } from "../diagnostics/breadcrumbs";
 
@@ -238,12 +239,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.viewport.onTraceStateChange = (st) => {
     useUiStore().traceState = st;
   };
-  e.viewport.onTraceFault = (why, off) => {
-    toast(off ? `${why}. Path tracing is off until FundaCAD restarts.` : `${why}. The view is back on Realtime.`, {
-      kind: "error",
-      source: "pathtrace",
-    });
-  };
+  e.viewport.onTraceFault = traceFaultToast;
   e.viewport.onTraceNotice = (message) => toast(message, { kind: "warning", source: "pathtrace" });
   e.viewport.onStutterChange = (on) => {
     useUiStore().lowPerformance = on;
