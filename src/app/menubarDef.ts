@@ -92,7 +92,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
           label: "Preferences…",
           shortcut: "Ctrl+,",
           onClick: () => {
-            useDialogStore().preferences = true;
+            useDialogStore().openPreferences();
           },
         },
       ],

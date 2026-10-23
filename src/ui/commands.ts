@@ -35,6 +35,7 @@ const GLOBAL: Command[] = [
   { id: "viewmode-pathtraced", label: "Path Traced View Mode", group: "View", context: "global" },
   { id: "viewmode-cycle", label: "Next View Mode", group: "View", context: "global", key: "Z" },
   { id: "show-all-bodies", label: "Show All Bodies", group: "View", context: "global", key: "Shift+H" },
+  { id: "preferences", label: "Preferences…", group: "Edit", context: "global", key: "Ctrl+," },
   { id: "shortcut-help", label: "Keyboard Shortcuts…", group: "Help", context: "global", key: "?" },
   { id: "manual", label: "Manual", group: "Help", context: "global" },
   { id: "report-problem", label: "Report a Problem…", group: "Help", context: "global" },
