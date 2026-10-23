@@ -20,15 +20,35 @@ describe("the rail's analysis on state follows the viewport", () => {
     const on = (a: string) => railActive(a, "model", "", ribbon.viewOn);
 
     v.setZebra(true);
-    expect([on("zebra"), on("curvature"), on("component-colors"), on("draft-analysis")]).toEqual([true, false, false, false]);
+    expect([on("zebra"), on("curvature"), on("component-colors"), on("draft-analysis")]).toEqual([
+      true,
+      false,
+      false,
+      false,
+    ]);
     v.setCurvatureCombs(true);
     v.setAnalysis("draft");
-    expect([on("zebra"), on("curvature"), on("component-colors"), on("draft-analysis")]).toEqual([true, true, false, true]);
+    expect([on("zebra"), on("curvature"), on("component-colors"), on("draft-analysis")]).toEqual([
+      true,
+      true,
+      false,
+      true,
+    ]);
     v.setAnalysis("component");
     v.setZebra(false);
-    expect([on("zebra"), on("curvature"), on("component-colors"), on("draft-analysis")]).toEqual([false, true, true, false]);
+    expect([on("zebra"), on("curvature"), on("component-colors"), on("draft-analysis")]).toEqual([
+      false,
+      true,
+      true,
+      false,
+    ]);
     v.setCurvatureCombs(false);
     v.setAnalysis("none");
-    expect(ribbon.viewOn).toEqual({ zebra: false, curvature: false, "component-colors": false, "draft-analysis": false });
+    expect(ribbon.viewOn).toEqual({
+      zebra: false,
+      curvature: false,
+      "component-colors": false,
+      "draft-analysis": false,
+    });
   });
 });

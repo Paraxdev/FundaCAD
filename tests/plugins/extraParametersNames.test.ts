@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { ParamDef } from "../../src/types";
 import { nameColumnChars, rowTooltip } from "../../plugins/FundaCAD.ExtraParameters/view";
 
-const def = (comment?: string) => ({ expr: "3.7", value: 3.7, unit: "mm", comment });
+const def = (comment?: string): ParamDef => ({ expr: "3.7", value: 3.7, unit: "mm", ...(comment ? { comment } : {}) });
 
 describe("parameter row tooltip", () => {
   it("leads with the full name, then the comment on a second line", () => {
@@ -23,8 +24,6 @@ describe("name column width", () => {
   it("is 0 with no rows, the one name's length, and the longest of many", () => {
     expect(nameColumnChars([])).toBe(0);
     expect(nameColumnChars([{ name: "gap" }])).toBe(3);
-    expect(
-      nameColumnChars([{ name: "gap" }, { name: "bracket_wall_thickness_outer" }, { name: "pitch_x" }]),
-    ).toBe(28);
+    expect(nameColumnChars([{ name: "gap" }, { name: "bracket_wall_thickness_outer" }, { name: "pitch_x" }])).toBe(28);
   });
 });

@@ -7,7 +7,13 @@ import type { Engine } from "../../src/app/engine";
 beforeEach(() => setActivePinia(createPinia()));
 
 it("Ctrl+, closes the shortcuts dialog before opening Preferences", () => {
-  installKeyboard({ sketch: { active: false }, handleAction: () => {}, toolBusy: () => false, tools: {}, viewport: {} } as unknown as Engine);
+  installKeyboard({
+    sketch: { active: false },
+    handleAction: () => {},
+    toolBusy: () => false,
+    tools: {},
+    viewport: {},
+  } as unknown as Engine);
   const d = useDialogStore();
   d.shortcuts = true;
   window.dispatchEvent(new KeyboardEvent("keydown", { key: ",", ctrlKey: true, bubbles: true }));

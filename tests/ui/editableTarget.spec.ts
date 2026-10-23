@@ -12,9 +12,12 @@ describe("isEditableTarget", () => {
     expect(isEditableTarget(input(t))).toBe(true);
   });
 
-  it.each(["checkbox", "radio", "range", "button", "color", "submit", "reset"])("%s inputs let sketch keys through", (t) => {
-    expect(isEditableTarget(input(t))).toBe(false);
-  });
+  it.each(["checkbox", "radio", "range", "button", "color", "submit", "reset"])(
+    "%s inputs let sketch keys through",
+    (t) => {
+      expect(isEditableTarget(input(t))).toBe(false);
+    },
+  );
 
   it("still covers textarea, select and contentEditable, and ignores null and plain elements", () => {
     const div = document.createElement("div");
