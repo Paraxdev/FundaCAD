@@ -210,7 +210,7 @@ describe("decoding an HDR", () => {
 
   it("says when a panorama is kept smaller than its file, and nothing when it is not", () => {
     expect(keptSmallerNote("a.hdr", { width: 16384, height: 8192 }, { width: 2048, height: 1024 })).toBe(
-      "a.hdr is 16384 x 8192. It lights the scene from a 2048 x 1024 copy, the size the lighting and a saved document keep.",
+      "a.hdr is 16384 x 8192. It lights the scene from a 2048 x 1024 copy, the size kept for lighting and saved documents (Preferences, Experimental).",
     );
     expect(keptSmallerNote("a.hdr", { width: 2048, height: 1024 }, { width: 2048, height: 1024 })).toBeNull();
   });

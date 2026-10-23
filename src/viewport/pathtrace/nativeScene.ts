@@ -157,6 +157,8 @@ export function nativeLook(look: TraceLook) {
     exposure: look.exposure,
     background: bg,
     environmentBehind: !!look.environmentBehind,
+    ...(look.bounces !== undefined ? { bounces: look.bounces } : {}),
+    ...(look.firefly !== undefined ? { firefly: look.firefly } : {}),
     ...(look.rig ? { lights: nativeLights(look.rig), ground: nativeGround(look.rig) } : {}),
   };
 }

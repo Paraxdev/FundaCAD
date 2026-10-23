@@ -29,6 +29,9 @@ export interface TraceLook {
    *  takes its pixels instead, `key` naming panorama, turn, exposure and hemisphere. */
   hdr?: { hash: string; rotation: number; exposure: number; hemi: TraceHemi | null; key: string };
   brightness: number;
+  /** Path bounces and the native tracer's firefly clamp (ui/experimentalPrefs.ts), the tracer's own when absent. */
+  bounces?: number;
+  firefly?: number;
   toneMapping: THREE.ToneMapping;
   exposure: number;
   /** The rig `lights` were placed from. The native tracer lights from it,

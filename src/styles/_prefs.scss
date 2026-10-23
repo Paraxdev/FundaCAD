@@ -117,6 +117,30 @@ label.pref-head {
   height: 30px;
   font-size: 13px;
 }
+.pref-warning {
+  margin: 0 0 var(--s-4);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+[data-prefs-experimental] .prefs-actions {
+  margin-top: var(--s-4);
+}
+.pref-number {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.pref-number .sm-input {
+  width: 96px;
+  height: 30px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
 .pref-slider {
   width: 100%;
 }
