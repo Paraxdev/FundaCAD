@@ -115,6 +115,23 @@ describe("the camera after an import", () => {
     ]);
   });
 
+  it("frames the first model after launch, whichever document brings it", () => {
+    const first = bridge();
+    first.show([], false);
+    first.open();
+    first.show([{ id: "plate", type: "extrude" }], true);
+    first.open();
+    first.show([{ id: "rib", type: "extrude" }], true);
+    const viaTemplate = bridge();
+    viaTemplate.show([], false);
+    viaTemplate.open();
+    viaTemplate.e.frameNextModel();
+    viaTemplate.show([{ id: "sk1", type: "sketch" }], false);
+    viaTemplate.open();
+    viaTemplate.show([{ id: "plate", type: "extrude" }], true);
+    expect([first.fits, viaTemplate.fits]).toEqual([[true, false], [true]]);
+  });
+
   it("leaves the camera alone for a part drawn into an emptied view", () => {
     const b = bridge();
     b.show([box], true);
