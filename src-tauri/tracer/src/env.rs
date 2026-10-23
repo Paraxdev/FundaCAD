@@ -100,6 +100,38 @@ impl Environment {
         Environment { key: key.into(), width, height, up, rgba }
     }
 
+    /// The bytes `tables` takes for this size, about one float per texel.
+    pub fn table_bytes(width: u32, height: u32) -> u64 {
+        (HEADER_VEC4S as u64 * 4 + height as u64 + width as u64 * height as u64 + 3) * 4
+    }
+
+    /// Halved with a 2 x 2 box until both sides fit `max_side` and the sampling tables fit `max_table_bytes`, so a
+    /// map past what the device binds is kept smaller instead of failing. The box keeps a small sun's light.
+    pub fn fit(self, max_side: u32, max_table_bytes: u64) -> Environment {
+        let mut e = self;
+        while e.width > 1
+            && e.height > 1
+            && (e.width > max_side || e.height > max_side || Self::table_bytes(e.width, e.height) > max_table_bytes)
+        {
+            let (w, h) = (e.width / 2, e.height / 2);
+            let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+            for r in 0..h {
+                for c in 0..w {
+                    let mut sum = [0f32; 3];
+                    for (dc, dr) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                        let t = e.texel(c * 2 + dc, r * 2 + dr);
+                        for k in 0..3 {
+                            sum[k] += t[k] * 0.25;
+                        }
+                    }
+                    rgba.extend([f32_to_f16(sum[0]), f32_to_f16(sum[1]), f32_to_f16(sum[2]), f32_to_f16(1.0)]);
+                }
+            }
+            e = Environment { key: e.key, width: w, height: h, up: e.up, rgba };
+        }
+        e
+    }
+
     pub fn texel(&self, col: u32, row: u32) -> [f32; 3] {
         let i = ((row * self.width + col) * 4) as usize;
         [0, 1, 2].map(|k| f16_to_f32(self.rgba[i + k]).max(0.0))
@@ -249,6 +281,32 @@ mod tests {
     fn rng(seed: &mut u64) -> f32 {
         *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
         ((*seed >> 40) as f32) / (1u64 << 24) as f32
+    }
+
+    #[test]
+    fn fit_halves_a_map_past_the_device_and_keeps_its_light() {
+        let (w, h) = (4096u32, 2048u32);
+        let e = Environment::from_rgb("big", w, h, Up::Z, |c, r| {
+            if (c / 8, r / 8) == (150, 75) {
+                [5000.0; 3]
+            } else {
+                [if r < h / 2 { 1.0 } else { 0.25 }; 3]
+            }
+        });
+        let mean = |e: &Environment| e.tables()[1][0];
+        let before = mean(&e);
+        let side = e.clone().fit(2048, u64::MAX);
+        assert_eq!((side.width, side.height), (2048, 1024));
+        let small = e.fit(2048, Environment::table_bytes(1024, 512));
+        assert_eq!((small.width, small.height), (1024, 512));
+        assert_eq!(small.rgba.len(), 1024 * 512 * 4);
+        assert!((mean(&small) / before - 1.0).abs() < 0.01, "{} against {before}", mean(&small));
+    }
+
+    #[test]
+    fn fit_leaves_a_map_that_fits() {
+        let e = Environment::from_rgb("s", 64, 32, Up::Y, |_, _| [1.0; 3]);
+        assert_eq!(e.clone().fit(8192, u64::MAX), e);
     }
 
     #[test]
