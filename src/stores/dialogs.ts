@@ -8,6 +8,7 @@ import type { BugReportDeps } from "../ui/bugReporter";
 export const useDialogStore = defineStore("dialogs", () => {
   const bugReport = ref(false);
   const preferences = ref(false);
+  const shortcuts = ref(false);
 
   /** Supplied once by app/engine.ts's mountUi(). Until then the bug button stays unrendered. */
   const bugDeps = shallowRef<BugReportDeps | null>(null);
@@ -15,6 +16,7 @@ export const useDialogStore = defineStore("dialogs", () => {
   return {
     bugReport,
     preferences,
+    shortcuts,
     bugDeps,
     bindBugReporter: (deps: BugReportDeps) => {
       bugDeps.value = markRaw(deps);
