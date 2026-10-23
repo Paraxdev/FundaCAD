@@ -952,37 +952,4 @@ fn overrun_note(label: &str, body: &str, size: f64, o: ops::Overrun) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_blend_that_hands_the_body_back_is_refused() {
-        let body = crate::kernel::make_box(10.0, 10.0, 10.0).unwrap();
-        let err = refuse_unchanged(&body, &body.clone(), "Fillet", "Box").unwrap_err();
-        assert!(matches!(err, Fail::Value { code: Some(BLEND_CHANGED_NOTHING), .. }));
-        let other = crate::kernel::make_box(10.0, 10.0, 9.0).unwrap();
-        assert!(refuse_unchanged(&body, &other, "Fillet", "Box").is_ok());
-    }
-
-    #[test]
-    fn a_drag_that_fell_back_asks_the_kernel_again_below_that_size() {
-        let key = "test-fell-back|body1|Fillet|[]".to_owned();
-        assert!(!fell_back_before(&key, 43.7));
-        remember_fell_back(key.clone(), 43.7);
-        assert!(fell_back_before(&key, 43.7));
-        assert!(fell_back_before(&key, 50.0));
-        assert!(!fell_back_before(&key, 3.0));
-        remember_fell_back(key.clone(), 37.0);
-        assert!(fell_back_before(&key, 40.0));
-        assert!(!fell_back_before(&key, 36.0));
-    }
-
-    #[test]
-    fn kernel_sentence_drops_the_max_fillet_tail() {
-        assert_eq!(
-            kernel_sentence("Failed creating a fillet with radius of 5, try a smaller value or use max_fillet() to find the largest valid fillet radius"),
-            "Failed creating a fillet with radius of 5, try a smaller value"
-        );
-        assert_eq!(kernel_sentence("x, or use max_fillet() y. z"), "x. z");
-    }
-}
+mod tests;
