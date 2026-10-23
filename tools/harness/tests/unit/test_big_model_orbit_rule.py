@@ -43,3 +43,23 @@ def test_a_renamed_constant_fails_loudly(orbit, tmp_path):
 )
 def test_thin_pays_by_the_product_margin(orbit, full, thin, pays):
     assert orbit.thin_pays(full, thin, 0.3) is pays
+
+
+@pytest.mark.parametrize(
+    "modes, lead",
+    [
+        ("ffffffffffm" + "t" * 30, 11),  # CI run 39969466440, a provisional window of fat lines then thin
+        ("fttttt", 1),
+        ("tttt", 0),
+        ("ffff", 4),  # never thin
+    ],
+)
+def test_counts_the_fat_lead(orbit, modes, lead):
+    assert orbit.fat_lead(modes) == lead
+
+
+def test_the_lead_follows_the_product_window(orbit, tmp_path):
+    src = tmp_path / "edgeMotion.ts"
+    src.write_text("const WINDOW = 4;\nconst SLOT_RUN = 3;\nconst VERIFY_SKIP = 3;\n")
+    assert orbit.lead_allowed(src) == 10 + orbit.LEAD_SLACK
+    assert orbit.lead_allowed() >= 11
