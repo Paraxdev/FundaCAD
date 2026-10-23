@@ -736,7 +736,8 @@ fn a_cancelled_mesh_pass_meshes_no_body_and_answers_none() {
 
     let mut ticks = 0;
     let whole = cache.mesh(&r, TOL, &Map::new(), &mut |_, _| ticks += 1);
-    assert_eq!((whole.bodies.len(), ticks, cache.stats.meshed), (r.bodies.len(), r.bodies.len(), r.bodies.len()));
+    // The pass opens with a 0 of N report, then one per body meshed.
+    assert_eq!((whole.bodies.len(), ticks, cache.stats.meshed), (r.bodies.len(), r.bodies.len() + 1, r.bodies.len()));
 
     token.cancel();
     let mut stopped = RebuildCache::new(None);
