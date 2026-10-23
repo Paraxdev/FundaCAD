@@ -2,7 +2,7 @@
 // Export hands the engine a path from the save dialog, so the file never round-trips through the webview.
 
 import { suggestedSavePath } from "./saveFolder";
-import type { CarriedSection, DocumentStore } from "../document/store";
+import type { CarriedSection, DocumentStore, GivenUp } from "../document/store";
 import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat, PlaneDef } from "../types";
@@ -300,11 +300,11 @@ export async function openDocumentText(
   let unpublished: string | null;
   try {
     unpublished = await publishEmbeddedGeometry(store, text);
-    if (!(await mayStillReplace(store, ticket, name))) return "dropped";
+    if (!(await mayStillReplace(store, ticket, name))) return settle(store, ticket, "dropped");
     store.load(text);
   } catch (e) {
     await reportUnreadable(e);
-    return "unreadable";
+    return settle(store, ticket, "unreadable");
   }
   // No real path, but the name lets the title bar show what is open and drop the unsaved marker.
   store.markSaved(name);
@@ -341,9 +341,9 @@ export async function openDocumentBytes(
     };
   } catch (e) {
     await reportError(`Couldn't open ${file.name}: ${errMsg(e)}`);
-    return "unreadable";
+    return settle(store, ticket, "unreadable");
   }
-  return finishOpen(store, file.name, opened, geometry, null, ticket);
+  return settle(store, ticket, await finishOpen(store, file.name, opened, geometry, null, ticket));
 }
 
 /** "unreadable": the file is gone or corrupt, callers may forget it. "newerFormat": this build is too old, and
@@ -354,11 +354,18 @@ export type OpenOutcome = "ok" | "unreadable" | "newerFormat" | "dropped";
 interface OpenTicket {
   op: OpenOp;
   edits: number;
+  given: GivenUp | null;
 }
 
 // Taken when the user has agreed to replace the open document, before the file is read.
 function openTicket(store: DocumentStore): OpenTicket {
-  return { op: store.sessions.opening(), edits: store.userEditCount };
+  return { op: store.sessions.opening(), edits: store.userEditCount, given: store.givenUpMark };
+}
+
+// An open that did not land kept the document, so the Discard it asked for no longer drops its crash snapshot.
+function settle(store: DocumentStore, ticket: OpenTicket, outcome: OpenOutcome): OpenOutcome {
+  if (outcome !== "ok") store.revokeGivenUp(ticket.given);
+  return outcome;
 }
 
 // Right before the swap: what the user agreed to replace must still be what is open (rm4abwsm).
@@ -381,7 +388,7 @@ async function mayStillReplace(store: DocumentStore, ticket: OpenTicket, name: s
       ],
     );
     if (pick !== "discard") return false;
-    store.markGivenUp();
+    ticket.given = store.markGivenUp();
   }
 }
 
@@ -463,9 +470,9 @@ export async function openDocumentAtPath(
     // container format, a damaged archive, geometry that does not match its
     // manifest), so pass them through rather than wrapping them in ours.
     await reportError(`Couldn't open ${base}: ${errMsg(e)}`);
-    return "unreadable";
+    return settle(store, ticket, "unreadable");
   }
-  return finishOpen(store, base, opened, geometry, path, ticket);
+  return settle(store, ticket, await finishOpen(store, base, opened, geometry, path, ticket));
 }
 
 interface RustOpened {

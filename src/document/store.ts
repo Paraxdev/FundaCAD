@@ -515,6 +515,11 @@ const emptyResult = (): RebuildResult => ({
   bodies: [],
 });
 
+export interface GivenUp {
+  readonly session: DocumentSession;
+  readonly edits: number;
+}
+
 export class DocumentStore {
   readonly sessions = new SessionHost();
   private doc: CadDocument;
@@ -1024,10 +1029,17 @@ export class DocumentStore {
     return this.userEdits;
   }
 
-  private givenUpAt: { session: DocumentSession; edits: number } | null = null;
+  private givenUpAt: GivenUp | null = null;
   /** The user chose Discard or Don't save for the document as it stands now. */
-  markGivenUp() {
-    this.givenUpAt = { session: this.session, edits: this.edits };
+  markGivenUp(): GivenUp {
+    return (this.givenUpAt = { session: this.session, edits: this.edits });
+  }
+  get givenUpMark(): GivenUp | null {
+    return this.givenUpAt;
+  }
+  // The open the answer was for did not land, so the document was kept after all. A later answer is left alone.
+  revokeGivenUp(mark: GivenUp | null) {
+    if (mark !== null && this.givenUpAt === mark) this.givenUpAt = null;
   }
   // An edit made after the answer, or another document, was not given up.
   get givenUp(): boolean {

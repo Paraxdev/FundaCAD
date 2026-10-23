@@ -254,4 +254,35 @@ describe("a document still being read when the open one changes", () => {
       await opensNextCleanly(store);
     }
   });
+
+  // A Discard answered for an open that did not land must not drop the crash snapshot of the document that stayed.
+  it("keeps the document's work given up only when the open it was asked for lands", async () => {
+    const { openDocumentAtPath } = await import("../../src/io/files");
+    const runs: unknown[] = [];
+    for (const [text, laterAnswer] of [
+      ["{ not a document", false],
+      [docText("gear"), false],
+      ["{ not a document", true],
+    ] as const) {
+      host.reads = [];
+      const { store } = setup();
+      store.setParam("width", 30);
+      await vi.waitFor(() => expect(store.dirty).toBe(true));
+      let givenUpAtEnd: boolean | null = null;
+      store.session.own(() => (givenUpAtEnd = store.givenUp));
+      store.markGivenUp();
+      const p = openDocumentAtPath(store, "D:/work/Gear.funda");
+      const read = await reading("D:/work/Gear.funda");
+      if (laterAnswer) store.markGivenUp();
+      read.release(text);
+      runs.push({ outcome: await p, givenUp: store.givenUp, givenUpAtEnd });
+      host.answer = "discard";
+      await opensNextCleanly(store);
+    }
+    expect(runs).toEqual([
+      { outcome: "unreadable", givenUp: false, givenUpAtEnd: null },
+      { outcome: "ok", givenUp: false, givenUpAtEnd: true },
+      { outcome: "unreadable", givenUp: true, givenUpAtEnd: null },
+    ]);
+  });
 });
