@@ -40,7 +40,7 @@ const check = (name, ok, detail) => {
     const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
     page.on("pageerror", (e) => {
       console.error("PAGE ERROR:", e.message);
-      failures++;
+      process.exitCode = 1;
     });
     await page.addInitScript(
       ([port, t]) => {
@@ -58,6 +58,18 @@ const check = (name, ok, detail) => {
     await page.goto(URL);
     await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
     await page.waitForTimeout(1500);
+    const gpu = await page.evaluate(() => {
+      const g = window.viewport.scene.renderer.getContext();
+      const d = g.getExtension("WEBGL_debug_renderer_info");
+      return d ? g.getParameter(d.UNMASKED_RENDERER_WEBGL) : "?";
+    });
+    console.log(`  gpu ${gpu}`);
+    // A software renderer starts on the low power tier, which never draws the catcher.
+    if (/swiftshader|llvmpipe|software/i.test(gpu)) {
+      console.error("needs a GPU: the low power tier a software renderer gets draws no contact shadow");
+      process.exitCode = 1;
+      return;
+    }
     const modal = await page.$(".modal-close");
     if (modal) {
       await modal.click();
@@ -141,7 +153,8 @@ const check = (name, ok, detail) => {
         },
         [a, b],
       );
-    // Mean luminance of a small square around world point (x, y, z) in an image of the current view.
+    // Mean luminance of a 2 mm square around world point (x, y, z) in an image of the current view. The square
+    // is sized in mm, not pixels, so at any fit zoom it stays clear of a body's outline 2.5 mm away.
     const lum = (url, pts) =>
       page.evaluate(
         async ([url, pts]) => {
@@ -161,9 +174,10 @@ const check = (name, ok, detail) => {
           g.drawImage(img, 0, 0);
           return pts.map(([x, y, z]) => {
             const v = new V(x, y, z).project(cam);
+            const u = new V(x + 1, y, z).project(cam);
             const px = Math.round(((v.x + 1) / 2) * img.width),
               py = Math.round(((1 - v.y) / 2) * img.height);
-            const r = Math.max(2, Math.round(img.width / 200));
+            const r = Math.max(1, Math.round((Math.abs(u.x - v.x) / 2) * img.width));
             const d = g.getImageData(px - r, py - r, 2 * r + 1, 2 * r + 1).data;
             let s = 0;
             for (let i = 0; i < d.length; i += 4) s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
