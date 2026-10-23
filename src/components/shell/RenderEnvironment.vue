@@ -33,6 +33,7 @@ import {
   deleteSavedEnvironment,
   envLibrary,
   hdrName,
+  hdrThumb,
   importEnvironmentFile,
   onEnvLibraryChange,
   renameSavedEnvironment,
@@ -65,6 +66,7 @@ const naming = ref<{ id: string | null; text: string } | null>(null);
 const nameInput = ref<HTMLInputElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const hdrLabel = ref<string | null>(null);
+const hdrPicture = ref("");
 const hdrHash = computed(() => hdrHashOf(prefs.value.environment));
 const offs: (() => void)[] = [];
 const loadSaved = () => {
@@ -80,6 +82,7 @@ const loadSaved = () => {
 };
 const syncLabel = () => {
   hdrLabel.value = hdrHash.value ? hdrName(hdrHash.value) : null;
+  hdrPicture.value = hdrHash.value ? hdrThumb(hdrHash.value) : "";
 };
 onMounted(() => {
   offs.push(
@@ -114,8 +117,9 @@ const fail = (err: unknown) => {
 
 const importFile = async (file: File) => {
   notice.value = `Reading ${file.name}...`;
-  const refused = await importEnvironmentFile(engine.store, file);
-  notice.value = refused;
+  let note: string | null = null;
+  const refused = await importEnvironmentFile(engine.store, file, { onNote: (n) => (note = n) });
+  notice.value = refused ?? note;
 };
 const onFilePicked = (e: Event) => {
   const input = e.target as HTMLInputElement;
@@ -242,7 +246,11 @@ const onBloom = (e: Event) => setRenderPref("bloom", Number.parseFloat((e.target
           data-environment="hdr"
           :title="hdrLabel ?? 'Imported HDR'"
         >
-          <span class="rd-ball rd-ball-hdr"></span>
+          <span
+            class="rd-ball"
+            :class="{ 'rd-ball-hdr': !hdrPicture }"
+            :style="hdrPicture ? thumbStyle(hdrPicture) : undefined"
+          ></span>
           <span class="rd-tile-name">{{ hdrLabel ?? "Imported HDR" }}</span>
           <span class="rd-sub">Imported, not saved yet</span>
         </button>
