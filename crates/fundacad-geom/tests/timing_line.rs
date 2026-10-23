@@ -45,3 +45,25 @@ fn a_cached_rebuild_reports_its_stages_and_an_uncached_one_none() {
 
     assert_eq!(timing(rebuild_result(&doc(1.5, 37.0), 0.1, &Map::new(), &NoWatch)), None);
 }
+
+#[test]
+fn the_meshing_time_of_many_bodies_never_exceeds_the_edit_it_is_part_of() {
+    let features: Vec<Value> = (0..6)
+        .flat_map(|i| {
+            let f = f64::from(i);
+            [
+                json!({"id": format!("b{i}"), "type": "sphere", "radius": 9.0 + f, "operation": "new"}),
+                json!({"id": format!("m{i}"), "type": "move", "x": 31.0 * f + 3.0, "y": 7.0 * f, "z": 2.0 * f}),
+            ]
+        })
+        .collect();
+    let mut cache = RebuildCache::new(None);
+    let began = std::time::Instant::now();
+    let reply =
+        timing(rebuild_result_cached(&json!({"features": features}), 0.05, &Map::new(), &NoWatch, &mut cache)).unwrap();
+    let wall = began.elapsed().as_secs_f64() * 1e3;
+    assert_eq!(reply["meshed"], json!(6), "{reply}");
+    let parts: f64 = ["copy", "replay", "post", "mesh"].iter().map(|k| reply[*k].as_f64().unwrap()).sum();
+    assert!(reply["mesh"].as_f64().unwrap() > 0.0, "{reply}");
+    assert!(parts <= wall + 1.0, "stages {parts} ms exceed the edit {wall} ms: {reply}");
+}
