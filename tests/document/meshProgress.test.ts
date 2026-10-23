@@ -11,8 +11,9 @@ import type { CadDocument, RebuildReply } from "../../src/types";
 import { Geometry, type GeometryBackend } from "../../src/geometry/client";
 import { buildProgress } from "../../src/ui/buildProgress";
 import { APPLY_LABEL_AFTER_MS, BUILD_PHASE } from "../../src/geometry/buildPhase";
+import { box } from "./storeKit";
 
-type ProgressFn = (feature: number, meshed: number, meshTotal: number, phase: number) => void;
+type ProgressFn = (feature: number, meshed: number, meshTotal: number, id?: string, phase?: number) => void;
 
 function backend(onRebuild?: () => void) {
   const listeners: ProgressFn[] = [];
@@ -34,7 +35,10 @@ function backend(onRebuild?: () => void) {
     },
     connected: true,
   } as unknown as GeometryBackend;
-  return { be, emit: (f: number, m: number, t: number, p: number) => listeners.forEach((fn) => fn(f, m, t, p)) };
+  return {
+    be,
+    emit: (f: number, m: number, t: number, p: number) => listeners.forEach((fn) => fn(f, m, t, undefined, p)),
+  };
 }
 
 const emptyDoc = (): CadDocument => ({ parameters: {}, features: [] });
@@ -149,7 +153,10 @@ describe("the chip over the engine's own frames", () => {
       parameters: {},
       features: ["Sketch", "Extrude", "Fillet"].map((n, i) => ({ id: `f${i}`, type: "box", name: n })),
     } as unknown as CadDocument);
-    (store as unknown as { build: { building: boolean } }).build.building = true;
+    // The frames are this document's own rebuild, so they count only while it is the one in flight.
+    const faked = store as unknown as { build: { building: boolean }; st: { inflight: { id: string | null } | null } };
+    faked.build.building = true;
+    faked.st.inflight = { id: "r1" };
     const frames = [
       { phase: 0, feature: -1, meshed: -1, meshTotal: -1 },
       { phase: 1, feature: 2, meshed: -1, meshTotal: -1 },
@@ -171,5 +178,39 @@ describe("the chip over the engine's own frames", () => {
       "meshing 1 part",
       "collecting the result…",
     ]);
+  });
+});
+
+describe("build progress belongs to the rebuild this document has on the wire", () => {
+  it("takes a status of its own rebuild id and ignores one of any other request", async () => {
+    const listeners: ((f: number, m: number, t: number, id?: string) => void)[] = [];
+    const be = {
+      rebuild(_d: CadDocument, _t?: number, onId?: (id: string) => void) {
+        onId?.("r-own");
+        return new Promise<RebuildReply>(() => {});
+      },
+      async init() {},
+      onStatus: () => () => {},
+      onProgress(fn: (f: number, m: number, t: number, id?: string) => void) {
+        listeners.push(fn);
+        return () => {};
+      },
+      async cancel() {
+        return true;
+      },
+      connected: true,
+    } as unknown as GeometryBackend;
+    const store = new DocumentStore(be, { parameters: {}, features: [box("plate", 40)] });
+    void store.rebuildNow();
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    const seen = () => ({ progress: store.buildState.progress, meshed: store.buildState.meshed });
+    listeners.forEach((fn) => fn(-1, 40, 90, "r-import-of-the-last-document"));
+    const other = seen();
+    listeners.forEach((fn) => fn(-1, 7, 90, "r-own"));
+    expect({ building: store.buildState.building, other, own: seen() }).toEqual({
+      building: true,
+      other: { progress: null, meshed: null },
+      own: { progress: -1, meshed: 7 },
+    });
   });
 });

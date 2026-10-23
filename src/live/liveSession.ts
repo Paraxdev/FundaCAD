@@ -46,7 +46,14 @@ interface Proposal {
   name: string;
   note: string | null;
   document: CadDocument;
+  /** The document session the assistant read, set by an engine that knows sessions. */
+  doc?: string;
+  /** A whole other document (the assistant's doc_new, doc_open or doc_set), not an edit of the open one. */
+  replaces?: boolean;
 }
+
+export const REFUSED_WHILE_IMPORTING =
+  "an import is still being read into the open document, so it was not replaced, nothing was applied; wait for the import or cancel it in History";
 
 export class LiveSessionHost {
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -58,6 +65,8 @@ export class LiveSessionHost {
   /** Ids of the proposals this window took, most recent last: the acknowledgement an assistant waits on. Not the
    *  revision (a person's edits move it) and not the document, which is migrated and normalised on the way in. */
   private applied: string[] = [];
+  /** Proposals this window turned down, with why, so the assistant reports the reason instead of timing out. */
+  private refused: { id: string; message: string }[] = [];
   private state: LiveState = { sharing: false, guests: [], lastEdit: null };
   private listeners = new Set<Listener>();
   private guide: GuideSession | null = null;
@@ -181,13 +190,17 @@ export class LiveSessionHost {
       // The cut is the user's view, and an assistant's edit sends back the whole document it pulled: with the cut
       // in it, an edit made against an older publish would put back a cut the user has since moved or turned off.
       const { sectionView: _view, ...document } = this.store.toObject();
+      const session = this.store.session;
       const res = await this.geometry.session?.("session_host", {
+        doc: session.id,
         document,
         revision: this.revision,
         title: this.store.filePath ?? null,
         status: this.buildStatus(),
       });
-      if (res) await this.collect(res);
+      // Proposals collected for a document closed during the round trip are dropped, the assistant is told by the
+      // next publish naming another document.
+      if (res && session.alive) await this.collect(res);
       // Not awaited: an engine older than guide mode queues the op behind a build.
       void this.guideTick();
     } catch {
@@ -221,9 +234,16 @@ export class LiveSessionHost {
       // Skip a malformed proposal without bumping the revision, so the assistant's wait times out and says so.
       return;
     }
+    if (p.doc !== undefined && p.doc !== this.store.session.id) return;
     if (!this.allowEdits()) {
       // Sharing read-only. The assistant is told via `canEdit` and refuses first; this is the check at the point of
       // action, the one that must be right if they disagree.
+      this.lastGuestSeen = this.now();
+      return;
+    }
+    // The import lands in whatever document is open when its read ends, so it would land in the assistant's.
+    if (p.replaces && this.store.importRunning) {
+      this.refused = [...this.refused, { id: p.id, message: REFUSED_WHILE_IMPORTING }].slice(-APPLIED_MEMORY);
       this.lastGuestSeen = this.now();
       return;
     }
@@ -240,6 +260,7 @@ export class LiveSessionHost {
       // Lets an assistant refuse an edit up front, naming the setting, instead of waiting out a silent drop.
       canEdit: this.allowEdits(),
       applied: this.applied,
+      refused: this.refused,
       building: b.building,
       errorFeatureId: b.errorFeatureId ?? null,
       errorMessage: b.errorMessage ?? null,

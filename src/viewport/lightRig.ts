@@ -58,6 +58,8 @@ export interface RigEnvironment {
 
 export interface LightRig {
   environment: RigEnvironment;
+  /** An imported panorama lights the scene on its own: the key, the fill and the hemisphere are at zero. */
+  hdrAlone: boolean;
   hemisphere: RigHemisphere;
   lights: RigLight[];
   brightness: number;
@@ -102,14 +104,28 @@ export function scaled(rig: Pick<LightRig, "brightness">, intensity: number): nu
   return intensity * rig.brightness;
 }
 
+/** True while a loaded panorama is the environment, which then lights the scene with no lights added. */
+export function litByHdrAlone(p: Readonly<RenderPrefs>, loaded: (hash: string) => boolean): boolean {
+  const hash = hdrHashOf(p.environment);
+  return hash !== null && loaded(hash);
+}
+
 export function buildLightRig(
   p: Readonly<RenderPrefs>,
   loaded: (hash: string) => boolean,
   floor?: Readonly<GroundFloor> | null,
 ): LightRig {
-  const hemisphere: RigHemisphere = { sky: HEMI_SKY, ground: HEMI_GROUND, intensity: HEMI_INTENSITY, up: HEMI_UP };
+  const alone = litByHdrAlone(p, loaded);
+  const on = alone ? 0 : 1;
+  const hemisphere: RigHemisphere = {
+    sky: HEMI_SKY,
+    ground: HEMI_GROUND,
+    intensity: HEMI_INTENSITY * on,
+    up: HEMI_UP,
+  };
   const key = environmentKeyOf(p, loaded);
   return {
+    hdrAlone: alone,
     environment: {
       key,
       rotation: p.envRotation,
@@ -122,7 +138,7 @@ export function buildLightRig(
         role: "key",
         direction: keyDirection(p.keyAzimuth, p.keyElevation),
         colour: 0xffffff,
-        intensity: KEY_INTENSITY,
+        intensity: KEY_INTENSITY * on,
         angularRadius: SUN_ANGULAR_RADIUS,
         realtimeOnly: false,
       },
@@ -130,7 +146,7 @@ export function buildLightRig(
         role: "fill",
         direction: FILL_DIRECTION,
         colour: 0xffffff,
-        intensity: FILL_INTENSITY,
+        intensity: FILL_INTENSITY * on,
         angularRadius: SUN_ANGULAR_RADIUS,
         realtimeOnly: false,
       },

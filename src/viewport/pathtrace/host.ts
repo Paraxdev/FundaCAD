@@ -3,7 +3,8 @@
 
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
-import { SAMPLE_CAP, TracerRefused, type TraceLook, type TracerBackend } from "./backend";
+import { TracerRefused, type TraceLook, type TracerBackend } from "./backend";
+import { experimentalPrefs } from "../../ui/experimentalPrefs";
 import { costProfile, FrameBudget, renderScaleFor, tracedPictureScale } from "./budget";
 import type { TraceLens } from "./camera";
 import type { FrameView } from "./frameCamera";
@@ -20,7 +21,6 @@ import {
   sceneSignature,
   storageBytes,
   transformSignature,
-  TRIANGLE_BUDGET,
   type SurfaceBaker,
 } from "./mirror";
 import { STILL_MS, TraceGeneration, traceState, type TraceInputs, type TraceState } from "./state";
@@ -78,6 +78,8 @@ export function lookSignature(l: TraceLook): string {
     l.brightness,
     l.toneMapping,
     l.exposure,
+    l.bounces ?? "",
+    l.firefly ?? "",
   ].join("|");
 }
 
@@ -148,7 +150,7 @@ export class PathTraceHost {
   /** The pending arm write, so a clear always lands after it. */
   private guardWrite: Promise<void> | null = null;
   private power: Power = { discharging: false };
-  private cap = SAMPLE_CAP;
+  private cap = costProfile({ discharging: false }).cap;
   private renderScale = 0;
   private budget = new FrameBudget(Infinity);
   /** The last frame is still on the GPU; the next waits for it, so a slow GPU
@@ -254,8 +256,10 @@ export class PathTraceHost {
       this.settled = false;
     }
     this.syncBloom(b, f);
+    // Note: at the cap the held frames come back fast and would step the budget up, a
+    // change then lands on a finished trace that nothing polls again.
     if (this.measured !== null) {
-      if (this.budget.frame(this.measured, f.now)) b.setFrameBudget(this.budget.budget);
+      if (s === "trace" && this.budget.frame(this.measured, f.now)) b.setFrameBudget(this.budget.budget);
       this.measured = null;
     }
     if (s === "trace") {
@@ -312,6 +316,17 @@ export class PathTraceHost {
     this.backend?.setCap(this.cap);
     this.size = { w: 0, h: 0, ratio: 0 };
     this.cameraDirty = true;
+  }
+
+  /** A limit in Preferences, Experimental changed: the cap, the resolution, the look and the refusal are taken
+   *  again. */
+  refreshLimits() {
+    this.cap = costProfile(this.power).cap;
+    this.backend?.setCap(this.cap);
+    this.size = { w: 0, h: 0, ratio: 0 };
+    this.cameraDirty = true;
+    this.sceneDirty = true;
+    this.refusedSig = "";
   }
 
   /** The size a traced picture at `scale` comes out at, or null while none can be taken. */
@@ -384,7 +399,8 @@ export class PathTraceHost {
     const tris = countTriangles(bodies);
     const limit = this.backend?.maxStorageBytes ?? Infinity;
     const overDevice = storageBytes(tris, countVertices(bodies)) > limit;
-    if (tris <= TRIANGLE_BUDGET && !overDevice) return false;
+    const budget = experimentalPrefs().triangleBudget;
+    if (tris <= budget && !overDevice) return false;
     const sig = sceneSignature(bodies);
     if (sig === this.refusedSig) return true;
     this.refusedSig = sig;
@@ -392,7 +408,7 @@ export class PathTraceHost {
     const has = (tris / 1e6).toFixed(1);
     this.note = overDevice
       ? `Path tracing needs more GPU memory than this device allows for a model of ${has} million triangles`
-      : `Path tracing is limited to ${TRIANGLE_BUDGET / 1e6} million triangles for now, this model has ${has} million`;
+      : `Path tracing is limited to ${budget / 1e6} million triangles for now, this model has ${has} million`;
     this.samples = 0;
     this.traceSince = 0;
     this.disarm();

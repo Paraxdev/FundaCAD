@@ -17,9 +17,9 @@ function geom(pendingIds: string[]) {
   for (const id of pendingIds) inner.pending.set(id, () => {});
   const queue: [string, EngineWait | null][] = [];
   const progress: number[] = [];
-  const reports: number[][] = [];
+  const reports: (number | undefined)[][] = [];
   g.onQueue((id, behind) => queue.push([id, behind]));
-  g.onProgress((f, m, t, p) => {
+  g.onProgress((f, m, t, _id, p) => {
     progress.push(f);
     reports.push([f, m, t, p]);
   });

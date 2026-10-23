@@ -1,6 +1,7 @@
 // The floating tool rail, built from the ribbon tables (ui/ribbonDefs.ts). Nothing selected shows categories, a
 // selection shows the tools that act on it, and a sketch shows its drawing tools with each family behind one button.
 
+import { keyHint, shortcutRows } from "../input/shortcuts";
 import { leavesOf, modelGroups, SKETCH, type Group, type ToolItem } from "./ribbonDefs";
 
 export type RailMode = "model" | "selection" | "sketch";
@@ -27,8 +28,14 @@ export interface RailFamily {
 
 export type RailEntry = RailTool | RailFamily;
 
+/** The key a tool shows: the one it is bound to now, none when a person unbound it, the ribbon's own for a tool the keymap does not carry. */
+function keyOf(t: ToolItem): string | undefined {
+  return shortcutRows().some((r) => r.action === t.action) ? keyHint(t.action) : t.key;
+}
+
 export function railTool(t: ToolItem): RailTool {
-  return { kind: "tool", action: t.action, label: t.label, icon: t.iconName, ...(t.key ? { keys: t.key } : {}) };
+  const keys = keyOf(t);
+  return { kind: "tool", action: t.action, label: t.label, icon: t.iconName, ...(keys ? { keys } : {}) };
 }
 
 const CATEGORY: Record<string, { label: string; icon: string }> = {
@@ -82,7 +89,8 @@ function sketchLeaf(action: string): ToolItem {
 export function sketchToolName(action: string): { label: string; keys?: string } | null {
   try {
     const leaf = sketchLeaf(action);
-    return { label: leaf.label, ...(leaf.key ? { keys: leaf.key } : {}) };
+    const keys = keyOf(leaf);
+    return { label: leaf.label, ...(keys ? { keys } : {}) };
   } catch {
     return null;
   }

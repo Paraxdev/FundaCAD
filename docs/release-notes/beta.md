@@ -6,46 +6,41 @@
 
 ## What's new since the last beta
 
-**Home**
-- A new Home screen: start a blank document, open a file, or pick an example. Your recent files show as cards.
-- Home sits on a calm background in the app's glass look. You can switch it to the workspace or your own picture in Preferences.
-
-**Path traced**
-- Path traced is lit by the real lights, the room you pick or your own HDR image, and glowing faces light the scene too.
-- A Realtime while moving switch: on, you see the quick Realtime view while you orbit or edit, and the trace picks up again when you stop. Off, it always shows the trace.
-- Edges, outlines, the grid, the gizmo and the selection stay visible over the traced picture.
-- Orthographic views, depth of field and the ground shadow now work in Path traced.
-- A graphics driver that stalls no longer freezes the view: Path traced greys out and says why.
-
-**Realtime**
-- Filament finishes and eight filament presets in the New material menu.
-- A Printed look that draws layer lines.
+**Home and examples**
+- Every example opens as a document you can edit, with named steps and parameters. A threaded capsule holder with a screw-on cap is new.
+- The welcome card has a Hide button and stays hidden once you hide it.
+- What's new, Report a problem and Suggest an idea are on Home.
 
 **Modeling**
-- Extrude can make a thin wall from open lines, for ribs, dividers and bins.
-- Sketches mark loose ends, and Tie Loose Ends closes small gaps in one step.
-- Export a sketch or a flat face as DXF or SVG at true size.
-- Reference images: put a photo on a plane and scale it from two points and a distance.
-- Threads no longer draw stray lines across the hole, so picking the thread works.
-- A join or cut that only worked through a fallback now says so on its feature.
+- Mirror asks for the objects and the mirror line in two lists, shows a live preview, and works in sketches and in 3D.
+- Right click a sketch line, or use the Construction tool, to turn it into construction and back.
+- Scaling a body on one axis works again after an earlier scale, and the result keeps its faces.
+- The origin planes are bigger tiles with clear names that are easy to hit, by mouse or touch.
+- A sketch with a small gap offers Close gap, and the Hole table goes up to M20.
 
-**Files**
-- Big .fundab files saved by this version open much faster.
-- Files saved by a newer version open, and the parts this version does not know are kept when you save.
+**Inspect**
+- Stress has a Set up and a Results tab, a plain verdict, play and pause, and Escape backs out one step at a time.
+- A section stays on while you work, and is saved with the document.
 
-**Linux and stability**
-- If FundaCAD fails to start twice, it opens in safe mode and tells you why, with a button to restart normally.
-- Opening a .funda or .fundab from the file manager opens it in FundaCAD.
-- The 3D mouse works through spacenavd without a udev rule.
-- Every installer is started and builds a box in CI before a release ships.
+**Render**
+- An imported HDR lights the scene on its own, at any size, and shows a preview. Environment brightness sets how strongly it lights the model.
+- Glass with dispersion keeps its colour, and Path traced no longer stops on a grainy picture.
+- Preferences has an Experimental tab to raise the HDR size and the path tracing limits, at your own risk.
 
-**For AI assistants**
-- An agent harness and ui tools let assistants drive the real app the way a person would.
+**Keys and settings**
+- Keyboard shortcuts open like Preferences, with a page per plugin. Click a key to change it.
+- Plugin settings open from a Settings button.
+
+**Big models and files**
+- Zooming out of a big assembly no longer freezes the view.
+- New, Open and Discard always leave a clean document, with nothing left over from the previous one.
+- .funda and .fundab files open from Explorer, Finder and Linux file managers.
 
 ## Known limits
 
 - On low powered or software graphics, Path traced is greyed out with the reason.
 - With Realtime while moving off, the traced picture can trail the edges for a moment while you drag.
+- On Linux, an HDR dropped on the window is not picked up yet. Use Import HDR in the Render panel.
 
 ## Downloads
 

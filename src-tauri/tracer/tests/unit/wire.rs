@@ -56,9 +56,28 @@ fn an_environment_arrives_with_its_layout_and_a_short_one_is_refused() {
 }
 
 #[test]
+fn an_environment_past_8192_wide_is_taken() {
+    let (w, h) = (16384u32, 2u32);
+    let mut b = encode(&format!(r#"{{"key":"wide","width":{w},"height":{h},"up":"z"}}"#), &[], &[], &[]);
+    b.resize(b.len() + (w * h * 4 * 2) as usize, 0);
+    let e = decode_env(&b).unwrap().unwrap();
+    assert_eq!((e.width, e.height), (w, h));
+    let small = e.fit(8192, u64::MAX);
+    assert_eq!((small.width, small.height), (8192, 1));
+}
+
+#[test]
 fn colours_set_or_clear() {
     let (k, c) =
         decode_colors(&encode(r#"{"key":"k","vertices":1,"colors":true}"#, &[0.5, 0.25, 1.], &[], &[])).unwrap();
     assert_eq!((k.as_str(), c), ("k", Some(vec![[0.5, 0.25, 1.]])));
     assert_eq!(decode_colors(&encode(r#"{"key":"k","vertices":1}"#, &[], &[], &[])).unwrap().1, None);
+}
+
+#[test]
+fn a_look_takes_bounces_and_the_firefly_clamp_and_keeps_six_and_ten_without() {
+    let bare: fundacad_tracer::Look = serde_json::from_str("{}").unwrap();
+    assert_eq!((bare.bounces, bare.firefly), (6, 10.0));
+    let raised: fundacad_tracer::Look = serde_json::from_str(r#"{"bounces":24,"firefly":0}"#).unwrap();
+    assert_eq!((raised.bounces, raised.firefly), (24, 0.0));
 }

@@ -1,10 +1,9 @@
-"""Writes the 3D printer example, a generic cube frame printer, as a gzipped AP214 STEP with names and colours.
+"""Writes a generic cube frame printer as a gzipped AP214 STEP with names and colours, for the 3,000 part import test.
 
-    uv run --no-project --python 3.12 --with cadquery-ocp==7.9.3.1.1 scripts/examples/gen_printer.py --leaves 100 src/templates/printer.stpz
     uv run --no-project --python 3.12 --with cadquery-ocp==7.9.3.1.1 scripts/examples/gen_printer.py --leaves 3000 tests/fixtures/printer_3000.stpz
 
 Leaves past the base parts are screws and T-nuts along the frame rails. A rerun gives the same bytes.
-It prints the leaf count, each subassembly's count and the model's bounding box, which the harness checks.
+It prints the leaf count, each subassembly's count and the model's bounding box.
 """
 
 import argparse

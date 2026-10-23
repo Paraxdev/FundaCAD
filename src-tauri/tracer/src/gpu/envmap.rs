@@ -72,6 +72,9 @@ impl Tracer {
     /// What the page's room or HDR lights the scene with; none goes back to
     /// the look's sky gradient.
     pub fn set_environment(&mut self, e: Option<Environment>) {
+        // Half the binding for the tables, the emitter table follows them in the same buffer.
+        let side = self.device.limits().max_texture_dimension_2d;
+        let e = e.map(|e| e.fit(side, self.buffer_limit / 2));
         if e.is_some() && e == self.env.held {
             return;
         }

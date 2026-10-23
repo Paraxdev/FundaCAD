@@ -2,6 +2,7 @@
 // import, and which are refused, decided from the names alone.
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { DocumentSession } from "../../src/document/session";
 
 const calls: string[] = [];
 let discard = true;
@@ -61,7 +62,11 @@ const confText = Object.values(
   }),
 )[0] as string;
 
-const engine = { store: { onOpen: () => () => {} }, sketch: { hasUncommittedEdits: false }, geometry: {} } as never;
+const engine = {
+  store: { onOpen: () => () => {}, session: new DocumentSession(), importing: (fn: () => Promise<unknown>) => fn() },
+  sketch: { hasUncommittedEdits: false },
+  geometry: {},
+} as never;
 
 beforeEach(() => {
   calls.length = 0;

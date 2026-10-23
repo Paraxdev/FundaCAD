@@ -133,7 +133,8 @@ export interface RenderPrefs {
   /** Draw the imported panorama behind the model instead of the ground colour. */
   envBackground: boolean;
   background: Background;
-  /** 0.4 to 2, multiplying the light rig and the environment together so their exposures cannot drift apart. */
+  /** Environment brightness, 0.4 to 2: the environment's light and reflections, a built in room's key, fill and
+   *  hemisphere with it so they cannot drift apart. An imported panorama has no other light to scale. */
   brightness: number;
   bloom: Bloom;
   /** Perspective lens in degrees, 20 (long, flat) to 65 (wide). Orthographic views ignore it. */

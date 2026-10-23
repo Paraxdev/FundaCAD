@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DocumentSession } from "../../src/document/session";
 
 const invoke = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...a: unknown[]) => invoke(...a) }));
@@ -36,6 +37,7 @@ function fakeStore(path = "D:/parts/a.funda") {
     toObject: () => ({}),
     carriedSections: [] as { kind: number; name: string; hash: string }[],
     markSaved: vi.fn(),
+    session: new DocumentSession(),
   };
 }
 
@@ -100,6 +102,7 @@ describe("the preview picture", () => {
         changed = fn;
       },
       onMeta: () => {},
+      sessions: { onBegin: () => () => {} },
     };
     installAutosave(store as any);
     changed();

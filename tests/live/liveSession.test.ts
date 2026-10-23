@@ -49,8 +49,8 @@ function doc(n: number): CadDocument {
   } as unknown as CadDocument;
 }
 
-function proposal(id: string, features: number, note: string | null = null) {
-  return { id, name: "an assistant", note, document: doc(features) };
+function proposal(id: string, features: number, note: string | null = null, docId?: string) {
+  return { id, name: "an assistant", note, document: doc(features), ...(docId ? { doc: docId } : {}) };
 }
 
 const CUT_A: SectionView = { origin: [41.5, -12, 8.25], normal: [0.6, 0.8, 0], offset: 3.5, side: 1, ghost: "soft" };
@@ -96,6 +96,133 @@ describe("the window's half of a live session", () => {
 
     const after = geo.sent.filter((m) => m.op === "session_host").at(-1)!.payload["revision"];
     expect(after, "a user's edit left the revision where it was").toBeGreaterThan(before);
+  });
+
+  it("publishes its document session and never applies a proposal made for a document it closed", async () => {
+    const host = new LiveSessionHost(store, geo, () => true);
+    host.start();
+    await host.tick();
+    const docA = store.session.id;
+    const publishedA = geo.sent.at(-1)!.payload["doc"];
+
+    // Answered after New: the round trip began in A, so nothing it carries lands in B.
+    let answer!: (v: Record<string, unknown>) => void;
+    geo.session = async (op: string, payload: object = {}) => {
+      geo.sent.push({ op, payload: payload as Record<string, unknown> });
+      return new Promise((r) => (answer = r));
+    };
+    const inFlight = host.tick();
+    store.newDocument();
+    answer({ ok: true, guests: [], proposals: [proposal("p1", 3, null, docA)] });
+    await inFlight;
+    const afterNew = store.document.features.length;
+
+    // A proposal for A handed over in B's own round trip is refused too; one for B, or naming none, is taken.
+    geo.session = StubBackend.prototype.session.bind(geo);
+    const docB = store.session.id;
+    geo.reply = { ok: true, guests: [], proposals: [proposal("p2", 4, null, docA)] };
+    await host.tick();
+    const staleRefused = store.document.features.length;
+    geo.reply = { ok: true, guests: [], proposals: [proposal("p3", 2, null, docB)] };
+    await host.tick();
+    const forB = store.document.features.length;
+    geo.reply = { ok: true, guests: [], proposals: [proposal("p4", 1)] };
+    await host.tick();
+    const unnamed = store.document.features.length;
+
+    // Then a third document starts clean.
+    store.newDocument();
+    geo.reply = { ok: true, guests: [], proposals: [] };
+    await host.tick();
+    expect({
+      publishedA: publishedA === docA,
+      publishedB: geo.sent.filter((m) => m.op === "session_host").some((m) => m.payload["doc"] === docB),
+      afterNew,
+      staleRefused,
+      forB,
+      unnamed,
+      third: store.document.features.length,
+      lastDoc: geo.sent.at(-1)!.payload["doc"] === store.session.id,
+    }).toEqual({
+      publishedA: true,
+      publishedB: true,
+      afterNew: 0,
+      staleRefused: 0,
+      forB: 2,
+      unnamed: 1,
+      third: 0,
+      lastDoc: true,
+    });
+    await host.stop();
+  });
+
+  it("refuses a whole new document while an import is read into the open one, and says so by proposal id", async () => {
+    const host = new LiveSessionHost(store, geo, () => true);
+    host.start();
+    await host.tick();
+    store.loadDocument(doc(2));
+    let finish!: () => void;
+    const reading = store.runBusy(
+      "Importing sv08.step",
+      (onStarted) => {
+        onStarted("rq-import");
+        return new Promise<void>((r) => (finish = r));
+      },
+      { holdHistory: true },
+    );
+    const lastStatus = () =>
+      geo.sent.filter((m) => m.op === "session_host").at(-1)!.payload["status"] as {
+        applied: string[];
+        refused: { id: string; message: string }[];
+      };
+
+    // doc_new or doc_open of the assistant: the import would land in that other document.
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [{ ...proposal("p1", 0), replaces: true }] };
+    await host.tick();
+    const whileReading = store.document.features.length;
+    // An edit of the open document goes in, the import was started for it.
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [proposal("p2", 3)] };
+    await host.tick();
+    const edited = store.document.features.length;
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [] };
+    await host.tick();
+    const told = lastStatus();
+
+    finish();
+    await reading;
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [{ ...proposal("p3", 1), replaces: true }] };
+    await host.tick();
+    const afterImport = store.document.features.length;
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [] };
+    await host.tick();
+
+    store.newDocument();
+    await host.tick();
+    expect({
+      whileReading,
+      edited,
+      told: { applied: told.applied, refused: told.refused },
+      afterImport,
+      after: lastStatus().applied,
+      next: store.document.features.length,
+    }).toEqual({
+      whileReading: 2,
+      edited: 3,
+      told: {
+        applied: ["p2"],
+        refused: [
+          {
+            id: "p1",
+            message:
+              "an import is still being read into the open document, so it was not replaced, nothing was applied; wait for the import or cancel it in History",
+          },
+        ],
+      },
+      afterImport: 1,
+      after: ["p2", "p3"],
+      next: 0,
+    });
+    await host.stop();
   });
 
   it("applies an assistant's edit through the document store, so it is one undo", async () => {

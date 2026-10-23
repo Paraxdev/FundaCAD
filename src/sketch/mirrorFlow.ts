@@ -1,4 +1,5 @@
 import type * as THREE from "three";
+import { entityLabel } from "./relations";
 import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
 import { mirrorCopies, type Pt } from "./mirror";
 import type { ResolvedEntity } from "./snap";
@@ -7,15 +8,27 @@ import {
   addObjects,
   clearField,
   countLabel,
+  enterStep,
   isReady,
+  nextPick,
   pickLine,
   pickObject,
+  removeAt,
   startFields,
   switchField,
   type MirrorFieldKey,
   type MirrorFields,
 } from "../features/mirrorFields";
 import type { MirrorPanelView } from "../stores/toolPanels";
+
+export interface MirrorPreview {
+  copies: ResolvedEntity[];
+  objects: ResolvedEntity[];
+  line: ResolvedEntity | null;
+  hover: ResolvedEntity | null;
+  /** The field a click on `hover` fills. */
+  hoverField: MirrorFieldKey;
+}
 
 export interface MirrorAxis {
   a: Pt;
@@ -32,8 +45,7 @@ export interface MirrorHost {
   textAt(p: THREE.Vector2): ResolvedEntity | null;
   /** The curves around the closed area under `p`, [] when it is not inside one. */
   loopIdsAt(p: THREE.Vector2): string[];
-  /** Copies drawn as the result, the mirror line lit, and the entity under the cursor, if any. */
-  showPreview(copies: ResolvedEntity[], line: ResolvedEntity | null, hover: ResolvedEntity | null): void;
+  showPreview(view: MirrorPreview): void;
   showPanel(view: MirrorPanelView | null): void;
   prompt(text: string): void;
   warn(msg: string): void;
@@ -60,12 +72,31 @@ export function axisOf(e: ResolvedEntity): MirrorAxis | null {
   return null;
 }
 
+// An origin axis has no entity, so it is drawn as a long line through the origin.
+const AXIS_HALF = 5000;
+
+function originAxisAt(p: THREE.Vector2, tol: number): { id: string; axis: MirrorAxis } | null {
+  const dx = Math.abs(p.y);
+  const dy = Math.abs(p.x);
+  if (Math.min(dx, dy) > tol) return null;
+  return dx <= dy
+    ? { id: "origin-x", axis: { a: { x: 0, y: 0 }, b: { x: 1, y: 0 }, label: "X axis" } }
+    : { id: "origin-y", axis: { a: { x: 0, y: 0 }, b: { x: 0, y: 1 }, label: "Y axis" } };
+}
+
+function axisEntity(id: string, ax: MirrorAxis): ResolvedEntity {
+  const len = Math.hypot(ax.b.x - ax.a.x, ax.b.y - ax.a.y) || 1;
+  const ux = ((ax.b.x - ax.a.x) / len) * AXIS_HALF;
+  const uy = ((ax.b.y - ax.a.y) / len) * AXIS_HALF;
+  return { type: "line", id, x1: ax.a.x - ux, y1: ax.a.y - uy, x2: ax.a.x + ux, y2: ax.a.y + uy } as ResolvedEntity;
+}
+
 let nextPanelId = 1;
 
 export class MirrorFlow {
   private fields: MirrorFields<MirrorAxis> | null = null;
   private pre: string[] = [];
-  private hoverId: string | null = null;
+  private hovered: ResolvedEntity | null = null;
   private panelId = 0;
   private refusal: string | null = null;
 
@@ -93,7 +124,7 @@ export class MirrorFlow {
       .map((e) => e.id);
     this.fields = startFields<MirrorAxis>(this.pre);
     this.panelId = nextPanelId++;
-    this.hoverId = null;
+    this.hovered = null;
     this.refusal = null;
     this.update();
   }
@@ -102,41 +133,41 @@ export class MirrorFlow {
   reset(): void {
     if (!this.fields) return;
     this.fields = null;
-    this.hoverId = null;
-    this.host.showPreview([], null, null);
+    this.hovered = null;
+    this.host.showPreview({ copies: [], objects: [], line: null, hover: null, hoverField: "objects" });
     this.host.showPanel(null);
   }
 
-  /** `keep` is Shift or Ctrl: an object pick that stays on Objects whichever field is active. */
+  /** `keep` is Shift or Ctrl: an object pick whichever field is active. */
   click(p: THREE.Vector2, keep: boolean): void {
     const f = this.fields;
     if (!f) return;
     this.refusal = null;
-    const hit = this.hitAt(p);
     if (f.active === "line" && !keep) {
-      if (!hit) return;
-      const axis = axisOf(hit);
-      if (axis) {
+      const hit = this.hitAt(p);
+      const axis = hit ? axisOf(hit) : null;
+      const origin = axis ? null : originAxisAt(p, this.host.pickTol());
+      if (axis && hit) {
+        const left = f.objects.includes(hit.id);
         this.set(pickLine(f, axis, hit.id));
-        if (f.objects.includes(hit.id)) {
-          this.refusal = LINE_LEFT_OBJECTS;
-          this.update();
-        }
-      } else {
+        if (left) this.refusal = LINE_LEFT_OBJECTS;
+      } else if (origin) {
+        this.set(pickLine(f, origin.axis, null));
+      } else if (hit) {
         this.refusal = LINE_REFUSED;
-        this.update();
       }
+      this.update();
+      return;
+    }
+    const hit = this.hitAt(p);
+    if (hit?.type === "projected") {
+      this.host.warn(PROJECTED_FIXED_MSG);
       return;
     }
     if (hit) {
-      if (hit.type === "projected") {
-        this.host.warn(PROJECTED_FIXED_MSG);
-        return;
-      }
-      this.set(pickObject(f, hit.id, keep));
+      this.set(pickObject(f, hit.id));
       return;
     }
-    if (f.active !== "objects") return;
     const loop = this.host.loopIdsAt(p).filter((id) => this.entity(id)?.type !== "projected");
     if (loop.length) this.set(addObjects(f, loop));
   }
@@ -145,11 +176,23 @@ export class MirrorFlow {
     const f = this.fields;
     if (!f) return;
     const hit = p ? this.hitAt(p) : undefined;
-    const takes = hit && (f.active === "line" ? axisOf(hit) !== null : hit.type !== "projected");
-    const id = takes ? hit.id : null;
-    if (id === this.hoverId) return;
-    this.hoverId = id;
+    let next: ResolvedEntity | null = null;
+    if (f.active === "line") {
+      const origin = p && !(hit && axisOf(hit)) ? originAxisAt(p, this.host.pickTol()) : null;
+      next = hit && axisOf(hit) ? hit : origin ? axisEntity(origin.id, origin.axis) : null;
+    } else if (hit && hit.type !== "projected") next = hit;
+    if ((next?.id ?? null) === (this.hovered?.id ?? null)) return;
+    this.hovered = next;
     this.drawPreview();
+  }
+
+  /** Enter: on to the empty field, or apply once both hold something. */
+  enter(): void {
+    const f = this.fields;
+    if (!f) return;
+    const step = enterStep(f);
+    if (step === "commit") this.commit();
+    else this.set(step);
   }
 
   /** False, with nothing changed, until both fields hold something. */
@@ -187,6 +230,10 @@ export class MirrorFlow {
     if (this.fields) this.set(clearField(this.fields, k));
   }
 
+  remove(k: MirrorFieldKey, i: number): void {
+    if (this.fields) this.set(removeAt(this.fields, k, i));
+  }
+
   switchField(): void {
     if (this.fields) this.set(switchField(this.fields));
   }
@@ -214,10 +261,20 @@ export class MirrorFlow {
   private drawPreview(): void {
     const f = this.fields;
     if (!f) return;
+    const ents = this.host.entities();
     const copies = f.line
-      ? mirrorCopies(this.host.entities(), new Set(f.objects), { id: f.lineId, ...f.line }, () => "mirror-preview")
+      ? mirrorCopies(ents, new Set(f.objects), { id: f.lineId, ...f.line }, () => "mirror-preview")
       : [];
-    this.host.showPreview(copies, this.entity(f.lineId) ?? null, this.entity(this.hoverId) ?? null);
+    const line = f.line
+      ? (this.entity(f.lineId) ?? axisEntity(`origin-${f.line.label[0]!.toLowerCase()}`, f.line))
+      : null;
+    this.host.showPreview({
+      copies,
+      objects: ents.filter((e) => f.objects.includes(e.id)),
+      line,
+      hover: this.hovered,
+      hoverField: f.active,
+    });
   }
 
   private update(): void {
@@ -225,17 +282,22 @@ export class MirrorFlow {
     if (!f) return;
     this.drawPreview();
     const objects = countLabel(f.objects.length, "object", "objects");
-    const want =
-      f.active === "objects" ? "Objects · click what to mirror, Shift adds more" : "Mirror line · click a line";
-    this.host.prompt(this.refusal ?? `${want} · ${objects} · Enter · Esc`);
+    const next = nextPick(f, "line");
+    this.host.prompt(`${this.refusal ? `${this.refusal} · ` : ""}${next} · ${objects} · Esc to cancel`);
     this.host.showPanel({
       id: this.panelId,
       fields: [
-        { key: "objects", label: "Objects", icon: "select-all", value: objects, filled: f.objects.length > 0 },
+        {
+          key: "objects",
+          label: "Objects",
+          items: f.objects.map((id) => entityLabel(this.host.entities(), id) ?? id),
+          value: objects,
+          filled: f.objects.length > 0,
+        },
         {
           key: "line",
           label: "Mirror line",
-          icon: "line",
+          items: f.line ? [f.line.label] : [],
           value: f.line?.label ?? "Nothing picked",
           filled: f.line !== null,
         },
@@ -246,6 +308,7 @@ export class MirrorFlow {
       ready: isReady(f),
       onActivate: (k) => this.activate(k),
       onClear: (k) => this.clear(k),
+      onRemove: (k, i) => this.remove(k, i),
       onPlane: () => {},
       onCommit: () => void this.commit(),
       onCancel: () => this.cancel(),

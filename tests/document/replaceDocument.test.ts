@@ -31,8 +31,10 @@ function backend() {
   let calls = 0;
   let cancels = 0;
   const be = {
-    async rebuild() {
+    async rebuild(_doc: unknown, _tol?: number, onId?: (id: string) => void) {
       calls++;
+      // The real client names every request before it goes out; Cancel targets that name.
+      onId?.(`r${calls}`);
       if (calls === 1) return { ok: true as const, result: RESULT };
       return new Promise<never>(() => {}); // never settles
     },
@@ -88,8 +90,8 @@ describe("replacing the document", () => {
     const { store } = await storeWithModelAndHangingRebuild();
     store.newDocument();
     const s = store.buildState;
-    // a stale fraction outliving its document is the same class of bug
-    expect(s.building).toBe(false);
+    // a stale fraction outliving its document is the same class of bug; building is the new document's own build
+    expect(store.busyState).toMatchObject({ active: true, label: "Rebuilding" });
     expect(s.progress).toBeNull();
     expect(s.meshed).toBeNull();
     expect(s.meshTotal).toBeNull();
@@ -168,8 +170,9 @@ function lateReplyBackend() {
   let release!: (v: unknown) => void;
   const chunkFns: ((c: RebuildChunk) => void)[] = [];
   const be = {
-    async rebuild() {
+    async rebuild(_doc: unknown, _tol: unknown, onId?: (id: string) => void) {
       calls++;
+      onId?.(`rq-${calls}`);
       if (calls === 1) return { ok: true as const, result: RESULT };
       if (calls === 2)
         return new Promise((r) => {
@@ -192,8 +195,10 @@ function lateReplyBackend() {
       return true;
     },
   } as unknown as GeometryBackend;
+  // Installments of the held second rebuild, the one that was on the wire when the document was replaced.
   const chunk = (done: number) => {
     const c = {
+      id: "rq-2",
       phase: "bodies",
       result: RESULT,
       manifest: [],

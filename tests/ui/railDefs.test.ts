@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   faceOf,
   familyOf,
@@ -9,6 +9,7 @@ import {
   type RailEntry,
 } from "../../src/ui/railDefs";
 import { leavesOf, MODEL, SKETCH } from "../../src/ui/ribbonDefs";
+import { resetUserShortcuts, setUserShortcut, shortcutRows } from "../../src/input/shortcuts";
 
 const actions = (entries: RailEntry[]) =>
   entries.flatMap((e) => (e.kind === "tool" ? [e.action] : e.items.map((t) => t.action)));
@@ -50,5 +51,18 @@ describe("sketchRail", () => {
     expect(faceOf(rect, undefined).action).toBe("rectangle");
     expect(faceOf(rect, "centerRectangle").action).toBe("centerRectangle");
     expect(faceOf(rect, "not-in-family").action).toBe("rectangle");
+  });
+});
+
+describe("rail key badges", () => {
+  afterEach(() => resetUserShortcuts());
+
+  it("show the key a tool is rebound to, and none once it is unbound", () => {
+    const id = shortcutRows().find((r) => r.action === "sketch" && r.context === "model")!.id;
+    expect(sketchTool()?.keys).toBe("S");
+    setUserShortcut(id, { key: "j" });
+    expect(sketchTool()?.keys).toBe("J");
+    setUserShortcut(id, { key: "" });
+    expect(sketchTool()?.keys).toBeUndefined();
   });
 });

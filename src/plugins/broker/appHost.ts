@@ -12,6 +12,16 @@ import type { Op } from "./ops";
 /** Refused by the host, not the broker. The broker hands it to the plugin as `{ ok: false, code: "failed" }`. */
 export class HostRefused extends Error {}
 
+const WRITES = new Set<Op>([
+  "doc_set",
+  "param_set",
+  "param_remove",
+  "feature_add",
+  "feature_update",
+  "feature_remove",
+  "feature_move",
+]);
+
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 const str = (v: unknown, what: string): string => {
@@ -90,10 +100,19 @@ export function appHost(opts: AppHostOptions): BrokerHost {
     }
   };
 
+  // A host serves one plugin run, and the run works on the document open when it started. Once the user closes that
+  // document, every write of the run is refused, a read of the next one included; only its own doc_new moves it on.
+  let session = store.session;
+  const sameDocument = (op: Op) => {
+    if (session.alive || !(WRITES.has(op) || op === "doc_new")) return;
+    throw new HostRefused(`${op}: the document this plugin run was working on was closed, nothing was applied`);
+  };
+
   return {
     async perform(op: Op, args: Record<string, unknown>): Promise<unknown> {
       const unserved = UNSERVED[op];
       if (unserved) throw new HostRefused(`${op}: ${unserved}`);
+      sameDocument(op);
 
       switch (op) {
         case "app_info":
@@ -151,9 +170,16 @@ export function appHost(opts: AppHostOptions): BrokerHost {
 
         case "doc_new":
           store.newDocument();
+          session = store.session;
           return { ok: true };
 
         case "doc_set": {
+          // The import lands in whatever document is open when its read ends, and this one may be another file.
+          if (store.importRunning) {
+            throw new HostRefused(
+              `${op}: an import is still being read into the open document, nothing was applied, try again once it has landed`,
+            );
+          }
           const next = clone(obj(args.document, "document")) as unknown as CadDocument;
           next.parameters ??= {};
           next.features ??= [];

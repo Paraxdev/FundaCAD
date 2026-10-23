@@ -1,6 +1,8 @@
 <script setup lang="ts">
-// No Esc dismiss: Esc clears a face selection while picking and must not throw the setup away. In probe mode Esc
-// ends probe mode only (viewport/stressGlyphs.ts).
+// Esc backs out one layer at a time. A drag, placing a spot and probe mode take it first in the view
+// (viewport/stressGlyphs.ts), then a focused field gives up focus, and only then does the panel close. It listens in the
+// bubble phase for that, so a layer that stopped the key never reaches it. The setup and the last result stay in the
+// document and the panel, as with Close.
 
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
@@ -11,6 +13,8 @@ import Tabs from "../ui/Tabs.vue";
 import StressSetupStep from "./StressSetupStep.vue";
 import StressResultsStep from "./StressResultsStep.vue";
 import { buildStressRequest } from "../../ui/stress";
+import { escapeClaimed } from "../../ui/escapeClaim";
+import { isEditableTarget } from "../../ui/focus";
 
 type Step = "setup" | "results";
 
@@ -72,6 +76,21 @@ const tabs = computed(() => [
 function close() {
   engine.ui.panels.closeStress();
 }
+
+function onEscape(e: KeyboardEvent) {
+  const d = panels.stress;
+  if (e.key !== "Escape" || !d || e.defaultPrevented || escapeClaimed()) return;
+  if (isEditableTarget(e.target)) {
+    (e.target as HTMLElement).blur();
+    return;
+  }
+  // The glyph layer already takes these in the view; this is for when the key reaches the panel with one still on.
+  if (d.probe) engine.ui.panels.setStressProbe(false);
+  else if (d.placing) engine.ui.panels.placeStressSpot(d.placing);
+  else close();
+}
+onMounted(() => window.addEventListener("keydown", onEscape));
+onUnmounted(() => window.removeEventListener("keydown", onEscape));
 </script>
 
 <template>

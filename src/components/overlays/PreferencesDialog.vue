@@ -13,6 +13,7 @@ import Select from "../ui/Select.vue";
 import McpSection from "./McpSection.vue";
 import DenoiserRow from "../shell/DenoiserRow.vue";
 import PluginsSection from "./PluginsSection.vue";
+import ExperimentalSection from "./ExperimentalSection.vue";
 import {
   addCustomTheme,
   asThemeId,
@@ -156,6 +157,7 @@ const categories = computed(() => [
   { id: "access", label: "Accessibility" },
   { id: "mcp", label: "AI assistants" },
   { id: "plugins", label: "Plugins" },
+  { id: "experimental", label: "Experimental" },
 ]);
 const category = ref(pluginFocus.value ? "plugins" : "appearance");
 watch(pluginFocus, (id) => {
@@ -480,7 +482,7 @@ function onClassicCamera(ev: Event) {
             </div>
             <div class="pref-card">
               <div class="pref-head">
-                <label class="pref-title" for="prefs-brightness">Brightness</label>
+                <label class="pref-title" for="prefs-brightness">Environment brightness</label>
               </div>
               <input
                 id="prefs-brightness"
@@ -492,7 +494,9 @@ function onClassicCamera(ev: Event) {
                 :value="render.brightness"
                 @input="onBrightness"
               />
-              <p class="pref-hint">Lights and reflections together, so the two stay in step.</p>
+              <p class="pref-hint">
+                How strongly the environment lights the model and shows in its reflections, an imported HDR included.
+              </p>
             </div>
             <div class="pref-card">
               <div class="pref-head">
@@ -750,6 +754,10 @@ function onClassicCamera(ev: Event) {
 
         <section v-show="category === 'plugins'" class="prefs-pane prefs-pane-flow">
           <PluginsSection />
+        </section>
+
+        <section v-show="category === 'experimental'" class="prefs-pane" data-prefs-experimental>
+          <ExperimentalSection />
         </section>
       </div>
     </div>

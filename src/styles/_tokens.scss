@@ -35,6 +35,8 @@
   --warn: #ffab2e;
   --error: #ff5c5c;
   --error-tint: rgba(255, 92, 92, 0.14);
+  /* A second pick colour, apart from the accent: the Mirror line or plane in the viewport. */
+  --pick-line: #b48cff;
 
   /* legacy alias */
   --accent-blue: var(--accent);

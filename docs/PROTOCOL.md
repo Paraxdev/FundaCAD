@@ -47,8 +47,14 @@ reach the supervisor.
 ## Request envelope
 
 ```jsonc
-{ "id": "<client-generated string, e.g. a UUID>", "op": "<op name>", /* op-specific fields */ }
+{ "id": "<client-generated string, e.g. a UUID>", "op": "<op name>", "doc": "<document session id>", /* op-specific fields */ }
 ```
+
+`doc` names the open document the request works for (the app sends its document session's id, third after `id` and
+`op`, so the desktop relay reads it from the request's first bytes). It is optional: a request without it belongs to
+the document `""`. The held document a delta rebuild patches is kept per connection and `doc`, and `doc_end` ends
+every job of one `doc`. App wide ops (`ping`, `cancel`, `doc_end`, `listFonts`, `tessellateText`, `session_*`) carry
+no `doc`.
 
 ## Reply envelope
 
@@ -927,10 +933,13 @@ losing the socket gives it up.
 // the window, on its loop: publish what is open, collect what has been asked for
 { "op": "session_host", "id": "...", "document": { /* CadDocument */ },
   "revision": 12, "title": "spool.funda",
-  "status": { "canEdit": true, "applied": ["p3"], "building": false } }
+  "status": { "canEdit": true, "applied": ["p3"], "building": false,
+              "refused": [ { "id": "p2", "message": "..." } ] } }
 // -> { "ok": true, "guests": ["an assistant"], "proposals": [ { "id": "p4",
 //      "name": "an assistant", "note": "feature_add: cylinder",
 //      "baseRevision": 12, "document": { ... } } ] }
+// A proposal of a whole other document carries "replaces": true. The window may
+// refuse it (an import is still read into its document) and lists it in "refused".
 
 // the window, on the way out. Takes the document with it: a document with no
 // host is not one anyone may act on.
@@ -943,7 +952,7 @@ losing the socket gives it up.
 
 // a guest offering an edit
 { "op": "session_propose", "id": "...", "document": { ... }, "baseRevision": 12,
-  "note": "feature_add: cylinder", "name": "an assistant" }
+  "note": "feature_add: cylinder", "name": "an assistant", "replaces": false }
 // -> { "ok": true, "proposal": "p4", "revision": 12 }
 // -> { "ok": false, "reason": "stale" | "no-host" | "backlog",
 //      "revision": 14, "message": "..." }
@@ -1013,6 +1022,23 @@ process (an engine on `--ws`, which nothing supervises, abandons its job thread 
 was running then answers `{ "ok": false, "cancelled": true, ... }` rather than the
 generic "the geometry kernel crashed on this operation" reply, so the caller can tell a
 deliberate cancel apart from a real crash.
+
+### `doc_end`
+
+Answered on the read path, like `cancel`. Ends one document of this connection, or every one:
+
+```jsonc
+{ "op": "doc_end", "id": "...", "doc": "<document session id>" }
+{ "op": "doc_end", "id": "...", "all": true }
+```
+
+Every queued request of that document is withdrawn and answered `{ "ok": false, "cancelled": true, ... }` before
+the ack, its running job is cancelled (and answers cancelled when it stops), and a later request naming that `doc`
+is answered cancelled without running. After the running job, the engine drops the held document of the ended `doc`
+and, when no document holds one any more, the rebuild cache's snapshots and mesh payloads (disk checkpoints stay).
+Reply: `{ "ended": <jobs ended, running and queued> }`. A `doc_end` with neither field is an error. Closing a
+connection ends all of its documents the same way. The desktop relay gives an ended document's running job the hard
+cancel grace before it restarts the worker, and a page that attaches in place of another ends every document first.
 
 ### `ping`
 

@@ -13,6 +13,8 @@ const remember = ref(true);
 const changeKeys = ref(false);
 const error = ref("");
 const askKeys = computed(() => props.req.askKeys || changeKeys.value);
+// Under the controls, past the .prefs-row label column and its gap.
+const indent = { marginLeft: "calc(92px + var(--s-3))" };
 
 function confirm() {
   const parsed = parseOnshapeUrl(link.value);
@@ -51,47 +53,76 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
   <ModalFrame panel-class="onshape-link-dialog" @close="cancel()">
     <template #title>Import from Onshape link</template>
 
-    <div class="modal-body prefs">
-      <label class="prefs-row" style="grid-template-columns: 90px 1fr">
-        <span class="prefs-label">Link</span>
-        <input
-          v-model="link"
-          class="sm-input"
-          type="url"
-          spellcheck="false"
-          autofocus
-          placeholder="https://cad.onshape.com/documents/..."
-          data-testid="onshape-link"
-        />
-      </label>
-      <div class="sm-hint"
-        >A part studio link imports that part studio. A document link imports every part studio in it.</div
-      >
-
-      <template v-if="askKeys">
-        <label class="prefs-row" style="grid-template-columns: 90px 1fr">
-          <span class="prefs-label">Access key</span>
-          <input v-model="access" class="sm-input" spellcheck="false" autocomplete="off" data-testid="onshape-access" />
+    <!-- The Settings dialog styles .modal-body.prefs as its two column page, so the form is a .prefs inside. -->
+    <div class="modal-body">
+      <div class="prefs" style="min-width: 460px">
+        <label class="prefs-row">
+          <span class="prefs-label">Link</span>
+          <input
+            v-model="link"
+            class="sm-input"
+            style="width: 100%"
+            type="url"
+            spellcheck="false"
+            autofocus
+            placeholder="https://cad.onshape.com/documents/..."
+            data-testid="onshape-link"
+          />
         </label>
-        <label class="prefs-row" style="grid-template-columns: 90px 1fr">
-          <span class="prefs-label">Secret key</span>
-          <input v-model="secret" class="sm-input" type="password" autocomplete="off" data-testid="onshape-secret" />
-        </label>
-        <label class="prefs-row" style="grid-template-columns: 90px 1fr">
-          <span class="prefs-label"></span>
-          <span><input v-model="remember" type="checkbox" /> Remember in the system's credential store</span>
-        </label>
-        <div class="sm-hint"
-          >Create a key with read access at dev-portal.onshape.com/keys. The keys never go in the document.</div
+        <div class="sm-hint" :style="indent"
+          >A part studio link imports that part studio. A document link imports every part studio in it.</div
         >
-      </template>
-      <button v-else type="button" class="btn" style="justify-self: start" @click="changeKeys = true"
-        >Use other keys</button
-      >
 
-      <div v-if="error" class="sm-hint" style="color: var(--error, #f0564a)" data-testid="onshape-error">{{
-        error
-      }}</div>
+        <template v-if="askKeys">
+          <label class="prefs-row">
+            <span class="prefs-label">Access key</span>
+            <input
+              v-model="access"
+              class="sm-input"
+              style="width: 100%"
+              spellcheck="false"
+              autocomplete="off"
+              data-testid="onshape-access"
+            />
+          </label>
+          <label class="prefs-row">
+            <span class="prefs-label">Secret key</span>
+            <input
+              v-model="secret"
+              class="sm-input"
+              style="width: 100%"
+              type="password"
+              autocomplete="off"
+              data-testid="onshape-secret"
+            />
+          </label>
+          <label class="prefs-row">
+            <span class="prefs-label"></span>
+            <span class="sm-hint"
+              ><input v-model="remember" type="checkbox" /> Remember in the system's credential store</span
+            >
+          </label>
+          <div class="sm-hint" :style="indent"
+            >Create a key with read access at dev-portal.onshape.com/keys. The keys never go in the document.</div
+          >
+        </template>
+        <button
+          v-else
+          type="button"
+          class="btn"
+          :style="{ ...indent, alignSelf: 'flex-start' }"
+          @click="changeKeys = true"
+          >Use other keys</button
+        >
+
+        <div
+          v-if="error"
+          class="sm-hint"
+          :style="{ ...indent, color: 'var(--error, #f0564a)' }"
+          data-testid="onshape-error"
+          >{{ error }}</div
+        >
+      </div>
     </div>
 
     <div class="modal-foot">

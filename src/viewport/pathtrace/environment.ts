@@ -3,6 +3,7 @@
 
 import * as THREE from "three";
 import type { HdrImage } from "../hdrImage";
+import { hdrLightingWidth } from "../hdrRegistry";
 
 /** The viewport's hemisphere light, which the tracer has no light for: folded
  *  into the environment, sky above `up`, ground below. */
@@ -14,9 +15,11 @@ export interface TraceHemi {
   up: THREE.Vector3;
 }
 
-const WIDTH = 512;
-const HEIGHT = 256;
-const CUBE = 256;
+/** 512 x 256 from a 256 cube by default, scaled with the lighting width an imported panorama is held at. */
+function sizes(): { width: number; height: number; cube: number } {
+  const light = hdrLightingWidth();
+  return { width: light / 2, height: light / 4, cube: light / 4 };
+}
 
 // The direction for a texel is the tracer's own equirectUvToDirection, so the
 // readback rows land where it samples them.
@@ -70,9 +73,10 @@ export function traceEnvironment(
   room: (() => { scene: THREE.Scene; dispose(): void }) | null,
   hemi: TraceHemi | null,
 ): THREE.DataTexture {
-  const full = `${key}|${hemiKey(hemi)}`;
+  const { width: WIDTH, height: HEIGHT, cube } = sizes();
+  const full = `${key}|${hemiKey(hemi)}|${WIDTH}`;
   if (held?.key === full) return held.tex;
-  const cubeTarget = new THREE.WebGLCubeRenderTarget(CUBE, { type: THREE.HalfFloatType });
+  const cubeTarget = new THREE.WebGLCubeRenderTarget(cube, { type: THREE.HalfFloatType });
   const flat = new THREE.WebGLRenderTarget(WIDTH, HEIGHT, { type: THREE.FloatType, depthBuffer: false });
   const quad = new THREE.Mesh(
     new THREE.PlaneGeometry(2, 2),

@@ -705,3 +705,42 @@ fn a_body_the_edit_changes_gets_a_new_blob() {
     assert_eq!(got, cold(&prefix));
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn releasing_the_cache_drops_its_snapshots_and_payloads_and_the_next_build_is_whole() {
+    let raw = doc();
+    let mut cache = RebuildCache::new(None);
+    let (first, _) = warm(&mut cache, &raw);
+    let (snapshots, payloads) = cache.holding();
+    assert!(snapshots > 0 && payloads > 0, "a build held nothing: {:?}", cache.holding());
+
+    cache.release();
+    assert_eq!(cache.holding(), (0, 0));
+    let (after, replayed) = warm(&mut cache, &raw);
+    assert_eq!((after, replayed.len(), cache.stats.source), (first, 6, Source::Full));
+
+    // A second document builds on a released cache as on a fresh one.
+    let other = edit(&raw, 4, "length", json!(9));
+    let mut fresh = RebuildCache::new(None);
+    cache.release();
+    assert_eq!(warm(&mut cache, &other).0, warm(&mut fresh, &other).0);
+}
+
+#[test]
+fn a_cancelled_mesh_pass_meshes_no_body_and_answers_none() {
+    let raw = doc();
+    let r = builder::rebuild(&typed(&raw), &raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+    let mut cache = RebuildCache::new(None);
+    let token = fundacad_protocol::CancelToken::new();
+    let _installed = fundacad_geom::cancel::install(Some(token.clone()));
+
+    let mut ticks = 0;
+    let whole = cache.mesh(&r, TOL, &Map::new(), &mut |_, _| ticks += 1);
+    assert_eq!((whole.bodies.len(), ticks, cache.stats.meshed), (r.bodies.len(), r.bodies.len(), r.bodies.len()));
+
+    token.cancel();
+    let mut stopped = RebuildCache::new(None);
+    let mut ticks = 0;
+    let none = stopped.mesh(&r, TOL, &Map::new(), &mut |_, _| ticks += 1);
+    assert_eq!((none.bodies.len(), ticks, stopped.stats.meshed, stopped.holding()), (0, 0, 0, (0, 0)));
+}

@@ -156,6 +156,7 @@ Status:
 | `--warn` | `#ffab2e` | Warnings, amber History steps, `.perf-warn` |
 | `--error` | `#ff5c5c` | Errors, destructive items, failed steps |
 | `--error-tint` | `rgba(255, 92, 92, 0.14)` | Error backgrounds and the error focus ring |
+| `--pick-line` | `#b48cff` | The second pick colour, apart from the accent: the Mirror line or plane, in the view and on its panel field |
 
 There is no info, success tint, warn tint, disabled or hover token. Derive them:
 
@@ -230,8 +231,7 @@ Scrims (`.modal-overlay`, `.cmdk-backdrop`, `.choice-backdrop`, final values in
 `_glass.scss`): `background: rgba(5, 4, 9, 0.35)` with
 `backdrop-filter: blur(6px) saturate(1.2)`. The workspace stays visible behind
 a dialog, blurred and dimmed. A new modal reuses `.modal-overlay` rather than
-writing its own scrim. `.shortcut-hud` still has its own flat
-`rgba(10, 11, 14, 0.6)` and no blur, see [14](#14-known-debt-do-not-copy).
+writing its own scrim.
 
 Stacking tokens: `--z-float` 20, `--z-popover` 200, `--z-menu` 3000,
 `--z-modal` 4000, `--z-toast` 5000. Most layers still use literals, so pick
@@ -246,7 +246,6 @@ your layer from what is actually on screen:
 | 2000 | `.menu-popup` |
 | 2450 | `.logcon` |
 | 2500 | `.toast-stack` |
-| 2600 | `.shortcut-hud` |
 | 3000 | `.context-menu` |
 | 4000 | `.choice-backdrop` |
 | 4001 | `.select-pop`, `calc(var(--z-modal) + 1)`, so a picker clears its dialog |
@@ -286,7 +285,7 @@ around the window). Hosts that are fixed or absolute in their own partial
 `.ne-overlay`) or `position: relative` there (`.rail-tile`) need nothing more;
 every other host is on the `position: relative` lists in `_glass.scss`
 (`.float-card`, `.float-group`, `.choice-card`, `.float-right .palette`,
-`.modal-panel`, `.cmdk-card`, `.tgt-panel`, `.shortcut-hud-card`, `.toast`,
+`.modal-panel`, `.cmdk-card`, `.tgt-panel`, `.toast`,
 `#renderdock`).
 
 ```scss
@@ -1032,7 +1031,8 @@ Escape depends on what the surface is:
 | A menu, popover, the command palette (`MenuBar.vue`, `ui/menu.ts`, `ContextMenuHost.vue`, `Popover.vue`, `CommandPalette.vue`) | Closes the topmost one only. It calls `claimEscape()` (`ui/escapeClaim.ts`) while open, and tools check `escapeClaimed()` so the same key does not also cancel them |
 | A dialog (`ModalFrame.vue`, the chooser) | Closes it through its own handler and the modal gate (`composables/useModalGate.ts`) |
 | A non modal tool panel with nothing of its own to cancel (Properties, Interference, Parameters) | `close-on-esc` on `FloatingPanel`. It does not claim Escape, so the key also reaches the global handler; the hint says "Esc to close" |
-| A panel that belongs to a running tool or mode (Measure, Overhang, Stress) | No `close-on-esc`. Whatever owns the panel closes it: `MeasureTool` owns Escape for its whole run and drops the panel with its highlight ("Esc to exit"), Overhang goes with the Draft toggle ("toggle Draft to close"), Stress has a Close button |
+| A panel that belongs to a running tool or mode (Measure, Overhang) | No `close-on-esc`. Whatever owns the panel closes it: `MeasureTool` owns Escape for its whole run and drops the panel with its highlight ("Esc to exit"), Overhang goes with the Draft toggle ("toggle Draft to close") |
+| A tool panel with layers of its own to back out of (Stress) | No `close-on-esc`, its own bubble phase `keydown` in `StressPanel.vue`. One layer per press: a drag, placing a spot or Read a point first (`viewport/stressGlyphs.ts` takes them in capture and stops the key), then a focused field gives up focus, and only then the panel closes, keeping the setup and the last result as the Close button does |
 
 Never call `claimEscape()` from a tool panel: the tool would stop hearing its
 own Escape.
@@ -1120,8 +1120,6 @@ Run all of it. Paste the screenshots into the review.
 - Undefined tokens listed in [2](#2-tokens), and `--grid-minor` and
   `--grid-major`, read by `viewport/scene.ts` but never defined.
 - `--z-menu`, `--z-toast` and `--shadow-pill` are defined and unused.
-- `.shortcut-hud` paints its own flat scrim, `rgba(10, 11, 14, 0.6)` with no
-  blur, instead of the shared one.
 - Raw colours inside the measure panels: `OverhangPanel.vue` writes
   `color: #e24a3b`, and `PropertiesPanel.vue` and `InterferencePanel.vue` write
   `var(--accent-hot, #ff9a5c)` inline.

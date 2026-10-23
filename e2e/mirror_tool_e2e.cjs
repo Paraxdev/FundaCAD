@@ -6,6 +6,8 @@
 //      both bodies, the result is symmetric about YZ and one undo takes it back.
 //   2. A curved face is refused as the plane, a flat face is taken: Enter adds a datum plane and
 //      the mirror together and one undo removes both. Esc in a third run changes nothing.
+//   3. Once the plane is set the clicks go back to Objects: a plain click on another body adds it
+//      instead of taking its face as the plane, and the picked face stays lit.
 //
 // Usage (from the repo root, with vite and an engine `fundacad-engine --ws` running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/mirror_tool_e2e.cjs [outDir]
@@ -94,15 +96,20 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
     page.evaluate(() => {
       const panel = document.querySelector(".mirror-panel");
       const field = (k) => {
-        const row = panel && panel.querySelector(`.mirror-field[data-field="${k}"]`);
+        const row = panel && panel.querySelector(`.tgt-section[data-field="${k}"]`);
         if (!row) return null;
         return {
-          value: row.querySelector(".mirror-field-v").textContent.trim(),
-          active: row.classList.contains("active"),
-          clearable: !row.querySelector(".float-card-close").disabled,
+          value: [
+            row.querySelectorAll(".tgt-item").length,
+            ...[...row.querySelectorAll(".tgt-label")].map((l) => l.textContent.trim()),
+          ]
+            .join(" ")
+            .trim(),
+          active: row.classList.contains("tgt-active"),
+          clearable: !row.querySelector(".tgt-clear").disabled,
         };
       };
-      const apply = panel && panel.querySelector(".mirror-actions .btn-primary");
+      const apply = panel && panel.querySelector(".tgt-done");
       const g = window.viewport.ghosts && window.viewport.ghosts.ghosts;
       return {
         running: window.__fundacad.mirror.active,
@@ -112,6 +119,8 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
         chips: panel ? [...panel.querySelectorAll(".rd-chip")].map((c) => c.textContent.trim()) : [],
         ready: !!apply && !apply.disabled,
         ghost: g ? { copies: g.copies.length, m: g.copies.map((c) => Array.from(c.matrix.elements)) } : null,
+        prompt: document.querySelector(".prompt-text")?.textContent?.trim() ?? "",
+        faceMarks: (window.viewport.faceMarkMeshes.get("mirror") || []).length,
       };
     });
 
@@ -133,7 +142,10 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
   st = await state();
   check(
     "Shift click adds the second body and stays on the plane",
-    /\b2\b/.test(st.objects.value) && st.plane.active && !st.plane.clearable,
+    /\b2\b/.test(st.objects.value) &&
+      st.plane.active &&
+      !st.plane.clearable &&
+      /pick the mirror plane/i.test(st.prompt),
     JSON.stringify([st.objects, st.plane]),
   );
 
@@ -142,6 +154,11 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
   await page.waitForTimeout(400);
   st = await state();
   check("the YZ chip sets the plane", st.plane.clearable && /YZ/.test(st.plane.value) && st.ready, st.plane.value);
+  check(
+    "the clicks go back to Objects and the prompt offers Enter",
+    st.objects.active && !st.plane.active && /enter to mirror/i.test(st.prompt),
+    JSON.stringify([st.objects, st.prompt]),
+  );
   const m = st.ghost && st.ghost.m[0];
   check(
     "one reflected ghost shows, x flipped across YZ",
@@ -197,6 +214,7 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
   await clickAt(await scr(-25, 18, 5));
   st = await state();
   check("a flat face is taken as the plane", st.plane.clearable && st.ready, st.plane.value);
+  check("the picked face stays lit", st.faceMarks === 1, String(st.faceMarks));
   await page.screenshot({ path: path.join(OUT, "02_flat_face.png") });
   const before2 = await features();
   await page.keyboard.press("Enter");
@@ -221,8 +239,17 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
   // Esc in a third run changes nothing and gives the selection back
   await clickAt(await scr(30, 7, 8));
   await page.click("#toolrail [data-action='offer:mirror']").catch(() => {});
-  await page.waitForTimeout(400);
+  await page.waitForSelector(".mirror-panel .rd-chip", { timeout: 10000 });
   await page.click(".mirror-panel .rd-chip:nth-child(1)");
+  await page.waitForTimeout(300);
+  await clickAt(await scr(-25, 18, 5));
+  st = await state();
+  check(
+    "a plain click on another body adds it and keeps the plane",
+    /\b2\b/.test(st.objects.value) && /XY/.test(st.plane.value) && st.objects.active,
+    JSON.stringify([st.objects, st.plane]),
+  );
+  await page.screenshot({ path: path.join(OUT, "03_body_added.png") });
   await page.keyboard.press("Escape");
   await settle();
   st = await state();

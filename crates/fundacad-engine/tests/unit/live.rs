@@ -278,3 +278,74 @@ fn a_guide_caption_is_capped() {
     let c = wire(&mut s, APP, "session_guide", json!({"state": {}}))["commands"][0]["caption"].as_str().unwrap().len();
     assert_eq!(c, MAX_CAPTION);
 }
+
+#[test]
+fn a_proposal_for_a_document_the_app_closed_never_reaches_the_next_one() {
+    let (mut s, _) = session();
+    s.publish_doc(APP, json!("doc-a"), doc(3), 7, Value::Null, Value::Null);
+    assert_eq!(s.state(Some(AGENT), None)["doc"], "doc-a");
+    let accepted = s.propose_doc(AGENT, doc(4), 7, Some(&json!("doc-a")), None, None);
+    s.guide_guest(AGENT, Some(&json!({"kind": "wait", "text": "Press Next"})), None);
+
+    // The app opened B before its next publish: what was asked for A is dropped, not handed to B.
+    let handed = s.publish_doc(APP, json!("doc-b"), doc(0), 8, Value::Null, Value::Null);
+    let late = s.propose_doc(AGENT, doc(5), 8, Some(&json!("doc-a")), None, None);
+    let for_b = s.propose_doc(AGENT, doc(1), 8, Some(&json!("doc-b")), None, None);
+    let unnamed = s.propose(AGENT, doc(2), 8, None, None);
+    let next = s.publish_doc(APP, json!("doc-b"), doc(0), 8, Value::Null, Value::Null);
+    let proposals: Vec<(Value, usize)> = next["proposals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| (p.get("doc").cloned().unwrap_or(Value::Null), features(&p["document"])))
+        .collect();
+    assert_eq!(
+        (accepted["ok"].clone(), handed["proposals"].clone(), late["reason"].clone(), late["message"].clone()),
+        (json!(true), json!([]), json!("doc-changed"), json!("the document in the app changed, nothing was applied"))
+    );
+    assert_eq!((for_b["ok"].clone(), unnamed["ok"].clone()), (json!(true), json!(true)));
+    assert_eq!(proposals, vec![(json!("doc-b"), 1), (json!("doc-b"), 2)]);
+    assert_eq!(s.guide_host(APP, Value::Null)["commands"], json!([]), "a guide command made for A reached B");
+
+    // A host that names no document keeps today's behaviour, and its state carries no doc.
+    let (mut plain, _) = session();
+    publish(&mut plain, APP, doc(1), 1);
+    plain.propose(AGENT, doc(2), 1, None, None);
+    assert_eq!(features(&publish(&mut plain, APP, doc(1), 1)["proposals"][0]["document"]), 2);
+    assert!(plain.state(Some(AGENT), None).get("doc").is_none());
+}
+
+#[test]
+fn a_whole_other_document_reaches_the_app_marked_so_it_can_refuse_it_during_an_import() {
+    let (mut s, _) = session();
+    s.publish_doc(APP, json!("doc-a"), doc(3), 7, Value::Null, Value::Null);
+    let replacing = wire(
+        &mut s,
+        AGENT,
+        "session_propose",
+        json!({"document": doc(0), "baseRevision": 7,
+        "doc": "doc-a", "replaces": true}),
+    );
+    let edit = wire(&mut s, AGENT, "session_propose", json!({"document": doc(4), "baseRevision": 7, "doc": "doc-a"}));
+    let unmarked = wire(
+        &mut s,
+        AGENT,
+        "session_propose",
+        json!({"document": doc(5), "baseRevision": 7,
+        "doc": "doc-a", "replaces": false}),
+    );
+    // A refused proposal leaves nothing marked behind.
+    let late = s.propose_replacing(AGENT, doc(0), 7, Some(&json!("doc-b")), None, None, true);
+    let handed = s.publish_doc(APP, json!("doc-a"), doc(3), 7, Value::Null, Value::Null);
+    let marks: Vec<(usize, Value)> = handed["proposals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| (features(&p["document"]), p.get("replaces").cloned().unwrap_or(Value::Null)))
+        .collect();
+    assert_eq!(
+        (replacing["ok"].clone(), edit["ok"].clone(), unmarked["ok"].clone(), late["reason"].clone()),
+        (json!(true), json!(true), json!(true), json!("doc-changed"))
+    );
+    assert_eq!(marks, vec![(0, json!(true)), (4, Value::Null), (5, Value::Null)]);
+}

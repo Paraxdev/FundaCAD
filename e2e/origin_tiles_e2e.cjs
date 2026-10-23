@@ -1,6 +1,7 @@
 // The origin planes as three small tiles beside the origin: shown only while a
-// tool asks for a plane, a constant size on screen, each picking its own plane,
-// in Noir and Solarized Light. SC_VARIANTS=1 also writes the corner comparison
+// tool asks for a plane, a constant size on screen, each picking its own plane by
+// its tile or its name with a 44 px target at any angle, in Noir and
+// Solarized Light. SC_VARIANTS=1 also writes the corner comparison
 // renders (circular corners against the squircle, close and far).
 //
 // Usage (vite + engine running):
@@ -12,9 +13,9 @@ const os = require("os");
 const path = require("path");
 
 // TILE_SIZE_PX, TILE_GAP_PX + TILE_SIZE_PX and the MIN_TILE_SCALE floor in src/viewport/originTiles.ts.
-const SIZE = 68;
-const EXTENT = 78;
-const FLOOR = 0.6 * SIZE;
+const SIZE = 85;
+const EXTENT = 97;
+const FLOOR = 0.48 * SIZE;
 
 const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
@@ -218,11 +219,97 @@ const PLANES = ["XY", "XZ", "YZ"];
     PLANES,
   );
   check(
-    "top view names only the XY tile, the two seen edge on hide theirs",
-    names.XY > 0.5 && names.XZ === 0 && names.YZ === 0,
+    "top view still names the two tiles seen edge on",
+    PLANES.every((k) => names[k] > 0.5),
     JSON.stringify(names),
   );
   await shot("tiles-top-noir", around(await origin(), 170));
+  const labelAt = () =>
+    page.evaluate(() => {
+      const v = window.viewport;
+      return v.scene.originTiles.labelsOnScreen({ camera: v.rig.active, rect: v.domElement.getBoundingClientRect() });
+    });
+  const labels = await labelAt();
+  const labelPicks = await page.evaluate(
+    (labels) =>
+      Object.fromEntries(
+        Object.entries(labels).map(([k, p]) => {
+          const c = window.viewport.pickConstructionAt(p.x, p.y);
+          return [k, c?.kind === "base" ? c.plane : null];
+        }),
+      ),
+    labels,
+  );
+  check(
+    "each name picks its own plane, the edge on ones included",
+    PLANES.every((k) => labelPicks[k] === k),
+    JSON.stringify({ labels, labelPicks }),
+  );
+  // The largest square of pixels that all pick a plane, the size of its target on screen.
+  const targets = () =>
+    page.evaluate((planes) => {
+      const v = window.viewport;
+      const o = v.projectToScreen(new v.camera.position.constructor(0, 0, 0));
+      const R = 200;
+      const n = 2 * R;
+      const best = Object.fromEntries(planes.map((k) => [k, 0]));
+      const prev = Object.fromEntries(planes.map((k) => [k, new Uint16Array(n)]));
+      for (let j = 0; j < n; j++) {
+        const cur = Object.fromEntries(planes.map((k) => [k, new Uint16Array(n)]));
+        for (let i = 0; i < n; i++) {
+          const c = v.pickConstructionAt(o.x - R + i + 0.5, o.y - R + j + 0.5);
+          const k = c?.kind === "base" ? c.plane : null;
+          if (!k) continue;
+          cur[k][i] = i && j ? 1 + Math.min(prev[k][i], cur[k][i - 1], prev[k][i - 1]) : 1;
+          best[k] = Math.max(best[k], cur[k][i]);
+        }
+        Object.assign(prev, cur);
+      }
+      return best;
+    }, PLANES);
+  const topTargets = await targets();
+  check(
+    "top view: every plane, the two edge on ones too, has a 44 px target",
+    PLANES.every((k) => topTargets[k] >= 44),
+    JSON.stringify(topTargets),
+  );
+  await page.mouse.move(labels.XZ.x, labels.XZ.y);
+  await page.waitForTimeout(250);
+  const hoverName = await page.evaluate(() => {
+    const m = window.viewport.scene.planes.XZ;
+    const label = m.children.find((c) => c.userData.role === "label");
+    return { fill: m.material.opacity, scale: label.scale.x, hot: label.material.opacity };
+  });
+  await shot("tiles-top-hover-xz-name-noir", around(await origin(), 170));
+  await page.mouse.move(1390, 890);
+  await page.waitForTimeout(250);
+  const idleName = await page.evaluate(() => {
+    const m = window.viewport.scene.planes.XZ;
+    const label = m.children.find((c) => c.userData.role === "label");
+    return { fill: m.material.opacity, scale: label.scale.x, hot: label.material.opacity };
+  });
+  check(
+    "hovering the XZ name lights the XZ plane and grows its name",
+    hoverName.fill > idleName.fill && hoverName.scale > idleName.scale && hoverName.hot > idleName.hot,
+    JSON.stringify({ hoverName, idleName }),
+  );
+  console.log("\n[an oblique view, the XZ tile almost edge on]");
+  await page.evaluate(() => {
+    const v = window.viewport;
+    const V = v.camera.position.constructor;
+    v.rig.setLookAt(new V(0.66, -0.07, 0.75).multiplyScalar(500), new V(0, 0, 0), false);
+    v.rig.setViewScale(60, false);
+    v.requestRender();
+  });
+  await page.waitForTimeout(900);
+  const obliqueTargets = await targets();
+  check(
+    "oblique view: every plane has a 44 px target",
+    PLANES.every((k) => obliqueTargets[k] >= 44),
+    JSON.stringify(obliqueTargets),
+  );
+  await shot("tiles-oblique-noir", around(await origin(), 170));
+  await top([0, 0, 0], 3000);
   const xyAt = (await tiles()).XY;
   const pickAt = () =>
     page.evaluate((p) => {
@@ -414,7 +501,7 @@ const PLANES = ["XY", "XZ", "YZ"];
         window.viewport.scene.originTiles.reshape(s);
         window.viewport.requestRender();
       }, shape);
-    const DEFAULT = { sizePx: SIZE, gapPx: EXTENT - SIZE, radiusPx: 29, exponent: 4, octant: { x: 1, y: -1, z: 1 } };
+    const DEFAULT = { sizePx: SIZE, gapPx: EXTENT - SIZE, radiusPx: 36, exponent: 4, octant: { x: 1, y: -1, z: 1 } };
     const BIG = { sizePx: 240, radiusPx: 102, gapPx: 36 };
     for (const theme of ["noir", "solarized"]) {
       await page.evaluate((th) => {

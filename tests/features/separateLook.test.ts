@@ -38,6 +38,9 @@ function rig() {
         listener = null;
       };
     },
+    onSessionBuild(fn: (s: unknown) => void) {
+      return this.onBuild(fn);
+    },
     bodyName: (id: string) => real.bodyName(id),
     inheritBodyLook: (from: string, pieces: Parameters<DocumentStore["inheritBodyLook"]>[1]) =>
       real.inheritBodyLook(from, pieces),

@@ -548,10 +548,9 @@ const STILLS = {
         side: "inside",
       },
     ]);
-    await ctx.view("iso", 1);
-    await ctx.centre();
+    await showModel(ctx, -1);
     await sleep(800);
-    await ctx.still("extrude-thin", { x: 400, y: 200, width: 760, height: 600 });
+    await ctx.still("extrude-thin", { x: 420, y: 220, width: 640, height: 520 });
   },
 
   async "presspull-face"(ctx) {
@@ -1208,10 +1207,7 @@ Object.assign(STILLS, {
   async "shortcuts-overlay"(ctx) {
     await ctx.page.keyboard.press("Shift+Slash");
     await sleep(900);
-    // The list is taller than the window, so it is shrunk to fit whole.
-    await ctx.page.addStyleTag({ content: ".shortcut-hud-card{zoom:.68}" });
-    await sleep(500);
-    await ctx.still("shortcuts-overlay", await ctx.box(".shortcut-hud-card", 8));
+    await ctx.still("shortcuts-overlay", await ctx.box(".shortcuts-panel", 6));
   },
 });
 

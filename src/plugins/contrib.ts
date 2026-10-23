@@ -321,6 +321,11 @@ export function contributedSettings(): { key: string; plugin: string; section: S
   return out;
 }
 
+/** The keys each plugin moved or added, for the shortcuts dialog's plugin pages. */
+export function contributedKeymaps(): { plugin: string; keymap: readonly ShortcutOverride[] }[] {
+  return entries.flatMap((e) => (e.c.keymap?.length ? [{ plugin: e.plugin, keymap: e.c.keymap }] : []));
+}
+
 export function contributedBrowserSections(): { key: string; section: BrowserSection }[] {
   const out: { key: string; section: BrowserSection }[] = [];
   for (const e of entries) {
