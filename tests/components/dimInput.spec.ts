@@ -79,6 +79,15 @@ describe("DimInput hit testing", () => {
     press("pointerup", document.body);
     expect(root().style.pointerEvents).toBe("none");
   });
+
+  it("lets a click through a box centred on the drawing, and is clickable again on the next show", () => {
+    // The circle's diameter box sits on the radius midpoint, so at a small radius the placing click lands on it.
+    dim.show([{ name: "radius", label: "R" }], () => {});
+    dim.positionCentred(143, 87);
+    expect(root().style.pointerEvents).toBe("none");
+    dim.show([{ name: "radius", label: "R" }], () => {});
+    expect(root().style.pointerEvents).toBe("");
+  });
 });
 
 describe("iconElement", () => {
