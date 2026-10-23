@@ -12,6 +12,7 @@ import {
   GRAVITY_DIRECTIONS,
   GRAVITY_MARK_COLOR,
   LOAD_MARK_COLOR,
+  REFINE_CHOICES,
   SUPPORT_COLORS,
   SUPPORT_KINDS,
   cssHex,
@@ -48,8 +49,8 @@ const bodyOptions = computed(() => {
   return opts;
 });
 
-// Open on first show when a size is set, so a value that changes the Run is never hidden.
-const moreOpen = ref(props.setup.size != null);
+// Open on first show when a size or refinement is set, so a value that changes the Run is never hidden.
+const moreOpen = ref(props.setup.size != null || props.setup.refine !== "standard");
 
 function supportColor(t: StressSupportType): string {
   return cssHex(SUPPORT_COLORS[t]);
@@ -277,6 +278,16 @@ function placing(target: StressTarget, as: "face" | "spot"): boolean {
         </span>
       </div>
       <div class="sm-hint">Smaller is finer and slower.</div>
+      <div class="stress-field">
+        <span class="measure-k">Refinement</span>
+        <Select
+          v-model="setup.refine"
+          :options="REFINE_CHOICES"
+          class="stress-refine"
+          title="Refine the mesh where stress is high"
+        />
+      </div>
+      <div class="sm-hint">Fine finds the peak more closely and takes longer. Off uses one even mesh.</div>
     </div>
 
     <div v-if="panels.stress?.error" class="measure-hint stress-error">{{ panels.stress.error }}</div>

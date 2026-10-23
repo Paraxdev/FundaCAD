@@ -149,6 +149,7 @@ export function normalizeStressStudy(raw: unknown): StressStudy | null {
   if (typeof material !== "string" || !material) return null;
   const custom = isRecord(raw["custom"]) ? raw["custom"] : {};
   const size = raw["size"];
+  const refine = raw["refine"];
 
   return {
     body,
@@ -163,5 +164,6 @@ export function normalizeStressStudy(raw: unknown): StressStudy | null {
       density: num(custom["density"], STUDY_DEFAULTS.density),
     },
     size: typeof size === "number" && Number.isFinite(size) && size > 0 ? size : null,
+    ...(refine === "fine" || refine === "off" ? { refine } : {}),
   };
 }

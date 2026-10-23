@@ -2,7 +2,7 @@
 // rows, the colour map, and the arithmetic behind the force arrow, deformation and probe. Testable in node.
 
 import type { AxisDirection, Selector, StressSpot, StressStudy, StressSupportType, Vec3 } from "../types";
-import type { StressMaterial, StressOptions, StressReply, StressSpotArea } from "../geometry/client";
+import type { StressMaterial, StressOptions, StressRefine, StressReply, StressSpotArea } from "../geometry/client";
 import type { PanelRow } from "../stores/panels";
 import { STUDY_DEFAULTS } from "../document/stressStudy";
 import { cylinderFromFace } from "../features/planeMath";
@@ -170,7 +170,17 @@ export interface StressSetup {
   /** Element size in mm whatever the display unit, as the engine's warnings
    *  quote it; null for the engine's automatic size. */
   size: number | null;
+  refine: StressRefine;
 }
+
+export const REFINE_CHOICES: readonly { value: StressRefine; label: string }[] = [
+  { value: "standard", label: "Standard" },
+  { value: "fine", label: "Fine" },
+  { value: "off", label: "Off" },
+];
+
+/** The element limit sent with Fine; the engine's default is about half. */
+export const FINE_MAX_ELEMENTS = 60_000;
 
 /** One row of the setup, by its id. */
 export type StressTarget = { support: number } | { load: number };
@@ -210,6 +220,7 @@ export function newSetup(body: string | null): StressSetup {
       density: STUDY_DEFAULTS.density,
     },
     size: null,
+    refine: "standard",
   };
 }
 
@@ -263,6 +274,7 @@ export function studyFromSetup(s: StressSetup, prev?: Readonly<StressStudy> | nu
       density: num(s.custom.density, pc?.density ?? d.density),
     },
     size: typeof s.size === "number" && Number.isFinite(s.size) && s.size > 0 ? s.size : null,
+    ...(s.refine === "fine" || s.refine === "off" ? { refine: s.refine } : {}),
   };
 }
 
@@ -297,6 +309,7 @@ export function setupFromStudy(study: StressStudy, faces: (selectors: Selector[]
     material: study.material,
     custom: { ...study.custom },
     size: study.size,
+    refine: study.refine ?? "standard",
   };
 }
 
@@ -472,6 +485,10 @@ export function buildStressRequest(s: StressSetup): StressRequest {
       return { ok: false, message: "the mesh size must be above 0, or blank for automatic" };
     options.size = s.size;
   }
+  if (s.refine === "fine") {
+    options.refine = "fine";
+    options.maxElements = FINE_MAX_ELEMENTS;
+  } else if (s.refine === "off") options.refine = "off";
   return { ok: true, body: s.body, options };
 }
 
@@ -552,7 +569,7 @@ export function formatStressResult(
     }
   }
   // In mm like the element size box and the engine's warnings about it.
-  details.push({ k: "Mesh", v: `${r.mesh.elements} elements, ${displayRound(r.mesh.size)} mm` });
+  details.push({ k: "Mesh", v: meshRow(r.mesh) });
   const warnings = [...(r.warnings ?? [])];
   for (const e of r.errors ?? []) warnings.push(e.feature_id ? `${e.feature_id}: ${e.message}` : e.message);
   const values = r.surface?.vonMises ?? [];
@@ -567,6 +584,13 @@ export function formatStressResult(
     peakAt: r.maxVonMises.at,
     maxDeflection: r.maxDisplacement.value,
   };
+}
+
+function meshRow(m: StressReply["mesh"]): string {
+  const row = `${m.elements} elements, ${displayRound(m.size)} mm`;
+  const passes = m.passes?.length ?? 1;
+  if (passes < 2 || m.finest === undefined || !(m.finest < m.size)) return row;
+  return `${row}, ${displayRound(m.finest)} mm where stress is high, ${passes} passes`;
 }
 
 /** The legend's end labels, MPa. A minimum under a thousandth of the peak is no colour of its own, so it reads 0. */
