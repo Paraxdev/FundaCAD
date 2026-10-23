@@ -499,7 +499,7 @@ describe("StressPanel", () => {
   it("keeps the marked spot with the colours off, and drops it once the model changed", async () => {
     const { p } = await withResult({ verdict: { safetyFactor: 2.94, peakPlace: "corner" } });
     const text = () => q(".stress-verdict")!.textContent;
-    expect(q(".stress-verdict-head")!.textContent).toBe("Holds by a rough reading, about 2.9x safe.");
+    expect(q(".stress-verdict-head")!.textContent).toBe("Holds by a rough reading, at least 2.9x safe.");
     expect(text()).toContain("Weakest at the marked sharp corner.");
     p.setStressColours("hidden");
     await flushPromises();
