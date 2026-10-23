@@ -16,12 +16,7 @@ export function analysisFlags(v: AnalysisSource): Record<string, boolean> {
 }
 
 // A rail action is not always its sketch tool's name (mirror-sketch arms "mirror").
-export function railActive(
-  action: string,
-  mode: string,
-  sketchTool: string,
-  viewOn: Record<string, boolean>,
-): boolean {
+export function railActive(action: string, mode: string, sketchTool: string, viewOn: Record<string, boolean>): boolean {
   if (mode === "sketch") return sketchTool !== "" && (SKETCH_MODIFY[action] ?? action) === sketchTool;
   return viewOn[action] === true;
 }

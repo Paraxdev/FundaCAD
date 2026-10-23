@@ -47,7 +47,7 @@ describe("plugin rows", () => {
   it("are found by display name or id, in any case, and by a setting", async () => {
     for (const id of ["FundaCAD.Texture", "Test.Zeta", "FundaCAD.Screws"]) give(id);
     const w = mount(PluginsSection);
-    const search = w.get('input');
+    const search = w.get("input");
     const found = async (q: string) => {
       await search.setValue(q);
       return order(w);
