@@ -52,18 +52,21 @@ function pick(id: string) {
 
 const num = (e: Event) => Number((e.target as HTMLInputElement).value);
 const rowStyle = { display: "flex", alignItems: "center", gap: "6px", paddingRight: "8px" };
-// The name takes its longest name's width between 38% and 62% of the row, the value field shrinks to the rest.
+// The name takes its longest name's width up to 62% of the row, but it is the one that gives way: the slider and the
+// number field keep their minimum widths and the name ellipsizes in what is left.
 const nameWidth = computed(() => `${nameColumnChars(groups.value.flatMap((g) => g.rows)) + 1}ch`);
 const nameStyle = computed(() => ({
-  flex: "0 0 auto",
+  flex: "0 1 auto",
   width: nameWidth.value,
-  minWidth: "38%",
+  minWidth: "0",
   maxWidth: "62%",
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 }));
 const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit" };
+const sliderStyle = { ...fieldStyle, flex: "1 0 60px", minWidth: "60px" };
+const numberStyle = { ...fieldStyle, flex: "1 0 76px", minWidth: "76px" };
 </script>
 
 <template>
@@ -167,7 +170,7 @@ const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit"
             <template v-else-if="row.control.kind === 'slider'">
               <input
                 type="range"
-                :style="fieldStyle"
+                :style="sliderStyle"
                 :min="row.control.min"
                 :max="row.control.max"
                 :step="row.control.step ?? 'any'"
@@ -175,7 +178,7 @@ const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit"
                 @input="dragging = { ...dragging, [row.name]: num($event) }"
                 @change="release(row, num($event))"
               />
-              <span style="min-width: 3.5em; text-align: right">
+              <span style="flex: 0 0 auto; min-width: 3.5em; text-align: right">
                 {{ Number((dragging[row.name] ?? row.def.value).toFixed(4)) }} {{ row.unit }}
               </span>
             </template>
@@ -183,14 +186,14 @@ const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit"
             <template v-else>
               <input
                 type="number"
-                :style="fieldStyle"
+                :style="numberStyle"
                 :min="row.control.min"
                 :max="row.control.max"
                 :step="row.control.step ?? 'any'"
                 :value="row.def.value"
                 @change="commit(row, num($event))"
               />
-              <span>{{ row.unit }}</span>
+              <span style="flex: 0 0 auto; min-width: 3.5em; text-align: left">{{ row.unit }}</span>
             </template>
           </div>
         </template>
