@@ -2,7 +2,7 @@
 // is cleared to alpha 0 so the trace shows through.
 
 import * as THREE from "three";
-import { isCostlyLight } from "../potato";
+import { castsWithoutMap, isCostlyLight } from "../potato";
 
 function isBodyMesh(o: THREE.Object3D): o is THREE.Mesh {
   return (o as THREE.Mesh).isMesh === true && !!o.userData.owner;
@@ -18,11 +18,13 @@ export class OverlayDraw {
   });
   private swapped: { mesh: THREE.Mesh; was: THREE.Material | THREE.Material[] }[] = [];
   private hidden: THREE.Object3D[] = [];
+  private uncast: THREE.Object3D[] = [];
   private clear = new THREE.Color();
 
   render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
     this.swapped.length = 0;
     this.hidden.length = 0;
+    this.uncast.length = 0;
     const shadows = renderer.shadowMap;
     const autoUpdate = shadows.autoUpdate;
     renderer.getClearColor(this.clear);
@@ -45,8 +47,10 @@ export class OverlayDraw {
       shadows.autoUpdate = autoUpdate;
       for (const { mesh, was } of this.swapped) mesh.material = was;
       for (const o of this.hidden) o.visible = true;
+      for (const o of this.uncast) o.castShadow = true;
       this.swapped.length = 0;
       this.hidden.length = 0;
+      this.uncast.length = 0;
     }
   }
 
@@ -54,6 +58,11 @@ export class OverlayDraw {
     if (isCostlyLight(o)) {
       o.visible = false;
       this.hidden.push(o);
+      return;
+    }
+    if (castsWithoutMap(o)) {
+      o.castShadow = false;
+      this.uncast.push(o);
       return;
     }
     if (!isBodyMesh(o)) return;
