@@ -1045,6 +1045,11 @@ export class DocumentStore {
     this.isDirty = true;
     this.emitMeta();
   }
+  // A change no undo step holds survives every undo and redo, so none of them gets back to what the file holds.
+  private markUnstepped() {
+    if (!this.keepClean) this.savedAt = null;
+    this.markDirty();
+  }
 
   // Counts every change, saved or not, so a caller can tell nothing else changed between two of its own steps.
   get editCount(): number {
@@ -1396,6 +1401,8 @@ export class DocumentStore {
     forgetStaleJoins(joins, this.doc);
     canonicalMirrorPlanes(this.doc);
     if (this.doc.paramDefs) this.applyRecompute(params.recompute(this.doc));
+    // A derived commit at the saved point goes into the next step's snapshot, so undoing back there keeps it.
+    if (!byUser && !this.keepClean && this.savedAt === this.undoAt) this.savedAt = null;
     this.markDirty(byUser);
     this.emitDoc();
     this.scheduleRebuild(immediate);
@@ -2115,7 +2122,7 @@ export class DocumentStore {
     const next = study ? structuredClone(study) : null;
     if (JSON.stringify(next) === JSON.stringify(this.stress)) return;
     this.stress = next;
-    this.markDirty();
+    this.markUnstepped();
   }
 
   get documentEnvironment(): Readonly<DocEnvironment> | null {
@@ -2126,7 +2133,7 @@ export class DocumentStore {
   setDocumentEnvironment(env: DocEnvironment | null, opts: { quiet?: boolean } = {}) {
     if (sameDocEnvironment(env, this.environment)) return;
     this.environment = env ? { ...env, settings: { ...env.settings } } : null;
-    if (!opts.quiet) this.markDirty();
+    if (!opts.quiet) this.markUnstepped();
   }
 
   get sectionView(): Readonly<SectionView> | null {
@@ -2140,7 +2147,7 @@ export class DocumentStore {
     if (sameSectionView(read, this.cut)) return;
     this.cut = read;
     if (read) delete this.unreadSections.sectionView;
-    this.markDirty();
+    this.markUnstepped();
     this.emitSectionView();
   }
 
@@ -2186,7 +2193,7 @@ export class DocumentStore {
     const next: ElementDef = { id, name: label };
     if (under !== null) next.parent = under;
     this.elements = [...this.elements, next];
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
     return id;
   }
@@ -2196,7 +2203,7 @@ export class DocumentStore {
     const n = name.trim();
     if (!n) return;
     this.elements = this.elements.map((e) => (e.id === id ? { ...e, name: n } : e));
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2208,7 +2215,7 @@ export class DocumentStore {
     // `reparented` returns untouched entries by identity and refuses an illegal move by returning them all.
     if (next.every((e, i) => e === this.elements[i])) return;
     this.elements = next;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2222,7 +2229,7 @@ export class DocumentStore {
       if (movedTo === null) this.bodyElement.delete(body);
       else this.bodyElement.set(body, movedTo);
     }
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2246,7 +2253,7 @@ export class DocumentStore {
       changed = true;
     }
     if (!changed) return;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2416,7 +2423,7 @@ export class DocumentStore {
     };
     next.id = uniqueId(m?.id && !taken.has(m.id) ? m.id : slugId(name), taken);
     this.materials = [...this.materials, next];
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
     return next.id;
   }
@@ -2462,7 +2469,7 @@ export class DocumentStore {
       return merged;
     });
     if (!changed) return;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2477,14 +2484,14 @@ export class DocumentStore {
     if (!this.materials.some((m) => gone.has(m.id))) return;
     this.materials = this.materials.filter((m) => !gone.has(m.id));
     this.dropMaterialUses(gone);
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
   // Keeps them in the library.
   unassignMaterials(ids: Iterable<string>) {
     if (!this.dropMaterialUses(new Set(ids))) return;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2522,7 +2529,7 @@ export class DocumentStore {
     }
     if (!added && !updated) return { added, updated };
     this.materials = next;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
     return { added, updated };
   }
@@ -2542,7 +2549,7 @@ export class DocumentStore {
     if (this.importColorSource(featureId) === source) return;
     if (source === "faces") this.importColors.set(featureId, "faces");
     else this.importColors.delete(featureId);
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2593,7 +2600,7 @@ export class DocumentStore {
     const cur = this.palette[i];
     if (!cur) return;
     this.palette[i] = { ...cur, ...patch };
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
   // One emit. Undefined entries leave that slot untouched.
@@ -2605,7 +2612,7 @@ export class DocumentStore {
       changed = true;
     });
     if (!changed) return;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
   // Undefined means the default shade.
@@ -2675,7 +2682,7 @@ export class DocumentStore {
     const v = commitVersion(repo, this.workingSnapshot(), message, Date.now());
     if (!v) return null;
     this.repo = repo;
-    this.markDirty();
+    this.markUnstepped();
     this.emitMeta();
     return v;
   }

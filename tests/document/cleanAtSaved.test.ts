@@ -25,6 +25,8 @@ const image = (opacity: number) => ({
   opacity,
 });
 
+const lengths = (s: DocumentStore) => s.document.features.map((f) => (f as { length?: number }).length);
+
 function savedWith(...ids: string[]) {
   const s = freshStore();
   ids.forEach((id, i) => s.addFeature(box(id, 11.5 + 3.25 * i, 4.75 + i)));
@@ -222,5 +224,67 @@ describe("clean at the saved position", () => {
     s.setReferenceImages([image(0.8)], { coalesce: "opacity:other" });
     s.undo();
     expect({ dirty: s.dirty, opacity: s.referenceImages()[0]?.opacity }).toEqual({ dirty: true, opacity: 0.65 });
+  });
+  it("a change no undo step holds, made after an edit, keeps every undo and redo unsaved", () => {
+    const loose: [string, (s: DocumentStore) => unknown][] = [
+      ["element", (s) => s.addElement("Fixtures")],
+      ["material", (s) => s.addMaterial({ name: "Brass", color: "#b5a642" })],
+      ["version", (s) => s.saveVersion("before the slot")],
+      ["palette", (s) => s.setPaletteSlot(2, { name: "Rib", color: "#3a7d5c" })],
+    ];
+    const seen = loose.map(([name, change]) => {
+      const s = savedWith("p1");
+      s.addFeature(box("p2", 9.5, 3.75));
+      change(s);
+      s.undo();
+      const back = { dirty: s.dirty, ids: at(s).ids };
+      s.redo();
+      s.undo();
+      return { name, back, again: s.dirty, els: s.bodyElements.length };
+    });
+    expect(seen).toEqual(
+      loose.map(([name]) => ({
+        name,
+        back: { dirty: true, ids: ["p1"] },
+        again: true,
+        els: name === "element" ? 1 : 0,
+      })),
+    );
+  });
+
+  it("a change no undo step holds, made while opening, leaves the saved point in place", () => {
+    const s = freshStore();
+    s.addFeature(box("p1", 11.5, 4.75));
+    s.keepingClean(() => s.addElement("Fixtures"));
+    s.markSaved(A);
+    s.keepingClean(() => s.renameElement(s.bodyElements[0]!.id, "Jigs"));
+    s.addFeature(box("p2", 9.5, 3.75));
+    s.undo();
+    expect({ ...at(s), els: s.bodyElements.map((e) => e.name) }).toEqual({
+      dirty: false,
+      path: A,
+      ids: ["p1"],
+      els: ["Jigs"],
+    });
+  });
+
+  it("a derived commit at the saved point is unsaved after an edit and its undo, one above it is undone with the edit", () => {
+    const at0 = savedWith("p1", "p2");
+    at0.deriveFeature("p2", { length: 6.75 } as never);
+    at0.addFeature(box("p3", 14.25, 2.5));
+    at0.undo();
+    expect({ dirty: at0.dirty, lengths: lengths(at0) }).toEqual({
+      dirty: true,
+      lengths: [11.5, 6.75],
+    });
+
+    const above = savedWith("p1", "p2");
+    above.addFeature(box("p3", 14.25, 2.5));
+    above.deriveFeature("p2", { length: 6.75 } as never);
+    above.undo();
+    expect({ dirty: above.dirty, lengths: lengths(above) }).toEqual({
+      dirty: false,
+      lengths: [11.5, 14.75],
+    });
   });
 });
