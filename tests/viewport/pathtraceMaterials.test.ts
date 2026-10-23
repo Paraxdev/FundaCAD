@@ -124,6 +124,41 @@ describe("material signature", () => {
     });
   }
 
+  // three's renderTransmissionPass draws a double sided transmissive material's back faces first, flipping side
+  // and setting needsUpdate twice on every Realtime frame (WebGLRenderer.js in r186).
+  const transmissionPass = (m: THREE.Material) => {
+    const side = m.side;
+    m.side = THREE.BackSide;
+    m.needsUpdate = true;
+    m.side = side;
+    m.needsUpdate = true;
+  };
+
+  it("holds over three's transmission pass, for one glass body and for many", () => {
+    for (const n of [1, 3]) {
+      const mats = Array.from({ length: n }, (_, i) => glass({ ior: 1.3 + 0.2 * i }));
+      for (const m of mats) m.side = THREE.DoubleSide;
+      const bodies = mats.map((m) => body(m));
+      const before = materialSignature(bodies);
+      for (let frame = 0; frame < 4; frame++) mats.forEach(transmissionPass);
+      expect(materialSignature(bodies)).toBe(before);
+    }
+  });
+
+  it("still changes when the side really changes or a field moves after the pass", () => {
+    const mat = glass({ ior: 1.7 });
+    mat.side = THREE.DoubleSide;
+    const b = body(mat);
+    const before = materialSignature([b]);
+    transmissionPass(mat);
+    mat.side = THREE.FrontSide;
+    const sided = materialSignature([b]);
+    expect(sided).not.toBe(before);
+    transmissionPass(mat);
+    mat.roughness = 0.37;
+    expect(materialSignature([b])).not.toBe(sided);
+  });
+
   it("changes when a surface slider moves under the same key", () => {
     const mat = new THREE.MeshPhysicalMaterial();
     applySurface(mat, { kind: "noise", scale: 2, amount: 0.3, color: "#ff0000", colorAmount: 0.5 });
