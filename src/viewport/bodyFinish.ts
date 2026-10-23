@@ -225,6 +225,8 @@ export class BodyFinishLayer {
   private reliefWarm = new WeakSet<THREE.Material>();
   private reliefLinking = new WeakSet<THREE.Material>();
   private warmClones: THREE.Material[] = [];
+  // Bumped by clear(), so a link finishing after the model left never patches or redraws anything.
+  private generation = 0;
   private last: FinishOverlays | null = null;
 
   constructor(private host: FinishHost) {}
@@ -409,7 +411,13 @@ export class BodyFinishLayer {
       group.add(mesh);
     }
     if (!group.children.length) return;
+    const gen = this.generation;
     const done = () => {
+      if (gen !== this.generation) {
+        for (const c of clones) c.dispose();
+        for (const m of live) this.reliefLinking.delete(m);
+        return;
+      }
       // A stand in let go before the live material has drawn would free the program.
       for (const c of this.warmClones) c.dispose();
       this.warmClones = clones;
@@ -428,6 +436,7 @@ export class BodyFinishLayer {
 
   /** Model gone: its lights go with it, or they light the next document's first preview. */
   clear() {
+    this.generation++;
     this.dropFaceMaterials(() => true);
     for (const c of this.warmClones) c.dispose();
     this.warmClones = [];

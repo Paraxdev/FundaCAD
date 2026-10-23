@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DocumentSession } from "../../src/document/session";
 
 const invoke = vi.fn();
 const toast = vi.fn();
@@ -21,6 +22,7 @@ function store(path: string, carried: { kind: number; name: string; hash: string
     toObject: () => ({}),
     carriedSections: carried,
     markSaved: vi.fn(),
+    session: new DocumentSession(),
   };
 }
 

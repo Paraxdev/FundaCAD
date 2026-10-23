@@ -5,7 +5,7 @@
 use fundacad_protocol::stdio::{read_message, write_message, Message};
 use fundacad_protocol::{envelope, message_id};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -32,8 +32,8 @@ struct Inner {
     channel: Mutex<Option<Channel<InvokeResponseBody>>>,
     up: AtomicBool,
     generation: AtomicU64,
-    /// Requests sent and not yet answered by a terminal message, by id.
-    in_flight: Mutex<HashSet<String>>,
+    /// Requests sent and not yet answered by a terminal message, by id, to the document they belong to.
+    in_flight: Mutex<HashMap<String, Option<String>>>,
     /// Cancel requests awaiting their acknowledgement, to the id they target
     /// and how long that job then has.
     cancels: Mutex<HashMap<String, (String, Duration)>>,
@@ -156,7 +156,7 @@ impl Engine {
             channel: Mutex::new(None),
             up: AtomicBool::new(false),
             generation: AtomicU64::new(0),
-            in_flight: Mutex::new(HashSet::new()),
+            in_flight: Mutex::new(HashMap::new()),
             cancels: Mutex::new(HashMap::new()),
             stopping: AtomicBool::new(false),
             cancel_killed: AtomicU64::new(0),
@@ -201,7 +201,7 @@ fn supervise(inner: Arc<Inner>) {
                 set_up(&inner, true);
                 let generation = inner.generation.load(Ordering::SeqCst);
                 let cause = relay(&inner, stdout);
-                let unanswered: Vec<String> = lock(&inner.in_flight).iter().cloned().collect();
+                let unanswered: Vec<String> = lock(&inner.in_flight).keys().cloned().collect();
                 let status = lock(&inner.worker).as_mut().filter(|w| w.generation == generation).and_then(|w| {
                     // Its output closed, so a worker still alive is wedged.
                     let _ = w.child.kill();
@@ -408,7 +408,7 @@ fn escalate_cancel(inner: Arc<Inner>, target: String, grace: Duration) {
     std::thread::spawn(move || {
         let generation = inner.generation.load(Ordering::SeqCst);
         std::thread::sleep(grace);
-        if !lock(&inner.in_flight).contains(&target) || inner.generation.load(Ordering::SeqCst) != generation {
+        if !lock(&inner.in_flight).contains_key(&target) || inner.generation.load(Ordering::SeqCst) != generation {
             return;
         }
         eprintln!("[engine] {target} ignored cancel, restarting the worker");
@@ -428,10 +428,40 @@ pub fn mcp_server() -> Result<String, String> {
     std::env::current_exe().map(|path| path.to_string_lossy().into_owned()).map_err(|e| e.to_string())
 }
 
+/// The requests a `doc_end` ends: every one of `doc`, or every one in flight when it names none.
+fn ended_by(in_flight: &HashMap<String, Option<String>>, doc: Option<&str>) -> Vec<String> {
+    let mut ids: Vec<String> = in_flight
+        .iter()
+        .filter(|(_, d)| doc.is_none_or(|doc| d.as_deref() == Some(doc)))
+        .map(|(id, _)| id.clone())
+        .collect();
+    ids.sort();
+    ids
+}
+
+/// Every request of an ended document gets the grace a hard cancel gets; the queued ones are answered at once, so only
+/// a running job that ignores the end is left to restart the worker over.
+fn end_docs(inner: &Arc<Inner>, doc: Option<&str>) {
+    for id in ended_by(&lock(&inner.in_flight), doc) {
+        escalate_cancel(inner.clone(), id, CANCEL_GRACE);
+    }
+}
+
+/// What a reattach sends: the page before it is gone, and so is every document it had open.
+fn end_all_request(n: u64) -> String {
+    serde_json::json!({"id": format!("relay-attach-{n}"), "op": "doc_end", "all": true}).to_string()
+}
+
 /// The webview's one channel for engine messages. Returns whether the engine is up.
 #[tauri::command]
 pub fn engine_attach(state: tauri::State<'_, Engine>, channel: Channel<InvokeResponseBody>) -> bool {
-    *lock(&state.0.channel) = Some(channel);
+    static ATTACHES: AtomicU64 = AtomicU64::new(0);
+    let replaced = lock(&state.0.channel).replace(channel).is_some();
+    // A reload or a new page: the jobs of the page it replaces must not feed this one.
+    if replaced && state.0.up.load(Ordering::SeqCst) {
+        let _ = send_to_worker(&state.0, &Message::Text(end_all_request(ATTACHES.fetch_add(1, Ordering::Relaxed))));
+        end_docs(&state.0, None);
+    }
     state.0.up.load(Ordering::SeqCst)
 }
 
@@ -442,7 +472,7 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
         return Err("engine_send takes the request as raw bytes".into());
     };
     let text = String::from_utf8(bytes.clone()).map_err(|e| e.to_string())?;
-    let Head { id, op, target, soft } = head(&text);
+    let Head { id, op, target, soft, doc, all } = head(&text);
     remember(
         &state.0.recent,
         format!(
@@ -461,15 +491,16 @@ pub fn engine_send(state: tauri::State<'_, Engine>, request: Request<'_>) -> Res
     };
     match op.as_deref() {
         Some("cancel") => {
-            let target = target.or_else(|| lock(&state.0.in_flight).iter().next().cloned());
+            let target = target.or_else(|| lock(&state.0.in_flight).keys().next().cloned());
             let grace = if soft { SOFT_CANCEL_GRACE } else { CANCEL_GRACE };
             if let Some(target) = target {
                 lock(&state.0.cancels).insert(id.clone(), (target, grace));
             }
         }
+        Some("doc_end") => end_docs(&state.0, if all { None } else { doc.as_deref() }),
         Some("ping") | None => {}
         Some(_) => {
-            lock(&state.0.in_flight).insert(id.clone());
+            lock(&state.0.in_flight).insert(id.clone(), doc);
         }
     }
     send_to_worker(&state.0, &Message::Text(text)).inspect_err(|_| {
@@ -490,10 +521,12 @@ struct Head {
     op: Option<String>,
     target: Option<String>,
     soft: bool,
+    doc: Option<String>,
+    all: bool,
 }
 
-/// The head of a request without parsing a multi megabyte document: the client writes it first, so a prefix almost
-/// always holds it, and a full parse is the fallback.
+/// The head of a request without parsing a multi megabyte document: the client writes `id`, `op` and `doc` first, so a
+/// prefix almost always holds them, and a full parse is the fallback.
 fn head(text: &str) -> Head {
     #[derive(serde::Deserialize)]
     struct Raw {
@@ -501,21 +534,27 @@ fn head(text: &str) -> Head {
         op: Option<String>,
         target: Option<Value>,
         soft: Option<bool>,
+        doc: Option<Value>,
+        all: Option<bool>,
     }
     let pick = |h: Raw| {
         let s = |v: Option<Value>| v.and_then(|v| v.as_str().map(str::to_owned));
-        Head { id: s(h.id), op: h.op, target: s(h.target), soft: h.soft == Some(true) }
+        Head {
+            id: s(h.id),
+            op: h.op,
+            target: s(h.target),
+            soft: h.soft == Some(true),
+            doc: s(h.doc),
+            all: h.all == Some(true),
+        }
     };
     let prefix_end = text.char_indices().nth(512).map_or(text.len(), |(i, _)| i);
-    if let Some(close) = text[..prefix_end].find(",\"") {
-        let rest = &text[close + 1..prefix_end];
-        if let Some(second) = rest.find(",\"").map(|i| close + 1 + i) {
-            let candidate = format!("{}}}", &text[..second]);
-            if let Ok(h) = serde_json::from_str::<Raw>(&candidate) {
-                if h.op.is_some() && h.op.as_deref() != Some("cancel") {
-                    return pick(h);
-                }
-            }
+    let cuts: Vec<usize> = text[..prefix_end].match_indices(",\"").map(|(i, _)| i).take(3).collect();
+    // The third key is `doc` when the request has one; a cut after the second still answers a request without it.
+    for &cut in cuts.iter().skip(1).rev() {
+        let Ok(h) = serde_json::from_str::<Raw>(&format!("{}}}", &text[..cut])) else { continue };
+        if h.op.is_some() && !matches!(h.op.as_deref(), Some("cancel" | "doc_end")) {
+            return pick(h);
         }
     }
     serde_json::from_str::<Raw>(text).map(pick).unwrap_or_default()
@@ -532,6 +571,7 @@ mod tests {
             op: op.map(Into::into),
             target: target.map(Into::into),
             soft,
+            ..Head::default()
         };
         let big = format!(r#"{{"id":"a","op":"rebuild","document":{{"x":"{}"}}}}"#, "y".repeat(10_000));
         assert_eq!(head(&big), h(Some("a"), Some("rebuild"), None, false));
@@ -542,6 +582,39 @@ mod tests {
         );
         assert_eq!(head(r#"{"op":"ping"}"#), h(None, Some("ping"), None, false));
         assert_eq!(head("not json"), Head::default());
+    }
+
+    #[test]
+    fn the_head_names_the_document_a_request_belongs_to() {
+        let big = format!(r#"{{"id":"a","op":"rebuild","doc":"D1","document":{{"x":"{}"}}}}"#, "y".repeat(10_000));
+        let doc = |id: &str, op: &str, doc: Option<&str>, all: bool| Head {
+            id: Some(id.into()),
+            op: Some(op.into()),
+            doc: doc.map(Into::into),
+            all,
+            ..Head::default()
+        };
+        assert_eq!(head(&big), doc("a", "rebuild", Some("D1"), false));
+        let no_doc = format!(r#"{{"id":"a","op":"rebuild","document":{{"x":"{}"}},"tolerance":0.1}}"#, "y".repeat(600));
+        assert_eq!(head(&no_doc), doc("a", "rebuild", None, false));
+        assert_eq!(head(r#"{"id":"e","op":"doc_end","doc":"D1"}"#), doc("e", "doc_end", Some("D1"), false));
+        assert_eq!(head(r#"{"id":"e","op":"doc_end","all":true}"#), doc("e", "doc_end", None, true));
+    }
+
+    #[test]
+    fn a_document_end_reaches_only_that_documents_requests_and_a_reattach_ends_them_all() {
+        let in_flight: HashMap<String, Option<String>> = [
+            ("a1".to_owned(), Some("A".to_owned())),
+            ("a2".to_owned(), Some("A".to_owned())),
+            ("b1".to_owned(), Some("B".to_owned())),
+            ("fonts".to_owned(), None),
+        ]
+        .into();
+        assert_eq!(ended_by(&in_flight, Some("A")), ["a1", "a2"]);
+        assert_eq!(ended_by(&in_flight, Some("C")), Vec::<String>::new());
+        assert_eq!(ended_by(&in_flight, None), ["a1", "a2", "b1", "fonts"]);
+        let end: Value = serde_json::from_str(&end_all_request(4)).unwrap();
+        assert_eq!(end, serde_json::json!({"id": "relay-attach-4", "op": "doc_end", "all": true}));
     }
 
     #[test]

@@ -1,11 +1,13 @@
 // Sketch Mirror as a tool with a panel, in a real browser.
 //
 //   0. Two lines selected before the start fill Objects and the tool waits on the mirror line.
-//   1. A circle is refused as the mirror line, a construction line is taken, the preview shows
-//      the copies, Enter adds exactly the reflected lines and one Ctrl+Z takes both back.
-//   2. With nothing selected, Shift clicks pick several, the field icon moves to the line, Esc
-//      leaves the sketch as it was.
-//   3. A plain click picks one object and moves on by itself, the panel's Mirror button applies.
+//   1. A circle is refused as the mirror line, a construction line is taken and lit dashed in the
+//      line colour with its mark, the clicks go back to Objects, Enter adds exactly the reflected
+//      lines and one Ctrl+Z takes both back.
+//   2. With nothing selected, plain and Shift clicks both add, Enter moves on to the line, the
+//      field icons switch, Esc leaves the sketch as it was.
+//   3. A plain click picks one object and stays on Objects, the panel's Mirror button applies.
+//   5. The origin X axis is taken as the mirror line.
 //
 // Usage (from the repo root, with vite and an engine `fundacad-engine --ws` running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] node e2e/sketch_mirror_e2e.cjs [outDir]
@@ -97,16 +99,21 @@ function reflect(x, y) {
       const s = window.sketch;
       const panel = document.querySelector(".mirror-panel");
       const field = (k) => {
-        const row = panel && panel.querySelector(`.mirror-field[data-field="${k}"]`);
+        const row = panel && panel.querySelector(`.tgt-section[data-field="${k}"]`);
         if (!row) return null;
         return {
-          value: row.querySelector(".mirror-field-v").textContent.trim(),
-          active: row.classList.contains("active"),
-          pressed: row.querySelector("button").getAttribute("aria-pressed"),
-          clearable: !row.querySelector(".float-card-close").disabled,
+          value: [
+            row.querySelectorAll(".tgt-item").length,
+            ...[...row.querySelectorAll(".tgt-label")].map((l) => l.textContent.trim()),
+          ]
+            .join(" ")
+            .trim(),
+          active: row.classList.contains("tgt-active"),
+          pressed: String(row.classList.contains("tgt-active")),
+          clearable: !row.querySelector(".tgt-clear").disabled,
         };
       };
-      const apply = panel && panel.querySelector(".mirror-actions .btn-primary");
+      const apply = panel && panel.querySelector(".tgt-done");
       return {
         tool: s.tool,
         ids: s.entities.map((e) => e.id),
@@ -116,6 +123,10 @@ function reflect(x, y) {
         line: field("line"),
         ready: !!apply && !apply.disabled,
         preview: s.overlay.previewGroup.children.length,
+        prompt: document.querySelector(".prompt-text")?.textContent?.trim() ?? "",
+        dashed: s.overlay.previewGroup.children
+          .filter((o) => o.material && o.material.isLineDashedMaterial)
+          .map((o) => o.material.color.getHex()),
       };
     });
   const added = () =>
@@ -143,7 +154,7 @@ function reflect(x, y) {
   );
   check("Mirror is disabled while the line is empty", !st.ready && st.line && !st.line.clearable);
   const look = await page.evaluate(() => {
-    const b = document.querySelector(".mirror-panel .mirror-actions .btn-primary");
+    const b = document.querySelector(".mirror-panel .tgt-done");
     return { opacity: Number(getComputedStyle(b).opacity), title: b.title };
   });
   check(
@@ -156,10 +167,12 @@ function reflect(x, y) {
   await page.mouse.move(onAxis.x, onAxis.y, { steps: 3 });
   await page.waitForTimeout(250);
   st = await state();
-  check("the line under the pointer is lit before the click", st.preview === 1, `preview ${st.preview}`);
+  check("the prompt names the mirror line as the next pick", /pick the mirror line/i.test(st.prompt), st.prompt);
+  check("the picked objects and the line under the pointer are lit", st.preview === 3, `preview ${st.preview}`);
+  check("the hovered construction line is lit in another colour", st.dashed.length === 1 && st.dashed[0] !== 0xffa64d);
   await awayFromAll();
   st = await state();
-  check("moving off it drops the light", st.preview === 0, `preview ${st.preview}`);
+  check("moving off it drops the hover, the objects stay lit", st.preview === 2, `preview ${st.preview}`);
 
   await clickAt(21.5, 14);
   st = await state();
@@ -168,12 +181,24 @@ function reflect(x, y) {
     st.line && !st.line.clearable && st.selected.join() === "a,b" && st.line.active,
     JSON.stringify(st),
   );
+  check("the refusal still names the next pick", /pick the mirror line/i.test(st.prompt), st.prompt);
 
   await clickAt(6.5, 2.125);
   await awayFromAll();
   st = await state();
   check("the construction line is taken", st.line && st.line.clearable && st.ready, JSON.stringify(st.line));
-  check("the preview draws two copies and the line", st.preview === 3, `preview ${st.preview}`);
+  check("the clicks go back to Objects", st.objects.active && !st.line.active, JSON.stringify(st.objects));
+  check("the prompt offers Enter", /enter to mirror/i.test(st.prompt), st.prompt);
+  check(
+    "the preview draws two copies, the two objects, the line and its mark",
+    st.preview === 6,
+    `preview ${st.preview}`,
+  );
+  check(
+    "the mirror line is dashed in the line colour, not construction orange",
+    st.dashed.length === 1 && st.dashed[0] !== 0xffa64d,
+    JSON.stringify(st.dashed),
+  );
   check("nothing is added before Enter", st.ids.length === 4, JSON.stringify(st.ids));
   await page.screenshot({ path: path.join(OUT, "00_preview.png") });
 
@@ -222,15 +247,24 @@ function reflect(x, y) {
     st.objects && st.objects.active && !st.objects.clearable && st.selected.length === 0,
     JSON.stringify(st.objects),
   );
-  await clickAt(18, 6.25, ["Shift"]);
+  await clickAt(18, 6.25);
   await clickAt(21.5, 14, ["Shift"]);
   st = await state();
   check(
-    "Shift clicks pick two and stay on Objects",
+    "a plain and a Shift click pick two and stay on Objects",
     st.selected.join() === "a,c1" && st.objects.active && /\b2\b/.test(st.objects.value),
     JSON.stringify({ sel: st.selected, objects: st.objects }),
   );
-  await page.click('.mirror-field[data-field="line"] button');
+  check("the prompt asks for more or Enter", /pick what to mirror, enter when done/i.test(st.prompt), st.prompt);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(200);
+  st = await state();
+  check("Enter moves on to the line", st.line.active && !st.objects.active && st.ids.length === 4);
+  await page.click('.tgt-section[data-field="objects"] .tgt-field');
+  await page.waitForTimeout(200);
+  st = await state();
+  check("the objects icon makes Objects active", st.objects.active && !st.line.active, JSON.stringify(st.objects));
+  await page.click('.tgt-section[data-field="line"] .tgt-field');
   await page.waitForTimeout(200);
   st = await state();
   check("the line icon makes the line field active", st.line.active && !st.objects.active, JSON.stringify(st.line));
@@ -255,7 +289,7 @@ function reflect(x, y) {
   await clickAt(20.5, -1.25, ["Shift"]);
   await page.evaluate(() => window.sketch.setTool("mirror"));
   await page.waitForTimeout(300);
-  await page.click('.mirror-panel .mirror-field[data-field="objects"] .mirror-field-k');
+  await page.click('.mirror-panel .tgt-section[data-field="objects"] .tgt-field');
   await page.waitForTimeout(200);
   st = await state();
   check(
@@ -274,18 +308,20 @@ function reflect(x, y) {
   await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
 
-  // 3: a plain click moves on by itself, the panel button applies
+  // 3: a plain click stays on Objects, the panel button applies
   await page.evaluate(() => window.sketch.setTool("mirror"));
   await page.waitForTimeout(300);
   await clickAt(20.5, -1.25);
   st = await state();
   check(
-    "a plain click picks one and moves to the line",
-    st.selected.join() === "b" && st.line.active && /\b1\b/.test(st.objects.value),
+    "a plain click picks one and stays on Objects",
+    st.selected.join() === "b" && st.objects.active && /\b1\b/.test(st.objects.value),
     JSON.stringify({ sel: st.selected, objects: st.objects, line: st.line }),
   );
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(200);
   await clickAt(6.5, 2.125);
-  await page.click(".mirror-panel .mirror-actions .btn-primary");
+  await page.click(".mirror-panel .tgt-done");
   await page.waitForTimeout(500);
   st = await state();
   const one = await added();
@@ -294,6 +330,25 @@ function reflect(x, y) {
     "the Mirror button adds the one copy",
     st.ids.length === 5 && one.length === 1 && near(one[0].x1, x1) && near(one[0].y1, y1) && !st.panel,
     JSON.stringify({ ids: st.ids, one }),
+  );
+
+  // 5: the origin X axis as the mirror line
+  await page.evaluate(() => window.sketch.setTool("mirror"));
+  await page.waitForTimeout(300);
+  await clickAt(20.5, -1.25);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(200);
+  await clickAt(-20, 0.05);
+  st = await state();
+  check("the X axis is taken as the mirror line", /X axis/.test(st.line.value) && st.ready, JSON.stringify(st.line));
+  await page.screenshot({ path: path.join(OUT, "03_x_axis.png") });
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(500);
+  const flipped = (await added()).at(-1);
+  check(
+    "Enter adds b reflected across the X axis",
+    flipped && near(flipped.x1, 16) && near(flipped.y1, 4) && near(flipped.x2, 25) && near(flipped.y2, -1.5),
+    JSON.stringify(flipped),
   );
 
   console.log(`\n${failures === 0 ? "all checks passed" : failures + " check(s) failed"}`);

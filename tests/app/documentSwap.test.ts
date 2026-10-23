@@ -10,6 +10,7 @@ import { cancelActiveTools } from "../../src/app/toolBusy";
 import type { EngineTools } from "../../src/app/engine";
 import { createPinia, setActivePinia } from "pinia";
 import { useBrowserStore } from "../../src/stores/browser";
+import { setWorkspace, workspace } from "../../src/ui/workspace";
 
 const RESULT: RebuildResult = {
   mesh: { positions: [0, 0, 0], indices: [0], faceIds: [0] },
@@ -55,7 +56,7 @@ function harness(browser?: { forgetDocumentFolders(): void }) {
     viewport: {
       clearSelection: () => calls.push("clearSelection"),
       setSelectedBodies: () => calls.push("setSelectedBodies"),
-      clearModel: () => calls.push("clearModel"),
+      endDocument: () => calls.push("endDocument"),
     },
     browser: browser ?? { forgetDocumentFolders: () => calls.push("forgetDocumentFolders") },
   });
@@ -81,9 +82,13 @@ describe("New and Open clear the view at once", () => {
         "setSelectedBodies",
         "clearRegionSelection",
         "forgetLastCommit",
-        "clearModel",
+        "endDocument",
       ]);
       expect(calls).not.toContain("build:old");
+      // The second document's session owns the next swap, and it runs once.
+      calls.length = 0;
+      store.newDocument();
+      expect(calls.filter((c) => c === "endDocument")).toEqual(["endDocument"]);
     });
   }
 
@@ -92,11 +97,11 @@ describe("New and Open clear the view at once", () => {
     await store.rebuildNow();
     calls.length = 0;
     store.load(JSON.stringify(DOC), { replace: true });
-    expect(calls).not.toContain("clearModel");
+    expect(calls).not.toContain("endDocument");
   });
 });
 
-// Every import's top node is "n:f1/0", so the 3D printer example opened with its folders as an earlier document's
+// Every import's top node is "n:f1/0", so a STEP example opened with its folders as an earlier document's
 // assembly was left.
 describe("New and Open start the next document's folders from their defaults", () => {
   const open = (b: ReturnType<typeof useBrowserStore>) =>
@@ -210,13 +215,14 @@ describe("New and Open stand every tool down", () => {
       await store.rebuildNow();
       store.setPreview({ id: "pv", type: "box", width: 60, depth: 60, height: 5 } as never);
       store.beginEditPreview("f1", null);
+      const before = sent.length;
       if (how === "New") store.newDocument();
       else store.load(JSON.stringify({ parameters: {}, features: [] }));
       expect(store.hasPreview).toBe(false);
       expect(store.editPreviewId).toBeNull();
-      sent.length = 0;
       await store.rebuildNow();
-      expect(sent.at(-1)).toBe("");
+      // The next document's own build went out empty; the second ask settled empty here, with its build still out.
+      expect({ sent: sent.slice(before), bodies: store.buildState.result?.bodies }).toEqual({ sent: [""], bodies: [] });
     });
   }
 
@@ -255,5 +261,30 @@ describe("New and Open stand every tool down", () => {
     expect(() => cancelActiveTools(t)).not.toThrow();
     expect(calls).toContain("pressPull.cancel");
     err.mockRestore();
+  });
+});
+
+// Render, a discard and Home kept the Render dock up over Home and on the next document.
+describe("New and Open start the next document in Model", () => {
+  for (const how of ["New", "Open"] as const) {
+    it(`leaves Render on ${how}, and again for a second document after the first`, () => {
+      const { store } = harness();
+      const next = () =>
+        how === "New" ? store.newDocument() : store.load(JSON.stringify({ parameters: {}, features: [] }));
+      setWorkspace("render");
+      next();
+      expect(workspace()).toBe("model");
+      setWorkspace("render");
+      next();
+      expect(workspace()).toBe("model");
+    });
+  }
+
+  it("keeps Render through a replace, which is the same document", () => {
+    const { store } = harness();
+    setWorkspace("render");
+    store.load(JSON.stringify(DOC), { replace: true });
+    expect(workspace()).toBe("render");
+    setWorkspace("model");
   });
 });

@@ -26,6 +26,7 @@ import { SectionCaps } from "./sectionCaps";
 // The one derivation of "which plane is that face"; pure, so nothing cycles back.
 import { pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
+import { planeHitMinPx } from "./planeHit";
 import { StutterWatch } from "./stutterWatch";
 import { MotionQuality, motionPixelScale, pixelBoundView, type DrawnView } from "./motionQuality";
 import { EdgeBlend, EdgeMotionRule, type EdgeLoad, type EdgeMode } from "./edgeMotion";
@@ -63,6 +64,7 @@ import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
 import { sameRelief } from "./relief";
 import type { ReliefMap } from "../plugins/contrib";
 import { hdrHashOf, onRenderPrefsChange, renderPrefs, setRenderPref } from "../ui/renderPrefs";
+import { experimentalPrefs, onExperimentalPrefsChange } from "../ui/experimentalPrefs";
 import { isSoftwareRenderer } from "../ui/glassBlur";
 import { resolveRealtimeQuality, type QualityTier } from "./realtimePipeline";
 import {
@@ -282,6 +284,7 @@ export class Viewport {
   /** A tool is asking for a plane: the construction quads draw over the model
    *  and take the click before it. */
   private planesOnTop = false;
+  private lastPointerType: string | null = null;
   // Datum points and axes, apart from datumQuads so a plane pick never resolves to one.
   private datumMarkers: THREE.Mesh[] = [];
   private hoveredDatum: string | null = null;
@@ -326,7 +329,7 @@ export class Viewport {
 
   /** A chunked reply being drawn and a tool's suspension are two independent reasons, deliberately apart. */
   private get pickSuppressed(): boolean {
-    return this.suspendPicking || this.streaming;
+    return this.suspendPicking || this.streaming || this.outOfDate;
   }
   // Until the user moves the camera the model stays framed on resize: under remote
   // desktops and fractional scaling the canvas settles a frame after the first fit.
@@ -405,6 +408,10 @@ export class Viewport {
       if (this.viewModeNow === "pathtraced") chooseViewMode("realtime", this.renderTier);
       this.onTraceNotice?.(why);
     };
+    onExperimentalPrefsChange(() => {
+      this.trace.refreshLimits();
+      this.requestRender();
+    });
     watchPower((p) => {
       this.power = p;
       this.trace.setPower(p);
@@ -486,6 +493,7 @@ export class Viewport {
       // which left a stray field eating every shortcut (FI-2).
       const active = document.activeElement;
       if (active instanceof HTMLElement && isEditableTarget(active)) active.blur();
+      this.lastPointerType = e.pointerType;
       if (e.button !== 0) return;
       this.dragMoved = false;
       this.downPos = { x: e.clientX, y: e.clientY };
@@ -504,6 +512,7 @@ export class Viewport {
           : null;
     });
     c.addEventListener("pointermove", (e) => {
+      this.lastPointerType = e.pointerType;
       if (Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3) {
         this.dragMoved = true;
       }
@@ -1158,6 +1167,8 @@ export class Viewport {
       environment,
       environmentBehind: !!envKey && p.envBackground && hdrHashOf(p.environment) !== null,
       brightness: p.brightness,
+      bounces: experimentalPrefs().bounces,
+      firefly: experimentalPrefs().firefly,
       toneMapping: r.toneMapping,
       exposure: r.toneMappingExposure,
       rig: this.lightRig(),
@@ -1245,6 +1256,16 @@ export class Viewport {
     this.requestRender();
   }
 
+  // Behind its document (app/staleModel.ts): ghosted like a refused preview, and nothing on it can be picked.
+  private outOfDate = false;
+  setModelOutOfDate(on: boolean) {
+    if (this.outOfDate === on) return;
+    this.outOfDate = on;
+    if (on) this.highlighter?.clearHover();
+    this.applyBodyFinish();
+    this.requestRender();
+  }
+
   private finish = new BodyFinishLayer({
     model: () => this.model,
     scene: () => this.scene,
@@ -1328,7 +1349,10 @@ export class Viewport {
   private applyBodyFinish(only?: ReadonlySet<BodyMesh>) {
     if (!this.model) return;
     this.peek = this.resolvePeek();
-    this.finish.apply({ xray: this.xray, stale: this.stale, wireframe: this.wireframe, peek: this.peek }, only);
+    this.finish.apply(
+      { xray: this.xray, stale: this.stale || this.outOfDate, wireframe: this.wireframe, peek: this.peek },
+      only,
+    );
     if (this.wireframe && !this.edgesEmphasized) this.highlighter?.setEdgeBase(EDGE_WIRE);
     if (only) return;
     this.syncBloomable();
@@ -1903,13 +1927,20 @@ export class Viewport {
     clientX: number,
     clientY: number,
   ): { kind: "base"; plane: Plane3 } | { kind: "datum"; id: string; def: PlaneDef } | null {
+    const tile = this.pickTile(clientX, clientY);
     this.rayFrom(clientX, clientY);
-    const hit = this.sharedRaycaster.intersectObjects([...this.shownTiles(), ...this.datumQuads], false)[0];
-    if (!hit) return null;
-    const id = hit.object.userData.datumId as string | undefined;
-    if (id) return { kind: "datum", id, def: hit.object.userData.datumDef as PlaneDef };
-    const plane = hit.object.userData.plane as Plane3 | undefined;
-    return plane ? { kind: "base", plane } : null;
+    // A tile's name is drawn over everything, its pad is only there to be easy to hit, so a datum quad
+    // under either the pad or a tile in front of it keeps its own press.
+    const datumFirst =
+      tile?.part === "label"
+        ? null
+        : this.sharedRaycaster.intersectObjects(
+            tile?.part === "tile" ? [...this.shownTiles(), ...this.datumQuads] : this.datumQuads,
+            false,
+          )[0];
+    const id = datumFirst?.object.userData.datumId as string | undefined;
+    if (id) return { kind: "datum", id, def: datumFirst!.object.userData.datumDef as PlaneDef };
+    return tile ? { kind: "base", plane: tile.plane } : null;
   }
 
   /** Brighten the plane under the cursor, separately from the selected one. */
@@ -2915,6 +2946,18 @@ export class Viewport {
     this.requestRender();
   }
 
+  /** Everything the view holds for one document, released when its session ends. */
+  endDocument() {
+    this.clearModel();
+    this.streamMemo = null;
+    this.edgeBatchesOf = null;
+    this.lastHover = null;
+    this.userMovedCamera = false;
+    this.showSketchFace(null);
+    this.setStaleModel(false);
+    this.setModelOutOfDate(false);
+  }
+
   stepView(dir: "left" | "right" | "up" | "down", fine: boolean) {
     this.rig.stepView(dir, fine);
     this.requestRender();
@@ -2968,7 +3011,23 @@ export class Viewport {
   }
 
   private syncOriginTiles() {
-    this.scene.originTiles.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal(), this.rig.active);
+    this.scene.originTiles.update(
+      this.pixelWorldSize(WORLD_ORIGIN),
+      this.modelDiagonal(),
+      this.rig.active,
+      this.canvas.getBoundingClientRect(),
+    );
+  }
+
+  /** The smallest a plane's target is on screen, a finger's size on a touch screen. */
+  planeHitMinPx(): number {
+    const coarse = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+    return planeHitMinPx(coarse, this.lastPointerType);
+  }
+
+  private pickTile(clientX: number, clientY: number) {
+    const frame = { camera: this.rig.active, rect: this.canvas.getBoundingClientRect() };
+    return this.scene.originTiles.pick(clientX, clientY, frame, this.planeHitMinPx());
   }
 
   /** The colour drawn behind the scene, which a fixed render ground keeps apart from the theme. */
@@ -2992,13 +3051,9 @@ export class Viewport {
     this.requestRender();
   }
 
-  /** The nearest plane under the cursor, intersectObjects sorts hits nearest first. */
+  /** The origin plane a press here takes, by its tile, the pad around it or its name. */
   pickPlane(clientX: number, clientY: number): Plane3 | null {
-    this.rayFrom(clientX, clientY);
-    const hits = this.sharedRaycaster.intersectObjects(this.shownTiles(), false);
-    const hit = hits[0];
-    if (!hit) return null;
-    return (hit.object.userData.plane as Plane3) ?? null;
+    return this.pickTile(clientX, clientY)?.plane ?? null;
   }
 
   /** The plane pick of the face under the cursor. `kind` says flat or round, and
@@ -4164,7 +4219,7 @@ export class Viewport {
   }
 
   private get ghosted(): boolean {
-    return this.xray || this.wireframe || this.stale || this.peek.size > 0 || this.sketchDimmed;
+    return this.xray || this.wireframe || this.stale || this.outOfDate || this.peek.size > 0 || this.sketchDimmed;
   }
 
   private drawPicture<T>(

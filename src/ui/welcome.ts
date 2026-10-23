@@ -18,6 +18,18 @@ export function setWelcomeOnStartup(on: boolean): void {
   }
 }
 
+const CLOSED_KEY = "fundacad.welcomeClosed";
+export function welcomeClosed(): boolean {
+  return readSetting(CLOSED_KEY) === "true";
+}
+export function closeWelcome(): void {
+  try {
+    localStorage.setItem(CLOSED_KEY, "true");
+  } catch {
+    /* blocked storage shows the welcome again next time */
+  }
+}
+
 export const MANUAL_URL = "https://paraxdev.github.io/FundaCAD/";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;

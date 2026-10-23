@@ -98,3 +98,8 @@ pub fn cancel_ack(id: &Value, hit: bool) -> String {
 pub fn bad_json(detail: &str) -> String {
     err(&Value::Null, &format!("bad JSON: {detail}"), None)
 }
+
+/// The reply to a `doc_end` op: how many of the document's jobs it ended, running or queued.
+pub fn doc_end_ack(id: &Value, jobs: usize) -> String {
+    ok(id, &json!({"ended": jobs}))
+}

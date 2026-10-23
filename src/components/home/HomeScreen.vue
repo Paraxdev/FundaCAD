@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useHomeStore } from "../../stores/home";
 import { useModalStore } from "../../stores/modals";
 import { useModalGate } from "../../composables/useModalGate";
-import { welcomeOnStartup, setWelcomeOnStartup } from "../../ui/welcome";
+import { welcomeClosed, welcomeOnStartup, setWelcomeOnStartup } from "../../ui/welcome";
 import { openReportDialog } from "../../ui/bugReporter";
 import { forgetRecent, getRecentFiles } from "../../io/recentFiles";
 import { library, type FileStat, type FolderListing } from "../../io/library";
@@ -258,6 +258,7 @@ function onViewSelect(el: HTMLSelectElement): void {
 }
 
 const showOnStartup = ref(welcomeOnStartup());
+const welcomeHidden = ref(welcomeClosed());
 watch(showOnStartup, setWelcomeOnStartup);
 
 const root = ref<HTMLElement | null>(null);
@@ -356,7 +357,7 @@ onUnmounted(() => {
       </p>
       <div class="home-scroll">
         <WhatsNewCard />
-        <WelcomeBlock v-if="fresh && !query" />
+        <WelcomeBlock v-if="fresh && !query && !welcomeHidden" @close="welcomeHidden = true" />
         <template v-if="fresh && examples.length">
           <h2 class="home-section">Start here</h2>
           <div class="home-grid home-examples">

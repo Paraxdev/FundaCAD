@@ -39,6 +39,14 @@ impl Payloads {
         self.ram.clear();
     }
 
+    pub fn len(&self) -> usize {
+        self.ram.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.ram.is_empty()
+    }
+
     pub fn reset_counters(&mut self) {
         self.ram_hits = 0;
         self.disk_hits = 0;

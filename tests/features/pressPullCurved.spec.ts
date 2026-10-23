@@ -92,6 +92,9 @@ function fakeStore(reply: FaceAxisReply | null) {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
+    onSessionBuild(fn: (s: RebuildState) => void) {
+      return this.onBuild(fn);
+    },
     faceAxis: async () => reply,
   };
   return { store: store as unknown as DocumentStore, previews, added };

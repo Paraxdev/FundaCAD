@@ -3,6 +3,7 @@ import { isEditableTarget, isPageSelectAll } from "../ui/focus";
 import { saveDocument, saveDocumentAs, exportSelection } from "../io/files";
 import { SKETCH_TOOLS } from "./actionTables";
 import { logError, toggleConsole } from "../ui/logStore";
+import { isSessionEnded } from "../document/session";
 import { useDialogStore } from "../stores/dialogs";
 import { isMac } from "../input/platform";
 import { useShellStore } from "../stores/shell";
@@ -77,6 +78,7 @@ export function installKeyboard(e: Engine): void {
     });
   });
   window.addEventListener("unhandledrejection", (ev) => {
+    if (isSessionEnded(ev.reason)) return;
     logError(ev.reason, { source: "promise" });
   });
 

@@ -1,5 +1,7 @@
 // Ring buffer of recent events for the bug reporter, fed from window errors and every toast.
 
+import { isSessionEnded } from "../document/session";
+
 const MAX = 20;
 const buf: string[] = [];
 
@@ -46,6 +48,7 @@ if (typeof window !== "undefined") {
   });
   window.addEventListener("unhandledrejection", (e) => {
     const r = e.reason;
+    if (isSessionEnded(r)) return;
     crumb(`[unhandledrejection] ${r instanceof Error ? r.message : String(r)}`);
   });
 }

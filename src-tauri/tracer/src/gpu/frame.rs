@@ -102,7 +102,7 @@ impl Tracer {
             v4(up.map(|x| x * th), 0.0),
             v4(l.sky_top, l.env_intensity),
             v4(l.sky_bottom, 0.0),
-            [l.exposure, ortho, pull, 0.0],
+            [l.exposure, ortho, pull, if l.firefly > 0.0 { l.firefly } else { f32::MAX }],
         ] {
             data.extend(v);
         }

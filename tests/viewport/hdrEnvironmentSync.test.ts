@@ -1,8 +1,8 @@
-// An .exr reads the right way up and is refused from its header, and the
+// An .exr reads the right way up and is taken however wide, and the
 // document's embedded environment follows every change to the look.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { decodeHdr, HdrRefusal, toHalfRgba, type HdrImage } from "../../src/viewport/hdrImage";
+import { decodeHdr, toHalfRgba, type HdrImage } from "../../src/viewport/hdrImage";
 import { createEnvLibrary, memoryKv } from "../../src/ui/environmentLibrary";
 import { envSettingsOf, renderPrefs, setRenderPref } from "../../src/ui/renderPrefs";
 import { DocumentStore } from "../../src/document/store";
@@ -104,13 +104,14 @@ describe("an imported .exr", () => {
     expect(at(img, 0, 3)).toBeCloseTo(0.1, 5);
   });
 
-  it("is refused from its header before any pixel is read", async () => {
-    const err = await decodeHdr(
-      exr(9000, 2, () => 1, false),
-      "huge.exr",
-    ).catch((e) => e);
-    expect(err).toBeInstanceOf(HdrRefusal);
-    expect((err as Error).message).toMatch(/9000 x 2.*8192/);
+  it("is taken however wide, and halved to the width asked for", async () => {
+    const img = await decodeHdr(
+      exr(9000, 2, () => 1),
+      "wide.exr",
+      2048,
+    );
+    expect([img.width, img.height]).toEqual([1125, 1]);
+    expect(at(img, 500, 0)).toBeCloseTo(1, 3);
   });
 });
 

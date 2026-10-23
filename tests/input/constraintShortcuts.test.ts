@@ -23,7 +23,7 @@ describe("constraint shortcuts", () => {
     const sketch = shortcutHudGroups().find((g) => g.name === "Sketch")!;
     for (const a of constraintActions) {
       const row = SHORTCUTS.find((s) => s.action === a && s.context === "sketch")!;
-      expect(sketch.rows).toContainEqual({ key: formatShortcut(row), label: row.label });
+      expect(sketch.rows).toContainEqual(expect.objectContaining({ key: formatShortcut(row), label: row.label }));
     }
   });
 

@@ -11,9 +11,9 @@ import {
   TILE_LOOK,
   TILE_ORDER,
   TILE_SHAPE,
+  LABEL_HOT_SCALE,
   labelInk,
   mixHex,
-  nameFade,
   tilePose,
   tileStates,
   type TilePose,
@@ -84,9 +84,9 @@ describe("TILE_SHAPE", () => {
   // A rail tile is 40 px with a 17 px squircle corner (--rail-tile, --float-tile-radius).
   it("is clearly bigger than a rail tile and rounds like one, with the app's squircle", () => {
     expect(TILE_SHAPE).toEqual({
-      sizePx: 68,
-      gapPx: 10,
-      radiusPx: 29,
+      sizePx: 85,
+      gapPx: 12,
+      radiusPx: 36,
       exponent: SQUIRCLE_EXPONENT,
       octant: { x: 1, y: -1, z: 1 },
     });
@@ -99,9 +99,9 @@ describe("TILE_SHAPE", () => {
 describe("tilePose", () => {
   it("puts each default tile in its own quadrant of the home octant", () => {
     expect(PLANES.map((k) => tilePose(k, TILE_SHAPE))).toEqual([
-      { centre: [44, -44, 0], u: [1, 0, 0], v: [0, 1, 0], normal: [0, 0, 1] },
-      { centre: [44, 0, 44], u: [1, 0, 0], v: [0, 0, 1], normal: [0, -1, 0] },
-      { centre: [0, -44, 44], u: [0, 1, 0], v: [0, 0, 1], normal: [1, 0, 0] },
+      { centre: [54.5, -54.5, 0], u: [1, 0, 0], v: [0, 1, 0], normal: [0, 0, 1] },
+      { centre: [54.5, 0, 54.5], u: [1, 0, 0], v: [0, 0, 1], normal: [0, -1, 0] },
+      { centre: [0, -54.5, 54.5], u: [0, 1, 0], v: [0, 0, 1], normal: [1, 0, 0] },
     ]);
   });
 
@@ -129,15 +129,6 @@ describe("tilePose", () => {
       ];
       for (const x of d) expect(x).toBeCloseTo(want, 12);
     }
-  });
-});
-
-describe("nameFade", () => {
-  it("ramps from 0.15 to 0.35 of facing", () => {
-    expect([0, 0.1, 0.15, 0.35, 0.9, 1].map(nameFade)).toEqual([0, 0, 0, 1, 1, 1]);
-    expect(nameFade(0.25)).toBeCloseTo(0.5, 12);
-    expect(nameFade(-0.25)).toBeCloseTo(0.5, 12);
-    expect(nameFade(0.2)).toBeCloseTo(0.25, 12);
   });
 });
 
@@ -264,42 +255,22 @@ describe("OriginTiles", () => {
     t.dispose();
   });
 
-  it("hides the names of tiles seen edge on", () => {
+  it("keeps every name at its full look edge on, and grows the hovered one", () => {
     const t = new OriginTiles(new THREE.Scene());
     t.setShown(true);
     t.update(0.37, null, topCamera());
-    expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.idle.label, XZ: 0, YZ: 0 });
+    expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.idle.label, XZ: TILE_LOOK.idle.label, YZ: TILE_LOOK.idle.label });
     t.hover("XZ");
-    expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.dim.label, XZ: 0, YZ: 0 });
+    expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.dim.label, XZ: TILE_LOOK.hot.label, YZ: TILE_LOOK.dim.label });
+    const size = (k: Plane3) => child(t.planes[k], "label").scale.toArray().slice(0, 2);
+    expect(size("XZ")).toEqual([LABEL_BOX_PX.w * LABEL_HOT_SCALE, LABEL_BOX_PX.h * LABEL_HOT_SCALE]);
+    expect(size("XY")).toEqual([LABEL_BOX_PX.w, LABEL_BOX_PX.h]);
+    const colour = (k: Plane3, role: string) => matOf(child(t.planes[k], role)).color.getHex();
+    expect(colour("XZ", "label")).toBe(colour("XZ", "rim"));
+    expect(colour("XY", "label")).not.toBe(colour("XY", "rim"));
     t.hover(null);
-    t.update(0.37, null, homeCamera());
-    const home = labelOpacity(t);
-    expect(PLANES.map((k) => home[k]! > 0)).toEqual([true, true, true]);
-    expect(PLANES.map((k) => home[k]! <= TILE_LOOK.idle.label)).toEqual([true, true, true]);
-    t.dispose();
-  });
-
-  it("fades a name by the unit direction from the tile's scaled centre to a perspective eye", () => {
-    const t = new OriginTiles(new THREE.Scene());
-    t.setShown(true);
-    const eyeAt = (x: number, y: number, z: number, look: [number, number, number]) => {
-      const cam = new THREE.PerspectiveCamera(30, 1.5, 1, 5000);
-      cam.up.set(0, 1, 0);
-      cam.position.set(x, y, z);
-      cam.lookAt(...look);
-      cam.updateMatrixWorld(true);
-      return cam;
-    };
-    t.update(0.37, null, eyeAt(12, -7, 300, [12, -7, 0]));
-    expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.idle.label, XZ: 0, YZ: 0 });
-    // At scale 13/11 the XZ centre is (52, 0, 52) and the YZ centre (0, -52, 52): the eye is 67 and 63 away.
-    t.update(13 / 11, null, eyeAt(10, -15, 102, [30, -20, 15]));
-    const ramp = (facing: number) => (TILE_LOOK.idle.label * (facing - 0.15)) / 0.2;
-    expect(labelOpacity(t)).toEqual({
-      XY: TILE_LOOK.idle.label,
-      XZ: expect.closeTo(ramp(15 / 67), 12),
-      YZ: expect.closeTo(ramp(10 / 63), 12),
-    });
+    expect(size("XZ")).toEqual([LABEL_BOX_PX.w, LABEL_BOX_PX.h]);
+    expect(colour("XZ", "label")).toBe(colour("XY", "label"));
     t.dispose();
   });
 
@@ -332,7 +303,11 @@ describe("OriginTiles", () => {
     const ctx = {
       clearRect: () => {},
       fillText: (s: string) => drawn.push(s),
+      strokeText: () => {},
       fillStyle: "",
+      strokeStyle: "",
+      lineJoin: "",
+      lineWidth: 0,
       font: "",
       textAlign: "",
       textBaseline: "",
@@ -348,7 +323,7 @@ describe("OriginTiles", () => {
     expect(drawn).toEqual([]);
     t.setShown(true);
     expect(drawn).toEqual(["XY", "XZ", "YZ"]);
-    expect({ fill: ctx.fillStyle, font: ctx.font.includes("Space Grotesk"), size: ctx.font.includes("44px") }).toEqual({
+    expect({ fill: ctx.fillStyle, font: ctx.font.includes("Space Grotesk"), size: ctx.font.includes("60px") }).toEqual({
       fill: "#ffffff",
       font: true,
       size: true,
@@ -359,7 +334,7 @@ describe("OriginTiles", () => {
     t.setShown(true);
     expect(drawn.length).toBe(6);
     const map = (child(t.planes.YZ, "label") as THREE.Sprite).material.map!;
-    expect(map.image as { width: number; height: number }).toMatchObject({ width: 112, height: 64 });
+    expect(map.image as { width: number; height: number }).toMatchObject({ width: 152, height: 88 });
     t.dispose();
   });
 
@@ -454,9 +429,9 @@ describe("OriginTiles", () => {
         .toArray()
         .map((n) => Math.round(n * 1e9) / 1e9 + 0);
     expect(PLANES.map(corner)).toEqual([
-      [64 * 0.37, -24 * 0.37, 0].map((n) => Math.round(n * 1e9) / 1e9),
-      [64 * 0.37, 0, 64 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
-      [0, -24 * 0.37, 64 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
+      [74.5 * 0.37, -34.5 * 0.37, 0].map((n) => Math.round(n * 1e9) / 1e9),
+      [74.5 * 0.37, 0, 74.5 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
+      [0, -34.5 * 0.37, 74.5 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
     ]);
     t.dispose();
   });

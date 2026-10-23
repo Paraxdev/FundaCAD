@@ -9,6 +9,7 @@ import { openReportDialog } from "../ui/bugReporter";
 import { ideaUrl, REPO_URL } from "../ui/reportText";
 import type { MenuDef } from "../ui/menu";
 import { beforeUpdate } from "./unsavedGuard";
+import { PRODUCT_NAME } from "./channel";
 import type { Engine } from "./engine";
 
 const ISSUES_URL = `${REPO_URL}/issues`;
@@ -107,7 +108,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
         { label: "Issue Tracker", onClick: () => void openExternal(ISSUES_URL) },
         { separator: true, label: "" },
         { label: "Check for Updates…", onClick: () => void checkForUpdates(true, beforeUpdate(e)) },
-        { label: "About FundaCAD", onClick: () => void showAbout() },
+        { label: `About ${PRODUCT_NAME}`, onClick: () => void showAbout() },
       ],
     },
   ] as MenuDef[]).filter((m) => m.items.length > 0);

@@ -1,5 +1,7 @@
 import { saveDocument } from "../io/files";
+import { clearRecovery } from "../io/recovery";
 import { choose } from "../ui/choice";
+import { PRODUCT_NAME } from "./channel";
 import type { BeforeInstall } from "../ui/updates";
 import type { Engine } from "./engine";
 
@@ -7,7 +9,7 @@ const isTauri = () => "__TAURI_INTERNALS__" in window;
 
 /** "part.funda*" while there are unsaved changes. */
 export function windowTitle(fileName: string, dirty: boolean): string {
-  return `${fileName}${dirty ? "*" : ""} · FundaCAD`;
+  return `${fileName}${dirty ? "*" : ""} · ${PRODUCT_NAME}`;
 }
 
 /** Resolves whether to go on; a Save As that was cancelled or failed leaves the document dirty, so that is a no. */
@@ -18,7 +20,10 @@ export async function saveFirst(e: Pick<Engine, "store">, question: string, disc
     { value: "discard", label: "Don't save", hint: discardHint },
     { value: "cancel", label: "Cancel" },
   ]);
-  if (pick === "discard") return true;
+  if (pick === "discard") {
+    e.store.markGivenUp();
+    return true;
+  }
   if (pick !== "save") return false;
   await saveDocument(e.store);
   return !e.store.dirty;
@@ -69,11 +74,17 @@ export function installUnsavedGuard(e: Engine): void {
         return;
       }
       asking = true;
-      const question = `Save changes to ${e.store.fileName} before closing?`;
-      const close = await saveFirst(e, question, "close and lose the changes").finally(() => {
+      await confirmClose(e, ev).finally(() => {
         asking = false;
       });
-      if (!close) ev.preventDefault();
     }),
   );
+}
+
+/** A close with unsaved work: Save, Don't save or Cancel. Don't save gives the work up, so the next start must not
+ *  offer its snapshot back. */
+export async function confirmClose(e: Pick<Engine, "store">, ev: { preventDefault(): void }): Promise<void> {
+  const question = `Save changes to ${e.store.fileName} before closing?`;
+  if (!(await saveFirst(e, question, "close and lose the changes"))) ev.preventDefault();
+  else if (e.store.dirty) await clearRecovery(e.store.filePath);
 }

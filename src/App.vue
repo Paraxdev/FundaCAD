@@ -6,7 +6,7 @@ import RenderDock from "./components/shell/RenderDock.vue";
 import ToastStack from "./components/overlays/ToastStack.vue";
 import GuideLayer from "./components/overlays/GuideLayer.vue";
 import ModalHost from "./components/overlays/ModalHost.vue";
-import ShortcutHud from "./components/overlays/ShortcutHud.vue";
+import ShortcutsDialog from "./components/overlays/ShortcutsDialog.vue";
 import ContextMenuHost from "./components/overlays/ContextMenuHost.vue";
 import RadialMenuHost from "./components/overlays/RadialMenuHost.vue";
 import TargetEditPanel from "./components/overlays/TargetEditPanel.vue";
@@ -104,6 +104,7 @@ watch(
             <BrowserPane v-if="shell.itemsShown" />
             <FilletMembers />
             <TargetEditPanel />
+            <MirrorToolPanel v-if="toolPanels.mirror" :key="toolPanels.mirror.id" :view="toolPanels.mirror" />
           </div>
           <ToolRail />
         </div>
@@ -124,7 +125,6 @@ watch(
   <ToastStack />
   <ModalHost />
   <GuideLayer />
-  <ShortcutHud />
   <ContextMenuHost />
   <RadialMenuHost />
   <ConsolePanel />
@@ -144,11 +144,11 @@ watch(
   <SketchDimLayer v-if="sketchLabelsShown" />
   <SketchGlyphLayer v-if="sketchLabelsShown" />
   <TextToolPanel v-if="toolPanels.text" :key="toolPanels.text.id" :req="toolPanels.text" />
-  <MirrorToolPanel v-if="toolPanels.mirror" :key="toolPanels.mirror.id" :view="toolPanels.mirror" />
   <ProjectFilterBar v-if="toolPanels.projectAnchor" />
 
   <!-- v-if, not an open prop: mount is open, so useModalGate.ts can count modal depth in mount hooks without leaks. -->
   <PreferencesDialog v-if="dialogs.preferences" />
+  <ShortcutsDialog v-if="dialogs.shortcuts" />
   <ExportDialog v-if="exportDialog.request" />
   <BugReportDialog v-if="dialogs.bugReport && dialogs.bugDeps" />
 

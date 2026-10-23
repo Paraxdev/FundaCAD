@@ -51,7 +51,6 @@ const COLOUR_BASELINE: Record<string, number> = {
   "src/styles/_renderdock.scss": 5,
   "src/styles/_targetedit.scss": 2,
   "src/styles/_timeline.scss": 5,
-  "src/styles/_titlebar.scss": 1,
   "src/styles/_utilities.scss": 11,
 };
 
@@ -75,7 +74,7 @@ const FLAT_BASELINE: Record<string, number> = {
   "src/styles/_renderdock.scss": 8,
   "src/styles/_targetedit.scss": 2,
   "src/styles/_timeline.scss": 7,
-  "src/styles/_titlebar.scss": 8,
+  "src/styles/_titlebar.scss": 6,
   "src/styles/_utilities.scss": 18,
 };
 

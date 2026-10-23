@@ -30,12 +30,8 @@ vi.mock("../../src/ui/choice", () => ({
 vi.mock("../../src/ui/toast", () => ({
   toast: (msg: string, o: { kind?: string } = {}) => void (o.kind === "error" ? h.reported : h.told).push(msg),
 }));
-vi.mock("../../src/templates", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../src/templates")>()),
-  templateFile: (id: string) => Promise.resolve(new File([new Uint8Array([31, 139])], `${id}.stpz`)),
-}));
 
-import { importFromHome, isBlankDocument, newFromTemplate } from "../../src/app/documentActions";
+import { importFromHome, isBlankDocument } from "../../src/app/documentActions";
 
 const SAVED: Feature[] = [
   { id: "sk1", type: "sketch", plane: "XZ", entities: [] },
@@ -136,7 +132,6 @@ beforeEach(() => {
 });
 
 const openings = [
-  ["the 3D printer example", "printer.stpz", (e: Engine) => newFromTemplate(e, "printer")],
   ["a STEP dropped on a blank Home", "a.step", (e: Engine) => (e.store.newDocument(), dropOnHome(e, "a.step"))],
 ] as const;
 

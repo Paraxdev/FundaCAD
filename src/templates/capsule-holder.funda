@@ -1,0 +1,716 @@
+{
+  "parameters": {
+    "innerDiameter": 20,
+    "innerLength": 40,
+    "wall": 2.4,
+    "pitch": 2,
+    "clearance": 0.25,
+    "threadLength": 12,
+    "chamfer": 1,
+    "spacing": 8,
+    "screwedOn": 0,
+    "fit": 0.25,
+    "threadSpan": 12,
+    "innerRadius": 10.0,
+    "neckRadius": 12.4,
+    "bodyRadius": 15.05,
+    "rimHeight": 42.4,
+    "shoulderHeight": 30.4,
+    "chamferRadius": 14.05,
+    "capDepth": 14.25,
+    "capHeight": 16.65,
+    "ledgeHeight": 14.399999999999999,
+    "grooveDepth": 1.2268,
+    "breakout": 0.2,
+    "grooveHalf": 0.8237633640797579,
+    "grooveBottom": 11.173200000000001,
+    "grooveOuter": 12.6,
+    "grooveStart": 31.34876336407976,
+    "grooveTop": 32.17252672815952,
+    "grooveLow": 30.525,
+    "grooveTurns": 6,
+    "grooveAngle": 2160,
+    "flankPlay": 0.28867513459481287,
+    "crestRadius": 11.923200000000001,
+    "crestHalf": 0.8556624327025936,
+    "rootRadius": 12.65,
+    "reliefRadius": 12.775,
+    "rootHalf": 0.4360442570555737,
+    "mouthRadius": 11.798200000000001,
+    "mouthHalf": 0.9278312163512967,
+    "capStart": 3.4528312163512966,
+    "mouthTop": 4.380662432702593,
+    "mouthLow": 2.525,
+    "rootTop": 3.8888754734068702,
+    "rootLow": 3.016786959295723,
+    "capTurns": 8,
+    "capAngle": 2880,
+    "capShift": 38.1,
+    "screwedFlag": 0,
+    "layoutOn": 1,
+    "seatHeight": 47.175,
+    "seatTurn": -5.68670270978447,
+    "seatAngle": 112.78702447759088,
+    "d1": 2160,
+    "d2": 2,
+    "d3": 2880,
+    "d4": 2,
+    "d5": 38.1,
+    "d6": 1,
+    "d7": 47.175,
+    "d8": 112.78702447759088,
+    "d9": 0
+  },
+  "paramDefs": {
+    "innerDiameter": {
+      "expr": "20",
+      "value": 20,
+      "unit": "mm"
+    },
+    "innerLength": {
+      "expr": "40",
+      "value": 40,
+      "unit": "mm"
+    },
+    "wall": {
+      "expr": "2.4",
+      "value": 2.4,
+      "unit": "mm"
+    },
+    "pitch": {
+      "expr": "2",
+      "value": 2,
+      "unit": "mm"
+    },
+    "clearance": {
+      "expr": "0.25",
+      "value": 0.25,
+      "unit": "mm"
+    },
+    "threadLength": {
+      "expr": "12",
+      "value": 12,
+      "unit": "mm"
+    },
+    "chamfer": {
+      "expr": "1",
+      "value": 1,
+      "unit": "mm"
+    },
+    "spacing": {
+      "expr": "8",
+      "value": 8,
+      "unit": "mm"
+    },
+    "screwedOn": {
+      "expr": "0",
+      "value": 0,
+      "unit": "count"
+    },
+    "fit": {
+      "expr": "max(clearance; 0.05)",
+      "value": 0.25,
+      "unit": "mm"
+    },
+    "threadSpan": {
+      "expr": "max(2.5 * pitch; min(threadLength; 9 * pitch; innerLength))",
+      "value": 12,
+      "unit": "mm"
+    },
+    "innerRadius": {
+      "expr": "innerDiameter / 2",
+      "value": 10.0,
+      "unit": "mm"
+    },
+    "neckRadius": {
+      "expr": "innerRadius + wall",
+      "value": 12.4,
+      "unit": "mm"
+    },
+    "bodyRadius": {
+      "expr": "neckRadius + fit + wall",
+      "value": 15.05,
+      "unit": "mm"
+    },
+    "rimHeight": {
+      "expr": "wall + innerLength",
+      "value": 42.4,
+      "unit": "mm"
+    },
+    "shoulderHeight": {
+      "expr": "rimHeight - threadSpan",
+      "value": 30.4,
+      "unit": "mm"
+    },
+    "chamferRadius": {
+      "expr": "bodyRadius - chamfer",
+      "value": 14.05,
+      "unit": "mm"
+    },
+    "capDepth": {
+      "expr": "threadSpan + pitch + fit",
+      "value": 14.25,
+      "unit": "mm"
+    },
+    "capHeight": {
+      "expr": "wall + capDepth",
+      "value": 16.65,
+      "unit": "mm"
+    },
+    "ledgeHeight": {
+      "expr": "capHeight - pitch - fit",
+      "value": 14.399999999999999,
+      "unit": "mm"
+    },
+    "grooveDepth": {
+      "expr": "min(0.6134 * pitch; wall - 0.4)",
+      "value": 1.2268,
+      "unit": "mm"
+    },
+    "breakout": {
+      "expr": "pitch / 10",
+      "value": 0.2,
+      "unit": "mm"
+    },
+    "grooveHalf": {
+      "expr": "tan(30) * (grooveDepth + breakout)",
+      "value": 0.8237633640797579,
+      "unit": "mm"
+    },
+    "grooveBottom": {
+      "expr": "neckRadius - grooveDepth",
+      "value": 11.173200000000001,
+      "unit": "mm"
+    },
+    "grooveOuter": {
+      "expr": "neckRadius + breakout",
+      "value": 12.6,
+      "unit": "mm"
+    },
+    "grooveStart": {
+      "expr": "shoulderHeight + grooveHalf + fit / 2",
+      "value": 31.34876336407976,
+      "unit": "mm"
+    },
+    "grooveTop": {
+      "expr": "grooveStart + grooveHalf",
+      "value": 32.17252672815952,
+      "unit": "mm"
+    },
+    "grooveLow": {
+      "expr": "grooveStart - grooveHalf",
+      "value": 30.525,
+      "unit": "mm"
+    },
+    "grooveTurns": {
+      "expr": "ceil(threadSpan / pitch)",
+      "value": 6,
+      "unit": "count"
+    },
+    "grooveAngle": {
+      "expr": "360 * grooveTurns",
+      "value": 2160,
+      "unit": "deg"
+    },
+    "flankPlay": {
+      "expr": "fit / cos(30)",
+      "value": 0.28867513459481287,
+      "unit": "mm"
+    },
+    "crestRadius": {
+      "expr": "grooveBottom + 3 * fit",
+      "value": 11.923200000000001,
+      "unit": "mm"
+    },
+    "crestHalf": {
+      "expr": "pitch / 2 - tan(30) * 3 * fit + flankPlay",
+      "value": 0.8556624327025936,
+      "unit": "mm"
+    },
+    "rootRadius": {
+      "expr": "neckRadius + fit",
+      "value": 12.65,
+      "unit": "mm"
+    },
+    "reliefRadius": {
+      "expr": "rootRadius + fit / 2",
+      "value": 12.775,
+      "unit": "mm"
+    },
+    "rootHalf": {
+      "expr": "pitch / 2 - tan(30) * (grooveDepth + fit) + flankPlay",
+      "value": 0.4360442570555737,
+      "unit": "mm"
+    },
+    "mouthRadius": {
+      "expr": "crestRadius - fit / 2",
+      "value": 11.798200000000001,
+      "unit": "mm"
+    },
+    "mouthHalf": {
+      "expr": "crestHalf + tan(30) * (crestRadius - mouthRadius)",
+      "value": 0.9278312163512967,
+      "unit": "mm"
+    },
+    "capStart": {
+      "expr": "wall + mouthHalf + fit / 2",
+      "value": 3.4528312163512966,
+      "unit": "mm"
+    },
+    "mouthTop": {
+      "expr": "capStart + mouthHalf",
+      "value": 4.380662432702593,
+      "unit": "mm"
+    },
+    "mouthLow": {
+      "expr": "capStart - mouthHalf",
+      "value": 2.525,
+      "unit": "mm"
+    },
+    "rootTop": {
+      "expr": "capStart + rootHalf",
+      "value": 3.8888754734068702,
+      "unit": "mm"
+    },
+    "rootLow": {
+      "expr": "capStart - rootHalf",
+      "value": 3.016786959295723,
+      "unit": "mm"
+    },
+    "capTurns": {
+      "expr": "ceil(capDepth / pitch)",
+      "value": 8,
+      "unit": "count"
+    },
+    "capAngle": {
+      "expr": "360 * capTurns",
+      "value": 2880,
+      "unit": "deg"
+    },
+    "capShift": {
+      "expr": "2 * bodyRadius + spacing",
+      "value": 38.1,
+      "unit": "mm"
+    },
+    "screwedFlag": {
+      "expr": "min(max(round(screwedOn); 0); 1)",
+      "value": 0,
+      "unit": "count"
+    },
+    "layoutOn": {
+      "expr": "1 - screwedFlag",
+      "value": 1,
+      "unit": "count"
+    },
+    "seatHeight": {
+      "expr": "capHeight + shoulderHeight + fit / 2",
+      "value": 47.175,
+      "unit": "mm"
+    },
+    "seatTurn": {
+      "expr": "0.5 - (seatHeight - capStart - grooveStart) / pitch",
+      "value": -5.68670270978447,
+      "unit": "count"
+    },
+    "seatAngle": {
+      "expr": "360 * (seatTurn - floor(seatTurn))",
+      "value": 112.78702447759088,
+      "unit": "deg"
+    },
+    "d1": {
+      "expr": "grooveAngle",
+      "value": 2160,
+      "unit": "deg",
+      "target": {
+        "kind": "feature",
+        "feature": "groove",
+        "field": "angle"
+      }
+    },
+    "d2": {
+      "expr": "pitch",
+      "value": 2,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "groove",
+        "field": "pitch"
+      }
+    },
+    "d3": {
+      "expr": "capAngle",
+      "value": 2880,
+      "unit": "deg",
+      "target": {
+        "kind": "feature",
+        "feature": "capThread",
+        "field": "angle"
+      }
+    },
+    "d4": {
+      "expr": "pitch",
+      "value": 2,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "capThread",
+        "field": "pitch"
+      }
+    },
+    "d5": {
+      "expr": "capShift",
+      "value": 38.1,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "place",
+        "field": "dx"
+      }
+    },
+    "d6": {
+      "expr": "layoutOn",
+      "value": 1,
+      "unit": "count",
+      "target": {
+        "kind": "feature",
+        "feature": "place",
+        "field": "activeWhen"
+      }
+    },
+    "d7": {
+      "expr": "seatHeight",
+      "value": 47.175,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "screw",
+        "field": "dz"
+      }
+    },
+    "d8": {
+      "expr": "seatAngle",
+      "value": 112.78702447759088,
+      "unit": "deg",
+      "target": {
+        "kind": "feature",
+        "feature": "screw",
+        "field": "rz"
+      }
+    },
+    "d9": {
+      "expr": "screwedFlag",
+      "value": 0,
+      "unit": "count",
+      "target": {
+        "kind": "feature",
+        "feature": "screw",
+        "field": "activeWhen"
+      }
+    }
+  },
+  "features": [
+    {
+      "id": "tubeProfile",
+      "type": "sketch",
+      "name": "Tube profile",
+      "plane": "XZ",
+      "entities": [
+        {
+          "type": "line",
+          "id": "tube_1",
+          "x1": 0,
+          "y1": 0,
+          "x2": "chamferRadius",
+          "y2": 0
+        },
+        {
+          "type": "line",
+          "id": "tube_2",
+          "x1": "chamferRadius",
+          "y1": 0,
+          "x2": "bodyRadius",
+          "y2": "chamfer"
+        },
+        {
+          "type": "line",
+          "id": "tube_3",
+          "x1": "bodyRadius",
+          "y1": "chamfer",
+          "x2": "bodyRadius",
+          "y2": "shoulderHeight"
+        },
+        {
+          "type": "line",
+          "id": "tube_4",
+          "x1": "bodyRadius",
+          "y1": "shoulderHeight",
+          "x2": "neckRadius",
+          "y2": "shoulderHeight"
+        },
+        {
+          "type": "line",
+          "id": "tube_5",
+          "x1": "neckRadius",
+          "y1": "shoulderHeight",
+          "x2": "neckRadius",
+          "y2": "rimHeight"
+        },
+        {
+          "type": "line",
+          "id": "tube_6",
+          "x1": "neckRadius",
+          "y1": "rimHeight",
+          "x2": "innerRadius",
+          "y2": "rimHeight"
+        },
+        {
+          "type": "line",
+          "id": "tube_7",
+          "x1": "innerRadius",
+          "y1": "rimHeight",
+          "x2": "innerRadius",
+          "y2": "wall"
+        },
+        {
+          "type": "line",
+          "id": "tube_8",
+          "x1": "innerRadius",
+          "y1": "wall",
+          "x2": 0,
+          "y2": "wall"
+        },
+        {
+          "type": "line",
+          "id": "tube_9",
+          "x1": 0,
+          "y1": "wall",
+          "x2": 0,
+          "y2": 0
+        }
+      ]
+    },
+    {
+      "id": "tube",
+      "type": "revolve",
+      "name": "Tube",
+      "sketch": "tubeProfile",
+      "axis": "Z",
+      "angle": 360,
+      "operation": "new"
+    },
+    {
+      "id": "grooveProfile",
+      "type": "sketch",
+      "name": "Tube thread profile",
+      "plane": "XZ",
+      "entities": [
+        {
+          "type": "line",
+          "id": "groove_1",
+          "x1": "grooveOuter",
+          "y1": "grooveLow",
+          "x2": "grooveOuter",
+          "y2": "grooveTop"
+        },
+        {
+          "type": "line",
+          "id": "groove_2",
+          "x1": "grooveOuter",
+          "y1": "grooveTop",
+          "x2": "grooveBottom",
+          "y2": "grooveStart"
+        },
+        {
+          "type": "line",
+          "id": "groove_3",
+          "x1": "grooveBottom",
+          "y1": "grooveStart",
+          "x2": "grooveOuter",
+          "y2": "grooveLow"
+        }
+      ]
+    },
+    {
+      "id": "groove",
+      "type": "revolve",
+      "name": "Tube thread",
+      "sketch": "grooveProfile",
+      "axis": "Z",
+      "angle": 2160,
+      "pitch": 2,
+      "operation": "cut",
+      "targets": [
+        "body1"
+      ]
+    },
+    {
+      "id": "capProfile",
+      "type": "sketch",
+      "name": "Cap profile",
+      "plane": "XZ",
+      "entities": [
+        {
+          "type": "line",
+          "id": "cap_1",
+          "x1": 0,
+          "y1": 0,
+          "x2": "chamferRadius",
+          "y2": 0
+        },
+        {
+          "type": "line",
+          "id": "cap_2",
+          "x1": "chamferRadius",
+          "y1": 0,
+          "x2": "bodyRadius",
+          "y2": "chamfer"
+        },
+        {
+          "type": "line",
+          "id": "cap_3",
+          "x1": "bodyRadius",
+          "y1": "chamfer",
+          "x2": "bodyRadius",
+          "y2": "capHeight"
+        },
+        {
+          "type": "line",
+          "id": "cap_4",
+          "x1": "bodyRadius",
+          "y1": "capHeight",
+          "x2": "reliefRadius",
+          "y2": "capHeight"
+        },
+        {
+          "type": "line",
+          "id": "cap_5",
+          "x1": "reliefRadius",
+          "y1": "capHeight",
+          "x2": "reliefRadius",
+          "y2": "ledgeHeight"
+        },
+        {
+          "type": "line",
+          "id": "cap_6",
+          "x1": "reliefRadius",
+          "y1": "ledgeHeight",
+          "x2": "crestRadius",
+          "y2": "ledgeHeight"
+        },
+        {
+          "type": "line",
+          "id": "cap_7",
+          "x1": "crestRadius",
+          "y1": "ledgeHeight",
+          "x2": "crestRadius",
+          "y2": "wall"
+        },
+        {
+          "type": "line",
+          "id": "cap_8",
+          "x1": "crestRadius",
+          "y1": "wall",
+          "x2": 0,
+          "y2": "wall"
+        },
+        {
+          "type": "line",
+          "id": "cap_9",
+          "x1": 0,
+          "y1": "wall",
+          "x2": 0,
+          "y2": 0
+        }
+      ]
+    },
+    {
+      "id": "cap",
+      "type": "revolve",
+      "name": "Cap",
+      "sketch": "capProfile",
+      "axis": "Z",
+      "angle": 360,
+      "operation": "new"
+    },
+    {
+      "id": "voidProfile",
+      "type": "sketch",
+      "name": "Cap thread profile",
+      "plane": "XZ",
+      "entities": [
+        {
+          "type": "line",
+          "id": "void_1",
+          "x1": "mouthRadius",
+          "y1": "mouthLow",
+          "x2": "mouthRadius",
+          "y2": "mouthTop"
+        },
+        {
+          "type": "line",
+          "id": "void_2",
+          "x1": "mouthRadius",
+          "y1": "mouthTop",
+          "x2": "rootRadius",
+          "y2": "rootTop"
+        },
+        {
+          "type": "line",
+          "id": "void_3",
+          "x1": "rootRadius",
+          "y1": "rootTop",
+          "x2": "rootRadius",
+          "y2": "rootLow"
+        },
+        {
+          "type": "line",
+          "id": "void_4",
+          "x1": "rootRadius",
+          "y1": "rootLow",
+          "x2": "mouthRadius",
+          "y2": "mouthLow"
+        }
+      ]
+    },
+    {
+      "id": "capThread",
+      "type": "revolve",
+      "name": "Cap thread",
+      "sketch": "voidProfile",
+      "axis": "Z",
+      "angle": 2880,
+      "pitch": 2,
+      "operation": "cut",
+      "targets": [
+        "body2"
+      ]
+    },
+    {
+      "id": "place",
+      "type": "move",
+      "name": "Lay out for printing",
+      "dx": 38.1,
+      "bodies": [
+        "body2"
+      ],
+      "activeWhen": 1
+    },
+    {
+      "id": "screw",
+      "type": "move",
+      "name": "Screw on",
+      "dz": 47.175,
+      "rx": 180,
+      "rz": 112.78702447759088,
+      "bodies": [
+        "body2"
+      ],
+      "activeWhen": 0
+    }
+  ],
+  "bodyIds": {
+    "tube:0": "body1",
+    "cap:0": "body2"
+  },
+  "version": 10
+}

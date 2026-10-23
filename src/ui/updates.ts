@@ -1,6 +1,7 @@
 // In-app updates via tauri-plugin-updater from the rolling release's latest.json. The Rust `updates_supported` command
 // gates out deb, rpm, Flatpak and browser dev, where the updater cannot replace the install.
 
+import { PRODUCT_NAME, versionLabel } from "../app/channel";
 import { choose } from "./choice";
 import { toast } from "./toast";
 
@@ -18,12 +19,13 @@ async function updatesSupported(): Promise<boolean> {
 }
 
 /** the packaged app's version ("dev" in a plain-browser session). CI stamps
- *  packaged beta builds 1.0.<run>; local builds carry tauri.conf.json's 1.0.0. */
+ *  packaged builds 1.0.<run>, shown as dev-<run> on the development channel; local builds carry tauri.conf.json's
+ *  1.0.0. */
 export async function appVersion(): Promise<string> {
   if (!isTauri()) return "dev";
   try {
     const { getVersion } = await import("@tauri-apps/api/app");
-    return await getVersion();
+    return versionLabel(await getVersion());
   } catch {
     return "unknown";
   }
@@ -32,7 +34,7 @@ export async function appVersion(): Promise<string> {
 /** Help → About: the one place to read off which version is running. */
 export async function showAbout(): Promise<void> {
   const { listModal } = await import("./choice");
-  await listModal("About FundaCAD", [`Version ${await appVersion()}`]);
+  await listModal(`About ${PRODUCT_NAME}`, [`Version ${await appVersion()}`]);
 }
 
 /** "sketch": an open sketch holds edits Save cannot write; "stop": the user kept the unsaved work. */
@@ -117,18 +119,18 @@ export async function checkForUpdates(interactive: boolean, beforeInstall: Befor
     return;
   }
   if (!update) {
-    if (interactive) toast(`FundaCAD ${await appVersion()} is up to date.`);
+    if (interactive) toast(`${PRODUCT_NAME} ${await appVersion()} is up to date.`);
     return;
   }
   const run = updateAction(update, beforeInstall);
   if (!interactive) {
-    toast(`FundaCAD ${update.version} is available.`, {
+    toast(`${PRODUCT_NAME} ${versionLabel(update.version)} is available.`, {
       timeout: 30000,
       action: { label: RESTART_LABEL, onClick: () => void run() },
     });
     return;
   }
-  const pick = await choose(`Update ${update.version} is available`, [
+  const pick = await choose(`Update ${versionLabel(update.version)} is available`, [
     { value: "install", label: RESTART_LABEL },
     { value: "later", label: "Later" },
   ]);

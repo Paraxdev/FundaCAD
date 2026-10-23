@@ -357,6 +357,26 @@ jobs:
           if-no-files-found: error
           path: dist-plugins/plugin-*.zip
 
+      # The development build is its own product on Windows and macOS, FundaCAD
+      # Dev with its own identifier, binary, Start menu entry and install folder,
+      # so it installs beside the beta (tauri.dev-product.conf.json). Linux keeps
+      # the beta's names: its .deb, Flatpak and container checks are keyed on
+      # dev.fundacad.app and usr/bin/fundacad, and two .debs cannot both own the
+      # udev rule and the MIME file anyway. It shows dev-<run> there too.
+      - name: Pick the product the build is named as
+        shell: bash
+        run: |
+          set -euo pipefail
+          args="--config src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json"
+          bin=fundacad
+          product=$(node -p "require('./src-tauri/tauri.conf.json').productName")
+          if [ "${{ needs.channel.outputs.config }}" = dev ] && [ "$RUNNER_OS" != Linux ]; then
+            args="$args --config src-tauri/tauri.dev-product.conf.json"
+            bin=$(node -p "require('./src-tauri/tauri.dev-product.conf.json').mainBinaryName")
+            product=$(node -p "require('./src-tauri/tauri.dev-product.conf.json').productName")
+          fi
+          printf '%s=%s\n' TAURI_CONFIG_ARGS "$args" FUNDACAD_BIN "$bin" FUNDACAD_PRODUCT "$product" | tee -a "$GITHUB_ENV"
+
       # --- build + bundle. The app also exposes the MCP server through its
       #     --mcp mode. ---
       - name: Build + bundle Tauri app
@@ -371,7 +391,7 @@ jobs:
           NO_STRIP: true
           VITE_FUNDACAD_RELEASE: ${{ needs.channel.outputs.tag || 'beta' }}
         with:
-          args: --verbose --config src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json
+          args: --verbose ${{ env.TAURI_CONFIG_ARGS }}
 
       # Checked against the bytes rather than the arguments: `engine_attach` is
       # the IPC command the webview reaches the engine through
@@ -381,7 +401,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bin=$(find src-tauri/target/release -maxdepth 1 -type f \( -name fundacad -o -name fundacad.exe \) | head -1)
+          bin=$(find src-tauri/target/release -maxdepth 1 -type f \( -name "$FUNDACAD_BIN" -o -name "$FUNDACAD_BIN.exe" \) | head -1)
           [ -n "$bin" ] || { echo "::error::no fundacad binary was produced"; exit 1; }
           node -e "
             const fs = require('fs');
@@ -493,11 +513,43 @@ jobs:
         run: |
           set -euo pipefail
           case "$RUNNER_OS" in
-            Windows) bin=src-tauri/target/release/fundacad.exe py=python ;;
-            macOS) bin=$(find src-tauri/target/release/bundle/macos -ipath '*.app/Contents/MacOS/fundacad' | head -1) py=python3 ;;
+            Windows) bin=src-tauri/target/release/$FUNDACAD_BIN.exe py=python ;;
+            macOS) bin=$(find src-tauri/target/release/bundle/macos -ipath "*.app/Contents/MacOS/$FUNDACAD_BIN" | head -1) py=python3 ;;
           esac
           if [ -z "${bin:-}" ] || [ ! -f "$bin" ]; then echo "::error::no executable to start"; exit 1; fi
           "$py" scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-exe" -- "$bin" --mcp
+
+      # The updater runs the installer as `/P /R /UPDATE`, and from the portable
+      # build that is the first install, which has to make the Start menu entry
+      # (src-tauri/windows/installer-hooks.nsh). An update over an install whose
+      # entry was removed leaves it removed. /R is left out, it would start the
+      # app. Not a gate until it has run green on the runner.
+      - name: Install as the updater does and find the Start menu entry
+        if: matrix.platform == 'windows-latest'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem src-tauri/target/release/bundle/nsis -Filter '*-setup.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'no NSIS installer was produced' }
+          if (-not $setup.Name.StartsWith("$($env:FUNDACAD_PRODUCT)_")) { throw "$($setup.Name) is not named after $env:FUNDACAD_PRODUCT" }
+          $lnk = Join-Path ([Environment]::GetFolderPath('Programs')) "$($env:FUNDACAD_PRODUCT).lnk"
+          $exe = Join-Path $env:LOCALAPPDATA "$($env:FUNDACAD_PRODUCT)\$($env:FUNDACAD_BIN).exe"
+          if ((Test-Path $lnk) -or (Test-Path $exe)) { throw "$env:FUNDACAD_PRODUCT is already installed on this runner" }
+          $run = { (Start-Process $setup.FullName -ArgumentList '/P', '/UPDATE' -Wait -PassThru).ExitCode }
+          $code = & $run
+          if ($code -ne 0) { throw "the first install exited with $code" }
+          if (-not (Test-Path $exe)) { throw "the first install left no $exe" }
+          if (-not (Test-Path $lnk)) { throw "the first install in update mode made no Start menu entry at $lnk" }
+          $target = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk).TargetPath
+          if ($target -ne $exe) { throw "the Start menu entry starts $target, not $exe" }
+          Write-Host "first install: $lnk -> $target"
+          Remove-Item $lnk
+          $code = & $run
+          if ($code -ne 0) { throw "the update exited with $code" }
+          if (Test-Path $lnk) { throw 'an update over an install brought back the Start menu entry its user removed' }
+          Write-Host 'update over the install: the removed entry stayed removed'
 
       # A week, the cap tests/build/artifactRetention.test.ts holds, so the
       # beta release can be republished from them by hand. A leg that failed
@@ -520,6 +572,7 @@ jobs:
             src-tauri/target/release/bundle/**/*.exe
             src-tauri/target/release/bundle/**/*.app.tar.gz
             src-tauri/target/release/fundacad.exe
+            src-tauri/target/release/fundacad-dev.exe
             src-tauri/target/release/bundle/**/*.sig
 
   # The Linux build as a Flatpak, repackaged from the .deb above. The GNOME
@@ -723,7 +776,7 @@ jobs:
           put '*.flatpak'     FundaCAD-linux-x86_64.flatpak
           put '*setup.exe'    FundaCAD-windows-x64-setup.exe
           put '*.msi'         FundaCAD-windows-x64.msi
-          put 'fundacad.exe'  FundaCAD-windows-x64-portable.exe
+          put 'fundacad*.exe' FundaCAD-windows-x64-portable.exe
           put '*.dmg'         FundaCAD-macos-arm64.dmg
           put '*.app.tar.gz'  FundaCAD-macos-arm64.app.tar.gz
           find dist -type f -name 'plugin-*.zip' -exec cp {} release/ \;
@@ -884,8 +937,10 @@ jobs:
             } >> notes.md
           fi
 
-          printf '\n---\n\nUnsigned: Windows SmartScreen needs "More info", then "Run anyway"; macOS may call the app damaged, which `xattr -dr com.apple.quarantine /Applications/FundaCAD.app` clears. [Install notes](https://github.com/%s#install).\n' \
-            "$R" >> notes.md
+          app=FundaCAD
+          [ "$RELEASE" != development ] || app='FundaCAD Dev'
+          printf '\n---\n\nUnsigned: Windows SmartScreen needs "More info", then "Run anyway"; macOS may call the app damaged, which `xattr -dr com.apple.quarantine "/Applications/%s.app"` clears. [Install notes](https://github.com/%s#install).\n' \
+            "$app" "$R" >> notes.md
           printf '\nThis build carries no Python runtime, so it is a fraction of the size of the Python engine builds.\n' >> notes.md
           if [ -n "$partial" ]; then
             printf '\nNot rebuilt this time, so any copy here is from an earlier build: %s.\n' "$partial" >> notes.md

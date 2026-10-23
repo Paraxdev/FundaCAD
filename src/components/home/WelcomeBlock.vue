@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { MANUAL_URL, openExternal } from "../../ui/welcome";
+import { MANUAL_URL, closeWelcome, openExternal } from "../../ui/welcome";
+
+const emit = defineEmits<{ close: [] }>();
+function hide() {
+  closeWelcome();
+  emit("close");
+}
 </script>
 
 <template>
@@ -8,8 +14,11 @@ import { MANUAL_URL, openExternal } from "../../ui/welcome";
     <p class="home-welcome-text">
       Open an example to see how it is built, or start with Blank. Open… takes your own STEP, STL and 3MF files too.
     </p>
-    <button type="button" class="btn home-welcome-manual" @click="void openExternal(MANUAL_URL)">
-      Read the manual
-    </button>
+    <div class="home-welcome-acts">
+      <button type="button" class="btn home-welcome-manual" @click="void openExternal(MANUAL_URL)">
+        Read the manual
+      </button>
+      <button type="button" class="btn home-welcome-hide" @click="hide">Hide</button>
+    </div>
   </section>
 </template>

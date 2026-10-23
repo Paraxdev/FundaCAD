@@ -58,6 +58,8 @@ interface Opts {
   features?: object[];
   /** what the engine is busy with: an import, or a rebuild */
   busy?: "import" | "rebuild";
+  /** every running op, oldest first, when more than the one `busy` names */
+  ops?: ("import" | "rebuild")[];
 }
 
 function mountBar(o: Opts = {}) {
@@ -100,7 +102,16 @@ function mountBar(o: Opts = {}) {
       docVersion: ref(0),
       buildVersion: ref(0),
       editPreviewVersion: ref(0),
-      busy: ref({ active: !!o.busy, waiting: false, rebuild: o.busy === "rebuild" }),
+      busy: ref({ active: !!o.busy, waiting: null, rebuild: o.busy === "rebuild" }),
+      ops: ref(
+        (o.ops ?? (o.busy ? [o.busy] : [])).map((kind, i) => ({
+          key: i + 1,
+          label: kind === "import" ? "Importing sv08.step" : "Rebuilding",
+          stage: null,
+          pct: null,
+          rebuild: kind === "rebuild",
+        })),
+      ),
     },
     tools,
     sketch,
@@ -135,6 +146,10 @@ function mountBar(o: Opts = {}) {
       isSuppressed: (id: string) => !!o.suppressed?.includes(id),
       rollbackIndex: 6,
       buildState: { result: null, building: false, errorFeatureId: null },
+      cancelRunningOp: (key: number) => {
+        log.push(`cancelOp:${key}`);
+        return Promise.resolve(true);
+      },
     },
   } as unknown as Engine;
   const sel = createSelection(e);
@@ -322,5 +337,28 @@ describe("History's empty line", () => {
   it("stays away while the first import runs, and shows during an empty rebuild", () => {
     expect(mountBar({ features: [], busy: "import" }).w.find(".timeline-empty").exists()).toBe(false);
     expect(mountBar({ features: [], busy: "rebuild" }).w.find(".timeline-empty").exists()).toBe(true);
+  });
+});
+
+// The SV08 read for minutes with no History step, and an emptied History said "remeshing…" for another document's op.
+describe("History's rows for running ops", () => {
+  it("lists an import from the moment it starts, under any rebuild, and its Cancel stops only it", async () => {
+    const m = mountBar({ features: [], busy: "rebuild", ops: ["import", "rebuild"] });
+    const rows = m.w.findAll(".timeline-node.running");
+    expect({
+      rows: rows.map((r) => r.find(".t-build").text()),
+      empty: m.w.find(".timeline-empty").exists(),
+      chip: m.w.find(".timeline-node.building").exists(),
+    }).toEqual({ rows: ["Importing sv08.step"], empty: false, chip: false });
+    await rows[0]!.find(".t-op-cancel").trigger("click");
+    expect(m.log).toEqual(["cancelOp:1"]);
+  });
+
+  it("shows no row and the empty line while only the document's own rebuild runs", () => {
+    const m = mountBar({ features: [], busy: "rebuild" });
+    expect({
+      rows: m.w.findAll(".timeline-node.running").length,
+      empty: m.w.find(".timeline-empty").exists(),
+    }).toEqual({ rows: 0, empty: true });
   });
 });
