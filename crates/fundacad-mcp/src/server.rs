@@ -872,7 +872,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "doc_get",
-        description = "The whole document as JSON: parameters, the feature timeline in order, and `bodyIds`, the record that keeps every body's id. Pass all of it back to `doc_set` and the same ids come out.",
+        description = "The document's geometry as JSON: parameters, the feature timeline in order, and `bodyIds`, the record that keeps every body's id. Pass all of it back to `doc_set` and the same ids come out; the parts it leaves out (stress study, environment, materials and the like) stay in the document.",
         input_schema = crate::tools::doc_get(),
         annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -894,7 +894,7 @@ note: left out of the file, because this build cannot read them and a .funda has
 
     #[tool(
         name = "doc_set",
-        description = "Replace the whole document with the given JSON. For wholesale rewrites; prefer the feature_* tools for edits. Keep the `bodyIds` that `doc_get` gave; without it the document is numbered as a new one, where a join keeps the id of the body it merges into.",
+        description = "Replace what `doc_get` gives (features, parameters, paramDefs, bodyIds, version) with the given JSON. For wholesale rewrites; prefer the feature_* tools for edits. Every other part of the open document (stress study, environment, materials, palette, overlays, reference images) stays unless the JSON names it, and a key named with null is cleared. Keep the `bodyIds` that `doc_get` gave; without it the document is numbered as a new one, where a join keeps the id of the body it merges into.",
         input_schema = crate::tools::doc_set(),
         annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
@@ -922,6 +922,7 @@ note: left out of the file, because this build cannot read them and a .funda has
         }
         let mut st = self.state.lock().await;
         model::forget_stale_joins(&st.doc, &mut next);
+        model::keep_unnamed_keys(&st.doc, &mut next);
         st.doc = next;
         model::fill_defaults(&mut st.doc);
         fundacad_core::body_ids::ensure_map(&mut st.doc);
