@@ -32,6 +32,9 @@ pub struct LiveSession {
     pending: Vec<Map<String, Value>>,
     /// Proposals whose base the host moved past before collecting them, shown to guests beside the host's refusals.
     refused: Vec<Value>,
+    /// Proposal ids are `p<nonce>-<n>` and `n` survives a release: the app keeps the ids it took or refused across
+    /// a release and an engine restart, and an agent waiting on a new id must never match one of those.
+    nonce: String,
     next_proposal: u64,
     /// What the host's guide shows, stored as the host sent it.
     guide_state: Value,
@@ -62,6 +65,16 @@ fn name_text(v: &Value) -> String {
     }
 }
 
+/// `RandomState` keys are random per process and step per call, the clock and pid are mixed in on top.
+fn session_nonce() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    h.write_u128(now);
+    h.write_u32(std::process::id());
+    format!("{:010x}", h.finish() & 0xff_ffff_ffff)
+}
+
 impl LiveSession {
     pub fn new(clock: Clock) -> LiveSession {
         LiveSession {
@@ -75,6 +88,7 @@ impl LiveSession {
             guests: HashMap::new(),
             pending: Vec::new(),
             refused: Vec::new(),
+            nonce: session_nonce(),
             next_proposal: 0,
             guide_state: Value::Null,
             guide_step: None,
@@ -99,7 +113,6 @@ impl LiveSession {
         self.guests.clear();
         self.pending.clear();
         self.refused.clear();
-        self.next_proposal = 0;
         self.reset_guide();
     }
 
@@ -272,7 +285,7 @@ impl LiveSession {
                 "message": "the app has not collected the last edits yet"});
         }
         self.next_proposal += 1;
-        let pid = format!("p{}", self.next_proposal);
+        let pid = format!("p{}-{}", self.nonce, self.next_proposal);
         let note = note
             .filter(|n| truthy(Some(n)))
             .map(|n| Value::String(name_text(n).chars().take(MAX_NOTE).collect()))
