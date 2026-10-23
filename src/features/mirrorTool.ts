@@ -146,7 +146,7 @@ export class MirrorTool {
   }
 
   private bodyLabel(id: string): string {
-    const built = this.store.buildState.result?.bodies.find((b) => b.id === id);
+    const built = this.store.buildState.result?.bodies?.find((b) => b.id === id);
     return this.store.bodyName(id) ?? built?.name ?? id;
   }
 
