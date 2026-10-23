@@ -11,7 +11,7 @@ import {
 } from "fundacad";
 import { Icon } from "fundacad/ui";
 import { setupOpen } from "./state";
-import { tuneGroups, type TuneRow } from "./view";
+import { nameColumnChars, rowTooltip, tuneGroups, type TuneRow } from "./view";
 
 const store = useEngine().store;
 const browser = useBrowserStore();
@@ -52,7 +52,17 @@ function pick(id: string) {
 
 const num = (e: Event) => Number((e.target as HTMLInputElement).value);
 const rowStyle = { display: "flex", alignItems: "center", gap: "6px", paddingRight: "8px" };
-const nameStyle = { flex: "0 0 38%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+// The name takes its longest name's width between 38% and 62% of the row, the value field shrinks to the rest.
+const nameWidth = computed(() => `${nameColumnChars(groups.value.flatMap((g) => g.rows)) + 1}ch`);
+const nameStyle = computed(() => ({
+  flex: "0 0 auto",
+  width: nameWidth.value,
+  minWidth: "38%",
+  maxWidth: "62%",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+}));
 const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit" };
 </script>
 
@@ -124,7 +134,7 @@ const fieldStyle = { flex: "1", minWidth: "0", font: "inherit", color: "inherit"
             class="feature-row tree-child xp-row"
             :data-param="row.name"
             :style="{ ...rowStyle, paddingLeft: g.id === null ? undefined : '34px' }"
-            :title="row.problem ? `${row.name}: ${row.problem}` : (row.def.comment ?? row.name)"
+            :title="rowTooltip(row)"
           >
             <span :style="{ ...nameStyle, color: row.problem ? '#e24a3b' : undefined }">{{ row.name }}</span>
 
