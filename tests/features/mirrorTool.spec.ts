@@ -326,6 +326,19 @@ describe("picking", () => {
     expect(summary()!.values[1]).toBe("Nothing picked");
   });
 
+  it("removes a body or the plane from its list", () => {
+    const r = rig();
+    r.tool.start(["body1"], r.done);
+    panel()!.onPlane("XY");
+    expect(panel()!.fields.map((f) => f.items)).toEqual([["body1"], ["XY plane"]]);
+    panel()!.onRemove("line", 0);
+    expect(summary()!.values[1]).toBe("Nothing picked");
+    expect(r.log.ghost).toBeNull();
+    panel()!.onRemove("objects", 0);
+    expect(summary()!.values[0]).toBe("Nothing picked");
+    expect(r.log.selected).toEqual([]);
+  });
+
   it("hover lights a body only while Objects takes the click", () => {
     const r = rig();
     r.tool.start([], r.done);

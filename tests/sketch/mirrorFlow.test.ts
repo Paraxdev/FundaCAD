@@ -367,6 +367,22 @@ describe("MirrorFlow commit and cancel", () => {
   });
 });
 
+describe("MirrorFlow list removal", () => {
+  it("removes one object or the line, keeps the active list and redraws the preview", () => {
+    const r = rig(["c1", "l1"]);
+    r.flow.begin();
+    r.flow.click(ON.ax, false);
+    expect(r.panel()!.fields[0].items).toHaveLength(2);
+    r.panel()!.onRemove("objects", 0);
+    expect(r.panel()!.fields[0].items).toHaveLength(1);
+    expect(r.panel()!.active).toBe("objects");
+    expect(r.selected.size).toBe(1);
+    r.panel()!.onRemove("line", 0);
+    expect(r.panel()!.fields[1]).toMatchObject({ items: [], filled: false });
+    expect(r.panel()!.ready).toBe(false);
+  });
+});
+
 describe("MirrorFlow origin axes", () => {
   it("takes the X axis and the Y axis as the mirror line in the line field", () => {
     const x = rig(["c1"]);

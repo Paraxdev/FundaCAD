@@ -23,7 +23,8 @@ export interface TextReq {
 export interface MirrorFieldView {
   key: MirrorFieldKey;
   label: string;
-  icon: string;
+  /** One label per picked item, in pick order. */
+  items: readonly string[];
   value: string;
   filled: boolean;
 }
@@ -39,6 +40,7 @@ export interface MirrorPanelView {
   ready: boolean;
   onActivate(k: MirrorFieldKey): void;
   onClear(k: MirrorFieldKey): void;
+  onRemove(k: MirrorFieldKey, i: number): void;
   onPlane(p: string): void;
   onCommit(): void;
   onCancel(): void;

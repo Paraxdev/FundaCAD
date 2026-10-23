@@ -96,15 +96,20 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
     page.evaluate(() => {
       const panel = document.querySelector(".mirror-panel");
       const field = (k) => {
-        const row = panel && panel.querySelector(`.mirror-field[data-field="${k}"]`);
+        const row = panel && panel.querySelector(`.tgt-section[data-field="${k}"]`);
         if (!row) return null;
         return {
-          value: row.querySelector(".mirror-field-v").textContent.trim(),
-          active: row.classList.contains("active"),
-          clearable: !row.querySelector(".float-card-close").disabled,
+          value: [
+            row.querySelectorAll(".tgt-item").length,
+            ...[...row.querySelectorAll(".tgt-label")].map((l) => l.textContent.trim()),
+          ]
+            .join(" ")
+            .trim(),
+          active: row.classList.contains("tgt-active"),
+          clearable: !row.querySelector(".tgt-clear").disabled,
         };
       };
-      const apply = panel && panel.querySelector(".mirror-actions .btn-primary");
+      const apply = panel && panel.querySelector(".tgt-done");
       const g = window.viewport.ghosts && window.viewport.ghosts.ghosts;
       return {
         running: window.__fundacad.mirror.active,

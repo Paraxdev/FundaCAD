@@ -22,6 +22,7 @@ import {
   nextPick,
   pickLine,
   pickObject,
+  removeAt,
   startFields,
   switchField,
   type MirrorFieldKey,
@@ -108,6 +109,10 @@ export class MirrorTool {
 
   clear(k: MirrorFieldKey): void {
     if (this.active) this.set(clearField(this.fields, k));
+  }
+
+  remove(k: MirrorFieldKey, i: number): void {
+    if (this.active) this.set(removeAt(this.fields, k, i));
   }
 
   setBasePlane(p: Plane3): void {
@@ -254,11 +259,17 @@ export class MirrorTool {
     showMirrorPanel({
       id: this.panelId,
       fields: [
-        { key: "objects", label: "Objects", icon: "select-all", value: objects, filled: f.objects.length > 0 },
+        {
+          key: "objects",
+          label: "Objects",
+          items: [...f.objects],
+          value: objects,
+          filled: f.objects.length > 0,
+        },
         {
           key: "line",
           label: "Mirror plane",
-          icon: "plane",
+          items: f.line ? [this.planeLabel(f.line)] : [],
           value: this.planeLabel(f.line),
           filled: f.line !== null,
         },
@@ -269,6 +280,7 @@ export class MirrorTool {
       ready: isReady(f),
       onActivate: (k) => this.activate(k),
       onClear: (k) => this.clear(k),
+      onRemove: (k, i) => this.remove(k, i),
       onPlane: (p) => this.setBasePlane(p as Plane3),
       onCommit: () => void this.commit(),
       onCancel: () => this.cancel(),

@@ -99,16 +99,21 @@ function reflect(x, y) {
       const s = window.sketch;
       const panel = document.querySelector(".mirror-panel");
       const field = (k) => {
-        const row = panel && panel.querySelector(`.mirror-field[data-field="${k}"]`);
+        const row = panel && panel.querySelector(`.tgt-section[data-field="${k}"]`);
         if (!row) return null;
         return {
-          value: row.querySelector(".mirror-field-v").textContent.trim(),
-          active: row.classList.contains("active"),
-          pressed: row.querySelector("button").getAttribute("aria-pressed"),
-          clearable: !row.querySelector(".float-card-close").disabled,
+          value: [
+            row.querySelectorAll(".tgt-item").length,
+            ...[...row.querySelectorAll(".tgt-label")].map((l) => l.textContent.trim()),
+          ]
+            .join(" ")
+            .trim(),
+          active: row.classList.contains("tgt-active"),
+          pressed: String(row.classList.contains("tgt-active")),
+          clearable: !row.querySelector(".tgt-clear").disabled,
         };
       };
-      const apply = panel && panel.querySelector(".mirror-actions .btn-primary");
+      const apply = panel && panel.querySelector(".tgt-done");
       return {
         tool: s.tool,
         ids: s.entities.map((e) => e.id),
@@ -149,7 +154,7 @@ function reflect(x, y) {
   );
   check("Mirror is disabled while the line is empty", !st.ready && st.line && !st.line.clearable);
   const look = await page.evaluate(() => {
-    const b = document.querySelector(".mirror-panel .mirror-actions .btn-primary");
+    const b = document.querySelector(".mirror-panel .tgt-done");
     return { opacity: Number(getComputedStyle(b).opacity), title: b.title };
   });
   check(
@@ -255,11 +260,11 @@ function reflect(x, y) {
   await page.waitForTimeout(200);
   st = await state();
   check("Enter moves on to the line", st.line.active && !st.objects.active && st.ids.length === 4);
-  await page.click('.mirror-field[data-field="objects"] button');
+  await page.click('.tgt-section[data-field="objects"] .tgt-field');
   await page.waitForTimeout(200);
   st = await state();
   check("the objects icon makes Objects active", st.objects.active && !st.line.active, JSON.stringify(st.objects));
-  await page.click('.mirror-field[data-field="line"] button');
+  await page.click('.tgt-section[data-field="line"] .tgt-field');
   await page.waitForTimeout(200);
   st = await state();
   check("the line icon makes the line field active", st.line.active && !st.objects.active, JSON.stringify(st.line));
@@ -284,7 +289,7 @@ function reflect(x, y) {
   await clickAt(20.5, -1.25, ["Shift"]);
   await page.evaluate(() => window.sketch.setTool("mirror"));
   await page.waitForTimeout(300);
-  await page.click('.mirror-panel .mirror-field[data-field="objects"] .mirror-field-k');
+  await page.click('.mirror-panel .tgt-section[data-field="objects"] .tgt-field');
   await page.waitForTimeout(200);
   st = await state();
   check(
@@ -316,7 +321,7 @@ function reflect(x, y) {
   await page.keyboard.press("Enter");
   await page.waitForTimeout(200);
   await clickAt(6.5, 2.125);
-  await page.click(".mirror-panel .mirror-actions .btn-primary");
+  await page.click(".mirror-panel .tgt-done");
   await page.waitForTimeout(500);
   st = await state();
   const one = await added();
