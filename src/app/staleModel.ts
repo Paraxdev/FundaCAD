@@ -55,7 +55,7 @@ export function watchOutOfDate(store: Watched, mark: (on: boolean) => void): () 
 
 // A slow rebuild of the current model: it stays drawn and pickable, only a light cue says a newer one is coming.
 export function watchSlowBuild(
-  store: Pick<DocumentStore, "onBuild" | "hasPreview">,
+  store: Pick<DocumentStore, "onBuild" | "onPreview" | "buildState" | "hasPreview">,
   show: (on: boolean) => void,
 ): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -69,8 +69,8 @@ export function watchSlowBuild(
     if (timer !== null) clearTimeout(timer);
     timer = null;
   };
-  const off = store.onBuild((b) => {
-    if (!b.building || store.hasPreview) {
+  const check = () => {
+    if (!store.buildState.building || store.hasPreview) {
       stopTimer();
       set(false);
       return;
@@ -78,12 +78,13 @@ export function watchSlowBuild(
     if (shown || timer !== null) return;
     timer = setTimeout(() => {
       timer = null;
-      set(true);
+      if (store.buildState.building && !store.hasPreview) set(true);
     }, OUT_OF_DATE_GRACE_MS);
-  });
+  };
+  const offs = [store.onBuild(check), store.onPreview(check)];
   return () => {
     stopTimer();
-    off();
+    for (const off of offs) off();
     set(false);
   };
 }
