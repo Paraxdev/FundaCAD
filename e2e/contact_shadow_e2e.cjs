@@ -40,7 +40,7 @@ const check = (name, ok, detail) => {
     const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
     page.on("pageerror", (e) => {
       console.error("PAGE ERROR:", e.message);
-      process.exitCode = 1;
+      failures++;
     });
     await page.addInitScript(
       ([port, t]) => {
