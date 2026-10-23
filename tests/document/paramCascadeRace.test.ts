@@ -190,6 +190,60 @@ describe("parameter cascade racing a document change", () => {
     expect(state()).toEqual({ path: "D:/parts/bracket.funda", ...doc() });
   });
 
+  const lidDoc = (): CadDocument => ({
+    parameters: { t: 2.75 },
+    features: [sketch(-18.5, 9.25, 3.5, 3.5), box("lid", 31.5)],
+  });
+  const lidState = { path: null, parameters: { t: 2.75 }, paramDefs: { t: { expr: "2.75", value: 2.75, unit: "mm" } } };
+
+  it.each([
+    ["a second r edit", (s: DocumentStore) => s.setParamExpr("r", "8.25")],
+    ["an added parameter", (s: DocumentStore) => s.addParam("q", "3.5")],
+  ])("drops %s queued behind the solving one when an untitled load lands, warning once", async (_, second) => {
+    const store = new DocumentStore(backend(), doc());
+    store.markSaved("D:/parts/bracket.funda");
+    const warnings: string[] = [];
+    store.onWarning = (m) => warnings.push(m);
+    heldSolver(store, (n) => n === 1 && store.loadDocument(lidDoc(), { replace: true, untitled: true }));
+    store.setParamExpr("r", "7.75");
+    second(store);
+    for (let i = 0; i < 6; i++) await ticks();
+    expect({
+      path: store.filePath,
+      parameters: store.document.parameters,
+      paramDefs: store.document.paramDefs,
+      features: store.document.features,
+    }).toEqual({ ...lidState, features: lidDoc().features });
+    expect(warnings.length).toBe(1);
+    expect(warnings[0]).toMatch(/parameter/i);
+  });
+
+  it("applies the change when an untitled load and its undo both land during the solve", async () => {
+    const store = new DocumentStore(backend(), doc());
+    store.markSaved("D:/parts/bracket.funda");
+    const warnings: string[] = [];
+    store.onWarning = (m) => warnings.push(m);
+    heldSolver(store, (n) => {
+      if (n !== 1) return;
+      store.loadDocument(lidDoc(), { replace: true, untitled: true });
+      store.undo();
+    });
+    store.setParamExpr("r", "8.25");
+    for (let i = 0; i < 6; i++) await ticks();
+    expect({
+      path: store.filePath,
+      parameters: store.document.parameters,
+      paramDefs: store.document.paramDefs,
+      features: store.document.features,
+    }).toEqual({
+      path: "D:/parts/bracket.funda",
+      parameters: { r: 8.25 },
+      paramDefs: userDefs(8.25, "8.25"),
+      features: [sketch(12.5, -7.25, 8.25, 8.25), box("b1", 9.75)],
+    });
+    expect(warnings).toEqual([]);
+  });
+
   // The same sketch and parameter as the bracket, moved, so a doc_set keeps the parameter's target.
   const incoming = (): CadDocument => ({ ...doc(), features: [sketch(-3.75, 21.5, 4.5, 4.5), box("lid-x", 30.5)] });
   it.each([

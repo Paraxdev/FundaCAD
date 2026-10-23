@@ -1173,10 +1173,13 @@ export class DocumentStore {
   private queueParamCommit(fn: (d: CadDocument) => void) {
     const st = this.st;
     st.paramPending++;
+    const owner = this.untitledDoc;
     st.paramChain = st.paramChain
       // Only the last of a burst rebuilds at once, the rest keep the debounce, so
       // a plugin setting ten parameters does not start and supersede nine builds.
-      .then(() => (st.session.alive ? st.session.step(this.commitWithCascade(fn, --st.paramPending === 0)) : undefined))
+      .then(() =>
+        st.session.alive ? st.session.step(this.commitWithCascade(fn, --st.paramPending === 0, owner)) : undefined,
+      )
       .catch((e) => {
         if (isSessionEnded(e)) return;
         console.error("param commit failed:", e);
@@ -1185,11 +1188,11 @@ export class DocumentStore {
   }
   // A doc edit landing during the solves (a doc_set, an import, a restore) would be overwritten by the
   // stale draft, so the cascade redoes on top of it; past 3 tries it lands unsolved rather than never.
-  // An assistant's doc_open or doc_new put another document in place, so the change is dropped with the old one.
-  private async commitWithCascade(fn: (d: CadDocument) => void, immediate: boolean): Promise<void> {
+  // An assistant's doc_open or doc_new since the edit was queued put another document in place, so the change is dropped.
+  private async commitWithCascade(fn: (d: CadDocument) => void, immediate: boolean, owner: number): Promise<void> {
     const st = this.st;
-    const swaps = this.untitledSwaps;
     for (let tries = 1; ; tries++) {
+      if (this.untitledDoc !== owner) return this.warnParamDropped(owner);
       const seen = this.docEdits;
       const draft = clone(this.doc);
       fn(draft);
@@ -1205,8 +1208,8 @@ export class DocumentStore {
           const solved = await this.solveConstrainedSketch(f, draft.parameters);
           if (solved) f.entities = solved;
         }
-      if (!st.session.alive || this.untitledSwaps !== swaps) return;
-      if (this.docEdits !== seen) continue;
+      if (!st.session.alive) return;
+      if (this.docEdits !== seen || this.untitledDoc !== owner) continue;
       this.mutate((d) => {
         d.parameters = draft.parameters;
         if (draft.paramDefs) d.paramDefs = draft.paramDefs;
@@ -2682,21 +2685,32 @@ export class DocumentStore {
     });
   }
   private untitledSwaps = 0;
+  // Which untitled load is on screen, put back by its undo, so an edit queued on a document knows it is still there.
+  private untitledDoc = 0;
+  private untitledSeq = 0;
+  private droppedFor = -1;
+  private warnParamDropped(owner: number) {
+    if (this.droppedFor === owner) return;
+    this.droppedFor = owner;
+    this.onWarning?.("A parameter change was dropped, another document replaced this one before it finished applying.");
+  }
   // Moves on an untitled load and on its undo and redo: a save begun before it holds the other document, so it must not
   // name the one on screen.
   get untitledSwapCount(): number {
     return this.untitledSwaps;
   }
   private dropPathUndoably() {
-    const was = { path: this.path, name: this.pathlessName };
-    const put = (path: string | null, name: string | null) => {
+    const was = { path: this.path, name: this.pathlessName, doc: this.untitledDoc };
+    const now = ++this.untitledSeq;
+    const put = (path: string | null, name: string | null, doc: number) => {
       this.untitledSwaps++;
+      this.untitledDoc = doc;
       this.path = path;
       this.pathlessName = name;
       this.emitMeta();
     };
-    put(null, null);
-    this.pushOverlayUndo({ undo: () => put(was.path, was.name), redo: () => put(null, null) });
+    put(null, null, now);
+    this.pushOverlayUndo({ undo: () => put(was.path, was.name, was.doc), redo: () => put(null, null, now) });
   }
   // A version is always the open document, even one sharing no feature with what is on screen.
   private loadAs(json: string, as: "open" | "edit" | "version") {
