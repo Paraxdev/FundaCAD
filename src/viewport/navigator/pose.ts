@@ -120,6 +120,27 @@ export interface Frame {
   height: number;
 }
 
+/** Pixels of the frame covered on each side, outside the free rect a fit centres in. */
+export interface Insets {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+export const NO_INSETS: Insets = { left: 0, right: 0, top: 0, bottom: 0 };
+
+/** The insets that leave a free rect with area, else none: an empty rect means the whole frame. */
+export function usableInsets(v: Frame, i: Insets | undefined): Insets {
+  if (!i) return NO_INSETS;
+  const l = Math.max(0, i.left);
+  const r = Math.max(0, i.right);
+  const t = Math.max(0, i.top);
+  const b = Math.max(0, i.bottom);
+  const ok = [l, r, t, b].every(Number.isFinite) && v.width - l - r > 0 && v.height - t - b > 0;
+  return ok ? { left: l, right: r, top: t, bottom: b } : NO_INSETS;
+}
+
 export function aspectOf(v: Frame): number {
   return v.width > 0 && v.height > 0 ? v.width / v.height : 1;
 }
