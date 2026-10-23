@@ -23,6 +23,7 @@ import type {
 } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
+import { BUILD_PHASE } from "./buildPhase";
 import { EngineTransport, type GeometryTransport } from "./transport";
 import { blake2b128Hex } from "../document/blake2b";
 
@@ -418,9 +419,9 @@ export interface GeometryBackend {
   // Call once before any op. Earlier ops queue in the outbox until it opens, so ordering is not critical.
   init(): Promise<void>;
   onStatus(fn: StatusListener): () => void;
-  /** Build progress about once a second: the feature index (-1 while tessellating), and while meshing the
-   *  per-body `meshed`/`meshTotal` (else -1), which keeps the bar moving through 136 s of meshing on big assemblies. */
-  onProgress?(fn: (feature: number, meshed: number, meshTotal: number) => void): () => void;
+  /** Build progress about once a second: the feature running (-1 outside the feature phase), while meshing the
+   *  `meshed`/`meshTotal` bodies really being meshed (else -1), and the engine's `phase`. */
+  onProgress?(fn: (feature: number, meshed: number, meshTotal: number, phase: number) => void): () => void;
   /** Installments of a chunked rebuild reply for progressive display; the in-process backend never streams. */
   onRebuildChunk?(fn: (c: RebuildChunk) => void): () => void;
   /** MCAD-style "Compute All": rebuild bypassing every cache layer. Optional. */
@@ -633,7 +634,7 @@ export class Geometry implements GeometryBackend {
   private outbox: string[] = [];
   private statusListeners = new Set<StatusListener>();
   private opProgressListeners = new Set<OpProgressListener>();
-  private progressListeners = new Set<(feature: number, meshed: number, meshTotal: number) => void>();
+  private progressListeners = new Set<(feature: number, meshed: number, meshTotal: number, phase: number) => void>();
   private queueListeners = new Set<(id: string, behind: EngineWait | null) => void>();
   // Last full payload per body: the engine answers unchanged bodies with an etag stub instead of the multi-MB mesh,
   // and assemble() rebuilds the merged result from this cache.
@@ -691,7 +692,7 @@ export class Geometry implements GeometryBackend {
     return () => this.chunkListeners.delete(fn);
   }
 
-  onProgress(fn: (feature: number, meshed: number, meshTotal: number) => void): () => void {
+  onProgress(fn: (feature: number, meshed: number, meshTotal: number, phase: number) => void): () => void {
     this.progressListeners.add(fn);
     return () => this.progressListeners.delete(fn);
   }
@@ -740,7 +741,8 @@ export class Geometry implements GeometryBackend {
         const f = typeof msg.feature === "number" ? msg.feature : -1;
         const m = typeof msg.meshed === "number" ? msg.meshed : -1;
         const mt = typeof msg.meshTotal === "number" ? msg.meshTotal : -1;
-        for (const fn of this.progressListeners) fn(f, m, mt);
+        const phase = typeof msg.phase === "number" ? msg.phase : f >= 0 ? BUILD_PHASE.feature : BUILD_PHASE.preparing;
+        for (const fn of this.progressListeners) fn(f, m, mt, phase);
       } else if (msg.status === "importing") {
         const pct = typeof msg.pct === "number" && msg.pct >= 0 ? Math.min(msg.pct, 100) : null;
         const label = typeof msg.label === "string" ? msg.label : "";

@@ -12,7 +12,7 @@ use serde_json::{json, Map, Value};
 
 use super::keys::blob_key;
 use super::store::{Checkpoint, GeomStore, ManifestEntry};
-use crate::builder::{owners, Body, FeatureError, ImportedMeta, Owners, PlaneRecord, Snapshot, State};
+use crate::builder::{owners, Body, FeatureError, ImportedMeta, Owners, PlaneRecord, Snapshot, State, Watch};
 
 /// Face, edge and vertex counts and the poles box rounded to 4 places.
 pub fn fingerprint(shape: &opencascade::primitives::Shape) -> Option<Value> {
@@ -48,6 +48,7 @@ pub type Modified = HashMap<String, ((u64, u64), String)>;
 /// The disk half of a cached rebuild, fed after every feature.
 pub struct Persist<'a> {
     pub store: &'a GeomStore,
+    pub watch: &'a dyn Watch,
     pub keys: &'a [String],
     pub modified: Modified,
     pub acc_ms: f64,
@@ -77,6 +78,7 @@ impl Persist<'_> {
         let Some(chain_key) = self.keys.get(index) else {
             return;
         };
+        self.watch.phase(fundacad_protocol::build_phase::SAVING);
         let mut manifest = Vec::new();
         let mut fps = Vec::new();
         let mut owners = Map::new();

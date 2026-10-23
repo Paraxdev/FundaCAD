@@ -91,6 +91,7 @@ import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
 import { featureMeta } from "../ui/featureMeta";
+import { afterPaint, APPLY_LABEL_AFTER_MS, BUILD_PHASE } from "../geometry/buildPhase";
 
 /** A section of a `.fundab` this version does not read (docs/FUNDA-FORMAT.md). */
 export interface CarriedSection {
@@ -113,9 +114,11 @@ export interface RebuildState {
   result: RebuildResult | null;
   errorFeatureId: string | null;
   errorMessage: string | null;
-  // Feature index the engine is executing (-1 = tessellating), streamed about 1/s during long rebuilds.
+  // Feature index the engine is executing (-1 outside the feature phase), streamed about 1/s during long rebuilds.
   progress: number | null;
-  // Bodies meshed and total during the meshing phase, where the feature index stays -1.
+  // A `BUILD_PHASE`, null until the first report.
+  phase: number | null;
+  // Bodies meshed and to mesh during the meshing phase, hits excluded.
   meshed: number | null;
   meshTotal: number | null;
   // `result` stays the previous model during a chunked reply, so only the viewport sees a partial body list.
@@ -569,6 +572,7 @@ export class DocumentStore {
     streamed: null,
     streamTotal: null,
     progress: null,
+    phase: null,
     meshed: null,
     meshTotal: null,
   };
@@ -603,12 +607,13 @@ export class DocumentStore {
   ) {
     this.doc = clone(initial);
     migrateDocument(this.doc); // the seed doc skips load(); normalize it the same way
-    geometry.onProgress?.((feature, meshed, meshTotal) => {
+    geometry.onProgress?.((feature, meshed, meshTotal, phase) => {
       if (!this.build.building) return;
       // -1/-1 means not meshing; null lets the chip tell "no denominator" from "0 of N".
       this.build = {
         ...this.build,
         progress: feature,
+        phase,
         meshed: meshed >= 0 ? meshed : null,
         meshTotal: meshTotal > 0 ? meshTotal : null,
       };
@@ -823,6 +828,7 @@ export class DocumentStore {
       streamed: null,
       streamTotal: null,
       progress: null,
+      phase: null,
       meshed: null,
       meshTotal: null,
       previewBuilt: null,
@@ -2773,6 +2779,7 @@ export class DocumentStore {
       ...this.build,
       building: true,
       progress: null,
+      phase: null,
       meshed: null,
       meshTotal: null,
       streamed: null,
@@ -2821,6 +2828,7 @@ export class DocumentStore {
     const done = {
       building: false,
       progress: null,
+      phase: null,
       meshed: null,
       meshTotal: null,
       streamed: null,
@@ -2884,6 +2892,7 @@ export class DocumentStore {
             do {
               this.rebuildQueued = false;
               this.emitBuildStarted();
+              const startedAt = Date.now();
               const sent = this.doc;
               const previewing = !!(this.preview || this.editPreview);
               const sentPreview = this.previewSnapshot();
@@ -2904,6 +2913,18 @@ export class DocumentStore {
               if (!reply.ok && reply.cancelled && flight.byUser) this.rebuildQueued = false;
               if (!reply.ok && reply.cancelled && this.rebuildQueued) continue;
               if (key !== null && this.refusedProvisional(reply, key)) continue;
+              if (reply.ok && Date.now() - startedAt >= APPLY_LABEL_AFTER_MS) {
+                this.build = {
+                  ...this.build,
+                  progress: null,
+                  meshed: null,
+                  meshTotal: null,
+                  phase: BUILD_PHASE.applying,
+                };
+                this.emitBuild();
+                await afterPaint();
+                if (flight.gen <= this.staleThrough) continue;
+              }
               if (!previewing) this.keepBodyIds(sent, reply);
               const settled = this.settledBuild(reply, sentPreview);
               // An incomplete stream left a partial model on screen; drop it before this result (on failure the

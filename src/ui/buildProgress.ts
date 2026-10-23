@@ -1,31 +1,49 @@
 import type { EngineWait } from "../geometry/client";
 import type { BusyState } from "../document/store";
+import { BUILD_PHASE } from "../geometry/buildPhase";
 
 // The timeline's pure helpers, kept apart so they test without a DOM.
 
 // A fast op must not flash a Cancel button; a slow one must offer it early.
 export const CANCEL_DELAY_MS = 700;
 
-/** Meshing reports feature = -1 for its whole run (136 s on the reference assembly), so per-body counts give the
- *  real fraction when the engine supplies them, else the label stays indeterminate. */
-export function buildProgress(
-  progress: number | null,
-  meshed: number | null,
-  meshTotal: number | null,
-  total: number,
-): { label: string; pct: number } {
-  if (progress === null) return { label: "building…", pct: 0 };
-  if (progress < 0) {
-    if (meshed === null || meshTotal === null || meshTotal <= 0) {
-      return { label: "meshing…", pct: 0 };
+export interface BuildReport {
+  phase: number | null;
+  progress: number | null;
+  meshed: number | null;
+  meshTotal: number | null;
+}
+
+/** The chip's words for what the engine, then the app, is doing. `steps` names the features by index. */
+export function buildProgress(r: BuildReport, steps: readonly string[]): { label: string; pct: number } {
+  const total = steps.length;
+  switch (r.phase) {
+    case BUILD_PHASE.preparing:
+      return { label: "preparing…", pct: 0 };
+    case BUILD_PHASE.feature: {
+      const at = r.progress ?? -1;
+      if (at < 0) return { label: "building…", pct: 0 };
+      const n = Math.min(at + 1, total);
+      return {
+        label: `${steps[at] ?? "building"} ${n}/${total}`,
+        pct: total === 0 ? 0 : Math.round((n / total) * 100),
+      };
     }
-    const done = Math.min(meshed, meshTotal);
-    return { label: `meshing ${done}/${meshTotal}`, pct: Math.round((done / meshTotal) * 100) };
+    case BUILD_PHASE.saving:
+      return { label: "saving a checkpoint…", pct: 0 };
+    case BUILD_PHASE.meshing: {
+      if (r.meshed === null || r.meshTotal === null || r.meshTotal <= 0) return { label: "meshing…", pct: 0 };
+      const done = Math.min(r.meshed, r.meshTotal);
+      const pct = Math.round((done / r.meshTotal) * 100);
+      return { label: r.meshTotal === 1 ? "meshing 1 part" : `meshing ${done}/${r.meshTotal} parts`, pct };
+    }
+    case BUILD_PHASE.assembling:
+      return { label: "collecting the result…", pct: 0 };
+    case BUILD_PHASE.applying:
+      return { label: "applying to the view…", pct: 100 };
+    default:
+      return { label: "building…", pct: 0 };
   }
-  return {
-    label: `building ${Math.min(progress + 1, total)}/${total}`,
-    pct: total === 0 ? 0 : Math.round(((progress + 1) / total) * 100),
-  };
 }
 
 const WAIT_DOING: Record<string, string> = {
