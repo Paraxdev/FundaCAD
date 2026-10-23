@@ -4,7 +4,7 @@
 mod band;
 mod cells;
 mod check;
-mod memo;
+pub(crate) mod memo;
 mod neighbours;
 mod run;
 mod surface;
