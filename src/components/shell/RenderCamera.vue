@@ -119,9 +119,10 @@ async function takePicture() {
   }
   saving.value = true;
   try {
-    const url = await render();
-    if (!url) return;
+    const session = engine.store.session;
     const base = engine.store.fileName === "Untitled" ? "render" : engine.store.fileName;
+    const url = await render();
+    if (!url || !session.alive) return;
     const path = await saveRenderedImage(url, `${base}.png`);
     if (path) toast(`Saved ${path}`);
   } finally {
