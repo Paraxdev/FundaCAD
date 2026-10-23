@@ -55,6 +55,9 @@ interface Proposal {
 export const REFUSED_WHILE_IMPORTING =
   "an import is still being read into the open document, so it was not replaced, nothing was applied; wait for the import or cancel it in History";
 
+// The note the MCP server writes, the tool's name then ": subject". doc_set is often the open file edited, so it stays.
+const OTHER_FILE = /^doc_(open|new)(:|$)/;
+
 export class LiveSessionHost {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private unsubscribeDoc: (() => void) | null = null;
@@ -247,7 +250,7 @@ export class LiveSessionHost {
       this.lastGuestSeen = this.now();
       return;
     }
-    this.store.loadDocument(p.document, { replace: true });
+    this.store.loadDocument(p.document, { replace: true, untitled: !!p.replaces && OTHER_FILE.test(p.note ?? "") });
     this.applied = [...this.applied, p.id].slice(-APPLIED_MEMORY);
     this.lastGuestSeen = this.now();
     this.emit({ lastEdit: { note: p.note ?? null, by: p.name, at: this.now() } });

@@ -4,6 +4,7 @@
 import { storedSettings } from "../settings";
 import type { CadDocument, Feature } from "../../types";
 import type { DocumentStore } from "../../document/store";
+import type { DocumentSession } from "../../document/session";
 import { ensureBodyIds } from "../../document/bodyIds";
 import type { BrokerHost } from "./broker";
 import type { NativeBridge } from "./native";
@@ -67,7 +68,16 @@ export interface AppHostOptions {
   featureTypes?: () => string[];
   /** Absent in a browser session and in tests that did not ask for one; the file ops then refuse. */
   native?: NativeBridge;
+  /** The document the run started on, taken before anything the run awaits. */
+  session?: DocumentSession;
+  /** The user's own New question. By default it asks about the store's unsaved changes alone. */
+  mayDiscard?: (question: string) => Promise<boolean>;
 }
+
+const askStore = (store: DocumentStore) => async (question: string) => {
+  const { mayDiscard } = await import("../../app/documentActions");
+  return await mayDiscard({ store, sketch: { hasUncommittedEdits: false } as never }, question);
+};
 
 export function appHost(opts: AppHostOptions): BrokerHost {
   const { store } = opts;
@@ -102,7 +112,7 @@ export function appHost(opts: AppHostOptions): BrokerHost {
 
   // A host serves one plugin run, and the run works on the document open when it started. Once the user closes that
   // document, every write of the run is refused, a read of the next one included; only its own doc_new moves it on.
-  let session = store.session;
+  let session = opts.session ?? store.session;
   const sameDocument = (op: Op) => {
     if (session.alive || !(WRITES.has(op) || op === "doc_new")) return;
     throw new HostRefused(`${op}: the document this plugin run was working on was closed, nothing was applied`);
@@ -169,6 +179,10 @@ export function appHost(opts: AppHostOptions): BrokerHost {
           return clone(store.toObject());
 
         case "doc_new":
+          if (!(await (opts.mayDiscard ?? askStore(store))("Discard unsaved changes and start a new document?"))) {
+            throw new HostRefused(`${op}: the user kept the unsaved changes, so no new document was started`);
+          }
+          sameDocument(op);
           store.newDocument();
           session = store.session;
           return { ok: true };

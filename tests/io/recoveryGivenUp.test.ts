@@ -1,5 +1,5 @@
-// A crash snapshot is dropped only for work the user gave up by Discard or Don't save. A document thrown away without
-// asking (a plugin's doc_new) keeps its snapshot, so the next start still offers it back.
+// A crash snapshot is dropped only for work the user gave up by Discard or Don't save. A plugin's doc_new asks the same
+// question, and a Cancel keeps the document and its snapshot.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import { stubBackend, box } from "../document/storeKit";
@@ -59,17 +59,21 @@ describe("the crash snapshot of a document that ends unsaved", () => {
     };
   });
 
-  it("is kept when a plugin's doc_new throws the document away without asking", async () => {
+  it("follows the answer to a plugin's doc_new, kept on Cancel and dropped on Discard", async () => {
     const store = editedFile();
-    const run = appHost({ store });
-    const dropped = await clears(() => run.perform("doc_new", {}));
+    host.pick = "cancel";
+    const kept = await clears(() =>
+      appHost({ store })
+        .perform("doc_new", {})
+        .catch(() => {}),
+    );
     const after = shape(store);
-    store.addFeature(box("b-plate", 20));
-    const next = await clears(() => run.perform("doc_new", {}));
-    expect({ dropped, after, next, last: shape(store) }).toEqual({
-      dropped: [],
-      after: { features: [], path: null, dirty: false },
-      next: [],
+    host.pick = "discard";
+    const dropped = await clears(() => appHost({ store }).perform("doc_new", {}));
+    expect({ kept, after, dropped, last: shape(store) }).toEqual({
+      kept: [],
+      after: { features: ["a-plate"], path: "D:/parts/a.funda", dirty: true },
+      dropped: [slotFor("D:/parts/a.funda"), slotFor(null)],
       last: { features: [], path: null, dirty: false },
     });
   });

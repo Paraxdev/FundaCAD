@@ -515,6 +515,11 @@ const emptyResult = (): RebuildResult => ({
   bodies: [],
 });
 
+export interface GivenUp {
+  readonly session: DocumentSession;
+  readonly edits: number;
+}
+
 export class DocumentStore {
   readonly sessions = new SessionHost();
   private doc: CadDocument;
@@ -530,6 +535,7 @@ export class DocumentStore {
   private pathlessName: string | null = null;
   private isDirty = false; // unsaved changes since last save/open/new
   private edits = 0;
+  private userEdits = 0;
   private keepClean = 0;
   private rollback: number | null = null; // # of active features (null = all); timeline marker
   private suppressed = new Set<string>(); // feature ids skipped on rebuild (suppress)
@@ -642,9 +648,13 @@ export class DocumentStore {
       const chunk: BuildChunk = { ...c, epoch: this.buildEpoch };
       for (const fn of this.chunkListeners) fn(chunk);
     });
+    // An op whose request id is not back yet waits for its own progress rather than taking another op's.
     geometry.onOpProgress?.((id, pct, stage) => {
-      if (!this.busy.active || (this.busy.id !== null && this.busy.id !== id)) return;
-      this.setBusy({ ...this.busy, pct, stage: stage || null });
+      const op = this.st.busyOps.find((o) => o.state.id === id);
+      if (!op) return;
+      const next = { ...op.state, pct, stage: stage || null };
+      if (this.st.busyOps.at(-1) === op) this.setBusy(next);
+      else op.state = next;
     });
     // Only the busy op's own request: any other id is not what this document waits on.
     geometry.onQueue?.((id, behind) => {
@@ -729,11 +739,11 @@ export class DocumentStore {
     return () => this.busyListeners.delete(fn);
   }
 
-  // `onStarted` hands back the request id, else a rebuild started meanwhile would be "most recent". An op that never
-  // reaches the engine passes `abort`. `holdHistory` blocks undo/redo, since an import's late step would drop a redo.
+  // `onStarted` hands back the request id, else a rebuild started meanwhile would be "most recent", and a label for
+  // an op whose passes differ. An op that never reaches the engine passes `abort`. `holdHistory` blocks undo/redo, since an import's late step would drop a redo.
   async runBusy<T>(
     label: string,
-    fn: (onStarted: (id: string) => void) => Promise<T>,
+    fn: (onStarted: (id: string, label?: string) => void) => Promise<T>,
     opts: { rebuild?: boolean; abort?: AbortController; holdHistory?: boolean } = {},
   ): Promise<T> {
     const op: BusyOp = {
@@ -750,9 +760,9 @@ export class DocumentStore {
     st.busyOps.push(op);
     this.setBusy(op.state);
     try {
-      return await fn((id) => {
+      return await fn((id, label) => {
         if (op.abort.signal.aborted) throw new OpCancelled();
-        op.state = { ...op.state, id, waiting: null };
+        op.state = { ...op.state, id, waiting: null, label: label ?? op.state.label };
         if (st === this.st && st.busyOps.at(-1) === op) this.setBusy(op.state);
       });
     } finally {
@@ -992,7 +1002,9 @@ export class DocumentStore {
     this.scheduleRebuild(true);
   }
 
+  private docEdits = 0;
   private emitDoc() {
+    this.docEdits++;
     for (const fn of this.docListeners) fn(this.doc);
   }
   private emitBuild() {
@@ -1004,8 +1016,9 @@ export class DocumentStore {
   private emitMeta() {
     for (const fn of this.metaListeners) fn();
   }
-  private markDirty() {
+  private markDirty(byUser = true) {
     this.edits++;
+    if (byUser) this.userEdits++;
     if (this.isDirty || this.keepClean) return;
     this.isDirty = true;
     this.emitMeta();
@@ -1015,11 +1028,22 @@ export class DocumentStore {
   get editCount(): number {
     return this.edits;
   }
+  // Leaves out derived commits (a projection refresh, a measured field), which the user did not make.
+  get userEditCount(): number {
+    return this.userEdits;
+  }
 
-  private givenUpAt: { session: DocumentSession; edits: number } | null = null;
+  private givenUpAt: GivenUp | null = null;
   /** The user chose Discard or Don't save for the document as it stands now. */
-  markGivenUp() {
-    this.givenUpAt = { session: this.session, edits: this.edits };
+  markGivenUp(): GivenUp {
+    return (this.givenUpAt = { session: this.session, edits: this.edits });
+  }
+  get givenUpMark(): GivenUp | null {
+    return this.givenUpAt;
+  }
+  // The open the answer was for did not land, so the document was kept after all. A later answer is left alone.
+  revokeGivenUp(mark: GivenUp | null) {
+    if (mark !== null && this.givenUpAt === mark) this.givenUpAt = null;
   }
   // An edit made after the answer, or another document, was not given up.
   get givenUp(): boolean {
@@ -1116,7 +1140,7 @@ export class DocumentStore {
     this.redoStack = [];
     // A user edit is the "edit the model to retry" the valve toast promises.
     this.rearmProjectionValve();
-    this.applyDerived(fn, immediate);
+    this.applyDerived(fn, immediate, true);
   }
 
   // name -> why its value is stale (cycle, unknown ref, non-finite, missing target) from the last recompute.
@@ -1155,33 +1179,43 @@ export class DocumentStore {
         this.onWarning?.("Parameter change failed to apply, see the console for details.");
       });
   }
+  // A doc edit landing during the solves (a doc_set, an import, a restore) would be overwritten by the
+  // stale draft, so the cascade redoes on top of it; past 3 tries it lands unsolved rather than never.
   private async commitWithCascade(fn: (d: CadDocument) => void, immediate: boolean): Promise<void> {
-    const draft = clone(this.doc);
-    fn(draft);
-    const r = params.recompute(draft);
-    const open = this.openSketchId?.() ?? null;
-    for (const sid of r.affectedSketches) {
-      if (sid === open) continue;
-      const f = draft.features.find(
-        (x): x is Extract<Feature, { type: "sketch" }> => x.type === "sketch" && x.id === sid,
-      );
-      if (!f) continue;
-      const solved = await this.solveConstrainedSketch(f, draft.parameters);
-      if (solved) f.entities = solved;
+    const st = this.st;
+    for (let tries = 1; ; tries++) {
+      const seen = this.docEdits;
+      const draft = clone(this.doc);
+      fn(draft);
+      const r = params.recompute(draft);
+      const open = this.openSketchId?.() ?? null;
+      const sketches = [...r.affectedSketches].filter((sid) => sid !== open);
+      if (tries > 3) for (const sid of sketches) this.onParamSolveIssue?.(sid);
+      else
+        for (const sid of sketches) {
+          const at = draft.features.find((x) => x.id === sid);
+          const f = asFeature(at, "sketch");
+          if (!f) continue;
+          const solved = await this.solveConstrainedSketch(f, draft.parameters);
+          if (solved) f.entities = solved;
+        }
+      if (!st.session.alive) return;
+      if (this.docEdits !== seen) continue;
+      this.mutate((d) => {
+        d.parameters = draft.parameters;
+        if (draft.paramDefs) d.paramDefs = draft.paramDefs;
+        else delete d.paramDefs;
+        if (draft.paramExtras) d.paramExtras = draft.paramExtras;
+        else delete d.paramExtras;
+        // The draft is a clone, and the rebuild wire resends every changed object, so keep the untouched features.
+        d.features = draft.features.map((f, i) => {
+          const was = d.features[i];
+          return was && was.id === f.id && JSON.stringify(was) === JSON.stringify(f) ? was : f;
+        });
+      }, immediate);
+      this.onParamsApplied?.();
+      return;
     }
-    this.mutate((d) => {
-      d.parameters = draft.parameters;
-      if (draft.paramDefs) d.paramDefs = draft.paramDefs;
-      else delete d.paramDefs;
-      if (draft.paramExtras) d.paramExtras = draft.paramExtras;
-      else delete d.paramExtras;
-      // The draft is a clone, and the rebuild wire resends every changed object, so keep the untouched features.
-      d.features = draft.features.map((f, i) => {
-        const was = d.features[i];
-        return was && was.id === f.id && JSON.stringify(was) === JSON.stringify(f) ? was : f;
-      });
-    }, immediate);
-    this.onParamsApplied?.();
   }
 
   // Projection updates land as a derived commit with no undo entry, so an upstream edit settles in two rebuilds.
@@ -1305,13 +1339,13 @@ export class DocumentStore {
   }
 
   // Derived commits call this directly to stay out of undo.
-  private applyDerived(fn: (doc: CadDocument) => void, immediate = true) {
+  private applyDerived(fn: (doc: CadDocument) => void, immediate = true, byUser = false) {
     const joins = joinSignatures(this.doc);
     fn(this.doc);
     forgetStaleJoins(joins, this.doc);
     canonicalMirrorPlanes(this.doc);
     if (this.doc.paramDefs) this.applyRecompute(params.recompute(this.doc));
-    this.markDirty();
+    this.markDirty(byUser);
     this.emitDoc();
     this.scheduleRebuild(immediate);
   }
@@ -2633,9 +2667,24 @@ export class DocumentStore {
     return JSON.stringify(this.toObject(), null, 2);
   }
   // `replace` puts another state of the same document in place (a version, an assistant's or a plugin's edit), as one
-  // undoable step that leaves the versions alone.
-  load(json: string, opts: { replace?: boolean } = {}) {
-    this.loadAs(json, opts.replace ? "edit" : "open");
+  // undoable step that leaves the versions alone. `untitled` also drops the file path, so Save asks where.
+  load(json: string, opts: { replace?: boolean; untitled?: boolean } = {}) {
+    if (!opts.replace || !opts.untitled) return this.loadAs(json, opts.replace ? "edit" : "open");
+    this.undoAsOne(() => {
+      this.loadAs(json, "edit");
+      this.dropPathUndoably();
+    });
+  }
+  private dropPathUndoably() {
+    const was = { path: this.path, name: this.pathlessName };
+    if (was.path === null && was.name === null) return;
+    const put = (path: string | null, name: string | null) => {
+      this.path = path;
+      this.pathlessName = name;
+      this.emitMeta();
+    };
+    put(null, null);
+    this.pushOverlayUndo({ undo: () => put(was.path, was.name), redo: () => put(null, null) });
   }
   // A version is always the open document, even one sharing no feature with what is on screen.
   private loadAs(json: string, as: "open" | "edit" | "version") {
@@ -2802,7 +2851,7 @@ export class DocumentStore {
     if (vis) this.isolate = vis[1];
     return back;
   }
-  loadDocument(doc: CadDocument, opts: { replace?: boolean } = {}) {
+  loadDocument(doc: CadDocument, opts: { replace?: boolean; untitled?: boolean } = {}) {
     this.load(JSON.stringify(doc), opts);
   }
 
@@ -3029,7 +3078,7 @@ export class DocumentStore {
               const send = (id: string) => {
                 if (flight.dropped) throw new OpCancelled();
                 flight.id = id;
-                onStarted(id);
+                onStarted(id, all ? "Computing all" : "Rebuilding");
               };
               const reply =
                 all && computeAll
