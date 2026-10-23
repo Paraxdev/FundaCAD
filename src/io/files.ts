@@ -358,7 +358,7 @@ interface OpenTicket {
 
 // Taken when the user has agreed to replace the open document, before the file is read.
 function openTicket(store: DocumentStore): OpenTicket {
-  return { op: store.sessions.opening(), edits: store.editCount };
+  return { op: store.sessions.opening(), edits: store.userEditCount };
 }
 
 // Right before the swap: what the user agreed to replace must still be what is open (rm4abwsm).
@@ -370,8 +370,8 @@ async function mayStillReplace(store: DocumentStore, ticket: OpenTicket, name: s
       toast(`${name} was not opened, another document was started while it was read.`, { kind: "info" });
       return false;
     }
-    if (store.editCount === ticket.edits || !store.dirty) return true;
-    ticket.edits = store.editCount;
+    if (store.userEditCount === ticket.edits || !store.dirty) return true;
+    ticket.edits = store.userEditCount;
     const { choose } = await import("../ui/choice");
     const pick = await choose(
       `${store.fileName} changed while ${name} was read. Discard those changes and open ${name}?`,

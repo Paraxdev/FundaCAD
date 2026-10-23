@@ -530,6 +530,7 @@ export class DocumentStore {
   private pathlessName: string | null = null;
   private isDirty = false; // unsaved changes since last save/open/new
   private edits = 0;
+  private userEdits = 0;
   private keepClean = 0;
   private rollback: number | null = null; // # of active features (null = all); timeline marker
   private suppressed = new Set<string>(); // feature ids skipped on rebuild (suppress)
@@ -1006,8 +1007,9 @@ export class DocumentStore {
   private emitMeta() {
     for (const fn of this.metaListeners) fn();
   }
-  private markDirty() {
+  private markDirty(byUser = true) {
     this.edits++;
+    if (byUser) this.userEdits++;
     if (this.isDirty || this.keepClean) return;
     this.isDirty = true;
     this.emitMeta();
@@ -1016,6 +1018,10 @@ export class DocumentStore {
   // Counts every change, saved or not, so a caller can tell nothing else changed between two of its own steps.
   get editCount(): number {
     return this.edits;
+  }
+  // Leaves out derived commits (a projection refresh, a measured field), which the user did not make.
+  get userEditCount(): number {
+    return this.userEdits;
   }
 
   private givenUpAt: { session: DocumentSession; edits: number } | null = null;
@@ -1118,7 +1124,7 @@ export class DocumentStore {
     this.redoStack = [];
     // A user edit is the "edit the model to retry" the valve toast promises.
     this.rearmProjectionValve();
-    this.applyDerived(fn, immediate);
+    this.applyDerived(fn, immediate, true);
   }
 
   // name -> why its value is stale (cycle, unknown ref, non-finite, missing target) from the last recompute.
@@ -1317,13 +1323,13 @@ export class DocumentStore {
   }
 
   // Derived commits call this directly to stay out of undo.
-  private applyDerived(fn: (doc: CadDocument) => void, immediate = true) {
+  private applyDerived(fn: (doc: CadDocument) => void, immediate = true, byUser = false) {
     const joins = joinSignatures(this.doc);
     fn(this.doc);
     forgetStaleJoins(joins, this.doc);
     canonicalMirrorPlanes(this.doc);
     if (this.doc.paramDefs) this.applyRecompute(params.recompute(this.doc));
-    this.markDirty();
+    this.markDirty(byUser);
     this.emitDoc();
     this.scheduleRebuild(immediate);
   }
