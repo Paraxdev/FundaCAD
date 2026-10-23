@@ -15,6 +15,10 @@ fn shapes() {
         r#"{"id": "r1", "status": "building", "feature": 3, "meshed": -1, "meshTotal": -1}"#
     );
     assert_eq!(
+        building_in(&id, 3, -1, 5, 12),
+        r#"{"id": "r1", "status": "building", "phase": 3, "feature": -1, "meshed": 5, "meshTotal": 12}"#
+    );
+    assert_eq!(
         queued(&id, &json!({"op": "import", "who": "session"})),
         r#"{"id": "r1", "status": "queued", "behind": {"op": "import", "who": "session"}}"#
     );

@@ -18,6 +18,11 @@ function toAppLog(line: string) {
   core.then(({ invoke }) => invoke("log_line", { line })).catch(() => {});
 }
 
+/** To the log file only: a line that must not take a place in the report's 20 crumbs. */
+export function appLog(line: string) {
+  toAppLog(line);
+}
+
 export function stickyFact(message: string) {
   toAppLog(message.slice(0, 300));
   if (sticky.length >= STICKY_MAX) return;

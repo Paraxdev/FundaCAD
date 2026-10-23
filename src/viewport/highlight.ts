@@ -48,6 +48,9 @@ export function sameHover(a: HoverState | undefined, b: HoverState | undefined):
   );
 }
 
+// Bodies whose colour buffer may hold a hover or selection tint that the base colours do not.
+const tinted = new WeakSet<BodyMesh>();
+
 export class Highlighter {
   private hoveredEdge: EdgeRef | null = null;
   /** More than one when the face under the cursor is a piece of a split run (faceBands), so the hover shows what the
@@ -65,7 +68,19 @@ export class Highlighter {
   private edgeBase = EDGE_BASE.clone();
 
   constructor(private view: ModelView) {
-    for (const b of view.bodies) removeSelectionGlows(b.mesh);
+    for (const b of view.bodies) {
+      removeSelectionGlows(b.mesh);
+      if (tinted.delete(b)) this.stripTint(b);
+    }
+  }
+
+  /** A reused body keeps the tint its last highlighter painted, and the repaint that used to wipe it now skips it. */
+  private stripTint(body: BodyMesh) {
+    const colorAttr = body.mesh.geometry.getAttribute("color") as THREE.BufferAttribute | undefined;
+    if (!colorAttr) return;
+    colorAttr.array.set(body.baseColors);
+    colorAttr.clearUpdateRanges();
+    colorAttr.needsUpdate = true;
   }
 
   /** Built once: a linear find per painted body scans thousands on an import. No invalidation needed, setModel() builds a
@@ -431,6 +446,7 @@ export class Highlighter {
     const colorAttr = body.mesh.geometry.getAttribute("color") as THREE.BufferAttribute;
     const index = body.mesh.geometry.getIndex();
     if (!colorAttr || !index) return;
+    tinted.add(body);
     const range = this.forEachVertex(tris, index, (v) => {
       colorAttr.setXYZ(v, color.r, color.g, color.b);
     });
