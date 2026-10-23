@@ -40,7 +40,7 @@ export const EXPERIMENTAL_RANGE: Record<Exclude<keyof ExperimentalPrefs, "envWid
   sampleCap: [1, 65536],
   batterySampleCap: [1, 65536],
   bounces: [1, 64],
-  firefly: [0, 1e6],
+  firefly: [0, 1000],
   traceScale: [0, 2],
   pictureMegapixels: [0.1, 268],
   triangleBudget: [1000, 500_000_000],
