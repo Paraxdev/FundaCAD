@@ -145,6 +145,7 @@ function onKey(e: KeyboardEvent) {
   e.preventDefault();
   e.stopImmediatePropagation();
   if (pending.value) pending.value = null;
+  else if (query.value) query.value = "";
   else close();
 }
 
