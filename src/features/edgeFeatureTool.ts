@@ -998,6 +998,7 @@ export class EdgeFeatureTool {
       if (release === "commit") return this.commit();
       if (release === "cancel") return this.cancel();
       this.viewport.domElement.style.cursor = this.hovering ? "grab" : "default";
+      this.dim.focus();
       if (!moved) {
         // A press that never travelled opens the full tool; from the selection handle that arms on nothing, so put
         // the default value up.
@@ -1016,6 +1017,7 @@ export class EdgeFeatureTool {
     if (this.downOnGizmo || moved) return;
     if (this.memberCount()) setPrompt(missPrompt(this.kind, this.memberCount()));
     else this.promptForPhase();
+    this.dim.focus();
   }
 
   private onKey(e: KeyboardEvent) {
