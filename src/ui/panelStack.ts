@@ -60,6 +60,8 @@ function natural(el: HTMLElement): number {
 
 function place() {
   frame = 0;
+  // A panel with its own scroller reports the height it was last capped to, so measure it uncapped.
+  for (const p of open) p.el.style.maxHeight = "";
   const layer = document.getElementById("float-layer");
   const area = (layer ?? document.body).getBoundingClientRect();
   const box: Box = { left: area.left, right: area.right, top: area.top, bottom: area.bottom };
