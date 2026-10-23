@@ -70,7 +70,8 @@ fn an_oversized_fillet_reports_what_failed_where_and_how_long_it_took() {
 
     let d = &err.wire_full()["detail"];
     let calls = d["kernel"].as_array().expect("kernel calls");
-    let failed: Vec<(&str, &str)> = calls.iter().filter_map(|c| Some((c["op"].as_str()?, c["error"].as_str()?))).collect();
+    let failed: Vec<(&str, &str)> =
+        calls.iter().filter_map(|c| Some((c["op"].as_str()?, c["error"].as_str()?))).collect();
     assert!(calls.len() >= 5, "the whole set and each edge alone are tried: {d}");
     assert_eq!(failed, vec![("BRepFilletAPI_MakeFillet", "IsDone() is false"); calls.len()], "{d}");
     // A box fillet call takes about 2 ms, seconds as milliseconds would read 0.
