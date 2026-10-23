@@ -503,11 +503,11 @@ function check(ok, what, detail) {
         for (let i = 0; i < p.length; i += 4)
           if (Math.max(Math.abs(p[i] - q[i]), Math.abs(p[i + 1] - q[i + 1]), Math.abs(p[i + 2] - q[i + 2])) > 2)
             changed++;
-        return { same: a === b, changed, of: p.length / 4 };
+        return { same: a === b, sameSize: p.length === q.length, changed, of: p.length / 4 };
       },
       [rt1, rt2],
     );
-    check(trip.changed === 0, "Realtime draws the same pixels after a trip through Matcap", trip);
+    check(trip.sameSize && trip.changed === 0, "Realtime draws the same pixels after a trip through Matcap", trip);
     const programsAfter = await page.evaluate(() => window.viewport.scene.renderer.info.programs.length);
     check(programsAfter - programsBefore <= 1, "one matcap program, nothing recompiled", {
       programsBefore,
