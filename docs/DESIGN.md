@@ -343,6 +343,7 @@ needs a larger radius to look the same size. Always pair a float radius with
 | `.rail-tile`, `.rail-pill` | `components/ui/RailButton.vue` | Tool buttons on the rail |
 | `#viewport .prompt` | `PromptBanner.vue` | The tool prompt pill |
 | `.section-chip` | `SectionChip.vue`, in `#viewport .vp-top` | A state that stays on over the model, with its word buttons |
+| `.updating-chip` | `UpdatingChip.vue`, in `#viewport .vp-top` | A passing state over the model that takes no clicks, like a slow rebuild |
 
 ### 4.3 A new surface
 
@@ -717,6 +718,7 @@ reads as a title.
 | `.tree-count` | 10px, 600, `--text-mute`, `--panel-2` pill, hidden when empty |
 | `.section-chip` (`SectionChip.vue`) | glass A, chip radius, no rim, padding `var(--s-1) var(--s-1) var(--s-1) var(--s-3)`, gap `--s-2`, 600 12px `--text`, the section icon in `--accent`, `pop-in`; `role="toolbar"`; shown only while a cut is on, absent otherwise; under 560px, or when the top row is too narrow for them, the words hide and the icon's `title` says them |
 | `.section-chip-btn` | white ink of `.pop-wide`, chip radius, padding `var(--s-1) var(--s-3)`, 600 12px `--text-dim`; hover `--text`; `.active` (Edit while editing, `aria-pressed`) as `.dim-btn.dim-toggle.on`; `.disabled` with `aria-disabled` opacity 0.45, no hover; shared focus ring; a 40px hit area on touch |
+| `.updating-chip` (`UpdatingChip.vue`) | glass A, chip radius, padding `var(--s-1) var(--s-3)`, gap `--s-2`, 500 11.5px `--text-dim`, `pop-in`, `role="status"`, `pointer-events: none` so a pick goes through to the model; a 10px ring spinner in `--accent` on a 25% accent track; shown while a rebuild other than a tool preview has run past `OUT_OF_DATE_GRACE_MS` (600 ms, `app/staleModel.ts`), gone when it lands, is cancelled or the document is replaced; it never ghosts the model |
 
 ### 7.9 Rows
 

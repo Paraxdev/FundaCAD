@@ -1079,6 +1079,34 @@
   opacity: 0.45;
   cursor: default;
 }
+/* Never blocks a pick through it, the model under it is still the one to pick. */
+#viewport .vp-top > .updating-chip {
+  pointer-events: none;
+}
+.updating-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-3);
+  font: 500 11.5px/1.4 var(--ui);
+  color: var(--text-dim);
+  white-space: nowrap;
+  animation: pop-in var(--t-fast) var(--ease);
+}
+.updating-spin {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-top-color: var(--accent);
+  animation: updating-spin 0.9s linear infinite;
+}
+@keyframes updating-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 #viewport .vp-top[data-narrow] .section-chip-text {
   display: none;
 }
