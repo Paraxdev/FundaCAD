@@ -71,6 +71,13 @@ export function isCostlyLight(o: THREE.Object3D): boolean {
   return l.isRectAreaLight === true || l.isPointLight === true || l.isSpotLight === true;
 }
 
+// three 0.186 binds an RGBA fallback to the shadow sampler of a caster with no map yet, and ANGLE drops every lit
+// draw of that program (sampler type mismatch). A frame that skips the shadow pass must not cast from it.
+export function castsWithoutMap(o: THREE.Object3D): boolean {
+  const l = o as THREE.Light & { shadow?: THREE.LightShadow };
+  return l.isLight === true && l.castShadow && !!l.shadow && !l.shadow.map;
+}
+
 interface MatTwin {
   cheap: THREE.MeshLambertMaterial;
   seen: number;
