@@ -264,6 +264,7 @@
 .stress-view-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--s-2);
   min-height: 32px;

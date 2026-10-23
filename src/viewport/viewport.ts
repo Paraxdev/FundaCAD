@@ -18,6 +18,7 @@ import {
   setEdgeResolution,
   visibleBodyMeshes,
   BASE_COLOR,
+  SCAN_COLOR,
   type BodyMesh,
   type ModelView,
   type EdgeRef,
@@ -42,6 +43,9 @@ import {
   buildClearanceLine,
   buildComMarker,
   buildStressMesh,
+  plainStressMaterial,
+  solidColors,
+  stressSurfaceGeometry,
   buildFaceMarkMesh,
   clearOverlayObjects,
 } from "./overlays";
@@ -131,6 +135,7 @@ const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
 
 import { Highlighter, EDGE_HOVER_COLOR, sameHover } from "./highlight";
+import { DRAFT_COLORS } from "./draftColors";
 import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, nearestEdgeByCurve, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
 import { mergeScope, pickScope, type ScopeDecision, type ScopeView } from "./pickScope";
@@ -1675,9 +1680,9 @@ export class Viewport {
       this.highlighter.setBase((fid) => hue.get(this.faceIdToBodyId(fid) ?? "") ?? BASE_COLOR, only);
     } else if (this.analysis === "draft") {
       const B = this.draftDir;
-      const OVERHANG = new THREE.Color(0xe24a3b); // unsupported overhang (red)
-      const TOP = new THREE.Color(0x49c46a); // up-facing
-      const WALL = new THREE.Color(0x4aa3e2); // wall / steep-enough downward
+      const OVERHANG = new THREE.Color(DRAFT_COLORS.overhang);
+      const TOP = new THREE.Color(DRAFT_COLORS.top);
+      const WALL = new THREE.Color(DRAFT_COLORS.wall);
       // A downward face overhangs when its angle from straight down (β) is below the threshold.
       this.highlighter.setBase((fid) => {
         const c = this.faceNormalWorld(fid).dot(B); // cos(angle to build dir)
@@ -3196,8 +3201,10 @@ export class Viewport {
   private clearanceLines: THREE.Line[] = [];
 
   /** The analysed body's surface coloured over `range` (blue low, red high) in its place, the body hidden
-   *  meanwhile. `displacement` (three numbers per vertex) draws it deformed, see setStressDeformation. Null
-   *  clears, as does the next setModel. Tells onStressOverlayChange listeners when the body changes. */
+   *  meanwhile. `displacement` (three numbers per vertex) draws it deformed, see setStressDeformation. `colours`
+   *  false draws it in the body's own colour, and undeformed as well leaves the body itself on show, the surface
+   *  kept only for stressOverlayPoint. Null clears, as does the next setModel. Tells onStressOverlayChange
+   *  listeners when the body changes. */
   setStressOverlay(
     o: {
       bodyId: string;
@@ -3207,8 +3214,11 @@ export class Viewport {
       range: { min: number; max: number };
       displacement?: ArrayLike<number>;
       scale?: number;
+      colours?: boolean;
     } | null,
   ) {
+    this.stressRest?.dispose();
+    this.stressRest = null;
     if (this.stressMesh) {
       clearOverlayObjects([this.stressMesh]);
       this.stressMesh = null;
@@ -3223,14 +3233,27 @@ export class Viewport {
       }
       this.stressHidden = null;
     }
-    if (o && o.positions.length && o.indices.length && o.values.length * 3 === o.positions.length) {
-      this.stressMesh = buildStressMesh(o.positions, o.indices, stressColors(o.values, o.range.min, o.range.max));
+    const valid = !!o && o.positions.length > 0 && o.indices.length > 0 && o.values.length * 3 === o.positions.length;
+    const moves = !!o?.displacement && o.displacement.length === o.positions.length;
+    if (o && valid && o.colours === false && !moves) {
+      this.stressRest = stressSurfaceGeometry(o.positions, o.indices);
+    } else if (o && valid) {
+      const b = this.model?.bodies.find((x) => x.id === o.bodyId);
+      const plain = o.colours === false;
+      const colors = plain
+        ? solidColors(o.positions.length / 3, this.bodyColour(b))
+        : stressColors(o.values, o.range.min, o.range.max);
+      this.stressMesh = buildStressMesh(o.positions, o.indices, colors);
+      const own = plain ? plainStressMaterial(b?.mesh.material) : null;
+      if (own) {
+        (this.stressMesh.material as THREE.Material).dispose();
+        this.stressMesh.material = own;
+      }
       this.scene.scene.add(markInPicture(this.stressMesh));
-      if (o.displacement && o.displacement.length === o.positions.length) {
-        this.stressShape = { base: Float32Array.from(o.positions), displacement: Float32Array.from(o.displacement) };
+      if (moves) {
+        this.stressShape = { base: Float32Array.from(o.positions), displacement: Float32Array.from(o.displacement!) };
         this.setStressDeformation(o.scale ?? 0);
       }
-      const b = this.model?.bodies.find((x) => x.id === o.bodyId);
       if (b) {
         this.stressHidden = { bodyId: b.id, wasVisible: b.mesh.visible };
         b.mesh.visible = false;
@@ -3242,8 +3265,14 @@ export class Viewport {
     this.requestRender();
     if (this.stressBody !== was) for (const fn of this.stressListeners) fn();
   }
+  /** The colour a body is painted as a whole. Its albedo is in its vertex colours, its material stays white. */
+  private bodyColour(b: BodyMesh | undefined): THREE.Color {
+    const hex = b ? this.finish.bodyPaint[b.id] : undefined;
+    return hex ? new THREE.Color(hex) : b?.scan ? SCAN_COLOR : BASE_COLOR;
+  }
+  /** True while an overlay is set, drawn in its colours, plain or only kept for its points. */
   hasStressOverlay(): boolean {
-    return this.stressMesh !== null;
+    return this.stressMesh !== null || this.stressRest !== null;
   }
   /** Null when none is up. Other face tints leave that body alone, a tint over the colours would misread them. */
   stressOverlayBody(): string | null {
@@ -3297,7 +3326,7 @@ export class Viewport {
   }
 
   private stressCorners(tri: number): [Vec3, Vec3, Vec3] | null {
-    const geo = this.stressMesh?.geometry;
+    const geo = this.stressMesh?.geometry ?? this.stressRest;
     const index = geo?.getIndex();
     if (!geo || !index || tri < 0 || tri * 3 + 2 >= index.count) return null;
     const pos = geo.getAttribute("position");
@@ -3309,6 +3338,7 @@ export class Viewport {
   }
 
   private stressMesh: THREE.Mesh | null = null;
+  private stressRest: THREE.BufferGeometry | null = null;
   private stressHidden: { bodyId: string; wasVisible: boolean } | null = null;
   /** The overlay's undeformed positions and displacement, while it has one. */
   private stressShape: { base: Float32Array; displacement: Float32Array } | null = null;

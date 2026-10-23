@@ -50,14 +50,14 @@ function onDeform(e: Event) {
 
     <StressVerdict
       :input="result.verdict"
-      :marked="stress.colours === 'shown'"
-      :scale="deform?.scale ?? null"
+      :marked="!modelChanged"
+      :scale="deform ? (deform.shown ? deform.scale : 0) : null"
       :max-deflection="result.maxDeflection"
       :unit="unit"
     />
     <div class="measure-k stress-ran-with">{{ ranWith }}</div>
 
-    <template v-if="deform && !modelChanged">
+    <template v-if="deform?.shown && !modelChanged">
       <div class="measure-row">
         <span class="measure-k">Exaggeration</span>
         <span class="measure-v stress-deform-label">{{ deformLabel(deform.scale) }}</span>
@@ -105,6 +105,18 @@ function onDeform(e: Event) {
           <span class="track"><span class="knob" /></span>
         </span>
         <span class="measure-k">Colours</span>
+      </label>
+      <label v-if="deform && !modelChanged" class="stress-gravity" title="Draw the body bent under the load">
+        <span class="param-switch">
+          <input
+            type="checkbox"
+            class="stress-shape"
+            :checked="deform.shown"
+            @change="engine.ui.panels.setStressShape(($event.target as HTMLInputElement).checked)"
+          />
+          <span class="track"><span class="knob" /></span>
+        </span>
+        <span class="measure-k">Deformed shape</span>
       </label>
       <!-- Stays pressable to leave probe mode whatever the colours are doing. -->
       <button

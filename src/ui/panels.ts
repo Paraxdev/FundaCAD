@@ -51,6 +51,7 @@ import {
 } from "./stress";
 import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } from "../types";
 import { isVec3 } from "../document/stressStudy";
+import { bodyLabels, labelledBodies } from "./bodyLabels";
 import * as THREE from "three";
 
 type StressOverlay = NonNullable<Parameters<Viewport["setStressOverlay"]>[0]>;
@@ -63,8 +64,8 @@ export interface StressGlyphsApi {
   setProbePins(pins: Pick<StressProbePin, "tri" | "weights" | "label">[]): void;
   /** The result's weakest spot as a pin; optional so a test rig can leave it out. */
   setWeakSpot?(p: Pick<StressProbePin, "tri" | "weights" | "label"> | null): void;
-  /** Place mode with the orb a click would put down, or null to end it. */
-  setPlacing?(p: { color: number; radius: number } | null): void;
+  /** Place mode with the orb a click would put down, a null radius for none, or null to end it. */
+  setPlacing?(p: { color: number; radius: number | null } | null): void;
   dispose(): void;
 }
 
@@ -78,6 +79,10 @@ export interface PanelsDeps {
    *  rig) the panel works with nothing drawn but the face tints. */
   stressGlyphs?: (handlers: StressGlyphHandlers) => StressGlyphsApi;
 }
+
+const INTERFERENCE_MARKS = "interference";
+// Violet, apart from the amber hover, the orange selection and the red clash volume drawn inside the pair.
+const INTERFERENCE_TINT = 0xa98bff;
 
 export function createPanels(deps: PanelsDeps) {
   const { store, viewport, geometry, hasBody, setStatus } = deps;
@@ -96,9 +101,11 @@ export function createPanels(deps: PanelsDeps) {
     const f = toDisplay(1);
     // The mesh of a body that is not a sound solid has no inside, so a volume
     // summed off it and the centre of mass weighted by it are wrong.
-    const faults = (store.buildState.result?.bodies ?? [])
+    const built = store.buildState.result?.bodies ?? [];
+    const names = bodyLabels(built, (id) => store.bodyName(id));
+    const faults = built
       .filter((b) => b.fault !== undefined && p.ids.includes(b.id))
-      .map((b) => `${b.name} ${b.fault}`);
+      .map((b) => `${names.get(b.id)} ${b.fault}`);
     const solid = faults.length === 0;
     const rows: PanelRow[] = [
       ...(solid ? [{ k: "Volume", v: `${displayRound(p.volume * f * f * f)} ${unit}³` }] : []),
@@ -145,6 +152,8 @@ export function createPanels(deps: PanelsDeps) {
       return;
     }
     setStatus("Checking interference…", "");
+    tinted = null;
+    viewport.setFaceMarks(null, INTERFERENCE_MARKS);
     const res = await geometry.interference(store.document, clearanceMm);
     if (!res.ok) {
       setStatus(`Interference check failed: ${res.message ?? "error"}`, "error");
@@ -152,7 +161,9 @@ export function createPanels(deps: PanelsDeps) {
     }
     const pairs = res.pairs ?? [];
     const clearances = res.clearances ?? [];
-    const unchecked = (res.unchecked ?? []).map((u) => `${u.name} ${u.reason}`);
+    const labels = bodyLabels(store.buildState.result?.bodies ?? [], (id) => store.bodyName(id));
+    const label = (id: string, raw: string) => labels.get(id) ?? raw;
+    const unchecked = (res.unchecked ?? []).map((u) => `${label(u.id, u.name)} ${u.reason}`);
     const foundAny = pairs.length || clearances.length;
     const notJudged = unchecked.length
       ? `, ${unchecked.length} ${unchecked.length === 1 ? "body" : "bodies"} could not be checked`
@@ -167,13 +178,13 @@ export function createPanels(deps: PanelsDeps) {
     const unit = getUnit();
     const f = toDisplay(1);
     const clashes: ClashRow[] = pairs.map((p) => ({
-      k: `${p.aName} ∩ ${p.bName}`,
+      k: `${label(p.a, p.aName)} ∩ ${label(p.b, p.bName)}`,
       v: `${displayRound(p.volume * f * f * f)} ${unit}³`,
       a: p.a,
       b: p.b,
     }));
     const clearanceRows: ClearanceRow[] = clearances.map((c) => ({
-      k: `${c.aName} ↔ ${c.bName}`,
+      k: `${label(c.a, c.aName)} ↔ ${label(c.b, c.bName)}`,
       v: `${displayRound(toDisplay(c.distance))} ${unit}`,
       a: c.a,
       b: c.b,
@@ -194,6 +205,25 @@ export function createPanels(deps: PanelsDeps) {
   function closeInterference() {
     panels.interference = null;
     viewport.setInterferenceOverlay(null, null);
+    tinted = null;
+    viewport.setFaceMarks(null, INTERFERENCE_MARKS);
+  }
+
+  let tinted: { build: unknown; key: string } | null = null;
+
+  // A tint rather than a selection, which would bring up the Move gizmo and the selection toolbar over the pair.
+  // A second click on the same pair clears it.
+  function highlightInterference(a: string, b: string) {
+    const built = store.buildState.result;
+    const key = `${a} ${b}`;
+    const again = tinted?.build === built && tinted.key === key;
+    const faces = again
+      ? []
+      : (built?.bodies ?? [])
+          .filter((x) => x.id === a || x.id === b)
+          .flatMap((x) => Array.from({ length: x.faceCount }, (_, i) => x.faceStart + i));
+    tinted = faces.length ? { build: built, key } : null;
+    viewport.setFaceMarks(faces.length ? [{ faceIds: faces, color: INTERFERENCE_TINT }] : null, INTERFERENCE_MARKS);
   }
 
   // Stress: a linear static analysis of one body, its setup edited in the panel and saved with the document.
@@ -277,7 +307,7 @@ export function createPanels(deps: PanelsDeps) {
 
   /** The bodies the panel can analyse, in build order. */
   function stressBodies(): { id: string; name: string }[] {
-    return (store.buildState.result?.bodies ?? []).map((b) => ({ id: b.id, name: b.name }));
+    return labelledBodies(store);
   }
 
   function showStress() {
@@ -432,9 +462,10 @@ export function createPanels(deps: PanelsDeps) {
     // An edit makes the colours stale for good; a model drawn again without
     // one (an eye toggle) only took them off.
     if (d.colours !== "none" && !(colours && colours.epoch === docEpoch)) dropResultDrawing();
-    else if (d.colours === "shown" && !viewport.hasStressOverlay()) {
+    else if (d.colours !== "none" && !viewport.hasStressOverlay()) {
       stopAnimation();
       panels.setStressColours("hidden");
+      drawOverlay();
       showWeakSpot();
     }
     const missing = relocateStressFaces();
@@ -451,7 +482,7 @@ export function createPanels(deps: PanelsDeps) {
     }
     drawGlyphs();
     const s = d.setup;
-    if (d.colours === "shown" || !s.body || !store.isBodyVisible(s.body)) {
+    if (d.colours === "shown" || shapeDrawn() || !s.body || !store.isBodyVisible(s.body)) {
       viewport.setFaceMarks(null);
       return;
     }
@@ -478,9 +509,10 @@ export function createPanels(deps: PanelsDeps) {
     showWeakSpot();
   }
 
-  /** The weakest spot's pin, shown while the colours are. */
+  /** The weakest spot's pin, shown while the result is, colours or not. */
   function showWeakSpot() {
-    glyphs?.setWeakSpot?.(panels.stress?.colours === "shown" ? weakSpot : null);
+    const c = panels.stress?.colours;
+    glyphs?.setWeakSpot?.(c === "shown" || c === "hidden" ? weakSpot : null);
   }
 
   let glyphsPending = false;
@@ -658,8 +690,15 @@ export function createPanels(deps: PanelsDeps) {
         return;
       }
       if (!d.setup.body) panels.setStressBody(hit.body);
-      const radius = spotRadiusFor(hit.body);
-      panels.addStressSpot(target, { at: hit.at.map(round4) as Vec3, radius, normal: hit.normal.map(round4) as Vec3 });
+      if (d.placeAs === "face") addStressFace(target, hit.body, hit.faceId, hit.at);
+      else {
+        const radius = spotRadiusFor(hit.body);
+        panels.addStressSpot(target, {
+          at: hit.at.map(round4) as Vec3,
+          radius,
+          normal: hit.normal.map(round4) as Vec3,
+        });
+      }
       if (!more) stopPlacing();
     },
     leavePlacing() {
@@ -694,12 +733,12 @@ export function createPanels(deps: PanelsDeps) {
     return defaultSpotRadius(box && !box.isEmpty() ? box.min.distanceTo(box.max) : NaN);
   }
 
-  /** The next click on the body puts a spot there; Place again or Esc disarms. The result's colours come off first, as
-   *  the click is on the body. */
-  function placeStressSpot(target: StressTarget) {
+  /** The next click on the body adds the face clicked, whole, or with `as` "spot" puts a spot there; the same button
+   *  again or Esc disarms. The result's colours come off first, as the click is on the body. */
+  function placeStressSpot(target: StressTarget, as: "face" | "spot" = "face") {
     const d = panels.stress;
     if (!d) return;
-    if (sameTarget(d.placing, target)) {
+    if (sameTarget(d.placing, target) && d.placeAs === as) {
       stopPlacing();
       return;
     }
@@ -707,11 +746,32 @@ export function createPanels(deps: PanelsDeps) {
     if (!row) return;
     if (d.probe) setStressProbe(false);
     if (d.colours === "shown") setStressColours(false);
+    if (d.deform?.shown) setStressShape(false);
     const body = bodyOnModel();
-    panels.setStressPlacing(target);
+    panels.setStressPlacing(target, as);
     const color = "support" in target ? SUPPORT_COLORS[(row as { type: StressSupportType }).type] : LOAD_MARK_COLOR;
-    const radius = body ? spotRadiusFor(body) : defaultSpotRadius(NaN);
+    const radius = as === "face" ? null : body ? spotRadiusFor(body) : defaultSpotRadius(NaN);
     glyphs?.setPlacing?.({ color, radius });
+  }
+
+  /** Adds the clicked face to the row's faces, by the point clicked, which the engine resolves to that face as it
+   *  does a picked one. A face the row already holds is left as it is. */
+  function addStressFace(target: StressTarget, body: string, faceId: number, at: Vec3) {
+    relocateStressFaces();
+    const row = panels.stressRow(target);
+    if (!row || row.faces.faceIds.includes(faceId)) return;
+    const was = row.faces;
+    const faces: StressFaceSet = {
+      ...faceSet(
+        [...was.selectors, { kind: "face", by: "nearest", point: at.map(round4) as Vec3, body }],
+        [...was.faceIds, faceId],
+      ),
+      ...(was.missing ? { missing: was.missing } : {}),
+      ...(was.unshown !== undefined ? { unshown: was.unshown } : {}),
+    };
+    if ("support" in target) panels.setStressSupportFaces(target.support, faces);
+    else panels.setStressLoadFaces(target.load, faces);
+    refreshStressMarks();
   }
 
   function stopPlacing() {
@@ -829,15 +889,28 @@ export function createPanels(deps: PanelsDeps) {
     refreshStressMarks();
   }
 
-  /** The overlay as it should be drawn now, at the slider's deformation. */
+  /** The overlay as it should be drawn now: coloured or plain, and deformed at the slider's pose while the shape is
+   *  shown. Plain and still, it leaves the body itself on show. */
   function overlayNow(): StressOverlay | null {
-    if (!colours) return null;
-    if (!colours.overlay.displacement) return colours.overlay;
-    return { ...colours.overlay, scale: poseScale() };
+    const d = panels.stress;
+    if (!colours || !d || d.colours === "none") return null;
+    const { displacement, ...still } = colours.overlay;
+    const o = { ...still, colours: d.colours === "shown" };
+    return displacement && d.deform?.shown ? { ...o, displacement, scale: poseScale() } : o;
   }
 
-  /** Put the last result's colours on the body, or take them off so its faces
-   *  can be picked again. Only while the model is the one they were for. */
+  function drawOverlay() {
+    const o = overlayNow();
+    viewport.setStressOverlay(o && store.isBodyVisible(o.bodyId) ? o : null);
+  }
+
+  /** The deformed shape stands in for the body, so its faces cannot be picked or tinted. */
+  function shapeDrawn(): boolean {
+    return !!colours?.overlay.displacement && !!panels.stress?.deform?.shown;
+  }
+
+  /** Put the last result's colours on the body, or take them off. The deformed shape keeps its own switch. Only
+   *  while the model is the one they were for. */
   function setStressColours(on: boolean) {
     const d = panels.stress;
     if (!d || d.colours === "none") return;
@@ -845,15 +918,25 @@ export function createPanels(deps: PanelsDeps) {
       dropResultDrawing();
       return;
     }
-    if (!on) {
-      pauseAnimation();
-      if (d.probe) setStressProbe(false);
-    }
-    viewport.setStressOverlay(on ? overlayNow() : null);
+    if (!on && d.probe) setStressProbe(false);
     panels.setStressColours(on ? "shown" : "hidden");
+    drawOverlay();
     refreshStressMarks();
     showWeakSpot();
-    if (on && d.deform?.animate) startAnimation();
+  }
+
+  /** Draw the deformed shape, or the body as built so its faces can be picked again with the colours off. */
+  function setStressShape(on: boolean) {
+    const d = panels.stress;
+    if (!d?.deform || d.colours === "none" || d.deform.shown === on) return;
+    if (on && !(colours && colours.epoch === docEpoch)) {
+      dropResultDrawing();
+      return;
+    }
+    if (!on) pauseAnimation();
+    d.deform.shown = on;
+    drawOverlay();
+    refreshStressMarks();
   }
 
   /** Draw the deformed shape at `scale` times the true deflection. */
@@ -876,8 +959,9 @@ export function createPanels(deps: PanelsDeps) {
       pauseAnimation();
       return;
     }
+    if (!def.shown) setStressShape(true);
+    if (!def.shown) return;
     def.animate = true;
-    if (panels.stress?.colours !== "shown") setStressColours(true);
     startAnimation();
   }
 
@@ -894,7 +978,7 @@ export function createPanels(deps: PanelsDeps) {
     const step = (now: number) => {
       animRaf = 0;
       const d = panels.stress;
-      if (!d?.deform?.animate || d.colours !== "shown") return;
+      if (!d?.deform?.animate || !d.deform.shown || d.colours === "none") return;
       animPhase = animFrom + (now - animT0);
       viewport.setStressDeformation(swingScale(animPhase, d.deform.scale));
       animRaf = requestAnimationFrame(step);
@@ -1037,7 +1121,7 @@ export function createPanels(deps: PanelsDeps) {
       weakSpot = corner && { ...corner, label: weakSpotLabel(r.safetyFactor) };
       if (moves) {
         const auto = autoDeformScale(r.surface.positions, disp!);
-        panels.setStressDeform({ scale: auto, auto, max: deformSliderMax(auto), animate: false });
+        panels.setStressDeform({ scale: auto, auto, max: deformSliderMax(auto), animate: false, shown: true });
       }
       panels.setStressColours("hidden");
       setStressColours(true);
@@ -1093,6 +1177,7 @@ export function createPanels(deps: PanelsDeps) {
     closeProperties,
     showInterference,
     closeInterference,
+    highlightInterference,
     showOverhangSettings,
     closeOverhangSettings,
     showStress,
@@ -1110,6 +1195,7 @@ export function createPanels(deps: PanelsDeps) {
     addStressLoad,
     removeStressLoad,
     setStressColours,
+    setStressShape,
     refreshStressMarks,
     setStressDeformation,
     setStressAnimate,
