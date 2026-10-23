@@ -195,4 +195,49 @@ describe("Compute All runs as the document's rebuild", () => {
       c: { sent: ["r3:c1"], features: ["c1"], bodies: ["c"], building: false, ops: 0 },
     });
   });
+
+  it("History names each pass of the loop for what it is, not for the pass that started it", async () => {
+    const labels = (store: DocumentStore) => ({
+      chip: store.busyState.label,
+      rows: store.runningOps.map((o) => o.label),
+    });
+    const runs: Record<string, unknown> = {};
+    for (const first of ["computeAll", "rebuild"] as const) {
+      const { store, jobs } = await built(["a"]);
+      let done: Promise<void>;
+      if (first === "computeAll") {
+        done = store.computeAllNow();
+        await flush();
+        const one = labels(store);
+        store.addFeature(box("b", 4.5));
+        await later();
+        jobs[0]!.settle({ ok: true, result: result("a, all") });
+        await flush();
+        runs[first] = { one, two: labels(store) };
+      } else {
+        store.addFeature(box("b", 4.5));
+        await later();
+        const one = labels(store);
+        done = store.computeAllNow();
+        await flush();
+        jobs[0]!.settle({ ok: true, result: result("a+b") });
+        await flush();
+        runs[first] = { one, two: labels(store) };
+      }
+      jobs[1]?.settle({ ok: true, result: result("a+b, last") });
+      await done;
+      await flush();
+      runs[`${first} then`] = { sent: sent(jobs), ...labels(store), c: await secondDocument(store, jobs) };
+    }
+    const rebuilding = { chip: "Rebuilding", rows: ["Rebuilding"] };
+    const computing = { chip: "Computing all", rows: ["Computing all"] };
+    const idle = { chip: "", rows: [] };
+    const c = (id: number) => ({ sent: [`r${id}:c1`], features: ["c1"], bodies: ["c"], building: false, ops: 0 });
+    expect(runs).toEqual({
+      computeAll: { one: computing, two: rebuilding },
+      "computeAll then": { sent: ["ca1:a", "r2:a,b"], ...idle, c: c(3) },
+      rebuild: { one: rebuilding, two: computing },
+      "rebuild then": { sent: ["r1:a,b", "ca2:a,b"], ...idle, c: c(3) },
+    });
+  });
 });

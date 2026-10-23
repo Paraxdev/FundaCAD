@@ -2,7 +2,7 @@
 // Export hands the engine a path from the save dialog, so the file never round-trips through the webview.
 
 import { suggestedSavePath } from "./saveFolder";
-import type { CarriedSection, DocumentStore } from "../document/store";
+import type { CarriedSection, DocumentStore, GivenUp } from "../document/store";
 import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat, PlaneDef } from "../types";
@@ -259,22 +259,25 @@ export async function openDocument(
   },
 ) {
   if (isTauri()) {
-    // A file picked for a document closed while the dialog was up is not imported into the next one.
+    // A file picked for a document closed while the dialog was up is not imported into the next one. Only the dialog
+    // counts as an import here, so no doc_set replaces its document, and Home still sees a blank one as blank.
     const session = store.session;
     const { open } = await import("@tauri-apps/plugin-dialog");
-    const path = await open({
-      multiple: false,
-      // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
-      // body), routed by extension below, so users can just "open" an STL.
-      filters: [
-        {
-          name: "All supported",
-          extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS]),
-        },
-        { name: "FundaCAD Document", extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"]) },
-        { name: "Mesh / CAD", extensions: dialogExts(IMPORT_EXTS) },
-      ],
-    });
+    const path = await store.importing(() =>
+      open({
+        multiple: false,
+        // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
+        // body), routed by extension below, so users can just "open" an STL.
+        filters: [
+          {
+            name: "All supported",
+            extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS]),
+          },
+          { name: "FundaCAD Document", extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"]) },
+          { name: "Mesh / CAD", extensions: dialogExts(IMPORT_EXTS) },
+        ],
+      }),
+    );
     if (typeof path !== "string") return;
     const ext = path.split(".").pop()?.toLowerCase();
     if (isDocumentExt(ext)) {
@@ -300,11 +303,11 @@ export async function openDocumentText(
   let unpublished: string | null;
   try {
     unpublished = await publishEmbeddedGeometry(store, text);
-    if (!(await mayStillReplace(store, ticket, name))) return "dropped";
+    if (!(await mayStillReplace(store, ticket, name))) return settle(store, ticket, "dropped");
     store.load(text);
   } catch (e) {
     await reportUnreadable(e);
-    return "unreadable";
+    return settle(store, ticket, "unreadable");
   }
   // No real path, but the name lets the title bar show what is open and drop the unsaved marker.
   store.markSaved(name);
@@ -341,9 +344,23 @@ export async function openDocumentBytes(
     };
   } catch (e) {
     await reportError(`Couldn't open ${file.name}: ${errMsg(e)}`);
-    return "unreadable";
+    return settle(store, ticket, "unreadable");
   }
-  return finishOpen(store, file.name, opened, geometry, null, ticket);
+  return settle(store, ticket, await finishOpen(store, file.name, opened, geometry, null, ticket));
+}
+
+/** A template is read like a file, so a New or an edit made meanwhile is kept the same way. */
+export async function openTemplate(
+  store: DocumentStore,
+  name: string,
+  read: () => Promise<string>,
+): Promise<OpenOutcome> {
+  const ticket = openTicket(store);
+  const text = await read();
+  if (!(await mayStillReplace(store, ticket, name))) return settle(store, ticket, "dropped");
+  store.load(text);
+  store.markOpenedWithoutPath(name);
+  return "ok";
 }
 
 /** "unreadable": the file is gone or corrupt, callers may forget it. "newerFormat": this build is too old, and
@@ -354,11 +371,18 @@ export type OpenOutcome = "ok" | "unreadable" | "newerFormat" | "dropped";
 interface OpenTicket {
   op: OpenOp;
   edits: number;
+  given: GivenUp | null;
 }
 
 // Taken when the user has agreed to replace the open document, before the file is read.
 function openTicket(store: DocumentStore): OpenTicket {
-  return { op: store.sessions.opening(), edits: store.editCount };
+  return { op: store.sessions.opening(), edits: store.userEditCount, given: store.givenUpMark };
+}
+
+// An open that did not land kept the document, so the Discard it asked for no longer drops its crash snapshot.
+function settle(store: DocumentStore, ticket: OpenTicket, outcome: OpenOutcome): OpenOutcome {
+  if (outcome !== "ok") store.revokeGivenUp(ticket.given);
+  return outcome;
 }
 
 // Right before the swap: what the user agreed to replace must still be what is open (rm4abwsm).
@@ -370,8 +394,8 @@ async function mayStillReplace(store: DocumentStore, ticket: OpenTicket, name: s
       toast(`${name} was not opened, another document was started while it was read.`, { kind: "info" });
       return false;
     }
-    if (store.editCount === ticket.edits || !store.dirty) return true;
-    ticket.edits = store.editCount;
+    if (store.userEditCount === ticket.edits || !store.dirty) return true;
+    ticket.edits = store.userEditCount;
     const { choose } = await import("../ui/choice");
     const pick = await choose(
       `${store.fileName} changed while ${name} was read. Discard those changes and open ${name}?`,
@@ -381,7 +405,7 @@ async function mayStillReplace(store: DocumentStore, ticket: OpenTicket, name: s
       ],
     );
     if (pick !== "discard") return false;
-    store.markGivenUp();
+    ticket.given = store.markGivenUp();
   }
 }
 
@@ -463,9 +487,9 @@ export async function openDocumentAtPath(
     // container format, a damaged archive, geometry that does not match its
     // manifest), so pass them through rather than wrapping them in ours.
     await reportError(`Couldn't open ${base}: ${errMsg(e)}`);
-    return "unreadable";
+    return settle(store, ticket, "unreadable");
   }
-  return finishOpen(store, base, opened, geometry, path, ticket);
+  return settle(store, ticket, await finishOpen(store, base, opened, geometry, path, ticket));
 }
 
 interface RustOpened {
@@ -759,34 +783,37 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
   }
   const session = store.session;
   const { open } = await import("@tauri-apps/plugin-dialog");
-  const path = await open({
-    multiple: false,
-    filters: [
-      { name: "All supported", extensions: dialogExts(IMPORT_EXTS) },
-      { name: "STL", extensions: dialogExts(["stl"]) },
-      { name: "3MF", extensions: dialogExts(["3mf"]) },
-      { name: "STEP", extensions: dialogExts(["step", "stp", "stpz", "gz"]) },
-      { name: "IGES", extensions: dialogExts(["iges", "igs"]) },
-      { name: "BREP", extensions: dialogExts(["brep"]) },
-      { name: "OCCT XBF", extensions: dialogExts(["xbf"]) },
-      { name: "FreeCAD", extensions: dialogExts(["fcstd"]) },
-      { name: "Rhino 3DM", extensions: dialogExts(["3dm"]) },
-      { name: "IFC (buildings)", extensions: dialogExts(["ifc"]) },
-      { name: "DXF (AutoCAD)", extensions: dialogExts(["dxf"]) },
-      { name: "SVG (drawing)", extensions: dialogExts(["svg"]) },
-      { name: "OBJ", extensions: dialogExts(["obj"]) },
-      { name: "PLY", extensions: dialogExts(["ply"]) },
-      { name: "OFF", extensions: dialogExts(["off"]) },
-      { name: "AMF", extensions: dialogExts(["amf"]) },
-      { name: "glTF", extensions: dialogExts(["glb", "gltf"]) },
-      { name: "VRML", extensions: dialogExts(["wrl", "wrz"]) },
-      { name: "X3D", extensions: dialogExts(["x3d", "x3dz"]) },
-      { name: "FBX (Maya, 3ds Max)", extensions: dialogExts(["fbx"]) },
-      { name: "3DS (old 3ds Max)", extensions: dialogExts(["3ds"]) },
-    ],
+  // Counted as an import from the dialog on, so a doc_set cannot replace the document the picked file lands in.
+  await store.importing(async () => {
+    const path = await open({
+      multiple: false,
+      filters: [
+        { name: "All supported", extensions: dialogExts(IMPORT_EXTS) },
+        { name: "STL", extensions: dialogExts(["stl"]) },
+        { name: "3MF", extensions: dialogExts(["3mf"]) },
+        { name: "STEP", extensions: dialogExts(["step", "stp", "stpz", "gz"]) },
+        { name: "IGES", extensions: dialogExts(["iges", "igs"]) },
+        { name: "BREP", extensions: dialogExts(["brep"]) },
+        { name: "OCCT XBF", extensions: dialogExts(["xbf"]) },
+        { name: "FreeCAD", extensions: dialogExts(["fcstd"]) },
+        { name: "Rhino 3DM", extensions: dialogExts(["3dm"]) },
+        { name: "IFC (buildings)", extensions: dialogExts(["ifc"]) },
+        { name: "DXF (AutoCAD)", extensions: dialogExts(["dxf"]) },
+        { name: "SVG (drawing)", extensions: dialogExts(["svg"]) },
+        { name: "OBJ", extensions: dialogExts(["obj"]) },
+        { name: "PLY", extensions: dialogExts(["ply"]) },
+        { name: "OFF", extensions: dialogExts(["off"]) },
+        { name: "AMF", extensions: dialogExts(["amf"]) },
+        { name: "glTF", extensions: dialogExts(["glb", "gltf"]) },
+        { name: "VRML", extensions: dialogExts(["wrl", "wrz"]) },
+        { name: "X3D", extensions: dialogExts(["x3d", "x3dz"]) },
+        { name: "FBX (Maya, 3ds Max)", extensions: dialogExts(["fbx"]) },
+        { name: "3DS (old 3ds Max)", extensions: dialogExts(["3ds"]) },
+      ],
+    });
+    if (typeof path !== "string" || !session.alive) return;
+    await importPath(store, geometry, path);
   });
-  if (typeof path !== "string" || !session.alive) return;
-  await importPath(store, geometry, path);
 }
 
 /** The most recently cancelled import's path, so a retry is one click. Session state only, never in the document. */
