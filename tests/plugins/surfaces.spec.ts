@@ -39,11 +39,8 @@ function fakeEngine(): Engine {
 const labels = (menus: { label: string }[]) => menus.map((m) => m.label);
 
 describe("the menubar", () => {
-  it("has no View menu of its own", () => {
-    // Every row of View belonged to one capability. With nothing contributed the
-    // menu is not empty, it is absent, and the app arrives there by having
-    // nothing to put in it rather than by knowing whose it was.
-    expect(labels(buildMenubar(fakeEngine()))).toEqual(["File", "Edit", "Help"]);
+  it("has the core menus, View among them, with nothing contributed", () => {
+    expect(labels(buildMenubar(fakeEngine()))).toEqual(["File", "Edit", "View", "Help"]);
   });
 
   it("appends rows to a menu that already exists", () => {
@@ -57,8 +54,8 @@ describe("the menubar", () => {
   });
 
   it("creates a menu that does not exist, where it asked to be", () => {
-    contribute("A.One", { menus: [{ menu: "View", before: "Help", items: [{ label: "Tumble" }] }] });
-    expect(labels(buildMenubar(fakeEngine()))).toEqual(["File", "Edit", "View", "Help"]);
+    contribute("A.One", { menus: [{ menu: "Tools", before: "Help", items: [{ label: "Tumble" }] }] });
+    expect(labels(buildMenubar(fakeEngine()))).toEqual(["File", "Edit", "View", "Tools", "Help"]);
   });
 
   it("puts an unplaced menu at the end rather than refusing it", () => {
@@ -70,10 +67,10 @@ describe("the menubar", () => {
     // The control. A menubar built once and cached, or a merge that pushed into
     // the plugin's own item array, would both pass the cases above and leave a
     // switched-off capability's rows in File forever.
-    const off = contribute("A.One", { menus: [{ menu: "View", items: [{ label: "Tumble" }] }] });
-    expect(labels(buildMenubar(fakeEngine()))).toContain("View");
+    const off = contribute("A.One", { menus: [{ menu: "Tools", items: [{ label: "Tumble" }] }] });
+    expect(labels(buildMenubar(fakeEngine()))).toContain("Tools");
     off();
-    expect(labels(buildMenubar(fakeEngine()))).not.toContain("View");
+    expect(labels(buildMenubar(fakeEngine()))).not.toContain("Tools");
   });
 
   it("changes nothing when a capability is merely switched on", () => {
@@ -88,9 +85,9 @@ describe("the menubar", () => {
     // So this asserts the useless half directly: the registry moving is not the
     // signal, the contribution landing is.
     setPluginEnabled("Some.Capability", true);
-    expect(labels(buildMenubar(fakeEngine()))).toEqual(["File", "Edit", "Help"]);
-    contribute("Some.Capability", { menus: [{ menu: "View", before: "Help", items: [{ label: "Tumble" }] }] });
-    expect(labels(buildMenubar(fakeEngine()))).toContain("View");
+    expect(labels(buildMenubar(fakeEngine()))).toEqual(["File", "Edit", "View", "Help"]);
+    contribute("Some.Capability", { menus: [{ menu: "Tools", before: "Help", items: [{ label: "Tumble" }] }] });
+    expect(labels(buildMenubar(fakeEngine()))).toContain("Tools");
   });
 
   it("does not grow the contribution's own item list on every render", () => {
