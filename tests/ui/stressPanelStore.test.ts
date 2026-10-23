@@ -97,7 +97,7 @@ describe("stress panel store", () => {
       },
     });
     p.setStressColours("shown");
-    p.setStressDeform({ scale: 10, auto: 10, max: 40, animate: false });
+    p.setStressDeform({ scale: 10, auto: 10, max: 40, animate: false, shown: true });
     p.setStressProbe(true);
     p.addStressPin({ tri: 0, weights: [1, 0, 0], label: "3 MPa" });
     const setup = p.stress!.setup;

@@ -432,9 +432,10 @@ export function createPanels(deps: PanelsDeps) {
     // An edit makes the colours stale for good; a model drawn again without
     // one (an eye toggle) only took them off.
     if (d.colours !== "none" && !(colours && colours.epoch === docEpoch)) dropResultDrawing();
-    else if (d.colours === "shown" && !viewport.hasStressOverlay()) {
+    else if (d.colours !== "none" && !viewport.hasStressOverlay()) {
       stopAnimation();
       panels.setStressColours("hidden");
+      if (colours && store.isBodyVisible(colours.overlay.bodyId)) drawOverlay();
       showWeakSpot();
     }
     const missing = relocateStressFaces();
@@ -451,7 +452,7 @@ export function createPanels(deps: PanelsDeps) {
     }
     drawGlyphs();
     const s = d.setup;
-    if (d.colours === "shown" || !s.body || !store.isBodyVisible(s.body)) {
+    if (d.colours === "shown" || shapeDrawn() || !s.body || !store.isBodyVisible(s.body)) {
       viewport.setFaceMarks(null);
       return;
     }
@@ -478,9 +479,10 @@ export function createPanels(deps: PanelsDeps) {
     showWeakSpot();
   }
 
-  /** The weakest spot's pin, shown while the colours are. */
+  /** The weakest spot's pin, shown while the result is, colours or not. */
   function showWeakSpot() {
-    glyphs?.setWeakSpot?.(panels.stress?.colours === "shown" ? weakSpot : null);
+    const c = panels.stress?.colours;
+    glyphs?.setWeakSpot?.(c === "shown" || c === "hidden" ? weakSpot : null);
   }
 
   let glyphsPending = false;
@@ -707,6 +709,7 @@ export function createPanels(deps: PanelsDeps) {
     if (!row) return;
     if (d.probe) setStressProbe(false);
     if (d.colours === "shown") setStressColours(false);
+    if (d.deform?.shown) setStressShape(false);
     const body = bodyOnModel();
     panels.setStressPlacing(target);
     const color = "support" in target ? SUPPORT_COLORS[(row as { type: StressSupportType }).type] : LOAD_MARK_COLOR;
@@ -829,15 +832,27 @@ export function createPanels(deps: PanelsDeps) {
     refreshStressMarks();
   }
 
-  /** The overlay as it should be drawn now, at the slider's deformation. */
+  /** The overlay as it should be drawn now: coloured or plain, and deformed at the slider's pose while the shape is
+   *  shown. Plain and still, it leaves the body itself on show. */
   function overlayNow(): StressOverlay | null {
-    if (!colours) return null;
-    if (!colours.overlay.displacement) return colours.overlay;
-    return { ...colours.overlay, scale: poseScale() };
+    const d = panels.stress;
+    if (!colours || !d || d.colours === "none") return null;
+    const { displacement, ...still } = colours.overlay;
+    const o = { ...still, colours: d.colours === "shown" };
+    return displacement && d.deform?.shown ? { ...o, displacement, scale: poseScale() } : o;
   }
 
-  /** Put the last result's colours on the body, or take them off so its faces
-   *  can be picked again. Only while the model is the one they were for. */
+  function drawOverlay() {
+    viewport.setStressOverlay(overlayNow());
+  }
+
+  /** The deformed shape stands in for the body, so its faces cannot be picked or tinted. */
+  function shapeDrawn(): boolean {
+    return !!colours?.overlay.displacement && !!panels.stress?.deform?.shown;
+  }
+
+  /** Put the last result's colours on the body, or take them off. The deformed shape keeps its own switch. Only
+   *  while the model is the one they were for. */
   function setStressColours(on: boolean) {
     const d = panels.stress;
     if (!d || d.colours === "none") return;
@@ -845,15 +860,25 @@ export function createPanels(deps: PanelsDeps) {
       dropResultDrawing();
       return;
     }
-    if (!on) {
-      pauseAnimation();
-      if (d.probe) setStressProbe(false);
-    }
-    viewport.setStressOverlay(on ? overlayNow() : null);
+    if (!on && d.probe) setStressProbe(false);
     panels.setStressColours(on ? "shown" : "hidden");
+    drawOverlay();
     refreshStressMarks();
     showWeakSpot();
-    if (on && d.deform?.animate) startAnimation();
+  }
+
+  /** Draw the deformed shape, or the body as built so its faces can be picked again with the colours off. */
+  function setStressShape(on: boolean) {
+    const d = panels.stress;
+    if (!d?.deform || d.colours === "none" || d.deform.shown === on) return;
+    if (on && !(colours && colours.epoch === docEpoch)) {
+      dropResultDrawing();
+      return;
+    }
+    if (!on) pauseAnimation();
+    d.deform.shown = on;
+    drawOverlay();
+    refreshStressMarks();
   }
 
   /** Draw the deformed shape at `scale` times the true deflection. */
@@ -876,8 +901,9 @@ export function createPanels(deps: PanelsDeps) {
       pauseAnimation();
       return;
     }
+    if (!def.shown) setStressShape(true);
+    if (!def.shown) return;
     def.animate = true;
-    if (panels.stress?.colours !== "shown") setStressColours(true);
     startAnimation();
   }
 
@@ -894,7 +920,7 @@ export function createPanels(deps: PanelsDeps) {
     const step = (now: number) => {
       animRaf = 0;
       const d = panels.stress;
-      if (!d?.deform?.animate || d.colours !== "shown") return;
+      if (!d?.deform?.animate || !d.deform.shown || d.colours === "none") return;
       animPhase = animFrom + (now - animT0);
       viewport.setStressDeformation(swingScale(animPhase, d.deform.scale));
       animRaf = requestAnimationFrame(step);
@@ -1037,7 +1063,7 @@ export function createPanels(deps: PanelsDeps) {
       weakSpot = corner && { ...corner, label: weakSpotLabel(r.safetyFactor) };
       if (moves) {
         const auto = autoDeformScale(r.surface.positions, disp!);
-        panels.setStressDeform({ scale: auto, auto, max: deformSliderMax(auto), animate: false });
+        panels.setStressDeform({ scale: auto, auto, max: deformSliderMax(auto), animate: false, shown: true });
       }
       panels.setStressColours("hidden");
       setStressColours(true);
@@ -1110,6 +1136,7 @@ export function createPanels(deps: PanelsDeps) {
     addStressLoad,
     removeStressLoad,
     setStressColours,
+    setStressShape,
     refreshStressMarks,
     setStressDeformation,
     setStressAnimate,

@@ -165,6 +165,7 @@ function rig() {
   const ui = createPanels(deps);
   return {
     ui,
+    store,
     built,
     marks,
     overlays,
@@ -324,6 +325,7 @@ describe("stress panel flow", () => {
       indices: drawn.indices,
       values: drawn.values,
       range: { min: 1, max: 4 },
+      colours: true,
     });
     expect(drawn.indices.length / 3).toBe(16);
   });
@@ -398,7 +400,9 @@ describe("stress panel across changes", () => {
     // No tint over the colours.
     expect(r.marks.at(-1)).toBeNull();
     r.ui.setStressColours(false);
-    expect(r.overlays.at(-1)).toBeNull();
+    // Plain and still, kept for the weakest spot's pin while the body itself shows.
+    expect(r.overlays.at(-1)).toMatchObject({ bodyId: "b1", colours: false });
+    expect(r.overlays.at(-1)).not.toHaveProperty("displacement");
     expect(p.stress!.colours).toBe("hidden");
     expect(r.marks.at(-1)).toEqual([
       { faceIds: [1], color: 0x4ac6ff },
@@ -740,7 +744,7 @@ describe("the deformed shape and the probe", () => {
     await deformed(r);
     const p = usePanelsStore();
     const auto = p.stress!.deform!.auto;
-    expect(p.stress!.deform).toEqual({ scale: auto, auto, max: 4 * auto, animate: false });
+    expect(p.stress!.deform).toEqual({ scale: auto, auto, max: 4 * auto, animate: false, shown: true });
     // The scale is the engine mesh's; the drawn shape bends by the refined displacement.
     expect(auto).toBe(autoDeformScale(moving.surface!.positions, moving.surface!.displacement!));
     expect(r.overlays.at(-1)).toMatchObject({
@@ -1138,7 +1142,7 @@ describe("playing and pausing the deformation", () => {
     expect(scale).not.toBe(1);
   });
 
-  it("pauses when the tab asks, and when the colours go, coming back at the held pose", async () => {
+  it("pauses when the tab asks, and when the shape goes, coming back at the held pose", async () => {
     const { r, scale } = await played();
     const p = usePanelsStore();
     r.ui.setStressAnimate(true);
@@ -1155,10 +1159,12 @@ describe("playing and pausing the deformation", () => {
     frame(5000);
     clock = 5300;
     r.ui.setStressColours(false);
+    expect(p.stress!.deform!.animate, "the colours no longer carry the shape").toBe(true);
+    r.ui.setStressShape(false);
     expect(p.stress!.deform!.animate).toBe(false);
     expect(frames.size).toBe(0);
-    r.ui.setStressColours(true);
-    expect(r.overlays.at(-1)).toMatchObject({ scale: swingScale(REST + 500, scale) });
+    r.ui.setStressShape(true);
+    expect(r.overlays.at(-1)).toMatchObject({ colours: false, scale: swingScale(REST + 500, scale) });
   });
 
   it("resets to the full pose and cancels on Close, and a new Run starts still at full", async () => {
@@ -1245,7 +1251,7 @@ describe("the result through a close", () => {
     r.ui.showStress();
     const p = usePanelsStore();
     expect(p.stress!.colours).toBe("hidden");
-    expect(r.overlays.at(-1)).toBeNull();
+    expect(r.overlays.at(-1)).toMatchObject({ bodyId: "b1", colours: false });
     r.ui.setStressColours(true);
     expect(p.stress!.colours).toBe("shown");
   });
@@ -1348,14 +1354,17 @@ describe("the weakest spot", () => {
     expect(r.weakSpots.at(-1)).toEqual({ ...corner, label: "Weakest, 3.3x safe" });
   });
 
-  it("goes with the colours, on a new Run and when the model changes, and moves with a new peak", async () => {
+  it("stays through the colours and shape switches, goes on a new Run and a model change, moves with a new peak", async () => {
     const r = rig();
     setUp(r);
     await ran(r, bent);
+    const pin = r.weakSpots.at(-1);
+    expect(pin).not.toBeNull();
     r.ui.setStressColours(false);
-    expect(r.weakSpots.at(-1)).toBeNull();
+    r.ui.setStressShape(false);
+    expect(r.weakSpots.at(-1)).toEqual(pin);
     r.ui.setStressColours(true);
-    expect(r.weakSpots.at(-1)).not.toBeNull();
+    expect(r.weakSpots.at(-1)).toEqual(pin);
     const run = r.ui.runStress();
     expect(r.weakSpots.at(-1)).toBeNull();
     const moved = { ...bent, safetyFactor: null, maxVonMises: { value: 4, at: [2.5, 9.5, 0.5] as Vec3, face: 2 } };
@@ -1366,5 +1375,163 @@ describe("the weakest spot", () => {
     r.editDoc();
     r.rebuild(FIRST);
     expect(r.weakSpots.at(-1)).toBeNull();
+  });
+});
+
+describe("the colours and the deformed shape, each with its own switch", () => {
+  const leaning: StressReply = {
+    ...reply,
+    safetyFactor: 4.57,
+    maxVonMises: { value: 4, at: [100.2, 0.1, -0.05], face: 2 },
+    surface: {
+      ...reply.surface!,
+      positions: [13.5, -7.25, 4.1, 100, 0, 0, 2, 10, 0.5],
+      displacement: [0, 0, 0, 0.25, 0, -2, 0, 0.5, -1],
+    },
+  };
+  const TINT = [
+    { faceIds: [1], color: 0x4ac6ff },
+    { faceIds: [2], color: 0xff9a2e },
+  ];
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function ran() {
+    const r = rig();
+    setUp(r);
+    const run = r.ui.runStress();
+    r.settle({ ok: true, result: leaning });
+    await run;
+    const p = usePanelsStore();
+    const drawn = refineSurface(leaning.surface!, 2);
+    const still = {
+      bodyId: "b1",
+      positions: drawn.positions,
+      indices: drawn.indices,
+      values: drawn.values,
+      range: { min: 1, max: 4 },
+    };
+    const bent = { displacement: drawn.displacement, scale: p.stress!.deform!.auto };
+    const pin = r.weakSpots.at(-1)!;
+    const seen = () => ({
+      overlay: r.overlays.at(-1),
+      marks: r.marks.at(-1),
+      pin: r.weakSpots.at(-1),
+      colours: p.stress!.colours,
+      shape: p.stress!.deform!.shown,
+    });
+    return { r, p, still, bent, pin, seen };
+  }
+
+  it("draws each of the four combinations, the weakest pin through all of them", async () => {
+    const { r, still, bent, pin, seen } = await ran();
+    expect(pin.label).toBe("Weakest, 4.5x safe");
+    expect(seen()).toEqual({
+      overlay: { ...still, colours: true, ...bent },
+      marks: null,
+      pin,
+      colours: "shown",
+      shape: true,
+    });
+    r.ui.setStressColours(false);
+    expect(seen()).toEqual({
+      overlay: { ...still, colours: false, ...bent },
+      marks: null,
+      pin,
+      colours: "hidden",
+      shape: true,
+    });
+    r.ui.setStressShape(false);
+    // Plain and still: the body itself shows, its faces tinted and pickable.
+    expect(seen()).toEqual({
+      overlay: { ...still, colours: false },
+      marks: TINT,
+      pin,
+      colours: "hidden",
+      shape: false,
+    });
+    r.ui.setStressColours(true);
+    expect(seen()).toEqual({ overlay: { ...still, colours: true }, marks: null, pin, colours: "shown", shape: false });
+    r.ui.setStressShape(true);
+    expect(seen()).toEqual({
+      overlay: { ...still, colours: true, ...bent },
+      marks: null,
+      pin,
+      colours: "shown",
+      shape: true,
+    });
+  });
+
+  it("a shape switch already on draws nothing again, and Close leaves the plain body", async () => {
+    const { r } = await ran();
+    const n = r.overlays.length;
+    r.ui.setStressShape(true);
+    expect(r.overlays.length).toBe(n);
+    r.ui.setStressColours(false);
+    r.ui.closeStress();
+    expect({ overlay: r.overlays.at(-1), marks: r.marks.at(-1), panel: usePanelsStore().stress }).toEqual({
+      overlay: null,
+      marks: null,
+      panel: null,
+    });
+  });
+
+  it("placing a spot takes both off, so the click lands on the body", async () => {
+    const { r, p, still, pin, seen } = await ran();
+    r.ui.placeStressSpot({ support: p.stress!.setup.supports[0]!.id });
+    expect(seen()).toEqual({
+      overlay: { ...still, colours: false },
+      marks: TINT,
+      pin,
+      colours: "hidden",
+      shape: false,
+    });
+  });
+
+  it("Play puts a hidden shape back, and the slider moves it only while it is drawn", async () => {
+    const { r, p, still, bent, seen } = await ran();
+    r.ui.setStressShape(false);
+    r.ui.setStressDeformation(2.5);
+    expect(r.overlays.at(-1)).toEqual({ ...still, colours: true });
+    r.ui.setStressShape(true);
+    expect(seen().overlay).toEqual({ ...still, colours: true, ...bent, scale: 2.5 });
+    vi.stubGlobal("requestAnimationFrame", () => 7);
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    r.ui.setStressShape(false);
+    r.ui.setStressAnimate(true);
+    expect({ shape: p.stress!.deform!.shown, animate: p.stress!.deform!.animate }).toEqual({
+      shape: true,
+      animate: true,
+    });
+  });
+
+  it("an eye toggle keeps the shape and the pin with the colours off, and draws nothing over a hidden body", async () => {
+    const { r, still, bent, pin, seen } = await ran();
+    r.rebuild(FIRST);
+    expect(seen()).toEqual({
+      overlay: { ...still, colours: false, ...bent },
+      marks: null,
+      pin,
+      colours: "hidden",
+      shape: true,
+    });
+    r.store.isBodyVisible = () => false;
+    r.rebuild(FIRST);
+    expect(seen()).toEqual({ overlay: null, marks: null, pin, colours: "hidden", shape: true });
+  });
+
+  it("an edit drops the drawing whichever switch is on", async () => {
+    const { r } = await ran();
+    r.ui.setStressColours(false);
+    r.editDoc();
+    r.rebuild(FIRST);
+    const n = r.overlays.length;
+    r.ui.setStressShape(true);
+    r.ui.setStressColours(true);
+    expect(r.overlays.length).toBe(n);
+    expect({ colours: usePanelsStore().stress!.colours, deform: usePanelsStore().stress!.deform }).toEqual({
+      colours: "none",
+      deform: null,
+    });
   });
 });

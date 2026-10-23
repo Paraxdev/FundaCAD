@@ -28,6 +28,7 @@ function makeEngine() {
     cancelStress: vi.fn(),
     closeStress: vi.fn(),
     setStressColours: vi.fn(),
+    setStressShape: vi.fn(),
     setStressDeformation: vi.fn(),
     setStressAnimate: vi.fn(),
     pauseStressAnimation: vi.fn(),
@@ -308,7 +309,7 @@ describe("StressPanel", () => {
 
   it("says when the model changed since the Run, hides the deformation, and runs again", async () => {
     const { p, panels } = await withResult();
-    p.setStressDeform({ scale: 10, auto: 10, max: 40, animate: false });
+    p.setStressDeform({ scale: 10, auto: 10, max: 40, animate: false, shown: true });
     await flushPromises();
     expect(q(".stress-stale")).toBeNull();
     expect(q(".stress-deform")).not.toBeNull();
@@ -341,9 +342,33 @@ describe("StressPanel", () => {
     expect(ends()).toEqual([]);
   });
 
+  it("has a Deformed shape switch beside Colours, the exaggeration only while the shape is drawn", async () => {
+    const { p, panels } = await withResult({ maxDeflection: 0.47 });
+    const shape = () => q(".stress-shape") as HTMLInputElement | null;
+    const bend = () => q(".stress-verdict-bend")?.textContent;
+    expect(shape(), "no switch without a deformed shape").toBeNull();
+    p.setStressDeform({ scale: 12.5, auto: 12.5, max: 50, animate: false, shown: true });
+    await flushPromises();
+    expect(shape()!.closest(".stress-view-row")).toBe(q(".stress-colours")!.closest(".stress-view-row"));
+    expect({ checked: shape()!.checked, slider: !!q(".stress-deform") }).toEqual({ checked: true, slider: true });
+    expect(bend()).toContain("drawn 13x larger");
+    p.setStressColours("hidden");
+    await flushPromises();
+    expect({ checked: shape()!.checked, slider: !!q(".stress-deform") }).toEqual({ checked: true, slider: true });
+    p.stress!.deform!.shown = false;
+    await flushPromises();
+    expect({ checked: shape()!.checked, slider: !!q(".stress-deform") }).toEqual({ checked: false, slider: false });
+    expect(bend()).toContain("not drawn");
+    shape()!.click();
+    expect(panels.setStressShape.mock.calls).toEqual([[true]]);
+    p.setStressColours("none");
+    await flushPromises();
+    expect(shape(), "gone once the model changed").toBeNull();
+  });
+
   it("lets the exaggeration slider rest on any value, so True size sits at 1", async () => {
     const { p } = await withResult();
-    p.setStressDeform({ scale: 1, auto: 12.5, max: 50, animate: false });
+    p.setStressDeform({ scale: 1, auto: 12.5, max: 50, animate: false, shown: true });
     await flushPromises();
     const slider = q(".stress-deform") as HTMLInputElement;
     expect([slider.step, slider.value]).toEqual(["any", "1"]);
@@ -433,7 +458,7 @@ describe("StressPanel", () => {
 
   it("shows the deformation with its factor, True size, Read a point and the pinned points", async () => {
     const { p, panels } = await withResult();
-    p.setStressDeform({ scale: 120, auto: 120, max: 480, animate: false });
+    p.setStressDeform({ scale: 120, auto: 120, max: 480, animate: false, shown: true });
     p.addStressPin({ tri: 3, weights: [1, 0, 0], label: "12 MPa, 0.4 mm" });
     await flushPromises();
     expect(q(".stress-deform-label")?.textContent).toBe("120x");
@@ -456,7 +481,7 @@ describe("StressPanel", () => {
       yields: true,
       verdict: { safetyFactor: 0.62, peakPlace: null },
     });
-    p.setStressDeform({ scale: 12.5, auto: 12.5, max: 50, animate: false });
+    p.setStressDeform({ scale: 12.5, auto: 12.5, max: 50, animate: false, shown: true });
     await flushPromises();
     const step = q(".stress-results")!;
     const verdict = step.firstElementChild as HTMLElement;
@@ -471,12 +496,15 @@ describe("StressPanel", () => {
     expect(q(".stress-verdict-bend")).toBeNull();
   });
 
-  it("points at the marked spot only while the colours, and so the pin, are shown", async () => {
+  it("keeps the marked spot with the colours off, and drops it once the model changed", async () => {
     const { p } = await withResult({ verdict: { safetyFactor: 2.94, peakPlace: "corner" } });
     const text = () => q(".stress-verdict")!.textContent;
     expect(q(".stress-verdict-head")!.textContent).toBe("Holds by a rough reading, about 2.9x safe.");
     expect(text()).toContain("Weakest at the marked sharp corner.");
     p.setStressColours("hidden");
+    await flushPromises();
+    expect(text()).toContain("Weakest at the marked sharp corner.");
+    p.setStressColours("none");
     await flushPromises();
     expect(text()).toContain("Weakest at a sharp inside corner.");
     expect(text()).not.toContain("marked");
@@ -484,7 +512,7 @@ describe("StressPanel", () => {
 
   it("plays and pauses the deformation from one button that says which it will do", async () => {
     const { p, panels } = await withResult();
-    p.setStressDeform({ scale: 12.5, auto: 12.5, max: 50, animate: false });
+    p.setStressDeform({ scale: 12.5, auto: 12.5, max: 50, animate: false, shown: true });
     await flushPromises();
     const play = q(".stress-animate")!;
     expect({ text: play.textContent?.trim(), pressed: play.getAttribute("aria-pressed") }).toEqual({
@@ -504,7 +532,7 @@ describe("StressPanel", () => {
 
   it("pauses the swing on the way to Set up, and does not play it again back in Results", async () => {
     const { p, panels } = await withResult();
-    p.setStressDeform({ scale: 12.5, auto: 12.5, max: 50, animate: false });
+    p.setStressDeform({ scale: 12.5, auto: 12.5, max: 50, animate: false, shown: true });
     await flushPromises();
     tab("setup").click();
     await flushPromises();

@@ -42,6 +42,8 @@ import {
   buildClearanceLine,
   buildComMarker,
   buildStressMesh,
+  plainStressMaterial,
+  stressSurfaceGeometry,
   buildFaceMarkMesh,
   clearOverlayObjects,
 } from "./overlays";
@@ -3196,8 +3198,10 @@ export class Viewport {
   private clearanceLines: THREE.Line[] = [];
 
   /** The analysed body's surface coloured over `range` (blue low, red high) in its place, the body hidden
-   *  meanwhile. `displacement` (three numbers per vertex) draws it deformed, see setStressDeformation. Null
-   *  clears, as does the next setModel. Tells onStressOverlayChange listeners when the body changes. */
+   *  meanwhile. `displacement` (three numbers per vertex) draws it deformed, see setStressDeformation. `colours`
+   *  false draws it in the body's own colour, and undeformed as well leaves the body itself on show, the surface
+   *  kept only for stressOverlayPoint. Null clears, as does the next setModel. Tells onStressOverlayChange
+   *  listeners when the body changes. */
   setStressOverlay(
     o: {
       bodyId: string;
@@ -3207,8 +3211,11 @@ export class Viewport {
       range: { min: number; max: number };
       displacement?: ArrayLike<number>;
       scale?: number;
+      colours?: boolean;
     } | null,
   ) {
+    this.stressRest?.dispose();
+    this.stressRest = null;
     if (this.stressMesh) {
       clearOverlayObjects([this.stressMesh]);
       this.stressMesh = null;
@@ -3223,14 +3230,28 @@ export class Viewport {
       }
       this.stressHidden = null;
     }
-    if (o && o.positions.length && o.indices.length && o.values.length * 3 === o.positions.length) {
-      this.stressMesh = buildStressMesh(o.positions, o.indices, stressColors(o.values, o.range.min, o.range.max));
+    const valid = !!o && o.positions.length > 0 && o.indices.length > 0 && o.values.length * 3 === o.positions.length;
+    const moves = !!o?.displacement && o.displacement.length === o.positions.length;
+    if (o && valid && o.colours === false && !moves) {
+      this.stressRest = stressSurfaceGeometry(o.positions, o.indices);
+    } else if (o && valid) {
+      const b = this.model?.bodies.find((x) => x.id === o.bodyId);
+      const plain = o.colours === false;
+      // Grey with no material of the body's to copy.
+      const colors = plain
+        ? new Float32Array(o.positions.length).fill(0.75)
+        : stressColors(o.values, o.range.min, o.range.max);
+      this.stressMesh = buildStressMesh(o.positions, o.indices, colors);
+      const own = plain ? plainStressMaterial(b?.mesh.material) : null;
+      if (own) {
+        (this.stressMesh.material as THREE.Material).dispose();
+        this.stressMesh.material = own;
+      }
       this.scene.scene.add(markInPicture(this.stressMesh));
-      if (o.displacement && o.displacement.length === o.positions.length) {
-        this.stressShape = { base: Float32Array.from(o.positions), displacement: Float32Array.from(o.displacement) };
+      if (moves) {
+        this.stressShape = { base: Float32Array.from(o.positions), displacement: Float32Array.from(o.displacement!) };
         this.setStressDeformation(o.scale ?? 0);
       }
-      const b = this.model?.bodies.find((x) => x.id === o.bodyId);
       if (b) {
         this.stressHidden = { bodyId: b.id, wasVisible: b.mesh.visible };
         b.mesh.visible = false;
@@ -3242,8 +3263,9 @@ export class Viewport {
     this.requestRender();
     if (this.stressBody !== was) for (const fn of this.stressListeners) fn();
   }
+  /** True while an overlay is set, drawn in its colours, plain or only kept for its points. */
   hasStressOverlay(): boolean {
-    return this.stressMesh !== null;
+    return this.stressMesh !== null || this.stressRest !== null;
   }
   /** Null when none is up. Other face tints leave that body alone, a tint over the colours would misread them. */
   stressOverlayBody(): string | null {
@@ -3297,7 +3319,7 @@ export class Viewport {
   }
 
   private stressCorners(tri: number): [Vec3, Vec3, Vec3] | null {
-    const geo = this.stressMesh?.geometry;
+    const geo = this.stressMesh?.geometry ?? this.stressRest;
     const index = geo?.getIndex();
     if (!geo || !index || tri < 0 || tri * 3 + 2 >= index.count) return null;
     const pos = geo.getAttribute("position");
@@ -3309,6 +3331,7 @@ export class Viewport {
   }
 
   private stressMesh: THREE.Mesh | null = null;
+  private stressRest: THREE.BufferGeometry | null = null;
   private stressHidden: { bodyId: string; wasVisible: boolean } | null = null;
   /** The overlay's undeformed positions and displacement, while it has one. */
   private stressShape: { base: Float32Array; displacement: Float32Array } | null = null;
