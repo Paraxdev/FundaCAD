@@ -50,7 +50,12 @@ interface Proposal {
   doc?: string;
   /** A whole other document (the assistant's doc_new, doc_open or doc_set), not an edit of the open one. */
   replaces?: boolean;
+  /** The revision the assistant read. */
+  baseRevision?: number;
 }
+
+export const REFUSED_STALE =
+  "the document changed before this edit reached the app, nothing was applied; read it again with doc_get and retry";
 
 export const REFUSED_WHILE_IMPORTING =
   "an import is still being read into the open document, so it was not replaced, nothing was applied; wait for the import or cancel it in History";
@@ -244,16 +249,26 @@ export class LiveSessionHost {
       this.lastGuestSeen = this.now();
       return;
     }
+    // The engine compares the base with the revision it was sent, but a change during the round trip, or an earlier
+    // proposal in this batch, moves it again, and loading this one would wipe that change.
+    if (typeof p.baseRevision === "number" && p.baseRevision !== this.revision) {
+      this.refuse(p.id, REFUSED_STALE);
+      return;
+    }
     // The import lands in whatever document is open when its read ends, so it would land in the assistant's.
     if (p.replaces && this.store.importRunning) {
-      this.refused = [...this.refused, { id: p.id, message: REFUSED_WHILE_IMPORTING }].slice(-APPLIED_MEMORY);
-      this.lastGuestSeen = this.now();
+      this.refuse(p.id, REFUSED_WHILE_IMPORTING);
       return;
     }
     this.store.loadDocument(p.document, { replace: true, untitled: !!p.replaces && OTHER_FILE.test(p.note ?? "") });
     this.applied = [...this.applied, p.id].slice(-APPLIED_MEMORY);
     this.lastGuestSeen = this.now();
     this.emit({ lastEdit: { note: p.note ?? null, by: p.name, at: this.now() } });
+  }
+
+  private refuse(id: string, message: string): void {
+    this.refused = [...this.refused, { id, message }].slice(-APPLIED_MEMORY);
+    this.lastGuestSeen = this.now();
   }
 
   /** The last build's outcome, enough for the assistant to know its edit broke something without its own rebuild. */

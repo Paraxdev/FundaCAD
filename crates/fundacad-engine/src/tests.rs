@@ -658,3 +658,122 @@ fn a_test_hold_names_the_ops_it_holds() {
     assert_eq!(supervise::hold_ms(spec, "export"), None);
     assert_eq!(supervise::hold_ms("import=soon", "import"), None);
 }
+
+struct TwoClients {
+    engine: Arc<Engine>,
+    releases: Arc<AtomicI64>,
+    app: (Client, Receiver<Message>),
+    mcp: (Client, Receiver<Message>),
+}
+
+fn app_and_assistant() -> TwoClients {
+    let (tx, _rx) = channel();
+    let releases = Arc::new(AtomicI64::new(0));
+    let jobs = Docked(Fake { gate: None, rebuilds: Arc::new(AtomicI64::new(0)) }, releases.clone());
+    let engine = Arc::new(Engine::start(jobs, Arc::new(Collect(Mutex::new(tx)))));
+    let pair = || {
+        let (t, r) = channel();
+        (engine.client(Arc::new(Collect(Mutex::new(t)))), r)
+    };
+    let (app, mcp) = (pair(), pair());
+    TwoClients { engine, releases, app, mcp }
+}
+
+fn built(c: &(Client, Receiver<Message>), id: &str, doc: Option<&str>) {
+    let mut req = json!({"id": id, "op": "rebuild", "revision": 1, "document": {"features": [{"id": "f"}]}});
+    if let Some(d) = doc {
+        req["doc"] = json!(d);
+    }
+    say(&c.0, req);
+    assert_eq!(replies_until(&c.1, id), vec![json!([id, "ok"])]);
+}
+
+fn ended(c: &(Client, Receiver<Message>), id: &str, doc: &str) {
+    say(&c.0, json!({"id": id, "op": "doc_end", "doc": doc}));
+    assert_eq!(replies_until(&c.1, id), vec![json!([id, {"ended": 0}])]);
+}
+
+#[test]
+fn an_assistant_that_names_no_document_does_not_keep_an_ended_documents_caches_held() {
+    let t = app_and_assistant();
+    built(&t.mcp, "m1", None);
+    built(&t.app, "a1", Some("A"));
+    built(&t.app, "b1", Some("B"));
+    ended(&t.app, "end-a", "A");
+    // B is still open, so nothing is released.
+    built(&t.app, "b2", Some("B"));
+    assert_eq!(t.releases.load(Ordering::SeqCst), 0);
+    ended(&t.app, "end-b", "B");
+    until_count(&t.releases, 1);
+    built(&t.mcp, "m2", None);
+    built(&t.app, "c1", Some("C"));
+    ended(&t.app, "end-c", "C");
+    until_count(&t.releases, 2);
+    assert!(t.engine.waiting.lock().unwrap().is_empty());
+}
+
+#[test]
+fn the_ended_documents_kept_are_the_latest_sixty_four() {
+    let t = app_and_assistant();
+    let late = |c: &(Client, Receiver<Message>), id: &str, doc: &str| {
+        say(&c.0, json!({"id": id, "op": "rebuild", "doc": doc, "revision": 1, "document": {"features": []}}));
+        replies_until(&c.1, id)
+    };
+    for n in 0..64 {
+        ended(&t.app, &format!("e{n}"), &format!("d{n}"));
+    }
+    ended(&t.app, "again", "d7");
+    assert_eq!(t.engine.gone.lock().unwrap().len(), 64);
+    assert_eq!(late(&t.app, "l0", "d0"), vec![json!(["l0", "cancelled"])]);
+    assert_eq!(late(&t.app, "l63", "d63"), vec![json!(["l63", "cancelled"])]);
+    ended(&t.mcp, "other", "d0");
+    assert_eq!(t.engine.gone.lock().unwrap().len(), 64);
+    assert_eq!(late(&t.app, "l0b", "d0"), vec![json!(["l0b", "ok"])]);
+    assert_eq!(late(&t.mcp, "m0", "d0"), vec![json!(["m0", "cancelled"])]);
+    assert_eq!(late(&t.app, "l1", "d1"), vec![json!(["l1", "cancelled"])]);
+    ended(&t.app, "e64", "d64");
+    assert_eq!(t.engine.gone.lock().unwrap().len(), 64);
+    assert_eq!(late(&t.app, "l1b", "d1"), vec![json!(["l1b", "ok"])]);
+    assert_eq!(late(&t.app, "l2", "d2"), vec![json!(["l2", "cancelled"])]);
+    assert_eq!(late(&t.app, "l64", "d64"), vec![json!(["l64", "cancelled"])]);
+}
+
+#[test]
+fn ending_every_document_keeps_the_ended_ones_gone_and_dropping_the_client_forgets_them() {
+    let (gate_tx, gate_rx) = channel();
+    let (tx, _rx) = channel();
+    let jobs = Docked(Fake { gate: Some(gate_rx), rebuilds: Arc::new(AtomicI64::new(0)) }, Arc::new(AtomicI64::new(0)));
+    let engine = Arc::new(Engine::start(jobs, Arc::new(Collect(Mutex::new(tx)))));
+    let (a_tx, a_rx) = channel();
+    let a = engine.client(Arc::new(Collect(Mutex::new(a_tx))));
+    let (b_tx, b_rx) = channel();
+    let b = engine.client(Arc::new(Collect(Mutex::new(b_tx))));
+    say(&a, json!({"id": "r0", "op": "doc_end", "doc": "R"}));
+    assert_eq!(replies_until(&a_rx, "r0"), vec![json!(["r0", {"ended": 0}])]);
+    say(&a, json!({"id": "p1", "op": "rebuild", "doc": "P", "document": {"features": []}}));
+    until_running(&engine);
+    say(&a, json!({"id": "q1", "op": "import", "doc": "Q"}));
+    say(&a, json!({"id": "n1", "op": "import"}));
+    say(&a, json!({"id": "all", "op": "doc_end", "all": true}));
+    assert_eq!(
+        replies_until(&a_rx, "p1"),
+        vec![
+            json!(["q1", "cancelled"]),
+            json!(["n1", "cancelled"]),
+            json!(["all", {"ended": 3}]),
+            json!(["p1", "cancelled"])
+        ]
+    );
+    let gone = |e: &Engine| e.gone.lock().unwrap().iter().cloned().collect::<Vec<_>>();
+    let id_a = a.id;
+    assert_eq!(gone(&engine), vec![(id_a, "R".into()), (id_a, "P".into()), (id_a, "Q".into())]);
+    for (id, doc) in [("p2", "P"), ("q2", "Q"), ("r2", "R")] {
+        say(&a, json!({"id": id, "op": "rebuild", "doc": doc, "document": {"features": []}}));
+        assert_eq!(replies_until(&a_rx, id), vec![json!([id, "cancelled"])]);
+    }
+    say(&b, json!({"id": "b1", "op": "doc_end", "doc": "S"}));
+    assert_eq!(replies_until(&b_rx, "b1"), vec![json!(["b1", {"ended": 0}])]);
+    drop(a);
+    assert_eq!(gone(&engine), vec![(b.id, "S".to_string())]);
+    drop(gate_tx);
+}
