@@ -122,6 +122,7 @@ function rig() {
       return () => {};
     },
     isBodyVisible: (_id: string) => true,
+    bodyName: (_id: string): string | undefined => undefined,
     loadCount: 3,
     get stressStudy() {
       return study;
