@@ -73,3 +73,11 @@ fn colours_set_or_clear() {
     assert_eq!((k.as_str(), c), ("k", Some(vec![[0.5, 0.25, 1.]])));
     assert_eq!(decode_colors(&encode(r#"{"key":"k","vertices":1}"#, &[], &[], &[])).unwrap().1, None);
 }
+
+#[test]
+fn a_look_takes_bounces_and_the_firefly_clamp_and_keeps_six_and_ten_without() {
+    let bare: fundacad_tracer::Look = serde_json::from_str("{}").unwrap();
+    assert_eq!((bare.bounces, bare.firefly), (6, 10.0));
+    let raised: fundacad_tracer::Look = serde_json::from_str(r#"{"bounces":24,"firefly":0}"#).unwrap();
+    assert_eq!((raised.bounces, raised.firefly), (24, 0.0));
+}
