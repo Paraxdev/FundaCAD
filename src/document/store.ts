@@ -992,7 +992,9 @@ export class DocumentStore {
     this.scheduleRebuild(true);
   }
 
+  private docEdits = 0;
   private emitDoc() {
+    this.docEdits++;
     for (const fn of this.docListeners) fn(this.doc);
   }
   private emitBuild() {
@@ -1155,33 +1157,43 @@ export class DocumentStore {
         this.onWarning?.("Parameter change failed to apply, see the console for details.");
       });
   }
+  // A doc edit landing during the solves (a doc_set, an import, a restore) would be overwritten by the
+  // stale draft, so the cascade redoes on top of it; past 3 tries it lands unsolved rather than never.
   private async commitWithCascade(fn: (d: CadDocument) => void, immediate: boolean): Promise<void> {
-    const draft = clone(this.doc);
-    fn(draft);
-    const r = params.recompute(draft);
-    const open = this.openSketchId?.() ?? null;
-    for (const sid of r.affectedSketches) {
-      if (sid === open) continue;
-      const f = draft.features.find(
-        (x): x is Extract<Feature, { type: "sketch" }> => x.type === "sketch" && x.id === sid,
-      );
-      if (!f) continue;
-      const solved = await this.solveConstrainedSketch(f, draft.parameters);
-      if (solved) f.entities = solved;
+    const st = this.st;
+    for (let tries = 1; ; tries++) {
+      const seen = this.docEdits;
+      const draft = clone(this.doc);
+      fn(draft);
+      const r = params.recompute(draft);
+      const open = this.openSketchId?.() ?? null;
+      const sketches = [...r.affectedSketches].filter((sid) => sid !== open);
+      if (tries > 3) for (const sid of sketches) this.onParamSolveIssue?.(sid);
+      else
+        for (const sid of sketches) {
+          const at = draft.features.find((x) => x.id === sid);
+          const f = asFeature(at, "sketch");
+          if (!f) continue;
+          const solved = await this.solveConstrainedSketch(f, draft.parameters);
+          if (solved) f.entities = solved;
+        }
+      if (!st.session.alive) return;
+      if (this.docEdits !== seen) continue;
+      this.mutate((d) => {
+        d.parameters = draft.parameters;
+        if (draft.paramDefs) d.paramDefs = draft.paramDefs;
+        else delete d.paramDefs;
+        if (draft.paramExtras) d.paramExtras = draft.paramExtras;
+        else delete d.paramExtras;
+        // The draft is a clone, and the rebuild wire resends every changed object, so keep the untouched features.
+        d.features = draft.features.map((f, i) => {
+          const was = d.features[i];
+          return was && was.id === f.id && JSON.stringify(was) === JSON.stringify(f) ? was : f;
+        });
+      }, immediate);
+      this.onParamsApplied?.();
+      return;
     }
-    this.mutate((d) => {
-      d.parameters = draft.parameters;
-      if (draft.paramDefs) d.paramDefs = draft.paramDefs;
-      else delete d.paramDefs;
-      if (draft.paramExtras) d.paramExtras = draft.paramExtras;
-      else delete d.paramExtras;
-      // The draft is a clone, and the rebuild wire resends every changed object, so keep the untouched features.
-      d.features = draft.features.map((f, i) => {
-        const was = d.features[i];
-        return was && was.id === f.id && JSON.stringify(was) === JSON.stringify(f) ? was : f;
-      });
-    }, immediate);
-    this.onParamsApplied?.();
   }
 
   // Projection updates land as a derived commit with no undo entry, so an upstream edit settles in two rebuilds.
