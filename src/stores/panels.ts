@@ -52,13 +52,14 @@ export interface InterferenceData {
   unchecked: string[];
 }
 
-/** The deformed shape drawn on the result's colours: the scale on the slider,
- *  the automatic one it started at, the slider's top, and whether it swings. */
+/** The deformed shape: the scale on the slider, the automatic one it started at, the slider's top, whether it swings,
+ *  and whether it is drawn at all, with or without the colours. */
 export interface StressDeform {
   scale: number;
   auto: number;
   max: number;
   animate: boolean;
+  shown: boolean;
 }
 
 /** A point pinned on the coloured body, as a triangle and barycentric weights so it rides the deformed shape, and the
