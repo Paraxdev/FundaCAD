@@ -2,6 +2,7 @@
 
 import * as THREE from "three";
 import type { ModelView } from "./render";
+import { copyPatches } from "./shaderPatches";
 import { DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer } from "./composerColor";
 
 /** Bands follow the reflected view vector, so curvature breaks show as broken or bunched stripes.
@@ -160,6 +161,14 @@ export function buildStressMesh(
   return mesh;
 }
 
+/** `count` vertex colours of `c` in sRGB, as buildStressMesh takes them. */
+export function solidColors(count: number, c: THREE.Color): Float32Array {
+  const { r, g, b } = c.getRGB({ r: 0, g: 0, b: 0 }, THREE.SRGBColorSpace);
+  const out = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) out.set([r, g, b], i * 3);
+  return out;
+}
+
 export function stressSurfaceGeometry(positions: ArrayLike<number>, indices: ArrayLike<number>): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -174,7 +183,11 @@ export function plainStressMaterial(material: THREE.Material | THREE.Material[] 
   const m = Array.isArray(material) ? material[0] : material;
   if (!(m instanceof THREE.MeshStandardMaterial)) return null;
   const copy = m.clone();
+  // The glass patch reads a thickness drawn for the body's own mesh.
+  copyPatches(m, copy, (p) => p.name !== "glassAuto");
   copy.side = THREE.DoubleSide;
+  // The surface shares its vertices across sharp edges, so smooth normals would bend the light over every face.
+  copy.flatShading = true;
   return copy;
 }
 
