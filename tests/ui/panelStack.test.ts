@@ -34,7 +34,11 @@ describe("the floating panel column", () => {
       { id: "b", height: 97 },
       { id: "c", height: 333 },
     ];
-    const after = layoutStack(all.filter((p) => p.id !== "b"), 170, 900);
+    const after = layoutStack(
+      all.filter((p) => p.id !== "b"),
+      170,
+      900,
+    );
     expect(after).toEqual([
       { id: "a", top: 170, maxHeight: null },
       { id: "c", top: 392, maxHeight: null },
