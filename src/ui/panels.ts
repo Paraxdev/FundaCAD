@@ -214,8 +214,8 @@ export function createPanels(deps: PanelsDeps) {
   // saved once and a study the document gained some other way (a version put
   // back, an assistant's edit) is told apart from the panel's own.
   let persisted: string | null = null;
-  // The last result outlives a Close, so reopening shows it again without a Run. `same` when the setup at the close
-  // was the one it ran with, `study` that setup as saved, to tell an edit made while closed.
+  // The last result outlives a Close and an edit, not a replacing load. `same` when the setup at the close was the
+  // one it ran with, `study` that setup as saved, to tell an edit made while closed.
   let kept: {
     data: Pick<StressData, "result" | "deform" | "pins" | "colours" | "ranSetup">;
     colours: Colours | null;
@@ -223,6 +223,7 @@ export function createPanels(deps: PanelsDeps) {
     body: string | null;
     same: boolean;
     study: string;
+    load: number;
   } | null = null;
   // The arrows, axes and probe markers in the view, while the panel is open.
   let glyphs: StressGlyphsApi | null = null;
@@ -306,7 +307,7 @@ export function createPanels(deps: PanelsDeps) {
     const k = kept;
     kept = null;
     const d = panels.stress;
-    if (!k?.data.result || !d || d.result || d.setup.body !== k.body) return;
+    if (!k?.data.result || !d || d.result || d.setup.body !== k.body || k.load !== store.loadCount) return;
     panels.stressFinished({ result: k.data.result });
     const study = JSON.stringify(store.stressStudy);
     d.ranSetup = k.same && study === k.study ? JSON.stringify(d.setup) : k.data.ranSetup;
@@ -1065,6 +1066,7 @@ export function createPanels(deps: PanelsDeps) {
             body: d.setup.body,
             same: d.ranSetup === JSON.stringify(d.setup),
             study: JSON.stringify(store.stressStudy),
+            load: store.loadCount,
           }
         : null;
     runSeq++;
