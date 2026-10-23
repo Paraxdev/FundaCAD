@@ -11,7 +11,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DocumentStore, EMPTY_DOCUMENT } from "../../src/document/store";
-import { GUIDE_LINGER_MS, LiveSessionHost } from "../../src/live/liveSession";
+import { GUIDE_LINGER_MS, LiveSessionHost, REFUSED_STALE } from "../../src/live/liveSession";
 import { GuideSession } from "../../src/ui/guide/guideSession";
 import { emptySnapshot } from "../../src/ui/guide/wait";
 import type { CadDocument, SectionView } from "../../src/types";
@@ -222,6 +222,64 @@ describe("the window's half of a live session", () => {
       after: ["p2", "p3"],
       next: 0,
     });
+    await host.stop();
+  });
+
+  it("refuses an edit whose base the window moved past, by proposal id, and applies one made against what it published", async () => {
+    const host = new LiveSessionHost(store, geo, () => true);
+    host.start();
+    await host.tick();
+    const published = () => geo.sent.filter((m) => m.op === "session_host").at(-1)!.payload;
+    const base = () => published()["revision"] as number;
+    const counts: number[] = [];
+
+    // Two assistants read the same revision: the first one taken moves it, so the second would wipe the first.
+    geo.reply = {
+      ok: true,
+      guests: ["an assistant"],
+      proposals: [
+        { ...proposal("p1", 3), baseRevision: base() },
+        { ...proposal("p2", 5), baseRevision: base() },
+      ],
+    };
+    await host.tick();
+    counts.push(store.document.features.length);
+
+    // A person's edit lands during the round trip of the publish that collects p3.
+    const reply = (proposals: unknown[]) => ({ ok: true, guests: ["an assistant"], proposals });
+    const session = geo.session.bind(geo);
+    geo.session = async (op: string, payload: object = {}) => {
+      const sent = await session(op, payload);
+      if (op !== "session_host") return sent;
+      store.mutate((d) => {
+        d.features.push({ id: "mine", type: "box" } as never);
+      }, true);
+      return reply([{ ...proposal("p3", 6), baseRevision: (payload as { revision: number }).revision }]);
+    };
+    await host.tick();
+    geo.session = session;
+    counts.push(store.document.features.length);
+
+    geo.reply = reply([{ ...proposal("p4", 8), baseRevision: base() + 1 }]);
+    await host.tick();
+    counts.push(store.document.features.length);
+    // An engine that sends no base is taken at its word.
+    geo.reply = reply([proposal("p5", 7)]);
+    await host.tick();
+    counts.push(store.document.features.length);
+    geo.reply = reply([]);
+    await host.tick();
+
+    const status = published()["status"] as { applied: string[]; refused: { id: string; message: string }[] };
+    expect({ counts, applied: status.applied, refused: status.refused }).toEqual({
+      counts: [3, 4, 8, 7],
+      applied: ["p1", "p4", "p5"],
+      refused: [
+        { id: "p2", message: REFUSED_STALE },
+        { id: "p3", message: REFUSED_STALE },
+      ],
+    });
+    expect(REFUSED_STALE).toContain("doc_get");
     await host.stop();
   });
 
