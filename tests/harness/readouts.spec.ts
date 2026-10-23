@@ -28,6 +28,7 @@ function host(
       buildState: {
         building: over.building ?? false,
         progress: null,
+        phase: null,
         meshed: null,
         meshTotal: null,
         streamed: null,

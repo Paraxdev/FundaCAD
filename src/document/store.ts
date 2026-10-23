@@ -90,7 +90,9 @@ import { extrasEmpty, trialConfiguration } from "../params/extras";
 import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
+import { logEditTiming } from "../diagnostics/editTiming";
 import { featureMeta } from "../ui/featureMeta";
+import { afterPaint, APPLY_LABEL_AFTER_MS, BUILD_PHASE } from "../geometry/buildPhase";
 import { OpCancelled, SessionHost, isSessionEnded, type DocumentSession } from "./session";
 import { SessionState, type BusyOp } from "./sessionState";
 
@@ -115,9 +117,11 @@ export interface RebuildState {
   result: RebuildResult | null;
   errorFeatureId: string | null;
   errorMessage: string | null;
-  // Feature index the engine is executing (-1 = tessellating), streamed about 1/s during long rebuilds.
+  // Feature index the engine is executing (-1 outside the feature phase), streamed about 1/s during long rebuilds.
   progress: number | null;
-  // Bodies meshed and total during the meshing phase, where the feature index stays -1.
+  // A `BUILD_PHASE`, null until the first report.
+  phase: number | null;
+  // Bodies meshed and to mesh during the meshing phase, hits excluded.
   meshed: number | null;
   meshTotal: number | null;
   // `result` stays the previous model during a chunked reply, so only the viewport sees a partial body list.
@@ -590,6 +594,7 @@ export class DocumentStore {
     streamed: null,
     streamTotal: null,
     progress: null,
+    phase: null,
     meshed: null,
     meshTotal: null,
   };
@@ -615,13 +620,14 @@ export class DocumentStore {
       this.emitBusy();
     });
     migrateDocument(this.doc); // the seed doc skips load(); normalize it the same way
-    geometry.onProgress?.((feature, meshed, meshTotal, id) => {
+    geometry.onProgress?.((feature, meshed, meshTotal, id, phase) => {
       // A status of any other request, an import or an ended document's rebuild, is not this build's progress.
       if (!this.build.building || (id !== undefined && id !== this.st.inflight?.id)) return;
       // -1/-1 means not meshing; null lets the chip tell "no denominator" from "0 of N".
       this.build = {
         ...this.build,
         progress: feature,
+        phase: phase ?? null,
         meshed: meshed >= 0 ? meshed : null,
         meshTotal: meshTotal > 0 ? meshTotal : null,
       };
@@ -920,6 +926,7 @@ export class DocumentStore {
       streamed: null,
       streamTotal: null,
       progress: null,
+      phase: null,
       meshed: null,
       meshTotal: null,
       previewBuilt: null,
@@ -2893,6 +2900,7 @@ export class DocumentStore {
       ...this.build,
       building: true,
       progress: null,
+      phase: null,
       meshed: null,
       meshTotal: null,
       streamed: null,
@@ -2941,6 +2949,7 @@ export class DocumentStore {
     const done = {
       building: false,
       progress: null,
+      phase: null,
       meshed: null,
       meshTotal: null,
       streamed: null,
@@ -3006,6 +3015,7 @@ export class DocumentStore {
               const all = st.computeAllQueued && !!computeAll;
               st.computeAllQueued = false;
               this.emitBuildStarted();
+              const startedAt = Date.now();
               const sent = this.doc;
               const sentLoad = this.loads;
               const previewing = !!(this.preview || this.editPreview);
@@ -3014,6 +3024,7 @@ export class DocumentStore {
               const key = previewing ? null : buildKey(effective);
               const flight: NonNullable<SessionState["inflight"]> = { gen: ++this.sendGen, id: null, cancelled: false };
               st.inflight = flight;
+              const sentAtMs = performance.now();
               markSent();
               const send = (id: string) => {
                 if (flight.dropped) throw new OpCancelled();
@@ -3037,6 +3048,19 @@ export class DocumentStore {
                 continue;
               }
               if (key !== null && this.refusedProvisional(reply, key)) continue;
+              if (reply.ok && Date.now() - startedAt >= APPLY_LABEL_AFTER_MS) {
+                this.build = {
+                  ...this.build,
+                  progress: null,
+                  meshed: null,
+                  meshTotal: null,
+                  phase: BUILD_PHASE.applying,
+                };
+                this.emitBuild();
+                await afterPaint();
+                if (!st.session.alive) break;
+                if (flight.gen <= this.staleThrough) continue;
+              }
               if (!previewing) this.keepBodyIds(sent, reply);
               const settled = this.settledBuild(reply, sentPreview);
               // An incomplete stream left a partial model on screen; drop it before this result (on failure the
@@ -3045,7 +3069,18 @@ export class DocumentStore {
               this.build = settled;
               if (reply.ok) st.drawnFrom = { ids: new Set(sent.features.map((f) => f.id)), load: sentLoad };
               if (key !== null && reply.ok) this.st.committedShown = { key, state: settled };
+              const appliedAtMs = performance.now();
               this.emitBuild();
+              // Compute All is no edit, and its reply carries no stage timing.
+              if (reply.ok && !previewing && !all) {
+                const cost = this.geometry.lastRebuildCost?.();
+                logEditTiming({
+                  totalMs: performance.now() - sentAtMs,
+                  engine: cost?.engine ?? null,
+                  replyBytes: cost?.replyBytes ?? 0,
+                  applyMs: performance.now() - appliedAtMs,
+                });
+              }
               // Compute All is the explicit retry the valve toast promises, so it re-arms the valve first.
               if (reply.ok && all) this.rearmProjectionValve();
               // After publishing; a failed rebuild says nothing about projections.
@@ -3084,6 +3119,7 @@ export class DocumentStore {
     this.build = {
       building: false,
       progress: null,
+      phase: null,
       meshed: null,
       meshTotal: null,
       streamed: null,

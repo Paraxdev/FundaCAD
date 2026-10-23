@@ -1643,7 +1643,45 @@ export class Viewport {
     if (this.analysis === "draft") this.applyAnalysis();
   }
 
+  /** What a body's base colours depend on, null when they depend on more than it names (draft reads the pose). Face
+   *  paint is keyed by local face so a shifted body with the same look is not repainted. */
+  private paintKeys(bodies: readonly BodyMesh[]): Map<BodyMesh, string | null> {
+    const keys = new Map<BodyMesh, string | null>();
+    const model = this.model;
+    if (!model || this.analysis === "draft") return new Map(bodies.map((b) => [b, null]));
+    if (this.analysis === "component") {
+      const index = new Map(model.bodies.map((b, i) => [b, i]));
+      for (const b of bodies) keys.set(b, `component|${index.get(b)}`);
+      return keys;
+    }
+    const own = new Map<BodyMesh, string[]>();
+    const paint = this.finish.facePaint;
+    for (const k of Object.keys(paint)) {
+      const fid = Number(k);
+      const b = bodyOfFace(model, fid);
+      if (!b) continue;
+      const list = own.get(b) ?? [];
+      list.push(`${fid - b.faceStart}:${paint[fid]}`);
+      own.set(b, list);
+    }
+    for (const b of bodies) keys.set(b, `none|${this.finish.bodyPaint[b.id] ?? ""}|${(own.get(b) ?? []).join(",")}`);
+    return keys;
+  }
+
+  // A body whose paint inputs are the same as when it was last painted keeps its colours, which cost 0.2 to 0.6 s a
+  // commit on the SV08 when every body was repainted.
   private applyAnalysis(only?: Iterable<BodyMesh>) {
+    if (!this.highlighter || !this.model) return;
+    const keys = this.paintKeys([...(only ?? this.model.bodies)]);
+    const stale = [...keys].filter(([b, k]) => k === null || b.paintKey !== k).map(([b]) => b);
+    if (stale.length) {
+      this.paintBases(stale);
+      for (const b of stale) b.paintKey = keys.get(b) ?? undefined;
+    }
+    this.requestRender();
+  }
+
+  private paintBases(only: BodyMesh[]) {
     if (!this.highlighter || !this.model) return;
     if (this.analysis === "component") {
       const hue = new Map<string, THREE.Color>();
@@ -1671,7 +1709,6 @@ export class Viewport {
         return hex ? new THREE.Color(hex) : BASE_COLOR;
       }, only);
     }
-    this.requestRender();
   }
 
   /** body id → hex, repainted unless an analysis overlay masks it. */

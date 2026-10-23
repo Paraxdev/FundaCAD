@@ -5,6 +5,7 @@ pub mod checkpoint;
 pub mod keys;
 pub mod meshes;
 pub mod store;
+pub mod timing;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::{mpsc, Mutex, OnceLock};
@@ -39,6 +40,11 @@ pub struct CacheStats {
     pub mesh_ram_hits: usize,
     pub mesh_disk_hits: usize,
     pub meshed: usize,
+    pub copy: Duration,
+    pub replay: Duration,
+    /// The slowest replayed feature, as its index and time.
+    pub slowest: Option<(usize, Duration)>,
+    pub mesh_time: Duration,
 }
 
 pub struct RebuildCache {
@@ -56,7 +62,7 @@ pub struct RebuildCache {
     pub mesh_persist_after: Duration,
     brep_sigs: HashMap<String, String>,
     proj_quiet: bool,
-    mesh_keys: HashMap<String, String>,
+    stored: Modified,
     payloads: meshes::Payloads,
     pub stats: CacheStats,
 }
@@ -65,12 +71,16 @@ struct CacheTap<'a> {
     keep_from: usize,
     snaps: Vec<(usize, Snapshot)>,
     replayed: Vec<usize>,
+    slowest: Option<(usize, Duration)>,
     persist: Option<Persist<'a>>,
 }
 
 impl Tap for CacheTap<'_> {
     fn after_feature(&mut self, index: usize, state: &State<'_>, elapsed: Duration) {
         self.replayed.push(index);
+        if self.slowest.is_none_or(|(_, t)| elapsed > t) {
+            self.slowest = Some((index, elapsed));
+        }
         if index >= self.keep_from {
             self.snaps.push((index, state.snapshot()));
         }
@@ -93,7 +103,7 @@ impl RebuildCache {
             mesh_persist_after: meshes::PERSIST_MIN,
             brep_sigs: HashMap::new(),
             proj_quiet: false,
-            mesh_keys: HashMap::new(),
+            stored: HashMap::new(),
             payloads: meshes::Payloads::default(),
             stats: CacheStats::default(),
         }
@@ -143,7 +153,7 @@ impl RebuildCache {
     /// No document is open any more: the snapshots and payloads it held go, the disk checkpoints stay for a reopen.
     pub fn release(&mut self) {
         self.reset();
-        self.mesh_keys.clear();
+        self.stored.clear();
     }
 
     /// The snapshots and viewport payloads this process holds.
@@ -162,6 +172,7 @@ impl RebuildCache {
 
     /// `rebuild_cached`.
     pub fn rebuild(&mut self, doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebuild, Cancelled> {
+        let entered = Instant::now();
         let absent = absent_geometry(raw);
         let keys = self.keys_given(raw, &absent);
         let n = keys.len();
@@ -200,10 +211,16 @@ impl RebuildCache {
             }
         }
         let start = resume.as_ref().map_or(0, |r| r.0);
+        // An unchanged body keeps the key the last build stored it under, or every checkpoint after a resume
+        // rewrites its blob under a new name (1097 blobs, 438 MB on a big part).
         if source == Source::Ram && start > 0 {
             if let Some((_, snap)) = &resume {
                 for b in &snap.bodies {
-                    modified.insert(b.id.clone(), (b.identity(), keys::blob_key(&keys[start - 1], &b.id)));
+                    let key = match self.stored.get(&b.id) {
+                        Some((ident, key)) if *ident == b.identity() => key.clone(),
+                        _ => keys::blob_key(&keys[start - 1], &b.id),
+                    };
+                    modified.insert(b.id.clone(), (b.identity(), key));
                 }
             }
         }
@@ -224,17 +241,21 @@ impl RebuildCache {
             (source == Source::Disk).then(|| resume.as_ref().map(|(at, snap)| (*at, snap.clone()))).flatten();
 
         let began = Instant::now();
+        let copy = began.duration_since(entered);
         let mut tap = CacheTap {
             keep_from: n.saturating_sub(self.window),
             snaps: Vec::new(),
             replayed: Vec::new(),
+            slowest: None,
             persist: self.store.as_ref().filter(|_| n > 0).map(|store| Persist {
                 store,
+                watch,
                 keys: &keys,
                 modified,
                 acc_ms: 0.0,
                 budget_ms: self.budget_ms,
                 written: 0,
+                last_saved: None,
             }),
         };
         let built = builder::rebuild_from(doc, raw, watch, resume, &mut tap);
@@ -246,7 +267,7 @@ impl RebuildCache {
             let replayed = std::mem::take(&mut tap.replayed);
             drop(tap);
             self.reset();
-            self.mesh_keys.clear();
+            self.stored.clear();
             if let Some(s) = &self.store {
                 s.purge(&keys);
             }
@@ -282,22 +303,31 @@ impl RebuildCache {
 
         let mut written = 0;
         if let Some(mut p) = tap.persist.take() {
-            if elapsed >= self.tip_after || p.acc_ms >= self.tip_after.as_secs_f64() * 1000.0 {
+            let slow = elapsed >= self.tip_after || p.acc_ms >= self.tip_after.as_secs_f64() * 1000.0;
+            if slow && p.last_saved != Some(n - 1) {
                 if let Some(Some(tip)) = ring.last() {
                     p.save(n - 1, tip);
                 }
             }
             written = p.written;
-            self.mesh_keys = p.modified.into_iter().map(|(id, (_, key))| (id, key)).collect();
+            self.stored = p.modified;
         } else {
-            self.mesh_keys.clear();
+            self.stored.clear();
         }
-        let replayed = tap.replayed;
+        let (replayed, slowest) = (tap.replayed, tap.slowest);
         self.proj_quiet = r.projection_updates.is_empty();
         self.ring = ring;
         self.ring_keys = keys;
-        self.stats =
-            CacheStats { source, resumed_at: start, replayed, checkpoints_written: written, ..CacheStats::default() };
+        self.stats = CacheStats {
+            source,
+            resumed_at: start,
+            replayed,
+            checkpoints_written: written,
+            copy,
+            replay: elapsed,
+            slowest,
+            ..CacheStats::default()
+        };
         Ok(r)
     }
 
@@ -328,11 +358,13 @@ impl RebuildCache {
             .map(|b| {
                 let mut m = crate::reply::mesh_body(b);
                 m.identity = Some(b.identity);
-                m.mesh_key = self.mesh_keys.get(&b.id).cloned();
+                m.mesh_key = self.stored.get(&b.id).map(|(_, key)| key.clone());
                 m
             })
             .collect();
         self.payloads.reset_counters();
+        // Wall time: bodies mesh in parallel, so summing their own times would exceed the edit.
+        let began = Instant::now();
         let result = {
             let mut tiered = meshes::Tiered {
                 payloads: &mut self.payloads,
@@ -346,6 +378,7 @@ impl RebuildCache {
         self.stats.mesh_ram_hits = self.payloads.ram_hits;
         self.stats.mesh_disk_hits = self.payloads.disk_hits;
         self.stats.meshed = self.payloads.meshed;
+        self.stats.mesh_time = began.elapsed();
         result
     }
 }

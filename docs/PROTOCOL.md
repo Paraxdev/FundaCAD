@@ -1069,13 +1069,14 @@ During a `rebuild` or `computeAll`, the engine sends interim frames on the same
 connection, reusing the request's `id` but with **no `ok` field**:
 
 ```jsonc
-{ "id": "<same id as the request>", "status": "building", "feature": 3 }
+{ "id": "<same id as the request>", "status": "building", "phase": 1, "feature": 3 }
 ```
 
-`feature` is the index of the feature currently being built, or `-1` while
-tessellating. `meshed` / `meshTotal` carry the payload phase's per-body denominator
-(both `-1` outside it), so a client can say "meshing 812/3071" rather than sitting at
-0% for the whole phase. These fire roughly once a second during a long rebuild. An
+`phase` is what the job is doing: `0` preparing (copying the model it resumes from), `1` running a
+feature, `2` saving a checkpoint, `3` meshing, `4` assembling the reply. `feature` is the index of the
+feature running, `-1` outside phase `1`. `meshed` / `meshTotal` count the bodies really being meshed
+(a body served from a cache is not counted, and a rebuild with none never enters phase `3`), both `-1`
+outside it. These fire roughly once a second during a long rebuild. An
 `import` streams the same way with `status: "importing"` and `phase` / `label` / `pct`.
 
 Every client of one engine shares its job thread, so a request can wait behind another

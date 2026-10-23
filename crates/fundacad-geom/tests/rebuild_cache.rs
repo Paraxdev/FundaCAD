@@ -600,6 +600,112 @@ fn face_owners_survive_a_disk_resume_of_faces_measuring_on_a_rounding_tie() {
     assert_eq!(face_owners(&again), face_owners(&built(&edited)), "faces lost their owner in the second restore");
 }
 
+/// Three bodies, each last changed by a later feature than the one that made it: body1 by the cut at 3, body2 by
+/// the slanted move at 2, body3 by the move at 5.
+fn three_moved_bodies() -> Value {
+    json!({"parameters": {}, "features": [
+        {"id": "b1", "type": "box", "length": 14, "width": 9, "height": 6, "operation": "new"},
+        {"id": "b2", "type": "box", "length": 11, "width": 4, "height": 8, "operation": "new"},
+        {"id": "m2", "type": "move", "bodies": ["body2"], "rz": 23, "dx": 23, "dy": -9.5, "dz": 1.5},
+        {"id": "c1", "type": "box", "length": 3, "width": 5, "height": 20, "operation": "cut", "targets": ["body1"]},
+        {"id": "b3", "type": "box", "length": 5, "width": 7, "height": 2.5, "operation": "new"},
+        {"id": "m3", "type": "move", "bodies": ["body3"], "rx": 11, "dx": -17, "dy": 13, "dz": 4},
+    ]})
+}
+
+fn blob_names(root: &std::path::Path) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    for shard in std::fs::read_dir(root.join("blobs")).into_iter().flatten().flatten() {
+        for blob in std::fs::read_dir(shard.path()).into_iter().flatten().flatten() {
+            out.insert(blob.path().file_stem().unwrap().to_string_lossy().into_owned());
+        }
+    }
+    out
+}
+
+fn eager_cache(root: &std::path::Path) -> RebuildCache {
+    let mut cache = RebuildCache::new(Some(GeomStore::open(root).unwrap()));
+    cache.budget_ms = 0.0;
+    cache.tip_after = Duration::ZERO;
+    cache
+}
+
+/// The blobs an edit of `index` to `value` adds after a full build, with the edited document's chain keys.
+fn blobs_an_edit_writes(
+    root: &std::path::Path,
+    index: usize,
+    field: &str,
+    value: Value,
+) -> (Value, Vec<String>, std::collections::BTreeSet<String>) {
+    let base = three_moved_bodies();
+    let mut cache = eager_cache(root);
+    warm(&mut cache, &base);
+    assert_eq!(cache.stats.checkpoints_written, 6, "one checkpoint per feature, the tip not saved twice");
+    let before = blob_names(root);
+    let edited = edit(&base, index, field, value);
+    let (got, replayed) = warm(&mut cache, &edited);
+    assert_eq!(cache.stats.source, Source::Ram);
+    assert_eq!(replayed, (index..6).collect::<Vec<_>>());
+    assert_eq!(cache.stats.checkpoints_written, 6 - index);
+    assert_eq!(got, cold(&edited));
+    let keys = cache.chain_keys(&edited);
+    (edited, keys, blob_names(root).difference(&before).cloned().collect())
+}
+
+#[test]
+fn a_resume_then_a_checkpoint_writes_only_the_changed_bodies() {
+    use fundacad_geom::cache::keys::blob_key;
+    let root = scratch("resume-blobs");
+    let (_, keys, written) = blobs_an_edit_writes(&root, 4, "length", json!(6.5));
+    let expected: std::collections::BTreeSet<String> =
+        [blob_key(&keys[4], "body3"), blob_key(&keys[5], "body3")].into_iter().collect();
+    assert_eq!(written, expected);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_reopen_from_that_checkpoint_gives_the_same_document() {
+    let root = scratch("resume-reopen");
+    let (edited, _, _) = blobs_an_edit_writes(&root, 4, "length", json!(6.5));
+    let mut reopened = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    let (got, replayed) = warm(&mut reopened, &edited);
+    assert_eq!((reopened.stats.source, reopened.stats.resumed_at), (Source::Disk, 6));
+    assert!(replayed.is_empty(), "replayed {replayed:?} after a disk resume");
+    assert_eq!(got, cold(&edited));
+
+    let base = three_moved_bodies();
+    let (got, _) = warm(&mut reopened, &base);
+    assert_eq!(got, cold(&base));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// body1 at the resume point is the shape before the cut at 3, so the previous build's key for body1 (the cut
+/// shape) must not name it: a reopen of the first three features would then fail its fingerprint and rebuild cold.
+#[test]
+fn a_body_the_edit_changes_gets_a_new_blob() {
+    use fundacad_geom::cache::keys::blob_key;
+    let root = scratch("resume-changed");
+    let (edited, keys, written) = blobs_an_edit_writes(&root, 1, "width", json!(4.75));
+    let expected: std::collections::BTreeSet<String> = [
+        blob_key(&keys[1], "body2"),
+        blob_key(&keys[2], "body2"),
+        blob_key(&keys[3], "body1"),
+        blob_key(&keys[4], "body3"),
+        blob_key(&keys[5], "body3"),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(written, expected);
+
+    let prefix = json!({"parameters": {}, "features": edited["features"].as_array().unwrap()[..3]});
+    let mut reopened = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    let (got, replayed) = warm(&mut reopened, &prefix);
+    assert_eq!((reopened.stats.source, reopened.stats.resumed_at), (Source::Disk, 3));
+    assert!(replayed.is_empty(), "replayed {replayed:?} after a disk resume");
+    assert_eq!(got, cold(&prefix));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn releasing_the_cache_drops_its_snapshots_and_payloads_and_the_next_build_is_whole() {
     let raw = doc();
@@ -630,7 +736,8 @@ fn a_cancelled_mesh_pass_meshes_no_body_and_answers_none() {
 
     let mut ticks = 0;
     let whole = cache.mesh(&r, TOL, &Map::new(), &mut |_, _| ticks += 1);
-    assert_eq!((whole.bodies.len(), ticks, cache.stats.meshed), (r.bodies.len(), r.bodies.len(), r.bodies.len()));
+    // The pass opens with a 0 of N report, then one per body meshed.
+    assert_eq!((whole.bodies.len(), ticks, cache.stats.meshed), (r.bodies.len(), r.bodies.len() + 1, r.bodies.len()));
 
     token.cancel();
     let mut stopped = RebuildCache::new(None);

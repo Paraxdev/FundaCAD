@@ -17,10 +17,14 @@ function geom(pendingIds: string[]) {
   for (const id of pendingIds) inner.pending.set(id, () => {});
   const queue: [string, EngineWait | null][] = [];
   const progress: number[] = [];
+  const reports: (number | undefined)[][] = [];
   g.onQueue((id, behind) => queue.push([id, behind]));
-  g.onProgress((f) => progress.push(f));
+  g.onProgress((f, m, t, _id, p) => {
+    progress.push(f);
+    reports.push([f, m, t, p]);
+  });
   const say = (v: object) => inner.onMessage(JSON.stringify(v));
-  return { g, inner, queue, progress, say };
+  return { g, inner, queue, progress, reports, say };
 }
 
 describe("queue frames", () => {
@@ -49,6 +53,20 @@ describe("queue frames", () => {
     expect(progress).toEqual([]);
     say({ id: "mine", status: "building", feature: 2, meshed: -1, meshTotal: -1 });
     expect(progress).toEqual([2]);
+  });
+
+  it("passes the engine's phase through, and reads a frame without one from its feature index", () => {
+    const { reports, say } = geom(["mine"]);
+    say({ id: "mine", status: "building", phase: 3, feature: -1, meshed: 4, meshTotal: 9 });
+    say({ id: "mine", status: "building", phase: 2, feature: -1, meshed: -1, meshTotal: -1 });
+    say({ id: "mine", status: "building", feature: 6, meshed: -1, meshTotal: -1 });
+    say({ id: "mine", status: "building", feature: -1, meshed: -1, meshTotal: -1 });
+    expect(reports).toEqual([
+      [-1, 4, 9, 3],
+      [-1, -1, -1, 2],
+      [6, -1, -1, 1],
+      [-1, -1, -1, 0],
+    ]);
   });
 
   it("never settles the pending call on a queue frame", () => {

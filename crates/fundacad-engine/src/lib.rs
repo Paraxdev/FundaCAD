@@ -13,7 +13,9 @@ pub mod ws;
 pub use doc_state::DocState;
 pub use supervise::{Budget, Clocks};
 
-use fundacad_protocol::{envelope, import_stage, send_reply, CancelToken, JobResult, Limits, Message, ReplyOptions};
+use fundacad_protocol::{
+    build_phase, envelope, import_stage, send_reply, CancelToken, JobResult, Limits, Message, ReplyOptions,
+};
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 use std::io;
@@ -53,6 +55,7 @@ pub trait Outbox: Send + Sync + 'static {
 /// What a running job reports, read by the progress ticker.
 #[derive(Debug, Default)]
 pub struct Progress {
+    phase: AtomicI64,
     feature: AtomicI64,
     meshed: AtomicI64,
     mesh_total: AtomicI64,
@@ -63,16 +66,33 @@ pub struct Progress {
 }
 
 impl Progress {
+    /// Feature `index` is running.
     pub fn feature(&self, index: i64) {
         self.feature.store(index, Ordering::Relaxed);
-        self.tick();
+        self.enter(build_phase::FEATURE);
     }
 
-    /// Meshing phase: `meshed` of `total` bodies. (-1, -1) leaves it.
+    /// Any phase but meshing, which [`Progress::meshing`] enters.
+    pub fn phase(&self, phase: i64) {
+        self.enter(phase);
+    }
+
+    /// Meshing phase: `meshed` of `total` bodies that really need meshing.
     pub fn meshing(&self, meshed: i64, total: i64) {
-        self.feature.store(-1, Ordering::Relaxed);
         self.meshed.store(meshed, Ordering::Relaxed);
         self.mesh_total.store(total, Ordering::Relaxed);
+        self.enter(build_phase::MESHING);
+    }
+
+    fn enter(&self, phase: i64) {
+        if phase != build_phase::FEATURE {
+            self.feature.store(-1, Ordering::Relaxed);
+        }
+        if phase != build_phase::MESHING {
+            self.meshed.store(-1, Ordering::Relaxed);
+            self.mesh_total.store(-1, Ordering::Relaxed);
+        }
+        self.phase.store(phase, Ordering::Relaxed);
         self.tick();
     }
 
@@ -96,6 +116,7 @@ impl Progress {
     }
 
     fn reset(&self) {
+        self.phase.store(build_phase::PREPARING, Ordering::Relaxed);
         self.feature.store(-1, Ordering::Relaxed);
         self.meshed.store(-1, Ordering::Relaxed);
         self.mesh_total.store(-1, Ordering::Relaxed);
@@ -741,8 +762,9 @@ fn spawn_watchdog(
             }
             let p = &job.progress;
             let frame = if job.frames == Frames::Building {
-                envelope::building(
+                envelope::building_in(
                     &job.id,
+                    p.phase.load(Ordering::Relaxed),
                     p.feature.load(Ordering::Relaxed),
                     p.meshed.load(Ordering::Relaxed),
                     p.mesh_total.load(Ordering::Relaxed),
