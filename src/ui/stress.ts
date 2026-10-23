@@ -570,6 +570,8 @@ export function formatStressResult(
   }
   // In mm like the element size box and the engine's warnings about it.
   details.push({ k: "Mesh", v: meshRow(r.mesh) });
+  const refinement = refinementRow(r.mesh);
+  if (refinement) details.push({ k: "Refinement", v: refinement });
   const warnings = [...(r.warnings ?? [])];
   for (const e of r.errors ?? []) warnings.push(e.feature_id ? `${e.feature_id}: ${e.message}` : e.message);
   const values = r.surface?.vonMises ?? [];
@@ -591,6 +593,28 @@ function meshRow(m: StressReply["mesh"]): string {
   const passes = m.passes?.length ?? 1;
   if (passes < 2 || m.finest === undefined || !(m.finest < m.size)) return row;
   return `${row}, ${displayRound(m.finest)} mm where stress is high, ${passes} passes`;
+}
+
+const REFINE_STOPS: Record<string, string> = {
+  settled: "a finer mesh would barely move the peak",
+  elements: "stopped at the element limit",
+  time: "stopped to stay within about a minute",
+  memory: "stopped as a finer mesh needs more memory",
+  unrefinable: "nothing left to refine",
+};
+
+function refinementRow(m: StressReply["mesh"]): string | null {
+  if (m.stop === undefined) return null;
+  const passes = m.passes ?? [];
+  const why = REFINE_STOPS[m.stop];
+  if (passes.length < 2) {
+    if (m.stop === "off") return "Off";
+    if (m.stop === "settled") return `Not needed, ${why}`;
+    return why ? why[0]!.toUpperCase() + why.slice(1) : null;
+  }
+  const n = passes.length - 1;
+  const moved = `${n === 1 ? "Refined once" : `Refined ${n} times`}, the peak went from ${displayRound(passes[0]!.maxVonMises)} to ${displayRound(passes[n]!.maxVonMises)} MPa`;
+  return why ? `${moved}, then ${why}` : moved;
 }
 
 /** The legend's end labels, MPa. A minimum under a thousandth of the peak is no colour of its own, so it reads 0. */

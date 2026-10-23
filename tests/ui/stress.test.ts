@@ -276,6 +276,45 @@ describe("formatStressResult", () => {
     expect(mesh({})).toBe("4800 elements, 2.54 mm");
   });
 
+  it("says in Details whether refinement ran and why it stopped, and nothing for an older reply", () => {
+    const refinement = (m: Partial<StressReply["mesh"]>) =>
+      formatStressResult({ ...reply, mesh: { ...reply.mesh, ...m } }, "mm").details.find((d) => d.k === "Refinement")
+        ?.v ?? null;
+    const one = [{ elements: 4800, maxVonMises: 15.077 }];
+    const two = [{ elements: 3100, maxVonMises: 28.46 }, ...one];
+    const three = [...two, { elements: 6000, maxVonMises: 35.92 }];
+    expect({
+      older: refinement({ passes: two }),
+      off: refinement({ passes: one, stop: "off" }),
+      settled: refinement({ passes: one, stop: "settled" }),
+      settledLater: refinement({ passes: two, stop: "settled" }),
+      once: refinement({ passes: two, stop: "passes" }),
+      twice: refinement({ passes: three, stop: "passes" }),
+      noPasses: refinement({ stop: "elements" }),
+      time: refinement({ passes: one, stop: "time" }),
+      memory: refinement({ passes: two, stop: "memory" }),
+      unrefinable: refinement({ passes: one, stop: "unrefinable" }),
+      unknownAlone: refinement({ passes: one, stop: "later" }),
+      unknownRefined: refinement({ passes: two, stop: "later" }),
+    }).toEqual({
+      older: null,
+      off: "Off",
+      settled: "Not needed, a finer mesh would barely move the peak",
+      settledLater:
+        "Refined once, the peak went from 28.46 to 15.077 MPa, then a finer mesh would barely move the peak",
+      once: "Refined once, the peak went from 28.46 to 15.077 MPa",
+      twice: "Refined 2 times, the peak went from 28.46 to 35.92 MPa",
+      noPasses: "Stopped at the element limit",
+      time: "Stopped to stay within about a minute",
+      memory: "Refined once, the peak went from 28.46 to 15.077 MPa, then stopped as a finer mesh needs more memory",
+      unrefinable: "Nothing left to refine",
+      unknownAlone: null,
+      unknownRefined: "Refined once, the peak went from 28.46 to 15.077 MPa",
+    });
+    const rows = formatStressResult({ ...reply, mesh: { ...reply.mesh, passes: one, stop: "settled" } }, "mm").details;
+    expect(rows.slice(-2).map((r) => r.k)).toEqual(["Mesh", "Refinement"]);
+  });
+
   it("lists each of three supports' reactions and the weight in the details, none of them in the key rows", () => {
     const v = formatStressResult(
       {

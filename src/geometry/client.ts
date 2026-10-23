@@ -227,8 +227,8 @@ export interface StressReply {
   body: string;
   name: string;
   material: { name: string; E: number; nu: number; yield: number; density?: number | null };
-  /** `size` is the starting element size, `finest` the smallest after refinement; older engines omit `finest` and
-   *  `passes`. */
+  /** `size` is the starting element size, `finest` the smallest after refinement, `stop` why refinement ended
+   *  (docs/PROTOCOL.md); older engines omit `finest`, `passes` and `stop`. */
   mesh: {
     nodes: number;
     elements: number;
@@ -236,6 +236,7 @@ export interface StressReply {
     minDihedral: number;
     finest?: number;
     passes?: { elements: number; maxVonMises: number }[];
+    stop?: string;
   };
   /** `face` is null for a peak inside the body, away from every face. */
   maxVonMises: { value: number; at: Vec3; face?: number | null };

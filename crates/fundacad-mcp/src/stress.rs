@@ -410,6 +410,9 @@ pub fn report(r: &Value, supports: &[String]) -> String {
     if let (true, Some(finest)) = (passes > 1, f(mesh, "finest")) {
         line.push_str(&format!(", refined in {} passes down to {} mm", passes, sig(finest)));
     }
+    if mesh.get("stop").and_then(Value::as_str) == Some("settled") {
+        line.push_str(", refined no further as a finer mesh would barely move the peak");
+    }
     if let Some(d) = f(mesh, "minDihedral") {
         line.push_str(&format!(", smallest dihedral angle {} deg", g_format(d)));
     }

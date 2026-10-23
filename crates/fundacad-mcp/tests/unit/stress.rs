@@ -109,6 +109,17 @@ fn the_report_names_the_peaks_the_balance_and_the_warnings() {
     let mut one = refined.clone();
     one["mesh"]["passes"] = json!([{"elements": 1700, "maxVonMises": 61.23456}]);
     assert!(!report(&one, &["fixed".to_string()]).contains("passes"));
+
+    let settled = "refined no further as a finer mesh would barely move the peak";
+    assert!(!text.contains(settled), "{text}");
+    one["mesh"]["stop"] = json!("settled");
+    let text = report(&one, &["fixed".to_string()]);
+    assert!(text.contains(&format!("element size 2.5 mm, {settled}, smallest dihedral")), "{text}");
+    refined["mesh"]["stop"] = json!("settled");
+    let text = report(&refined, &["fixed".to_string()]);
+    assert!(text.contains(&format!("refined in 2 passes down to 0.64 mm, {settled}, smallest")), "{text}");
+    refined["mesh"]["stop"] = json!("passes");
+    assert!(!report(&refined, &["fixed".to_string()]).contains(settled));
 }
 
 #[test]
