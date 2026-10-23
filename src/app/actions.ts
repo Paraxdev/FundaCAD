@@ -8,6 +8,7 @@ import { choose } from "../ui/choice";
 import { endPickSession } from "../ui/treePick";
 import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE } from "./actionTables";
 import { booleanOpOfAction } from "../features/booleanOps";
+import { useDialogStore } from "../stores/dialogs";
 import { useUiStore } from "../stores/ui";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
@@ -108,6 +109,7 @@ export function createActions(e: Engine): (action: string) => void {
     // Before the sketch finish below, so a sketch open when the problem showed is reported open.
     if (action === "report-problem") return openReportDialog();
     if (action === "suggest-idea") return void openExternal(ideaUrl());
+    if (action === "preferences") return void useDialogStore().openPreferences();
     if (action === "manual") return void openExternal(MANUAL_URL);
     // The arrow keys turn the view and nothing else: they leave a sketch open,
     // and a tool that reads the arrows itself (the pattern count) keeps them.
