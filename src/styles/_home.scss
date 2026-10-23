@@ -160,6 +160,10 @@
   font-size: 12px;
   color: var(--text-dim);
 }
+.home-welcome-acts {
+  display: flex;
+  gap: var(--s-2);
+}
 .home-news {
   display: flex;
   flex-direction: column;
