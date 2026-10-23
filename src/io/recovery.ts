@@ -48,6 +48,7 @@ export function installAutosave(store: DocumentStore) {
   const givenUp = new WeakSet<DocumentSession>();
   let failCount = 0; // consecutive autosave failures; warn once at 3, reset on success
   let warned = false;
+  let wrote: Snapshot | null = null; // the open document's last snapshot on disk
 
   const failed = (e: unknown) => {
     console.warn("autosave failed:", e);
@@ -80,6 +81,11 @@ export function installAutosave(store: DocumentStore) {
       await invoke("recovery_write", { slot: snap.slot, json: snap.json });
       // A Discard while the write was in flight cleared the slot before the write landed.
       if (givenUp.has(snap.session)) await invoke("recovery_clear", { slot: snap.slot });
+      else if (snap.session === store.session) {
+        // An undo back to the saved state while the write was in flight.
+        if (store.dirty) wrote = snap;
+        else await invoke("recovery_clear", { slot: snap.slot });
+      }
       failCount = 0;
       warned = false;
     } catch (e) {
@@ -144,6 +150,16 @@ export function installAutosave(store: DocumentStore) {
 
   store.onDocChange(schedule);
   store.onMeta(schedule);
+  // Undo or redo back to the saved state leaves nothing to recover, so the snapshot of the unsaved state goes.
+  store.onMeta(() => {
+    if (store.dirty || wrote?.session !== store.session) return;
+    const slot = wrote.slot;
+    wrote = null;
+    idleTimer?.();
+    idleTimer = null;
+    oldestEdit = null;
+    void import("@tauri-apps/api/core").then(({ invoke }) => invoke("recovery_clear", { slot })).catch(() => {});
+  });
 }
 
 /** Drop the recovery snapshots of a document that was just saved. */
