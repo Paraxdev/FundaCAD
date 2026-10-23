@@ -8,6 +8,7 @@ import { useBuildValue, useDocValue } from "../../app/useDoc";
 import { useRibbonStore } from "../../stores/ribbon";
 import { useCommandPaletteStore } from "../../stores/commandPalette";
 import { useSketchPaletteStore } from "../../stores/sketchPalette";
+import { onShortcutsChange } from "../../input/shortcuts";
 import { onContribChange } from "../../plugins/contrib";
 import {
   faceOf,
@@ -66,6 +67,11 @@ onMounted(() => {
   offPlugins = onContribChange(() => pluginTick.value++);
 });
 onUnmounted(() => offPlugins?.());
+let offShortcuts: (() => void) | null = null;
+onMounted(() => {
+  offShortcuts = onShortcutsChange(() => pluginTick.value++);
+});
+onUnmounted(() => offShortcuts?.());
 
 // A plugin's tool group starts open; folding it away is remembered by plugin id
 // for the session. Collapsing changes the list height, so the fit is remeasured.
