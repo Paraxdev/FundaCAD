@@ -2212,6 +2212,63 @@ inline Opt<TopoDS_Shape> mitre(const ChamferEnd &a, const ChamferEnd &b, double 
   return out;
 }
 
+// Three chamfers at a convex corner cut past it, leaving the pyramid under OCCT's triangle through the setback meets
+// (152.38 too much on a 20 x 20 x 10 block at 4/10). Only on square faces is OCCT's corner that triangle.
+inline Opt<TopoDS_Shape> corner_pyramid(const ChamferEnd *const *c, double fuzz) {
+  gp_Pnt meet[3], on[3];
+  gp_Vec n[3];
+  gp_Dir across[3];
+  for (int k = 0; k < 3; ++k) {
+    const ChamferEnd &a = *c[k], &b = *c[(k + 1) % 3];
+    int ia = -1, ib = -1, shared = 0;
+    for (int i = 0; i < 2; ++i)
+      for (int j = 0; j < 2; ++j)
+        if (a.faces[i].IsSame(b.faces[j])) ia = i, ib = j, ++shared;
+    if (shared != 1 || BRepAdaptor_Surface(a.faces[ia]).GetType() != GeomAbs_Plane) return {};
+    across[k] = BRepAdaptor_Surface(a.faces[ia]).Plane().Axis().Direction();
+    gp_Vec u = a.into, v = b.into, w(b.Q[ib], a.Q[ia]);
+    double uu = u.Dot(u), uv = u.Dot(v), vv = v.Dot(v), den = uu * vv - uv * uv;
+    if (den < 1e-12 * uu * vv) return {};
+    double s = (uv * v.Dot(w) - vv * u.Dot(w)) / den, t = (uu * v.Dot(w) - uv * u.Dot(w)) / den;
+    gp_Pnt pa = a.Q[ia].Translated(u.Multiplied(s)), pb = b.Q[ib].Translated(v.Multiplied(t));
+    if (s <= 0 || t <= 0 || pa.Distance(pb) > fuzz) return {};
+    meet[k] = gp_Pnt(0.5 * (pa.XYZ() + pb.XYZ()));
+    n[k] = gp_Vec(a.Q[0], a.Q[1]).Crossed(a.into);
+    if (n[k].Magnitude() < 1e-12) return {};
+    n[k].Normalize();
+    if (n[k].Dot(gp_Vec(a.Q[0], a.at)) > 0) n[k].Reverse();
+    on[k] = a.Q[0];
+  }
+  for (int k = 0; k < 3; ++k)
+    if (std::abs(across[k].Dot(across[(k + 1) % 3])) > 1e-6) return {};
+  const gp_Pnt &tip = c[0]->at;
+  gp_Vec m = gp_Vec(meet[0], meet[1]).Crossed(gp_Vec(meet[0], meet[2]));
+  if (m.Magnitude() < 1e-12) return {};
+  m.Normalize();
+  if (m.Dot(gp_Vec(meet[0], tip)) < 0) m.Reverse();
+  double rows[3][3], rhs[3];
+  for (int k = 0; k < 3; ++k) {
+    rows[k][0] = n[k].X(), rows[k][1] = n[k].Y(), rows[k][2] = n[k].Z();
+    rhs[k] = n[k].Dot(V(on[k]));
+  }
+  Opt<gp_Vec> apex = solve3(rows, rhs);
+  if (!apex) return {};
+  for (int k = 0; k < 3; ++k)
+    for (int j = 0; j < 3; ++j)
+      if (n[j].Dot(gp_Vec(on[j], meet[k])) < -fuzz) return {};
+  double h = m.Dot(*apex - V(meet[0]));
+  if (h < -fuzz) return {};
+  if (h < fuzz) return TopoDS_Shape();
+  double reach = tip.Distance(P(*apex));
+  for (const gp_Pnt &p : meet) reach = std::max(reach, tip.Distance(p));
+  double R = 4 * reach + 10 * fuzz, e = std::max(0.02 * reach, 0.01);
+  TopoDS_Shape out = slab(meet[0], m, tip, R);
+  for (int k = 0; k < 3; ++k)
+    out = boolean(Op::Common, out, {slab(on[k].Translated(n[k].Multiplied(-e)), n[k], tip, R)}, 0.0);
+  if (volume(out) < 1e-9) return {};
+  return out;
+}
+
 struct RoundTools {
   std::vector<TopoDS_Shape> cut, fuse;
   std::vector<std::pair<TopoDS_Shape, double>> convex;
@@ -2283,6 +2340,26 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
           }
           out.cut.push_back(m.val);
         }
+  std::vector<gp_Pnt> seen;
+  for (const std::vector<ChamferEnd> &own : ends)
+    for (const ChamferEnd &a : own) {
+      bool again = false;
+      for (const gp_Pnt &p : seen) again = again || p.Distance(a.at) <= by;
+      if (again) continue;
+      seen.push_back(a.at);
+      std::vector<const ChamferEnd *> here;
+      for (const std::vector<ChamferEnd> &other : ends)
+        for (const ChamferEnd &b : other)
+          if (b.at.Distance(a.at) <= by) here.push_back(&b);
+      if (here.size() < 3) continue;
+      Opt<TopoDS_Shape> pyramid;
+      if (here.size() == 3 && meeting(a.at) == 3) pyramid = corner_pyramid(here.data(), by);
+      if (pyramid.has) {
+        if (!pyramid.val.IsNull()) out.cut.push_back(pyramid.val);
+      } else if (!sizing()) {
+        throw Unmitred(a.at);
+      }
+    }
   last_overrun() = first;
   return out;
 }

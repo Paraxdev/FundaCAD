@@ -672,3 +672,65 @@ fn a_chamfer_past_an_inside_corner_too_sharp_to_mitre_is_refused_at_the_corner()
         vec![((0, vec![], 5870.35, None), false), ((1, vec![], 5885.7, None), true), ((1, vec![], 5885.7, None), true)];
     assert_eq!(got, want);
 }
+
+fn with_faces(r: &Rebuild) -> (usize, Vec<String>, f64, Option<f64>, Option<usize>) {
+    let (errors, warned, v, offer) = owned(r);
+    (errors, warned, v, offer, r.bodies.first().map(|b| kernel::count(&b.shape, Kind::Face)))
+}
+
+/// 10 + 10 just meets across the 20 x 20 top and bottom, so OCCT cannot build it and the section build cut every
+/// chamfer past its ends, leaving at each corner the pyramid under OCCT's corner triangle: 1645.71 for 1493.33
+/// (8 x 19.05), and with the top and Z edges 2422.86 for 2346.67, no word said. Both Z edges of one wall take 10
+/// there, closing it to a line, so 21 faces. A slanted corner is refused, OCCT's corner there is no plane.
+#[test]
+fn two_distance_chamfers_that_just_meet_at_three_edge_corners_cut_the_corner_triangle() {
+    let all = || json!({"kind": "edge", "by": "all", "body": "body1"});
+    let top = json!({"kind": "edge", "by": "ofFace", "body": "body1",
+        "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1]}});
+    let turned: Vec<(f64, f64)> =
+        rect(0.0, 0.0, 20.0, 20.0).iter().map(|&(x, y)| (7.0 + 0.8 * x - 0.6 * y, -3.0 + 0.6 * x + 0.8 * y)).collect();
+    let block = |d: f64, d2: f64, edges: Value| {
+        with_faces(&prism_chamfer(&rect(13.0, -7.0, 20.0, 20.0), 10.0, d, d2, edges, json!({})))
+    };
+    let tilted = |d: f64, d2: f64| {
+        with_faces(&plate(
+            &[&rect(0.0, 0.0, 20.0, 20.0)],
+            TILTED,
+            [0.8, 0.6, 0.0],
+            10.0,
+            vec![two_distance("c", d, d2, all(), json!({}))],
+        ))
+    };
+    let top_and_z = json!([top.clone(), z_edges()]);
+    let got = vec![
+        block(4.0, 10.0, all()),
+        block(10.0, 4.0, all()),
+        tilted(4.0, 10.0),
+        with_faces(&prism_chamfer(&turned, 10.0, 4.0, 10.0, top_and_z, json!({}))),
+        block(3.9996, 9.999, all()),
+        block(4.0, 10.0, top),
+        with_faces(&prism_chamfer(&PARALLELOGRAM, 10.0, 3.0, 8.0, all(), json!({}))),
+    ];
+    let want = vec![
+        (0, vec![], 1493.33, None, Some(21)),
+        (0, vec![], 1493.33, None, Some(21)),
+        (0, vec![], 1493.33, None, Some(21)),
+        (0, vec![], 2346.67, None, Some(15)),
+        (0, vec![], 1493.69, None, Some(26)),
+        (0, vec![], 2933.33, None, Some(9)),
+        (1, vec![], 3520.0, None, Some(6)),
+    ];
+    assert_eq!(got, want);
+}
+
+/// A hair past meeting the setbacks cross on the top face, refused with a size whose chamfer OCCT builds exactly.
+#[test]
+fn two_distance_chamfers_a_hair_past_meeting_at_three_edge_corners_are_refused_with_a_size_that_builds() {
+    let all = || json!({"kind": "edge", "by": "all", "body": "body1"});
+    let r = prism_chamfer(&rect(13.0, -7.0, 20.0, 20.0), 10.0, 4.0, 10.001, all(), json!({}));
+    let offer = messages(&r).first().and_then(|m| offered(m));
+    let fits = offer.map(|s| {
+        with_faces(&prism_chamfer(&rect(13.0, -7.0, 20.0, 20.0), 10.0, s, 10.001 * s / 4.0, all(), json!({})))
+    });
+    assert_eq!((r.errors.len(), offer, fits), (1, Some(3.99), Some((0, vec![], 1501.99, None, Some(26)))));
+}
