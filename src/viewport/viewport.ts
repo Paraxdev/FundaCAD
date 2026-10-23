@@ -18,6 +18,7 @@ import {
   setEdgeResolution,
   visibleBodyMeshes,
   BASE_COLOR,
+  SCAN_COLOR,
   type BodyMesh,
   type ModelView,
   type EdgeRef,
@@ -43,6 +44,7 @@ import {
   buildComMarker,
   buildStressMesh,
   plainStressMaterial,
+  solidColors,
   stressSurfaceGeometry,
   buildFaceMarkMesh,
   clearOverlayObjects,
@@ -3237,9 +3239,8 @@ export class Viewport {
     } else if (o && valid) {
       const b = this.model?.bodies.find((x) => x.id === o.bodyId);
       const plain = o.colours === false;
-      // Grey with no material of the body's to copy.
       const colors = plain
-        ? new Float32Array(o.positions.length).fill(0.75)
+        ? solidColors(o.positions.length / 3, this.bodyColour(b))
         : stressColors(o.values, o.range.min, o.range.max);
       this.stressMesh = buildStressMesh(o.positions, o.indices, colors);
       const own = plain ? plainStressMaterial(b?.mesh.material) : null;
@@ -3262,6 +3263,11 @@ export class Viewport {
     this.stressBody = this.stressMesh && o ? o.bodyId : null;
     this.requestRender();
     if (this.stressBody !== was) for (const fn of this.stressListeners) fn();
+  }
+  /** The colour a body is painted as a whole. Its albedo is in its vertex colours, its material stays white. */
+  private bodyColour(b: BodyMesh | undefined): THREE.Color {
+    const hex = b ? this.finish.bodyPaint[b.id] : undefined;
+    return hex ? new THREE.Color(hex) : b?.scan ? SCAN_COLOR : BASE_COLOR;
   }
   /** True while an overlay is set, drawn in its colours, plain or only kept for its points. */
   hasStressOverlay(): boolean {

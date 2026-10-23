@@ -2,6 +2,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { Viewport } from "../../src/viewport/viewport";
+import { getPatch, setPatch } from "../../src/viewport/shaderPatches";
 
 const POSITIONS = [13.5, -7.25, 4.1, 100, 0, 0, 2, 10, 0.5];
 const BASE = {
@@ -13,14 +14,19 @@ const BASE = {
 };
 const BENT = { displacement: [0, 0, 0, 0.25, 0, -2, 0, 0.5, -1], scale: 2 };
 const W: [number, number, number] = [0.2, 0.3, 0.5];
+const rgb = (hex: number | string) => new THREE.Color(hex).toArray().map((x) => Number(x.toFixed(4)));
 
 function view() {
   const scene = new THREE.Scene();
-  const material = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.8, 0.4, 0.2, "srgb") });
+  // As render.ts makes a body: white, its albedo in its vertex colours, a finish patch and the glass one.
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true });
+  setPatch(material, { name: "surface", key: "s1", after: { color_fragment: "diffuseColor.rgb *= 0.9;" } });
+  setPatch(material, { name: "glassAuto", key: "g1", after: { transmission_fragment: "" } });
   const body = { id: "b1", mesh: new THREE.Mesh(new THREE.BufferGeometry(), material), edges: { setBodyVisible() {} } };
   const vp = Object.create(Viewport.prototype) as Viewport;
   Object.assign(vp, {
     model: { bodies: [body] },
+    finish: { bodyPaint: {} as Record<string, string> },
     scene: { scene },
     stressMesh: null,
     stressRest: null,
@@ -42,7 +48,14 @@ function view() {
       set: vp.hasStressOverlay(),
       standsIn: vp.stressOverlayBody(),
       firstColour: c ? [0, 1, 2].map((k) => Number(c.getComponent(0, k).toFixed(4))) : null,
-      own: mat && !mat.vertexColors ? { hex: mat.color.getHexString(), copy: mat !== body.mesh.material } : null,
+      own:
+        mat && getPatch(mat, "surface")
+          ? {
+              copy: mat !== body.mesh.material,
+              glass: !!getPatch(mat, "glassAuto"),
+              white: mat.color.getHex() === 0xffffff,
+            }
+          : null,
       point: point && point.map((x) => Number(x.toFixed(6))),
     };
   };
@@ -72,8 +85,8 @@ describe("the stress overlay with its colours and shape apart", () => {
       bodyShown: false,
       set: true,
       standsIn: "b1",
-      firstColour: null,
-      own: { hex: "cc6633", copy: true },
+      firstColour: rgb(0x9aa7b4),
+      own: { copy: true, glass: false, white: true },
       point: at(BENT_POS),
     });
     vp.setStressOverlay({ ...BASE, colours: false });
@@ -116,11 +129,28 @@ describe("the stress overlay with its colours and shape apart", () => {
     expect({ shown: state().bodyShown, meshes: state().meshes }).toEqual({ shown: false, meshes: 0 });
   });
 
-  it("colours the plain shape grey for a body with no colour, and refuses a surface whose values do not fit", () => {
+  it("paints the plain shape the body's paint, a scan its sand, one with no lit material still its colour", () => {
     const { vp, body, state } = view();
+    (vp as unknown as { finish: { bodyPaint: Record<string, string> } }).finish.bodyPaint = {
+      b1: "#c0392b",
+      b2: "#00ff00",
+    };
+    vp.setStressOverlay({ ...BASE, ...BENT, colours: false });
+    expect({ firstColour: state().firstColour, own: state().own }).toEqual({
+      firstColour: rgb("#c0392b"),
+      own: { copy: true, glass: false, white: true },
+    });
+    (vp as unknown as { finish: { bodyPaint: Record<string, string> } }).finish.bodyPaint = {};
+    Object.assign(body, { scan: true });
+    vp.setStressOverlay({ ...BASE, ...BENT, colours: false });
+    expect(state().firstColour).toEqual(rgb(0xc9b48f));
     (body.mesh as THREE.Mesh).material = [];
     vp.setStressOverlay({ ...BASE, ...BENT, colours: false });
-    expect(state().firstColour).toEqual([0.5225, 0.5225, 0.5225]);
+    expect({ firstColour: state().firstColour, own: state().own }).toEqual({ firstColour: rgb(0xc9b48f), own: null });
+  });
+
+  it("refuses a surface whose values do not fit", () => {
+    const { vp, state } = view();
     vp.setStressOverlay({ ...BASE, values: [1, 4], colours: false });
     expect({ set: state().set, bodyShown: state().bodyShown }).toEqual({ set: false, bodyShown: true });
   });
