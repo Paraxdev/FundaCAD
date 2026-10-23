@@ -96,15 +96,20 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
     page.evaluate(() => {
       const panel = document.querySelector(".mirror-panel");
       const field = (k) => {
-        const row = panel && panel.querySelector(`.mirror-field[data-field="${k}"]`);
+        const row = panel && panel.querySelector(`.tgt-section[data-field="${k}"]`);
         if (!row) return null;
         return {
-          value: row.querySelector(".mirror-field-v").textContent.trim(),
-          active: row.classList.contains("active"),
-          clearable: !row.querySelector(".float-card-close").disabled,
+          value: [
+            row.querySelectorAll(".tgt-item").length,
+            ...[...row.querySelectorAll(".tgt-label")].map((l) => l.textContent.trim()),
+          ]
+            .join(" ")
+            .trim(),
+          active: row.classList.contains("tgt-active"),
+          clearable: !row.querySelector(".tgt-clear").disabled,
         };
       };
-      const apply = panel && panel.querySelector(".mirror-actions .btn-primary");
+      const apply = panel && panel.querySelector(".tgt-done");
       const g = window.viewport.ghosts && window.viewport.ghosts.ghosts;
       return {
         running: window.__fundacad.mirror.active,
@@ -234,7 +239,7 @@ const near = (a, b, tol) => Number.isFinite(a) && Math.abs(a - b) <= tol;
   // Esc in a third run changes nothing and gives the selection back
   await clickAt(await scr(30, 7, 8));
   await page.click("#toolrail [data-action='offer:mirror']").catch(() => {});
-  await page.waitForTimeout(400);
+  await page.waitForSelector(".mirror-panel .rd-chip", { timeout: 10000 });
   await page.click(".mirror-panel .rd-chip:nth-child(1)");
   await page.waitForTimeout(300);
   await clickAt(await scr(-25, 18, 5));

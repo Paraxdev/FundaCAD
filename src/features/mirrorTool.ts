@@ -22,6 +22,7 @@ import {
   nextPick,
   pickLine,
   pickObject,
+  removeAt,
   startFields,
   switchField,
   type MirrorFieldKey,
@@ -110,6 +111,10 @@ export class MirrorTool {
     if (this.active) this.set(clearField(this.fields, k));
   }
 
+  remove(k: MirrorFieldKey, i: number): void {
+    if (this.active) this.set(removeAt(this.fields, k, i));
+  }
+
   setBasePlane(p: Plane3): void {
     if (this.active) this.set(pickLine(this.fields, { kind: "base", plane: p }, null));
   }
@@ -138,6 +143,11 @@ export class MirrorTool {
 
   private bodyIds(): string[] {
     return (this.store.buildState.result?.bodies ?? []).map((b) => b.id);
+  }
+
+  private bodyLabel(id: string): string {
+    const built = this.store.buildState.result?.bodies?.find((b) => b.id === id);
+    return this.store.bodyName(id) ?? built?.name ?? id;
   }
 
   private planeOf(t: PlanePickTarget): MirrorPlanePick | null {
@@ -254,11 +264,17 @@ export class MirrorTool {
     showMirrorPanel({
       id: this.panelId,
       fields: [
-        { key: "objects", label: "Objects", icon: "select-all", value: objects, filled: f.objects.length > 0 },
+        {
+          key: "objects",
+          label: "Objects",
+          items: f.objects.map((id) => this.bodyLabel(id)),
+          value: objects,
+          filled: f.objects.length > 0,
+        },
         {
           key: "line",
           label: "Mirror plane",
-          icon: "plane",
+          items: f.line ? [this.planeLabel(f.line)] : [],
           value: this.planeLabel(f.line),
           filled: f.line !== null,
         },
@@ -269,6 +285,7 @@ export class MirrorTool {
       ready: isReady(f),
       onActivate: (k) => this.activate(k),
       onClear: (k) => this.clear(k),
+      onRemove: (k, i) => this.remove(k, i),
       onPlane: (p) => this.setBasePlane(p as Plane3),
       onCommit: () => void this.commit(),
       onCancel: () => this.cancel(),

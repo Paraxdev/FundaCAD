@@ -62,6 +62,11 @@ export function clearField<L>(f: MirrorFields<L>, k: MirrorFieldKey): MirrorFiel
   return k === "objects" ? { ...f, objects: [], active: k } : { ...f, line: null, lineId: null, active: k };
 }
 
+export function removeAt<L>(f: MirrorFields<L>, k: MirrorFieldKey, i: number): MirrorFields<L> {
+  if (k === "line") return { ...f, line: null, lineId: null };
+  return { ...f, objects: f.objects.filter((_, j) => j !== i) };
+}
+
 export function isReady(f: MirrorFields<unknown>): boolean {
   return f.objects.length > 0 && f.line !== null;
 }

@@ -104,6 +104,7 @@ watch(
             <BrowserPane v-if="shell.itemsShown" />
             <FilletMembers />
             <TargetEditPanel />
+            <MirrorToolPanel v-if="toolPanels.mirror" :key="toolPanels.mirror.id" :view="toolPanels.mirror" />
           </div>
           <ToolRail />
         </div>
@@ -143,7 +144,6 @@ watch(
   <SketchDimLayer v-if="sketchLabelsShown" />
   <SketchGlyphLayer v-if="sketchLabelsShown" />
   <TextToolPanel v-if="toolPanels.text" :key="toolPanels.text.id" :req="toolPanels.text" />
-  <MirrorToolPanel v-if="toolPanels.mirror" :key="toolPanels.mirror.id" :view="toolPanels.mirror" />
   <ProjectFilterBar v-if="toolPanels.projectAnchor" />
 
   <!-- v-if, not an open prop: mount is open, so useModalGate.ts can count modal depth in mount hooks without leaks. -->

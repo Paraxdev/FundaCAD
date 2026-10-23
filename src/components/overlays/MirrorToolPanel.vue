@@ -3,9 +3,7 @@
 
 import { computed } from "vue";
 import type { MirrorPanelView } from "../../stores/toolPanels";
-import FloatingPanel from "./FloatingPanel.vue";
-import IconButton from "../ui/IconButton.vue";
-import Icon from "../shell/Icon.vue";
+import PickList from "./PickList.vue";
 
 const props = defineProps<{ view: MirrorPanelView }>();
 
@@ -17,35 +15,31 @@ const waitingFor = computed(() =>
         .map((f) => f.label.toLowerCase())
         .join(" and ")} first`,
 );
+
+const emptyText = (key: string) => (key === "objects" ? "Click geometry to add" : "Click to set");
 </script>
 
 <template>
-  <!-- No close on Esc: the tool owns Escape. Pointer presses keep focus off the buttons so Enter still applies. -->
-  <FloatingPanel :open="true" panel-class="mirror-panel">
-    <div class="measure-title">Mirror</div>
-    <div
+  <!-- Docked like the target editor. No close on Esc: the tool owns Escape. Pointer presses keep focus off the buttons so Enter still applies. -->
+  <aside class="tgt-panel mirror-panel" role="dialog" aria-label="Mirror selection" @pointerdown.prevent>
+    <div class="tgt-head">
+      <span class="tgt-title">Mirror</span>
+      <span class="tgt-sub">{{ view.fields[0].value }}</span>
+    </div>
+
+    <PickList
       v-for="f in view.fields"
       :key="f.key"
-      class="mirror-field"
-      :class="{ active: view.active === f.key }"
       :data-field="f.key"
-      @pointerdown.prevent
+      :label="f.label"
+      :rows="f.items.map((label) => ({ label }))"
+      :active="view.active === f.key"
+      :empty="view.active === f.key ? emptyText(f.key) : 'Nothing picked'"
       @click="view.onActivate(f.key)"
-    >
-      <IconButton :icon="f.icon" :title="`Pick ${f.label.toLowerCase()}`" :active="view.active === f.key" :size="16" />
-      <span class="mirror-field-k">{{ f.label }}</span>
-      <span class="mirror-field-v">{{ f.value }}</span>
-      <button
-        type="button"
-        class="float-card-close"
-        :title="`Clear ${f.label.toLowerCase()}`"
-        :aria-label="`Clear ${f.label.toLowerCase()}`"
-        :disabled="!f.filled"
-        @click.stop="view.onClear(f.key)"
-      >
-        <Icon name="close" :size="14" />
-      </button>
-    </div>
+      @clear="view.onClear(f.key)"
+      @remove="view.onRemove(f.key, $event)"
+    />
+
     <div v-if="view.planes.length" class="mirror-chips">
       <button
         v-for="p in view.planes"
@@ -54,26 +48,18 @@ const waitingFor = computed(() =>
         class="rd-chip"
         :class="{ active: view.plane === p }"
         :aria-pressed="view.plane === p"
-        @pointerdown.prevent
         @click="view.onPlane(p)"
       >
         {{ p }}
       </button>
     </div>
-    <div class="mirror-actions">
-      <button type="button" class="btn" @pointerdown.prevent @click="view.onCancel()">Cancel</button>
-      <button
-        type="button"
-        class="btn btn-primary"
-        :disabled="!view.ready"
-        :title="waitingFor"
-        @pointerdown.prevent
-        @click="view.onCommit()"
-      >
-        <Icon name="check" :size="14" />
+
+    <div class="tgt-actions">
+      <button type="button" class="tgt-done" :disabled="!view.ready" :title="waitingFor" @click="view.onCommit()">
         Mirror
       </button>
+      <button type="button" class="tgt-cancel" @click="view.onCancel()">Cancel</button>
     </div>
-    <div class="measure-hint">Enter moves to the next field, then applies · Shift adds to Objects · Esc to cancel</div>
-  </FloatingPanel>
+    <div class="tgt-hint">Enter: next list, then apply · Shift adds to Objects · Esc cancels</div>
+  </aside>
 </template>
