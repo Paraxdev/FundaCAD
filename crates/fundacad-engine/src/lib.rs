@@ -17,7 +17,7 @@ use fundacad_protocol::{
     build_phase, envelope, import_stage, send_reply, CancelToken, JobResult, Limits, Message, ReplyOptions,
 };
 use serde_json::{json, Map, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::mpsc;
@@ -329,8 +329,8 @@ pub struct Engine {
     /// Locked before `running` wherever both are held.
     waiting: Arc<Mutex<Vec<Waiting>>>,
     ended: Arc<Mutex<Vec<Ended>>>,
-    /// Documents a client ended, whose late requests are answered cancelled instead of run.
-    gone: Mutex<HashSet<(u64, String)>>,
+    /// The documents clients ended last, whose late requests are answered cancelled instead of run.
+    gone: Mutex<VecDeque<(u64, String)>>,
     next_ticket: AtomicU64,
     out: Arc<dyn Outbox>,
     next_client: AtomicU64,
@@ -444,7 +444,7 @@ impl Engine {
             }
             op => {
                 let doc = doc_of(&req);
-                if !doc.is_empty() && lock(&self.gone).contains(&(client, doc.clone())) {
+                if !doc.is_empty() && lock(&self.gone).iter().any(|(c, d)| *c == client && *d == doc) {
                     reply(envelope::cancelled(&id));
                     return;
                 }
@@ -526,8 +526,10 @@ impl Engine {
         let hit = |c: u64, d: &str| c == client && doc.map_or(true, |x| x == d);
         let mut waiting = lock(&self.waiting);
         let mut ended = 0;
+        let mut docs: Vec<String> = vec![];
         if let Some(r) = lock(&self.running).as_ref().filter(|r| hit(r.client, &r.doc)) {
             r.cancel.cancel();
+            docs.push(r.doc.clone());
             ended += 1;
         }
         let (withdrawn, kept): (Vec<Waiting>, Vec<Waiting>) =
@@ -540,16 +542,34 @@ impl Engine {
                 let _ = w.out.send(&mut std::iter::once(Message::Text(envelope::cancelled(&w.id))));
             }
         }
-        match doc {
-            Some(d) => {
-                lock(&self.gone).insert((client, d.to_owned()));
+        let mut gone = lock(&self.gone);
+        match (doc, answer) {
+            (Some(d), _) => remember_gone(&mut gone, client, d),
+            (None, true) => {
+                for d in docs.iter().chain(withdrawn.iter().map(|w| &w.doc)) {
+                    remember_gone(&mut gone, client, d);
+                }
             }
-            None => lock(&self.gone).retain(|(c, _)| *c != client),
+            (None, false) => gone.retain(|(c, _)| *c != client),
         }
+        drop(gone);
         lock(&self.ended).push((client, doc.map(str::to_owned)));
         let _ = self.jobs.send(Work::End);
         ended
     }
+}
+
+/// Enough for every document a session closes before a late request of one arrives.
+const GONE_KEPT: usize = 64;
+
+fn remember_gone(gone: &mut VecDeque<(u64, String)>, client: u64, doc: &str) {
+    if doc.is_empty() || gone.iter().any(|(c, d)| *c == client && d == doc) {
+        return;
+    }
+    if gone.len() >= GONE_KEPT {
+        gone.pop_front();
+    }
+    gone.push_back((client, doc.to_owned()));
 }
 
 /// One connection's handle on a shared [`Engine`].
