@@ -121,7 +121,7 @@ function rig() {
       openListeners.push(fn);
       return () => {};
     },
-    isBodyVisible: () => true,
+    isBodyVisible: (_id: string) => true,
     loadCount: 3,
     get stressStudy() {
       return study;
@@ -1518,6 +1518,20 @@ describe("the colours and the deformed shape, each with its own switch", () => {
     r.store.isBodyVisible = () => false;
     r.rebuild(FIRST);
     expect(seen()).toEqual({ overlay: null, marks: null, pin, colours: "hidden", shape: true });
+  });
+
+  it("neither switch draws over a body hidden with the eye, and both draw again once it shows", async () => {
+    const { r, still, bent } = await ran();
+    r.store.isBodyVisible = (id: string) => id !== "b1";
+    r.ui.setStressShape(false);
+    expect(r.overlays.at(-1)).toBeNull();
+    r.ui.setStressColours(false);
+    expect(r.overlays.at(-1)).toBeNull();
+    r.ui.setStressShape(true);
+    expect(r.overlays.at(-1)).toBeNull();
+    r.store.isBodyVisible = () => true;
+    r.ui.setStressColours(true);
+    expect(r.overlays.at(-1)).toEqual({ ...still, colours: true, ...bent });
   });
 
   it("an edit drops the drawing whichever switch is on", async () => {
