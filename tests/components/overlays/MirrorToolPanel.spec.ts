@@ -10,8 +10,8 @@ function viewOf(over: Partial<MirrorPanelView> = {}): MirrorPanelView {
   return {
     id: 4,
     fields: [
-      { key: "objects", label: "Objects", icon: "select-all", value: "3 objects", filled: true },
-      { key: "line", label: "Mirror line", icon: "line", value: "Nothing picked", filled: false },
+      { key: "objects", label: "Objects", items: ["Line 1", "Circle 1", "Arc 1"], value: "3 objects", filled: true },
+      { key: "line", label: "Mirror line", items: [], value: "Nothing picked", filled: false },
     ],
     active: "line",
     planes: [],
@@ -19,6 +19,7 @@ function viewOf(over: Partial<MirrorPanelView> = {}): MirrorPanelView {
     ready: false,
     onActivate: vi.fn(),
     onClear: vi.fn(),
+    onRemove: vi.fn(),
     onPlane: vi.fn(),
     onCommit: vi.fn(),
     onCancel: vi.fn(),
@@ -33,53 +34,61 @@ function mountView(view: MirrorPanelView) {
 const $ = (sel: string) => [...document.body.querySelectorAll<HTMLElement>(sel)];
 
 describe("MirrorToolPanel", () => {
-  it("shows both fields with the active one pressed and lit", () => {
+  it("lists a section per field with one row per pick, the active one marked", () => {
     mountView(viewOf());
-    const rows = $(".mirror-panel .mirror-field");
-    expect(rows.map((r) => r.dataset.field)).toEqual(["objects", "line"]);
-    expect(rows.map((r) => r.classList.contains("active"))).toEqual([false, true]);
-    expect(rows.map((r) => r.querySelector(".icon-btn")!.getAttribute("aria-pressed"))).toEqual(["false", "true"]);
-    expect(rows.map((r) => r.querySelector(".mirror-field-v")!.textContent)).toEqual(["3 objects", "Nothing picked"]);
+    const sections = $(".mirror-panel .tgt-section");
+    expect(sections.map((r) => r.dataset.field)).toEqual(["objects", "line"]);
+    expect(sections.map((r) => r.classList.contains("tgt-active"))).toEqual([false, true]);
+    expect(sections.map((r) => r.querySelector(".tgt-field")!.textContent)).toEqual(["Objects", "Mirror line"]);
+    expect($('[data-field="objects"] .tgt-item .tgt-label').map((l) => l.textContent)).toEqual([
+      "Line 1",
+      "Circle 1",
+      "Arc 1",
+    ]);
+    expect($('[data-field="line"] .tgt-none').map((l) => l.textContent)).toEqual(["Click to set"]);
+    expect($('[data-field="objects"] .tgt-none')).toEqual([]);
   });
 
-  it("enables a clear button only on a filled field and passes its key", async () => {
+  it("enables Clear all only on a filled list and passes its key", () => {
     const v = viewOf();
     mountView(v);
-    const clears = $(".mirror-field .float-card-close") as HTMLButtonElement[];
+    const clears = $(".tgt-clear") as HTMLButtonElement[];
     expect(clears.map((b) => b.disabled)).toEqual([false, true]);
     clears[0]!.click();
-    expect(v.onClear).toHaveBeenCalledTimes(1);
     expect(v.onClear).toHaveBeenCalledWith("objects");
     expect(v.onActivate).not.toHaveBeenCalled();
   });
 
-  it("makes a field active from its toggle", () => {
+  it("removes one row by its index without activating the list", () => {
     const v = viewOf();
     mountView(v);
-    $(".mirror-field .icon-btn")[0]!.click();
-    expect(vi.mocked(v.onActivate).mock.calls).toEqual([["objects"]]);
+    ($(".tgt-remove")[1] as HTMLButtonElement).click();
+    expect(vi.mocked(v.onRemove).mock.calls).toEqual([["objects", 1]]);
+    expect(v.onActivate).not.toHaveBeenCalled();
   });
 
-  it("makes a field active from anywhere on its row", () => {
+  it("makes a list active from anywhere in its section", () => {
     const v = viewOf();
     mountView(v);
-    $(".mirror-field .mirror-field-k")[0]!.click();
-    $(".mirror-field .mirror-field-v")[1]!.click();
-    expect(vi.mocked(v.onActivate).mock.calls).toEqual([["objects"], ["line"]]);
+    $('[data-field="objects"] .tgt-field')[0]!.click();
+    $('[data-field="objects"] .tgt-item')[0]!.click();
+    $('[data-field="line"] .tgt-none')[0]!.click();
+    expect(vi.mocked(v.onActivate).mock.calls).toEqual([["objects"], ["objects"], ["line"]]);
   });
 
   it("holds the Mirror button until both fields are filled", () => {
     const waiting = viewOf();
     const w = mountView(waiting);
-    const primary = () => $(".mirror-actions .btn-primary")[0] as HTMLButtonElement;
+    const primary = () => $(".tgt-done")[0] as HTMLButtonElement;
+    expect(primary().textContent!.trim()).toBe("Mirror");
     expect(primary().disabled).toBe(true);
     expect(primary().title).toBe("Pick mirror line first");
     w.unmount();
     const [objects, line] = viewOf().fields;
     const empty = viewOf({
       fields: [
-        { ...objects, value: "Nothing picked", filled: false },
-        { ...line, value: "Nothing picked", filled: false },
+        { ...objects, items: [], value: "Nothing picked", filled: false },
+        { ...line, filled: false },
       ],
     });
     const e = mountView(empty);
@@ -91,7 +100,7 @@ describe("MirrorToolPanel", () => {
     expect(primary().hasAttribute("title")).toBe(false);
     primary().click();
     expect(ready.onCommit).toHaveBeenCalledTimes(1);
-    ($(".mirror-actions .btn:not(.btn-primary)")[0] as HTMLButtonElement).click();
+    ($(".tgt-cancel")[0] as HTMLButtonElement).click();
     expect(ready.onCancel).toHaveBeenCalledTimes(1);
   });
 
@@ -120,8 +129,8 @@ describe("MirrorToolPanel", () => {
     cur.value = second;
     await w.vm.$nextTick();
     expect($(".mirror-panel")).toHaveLength(1);
-    ($(".mirror-actions .btn-primary")[0] as HTMLButtonElement).click();
-    $(".mirror-field .icon-btn")[0]!.click();
+    ($(".tgt-done")[0] as HTMLButtonElement).click();
+    $('[data-field="objects"] .tgt-field')[0]!.click();
     expect(second.onCommit).toHaveBeenCalledTimes(1);
     expect(second.onActivate).toHaveBeenCalledWith("objects");
     expect(first.onCommit).not.toHaveBeenCalled();

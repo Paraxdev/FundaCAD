@@ -3,7 +3,7 @@
 // not polled, since every change goes through the tool.
 
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import Icon from "../shell/Icon.vue";
+import PickList from "./PickList.vue";
 import { useEngine } from "../../app/engineKey";
 import { featureMeta } from "../../ui/featureMeta";
 import { describeTarget } from "../../features/selectionTargets";
@@ -81,45 +81,17 @@ const summary = computed(() => {
       <span class="tgt-sub">{{ summary }}</span>
     </div>
 
-    <div class="tgt-fieldrow">
-      <span class="tgt-field">{{ field.label }}</span>
-      <button
-        type="button"
-        class="tgt-clear"
-        :disabled="rows.length === 0"
-        title="Remove every entry"
-        @click="tool.clear()"
-      >
-        Clear all
-      </button>
-    </div>
-
-    <!-- Scrolls rather than grows: a face set on an imported mesh can be dozens, and a taller panel loses Done. -->
-    <ul class="tgt-list">
-      <li
-        v-for="(r, i) in rows"
-        :key="i"
-        class="tgt-item"
-        :class="{ 'tgt-unresolved': !r.resolved, 'tgt-held': held === i }"
-        @pointerenter="tool.hoverAt(i)"
-        @pointerleave="leave()"
-        @click="focus(i)"
-      >
-        <span class="tgt-label">{{ r.label }}</span>
-        <button
-          type="button"
-          class="tgt-remove"
-          title="Remove this one"
-          :aria-label="`Remove ${r.label}`"
-          @click.stop="removeRow(i)"
-        >
-          <Icon name="minus" :size="14" />
-        </button>
-      </li>
-      <!-- Not an empty box: several targets mean something specific with
-           nothing in them, and the row above already says which. -->
-      <li v-if="rows.length === 0" class="tgt-none">Click geometry to add</li>
-    </ul>
+    <PickList
+      :label="field.label"
+      :rows="rows"
+      :held="held"
+      empty="Click geometry to add"
+      @clear="tool.clear()"
+      @remove="removeRow"
+      @enter="tool.hoverAt($event)"
+      @leave="leave()"
+      @pick="focus"
+    />
 
     <div class="tgt-actions">
       <button type="button" class="tgt-done" @click="tool.commit()">Done</button>

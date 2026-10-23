@@ -1,4 +1,5 @@
 import type * as THREE from "three";
+import { entityLabel } from "./relations";
 import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
 import { mirrorCopies, type Pt } from "./mirror";
 import type { ResolvedEntity } from "./snap";
@@ -12,6 +13,7 @@ import {
   nextPick,
   pickLine,
   pickObject,
+  removeAt,
   startFields,
   switchField,
   type MirrorFieldKey,
@@ -228,6 +230,10 @@ export class MirrorFlow {
     if (this.fields) this.set(clearField(this.fields, k));
   }
 
+  remove(k: MirrorFieldKey, i: number): void {
+    if (this.fields) this.set(removeAt(this.fields, k, i));
+  }
+
   switchField(): void {
     if (this.fields) this.set(switchField(this.fields));
   }
@@ -281,11 +287,17 @@ export class MirrorFlow {
     this.host.showPanel({
       id: this.panelId,
       fields: [
-        { key: "objects", label: "Objects", icon: "select-all", value: objects, filled: f.objects.length > 0 },
+        {
+          key: "objects",
+          label: "Objects",
+          items: f.objects.map((id) => entityLabel(this.host.entities(), id) ?? id),
+          value: objects,
+          filled: f.objects.length > 0,
+        },
         {
           key: "line",
           label: "Mirror line",
-          icon: "line",
+          items: f.line ? [f.line.label] : [],
           value: f.line?.label ?? "Nothing picked",
           filled: f.line !== null,
         },
@@ -296,6 +308,7 @@ export class MirrorFlow {
       ready: isReady(f),
       onActivate: (k) => this.activate(k),
       onClear: (k) => this.clear(k),
+      onRemove: (k, i) => this.remove(k, i),
       onPlane: () => {},
       onCommit: () => void this.commit(),
       onCancel: () => this.cancel(),
