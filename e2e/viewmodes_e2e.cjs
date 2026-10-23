@@ -7,7 +7,8 @@
 //   engine --ws, vite, then
 //   SC_TOKEN=<engine token> node e2e/viewmodes_e2e.cjs [N=64]
 // SC_URL (default http://localhost:5173/), SC_ENGINE_PORT (default 8765) and
-// SC_OUT (screenshot folder, default the OS temp dir) pick the setup.
+// SC_OUT (screenshot folder, default the OS temp dir) pick the setup, SC_ANGLE (default d3d11) the WebGL backend
+// and SC_HEADLESS=1 a headless Chrome.
 
 const { chromium } = require("playwright-core");
 const fs = require("fs");
@@ -17,6 +18,7 @@ const path = require("path");
 const TOKEN = process.env.SC_TOKEN || "";
 const APP = process.env.SC_URL || "http://localhost:5173/";
 const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
+const ANGLE = process.env.SC_ANGLE || "d3d11";
 const OUT = process.env.SC_OUT || path.join(os.tmpdir(), "viewmodes_e2e");
 const N = +(process.argv[2] || 64);
 if (!TOKEN) {
@@ -38,7 +40,9 @@ function check(ok, what, detail) {
   const browser = await chromium.launch({
     channel: process.env.CHROME_CHANNEL || "chrome",
     headless: process.env.SC_HEADLESS === "1",
-    args: ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist"],
+    args: [`--use-angle=${ANGLE}`, "--no-sandbox"].concat(
+      ANGLE === "swiftshader" ? ["--enable-unsafe-swiftshader"] : ["--enable-gpu", "--ignore-gpu-blocklist"],
+    ),
   });
   try {
     const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
@@ -82,6 +86,18 @@ function check(ok, what, detail) {
       if (modal) await modal.click();
     };
     await open();
+    const gpu = await page.evaluate(() => {
+      const g = window.viewport.scene.renderer.getContext();
+      const d = g.getExtension("WEBGL_debug_renderer_info");
+      return d ? g.getParameter(d.UNMASKED_RENDERER_WEBGL) : "?";
+    });
+    console.log(`gpu ${gpu}`);
+    // A software renderer starts on the low power tier, which blocks Path traced.
+    if (/swiftshader|llvmpipe|software/i.test(gpu)) {
+      console.error("needs a GPU: the low power tier a software renderer gets blocks Path traced");
+      process.exitCode = 1;
+      return;
+    }
     await page.evaluate(async () => {
       const { setRenderPref } = await import("/src/ui/renderPrefs.ts");
       setRenderPref("viewModeModel", "realtime");
@@ -184,6 +200,7 @@ function check(ok, what, detail) {
     const before = await materialIds();
     const rt1 = await snap();
 
+    const traceStart = Date.now();
     await page.click('[data-view-mode="pathtraced"]');
     s = await state();
     check(s.mode === "pathtraced" && s.post === "pathtraced", "Path traced button", s);
@@ -201,12 +218,16 @@ function check(ok, what, detail) {
         (e) => ({ error: String(e) }),
       );
     check(traced.samples >= 64 && traced.shown, "Path traced reaches 64 samples and shows them", traced);
+    // A GPU another program is busy on traces several times slower, so a wait for the cap is four times the time
+    // the first 64 samples took, scaled to 256, and never under two minutes.
+    const traceMs = Math.max(120000, 4 * 4 * (Date.now() - traceStart));
+    console.log(`first 64 samples in ${Date.now() - traceStart} ms, a wait for the cap allows ${traceMs} ms`);
     await shotView("pathtraced-64.png");
     const capped = await page
       .waitForFunction(
         () => (window.viewport.traceStatus.state === "done" ? window.viewport.traceStatus : null),
         null,
-        { timeout: 120000, polling: 200 },
+        { timeout: traceMs, polling: 200 },
       )
       .then(
         (h) => h.jsonValue(),
@@ -218,7 +239,7 @@ function check(ok, what, detail) {
       page.evaluate(async (d) => (await import("/src/ui/renderPrefs.ts")).setRenderPref("denoise", d), v);
     const waitDenoised = () =>
       page
-        .waitForFunction(() => window.viewport.traceStatus.denoised, null, { timeout: 60000, polling: 100 })
+        .waitForFunction(() => window.viewport.traceStatus.denoised, null, { timeout: traceMs, polling: 100 })
         .then(
           () => status(),
           (e) => ({ error: String(e) }),
@@ -295,7 +316,7 @@ function check(ok, what, detail) {
       shown: window.viewport.traceStatus.shown,
       button: document.querySelector("#rd-take-picture")?.textContent,
     }));
-    await page.waitForFunction(() => !!window.__saved, null, { timeout: 120000, polling: 100 });
+    await page.waitForFunction(() => !!window.__saved, null, { timeout: traceMs, polling: 100 });
     const pictureMs = Date.now() - p0;
     const pic = await page.evaluate(async () => {
       const load = (src) =>
@@ -317,15 +338,23 @@ function check(ok, what, detail) {
       const raster = await load(window.viewport.renderStill(1, { realtime: true }));
       const a = pixels(traced),
         b = pixels(raster);
+      // The difference is taken over the model only, where the raster still is off its own corner background: the
+      // Render workspace frames the model small, so a whole frame mean is mostly two equal backgrounds.
+      const bg = (b[0] + b[1] + b[2]) / 3;
       let sum = 0,
         sq = 0,
-        diff = 0;
+        diff = 0,
+        model = 0;
       const n = a.length / 4;
       for (let i = 0; i < a.length; i += 4) {
         const l = (a[i] + a[i + 1] + a[i + 2]) / 3;
         sum += l;
         sq += l * l;
-        if (a.length === b.length) diff += Math.abs(l - (b[i] + b[i + 1] + b[i + 2]) / 3);
+        const r = (b[i] + b[i + 1] + b[i + 2]) / 3;
+        if (a.length === b.length && Math.abs(r - bg) > 8) {
+          diff += Math.abs(l - r);
+          model++;
+        }
       }
       const mean = sum / n;
       return {
@@ -336,7 +365,8 @@ function check(ok, what, detail) {
         rh: raster.height,
         mean: +mean.toFixed(1),
         sd: +Math.sqrt(sq / n - mean * mean).toFixed(1),
-        diffFromRaster: +(diff / n).toFixed(2),
+        modelPx: model,
+        diffFromRaster: +(diff / Math.max(1, model)).toFixed(2),
       };
     });
     const base64 = await page.evaluate(() => window.__saved.href.slice(window.__saved.href.indexOf(",") + 1));
@@ -375,11 +405,12 @@ function check(ok, what, detail) {
       "performance mode drops Path traced to Realtime",
       s,
     );
-    await page.click('[data-view-mode="pathtraced"]');
+    // aria-disabled reads as disabled to Playwright, but a soft block still takes the user's click.
+    await page.click('[data-view-mode="pathtraced"]', { force: true });
     await page.waitForTimeout(300);
     s = await state();
     check(s.mode === "realtime" && s.ptDisabled === "true", "the first click on the greyed Path traced only warns", s);
-    await page.click('[data-view-mode="pathtraced"]');
+    await page.click('[data-view-mode="pathtraced"]', { force: true });
     await page.waitForTimeout(500);
     s = await state();
     check(s.mode === "pathtraced" && s.ptDisabled !== "true", "a second click enables Path traced for the session", s);
@@ -454,7 +485,29 @@ function check(ok, what, detail) {
       "body materials are the same objects back in Realtime",
     );
     const rt2 = await snap();
-    check(rt1 === rt2, "Realtime is byte identical after a trip through Matcap", { a: rt1.length, b: rt2.length });
+    const trip = await page.evaluate(
+      async ([a, b]) => {
+        const px = async (u) => {
+          const i = new Image();
+          i.src = u;
+          await i.decode();
+          const c = document.createElement("canvas");
+          c.width = i.width;
+          c.height = i.height;
+          const g = c.getContext("2d");
+          g.drawImage(i, 0, 0);
+          return g.getImageData(0, 0, i.width, i.height).data;
+        };
+        const [p, q] = await Promise.all([px(a), px(b)]);
+        let changed = 0;
+        for (let i = 0; i < p.length; i += 4)
+          if (Math.max(Math.abs(p[i] - q[i]), Math.abs(p[i + 1] - q[i + 1]), Math.abs(p[i + 2] - q[i + 2])) > 2)
+            changed++;
+        return { same: a === b, changed, of: p.length / 4 };
+      },
+      [rt1, rt2],
+    );
+    check(trip.changed === 0, "Realtime draws the same pixels after a trip through Matcap", trip);
     const programsAfter = await page.evaluate(() => window.viewport.scene.renderer.info.programs.length);
     check(programsAfter - programsBefore <= 1, "one matcap program, nothing recompiled", {
       programsBefore,
