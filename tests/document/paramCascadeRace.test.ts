@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import type { CadDocument, Feature, RebuildReply, RebuildResult } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
+import { LiveSessionHost } from "../../src/live/liveSession";
 
 const okReply: RebuildReply = {
   ok: true,
@@ -160,5 +161,83 @@ describe("parameter cascade racing a document change", () => {
     expect(store.document.parameters).toEqual({ r: 2.25 });
     expect(store.document.paramDefs).toEqual(userDefs(2.25, "2.25"));
     expect(store.document.features).toEqual(second.features);
+  });
+
+  it("drops the cascade when a replacing untitled load lands during the solve, and its undo brings the old one back unchanged", async () => {
+    const store = new DocumentStore(backend(), doc());
+    store.markSaved("D:/parts/bracket.funda");
+    const lid: CadDocument = {
+      parameters: { t: 2.75 },
+      features: [sketch(-18.5, 9.25, 3.5, 3.5), box("lid", 31.5)],
+    };
+    const seen = heldSolver(store, (n) => n === 1 && store.loadDocument(lid, { replace: true, untitled: true }));
+    store.setParamExpr("r", "8.25");
+    for (let i = 0; i < 4; i++) await ticks();
+    expect(seen.length).toBe(1);
+    const state = () => ({
+      path: store.filePath,
+      parameters: store.document.parameters,
+      paramDefs: store.document.paramDefs,
+      features: store.document.features,
+    });
+    expect(state()).toEqual({
+      path: null,
+      parameters: { t: 2.75 },
+      paramDefs: { t: { expr: "2.75", value: 2.75, unit: "mm" } },
+      features: lid.features,
+    });
+    store.undo();
+    expect(state()).toEqual({ path: "D:/parts/bracket.funda", ...doc() });
+  });
+
+  // The same sketch and parameter as the bracket, moved, so a doc_set keeps the parameter's target.
+  const incoming = (): CadDocument => ({ ...doc(), features: [sketch(-3.75, 21.5, 4.5, 4.5), box("lid-x", 30.5)] });
+  it.each([
+    ["doc_open", true, { path: null, ...incoming() }],
+    ["doc_new", true, { path: null, ...incoming() }],
+    [
+      "doc_set",
+      false,
+      {
+        path: "D:/parts/bracket.funda",
+        parameters: { r: 8.25 },
+        paramDefs: userDefs(8.25, "8.25"),
+        features: [sketch(-3.75, 21.5, 8.25, 8.25), box("lid-x", 30.5)],
+      },
+    ],
+  ])("an assistant's %s landing through the live session during the solve", async (note, replaces, expected) => {
+    let reply: Record<string, unknown> = { ok: true, guests: [], proposals: [] };
+    const geo = { ...backend(), session: async () => reply } as unknown as GeometryBackend;
+    const store = new DocumentStore(geo, doc());
+    store.markSaved("D:/parts/bracket.funda");
+    const host = new LiveSessionHost(store, geo, () => true);
+    host.start();
+    await host.tick();
+    heldSolver(store);
+    const solve = store.headlessSolve!;
+    let fired = false;
+    store.headlessSolve = async (f, parameters) => {
+      if (!fired) {
+        fired = true;
+        reply = {
+          ok: true,
+          guests: ["an assistant"],
+          proposals: [{ id: "p1", name: "an assistant", note, document: incoming(), replaces }],
+        };
+        await host.tick();
+        reply = { ok: true, guests: [], proposals: [] };
+      }
+      return solve(f, parameters);
+    };
+    store.setParamExpr("r", "8.25");
+    for (let i = 0; i < 4; i++) await ticks();
+    const after = {
+      path: store.filePath,
+      parameters: store.document.parameters,
+      paramDefs: store.document.paramDefs,
+      features: store.document.features,
+    };
+    await host.stop();
+    expect(after).toEqual(expected);
   });
 });
