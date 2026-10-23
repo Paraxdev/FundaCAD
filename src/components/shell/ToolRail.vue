@@ -24,6 +24,7 @@ import { HOLD_MS, IDLE, holdStep, type HoldEvent, type HoldPhase } from "../../u
 import { contextMenu } from "../../ui/menu";
 import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { runningTool } from "../../ui/runningTool";
+import { railActive } from "../../ui/railActive";
 import RailButton from "../ui/RailButton.vue";
 import Popover from "../ui/Popover.vue";
 import Icon from "./Icon.vue";
@@ -340,6 +341,8 @@ function pickFromFlyout(t: RailTool, ev: MouseEvent) {
 }
 
 function run(action: string, ev?: MouseEvent) {
+  // A pointer click leaves focus on the button, and the next key pressed (Enter applying a Mirror) draws a focus ring on it.
+  if (ev && ev.detail > 0) (ev.currentTarget as HTMLElement | null)?.blur?.();
   if (action.startsWith("offer:")) {
     const o = sel.offers.value.find((x) => `offer:${x.tool}` === action);
     if (o) sel.run(o);
@@ -355,7 +358,7 @@ function run(action: string, ev?: MouseEvent) {
 }
 
 function isActive(action: string): boolean {
-  return mode.value === "sketch" && ribbon.activeSketchTool === action;
+  return railActive(action, mode.value, ribbon.activeSketchTool, ribbon.viewOn);
 }
 
 function toggleIsolate() {
