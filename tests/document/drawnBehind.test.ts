@@ -34,25 +34,27 @@ function rig() {
     connected: true,
   } as unknown as GeometryBackend;
   const store = new DocumentStore(be, { parameters: {}, features: [box("a", 10), box("b", 20)] });
-  const land = async () => {
-    await flush();
+  // Waits for the rebuild request itself, ten zero ticks raced the store's 120 ms rebuild debounce on a loaded CI runner.
+  const sent = () => vi.waitFor(() => expect(jobs.length).toBeGreaterThan(0), { timeout: 5000 });
+  const land = async (expectJob = true) => {
+    await (expectJob ? sent() : flush());
     jobs.splice(0).forEach((s) => s({ ok: true, result: result() }));
     await flush();
   };
-  return { store, land };
+  return { store, land, sent };
 }
 
 describe("a drawn model behind its document", () => {
   it("is behind after a delete or a replace load until its build lands, never after an edit", async () => {
-    const { store, land } = rig();
-    await land();
+    const { store, land, sent } = rig();
+    await land(false);
     const first = store.drawnBehind;
     store.updateFeature("a", { length: 12 } as never);
-    await flush();
+    await sent();
     const edited = { building: store.buildState.building, behind: store.drawnBehind };
     await land();
     store.removeFeature("b");
-    await flush();
+    await sent();
     const deleted = { building: store.buildState.building, behind: store.drawnBehind };
     await land();
     const afterDelete = store.drawnBehind;
