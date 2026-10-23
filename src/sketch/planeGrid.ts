@@ -2,7 +2,7 @@
 // Spacing comes from niceStep at ~64px like the ground grid, and the extent is in screenfuls, not mm.
 
 import * as THREE from "three";
-import { niceStep } from "../ui/units";
+import { niceGridStep } from "../ui/units";
 import type { SketchPlane } from "./plane";
 
 /** Target size of one minor cell on screen. Matches AdaptiveGrid. */
@@ -20,7 +20,7 @@ const MAX_LINES = 512;
 /** Minor-line spacing in mm for the zoom, never finer than `minStep` (0 for no floor, as both callers pass). */
 export function gridStep(worldPerPixel: number, minStep: number): number {
   const rough = worldPerPixel * GRID_CELL_PX;
-  const nice = rough > 0 && Number.isFinite(rough) ? niceStep(rough) : 1;
+  const nice = rough > 0 && Number.isFinite(rough) ? niceGridStep(rough) : 1;
   return minStep > 0 && Number.isFinite(minStep) ? Math.max(nice, minStep) : nice;
 }
 
