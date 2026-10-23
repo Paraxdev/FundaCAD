@@ -4,24 +4,18 @@
 import { ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
-import { useUiStore } from "../../stores/ui";
 import FloatingPanel from "./FloatingPanel.vue";
 import type { ClashRow, ClearanceRow } from "../../stores/panels";
 
 const engine = useEngine();
 const panels = usePanelsStore();
-const ui = useUiStore();
 
 // Typical print-in-place clearance; not persisted, this is a per-check value.
 const clearanceOn = ref(false);
 const threshold = ref(0.2);
 
 function highlight(c: ClashRow | ClearanceRow) {
-  if (engine.viewport.policy === "faces") {
-    engine.viewport.setSelectPolicy("bodies");
-    ui.selMode = "bodies";
-  }
-  engine.viewport.setSelectedBodies([c.a, c.b]);
+  engine.ui.panels.highlightInterference(c.a, c.b);
 }
 
 function recheck() {

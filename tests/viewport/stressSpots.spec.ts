@@ -44,6 +44,7 @@ function rig() {
             anchor: new THREE.Vector3(x - 50, 50 - y, 0),
             normal: new THREE.Vector3(0, 0, 1),
             bodyId: "body1",
+            faceId: x >= 60 ? 7 : 3,
           },
     overlayDrawn: () => true,
     watchOverlays: () => () => {},
@@ -98,10 +99,29 @@ describe("stress spots in the view", () => {
     pointer(canvas, "pointerdown", 70, 50);
     pointer(canvas, "pointerup", 71, 50);
     expect(view).not.toHaveBeenCalled();
-    expect(handlers.placeSpot).toHaveBeenCalledWith({ at: [21, 0, 0], normal: [0, 0, 1], body: "body1" }, false);
+    expect(handlers.placeSpot).toHaveBeenCalledWith(
+      { at: [21, 0, 0], normal: [0, 0, 1], body: "body1", faceId: 7 },
+      false,
+    );
     pointer(canvas, "pointerdown", 70, 50, true);
     pointer(canvas, "pointerup", 70, 50, true);
-    expect(handlers.placeSpot).toHaveBeenLastCalledWith({ at: [20, 0, 0], normal: [0, 0, 1], body: "body1" }, true);
+    expect(handlers.placeSpot).toHaveBeenLastCalledWith(
+      { at: [20, 0, 0], normal: [0, 0, 1], body: "body1", faceId: 7 },
+      true,
+    );
+  });
+
+  it("picking whole faces shows no orb and hands over the face clicked", () => {
+    const { glyphs, handlers, scene, canvas } = rig();
+    glyphs.setPlacing({ color: 0x4ac6ff, radius: null });
+    pointer(canvas, "pointermove", 55, 30);
+    expect(scene.children).toHaveLength(0);
+    pointer(canvas, "pointerdown", 55, 30);
+    pointer(canvas, "pointerup", 55, 30);
+    expect(handlers.placeSpot).toHaveBeenCalledWith(
+      { at: [5, 20, 0], normal: [0, 0, 1], body: "body1", faceId: 3 },
+      false,
+    );
   });
 
   it("places nothing off the body or at the end of a drag, and drops the orb when placing ends", () => {

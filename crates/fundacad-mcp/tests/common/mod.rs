@@ -301,28 +301,38 @@ pub struct RealEngine {
 }
 
 impl RealEngine {
+    // free_port releases its port before the engine binds it, so a test starting beside this one can take it
+    // first and the engine exits without listening; a fresh port is tried then.
     pub fn start() -> RealEngine {
-        let port = free_port();
-        let token = format!("live-test-{port}");
-        let dir = std::env::temp_dir().join(format!("funda-live-e2e-{port}"));
-        std::fs::create_dir_all(&dir).expect("a temp dir");
-        let mut cmd = Command::new(engine_binary());
-        cmd.arg("--ws")
-            .env("FUNDACAD_ENGINE_PORT", port.to_string())
-            .env("FUNDACAD_ENGINE_TOKEN", &token)
-            .env_remove("SINDRI_ENGINE_PORT")
-            .env_remove("SINDRI_ENGINE_TOKEN")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null());
-        let mut child = cmd.spawn().expect("the engine binary is built");
-        let stdout = child.stdout.take().expect("piped");
-        let mut lines = BufReader::new(stdout).lines();
-        let listening = lines.by_ref().take(200).any(|l| l.map(|l| l.starts_with("LISTENING")).unwrap_or(false));
-        assert!(listening, "the engine never said it was listening");
-        let session = dir.join("session.json");
-        let engine = RealEngine { port, token, session, dir, child };
-        engine.advertise();
-        engine
+        for _ in 0..5 {
+            let port = free_port();
+            let token = format!("live-test-{port}");
+            let dir = std::env::temp_dir().join(format!("funda-live-e2e-{port}"));
+            std::fs::create_dir_all(&dir).expect("a temp dir");
+            let mut cmd = Command::new(engine_binary());
+            cmd.arg("--ws")
+                .env("FUNDACAD_ENGINE_PORT", port.to_string())
+                .env("FUNDACAD_ENGINE_TOKEN", &token)
+                .env_remove("SINDRI_ENGINE_PORT")
+                .env_remove("SINDRI_ENGINE_TOKEN")
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null());
+            let mut child = cmd.spawn().expect("the engine binary is built");
+            let stdout = child.stdout.take().expect("piped");
+            let mut lines = BufReader::new(stdout).lines();
+            let listening = lines.by_ref().take(200).any(|l| l.map(|l| l.starts_with("LISTENING")).unwrap_or(false));
+            if !listening {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = std::fs::remove_dir_all(&dir);
+                continue;
+            }
+            let session = dir.join("session.json");
+            let engine = RealEngine { port, token, session, dir, child };
+            engine.advertise();
+            return engine;
+        }
+        panic!("the engine never said it was listening, on five ports");
     }
 
     pub fn advertise(&self) {

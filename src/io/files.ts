@@ -21,6 +21,7 @@ import {
   saveExportSettings,
   type FlatSource,
 } from "./exportSettings";
+import { labelledBodies } from "../ui/bodyLabels";
 import { buildBodyTree, importTrees } from "../ui/browserTree";
 import { referencedGeometry } from "../document/versions";
 import { hashShapedStrings } from "../document/geometryRefs";
@@ -606,7 +607,7 @@ export async function exportModel(
   // The dialogs wait on the user; a document closed meanwhile is not exported, nor is the one opened after it.
   const session = store.session;
   const built = store.buildState.result?.bodies ?? [];
-  const bodies = built.map((b) => ({ id: b.id, name: store.bodyName(b.id) ?? b.name }));
+  const bodies = labelledBodies(store);
   const docName = store.fileName === "Untitled" ? "" : store.fileName.replace(/\.[^.]+$/, "");
   const { groups } = buildBodyTree(built, importTrees(store.document), store.bodyElements, store.bodyElementMap());
   const start = exportScopeFromSelection(selected, bodies, groups, docName);
