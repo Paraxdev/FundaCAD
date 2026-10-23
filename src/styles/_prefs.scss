@@ -300,6 +300,7 @@ label.pref-head {
 }
 .sc-changed,
 .sc-fixed {
+  line-height: 1;
   font-size: 11px;
   color: var(--accent);
 }
@@ -308,6 +309,8 @@ label.pref-head {
 }
 .sc-reset {
   border: 0;
+  padding: 0;
+  line-height: 1;
   background: transparent;
   color: var(--text-dim);
   font: inherit;
