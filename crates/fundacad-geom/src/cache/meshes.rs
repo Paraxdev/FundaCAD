@@ -32,7 +32,6 @@ pub struct Payloads {
     pub ram_hits: usize,
     pub disk_hits: usize,
     pub meshed: usize,
-    pub mesh_time: Duration,
 }
 
 impl Payloads {
@@ -44,7 +43,6 @@ impl Payloads {
         self.ram_hits = 0;
         self.disk_hits = 0;
         self.meshed = 0;
-        self.mesh_time = Duration::ZERO;
     }
 
     /// Forget bodies the last reply did not carry.
@@ -124,7 +122,6 @@ impl PayloadCache for Tiered<'_> {
         build: Duration,
     ) {
         self.payloads.meshed += 1;
-        self.payloads.mesh_time += build;
         let passes = mesh::pass_key(body);
         if let (Some(store), Some(key)) = (self.store, body.mesh_key.as_deref()) {
             if build >= self.persist_after || profile.size_scale != 1.0 {

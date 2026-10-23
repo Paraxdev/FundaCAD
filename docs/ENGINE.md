@@ -574,7 +574,8 @@ line out (`cargo run --release -p fundacad-geom --example bench_suite -- ...`):
 `FUNDACAD_THREADS` caps both the engine's rayon pool and OCCT's.
 Always on, a cached rebuild's reply carries `timing` (copy, replay with its slowest feature, post, mesh in ms), and the
 app writes one `edit` line per committed rebuild to its log: `edit 3.8 s: copy 2.8, replay 0.01 (fillet), post 0.3,
-mesh 0.008 (1 part), reply 600 KB, apply 0.4`. Post is what the engine did beyond the other three, apply the app's commit.
+mesh 0.008 (1 part), reply 600 KB, apply 0.4`. Mesh is the wall time of the meshing step (bodies mesh in parallel, and stored mesh reads count in it), post is what the
+engine did beyond the other three (document parse, the reply fields), apply the app's commit.
 
 `crates/fundacad-cli/examples/bench_open.rs` times the document file itself, for
 documents with big imports (`cargo run --release -p fundacad-cli --example bench_open -- ...`):

@@ -352,6 +352,8 @@ impl RebuildCache {
             })
             .collect();
         self.payloads.reset_counters();
+        // Wall time: bodies mesh in parallel, so summing their own times would exceed the edit.
+        let began = Instant::now();
         let result = {
             let mut tiered = meshes::Tiered {
                 payloads: &mut self.payloads,
@@ -365,7 +367,7 @@ impl RebuildCache {
         self.stats.mesh_ram_hits = self.payloads.ram_hits;
         self.stats.mesh_disk_hits = self.payloads.disk_hits;
         self.stats.meshed = self.payloads.meshed;
-        self.stats.mesh_time = self.payloads.mesh_time;
+        self.stats.mesh_time = began.elapsed();
         result
     }
 }
