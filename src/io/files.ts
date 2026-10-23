@@ -349,6 +349,20 @@ export async function openDocumentBytes(
   return settle(store, ticket, await finishOpen(store, file.name, opened, geometry, null, ticket));
 }
 
+/** A template is read like a file, so a New or an edit made meanwhile is kept the same way. */
+export async function openTemplate(
+  store: DocumentStore,
+  name: string,
+  read: () => Promise<string>,
+): Promise<OpenOutcome> {
+  const ticket = openTicket(store);
+  const text = await read();
+  if (!(await mayStillReplace(store, ticket, name))) return settle(store, ticket, "dropped");
+  store.load(text);
+  store.markOpenedWithoutPath(name);
+  return "ok";
+}
+
 /** "unreadable": the file is gone or corrupt, callers may forget it. "newerFormat": this build is too old, and
  *  the recent-files entry must survive as the user's way back to the file after upgrading. "dropped": the open
  *  document changed or was replaced while the file was read, and the user kept it. */

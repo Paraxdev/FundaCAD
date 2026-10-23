@@ -1,4 +1,4 @@
-import { openDocument, openDocumentAtPath, type OpenOutcome } from "../io/files";
+import { openDocument, openDocumentAtPath, openTemplate, type OpenOutcome } from "../io/files";
 import { choose } from "../ui/choice";
 import type { Engine } from "./engine";
 import { TEMPLATES, templateText } from "../templates";
@@ -156,9 +156,7 @@ export async function newFromTemplate(e: ExampleEngine, id: string): Promise<voi
   const info = TEMPLATES.find((t) => t.id === id);
   if (!info) return;
   if (!(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return;
-  e.store.load(await templateText(id));
-  e.store.markOpenedWithoutPath(info.name);
-  e.frameNextModel();
+  if ((await openTemplate(e.store, info.name, () => templateText(id))) === "ok") e.frameNextModel();
 }
 
 type VersionEngine = Pick<Engine, "store" | "sketch" | "geometry" | "toolAtWork" | "setStatus">;
