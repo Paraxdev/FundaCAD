@@ -65,7 +65,7 @@ function placing(target: StressTarget): boolean {
 </script>
 
 <template>
-  <div class="stress-step stress-setup">
+  <div class="stress-step stress-setup" data-panel-scroll>
     <label class="stress-field">
       <span class="measure-k">Body</span>
       <Select

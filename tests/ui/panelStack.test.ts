@@ -85,4 +85,47 @@ describe("the floating panel column", () => {
     );
     expect(out.map((s) => s.maxHeight)).toEqual([120, 120, 120]);
   });
+
+  // The 1440x700 case: Properties, Interference, then Stress whose step scrolls inside it.
+  const three = [
+    { id: "properties", height: 326, head: 50 },
+    { id: "interference", height: 138, head: 50 },
+    { id: "stress", height: 657, head: 58, floor: 301 },
+  ];
+
+  it("keeps a panel's floor and folds the oldest panel to its header when the floors do not fit", () => {
+    const out = layoutStack(three, 182, 686);
+    expect(out).toEqual([
+      { id: "properties", top: 182, maxHeight: 50, folded: true },
+      { id: "interference", top: 244, maxHeight: 129 },
+      { id: "stress", top: 385, maxHeight: 301 },
+    ]);
+    expect(385 + 301).toBeLessThanOrEqual(686);
+  });
+
+  it("folds nothing while the floors still fit, one pixel either side", () => {
+    // 120 + 120 + 301 + 2 gaps of 12 = 565
+    expect(layoutStack(three, 0, 565).some((s) => s.folded)).toBe(false);
+    expect(layoutStack(three, 0, 564).map((s) => !!s.folded)).toEqual([true, false, false]);
+  });
+
+  it("folds the least recently used panel, never the most recent one", () => {
+    const used = three.map((p, i) => ({ ...p, rank: [9, 1, 5][i]! }));
+    expect(layoutStack(used, 182, 686).map((s) => !!s.folded)).toEqual([false, true, false]);
+    const tiny = layoutStack(three, 182, 400);
+    expect(tiny.map((s) => !!s.folded)).toEqual([true, true, false]);
+    expect(tiny[2]!.maxHeight).toBe(301);
+  });
+
+  it("gives a floor above the minimum before cutting the others to theirs", () => {
+    const out = layoutStack(
+      [
+        { id: "a", height: 400 },
+        { id: "b", height: 600, floor: 300 },
+      ],
+      0,
+      512,
+    );
+    expect(out.map((s) => s.maxHeight)).toEqual([200, 300]);
+  });
 });
