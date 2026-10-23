@@ -63,8 +63,8 @@ export interface StressGlyphsApi {
   setProbePins(pins: Pick<StressProbePin, "tri" | "weights" | "label">[]): void;
   /** The result's weakest spot as a pin; optional so a test rig can leave it out. */
   setWeakSpot?(p: Pick<StressProbePin, "tri" | "weights" | "label"> | null): void;
-  /** Place mode with the orb a click would put down, or null to end it. */
-  setPlacing?(p: { color: number; radius: number } | null): void;
+  /** Place mode with the orb a click would put down, a null radius for none, or null to end it. */
+  setPlacing?(p: { color: number; radius: number | null } | null): void;
   dispose(): void;
 }
 
@@ -660,8 +660,15 @@ export function createPanels(deps: PanelsDeps) {
         return;
       }
       if (!d.setup.body) panels.setStressBody(hit.body);
-      const radius = spotRadiusFor(hit.body);
-      panels.addStressSpot(target, { at: hit.at.map(round4) as Vec3, radius, normal: hit.normal.map(round4) as Vec3 });
+      if (d.placeAs === "face") addStressFace(target, hit.body, hit.faceId, hit.at);
+      else {
+        const radius = spotRadiusFor(hit.body);
+        panels.addStressSpot(target, {
+          at: hit.at.map(round4) as Vec3,
+          radius,
+          normal: hit.normal.map(round4) as Vec3,
+        });
+      }
       if (!more) stopPlacing();
     },
     leavePlacing() {
@@ -696,12 +703,12 @@ export function createPanels(deps: PanelsDeps) {
     return defaultSpotRadius(box && !box.isEmpty() ? box.min.distanceTo(box.max) : NaN);
   }
 
-  /** The next click on the body puts a spot there; Place again or Esc disarms. The result's colours come off first, as
-   *  the click is on the body. */
-  function placeStressSpot(target: StressTarget) {
+  /** The next click on the body adds the face clicked, whole, or with `as` "spot" puts a spot there; the same button
+   *  again or Esc disarms. The result's colours come off first, as the click is on the body. */
+  function placeStressSpot(target: StressTarget, as: "face" | "spot" = "face") {
     const d = panels.stress;
     if (!d) return;
-    if (sameTarget(d.placing, target)) {
+    if (sameTarget(d.placing, target) && d.placeAs === as) {
       stopPlacing();
       return;
     }
@@ -711,10 +718,30 @@ export function createPanels(deps: PanelsDeps) {
     if (d.colours === "shown") setStressColours(false);
     if (d.deform?.shown) setStressShape(false);
     const body = bodyOnModel();
-    panels.setStressPlacing(target);
+    panels.setStressPlacing(target, as);
     const color = "support" in target ? SUPPORT_COLORS[(row as { type: StressSupportType }).type] : LOAD_MARK_COLOR;
-    const radius = body ? spotRadiusFor(body) : defaultSpotRadius(NaN);
+    const radius = as === "face" ? null : body ? spotRadiusFor(body) : defaultSpotRadius(NaN);
     glyphs?.setPlacing?.({ color, radius });
+  }
+
+  /** Adds the clicked face to the row's faces, by the point clicked, which the engine resolves to that face as it
+   *  does a picked one. A face the row already holds is left as it is. */
+  function addStressFace(target: StressTarget, body: string, faceId: number, at: Vec3) {
+    relocateStressFaces();
+    const row = panels.stressRow(target);
+    if (!row || row.faces.faceIds.includes(faceId)) return;
+    const was = row.faces;
+    const faces: StressFaceSet = {
+      ...faceSet(
+        [...was.selectors, { kind: "face", by: "nearest", point: at.map(round4) as Vec3, body }],
+        [...was.faceIds, faceId],
+      ),
+      ...(was.missing ? { missing: was.missing } : {}),
+      ...(was.unshown !== undefined ? { unshown: was.unshown } : {}),
+    };
+    if ("support" in target) panels.setStressSupportFaces(target.support, faces);
+    else panels.setStressLoadFaces(target.load, faces);
+    refreshStressMarks();
   }
 
   function stopPlacing() {

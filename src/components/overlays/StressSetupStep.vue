@@ -59,8 +59,8 @@ function supportHint(t: StressSupportType): string {
   return SUPPORT_KINDS.find((k) => k.value === t)?.hint ?? "";
 }
 
-function placing(target: StressTarget): boolean {
-  return sameTarget(panels.stress?.placing ?? null, target);
+function placing(target: StressTarget, as: "face" | "spot"): boolean {
+  return sameTarget(panels.stress?.placing ?? null, target) && panels.stress?.placeAs === as;
 }
 </script>
 
@@ -109,11 +109,20 @@ function placing(target: StressTarget): boolean {
           <button
             type="button"
             class="btn stress-place-support"
-            :class="{ active: placing({ support: x.id }) }"
-            :aria-pressed="placing({ support: x.id })"
-            title="Click the body to place a spot"
+            :class="{ active: placing({ support: x.id }, 'face') }"
+            :aria-pressed="placing({ support: x.id }, 'face')"
+            title="Click faces of the body to add each whole face"
             @click="engine.ui.panels.placeStressSpot({ support: x.id })"
-            >{{ placing({ support: x.id }) ? "Placing…" : "Click on body" }}</button
+            >{{ placing({ support: x.id }, "face") ? "Picking…" : "Click faces" }}</button
+          >
+          <button
+            type="button"
+            class="btn stress-spot-support"
+            :class="{ active: placing({ support: x.id }, 'spot') }"
+            :aria-pressed="placing({ support: x.id }, 'spot')"
+            title="Click the body to place a round spot, for a local support"
+            @click="engine.ui.panels.placeStressSpot({ support: x.id }, 'spot')"
+            >{{ placing({ support: x.id }, "spot") ? "Placing…" : "Spot" }}</button
           >
           <button
             type="button"
@@ -169,11 +178,20 @@ function placing(target: StressTarget): boolean {
           <button
             type="button"
             class="btn stress-place-load"
-            :class="{ active: placing({ load: l.id }) }"
-            :aria-pressed="placing({ load: l.id })"
-            title="Click the body to place a spot"
+            :class="{ active: placing({ load: l.id }, 'face') }"
+            :aria-pressed="placing({ load: l.id }, 'face')"
+            title="Click faces of the body to add each whole face"
             @click="engine.ui.panels.placeStressSpot({ load: l.id })"
-            >{{ placing({ load: l.id }) ? "Placing…" : "Click on body" }}</button
+            >{{ placing({ load: l.id }, "face") ? "Picking…" : "Click faces" }}</button
+          >
+          <button
+            type="button"
+            class="btn stress-spot-load"
+            :class="{ active: placing({ load: l.id }, 'spot') }"
+            :aria-pressed="placing({ load: l.id }, 'spot')"
+            title="Click the body to place a round spot, for a local load"
+            @click="engine.ui.panels.placeStressSpot({ load: l.id }, 'spot')"
+            >{{ placing({ load: l.id }, "spot") ? "Placing…" : "Spot" }}</button
           >
           <button
             type="button"
