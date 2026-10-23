@@ -435,7 +435,7 @@ export function createPanels(deps: PanelsDeps) {
     else if (d.colours !== "none" && !viewport.hasStressOverlay()) {
       stopAnimation();
       panels.setStressColours("hidden");
-      if (colours && store.isBodyVisible(colours.overlay.bodyId)) drawOverlay();
+      drawOverlay();
       showWeakSpot();
     }
     const missing = relocateStressFaces();
@@ -843,7 +843,8 @@ export function createPanels(deps: PanelsDeps) {
   }
 
   function drawOverlay() {
-    viewport.setStressOverlay(overlayNow());
+    const o = overlayNow();
+    viewport.setStressOverlay(o && store.isBodyVisible(o.bodyId) ? o : null);
   }
 
   /** The deformed shape stands in for the body, so its faces cannot be picked or tinted. */
