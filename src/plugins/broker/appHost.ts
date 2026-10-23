@@ -70,7 +70,14 @@ export interface AppHostOptions {
   native?: NativeBridge;
   /** The document the run started on, taken before anything the run awaits. */
   session?: DocumentSession;
+  /** The user's own New question. By default it asks about the store's unsaved changes alone. */
+  mayDiscard?: (question: string) => Promise<boolean>;
 }
+
+const askStore = (store: DocumentStore) => async (question: string) => {
+  const { mayDiscard } = await import("../../app/documentActions");
+  return await mayDiscard({ store, sketch: { hasUncommittedEdits: false } as never }, question);
+};
 
 export function appHost(opts: AppHostOptions): BrokerHost {
   const { store } = opts;
@@ -172,6 +179,10 @@ export function appHost(opts: AppHostOptions): BrokerHost {
           return clone(store.toObject());
 
         case "doc_new":
+          if (!(await (opts.mayDiscard ?? askStore(store))("Discard unsaved changes and start a new document?"))) {
+            throw new HostRefused(`${op}: the user kept the unsaved changes, so no new document was started`);
+          }
+          sameDocument(op);
           store.newDocument();
           session = store.session;
           return { ok: true };
