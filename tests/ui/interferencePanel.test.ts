@@ -4,13 +4,15 @@ import { createPanels, type PanelsDeps } from "../../src/ui/panels";
 import { usePanelsStore } from "../../src/stores/panels";
 import type { InterferenceReply } from "../../src/geometry/client";
 import type { CadDocument } from "../../src/types";
+import { EDGE_HOVER_COLOR } from "../../src/viewport/highlight";
 
 // The Interference panel against a hand-made engine: a body the engine could
 // not judge is named with why, and its pairs are never reported as clear.
 
 beforeEach(() => setActivePinia(createPinia()));
 
-type Body = { id: string; name: string };
+type Body = { id: string; name: string; faceStart?: number; faceCount?: number };
+type Marks = { faceIds: number[]; color: number }[] | null;
 
 function rig(
   reply: InterferenceReply,
@@ -21,6 +23,8 @@ function rig(
   userNames = new Map<string, string>(),
 ) {
   const statuses: { text: string; cls: string }[] = [];
+  const marks: { marks: Marks; layer: string | undefined }[] = [];
+  const selected: string[][] = [];
   const deps = {
     store: {
       document: { features: [] } as unknown as CadDocument,
@@ -29,12 +33,16 @@ function rig(
       onDocChange: () => {},
       onOpen: () => {},
     },
-    viewport: { setInterferenceOverlay: () => {} },
+    viewport: {
+      setInterferenceOverlay: () => {},
+      setFaceMarks: (m: Marks, layer?: string) => marks.push({ marks: m, layer }),
+      setSelectedBodies: (ids: string[]) => selected.push(ids),
+    },
     geometry: { interference: async () => reply },
     hasBody: () => true,
     setStatus: (text: string, cls: string) => statuses.push({ text, cls }),
   } as unknown as PanelsDeps;
-  return { panels: createPanels(deps), statuses };
+  return { panels: createPanels(deps), statuses, marks, selected };
 }
 
 describe("the Interference panel", () => {
@@ -96,5 +104,31 @@ describe("the Interference panel", () => {
     expect(p.clashes.map((c) => c.k)).toEqual(["Box ∩ Box 3", "Box 3 ∩ Box 4"]);
     expect(p.clearances.map((c) => c.k)).toEqual(["Box ↔ Box 4"]);
     expect(p.unchecked).toEqual(["Box 4 is open"]);
+  });
+
+  it("tints a clicked pair's faces on a layer of its own without selecting them, and drops the tint on a recheck or close", async () => {
+    const bodies: Body[] = [
+      { id: "body1", name: "Base", faceStart: 0, faceCount: 3 },
+      { id: "body2", name: "Pin", faceStart: 3, faceCount: 2 },
+      { id: "body5", name: "Cap", faceStart: 5, faceCount: 4 },
+    ];
+    const { panels, marks, selected } = rig({ ok: true, pairs: [] }, bodies);
+    await panels.showInterference();
+    marks.length = 0;
+    panels.highlightInterference("body5", "body1");
+    expect(marks).toEqual([
+      { marks: [{ faceIds: [0, 1, 2, 5, 6, 7, 8], color: EDGE_HOVER_COLOR }], layer: "interference" },
+    ]);
+    panels.highlightInterference("body2", "body9");
+    expect(marks.at(-1)).toEqual({ marks: [{ faceIds: [3, 4], color: EDGE_HOVER_COLOR }], layer: "interference" });
+    panels.highlightInterference("body8", "body9");
+    expect(marks.at(-1)).toEqual({ marks: null, layer: "interference" });
+    panels.highlightInterference("body1", "body2");
+    await panels.showInterference();
+    expect(marks.at(-1)).toEqual({ marks: null, layer: "interference" });
+    panels.highlightInterference("body1", "body2");
+    panels.closeInterference();
+    expect(marks.at(-1)).toEqual({ marks: null, layer: "interference" });
+    expect(selected).toEqual([]);
   });
 });
