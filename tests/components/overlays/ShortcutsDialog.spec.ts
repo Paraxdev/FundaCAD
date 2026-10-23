@@ -64,7 +64,7 @@ describe("changing a key in the shortcuts dialog", () => {
   it("shows a conflict, where cancel leaves everything and replace takes the key", async () => {
     await capture("Fillet");
     await press({ key: "e" });
-    expect(rowOf("Fillet").querySelector(".sc-problem")?.textContent).toContain("E is already Extrude");
+    expect(rowOf("Fillet").querySelector(".sc-problem")?.textContent).toContain("E is already used by Extrude");
     expect(resolveShortcut("e", false, "model")).toBe("extrude");
     await click(rowOf("Fillet").querySelector(".sc-problem .btn:not(.btn-primary)"));
     expect(rowOf("Fillet").querySelector(".sc-problem")).toBeNull();

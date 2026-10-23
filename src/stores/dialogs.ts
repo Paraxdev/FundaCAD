@@ -18,6 +18,10 @@ export const useDialogStore = defineStore("dialogs", () => {
     preferences,
     shortcuts,
     bugDeps,
+    openPreferences: () => {
+      shortcuts.value = false;
+      preferences.value = true;
+    },
     bindBugReporter: (deps: BugReportDeps) => {
       bugDeps.value = markRaw(deps);
     },

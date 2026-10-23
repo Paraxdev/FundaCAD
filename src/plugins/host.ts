@@ -107,7 +107,7 @@ export { definePluginSettings } from "./settings";
 /** Opens Preferences on the plugin's row with its settings expanded. */
 export function openPluginSettings(pluginId: string) {
   pluginFocus.value = pluginId;
-  useDialogStore().preferences = true;
+  useDialogStore().openPreferences();
 }
 export type { PluginSettings, SettingProp, SettingValues, SettingsSchema } from "./settings";
 

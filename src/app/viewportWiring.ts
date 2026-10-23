@@ -8,6 +8,8 @@ import { bodyRowLabel, distinguish, dominantOwner, edgeChoiceLabel } from "../ui
 import { TIE_BAND_PX, ambiguousCandidates } from "../viewport/edgeTies";
 import { areaFilterLabel } from "../viewport/areaSelect";
 import { useBrowserStore } from "../stores/browser";
+import { useRibbonStore } from "../stores/ribbon";
+import { analysisFlags } from "../ui/railActive";
 import { edgeNudgePlacement } from "../features/edgeNudge";
 import { faceNudgePlacement } from "../features/faceNudge";
 import { regionNudgePlacement } from "../features/regionNudge";
@@ -185,6 +187,10 @@ export function installViewportWiring(e: Engine): void {
   });
 
   // The Viewport is not reactive, so its body selection is mirrored into the browser store.
+  const ribbonStore = useRibbonStore();
+  const pushAnalysis = () => (ribbonStore.viewOn = analysisFlags(e.viewport));
+  e.viewport.onAnalysisChange = pushAnalysis;
+  pushAnalysis();
   const browser = useBrowserStore();
   browser.setSelectedBodies(e.viewport.getSelectedBodies());
   // Picking a body raises the Move gizmo on it; the tool hands a plain click back, so the next pick moves it on.
