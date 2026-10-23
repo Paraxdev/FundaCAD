@@ -89,6 +89,8 @@
   border-radius: var(--r-md);
   box-shadow: var(--shadow-3);
   padding: var(--s-1);
+  /* MenuBar.vue sets max-height from the window, this is the scroll that cap leads to. */
+  overflow-y: auto;
   z-index: 2000;
   animation: pop-in var(--t-fast) var(--ease);
 }
@@ -108,10 +110,7 @@
 .menu-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  /* A minimum in a space-between row, wide enough that "Save As…  Ctrl+Shift+S" still
-     reads as two columns. */
-  gap: var(--s-7);
+  gap: var(--s-3);
   width: 100%;
   background: none;
   border: none;
@@ -133,6 +132,11 @@
 .menu-item[disabled] {
   color: var(--text-mute);
   pointer-events: none;
+}
+.menu-label {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
 }
 .menu-shortcut {
   color: var(--text-mute);

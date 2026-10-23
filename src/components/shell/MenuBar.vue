@@ -10,6 +10,15 @@ const props = defineProps<{ menus: MenuDef[] }>();
 const root = useTemplateRef<HTMLElement>("root");
 const openIndex = ref<number | null>(null);
 
+// The popup hangs 6px below the bar, and keeps this margin above the window's bottom edge.
+const POPUP_GAP = 6;
+const WINDOW_MARGIN = 16;
+const popupMaxHeight = ref("");
+function capToWindow() {
+  const bottom = root.value?.getBoundingClientRect().bottom ?? 0;
+  popupMaxHeight.value = `${Math.max(120, window.innerHeight - bottom - POPUP_GAP - WINDOW_MARGIN)}px`;
+}
+
 // `disabled` and `checked` are thunks re-evaluated on every open, which is how Undo greys out without pushed state.
 // Bumping this on open re-runs the computed below.
 const openTick = ref(0);
@@ -41,6 +50,7 @@ function toggle(i: number) {
     return;
   }
   openTick.value++;
+  capToWindow();
   openIndex.value = i;
 }
 
@@ -82,14 +92,14 @@ onUnmounted(() => {
       <button class="menu-btn" :class="{ active: openIndex === i }" @click.stop="toggle(i)">
         {{ m.label }}
       </button>
-      <div class="menu-popup" :class="{ hidden: openIndex !== i }">
+      <div class="menu-popup" :class="{ hidden: openIndex !== i }" :style="{ maxHeight: popupMaxHeight }">
         <template v-for="(r, j) in rendered[i]" :key="j">
           <div v-if="r.item.separator" class="menu-sep"></div>
           <button v-else class="menu-item" :disabled="r.disabled" @click.stop="run(r)">
             <span v-if="hasChecks[i]" class="menu-check">
               <Icon v-if="r.checked" name="check" :size="12" />
             </span>
-            <span>{{ r.item.label }}</span>
+            <span class="menu-label">{{ r.item.label }}</span>
             <span v-if="r.item.shortcut" class="menu-shortcut">{{ fmtKeys(r.item.shortcut) }}</span>
           </button>
         </template>
