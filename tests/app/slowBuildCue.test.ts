@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OUT_OF_DATE_GRACE_MS, watchOutOfDate, watchSlowBuild } from "../../src/app/staleModel";
 import type { BusyState, RebuildState } from "../../src/document/store";
+import { SessionHost } from "../../src/document/session";
 
 function fakeStore() {
   const builds = new Set<(s: RebuildState) => void>();
@@ -20,6 +21,7 @@ function fakeStore() {
       return { waiting: null } as BusyState;
     },
     runningOps: [],
+    sessions: new SessionHost(),
     onBuild(fn: (st: RebuildState) => void) {
       builds.add(fn);
       fn(s.buildState);
