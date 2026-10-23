@@ -1,7 +1,10 @@
-/** Inputs, textareas, selects and contentEditable, so typing "T" in a field does not start the Text tool. */
+// Inputs that take no typed text, so a focused one must not swallow the sketch keys.
+const NON_TEXT_INPUTS = new Set(["checkbox", "radio", "range", "button", "color", "submit", "reset"]);
+
+/** Text inputs, textareas, selects and contentEditable, so typing "T" in a field does not start the Text tool. */
 export function isEditableTarget(t: EventTarget | null): boolean {
   return (
-    t instanceof HTMLInputElement ||
+    (t instanceof HTMLInputElement && !NON_TEXT_INPUTS.has(t.type)) ||
     t instanceof HTMLTextAreaElement ||
     t instanceof HTMLSelectElement ||
     (t instanceof HTMLElement && t.isContentEditable)
