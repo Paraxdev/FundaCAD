@@ -32,10 +32,9 @@ ORBIT_P95_BUDGET_MS = 2500
 HOVER_POINTS = 40
 ORBIT_STEPS = 40
 EDGE_MOTION = Path(__file__).resolve().parents[3] / "src" / "viewport" / "edgeMotion.ts"
-# Where the thin lines pay, the second orbit draws fat lines for at most its first frame, a window of 4, 3 ticks
-# back from free GPU queue slots, a double frame over MAX_SAMPLE_MS on CI and the fade
-# frame: 10 of CI's 39 moved frames. Measured 0.80 to 0.87 here, 0.78 at CI's frame cost.
-THIN_SHARE = 0.74
+# Frames of the second orbit's lead before thin besides the product's window, free slots and verify skip: its
+# first frame, a double frame over MAX_SAMPLE_MS on CI and the fade frame.
+LEAD_SLACK = 3
 REST_TIMEOUT_MS = 10_000
 
 PLATE = 30
@@ -190,6 +189,17 @@ def thin_pays(full_ms, thin_ms, min_gain):
     return full_ms > 0 and thin_ms > 0 and thin_ms <= full_ms * (1 - min_gain)
 
 
+def fat_lead(modes):
+    """Frames an orbit drew before its first thin one, all of them when it never went thin."""
+    i = modes.find("t")
+    return len(modes) if i < 0 else i
+
+
+def lead_allowed(source=EDGE_MOTION):
+    """A remembered verdict is provisional, so the next gesture measures one window of fat lines before thin again."""
+    return int(sum(product_constant(n, source) for n in ("WINDOW", "SLOT_RUN", "VERIFY_SKIP"))) + LEAD_SLACK
+
+
 def quantile(xs, f):
     s = sorted(xs)
     return s[min(len(s) - 1, int(len(s) * f))] if s else 0
@@ -250,6 +260,7 @@ def run(s, tmp_path):
         "full_edges_median_ms": round(quantile(full, 0.5), 1),
         "thin_edges_median_ms": round(quantile(thin, 0.5), 1),
         "second_orbit_thin_share": round(sum(m == "thin" for _, m in drag2) / max(1, len(drag2)), 2),
+        "second_orbit_fat_lead": fat_lead("".join(m[0] for _, m in drag2)),
         "orbit_modes": ["".join(m[0] for _, m in d) for d in (drag1, drag2)],
         "at_rest": [rest1, rest2],
     }
@@ -261,7 +272,7 @@ def run(s, tmp_path):
     assert full and thin, f"the first windows drew the full edges and the rest thin ones, {got}"
     # Where thin lines save less, as on a renderer whose frames something else dominates, the fat ones rightly stay.
     if got["thin_pays"]:
-        assert got["second_orbit_thin_share"] >= THIN_SHARE, f"the thin edges paid, yet the second orbit kept the fat ones, {got}"
+        assert got["second_orbit_fat_lead"] <= lead_allowed(), f"the thin edges paid, yet the second orbit kept the fat ones, {got}"
         assert not any("tf" in m for m in got["orbit_modes"]), f"the thin edges paid, yet an orbit went back to the fat ones mid drag, {got}"
     for rest in (rest1, rest2):
         assert rest["mode"] == "full" and rest["drawn"] is None and rest["hidden"] == 0, f"the full edges were not back at rest, {got}"
