@@ -4,7 +4,6 @@ import { createPanels, type PanelsDeps } from "../../src/ui/panels";
 import { usePanelsStore } from "../../src/stores/panels";
 import type { InterferenceReply } from "../../src/geometry/client";
 import type { CadDocument } from "../../src/types";
-import { EDGE_HOVER_COLOR } from "../../src/viewport/highlight";
 
 // The Interference panel against a hand-made engine: a body the engine could
 // not judge is named with why, and its pairs are never reported as clear.
@@ -13,6 +12,8 @@ beforeEach(() => setActivePinia(createPinia()));
 
 type Body = { id: string; name: string; faceStart?: number; faceCount?: number };
 type Marks = { faceIds: number[]; color: number }[] | null;
+// Violet, so a hover (amber) over a tinted face still shows.
+const TINT = 0xa98bff;
 
 function rig(
   reply: InterferenceReply,
@@ -116,11 +117,13 @@ describe("the Interference panel", () => {
     await panels.showInterference();
     marks.length = 0;
     panels.highlightInterference("body5", "body1");
-    expect(marks).toEqual([
-      { marks: [{ faceIds: [0, 1, 2, 5, 6, 7, 8], color: EDGE_HOVER_COLOR }], layer: "interference" },
-    ]);
+    expect(marks).toEqual([{ marks: [{ faceIds: [0, 1, 2, 5, 6, 7, 8], color: TINT }], layer: "interference" }]);
     panels.highlightInterference("body2", "body9");
-    expect(marks.at(-1)).toEqual({ marks: [{ faceIds: [3, 4], color: EDGE_HOVER_COLOR }], layer: "interference" });
+    expect(marks.at(-1)).toEqual({ marks: [{ faceIds: [3, 4], color: TINT }], layer: "interference" });
+    panels.highlightInterference("body2", "body9");
+    expect(marks.at(-1)).toEqual({ marks: null, layer: "interference" });
+    panels.highlightInterference("body2", "body9");
+    expect(marks.at(-1)).toEqual({ marks: [{ faceIds: [3, 4], color: TINT }], layer: "interference" });
     panels.highlightInterference("body8", "body9");
     expect(marks.at(-1)).toEqual({ marks: null, layer: "interference" });
     panels.highlightInterference("body1", "body2");

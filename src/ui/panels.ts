@@ -52,7 +52,6 @@ import {
 import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } from "../types";
 import { isVec3 } from "../document/stressStudy";
 import { bodyLabels, labelledBodies } from "./bodyLabels";
-import { EDGE_HOVER_COLOR } from "../viewport/highlight";
 import * as THREE from "three";
 
 type StressOverlay = NonNullable<Parameters<Viewport["setStressOverlay"]>[0]>;
@@ -82,6 +81,8 @@ export interface PanelsDeps {
 }
 
 const INTERFERENCE_MARKS = "interference";
+// Violet, apart from the amber hover, the orange selection and the red clash volume drawn inside the pair.
+const INTERFERENCE_TINT = 0xa98bff;
 
 export function createPanels(deps: PanelsDeps) {
   const { store, viewport, geometry, hasBody, setStatus } = deps;
@@ -151,6 +152,7 @@ export function createPanels(deps: PanelsDeps) {
       return;
     }
     setStatus("Checking interference…", "");
+    tinted = null;
     viewport.setFaceMarks(null, INTERFERENCE_MARKS);
     const res = await geometry.interference(store.document, clearanceMm);
     if (!res.ok) {
@@ -203,15 +205,25 @@ export function createPanels(deps: PanelsDeps) {
   function closeInterference() {
     panels.interference = null;
     viewport.setInterferenceOverlay(null, null);
+    tinted = null;
     viewport.setFaceMarks(null, INTERFERENCE_MARKS);
   }
 
+  let tinted: { build: unknown; key: string } | null = null;
+
   // A tint rather than a selection, which would bring up the Move gizmo and the selection toolbar over the pair.
+  // A second click on the same pair clears it.
   function highlightInterference(a: string, b: string) {
-    const faces = (store.buildState.result?.bodies ?? [])
-      .filter((x) => x.id === a || x.id === b)
-      .flatMap((x) => Array.from({ length: x.faceCount }, (_, i) => x.faceStart + i));
-    viewport.setFaceMarks(faces.length ? [{ faceIds: faces, color: EDGE_HOVER_COLOR }] : null, INTERFERENCE_MARKS);
+    const built = store.buildState.result;
+    const key = `${a} ${b}`;
+    const again = tinted?.build === built && tinted.key === key;
+    const faces = again
+      ? []
+      : (built?.bodies ?? [])
+          .filter((x) => x.id === a || x.id === b)
+          .flatMap((x) => Array.from({ length: x.faceCount }, (_, i) => x.faceStart + i));
+    tinted = faces.length ? { build: built, key } : null;
+    viewport.setFaceMarks(faces.length ? [{ faceIds: faces, color: INTERFERENCE_TINT }] : null, INTERFERENCE_MARKS);
   }
 
   // Stress: a linear static analysis of one body, its setup edited in the panel and saved with the document.
