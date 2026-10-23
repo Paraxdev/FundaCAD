@@ -259,22 +259,25 @@ export async function openDocument(
   },
 ) {
   if (isTauri()) {
-    // A file picked for a document closed while the dialog was up is not imported into the next one.
+    // A file picked for a document closed while the dialog was up is not imported into the next one. Only the dialog
+    // counts as an import here, so no doc_set replaces its document, and Home still sees a blank one as blank.
     const session = store.session;
     const { open } = await import("@tauri-apps/plugin-dialog");
-    const path = await open({
-      multiple: false,
-      // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
-      // body), routed by extension below, so users can just "open" an STL.
-      filters: [
-        {
-          name: "All supported",
-          extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS]),
-        },
-        { name: "FundaCAD Document", extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"]) },
-        { name: "Mesh / CAD", extensions: dialogExts(IMPORT_EXTS) },
-      ],
-    });
+    const path = await store.importing(() =>
+      open({
+        multiple: false,
+        // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
+        // body), routed by extension below, so users can just "open" an STL.
+        filters: [
+          {
+            name: "All supported",
+            extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS]),
+          },
+          { name: "FundaCAD Document", extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"]) },
+          { name: "Mesh / CAD", extensions: dialogExts(IMPORT_EXTS) },
+        ],
+      }),
+    );
     if (typeof path !== "string") return;
     const ext = path.split(".").pop()?.toLowerCase();
     if (isDocumentExt(ext)) {
@@ -766,34 +769,37 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
   }
   const session = store.session;
   const { open } = await import("@tauri-apps/plugin-dialog");
-  const path = await open({
-    multiple: false,
-    filters: [
-      { name: "All supported", extensions: dialogExts(IMPORT_EXTS) },
-      { name: "STL", extensions: dialogExts(["stl"]) },
-      { name: "3MF", extensions: dialogExts(["3mf"]) },
-      { name: "STEP", extensions: dialogExts(["step", "stp", "stpz", "gz"]) },
-      { name: "IGES", extensions: dialogExts(["iges", "igs"]) },
-      { name: "BREP", extensions: dialogExts(["brep"]) },
-      { name: "OCCT XBF", extensions: dialogExts(["xbf"]) },
-      { name: "FreeCAD", extensions: dialogExts(["fcstd"]) },
-      { name: "Rhino 3DM", extensions: dialogExts(["3dm"]) },
-      { name: "IFC (buildings)", extensions: dialogExts(["ifc"]) },
-      { name: "DXF (AutoCAD)", extensions: dialogExts(["dxf"]) },
-      { name: "SVG (drawing)", extensions: dialogExts(["svg"]) },
-      { name: "OBJ", extensions: dialogExts(["obj"]) },
-      { name: "PLY", extensions: dialogExts(["ply"]) },
-      { name: "OFF", extensions: dialogExts(["off"]) },
-      { name: "AMF", extensions: dialogExts(["amf"]) },
-      { name: "glTF", extensions: dialogExts(["glb", "gltf"]) },
-      { name: "VRML", extensions: dialogExts(["wrl", "wrz"]) },
-      { name: "X3D", extensions: dialogExts(["x3d", "x3dz"]) },
-      { name: "FBX (Maya, 3ds Max)", extensions: dialogExts(["fbx"]) },
-      { name: "3DS (old 3ds Max)", extensions: dialogExts(["3ds"]) },
-    ],
+  // Counted as an import from the dialog on, so a doc_set cannot replace the document the picked file lands in.
+  await store.importing(async () => {
+    const path = await open({
+      multiple: false,
+      filters: [
+        { name: "All supported", extensions: dialogExts(IMPORT_EXTS) },
+        { name: "STL", extensions: dialogExts(["stl"]) },
+        { name: "3MF", extensions: dialogExts(["3mf"]) },
+        { name: "STEP", extensions: dialogExts(["step", "stp", "stpz", "gz"]) },
+        { name: "IGES", extensions: dialogExts(["iges", "igs"]) },
+        { name: "BREP", extensions: dialogExts(["brep"]) },
+        { name: "OCCT XBF", extensions: dialogExts(["xbf"]) },
+        { name: "FreeCAD", extensions: dialogExts(["fcstd"]) },
+        { name: "Rhino 3DM", extensions: dialogExts(["3dm"]) },
+        { name: "IFC (buildings)", extensions: dialogExts(["ifc"]) },
+        { name: "DXF (AutoCAD)", extensions: dialogExts(["dxf"]) },
+        { name: "SVG (drawing)", extensions: dialogExts(["svg"]) },
+        { name: "OBJ", extensions: dialogExts(["obj"]) },
+        { name: "PLY", extensions: dialogExts(["ply"]) },
+        { name: "OFF", extensions: dialogExts(["off"]) },
+        { name: "AMF", extensions: dialogExts(["amf"]) },
+        { name: "glTF", extensions: dialogExts(["glb", "gltf"]) },
+        { name: "VRML", extensions: dialogExts(["wrl", "wrz"]) },
+        { name: "X3D", extensions: dialogExts(["x3d", "x3dz"]) },
+        { name: "FBX (Maya, 3ds Max)", extensions: dialogExts(["fbx"]) },
+        { name: "3DS (old 3ds Max)", extensions: dialogExts(["3ds"]) },
+      ],
+    });
+    if (typeof path !== "string" || !session.alive) return;
+    await importPath(store, geometry, path);
   });
-  if (typeof path !== "string" || !session.alive) return;
-  await importPath(store, geometry, path);
 }
 
 /** The most recently cancelled import's path, so a retry is one click. Session state only, never in the document. */
