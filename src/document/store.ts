@@ -90,6 +90,7 @@ import { extrasEmpty, trialConfiguration } from "../params/extras";
 import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
+import { logEditTiming } from "../diagnostics/editTiming";
 import { featureMeta } from "../ui/featureMeta";
 import { afterPaint, APPLY_LABEL_AFTER_MS, BUILD_PHASE } from "../geometry/buildPhase";
 
@@ -2900,6 +2901,7 @@ export class DocumentStore {
               const key = previewing ? null : buildKey(effective);
               const flight: NonNullable<typeof this.inflight> = { gen: ++this.sendGen, id: null, cancelled: false };
               this.inflight = flight;
+              const sentAtMs = performance.now();
               markSent();
               const reply = await this.geometry.rebuild(effective, undefined, (id) => {
                 flight.id = id;
@@ -2932,7 +2934,17 @@ export class DocumentStore {
               if (this.build.streamed !== null && (!reply.ok || settled.heldRefusal)) this.emitBuildAbort();
               this.build = settled;
               if (key !== null && reply.ok) this.committedShown = { key, state: settled };
+              const appliedAtMs = performance.now();
               this.emitBuild();
+              if (reply.ok && !previewing) {
+                const cost = this.geometry.lastRebuildCost?.();
+                logEditTiming({
+                  totalMs: performance.now() - sentAtMs,
+                  engine: cost?.engine ?? null,
+                  replyBytes: cost?.replyBytes ?? 0,
+                  applyMs: performance.now() - appliedAtMs,
+                });
+              }
               // After publishing; a failed rebuild says nothing about projections.
               if (reply.ok) this.maybeQueueProjectionRefresh(reply.result.projectionUpdates);
             } while (this.rebuildQueued);
