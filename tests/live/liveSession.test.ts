@@ -225,6 +225,43 @@ describe("the window's half of a live session", () => {
     await host.stop();
   });
 
+  it("forgets what it applied and refused when sharing starts again, so a new session's ids are not answered from them", async () => {
+    const host = new LiveSessionHost(store, geo, () => true);
+    const lastStatus = () => geo.sent.filter((m) => m.op === "session_host").at(-1)!.payload["status"];
+    const told = () => {
+      const st = lastStatus() as { applied: string[]; refused: { id: string }[] };
+      return { applied: st.applied, refused: st.refused.map((r) => r.id) };
+    };
+    host.start();
+    await host.tick();
+    geo.reply = {
+      ok: true,
+      guests: ["an assistant"],
+      proposals: [proposal("pa7-1", 2), proposal("pa7-2", 3), { ...proposal("pa7-3", 4), baseRevision: 9041 }],
+    };
+    await host.tick();
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [] };
+    await host.tick();
+    const before = told();
+    await host.stop();
+
+    host.start();
+    await host.tick();
+    const restarted = told();
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [proposal("pc3-1", 5)] };
+    await host.tick();
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [] };
+    await host.tick();
+
+    expect({ before, restarted, after: told(), features: store.document.features.length }).toEqual({
+      before: { applied: ["pa7-1", "pa7-2"], refused: ["pa7-3"] },
+      restarted: { applied: [], refused: [] },
+      after: { applied: ["pc3-1"], refused: [] },
+      features: 5,
+    });
+    await host.stop();
+  });
+
   it("refuses an edit whose base the window moved past, by proposal id, and applies one made against what it published", async () => {
     const host = new LiveSessionHost(store, geo, () => true);
     host.start();
