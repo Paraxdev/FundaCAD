@@ -89,8 +89,9 @@ export interface StressData {
   /** Probe mode, and the points pinned with it. */
   probe: boolean;
   pins: StressProbePin[];
-  /** The row whose next click on the body places a spot, null when none is. */
+  /** The row whose next click on the body takes the face clicked, or places a spot with `placeAs` "spot". */
   placing: StressTarget | null;
+  placeAs: "face" | "spot";
   /** The setup as JSON when the last Run started, to tell when the result no longer matches it. */
   ranSetup: string | null;
 }
@@ -135,6 +136,7 @@ export const usePanelsStore = defineStore("panels", () => {
       probe: false,
       pins: [],
       placing: null,
+      placeAs: "face",
       ranSetup: null,
     };
   }
@@ -184,8 +186,10 @@ export const usePanelsStore = defineStore("panels", () => {
     else delete row.spots;
   }
 
-  function setStressPlacing(target: StressTarget | null) {
-    if (stress.value) stress.value.placing = target;
+  function setStressPlacing(target: StressTarget | null, as: "face" | "spot" = "face") {
+    if (!stress.value) return;
+    stress.value.placing = target;
+    stress.value.placeAs = as;
   }
 
   function setStressSupportFaces(supportId: number, faces: StressFaceSet) {

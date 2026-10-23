@@ -86,7 +86,7 @@ function onEscape(e: KeyboardEvent) {
   }
   // The glyph layer already takes these in the view; this is for when the key reaches the panel with one still on.
   if (d.probe) engine.ui.panels.setStressProbe(false);
-  else if (d.placing) engine.ui.panels.placeStressSpot(d.placing);
+  else if (d.placing) engine.ui.panels.placeStressSpot(d.placing, d.placeAs);
   else close();
 }
 onMounted(() => window.addEventListener("keydown", onEscape));
@@ -117,8 +117,11 @@ onUnmounted(() => window.removeEventListener("keydown", onEscape));
 
       <div class="measure-hint">
         <template v-if="panels.stress.probe">Hover the body to read it, click to pin, Esc to stop.</template>
-        <template v-else-if="panels.stress.placing"
+        <template v-else-if="panels.stress.placing && panels.stress.placeAs === 'spot'"
           >Click the body to place a spot, Shift click for more, Esc to stop.</template
+        >
+        <template v-else-if="panels.stress.placing"
+          >Click a face to add all of it, Shift click for more, Esc to stop.</template
         >
         <template v-else-if="step === 'results' && result">Results are linear and approximate.</template>
         <template v-else-if="ready">Ready, press Run.</template>

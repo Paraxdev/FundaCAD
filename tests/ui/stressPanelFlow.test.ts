@@ -157,6 +157,7 @@ function rig() {
         setModel: (m: StressGlyphModel) => glyphModels.push(m),
         setProbe: (on: boolean) => glyphCalls.push(`probe ${on}`),
         setProbePins: (p: unknown[]) => glyphCalls.push(`pins ${p.length}`),
+        setPlacing: (p: { radius: number | null } | null) => glyphCalls.push(`placing ${p ? p.radius : "off"}`),
         setWeakSpot: (w: { tri: number; weights: Vec3; label: string } | null) => weakSpots.push(w),
         dispose: () => glyphCalls.push("dispose"),
       };
@@ -259,14 +260,14 @@ describe("stress panel flow", () => {
     r.ui.setStressFacesFromSelection({ support: 1 });
     const d = usePanelsStore().stress!;
     const toasts = r.statuses.length;
-    r.ui.placeStressSpot({ load: 1 });
+    r.ui.placeStressSpot({ load: 1 }, "spot");
     expect(d.placing).toEqual({ load: 1 });
     expect(r.statuses.slice(toasts), "the panel's own hint says it, no toast over it").toEqual([]);
     // A click on another body is told so and places nothing.
-    r.handlers().placeSpot!({ at: [1, 1, 0], normal: [0, 0, 1], body: "b2" }, false);
+    r.handlers().placeSpot!({ at: [1, 1, 0], normal: [0, 0, 1], body: "b2", faceId: 9 }, false);
     expect(r.statuses.at(-1)).toMatch(/another body/);
     expect(d.setup.loads[0]!.spots).toBeUndefined();
-    r.handlers().placeSpot!({ at: [5.00001, 5, 10], normal: [0, 0, 1], body: "b1" }, false);
+    r.handlers().placeSpot!({ at: [5.00001, 5, 10], normal: [0, 0, 1], body: "b1", faceId: 2 }, false);
     expect(d.placing, "one click, one spot").toBeNull();
     expect(d.setup.loads[0]!.spots).toEqual([{ at: [5, 5, 10], radius: 5, normal: [0, 0, 1] }]);
     await flush();
@@ -281,8 +282,8 @@ describe("stress panel flow", () => {
     expect(d.setup.loads[0]!.spots![0]!.radius).toBe(5);
     r.handlers().spotRadius!({ load: 1 }, 0, 2);
     r.handlers().spotRadiusEnd!({ load: 1 }, 0, false);
-    r.ui.placeStressSpot({ load: 1 });
-    r.handlers().placeSpot!({ at: [2, 2, 10], normal: [0, 0, 1], body: "b1" }, true);
+    r.ui.placeStressSpot({ load: 1 }, "spot");
+    r.handlers().placeSpot!({ at: [2, 2, 10], normal: [0, 0, 1], body: "b1", faceId: 2 }, true);
     expect(d.placing, "Shift keeps placing").toEqual({ load: 1 });
     r.handlers().leavePlacing!();
     expect(d.placing).toBeNull();
@@ -291,6 +292,71 @@ describe("stress panel flow", () => {
 
     void r.ui.runStress();
     expect(r.calls[0]!.opts.loads).toEqual([{ spots: [{ at: [5, 5, 10], radius: 2 }], force: [0, 0, -100] }]);
+  });
+
+  it("a click adds the whole face clicked, Shift adds more, and a face held already is not added twice", async () => {
+    const r = rig();
+    r.ui.showStress();
+    const d = usePanelsStore().stress!;
+    r.ui.placeStressSpot({ support: 1 });
+    expect([d.placing, d.placeAs]).toEqual([{ support: 1 }, "face"]);
+    expect(r.glyphCalls.at(-1), "no spot orb follows the cursor").toBe("placing null");
+    r.handlers().placeSpot!({ at: [3.25, 7.5, 0], normal: [0, 0, -1], body: "b1", faceId: 1 }, false);
+    expect(d.placing, "one click, one face").toBeNull();
+    expect(d.setup.body).toBe("b1");
+    expect(d.setup.supports[0]).toEqual({
+      id: 1,
+      type: "fixed",
+      faces: {
+        selectors: [{ kind: "face", by: "nearest", point: [3.25, 7.5, 0], body: "b1" }],
+        faceIds: [1],
+        normalSum: [0, 0, -100],
+        area: 100,
+      },
+    });
+
+    r.ui.placeStressSpot({ support: 1 });
+    r.handlers().placeSpot!({ at: [6.5, 1.75, 10], normal: [0, 0, 1], body: "b1", faceId: 2 }, true);
+    r.handlers().placeSpot!({ at: [8, 4, 10], normal: [0, 0, 1], body: "b1", faceId: 2 }, true);
+    expect(d.placing, "Shift keeps picking").toEqual({ support: 1 });
+    r.handlers().placeSpot!({ at: [1, 1, 0], normal: [0, 0, 1], body: "b2", faceId: 9 }, true);
+    expect(r.statuses.at(-1)).toMatch(/another body/);
+    expect(d.setup.supports[0]!.faces.selectors.map((x) => "point" in x && x.point)).toEqual([
+      [3.25, 7.5, 0],
+      [6.5, 1.75, 10],
+    ]);
+    expect(d.setup.supports[0]!.faces.faceIds).toEqual([1, 2]);
+    expect(d.setup.supports[0]!.spots).toBeUndefined();
+    r.ui.placeStressSpot({ support: 1 });
+    expect(d.placing, "the button again stops picking").toBeNull();
+    expect(r.marks.at(-1)).toEqual([
+      { faceIds: [1, 2], color: 0x4ac6ff },
+      { faceIds: [], color: 0xff9a2e },
+    ]);
+  });
+
+  it("switches between picking faces and placing spots on one row, and each button stops only its own", () => {
+    const r = rig();
+    r.ui.showStress();
+    const d = usePanelsStore().stress!;
+    r.select([1]);
+    r.ui.setStressFacesFromSelection({ support: 1 });
+    r.ui.placeStressSpot({ load: 1 });
+    r.ui.placeStressSpot({ load: 1 }, "spot");
+    expect([d.placing, d.placeAs], "Spot switches the row to spots").toEqual([{ load: 1 }, "spot"]);
+    expect(r.glyphCalls.slice(-2)).toEqual(["placing null", "placing 5"]);
+    r.handlers().placeSpot!({ at: [7.25, 2.5, 10], normal: [0, 0, 1], body: "b1", faceId: 2 }, false);
+    expect(d.setup.loads[0]!.faces.faceIds, "a spot click adds no face").toEqual([]);
+    expect(d.setup.loads[0]!.spots).toEqual([{ at: [7.25, 2.5, 10], radius: 5, normal: [0, 0, 1] }]);
+    r.ui.placeStressSpot({ load: 1 }, "spot");
+    r.ui.placeStressSpot({ load: 1 }, "spot");
+    expect(d.placing).toBeNull();
+    r.ui.placeStressSpot({ load: 1 }, "spot");
+    r.ui.placeStressSpot({ load: 1 });
+    expect([d.placing, d.placeAs], "Click faces switches it back").toEqual([{ load: 1 }, "face"]);
+    r.handlers().placeSpot!({ at: [2.5, 6, 10], normal: [0, 0, 1], body: "b1", faceId: 2 }, false);
+    expect(d.setup.loads[0]!.faces.faceIds).toEqual([2]);
+    expect(d.setup.loads[0]!.spots).toHaveLength(1);
   });
 
   it("refuses faces on another body than the one analysed", () => {

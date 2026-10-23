@@ -119,10 +119,20 @@ describe("StressPanel", () => {
     expect(q(".stress-panel")?.textContent).toContain("Support 1");
     expect(value(q(".stress-support-type"))).toBe("fixed");
     expect(value(q(".stress-body"))).toBe("b1");
-    expect([q(".stress-place-support")?.textContent, q(".stress-set-support")?.textContent]).toEqual([
-      "Click on body",
-      "Use selected faces",
-    ]);
+    const actions = () =>
+      [".stress-place-support", ".stress-spot-support", ".stress-set-support"].map((c) => q(c)?.textContent);
+    expect(actions()).toEqual(["Click faces", "Spot", "Use selected faces"]);
+    q(".stress-place-support")!.click();
+    q(".stress-spot-load")!.click();
+    expect(panels.placeStressSpot.mock.calls).toEqual([[{ support: 1 }], [{ load: 1 }, "spot"]]);
+    usePanelsStore().setStressPlacing({ support: 1 }, "spot");
+    await flushPromises();
+    expect(actions(), "only the Spot button shows it is on").toEqual(["Click faces", "Placing…", "Use selected faces"]);
+    usePanelsStore().setStressPlacing({ support: 1 });
+    await flushPromises();
+    expect(actions()).toEqual(["Picking…", "Spot", "Use selected faces"]);
+    usePanelsStore().setStressPlacing(null);
+    await flushPromises();
     expect([...document.body.querySelectorAll(".stress-count")].map((e) => e.textContent)).toEqual([
       "No faces yet",
       "No faces yet",
@@ -732,7 +742,11 @@ describe("StressPanel Escape", () => {
     p.setStressPlacing({ support: 1 });
     await flushPromises();
     esc();
-    expect(panels.placeStressSpot).toHaveBeenCalledWith({ support: 1 });
+    expect(panels.placeStressSpot).toHaveBeenCalledWith({ support: 1 }, "face");
+    p.setStressPlacing({ load: 1 }, "spot");
+    await flushPromises();
+    esc();
+    expect(panels.placeStressSpot).toHaveBeenLastCalledWith({ load: 1 }, "spot");
     expect(panels.closeStress).not.toHaveBeenCalled();
     p.setStressPlacing(null);
     esc();
