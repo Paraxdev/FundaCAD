@@ -360,6 +360,22 @@ describe("move gizmo raised by a body selection", () => {
     document.body.innerHTML = "";
   });
 
+  it("keeps the M that claims the raised gizmo out of its value field", () => {
+    const { vp } = fakeViewport();
+    const tool = new MoveTool(vp, fakeStore().store);
+    tool.startTarget(probe([0, 0, 0]).target, () => {});
+    tool.markAmbient();
+    const field = document.querySelector<HTMLInputElement>(".dim-input input")!;
+    field.focus();
+    const m = new KeyboardEvent("keydown", { key: "m", bubbles: true, cancelable: true });
+    field.dispatchEvent(m);
+    expect(m.defaultPrevented).toBe(true);
+    expect(tool.ambient).toBe(false);
+    const again = new KeyboardEvent("keydown", { key: "m", bubbles: true, cancelable: true });
+    field.dispatchEvent(again);
+    expect(again.defaultPrevented).toBe(false);
+  });
+
   it("hides its value row while the handles overlay is off, and shows it again", () => {
     const { vp, setHandles } = fakeViewport();
     const tool = new MoveTool(vp, fakeStore().store);
