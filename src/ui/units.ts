@@ -61,9 +61,30 @@ export function fmtLength(mm: number): string {
   return `${displayRound(toDisplay(mm))} ${current}`;
 }
 
-/** At most three significant digits and no space, for the 40 px viewport grid button. */
+const FRACTION_DENOMINATORS = [2, 4, 8, 16, 32, 64];
+
+/** "1/16" for an inch length under one inch that is a whole number of 64ths, else null. */
+function inchFraction(mm: number): string | null {
+  const inches = mm / FACTOR.in;
+  if (!(inches > 0 && inches < 1)) return null;
+  for (const d of FRACTION_DENOMINATORS) {
+    const n = Math.round(inches * d);
+    if (n >= 1 && n < d && n % 2 === 1 && Math.abs(inches * d - n) < 1e-9 * d) return `${n}/${d}`;
+  }
+  return null;
+}
+
+/** At most three significant digits and no space, for the 40 px viewport grid button. Inch steps under one inch read
+ *  as fractions. */
 export function fmtLengthCompact(mm: number): string {
-  return `${Number(toDisplay(mm).toPrecision(3))}${current}`;
+  const frac = current === "in" ? inchFraction(mm) : null;
+  return frac ? `${frac}in` : `${Number(toDisplay(mm).toPrecision(3))}${current}`;
+}
+
+/** fmtLength for a grid step: inch steps under one inch read as fractions. */
+export function fmtGridStep(mm: number): string {
+  const frac = current === "in" ? inchFraction(mm) : null;
+  return frac ? `${frac} in` : fmtLength(mm);
 }
 
 /** Quantise for storage to a thousandth, `snap()`'s lattice floor and the finest drag step (viewport/dragStep.ts).
@@ -80,6 +101,26 @@ export function niceStep(rough: number): number {
   const base = rough / Math.pow(10, exp); // 1..10
   const nice = base < 1.5 ? 1 : base < 3.5 ? 2 : base < 7.5 ? 5 : 10;
   return nice * Math.pow(10, exp);
+}
+
+const INCH_FRACTION_STEPS = [1 / 64, 1 / 32, 1 / 16, 1 / 8, 1 / 4, 1 / 2];
+
+/** Nearest inch grid step (by ratio) to a rough size in mm, returned in mm: 1/64 to 1/2 in by halving, then 1/2/5 in
+ *  per decade, and decimal 1/2/5 steps below 1/64 in. */
+export function niceInchStep(roughMm: number): number {
+  if (!(roughMm > 0) || !isFinite(roughMm)) return FACTOR.in;
+  const rough = roughMm / FACTOR.in;
+  if (rough < INCH_FRACTION_STEPS[0]! / Math.SQRT2) return niceStep(rough) * FACTOR.in;
+  const decade = Math.pow(10, Math.max(0, Math.floor(Math.log10(rough))));
+  const candidates = [...INCH_FRACTION_STEPS, ...[1, 2, 5, 10].map((m) => m * decade)];
+  let best = candidates[0]!;
+  for (const c of candidates) if (Math.abs(Math.log(c / rough)) < Math.abs(Math.log(best / rough))) best = c;
+  return best * FACTOR.in;
+}
+
+/** Grid spacing for a rough size in mm: inch steps while the display unit is inches, else the metric nice step. */
+export function niceGridStep(roughMm: number): number {
+  return current === "in" ? niceInchStep(roughMm) : niceStep(roughMm);
 }
 
 /** Snap a value to a step, then strip float fuzz so it reads as a clean number

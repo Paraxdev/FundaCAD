@@ -2,6 +2,7 @@
 
 import { setLeftButtonOwner } from "../viewport/navigator/bindings";
 import { Viewport } from "../viewport/viewport";
+import { onUnitChange } from "../ui/units";
 import { asFeature } from "../types";
 import { isSessionEnded } from "../document/session";
 import { Geometry, type GeometryBackend } from "../geometry/client";
@@ -223,6 +224,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   };
 
   e.viewport = new Viewport(canvas);
+  onUnitChange(() => e.viewport.requestRender());
   e.viewport.onGridStep = (mm) => {
     useUiStore().gridStepMm = mm;
   };
