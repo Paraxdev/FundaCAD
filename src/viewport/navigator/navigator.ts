@@ -826,7 +826,13 @@ export class Navigator {
 
   /** The view a fresh window opens on. Given the box, it frames the box itself
    *  rather than its bounding ball. */
-  resetView(center: THREE.Vector3 | null, radius: number, animate: boolean, box?: THREE.Box3, insets?: Insets | undefined) {
+  resetView(
+    center: THREE.Vector3 | null,
+    radius: number,
+    animate: boolean,
+    box?: THREE.Box3,
+    insets?: Insets | undefined,
+  ) {
     const p = clonePose(this.pose);
     const home = HOME_EYE.clone().normalize();
     const q = lookQuat(home, new THREE.Vector3());
