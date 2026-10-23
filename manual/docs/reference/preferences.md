@@ -10,3 +10,5 @@ Viewport sets Reflections, Background and Environment brightness. Tangent edges 
 
 Navigation sets Smoothing, Orbit inertia and Scrolling for a mouse or touchpad. Accessibility holds Animations and Hover delay.
 
+
+Experimental raises the limits FundaCAD keeps for stability: the size an imported HDR is kept at, and the samples, bounces, firefly clamp, trace resolution, picture size and triangle count of Path traced. These can make FundaCAD unstable or crash it, and Reset to defaults puts every one back.

@@ -11,10 +11,6 @@ export interface HdrImage {
   data: Float32Array;
 }
 
-/** Kept and embedded at this width; lighting reads a quarter of the pixels. */
-export const STORED_HDR_WIDTH = 2048;
-/** One texel per texel of the 256 cube face the room is rendered into. */
-export const LIGHTING_HDR_WIDTH = 1024;
 /** The most half float bytes an OpenEXR may unpack to: three's EXRLoader has no streaming path, and past this a
  *  typed array is refused or the window runs out of memory. */
 export const MAX_EXR_DECODE_BYTES = 2 ** 31;

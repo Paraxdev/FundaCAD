@@ -13,10 +13,9 @@ import {
   inflateBase64,
   sha256Hex,
   sphereThumbnailPixels,
-  STORED_HDR_WIDTH,
   type HdrImage,
 } from "../viewport/hdrImage";
-import { heldHdr, registerHdr } from "../viewport/hdrRegistry";
+import { hdrStoredWidth, heldHdr, registerHdr } from "../viewport/hdrRegistry";
 import { createEnvLibrary, indexedDbKv, type EnvEntry, type EnvLibrary, type StoredHdr } from "./environmentLibrary";
 import {
   applyEnvSettings,
@@ -71,9 +70,9 @@ export function hdrName(hash: string): string | null {
   return heldHdr(hash)?.name ?? names.get(hash) ?? null;
 }
 
-/** Stored at 2k, hashed, kept in the library and held for the renderer. */
+/** Stored at 2k (hdrStoredWidth), hashed, kept in the library and held for the renderer. */
 export async function storeHdr(img: HdrImage, name: string, library = envLibrary()): Promise<StoredHdr> {
-  const stored = downscaleEquirect(img, STORED_HDR_WIDTH);
+  const stored = downscaleEquirect(img, hdrStoredWidth());
   const rgbe = encodeRgbe(stored);
   const hash = await sha256Hex(rgbe);
   const rec: StoredHdr = { hash, name, width: stored.width, height: stored.height, rgbe };
@@ -99,7 +98,7 @@ export function keptSmallerNote(
   if (!source || source.width <= kept.width) return null;
   return (
     `${name} is ${source.width} x ${source.height}. It lights the scene from a ${kept.width} x ${kept.height} ` +
-    `copy, the size the lighting and a saved document keep.`
+    `copy, the size kept for lighting and saved documents (Preferences, Experimental).`
   );
 }
 
@@ -112,7 +111,7 @@ export async function importEnvironmentBytes(
   opts: ImportOptions = {},
 ): Promise<string | null> {
   try {
-    const img = await decodeHdr(bytes, name, STORED_HDR_WIDTH);
+    const img = await decodeHdr(bytes, name, hdrStoredWidth());
     const note = keptSmallerNote(name, hdrSize(bytes, name), img);
     const rec = await storeHdr(img, name, library);
     if (opts.leftOut) {

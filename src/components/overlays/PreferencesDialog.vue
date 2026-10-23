@@ -13,6 +13,7 @@ import Select from "../ui/Select.vue";
 import McpSection from "./McpSection.vue";
 import DenoiserRow from "../shell/DenoiserRow.vue";
 import PluginsSection from "./PluginsSection.vue";
+import ExperimentalSection from "./ExperimentalSection.vue";
 import {
   addCustomTheme,
   asThemeId,
@@ -156,6 +157,7 @@ const categories = computed(() => [
   { id: "access", label: "Accessibility" },
   { id: "mcp", label: "AI assistants" },
   { id: "plugins", label: "Plugins" },
+  { id: "experimental", label: "Experimental" },
 ]);
 const category = ref(pluginFocus.value ? "plugins" : "appearance");
 watch(pluginFocus, (id) => {
@@ -752,6 +754,10 @@ function onClassicCamera(ev: Event) {
 
         <section v-show="category === 'plugins'" class="prefs-pane prefs-pane-flow">
           <PluginsSection />
+        </section>
+
+        <section v-show="category === 'experimental'" class="prefs-pane" data-prefs-experimental>
+          <ExperimentalSection />
         </section>
       </div>
     </div>
