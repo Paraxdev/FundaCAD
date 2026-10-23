@@ -1351,7 +1351,7 @@ describe("the weakest spot", () => {
     setUp(r);
     await ran(r, bent);
     const corner = drawnCorner(refineSurface(bent.surface!, 2), 1)!;
-    expect(r.weakSpots.at(-1)).toEqual({ ...corner, label: "Weakest, 3.3x safe" });
+    expect(r.weakSpots.at(-1)).toEqual({ ...corner, label: "Weakest, at least 3.3x safe" });
   });
 
   it("stays through the colours and shape switches, goes on a new Run and a model change, moves with a new peak", async () => {
@@ -1425,7 +1425,7 @@ describe("the colours and the deformed shape, each with its own switch", () => {
 
   it("draws each of the four combinations, the weakest pin through all of them", async () => {
     const { r, still, bent, pin, seen } = await ran();
-    expect(pin.label).toBe("Weakest, 4.5x safe");
+    expect(pin.label).toBe("Weakest, at least 4.5x safe");
     expect(seen()).toEqual({
       overlay: { ...still, colours: true, ...bent },
       marks: null,
