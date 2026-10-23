@@ -648,9 +648,13 @@ export class DocumentStore {
       const chunk: BuildChunk = { ...c, epoch: this.buildEpoch };
       for (const fn of this.chunkListeners) fn(chunk);
     });
+    // An op whose request id is not back yet waits for its own progress rather than taking another op's.
     geometry.onOpProgress?.((id, pct, stage) => {
-      if (!this.busy.active || (this.busy.id !== null && this.busy.id !== id)) return;
-      this.setBusy({ ...this.busy, pct, stage: stage || null });
+      const op = this.st.busyOps.find((o) => o.state.id === id);
+      if (!op) return;
+      const next = { ...op.state, pct, stage: stage || null };
+      if (this.st.busyOps.at(-1) === op) this.setBusy(next);
+      else op.state = next;
     });
     // Only the busy op's own request: any other id is not what this document waits on.
     geometry.onQueue?.((id, behind) => {
