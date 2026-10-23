@@ -46,12 +46,12 @@ export function traceMaterialFrom(
 const WHITE = new THREE.Color(1, 1, 1);
 const BLACK = new THREE.Color(0, 0, 0);
 
-/** Every field traceMaterialFrom reads, so any edit to one reaches the tracer. */
+/** Every field traceMaterialFrom reads, so any edit to one reaches the tracer. Not `version`: three's transmission
+ *  pass bumps it twice on every Realtime frame of a double sided glass. */
 export function traceMaterialKey(m: THREE.Material): string {
   const s = m as Physical;
   return [
     m.uuid,
-    m.version,
     s.color?.getHex(),
     s.emissive?.getHex(),
     s.emissiveIntensity,
