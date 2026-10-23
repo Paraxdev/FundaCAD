@@ -6,7 +6,7 @@ import RenderDock from "./components/shell/RenderDock.vue";
 import ToastStack from "./components/overlays/ToastStack.vue";
 import GuideLayer from "./components/overlays/GuideLayer.vue";
 import ModalHost from "./components/overlays/ModalHost.vue";
-import ShortcutHud from "./components/overlays/ShortcutHud.vue";
+import ShortcutsDialog from "./components/overlays/ShortcutsDialog.vue";
 import ContextMenuHost from "./components/overlays/ContextMenuHost.vue";
 import RadialMenuHost from "./components/overlays/RadialMenuHost.vue";
 import TargetEditPanel from "./components/overlays/TargetEditPanel.vue";
@@ -124,7 +124,6 @@ watch(
   <ToastStack />
   <ModalHost />
   <GuideLayer />
-  <ShortcutHud />
   <ContextMenuHost />
   <RadialMenuHost />
   <ConsolePanel />
@@ -149,6 +148,7 @@ watch(
 
   <!-- v-if, not an open prop: mount is open, so useModalGate.ts can count modal depth in mount hooks without leaks. -->
   <PreferencesDialog v-if="dialogs.preferences" />
+  <ShortcutsDialog v-if="dialogs.shortcuts" />
   <ExportDialog v-if="exportDialog.request" />
   <BugReportDialog v-if="dialogs.bugReport && dialogs.bugDeps" />
 

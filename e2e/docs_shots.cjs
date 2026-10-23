@@ -1207,10 +1207,7 @@ Object.assign(STILLS, {
   async "shortcuts-overlay"(ctx) {
     await ctx.page.keyboard.press("Shift+Slash");
     await sleep(900);
-    // The list is taller than the window, so it is shrunk to fit whole.
-    await ctx.page.addStyleTag({ content: ".shortcut-hud-card{zoom:.68}" });
-    await sleep(500);
-    await ctx.still("shortcuts-overlay", await ctx.box(".shortcut-hud-card", 8));
+    await ctx.still("shortcuts-overlay", await ctx.box(".shortcuts-panel", 6));
   },
 });
 

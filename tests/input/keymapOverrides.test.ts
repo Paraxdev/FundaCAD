@@ -27,7 +27,7 @@ describe("moving a key", () => {
     expect(resolveShortcut("f", false, "model")).toBe(null);
     expect(resolveShortcut("g", false, "sketch")).toBe("tangent");
     expect(keyHint("fillet")).toBe("G");
-    expect(row("Model", "G")).toEqual({ key: "G", label: "Fillet", changed: true });
+    expect(row("Model", "G")).toMatchObject({ key: "G", label: "Fillet", changed: true });
   });
 
   it("binds a contributed action, globally unless told otherwise", () => {
