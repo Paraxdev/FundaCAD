@@ -900,7 +900,7 @@ export function barycentric(a: Vec3, b: Vec3, c: Vec3, p: Vec3): Vec3 {
 /** Von Mises (MPa) and deflection (mm, its size and vector) interpolated at `weights` in surface triangle `tri`.
  *  Deflection is null without displacement data; null for a triangle the surface lacks. */
 export function probeValues(
-  surface: { indices: ArrayLike<number>; vonMises: ArrayLike<number>; displacement?: ArrayLike<number> },
+  surface: { indices: ArrayLike<number>; vonMises: ArrayLike<number>; displacement?: ArrayLike<number> | undefined },
   tri: number,
   weights: Vec3,
 ): { vonMises: number; deflection: number | null; vector: Vec3 | null } | null {

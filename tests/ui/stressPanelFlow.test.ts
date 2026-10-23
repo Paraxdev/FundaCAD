@@ -7,7 +7,11 @@ import type { StressOptions, StressReply, StressResult } from "../../src/geometr
 import type { CadDocument, StressStudy, Vec3 } from "../../src/types";
 import type { StressGlyphHandlers, StressGlyphModel } from "../../src/viewport/stressGlyphs";
 import { autoDeformScale, probeLabel, probeValues, swingScale } from "../../src/ui/stress";
-import { drawnCorner, engineHit, refineSurface } from "../../src/ui/stressSurface";
+import { drawnSurface, readAt, weakSpot, type DisplayMesh } from "../../src/ui/stressDrawn";
+import { locator, type EngineSurface } from "../../src/ui/stressLocate";
+
+// Without a display mesh the engine surface is drawn as it came.
+const asSent = (s: EngineSurface) => drawnSurface(null, s, locator(s), { min: 1, max: 4 });
 
 // The Stress panel's facade against a hand-made viewport, store and engine:
 // faces come from the selection stamped with their body, Run sends what the
@@ -68,8 +72,10 @@ function rig() {
   const glyphCalls: string[] = [];
   let handlers: StressGlyphHandlers | null = null;
   let pick: { tri: number; weights: Vec3; point: Vec3 } | null = null;
+  let display: DisplayMesh | null = null;
 
   const viewport = {
+    bodyDisplayMesh: () => display,
     getSelectedBodies: () => [],
     getSelectedFaceIds: () => selected,
     faceIdToBodyId: (f: number) => FACES[f]?.body ?? null,
@@ -180,6 +186,9 @@ function rig() {
     glyphModels,
     glyphCalls,
     handlers: () => handlers!,
+    showDisplay: (m: DisplayMesh | null) => {
+      display = m;
+    },
     pickAt: (p: typeof pick) => {
       pick = p;
     },
@@ -384,17 +393,38 @@ describe("stress panel flow", () => {
     await run;
     expect(usePanelsStore().stress!.running).toBe(false);
     expect(usePanelsStore().stress!.result?.rows.find((x) => x.k === "Safety factor")?.v).toBe("12.5");
-    // One engine triangle is drawn two levels finer, sixteen triangles, over the engine's own range.
-    const drawn = refineSurface(reply.surface!, 2);
+    // With no display mesh for the body the engine's triangle is drawn as sent, over the engine's own range.
     expect(r.overlays.at(-1)).toEqual({
       bodyId: "b1",
-      positions: drawn.positions,
-      indices: drawn.indices,
-      values: drawn.values,
+      positions: Float32Array.from([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+      indices: Uint32Array.from([0, 1, 2]),
+      values: Float32Array.from([1, 4, 2]),
       range: { min: 1, max: 4 },
       colours: true,
     });
-    expect(drawn.indices.length / 3).toBe(16);
+  });
+
+  it("paints the body's own display mesh, split finer, with the engine's values at its corners", async () => {
+    const r = rig();
+    setUp(r);
+    // The engine triangle as the viewport tessellated it, global face 7 being the body's local face 0.
+    r.showDisplay({
+      positions: Float32Array.from([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+      indices: Uint32Array.from([0, 1, 2]),
+      faceIds: Int32Array.from([7]),
+      faceStart: 7,
+    });
+    const run = r.ui.runStress();
+    r.settle({ ok: true, result: reply });
+    await run;
+    const o = r.overlays.at(-1) as { positions: Float32Array; indices: Uint32Array; values: Float32Array };
+    expect(o.indices.length / 3).toBeGreaterThan(1);
+    const corner = (p: Vec3) => {
+      for (let v = 0; v < o.positions.length / 3; v++)
+        if ([0, 1, 2].every((k) => o.positions[v * 3 + k] === p[k])) return Math.round(o.values[v]! * 1e4) / 1e4;
+      return null;
+    };
+    expect([corner([0, 0, 0]), corner([1, 0, 0]), corner([0, 1, 0])]).toEqual([1, 4, 2]);
   });
 
   it("cancels by its own request id and stays quiet about it", async () => {
@@ -815,7 +845,7 @@ describe("the deformed shape and the probe", () => {
     // The scale is the engine mesh's; the drawn shape bends by the refined displacement.
     expect(auto).toBe(autoDeformScale(moving.surface!.positions, moving.surface!.displacement!));
     expect(r.overlays.at(-1)).toMatchObject({
-      displacement: refineSurface(moving.surface!, 2).displacement,
+      displacement: Float32Array.from(moving.surface!.displacement!),
       scale: auto,
     });
     r.ui.setStressDeformation(1);
@@ -850,13 +880,14 @@ describe("the deformed shape and the probe", () => {
     await deformed(r);
     const p = usePanelsStore();
     r.ui.setStressProbe(true);
-    const hit = { tri: 13, weights: [0.25, 0.25, 0.5] as Vec3, point: [0, 0, 0] as Vec3 };
+    const hit = { tri: 0, weights: [0.25, 0.25, 0.5] as Vec3, point: [0, 0, 0] as Vec3 };
     r.handlers().pinProbe(hit);
     const label = p.stress!.pins[0]!.label;
     r.ui.setStressDeformation(37.5);
     expect(p.stress!.pins.map((x) => ({ tri: x.tri, weights: x.weights, label: x.label }))).toEqual([
-      { tri: 13, weights: [0.25, 0.25, 0.5], label },
+      { tri: 0, weights: [0.25, 0.25, 0.5], label },
     ]);
+    expect(r.handlers().probeLabel({ ...hit, tri: 13 }), "a triangle the drawing does not have").toBeNull();
   });
 
   it("animates on frames until the panel closes", async () => {
@@ -893,14 +924,16 @@ describe("the deformed shape and the probe", () => {
     r.ui.setStressProbe(true);
     expect(p.stress!.probe).toBe(true);
     expect(r.glyphCalls).toContain("probe true");
-    // A hit on the drawn mesh reads the engine's surface: at an engine vertex its own values, between them the
-    // engine's interpolation in the engine triangle the drawn one lies in.
-    const drawn = refineSurface(moving.surface!, 2);
-    const corner = drawnCorner(drawn, 1)!;
+    // A hit on the drawn mesh reads the engine's surface where its rest point lies: at an engine vertex its own
+    // values, between them the engine's interpolation.
+    const drawn = asSent(moving.surface!);
+    const corner = { tri: 0, weights: [0, 1, 0] as Vec3 };
     const hit = { ...corner, point: [100, 0, -2] as Vec3 };
     expect(r.handlers().probeLabel(hit)).toBe("4 MPa, 2 mm");
-    const inner = { tri: 9, weights: [0.2, 0.5, 0.3] as Vec3, point: [0, 0, 0] as Vec3 };
-    const at = engineHit(drawn, inner.tri, inner.weights)!;
+    const inner = { tri: 0, weights: [0.2, 0.5, 0.3] as Vec3, point: [0, 0, 0] as Vec3 };
+    const at = readAt(drawn, locator(moving.surface!), inner.tri, inner.weights)!;
+    expect(at.tri).toBe(0);
+    expect(at.weights.map((w) => Math.round(w * 1e5) / 1e5)).toEqual([0.2, 0.5, 0.3]);
     expect(r.handlers().probeLabel(inner)).toBe(probeLabel(probeValues(moving.surface!, at.tri, at.weights)!, "mm"));
     r.handlers().pinProbe(hit);
     expect(p.stress!.pins.map((x) => x.label)).toEqual(["4 MPa, 2 mm"]);
@@ -1413,12 +1446,14 @@ describe("the weakest spot", () => {
     await run;
   }
 
-  it("is pinned at the drawn corner of the vertex nearest the peak, with the safety factor", async () => {
+  it("is pinned at the drawn point nearest the peak, with the safety factor", async () => {
     const r = rig();
     setUp(r);
     await ran(r, bent);
-    const corner = drawnCorner(refineSurface(bent.surface!, 2), 1)!;
-    expect(r.weakSpots.at(-1)).toEqual({ ...corner, label: "Weakest, at least 3.3x safe" });
+    const spot = weakSpot(asSent(bent.surface!), [100.2, 0.1, -0.05], 2)!;
+    expect(spot.tri).toBe(0);
+    expect(spot.weights[1]).toBeGreaterThan(0.99);
+    expect(r.weakSpots.at(-1)).toEqual({ ...spot, label: "Weakest, at least 3.3x safe" });
   });
 
   it("stays through the colours and shape switches, goes on a new Run and a model change, moves with a new peak", async () => {
@@ -1437,8 +1472,9 @@ describe("the weakest spot", () => {
     const moved = { ...bent, safetyFactor: null, maxVonMises: { value: 4, at: [2.5, 9.5, 0.5] as Vec3, face: 2 } };
     r.settle({ ok: true, result: moved });
     await run;
-    const corner = drawnCorner(refineSurface(bent.surface!, 2), 2)!;
-    expect(r.weakSpots.at(-1)).toEqual({ ...corner, label: "Weakest" });
+    const spot = weakSpot(asSent(bent.surface!), [2.5, 9.5, 0.5], 2)!;
+    expect(spot.weights[2]).toBeGreaterThan(0.9);
+    expect(r.weakSpots.at(-1)).toEqual({ ...spot, label: "Weakest" });
     r.editDoc();
     r.rebuild(FIRST);
     expect(r.weakSpots.at(-1)).toBeNull();
@@ -1470,7 +1506,7 @@ describe("the colours and the deformed shape, each with its own switch", () => {
     r.settle({ ok: true, result: leaning });
     await run;
     const p = usePanelsStore();
-    const drawn = refineSurface(leaning.surface!, 2);
+    const drawn = asSent(leaning.surface!);
     const still = {
       bodyId: "b1",
       positions: drawn.positions,

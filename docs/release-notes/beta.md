@@ -20,6 +20,7 @@
 
 **Inspect**
 - Stress has a Set up and a Results tab, a plain verdict, play and pause, and Escape backs out one step at a time.
+- The stress colours are drawn on the part itself, with its sharp edges and round fillets, and the solver refines its mesh where the stress is highest.
 - A section stays on while you work, and is saved with the document.
 
 **Render**
