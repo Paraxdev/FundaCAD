@@ -821,6 +821,21 @@ inline void bo_plane_frame(double ox, double oy, double oz, double xx, double xy
   for (int i = 0; i < 12; ++i) out[i] = v[i];
 }
 
+// Note: in OCCT 7.8 GTransform of a B-spline face that carries a triangulation returns a face with no surface,
+// only the old mesh, placed wrong when the body has a location. That face draws away from its edges and the next
+// GTransform of it throws. The viewer meshes every body, so a meshed input is scaled from a copy without its mesh.
+inline TopoDS_Shape bo_gtransform(const TopoDS_Shape &s, const gp_GTrsf &g) {
+  bool meshed = false;
+  for (TopExp_Explorer ex(s, TopAbs_FACE); ex.More() && !meshed; ex.Next()) {
+    TopLoc_Location loc;
+    meshed = !BRep_Tool::Triangulation(TopoDS::Face(ex.Current()), loc).IsNull();
+  }
+  TopoDS_Shape src = meshed ? BRepBuilderAPI_Copy(s, true, false).Shape() : s;
+  TopoDS_Shape out = BRepBuilderAPI_GTransform(src, g, true).Shape();
+  BRepTools::Clean(out);
+  return out;
+}
+
 inline BoShape bo_scaled(const TopoDS_Shape &s, double fx, double fy, double fz, double ax,
                          double ay, double az, bool uniform) {
   BO_GUARD(
@@ -835,10 +850,7 @@ inline BoShape bo_scaled(const TopoDS_Shape &s, double fx, double fy, double fz,
       gp_GTrsf g;
       g.SetValue(1, 1, fx); g.SetValue(2, 2, fy); g.SetValue(3, 3, fz);
       g.SetValue(1, 4, ax * (1 - fx)); g.SetValue(2, 4, ay * (1 - fy)); g.SetValue(3, 4, az * (1 - fz));
-      BRepBuilderAPI_GTransform tr(s, g, true);
-      TopoDS_Shape out = tr.Shape();
-      BRepTools::Clean(out);
-      return bo_own(out);)
+      return bo_own(bo_gtransform(s, g));)
 }
 
 inline BoShape bo_mirrored(const TopoDS_Shape &s, double ox, double oy, double oz, double nx,
