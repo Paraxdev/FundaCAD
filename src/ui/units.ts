@@ -123,6 +123,14 @@ export function niceGridStep(roughMm: number): number {
   return current === "in" ? niceInchStep(roughMm) : niceStep(roughMm);
 }
 
+/** Minor cells per major grid line. Inch fractions take four, so the majors land on the next round fraction or whole
+ *  inch (1/16 to 1/4, 1/4 to 1, 1/2 to 2 in). Whole inch steps run 1/2/5 per decade like metric and keep five. */
+export function gridMajorEvery(stepMm: number): number {
+  if (current !== "in") return 5;
+  const inches = stepMm / FACTOR.in;
+  return INCH_FRACTION_STEPS.some((f) => Math.abs(inches / f - 1) < 1e-9) ? 4 : 5;
+}
+
 /** Snap a value to a step, then strip float fuzz so it reads as a clean number
  *  (e.g. 0.30000001 → 0.3). */
 export function snap(v: number, step: number): number {

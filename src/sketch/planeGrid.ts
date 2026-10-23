@@ -2,7 +2,7 @@
 // Spacing comes from niceStep at ~64px like the ground grid, and the extent is in screenfuls, not mm.
 
 import * as THREE from "three";
-import { niceGridStep } from "../ui/units";
+import { gridMajorEvery, niceGridStep } from "../ui/units";
 import type { SketchPlane } from "./plane";
 
 /** Target size of one minor cell on screen. Matches AdaptiveGrid. */
@@ -50,7 +50,13 @@ export interface GridLines {
 
 /** Lines sit at absolute multiples of `step`, keeping the majors pinned to the sketch origin however the view
  *  wanders. Each is one segment with both ends OUTSIDE the asked square, so no line end is ever visible. */
-export function gridLines(cx: number, cy: number, step: number, reach: number): GridLines {
+export function gridLines(
+  cx: number,
+  cy: number,
+  step: number,
+  reach: number,
+  every: number = gridMajorEvery(step),
+): GridLines {
   const out: GridLines = { minor: [], major: [] };
   if (!(step > 0) || !(reach > 0) || !Number.isFinite(step) || !Number.isFinite(reach)) return out;
   if (!Number.isFinite(cx) || !Number.isFinite(cy)) return out;
@@ -61,7 +67,7 @@ export function gridLines(cx: number, cy: number, step: number, reach: number): 
   const j1 = Math.ceil((cy + reach) / step);
   if (i1 - i0 + 1 > MAX_LINES || j1 - j0 + 1 > MAX_LINES) return out;
 
-  const isMajor = (i: number) => ((i % GRID_MAJOR_EVERY) + GRID_MAJOR_EVERY) % GRID_MAJOR_EVERY === 0;
+  const isMajor = (i: number) => ((i % every) + every) % every === 0;
   const xLo = i0 * step;
   const xHi = i1 * step;
   const yLo = j0 * step;
