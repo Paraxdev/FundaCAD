@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { DocumentStore } from "../../src/document/store";
 import type { GeometryBackend } from "../../src/geometry/client";
+import type { Feature } from "../../src/types";
 
 const host = vi.hoisted(() => ({
   reads: [] as { path: string; release: (text: string) => void }[],
@@ -44,7 +45,7 @@ vi.mock("../../src/io/thumbnails", () => ({
 
 const docText = (param: string) => JSON.stringify({ version: 9, parameters: { [param]: 1 }, features: [] });
 
-function setup() {
+function setup(features: Feature[] = []) {
   const geometry = {
     async rebuild() {
       return { ok: false, error: { message: "stub" } };
@@ -55,7 +56,7 @@ function setup() {
     },
     connected: true,
   } as unknown as GeometryBackend;
-  const store = new DocumentStore(geometry, { parameters: {}, features: [] });
+  const store = new DocumentStore(geometry, { parameters: {}, features });
   store.markSaved("D:/work/Bracket.funda");
   return { store };
 }
@@ -210,5 +211,47 @@ describe("a document still being read when the open one changes", () => {
       asked: ["Bracket.funda changed while Gear.funda was read. Discard those changes and open Gear.funda?"],
     });
     await opensNextCleanly(store);
+  });
+
+  // A derived commit (a projection refresh, a measured field) is not a change the user made while it read.
+  it("asks only for a user edit made while it read, not for a derived commit", async () => {
+    const { openDocumentAtPath } = await import("../../src/io/files");
+    const box = { id: "box1", type: "box", width: 12.5, depth: 7.25, height: 3.5 } as unknown as Feature;
+    for (const userEdit of [false, true]) {
+      host.reads = [];
+      host.asked = [];
+      host.answer = "cancel";
+      const { store } = setup([box]);
+      store.setParam("width", 30);
+      await vi.waitFor(() => expect(store.dirty).toBe(true));
+      const p = openDocumentAtPath(store, "D:/work/Gear.funda");
+      const read = await reading("D:/work/Gear.funda");
+      store.deriveFeature("box1", { depth: 9.75 } as Partial<Feature>);
+      store.deriveFeature("box1", { height: 4.125 } as Partial<Feature>);
+      if (userEdit) store.setParam("depth", 17);
+      await vi.waitFor(() => expect(store.document.parameters.depth).toBe(userEdit ? 17 : undefined));
+      read.release(docText("gear"));
+      expect({ outcome: await p, ...state(store) }).toEqual(
+        userEdit
+          ? {
+              outcome: "dropped",
+              parameters: { width: 30, depth: 17 },
+              path: "D:/work/Bracket.funda",
+              dirty: true,
+              toasts: [],
+              asked: [expect.stringContaining("changed while Gear.funda was read")],
+            }
+          : {
+              outcome: "ok",
+              parameters: { gear: 1 },
+              path: "D:/work/Gear.funda",
+              dirty: false,
+              toasts: [],
+              asked: [],
+            },
+      );
+      host.answer = "discard";
+      await opensNextCleanly(store);
+    }
   });
 });
