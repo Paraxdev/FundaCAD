@@ -280,3 +280,44 @@ async fn an_edit_is_not_answered_from_ids_the_app_kept_from_before_sharing_was_t
     assert!(!host.applied[..2].contains(&host.applied[2]), "a new id repeated an old one: {:?}", host.applied);
     assert_eq!(host.feature_names(), vec!["from-the-app".to_string(), "from-the-agent".to_string()]);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_doc_open_the_app_refused_leaves_doc_save_on_the_file_it_saved_to_before() {
+    let engine = RealEngine::start();
+    let mut host = Host::new(engine.socket().await);
+    host.importing = true;
+    host.tick().await;
+    let dir = tempfile::Builder::new().prefix("live-refused-open-").tempdir().unwrap();
+    let mine = dir.path().join("mine.funda");
+    let theirs = dir.path().join("theirs.funda");
+    let theirs_bytes = serde_json::to_vec(&a_document(3, "theirs")).unwrap();
+    std::fs::write(&theirs, &theirs_bytes).unwrap();
+    let env = engine.mcp_env("auto", true);
+    let open = json!({"path": theirs.to_string_lossy()});
+
+    // Never saved: the refused open leaves no path behind, so a bare save asks for one.
+    let fresh = Mcp::start(&env, dir.path());
+    let (fresh, opened) = while_pumping(fresh, &mut host, "doc_open", open.clone(), 5.0).await;
+    let (_fresh, bare) = while_pumping(fresh, &mut host, "doc_save", json!({}), 5.0).await;
+    assert!(opened.is_error, "{}", opened.text);
+    assert!(bare.is_error && bare.text.contains("No path given"), "{}", bare.text);
+    assert_eq!(std::fs::read(&theirs).unwrap(), theirs_bytes);
+
+    // Saved once: the refused open keeps the earlier path.
+    let mcp = Mcp::start(&env, dir.path());
+    let (mcp, first) = while_pumping(mcp, &mut host, "doc_save", json!({"path": mine.to_string_lossy()}), 5.0).await;
+    let (mcp, opened) = while_pumping(mcp, &mut host, "doc_open", open.clone(), 5.0).await;
+    let (mcp, bare) = while_pumping(mcp, &mut host, "doc_save", json!({}), 5.0).await;
+    assert!(!first.is_error, "{}", first.text);
+    assert!(opened.is_error, "{}", opened.text);
+    assert!(!bare.is_error && bare.text.contains("mine.funda"), "{}", bare.text);
+    assert_eq!(std::fs::read(&theirs).unwrap(), theirs_bytes);
+
+    // The control: an open the app adopts moves the save path to the opened file.
+    host.importing = false;
+    let (mcp, opened) = while_pumping(mcp, &mut host, "doc_open", open, 5.0).await;
+    let (_mcp, bare) = while_pumping(mcp, &mut host, "doc_save", json!({}), 5.0).await;
+    assert!(!opened.is_error, "{}", opened.text);
+    assert_eq!(host.feature_names(), vec!["theirs".to_string(); 3]);
+    assert!(!bare.is_error && bare.text.contains("theirs.funda"), "{}", bare.text);
+}
