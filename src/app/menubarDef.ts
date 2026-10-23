@@ -10,6 +10,8 @@ import { ideaUrl, REPO_URL } from "../ui/reportText";
 import type { MenuDef } from "../ui/menu";
 import { beforeUpdate } from "./unsavedGuard";
 import { PRODUCT_NAME } from "./channel";
+import { allCommands } from "../ui/commands";
+import { analysisFlags } from "../ui/railActive";
 import type { Engine } from "./engine";
 
 const ISSUES_URL = `${REPO_URL}/issues`;
@@ -30,6 +32,25 @@ function withContributions(menus: MenuDef[]): MenuDef[] {
     else out.push(fresh);
   }
   return out;
+}
+
+const ANALYSIS_ITEMS = [
+  { id: "draft-analysis", label: "Overhang" },
+  { id: "zebra", label: "Zebra" },
+  { id: "curvature", label: "Curvature" },
+  { id: "component-colors", label: "Body Colors" },
+];
+
+function viewItems(e: Engine): MenuDef["items"] {
+  const view = allCommands()
+    .filter((c) => c.group === "View")
+    .map((c) => ({ label: c.label, ...(c.key ? { shortcut: c.key } : {}), onClick: () => e.handleAction(c.id) }));
+  const analysis = ANALYSIS_ITEMS.map((a) => ({
+    label: a.label,
+    checked: () => analysisFlags(e.viewport)[a.id] === true,
+    onClick: () => e.handleAction(a.id),
+  }));
+  return [...view, { separator: true, label: "" }, ...analysis];
 }
 
 /** `disabled` and `checked` are thunks, re-evaluated every time a menu opens. */
@@ -97,6 +118,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
         },
       ],
     },
+    { label: "View", items: viewItems(e) },
     {
       label: "Help",
       items: [
