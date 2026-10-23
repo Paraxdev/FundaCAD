@@ -31,6 +31,8 @@ export interface BodyMesh {
   baseColors: Float32Array;
   /** Bumped on every rewrite of baseColors, so the traced copy knows to follow. */
   baseVersion?: number;
+  /** What the base colours were last painted from, so a repaint skips a body whose inputs are the same. */
+  paintKey?: string | undefined;
   // faceId to LOCAL triangle indices, so hover, select and measure touch one face without scanning the body.
   faceTriangles: Map<number, number[]>;
   /** A read-only reference scan: picked as a whole body, never face by face. */
