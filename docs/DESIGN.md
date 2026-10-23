@@ -805,7 +805,7 @@ defineEmits<{ close: [] }>();
 | `.measure-v` | the value, `font-variant-numeric: tabular-nums` |
 | `.measure-divider` | 1px `--line`, margin `var(--s-2) 0` |
 | `.measure-select`, `.measure-number` | small inline fields; `.measure-number` 60px, right aligned |
-| `.measure-hint` | 10px, `--text-mute`, `margin-top: var(--s-2)`. The last line, saying how the panel closes ("Esc to close", "Esc to exit", "toggle Draft to close") |
+| `.measure-hint` | 10px, `--text-mute`, `margin-top: var(--s-2)`. The last line, saying how the panel closes ("Esc to close", "Esc to exit", "Overhang again to close") |
 | Actions | `.btn`, or `.btn.btn-primary` for the one main action; a 28px icon action is `.float-card-close` ([7.1](#71-floating-card-float-card)) |
 
 Do not add a head with its own padding: the shell padding is the inset, and a
