@@ -88,6 +88,9 @@ export function shrinkFactor(width: number, maxWidth: number): number {
   return f;
 }
 
+/** 2^(e - 136): a mantissa m decodes to (m + 0.5) times it, the Radiance convention, which encodeRgbe inverts. */
+const RGBE_SCALE = Float32Array.from({ length: 256 }, (_, e) => (e === 0 ? 0 : 2 ** (e - 136)));
+
 /** Averages `f` x `f` blocks of a source fed a row at a time, the edge rows and columns that do not fill a block
  *  folded into the last one. */
 class BoxShrink {
@@ -96,6 +99,8 @@ class BoxShrink {
   private readonly data: Float32Array;
   private readonly cols: Float32Array;
   private readonly rows: Float32Array;
+  /** Each source column's offset into an output row. */
+  private readonly at: Int32Array;
   constructor(
     srcWidth: number,
     srcHeight: number,
@@ -108,6 +113,21 @@ class BoxShrink {
     this.rows = new Float32Array(this.height);
     for (let x = 0; x < srcWidth; x++) this.cols[this.col(x)] = this.cols[this.col(x)]! + 1;
     for (let y = 0; y < srcHeight; y++) this.rows[this.row(y)] = this.rows[this.row(y)]! + 1;
+    this.at = Int32Array.from({ length: srcWidth }, (_, x) => this.col(x) * 4);
+  }
+  /** One source row of Radiance pixels, RGBE bytes. */
+  addRgbeRow(y: number, scan: Uint8Array) {
+    const o = this.row(y) * this.width * 4;
+    const d = this.data;
+    const at = this.at;
+    for (let x = 0, n = at.length; x < n; x++) {
+      const e = RGBE_SCALE[scan[x * 4 + 3]!]!;
+      if (e === 0) continue;
+      const i = o + at[x]!;
+      d[i] = d[i]! + (scan[x * 4]! + 0.5) * e;
+      d[i + 1] = d[i + 1]! + (scan[x * 4 + 1]! + 0.5) * e;
+      d[i + 2] = d[i + 2]! + (scan[x * 4 + 2]! + 0.5) * e;
+    }
   }
   private col(x: number): number {
     return Math.min(this.width - 1, Math.floor(x / this.f));
@@ -121,7 +141,7 @@ class BoxShrink {
     const d = this.data;
     const n = rgb.length / 3;
     for (let x = 0; x < n; x++) {
-      const i = o + this.col(x) * 4;
+      const i = o + this.at[x]!;
       d[i] = d[i]! + rgb[x * 3]!;
       d[i + 1] = d[i + 1]! + rgb[x * 3 + 1]!;
       d[i + 2] = d[i + 2]! + rgb[x * 3 + 2]!;
@@ -142,9 +162,6 @@ class BoxShrink {
     return { width: this.width, height: this.height, data: d };
   }
 }
-
-/** 2^(e - 136): a mantissa m decodes to (m + 0.5) times it, the Radiance convention, which encodeRgbe inverts. */
-const RGBE_SCALE = Float32Array.from({ length: 256 }, (_, e) => (e === 0 ? 0 : 2 ** (e - 136)));
 
 const yieldToPage = () => new Promise<void>((r) => setTimeout(r, 0));
 
@@ -177,7 +194,6 @@ async function decodeRadiance(bytes: Uint8Array, name: string, maxWidth: number)
   refuseEmpty(name, width, height);
   const shrink = new BoxShrink(width, height, shrinkFactor(width, maxWidth));
   const scan = new Uint8Array(width * 4);
-  const rgb = new Float32Array(width * 3);
   const short = () => new HdrRefusal(`${name} ends before its last scanline.`);
   const broken = () => new HdrRefusal(`${name} has a broken scanline.`);
   let lastYield = performance.now();
@@ -222,13 +238,7 @@ async function decodeRadiance(bytes: Uint8Array, name: string, maxWidth: number)
         shift = 0;
       }
     }
-    for (let x = 0; x < width; x++) {
-      const e = RGBE_SCALE[scan[x * 4 + 3]!]!;
-      rgb[x * 3] = e === 0 ? 0 : (scan[x * 4]! + 0.5) * e;
-      rgb[x * 3 + 1] = e === 0 ? 0 : (scan[x * 4 + 1]! + 0.5) * e;
-      rgb[x * 3 + 2] = e === 0 ? 0 : (scan[x * 4 + 2]! + 0.5) * e;
-    }
-    shrink.addRow(y, rgb);
+    shrink.addRgbeRow(y, scan);
     if (performance.now() - lastYield > 50) {
       await yieldToPage();
       lastYield = performance.now();
@@ -429,10 +439,10 @@ export function sphereThumbnailPixels(img: HdrImage, size: number): Uint8Clamped
           // The ball's normal faces the viewer (-Y); a view ray along +Y reflects off it.
           const ny = -Math.sqrt(1 - r2);
           const d = 2 * ny;
-          sample((-d * nx) / radius, 1 - d * ny, (-d * nz) / radius, 0.9, c);
+          sample((-d * nx) / radius, 1 - d * ny, (-d * nz) / radius, 0.55 + 0.45 * Math.sqrt(1 - r2), c);
         } else {
           const n = Math.hypot(nx, 1.4, nz);
-          sample(nx / n, 1.4 / n, nz / n, 0.55, c);
+          sample(nx / n, 1.4 / n, nz / n, 0.35, c);
         }
         for (let k = 0; k < 3; k++) acc[k] = acc[k]! + c[k]! / (1 + c[k]!) / 4;
       }
