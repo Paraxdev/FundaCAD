@@ -250,3 +250,33 @@ async fn an_edit_the_app_applied_is_reported_applied_even_if_another_document_op
     assert!(refused[0]["message"].as_str().unwrap_or_default().contains("doc_get"), "{st}");
     assert_eq!(host.feature_names(), vec!["the-user-moved-it".to_string(), "the-user-moved-it".to_string()]);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_edit_is_not_answered_from_ids_the_app_kept_from_before_sharing_was_turned_off_and_on() {
+    let engine = RealEngine::start();
+    let mut host = Host::new(engine.socket().await);
+    host.tick().await;
+    let first =
+        host.call("session_propose", json!({"document": a_document(2, "before"), "baseRevision": host.rev})).await;
+    let old = first["result"]["proposal"].as_str().expect("a proposal id").to_string();
+    // The app keeps its list through stop() and start(), and the first id after a release used to repeat this one.
+    host.applied = vec!["p-stale".into(), old.clone()];
+    assert_eq!(host.call("session_release", json!({})).await["result"]["ok"], true);
+    host.tick().await;
+
+    let mcp = Mcp::start(&engine.mcp_env("auto", true), &std::env::temp_dir());
+    let (_mcp, out) = while_pumping(
+        mcp,
+        &mut host,
+        "feature_add",
+        json!({"feature": {"id": "s1", "type": "sphere", "radius": 4.5, "name": "from-the-agent"}}),
+        6.0,
+    )
+    .await;
+
+    assert!(!out.is_error, "a stale refusal answered the new edit: {}", out.text);
+    assert!(out.text.contains("applied in FundaCAD"), "{}", out.text);
+    assert_eq!(host.applied.len(), 3, "{:?}", host.applied);
+    assert!(!host.applied[..2].contains(&host.applied[2]), "a new id repeated an old one: {:?}", host.applied);
+    assert_eq!(host.feature_names(), vec!["from-the-app".to_string(), "from-the-agent".to_string()]);
+}

@@ -206,7 +206,8 @@ fn the_live_session_answers_while_a_job_runs_and_follows_the_connection() {
         json!({"id": 3, "op": "session_propose", "document": doc, "baseRevision": 12,
             "note": "feature_add: cylinder", "name": "an assistant"}),
     );
-    assert_eq!(p["result"], json!({"ok": true, "proposal": "p1", "revision": 12}));
+    assert_eq!(p["result"], json!({"ok": true, "proposal": p["result"]["proposal"], "revision": 12}));
+    assert!(p["result"]["proposal"].as_str().is_some_and(|id| id.starts_with('p') && id.ends_with("-1")), "{p}");
     let stale = call(&agent, &agent_rx, json!({"id": 4, "op": "session_propose", "document": doc, "baseRevision": 11}));
     assert_eq!(stale["result"]["reason"], "stale");
     let got = call(&app, &app_rx, json!({"id": 5, "op": "session_host", "document": doc, "revision": 12}));

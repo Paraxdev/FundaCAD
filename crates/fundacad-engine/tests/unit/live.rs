@@ -25,6 +25,11 @@ fn publish(s: &mut LiveSession, host: &str, d: Value, rev: i64) -> Value {
     s.publish(host, d, rev, Value::Null, Value::Null)
 }
 
+/// The `n` of a `p<nonce>-<n>` proposal id.
+fn seq(id: &Value) -> u64 {
+    id.as_str().and_then(|s| s.rsplit_once('-')).and_then(|(_, n)| n.parse().ok()).unwrap_or(0)
+}
+
 fn features(v: &Value) -> usize {
     v["features"].as_array().map_or(0, Vec::len)
 }
@@ -55,7 +60,7 @@ fn a_guest_cannot_install_a_document_only_offer_one() {
     publish(&mut s, APP, doc(3), 7);
     let r = s.propose(AGENT, doc(99), 7, Some(&json!("add a hole")), None);
     assert_eq!(r["ok"], true);
-    assert_eq!(r["proposal"], "p1");
+    assert_eq!(seq(&r["proposal"]), 1);
     let st = s.state(Some(OTHER), None);
     assert_eq!(features(&st["document"]), 3);
     assert_eq!(st["revision"], 7);
@@ -180,7 +185,8 @@ fn the_wire_ops_read_revisions_like_python() {
     assert_eq!(r, json!({"ok": true, "guests": [], "proposals": []}));
     let r =
         session_reply(&mut s, "c2", "session_propose", &req(json!({"document": doc(2), "baseRevision": 3}))).unwrap();
-    assert_eq!(r, json!({"ok": true, "proposal": "p1", "revision": 3}));
+    assert_eq!(r, json!({"ok": true, "proposal": r["proposal"], "revision": 3}));
+    assert_eq!(seq(&r["proposal"]), 1);
     let st = session_reply(&mut s, "c2", "session_state", &req(json!({}))).unwrap();
     assert_eq!(st["guests"], json!(["c2"]));
     assert!(session_reply(&mut s, "c2", "session_nope", &req(json!({}))).is_err());
@@ -367,15 +373,20 @@ fn a_proposal_the_app_moved_past_before_collecting_it_is_refused_not_handed_over
     let st = s.state(Some(AGENT), None);
     let refused = st["status"]["refused"].as_array().cloned().unwrap();
     assert_eq!((handed["proposals"].clone(), features(&st["document"]), refused.len()), (json!([]), 5, 3));
-    assert_eq!(refused.iter().map(|r| r["id"].clone()).collect::<Vec<_>>(), [json!("p0"), json!("p1"), json!("p2")]);
+    assert_eq!(refused.iter().map(|r| seq(&r["id"])).collect::<Vec<_>>(), [0, 1, 2]);
+    assert_eq!(refused[0]["id"], "p0");
     let why = refused[1]["message"].as_str().unwrap();
     assert!(why.contains("7 -> 8") && why.contains("doc_get") && why.contains("nothing was applied"), "{why}");
 
     // Control: one made against the revision now published is handed over and refused nothing more.
     s.propose(AGENT, doc(9), 8, None, None);
     let fresh = publish(&mut s, APP, doc(5), 8);
-    assert_eq!(fresh["proposals"].as_array().map(|p| (p.len(), p[0]["id"].clone())), Some((1, json!("p3"))));
-    assert_eq!(refused_ids(&mut s), [json!("p1"), json!("p2")], "a host status of null keeps the engine's refusals");
+    assert_eq!(fresh["proposals"].as_array().map(|p| (p.len(), seq(&p[0]["id"]))), Some((1, 3)));
+    assert_eq!(
+        refused_ids(&mut s).iter().map(seq).collect::<Vec<_>>(),
+        [1, 2],
+        "a host status of null keeps the engine's refusals"
+    );
 }
 
 #[test]
@@ -389,9 +400,34 @@ fn the_engines_refusals_are_capped_and_go_with_the_document() {
         s.publish_doc(APP, json!("doc-a"), doc(1), rev, Value::Null, json!({"canEdit": true}));
     }
     let ids = refused_ids(&mut s);
-    assert_eq!((ids.len(), ids[0].clone(), ids[15].clone()), (MAX_REFUSED, json!("p2"), json!("p17")));
+    assert_eq!((ids.len(), seq(&ids[0]), seq(&ids[15])), (MAX_REFUSED, 2, 17));
     assert_eq!(s.state(None, None)["status"]["canEdit"], true);
 
     s.publish_doc(APP, json!("doc-b"), doc(1), rev + 1, Value::Null, json!({"canEdit": true}));
     assert_eq!(s.state(None, None)["status"], json!({"canEdit": true}), "doc-a's refusals reached doc-b");
+}
+
+fn proposal_ids(s: &mut LiveSession, rev: i64, count: usize) -> Vec<String> {
+    publish(s, APP, doc(2), rev);
+    (0..count).map(|_| s.propose(AGENT, doc(3), rev, None, None)["proposal"].as_str().unwrap().to_string()).collect()
+}
+
+#[test]
+fn proposal_ids_never_repeat_across_a_release_or_a_new_session() {
+    let (mut s, _) = session();
+    let mut ids = proposal_ids(&mut s, 7, 3);
+    assert_eq!(s.release(APP)["ok"], true);
+    ids.extend(proposal_ids(&mut s, 7, 1));
+    assert_eq!(s.release(APP)["ok"], true);
+    assert_eq!(proposal_ids(&mut s, 7, 0), Vec::<String>::new());
+    ids.extend(proposal_ids(&mut s, 12, 2));
+    // A restarted engine builds a fresh session, an app that kept its lists must not see these ids again.
+    ids.extend(proposal_ids(&mut session().0, 7, 3));
+    ids.extend(proposal_ids(&mut LiveSession::monotonic(), 7, 2));
+    ids.extend(proposal_ids(&mut LiveSession::monotonic(), 7, 2));
+    let mut unique = ids.clone();
+    unique.sort();
+    unique.dedup();
+    assert_eq!((ids.len(), unique.len()), (13, 13), "{ids:?}");
+    assert!(ids.iter().all(|id| id.starts_with('p')), "{ids:?}");
 }
