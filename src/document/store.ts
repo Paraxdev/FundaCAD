@@ -537,6 +537,10 @@ export class DocumentStore {
   private edits = 0;
   private userEdits = 0;
   private keepClean = 0;
+  // Steps below the undo top, counted from the document's start, and that count at the last save or open. Null when
+  // no undo or redo can bring back what the file holds.
+  private undoAt = 0;
+  private savedAt: number | null = 0;
   private rollback: number | null = null; // # of active features (null = all); timeline marker
   private suppressed = new Set<string>(); // feature ids skipped on rebuild (suppress)
   private sketchVis = new Overlay<boolean>("sketchVisibility", isBool); // explicit per-sketch show/hide overrides
@@ -918,6 +922,7 @@ export class DocumentStore {
   markSaved(path: string, clean = true) {
     this.path = path;
     this.pathlessName = null;
+    this.savedAt = clean ? this.undoAt : null;
     if (clean) this.isDirty = false;
     this.emitMeta();
   }
@@ -925,6 +930,7 @@ export class DocumentStore {
   markOpenedWithoutPath(name: string) {
     this.path = null;
     this.pathlessName = name;
+    this.savedAt = this.undoAt;
     this.isDirty = false;
     this.emitMeta();
   }
@@ -1008,6 +1014,7 @@ export class DocumentStore {
     this.carriedSections = [];
     this.path = null;
     this.pathlessName = null;
+    this.savedAt = this.undoAt;
     this.isDirty = false;
     this.dropToolPreview();
     this.discardModelForReplacement();
@@ -1037,6 +1044,11 @@ export class DocumentStore {
     if (this.isDirty || this.keepClean) return;
     this.isDirty = true;
     this.emitMeta();
+  }
+  // A change no undo step holds survives every undo and redo, so none of them gets back to what the file holds.
+  private markUnstepped() {
+    if (!this.keepClean) this.savedAt = null;
+    this.markDirty();
   }
 
   // Counts every change, saved or not, so a caller can tell nothing else changed between two of its own steps.
@@ -1076,6 +1088,7 @@ export class DocumentStore {
   }
   // Back to what the last save or open left, as when a cancelled import was the only change.
   markClean() {
+    this.savedAt = this.undoAt;
     if (!this.isDirty) return;
     this.isDirty = false;
     this.emitMeta();
@@ -1086,15 +1099,38 @@ export class DocumentStore {
 
   private collecting: UndoEntry[] | null = null;
 
+  // A new step on top of the undo stack. The redo steps it drops are gone, the saved point with them when it was there.
+  private stepped() {
+    if (this.savedAt !== null && this.savedAt > this.undoAt) this.savedAt = null;
+    const keep = this.keepClean > 0 && this.savedAt === this.undoAt;
+    this.undoAt++;
+    if (keep) this.savedAt = this.undoAt;
+  }
+  // The top step itself grew (a coalesced drag, a joined step), so its position no longer holds what was saved there.
+  private grewTop() {
+    if (this.keepClean || this.savedAt === null || this.savedAt < this.undoAt) return;
+    this.savedAt = null;
+  }
+  private settleDirty() {
+    const dirty = this.savedAt !== this.undoAt;
+    if (dirty === this.isDirty) return;
+    this.isDirty = dirty;
+    this.emitMeta();
+  }
+
   private pushUndo(): UndoEntry & { kind: "doc" } {
     const entry = { kind: "doc" as const, doc: clone(this.doc) };
     if (this.collecting) this.collecting.push(entry);
-    else if (this.undoStack.push(entry) > DocumentStore.UNDO_CAP) this.undoStack.shift();
+    else {
+      this.stepped();
+      if (this.undoStack.push(entry) > DocumentStore.UNDO_CAP) this.undoStack.shift();
+    }
     return entry;
   }
 
   private pushOverlayUndo(entry: { undo: () => void; redo: () => void }) {
     if (this.collecting) return void this.collecting.push({ kind: "overlay", ...entry });
+    this.stepped();
     this.undoStack.push({ kind: "overlay", ...entry });
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
     this.redoStack = [];
@@ -1365,6 +1401,8 @@ export class DocumentStore {
     forgetStaleJoins(joins, this.doc);
     canonicalMirrorPlanes(this.doc);
     if (this.doc.paramDefs) this.applyRecompute(params.recompute(this.doc));
+    // A derived commit at the saved point goes into the next step's snapshot, so undoing back there keeps it.
+    if (!byUser && !this.keepClean && this.savedAt === this.undoAt) this.savedAt = null;
     this.markDirty(byUser);
     this.emitDoc();
     this.scheduleRebuild(immediate);
@@ -1799,16 +1837,20 @@ export class DocumentStore {
   private undoStep() {
     const prev = this.undoStack.pop();
     if (!prev) return;
+    this.undoAt--;
     this.emitRewind();
     this.redoStack.push(this.applyUndoEntry(prev, "undo"));
+    this.settleDirty();
   }
   redo() {
     if (this.st.historyHeld) return;
     const next = this.redoStack.pop();
     if (!next) return;
+    this.undoAt++;
     this.emitRewind();
     this.undoStack.push(this.applyUndoEntry(next, "redo"));
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
+    this.settleDirty();
   }
   private applyUndoEntry(e: UndoEntry, way: "undo" | "redo"): UndoEntry {
     if (e.kind === "overlay") {
@@ -1844,9 +1886,11 @@ export class DocumentStore {
     }
     if (!taken.length) return join;
     if (join) {
+      this.grewTop();
       this.undoStack[this.undoStack.length - 1] = { kind: "group", entries: [top!, ...taken] };
       return true;
     }
+    this.stepped();
     this.undoStack.push(taken.length > 1 ? { kind: "group", entries: taken } : taken[0]!);
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
     this.redoStack = [];
@@ -2078,7 +2122,7 @@ export class DocumentStore {
     const next = study ? structuredClone(study) : null;
     if (JSON.stringify(next) === JSON.stringify(this.stress)) return;
     this.stress = next;
-    this.markDirty();
+    this.markUnstepped();
   }
 
   get documentEnvironment(): Readonly<DocEnvironment> | null {
@@ -2089,7 +2133,7 @@ export class DocumentStore {
   setDocumentEnvironment(env: DocEnvironment | null, opts: { quiet?: boolean } = {}) {
     if (sameDocEnvironment(env, this.environment)) return;
     this.environment = env ? { ...env, settings: { ...env.settings } } : null;
-    if (!opts.quiet) this.markDirty();
+    if (!opts.quiet) this.markUnstepped();
   }
 
   get sectionView(): Readonly<SectionView> | null {
@@ -2103,7 +2147,7 @@ export class DocumentStore {
     if (sameSectionView(read, this.cut)) return;
     this.cut = read;
     if (read) delete this.unreadSections.sectionView;
-    this.markDirty();
+    this.markUnstepped();
     this.emitSectionView();
   }
 
@@ -2149,7 +2193,7 @@ export class DocumentStore {
     const next: ElementDef = { id, name: label };
     if (under !== null) next.parent = under;
     this.elements = [...this.elements, next];
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
     return id;
   }
@@ -2159,7 +2203,7 @@ export class DocumentStore {
     const n = name.trim();
     if (!n) return;
     this.elements = this.elements.map((e) => (e.id === id ? { ...e, name: n } : e));
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2171,7 +2215,7 @@ export class DocumentStore {
     // `reparented` returns untouched entries by identity and refuses an illegal move by returning them all.
     if (next.every((e, i) => e === this.elements[i])) return;
     this.elements = next;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2185,7 +2229,7 @@ export class DocumentStore {
       if (movedTo === null) this.bodyElement.delete(body);
       else this.bodyElement.set(body, movedTo);
     }
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2209,7 +2253,7 @@ export class DocumentStore {
       changed = true;
     }
     if (!changed) return;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2231,6 +2275,7 @@ export class DocumentStore {
     const c = this.refCoalesce;
     if (opts.coalesce && c && c.key === opts.coalesce && this.undoStack[this.undoStack.length - 1] === c.top) {
       c.after.v = after;
+      this.grewTop();
       this.redoStack = [];
     } else {
       const before = this.refImages;
@@ -2378,7 +2423,7 @@ export class DocumentStore {
     };
     next.id = uniqueId(m?.id && !taken.has(m.id) ? m.id : slugId(name), taken);
     this.materials = [...this.materials, next];
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
     return next.id;
   }
@@ -2424,7 +2469,7 @@ export class DocumentStore {
       return merged;
     });
     if (!changed) return;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2439,14 +2484,14 @@ export class DocumentStore {
     if (!this.materials.some((m) => gone.has(m.id))) return;
     this.materials = this.materials.filter((m) => !gone.has(m.id));
     this.dropMaterialUses(gone);
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
   // Keeps them in the library.
   unassignMaterials(ids: Iterable<string>) {
     if (!this.dropMaterialUses(new Set(ids))) return;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2484,7 +2529,7 @@ export class DocumentStore {
     }
     if (!added && !updated) return { added, updated };
     this.materials = next;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
     return { added, updated };
   }
@@ -2504,7 +2549,7 @@ export class DocumentStore {
     if (this.importColorSource(featureId) === source) return;
     if (source === "faces") this.importColors.set(featureId, "faces");
     else this.importColors.delete(featureId);
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
 
@@ -2555,7 +2600,7 @@ export class DocumentStore {
     const cur = this.palette[i];
     if (!cur) return;
     this.palette[i] = { ...cur, ...patch };
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
   // One emit. Undefined entries leave that slot untouched.
@@ -2567,7 +2612,7 @@ export class DocumentStore {
       changed = true;
     });
     if (!changed) return;
-    this.markDirty();
+    this.markUnstepped();
     this.emitBuild();
   }
   // Undefined means the default shade.
@@ -2637,7 +2682,7 @@ export class DocumentStore {
     const v = commitVersion(repo, this.workingSnapshot(), message, Date.now());
     if (!v) return null;
     this.repo = repo;
-    this.markDirty();
+    this.markUnstepped();
     this.emitMeta();
     return v;
   }
@@ -2746,7 +2791,10 @@ export class DocumentStore {
     }
     this.emitRewind();
     const replaced = replace ? { entry: this.pushUndo(), before: this.stateSections(true) } : null;
-    if (!replaced) this.undoStack = [];
+    if (!replaced) {
+      this.undoStack = [];
+      this.savedAt = null;
+    }
     this.redoStack = [];
     this.rearmProjectionValve(); // valve state must never cross documents
     // The versions are the open file's history, which a replacing load's copy may lack or hold stale or foreign.
