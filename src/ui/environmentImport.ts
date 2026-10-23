@@ -59,6 +59,15 @@ function setActiveSaved(next: { id: string | null; name: string } | null) {
   libraryChanged();
 }
 
+// activeSaved is not stored, so after a reload the look is matched back to the saved entry that names its panorama.
+export async function adoptSavedForCurrentLook(library = envLibrary()): Promise<void> {
+  if (activeSaved) return;
+  const env = renderPrefs().environment;
+  if (!hdrHashOf(env)) return;
+  const entry = (await library.list().catch(() => [])).find((e) => e.settings.environment === env);
+  if (entry && !activeSaved) setActiveSaved({ id: entry.id, name: entry.name });
+}
+
 export function chooseBuiltInEnvironment(store: DocumentStore | null, id: EnvSettings["environment"]) {
   setActiveSaved(null);
   setRenderPref("environment", id);
