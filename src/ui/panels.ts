@@ -52,6 +52,7 @@ import {
 import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } from "../types";
 import { isVec3 } from "../document/stressStudy";
 import { bodyLabels, labelledBodies } from "./bodyLabels";
+import { EDGE_HOVER_COLOR } from "../viewport/highlight";
 import * as THREE from "three";
 
 type StressOverlay = NonNullable<Parameters<Viewport["setStressOverlay"]>[0]>;
@@ -79,6 +80,8 @@ export interface PanelsDeps {
    *  rig) the panel works with nothing drawn but the face tints. */
   stressGlyphs?: (handlers: StressGlyphHandlers) => StressGlyphsApi;
 }
+
+const INTERFERENCE_MARKS = "interference";
 
 export function createPanels(deps: PanelsDeps) {
   const { store, viewport, geometry, hasBody, setStatus } = deps;
@@ -146,6 +149,7 @@ export function createPanels(deps: PanelsDeps) {
       return;
     }
     setStatus("Checking interference…", "");
+    viewport.setFaceMarks(null, INTERFERENCE_MARKS);
     const res = await geometry.interference(store.document, clearanceMm);
     if (!res.ok) {
       setStatus(`Interference check failed: ${res.message ?? "error"}`, "error");
@@ -197,6 +201,15 @@ export function createPanels(deps: PanelsDeps) {
   function closeInterference() {
     panels.interference = null;
     viewport.setInterferenceOverlay(null, null);
+    viewport.setFaceMarks(null, INTERFERENCE_MARKS);
+  }
+
+  // A tint rather than a selection, which would bring up the Move gizmo and the selection toolbar over the pair.
+  function highlightInterference(a: string, b: string) {
+    const faces = (store.buildState.result?.bodies ?? [])
+      .filter((x) => x.id === a || x.id === b)
+      .flatMap((x) => Array.from({ length: x.faceCount }, (_, i) => x.faceStart + i));
+    viewport.setFaceMarks(faces.length ? [{ faceIds: faces, color: EDGE_HOVER_COLOR }] : null, INTERFERENCE_MARKS);
   }
 
   // Stress: a linear static analysis of one body, its setup edited in the panel and saved with the document.
@@ -1150,6 +1163,7 @@ export function createPanels(deps: PanelsDeps) {
     closeProperties,
     showInterference,
     closeInterference,
+    highlightInterference,
     showOverhangSettings,
     closeOverhangSettings,
     showStress,
