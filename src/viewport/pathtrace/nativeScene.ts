@@ -133,7 +133,7 @@ export interface NativeLight {
 
 export function nativeLights(rig: LightRig): NativeLight[] {
   return rig.lights
-    .filter((l) => !l.realtimeOnly)
+    .filter((l) => !l.realtimeOnly && l.intensity > 0)
     .slice(0, NATIVE_LIGHTS)
     .map((l) => ({
       direction: [l.direction[0], l.direction[1], l.direction[2]],
@@ -157,6 +157,8 @@ export function nativeLook(look: TraceLook) {
     exposure: look.exposure,
     background: bg,
     environmentBehind: !!look.environmentBehind,
+    ...(look.bounces !== undefined ? { bounces: look.bounces } : {}),
+    ...(look.firefly !== undefined ? { firefly: look.firefly } : {}),
     ...(look.rig ? { lights: nativeLights(look.rig), ground: nativeGround(look.rig) } : {}),
   };
 }

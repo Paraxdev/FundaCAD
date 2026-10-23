@@ -247,6 +247,14 @@ describe("native look", () => {
     expect(nativeLook(look(1, more)).lights).toHaveLength(4);
   });
 
+  it("an imported panorama sends no lights and its brightness as the environment's", () => {
+    const hash = "fedcba9876543210";
+    const rig = buildLightRig({ ...DEFAULT_RENDER, environment: `hdr:${hash}`, brightness: 1.7 }, (h) => h === hash);
+    const l = nativeLook({ ...look(1.7), rig });
+    expect(l.lights).toEqual([]);
+    expect(l.envIntensity).toBe(1.7);
+  });
+
   it("a look without a rig sends no lights", () => {
     const { rig: _, ...bare } = look(1);
     expect(nativeLook(bare).lights).toBeUndefined();

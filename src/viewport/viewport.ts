@@ -64,6 +64,7 @@ import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
 import { sameRelief } from "./relief";
 import type { ReliefMap } from "../plugins/contrib";
 import { hdrHashOf, onRenderPrefsChange, renderPrefs, setRenderPref } from "../ui/renderPrefs";
+import { experimentalPrefs, onExperimentalPrefsChange } from "../ui/experimentalPrefs";
 import { isSoftwareRenderer } from "../ui/glassBlur";
 import { resolveRealtimeQuality, type QualityTier } from "./realtimePipeline";
 import {
@@ -407,6 +408,10 @@ export class Viewport {
       if (this.viewModeNow === "pathtraced") chooseViewMode("realtime", this.renderTier);
       this.onTraceNotice?.(why);
     };
+    onExperimentalPrefsChange(() => {
+      this.trace.refreshLimits();
+      this.requestRender();
+    });
     watchPower((p) => {
       this.power = p;
       this.trace.setPower(p);
@@ -1162,6 +1167,8 @@ export class Viewport {
       environment,
       environmentBehind: !!envKey && p.envBackground && hdrHashOf(p.environment) !== null,
       brightness: p.brightness,
+      bounces: experimentalPrefs().bounces,
+      firefly: experimentalPrefs().firefly,
       toneMapping: r.toneMapping,
       exposure: r.toneMappingExposure,
       rig: this.lightRig(),

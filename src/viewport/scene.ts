@@ -37,7 +37,7 @@ import type { ViewMode } from "../ui/renderPrefs";
 import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
 import { buildRoom, disposeRoom } from "./environments";
 import { hdrHashOf, type Environment, type RenderPrefs } from "../ui/renderPrefs";
-import { hdrRoom, heldHdr } from "./hdrRegistry";
+import { hdrRoom, heldHdr, setHdrTextureMax } from "./hdrRegistry";
 import { themeColor } from "./themeColors";
 import { buildLightRig, environmentKeyOf, lightOf, scaled } from "./lightRig";
 import { OriginTriad } from "./originTriad";
@@ -266,6 +266,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   // filmic shift hue, so a part's assigned colour would no longer be drawn as itself.
   renderer.toneMapping = THREE.NeutralToneMapping;
   recordGpu(renderer);
+  setHdrTextureMax(renderer.capabilities.maxTextureSize);
 
   const scene = new THREE.Scene();
 
@@ -308,7 +309,8 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const post = new PostChain(renderer, scene, potatoOn);
 
   const frameShadows = () => {
-    key.castShadow = renderPrefs().shadows;
+    // With no key light (an imported panorama lights alone) a shadow map would still darken the catcher.
+    key.castShadow = renderPrefs().shadows && key.intensity > 0;
     if (key.castShadow) frameKeyShadow(key, modelGroup);
   };
 

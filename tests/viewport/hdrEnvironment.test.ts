@@ -1,4 +1,4 @@
-// Imported HDR panoramas: decoded and refused by size, downscaled without losing
+// Imported HDR panoramas: decoded at any size, downscaled without losing
 // the sun, kept in a named library, and carried inside the document.
 
 import { describe, expect, it } from "vitest";
@@ -9,8 +9,10 @@ import {
   encodeRgbe,
   HdrRefusal,
   inflateBase64,
-  MAX_HDR_FILE_BYTES,
+  MAX_EXR_DECODE_BYTES,
   radianceSize,
+  shrinkFactor,
+  sphereThumbnailPixels,
   type HdrImage,
 } from "../../src/viewport/hdrImage";
 import { createEnvLibrary, memoryKv } from "../../src/ui/environmentLibrary";
@@ -24,7 +26,7 @@ import {
 } from "../../src/ui/renderPrefs";
 import { DocumentStore } from "../../src/document/store";
 import { normalizeDocEnvironment } from "../../src/document/docEnvironment";
-import { documentEnvironmentFor, storeHdr } from "../../src/ui/environmentImport";
+import { documentEnvironmentFor, keptSmallerNote, storeHdr } from "../../src/ui/environmentImport";
 import type { CadDocument } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 
@@ -58,6 +60,91 @@ function irradiance(img: HdrImage): number {
   return (s / (img.width * img.height)) * Math.PI * 2;
 }
 
+/** A Radiance file in the run length form, each channel one run per 127 texels of the same value. */
+function rleRadiance(w: number, h: number, at: (x: number, y: number) => number): Uint8Array {
+  const head = new TextEncoder().encode(`#?RADIANCE
+FORMAT=32-bit_rle_rgbe
+
+-Y ${h} +X ${w}
+`);
+  const chunks: Uint8Array[] = [head];
+  const px = new Uint8Array(w * 4);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const v = at(x, y);
+      const e = Math.floor(Math.log2(v)) + 1;
+      const m = Math.min(255, Math.floor((v * 256) / 2 ** e));
+      px.set([m, m, m, e + 128], x * 4);
+    }
+    const out: number[] = [2, 2, w >> 8, w & 255];
+    for (let c = 0; c < 4; c++) {
+      let x = 0;
+      while (x < w) {
+        let n = 1;
+        while (x + n < w && n < 127 && px[(x + n) * 4 + c] === px[x * 4 + c]) n++;
+        out.push(128 + n, px[x * 4 + c]!);
+        x += n;
+      }
+    }
+    chunks.push(Uint8Array.from(out));
+  }
+  const size = chunks.reduce((n, c) => n + c.length, 0);
+  const file = new Uint8Array(size);
+  let o = 0;
+  for (const c of chunks) {
+    file.set(c, o);
+    o += c.length;
+  }
+  return file;
+}
+
+/** An OpenEXR header naming a `w` x `h` data window and nothing after it. */
+function exrHeader(w: number, h: number): Uint8Array {
+  const enc = new TextEncoder();
+  const box = new DataView(new ArrayBuffer(20));
+  box.setInt32(0, 16, true);
+  box.setInt32(12, w - 1, true);
+  box.setInt32(16, h - 1, true);
+  return new Uint8Array([
+    0x76,
+    0x2f,
+    0x31,
+    0x01,
+    2,
+    0,
+    0,
+    0,
+    ...enc.encode("dataWindow\0box2i\0"),
+    ...new Uint8Array(box.buffer),
+    0,
+  ]);
+}
+
+describe("the tile picture of a panorama", () => {
+  it("is a chrome ball showing the sky above and the ground below", () => {
+    const w = 64,
+      h = 32;
+    const data = new Float32Array(w * h * 4);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) data.set(y < h / 2 ? [0.2, 0.3, 1.2, 1] : [0.1, 0.6, 0.05, 1], (y * w + x) * 4);
+    const size = 64;
+    const px = sphereThumbnailPixels({ width: w, height: h, data }, size);
+    expect(px.length).toBe(size * size * 4);
+    const at = (x: number, y: number) => Array.from(px.subarray((y * size + x) * 4, (y * size + x) * 4 + 4));
+    const top = at(size / 2, Math.round(size * 0.2));
+    const bottom = at(size / 2, Math.round(size * 0.8));
+    expect(top[2]!).toBeGreaterThan(top[1]!);
+    expect(bottom[1]!).toBeGreaterThan(bottom[2]!);
+    expect(top[3]).toBe(255);
+  });
+
+  it("is exposed for the panorama, so a dim one is not black", () => {
+    const data = new Float32Array(8 * 4 * 4).fill(0.001);
+    const px = sphereThumbnailPixels({ width: 8, height: 4, data }, 16);
+    expect(px[(8 * 16 + 8) * 4]!).toBeGreaterThan(60);
+  });
+});
+
 const settings = (over: Partial<EnvSettings> = {}): EnvSettings => ({ ...envSettingsOf(DEFAULT_RENDER), ...over });
 
 describe("decoding an HDR", () => {
@@ -70,17 +157,62 @@ describe("decoding an HDR", () => {
     expect(irradiance(got) / irradiance(img)).toBeCloseTo(1, 2);
   });
 
-  it("refuses an oversized panorama from its header, before reading pixels", async () => {
-    const head = new TextEncoder().encode("#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 4500 +X 9000\n");
-    expect(radianceSize(head)).toEqual({ width: 9000, height: 4500 });
-    await expect(decodeHdr(head, "big.hdr")).rejects.toThrow(/9000 x 4500.*8192/);
+  it("reads a 16k run length encoded panorama straight to the stored width, its sun's light kept", async () => {
+    const w = 16384,
+      h = 8192;
+    const file = rleRadiance(w, h, (x, y) =>
+      Math.abs(x - w * 0.3) < 8 && Math.abs(y - h * 0.25) < 8 ? 20000 : y < h / 2 ? 0.8 : 0.2,
+    );
+    expect(radianceSize(file)).toEqual({ width: w, height: h });
+    const got = await decodeHdr(file, "huge.hdr", 2048);
+    expect([got.width, got.height]).toEqual([2048, 1024]);
+    expect(got.data.length).toBe(2048 * 1024 * 4);
+    const sunTexels = 16 * 16;
+    const want = (0.8 + 0.2) / 2 + ((20000 - 0.8) * sunTexels) / (w * h);
+    let mean = 0;
+    for (let i = 0; i < got.data.length; i += 4) mean += got.data[i]!;
+    mean /= got.width * got.height;
+    // RGBE keeps 8 bits of mantissa, which is all the difference left.
+    expect(Math.abs(mean / want - 1)).toBeLessThan(0.01);
+  }, 60000);
+
+  it("reads the old run length form and a flat file alike", async () => {
+    const img = sky(16, 4);
+    const flat = encodeRgbe(img);
+    const head = flat.subarray(0, flat.length - 16 * 4 * 4);
+    // Row 0 as one pixel and a repeat of it fifteen times.
+    const first = flat.subarray(head.length, head.length + 4);
+    const rest = flat.subarray(head.length + 16 * 4);
+    const old = new Uint8Array([...head, ...first, 1, 1, 1, 15, ...rest]);
+    const a = await decodeHdr(old, "old.hdr");
+    const b = await decodeHdr(flat, "flat.hdr");
+    expect(Array.from(a.data)).toEqual(Array.from(b.data));
   });
 
-  it("refuses a file over the size limit and names both sizes", async () => {
-    const big = new Uint8Array(MAX_HDR_FILE_BYTES + 1);
-    const err = await decodeHdr(big, "huge.exr").catch((e: unknown) => e);
+  it("round trips the Radiance mantissa, so storing a stored file again keeps its bytes", async () => {
+    const once = encodeRgbe(await decodeHdr(encodeRgbe(sky(64, 32)), "a.hdr"));
+    const twice = encodeRgbe(await decodeHdr(once, "b.hdr"));
+    expect(twice).toEqual(once);
+  });
+
+  it("halves in powers of two, as downscaleEquirect does", () => {
+    expect(shrinkFactor(16384, 2048)).toBe(8);
+    expect(shrinkFactor(2048, 2048)).toBe(1);
+    expect(shrinkFactor(3000, 2048)).toBe(2);
+  });
+
+  it("refuses an OpenEXR too big to unpack whole and says how to bring it in", async () => {
+    const side = Math.ceil(Math.sqrt(MAX_EXR_DECODE_BYTES / 8)) + 2;
+    const err = await decodeHdr(exrHeader(side, side), "giant.exr").catch((e: unknown) => e);
     expect(err).toBeInstanceOf(HdrRefusal);
-    expect((err as Error).message).toBe("huge.exr is 64 MB, an environment file can be 64 MB at most.");
+    expect((err as Error).message).toMatch(/giant\.exr is \d+ x \d+.*\.hdr/);
+  });
+
+  it("says when a panorama is kept smaller than its file, and nothing when it is not", () => {
+    expect(keptSmallerNote("a.hdr", { width: 16384, height: 8192 }, { width: 2048, height: 1024 })).toBe(
+      "a.hdr is 16384 x 8192. It lights the scene from a 2048 x 1024 copy, the size kept for lighting and saved documents (Preferences, Experimental).",
+    );
+    expect(keptSmallerNote("a.hdr", { width: 2048, height: 1024 }, { width: 2048, height: 1024 })).toBeNull();
   });
 
   it("refuses something that is not an HDR with a readable message", async () => {
