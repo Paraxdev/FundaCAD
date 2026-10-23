@@ -1185,8 +1185,10 @@ export class DocumentStore {
   }
   // A doc edit landing during the solves (a doc_set, an import, a restore) would be overwritten by the
   // stale draft, so the cascade redoes on top of it; past 3 tries it lands unsolved rather than never.
+  // An assistant's doc_open or doc_new put another document in place, so the change is dropped with the old one.
   private async commitWithCascade(fn: (d: CadDocument) => void, immediate: boolean): Promise<void> {
     const st = this.st;
+    const swaps = this.untitledSwaps;
     for (let tries = 1; ; tries++) {
       const seen = this.docEdits;
       const draft = clone(this.doc);
@@ -1203,7 +1205,7 @@ export class DocumentStore {
           const solved = await this.solveConstrainedSketch(f, draft.parameters);
           if (solved) f.entities = solved;
         }
-      if (!st.session.alive) return;
+      if (!st.session.alive || this.untitledSwaps !== swaps) return;
       if (this.docEdits !== seen) continue;
       this.mutate((d) => {
         d.parameters = draft.parameters;
