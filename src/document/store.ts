@@ -2674,10 +2674,16 @@ export class DocumentStore {
   // undoable step that leaves the versions alone. `untitled` also drops the file path, so Save asks where.
   load(json: string, opts: { replace?: boolean; untitled?: boolean } = {}) {
     if (!opts.replace || !opts.untitled) return this.loadAs(json, opts.replace ? "edit" : "open");
+    this.untitledLoads++;
     this.undoAsOne(() => {
       this.loadAs(json, "edit");
       this.dropPathUndoably();
     });
+  }
+  private untitledLoads = 0;
+  // A save in flight wrote the file of what was on screen before this moved, so it must not name the new document.
+  get untitledLoadCount(): number {
+    return this.untitledLoads;
   }
   private dropPathUndoably() {
     const was = { path: this.path, name: this.pathlessName };
