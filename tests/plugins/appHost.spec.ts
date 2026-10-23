@@ -234,7 +234,9 @@ describe("what this host cannot do yet, it refuses by name", () => {
       // this a test of the ORDER of the op table: feature_remove comes before
       // feature_move, and would delete the feature the move then looked for.
       const s = store();
-      const b = broker(appHost({ store: s, plugin: "A.Test", featureTypes: () => ["box"] }));
+      const b = broker(
+        appHost({ store: s, plugin: "A.Test", featureTypes: () => ["box"], mayDiscard: async () => true }),
+      );
       await b.call("feature_add", { feature: { type: "box", id: "f1" } });
       await b.call("param_set", { name: "p", expr: 1 });
       const r = await b.call(op, {

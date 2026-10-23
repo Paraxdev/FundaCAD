@@ -120,12 +120,12 @@ describe("autosave around the end of a document", () => {
     await idle();
     store.addFeature(box("a-rib", 9.75, 2.5));
     await vi.advanceTimersByTimeAsync(12_000);
-    await appHost({ store }).perform("doc_new", {});
+    await appHost({ store, mayDiscard: async () => true }).perform("doc_new", {});
     await settle();
     const afterEdits = onDisk();
     loadB(store);
     await idle();
-    await appHost({ store }).perform("doc_new", {});
+    await appHost({ store, mayDiscard: async () => true }).perform("doc_new", {});
     await idle();
     expect({ afterEdits, disk: onDisk(), writes: host.writes }).toEqual({
       afterEdits: { [slotFor(A)]: ["a-plate", "a-rib"] },
