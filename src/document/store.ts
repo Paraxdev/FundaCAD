@@ -2667,9 +2667,24 @@ export class DocumentStore {
     return JSON.stringify(this.toObject(), null, 2);
   }
   // `replace` puts another state of the same document in place (a version, an assistant's or a plugin's edit), as one
-  // undoable step that leaves the versions alone.
-  load(json: string, opts: { replace?: boolean } = {}) {
-    this.loadAs(json, opts.replace ? "edit" : "open");
+  // undoable step that leaves the versions alone. `untitled` also drops the file path, so Save asks where.
+  load(json: string, opts: { replace?: boolean; untitled?: boolean } = {}) {
+    if (!opts.replace || !opts.untitled) return this.loadAs(json, opts.replace ? "edit" : "open");
+    this.undoAsOne(() => {
+      this.loadAs(json, "edit");
+      this.dropPathUndoably();
+    });
+  }
+  private dropPathUndoably() {
+    const was = { path: this.path, name: this.pathlessName };
+    if (was.path === null && was.name === null) return;
+    const put = (path: string | null, name: string | null) => {
+      this.path = path;
+      this.pathlessName = name;
+      this.emitMeta();
+    };
+    put(null, null);
+    this.pushOverlayUndo({ undo: () => put(was.path, was.name), redo: () => put(null, null) });
   }
   // A version is always the open document, even one sharing no feature with what is on screen.
   private loadAs(json: string, as: "open" | "edit" | "version") {
@@ -2836,7 +2851,7 @@ export class DocumentStore {
     if (vis) this.isolate = vis[1];
     return back;
   }
-  loadDocument(doc: CadDocument, opts: { replace?: boolean } = {}) {
+  loadDocument(doc: CadDocument, opts: { replace?: boolean; untitled?: boolean } = {}) {
     this.load(JSON.stringify(doc), opts);
   }
 
