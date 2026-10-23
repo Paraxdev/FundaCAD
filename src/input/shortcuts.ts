@@ -1,7 +1,8 @@
 // Single source of truth for shortcuts: keymap.ts dispatches from this table, commands.ts reads its hints and
 // the `?` HUD renders it, so they cannot disagree.
 
-import { useUiStore } from "../stores/ui";
+import { useDialogStore } from "../stores/dialogs";
+import { readSetting } from "../ui/storedSetting";
 import { DEFAULT_BINDINGS, bindingRows, pointerBindings } from "../viewport/navigator/bindings";
 
 export interface Shortcut {
@@ -100,7 +101,7 @@ export const SHORTCUTS: Shortcut[] = [
 /** How a shortcut is written for a human ("Shift+H", "Ctrl+U", "Home"), shared by keyHint and the `?` HUD so
  *  the cheat sheet cannot advertise a key nothing binds. */
 export function formatShortcut(s: Shortcut): string {
-  const name = s.key.replace(/^arrow/, "");
+  const name = s.key === " " ? "space" : s.key.replace(/^arrow/, "");
   const k = name.length === 1 ? name.toUpperCase() : name.charAt(0).toUpperCase() + name.slice(1);
   return `${s.ctrl ? "Ctrl+" : ""}${s.shift ? "Shift+" : ""}${k}`;
 }
@@ -162,8 +163,55 @@ const RESERVED: Record<string, string> = {
   "?": "This sheet",
 };
 
+/** A table row with the identity a person's own key is stored against: action, context and the key it ships with. */
+export interface ShortcutRow extends Shortcut {
+  id: string;
+}
+
+/** A key a person chose for one row. An empty key unbinds the row. */
+export interface UserShortcut {
+  id: string;
+  key: string;
+  shift?: boolean;
+  ctrl?: boolean;
+}
+
+const USER_KEY = "fundacad.keymap";
+
 let overrides: ShortcutOverride[] = [];
-let active: Shortcut[] | null = null;
+let userOverrides: UserShortcut[] = readUserShortcuts();
+let active: ShortcutRow[] | null = null;
+const listeners = new Set<() => void>();
+
+function readUserShortcuts(): UserShortcut[] {
+  try {
+    const v: unknown = JSON.parse(readSetting(USER_KEY) ?? "[]");
+    if (!Array.isArray(v)) return [];
+    return v.flatMap((u: Partial<UserShortcut>) =>
+      u && typeof u.id === "string" && typeof u.key === "string"
+        ? [{ id: u.id, key: u.key, ...(u.shift ? { shift: true } : {}), ...(u.ctrl ? { ctrl: true } : {}) }]
+        : [],
+    );
+  } catch {
+    return [];
+  }
+}
+
+function userChanged() {
+  active = null;
+  try {
+    localStorage.setItem(USER_KEY, JSON.stringify(userOverrides));
+  } catch {
+    /* ignore */
+  }
+  for (const fn of listeners) fn();
+}
+
+/** Called after the table moves, whoever moved it: a person or a plugin's keymap. */
+export function onShortcutsChange(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
 
 const sameCombo = (a: Pick<Shortcut, "key" | "shift" | "ctrl">, b: Pick<Shortcut, "key" | "shift" | "ctrl">) =>
   a.key === b.key && !!a.shift === !!b.shift && !!a.ctrl === !!b.ctrl;
@@ -173,26 +221,53 @@ const combo = (o: { key: string; shift?: boolean; ctrl?: boolean }): Pick<Shortc
   ...(o.ctrl ? { ctrl: true } : {}),
 });
 const overlap = (a: Shortcut["context"], b: Shortcut["context"]) => a === b || a === "global" || b === "global";
+const idOf = (s: Shortcut, key = s.key ? formatShortcut(s) : "") => `${s.action}|${s.context}|${key}`;
 
-/** The table with the overrides applied, overridden rows first so a key the
- *  user chose is preferred over the table's own use of it. */
-export function activeShortcuts(): Shortcut[] {
-  if (active) return active;
+/** The table with the plugin's keymap applied and the user's keys not yet. */
+function staged(): ShortcutRow[] {
+  const base: ShortcutRow[] = SHORTCUTS.map((s) => ({ ...s, id: idOf(s) }));
   const moved = new Map(overrides.map((o) => [o.action, o]));
-  const mine: Shortcut[] = [];
+  const mine: ShortcutRow[] = [];
   for (const o of overrides) {
     if (!o.key) continue;
-    const rows = SHORTCUTS.filter((s) => s.action === o.action);
-    const base = rows.length
+    const rows = base.filter((s) => s.action === o.action);
+    const from: ShortcutRow[] = rows.length
       ? rows
-      : [{ action: o.action, context: o.context ?? "global", label: o.label ?? o.action, key: "" } as Shortcut];
-    for (const r of base) {
+      : [
+          {
+            action: o.action,
+            context: o.context ?? "global",
+            label: o.label ?? o.action,
+            key: "",
+            id: idOf({ action: o.action, context: o.context ?? "global" } as Shortcut, ""),
+          },
+        ];
+    for (const r of from) {
       const { shift: _s, ctrl: _c, ...rest } = r;
       mine.push({ ...rest, ...combo(o), context: o.context ?? r.context });
     }
   }
-  active = [...mine, ...SHORTCUTS.filter((s) => !moved.has(s.action))];
-  return active;
+  return [...mine, ...base.filter((s) => !moved.has(s.action))];
+}
+
+/** Every row, an unbound one with an empty key. */
+export function shortcutRows(): ShortcutRow[] {
+  const mine = new Map(userOverrides.map((u) => [u.id, u]));
+  return staged().map((r): ShortcutRow => {
+    const u = mine.get(r.id);
+    if (!u) return r;
+    const { shift: _s, ctrl: _c, ...rest } = r;
+    return { ...rest, ...combo(u) };
+  });
+}
+
+/** The table with the overrides applied, changed rows first so a key a person or plugin chose is preferred over the
+ *  table's own use of it. */
+export function activeShortcuts(): ShortcutRow[] {
+  if (active) return active;
+  const mine = new Set(userOverrides.map((u) => u.id));
+  const rows = shortcutRows().filter((r) => r.key);
+  return (active = [...rows.filter((r) => mine.has(r.id)), ...rows.filter((r) => !mine.has(r.id))]);
 }
 
 export function shortcutOverridden(action: string): boolean {
@@ -237,7 +312,54 @@ export function setShortcutOverrides(
     const p = checkShortcut(o, table);
     if (p) out.push({ action: o.action, problem: p });
   }
+  for (const fn of listeners) fn();
   return out;
+}
+
+/** Why a key cannot go to one row, or null when it can. */
+export function checkRow(
+  id: string,
+  c: { key: string; shift?: boolean; ctrl?: boolean; alt?: boolean },
+): ShortcutProblem | null {
+  if (c.alt) return { refused: "Alt is read by the tools, pick a key without it" };
+  const row = combo(c);
+  const name = formatShortcut({ ...row, action: "", context: "global", label: "" });
+  if (RESERVED[name]) return { reserved: RESERVED[name]! };
+  const ctx = shortcutRows().find((r) => r.id === id)?.context ?? "global";
+  const hit = activeShortcuts().find((s) => s.id !== id && sameCombo(s, row) && overlap(s.context, ctx));
+  return hit ? { conflict: hit } : null;
+}
+
+/** Give one row a key. A conflict is returned and nothing changes, unless `replace` is set, which unbinds the row that
+ *  held the key. Null when the key was taken. */
+export function setUserShortcut(
+  id: string,
+  c: { key: string; shift?: boolean; ctrl?: boolean; alt?: boolean },
+  replace = false,
+): ShortcutProblem | null {
+  const problem = checkRow(id, c);
+  if (problem && !(replace && "conflict" in problem)) return problem;
+  const next = userOverrides.filter((u) => u.id !== id);
+  const shipped = staged().find((r) => r.id === id);
+  if (!shipped || !sameCombo(shipped, combo(c))) next.push({ id, ...combo(c) });
+  if (problem && "conflict" in problem) {
+    const other = (problem.conflict as ShortcutRow).id;
+    userOverrides = [...next.filter((u) => u.id !== other), { id: other, key: "" }];
+  } else {
+    userOverrides = next;
+  }
+  userChanged();
+  return null;
+}
+
+export function resetUserShortcuts(ids?: readonly string[]) {
+  const before = userOverrides.length;
+  userOverrides = ids ? userOverrides.filter((u) => !ids.includes(u.id)) : [];
+  if (userOverrides.length !== before) userChanged();
+}
+
+export function userShortcutIds(): string[] {
+  return userOverrides.map((u) => u.id);
 }
 
 /** Every pair of rows that answer the same key in the same context. */
@@ -254,23 +376,53 @@ export function shortcutConflicts(): [Shortcut, Shortcut][] {
   return out;
 }
 
-// The `?` cheat sheet HUD, generated from the table and dismissed by any key or click.
+// The shortcuts dialog's content, generated from the table so it cannot drift from the dispatcher.
 
-/** One section of the HUD, derived from SHORTCUTS so the cheat sheet cannot drift from the dispatcher. */
+/** One section of the dialog, derived from SHORTCUTS so it cannot drift from the dispatcher. A row with an `id` can be
+ *  changed; one without is fixed. */
 export interface HudGroup {
   name: string;
-  rows: { key: string; label: string; changed?: boolean }[];
+  rows: { key: string; label: string; changed?: boolean; id?: string }[];
 }
 
-/** Pure: the HUD's content. Exported so it is unit-testable without a DOM. */
-export function shortcutHudGroups(): HudGroup[] {
+const CONTEXTS = [
+  ["Model", "model"],
+  ["Sketch", "sketch"],
+  ["Global", "global"],
+] as const;
+
+/** The editable rows of some actions, by context. Empty contexts are left out. */
+export function shortcutGroupsOf(actions: ReadonlySet<string>): HudGroup[] {
+  return contextGroups((s) => actions.has(s.action), false).filter((g) => g.rows.length);
+}
+
+function contextGroups(keep: (s: Shortcut) => boolean, core: boolean): HudGroup[] {
+  const mine = new Set(userOverrides.map((u) => u.id));
+  const fixed = new Set(Object.keys(RESERVED));
+  const shipped = new Set(SHORTCUTS.map((s) => s.action));
+  const order = new Map(SHORTCUTS.map((s, i) => [idOf(s), i]));
+  return CONTEXTS.map(([name, ctx]) => ({
+    name,
+    rows: shortcutRows()
+      .filter((s) => s.context === ctx && keep(s))
+      .sort((a, b) => (order.get(a.id) ?? SHORTCUTS.length) - (order.get(b.id) ?? SHORTCUTS.length))
+      .map((s) => {
+        const user = mine.has(s.id);
+        const changed = user || (core && shipped.has(s.action) && shortcutOverridden(s.action));
+        return {
+          key: s.key ? formatShortcut(s) : "",
+          label: s.label,
+          ...(changed ? { changed: true } : {}),
+          ...(fixed.has(formatShortcut(s)) ? {} : { id: s.id }),
+        };
+      }),
+  }));
+}
+
+/** Pure: the dialog's General content. Exported so it is unit-testable without a DOM. `skip` leaves out actions another
+ *  page shows. */
+export function shortcutHudGroups(skip: ReadonlySet<string> = new Set()): HudGroup[] {
   const fmt = formatShortcut;
-  const byContext = (ctx: Shortcut["context"]) =>
-    activeShortcuts()
-      .filter((s) => s.context === ctx)
-      .map((s) =>
-        shortcutOverridden(s.action) ? { key: fmt(s), label: s.label, changed: true } : { key: fmt(s), label: s.label },
-      );
   const clashes = shortcutConflicts().map(([a, b]) => ({
     key: fmt(a),
     label: `${a.label} and ${b.label} share this key, ${a.label} applies`,
@@ -278,9 +430,7 @@ export function shortcutHudGroups(): HudGroup[] {
   const custom = pointerBindings() !== DEFAULT_BINDINGS;
   return [
     ...(clashes.length ? [{ name: "Conflicts", rows: clashes }] : []),
-    { name: "Model", rows: byContext("model") },
-    { name: "Sketch", rows: byContext("sketch") },
-    { name: "Global", rows: byContext("global") },
+    ...contextGroups((s) => !skip.has(s.action), true),
     {
       name: "Mouse",
       rows: [
@@ -313,8 +463,8 @@ export function shortcutHudGroups(): HudGroup[] {
   ];
 }
 
-/** Toggle the HUD, a facade over stores/ui.ts rendered by components/overlays/ShortcutHud.vue. */
+/** Toggle the shortcuts dialog, a facade over stores/dialogs.ts rendered by components/overlays/ShortcutsDialog.vue. */
 export function toggleShortcutHUD() {
-  const ui = useUiStore();
-  ui.shortcutHudOpen = !ui.shortcutHudOpen;
+  const dialogs = useDialogStore();
+  dialogs.shortcuts = !dialogs.shortcuts;
 }
