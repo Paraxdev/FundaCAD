@@ -1,6 +1,7 @@
 // Assembles a rebuild reply's per-body payloads into one flat RebuildResult. A chunked reply's head frame
 // lists every body, so all offsets are planned before any payload arrives and chunks may land in any order.
 
+import type { EngineTiming } from "../diagnostics/editTiming";
 import type { FaceColorRuns, F32Wire, RebuildResult, U32Wire } from "../types";
 
 // Protocol v2 wire shapes (server.py _rebuild_job / _body_payload). `unchanged` marks a stub for a cached etag.
@@ -57,6 +58,7 @@ export type WireEdgeList = { points: [number, number, number][]; body?: string; 
 export interface WireRebuildResult {
   resync?: true;
   protocol?: 2;
+  timing?: EngineTiming;
   bodies?: WireBody[];
   bbox?: { min: number[]; max: number[] } | null;
   diagnostics?: RebuildResult["diagnostics"];

@@ -5,6 +5,7 @@ pub mod checkpoint;
 pub mod keys;
 pub mod meshes;
 pub mod store;
+pub mod timing;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::{mpsc, Mutex, OnceLock};
@@ -39,6 +40,11 @@ pub struct CacheStats {
     pub mesh_ram_hits: usize,
     pub mesh_disk_hits: usize,
     pub meshed: usize,
+    pub copy: Duration,
+    pub replay: Duration,
+    /// The slowest replayed feature, as its index and time.
+    pub slowest: Option<(usize, Duration)>,
+    pub mesh_time: Duration,
 }
 
 pub struct RebuildCache {
@@ -65,12 +71,16 @@ struct CacheTap<'a> {
     keep_from: usize,
     snaps: Vec<(usize, Snapshot)>,
     replayed: Vec<usize>,
+    slowest: Option<(usize, Duration)>,
     persist: Option<Persist<'a>>,
 }
 
 impl Tap for CacheTap<'_> {
     fn after_feature(&mut self, index: usize, state: &State<'_>, elapsed: Duration) {
         self.replayed.push(index);
+        if self.slowest.is_none_or(|(_, t)| elapsed > t) {
+            self.slowest = Some((index, elapsed));
+        }
         if index >= self.keep_from {
             self.snaps.push((index, state.snapshot()));
         }
@@ -151,6 +161,7 @@ impl RebuildCache {
 
     /// `rebuild_cached`.
     pub fn rebuild(&mut self, doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebuild, Cancelled> {
+        let entered = Instant::now();
         let absent = absent_geometry(raw);
         let keys = self.keys_given(raw, &absent);
         let n = keys.len();
@@ -219,10 +230,12 @@ impl RebuildCache {
             (source == Source::Disk).then(|| resume.as_ref().map(|(at, snap)| (*at, snap.clone()))).flatten();
 
         let began = Instant::now();
+        let copy = began.duration_since(entered);
         let mut tap = CacheTap {
             keep_from: n.saturating_sub(self.window),
             snaps: Vec::new(),
             replayed: Vec::new(),
+            slowest: None,
             persist: self.store.as_ref().filter(|_| n > 0).map(|store| Persist {
                 store,
                 watch,
@@ -290,12 +303,20 @@ impl RebuildCache {
         } else {
             self.stored.clear();
         }
-        let replayed = tap.replayed;
+        let (replayed, slowest) = (tap.replayed, tap.slowest);
         self.proj_quiet = r.projection_updates.is_empty();
         self.ring = ring;
         self.ring_keys = keys;
-        self.stats =
-            CacheStats { source, resumed_at: start, replayed, checkpoints_written: written, ..CacheStats::default() };
+        self.stats = CacheStats {
+            source,
+            resumed_at: start,
+            replayed,
+            checkpoints_written: written,
+            copy,
+            replay: elapsed,
+            slowest,
+            ..CacheStats::default()
+        };
         Ok(r)
     }
 
@@ -344,6 +365,7 @@ impl RebuildCache {
         self.stats.mesh_ram_hits = self.payloads.ram_hits;
         self.stats.mesh_disk_hits = self.payloads.disk_hits;
         self.stats.meshed = self.payloads.meshed;
+        self.stats.mesh_time = self.payloads.mesh_time;
         result
     }
 }

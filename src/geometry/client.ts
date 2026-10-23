@@ -23,6 +23,7 @@ import type {
 } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
+import type { EngineTiming } from "../diagnostics/editTiming";
 import { BUILD_PHASE } from "./buildPhase";
 import { EngineTransport, type GeometryTransport } from "./transport";
 import { blake2b128Hex } from "../document/blake2b";
@@ -314,6 +315,8 @@ export type PrintabilityResult =
 export interface GeometryBackend {
   /** `onId` receives the request id, again if a resync sends it a second time. */
   rebuild(doc: CadDocument, tolerance?: number, onId?: (id: string) => void): Promise<RebuildReply>;
+  /** What the last rebuild's reply weighed and what the engine says its stages took. */
+  lastRebuildCost?(): { engine: EngineTiming | null; replyBytes: number };
   /** Per-glyph 2D outlines for a sketch text entity; the engine owns fonts, so previews match the extruded solid. */
   tessellateText(entity: object, pathEntity?: object): Promise<TextFace[]>;
   /** Project body edges, face boundaries or sketch curves onto a sketch plane. `doc` is the timeline prefix for
@@ -716,7 +719,15 @@ export class Geometry implements GeometryBackend {
     this.outbox = [];
   }
 
+  private replyBytes = 0;
+  private engineTiming: EngineTiming | null = null;
+
+  lastRebuildCost() {
+    return { engine: this.engineTiming, replyBytes: this.replyBytes };
+  }
+
   private onMessage(data: string | ArrayBuffer) {
+    this.replyBytes += typeof data === "string" ? data.length : data.byteLength;
     if (typeof data !== "string") {
       this.handleBinaryReply(data);
       return;
@@ -815,6 +826,7 @@ export class Geometry implements GeometryBackend {
       const prev = this.streams.get(id);
       if (prev) clearTimeout(prev.timer);
       const result = header.result as WireRebuildResult & { manifest?: WireManifestEntry[] };
+      this.engineTiming = result.timing ?? null;
       const manifest = result.manifest ?? [];
       delete result.manifest;
       // Plan the whole reply from the manifest now, so each body draws as soon as its chunk lands, and an unbacked
@@ -1011,6 +1023,8 @@ export class Geometry implements GeometryBackend {
   }
 
   async rebuild(doc: CadDocument, tolerance = 0.1, onId?: (id: string) => void): Promise<RebuildReply> {
+    this.replyBytes = 0;
+    this.engineTiming = null;
     const known: Record<string, string> = {};
     for (const [id, p] of this.bodyMesh) known[id] = p.etag;
 
@@ -1048,6 +1062,7 @@ export class Geometry implements GeometryBackend {
       payload = { document: doc, revision: this.revision + 1 };
       msg = await this.rebuildCall("rebuild", { ...payload, tolerance }, onId);
     }
+    if (msg.ok && msg.result?.timing) this.engineTiming = msg.result.timing;
     if (msg.ok && !msg.result?.resync) {
       this.revision = payload.revision;
       this.lastSent = { features: doc.features.slice(), parameters: pJson, bodyVisibility: vJson, bodyIds: iJson };

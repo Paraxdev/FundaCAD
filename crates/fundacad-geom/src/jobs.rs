@@ -62,6 +62,7 @@ fn rebuild_with(
     watch: &dyn Watch,
     mut cache: Option<&mut RebuildCache>,
 ) -> JobResult {
+    let started = std::time::Instant::now();
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let _cancel = crate::cancel::install(watch.cancel_token());
     let typed: CadDocument = match CadDocument::from_value_lenient(doc) {
@@ -85,8 +86,13 @@ fn rebuild_with(
     }
     watch.phase(fundacad_protocol::build_phase::ASSEMBLING);
     let fields = builder::result_fields(&typed, &r);
+    let mut timing = None;
     let meshed = match cache {
-        Some(c) => JobResult::Mesh(c.mesh(&r, tolerance, known, &mut |done, total| watch.meshing(done, total))),
+        Some(c) => {
+            let m = c.mesh(&r, tolerance, known, &mut |done, total| watch.meshing(done, total));
+            timing = Some(crate::cache::timing::wire(&c.stats, doc, started.elapsed()));
+            JobResult::Mesh(m)
+        }
         None => mesh_result(&r.bodies, tolerance, known, watch),
     };
     watch.phase(fundacad_protocol::build_phase::ASSEMBLING);
@@ -96,6 +102,9 @@ fn rebuild_with(
             let failed = mesh.fields.remove(crate::mesh::PASS_ERRORS);
             let mut merged = fields;
             merged.insert("bbox".into(), bbox);
+            if let Some(t) = timing {
+                merged.insert("timing".into(), t);
+            }
             if let Some(Value::Array(failed)) = failed {
                 add_pass_errors(&mut merged, failed);
             }
