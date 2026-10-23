@@ -149,6 +149,10 @@ fn add_pass_errors(fields: &mut Map<String, Value>, failed: Vec<Value>) {
 }
 
 #[cfg(test)]
+#[path = "jobs_release_tests.rs"]
+mod release_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
@@ -265,13 +269,22 @@ impl Jobs for GeomJobs {
         crate::bench::doing()
     }
 
-    // Note: an abandoned rebuild can still hold the cache, so this never waits for it.
+    // An abandoned job can still hold a cache, so this never waits for it. The memos are this thread's, the job
+    // thread's, and keyed by shape, not by document.
     fn release(&mut self) -> bool {
-        match cache::global().try_lock() {
-            Ok(mut cache) => cache.release(),
-            Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner().release(),
-            Err(std::sync::TryLockError::WouldBlock) => return false,
-        }
-        true
+        crate::kernel::forget_remembered();
+        crate::features::resize::memo::forget();
+        let rebuilt = match cache::global().try_lock() {
+            Ok(mut cache) => {
+                cache.release();
+                true
+            }
+            Err(std::sync::TryLockError::Poisoned(p)) => {
+                p.into_inner().release();
+                true
+            }
+            Err(std::sync::TryLockError::WouldBlock) => false,
+        };
+        crate::inspect::release_locals() && rebuilt
     }
 }

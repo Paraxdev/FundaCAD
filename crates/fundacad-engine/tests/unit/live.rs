@@ -349,3 +349,49 @@ fn a_whole_other_document_reaches_the_app_marked_so_it_can_refuse_it_during_an_i
     );
     assert_eq!(marks, vec![(0, json!(true)), (4, Value::Null), (5, Value::Null)]);
 }
+
+fn refused_ids(s: &mut LiveSession) -> Vec<Value> {
+    let st = s.state(Some(OTHER), None);
+    st["status"]["refused"].as_array().cloned().unwrap_or_default().iter().map(|r| r["id"].clone()).collect()
+}
+
+#[test]
+fn a_proposal_the_app_moved_past_before_collecting_it_is_refused_not_handed_over() {
+    let (mut s, _) = session();
+    s.publish(APP, doc(3), 7, Value::Null, json!({"refused": [{"id": "p0", "message": "import running"}]}));
+    s.propose(AGENT, doc(4), 7, Some(&json!("add a hole")), None);
+    s.propose(OTHER, doc(6), 7, None, None);
+    // An import landed in the app between the read and the next publish.
+    let handed =
+        s.publish(APP, doc(5), 8, Value::Null, json!({"refused": [{"id": "p0", "message": "import running"}]}));
+    let st = s.state(Some(AGENT), None);
+    let refused = st["status"]["refused"].as_array().cloned().unwrap();
+    assert_eq!((handed["proposals"].clone(), features(&st["document"]), refused.len()), (json!([]), 5, 3));
+    assert_eq!(refused.iter().map(|r| r["id"].clone()).collect::<Vec<_>>(), [json!("p0"), json!("p1"), json!("p2")]);
+    let why = refused[1]["message"].as_str().unwrap();
+    assert!(why.contains("7 -> 8") && why.contains("doc_get") && why.contains("nothing was applied"), "{why}");
+
+    // Control: one made against the revision now published is handed over and refused nothing more.
+    s.propose(AGENT, doc(9), 8, None, None);
+    let fresh = publish(&mut s, APP, doc(5), 8);
+    assert_eq!(fresh["proposals"].as_array().map(|p| (p.len(), p[0]["id"].clone())), Some((1, json!("p3"))));
+    assert_eq!(refused_ids(&mut s), [json!("p1"), json!("p2")], "a host status of null keeps the engine's refusals");
+}
+
+#[test]
+fn the_engines_refusals_are_capped_and_go_with_the_document() {
+    let (mut s, _) = session();
+    let mut rev = 3;
+    s.publish_doc(APP, json!("doc-a"), doc(1), rev, Value::Null, json!({"canEdit": true}));
+    for _ in 0..17 {
+        s.propose_doc(AGENT, doc(2), rev, Some(&json!("doc-a")), None, None);
+        rev += 1;
+        s.publish_doc(APP, json!("doc-a"), doc(1), rev, Value::Null, json!({"canEdit": true}));
+    }
+    let ids = refused_ids(&mut s);
+    assert_eq!((ids.len(), ids[0].clone(), ids[15].clone()), (MAX_REFUSED, json!("p2"), json!("p17")));
+    assert_eq!(s.state(None, None)["status"]["canEdit"], true);
+
+    s.publish_doc(APP, json!("doc-b"), doc(1), rev + 1, Value::Null, json!({"canEdit": true}));
+    assert_eq!(s.state(None, None)["status"], json!({"canEdit": true}), "doc-a's refusals reached doc-b");
+}

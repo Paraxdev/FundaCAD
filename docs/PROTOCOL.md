@@ -53,8 +53,9 @@ reach the supervisor.
 `doc` names the open document the request works for (the app sends its document session's id, third after `id` and
 `op`, so the desktop relay reads it from the request's first bytes). It is optional: a request without it belongs to
 the document `""`. The held document a delta rebuild patches is kept per connection and `doc`, and `doc_end` ends
-every job of one `doc`. App wide ops (`ping`, `cancel`, `doc_end`, `listFonts`, `tessellateText`, `session_*`) carry
-no `doc`.
+every job of one `doc`. App wide ops (`ping`, `cancel`, `listFonts`, `tessellateText`, `session_release`,
+`session_state`, `session_leave`, `session_guide`) carry no `doc`. `doc_end` names the `doc` it ends, and
+`session_host` and `session_propose` name the live session's document, never a job's.
 
 ## Reply envelope
 

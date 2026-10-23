@@ -382,6 +382,10 @@ pub struct Host {
     /// An import is being read into the open document, so a whole other document is refused as the app does.
     pub importing: bool,
     pub refused: Vec<Value>,
+    /// The document session it names, as the app does, or none like an older app.
+    pub session: Option<String>,
+    /// Opened right after the next proposal is applied, before the publish that acknowledges it.
+    pub opens_after_apply: Option<String>,
     /// What the window shares as its title, the open file's path.
     pub title: String,
     next: u64,
@@ -398,6 +402,8 @@ impl Host {
             can_edit: true,
             importing: false,
             refused: Vec::new(),
+            session: None,
+            opens_after_apply: None,
             next: 0,
         }
     }
@@ -411,14 +417,13 @@ impl Host {
     }
 
     pub async fn tick(&mut self) -> Value {
-        let reply = self
-            .call(
-                "session_host",
-                json!({"document": self.doc, "revision": self.rev, "title": self.title,
+        let mut publish = json!({"document": self.doc, "revision": self.rev, "title": self.title,
                        "status": {"canEdit": self.can_edit, "applied": self.applied,
-                                  "refused": self.refused, "building": false}}),
-            )
-            .await;
+                                  "refused": self.refused, "building": false}});
+        if let Some(session) = &self.session {
+            publish["doc"] = json!(session);
+        }
+        let reply = self.call("session_host", publish).await;
         let res = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         for p in res.get("proposals").and_then(Value::as_array).cloned().unwrap_or_default() {
             if !self.can_edit {
@@ -434,6 +439,11 @@ impl Host {
             self.applied.push(p.get("id").and_then(Value::as_str).unwrap_or("").to_string());
             if self.applied.len() > 16 {
                 self.applied.remove(0);
+            }
+            if let Some(next) = self.opens_after_apply.take() {
+                self.session = Some(next);
+                self.doc = a_document(1, "another-document");
+                self.rev += 1;
             }
         }
         res
